@@ -197,8 +197,8 @@ describe("set_practice_jurisdictions MCP tool", () => {
     const result = await handleMcpToolCall({
       args: {
         jurisdictions: [
-          { countryCode: "CZ", isPrimary: true },
-          { countryCode: "SK", isPrimary: false },
+          { country_code: "CZ", is_primary: true },
+          { country_code: "SK", is_primary: false },
         ],
       },
       context,
@@ -247,7 +247,7 @@ describe("set_practice_jurisdictions MCP tool", () => {
 
     const result = await handleMcpToolCall({
       args: {
-        jurisdictions: [{ countryCode: "CZ", isPrimary: true }],
+        jurisdictions: [{ country_code: "CZ", is_primary: true }],
       },
       context,
       toolName: "set_practice_jurisdictions",
@@ -269,8 +269,8 @@ describe("set_practice_jurisdictions MCP tool", () => {
     const result = await handleMcpToolCall({
       args: {
         jurisdictions: [
-          { countryCode: "CZ", isPrimary: false },
-          { countryCode: "SK", isPrimary: false },
+          { country_code: "CZ", is_primary: false },
+          { country_code: "SK", is_primary: false },
         ],
       },
       context,
@@ -291,8 +291,8 @@ describe("set_practice_jurisdictions MCP tool", () => {
     const result = await handleMcpToolCall({
       args: {
         jurisdictions: [
-          { countryCode: "CZ", isPrimary: true },
-          { countryCode: "SK", isPrimary: true },
+          { country_code: "CZ", is_primary: true },
+          { country_code: "SK", is_primary: true },
         ],
       },
       context,
@@ -312,13 +312,32 @@ describe("set_practice_jurisdictions MCP tool", () => {
 
     const result = await handleMcpToolCall({
       args: {
-        jurisdictions: [{ countryCode: "ZZZ", isPrimary: true }],
+        jurisdictions: [{ country_code: "ZZZ", is_primary: true }],
       },
       context,
       toolName: "set_practice_jurisdictions",
     });
 
     expect(result.isError).toBe(true);
+  });
+
+  test("rejects camelCase jurisdiction keys", async () => {
+    const context = createContext();
+
+    const result = await handleMcpToolCall({
+      args: {
+        jurisdictions: [{ countryCode: "CZ", isPrimary: true }],
+      },
+      context,
+      toolName: "set_practice_jurisdictions",
+    });
+
+    expect(result.isError).toBe(true);
+    const item = result.content.at(0);
+    expect(item?.type).toBe("text");
+    if (item?.type === "text") {
+      expect(item.text).toContain("jurisdictions.0.country_code");
+    }
   });
 
   test("rejects empty jurisdictions input", async () => {

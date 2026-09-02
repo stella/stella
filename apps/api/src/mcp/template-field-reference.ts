@@ -1,6 +1,5 @@
 import type * as v from "valibot";
 
-import type { fieldMetaToolInputSchema } from "@/api/lib/docx/types";
 import {
   DATE_FORMAT_STYLES,
   INPUT_TYPES,
@@ -18,6 +17,7 @@ import {
   USER_FIELDS,
   WORKSPACE_CONTACT_ROLES,
 } from "@/api/lib/template-binding/binding-sources";
+import type { templateFieldInputSchema } from "@/api/mcp/template-field-input";
 import { TEMPLATE_MARKER_REFERENCE_URI } from "@/api/mcp/template-marker-reference";
 
 /**
@@ -27,7 +27,7 @@ import { TEMPLATE_MARKER_REFERENCE_URI } from "@/api/mcp/template-marker-referen
  * carries the structure plus one short line per property.
  *
  * Both inventories below are keyed by their source of truth
- * ({@link fieldMetaToolInputSchema}'s own keys, {@link BindingSourceKind}), so
+ * ({@link templateFieldInputSchema}'s own keys, {@link BindingSourceKind}), so
  * a new field property or binding kind is a compile error here until it is
  * documented. Value lists (input types, registries, contact fields) render
  * from the same constants the schema validates against, never a hand-copied
@@ -42,27 +42,27 @@ import { TEMPLATE_MARKER_REFERENCE_URI } from "@/api/mcp/template-marker-referen
 export const TEMPLATE_FIELD_REFERENCE_URI =
   "stella://reference/template-fields";
 
-type FieldConfigProperty = keyof v.InferInput<typeof fieldMetaToolInputSchema>;
+type FieldConfigProperty = keyof v.InferInput<typeof templateFieldInputSchema>;
 
 const FIELD_PROPERTY_DOCS = {
   path: "Must match a `{{marker}}` in the DOCX. Identical paths anywhere in the document are one field and one question.",
   label: "Question label shown to the person filling the field.",
   hint: "Short fill guidance shown with the input.",
-  inputType: `Input control: ${INPUT_TYPES.join(", ")}. Defaults to text.`,
+  input_type: `Input control: ${INPUT_TYPES.join(", ")}. Defaults to text.`,
   options: "Allowed values for a select field.",
-  optionsFrom:
+  options_from:
     "Dependent select: the path of another field whose entered values supply this field's options. Use instead of `options`.",
   validation:
-    "Constraints checked at fill time: `required`, `minLength`/`maxLength`, `min`/`max`, `pattern` (a regex matched against the complete value), `minItems`/`maxItems` for repeated fields.",
+    "Constraints checked at fill time: `required`, `min_length`/`max_length`, `min`/`max`, `pattern` (a regex matched against the complete value), `min_items`/`max_items` for repeated fields.",
   required: "Whether the fill form rejects an empty value.",
-  aiPrompt:
+  ai_prompt:
     "Who fills = AI. The instruction the model follows to draft the value at fill time; the fill form shows no input for the field.",
-  aiAdapt:
+  ai_adapt:
     "Who fills = person + AI. The entered value is a stub the model rewrites for each occurrence in the document.",
-  aiSeesDocument:
+  ai_sees_document:
     "Include the rendered document in this AI field's prompt. It costs tokens per fill, so set it only when the value depends on the surrounding text.",
   parts:
-    "Composite field: one entry per sub-input (`key`, `label`, `inputType` text or select, `options`, `pattern`). Set `format` alongside it.",
+    "Composite field: one entry per sub-input (`key`, `label`, `input_type` text or select, `options`, `pattern`). Set `format` alongside it.",
   format:
     "Join template over the composite part keys, for example `{{title}} {{name}}`. Required with `parts`, meaningless without.",
   lookup: `Who fills = business-registry lookup. \`registry\` is one of: ${LOOKUP_REGISTRIES.join(", ")}. The person filling enters only the registry number; the company is resolved at fill time and rendered through \`formats\`.`,
@@ -72,7 +72,7 @@ const FIELD_PROPERTY_DOCS = {
     "Who fills = arithmetic derived from other fields, for example `base_rent * 12`.",
   condition:
     "Boolean rule expression for a field referenced by a `{{#if field_path}}` marker. A boolean field without a condition is asked as a yes/no question instead.",
-  dateFormat: `Locale-aware rendering for a date field: \`locale\` is a BCP-47 tag (\`cs\`, \`de\`, \`pl\`), \`style\` is one of ${DATE_FORMAT_STYLES.join(", ")}.`,
+  date_format: `Locale-aware rendering for a date field: \`locale\` is a BCP-47 tag (\`cs\`, \`de\`, \`pl\`), \`style\` is one of ${DATE_FORMAT_STYLES.join(", ")}.`,
 } as const satisfies Record<FieldConfigProperty, string>;
 
 type BindingSourceDoc = {
@@ -147,7 +147,7 @@ export const buildFieldReference = (): string => {
     propertyLines,
     "",
     "Who fills a field: a person, unless the field says otherwise. " +
-      "`aiPrompt`, `aiAdapt`, `condition`, `formula`, `lookup`, `parts`, and " +
+      "`ai_prompt`, `ai_adapt`, `condition`, `formula`, `lookup`, `parts`, and " +
       "`source` are mutually exclusive — at most one per field.",
     "",
     "Registry lookup formats: each `formats` entry renders the same resolved " +

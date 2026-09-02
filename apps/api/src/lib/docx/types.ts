@@ -349,32 +349,37 @@ export const fieldDateFormatSchema = v.pipe(
   v.description("Date rendering config"),
 );
 
+/** Shared with the snake_case MCP mirror in `mcp/template-field-input.ts`, so
+ *  both surfaces advertise the same line. */
+export const FIELD_VALIDATION_DESCRIPTION = "Field-level value constraints";
+export const FIELD_PARTS_DESCRIPTION = "Composite field parts";
+
+export const fieldValidationObjectSchema = v.strictObject({
+  required: v.optional(v.pipe(v.boolean(), v.description("Value is required"))),
+  minLength: v.optional(
+    v.pipe(v.number(), v.finite(), v.description("Minimum string length")),
+  ),
+  maxLength: v.optional(
+    v.pipe(v.number(), v.finite(), v.description("Maximum string length")),
+  ),
+  min: v.optional(
+    v.pipe(v.number(), v.finite(), v.description("Minimum numeric value")),
+  ),
+  max: v.optional(
+    v.pipe(v.number(), v.finite(), v.description("Maximum numeric value")),
+  ),
+  pattern: v.optional(describedString("Regex for the whole value")),
+  minItems: v.optional(
+    v.pipe(v.number(), v.finite(), v.description("Minimum repeated items")),
+  ),
+  maxItems: v.optional(
+    v.pipe(v.number(), v.finite(), v.description("Maximum repeated items")),
+  ),
+});
+
 export const fieldValidationSchema = v.pipe(
-  v.strictObject({
-    required: v.optional(
-      v.pipe(v.boolean(), v.description("Value is required")),
-    ),
-    minLength: v.optional(
-      v.pipe(v.number(), v.finite(), v.description("Minimum string length")),
-    ),
-    maxLength: v.optional(
-      v.pipe(v.number(), v.finite(), v.description("Maximum string length")),
-    ),
-    min: v.optional(
-      v.pipe(v.number(), v.finite(), v.description("Minimum numeric value")),
-    ),
-    max: v.optional(
-      v.pipe(v.number(), v.finite(), v.description("Maximum numeric value")),
-    ),
-    pattern: v.optional(describedString("Regex for the whole value")),
-    minItems: v.optional(
-      v.pipe(v.number(), v.finite(), v.description("Minimum repeated items")),
-    ),
-    maxItems: v.optional(
-      v.pipe(v.number(), v.finite(), v.description("Maximum repeated items")),
-    ),
-  }),
-  v.description("Field-level value constraints"),
+  fieldValidationObjectSchema,
+  v.description(FIELD_VALIDATION_DESCRIPTION),
 );
 
 type DerivedSourceMode =
@@ -386,6 +391,8 @@ type DerivedSourceMode =
   | "parts"
   | "source";
 
+/** `lookup`, `parts` and `source` are only presence-checked, so the parts shape
+ *  stays open: the snake_case MCP mirror passes its own part objects. */
 type DerivedSourceFields = {
   aiAdapt?: boolean | undefined;
   aiPrompt?: string | undefined;
@@ -393,7 +400,7 @@ type DerivedSourceFields = {
   conditionAst?: ConditionNode | undefined;
   formula?: string | undefined;
   lookup?: FieldLookup | undefined;
-  parts?: FieldPart[] | undefined;
+  parts?: readonly unknown[] | undefined;
   source?: FieldSource | undefined;
 };
 
@@ -432,8 +439,9 @@ const activeDerivedSourceModes = ({
   return modes;
 };
 
-const hasCompatibleDerivedSources = (fields: DerivedSourceFields): boolean =>
-  activeDerivedSourceModes(fields).length <= 1;
+export const hasCompatibleDerivedSources = (
+  fields: DerivedSourceFields,
+): boolean => activeDerivedSourceModes(fields).length <= 1;
 
 const FIELD_SOURCE_DESCRIPTION = "Who fills = matter or contact data";
 
@@ -470,7 +478,7 @@ const fieldMetaObjectSchema = v.strictObject({
     v.pipe(
       v.array(fieldPartSchema),
       v.minLength(1),
-      v.description("Composite field parts"),
+      v.description(FIELD_PARTS_DESCRIPTION),
     ),
   ),
   format: v.optional(describedString("Join template over the part keys")),
@@ -492,12 +500,12 @@ const fieldMetaObjectSchema = v.strictObject({
   dateFormat: v.optional(fieldDateFormatSchema),
 });
 
-const hasCompleteCompositeField = ({
+export const hasCompleteCompositeField = ({
   format,
   parts,
 }: {
   format?: string | undefined;
-  parts?: FieldPart[] | undefined;
+  parts?: readonly unknown[] | undefined;
 }): boolean => (parts === undefined) === (format === undefined);
 
 export const fieldMetaSchema = v.pipe(
@@ -517,7 +525,7 @@ export const fieldMetaSchema = v.pipe(
 /** Model-facing subset: conditionAst is the persisted canonical form, not an
  * authoring input. This schema derives its public fields from the persisted
  * object schema and applies the same named invariant predicates. */
-const fieldMetaToolInputObjectSchema = v.strictObject({
+export const fieldMetaToolInputObjectSchema = v.strictObject({
   ...v.omit(fieldMetaObjectSchema, ["conditionAst"]).entries,
   source: v.optional(
     v.pipe(fieldSourceToolInputSchema, v.description(FIELD_SOURCE_DESCRIPTION)),

@@ -370,36 +370,16 @@ describe("MCP registry annotation coherence", () => {
  * Advertised input property names. The anonymized surface is a projection of
  * the same definitions, so checking the default surface covers both.
  *
- * The nested paths below are the remaining camelCase debt: object and array
- * payloads that mirror internal document/field models (`knowledge-tools.ts`,
- * `stella-tools.ts`, `template-tools.ts`). The set is exact, so a new
- * camelCase name fails here and fixing one of these requires shrinking the
- * constant. Every TOP-LEVEL name (the surface an agent types) must already be
- * snake_case: none is listed, so any drift there fails immediately.
+ * The set is exact and empty: every advertised name, at every depth, must be
+ * snake_case. Payloads that mirror internal camelCase models (`save_clause`
+ * body paragraphs, `save_template` field overlays) carry their own snake_case
+ * input schema and map onto the model at the tool boundary, so a new
+ * camelCase name anywhere in an input fails here.
  */
-const CAMEL_CASE_INPUT_PROPERTY_DEBT = [
-  "save_clause.body[].directiveExpression",
-  "save_clause.body[].directiveKind",
-  "save_clause.body[].isDirective",
-  "save_clause.body[].listKind",
-  "save_clause.body[].listLevel",
-  "save_template.fields[].aiAdapt",
-  "save_template.fields[].aiPrompt",
-  "save_template.fields[].aiSeesDocument",
-  "save_template.fields[].dateFormat",
-  "save_template.fields[].inputType",
-  "save_template.fields[].optionsFrom",
-  "save_template.fields[].parts[].inputType",
-  "save_template.fields[].validation.maxItems",
-  "save_template.fields[].validation.maxLength",
-  "save_template.fields[].validation.minItems",
-  "save_template.fields[].validation.minLength",
-  "set_practice_jurisdictions.jurisdictions[].countryCode",
-  "set_practice_jurisdictions.jurisdictions[].isPrimary",
-];
+const CAMEL_CASE_INPUT_PROPERTY_DEBT: string[] = [];
 
 describe("MCP registry input naming", () => {
-  test("input property names are snake_case, bar the recorded debt", () => {
+  test("input property names are snake_case at every depth", () => {
     const issues: string[] = [];
     for (const tool of defaultTools) {
       collectNonSnakeCaseProperties(tool.inputSchema, tool.name, issues);

@@ -33,6 +33,7 @@ import type {
 import {
   CLAUSE_LIST_KINDS,
   type ClauseBody,
+  type ClauseParagraph,
   type ClauseRun,
   isClauseBody,
 } from "@/api/lib/clauses/types";
@@ -938,37 +939,76 @@ const clauseParagraphArgSchema = v.strictObject({
       ),
     ),
   ),
-  listKind: v.optional(
+  list_kind: v.optional(
     v.pipe(
       v.picklist(CLAUSE_LIST_KINDS),
       v.description("List item kind when the paragraph is a list item"),
     ),
   ),
-  listLevel: v.optional(
+  list_level: v.optional(
     v.pipe(
       v.number(),
       v.integer(),
       v.description("0-based list nesting depth for a list item"),
     ),
   ),
-  isDirective: v.optional(
+  is_directive: v.optional(
     v.pipe(
       v.boolean(),
       v.description("Whether the paragraph is a template directive marker"),
     ),
   ),
-  directiveKind: v.optional(
+  directive_kind: v.optional(
     v.pipe(
       v.picklist(BLOCK_DIRECTIVE_KINDS),
-      v.description("Directive kind when isDirective is set"),
+      v.description("Directive kind when is_directive is set"),
     ),
   ),
-  directiveExpression: v.optional(
+  directive_expression: v.optional(
     v.pipe(
       v.string(),
       v.description("Directive expression for an if/each directive"),
     ),
   ),
+});
+
+const toClauseRun = (
+  run: v.InferOutput<typeof clauseRunArgSchema>,
+): ClauseRun => ({
+  text: run.text,
+  ...(run.bold === undefined ? {} : { bold: run.bold }),
+  ...(run.italic === undefined ? {} : { italic: run.italic }),
+});
+
+/**
+ * The MCP surface is snake_case; the persisted `ClauseParagraph` is camelCase.
+ * Every target key is listed explicitly so a new schema key cannot reach the
+ * persisted shape without a decision here.
+ */
+const toClauseParagraph = (
+  paragraph: v.InferOutput<typeof clauseParagraphArgSchema>,
+): ClauseParagraph => ({
+  text: paragraph.text,
+  ...(paragraph.style === undefined ? {} : { style: paragraph.style }),
+  ...(paragraph.level === undefined ? {} : { level: paragraph.level }),
+  ...(paragraph.runs === undefined
+    ? {}
+    : { runs: paragraph.runs.map(toClauseRun) }),
+  ...(paragraph.list_kind === undefined
+    ? {}
+    : { listKind: paragraph.list_kind }),
+  ...(paragraph.list_level === undefined
+    ? {}
+    : { listLevel: paragraph.list_level }),
+  ...(paragraph.is_directive === undefined
+    ? {}
+    : { isDirective: paragraph.is_directive }),
+  ...(paragraph.directive_kind === undefined
+    ? {}
+    : { directiveKind: paragraph.directive_kind }),
+  ...(paragraph.directive_expression === undefined
+    ? {}
+    : { directiveExpression: paragraph.directive_expression }),
 });
 
 const clauseBodyArgSchema = v.pipe(
@@ -1103,21 +1143,7 @@ const handleSaveClauseTool: TypedMcpToolHandler<
   }
   const input = parsed.output;
 
-  // The clause body is validated structurally with isClauseBody so it narrows
-  // to the ClauseBody the backing handlers expect without an unchecked cast.
-  let clauseBody: ClauseBody | undefined;
-  if (input.body !== undefined) {
-    if (!isClauseBody(input.body)) {
-      return structuredErrorResult({
-        code: "validation_error",
-        message: "Invalid input: body must be a non-empty paragraph array",
-        issues: [
-          { path: "body", message: "Expected a non-empty paragraph array" },
-        ],
-      });
-    }
-    clauseBody = input.body;
-  }
+  const clauseBody = input.body?.map(toClauseParagraph);
 
   const organizationId = context.organizationId;
 
@@ -1127,9 +1153,8 @@ const handleSaveClauseTool: TypedMcpToolHandler<
       return errorResult("Forbidden");
     }
     // The schema guarantees title and body are present on create. Bind title
-    // in the narrowed scope (mirroring clauseBody above): inside the closure
-    // below TypeScript would otherwise widen input.title back to
-    // string | undefined.
+    // in the narrowed scope: inside the closure below TypeScript would
+    // otherwise widen input.title back to string | undefined.
     const { title } = input;
     if (title === undefined) {
       return structuredErrorResult({
@@ -1571,7 +1596,9 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
       "Create or update a clause in the organization's clause library. Omit " +
       "clause_id to create (title and body required); pass clause_id to update. " +
       "body is an ordered array of paragraphs, each with text and optional " +
-      "formatting. category_id, language, description, usage_notes, and metadata " +
+      "style, level, runs, list_kind, list_level, is_directive, directive_kind, " +
+      "and directive_expression. " +
+      "category_id, language, description, usage_notes, and metadata " +
       "accept null to clear them on update. Set snapshot_version true on an " +
       "update to also append a version snapshot of the body. Returns the clause id.",
     inputSchema: saveClauseArgsSchema,

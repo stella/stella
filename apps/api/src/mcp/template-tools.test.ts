@@ -355,7 +355,7 @@ describe("MCP template tools", () => {
       createContext(),
     );
     expect(listTemplates?.description).toContain(TEMPLATE_FIELD_REFERENCE_URI);
-    expect(listTemplates?.description).not.toContain("optionsFrom");
+    expect(listTemplates?.description).not.toContain("options_from");
   });
 
   test("save_template advertises the fields overlay pointing at the resource", async () => {
@@ -1446,7 +1446,7 @@ describe("MCP template tools", () => {
           {
             path: "company",
             label: "Company",
-            inputType: "text",
+            input_type: "text",
             required: true,
             lookup: {
               registry: "krs",
@@ -1490,8 +1490,8 @@ describe("MCP template tools", () => {
       args: {
         name: "NDA",
         docx_base64: docxBase64,
-        // formula is mutually exclusive with aiPrompt, so isFieldMeta rejects it.
-        fields: [{ path: "fee", formula: "rent * 12", aiPrompt: "draft it" }],
+        // formula is mutually exclusive with ai_prompt, so isFieldMeta rejects it.
+        fields: [{ path: "fee", formula: "rent * 12", ai_prompt: "draft it" }],
       },
       context: createContext(),
       toolName: "save_template",
@@ -1512,7 +1512,7 @@ describe("MCP template tools", () => {
         fields: [
           {
             path: "company",
-            aiPrompt: "Draft the company details",
+            ai_prompt: "Draft the company details",
             lookup: {
               registry: "krs",
               formats: [{ key: "default", template: "[name]" }],
