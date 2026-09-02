@@ -666,7 +666,9 @@ const applyDrift = ({
     bridge,
     TOOL_OPTIONS,
   );
-  if (!output.ok || output.result.applied.length !== 1) {
+  const applied =
+    output.ok && isRecord(output.result) ? output.result["applied"] : undefined;
+  if (!Array.isArray(applied) || applied.length !== 1) {
     panic(`drift not applied: ${JSON.stringify(output)}`);
   }
 };
