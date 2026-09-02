@@ -2,7 +2,10 @@ import { useTranslations } from "use-intl";
 
 import { cn } from "@stll/ui/utils";
 
-import { ConversationScrollButton } from "@/components/ai-elements/conversation";
+import {
+  ConversationScrollButton,
+  isScrollActionVisible,
+} from "@/components/ai-elements/conversation";
 import { SuggestedActions } from "@/components/suggested-actions";
 import { useMaybeStickToBottomContext } from "@/hooks/use-stick-to-bottom";
 
@@ -50,11 +53,17 @@ export const SuggestedFollowupChips = ({
   }
 
   const resolvedSurface = surface ?? "overlay";
+  // While the action overlays the row's inline end, the row reserves that
+  // footprint so the last chip can scroll clear of it. `pe-11` covers the
+  // action's 44px coarse-pointer hit area, not only its 28px circle.
+  const reserveScrollAction =
+    stickToBottom !== null && isScrollActionVisible(stickToBottom);
 
   return (
     <div className={cn("relative max-w-full pb-2", className)}>
       <SuggestedActions
         actions={prompts.map((prompt) => ({ id: prompt, label: prompt }))}
+        className={cn(reserveScrollAction && "pe-11")}
         label={t("chat.suggestedFollowupsLabel")}
         onSelect={onSelect}
         orientation="horizontal"

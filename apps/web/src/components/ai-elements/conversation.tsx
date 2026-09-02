@@ -130,6 +130,18 @@ type ConversationScrollButtonProps = ConversationScrollButtonBaseProps &
       }
   );
 
+/**
+ * Whether the scroll-to-bottom action shows. Exported so a row that overlays
+ * the inline action can reserve its footprint under the same rule.
+ */
+export const isScrollActionVisible = ({
+  isAtBottom,
+  isScrollable,
+}: {
+  isAtBottom: boolean;
+  isScrollable: boolean;
+}) => isScrollable && !isAtBottom;
+
 export const ConversationScrollButton = ({
   className,
   placement = "floating",
@@ -139,7 +151,7 @@ export const ConversationScrollButton = ({
   const t = useTranslations();
   const { isAtBottom, isScrollable, scrollToBottom } =
     useStickToBottomContext();
-  const isVisible = isScrollable && !isAtBottom;
+  const isVisible = isScrollActionVisible({ isAtBottom, isScrollable });
 
   if (!isVisible && placement === "floating") {
     return null;

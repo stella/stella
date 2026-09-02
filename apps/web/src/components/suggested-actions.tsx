@@ -1,3 +1,4 @@
+import { useCallback, useState } from "react";
 import type { ComponentProps, ReactNode } from "react";
 
 import { Button } from "@stll/ui/button";
@@ -67,11 +68,13 @@ export const SuggestedActionSurface = ({
 
 /**
  * A row (or stack) of click-to-run "suggested action" chips. Horizontal
- * chips scroll sideways so the list never wraps or overflows its container;
- * the row's trailing edge fades so a clipped chip reads as "more to scroll"
- * instead of a hard cut. The row shows no scrollbar: the fade carries the
- * overflow signal, and a scrollbar track would add height only when the
- * chips overflow, so the gap to the composer below would depend on content.
+ * chips scroll sideways so the list never wraps or overflows its container.
+ * While chips remain past the row's inline end, that edge fades so a clipped
+ * chip reads as "more to scroll" instead of a hard cut; at the end of the
+ * scroll the fade lifts so the last chip shows whole. The row shows no
+ * scrollbar: the fade carries the overflow signal, and a scrollbar track
+ * would add height only when the chips overflow, so the gap to the composer
+ * below would depend on content.
  */
 export const SuggestedActions = ({
   actions,
@@ -82,6 +85,31 @@ export const SuggestedActions = ({
   keyShortcut,
   className,
 }: SuggestedActionsProps) => {
+  // Whether chips remain past the row's inline end: DOM state (overflow and
+  // scroll position), so it is measured through a callback ref whose
+  // observer lives exactly as long as the node. The row is keyed on the chip
+  // set, so a new set of chips remounts it and re-measures from the start.
+  const [moreInlineEnd, setMoreInlineEnd] = useState(false);
+  const horizontalRowRef = useCallback((row: HTMLDivElement | null) => {
+    if (!row) {
+      return undefined;
+    }
+    const measure = () => {
+      // `scrollLeft` runs negative in RTL; the remaining distance does not.
+      const remaining =
+        row.scrollWidth - row.clientWidth - Math.abs(row.scrollLeft);
+      setMoreInlineEnd(remaining > 1);
+    };
+    const observer = new ResizeObserver(measure);
+    observer.observe(row);
+    row.addEventListener("scroll", measure, { passive: true });
+    measure();
+    return () => {
+      observer.disconnect();
+      row.removeEventListener("scroll", measure);
+    };
+  }, []);
+
   if (actions.length === 0) {
     return null;
   }
@@ -94,10 +122,18 @@ export const SuggestedActions = ({
       className={cn(
         "flex max-w-full gap-1.5",
         horizontal
-          ? "scrollbar-none overflow-x-auto [mask-image:linear-gradient(to_right,black_calc(100%-2.5rem),transparent)] rtl:[mask-image:linear-gradient(to_left,black_calc(100%-2.5rem),transparent)]"
+          ? [
+              "scrollbar-none overflow-x-auto",
+              moreInlineEnd &&
+                "[mask-image:linear-gradient(to_right,black_calc(100%-2.5rem),transparent)] rtl:[mask-image:linear-gradient(to_left,black_calc(100%-2.5rem),transparent)]",
+            ]
           : "flex-col items-start",
         className,
       )}
+      key={
+        horizontal ? actions.map((action) => action.id).join("\n") : undefined
+      }
+      ref={horizontal ? horizontalRowRef : undefined}
       role="group"
     >
       {actions.map((action) => (
