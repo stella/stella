@@ -384,6 +384,7 @@ const mockTask = ({
   activeEditBy: null,
   fields: {},
   cellMetadata: {},
+  assignees: [],
 });
 
 type MockCalendarTaskOptions = {

@@ -135,6 +135,7 @@ const toWorkspaceEntity = (entity: RawWorkspaceEntity): WorkspaceEntity => {
     activeEditBy: entity.activeEditBy,
     fields,
     cellMetadata,
+    assignees: entity.assignees,
   };
 };
 

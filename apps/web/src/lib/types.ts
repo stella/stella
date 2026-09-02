@@ -222,6 +222,12 @@ export type EntityField = {
   content: WorkspaceFieldContent;
 };
 
+export type WorkspaceEntityAssignee = {
+  userId: string;
+  name: string | null;
+  image: string | null;
+};
+
 export type WorkspaceEntity = {
   entityId: EntityId;
   kind: EntityKind;
@@ -265,6 +271,7 @@ export type WorkspaceEntity = {
   activeEditBy: { name: string; image: string | null; isMe: boolean } | null;
   fields: Partial<Record<PropertyId, WorkspaceField>>;
   cellMetadata: Partial<Record<PropertyId, WorkspaceCellMetadata>>;
+  assignees: WorkspaceEntityAssignee[];
 };
 
 export type WorkspaceView<T extends ViewLayoutType = ViewLayoutType> = {

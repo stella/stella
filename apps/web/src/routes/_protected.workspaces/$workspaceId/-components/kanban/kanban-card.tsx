@@ -60,6 +60,13 @@ type KanbanCardProps = {
   cardFields?: string[] | undefined;
   properties?: WorkspaceProperty[] | undefined;
   onRename?: ((entityId: string, newName: string) => void) | undefined;
+  /**
+   * The subgroup lane this card is rendered under, so a drop target can
+   * read the card's real source lane instead of guessing it from the
+   * dragged entity's data. `null` is the Unassigned lane; omit entirely on
+   * a board with no subgroup (a flat column).
+   */
+  dragSubgroupValue?: string | null | undefined;
 };
 
 export const KanbanCard = ({
@@ -69,6 +76,7 @@ export const KanbanCard = ({
   cardFields,
   properties,
   onRename,
+  dragSubgroupValue,
 }: KanbanCardProps) => {
   const name = getEntityName(entity);
   const file = getFirstFile(entity);
@@ -113,6 +121,7 @@ export const KanbanCard = ({
             name,
             kind: entity.kind,
             mimeType: file?.mimeType ?? null,
+            subgroupValue: dragSubgroupValue,
           },
           name,
         ),
@@ -124,6 +133,7 @@ export const KanbanCard = ({
     entity.kind,
     file?.mimeType,
     entity.parentId,
+    dragSubgroupValue,
   ]);
 
   const startEditing = () => {

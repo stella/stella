@@ -1108,6 +1108,7 @@ type Messages = {
     "ask": "Ask";
     "askAI": "Ask AI";
     "askInChat": "Ask in chat";
+    "assignee": "Assignee";
     "author": "Author";
     "back": "Back";
     "cancel": "Cancel";

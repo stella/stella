@@ -889,6 +889,9 @@ type GroupByControlProps = {
   allowMultiSelectGrouping?: boolean;
   allowPersonGrouping?: boolean;
   allowCreatedByGrouping?: boolean;
+  // Sub-group only: server paging and counts do not support a top-level
+  // Group by Assignee, so only the sub-group picker sets this.
+  allowAssigneeGrouping?: boolean;
   ariaLabel?: string | undefined;
   excludedPropertyId?: string | undefined;
   label?: string | undefined;
@@ -903,6 +906,7 @@ const GroupByControl = ({
   allowMultiSelectGrouping = false,
   allowPersonGrouping = false,
   allowCreatedByGrouping = false,
+  allowAssigneeGrouping = false,
   ariaLabel,
   excludedPropertyId,
   label,
@@ -950,6 +954,9 @@ const GroupByControl = ({
     }
     if (resolvedId === getInternalPropertyId("created-by")) {
       return t("common.author");
+    }
+    if (resolvedId === getInternalPropertyId("assignee")) {
+      return t("common.assignee");
     }
     return (
       eligible.find((p) => p.id === resolvedId)?.name ??
@@ -1011,6 +1018,12 @@ const GroupByControl = ({
             excludedPropertyId !== getInternalPropertyId("created-by") && (
               <SelectItem value={getInternalPropertyId("created-by")}>
                 {t("common.author")}
+              </SelectItem>
+            )}
+          {allowAssigneeGrouping &&
+            excludedPropertyId !== getInternalPropertyId("assignee") && (
+              <SelectItem value={getInternalPropertyId("assignee")}>
+                {t("common.assignee")}
               </SelectItem>
             )}
           {basicProps.map((prop) => (
@@ -1104,6 +1117,7 @@ const KanbanGroupingSettings = ({
             <GroupByControl
               allowNone
               allowCreatedByGrouping
+              allowAssigneeGrouping
               allowPersonGrouping
               ariaLabel={t("workspaces.views.subgroup")}
               excludedPropertyId={resolvedGroupBy}

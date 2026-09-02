@@ -38,7 +38,7 @@ import type { OptionColor } from "@/lib/api-contract";
 import { detached } from "@/lib/detached";
 import { ClientOperationError } from "@/lib/errors/client";
 import { toSafeId } from "@/lib/safe-id";
-import type { EntityKind, WorkspaceView } from "@/lib/types";
+import type { EntityKind, WorkspaceEntity, WorkspaceView } from "@/lib/types";
 import {
   calculationKindsForProperty,
   isCalculableProperty,
@@ -53,6 +53,10 @@ import {
   useUpsertField,
 } from "@/lib/workspaces/mutations/entities";
 import { useUpdateProperty } from "@/lib/workspaces/mutations/properties";
+import {
+  useAddTaskAssignee,
+  useRemoveTaskAssignee,
+} from "@/lib/workspaces/mutations/tasks";
 import {
   isGradableProperty,
   isPlaybookVerdictProperty,
@@ -71,8 +75,10 @@ import { KanbanColumn } from "@/routes/_protected.workspaces/$workspaceId/-compo
 import type { KanbanCalculations } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column";
 import { KanbanSubgroupBoard } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-subgroup-board";
 import {
+  buildKanbanAssigneeMatrix,
   canMoveCardToSubgroupLane,
   isKanbanSubgroupProperty,
+  resolveAssigneeLaneDropIntent,
   resolveWorkspaceKanbanDynamicSubgroup,
   resolveWorkspaceKanbanGrouping,
   resolveWorkspaceKanbanGroupValue,
@@ -106,6 +112,8 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
   const renameEntity = useRenameEntity();
   const updateProperty = useUpdateProperty();
   const createEntities = useCreateEntities();
+  const addTaskAssignee = useAddTaskAssignee(workspaceId);
+  const removeTaskAssignee = useRemoveTaskAssignee(workspaceId);
   const updateView = useUpdateView(workspaceId);
   const queryClient = useQueryClient();
   const [hiddenGroups, setHiddenGroups] = useState(new Set());
@@ -250,6 +258,9 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
     grouping.type === "built-in" &&
     grouping.group.id === getInternalPropertyId("status");
   const isBuiltInGrouping = grouping.type === "built-in";
+  const isAssigneeSubgroup =
+    subgroupDefinition.type === "built-in" &&
+    subgroupDefinition.group.id === getInternalPropertyId("assignee");
   const groupByProperty =
     grouping.type === "property" ? grouping.property : null;
   const subgroupByProperty =
@@ -296,7 +307,8 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       ? isKanbanSubgroupProperty(subgroupDefinition.property)
       : subgroupDefinition.type === "built-in" &&
         (isKanbanGroupingRenderable(subgroupDefinition) ||
-          subgroupDefinition.group.id === getInternalPropertyId("created-by"));
+          subgroupDefinition.group.id === getInternalPropertyId("created-by") ||
+          subgroupDefinition.group.id === getInternalPropertyId("assignee"));
   const subgroupQuery = useInfiniteQuery({
     ...entitiesWindowOptions({
       workspaceId,
@@ -335,6 +347,14 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
     ) {
       return null;
     }
+    if (isAssigneeSubgroup) {
+      return buildKanbanAssigneeMatrix({
+        group: grouping,
+        assigneeSubgroup: subgroup,
+        rows: subgroupEntities,
+        uncategorizedLabel: t("common.uncategorized"),
+      });
+    }
     return buildKanbanBoardMatrix({
       group: grouping,
       subgroup,
@@ -346,6 +366,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
   }, [
     grouping,
     hasSupportedSubgroup,
+    isAssigneeSubgroup,
     subgroup,
     subgroupByPropertyId,
     subgroupEntities,
@@ -702,10 +723,47 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
     });
   };
 
+  // The dragged card supplies its own source lane (the subgroup cell it was
+  // rendered in, threaded through the drag payload as `subgroupValue`) so a
+  // task with several assignees removes the one it was actually dragged away
+  // from rather than always the first. `undefined` means the payload carried
+  // no lane at all (the card never declared one) — only then do we fall back
+  // to this module's usual single-value read for the axis, the first
+  // assignee. Moving within the same value is a no-op; otherwise the old
+  // assignee is removed before the new one is added, matching the
+  // add/remove handler order.
+  const handleAssigneeLaneDrop = async (
+    sourceEntity: WorkspaceEntity,
+    targetLaneValue: string | null,
+    sourceSubgroupValue: string | null | undefined,
+  ) => {
+    const sourceLaneValue =
+      sourceSubgroupValue === undefined
+        ? resolveWorkspaceKanbanGroupValue(subgroup, sourceEntity)
+        : sourceSubgroupValue;
+    const { removeUserId, addUserId } = resolveAssigneeLaneDropIntent(
+      sourceLaneValue,
+      targetLaneValue,
+    );
+    if (removeUserId !== null) {
+      await removeTaskAssignee.mutateAsync({
+        taskId: sourceEntity.entityId,
+        userId: removeUserId,
+      });
+    }
+    if (addUserId !== null) {
+      await addTaskAssignee.mutateAsync({
+        taskId: sourceEntity.entityId,
+        userId: addUserId,
+      });
+    }
+  };
+
   const handleDropCardInCell = async (
     entityId: string,
     columnValue: string,
     laneValue: string | null,
+    sourceSubgroupValue: string | null | undefined,
   ) => {
     if (subgroup.type !== "property") {
       const sourceEntity = subgroupEntities.find(
@@ -726,6 +784,13 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
           type: "info",
         });
         return;
+      }
+      if (isAssigneeSubgroup) {
+        await handleAssigneeLaneDrop(
+          sourceEntity,
+          laneValue,
+          sourceSubgroupValue,
+        );
       }
     }
 
@@ -926,9 +991,14 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
             "kanban-view.create-task-in-cell",
           );
         }}
-        onDropCard={(entityId, columnValue, laneValue) => {
+        onDropCard={(entityId, columnValue, laneValue, sourceSubgroupValue) => {
           detached(
-            handleDropCardInCell(entityId, columnValue, laneValue),
+            handleDropCardInCell(
+              entityId,
+              columnValue,
+              laneValue,
+              sourceSubgroupValue,
+            ),
             "kanban-view.drop-card-in-cell",
           );
         }}

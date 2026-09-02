@@ -51,6 +51,7 @@ const entity = (
   sortOrder: null,
   activeEditBy: null,
   cellMetadata: {},
+  assignees: [],
   fields,
 });
 

@@ -29,6 +29,7 @@
     "search.updatedWithinOptions.day",
     "settings.organization.auditLogsActionDelete",
     "settings.organization.auditLogsActionDownload",
+    "tasks.assigneeRoles.assignee",
     "tasks.clearDate",
     "tasks.priorityValues.none",
     "tasks.status",
@@ -46,10 +47,6 @@
   ],
   "duplicateValues": [
     "account.sessions.currentSession",
-    "caseLaw.research.answers.no",
-    "caseLaw.research.answers.yes",
-    "inspector.review.presence.absent",
-    "inspector.review.presence.present",
     "agentClaim.approve",
     "agentClaim.error",
     "app.versionMismatch.dismiss",
@@ -69,6 +66,8 @@
     "billing.statuses.draft",
     "billing.stopTimer",
     "caseLaw.analysis.categories.reasoning",
+    "caseLaw.research.answers.no",
+    "caseLaw.research.answers.yes",
     "catalogue.cost.free",
     "catalogue.cost.paid",
     "catalogue.filter.skills",
@@ -153,6 +152,8 @@
     "inspector.review.decisions.accepted",
     "inspector.review.dismiss",
     "inspector.review.playbookSection",
+    "inspector.review.presence.absent",
+    "inspector.review.presence.present",
     "knowledge.agentSkills.enabled",
     "knowledge.agentSkills.newFolder",
     "knowledge.mcp.off",
@@ -179,7 +180,6 @@
     "knowledge.sections.tools.title",
     "memory.kinds.decision",
     "navigation.chat",
-    "navigation.inbox",
     "navigation.myTodos",
     "navigation.templates",
     "onboarding.catalogueCommunityHeading",
@@ -297,9 +297,6 @@
     "workspaces.views.layouts.calendar"
   ],
   "identicalToSource": {
-    "caseLaw.research.answers.no": [
-      "es"
-    ],
     "agentClaim.codePlaceholder": [
       "ar",
       "cs",
@@ -394,6 +391,9 @@
       "es",
       "fr",
       "pt-BR"
+    ],
+    "caseLaw.research.answers.no": [
+      "es"
     ],
     "catalogue.configuration": [
       "fr"

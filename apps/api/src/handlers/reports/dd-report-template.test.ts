@@ -165,6 +165,7 @@ const makeEntity = (
   activeEditBy: null,
   fields,
   cellMetadata: [],
+  assignees: [],
 });
 
 const layout: Extract<ViewLayout, { type: "table" }> = {

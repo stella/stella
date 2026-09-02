@@ -184,6 +184,7 @@ const makeEntity = (
   activeEditBy: null,
   fields,
   cellMetadata,
+  assignees: [],
 });
 
 const lockedCell = (

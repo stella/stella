@@ -56,6 +56,7 @@ const entity = (
   activeEditBy: null,
   fields,
   cellMetadata: {},
+  assignees: [],
   ...overrides,
 });
 
