@@ -25239,7 +25239,7 @@
       "version": "1.0.4"
     },
     {
-      "bom-ref": "pkg:cargo/uuid@1.25.0",
+      "bom-ref": "pkg:cargo/uuid@1.26.0",
       "evidence": {
         "identity": [
           {
@@ -25260,7 +25260,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "f053576934f05a761a402421fbbe3d425d9366f75f978806a037b3ca481abecc"
+          "content": "b5772d71c9be8a8a6ac2117d949c5b224c1b72241bb611d9a3012edcf8af7812"
         }
       ],
       "licenses": [
@@ -25282,9 +25282,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/uuid@1.25.0",
+      "purl": "pkg:cargo/uuid@1.26.0",
       "type": "library",
-      "version": "1.25.0"
+      "version": "1.26.0"
     },
     {
       "bom-ref": "pkg:cargo/valuable@0.1.1",
@@ -31981,7 +31981,7 @@
       "dependsOn": [
         "pkg:cargo/byteorder@1.5.0",
         "pkg:cargo/fnv@1.0.7",
-        "pkg:cargo/uuid@1.25.0"
+        "pkg:cargo/uuid@1.26.0"
       ],
       "ref": "pkg:cargo/cfb@0.7.3"
     },
@@ -33363,7 +33363,7 @@
         "pkg:cargo/objc2-foundation@0.3.2",
         "pkg:cargo/objc2@0.6.4",
         "pkg:cargo/time@0.3.55",
-        "pkg:cargo/uuid@1.25.0"
+        "pkg:cargo/uuid@1.26.0"
       ],
       "ref": "pkg:cargo/mac-notification-sys@0.6.15"
     },
@@ -34685,7 +34685,7 @@
         "pkg:cargo/tracing-subscriber@0.3.23",
         "pkg:cargo/tracing@0.1.44",
         "pkg:cargo/ts-rs@12.0.1",
-        "pkg:cargo/uuid@1.25.0",
+        "pkg:cargo/uuid@1.26.0",
         "pkg:cargo/windows-icons@0.4.0",
         "pkg:cargo/windows-native-keyring-store@1.1.0",
         "pkg:cargo/winsafe@0.0.28",
@@ -34932,7 +34932,7 @@
         "pkg:cargo/thiserror@2.0.20",
         "pkg:cargo/time@0.3.55",
         "pkg:cargo/url@2.5.8",
-        "pkg:cargo/uuid@1.25.0",
+        "pkg:cargo/uuid@1.26.0",
         "pkg:cargo/walkdir@2.5.0"
       ],
       "ref": "pkg:cargo/tauri-codegen@2.6.3"
@@ -35175,7 +35175,7 @@
         "pkg:cargo/toml@1.1.4+spec-1.1.0",
         "pkg:cargo/url@2.5.8",
         "pkg:cargo/urlpattern@0.3.0",
-        "pkg:cargo/uuid@1.25.0",
+        "pkg:cargo/uuid@1.26.0",
         "pkg:cargo/walkdir@2.5.0"
       ],
       "ref": "pkg:cargo/tauri-utils@2.9.3"
@@ -35602,7 +35602,7 @@
         "pkg:cargo/serde_core@1.0.229",
         "pkg:cargo/wasm-bindgen@0.2.127"
       ],
-      "ref": "pkg:cargo/uuid@1.25.0"
+      "ref": "pkg:cargo/uuid@1.26.0"
     },
     {
       "dependsOn": [],
@@ -36214,7 +36214,7 @@
         "pkg:cargo/serde_repr@0.1.21",
         "pkg:cargo/tracing@0.1.44",
         "pkg:cargo/uds_windows@1.2.1",
-        "pkg:cargo/uuid@1.25.0",
+        "pkg:cargo/uuid@1.26.0",
         "pkg:cargo/windows-sys@0.61.2",
         "pkg:cargo/winnow@1.0.4",
         "pkg:cargo/zbus_macros@5.18.0",
