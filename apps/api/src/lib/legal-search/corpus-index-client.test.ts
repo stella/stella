@@ -453,6 +453,26 @@ test("search falls back to the shared corpus index endpoint", async () => {
   expect(requests.at(0)?.host).toBe("localhost:7290");
 });
 
+test("search reads no snippets when snippet fields were requested and nothing matched", async () => {
+  // The engine leaves `snippets` out of a zero-hit response even when
+  // snippet fields were requested; that is an empty page, not a malformed one.
+  responseBody = { num_hits: 0, hits: [] };
+
+  const result = await getCorpusIndexClient("q08").search({
+    indexId: "legal_corpus_v1_cze",
+    query: "text:smlouva",
+    maxHits: 10,
+    snippetFields: ["text"],
+  });
+
+  expect(result.isOk()).toBe(true);
+  if (result.isOk()) {
+    expect(result.value.numHits).toBe(0);
+    expect(result.value.hits).toEqual([]);
+    expect(result.value.snippets).toEqual([]);
+  }
+});
+
 test("search rejects a malformed external response", async () => {
   responseBody = [];
 

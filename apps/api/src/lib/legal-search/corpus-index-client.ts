@@ -696,12 +696,16 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
         const numHits = response["num_hits"];
         const hits = parseRecordArray(response["hits"]);
         // The engine includes `snippets` only when snippet fields were
-        // requested: without them a missing key carries no snippets, with
-        // them a missing key is a malformed response.
-        const snippetsRequested =
-          snippetFields !== undefined && snippetFields.length > 0;
+        // requested and at least one hit exists: without either, a missing
+        // key carries no snippets; with both, a missing key is a malformed
+        // response.
+        const snippetsExpected =
+          snippetFields !== undefined &&
+          snippetFields.length > 0 &&
+          hits !== null &&
+          hits.length > 0;
         const snippets =
-          response["snippets"] === undefined && !snippetsRequested
+          response["snippets"] === undefined && !snippetsExpected
             ? []
             : parseRecordArray(response["snippets"]);
         if (
