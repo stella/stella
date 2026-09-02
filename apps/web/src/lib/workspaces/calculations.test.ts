@@ -9,6 +9,7 @@ import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceField, WorkspaceFieldContent } from "@/lib/types";
 import {
   calculationKindsForProperty,
+  propertyAppliesToKinds,
   toCalculationValue,
 } from "@/lib/workspaces/calculations";
 
@@ -113,6 +114,7 @@ describe("calculationKindsForProperty", () => {
         ? ({ version: 1, type: "int", value: 0, currency: null } as const)
         : ({ version: 1, type: "text", value: "" } as const),
     tool: { version: 1, type: "manual-input" } as const,
+    kinds: null,
   });
 
   test("only a numeric property offers a sum", () => {
@@ -128,6 +130,31 @@ describe("calculationKindsForProperty", () => {
     expect(calculationKindsForProperty(property("int"))).not.toContain(
       "percent-of-total",
     );
+  });
+});
+
+describe("propertyAppliesToKinds", () => {
+  // The defect this guards: a board of tasks offered totals over properties
+  // only documents carry, because the picker never asked which kinds a
+  // property applies to.
+  test("a document-only property is not offered on a task view", () => {
+    expect(propertyAppliesToKinds({ kinds: ["document"] }, ["task"])).toBe(
+      false,
+    );
+  });
+
+  test("a property shared by one of the view's kinds is offered", () => {
+    expect(
+      propertyAppliesToKinds({ kinds: ["document", "task"] }, ["task"]),
+    ).toBe(true);
+  });
+
+  test("an unscoped property applies everywhere", () => {
+    expect(propertyAppliesToKinds({ kinds: null }, ["task"])).toBe(true);
+  });
+
+  test("an unrestricted view offers every property", () => {
+    expect(propertyAppliesToKinds({ kinds: ["document"] }, null)).toBe(true);
   });
 });
 

@@ -11,7 +11,11 @@ import { NUMERIC_CALCULATION_KINDS } from "@stll/calculations";
 import { unsafeCents } from "@stll/money";
 import { currencyMinorUnitDigits } from "@stll/workspace-ui/calculation-format";
 
-import type { WorkspaceField, WorkspaceProperty } from "@/lib/types";
+import type {
+  EntityKind,
+  WorkspaceField,
+  WorkspaceProperty,
+} from "@/lib/types";
 
 /** Reductions that count rows, which every property type supports. */
 const COUNTING_KINDS = [
@@ -44,6 +48,20 @@ export const calculationKindsForProperty = (
 /** A property whose values can be reduced at all is worth offering. */
 export const isCalculableProperty = (property: WorkspaceProperty): boolean =>
   property.content.type !== "file";
+
+/**
+ * Whether a property applies to any of the kinds a view shows. A property
+ * with no kind scope applies everywhere; a view with no kind restriction
+ * shows everything. A board of tasks must not offer a totals column for a
+ * property that only documents carry: the column would count nothing.
+ */
+export const propertyAppliesToKinds = (
+  property: Pick<WorkspaceProperty, "kinds">,
+  kinds: readonly EntityKind[] | null,
+): boolean =>
+  kinds === null ||
+  property.kinds === null ||
+  property.kinds.some((kind) => kinds.includes(kind));
 
 export const toCalculationValue = (
   field: WorkspaceField | undefined,
