@@ -86,8 +86,15 @@ import {
 import type { AstNode } from "./utils.ts";
 
 const API_MODULE = "@/lib/api";
-const ERROR_ADAPTER_MODULE = "@/lib/errors/api";
-const APPROVED_RESPONSE_ADAPTERS = new Set(["unwrapEden"]);
+// Adapters that take the whole Eden response and own its error channel,
+// keyed by the module that exports them.
+const APPROVED_RESPONSE_ADAPTERS: ReadonlyMap<
+  string,
+  ReadonlySet<string>
+> = new Map([
+  ["@/lib/errors/api", new Set(["unwrapEden"])],
+  ["@/lib/public-law-api", new Set(["unwrapPublicLawEden"])],
+]);
 const EDEN_HTTP_METHODS = new Set([
   "delete",
   "get",
@@ -363,15 +370,18 @@ export default eslintCompatPlugin({
                 !isAstNode(definition.node) ||
                 !isAstNode(definition.parent) ||
                 definition.parent.type !== "ImportDeclaration" ||
-                !isStringLiteral(definition.parent.source) ||
-                definition.parent.source.value !== ERROR_ADAPTER_MODULE
+                !isStringLiteral(definition.parent.source)
               ) {
                 return false;
               }
+              const adapters = APPROVED_RESPONSE_ADAPTERS.get(
+                definition.parent.source.value,
+              );
               const importedName = getImportedName(definition.node);
               return (
+                adapters !== undefined &&
                 importedName !== null &&
-                APPROVED_RESPONSE_ADAPTERS.has(importedName)
+                adapters.has(importedName)
               );
             })
           );
@@ -523,22 +533,23 @@ export default eslintCompatPlugin({
             return { states: new Set(states), unsafe: false };
           }
 
-          if (expression.type === "MemberExpression") {
-            if (isBindingIdentifier(expression.object, binding)) {
-              const property =
-                expression.computed === true
-                  ? isStringLiteral(expression.property)
-                    ? expression.property.value
-                    : null
-                  : getPropertyName(expression.property);
-              if (property === "error") {
-                return { states: handledStates(states), unsafe: false };
-              }
-              return {
-                states: new Set(states),
-                unsafe: hasUnhandled(states),
-              };
+          if (
+            expression.type === "MemberExpression" &&
+            isBindingIdentifier(expression.object, binding)
+          ) {
+            const property =
+              expression.computed === true
+                ? isStringLiteral(expression.property)
+                  ? expression.property.value
+                  : null
+                : getPropertyName(expression.property);
+            if (property === "error") {
+              return { states: handledStates(states), unsafe: false };
             }
+            return {
+              states: new Set(states),
+              unsafe: hasUnhandled(states),
+            };
           }
 
           if (
@@ -742,6 +753,234 @@ export default eslintCompatPlugin({
           return { states: current, unsafe };
         };
 
+        const analyzeExitStatement = (
+          node: AstNode,
+          states: ReadonlySet<FlowState>,
+          binding: unknown,
+        ): FlowOutcome => {
+          const argument = analyzeExpression(node.argument, states, binding);
+          const exitsUnhandled = hasUnhandled(argument.states);
+          return {
+            states: deadStates(argument.states),
+            unsafe: argument.unsafe || exitsUnhandled,
+            unsafeExit:
+              argument.unsafeExit ??
+              (exitsUnhandled &&
+              !containsBindingReference(node.argument, binding)
+                ? node
+                : undefined),
+          };
+        };
+
+        // `response === null` / `response !== null` tests split the flow by
+        // presence; any other test is analyzed as an ordinary expression.
+        const nullComparisonOf = (
+          test: unknown,
+          binding: unknown,
+        ): "absent" | "present" | null => {
+          const expression = unwrapExpression(test);
+          if (
+            !isAstNode(expression) ||
+            expression.type !== "BinaryExpression"
+          ) {
+            return null;
+          }
+          const left = unwrapExpression(expression.left);
+          const right = unwrapExpression(expression.right);
+          const comparesBindingToNull =
+            (isBindingIdentifier(left, binding) &&
+              isAstNode(right) &&
+              right.type === "Literal" &&
+              right.value === null) ||
+            (isBindingIdentifier(right, binding) &&
+              isAstNode(left) &&
+              left.type === "Literal" &&
+              left.value === null);
+          if (!comparesBindingToNull) {
+            return null;
+          }
+          if (expression.operator === "===" || expression.operator === "==") {
+            return "absent";
+          }
+          if (expression.operator === "!==" || expression.operator === "!=") {
+            return "present";
+          }
+          return null;
+        };
+
+        const analyzeBranches = (
+          node: AstNode,
+          consequentStates: ReadonlySet<FlowState>,
+          alternateStates: ReadonlySet<FlowState>,
+          binding: unknown,
+        ): FlowOutcome => {
+          const consequent = analyzeStatement(
+            node.consequent,
+            consequentStates,
+            binding,
+          );
+          const alternate = isAstNode(node.alternate)
+            ? analyzeStatement(node.alternate, alternateStates, binding)
+            : {
+                states: new Set(alternateStates),
+                unsafe: false,
+                unsafeExit: undefined,
+              };
+          return {
+            states: mergeStates(consequent.states, alternate.states),
+            unsafe: consequent.unsafe || alternate.unsafe,
+            unsafeExit: consequent.unsafeExit ?? alternate.unsafeExit,
+          };
+        };
+
+        const analyzeIfStatement = (
+          node: AstNode,
+          states: ReadonlySet<FlowState>,
+          binding: unknown,
+        ): FlowOutcome => {
+          const nullComparison = nullComparisonOf(node.test, binding);
+          if (nullComparison !== null) {
+            const absentStates = new Set<FlowState>();
+            const presentStates = new Set<FlowState>();
+            for (const state of states) {
+              if (state === "absent") {
+                absentStates.add(state);
+              } else {
+                presentStates.add(state);
+              }
+            }
+            return nullComparison === "absent"
+              ? analyzeBranches(node, absentStates, presentStates, binding)
+              : analyzeBranches(node, presentStates, absentStates, binding);
+          }
+          const test = analyzeExpression(node.test, states, binding);
+          const branches = analyzeBranches(
+            node,
+            test.states,
+            test.states,
+            binding,
+          );
+          return {
+            states: branches.states,
+            unsafe: test.unsafe || branches.unsafe,
+            unsafeExit: test.unsafeExit ?? branches.unsafeExit,
+          };
+        };
+
+        const analyzeLoopStatement = (
+          node: AstNode,
+          states: ReadonlySet<FlowState>,
+          binding: unknown,
+        ): FlowOutcome => {
+          const entry = analyzeExpression(node.init, states, binding);
+          const test = analyzeExpression(node.test, entry.states, binding);
+          const right = analyzeExpression(node.right, test.states, binding);
+          const body = analyzeStatement(node.body, right.states, binding);
+          const update = analyzeExpression(node.update, body.states, binding);
+          return {
+            states: mergeStates(test.states, update.states),
+            unsafe:
+              entry.unsafe ||
+              test.unsafe ||
+              right.unsafe ||
+              body.unsafe ||
+              update.unsafe,
+            unsafeExit:
+              entry.unsafeExit ??
+              test.unsafeExit ??
+              right.unsafeExit ??
+              body.unsafeExit ??
+              update.unsafeExit,
+          };
+        };
+
+        const analyzeSwitchStatement = (
+          node: AstNode,
+          states: ReadonlySet<FlowState>,
+          binding: unknown,
+        ): FlowOutcome => {
+          const discriminant = analyzeExpression(
+            node.discriminant,
+            states,
+            binding,
+          );
+          const cases = Array.isArray(node.cases) ? node.cases : [];
+          const hasDefault = cases.some(
+            (switchCase) => isAstNode(switchCase) && switchCase.test === null,
+          );
+          const branches: Set<FlowState>[] = hasDefault
+            ? []
+            : [new Set(discriminant.states)];
+          let unsafe = discriminant.unsafe;
+          let unsafeExit = discriminant.unsafeExit;
+          for (const switchCase of cases) {
+            if (!isAstNode(switchCase)) {
+              continue;
+            }
+            const test = analyzeExpression(
+              switchCase.test,
+              discriminant.states,
+              binding,
+            );
+            const branch = analyzeStatements(
+              Array.isArray(switchCase.consequent) ? switchCase.consequent : [],
+              test.states,
+              binding,
+            );
+            branches.push(branch.states);
+            unsafe ||= test.unsafe || branch.unsafe;
+            unsafeExit ??= test.unsafeExit ?? branch.unsafeExit;
+          }
+          return {
+            states: mergeStates(...branches),
+            unsafe,
+            unsafeExit,
+          };
+        };
+
+        const analyzeTryStatement = (
+          node: AstNode,
+          states: ReadonlySet<FlowState>,
+          binding: unknown,
+        ): FlowOutcome => {
+          const tried = analyzeStatement(node.block, states, binding);
+          // An explicit throw carries the state reached in the try body.
+          // Starting catch from the pre-try state would resurrect an
+          // already-inspected response and falsely reject a catch return.
+          const caught = isAstNode(node.handler)
+            ? analyzeStatement(node.handler.body, tried.states, binding)
+            : {
+                states: new Set<FlowState>(),
+                unsafe: false,
+                unsafeExit: undefined,
+              };
+          const combined = {
+            states: mergeStates(tried.states, caught.states),
+            unsafe: tried.unsafe || caught.unsafe,
+            unsafeExit: tried.unsafeExit ?? caught.unsafeExit,
+          };
+          if (!isAstNode(node.finalizer)) {
+            return combined;
+          }
+          const finalizerInput = combined.unsafeExit
+            ? mergeStates(combined.states, states)
+            : combined.states;
+          const finalized = analyzeStatement(
+            node.finalizer,
+            finalizerInput,
+            binding,
+          );
+          const pendingExitHandled =
+            combined.unsafeExit !== undefined &&
+            !hasUnhandled(finalized.states);
+          return {
+            states: finalized.states,
+            unsafe:
+              (combined.unsafe && !pendingExitHandled) || finalized.unsafe,
+            unsafeExit: combined.unsafeExit ?? finalized.unsafeExit,
+          };
+        };
+
         const analyzeStatement = (
           node: unknown,
           states: ReadonlySet<FlowState>,
@@ -751,254 +990,50 @@ export default eslintCompatPlugin({
             return { states: new Set(states), unsafe: false };
           }
 
-          if (node.type === "BlockStatement") {
-            return analyzeStatements(
-              Array.isArray(node.body) ? node.body : [],
-              states,
-              binding,
-            );
-          }
-
-          if (node.type === "ExpressionStatement") {
-            return analyzeExpression(node.expression, states, binding);
-          }
-
-          if (node.type === "VariableDeclaration") {
-            return analyzeDeclarators(
-              Array.isArray(node.declarations) ? node.declarations : [],
-              states,
-              binding,
-            );
-          }
-
-          if (node.type === "ReturnStatement" || node.type === "ThrowStatement") {
-            const argument = analyzeExpression(node.argument, states, binding);
-            const exitsUnhandled = hasUnhandled(argument.states);
-            return {
-              states: deadStates(argument.states),
-              unsafe: argument.unsafe || exitsUnhandled,
-              unsafeExit:
-                argument.unsafeExit ??
-                (exitsUnhandled &&
-                !containsBindingReference(node.argument, binding)
-                  ? node
-                  : undefined),
-            };
-          }
-
-          if (node.type === "IfStatement") {
-            const nullComparison = (() => {
-              const test = unwrapExpression(node.test);
-              if (!isAstNode(test) || test.type !== "BinaryExpression") {
-                return null;
-              }
-              const left = unwrapExpression(test.left);
-              const right = unwrapExpression(test.right);
-              const comparesBindingToNull =
-                (isBindingIdentifier(left, binding) &&
-                  isAstNode(right) &&
-                  right.type === "Literal" &&
-                  right.value === null) ||
-                (isBindingIdentifier(right, binding) &&
-                  isAstNode(left) &&
-                  left.type === "Literal" &&
-                  left.value === null);
-              if (!comparesBindingToNull) {
-                return null;
-              }
-              if (test.operator === "===" || test.operator === "==") {
-                return "absent";
-              }
-              if (test.operator === "!==" || test.operator === "!=") {
-                return "present";
-              }
-              return null;
-            })();
-            if (nullComparison !== null) {
-              const absentStates = new Set<FlowState>();
-              const presentStates = new Set<FlowState>();
-              for (const state of states) {
-                if (state === "absent") {
-                  absentStates.add(state);
-                } else {
-                  presentStates.add(state);
-                }
-              }
-              const consequentStates =
-                nullComparison === "absent" ? absentStates : presentStates;
-              const alternateStates =
-                nullComparison === "absent" ? presentStates : absentStates;
-              const consequent = analyzeStatement(
-                node.consequent,
-                consequentStates,
+          switch (node.type) {
+            case "BlockStatement":
+              return analyzeStatements(
+                Array.isArray(node.body) ? node.body : [],
+                states,
                 binding,
               );
-              const alternate = isAstNode(node.alternate)
-                ? analyzeStatement(node.alternate, alternateStates, binding)
-                : {
-                    states: new Set(alternateStates),
-                    unsafe: false,
-                    unsafeExit: undefined,
-                  };
+            case "ExpressionStatement":
+              return analyzeExpression(node.expression, states, binding);
+            case "VariableDeclaration":
+              return analyzeDeclarators(
+                Array.isArray(node.declarations) ? node.declarations : [],
+                states,
+                binding,
+              );
+            case "ReturnStatement":
+            case "ThrowStatement":
+              return analyzeExitStatement(node, states, binding);
+            case "IfStatement":
+              return analyzeIfStatement(node, states, binding);
+            case "DoWhileStatement": {
+              const body = analyzeStatement(node.body, states, binding);
+              const test = analyzeExpression(node.test, body.states, binding);
               return {
-                states: mergeStates(consequent.states, alternate.states),
-                unsafe: consequent.unsafe || alternate.unsafe,
-                unsafeExit:
-                  consequent.unsafeExit ?? alternate.unsafeExit,
+                states: mergeStates(body.states, test.states),
+                unsafe: body.unsafe || test.unsafe,
+                unsafeExit: body.unsafeExit ?? test.unsafeExit,
               };
             }
-            const test = analyzeExpression(node.test, states, binding);
-            const consequent = analyzeStatement(
-              node.consequent,
-              test.states,
-              binding,
-            );
-            const alternate = isAstNode(node.alternate)
-              ? analyzeStatement(node.alternate, test.states, binding)
-              : {
-                  states: new Set(test.states),
-                  unsafe: false,
-                  unsafeExit: undefined,
-                };
-            return {
-              states: mergeStates(consequent.states, alternate.states),
-              unsafe: test.unsafe || consequent.unsafe || alternate.unsafe,
-              unsafeExit:
-                test.unsafeExit ??
-                consequent.unsafeExit ??
-                alternate.unsafeExit,
-            };
+            case "ForStatement":
+            case "ForInStatement":
+            case "ForOfStatement":
+            case "WhileStatement":
+              return analyzeLoopStatement(node, states, binding);
+            case "SwitchStatement":
+              return analyzeSwitchStatement(node, states, binding);
+            case "TryStatement":
+              return analyzeTryStatement(node, states, binding);
+            case "LabeledStatement":
+            case "WithStatement":
+              return analyzeStatement(node.body, states, binding);
+            default:
+              return analyzeExpression(node, states, binding);
           }
-
-          if (node.type === "DoWhileStatement") {
-            const body = analyzeStatement(node.body, states, binding);
-            const test = analyzeExpression(node.test, body.states, binding);
-            return {
-              states: mergeStates(body.states, test.states),
-              unsafe: body.unsafe || test.unsafe,
-              unsafeExit: body.unsafeExit ?? test.unsafeExit,
-            };
-          }
-
-          if (
-            node.type === "ForStatement" ||
-            node.type === "ForInStatement" ||
-            node.type === "ForOfStatement" ||
-            node.type === "WhileStatement"
-          ) {
-            const entry = analyzeExpression(node.init, states, binding);
-            const test = analyzeExpression(node.test, entry.states, binding);
-            const right = analyzeExpression(node.right, test.states, binding);
-            const body = analyzeStatement(node.body, right.states, binding);
-            const update = analyzeExpression(
-              node.update,
-              body.states,
-              binding,
-            );
-            return {
-              states: mergeStates(test.states, update.states),
-              unsafe:
-                entry.unsafe ||
-                test.unsafe ||
-                right.unsafe ||
-                body.unsafe ||
-                update.unsafe,
-              unsafeExit:
-                entry.unsafeExit ??
-                test.unsafeExit ??
-                right.unsafeExit ??
-                body.unsafeExit ??
-                update.unsafeExit,
-            };
-          }
-
-          if (node.type === "SwitchStatement") {
-            const discriminant = analyzeExpression(
-              node.discriminant,
-              states,
-              binding,
-            );
-            const cases = Array.isArray(node.cases) ? node.cases : [];
-            const hasDefault = cases.some(
-              (switchCase) =>
-                isAstNode(switchCase) && switchCase.test === null,
-            );
-            const branches: Set<FlowState>[] = hasDefault
-              ? []
-              : [new Set(discriminant.states)];
-            let unsafe = discriminant.unsafe;
-            let unsafeExit = discriminant.unsafeExit;
-            for (const switchCase of cases) {
-              if (!isAstNode(switchCase)) {
-                continue;
-              }
-              const test = analyzeExpression(
-                switchCase.test,
-                discriminant.states,
-                binding,
-              );
-              const branch = analyzeStatements(
-                Array.isArray(switchCase.consequent)
-                  ? switchCase.consequent
-                  : [],
-                test.states,
-                binding,
-              );
-              branches.push(branch.states);
-              unsafe ||= test.unsafe || branch.unsafe;
-              unsafeExit ??= test.unsafeExit ?? branch.unsafeExit;
-            }
-            return {
-              states: mergeStates(...branches),
-              unsafe,
-              unsafeExit,
-            };
-          }
-
-          if (node.type === "TryStatement") {
-            const tried = analyzeStatement(node.block, states, binding);
-            // An explicit throw carries the state reached in the try body.
-            // Starting catch from the pre-try state would resurrect an
-            // already-inspected response and falsely reject a catch return.
-            const caught = isAstNode(node.handler)
-              ? analyzeStatement(node.handler.body, tried.states, binding)
-              : {
-                  states: new Set<FlowState>(),
-                  unsafe: false,
-                  unsafeExit: undefined,
-                };
-            const combined = {
-              states: mergeStates(tried.states, caught.states),
-              unsafe: tried.unsafe || caught.unsafe,
-              unsafeExit: tried.unsafeExit ?? caught.unsafeExit,
-            };
-            if (!isAstNode(node.finalizer)) {
-              return combined;
-            }
-            const finalizerInput = combined.unsafeExit
-              ? mergeStates(combined.states, states)
-              : combined.states;
-            const finalized = analyzeStatement(
-              node.finalizer,
-              finalizerInput,
-              binding,
-            );
-            const pendingExitHandled =
-              combined.unsafeExit !== undefined &&
-              !hasUnhandled(finalized.states);
-            return {
-              states: finalized.states,
-              unsafe:
-                (combined.unsafe && !pendingExitHandled) || finalized.unsafe,
-              unsafeExit: combined.unsafeExit ?? finalized.unsafeExit,
-            };
-          }
-
-          if (node.type === "LabeledStatement" || node.type === "WithStatement") {
-            return analyzeStatement(node.body, states, binding);
-          }
-
-          return analyzeExpression(node, states, binding);
         };
 
         const analyzeContinuation = (
@@ -1098,7 +1133,7 @@ export default eslintCompatPlugin({
             assignedResults.length = 0;
           },
           ImportDeclaration(node) {
-            if (node.source?.value !== API_MODULE) {
+            if (node.source.value !== API_MODULE) {
               return;
             }
             for (const specifier of node.specifiers) {
@@ -1219,9 +1254,7 @@ export default eslintCompatPlugin({
                     parent.alternate === expression)))
             ) {
               expression = parent;
-              parent = isAstNode(expression.parent)
-                ? expression.parent
-                : null;
+              parent = isAstNode(expression.parent) ? expression.parent : null;
             }
 
             if (

@@ -1,9 +1,8 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
 import { nullableStringCursorSeed } from "@/lib/infinite-query";
-import { assertPublicLawApiData } from "@/lib/public-law-api";
+import { unwrapPublicLawEden } from "@/lib/public-law-api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -52,8 +51,10 @@ export const decisionProvisionsInfiniteOptions = (decisionId: string) =>
           fetch: { signal },
         });
 
-      const data = unwrapEden(response);
-      assertPublicLawApiData(data, "listPublicDecisionProvisions");
+      const data = unwrapPublicLawEden(
+        response,
+        "listPublicDecisionProvisions",
+      );
 
       return data;
     },
@@ -91,8 +92,7 @@ export const statuteByEliOptions = ({ country, eli }: StatuteByEliKey) =>
         fetch: { signal },
       });
 
-      const data = unwrapEden(response);
-      assertPublicLawApiData(data, "resolvePublicStatuteByEli");
+      const data = unwrapPublicLawEden(response, "resolvePublicStatuteByEli");
 
       return data.items.find((statute) => statute.eli === eli) ?? null;
     },
@@ -116,8 +116,10 @@ export const statuteVersionsOptions = (documentId: string) =>
           fetch: { signal },
         });
 
-      const data = unwrapEden(response);
-      assertPublicLawApiData(data, "listPublicStatuteVersionsForProvision");
+      const data = unwrapPublicLawEden(
+        response,
+        "listPublicStatuteVersionsForProvision",
+      );
 
       return data.items;
     },

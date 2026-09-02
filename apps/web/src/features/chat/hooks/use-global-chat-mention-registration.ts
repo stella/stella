@@ -10,7 +10,11 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePublicLawPreviewEnabled } from "@/hooks/use-public-law-preview";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { assertPublicLawApiData } from "@/lib/public-law-api";
+import {
+  PublicLawUnavailableError,
+  toPublicLawError,
+  unwrapPublicLawEden,
+} from "@/lib/public-law-api";
 import { toSafeId } from "@/lib/safe-id";
 
 const GLOBAL_CHAT_MENTION_EXTENSION_ID = "global-chat:org-mentions";
@@ -36,11 +40,20 @@ const searchCaseLawMentions = async (
   });
 
   if (response.error) {
-    getAnalytics().captureError(response.error);
+    const error = toPublicLawError(
+      response.error,
+      "searchPublicCaseLawMentions",
+    );
+    // A surface the deployment keeps off is the preview's expected answer,
+    // not a defect to report on every keystroke; the picker simply has no
+    // decisions to offer.
+    if (!PublicLawUnavailableError.is(error)) {
+      getAnalytics().captureError(error);
+    }
     return [];
   }
-  const data = response.data;
-  assertPublicLawApiData(data, "searchPublicCaseLawMentions");
+
+  const data = unwrapPublicLawEden(response, "searchPublicCaseLawMentions");
 
   return data.hits.map((hit) => ({
     resource: resourceRef({

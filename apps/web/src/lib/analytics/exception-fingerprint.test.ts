@@ -170,3 +170,27 @@ test("fingerprint is stable across content-hashed chunk renames", () => {
   );
   expect(a).not.toBe(c);
 });
+
+test("an API error carries its response identity as a trailing component", () => {
+  const entries = [
+    {
+      type: "ApiError",
+      stacktrace: { frames: [matterViewFrames[1]] },
+    },
+  ];
+  const withoutHttp = fingerprintExceptionEvent({ entries });
+  expect(withoutHttp).toBe("ApiError||matter-view.js:renderMatter|");
+  expect(fingerprintExceptionEvent({ entries, http: { status: 404 } })).toBe(
+    `${withoutHttp}|404`,
+  );
+  expect(
+    fingerprintExceptionEvent({
+      entries,
+      http: { status: 402, code: "usage_limit_exceeded" },
+    }),
+  ).toBe(`${withoutHttp}|402:usage_limit_exceeded`);
+  // Outcomes group separately; the same outcome groups together.
+  expect(
+    fingerprintExceptionEvent({ entries, http: { status: 503 } }),
+  ).not.toBe(fingerprintExceptionEvent({ entries, http: { status: 404 } }));
+});

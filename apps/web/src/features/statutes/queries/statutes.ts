@@ -2,10 +2,10 @@ import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { APIError } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { nullableStringCursorSeed } from "@/lib/infinite-query";
-import { assertPublicLawApiData } from "@/lib/public-law-api";
+import { toPublicLawError, unwrapPublicLawEden } from "@/lib/public-law-api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -85,8 +85,7 @@ export const statutesInfiniteOptions = (filters: StatuteListFilters) =>
         fetch: { signal },
       });
 
-      const data = unwrapEden(response);
-      assertPublicLawApiData(data, "listPublicStatutes");
+      const data = unwrapPublicLawEden(response, "listPublicStatutes");
 
       return data;
     },
@@ -100,8 +99,7 @@ const readStatute = async (documentId: string, signal: AbortSignal) => {
     .statutes({ documentId: toSafeId<"legislationDocument">(documentId) })
     .get({ fetch: { signal } });
 
-  const data = unwrapEden(response);
-  assertPublicLawApiData(data, "readPublicStatute");
+  const data = unwrapPublicLawEden(response, "readPublicStatute");
 
   return data;
 };
@@ -131,19 +129,16 @@ export const statuteAsOfOptions = (key: StatuteAsOfKey) =>
       });
 
       if (response.error) {
-        const error = toAPIError(response.error);
+        const error = toPublicLawError(response.error, "readPublicStatuteAsOf");
 
-        if (error.status === NOT_FOUND_STATUS) {
+        if (APIError.is(error) && error.status === NOT_FOUND_STATUS) {
           return null;
         }
 
         throw error;
       }
 
-      const { data } = response;
-      assertPublicLawApiData(data, "readPublicStatuteAsOf");
-
-      return data;
+      return unwrapPublicLawEden(response, "readPublicStatuteAsOf");
     },
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
@@ -169,8 +164,7 @@ const readStatuteVersionsPage = async ({
       fetch: { signal },
     });
 
-  const data = unwrapEden(response);
-  assertPublicLawApiData(data, "listPublicStatuteVersions");
+  const data = unwrapPublicLawEden(response, "listPublicStatuteVersions");
 
   return data;
 };

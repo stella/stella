@@ -1,10 +1,8 @@
 // Passive regression fixture for require-eden-error-check.
 
 import { api } from "@/lib/api";
-import {
-  toAPIError,
-  unwrapEden as unwrapResponse,
-} from "@/lib/errors/api";
+import { toAPIError, unwrapEden as unwrapResponse } from "@/lib/errors/api";
+import { unwrapPublicLawEden } from "@/lib/public-law-api";
 
 declare const consume: (value: unknown) => void;
 declare const condition: boolean;
@@ -37,8 +35,7 @@ export const directlyEscapedToOpaqueConsumer = async () => {
 
 // Allowed: direct inspection of the error channel and the canonical adapter
 // both handle the response without an intermediate binding.
-export const directlyInspectedError = async () =>
-  (await api.tasks.get()).error;
+export const directlyInspectedError = async () => (await api.tasks.get()).error;
 
 export const directlyAdaptedResponse = async () =>
   unwrapResponse(await api.tasks.get());
@@ -173,9 +170,7 @@ export const checkedOnBothBranches = async () => {
 // Allowed: mutually exclusive awaited branches flow into one binding whose
 // error channel is inspected before its data is consumed.
 export const checkedConditionalAcquisition = async () => {
-  const response = condition
-    ? await api.tasks.get()
-    : await api.tasks.get();
+  const response = condition ? await api.tasks.get() : await api.tasks.get();
   consume(response.error);
   return response.data;
 };
@@ -183,9 +178,7 @@ export const checkedConditionalAcquisition = async () => {
 // MUST flag: a conditional acquisition still needs one dominating error check.
 export const uncheckedConditionalAcquisition = async () => {
   // oxlint-disable-next-line require-eden-error-check/require-eden-error-check -- fixture: both conditional branches flow to one unchecked response binding
-  const response = condition
-    ? await api.tasks.get()
-    : await api.tasks.get();
+  const response = condition ? await api.tasks.get() : await api.tasks.get();
   return response.data;
 };
 
@@ -246,6 +239,13 @@ export const destructuredByAssignment = async () => {
 export const passedToApprovedAdapter = async () => {
   const response = await api.tasks.get();
   return unwrapResponse(response);
+};
+
+// Allowed: a domain adapter registered for its owning module owns the
+// error channel the same way the canonical one does.
+export const passedToDomainAdapter = async () => {
+  const response = await api.tasks.get();
+  return unwrapPublicLawEden(response, "fixture");
 };
 
 // MUST flag: a same-shaped local helper is not the canonical imported
