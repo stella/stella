@@ -1,5 +1,9 @@
 import { isEntityKind } from "@stll/api-contract";
-import { conditionIncludesKind, foldConditions } from "@stll/conditions";
+import {
+  conditionIncludesKind,
+  foldConditions,
+  isEffectiveLeaf,
+} from "@stll/conditions";
 import type { ConditionNode, FoldHandlers } from "@stll/conditions";
 
 import type { EntityKind } from "@/lib/types";
@@ -39,11 +43,14 @@ export const viewEntityKinds = (
 
 /**
  * What a node contributes to the kinds a view admits. Unlike the fold's
- * generic drop rule (a `null` result), this never reports "dropped" — a
- * predicate or compare other than `kind in […]` still compiles to SQL, it
- * just does not restrict which kind rows match, so it folds to
- * `UNRESTRICTED` rather than `null`. Only an empty group is ever dropped,
- * and that is handled by the fold itself before `group` below is called.
+ * generic drop rule (a `null` result), a *compiling* predicate or compare
+ * other than `kind in […]` never reports "dropped" — it still restricts SQL
+ * rows, just not by kind, so it folds to `UNRESTRICTED` rather than `null`.
+ * A leaf `isEffectiveLeaf` rejects (an incomplete filter, or a shape the SQL
+ * compiler does not support) genuinely IS dropped here too, exactly as it is
+ * dropped from the compiled SQL — see `isEffectiveLeaf`'s doc comment for the
+ * shared rule. An empty group is dropped the same way, but that is handled
+ * by the fold itself before `group` below is called.
  */
 type AdmittedKinds =
   | { type: "unrestricted" }
@@ -54,6 +61,9 @@ const UNRESTRICTED = {
 } as const satisfies AdmittedKinds;
 
 const admittedKindsForLeaf: FoldHandlers<AdmittedKinds>["leaf"] = (node) => {
+  if (!isEffectiveLeaf(node)) {
+    return null;
+  }
   if (
     node.type !== "predicate" ||
     node.operand.type !== "kind" ||

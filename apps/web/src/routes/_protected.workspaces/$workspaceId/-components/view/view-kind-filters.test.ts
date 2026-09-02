@@ -198,6 +198,64 @@ describe("view entity kinds", () => {
     ).toEqual(["task"]);
   });
 
+  // A compare that the SQL compiler drops as incomplete (an ordered op
+  // against an empty literal — the operator is chosen, the value has not
+  // been entered yet) must be dropped here too, not treated as an
+  // unrestricted sibling: SQL only ever restricts to the surviving `kind in
+  // […]` branch, matching `entity-filters.ts`'s `compileCompare`.
+  test("an incomplete compare inside an or does not widen a sibling kind restriction", () => {
+    expect(
+      viewEntityKinds([
+        {
+          type: "group",
+          combinator: "or",
+          children: [
+            {
+              type: "predicate",
+              operand: { type: "kind" },
+              op: "in",
+              value: ["task"],
+            },
+            {
+              type: "compare",
+              left: { type: "property", propertyId: "due-date" },
+              op: "lt",
+              right: { type: "literal", value: "" },
+            },
+          ],
+        },
+      ]),
+    ).toEqual(["task"]);
+  });
+
+  // The complement: a genuinely complete, unrelated compare DOES compile to
+  // SQL, so it keeps the `or` group unrestricted, exactly as it would keep
+  // a real WHERE clause from restricting to `kind`.
+  test("a complete unrelated compare inside an or leaves the view unrestricted", () => {
+    expect(
+      viewEntityKinds([
+        {
+          type: "group",
+          combinator: "or",
+          children: [
+            {
+              type: "predicate",
+              operand: { type: "kind" },
+              op: "in",
+              value: ["task"],
+            },
+            {
+              type: "compare",
+              left: { type: "property", propertyId: "due-date" },
+              op: "lt",
+              right: { type: "literal", value: "2026-01-01" },
+            },
+          ],
+        },
+      ]),
+    ).toBeNull();
+  });
+
   test("a group whose children are all dropped is dropped itself", () => {
     expect(
       viewEntityKinds([

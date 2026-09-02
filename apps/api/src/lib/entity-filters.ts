@@ -14,6 +14,7 @@ import {
   type RefOperand,
   evaluateCondition,
   foldCondition,
+  isEffectiveLeaf,
   pruneIncomplete,
 } from "@stll/conditions";
 
@@ -482,31 +483,28 @@ const compileBuiltinCompare = (
 ): SQL | null => {
   const col = builtinColumn(field);
   if (op === "eq") {
-    return value === "" ? null : eq(col, value);
+    return eq(col, value);
   }
   if (op === "neq") {
-    return value === "" ? null : (or(ne(col, value), isNull(col)) ?? null);
+    return or(ne(col, value), isNull(col)) ?? null;
   }
   return compareOpSql(op, sql`${col}`, value);
 };
 
 const compileCompare = (node: CompareNode): SQL | null => {
-  // `formula` operands have no SQL transpilation; skip the leaf rather than
-  // coerce it. They are stripped at the persistence boundary, so this is a
-  // belt-and-suspenders guard against a hand-crafted filter.
-  if (node.left.type === "formula" || node.right.type === "formula") {
+  // The structural completeness/support rule lives in `isEffectiveLeaf`,
+  // shared with the web's kind reader so both agree on which leaves compile
+  // to nothing: a `formula` operand on either side, a non-literal `right`, a
+  // `left` that is not a property or builtin column, or a blank literal
+  // (an in-progress filter — operator chosen, value not yet entered).
+  if (!isEffectiveLeaf(node)) {
     return null;
   }
-  // The filter UI always compares a ref operand against a literal.
+  // `isEffectiveLeaf` guarantees `right` is a non-empty literal and `left` is
+  // a property or builtin operand — the only shapes below need to handle.
   const value = literalString(node.right);
   if (value === null) {
-    return null;
-  }
-  // An ordered comparison with an empty literal is an incomplete filter
-  // (operator chosen, value not yet entered); drop it so an in-progress
-  // "date is before …" doesn't match nearly every row.
-  if (value === "" && node.op !== "eq" && node.op !== "neq") {
-    return null;
+    return panic("effective compare has a non-literal right operand");
   }
   if (node.left.type === "property") {
     return propertyExists(
@@ -517,7 +515,7 @@ const compileCompare = (node: CompareNode): SQL | null => {
   if (node.left.type === "builtin") {
     return compileBuiltinCompare(node.left.field, node.op, value);
   }
-  return null;
+  return panic("effective compare has an unsupported left operand");
 };
 
 // -- Predicate nodes --
@@ -550,18 +548,11 @@ const compilePropertyPredicate = (
   propertyId: string,
   node: PredicateNode,
 ): SQL | null => {
+  // `isEffectiveLeaf` (checked by `compilePredicate` before dispatching here)
+  // already guarantees a non-empty payload for every op below that needs one
+  // (`contains`/`not_contains`/`starts_with`/`ends_with`/`contains_all`/`in`)
+  // and rules out `is_truthy`, which has no SQL form for a property at all.
   const text = String(node.value ?? "");
-  // Incomplete value-bearing text predicate (no value yet) is a no-op, like the
-  // ordered compare path; contains_all/in already null out on an empty payload.
-  if (
-    text === "" &&
-    (node.op === "contains" ||
-      node.op === "not_contains" ||
-      node.op === "starts_with" ||
-      node.op === "ends_with")
-  ) {
-    return null;
-  }
   // Same matcher for arrays and scalars (membership/emptiness ops).
   const same = (match: (v: SQL) => SQL) =>
     propertyValueMatches(propertyId, match, match);
@@ -592,21 +583,19 @@ const compilePropertyPredicate = (
       return sql`NOT ${same((v) => sql`${v} <> ''`)}`;
     case "contains_all": {
       const wanted = asValueArray(node.value);
-      if (wanted.length === 0) {
-        return null;
-      }
       const clauses = wanted.map((want) => same((v) => sql`${v} = ${want}`));
       return and(...clauses) ?? null;
     }
     case "in": {
       const values = asValueArray(node.value);
-      if (values.length === 0) {
-        return null;
-      }
       // `typedPgArray` binds a real `ARRAY[...]::text[]`; a bare `ANY(${values})`
       // expands to a row constructor `ANY(($1, $2))`, which Postgres rejects.
       return same((v) => sql`${v} = ANY(${typedPgArray(values, "text")})`);
     }
+    // Unreachable: `isEffectiveLeaf` already rejects `is_truthy` for a
+    // property predicate before `compilePredicate` dispatches here. Kept as
+    // an explicit case (rather than folded into `default`) so this switch
+    // stays exhaustive over every `PredicateOp`.
     case "is_truthy":
       return null;
     default:
@@ -622,15 +611,15 @@ const compileBuiltinPredicate = (
   switch (node.op) {
     case "in": {
       const values = asValueArray(node.value);
-      if (values.length === 0) {
-        return null;
-      }
       return inArray(col, values);
     }
     case "is_empty":
       return sql`(${col} IS NULL OR ${col} = '')`;
     case "is_not_empty":
       return sql`(${col} IS NOT NULL AND ${col} <> '')`;
+    // Unreachable: `isEffectiveLeaf` already rejects every one of these ops
+    // for a builtin predicate before `compilePredicate` dispatches here.
+    // Kept explicit so this switch stays exhaustive over every `PredicateOp`.
     case "is_truthy":
     case "contains":
     case "not_contains":
@@ -644,9 +633,9 @@ const compileBuiltinPredicate = (
 };
 
 const compileKindPredicate = (node: PredicateNode): SQL | null => {
-  if (node.op !== "in") {
-    return null;
-  }
+  // `isEffectiveLeaf` already guarantees `node.op === "in"` with a non-empty
+  // payload; the only thing left to check here is whether that payload names
+  // a recognized `EntityKind` — a domain fact `@stll/conditions` doesn't own.
   const expanded = expandKindValues(asValueArray(node.value));
   if (expanded.length === 0) {
     return null;
@@ -655,6 +644,13 @@ const compileKindPredicate = (node: PredicateNode): SQL | null => {
 };
 
 const compilePredicate = (node: PredicateNode): SQL | null => {
+  // The structural completeness/support rule lives in `isEffectiveLeaf`,
+  // shared with the web's kind reader: an unsupported op for the operand's
+  // type, or a payload-bearing op with nothing entered yet, compiles to
+  // nothing.
+  if (!isEffectiveLeaf(node)) {
+    return null;
+  }
   switch (node.operand.type) {
     case "kind":
       return compileKindPredicate(node);
@@ -662,6 +658,9 @@ const compilePredicate = (node: PredicateNode): SQL | null => {
       return compilePropertyPredicate(node.operand.propertyId, node);
     case "builtin":
       return compileBuiltinPredicate(node.operand.field, node);
+    // Unreachable: `isEffectiveLeaf` already rejects every one of these
+    // operand types. Kept explicit so this switch stays exhaustive over
+    // every `Operand` type.
     case "path":
     case "formula":
     case "literal":
