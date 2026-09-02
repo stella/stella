@@ -19,6 +19,7 @@ import {
 import type { CachingDecision } from "@/api/lib/ai-config";
 import { classifyAIError } from "@/api/lib/ai-error";
 import { toSafeId } from "@/api/lib/branded-types";
+import { StructuredOutputBudgetError } from "@/api/lib/structured-output-budget";
 import {
   generateTanStackObjectForRole,
   generateTanStackTextForRole,
@@ -264,6 +265,75 @@ describe("TanStack AI structured output generation", () => {
     expect(captured.stream).toBe(true);
     expect(captured.outputSchema).not.toBe(rawSchema);
     expectHasTanStackJsonSchema(captured.outputSchema);
+  });
+
+  // The test model is an OpenAI one, so the schema has to clear the widest
+  // budget in the table. Every provider's budget is enforced at the same seam.
+  const overBudgetSchema = () =>
+    v.strictObject(
+      Object.fromEntries(
+        Array.from({ length: 600 }, (_, index) => [
+          `field_${index}`,
+          v.pipe(
+            v.string(),
+            v.description(
+              `Field ${index}: ${"a long instruction repeated to inflate the projected schema. ".repeat(3)}`,
+            ),
+          ),
+        ]),
+      ),
+    );
+
+  test("refuses an over-budget structured-output schema before it reaches the provider", async () => {
+    capturedChatOptions.length = 0;
+
+    const failure = await generateObjectForTestModel({
+      caching: noCaching,
+      organizationId: null,
+      orgAIConfig: null,
+      outputSchema: overBudgetSchema(),
+      prompt: "Extract the answer.",
+      role: "pdf",
+      serviceTier: "standard",
+      tenantWorkspaceIds: [],
+    }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+
+    expect(failure).toBeInstanceOf(StructuredOutputBudgetError);
+    expect(String(failure)).toContain("exceeds the openai budget");
+    expect(capturedChatOptions).toHaveLength(0);
+  });
+
+  test("refuses an over-budget structured-output schema before it starts streaming", async () => {
+    capturedChatOptions.length = 0;
+
+    const events: unknown[] = [];
+    const drain = async () => {
+      for await (const event of streamObjectForTestModel({
+        caching: noCaching,
+        organizationId: null,
+        orgAIConfig: null,
+        outputSchema: overBudgetSchema(),
+        prompt: "Extract the answer.",
+        role: "pdf",
+        serviceTier: "standard",
+        tenantWorkspaceIds: [],
+      })) {
+        events.push(event);
+      }
+    };
+
+    const failure = await drain().then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+
+    expect(failure).toBeInstanceOf(StructuredOutputBudgetError);
+    expect(String(failure)).toContain("exceeds the openai budget");
+    expect(events).toEqual([]);
+    expect(capturedChatOptions).toHaveLength(0);
   });
 
   test("validates final objects with the original Valibot schema", async () => {

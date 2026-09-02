@@ -12,8 +12,13 @@ import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import { sanitizeForPrompt, untrustedText } from "@/api/lib/prompt-safety";
+import { splitPropertiesForBudget } from "@/api/lib/structured-output-budget";
 import { markTanStackCacheBreakpoint } from "@/api/lib/tanstack-ai-caching";
-import { streamTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
+import {
+  resolveTanStackTextModel,
+  streamTanStackObjectForRole,
+  structuredOutputWireJsonSchema,
+} from "@/api/lib/tanstack-ai-generate";
 import {
   buildBatchSchema,
   buildDocxBlocksMessage,
@@ -147,7 +152,42 @@ export const generateWorkflowData = async ({
 }: GenerateWorkflowDataProps): Promise<
   Result<WorkflowDataOutput, WorkflowIntegrationError>
 > => {
-  const schema = buildBatchSchema(properties, filenames);
+  // Resolved up front because the schema budget is a property of the provider,
+  // not of the batch: the planner groups properties by dependency signature
+  // and cannot know how many of them one request may carry.
+  const model = Result.try({
+    try: () =>
+      resolveTanStackTextModel({ role: "pdf", orgAIConfig, organizationId }),
+    catch: (error) =>
+      new WorkflowIntegrationError({
+        message: "Workflow AI model resolution failed",
+        cause: error,
+      }),
+  });
+  if (Result.isError(model)) {
+    return Result.err(model.error);
+  }
+  const { provider } = model.value;
+
+  const chunks = splitPropertiesForBudget({
+    provider,
+    properties,
+    buildSchema: (chunkProperties) =>
+      structuredOutputWireJsonSchema({
+        outputSchema: buildBatchSchema(chunkProperties, filenames),
+        provider,
+      }),
+  });
+  if (Result.isError(chunks)) {
+    return Result.err(
+      new WorkflowIntegrationError({
+        message:
+          "A single workflow property does not fit the provider's structured-output budget",
+        cause: chunks.error,
+      }),
+    );
+  }
+
   const cachingDecision = resolveCaching({
     promptCachingEnabled,
     role: "pdf",
@@ -220,84 +260,103 @@ export const generateWorkflowData = async ({
     }
   }
 
-  messageContent.push({
-    type: "text",
-    content: buildPromptsMessage(properties),
-  });
-
-  const aiAnalytics = createTanStackAIAnalyticsCallbacks(
-    buildWorkflowAIAnalyticsProps({
-      entityVersionId,
-      organizationId,
-      orgAIConfig: orgAIConfig ?? null,
-      propertyCount: properties.length,
-      usageMetering,
-      workspaceId,
-    }),
-  );
-
-  return await Result.tryPromise({
-    try: async () => {
-      const stream = streamTanStackObjectForRole({
-        role: "pdf",
-        orgAIConfig,
+  // Every chunk sends the same `messageContent` prefix, so the cache
+  // breakpoint above is warmed once and reused; only the prompt list and the
+  // output schema narrow to the chunk.
+  const runChunk = async (
+    chunkProperties: AIBatchProperty[],
+  ): Promise<Result<WorkflowDataOutput, WorkflowIntegrationError>> => {
+    const aiAnalytics = createTanStackAIAnalyticsCallbacks(
+      buildWorkflowAIAnalyticsProps({
+        entityVersionId,
         organizationId,
-        tenantWorkspaceIds: [workspaceId],
-        analytics: aiAnalytics,
-        caching: cachingDecision,
-        serviceTier,
-        messages: [{ role: "user", content: messageContent }],
-        system: WORKFLOW_SYSTEM_PROMPT,
-        abortSignal,
-        outputSchema: schema,
-      });
+        orgAIConfig: orgAIConfig ?? null,
+        propertyCount: chunkProperties.length,
+        usageMetering,
+        workspaceId,
+      }),
+    );
 
-      let rawJson = "";
-      let output: WorkflowDataOutput | undefined;
-      const propertyIds = properties.map((property) => property.id);
+    const chunkContent: WorkflowMessagePart[] = [
+      ...messageContent,
+      { type: "text", content: buildPromptsMessage(chunkProperties) },
+    ];
 
-      for await (const event of stream) {
-        if (event.type === "complete") {
-          output = event.object;
-          continue;
-        }
+    return await Result.tryPromise({
+      try: async () => {
+        const stream = streamTanStackObjectForRole({
+          role: "pdf",
+          orgAIConfig,
+          organizationId,
+          tenantWorkspaceIds: [workspaceId],
+          analytics: aiAnalytics,
+          caching: cachingDecision,
+          serviceTier,
+          messages: [{ role: "user", content: chunkContent }],
+          system: WORKFLOW_SYSTEM_PROMPT,
+          abortSignal,
+          outputSchema: buildBatchSchema(chunkProperties, filenames),
+        });
 
-        if (!onPartialAnswer) {
-          continue;
-        }
+        let rawJson = "";
+        let output: WorkflowDataOutput | undefined;
+        const propertyIds = chunkProperties.map((property) => property.id);
 
-        if (event.type === "partial") {
-          await consumePartialAnswers({
-            partialOutputs: [event.partial],
+        for await (const event of stream) {
+          if (event.type === "complete") {
+            output = event.object;
+            continue;
+          }
+
+          if (!onPartialAnswer) {
+            continue;
+          }
+
+          if (event.type === "partial") {
+            await consumePartialAnswers({
+              partialOutputs: [event.partial],
+              propertyIds,
+              onPartialAnswer,
+            });
+            continue;
+          }
+
+          rawJson += event.delta;
+          await consumeTanStackPartialAnswer({
+            rawJson,
             propertyIds,
             onPartialAnswer,
           });
-          continue;
         }
 
-        rawJson += event.delta;
-        await consumeTanStackPartialAnswer({
-          rawJson,
-          propertyIds,
-          onPartialAnswer,
+        if (output === undefined) {
+          throw new WorkflowIntegrationError({
+            message: "Workflow AI generation did not return structured output",
+          });
+        }
+
+        return output;
+      },
+      catch: (error) => {
+        aiAnalytics.captureError(error);
+
+        return new WorkflowIntegrationError({
+          message: "Workflow AI generation failed",
+          cause: error,
         });
-      }
+      },
+    });
+  };
 
-      if (output === undefined) {
-        throw new WorkflowIntegrationError({
-          message: "Workflow AI generation did not return structured output",
-        });
-      }
+  const merged: WorkflowDataOutput = {};
+  for (const chunkProperties of chunks.value) {
+    // oxlint-disable-next-line no-await-in-loop -- chunks share one prompt prefix, so running them in order caches it once instead of paying for it per chunk, and the first failure stops the batch
+    const chunkOutput = await runChunk(chunkProperties);
+    if (Result.isError(chunkOutput)) {
+      return chunkOutput;
+    }
+    Object.assign(merged, chunkOutput.value);
+  }
 
-      return output;
-    },
-    catch: (error) => {
-      aiAnalytics.captureError(error);
-
-      return new WorkflowIntegrationError({
-        message: "Workflow AI generation failed",
-        cause: error,
-      });
-    },
-  });
+  return Result.ok(merged);
 };
