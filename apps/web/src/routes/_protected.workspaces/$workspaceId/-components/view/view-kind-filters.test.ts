@@ -47,6 +47,118 @@ describe("view entity kinds", () => {
       ]),
     ).toEqual(["task"]);
   });
+
+  test("is null for an or group with one non-kind child", () => {
+    expect(
+      viewEntityKinds([
+        {
+          type: "group",
+          combinator: "or",
+          children: [
+            {
+              type: "predicate",
+              operand: { type: "kind" },
+              op: "in",
+              value: ["task"],
+            },
+            {
+              type: "predicate",
+              operand: { type: "property", propertyId: "status" },
+              op: "is_not_empty",
+            },
+          ],
+        },
+      ]),
+    ).toBeNull();
+  });
+
+  test("unions the kinds an or group's children each admit", () => {
+    expect(
+      viewEntityKinds([
+        {
+          type: "group",
+          combinator: "or",
+          children: [
+            {
+              type: "predicate",
+              operand: { type: "kind" },
+              op: "in",
+              value: ["task"],
+            },
+            {
+              type: "predicate",
+              operand: { type: "kind" },
+              op: "in",
+              value: ["message"],
+            },
+          ],
+        },
+      ]),
+    ).toEqual(["task", "message"]);
+  });
+
+  test("is null for a negated group", () => {
+    expect(
+      viewEntityKinds([
+        {
+          type: "group",
+          combinator: "and",
+          negated: true,
+          children: [
+            {
+              type: "predicate",
+              operand: { type: "kind" },
+              op: "in",
+              value: ["task"],
+            },
+          ],
+        },
+      ]),
+    ).toBeNull();
+  });
+
+  test("intersects the kinds an and group's predicates each admit", () => {
+    expect(
+      viewEntityKinds([
+        {
+          type: "group",
+          combinator: "and",
+          children: [
+            {
+              type: "predicate",
+              operand: { type: "kind" },
+              op: "in",
+              value: ["task", "message"],
+            },
+            {
+              type: "predicate",
+              operand: { type: "kind" },
+              op: "in",
+              value: ["message", "document"],
+            },
+          ],
+        },
+      ]),
+    ).toEqual(["message"]);
+  });
+
+  test("ignores an unrelated predicate anded with a kind filter", () => {
+    expect(
+      viewEntityKinds([
+        {
+          type: "predicate",
+          operand: { type: "kind" },
+          op: "in",
+          value: ["task"],
+        },
+        {
+          type: "predicate",
+          operand: { type: "property", propertyId: "status" },
+          op: "is_not_empty",
+        },
+      ]),
+    ).toEqual(["task"]);
+  });
 });
 
 describe("List view detection", () => {

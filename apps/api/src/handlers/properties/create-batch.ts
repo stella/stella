@@ -16,6 +16,7 @@ import {
   createPropertyBodySchema,
   isDocumentTypeClassifierProperty,
 } from "@/api/lib/properties/create-schema";
+import { propertyKindsForTool } from "@/api/lib/properties/property-kinds";
 import { lockWorkspacePropertyWrites } from "@/api/lib/properties/property-lock";
 
 const config = {
@@ -136,6 +137,7 @@ const createPropertiesBatch = createSafeHandler(
               name,
               content,
               tool,
+              kinds: propertyKindsForTool(tool),
               role,
               status: initialStatus,
             })

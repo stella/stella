@@ -1,6 +1,6 @@
 import { isEntityKind } from "@stll/api-contract";
 import { conditionIncludesKind } from "@stll/conditions";
-import type { ConditionNode } from "@stll/conditions";
+import type { ConditionNode, GroupNode, PredicateNode } from "@stll/conditions";
 
 import type { EntityKind } from "@/lib/types";
 
@@ -13,43 +13,110 @@ export const includesListItems = (filters: readonly ConditionNode[]): boolean =>
 
 /**
  * The entity kinds a view's filters admit, read from its `kind in […]`
- * predicates (nested groups included), or `null` when the view does not
- * restrict the kind. A view that names kinds only ever shows those entities,
- * so anything offered per property (calculations, columns) can be scoped to
- * the properties those kinds carry.
+ * predicates, or `null` when the view does not provably restrict the kind.
+ * An `and` intersects the sets its restricted children admit (an unrestricted
+ * child is ignored, not treated as "everything"); an `or` is restricted only
+ * when every child is, and is then their union. A negated group, and any
+ * predicate or compare node other than `kind in […]`, is treated as
+ * unrestricted: we do not compute the complement a negation would admit.
  */
 export const viewEntityKinds = (
   filters: readonly ConditionNode[],
 ): readonly EntityKind[] | null => {
-  const kinds = new Set<EntityKind>();
-  return collectViewKinds(filters, kinds) ? [...kinds] : null;
+  const kinds = admittedKindsForAnd(filters);
+  return kinds ? [...kinds] : null;
 };
 
-/** Adds every admitted kind to `kinds`; true when some predicate restricts it. */
-const collectViewKinds = (
-  nodes: readonly ConditionNode[],
-  kinds: Set<EntityKind>,
-): boolean => {
-  let restricted = false;
-  for (const node of nodes) {
-    if (node.type === "group") {
-      restricted = collectViewKinds(node.children, kinds) || restricted;
-      continue;
-    }
-    if (
-      node.type !== "predicate" ||
-      node.operand.type !== "kind" ||
-      node.op !== "in" ||
-      !Array.isArray(node.value)
-    ) {
-      continue;
-    }
-    restricted = true;
-    for (const value of node.value) {
-      if (typeof value === "string" && isEntityKind(value)) {
-        kinds.add(value);
-      }
+/** The kinds a single condition node admits, or `null` when unrestricted. */
+const admittedKinds = (node: ConditionNode): ReadonlySet<EntityKind> | null => {
+  switch (node.type) {
+    case "compare":
+      return null;
+    case "predicate":
+      return admittedKindsForPredicate(node);
+    case "group":
+      return admittedKindsForGroup(node);
+    default:
+      return node satisfies never;
+  }
+};
+
+const admittedKindsForPredicate = (
+  node: PredicateNode,
+): ReadonlySet<EntityKind> | null => {
+  if (
+    node.operand.type !== "kind" ||
+    node.op !== "in" ||
+    !Array.isArray(node.value)
+  ) {
+    return null;
+  }
+  const kinds = new Set<EntityKind>();
+  for (const value of node.value) {
+    if (isEntityKind(value)) {
+      kinds.add(value);
     }
   }
-  return restricted;
+  return kinds;
+};
+
+const admittedKindsForGroup = (
+  node: GroupNode,
+): ReadonlySet<EntityKind> | null => {
+  if (node.negated) {
+    return null;
+  }
+  switch (node.combinator) {
+    case "and":
+      return admittedKindsForAnd(node.children);
+    case "or":
+      return admittedKindsForOr(node.children);
+    default:
+      return node.combinator satisfies never;
+  }
+};
+
+/** Intersection of restricted children; unrestricted children are ignored. */
+const admittedKindsForAnd = (
+  nodes: readonly ConditionNode[],
+): ReadonlySet<EntityKind> | null => {
+  let result: ReadonlySet<EntityKind> | null = null;
+  for (const node of nodes) {
+    const childKinds = admittedKinds(node);
+    if (!childKinds) {
+      continue;
+    }
+    result = result ? intersect(result, childKinds) : childKinds;
+  }
+  return result;
+};
+
+/** Union of children, but only when every child is itself restricted. */
+const admittedKindsForOr = (
+  nodes: readonly ConditionNode[],
+): ReadonlySet<EntityKind> | null => {
+  const kinds = new Set<EntityKind>();
+  for (const node of nodes) {
+    const childKinds = admittedKinds(node);
+    if (!childKinds) {
+      return null;
+    }
+    for (const kind of childKinds) {
+      kinds.add(kind);
+    }
+  }
+  return kinds;
+};
+
+const intersect = (
+  a: ReadonlySet<EntityKind>,
+  b: ReadonlySet<EntityKind>,
+): ReadonlySet<EntityKind> => {
+  const result = new Set<EntityKind>();
+  for (const kind of a) {
+    if (b.has(kind)) {
+      result.add(kind);
+    }
+  }
+  return result;
 };
