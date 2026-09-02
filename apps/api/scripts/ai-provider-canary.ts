@@ -18,6 +18,7 @@ import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-sc
 import type { CachingDecision, OrgAIConfig } from "@/api/lib/ai-config";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { providerSafeJsonSchemaOptionsForTanStackProvider } from "@/api/lib/provider-safe-json-schema";
+import { buildBudgetEdgeSchema } from "@/api/lib/structured-output-budget-probe";
 import {
   abortControllerFromSignal,
   generateTanStackObjectForRole,
@@ -32,6 +33,7 @@ import {
   CANARY_TIERS,
   CANARY_PROVIDERS,
   modelRoleMaxOutputTokens,
+  structuredOutputBudgetEdgeMaxOutputTokens,
   structuredOutputModelRoleMaxOutputTokens,
   IMPOSSIBLE_STRING_MAX_LENGTH,
   NULL_WIDENING_CANARY_PROVIDERS,
@@ -933,6 +935,46 @@ const capabilityProbes = [
         orgAIConfig: config,
         outputSchema: structuredOutputSchema,
         prompt: "Return an object whose ok field is true.",
+        role: CAPABILITY_ROLE,
+        serviceTier: "standard",
+        tenantWorkspaceIds: NO_TENANT_SCOPE,
+      });
+    },
+  },
+  {
+    // A schema sized to the widest a provider currently accepts for this
+    // application's own workflow-batch shape (see
+    // `buildBudgetEdgeSchema`/`STRUCTURED_OUTPUT_BUDGETS`), rather than the
+    // trivial one-field schema the "structured-output" probe above sends.
+    // The daily edge probe exists to catch a provider tightening its
+    // constrained-decoding grammar limits here, not in a user's workflow run.
+    type: "capability",
+    name: "structured-output-budget-edge",
+    timeoutMs: CAPABILITY_PROBE_TIMEOUT_MS,
+    run: async ({ config, provider }, signal) => {
+      const modelId = DEFAULT_MODELS[provider][CAPABILITY_ROLE];
+      const edge = buildBudgetEdgeSchema({ provider, modelId });
+      console.log(
+        `[ai-canary] ${provider}/structured-output-budget-edge: ` +
+          `${edge.propertyCount} properties, ${edge.measured.bytes}/` +
+          `${edge.budget.maxSchemaBytes} bytes, ` +
+          `${edge.measured.unionParameters}/${edge.budget.maxUnionParameters} ` +
+          `union parameters (${edge.budget.basis} budget, compiler=${edge.compiler})`,
+      );
+      await generateTanStackObjectForRole({
+        abortSignal: signal,
+        caching: NO_CACHING,
+        maxOutputTokens: structuredOutputBudgetEdgeMaxOutputTokens({
+          modelId,
+          propertyCount: edge.propertyCount,
+        }),
+        organizationId: null,
+        orgAIConfig: config,
+        outputSchema: edge.outputSchema,
+        prompt:
+          "Return an object with one entry per property key in the " +
+          'schema. For each, set "answer" to null and "justification" to ' +
+          "an empty array.",
         role: CAPABILITY_ROLE,
         serviceTier: "standard",
         tenantWorkspaceIds: NO_TENANT_SCOPE,

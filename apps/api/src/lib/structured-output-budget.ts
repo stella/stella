@@ -17,6 +17,12 @@ import type { TanStackAIProvider } from "@stll/ai-catalog";
 export type StructuredOutputBudget = {
   maxSchemaBytes: number;
   maxUnionParameters: number;
+  /**
+   * How the numbers above were established, so a caller (the budget-edge
+   * canary probe, a reviewer) can tell a provider-quoted ceiling from a
+   * guard against a runaway schema without re-reading these comments.
+   */
+  basis: "measured" | "documented" | "placeholder";
 };
 
 export const STRUCTURED_OUTPUT_BUDGETS = {
@@ -28,20 +34,44 @@ export const STRUCTURED_OUTPUT_BUDGETS = {
   // The union cap is quoted by Anthropic's second rejection: "limit: 16
   // parameters with unions". Sharing sub-schemas through `$defs`/`$ref` does
   // not help; the grammar is compiled from the inlined schema either way.
-  anthropic: { maxSchemaBytes: 5600, maxUnionParameters: 16 },
+  anthropic: {
+    maxSchemaBytes: 5600,
+    maxUnionParameters: 16,
+    basis: "measured",
+  },
   // Documented: OpenAI's strict structured outputs allow 120 000 total
   // characters across the schema. 100_000 keeps headroom for request framing.
   // The union cap is a placeholder; OpenAI publishes no union-parameter limit.
-  openai: { maxSchemaBytes: 100_000, maxUnionParameters: 1000 },
+  openai: {
+    maxSchemaBytes: 100_000,
+    maxUnionParameters: 1000,
+    basis: "documented",
+  },
   // Placeholders. No schema-size or union limit is published for these
   // providers, so these values only stop a runaway schema rather than
   // encoding a known ceiling; tighten one from a measurement, not a guess.
   // OpenRouter's applies only to an id whose upstream is unknown:
   // `resolveStructuredOutputBudget` reads the upstream off the id first.
-  bedrock: { maxSchemaBytes: 100_000, maxUnionParameters: 1000 },
-  google: { maxSchemaBytes: 100_000, maxUnionParameters: 1000 },
-  mistral: { maxSchemaBytes: 100_000, maxUnionParameters: 1000 },
-  openrouter: { maxSchemaBytes: 100_000, maxUnionParameters: 1000 },
+  bedrock: {
+    maxSchemaBytes: 100_000,
+    maxUnionParameters: 1000,
+    basis: "placeholder",
+  },
+  google: {
+    maxSchemaBytes: 100_000,
+    maxUnionParameters: 1000,
+    basis: "placeholder",
+  },
+  mistral: {
+    maxSchemaBytes: 100_000,
+    maxUnionParameters: 1000,
+    basis: "placeholder",
+  },
+  openrouter: {
+    maxSchemaBytes: 100_000,
+    maxUnionParameters: 1000,
+    basis: "placeholder",
+  },
 } as const satisfies Record<TanStackAIProvider, StructuredOutputBudget>;
 
 /**

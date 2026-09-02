@@ -183,6 +183,28 @@ export const structuredOutputModelRoleMaxOutputTokens = ({
 // probe on every model.
 export const TOOL_CALL_PROBE_MAX_OUTPUT_TOKENS = 4096;
 
+// The structured-output-budget-edge probe answers every property in its
+// schema (`null` answer, empty justification), so its output grows with the
+// property count `buildBudgetEdgeSchema` found — up to ~75 properties for a
+// 100 000-byte documented budget. The fixed "fast"-role ceiling above (512
+// tokens, sized for a one-line canary reply) truncates that response well
+// before it finishes; this scales headroom with the schema actually sent.
+const BUDGET_EDGE_PROBE_OUTPUT_TOKENS_BASE = 256;
+const BUDGET_EDGE_PROBE_OUTPUT_TOKENS_PER_PROPERTY = 50;
+
+export const structuredOutputBudgetEdgeMaxOutputTokens = ({
+  modelId,
+  propertyCount,
+}: {
+  modelId: string;
+  propertyCount: number;
+}) =>
+  clampToModelOutputLimit(
+    modelId,
+    BUDGET_EDGE_PROBE_OUTPUT_TOKENS_BASE +
+      propertyCount * BUDGET_EDGE_PROBE_OUTPUT_TOKENS_PER_PROPERTY,
+  );
+
 export const isCanaryProvider = (value: string): value is CanaryProvider =>
   CANARY_PROVIDERS.some((provider) => provider === value);
 
