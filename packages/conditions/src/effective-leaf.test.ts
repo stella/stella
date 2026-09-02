@@ -224,6 +224,34 @@ describe("isEffectiveLeaf — predicate: property", () => {
     }
   });
 
+  test("a text op whose array payload is blank once coerced is incomplete", () => {
+    // The compiler matches these ops against String(value): [""] is "" and
+    // would otherwise compile to a match-everything pattern.
+    for (const op of [
+      "contains",
+      "not_contains",
+      "starts_with",
+      "ends_with",
+    ] as const) {
+      expect(
+        isEffectiveLeaf({
+          type: "predicate",
+          operand: { type: "property", propertyId: "p" },
+          op,
+          value: [""],
+        }),
+      ).toBe(false);
+      expect(
+        isEffectiveLeaf({
+          type: "predicate",
+          operand: { type: "property", propertyId: "p" },
+          op,
+          value: ["a"],
+        }),
+      ).toBe(true);
+    }
+  });
+
   test("contains_all / in need a non-empty payload array", () => {
     const arrayOps = ["contains_all", "in"] as const;
     for (const op of arrayOps) {

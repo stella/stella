@@ -20,9 +20,10 @@
  *    - `kind`: only `op: "in"` with a non-empty payload.
  *    - `builtin`: only `in` (non-empty payload), `is_empty`, `is_not_empty`.
  *    - `property`: `is_empty`/`is_not_empty` need no payload; `contains`,
- *      `not_contains`, `starts_with`, `ends_with`, `contains_all`, `in` need
- *      a non-empty payload; `is_truthy` is not supported on a property at
- *      all (there is no SQL form for it, with or without a value).
+ *      `not_contains`, `starts_with`, `ends_with` need a payload that is
+ *      non-blank in its string form (`[""]` coerces to `""`); `contains_all`,
+ *      `in` need a non-empty array; `is_truthy` is not supported on a
+ *      property at all (there is no SQL form for it, with or without a value).
  *    - `path`/`formula`/`literal`: never effective.
  *
  * What stays OUT of this predicate, by design: anything that needs context
@@ -46,6 +47,16 @@ const hasPredicatePayload = (value: PredicateNode["value"]): boolean => {
   }
   return value !== "";
 };
+
+/**
+ * The scalar text ops (`contains`, `not_contains`, `starts_with`,
+ * `ends_with`) match the payload's string form: the compiler coerces the
+ * value with `String(...)`, so `[""]` collapses to `""` and `["a", "b"]` to
+ * `"a,b"`. A payload that is blank once coerced is an in-progress filter and
+ * must not compile into a match-everything pattern.
+ */
+const hasScalarTextPayload = (value: PredicateNode["value"]): boolean =>
+  value !== undefined && String(value) !== "";
 
 const isEffectiveCompare = (node: CompareNode): boolean => {
   if (node.left.type === "formula" || node.right.type === "formula") {
@@ -96,6 +107,7 @@ const isEffectivePropertyPredicate = (
     case "not_contains":
     case "starts_with":
     case "ends_with":
+      return hasScalarTextPayload(value);
     case "contains_all":
     case "in":
       return hasPredicatePayload(value);
