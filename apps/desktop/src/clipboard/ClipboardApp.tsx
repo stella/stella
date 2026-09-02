@@ -1890,6 +1890,23 @@ const ClipboardApp = () => {
                 <ShieldAlertIcon aria-hidden="true" className="size-3.5" />
               </span>
             ) : null}
+            <Button
+              aria-label={t("createGroup")}
+              className="size-11 shrink-0 rounded-full"
+              disabled={snapshot.groups.length >= 24}
+              onClick={() =>
+                setDialog({
+                  color: nextGroupColor,
+                  name: "",
+                  type: "createGroup",
+                })
+              }
+              size="icon"
+              title={t("createGroup")}
+              variant="ghost"
+            >
+              <FolderPlusIcon aria-hidden="true" className="size-4" />
+            </Button>
           </div>
 
           <nav
@@ -1960,23 +1977,6 @@ const ClipboardApp = () => {
                 <Trash2Icon aria-hidden="true" className="size-3.5" />
               </Button>
             ) : null}
-            <Button
-              aria-label={t("createGroup")}
-              className="size-11 shrink-0 rounded-full"
-              disabled={snapshot.groups.length >= 24}
-              onClick={() =>
-                setDialog({
-                  color: nextGroupColor,
-                  name: "",
-                  type: "createGroup",
-                })
-              }
-              size="icon"
-              title={t("createGroup")}
-              variant="ghost"
-            >
-              <FolderPlusIcon aria-hidden="true" className="size-4" />
-            </Button>
           </nav>
         </div>
 
