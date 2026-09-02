@@ -1,4 +1,5 @@
 import { CancelledError } from "@tanstack/react-query";
+import { isTaggedError } from "better-result";
 import { posthog } from "posthog-js";
 import type { CaptureResult, SupportedWebVitalsMetrics } from "posthog-js";
 
@@ -6,6 +7,7 @@ import { env } from "@/env";
 import { normalizeTelemetryErrorTypeName } from "@/lib/analytics/error-diagnostics";
 import { isErrorReference } from "@/lib/analytics/error-reference";
 import { fingerprintExceptionEvent } from "@/lib/analytics/exception-fingerprint";
+import type { ApiErrorIdentity } from "@/lib/analytics/exception-fingerprint";
 import { pickIngestionRequired } from "@/lib/analytics/posthog-ingestion";
 import type { sanitizeRouteErrorLifecycleEvent } from "@/lib/analytics/posthog-route-error";
 import { captureRedactedException } from "@/lib/analytics/stack-redaction";
@@ -15,6 +17,7 @@ import type {
   ErrorCaptureContext,
   WebAnalyticsEvent,
 } from "@/lib/analytics/types";
+import { API_ERROR_TAG } from "@/lib/errors/api-tag";
 import { logDevError } from "@/lib/errors/utils";
 
 const isWebAnalyticsEvent = (event: string): event is WebAnalyticsEvent =>
@@ -89,6 +92,61 @@ const telemetryAreaProperty = (
   return typeof area === "string" && TELEMETRY_AREA.test(area)
     ? { area }
     : undefined;
+};
+
+// API error codes are stable server-declared slugs (`usage_limit_exceeded`).
+// Anything else is treated as free text and dropped, so a server that echoed
+// input into `code` could not smuggle it into telemetry.
+const API_ERROR_CODE = /^[a-z][a-z0-9_]{0,63}$/u;
+const HTTP_STATUS_MIN = 100;
+const HTTP_STATUS_MAX = 599;
+
+const isHttpStatus = (value: unknown): value is number =>
+  typeof value === "number" &&
+  Number.isInteger(value) &&
+  value >= HTTP_STATUS_MIN &&
+  value <= HTTP_STATUS_MAX;
+
+// The status and code of an `ApiError` are the only parts of a failed API
+// response that identify the outcome without carrying its payload, so they
+// ride along as flat properties and feed the grouping identity below. The
+// class is recognized by its tag: importing it would close an import cycle
+// through the localized error module.
+const apiErrorTelemetryProperties = (
+  error: unknown,
+): Record<string, number | string> | undefined => {
+  if (
+    !isTaggedError(error) ||
+    error._tag !== API_ERROR_TAG ||
+    !isRecord(error)
+  ) {
+    return undefined;
+  }
+  const status = error["status"];
+  const code = error["code"];
+  if (!isHttpStatus(status)) {
+    return undefined;
+  }
+  return {
+    error_status: status,
+    ...(typeof code === "string" && API_ERROR_CODE.test(code)
+      ? { error_code: code }
+      : {}),
+  };
+};
+
+const apiErrorIdentity = (
+  properties: Record<string, unknown>,
+): ApiErrorIdentity | undefined => {
+  const status = properties["error_status"];
+  if (!isHttpStatus(status)) {
+    return undefined;
+  }
+  const code = properties["error_code"];
+  return {
+    status,
+    ...(typeof code === "string" && API_ERROR_CODE.test(code) ? { code } : {}),
+  };
 };
 
 // Structural frame fields only: code locations and symbol names from the
@@ -166,6 +224,7 @@ const sanitizeExceptionEvent = (event: CaptureResult): CaptureResult => {
   const type = sanitizedList.at(0)?.type ?? normalizeTelemetryErrorTypeName("");
   const safeArea =
     typeof area === "string" && TELEMETRY_AREA.test(area) ? area : undefined;
+  const http = apiErrorIdentity(properties);
   return {
     ...event,
     properties: {
@@ -175,12 +234,19 @@ const sanitizeExceptionEvent = (event: CaptureResult): CaptureResult => {
       $exception_fingerprint: fingerprintExceptionEvent({
         area: safeArea,
         entries: sanitizedList,
+        http,
       }),
       $exception_list: sanitizedList,
       $exception_type: type,
       ...(typeof appCommit === "string" ? { app_commit: appCommit } : {}),
       ...(typeof appVersion === "string" ? { app_version: appVersion } : {}),
       ...(safeArea === undefined ? {} : { area: safeArea }),
+      ...(http === undefined
+        ? {}
+        : {
+            error_status: http.status,
+            ...(http.code === undefined ? {} : { error_code: http.code }),
+          }),
       ...(isErrorReference(errorReference)
         ? { error_reference: errorReference }
         : {}),
@@ -556,6 +622,7 @@ export const createPostHogAnalytics = ({
         posthog.captureException(redacted, {
           ...errorContextProperties(context),
           ...telemetryAreaProperty(error),
+          ...apiErrorTelemetryProperties(error),
         });
       });
     },

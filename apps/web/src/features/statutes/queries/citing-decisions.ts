@@ -1,9 +1,8 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
 import { nullableStringCursorSeed } from "@/lib/infinite-query";
-import { assertPublicLawApiData } from "@/lib/public-law-api";
+import { unwrapPublicLawEden } from "@/lib/public-law-api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 
 /**
@@ -59,8 +58,10 @@ export const topCitingDecisionsOptions = (key: CitingDecisionsKey) =>
         fetch: { signal },
       });
 
-      const data = unwrapEden(response);
-      assertPublicLawApiData(data, "listPublicTopCitingDecisions");
+      const data = unwrapPublicLawEden(
+        response,
+        "listPublicTopCitingDecisions",
+      );
 
       return data.items;
     },
@@ -82,8 +83,7 @@ export const citingDecisionsInfiniteOptions = (key: CitingDecisionsKey) =>
         fetch: { signal },
       });
 
-      const data = unwrapEden(response);
-      assertPublicLawApiData(data, "listPublicCitingDecisions");
+      const data = unwrapPublicLawEden(response, "listPublicCitingDecisions");
 
       return data;
     },

@@ -448,14 +448,21 @@ const api = new Elysia()
       });
     }
 
-    captureRequestError(error, {
-      request,
-      context: {
-        route: getRouteName(route),
-        method: request.method,
-        elysiaCode: String(code),
-      },
-    });
+    // A framework-answered client fault (a rejected body, an unknown route,
+    // an unparseable request) is the caller's own outcome: the WARN record
+    // above keeps it, and reporting it as an exception would fill the tracker
+    // with one issue per scanner probe and schema mismatch. Every other code
+    // is the server's, and stays captured.
+    if (STATUS_BY_ELYSIA_CODE[code] === undefined) {
+      captureRequestError(error, {
+        request,
+        context: {
+          route: getRouteName(route),
+          method: request.method,
+          elysiaCode: String(code),
+        },
+      });
+    }
 
     // Return a sanitized response for unhandled errors.
     // Elysia's default would serialize error.message, which

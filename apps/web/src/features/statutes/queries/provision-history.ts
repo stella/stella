@@ -1,9 +1,8 @@
 import { infiniteQueryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
 import { nullableStringCursorSeed } from "@/lib/infinite-query";
-import { assertPublicLawApiData } from "@/lib/public-law-api";
+import { unwrapPublicLawEden } from "@/lib/public-law-api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -45,8 +44,7 @@ export const provisionHistoryOptions = (key: ProvisionHistoryKey) =>
           fetch: { signal },
         });
 
-      const data = unwrapEden(response);
-      assertPublicLawApiData(data, "readPublicProvisionHistory");
+      const data = unwrapPublicLawEden(response, "readPublicProvisionHistory");
 
       return data;
     },

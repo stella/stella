@@ -7,13 +7,14 @@ import {
 import type { ApiErrorInput } from "@stll/api-contract";
 
 import type { TranslationKey } from "@/i18n/types";
+import { API_ERROR_TAG } from "@/lib/errors/api-tag";
 import {
   STATUS_ERROR_KEYS,
   STATUS_TO_KEY,
   translateError,
 } from "@/lib/errors/localization";
 
-export class APIError extends TaggedError("ApiError")<{
+export class APIError extends TaggedError(API_ERROR_TAG)<{
   code?: string | undefined;
   status: number;
   message: string;
@@ -35,7 +36,7 @@ export const shouldRetryAPIRequest = (
 
 export type ToAPIErrorProps = ApiErrorInput;
 
-type EdenResponse<T> =
+export type EdenResponse<T> =
   | { data: T; error: null }
   | { data: null; error: ToAPIErrorProps };
 

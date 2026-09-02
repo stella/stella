@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { INGESTION_REQUIRED_KEYS } from "@/lib/analytics/posthog-ingestion";
 import { WEB_ANALYTICS_EVENTS } from "@/lib/analytics/types";
+import { APIError } from "@/lib/errors/api";
 
 type CapturedBrowserEvent = {
   event: string;
@@ -1422,5 +1423,57 @@ describe("PostHog browser analytics adapter", () => {
 
     expect(resetMock).toHaveBeenCalledTimes(1);
     expect(identifyMock).toHaveBeenCalledTimes(2);
+  });
+
+  test("sanitizer keeps a validated API response identity and groups by it", () => {
+    createPostHogAnalytics({ host: "https://posthog.test", key: "phc_test" });
+
+    const sanitized = initOptions?.before_send({
+      event: WEB_ANALYTICS_EVENTS.exception,
+      properties: {
+        $exception_list: [{ type: "ApiError", value: "Not Found" }],
+        error_status: 404,
+        error_code: "not_found",
+      },
+    });
+    expect(sanitized?.properties?.["$exception_fingerprint"]).toBe(
+      "ApiError||||404:not_found",
+    );
+    expect(sanitized?.properties?.["error_status"]).toBe(404);
+    expect(sanitized?.properties?.["error_code"]).toBe("not_found");
+
+    // A free-text code or an out-of-range status never passes through.
+    const rejected = initOptions?.before_send({
+      event: WEB_ANALYTICS_EVENTS.exception,
+      properties: {
+        $exception_list: [{ type: "ApiError", value: "" }],
+        error_status: 9999,
+        error_code: "Client Smith asked for jana.novakova@example.com",
+      },
+    });
+    expect(rejected?.properties?.["$exception_fingerprint"]).toBe(
+      "ApiError|||",
+    );
+    expect(rejected?.properties).not.toContainKey("error_status");
+    expect(rejected?.properties).not.toContainKey("error_code");
+  });
+
+  test("captureError reports the status and code of an API error", () => {
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+    });
+    analytics.captureError(
+      new APIError({
+        code: "usage_limit_exceeded",
+        message: "Privileged localized text",
+        status: 402,
+      }),
+    );
+
+    expect(captureExceptionMock.mock.calls.at(-1)?.[1]).toEqual({
+      error_code: "usage_limit_exceeded",
+      error_status: 402,
+    });
   });
 });

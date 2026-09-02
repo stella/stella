@@ -3,9 +3,8 @@ import { panic } from "better-result";
 
 import { api } from "@/lib/api";
 import { parseDeterministicDate } from "@/lib/deterministic-date";
-import { unwrapEden } from "@/lib/errors/api";
 import { nullableStringCursorSeed } from "@/lib/infinite-query";
-import { assertPublicLawApiData } from "@/lib/public-law-api";
+import { unwrapPublicLawEden } from "@/lib/public-law-api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -85,8 +84,7 @@ export const decisionFacetsOptions = (country?: string) =>
         fetch: { signal },
       });
 
-      const data = unwrapEden(response);
-      assertPublicLawApiData(data, "listPublicCaseLawFacets");
+      const data = unwrapPublicLawEden(response, "listPublicCaseLawFacets");
 
       return data;
     },
@@ -103,8 +101,10 @@ export const latestDecisionsOptions = (country: string) =>
         fetch: { signal },
       });
 
-      const data = unwrapEden(response);
-      assertPublicLawApiData(data, "listLatestPublicCaseLawDecisions");
+      const data = unwrapPublicLawEden(
+        response,
+        "listLatestPublicCaseLawDecisions",
+      );
 
       return data;
     },
@@ -149,8 +149,10 @@ export const decisionsInfiniteOptions = (filters: DecisionListFilters = {}) =>
           { fetch: { signal } },
         );
 
-        const data = unwrapEden(response);
-        assertPublicLawApiData(data, "searchPublicCaseLawDecisions");
+        const data = unwrapPublicLawEden(
+          response,
+          "searchPublicCaseLawDecisions",
+        );
 
         return {
           decisions: data.hits.map((h) => ({
@@ -207,8 +209,7 @@ export const decisionsInfiniteOptions = (filters: DecisionListFilters = {}) =>
         fetch: { signal },
       });
 
-      const data = unwrapEden(response);
-      assertPublicLawApiData(data, "listPublicCaseLawDecisions");
+      const data = unwrapPublicLawEden(response, "listPublicCaseLawDecisions");
 
       const facets: SearchFacets = null;
       const { items, ...page } = data;
@@ -227,8 +228,7 @@ export const decisionOptions = (decisionId: string) =>
         .decisions({ decisionId: toSafeId<"caseLawDecision">(decisionId) })
         .get({ fetch: { signal } });
 
-      const data = unwrapEden(response);
-      assertPublicLawApiData(data, "readPublicCaseLawDecision");
+      const data = unwrapPublicLawEden(response, "readPublicCaseLawDecision");
 
       return data;
     },
@@ -246,8 +246,10 @@ export const decisionBySlugOptions = ({ language, slug }: DecisionBySlugKey) =>
         fetch: { signal },
       });
 
-      const data = unwrapEden(response);
-      assertPublicLawApiData(data, "readPublicCaseLawDecisionBySlug");
+      const data = unwrapPublicLawEden(
+        response,
+        "readPublicCaseLawDecisionBySlug",
+      );
 
       return data;
     },

@@ -19,6 +19,17 @@ type FingerprintEntry = {
   stacktrace?: { frames: readonly FingerprintFrame[] };
 };
 
+/**
+ * Response identity of a failed API call: the HTTP status and the server's
+ * stable error code. Both are structural, so an `ApiError` groups per outcome
+ * (a 404 on a gated route, a 402 usage rejection, a 503) instead of one issue
+ * for every failed request.
+ */
+export type ApiErrorIdentity = {
+  status: number;
+  code?: string | undefined;
+};
+
 type ExceptionFingerprintInput = {
   /**
    * Sanitized `$exception_list`: the first entry is the thrown error, later
@@ -27,6 +38,8 @@ type ExceptionFingerprintInput = {
   entries: readonly FingerprintEntry[];
   /** Validated telemetry area slug, when an error boundary declared one. */
   area?: string | undefined;
+  /** Validated API response identity, when the error is an `ApiError`. */
+  http?: ApiErrorIdentity | undefined;
 };
 
 // The asset path up to the basename is deployment layout, not defect
@@ -70,17 +83,26 @@ const frameIdentities = (entry: FingerprintEntry | undefined): string[] => {
 /**
  * Positions are fixed (an empty component stays empty) so one component can
  * never collide with another — the same shape the server-side capture
- * wrapper uses for its `$exception_fingerprint`.
+ * wrapper uses for its `$exception_fingerprint`. The API identity is a
+ * trailing fifth component present only for API errors: appending rather
+ * than reserving keeps every existing identity byte-for-byte stable, and a
+ * class list can never start with a digit, so the two shapes cannot collide.
  */
 export const fingerprintExceptionEvent = ({
   area,
   entries,
+  http,
 }: ExceptionFingerprintInput): string => {
   const classes = entries.map((entry) => entry.type);
-  return [
+  const identity = [
     classes.at(0) ?? "UnknownError",
     area ?? "",
     frameIdentities(entries.at(0)).join(";"),
     classes.slice(1).join(";"),
   ].join("|");
+  if (http === undefined) {
+    return identity;
+  }
+  const code = http.code === undefined ? "" : `:${http.code}`;
+  return `${identity}|${http.status}${code}`;
 };
