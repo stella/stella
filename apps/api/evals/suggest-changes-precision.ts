@@ -159,6 +159,8 @@ type EvalTask = {
   request: string;
   /** Original block texts the request concerns; every other change is collateral. */
   concerns: (blockText: string) => boolean;
+  /** Inserted block texts the request calls for; every other insertion is collateral. */
+  allowsAdded?: (blockText: string) => boolean;
   expectations: readonly Expectation[];
   drift?: DocumentDrift;
 };
@@ -182,7 +184,10 @@ const TASKS: readonly EvalTask[] = [
     request: "Change the termination notice period to 45 days.",
     concerns: (text) => text.includes("written notice"),
     expectations: [
-      { kind: "contains", text: "45 days' written notice" },
+      {
+        kind: "contains",
+        text: "This Agreement continues until terminated. Either party may terminate this Agreement on 45 days' written notice.",
+      },
       { kind: "contains", text: "within 30 days of receiving a valid invoice" },
     ],
   },
@@ -205,6 +210,10 @@ const TASKS: readonly EvalTask[] = [
     // Renumbering the clauses that follow is part of the request.
     concerns: (text) =>
       /^\d+\. (?:Non-solicitation|Governing law)$/u.test(text),
+    allowsAdded: (text) =>
+      /force majeure|beyond (?:its|their|a party's|the parties') reasonable control|acts? of god/iu.test(
+        text,
+      ),
     expectations: [
       {
         // Its own clause-level heading block, numbered in sequence.
@@ -239,8 +248,10 @@ const TASKS: readonly EvalTask[] = [
     },
     concerns: (text) => text.includes("written notice"),
     expectations: [
-      { kind: "contains", text: "45 days' written notice" },
-      { kind: "contains", text: "immediately for material breach" },
+      {
+        kind: "contains",
+        text: "This Agreement continues until terminated. Either party may terminate this Agreement on 45 days' written notice, or immediately for material breach.",
+      },
     ],
   },
   {
@@ -251,8 +262,9 @@ const TASKS: readonly EvalTask[] = [
     expectations: [
       {
         kind: "matches",
-        pattern: /governed by the laws of the Czech Republic/u,
-        label: "new governing law",
+        pattern:
+          /^\[[0-9A-F]+\] This Agreement is governed by the laws of the Czech Republic\.$/mu,
+        label: "new governing law sentence",
       },
       { kind: "notContains", text: "England and Wales" },
       { kind: "contains", text: 'registered in England ("Client")' },
@@ -281,7 +293,10 @@ type CliOptions = {
 };
 
 const parseRuns = (value: string): number => {
-  const parsed = Number.parseInt(value, 10);
+  if (!/^\d+$/u.test(value)) {
+    return DEFAULT_RUNS;
+  }
+  const parsed = Number(value);
   if (!Number.isSafeInteger(parsed) || parsed < 1) {
     return DEFAULT_RUNS;
   }
@@ -515,7 +530,7 @@ const suggestChangesFacts = (
 
 type DocumentDelta = {
   changed: string[];
-  added: number;
+  added: string[];
   removed: string[];
 };
 
@@ -539,9 +554,9 @@ const documentDelta = (
       changed.push(text);
     }
   }
-  const added = after.blocks.filter(
-    (block) => !beforeById.has(block.id),
-  ).length;
+  const added = after.blocks
+    .filter((block) => !beforeById.has(block.id))
+    .map((block) => block.text);
   return { changed, added, removed };
 };
 
@@ -596,6 +611,9 @@ const checkExpectation = (
 // it had. Only counts when nothing was applied.
 const DECLINED_PATTERN =
   /\b(?:not|unable|couldn't|could not|cannot|can't|failed|skipped|changed|stale|no longer)\b/iu;
+// A reply that claims the edit landed is a hallucinated success, never a decline.
+const SUCCESS_CLAIM_PATTERN =
+  /\b(?:I(?:'ve| have)? (?:updated|changed|applied|replaced|inserted|removed|deleted|made|set)|(?:has|have) been (?:updated|changed|applied|replaced|set)|^done\b|\bdone[.!]|is now\b)/iu;
 
 type RunScore = {
   /** `declined`: nothing applied and the model said so. */
@@ -706,9 +724,12 @@ const runTask = async ({
   const documentText = reviewer.getContentAsText();
   const facts = suggestChangesFacts(trace);
   const delta = documentDelta(before, after);
-  const collateral = [...delta.changed, ...delta.removed].filter(
-    (text) => !task.concerns(text),
-  );
+  const collateral = [
+    ...[...delta.changed, ...delta.removed].filter(
+      (text) => !task.concerns(text),
+    ),
+    ...delta.added.filter((text) => !(task.allowsAdded?.(text) ?? false)),
+  ];
   const missing = task.expectations.flatMap((expectation) => {
     const failure = checkExpectation(documentText, expectation);
     return failure === null ? [] : [failure];
@@ -717,7 +738,8 @@ const runTask = async ({
     task.drift !== undefined &&
     facts.applied === 0 &&
     collateral.length === 0 &&
-    DECLINED_PATTERN.test(turn.finalText);
+    DECLINED_PATTERN.test(turn.finalText) &&
+    !SUCCESS_CLAIM_PATTERN.test(turn.finalText);
   const outcome = resolveOutcome({
     error: turn.error,
     calls: facts.calls,
@@ -780,7 +802,7 @@ const renderReport = (runs: readonly EvalRun[]): string => {
           String(facts.applied),
           countsText([...facts.skipped, ...facts.rejected]),
           String(delta.changed.length),
-          String(delta.added),
+          String(delta.added.length),
           String(delta.removed.length),
           String(collateral.length),
           missing.length === 0
