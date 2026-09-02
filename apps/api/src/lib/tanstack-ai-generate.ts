@@ -461,6 +461,7 @@ const guardStructuredOutputBudget = ({
 
   const budget = checkStructuredOutputBudget({
     provider: model.provider,
+    modelId: model.modelId,
     schema: structuredOutputWireJsonSchema({
       outputSchema,
       provider: model.provider,

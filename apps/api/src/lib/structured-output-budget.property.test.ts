@@ -13,6 +13,7 @@ import {
   checkStructuredOutputBudget,
   splitPropertiesForBudget,
 } from "@/api/lib/structured-output-budget";
+import type { StructuredOutputTarget } from "@/api/lib/structured-output-budget";
 import { structuredOutputWireJsonSchema } from "@/api/lib/tanstack-ai-generate";
 import { buildBatchSchema } from "@/api/lib/workflow/ai-prompts";
 import type { AIBatchProperty } from "@/api/lib/workflow/get-execution-plan";
@@ -77,15 +78,19 @@ const propertyForKind = (
   },
 });
 
-// `size: "max"` because fast-check's default array size would keep every
-// generated batch far below the workspace maximum, and the sizes that matter
-// here are the ones a real workspace reaches.
+// The batch length is drawn uniformly over the whole workspace range first:
+// fast-check's default array sizing would keep every generated batch far
+// below the workspace maximum, and the sizes that matter here are the ones a
+// real workspace reaches.
 const propertiesArbitrary = fc
-  .array(fc.constantFrom(...CONTENT_KINDS), {
-    minLength: 1,
-    maxLength: PROPERTIES_PER_WORKSPACE_MAX,
-    size: "max",
-  })
+  .integer({ min: 1, max: PROPERTIES_PER_WORKSPACE_MAX })
+  .chain((length) =>
+    fc.array(fc.constantFrom(...CONTENT_KINDS), {
+      minLength: length,
+      maxLength: length,
+      size: "max",
+    }),
+  )
   .map((kinds) => kinds.map(propertyForKind));
 
 const FILENAMES = [
@@ -101,15 +106,46 @@ const wireSchemaFor = (
     provider,
   });
 
+/**
+ * `compiler` is stated here rather than read back from
+ * `resolveStructuredOutputBudget`, so a resolver that ignored an OpenRouter
+ * id's upstream prefix fails this property instead of agreeing with it.
+ */
+type BudgetTarget = StructuredOutputTarget & {
+  compiler: TanStackAIProvider;
+};
+
+// Every provider once, plus the two OpenRouter ids that proxy to a provider
+// with its own budget: the id, not the addressed provider, decides which
+// grammar compiler sees the schema.
+const TARGETS: readonly BudgetTarget[] = [
+  ...TANSTACK_AI_PROVIDERS.map((provider) => ({
+    provider,
+    modelId: `${provider}-model`,
+    compiler: provider,
+  })),
+  {
+    provider: "openrouter",
+    modelId: "anthropic/claude-sonnet-5",
+    compiler: "anthropic",
+  },
+  {
+    provider: "openrouter",
+    modelId: "openai/gpt-5.6-luna",
+    compiler: "openai",
+  },
+];
+
 describe("splitting a workflow batch for the provider's schema budget", () => {
   test("every chunk fits its provider and the chunks partition the batch in order", () => {
     fc.assert(
       fc.property(
-        fc.constantFrom(...TANSTACK_AI_PROVIDERS),
+        fc.constantFrom(...TARGETS),
         propertiesArbitrary,
-        (provider, properties) => {
+        ({ provider, modelId, compiler }, properties) => {
           const split = splitPropertiesForBudget({
             provider,
+            modelId,
             properties,
             buildSchema: (chunk) => wireSchemaFor(provider, chunk),
           });
@@ -126,11 +162,12 @@ describe("splitting a workflow batch for the provider's schema budget", () => {
               Result.isError(
                 checkStructuredOutputBudget({
                   provider,
+                  modelId,
                   schema: wireSchemaFor(provider, chunk),
                 }),
               ),
             ).toBe(false);
-            if (provider === "anthropic") {
+            if (compiler === "anthropic") {
               expect(chunk.length).toBeLessThanOrEqual(
                 ANTHROPIC_MAX_PROPERTIES_PER_CHUNK,
               );

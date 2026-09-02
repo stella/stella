@@ -167,10 +167,11 @@ export const generateWorkflowData = async ({
   if (Result.isError(model)) {
     return Result.err(model.error);
   }
-  const { provider } = model.value;
+  const { provider, modelId } = model.value;
 
   const chunks = splitPropertiesForBudget({
     provider,
+    modelId,
     properties,
     buildSchema: (chunkProperties) =>
       structuredOutputWireJsonSchema({

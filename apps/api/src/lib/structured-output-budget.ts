@@ -1,5 +1,6 @@
 import { Result, TaggedError } from "better-result";
 
+import { TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
 import type { TanStackAIProvider } from "@stll/ai-catalog";
 
 /**
@@ -31,14 +32,53 @@ export const STRUCTURED_OUTPUT_BUDGETS = {
   openai: { maxSchemaBytes: 100_000, maxUnionParameters: 1000 },
   // Placeholders. No schema-size or union limit is published for these
   // providers, so these values only stop a runaway schema rather than
-  // encoding a known ceiling. An OpenRouter model id in particular resolves
-  // to an arbitrary upstream (Anthropic included), so its placeholder can
-  // under-constrain; tighten it from a measurement, not a guess.
+  // encoding a known ceiling; tighten one from a measurement, not a guess.
+  // OpenRouter's applies only to an id whose upstream is unknown:
+  // `resolveStructuredOutputBudget` reads the upstream off the id first.
   bedrock: { maxSchemaBytes: 100_000, maxUnionParameters: 1000 },
   google: { maxSchemaBytes: 100_000, maxUnionParameters: 1000 },
   mistral: { maxSchemaBytes: 100_000, maxUnionParameters: 1000 },
   openrouter: { maxSchemaBytes: 100_000, maxUnionParameters: 1000 },
 } as const satisfies Record<TanStackAIProvider, StructuredOutputBudget>;
+
+/**
+ * Which provider a request is addressed to, and which model it names.
+ *
+ * The model id matters because the addressed provider is not always the one
+ * that compiles the grammar: OpenRouter proxies to an upstream named by the
+ * id's prefix, so `anthropic/claude-sonnet-5` hits Anthropic's compiler and
+ * must be held to Anthropic's budget, not OpenRouter's placeholder.
+ */
+export type StructuredOutputTarget = {
+  provider: TanStackAIProvider;
+  modelId: string;
+};
+
+export type ResolvedStructuredOutputBudget = {
+  /** The provider whose grammar compiler sees the schema. */
+  provider: TanStackAIProvider;
+  budget: StructuredOutputBudget;
+};
+
+// Derived from the catalogue's own provider list, so a new TanStack provider
+// is recognized as an OpenRouter upstream without a second list to update.
+const upstreamProviderFromModelId = (
+  modelId: string,
+): TanStackAIProvider | undefined => {
+  const prefix = modelId.split("/").at(0);
+  return TANSTACK_AI_PROVIDERS.find((provider) => provider === prefix);
+};
+
+export const resolveStructuredOutputBudget = ({
+  provider,
+  modelId,
+}: StructuredOutputTarget): ResolvedStructuredOutputBudget => {
+  const compiler =
+    provider === "openrouter"
+      ? (upstreamProviderFromModelId(modelId) ?? "openrouter")
+      : provider;
+  return { provider: compiler, budget: STRUCTURED_OUTPUT_BUDGETS[compiler] };
+};
 
 export type StructuredOutputMeasure = {
   bytes: number;
@@ -89,6 +129,10 @@ export const measureStructuredOutputSchema = (
   };
 };
 
+/**
+ * `provider` is the one whose budget was applied, which for an OpenRouter
+ * request is the upstream that compiles the grammar rather than OpenRouter.
+ */
 export class StructuredOutputBudgetError extends TaggedError(
   "StructuredOutputBudgetError",
 )<{
@@ -98,19 +142,22 @@ export class StructuredOutputBudgetError extends TaggedError(
   budget: StructuredOutputBudget;
 }> {}
 
-type CheckStructuredOutputBudgetOptions = {
-  provider: TanStackAIProvider;
+type CheckStructuredOutputBudgetOptions = StructuredOutputTarget & {
   schema: unknown;
 };
 
 export const checkStructuredOutputBudget = ({
   provider,
+  modelId,
   schema,
 }: CheckStructuredOutputBudgetOptions): Result<
   StructuredOutputMeasure,
   StructuredOutputBudgetError
 > => {
-  const budget = STRUCTURED_OUTPUT_BUDGETS[provider];
+  const { provider: compiler, budget } = resolveStructuredOutputBudget({
+    provider,
+    modelId,
+  });
   const measured = measureStructuredOutputSchema(schema);
 
   const violations: string[] = [];
@@ -131,19 +178,18 @@ export const checkStructuredOutputBudget = ({
 
   return Result.err(
     new StructuredOutputBudgetError({
-      message: `Structured-output schema exceeds the ${provider} budget: ${violations.join("; ")}`,
-      provider,
+      message: `Structured-output schema exceeds the ${compiler} budget: ${violations.join("; ")}`,
+      provider: compiler,
       measured,
       budget,
     }),
   );
 };
 
-type SplitPropertiesForBudgetOptions<TProperty> = {
+type SplitPropertiesForBudgetOptions<TProperty> = StructuredOutputTarget & {
   /** Projects the JSON schema a request carrying exactly these properties would send. */
   buildSchema: (properties: readonly TProperty[]) => unknown;
   properties: readonly TProperty[];
-  provider: TanStackAIProvider;
 };
 
 /**
@@ -155,6 +201,7 @@ export const splitPropertiesForBudget = <TProperty>({
   buildSchema,
   properties,
   provider,
+  modelId,
 }: SplitPropertiesForBudgetOptions<TProperty>): Result<
   TProperty[][],
   StructuredOutputBudgetError
@@ -166,6 +213,7 @@ export const splitPropertiesForBudget = <TProperty>({
     current.push(property);
     const withProperty = checkStructuredOutputBudget({
       provider,
+      modelId,
       schema: buildSchema(current),
     });
     if (Result.isOk(withProperty)) {
@@ -180,6 +228,7 @@ export const splitPropertiesForBudget = <TProperty>({
     current = [property];
     const alone = checkStructuredOutputBudget({
       provider,
+      modelId,
       schema: buildSchema(current),
     });
     if (Result.isError(alone)) {

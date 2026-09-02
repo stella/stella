@@ -4,9 +4,13 @@ import { describe, expect, test } from "bun:test";
 import {
   checkStructuredOutputBudget,
   measureStructuredOutputSchema,
+  resolveStructuredOutputBudget,
   splitPropertiesForBudget,
   STRUCTURED_OUTPUT_BUDGETS,
 } from "@/api/lib/structured-output-budget";
+
+const ANTHROPIC_MODEL_ID = "claude-sonnet-5";
+const OPENAI_MODEL_ID = "gpt-5.6-luna";
 
 const expectError = <TValue, TError>(
   result: Result<TValue, TError>,
@@ -70,11 +74,68 @@ describe("measuring a projected structured-output schema", () => {
   });
 });
 
+describe("resolving which provider's budget applies", () => {
+  test("uses the addressed provider when it compiles the grammar itself", () => {
+    expect(
+      resolveStructuredOutputBudget({
+        provider: "anthropic",
+        modelId: ANTHROPIC_MODEL_ID,
+      }),
+    ).toEqual({
+      provider: "anthropic",
+      budget: STRUCTURED_OUTPUT_BUDGETS.anthropic,
+    });
+  });
+
+  test("holds an OpenRouter id routed to Anthropic to the Anthropic budget", () => {
+    expect(
+      resolveStructuredOutputBudget({
+        provider: "openrouter",
+        modelId: `anthropic/${ANTHROPIC_MODEL_ID}`,
+      }),
+    ).toEqual({
+      provider: "anthropic",
+      budget: STRUCTURED_OUTPUT_BUDGETS.anthropic,
+    });
+  });
+
+  test("holds an OpenRouter id routed to OpenAI to the OpenAI budget", () => {
+    expect(
+      resolveStructuredOutputBudget({
+        provider: "openrouter",
+        modelId: `openai/${OPENAI_MODEL_ID}`,
+      }),
+    ).toEqual({
+      provider: "openai",
+      budget: STRUCTURED_OUTPUT_BUDGETS.openai,
+    });
+  });
+
+  test("falls back to the OpenRouter placeholder for an unrecognized upstream", () => {
+    expect(
+      resolveStructuredOutputBudget({
+        provider: "openrouter",
+        modelId: "some-lab/experimental-1",
+      }),
+    ).toEqual({
+      provider: "openrouter",
+      budget: STRUCTURED_OUTPUT_BUDGETS.openrouter,
+    });
+    expect(
+      resolveStructuredOutputBudget({
+        provider: "openrouter",
+        modelId: "unprefixed-model",
+      }).provider,
+    ).toBe("openrouter");
+  });
+});
+
 describe("checking a schema against a provider budget", () => {
   test("accepts a schema inside the budget and reports what it measured", () => {
     const measured = expectValue(
       checkStructuredOutputBudget({
         provider: "anthropic",
+        modelId: ANTHROPIC_MODEL_ID,
         schema: { type: "object", properties: { answer: { type: "string" } } },
       }),
     );
@@ -94,7 +155,11 @@ describe("checking a schema against a provider budget", () => {
     };
 
     const error = expectError(
-      checkStructuredOutputBudget({ provider: "anthropic", schema: oversized }),
+      checkStructuredOutputBudget({
+        provider: "anthropic",
+        modelId: ANTHROPIC_MODEL_ID,
+        schema: oversized,
+      }),
     );
 
     expect(error.provider).toBe("anthropic");
@@ -118,7 +183,11 @@ describe("checking a schema against a provider budget", () => {
       STRUCTURED_OUTPUT_BUDGETS.anthropic.maxSchemaBytes,
     );
     const error = expectError(
-      checkStructuredOutputBudget({ provider: "anthropic", schema }),
+      checkStructuredOutputBudget({
+        provider: "anthropic",
+        modelId: ANTHROPIC_MODEL_ID,
+        schema,
+      }),
     );
 
     expect(error.measured.unionParameters).toBe(
@@ -137,12 +206,49 @@ describe("checking a schema against a provider budget", () => {
 
     expect(
       Result.isError(
-        checkStructuredOutputBudget({ provider: "anthropic", schema }),
+        checkStructuredOutputBudget({
+          provider: "anthropic",
+          modelId: ANTHROPIC_MODEL_ID,
+          schema,
+        }),
       ),
     ).toBe(true);
     expect(
       Result.isError(
-        checkStructuredOutputBudget({ provider: "openai", schema }),
+        checkStructuredOutputBudget({
+          provider: "openai",
+          modelId: OPENAI_MODEL_ID,
+          schema,
+        }),
+      ),
+    ).toBe(false);
+  });
+
+  test("rejects an OpenRouter request whose upstream is Anthropic", () => {
+    const schema = {
+      type: "object",
+      description: "x".repeat(
+        STRUCTURED_OUTPUT_BUDGETS.anthropic.maxSchemaBytes,
+      ),
+    };
+
+    const error = expectError(
+      checkStructuredOutputBudget({
+        provider: "openrouter",
+        modelId: `anthropic/${ANTHROPIC_MODEL_ID}`,
+        schema,
+      }),
+    );
+
+    // The budget names the compiler, not the proxy the request was sent to.
+    expect(error.provider).toBe("anthropic");
+    expect(
+      Result.isError(
+        checkStructuredOutputBudget({
+          provider: "openrouter",
+          modelId: `openai/${OPENAI_MODEL_ID}`,
+          schema,
+        }),
       ),
     ).toBe(false);
   });
@@ -167,6 +273,7 @@ describe("splitting properties to fit a provider budget", () => {
     const chunks = expectValue(
       splitPropertiesForBudget({
         provider: "anthropic",
+        modelId: ANTHROPIC_MODEL_ID,
         properties,
         buildSchema: fixedSizeSchema,
       }),
@@ -179,6 +286,7 @@ describe("splitting properties to fit a provider budget", () => {
         Result.isError(
           checkStructuredOutputBudget({
             provider: "anthropic",
+            modelId: ANTHROPIC_MODEL_ID,
             schema: fixedSizeSchema(chunk),
           }),
         ),
@@ -193,10 +301,35 @@ describe("splitting properties to fit a provider budget", () => {
     ).toBe(true);
   });
 
+  test("splits an OpenRouter batch by its upstream's budget, not the placeholder", () => {
+    const properties = Array.from({ length: 20 }, (_, index) => `p${index}`);
+
+    const viaAnthropic = expectValue(
+      splitPropertiesForBudget({
+        provider: "openrouter",
+        modelId: `anthropic/${ANTHROPIC_MODEL_ID}`,
+        properties,
+        buildSchema: fixedSizeSchema,
+      }),
+    );
+    const viaUnknownUpstream = expectValue(
+      splitPropertiesForBudget({
+        provider: "openrouter",
+        modelId: "some-lab/experimental-1",
+        properties,
+        buildSchema: fixedSizeSchema,
+      }),
+    );
+
+    expect(viaAnthropic.length).toBeGreaterThan(viaUnknownUpstream.length);
+    expect(viaAnthropic.flat()).toEqual(properties);
+  });
+
   test("reports the property that cannot fit alone instead of looping forever", () => {
     const error = expectError(
       splitPropertiesForBudget({
         provider: "anthropic",
+        modelId: ANTHROPIC_MODEL_ID,
         properties: ["fits", "never-fits", "fits-too"],
         buildSchema: (properties) =>
           properties.includes("never-fits")
@@ -220,6 +353,7 @@ describe("splitting properties to fit a provider budget", () => {
       expectValue(
         splitPropertiesForBudget({
           provider: "anthropic",
+          modelId: ANTHROPIC_MODEL_ID,
           properties: [],
           buildSchema: fixedSizeSchema,
         }),
