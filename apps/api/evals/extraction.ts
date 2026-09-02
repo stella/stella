@@ -537,14 +537,10 @@ const PROVIDER_ENV_CREDENTIALS: Record<BYOKProvider, string | undefined> = {
 const isByokProvider = (value: string): value is BYOKProvider =>
   value in BYOK_MODEL_OPTIONS;
 
-const BYOK_PROVIDERS = [
-  "google",
-  "openrouter",
-  "openai",
-  "anthropic",
-  "bedrock",
-  "mistral",
-] as const satisfies readonly BYOKProvider[];
+// Derived from the catalog's own keys (not hand-listed) so a new BYOKProvider
+// is picked up here automatically instead of silently missing from bare-model
+// resolution.
+const BYOK_PROVIDERS = Object.keys(BYOK_MODEL_OPTIONS).filter(isByokProvider);
 
 type ModelSelection = {
   provider: BYOKProvider;
@@ -591,6 +587,14 @@ const resolveBareModelSelection = (modelId: string): ModelSelection => {
 
   const openRouterApiKey = PROVIDER_ENV_CREDENTIALS.openrouter;
   const openRouterOptions: readonly string[] = BYOK_MODEL_OPTIONS.openrouter;
+
+  // An id OpenRouter already serves natively (e.g. "openai/gpt-5.6-luna")
+  // resolves directly, before falling back to "<provider>/<modelId>" routing
+  // for a provider-native id OpenRouter mirrors under a provider prefix.
+  if (openRouterApiKey !== undefined && openRouterOptions.includes(modelId)) {
+    return { provider: "openrouter", modelId, apiKey: openRouterApiKey };
+  }
+
   const routedProvider = directProviders.find((provider) =>
     openRouterOptions.includes(`${provider}/${modelId}`),
   );
@@ -691,7 +695,10 @@ const gradeAnswer = (
       if (validated.type !== "int") {
         return panic("Fixture/property type mismatch: int");
       }
-      return validated.value === expected.amount ? "correct" : "wrong";
+      return validated.value === expected.amount &&
+        validated.currency === expected.currency
+        ? "correct"
+        : "wrong";
     }
     case "single-select": {
       if (validated.type !== "single-select") {
