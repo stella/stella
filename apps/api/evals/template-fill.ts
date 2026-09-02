@@ -287,6 +287,13 @@ const createFixtureTools = ({
       scopedDb,
       organizationId,
     });
+    if ("usageRejection" in filled) {
+      // No usage check is configured for this call, so this branch is
+      // unreachable; the union still carries it.
+      return panic(
+        "fillTemplateDocx returned a usage rejection without a usage check",
+      );
+    }
     if ("error" in filled) {
       const result = { error: filled.error };
       fillCalls.push({ values, result });
