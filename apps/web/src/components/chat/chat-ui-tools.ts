@@ -280,6 +280,9 @@ const RETIRED_CHAT_TOOL_TITLE_KEYS = {
   // The manual DOCX edit tool that `suggest_changes` replaced; persisted
   // threads still carry its calls.
   "apply-active-docx-edits": "chat.tool.apply-active-docx-edits",
+  // The automatic DOCX edit tool the server-executed `suggest_changes`
+  // variant replaced; persisted threads still carry its calls.
+  edit_workspace_document: "chat.tool.suggest_changes",
   ares_lookup_company: "chat.tool.ares_lookup_company",
   ares_search_companies: "chat.tool.ares_search_companies",
   // Retired hand-rolled code-execution tools, replaced by the code-mode

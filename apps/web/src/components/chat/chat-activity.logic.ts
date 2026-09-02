@@ -74,10 +74,12 @@ const BUILT_IN_CHAT_TOOL_ACTIVITY_CATEGORIES = {
 } as const satisfies Record<keyof ChatUITools, ChatToolActivityCategory>;
 
 const RETIRED_CHAT_TOOL_ACTIVITY_CATEGORIES = {
+  "apply-active-docx-edits": "artifact",
   ares_lookup_company: "research",
   ares_search_companies: "research",
   "describe-stella-api": "research",
   "describe-stella-function": "research",
+  edit_workspace_document: "artifact",
   "execute-typescript": "computation",
   "read-contact": "research",
   "read-content-across-matters": "research",
