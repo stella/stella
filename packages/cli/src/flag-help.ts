@@ -30,7 +30,7 @@ export const flagKindFact = (spec: FlagSpec): string => {
  * about the underlying stricli flag, which stays optional at the parser layer
  * (every field can also arrive through `--input`).
  */
-export const mechanicalFlagFacts = (spec: FlagSpec): string => {
+const mechanicalFlagFacts = (spec: FlagSpec): string => {
   const parts = [spec.required ? "required" : "optional", flagKindFact(spec)];
   if (spec.repeatable) {
     parts.push("repeatable");
