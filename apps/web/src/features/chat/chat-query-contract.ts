@@ -1,8 +1,6 @@
 import type { ChatSendMode } from "@stll/anonymize-chat";
-import {
-  CHAT_TOOL_SCOPE,
-  type DocxSuggestionSurface,
-} from "@stll/api-contract";
+import { CHAT_TOOL_SCOPE } from "@stll/api-contract";
+import type { DocxSuggestionSurface } from "@stll/api-contract/chat-docx-suggestions";
 
 import type { ChatUserContext } from "@/features/chat/hooks/use-chat-user-context";
 import type {

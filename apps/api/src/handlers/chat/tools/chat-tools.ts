@@ -2,8 +2,8 @@ import {
   BUILT_IN_CHAT_TOOL_POLICY_KINDS,
   type ApprovalRequiredBuiltInChatToolName,
   type BuiltInChatToolPolicyKindByName,
-  type DocxSuggestionSurface,
 } from "@stll/api-contract";
+import type { DocxSuggestionSurface } from "@stll/api-contract/chat-docx-suggestions";
 import { roles } from "@stll/permissions";
 import type { SkillMetadata } from "@stll/skills";
 

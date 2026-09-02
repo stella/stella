@@ -4,7 +4,7 @@ import { panic } from "better-result";
 import {
   DOCX_SUGGEST_CHANGES_OPTIONS_BY_SURFACE,
   type DocxSuggestionSurface,
-} from "@stll/api-contract";
+} from "@stll/api-contract/chat-docx-suggestions";
 import {
   FOLIO_AGENT_TOOL_NAMES,
   getFolioToolDefinitions,

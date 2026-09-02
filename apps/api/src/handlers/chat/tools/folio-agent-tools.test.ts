@@ -1,7 +1,7 @@
 import { convertSchemaToJsonSchema } from "@tanstack/ai";
 import { describe, expect, test } from "bun:test";
 
-import { DOCX_SUGGESTION_SURFACE } from "@stll/api-contract";
+import { DOCX_SUGGESTION_SURFACE } from "@stll/api-contract/chat-docx-suggestions";
 
 import {
   ADD_COMMENT_TOOL_NAME,

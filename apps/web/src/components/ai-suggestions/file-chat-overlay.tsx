@@ -36,7 +36,7 @@ import { v7 as uuidv7 } from "uuid";
 import {
   DOCX_SUGGEST_CHANGES_OPTIONS_BY_SURFACE,
   DOCX_SUGGESTION_SURFACE,
-} from "@stll/api-contract";
+} from "@stll/api-contract/chat-docx-suggestions";
 import {
   createEditorRefBridge,
   executeFolioToolCall,

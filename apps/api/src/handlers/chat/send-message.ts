@@ -7,10 +7,10 @@ import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import {
   CHAT_TURN_INTENT,
-  DOCX_SUGGESTION_SURFACE,
   resourceRef,
   RESOURCE_TYPE,
 } from "@stll/api-contract";
+import { DOCX_SUGGESTION_SURFACE } from "@stll/api-contract/chat-docx-suggestions";
 import type { SkillMetadata } from "@stll/skills";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";

@@ -179,7 +179,9 @@ const SuggestChangesSummary = ({ operations }: SuggestChangesSummaryProps) => {
     return summary === null ? [] : [summary];
   });
   const previewOperations = summaries.slice(0, 3);
-  const hiddenCount = operations.length - previewOperations.length;
+  // Only describable operations can be "more"; the count line above still
+  // reports every operation the model sent.
+  const hiddenCount = summaries.length - previewOperations.length;
 
   const renderOperationSummary = (operation: SummaryOperation) => {
     const { blockId } = operation;

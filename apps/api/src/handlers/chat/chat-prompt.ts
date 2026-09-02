@@ -10,11 +10,11 @@ import * as cheerio from "cheerio";
 import { and, asc, count, eq, isNull, or, sql } from "drizzle-orm";
 import * as v from "valibot";
 
+import { CHAT_THREAD_PLACEHOLDER_TITLE } from "@stll/api-contract";
 import {
-  CHAT_THREAD_PLACEHOLDER_TITLE,
   DOCX_SUGGEST_CHANGES_OPTIONS_BY_SURFACE,
   DOCX_SUGGESTION_SURFACE,
-} from "@stll/api-contract";
+} from "@stll/api-contract/chat-docx-suggestions";
 import { describeSuggestChangesCapabilities } from "@stll/folio-agents";
 import type { SkillMetadata } from "@stll/skills";
 
@@ -1357,6 +1357,7 @@ const buildActiveTemplateEditSections = ({
         DOCX_SUGGESTION_SURFACE.templateStudio
       ],
     )} For \`replaceInBlock\`, copy \`find\` verbatim from the block text. The template studio renders text replacements only; do not promise insertions, comments, or table changes.`,
+    "PRECONDITIONS: When a block below carries a `blockTextHash`, copy it into `precondition.blockTextHash` on each operation that targets that block; omit `precondition` for a block without a hash, and never invent one.",
     toolAvailability.templateAuthoring
       ? FIELD_SUGGESTIONS_WITH_AUTHORING
       : FIELD_SUGGESTIONS_NO_AUTHORING,
@@ -1432,7 +1433,7 @@ const buildActiveDocxEditPrompt = (
     "Use the block ids below for tool operations. Prefer `replaceInBlock` with an exact `find` string for localized edits. Use `replaceBlock` when the whole paragraph/list item should change. Use `deleteBlock` to remove a paragraph. Use `insertAfterBlock` or `insertBeforeBlock` (anchored on the neighbouring block id) to add a new paragraph.",
     'STRUCTURAL INSERTS (use the canonical op, not directive text): For a page break, call `insertAfterBlock` with `pageBreakBefore: true` (the `text` may be empty). For a numbered heading (clause), call `insertAfterBlock` (or `insertBeforeBlock`) with `styleId: "ClauseHeading1"` (or `ClauseHeading2`, `ClauseHeading3`) and the heading text in `text`. For a signature block, call `insertSignatureTable` with one entry per party (`name` required; `signatory` and `title` optional). These ops produce real structural elements in the document. DO NOT emit directive markers like `@pagebreak`, `@clause`, `@signatures`, `@title`, or `[[placeholders]]` as paragraph text — those belong to `create-document`, not to this editor; in this tool they would land in the doc as literal characters. Pick one canonical op per intent and use it.',
     'Tool input example: {"operations":[{"type":"replaceInBlock","blockId":"1A2B3C4D","precondition":{"blockTextHash":"h1a2b3"},"find":"Acme Inc.","replace":"Example Ltd.","severity":"low","area":"Names"}]}. Operations must be objects, not strings. Use `blockId`, not `id`. Most block ids are 8-character uppercase hex (Word `w14:paraId`), with `seq-` fallback ids possible for older snapshots; always copy ids verbatim from the editable-blocks list below.',
-    "PRECONDITIONS: Every block below carries a `blockTextHash`. Copy it into `precondition.blockTextHash` on each operation that targets that block, so an edit against text that changed since this snapshot is skipped instead of landing on the wrong words. Never invent a hash.",
+    "PRECONDITIONS: When a block below carries a `blockTextHash`, copy it into `precondition.blockTextHash` on each operation that targets that block, so an edit against text that changed since this snapshot is skipped instead of landing on the wrong words. Omit `precondition` for a block without a hash. Never invent a hash.",
     'ALWAYS set `severity` and `area` on each operation. `severity`: "low" for typos / spelling / minor style, "medium" for routine wording or terminology fixes, "high" for substantive changes (numbers, dates, parties, legal effect). `area`: a short topic label that groups related ops, e.g. "Spelling", "Penalty", "Payment Terms", "Names", "Cross-references". The review panel sorts and groups by these — empty severity/area collapses everything into one undifferentiated bucket and is bad UX.',
     'After the tool returns, reply with ONE short sentence (in the user\'s language) covering the count and the high-level goal — e.g. "13 spelling and typo fixes are ready to review in the panel." Do NOT enumerate the operations, do NOT list block ids or before/after pairs in your reply — the panel already shows every suggestion with its full context. Repeating them is noise. NEVER claim the document was changed; only ids that appear in `applied` represent actual document changes (rare with this tool). Never paraphrase a `queued` result as a completed change.',
     "CITATIONS IN PLAIN ANSWERS: When you summarise, quote, or refer to specific content from the open document in a normal text reply (i.e. NOT inside `suggest_changes`), wrap the supporting paragraph snippet in a Markdown link whose href is `#folio:<blockId>` (note the leading `#` — it is required, the link will be stripped without it). Example: `the contract is governed by [Delaware law](#folio:1A2B3C4D)`. Copy block ids verbatim from the block list — do NOT shorten, pad, prefix, or otherwise mangle them. The link TEXT must be a short, human-meaningful phrase quoted or paraphrased from the cited block — typically 1–6 words in the user's language (e.g. `[Delaware law]`, `[July 20, 2021]`, `[$1,500,000]`). NEVER use the href itself as the link text (NOT `[#folio:1A2B3C4D](#folio:1A2B3C4D)`), NEVER leave the text empty (`[](#folio:1A2B3C4D)`), NEVER use Markdown autolinks like `<#folio:1A2B3C4D>` — those render as broken citations. Cite at most a few blocks per reply (only the ones a user would want to verify); never invent a blockId that's not in the list.",

@@ -8,6 +8,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./chat": "./src/chat.ts",
+    "./chat-docx-suggestions": "./src/chat-docx-suggestions.ts",
     "./chat-file-types": "./src/chat-file-types.ts",
     "./desktop-rpc": "./src/desktop-rpc.gen.ts",
     "./document-translation": "./src/document-translation.ts",

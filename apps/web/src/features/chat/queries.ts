@@ -5,7 +5,7 @@ import type { ReasoningEffort } from "@stll/ai-catalog";
 import {
   DOCX_SUGGESTION_SURFACE,
   type DocxSuggestionSurface,
-} from "@stll/api-contract";
+} from "@stll/api-contract/chat-docx-suggestions";
 
 import type { ChatContextUsage } from "@/components/chat/chat-context-meter";
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
