@@ -597,6 +597,7 @@ describe("format", () => {
       "2026-01-01T00:00:00Z",
       "2026-01-01T00:00:00.250z",
       "2026-01-01T23:59:59+02:00",
+      "2026-06-30T23:59:60Z",
     ]) {
       expect(validateAgainstSchema(schema, { at }).valid).toBe(true);
     }
@@ -608,6 +609,8 @@ describe("format", () => {
       "2026-01-01T00:00:00",
       "2026-02-30T00:00:00Z",
       "2026-01-01T25:00:00Z",
+      // A leap second exists only at the end of the day.
+      "2026-01-01T00:00:60Z",
       "yesterday",
     ]) {
       const result = validateAgainstSchema(schema, { at });

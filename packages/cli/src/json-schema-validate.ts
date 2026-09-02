@@ -58,11 +58,12 @@ const FULL_DATE = /^\d{4}-\d{2}-\d{2}$/u;
 
 /**
  * RFC 3339 §5.6 date-time: full date, `T`, full time with in-range fields
- * (a leap second allowed), and an offset. `Date.parse` alone also admits a
- * bare date, an offset-less local time, and out-of-range fields.
+ * (the leap second only as `23:59:60`), and an offset. `Date.parse` alone
+ * also admits a bare date, an offset-less local time, and out-of-range
+ * fields.
  */
 const RFC3339_DATE_TIME =
-  /^\d{4}-\d{2}-\d{2}[Tt](?:[01]\d|2[0-3]):[0-5]\d:(?:[0-5]\d|60)(?:\.\d+)?(?:[Zz]|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/u;
+  /^\d{4}-\d{2}-\d{2}[Tt](?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d|23:59:60)(?:\.\d+)?(?:[Zz]|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/u;
 
 /**
  * Whether a `YYYY-MM-DD` names a day the calendar has. `Date.parse` rolls an
