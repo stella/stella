@@ -7,7 +7,11 @@
 // The ban is deliberately scoped to `.insert(properties)` /
 // `.update(properties)` and aliases imported from the canonical schema
 // module: other Drizzle writes are unrelated, and an arbitrary local
-// identifier is not assumed to name the properties table.
+// identifier is not assumed to name the properties table — only a local
+// bound by a value import of `properties` from `@/api/db/schema` (aliases
+// included) counts; a same-named local that never imports it is unrelated,
+// and a type-only import cannot be passed to `.insert()`/`.update()` so it
+// does not bind either.
 //
 // Owner surfaces (may write `properties` directly):
 //   - apps/api/src/handlers/properties/**
@@ -81,11 +85,10 @@ export default eslintCompatPlugin({
         },
       },
       createOnce(context) {
-        const propertyBindings = new Set(["properties"]);
+        const propertyBindings = new Set<string>();
         return {
           before() {
             propertyBindings.clear();
-            propertyBindings.add("properties");
             const filename = filenameForContext(context);
             if (filename.endsWith(FIXTURE_FILE_SUFFIX)) {
               return true;
@@ -100,12 +103,16 @@ export default eslintCompatPlugin({
             if (
               !isStringLiteral(node.source) ||
               node.source.value !== "@/api/db/schema" ||
-              !Array.isArray(node.specifiers)
+              !Array.isArray(node.specifiers) ||
+              node.importKind === "type"
             ) {
               return;
             }
             for (const specifier of node.specifiers) {
-              if (getImportedName(specifier) !== "properties") {
+              if (
+                (isAstNode(specifier) && specifier.importKind === "type") ||
+                getImportedName(specifier) !== "properties"
+              ) {
                 continue;
               }
               const localName = getImportLocalName(specifier);

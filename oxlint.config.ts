@@ -200,6 +200,12 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-condition-combinator-outside-conditions.fixture.ts", [
     "no-condition-combinator-outside-conditions/no-condition-combinator-outside-conditions",
   ]),
+  fixtureRuleOverride(
+    "no-condition-combinator-outside-conditions.fixture.type-import.ts",
+    [
+      "no-condition-combinator-outside-conditions/no-condition-combinator-outside-conditions",
+    ],
+  ),
   fixtureRuleOverride("no-unjustified-double-assertion.fixture.ts", [
     "no-unjustified-double-assertion/no-unjustified-double-assertion",
   ]),
