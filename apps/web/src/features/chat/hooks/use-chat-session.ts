@@ -460,16 +460,22 @@ export const useChatSession = ({
                 draft.source,
                 { titleFallback: draft.name || "Draft" },
               );
+              // The compiler's report travels with the result so the model
+              // can check what it produced (see the tool's RESULT REPORT
+              // guidance); the user-facing failure copy stays in `message`.
               const output: CreateDocumentOutput =
                 compiled.status === "ok"
                   ? {
                       success: true,
                       destination: "draft",
                       fileName: buildCreateDocumentDownloadFileName(draft.name),
+                      fixes: compiled.fixes,
+                      warnings: compiled.warnings,
                     }
                   : {
                       success: false,
                       message: t("chat.createDocument.failedHeader"),
+                      errors: compiled.errors,
                     };
               await addToolResult({
                 tool: "create-document",
