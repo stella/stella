@@ -153,7 +153,10 @@ export const generateTanStackTextForRole = async (
   const abortController = options.abortSignal
     ? abortControllerFromSignal(options.abortSignal)
     : undefined;
-  const state: { finishReason: TanStackTextFinishReason } = {
+  // `finished` records that the run reported its end at all; the reason is
+  // optional on that event, so it cannot stand in for the event itself.
+  const state: { finished: boolean; finishReason: TanStackTextFinishReason } = {
+    finished: false,
     finishReason: null,
   };
   let output = "";
@@ -169,6 +172,7 @@ export const generateTanStackTextForRole = async (
     system: guardedSystemPrompt(options),
     temperature: options.temperature,
     onFinishReason: (value) => {
+      state.finished = true;
       state.finishReason = value;
     },
   })) {
@@ -179,9 +183,9 @@ export const generateTanStackTextForRole = async (
   // chunk: no `RUN_FINISHED`, nothing thrown. Whether a cancellation instead
   // surfaces as an adapter rejection races the provider stream, so without
   // this the same cancellation is sometimes an error and sometimes a truncated
-  // answer the caller cannot tell from a whole one. A reported finish reason
+  // answer the caller cannot tell from a whole one. A reported finish
   // separates the two: that run completed before the signal fired.
-  if (state.finishReason === null && options.abortSignal?.aborted === true) {
+  if (!state.finished && options.abortSignal?.aborted === true) {
     throw new HandlerError({
       status: 502,
       message: "AI generation was cancelled",

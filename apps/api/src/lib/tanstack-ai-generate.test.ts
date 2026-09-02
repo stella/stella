@@ -849,6 +849,28 @@ describe("TanStack AI text generation", () => {
     expect(output).toBe("a whole answer");
   });
 
+  test("keeps the output of a run that finished without a reason before the cancellation", async () => {
+    capturedChatOptions.length = 0;
+    const controller = new AbortController();
+    nextChatResult = createCancelledUnreasonedFinishStream(
+      ["a whole answer"],
+      controller,
+    );
+
+    const output = await generateTextForTestModel({
+      abortSignal: controller.signal,
+      caching: noCaching,
+      organizationId: null,
+      orgAIConfig: null,
+      prompt: "Rewrite it.",
+      role: "chat",
+      serviceTier: "standard",
+      tenantWorkspaceIds: [],
+    });
+
+    expect(output).toBe("a whole answer");
+  });
+
   test("collects text through the error-aware streaming boundary", async () => {
     capturedChatOptions.length = 0;
     nextChatResult = createTextStream(["hello", " world"]);
@@ -1097,6 +1119,16 @@ const createCancelledTextStream = async function* (
   finishReason?: "stop" | "length",
 ) {
   yield* createTextStream(deltas, finishReason);
+  controller.abort();
+};
+
+// `RUN_FINISHED` may carry no finish reason at all; the run still finished.
+const createCancelledUnreasonedFinishStream = async function* (
+  deltas: string[],
+  controller: AbortController,
+) {
+  yield* createTextStream(deltas);
+  yield { type: realTanStackAI.EventType.RUN_FINISHED };
   controller.abort();
 };
 
