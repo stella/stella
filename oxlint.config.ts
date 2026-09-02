@@ -1180,7 +1180,8 @@ export default defineConfig({
       },
     },
     {
-      files: ["**/scripts/**"],
+      // Evals are scripts too: on-demand model runs that print reports.
+      files: ["**/scripts/**", "**/evals/**"],
       rules: {
         "no-console": "off",
         // `noPropertyAccessFromIndexSignature` requires bracket access on the

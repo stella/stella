@@ -33,6 +33,44 @@ const createDocumentToolInputSchema = v.strictObject({
   ),
 });
 
+const legalSourceDiagnosticSchema = v.strictObject({
+  code: v.string(),
+  message: v.string(),
+  severity: v.picklist(["warning", "error"]),
+  line: v.optional(v.number()),
+});
+
+const legalSourceFixSchema = v.strictObject({
+  code: v.string(),
+  message: v.string(),
+  line: v.optional(v.number()),
+});
+
+// The compiler's report rides on the result so the model can check what it
+// produced without a second call: `fixes` are normalizations the compiler
+// applied on its own, `warnings` are kept-but-suspect constructs, `errors`
+// are what stopped the compile. Optional on the wire because results
+// persisted before the report existed carry none of them.
+const compilerReportProperties = {
+  fixes: v.optional(
+    v.pipe(
+      v.array(legalSourceFixSchema),
+      v.description(
+        "Normalizations the compiler applied to your source (for example a " +
+          "stripped manual clause number or a signatures block moved to " +
+          "the end). Reissue the full source if one of them changed your " +
+          "intent.",
+      ),
+    ),
+  ),
+  warnings: v.optional(
+    v.pipe(
+      v.array(legalSourceDiagnosticSchema),
+      v.description("Constructs the compiler kept but flags as suspect."),
+    ),
+  ),
+};
+
 const createDocumentToolOutputSchema = v.union([
   v.strictObject({
     success: v.literal(true),
@@ -49,6 +87,7 @@ const createDocumentToolOutputSchema = v.union([
     success: v.literal(true),
     destination: v.literal("draft"),
     fileName: v.string(),
+    ...compilerReportProperties,
   }),
   v.strictObject({
     success: v.literal(true),
@@ -58,6 +97,15 @@ const createDocumentToolOutputSchema = v.union([
   v.strictObject({
     success: v.literal(false),
     message: v.string(),
+    errors: v.optional(
+      v.pipe(
+        v.array(legalSourceDiagnosticSchema),
+        v.description(
+          "What stopped the compile, with the source line where known. " +
+            "Fix the source and call the tool again.",
+        ),
+      ),
+    ),
   }),
 ]);
 
@@ -104,6 +152,10 @@ export const createCreateDocumentTool = () =>
       "table cell, or bilingual column in `**`; use @title, @clause, or @subclause " +
       "for structural headings. The markers are compiled into DOCX runs and are " +
       "not shown literally.\n\n" +
+      "RESULT REPORT: the result lists `fixes` the compiler applied on its own " +
+      "and `warnings` it kept; a failed compile returns `errors` with source " +
+      "lines. Read them: if a fix changed what you meant, call the tool again " +
+      "with the corrected full source.\n\n" +
       "PLACEHOLDERS: wrap unknown values in `[[ ]]` — the compiler highlights them in yellow so the user can spot and fill them. Example: `Buyer shall pay [[purchase price]] on or before [[closing date]].` Briefly tell the user in your reply which placeholders you left.\n\n" +
       "@signatures: one block at the end, key:value lines per party. Keys: `party` (legal name), `by` (signing person, alias `name`), `title` (role). Use the document-language alias for the keys — e.g. `party / strana / partei / partie / parte / fél`. Each `party:` line opens a new party block; omit `by` and `title` to leave a blank line for hand-fill. The compiler renders one column per party (party name bolded, signing space, rule, then your `by:` / `title:` values raw) — no compiler-added captions. If you want labels like 'Datum:' or 'Podpis', write them inline in the source above the @signatures block (with @paragraph), in the document's language.",
     inputSchema: toTanStackToolSchema(createDocumentToolInputSchema),
