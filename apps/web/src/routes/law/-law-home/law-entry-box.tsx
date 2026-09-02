@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { ArrowUpIcon } from "lucide-react";
+import { SearchIcon } from "lucide-react";
 
 import { Button } from "@stll/ui/button";
 import {
@@ -102,7 +102,7 @@ export const LawEntryBox = ({
               size={COMPOSER_CONTROL_BUTTON_SIZE}
               type="submit"
             >
-              <ArrowUpIcon className="size-3.5" />
+              <SearchIcon className="size-3.5" />
             </Button>
           </div>
         </div>

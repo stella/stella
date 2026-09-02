@@ -11,7 +11,13 @@ import {
   redirect,
   useNavigate,
 } from "@tanstack/react-router";
-import { ActivityIcon, HistoryIcon, ScaleIcon, SearchIcon } from "lucide-react";
+import {
+  ActivityIcon,
+  BookOpenIcon,
+  HistoryIcon,
+  ScaleIcon,
+  SearchIcon,
+} from "lucide-react";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
@@ -262,7 +268,7 @@ function LawHomePending() {
 
 /** The section's mark over the question, as the chat home greets. */
 const LawHomeGreeting = ({ children }: { children: string }) => (
-  <LandingGreeting icon={<ScaleIcon className="size-6" />}>
+  <LandingGreeting icon={<BookOpenIcon className="size-6" />}>
     {children}
   </LandingGreeting>
 );
