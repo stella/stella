@@ -44,3 +44,6 @@ the default provider chain (see `getTanStackTextModelById`).
 - `extraction.ts`: does the structured-extraction path (`generateWorkflowData`)
   match ground truth across text, date, int, and select fields, and does it
   answer a question the source never states?
+- `agent-orientation.ts`: given stella's MCP tool list or CLI skill, does a
+  model pick the right tool or command and arguments for a natural-language
+  task, scored without executing anything?
