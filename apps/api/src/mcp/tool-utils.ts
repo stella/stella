@@ -139,6 +139,30 @@ export const toolDataResult = <TData>(
 // a string, but the runtime returns undefined for unsupported root values.
 const stringifyJson = (value: unknown): unknown => JSON.stringify(value);
 
+const isJsonObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+/**
+ * `structuredContent` for a success (MCP 2025-06-18 allows it without an
+ * output schema): the payload object itself, so a client reads typed fields
+ * instead of re-parsing `content[0].text`. A handler's own
+ * `mcp.structuredContent` wins; a non-object payload (array, scalar) has no
+ * structured form and is carried by the text content alone.
+ *
+ * An error result never carries it: `structuredContent` is the tool's output,
+ * and the `{ error: … }` envelope is the absence of one. A client validating
+ * it against an output schema must not be handed a failure envelope in that
+ * slot.
+ */
+const successStructuredContent = (
+  result: InternalToolSuccess,
+): Record<string, unknown> | undefined => {
+  if (result.mcp?.structuredContent !== undefined) {
+    return result.mcp.structuredContent;
+  }
+  return isJsonObject(result.data) ? result.data : undefined;
+};
+
 /** Serialize a canonical Stella tool result at the external MCP boundary. */
 export const serializeToolResult = (
   result: InternalToolResult,
@@ -160,11 +184,10 @@ export const serializeToolResult = (
         content.push({ type: "text", text });
       }
     }
+    const structuredContent = successStructuredContent(result);
     return {
       content,
-      ...(result.mcp?.structuredContent === undefined
-        ? {}
-        : { structuredContent: result.mcp.structuredContent }),
+      ...(structuredContent === undefined ? {} : { structuredContent }),
     };
   }
 
@@ -182,9 +205,18 @@ export const serializeToolResult = (
   };
 };
 
-/** Serialize unwrapped upstream data at an external MCP adapter boundary. */
-export const serializeMcpData = (data: unknown): CallToolResult =>
-  serializeToolResult(toolDataResult(data));
+/**
+ * Serialize unwrapped upstream data at an external MCP adapter boundary. The
+ * payload is foreign application output, not a stella projection, so it is
+ * carried as text only: `structuredContent` stays a first-party field a client
+ * can validate, never a slot an upstream server's shape lands in.
+ */
+export const serializeMcpData = (data: unknown): CallToolResult => {
+  const { structuredContent: _upstream, ...result } = serializeToolResult(
+    toolDataResult(data),
+  );
+  return result;
+};
 
 /**
  * Legacy plain-text tool error. Kept for the handful of bespoke messages that
@@ -559,7 +591,8 @@ export const isToolErrorResult = (
   "status" in value &&
   value.status === "error";
 
-const MAX_CURSOR_LENGTH = 512;
+/** Wire cap on an opaque pagination cursor, shared with the tool schemas. */
+export const MAX_CURSOR_LENGTH = 512;
 
 export const parseOptionalCursor = ({
   args,
@@ -890,6 +923,40 @@ export const invokeAiTool = async <TArgs extends Record<string, unknown>>({
     }
     throw error;
   }
+};
+
+const HTML_ENTITY_TEXT = new Map([
+  ["&amp;", "&"],
+  ["&lt;", "<"],
+  ["&gt;", ">"],
+  ["&quot;", '"'],
+  ["&#x27;", "'"],
+  ["&#39;", "'"],
+]);
+const HTML_ENTITY_PATTERN = /&(?:amp|lt|gt|quot|#x27|#39);/gu;
+const HIGHLIGHT_TAG_PATTERN = /<\/?mark>/gu;
+
+/**
+ * Plain text for a search snippet built for the web UI. `escapeAndHighlight`
+ * (see `lib/search/highlight.ts`) HTML-escapes the snippet and wraps matches in
+ * `<mark>`; an MCP client is an agent or a terminal, never a browser, so the
+ * markup is noise there. Tags are dropped before entities are decoded, so an
+ * escaped literal `&lt;mark&gt;` in the source text survives as text. Entities
+ * are decoded in one pass so `&amp;lt;` decodes to `&lt;`, not `<`.
+ */
+export const toPlainTextSnippet = (snippet: string | null): string | null => {
+  if (snippet === null) {
+    return null;
+  }
+
+  return snippet
+    .replaceAll(HIGHLIGHT_TAG_PATTERN, "")
+    .replaceAll(
+      HTML_ENTITY_PATTERN,
+      (entity) =>
+        HTML_ENTITY_TEXT.get(entity) ??
+        panic(`Unmapped HTML entity: ${entity}`),
+    );
 };
 
 export const normalizeTextField = ({

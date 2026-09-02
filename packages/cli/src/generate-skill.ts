@@ -6,11 +6,10 @@
 // the real `generateRouteMap` output, so the documented surface can never drift
 // from the command surface the CLI actually dispatches.
 
-import { panic } from "better-result";
-
+import { CLI_DEFAULT_SCOPES } from "./auth/constants.js";
 import { CAPABILITY_NAMESPACE } from "./generate-capability-tree.js";
 import { generateRouteMap } from "./generate-route-map.js";
-import { EXIT_CODES } from "./mcp-constants.js";
+import { exitCodeEntries } from "./mcp-constants.js";
 import type {
   LeafCommandSpec,
   RegistryToolListing,
@@ -24,29 +23,6 @@ import type {
  * emitted frontmatter and the codegen output path.
  */
 export const SKILL_NAME = "stella-cli";
-
-/**
- * Human meaning for each `EXIT_CODES` key. Typed `satisfies
- * Record<keyof typeof EXIT_CODES, string>` so a new exit code fails typecheck
- * here until it is described; the rendered code column is read from
- * `EXIT_CODES` itself, so the table can never drift from the compiled
- * exit-code constant. Declaration order is irrelevant: the table is rendered
- * sorted numerically by exit-code value.
- */
-const EXIT_CODE_DESCRIPTIONS = {
-  ok: "success",
-  unexpected: "unexpected internal error",
-  validation: "usage or input validation error",
-  auth: "authentication required or failed (run `stella auth login`)",
-  server: "server or tool error",
-  featureDisabled: "feature disabled for this organization",
-  notFound: "resource not found",
-  aborted: "confirmation aborted (a destructive op was declined)",
-  permissionDenied:
-    "permission denied (member role lacks the required permission)",
-  usageLimited: "usage entitlement exceeded",
-  conflict: "conflict with current state (duplicate or concurrent change)",
-} satisfies Record<keyof typeof EXIT_CODES, string>;
 
 type CommandRow = {
   domain: string;
@@ -122,20 +98,12 @@ const renderCommandTable = (rows: readonly CommandRow[]): string => {
   return lines.join("\n");
 };
 
-const renderExitCodeTable = (): string => {
-  const lines = ["| Code | Meaning |", "| --- | --- |"];
-  // Iterate `EXIT_CODES` (the source of truth) and look descriptions up
-  // through a widened alias, so no cast is needed: exhaustiveness is already
-  // compile-forced on the `EXIT_CODE_DESCRIPTIONS` literal by its `satisfies`.
-  const descriptions: Record<string, string> = EXIT_CODE_DESCRIPTIONS;
-  const sorted = Object.entries(EXIT_CODES).toSorted(([, a], [, b]) => a - b);
-  for (const [key, code] of sorted) {
-    const meaning =
-      descriptions[key] ?? panic(`exit code ${key} has no description`);
-    lines.push(`| ${code} | ${meaning} |`);
-  }
-  return lines.join("\n");
-};
+const renderExitCodeTable = (): string =>
+  [
+    "| Code | Meaning |",
+    "| --- | --- |",
+    ...exitCodeEntries().map(({ code, meaning }) => `| ${code} | ${meaning} |`),
+  ].join("\n");
 
 /** The capability-tree facts the skill documents (spec 049 deliverable 4). */
 export type CapabilitySkillSummary = {
@@ -167,7 +135,7 @@ const renderCapabilitySection = (summary: CapabilitySkillSummary): string =>
     "  workspace-scoped capabilities take a required `--workspace <id>`. Deep or",
     "  ambiguous payloads use `--input` (the whole `{ body?, params?, query? }`).",
     "- **Dry run**: `--dry-run` validates the input server-side and returns without",
-    "  executing (maps to `validateOnly`).",
+    "  executing (maps to `validate_only`).",
     "- **Destructive** capabilities prompt on a TTY and need `--yes` off a TTY; the",
     "  server's per-capability confirm gate is satisfied automatically once confirmed.",
     "- Exit codes are identical to the curated commands (see above).",
@@ -223,16 +191,18 @@ export const generateCliSkill = (
     "## Authenticate",
     "",
     "```sh",
-    "stella auth login",
+    "stella auth login --server <url>",
     "```",
     "",
     "Login runs an OAuth 2.1 authorization-code flow with PKCE against the stella",
     "server, using a loopback listener (`http://127.0.0.1/callback`, ephemeral port)",
     "to capture the code. Credentials are stored per server origin, so one machine",
-    "can hold sessions for several servers at once. Point at a non-default server",
-    "with `--server <url>`; scope the session with `--scopes` (default scopes:",
-    "`openid profile email stella:read stella:search`). `stella auth whoami` shows",
-    "the active session; `stella auth logout` clears it.",
+    "can hold sessions for several servers at once. The first login needs",
+    "`--server <url>` (or `STELLA_SERVER_URL`); it then becomes the default, and",
+    "every command accepts `--server <url>` to target another one. Scope the",
+    "session with `--scopes`; the default scopes are",
+    `\`${CLI_DEFAULT_SCOPES.join(" ")}\`.`,
+    "`stella auth whoami` shows the active session; `stella auth logout` clears it.",
     "",
     "## Conventions every agent must know",
     "",
@@ -256,6 +226,10 @@ export const generateCliSkill = (
     "  stays clean even with `--output json`. Every tool error carries a stable",
     "  machine `code` that maps to the process exit code (see below): branch on the",
     "  exit code, and read the `error:`/`hint:` lines for the human-readable message.",
+    "- **Finding and reading text**: `stella search matters --query '<q>'` returns",
+    "  matching documents with their entity ids, and",
+    "  `stella document content --entity-id <id>` prints one document's text",
+    "  (windowed, so follow `--cursor`).",
     "- **MCP resources**: `stella reference list` enumerates static server resources;",
     "  `stella reference show <name>` prints one.",
     "",

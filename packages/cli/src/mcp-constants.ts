@@ -1,5 +1,7 @@
 // Shared constants for the domain-command runtime (spec 051).
 
+import { panic } from "better-result";
+
 import {
   MCP_ERROR_CODES,
   type McpErrorCode,
@@ -41,6 +43,45 @@ export const EXIT_CODES = {
 } as const;
 
 export type ExitCode = (typeof EXIT_CODES)[keyof typeof EXIT_CODES];
+
+/**
+ * Human meaning for each `EXIT_CODES` key, typed `satisfies Record<keyof typeof
+ * EXIT_CODES, string>` so a new exit code fails typecheck here until it is
+ * described. Every surface that documents exit codes (the root `--help`, the
+ * generated agent skill) renders `exitCodeEntries()` instead of its own list,
+ * so no copy can drift from the compiled constant.
+ */
+const EXIT_CODE_DESCRIPTIONS = {
+  ok: "success",
+  unexpected: "unexpected internal error",
+  validation: "usage or input validation error",
+  auth: "authentication required or failed (run `stella auth login`)",
+  server: "server or tool error",
+  featureDisabled: "feature disabled for this organization",
+  notFound: "resource not found",
+  aborted: "confirmation aborted (a destructive op was declined)",
+  permissionDenied:
+    "permission denied (member role lacks the required permission)",
+  usageLimited: "usage entitlement exceeded",
+  conflict: "conflict with current state (duplicate or concurrent change)",
+} satisfies Record<keyof typeof EXIT_CODES, string>;
+
+export type ExitCodeEntry = { readonly code: number; readonly meaning: string };
+
+/** Every exit code with its meaning, ordered numerically. */
+export const exitCodeEntries = (): readonly ExitCodeEntry[] => {
+  // Iterate `EXIT_CODES` (the source of truth) and look descriptions up through
+  // a widened alias, so no cast is needed: exhaustiveness is already
+  // compile-forced on the `EXIT_CODE_DESCRIPTIONS` literal by its `satisfies`.
+  const descriptions: Record<string, string> = EXIT_CODE_DESCRIPTIONS;
+  return Object.entries(EXIT_CODES)
+    .toSorted(([, a], [, b]) => a - b)
+    .map(([key, code]) => ({
+      code,
+      meaning:
+        descriptions[key] ?? panic(`exit code ${key} has no description`),
+    }));
+};
 
 /**
  * Full map from a structured tool-error envelope `error.code` to the CLI exit

@@ -242,6 +242,11 @@ architecture and scale, auth and data access, files and external APIs, tests,
 - Defensive code belongs at real trust and failure boundaries. Do not add null
   checks, silent fallbacks, or catch-and-log blocks for states already excluded by
   types, validation, or framework guarantees.
+- No forward-compatibility placeholders: never ship a flag, option, field, or
+  export that is accepted but has no effect "for later" (a `--keychain` that
+  always falls back, a `setDefault` helper nothing calls). Add it in the PR that
+  wires it end to end. Dead-export checks (knip) enforce this where a package is
+  enrolled; enroll new packages.
 
 ## Workspace Layout
 

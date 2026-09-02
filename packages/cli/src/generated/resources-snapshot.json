@@ -12,5 +12,12 @@
     "title": "Template marker grammar",
     "description": "stella's {{...}} template marker grammar: fillable values, conditional and repeating blocks, clause slots, and numbering inside a DOCX. Read this before authoring a DOCX for save_template.",
     "mimeType": "text/markdown"
+  },
+  {
+    "uri": "stella://reference/template-fields",
+    "name": "template-fields",
+    "title": "Template field configuration",
+    "description": "How save_template's fields overlay configures each template field: input types, validation, composite parts, registry lookups, contact and matter bindings, and who fills the field. Read this before passing fields.",
+    "mimeType": "text/markdown"
   }
 ]

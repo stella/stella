@@ -14,20 +14,15 @@ import {
   setRegisteredClient,
 } from "./cli-config.js";
 import {
+  CLI_IDENTITY_SCOPES,
   getMcpResourceUrl,
   LOGIN_TIMEOUT_MS,
   LOOPBACK_REDIRECT_URI,
 } from "./constants.js";
-import {
-  readCredentialFile,
-  setDefaultOrg,
-  upsertCredential,
-  writeCredentialFile,
-} from "./credential-store.js";
 import type { StoredCredential } from "./credential-store.js";
 import { MissingOrgClaimError } from "./errors.js";
 import type { CliAuthError, LoopbackTimeoutError } from "./errors.js";
-import { decodeAccessTokenClaims } from "./jwt.js";
+import { decodeAccessTokenClaims, decodeIdTokenClaims } from "./jwt.js";
 import {
   startLoopbackListener,
   toLoopbackCallbackError,
@@ -37,6 +32,7 @@ import { parseManualCallbackInput } from "./manual-callback.js";
 import { registerLoopbackClient } from "./oauth-client-registration.js";
 import { discoverAuthorizationServerMetadata } from "./oauth-metadata.js";
 import type { AuthorizationServerMetadata } from "./oauth-metadata.js";
+import { persistLogin } from "./persist-login.js";
 import { createOAuthState, createPkcePair } from "./pkce.js";
 import { negotiateOAuthScopes } from "./scope-negotiation.js";
 import { resolveServerUrl } from "./server-resolution.js";
@@ -46,7 +42,12 @@ export type LoginOptions = {
   readonly configDir: string;
   readonly orgHint: string | undefined;
   readonly registrationScopes: readonly string[];
-  readonly requestedScopes: readonly string[];
+  /**
+   * `stella:*` scopes to request. `login` adds `CLI_IDENTITY_SCOPES` itself,
+   * so no caller (or `--scopes` value) can drop `offline_access` and end up
+   * with a session that cannot refresh.
+   */
+  readonly resourceScopes: readonly string[];
   readonly requiredScopes: readonly string[];
   readonly serverFlag: string | undefined;
 };
@@ -275,7 +276,7 @@ export const login = async (
     const scopes = yield* negotiateOAuthScopes({
       advertisedScopes: metadata.scopes_supported,
       registrationScopes: options.registrationScopes,
-      requestedScopes: options.requestedScopes,
+      requestedScopes: [...CLI_IDENTITY_SCOPES, ...options.resourceScopes],
       requiredScopes: options.requiredScopes,
     });
     const clientId = yield* Result.await(
@@ -340,12 +341,20 @@ export const login = async (
       );
     }
 
+    // The access token carries no email or name, so account identity comes
+    // from the `id_token` the token endpoint returns alongside it.
+    const identity = token.id_token
+      ? decodeIdTokenClaims(token.id_token)
+      : undefined;
+
     const now = Date.now();
     const credential: StoredCredential = {
       accessToken: token.access_token,
       clientId,
       createdAt: now,
+      ...(identity?.email ? { email: identity.email } : {}),
       expiresAt: now + token.expires_in * 1000,
+      ...(identity?.name ? { name: identity.name } : {}),
       orgId: claims.org_id,
       ...(options.orgHint ? { orgLabel: options.orgHint } : {}),
       refreshToken: token.refresh_token,
@@ -355,14 +364,7 @@ export const login = async (
       updatedAt: now,
     };
 
-    const existingFile = await readCredentialFile(options.configDir);
-    const withCredential = upsertCredential(existingFile, credential);
-    const withDefaultOrg = setDefaultOrg(
-      withCredential,
-      serverUrl,
-      credential.orgId,
-    );
-    await writeCredentialFile(options.configDir, withDefaultOrg);
+    await persistLogin({ configDir: options.configDir, credential });
 
     return Result.ok({
       expiresAt: credential.expiresAt,

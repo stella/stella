@@ -121,6 +121,64 @@ const schemaTypeList = (rawType: unknown): readonly string[] => {
   return typeof rawType === "string" ? [rawType] : [];
 };
 
+const isRecordSchema = (value: unknown): value is PropSchema =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+/**
+ * A nullable scalar can arrive as `type: ["string", "null"]` or, from a
+ * validator-derived projection, as `anyOf: [{ type: "string", ... }, { type:
+ * "null" }]`. Both mean the same flag (`nullable-string`, or a nullable int),
+ * so the union form is folded into the list form before classification; the
+ * non-null branch's own keywords (enum, bounds) carry over.
+ */
+const NULLABLE_SCALAR_TYPES: ReadonlySet<string> = new Set([
+  "boolean",
+  "integer",
+  "number",
+  "string",
+]);
+
+const unwrapNullableUnion = (schema: PropSchema): PropSchema => {
+  const variants = schema["anyOf"];
+  if (!Array.isArray(variants) || variants.length !== 2) {
+    return schema;
+  }
+  const branches = variants.filter(isRecordSchema);
+  if (branches.length !== 2) {
+    return schema;
+  }
+  const nullBranch = branches.find(
+    (branch) => schemaTypeList(branch["type"]).join(",") === "null",
+  );
+  const valueBranch = branches.find((branch) => branch !== nullBranch);
+  if (nullBranch === undefined || valueBranch === undefined) {
+    return schema;
+  }
+  const valueTypes = schemaTypeList(valueBranch["type"]);
+  const valueType = valueTypes.at(0);
+  // Scalars only: a nullable object or array stays a union, so its members keep
+  // going to `--input` instead of sprouting flags for paths the wrapper schema
+  // does not expose.
+  if (
+    valueTypes.length !== 1 ||
+    valueType === undefined ||
+    !NULLABLE_SCALAR_TYPES.has(valueType)
+  ) {
+    return schema;
+  }
+  const { anyOf: _anyOf, ...outer } = schema;
+  // An assertion the wrapper states as well (a hoisted `minimum`, an `enum`)
+  // would be overwritten by the branch's; such a union stays a union rather
+  // than losing the stricter of the two.
+  const overridesOuter = Object.keys(valueBranch).some(
+    (key) => key !== "type" && Object.hasOwn(outer, key),
+  );
+  if (overridesOuter) {
+    return schema;
+  }
+  return { ...outer, ...valueBranch, type: [...valueTypes, "null"] };
+};
+
 const typeInfo = (schema: PropSchema): TypeInfo => {
   const types = schemaTypeList(schema["type"]);
   const nullable = types.includes("null");
@@ -303,8 +361,9 @@ export const classifyProp = (
 
 const classifyPropShape = (
   prop: string,
-  schema: PropSchema,
+  rawSchema: PropSchema,
 ): PropClassification => {
+  const schema = unwrapNullableUnion(rawSchema);
   const { base, nullable } = typeInfo(schema);
   const values = enumValues(schema);
 

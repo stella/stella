@@ -6,21 +6,35 @@
 // exit-code selection happen inside the executor, so `process.exitCode` is set
 // precisely rather than defaulted by stricli.
 
-import { buildCommand, buildRouteMap } from "@stricli/core";
+import {
+  buildApplication,
+  buildCommand,
+  buildRouteMap,
+  help,
+  text_en,
+  version,
+} from "@stricli/core";
 import type {
+  Application,
   BaseFlags,
   Command,
   CommandBuilderArguments,
   RouteMap,
 } from "@stricli/core";
 
+import packageJson from "../package.json" with { type: "json" };
+import { authRoute } from "./commands/auth.js";
+import { compatibilityRoute } from "./commands/compatibility.js";
+import { uploadCommand } from "./commands/upload.js";
 import type { Context } from "./context.js";
 import { expandSchemaDefs } from "./expand-schema-defs.js";
+import { generatedResourceTree } from "./generated/resource-tree.js";
 import {
   buildInputContractHelp,
   formatInputExample,
 } from "./input-contract-help.js";
-import { buildOutputFlags } from "./output-flags.js";
+import { exitCodeEntries } from "./mcp-constants.js";
+import { buildCommonFlags, buildServerFlag } from "./output-flags.js";
 import type { ResourceLeafSpec, ResourceNode } from "./resource-types.js";
 import type {
   CapabilityLeafSpec,
@@ -77,21 +91,33 @@ const flagBrief = (spec: FlagSpec): string => {
   const facts = mechanicalFlagFacts(spec);
   return spec.description === undefined
     ? facts
-    : `${spec.description} [${facts}]`;
+    : `${spec.description} ${facts}`;
 };
 
+/**
+ * The schema facts as one parenthesised, comma-separated clause:
+ * `(required, string)`, `(optional, enum: draft, sent)`, `(optional, int
+ * 1..100, repeatable)`. Stricli already brackets an optional flag's usage, so
+ * nesting brackets here produced the misleading `[--entity-id ... [(required)
+ * string]]`: required-ness is a fact about the tool input, not about the
+ * stricli flag, which stays optional (see `OptionalStricliFlag`).
+ */
 const mechanicalFlagFacts = (spec: FlagSpec): string => {
-  const parts = [spec.required ? "(required)" : "(optional)", spec.kind];
-  if (spec.enum) {
-    parts.push(`one of: ${spec.enum.join(", ")}`);
-  }
-  if (spec.min !== undefined || spec.max !== undefined) {
-    parts.push(`range ${spec.min ?? "-inf"}..${spec.max ?? "inf"}`);
-  }
+  const parts = [spec.required ? "required" : "optional", flagKindFact(spec)];
   if (spec.repeatable) {
     parts.push("repeatable");
   }
-  return parts.join(" ");
+  return `(${parts.join(", ")})`;
+};
+
+const flagKindFact = (spec: FlagSpec): string => {
+  if (spec.enum) {
+    return `${spec.kind}: ${spec.enum.join(", ")}`;
+  }
+  if (spec.min !== undefined || spec.max !== undefined) {
+    return `${spec.kind} ${spec.min ?? "-inf"}..${spec.max ?? "inf"}`;
+  }
+  return spec.kind;
 };
 
 /**
@@ -120,7 +146,7 @@ const hasLimitProp = (spec: LeafCommandSpec): boolean => {
 };
 
 const buildLeafFlags = (spec: LeafCommandSpec): Record<string, unknown> => {
-  const flags: Record<string, unknown> = buildOutputFlags();
+  const flags: Record<string, unknown> = buildCommonFlags();
 
   for (const flagSpec of spec.flags) {
     flags[flagKey(flagSpec)] = buildFlag(flagSpec);
@@ -284,7 +310,7 @@ const capabilityLeafBrief = (spec: CapabilityLeafSpec): string => {
 const buildCapabilityLeafFlags = (
   spec: CapabilityLeafSpec,
 ): Record<string, unknown> => {
-  const flags: Record<string, unknown> = buildOutputFlags();
+  const flags: Record<string, unknown> = buildCommonFlags();
 
   for (const flagSpec of spec.flags) {
     flags[flagKey(flagSpec)] = buildFlag(flagSpec);
@@ -298,7 +324,7 @@ const buildCapabilityLeafFlags = (
     false,
   );
   flags[RESERVED_FLAG_KEYS.dryRun] = booleanFlag(
-    "Validate the input server-side and return without executing (validateOnly)",
+    "Validate the input server-side and return without executing (validate_only)",
     false,
   );
 
@@ -378,7 +404,7 @@ const buildRouteNode = (node: RouteNode, brief: string): RoutingTarget => {
  * Fold a generated `RouteNode` (route) into stricli `RoutingTarget` children,
  * ready to merge into the root route map's `routes`.
  */
-export const buildGeneratedRoutes = (
+const buildGeneratedRoutes = (
   node: RouteNode,
 ): Record<string, RoutingTarget> => {
   if (node.kind !== "route") {
@@ -399,7 +425,7 @@ const resourceLeafBrief = (spec: ResourceLeafSpec): string =>
 const buildResourceLeaf = (spec: ResourceLeafSpec): RoutingTarget => {
   const builderArgs = {
     docs: { brief: resourceLeafBrief(spec) },
-    parameters: { flags: buildOutputFlags() },
+    parameters: { flags: buildCommonFlags() },
     func: async function func(
       this: Context,
       parsedFlags: Record<string, unknown>,
@@ -431,7 +457,7 @@ const buildResourceNode = (
  * Fold a generated resource `ResourceNode` (route) into a single stricli
  * `RouteMap` for the reserved `reference` top-level command (spec S5.4).
  */
-export const buildResourceRoutes = (node: ResourceNode): RouteMap<Context> => {
+const buildResourceRoutes = (node: ResourceNode): RouteMap<Context> => {
   const routes: Record<string, RoutingTarget> = {};
   if (node.kind === "route") {
     for (const [name, child] of Object.entries(node.children)) {
@@ -445,3 +471,117 @@ export const buildResourceRoutes = (node: ResourceNode): RouteMap<Context> => {
 };
 
 export type { RouteMap };
+
+const collectLeafPaths = (
+  node: RouteNode,
+  path: readonly string[],
+  lines: string[],
+): void => {
+  if (node.kind === "leaf") {
+    lines.push(`${path.join(" ")}\t(${node.spec.toolName})`);
+    return;
+  }
+  if (node.kind === "capability-leaf") {
+    lines.push(
+      `${path.join(" ")}\t(invoke_capability: ${node.spec.capabilityId})`,
+    );
+    return;
+  }
+  for (const [name, child] of Object.entries(node.children)) {
+    collectLeafPaths(child, [...path, name], lines);
+  }
+};
+
+/** The root `--help` body: the exit-code contract, rendered from EXIT_CODES. */
+const rootFullDescription = (): string =>
+  [
+    "Stella command-line client.",
+    "",
+    "Exit codes:",
+    ...exitCodeEntries().map(
+      ({ code, meaning }) => `  ${String(code).padStart(2, " ")}  ${meaning}`,
+    ),
+  ].join("\n");
+
+const HELP_FORMATTING = {
+  useAliasInUsageLine: false,
+  onlyRequiredInUsageLine: false,
+  caseStyle: "convert-camel-to-kebab",
+} as const;
+
+const buildRootRoute = (tree: RouteNode): RouteMap<Context> => {
+  const toolsListCommand = buildCommand<
+    { readonly server: string | undefined },
+    [],
+    Context
+  >({
+    docs: {
+      brief:
+        "List the CLI commands generated from the stella MCP tool registry",
+    },
+    func(this: Context): void {
+      const lines: string[] = [];
+      // Reflect the ACTIVE tree (the cached-listings tree when the server
+      // registry has diverged), not the baked-in one.
+      collectLeafPaths(tree, [], lines);
+      this.process.stdout.write(`${lines.sort().join("\n")}\n`);
+    },
+    parameters: { flags: buildServerFlag() },
+  });
+
+  const toolsRoute = buildRouteMap({
+    docs: { brief: "Inspect the generated command registry" },
+    routes: { list: toolsListCommand },
+  });
+
+  return buildRouteMap({
+    docs: {
+      brief: "Stella command-line client",
+      fullDescription: rootFullDescription(),
+    },
+    routes: {
+      auth: authRoute,
+      compatibility: compatibilityRoute,
+      upload: uploadCommand,
+      tools: toolsRoute,
+      reference: buildResourceRoutes(generatedResourceTree),
+      ...buildGeneratedRoutes(tree),
+    },
+  });
+};
+
+/**
+ * The whole stricli application, assembled from the ACTIVE command tree. It
+ * lives here rather than in `cli.ts` so tests can walk the real route tree the
+ * CLI dispatches against instead of a re-wired copy of it.
+ */
+export const buildApp = (tree: RouteNode): Application<Context> =>
+  buildApplication(
+    buildRootRoute(tree),
+    {
+      name: "stella",
+      // Renders (and accepts) multi-word flags as kebab-case, e.g. the
+      // `noInput` flag as `--no-input` rather than `--noInput` — matches the
+      // documented command surface and every other kebab-case CLI convention
+      // (gh, npm, docker).
+      scanner: { caseStyle: "allow-kebab-for-camel" },
+    },
+    {
+      help: help({
+        brief: text_en.briefs.help,
+        defaultForRouteMap: true,
+        formatting: HELP_FORMATTING,
+      }),
+      helpAll: help({
+        brief: text_en.briefs.helpAll,
+        alias: "H",
+        hidden: true,
+        includeHidden: true,
+        formatting: HELP_FORMATTING,
+      }),
+      version: version({
+        brief: text_en.briefs.version,
+        info: { currentVersion: packageJson.version },
+      }),
+    },
+  );

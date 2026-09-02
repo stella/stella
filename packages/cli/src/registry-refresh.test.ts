@@ -93,6 +93,7 @@ const okFetch =
       cliMinimum?: string;
       grantedScopes?: readonly string[];
       scopeOmittedTools?: readonly string[];
+      featureOmittedTools?: readonly string[];
     } = {},
   ) =>
   async () =>
@@ -154,8 +155,19 @@ describe("resolveCommandTree (S5.3)", () => {
       env,
     });
     expect(tree).not.toBe(generatedRouteMap);
+    expect(notice).toBe("server registry differs: added list_widgets\n");
+  });
+
+  test("the notice names the diverged tools and summarizes a long list", async () => {
+    const env = await makeCacheEnv();
+    const removed = Array.from({ length: 10 }, (_, i) => `list_gone_${i}`);
+    await writeCache(env, {
+      listings: [listing("list_matters")],
+      delta: { added: [], removed, changed: ["list_matters"] },
+    });
+    const { notice } = await resolveCommandTree({ serverOrigin: ORIGIN, env });
     expect(notice).toBe(
-      "server registry differs (+1 −0 ~0); see 'stella tools list'\n",
+      "server registry differs: removed list_gone_0, list_gone_1, list_gone_2, list_gone_3, list_gone_4, list_gone_5, list_gone_6, list_gone_7 +2 more; changed list_matters\n",
     );
   });
 
@@ -206,6 +218,62 @@ describe("resolveCommandTree (S5.3)", () => {
       { additionalScopes: ["templates"], scope: "documents_write" },
       { additionalScopes: ["templates"], scope: "documents_write" },
     ]);
+  });
+
+  test("a single-scope omission prunes the command without a notice", async () => {
+    const env = await makeCacheEnv();
+    await writeCache(env, {
+      // `save_document` needs only `documents_write`, so there is no local
+      // all-scopes preflight to keep reachable: the token cannot call it.
+      listings: [listing("list_matters")],
+      delta: { added: [], removed: [], changed: [] },
+      scopeOmittedTools: ["save_document"],
+    });
+
+    const { tree, notice } = await resolveCommandTree({
+      serverOrigin: ORIGIN,
+      env,
+    });
+
+    expect(tree).not.toBe(generatedRouteMap);
+    expect(curatedLeavesForTool(tree, "save_document")).toHaveLength(0);
+    // The registry itself did not diverge, so nothing to report.
+    expect(notice).toBeUndefined();
+  });
+
+  test("a compound-only scope omission keeps the baked tree", async () => {
+    const env = await makeCacheEnv();
+    await writeCache(env, {
+      listings: [listing("list_matters")],
+      delta: { added: [], removed: [], changed: [] },
+      scopeOmittedTools: ["save_filled_template"],
+    });
+
+    const { tree, notice } = await resolveCommandTree({
+      serverOrigin: ORIGIN,
+      env,
+    });
+
+    expect(tree).toBe(generatedRouteMap);
+    expect(notice).toBeUndefined();
+  });
+
+  test("a feature-gated command stays in a diverged tree so the server can answer it", async () => {
+    const env = await makeCacheEnv();
+    await writeCache(env, {
+      listings: [listing("list_matters"), listing("list_widgets")],
+      delta: { added: ["list_widgets"], removed: [], changed: [] },
+      // `search_case_law` is baked but gated off in this deployment. Keeping the
+      // command means invoking it returns the server's feature_disabled with its
+      // real message, instead of the CLI claiming there is no such command.
+      featureOmittedTools: ["search_case_law"],
+    });
+
+    const { tree } = await resolveCommandTree({ serverOrigin: ORIGIN, env });
+
+    expect(
+      curatedLeavesForTool(tree, "search_case_law").length,
+    ).toBeGreaterThan(0);
   });
 
   test("a fully authorized omission does not restore a removed compound tool", async () => {
@@ -325,6 +393,61 @@ describe("refreshRegistryCache (S5.3/S5.5)", () => {
     expect(written?.grantedScopes).toEqual(["stella:read", "stella:search"]);
     expect(written?.scopeOmittedTools).toEqual(["save_filled_template"]);
     expect(written?.toolsListHash).toMatch(/^[0-9a-f]{64}$/u);
+  });
+
+  test("an attested deployment-gated projection reconciles to an empty delta", async () => {
+    const env = await makeCacheEnv();
+    // The shape a deployment with its feature flags off serves: the baked tools
+    // are absent from tools/list, and the response attests why. Without that
+    // evidence they read as removals and the notice fires on every invocation.
+    const outcome = await refreshRegistryCache({
+      serverOrigin: ORIGIN,
+      token: "t",
+      env,
+      force: true,
+      fetchLatestVersion: async () => undefined,
+      fetchRaw: okFetch(toolsBody(["list_matters"]), {
+        grantedScopes: ["stella:read", "stella:search"],
+        scopeOmittedTools: [],
+        featureOmittedTools: ["list_time_entries", "search_case_law"],
+      }),
+      bakedListings: [
+        listing("list_matters"),
+        listing("list_time_entries"),
+        listing("search_case_law"),
+      ],
+    });
+
+    expect(outcome).toEqual({ status: "refreshed", deltaEmpty: true });
+    const written = await readCacheFile(cachePathFor(ORIGIN, env));
+    expect(written?.delta).toEqual({ added: [], removed: [], changed: [] });
+    expect(written?.featureOmittedTools).toEqual([
+      "list_time_entries",
+      "search_case_law",
+    ]);
+    const { tree, notice } = await resolveCommandTree({
+      serverOrigin: ORIGIN,
+      env,
+    });
+    expect(notice).toBeUndefined();
+    expect(tree).toBe(generatedRouteMap);
+  });
+
+  test("an unattested absence is still a removal (older self-hosted server)", async () => {
+    const env = await makeCacheEnv();
+    const outcome = await refreshRegistryCache({
+      serverOrigin: ORIGIN,
+      token: "t",
+      env,
+      force: true,
+      fetchLatestVersion: async () => undefined,
+      fetchRaw: okFetch(toolsBody(["list_matters"])),
+      bakedListings: [listing("list_matters"), listing("search_case_law")],
+    });
+
+    expect(outcome).toEqual({ status: "refreshed", deltaEmpty: false });
+    const written = await readCacheFile(cachePathFor(ORIGIN, env));
+    expect(written?.delta.removed).toEqual(["search_case_law"]);
   });
 
   test("empty delta still refreshes (fetchedAt bumped) with deltaEmpty=true", async () => {

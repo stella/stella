@@ -26,7 +26,7 @@ const parseVersion = (
 };
 
 /** -1 / 0 / 1 when both versions parse; `undefined` when either does not. */
-export const compareVersions = (
+const compareVersions = (
   a: string | undefined,
   b: string | undefined,
 ): number | undefined => {

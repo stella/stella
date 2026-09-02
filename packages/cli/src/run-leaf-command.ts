@@ -11,6 +11,7 @@ import { createInterface } from "node:readline/promises";
 import { text as readStreamText } from "node:stream/consumers";
 
 import { decodeAccessTokenClaims } from "./auth/jwt.js";
+import { RESOURCE_SCOPE_PREFIX } from "./auth/scopes.js";
 import type { Context } from "./context.js";
 import { flagKey } from "./flag-name.js";
 import { validateAgainstSchema } from "./json-schema-validate.js";
@@ -99,7 +100,7 @@ export const setExit = (context: Context, code: ExitCode): void => {
 
 // Read all of stdin to a string (the `@-` / `--input -` escape hatch). Consumes
 // `process.stdin` to EOF so the published CLI runs under plain Node.
-export const readAllStdin = async (): Promise<string> =>
+const readAllStdin = async (): Promise<string> =>
   await readStreamText(process.stdin);
 
 /** Apply gh-style `@file`/`@-`/`@@` sugar to a string flag value (spec S3). */
@@ -153,7 +154,7 @@ export const setPath = (
  * satisfied by the `--input` JSON when the flag itself is unset (the flag and
  * the JSON compose; see `runLeafCommand`/`runCapabilityCommand`).
  */
-export const hasInputPath = (
+const hasInputPath = (
   target: Record<string, unknown>,
   path: string,
 ): boolean => {
@@ -245,7 +246,7 @@ const coerceArrayFlag = (
 };
 
 /** Coerce one parsed flag value to its JSON tool-arg value (spec S3). */
-export const coerceFlagValue = async (
+const coerceFlagValue = async (
   flagSpec: FlagSpec,
   value: unknown,
 ): Promise<Result<unknown, string>> => {
@@ -432,16 +433,25 @@ export const scopePreflightFailure = ({
     .filter((grantedScope) => grantedScope.length > 0);
   const grantedScopeSet = new Set(grantedScopes);
   const missingScope = requiredScopes.find(
-    (requiredScope) => !grantedScopeSet.has(`stella:${requiredScope}`),
+    (requiredScope) =>
+      !grantedScopeSet.has(`${RESOURCE_SCOPE_PREFIX}${requiredScope}`),
   );
   if (missingScope === undefined) {
     return undefined;
   }
 
+  // `--scopes` takes resource scopes only (the CLI always requests the
+  // identity set itself), so the hint must not echo granted identity scopes
+  // back: a command that `parseScopesFlag` rejects is a hint that loses the
+  // user their refresh token.
   const requestedScopes = [
     ...new Set([
-      ...grantedScopes,
-      ...requiredScopes.map((requiredScope) => `stella:${requiredScope}`),
+      ...grantedScopes.filter((grantedScope) =>
+        grantedScope.startsWith(RESOURCE_SCOPE_PREFIX),
+      ),
+      ...requiredScopes.map(
+        (requiredScope) => `${RESOURCE_SCOPE_PREFIX}${requiredScope}`,
+      ),
     ]),
   ];
   return {
@@ -763,7 +773,7 @@ type AllOutcome = {
  * count; the ceilings and truncation semantics are unchanged. Callers that
  * stream ignore `payload` and read `count`/`truncated`/`lastCursor`.
  */
-export const followAll = async ({
+const followAll = async ({
   windowedText,
   itemsKey,
   baseArgs,

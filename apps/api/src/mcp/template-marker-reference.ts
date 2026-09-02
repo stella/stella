@@ -12,6 +12,14 @@ import { type DirectiveKind, DIRECTIVE_KINDS } from "@stll/template-conditions";
  * user-facing), but the inventory it documents is derived, never duplicated.
  */
 
+/**
+ * Canonical URI of the marker-grammar resource. Owned here with the text it
+ * addresses, so the resource registry and the tool descriptions that point
+ * agents at it cannot drift apart.
+ */
+export const TEMPLATE_MARKER_REFERENCE_URI =
+  "stella://reference/template-markers";
+
 type DirectiveDoc = {
   /** Short label shown as the bullet heading. */
   title: string;
@@ -120,11 +128,9 @@ const NON_DIRECTIVE_RULES = [
     title: "Markers vs. field configuration",
     detail:
       "Markers decide only WHICH values are fillable. How each field behaves " +
-      "is set as a separate field configuration, never inside the DOCX: " +
-      "input type, select options, dependent options, date format, composite " +
-      "parts, hint, required, and who fills the field — a person (default), AI " +
-      "(aiPrompt), Person+AI (aiAdapt), a formula, or a company-register " +
-      "lookup. Configure fields over MCP via save_template's `fields` overlay.",
+      "(input type, options, validation, who fills it) is a separate field " +
+      "configuration, never inside the DOCX: pass it as save_template's " +
+      "`fields` overlay, documented in the template-fields reference resource.",
   },
 ] as const;
 

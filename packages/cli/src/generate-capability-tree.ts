@@ -114,7 +114,7 @@ export const isTransportInvocable = (
  * plain `--file <string>` flag that passes validation and reaches a handler
  * expecting a `File`.
  */
-export const filelessOnlyField = (
+const filelessOnlyField = (
   transport: CapabilityTransport,
 ): string | undefined => {
   if (transport.type !== "file-input" || transport.input.required) {

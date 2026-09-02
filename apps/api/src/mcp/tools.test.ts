@@ -28,7 +28,9 @@ import { pgFtsProvider } from "@/api/lib/search/pg-fts-provider";
 import type { SearchHit, SearchResult } from "@/api/lib/search/types";
 import type { withTimeout } from "@/api/lib/with-timeout";
 import type { McpRequestContext } from "@/api/mcp/context";
+import { deriveContactDisplayName } from "@/api/mcp/matter-tools";
 import {
+  findUndeclaredArguments,
   getMcpToolDefinition,
   getMcpToolRequiredScopesHint,
   handleMcpToolCall,
@@ -741,16 +743,19 @@ describe("OpenAI-compatible MCP tools", () => {
         query: {
           type: "string",
           description: "Search query",
+          minLength: 1,
           maxLength: 500,
         },
         cursor: {
           type: "string",
           description:
             "Opaque cursor from a previous search call to fetch the next page",
+          minLength: 1,
           maxLength: 512,
         },
       },
       required: ["query"],
+      additionalProperties: false,
     });
   });
 
@@ -765,6 +770,7 @@ describe("OpenAI-compatible MCP tools", () => {
         query: {
           type: "string",
           description: "Search query",
+          minLength: 1,
           maxLength: 500,
         },
         limit: {
@@ -815,6 +821,7 @@ describe("OpenAI-compatible MCP tools", () => {
         },
       },
       required: ["query"],
+      additionalProperties: false,
     });
   });
 
@@ -1116,7 +1123,9 @@ describe("OpenAI-compatible MCP tools", () => {
           decisionId: "dec_123",
           decisionType: "judgment",
           ecli: "ECLI:CZ:NS:2024:29.CDO.123.2024.1",
-          headline: "Relevant <mark>holding</mark>",
+          // The handler builds the headline for the web UI; the MCP snippet
+          // must come back as plain text.
+          headline: "Relevant <mark>holding</mark> on &quot;smlouva&quot;",
           language: "cs",
           languageAlternates: [
             {
@@ -1194,7 +1203,7 @@ describe("OpenAI-compatible MCP tools", () => {
           decisionType: "judgment",
           ecli: "ECLI:CZ:NS:2024:29.CDO.123.2024.1",
           language: "cs",
-          snippet: "Relevant <mark>holding</mark>",
+          snippet: 'Relevant holding on "smlouva"',
           sourceUrl: "https://example.test/decision",
         },
       ],
@@ -1252,7 +1261,7 @@ describe("OpenAI-compatible MCP tools", () => {
           decisionType: "judgment",
           ecli: "ECLI:CZ:NS:2024:29.CDO.123.2024.1",
           language: "cs",
-          snippet: "Relevant <mark>holding</mark>",
+          snippet: "Relevant holding",
           sourceUrl: "https://example.test/decision",
         },
       ],
@@ -3697,6 +3706,75 @@ describe("OpenAI-compatible MCP tools", () => {
     expectValidationMessage(result, "type is required to create a contact");
   });
 
+  test("save_contact rejects a create with no name to display", async () => {
+    const result = await handleMcpToolCall({
+      args: { type: "person", notes: "met at conference" },
+      context: createContext(),
+      toolName: "save_contact",
+    });
+
+    expectValidationMessage(
+      result,
+      "display_name is required to create a contact, or first_name/last_name (person) or organization_name (organization) to derive it from",
+    );
+  });
+
+  describe("deriveContactDisplayName", () => {
+    test("prefers an explicit display name", () => {
+      expect(
+        deriveContactDisplayName({
+          display_name: " Acme Corp ",
+          first_name: "Jan",
+          type: "person",
+        }),
+      ).toBe("Acme Corp");
+    });
+
+    test("derives a person from first and last name", () => {
+      expect(
+        deriveContactDisplayName({
+          first_name: " Jan ",
+          last_name: " Novák ",
+          type: "person",
+        }),
+      ).toBe("Jan Novák");
+    });
+
+    test("derives a person from whichever name part is present", () => {
+      expect(
+        deriveContactDisplayName({ last_name: "Novák", type: "person" }),
+      ).toBe("Novák");
+    });
+
+    test("derives an organization from its organization name", () => {
+      expect(
+        deriveContactDisplayName({
+          organization_name: "Acme s.r.o.",
+          type: "organization",
+        }),
+      ).toBe("Acme s.r.o.");
+    });
+
+    test("falls back across kinds rather than yielding no name", () => {
+      expect(
+        deriveContactDisplayName({
+          organization_name: "Acme s.r.o.",
+          type: "person",
+        }),
+      ).toBe("Acme s.r.o.");
+    });
+
+    test("yields an empty name when no part carries one", () => {
+      expect(
+        deriveContactDisplayName({
+          first_name: "  ",
+          organization_name: null,
+          type: "person",
+        }),
+      ).toBe("");
+    });
+  });
+
   test("list_contacts returns internal directory IDs from the shared query", async () => {
     const contact = {
       id: "contact_1",
@@ -4054,6 +4132,7 @@ describe("OpenAI-compatible MCP tools", () => {
           text: JSON.stringify({ taskId: "task_1", updated: true }),
         },
       ],
+      structuredContent: { taskId: "task_1", updated: true },
     });
     expect(workflowUpdates).toEqual([
       expect.objectContaining({ status: WORK_OBLIGATION_STATUS.COMPLETED }),
@@ -4448,5 +4527,87 @@ describe("OpenAI-compatible MCP tools", () => {
       message: "This capability is not available on the documents MCP surface",
       hint: "Use one of the upload lifecycle operations exposed by the document upload panel.",
     });
+  });
+});
+
+/**
+ * The dispatch-level unknown-key backstop. Every curated tool derives its
+ * advertised schema from the `v.strictObject` its handler parses, so this guard
+ * is redundant for them by construction; it exists so a tool that ever bypasses
+ * that path still cannot silently swallow a typo. Exercised against fabricated
+ * schemas, which is the case the registry itself cannot produce.
+ */
+describe("undeclared-argument backstop", () => {
+  const fakeToolSchema = {
+    type: "object",
+    properties: {
+      matter_id: { type: "string", description: "Matter ID" },
+      limit: { type: "integer", description: "Max rows" },
+    },
+    required: ["matter_id"],
+    additionalProperties: false,
+  } as const;
+
+  test("accepts exactly the declared keys", () => {
+    expect(
+      findUndeclaredArguments({
+        args: { matter_id: "ws_1", limit: 10 },
+        inputSchema: fakeToolSchema,
+      }),
+    ).toBeUndefined();
+  });
+
+  test("names every undeclared key, with a did-you-mean for case/underscore slips", () => {
+    expect(
+      findUndeclaredArguments({
+        args: { matter_id: "ws_1", matterId: "ws_1", bogus: 1 },
+        inputSchema: fakeToolSchema,
+      }),
+    ).toEqual({
+      declared: ["matter_id", "limit"],
+      undeclared: [
+        { key: "matterId", suggestion: "matter_id" },
+        { key: "bogus", suggestion: undefined },
+      ],
+    });
+  });
+
+  test("a no-property schema declares nothing, so any key is undeclared", () => {
+    expect(
+      findUndeclaredArguments({
+        args: { anything: true },
+        inputSchema: { type: "object" },
+      }),
+    ).toEqual({
+      declared: [],
+      undeclared: [{ key: "anything", suggestion: undefined }],
+    });
+  });
+
+  test("an explicitly open schema keeps its open contract", () => {
+    expect(
+      findUndeclaredArguments({
+        args: { passthrough: true },
+        inputSchema: { type: "object", additionalProperties: true },
+      }),
+    ).toBeUndefined();
+  });
+
+  test("dispatch rejects an undeclared key before the handler runs", async () => {
+    const result = await handleMcpToolCall({
+      args: { matterId: "ws_1" },
+      context: createContext(),
+      toolName: "list_matters",
+    });
+
+    const error = validationEnvelope(result);
+    expect(error["code"]).toBe("validation_error");
+    expect(error["message"]).toBe("Unknown parameter: matterId");
+    expect(error["issues"]).toEqual([
+      {
+        path: "matterId",
+        message: "Unknown parameter: matterId (did you mean matter_id?)",
+      },
+    ]);
   });
 });

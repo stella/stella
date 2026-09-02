@@ -270,6 +270,22 @@ describe("generateRouteMap: flag mapping (S3)", () => {
     });
   });
 
+  test("a nullable union whose wrapper restates a bound stays a union", () => {
+    // Unwrapping would let the branch's `minimum: 0` replace the wrapper's
+    // stricter `minimum: 10`; the property goes to `--input` instead.
+    expect(
+      classifyProp("limit", {
+        minimum: 10,
+        anyOf: [{ type: "integer", minimum: 0 }, { type: "null" }],
+      }),
+    ).toEqual({ kind: "input-only" });
+    expect(
+      classifyProp("limit", {
+        anyOf: [{ type: "integer", minimum: 0 }, { type: "null" }],
+      }),
+    ).toMatchObject({ kind: "flag", spec: { kind: "int", min: 0 } });
+  });
+
   test("unknown one-character properties fail codegen", () => {
     for (const prop of "abcdefghijklmnoprstuvwxyz") {
       expect(() => classifyProp(prop, { type: "string" })).toThrow(

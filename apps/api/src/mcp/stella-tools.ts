@@ -75,6 +75,7 @@ import {
   runTextFieldSpecs,
 } from "@/api/mcp/text-field-spec";
 import type {
+  InternalToolErrorResult,
   InternalToolSuccess,
   McpTextFieldSpec,
   McpToolDefinition,
@@ -87,24 +88,19 @@ import {
   DEFAULT_LIST_LIMIT,
   DEFAULT_SEARCH_LIMIT,
   ensureWorkspaceAccess,
-  enumProp,
   errorResult,
   getAppBaseUrl,
-  intProp,
-  isToolErrorResult,
+  MAX_CURSOR_LENGTH,
   MAX_LIST_LIMIT,
   MAX_SEARCH_LIMIT,
   notFoundResult,
-  parseOptionalCursor,
-  parseOptionalEnum,
-  parseOptionalLimit,
-  parseRequiredString,
   resolveWindowBounds,
-  stringProp,
   structuredErrorResult,
   toolDataResult,
+  toPlainTextSnippet,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
+import { defineValibotMcpTool } from "@/api/mcp/valibot-tool-definition";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const defaultReadGatedDecisionWithDocument: typeof readGatedDecisionWithDocument =
@@ -496,8 +492,199 @@ const buildContactTextFieldSpecs = (
   }),
 ];
 
+// --- Input schemas --------------------------------------------------------
+// One Valibot schema per tool: the handler parses it and the advertised JSON
+// Schema is projected from it, so an unknown key is rejected on both.
+
+const listMattersArgsSchema = v.strictObject({
+  matter_id: v.optional(
+    v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.description(
+        "Matter/workspace ID to return a single matter's overview; omit to list matters",
+      ),
+    ),
+  ),
+  status: v.optional(
+    v.pipe(
+      v.picklist(["active", "all"]),
+      v.description("Filter by matter status (list mode)"),
+    ),
+  ),
+  limit: v.optional(
+    v.pipe(
+      v.number(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(MAX_LIST_LIMIT),
+      v.description("Max matters to return (list mode)"),
+    ),
+  ),
+  cursor: v.optional(
+    v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(MAX_CURSOR_LENGTH),
+      v.description(
+        "Opaque cursor from a previous list_matters call to fetch the next page",
+      ),
+    ),
+  ),
+});
+
+const searchAcrossMattersArgsSchema = v.strictObject({
+  query: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.maxLength(LIMITS.searchQueryMaxLength),
+    v.description("Search query"),
+  ),
+  limit: v.optional(
+    v.pipe(
+      v.number(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(MAX_SEARCH_LIMIT),
+      v.description("Max results to return"),
+    ),
+  ),
+  cursor: v.optional(
+    v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(MAX_CURSOR_LENGTH),
+      v.description(
+        "Opaque cursor from a previous search_across_matters call to fetch the next page",
+      ),
+    ),
+  ),
+});
+
+const searchCaseLawArgsSchema = v.strictObject({
+  query: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.maxLength(LIMITS.searchQueryMaxLength),
+    v.description("Search query"),
+  ),
+  limit: v.optional(
+    v.pipe(
+      v.number(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(MAX_SEARCH_LIMIT),
+      v.description("Max results to return"),
+    ),
+  ),
+  cursor: v.optional(
+    v.pipe(
+      v.string(),
+      v.maxLength(128),
+      v.description("Opaque cursor from a previous search_case_law call"),
+    ),
+  ),
+  court: v.optional(
+    v.pipe(v.string(), v.maxLength(512), v.description("Filter by court name")),
+  ),
+  country: v.optional(
+    v.pipe(v.string(), v.maxLength(3), v.description("Filter by country code")),
+  ),
+  language: v.optional(
+    v.pipe(
+      v.string(),
+      v.maxLength(8),
+      v.description("Filter by language code"),
+    ),
+  ),
+  decision_type: v.optional(
+    v.pipe(
+      v.string(),
+      v.maxLength(128),
+      v.description("Filter by decision type"),
+    ),
+  ),
+  source_id: v.optional(
+    v.pipe(v.string(), v.maxLength(36), v.description("Filter by source ID")),
+  ),
+  date_from: v.optional(
+    v.pipe(
+      v.string(),
+      v.maxLength(10),
+      v.description("Filter decisions from this ISO date (YYYY-MM-DD)"),
+    ),
+  ),
+  date_to: v.optional(
+    v.pipe(
+      v.string(),
+      v.maxLength(10),
+      v.description("Filter decisions up to this ISO date (YYYY-MM-DD)"),
+    ),
+  ),
+});
+
+const readContentAcrossMattersArgsSchema = v.strictObject({
+  entity_id: v.pipe(v.string(), v.minLength(1), v.description("Entity ID")),
+  cursor: v.optional(
+    v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(MAX_CURSOR_LENGTH),
+      v.description(
+        "Opaque cursor from a previous call to read the next window of text",
+      ),
+    ),
+  ),
+});
+
+const readCaseLawDecisionArgsSchema = v.strictObject({
+  decision_id: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.description("Case-law decision ID"),
+  ),
+  cursor: v.optional(
+    v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(MAX_CURSOR_LENGTH),
+      v.description(
+        "Opaque cursor from a previous call to read the next window of decision text and citations",
+      ),
+    ),
+  ),
+});
+
+const readContactArgsSchema = v.strictObject({
+  contact_id: v.pipe(v.string(), v.minLength(1), v.description("Contact ID")),
+});
+
+const practiceJurisdictionInputSchema = v.strictObject({
+  countryCode: v.pipe(
+    v.picklist(COUNTRY_CODES),
+    v.description("ISO 3166-1 alpha-2 country code"),
+  ),
+  isPrimary: v.pipe(
+    v.boolean(),
+    v.description("Whether this is the organization's primary jurisdiction"),
+  ),
+});
+
+const setPracticeJurisdictionsArgsSchema = v.strictObject({
+  jurisdictions: v.pipe(
+    v.array(practiceJurisdictionInputSchema),
+    v.minLength(1),
+    v.maxLength(LIMITS.practiceJurisdictionsPerOrganization),
+    v.description(
+      "Practice jurisdictions for this organization. countryCode is an " +
+        "ISO 3166-1 alpha-2 code; exactly one entry should set isPrimary " +
+        "to true.",
+    ),
+  ),
+});
+
 export const STELLA_TOOL_DEFINITIONS = [
-  {
+  defineValibotMcpTool({
     annotations: {
       title: "List matters",
       readOnlyHint: true,
@@ -509,26 +696,7 @@ export const STELLA_TOOL_DEFINITIONS = [
       "cursor); list first when the user does not name a matter or you need " +
       "matter IDs for follow-up tools. Pass matter_id to return that matter's " +
       "overview instead: counts, recent entities, linked contacts, and members.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        matter_id: stringProp(
-          "Matter/workspace ID to return a single matter's overview; omit to list matters",
-        ),
-        status: enumProp("Filter by matter status (list mode)", [
-          "active",
-          "all",
-        ]),
-        limit: intProp("Max matters to return (list mode)", {
-          min: 1,
-          max: MAX_LIST_LIMIT,
-        }),
-        cursor: stringProp(
-          "Opaque cursor from a previous list_matters call to fetch the next page",
-          { maxLength: 512 },
-        ),
-      },
-    },
+    inputSchema: listMattersArgsSchema,
     access: "read",
     anonymized: {
       exposure: "anonymize",
@@ -539,8 +707,8 @@ export const STELLA_TOOL_DEFINITIONS = [
     },
     name: "list_matters",
     scope: "stella:read",
-  },
-  {
+  }),
+  defineValibotMcpTool({
     annotations: {
       title: "Search across matters",
       readOnlyHint: true,
@@ -549,23 +717,7 @@ export const STELLA_TOOL_DEFINITIONS = [
     description:
       "Search across all accessible matters. Use this when the user explicitly " +
       "asks to search outside a single matter or you do not yet know the right matter.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        query: stringProp("Search query", {
-          maxLength: LIMITS.searchQueryMaxLength,
-        }),
-        limit: intProp("Max results to return", {
-          min: 1,
-          max: MAX_SEARCH_LIMIT,
-        }),
-        cursor: stringProp(
-          "Opaque cursor from a previous search_across_matters call to fetch the next page",
-          { maxLength: 512 },
-        ),
-      },
-      required: ["query"],
-    },
+    inputSchema: searchAcrossMattersArgsSchema,
     access: "read",
     anonymized: {
       exposure: "anonymize",
@@ -573,8 +725,8 @@ export const STELLA_TOOL_DEFINITIONS = [
     },
     name: "search_across_matters",
     scope: "stella:search",
-  },
-  {
+  }),
+  defineValibotMcpTool({
     annotations: {
       title: "Search case law",
       readOnlyHint: true,
@@ -584,38 +736,7 @@ export const STELLA_TOOL_DEFINITIONS = [
       "Search the shared case-law corpus. Supports free-text search plus " +
       "optional filters such as court, country, language, date range, and " +
       "decision type. Each result includes a route-independent resourceName.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        query: stringProp("Search query", {
-          maxLength: LIMITS.searchQueryMaxLength,
-        }),
-        limit: intProp("Max results to return", {
-          min: 1,
-          max: MAX_SEARCH_LIMIT,
-        }),
-        cursor: stringProp(
-          "Opaque cursor from a previous search_case_law call",
-          { maxLength: 128 },
-        ),
-        court: stringProp("Filter by court name", { maxLength: 512 }),
-        country: stringProp("Filter by country code", { maxLength: 3 }),
-        language: stringProp("Filter by language code", { maxLength: 8 }),
-        decision_type: stringProp("Filter by decision type", {
-          maxLength: 128,
-        }),
-        source_id: stringProp("Filter by source ID", { maxLength: 36 }),
-        date_from: stringProp(
-          "Filter decisions from this ISO date (YYYY-MM-DD)",
-          { maxLength: 10 },
-        ),
-        date_to: stringProp(
-          "Filter decisions up to this ISO date (YYYY-MM-DD)",
-          { maxLength: 10 },
-        ),
-      },
-      required: ["query"],
-    },
+    inputSchema: searchCaseLawArgsSchema,
     access: "read",
     anonymized: { exposure: "passthrough" },
     // Backed by the public case-law corpus (caseLawPublicReadDb), the same
@@ -623,8 +744,8 @@ export const STELLA_TOOL_DEFINITIONS = [
     feature: "FEATURE_PUBLIC_LAW",
     name: "search_case_law",
     scope: "stella:search",
-  },
-  {
+  }),
+  defineValibotMcpTool({
     annotations: {
       title: "Read content across matters",
       readOnlyHint: true,
@@ -636,17 +757,7 @@ export const STELLA_TOOL_DEFINITIONS = [
       "(headings, tables, lists); other formats return their extracted plain " +
       "text. Use after search_across_matters. Long documents are returned in " +
       "windows; pass the returned nextCursor back as cursor to read more.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        entity_id: stringProp("Entity ID"),
-        cursor: stringProp(
-          "Opaque cursor from a previous call to read the next window of text",
-          { maxLength: 512 },
-        ),
-      },
-      required: ["entity_id"],
-    },
+    inputSchema: readContentAcrossMattersArgsSchema,
     access: "read",
     anonymized: {
       exposure: "anonymize",
@@ -656,8 +767,8 @@ export const STELLA_TOOL_DEFINITIONS = [
     },
     name: "read_content_across_matters",
     scope: "stella:read",
-  },
-  {
+  }),
+  defineValibotMcpTool({
     annotations: {
       title: "Read case-law decision",
       readOnlyHint: true,
@@ -668,17 +779,7 @@ export const STELLA_TOOL_DEFINITIONS = [
       "plain text, citation links, source URLs, and its route-independent " +
       "resourceName. Long decision text and large citation lists are returned " +
       "in windows; pass the returned nextCursor back as cursor to read more.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        decision_id: stringProp("Case-law decision ID"),
-        cursor: stringProp(
-          "Opaque cursor from a previous call to read the next window of decision text and citations",
-          { maxLength: 512 },
-        ),
-      },
-      required: ["decision_id"],
-    },
+    inputSchema: readCaseLawDecisionArgsSchema,
     access: "read",
     anonymized: { exposure: "passthrough" },
     // Backed by the public case-law corpus (caseLawPublicReadDb), the same
@@ -686,8 +787,8 @@ export const STELLA_TOOL_DEFINITIONS = [
     feature: "FEATURE_PUBLIC_LAW",
     name: "read_case_law_decision",
     scope: "stella:read",
-  },
-  {
+  }),
+  defineValibotMcpTool({
     annotations: {
       title: "Read contact",
       readOnlyHint: true,
@@ -696,13 +797,7 @@ export const STELLA_TOOL_DEFINITIONS = [
     description:
       "Read a contact by ID. Use this after matter overview or entity metadata " +
       "surfaces a contact the user wants to inspect more closely.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        contact_id: stringProp("Contact ID"),
-      },
-      required: ["contact_id"],
-    },
+    inputSchema: readContactArgsSchema,
     access: "read",
     anonymized: {
       exposure: "anonymize",
@@ -712,44 +807,14 @@ export const STELLA_TOOL_DEFINITIONS = [
     },
     name: "read_contact",
     scope: "stella:read",
-  },
-  {
+  }),
+  defineValibotMcpTool({
     description:
       "Set the practice jurisdictions for the user's stella organization. " +
       "Call this when the org's practice jurisdictions are empty (e.g., the " +
       "user signed up via an OAuth client and skipped onboarding). Pass an " +
       "array of {countryCode, isPrimary}; exactly one entry should be primary.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        jurisdictions: {
-          type: "array",
-          description:
-            "Practice jurisdictions for this organization. countryCode is an " +
-            "ISO 3166-1 alpha-2 code; exactly one entry should set isPrimary " +
-            "to true.",
-          minItems: 1,
-          maxItems: LIMITS.practiceJurisdictionsPerOrganization,
-          items: {
-            type: "object",
-            properties: {
-              countryCode: {
-                type: "string",
-                description: "ISO 3166-1 alpha-2 country code",
-                enum: [...COUNTRY_CODES],
-              },
-              isPrimary: {
-                type: "boolean",
-                description:
-                  "Whether this is the organization's primary jurisdiction",
-              },
-            },
-            required: ["countryCode", "isPrimary"],
-          },
-        },
-      },
-      required: ["jurisdictions"],
-    },
+    inputSchema: setPracticeJurisdictionsArgsSchema,
     // Not idempotent: the handler records a fresh audit event and bumps
     // updatedAt on every call even when the jurisdictions are unchanged, so a
     // repeat with identical args has an observable additional effect (a
@@ -763,7 +828,7 @@ export const STELLA_TOOL_DEFINITIONS = [
     anonymized: { exposure: "excluded", reason: "write" },
     name: "set_practice_jurisdictions",
     scope: "stella:onboarding",
-  },
+  }),
 ] as const satisfies readonly McpToolDefinition[];
 
 const loadPracticeJurisdictions = async (
@@ -829,14 +894,25 @@ const decodeMatterPageCursor = (cursor: string): string | null => {
 const handleListMattersTool: TypedMcpToolHandler<
   v.InferInput<typeof LIST_MATTERS_PROJECTION>
 > = async ({ args, context }) => {
+  const parsed = v.safeParse(listMattersArgsSchema, args);
+  if (!parsed.success) {
+    return validationErrorResult(parsed.issues);
+  }
+  const {
+    cursor,
+    limit: requestedLimit,
+    matter_id: matterId,
+    status: requestedStatus,
+  } = parsed.output;
+
   // Detail mode: matter_id selects one matter's overview. The list-only
   // filters (status/limit/cursor) do not apply, so reject the mixed request
   // up front rather than silently ignoring them.
-  if (args["matter_id"] !== undefined) {
+  if (matterId !== undefined) {
     if (
-      args["status"] !== undefined ||
-      args["limit"] !== undefined ||
-      args["cursor"] !== undefined
+      requestedStatus !== undefined ||
+      requestedLimit !== undefined ||
+      cursor !== undefined
     ) {
       return structuredErrorResult({
         code: "validation_error",
@@ -852,33 +928,12 @@ const handleListMattersTool: TypedMcpToolHandler<
         hint: "Omit 'matter_id' to list matters with 'status'/'limit'/'cursor', or pass only 'matter_id' to read one matter's overview.",
       });
     }
-    return await readMatterOverview({ args, context });
+    return await readMatterOverview({ context, matterId });
   }
 
-  const status = parseOptionalEnum({
-    args,
-    defaultValue: "active",
-    key: "status",
-    values: ["active", "all"] as const,
-  });
-  if (typeof status !== "string") {
-    return status;
-  }
+  const status = requestedStatus ?? "active";
+  const limit = requestedLimit ?? DEFAULT_LIST_LIMIT;
 
-  const limit = parseOptionalLimit({
-    args,
-    defaultValue: DEFAULT_LIST_LIMIT,
-    key: "limit",
-    max: MAX_LIST_LIMIT,
-  });
-  if (typeof limit !== "number") {
-    return limit;
-  }
-
-  const cursor = parseOptionalCursor({ args, key: "cursor" });
-  if (isToolErrorResult(cursor)) {
-    return cursor;
-  }
   let boundaryId: string | undefined;
   if (cursor !== undefined) {
     const decoded = decodeMatterPageCursor(cursor);
@@ -969,14 +1024,19 @@ const handleListMattersTool: TypedMcpToolHandler<
 // Detail branch of list_matters: one matter's overview (counts, recent
 // entities, contacts, members). Reused verbatim from the former
 // get_matter_overview tool, which list_matters absorbed.
-const readMatterOverview: TypedMcpToolHandler<
-  v.InferInput<typeof LIST_MATTERS_PROJECTION>
-> = async ({ args, context }) => {
-  const matterId = parseRequiredString(args, "matter_id");
-  if (typeof matterId !== "string") {
-    return matterId;
-  }
-
+const readMatterOverview = async ({
+  context,
+  matterId,
+}: {
+  context: McpRequestContext;
+  matterId: string;
+}): Promise<
+  Awaited<
+    ReturnType<
+      TypedMcpToolHandler<v.InferInput<typeof LIST_MATTERS_PROJECTION>>
+    >
+  >
+> => {
   const workspaceId = ensureWorkspaceAccess({
     context,
     workspaceId: matterId,
@@ -1090,27 +1150,13 @@ const readMatterOverview: TypedMcpToolHandler<
 const handleSearchAcrossMattersTool: TypedMcpToolHandler<
   v.InferInput<typeof SEARCH_ACROSS_MATTERS_PROJECTION>
 > = async ({ args, context }) => {
-  const query = parseRequiredString(args, "query", {
-    maxLength: LIMITS.searchQueryMaxLength,
-  });
-  if (typeof query !== "string") {
-    return query;
+  const parsed = v.safeParse(searchAcrossMattersArgsSchema, args);
+  if (!parsed.success) {
+    return validationErrorResult(parsed.issues);
   }
+  const { cursor, query } = parsed.output;
+  const limit = parsed.output.limit ?? DEFAULT_SEARCH_LIMIT;
 
-  const limit = parseOptionalLimit({
-    args,
-    defaultValue: DEFAULT_SEARCH_LIMIT,
-    key: "limit",
-    max: MAX_SEARCH_LIMIT,
-  });
-  if (typeof limit !== "number") {
-    return limit;
-  }
-
-  const cursor = parseOptionalCursor({ args, key: "cursor" });
-  if (isToolErrorResult(cursor)) {
-    return cursor;
-  }
   // Reject an undecodable provider cursor instead of forwarding it: the
   // provider treats a malformed cursor as no cursor and silently returns the
   // first page, which would duplicate hits or loop a paginating client.
@@ -1139,7 +1185,9 @@ const handleSearchAcrossMattersTool: TypedMcpToolHandler<
     workspaceName: hit.workspaceName,
     name: hit.title,
     kind: hit.kind,
-    headline: hit.headline,
+    // The provider builds the headline for the web UI (HTML-escaped, matches
+    // wrapped in <mark>); MCP callers get it as plain text.
+    headline: toPlainTextSnippet(hit.headline),
   }));
 
   // Hits span multiple matters; each anonymizes under its own workspace scope.
@@ -1158,73 +1206,33 @@ const handleSearchAcrossMattersTool: TypedMcpToolHandler<
   return { egress: "structured", payload, textFields };
 };
 
-const parseOptionalStringArg = ({
-  args,
-  key,
-  maxLength,
-}: {
-  args: Record<string, unknown>;
-  key: string;
-  maxLength?: number;
-}): string | undefined | ReturnType<typeof errorResult> => {
-  const value = args[key];
+/**
+ * Calendar validity of a `YYYY-MM-DD` filter, which the shape-only schema
+ * cannot express: a pattern accepts 2024-02-30, the round-trip does not.
+ * Returns the validation envelope for a bad date, `null` for a usable one.
+ */
+const isoDateIssue = (
+  key: string,
+  value: string | undefined,
+): InternalToolErrorResult | null => {
   if (value === undefined) {
-    return undefined;
-  }
-  if (typeof value !== "string") {
-    const message = `Invalid parameter: ${key}. Expected a string`;
-    return structuredErrorResult({
-      code: "validation_error",
-      message,
-      issues: [{ path: key, message }],
-    });
-  }
-  if (maxLength !== undefined && value.length > maxLength) {
-    const message = `Parameter ${key} exceeds maximum length of ${maxLength}`;
-    return structuredErrorResult({
-      code: "validation_error",
-      message,
-      issues: [{ path: key, message }],
-      hint: `Shorten '${key}' to at most ${maxLength} characters.`,
-    });
-  }
-  return value;
-};
-
-const parseOptionalDateArg = ({
-  args,
-  key,
-}: {
-  args: Record<string, unknown>;
-  key: string;
-}): string | undefined | ReturnType<typeof errorResult> => {
-  const value = parseOptionalStringArg({ args, key });
-  if (typeof value !== "string") {
-    return value;
-  }
-  if (!ISO_DATE_PATTERN.test(value)) {
-    const message = `Invalid parameter: ${key}. Expected an ISO date in YYYY-MM-DD format`;
-    return structuredErrorResult({
-      code: "validation_error",
-      message,
-      issues: [{ path: key, message }],
-      hint: `Set '${key}' to a calendar date formatted as YYYY-MM-DD.`,
-    });
+    return null;
   }
   const parsed = new Date(value);
   if (
-    Number.isNaN(parsed.getTime()) ||
-    parsed.toISOString().slice(0, 10) !== value
+    ISO_DATE_PATTERN.test(value) &&
+    !Number.isNaN(parsed.getTime()) &&
+    parsed.toISOString().slice(0, 10) === value
   ) {
-    const message = `Invalid parameter: ${key}. Expected an ISO date in YYYY-MM-DD format`;
-    return structuredErrorResult({
-      code: "validation_error",
-      message,
-      issues: [{ path: key, message }],
-      hint: `Set '${key}' to a calendar date formatted as YYYY-MM-DD.`,
-    });
+    return null;
   }
-  return value;
+  const message = `Invalid parameter: ${key}. Expected an ISO date in YYYY-MM-DD format`;
+  return structuredErrorResult({
+    code: "validation_error",
+    message,
+    issues: [{ path: key, message }],
+    hint: `Set '${key}' to a calendar date formatted as YYYY-MM-DD.`,
+  });
 };
 
 const getResultMessage = (value: unknown): string | null => {
@@ -1414,17 +1422,13 @@ const loadCurrentVersionDocxMarkdown = async ({
 const handleReadContentAcrossMattersTool: TypedMcpToolHandler<
   v.InferInput<typeof READ_CONTENT_ACROSS_MATTERS_PROJECTION>
 > = async ({ args, context }) => {
-  const rawEntityId = parseRequiredString(args, "entity_id");
-  if (typeof rawEntityId !== "string") {
-    return rawEntityId;
+  const parsed = v.safeParse(readContentAcrossMattersArgsSchema, args);
+  if (!parsed.success) {
+    return validationErrorResult(parsed.issues);
   }
+  const { cursor, entity_id: rawEntityId } = parsed.output;
 
   const entityId = brandPersistedEntityId(rawEntityId);
-
-  const cursor = parseOptionalCursor({ args, key: "cursor" });
-  if (isToolErrorResult(cursor)) {
-    return cursor;
-  }
 
   if (context.accessibleWorkspaceIds.length === 0) {
     return notFoundResult("Document not found or not accessible");
@@ -1621,71 +1625,23 @@ const handleReadContentAcrossMattersTool: TypedMcpToolHandler<
 const handleSearchCaseLawTool: TypedMcpToolHandler<
   v.InferInput<typeof SEARCH_CASE_LAW_PROJECTION>
 > = async ({ args, context }) => {
-  const query = parseRequiredString(args, "query", {
-    maxLength: LIMITS.searchQueryMaxLength,
-  });
-  if (typeof query !== "string") {
-    return query;
+  const parsed = v.safeParse(searchCaseLawArgsSchema, args);
+  if (!parsed.success) {
+    return validationErrorResult(parsed.issues);
   }
+  const {
+    country,
+    court,
+    cursor,
+    date_from: dateFrom,
+    date_to: dateTo,
+    decision_type: decisionType,
+    language,
+    query,
+    source_id: sourceId,
+  } = parsed.output;
+  const limit = parsed.output.limit ?? DEFAULT_SEARCH_LIMIT;
 
-  const limit = parseOptionalLimit({
-    args,
-    defaultValue: DEFAULT_SEARCH_LIMIT,
-    key: "limit",
-    max: MAX_SEARCH_LIMIT,
-  });
-  if (typeof limit !== "number") {
-    return limit;
-  }
-
-  const cursor = parseOptionalStringArg({
-    args,
-    key: "cursor",
-    maxLength: 128,
-  });
-  if (isToolErrorResult(cursor)) {
-    return cursor;
-  }
-  const court = parseOptionalStringArg({
-    args,
-    key: "court",
-    maxLength: 512,
-  });
-  if (isToolErrorResult(court)) {
-    return court;
-  }
-  const country = parseOptionalStringArg({
-    args,
-    key: "country",
-    maxLength: 3,
-  });
-  if (isToolErrorResult(country)) {
-    return country;
-  }
-  const language = parseOptionalStringArg({
-    args,
-    key: "language",
-    maxLength: 8,
-  });
-  if (isToolErrorResult(language)) {
-    return language;
-  }
-  const decisionType = parseOptionalStringArg({
-    args,
-    key: "decision_type",
-    maxLength: 128,
-  });
-  if (isToolErrorResult(decisionType)) {
-    return decisionType;
-  }
-  const sourceId = parseOptionalStringArg({
-    args,
-    key: "source_id",
-    maxLength: 36,
-  });
-  if (isToolErrorResult(sourceId)) {
-    return sourceId;
-  }
   if (sourceId !== undefined && !isUuid(sourceId)) {
     return structuredErrorResult({
       code: "validation_error",
@@ -1698,13 +1654,13 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
       ],
     });
   }
-  const dateFrom = parseOptionalDateArg({ args, key: "date_from" });
-  if (isToolErrorResult(dateFrom)) {
-    return dateFrom;
+  const dateFromIssue = isoDateIssue("date_from", dateFrom);
+  if (dateFromIssue) {
+    return dateFromIssue;
   }
-  const dateTo = parseOptionalDateArg({ args, key: "date_to" });
-  if (isToolErrorResult(dateTo)) {
-    return dateTo;
+  const dateToIssue = isoDateIssue("date_to", dateTo);
+  if (dateToIssue) {
+    return dateToIssue;
   }
 
   const result = await (
@@ -1763,7 +1719,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
         decisionType: hit.decisionType,
         ecli: hit.ecli,
         language: hit.language,
-        snippet: hit.headline,
+        snippet: toPlainTextSnippet(hit.headline),
         sourceUrl: hit.sourceUrl,
       };
     }),
@@ -1809,15 +1765,12 @@ const decodeDecisionCursor = (
 const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
   v.InferInput<typeof READ_CASE_LAW_DECISION_PROJECTION>
 > = async ({ args, context }) => {
-  const decisionId = parseRequiredString(args, "decision_id");
-  if (typeof decisionId !== "string") {
-    return decisionId;
+  const parsed = v.safeParse(readCaseLawDecisionArgsSchema, args);
+  if (!parsed.success) {
+    return validationErrorResult(parsed.issues);
   }
+  const { cursor, decision_id: decisionId } = parsed.output;
 
-  const cursor = parseOptionalCursor({ args, key: "cursor" });
-  if (isToolErrorResult(cursor)) {
-    return cursor;
-  }
   const offsets = decodeDecisionCursor(cursor);
   if (offsets === null) {
     return structuredErrorResult({
@@ -1926,12 +1879,12 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
 const handleReadContactTool: TypedMcpToolHandler<
   v.InferInput<typeof READ_CONTACT_PROJECTION>
 > = async ({ args, context }) => {
-  const rawContactId = parseRequiredString(args, "contact_id");
-  if (typeof rawContactId !== "string") {
-    return rawContactId;
+  const parsed = v.safeParse(readContactArgsSchema, args);
+  if (!parsed.success) {
+    return validationErrorResult(parsed.issues);
   }
 
-  const contactId = brandPersistedContactId(rawContactId);
+  const contactId = brandPersistedContactId(parsed.output.contact_id);
 
   const contact = await context.scopedDb((tx) =>
     tx.query.contacts.findFirst({
@@ -1979,21 +1932,6 @@ const handleReadContactTool: TypedMcpToolHandler<
 
   return { egress: "structured", payload, textFields };
 };
-
-const countryCodeSchema = v.picklist(COUNTRY_CODES);
-
-const practiceJurisdictionInputSchema = v.strictObject({
-  countryCode: countryCodeSchema,
-  isPrimary: v.boolean(),
-});
-
-const setPracticeJurisdictionsArgsSchema = v.strictObject({
-  jurisdictions: v.pipe(
-    v.array(practiceJurisdictionInputSchema),
-    v.minLength(1),
-    v.maxLength(LIMITS.practiceJurisdictionsPerOrganization),
-  ),
-});
 
 const handleSetPracticeJurisdictionsTool: TypedMcpToolHandler<
   v.InferInput<typeof SET_PRACTICE_JURISDICTIONS_PROJECTION>

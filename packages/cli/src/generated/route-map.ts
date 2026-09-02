@@ -46,28 +46,32 @@ export const generatedRouteMap: RouteNode = {
             scope: "read",
             inputSchema: {
               type: "object",
+              required: [],
+              additionalProperties: false,
               properties: {
                 matter_id: {
                   type: "string",
+                  minLength: 1,
                   description:
                     "Matter/workspace ID to return a single matter's overview; omit to list matters",
                 },
                 status: {
-                  type: "string",
                   enum: ["active", "all"],
+                  type: "string",
                   description: "Filter by matter status (list mode)",
                 },
                 limit: {
                   type: "integer",
-                  description: "Max matters to return (list mode)",
                   minimum: 1,
                   maximum: 100,
+                  description: "Max matters to return (list mode)",
                 },
                 cursor: {
                   type: "string",
+                  minLength: 1,
+                  maxLength: 512,
                   description:
                     "Opaque cursor from a previous list_matters call to fetch the next page",
-                  maxLength: 512,
                 },
               },
             },
@@ -141,37 +145,50 @@ export const generatedRouteMap: RouteNode = {
             scope: "matters_write",
             inputSchema: {
               type: "object",
+              required: [],
+              additionalProperties: false,
               properties: {
                 matter_id: {
                   type: "string",
+                  minLength: 1,
                   description:
                     "Matter/workspace ID to update; omit to create a new matter",
                 },
                 name: {
                   type: "string",
-                  description: "Matter name; required when creating",
+                  minLength: 1,
                   maxLength: 256,
+                  description: "Matter name; required when creating",
                 },
                 client_id: {
                   type: "string",
+                  minLength: 1,
                   description:
                     "Contact ID to attach in the client role. Only valid when creating a matter.",
                 },
                 reference: {
                   type: "string",
+                  minLength: 1,
+                  maxLength: 64,
                   description:
                     "Matter reference (file number). Only valid when updating.",
-                  maxLength: 64,
                 },
                 billing_reference: {
-                  type: ["string", "null"],
+                  anyOf: [
+                    {
+                      type: "string",
+                      maxLength: 128,
+                    },
+                    {
+                      type: "null",
+                    },
+                  ],
                   description:
                     "Billing reference; pass null to clear. Only valid when updating.",
-                  maxLength: 128,
                 },
                 status: {
-                  type: "string",
                   enum: ["active", "archived"],
+                  type: "string",
                   description:
                     "Set 'archived' to archive the matter or 'active' to unarchive it. Only valid when updating.",
                 },
@@ -201,9 +218,12 @@ export const generatedRouteMap: RouteNode = {
             scope: "matters_write",
             inputSchema: {
               type: "object",
+              required: ["matter_id"],
+              additionalProperties: false,
               properties: {
                 matter_id: {
                   type: "string",
+                  minLength: 1,
                   description: "Matter/workspace ID to delete",
                 },
                 confirm: {
@@ -212,7 +232,6 @@ export const generatedRouteMap: RouteNode = {
                     "Must be true to run this irreversible operation. Set it only after a human user has explicitly approved the deletion.",
                 },
               },
-              required: ["matter_id"],
             },
           },
         },
@@ -276,18 +295,21 @@ export const generatedRouteMap: RouteNode = {
             scope: "matters_write",
             inputSchema: {
               type: "object",
+              required: ["matter_id"],
+              additionalProperties: false,
               properties: {
                 matter_id: {
                   type: "string",
+                  minLength: 1,
                   description: "Matter/workspace ID",
                 },
                 contact_id: {
                   type: "string",
+                  minLength: 1,
                   description:
                     "Contact ID: with role to link the contact, or alone to unlink it from the matter",
                 },
                 role: {
-                  type: "string",
                   enum: [
                     "opposing_party",
                     "opposing_counsel",
@@ -299,16 +321,17 @@ export const generatedRouteMap: RouteNode = {
                     "mediator",
                     "other",
                   ],
+                  type: "string",
                   description:
                     "Party role for the linked contact; provide it only when linking",
                 },
                 workspace_contact_id: {
                   type: "string",
+                  minLength: 1,
                   description:
                     "Existing matter-contact link ID to remove, from list_matters",
                 },
               },
-              required: ["matter_id"],
             },
           },
         },
@@ -340,64 +363,29 @@ export const generatedRouteMap: RouteNode = {
             scope: "search",
             inputSchema: {
               type: "object",
+              required: ["query"],
+              additionalProperties: false,
               properties: {
                 query: {
                   type: "string",
-                  description: "Search query",
+                  minLength: 1,
                   maxLength: 500,
+                  description: "Search query",
                 },
                 limit: {
                   type: "integer",
-                  description: "Max results to return",
                   minimum: 1,
                   maximum: 20,
+                  description: "Max results to return",
                 },
                 cursor: {
                   type: "string",
+                  minLength: 1,
+                  maxLength: 512,
                   description:
                     "Opaque cursor from a previous search_across_matters call to fetch the next page",
-                  maxLength: 512,
                 },
               },
-              required: ["query"],
-            },
-          },
-        },
-        read: {
-          kind: "leaf",
-          spec: {
-            commandPath: ["search", "read"],
-            toolName: "read_content_across_matters",
-            flags: [
-              {
-                flag: "--entity-id",
-                prop: "entity_id",
-                kind: "string",
-                repeatable: false,
-                description: "Entity ID",
-                required: true,
-              },
-            ],
-            inputOnly: [],
-            paginated: true,
-            windowedText: true,
-            destructive: false,
-            scope: "read",
-            inputSchema: {
-              type: "object",
-              properties: {
-                entity_id: {
-                  type: "string",
-                  description: "Entity ID",
-                },
-                cursor: {
-                  type: "string",
-                  description:
-                    "Opaque cursor from a previous call to read the next window of text",
-                  maxLength: 512,
-                },
-              },
-              required: ["entity_id"],
             },
           },
         },
@@ -486,63 +474,65 @@ export const generatedRouteMap: RouteNode = {
             scope: "search",
             inputSchema: {
               type: "object",
+              required: ["query"],
+              additionalProperties: false,
               properties: {
                 query: {
                   type: "string",
-                  description: "Search query",
+                  minLength: 1,
                   maxLength: 500,
+                  description: "Search query",
                 },
                 limit: {
                   type: "integer",
-                  description: "Max results to return",
                   minimum: 1,
                   maximum: 20,
+                  description: "Max results to return",
                 },
                 cursor: {
                   type: "string",
+                  maxLength: 128,
                   description:
                     "Opaque cursor from a previous search_case_law call",
-                  maxLength: 128,
                 },
                 court: {
                   type: "string",
-                  description: "Filter by court name",
                   maxLength: 512,
+                  description: "Filter by court name",
                 },
                 country: {
                   type: "string",
-                  description: "Filter by country code",
                   maxLength: 3,
+                  description: "Filter by country code",
                 },
                 language: {
                   type: "string",
-                  description: "Filter by language code",
                   maxLength: 8,
+                  description: "Filter by language code",
                 },
                 decision_type: {
                   type: "string",
-                  description: "Filter by decision type",
                   maxLength: 128,
+                  description: "Filter by decision type",
                 },
                 source_id: {
                   type: "string",
-                  description: "Filter by source ID",
                   maxLength: 36,
+                  description: "Filter by source ID",
                 },
                 date_from: {
                   type: "string",
+                  maxLength: 10,
                   description:
                     "Filter decisions from this ISO date (YYYY-MM-DD)",
-                  maxLength: 10,
                 },
                 date_to: {
                   type: "string",
+                  maxLength: 10,
                   description:
                     "Filter decisions up to this ISO date (YYYY-MM-DD)",
-                  maxLength: 10,
                 },
               },
-              required: ["query"],
             },
           },
         },
@@ -568,19 +558,696 @@ export const generatedRouteMap: RouteNode = {
             scope: "read",
             inputSchema: {
               type: "object",
+              required: ["decision_id"],
+              additionalProperties: false,
               properties: {
                 decision_id: {
                   type: "string",
+                  minLength: 1,
                   description: "Case-law decision ID",
                 },
                 cursor: {
                   type: "string",
+                  minLength: 1,
+                  maxLength: 512,
                   description:
                     "Opaque cursor from a previous call to read the next window of decision text and citations",
-                  maxLength: 512,
                 },
               },
-              required: ["decision_id"],
+            },
+          },
+        },
+      },
+    },
+    document: {
+      kind: "route",
+      children: {
+        content: {
+          kind: "leaf",
+          spec: {
+            commandPath: ["document", "content"],
+            toolName: "read_content_across_matters",
+            flags: [
+              {
+                flag: "--entity-id",
+                prop: "entity_id",
+                kind: "string",
+                repeatable: false,
+                description: "Entity ID",
+                required: true,
+              },
+            ],
+            inputOnly: [],
+            paginated: true,
+            windowedText: true,
+            destructive: false,
+            scope: "read",
+            inputSchema: {
+              type: "object",
+              required: ["entity_id"],
+              additionalProperties: false,
+              properties: {
+                entity_id: {
+                  type: "string",
+                  minLength: 1,
+                  description: "Entity ID",
+                },
+                cursor: {
+                  type: "string",
+                  minLength: 1,
+                  maxLength: 512,
+                  description:
+                    "Opaque cursor from a previous call to read the next window of text",
+                },
+              },
+            },
+          },
+        },
+        list: {
+          kind: "leaf",
+          spec: {
+            commandPath: ["document", "list"],
+            toolName: "list_documents",
+            flags: [
+              {
+                flag: "--matter-id",
+                prop: "matter_id",
+                kind: "string",
+                repeatable: false,
+                description: "Matter/workspace ID to list documents in",
+                required: true,
+              },
+              {
+                flag: "--mode",
+                prop: "mode",
+                kind: "enum",
+                enum: ["flat", "children"],
+                repeatable: false,
+                description:
+                  "'flat' lists every document and folder in the matter; 'children' lists only the direct children of parent_id (or the matter root when parent_id is omitted). Defaults to 'flat', or 'children' when parent_id is provided. Passing parent_id with mode 'flat' is rejected.",
+                required: false,
+              },
+              {
+                flag: "--parent-id",
+                prop: "parent_id",
+                kind: "string",
+                repeatable: false,
+                description:
+                  "Folder entity ID whose direct children to list. Only valid in children mode; supplying it selects children mode when mode is omitted and is rejected together with mode 'flat'.",
+                required: false,
+              },
+            ],
+            inputOnly: [],
+            paginated: true,
+            windowedText: false,
+            itemsKey: "documents",
+            destructive: false,
+            scope: "read",
+            inputSchema: {
+              type: "object",
+              required: ["matter_id"],
+              additionalProperties: false,
+              properties: {
+                matter_id: {
+                  type: "string",
+                  minLength: 1,
+                  description: "Matter/workspace ID to list documents in",
+                },
+                mode: {
+                  enum: ["flat", "children"],
+                  type: "string",
+                  description:
+                    "'flat' lists every document and folder in the matter; 'children' lists only the direct children of parent_id (or the matter root when parent_id is omitted). Defaults to 'flat', or 'children' when parent_id is provided. Passing parent_id with mode 'flat' is rejected.",
+                },
+                parent_id: {
+                  type: "string",
+                  minLength: 1,
+                  description:
+                    "Folder entity ID whose direct children to list. Only valid in children mode; supplying it selects children mode when mode is omitted and is rejected together with mode 'flat'.",
+                },
+                limit: {
+                  type: "integer",
+                  minimum: 1,
+                  maximum: 100,
+                  description: "Max entities to return",
+                },
+                cursor: {
+                  type: "string",
+                  maxLength: 512,
+                  description:
+                    "Opaque cursor from a previous list_documents call to fetch the next page",
+                },
+              },
+            },
+          },
+        },
+        read: {
+          kind: "leaf",
+          spec: {
+            commandPath: ["document", "read"],
+            toolName: "read_document",
+            flags: [
+              {
+                flag: "--entity-id",
+                prop: "entity_id",
+                kind: "string",
+                repeatable: false,
+                description: "Document entity ID",
+                required: true,
+              },
+              {
+                flag: "--version-id",
+                prop: "version_id",
+                kind: "string",
+                repeatable: false,
+                description:
+                  "Return this version's metadata and field values instead of the current version",
+                required: false,
+              },
+              {
+                flag: "--compare-with-version-id",
+                prop: "compare_with_version_id",
+                kind: "string",
+                repeatable: false,
+                description:
+                  "With version_id, return a plain-text line diff of this version (base) against version_id (target)",
+                required: false,
+              },
+              {
+                flag: "--include-versions",
+                prop: "include_versions",
+                kind: "boolean",
+                repeatable: false,
+                description: "Also return the document's version history",
+                required: false,
+              },
+              {
+                flag: "--versions-cursor",
+                prop: "versions_cursor",
+                kind: "string",
+                repeatable: false,
+                description:
+                  "Opaque cursor from a previous call to fetch the next page of version history",
+                required: false,
+              },
+            ],
+            inputOnly: [],
+            paginated: false,
+            windowedText: false,
+            destructive: false,
+            scope: "read",
+            inputSchema: {
+              type: "object",
+              required: ["entity_id"],
+              additionalProperties: false,
+              properties: {
+                entity_id: {
+                  type: "string",
+                  minLength: 1,
+                  description: "Document entity ID",
+                },
+                version_id: {
+                  type: "string",
+                  minLength: 1,
+                  description:
+                    "Return this version's metadata and field values instead of the current version",
+                },
+                compare_with_version_id: {
+                  type: "string",
+                  minLength: 1,
+                  description:
+                    "With version_id, return a plain-text line diff of this version (base) against version_id (target)",
+                },
+                include_versions: {
+                  type: "boolean",
+                  description: "Also return the document's version history",
+                },
+                versions_cursor: {
+                  type: "string",
+                  maxLength: 512,
+                  description:
+                    "Opaque cursor from a previous call to fetch the next page of version history",
+                },
+              },
+            },
+          },
+        },
+        save: {
+          kind: "leaf",
+          spec: {
+            commandPath: ["document", "save"],
+            toolName: "save_document",
+            flags: [
+              {
+                flag: "--entity-id",
+                prop: "entity_id",
+                kind: "string",
+                repeatable: false,
+                description: "Document entity ID to update; omit to create",
+                required: false,
+              },
+              {
+                flag: "--matter-id",
+                prop: "matter_id",
+                kind: "string",
+                repeatable: false,
+                description:
+                  "Matter/workspace ID to create the entity in; required when creating",
+                required: false,
+              },
+              {
+                flag: "--name",
+                prop: "name",
+                kind: "string",
+                repeatable: false,
+                description:
+                  "Display name: required when creating, or the new name when renaming",
+                required: false,
+              },
+              {
+                flag: "--parent-id",
+                prop: "parent_id",
+                kind: "string",
+                repeatable: false,
+                description:
+                  "Folder entity ID: to place the new entity inside when creating, or to move the document into when updating",
+                required: false,
+              },
+              {
+                flag: "--kind",
+                prop: "kind",
+                kind: "enum",
+                enum: ["document", "folder"],
+                repeatable: false,
+                description:
+                  "Entity kind to create; defaults to 'document'. Only valid when creating.",
+                required: false,
+              },
+              {
+                flag: "--move-to-root",
+                prop: "move_to_root",
+                kind: "boolean",
+                repeatable: false,
+                description:
+                  "Move the document to the matter root (no parent folder). Only valid when updating.",
+                required: false,
+              },
+              {
+                flag: "--version-id",
+                prop: "version_id",
+                kind: "string",
+                repeatable: false,
+                description:
+                  "Version ID to annotate; required when setting label or description. Only valid when updating.",
+                required: false,
+              },
+              {
+                flag: "--label",
+                prop: "label",
+                kind: "nullable-string",
+                repeatable: false,
+                description:
+                  "New label for version_id; pass null to clear, empty string is not allowed, omit to leave unchanged",
+                required: false,
+              },
+              {
+                flag: "--description",
+                prop: "description",
+                kind: "nullable-string",
+                repeatable: false,
+                description:
+                  "New description for version_id; pass null to clear, empty string is not allowed, omit to leave unchanged",
+                required: false,
+              },
+            ],
+            inputOnly: [],
+            paginated: false,
+            windowedText: false,
+            destructive: false,
+            scope: "documents_write",
+            inputSchema: {
+              type: "object",
+              required: [],
+              additionalProperties: false,
+              properties: {
+                entity_id: {
+                  type: "string",
+                  minLength: 1,
+                  description: "Document entity ID to update; omit to create",
+                },
+                matter_id: {
+                  type: "string",
+                  minLength: 1,
+                  description:
+                    "Matter/workspace ID to create the entity in; required when creating",
+                },
+                name: {
+                  type: "string",
+                  minLength: 1,
+                  maxLength: 255,
+                  description:
+                    "Display name: required when creating, or the new name when renaming",
+                },
+                parent_id: {
+                  type: "string",
+                  minLength: 1,
+                  description:
+                    "Folder entity ID: to place the new entity inside when creating, or to move the document into when updating",
+                },
+                kind: {
+                  enum: ["document", "folder"],
+                  type: "string",
+                  description:
+                    "Entity kind to create; defaults to 'document'. Only valid when creating.",
+                },
+                move_to_root: {
+                  type: "boolean",
+                  description:
+                    "Move the document to the matter root (no parent folder). Only valid when updating.",
+                },
+                version_id: {
+                  type: "string",
+                  minLength: 1,
+                  description:
+                    "Version ID to annotate; required when setting label or description. Only valid when updating.",
+                },
+                label: {
+                  anyOf: [
+                    {
+                      type: "string",
+                      minLength: 1,
+                      maxLength: 128,
+                    },
+                    {
+                      type: "null",
+                    },
+                  ],
+                  description:
+                    "New label for version_id; pass null to clear, empty string is not allowed, omit to leave unchanged",
+                },
+                description: {
+                  anyOf: [
+                    {
+                      type: "string",
+                      minLength: 1,
+                      maxLength: 1024,
+                    },
+                    {
+                      type: "null",
+                    },
+                  ],
+                  description:
+                    "New description for version_id; pass null to clear, empty string is not allowed, omit to leave unchanged",
+                },
+              },
+            },
+          },
+        },
+        delete: {
+          kind: "leaf",
+          spec: {
+            commandPath: ["document", "delete"],
+            toolName: "delete_document",
+            flags: [
+              {
+                flag: "--entity-id",
+                prop: "entity_id",
+                kind: "string",
+                repeatable: false,
+                description: "Document entity ID to delete",
+                required: true,
+              },
+              {
+                flag: "--version-id",
+                prop: "version_id",
+                kind: "string",
+                repeatable: false,
+                description:
+                  "Delete only this version instead of the whole document",
+                required: false,
+              },
+            ],
+            inputOnly: [],
+            paginated: false,
+            windowedText: false,
+            destructive: true,
+            scope: "documents_write",
+            inputSchema: {
+              type: "object",
+              required: ["entity_id"],
+              additionalProperties: false,
+              properties: {
+                entity_id: {
+                  type: "string",
+                  minLength: 1,
+                  description: "Document entity ID to delete",
+                },
+                version_id: {
+                  type: "string",
+                  minLength: 1,
+                  description:
+                    "Delete only this version instead of the whole document",
+                },
+                confirm: {
+                  type: "boolean",
+                  description:
+                    "Must be true to run this irreversible operation. Set it only after a human user has explicitly approved the deletion.",
+                },
+              },
+            },
+          },
+        },
+        properties: {
+          kind: "route",
+          children: {
+            list: {
+              kind: "leaf",
+              spec: {
+                commandPath: ["document", "properties", "list"],
+                toolName: "list_properties",
+                flags: [
+                  {
+                    flag: "--matter-id",
+                    prop: "matter_id",
+                    kind: "string",
+                    repeatable: false,
+                    description: "Matter/workspace ID to list properties for",
+                    required: true,
+                  },
+                ],
+                inputOnly: [],
+                paginated: true,
+                windowedText: false,
+                itemsKey: "properties",
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  required: ["matter_id"],
+                  additionalProperties: false,
+                  properties: {
+                    matter_id: {
+                      type: "string",
+                      minLength: 1,
+                      description: "Matter/workspace ID to list properties for",
+                    },
+                    limit: {
+                      type: "integer",
+                      minimum: 1,
+                      maximum: 100,
+                      description: "Max properties to return",
+                    },
+                    cursor: {
+                      type: "string",
+                      maxLength: 512,
+                      description:
+                        "Opaque cursor from a previous list_properties call to fetch the next page",
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        field: {
+          kind: "route",
+          children: {
+            set: {
+              kind: "leaf",
+              spec: {
+                commandPath: ["document", "field", "set"],
+                toolName: "set_field_value",
+                flags: [
+                  {
+                    flag: "--entity-id",
+                    prop: "entity_id",
+                    kind: "string",
+                    repeatable: false,
+                    description: "Document entity ID whose cell to set",
+                    required: true,
+                  },
+                  {
+                    flag: "--property-id",
+                    prop: "property_id",
+                    kind: "string",
+                    repeatable: false,
+                    description: "Property ID, as returned by list_properties",
+                    required: true,
+                  },
+                ],
+                inputOnly: ["content"],
+                paginated: false,
+                windowedText: false,
+                destructive: false,
+                scope: "documents_write",
+                inputSchema: {
+                  type: "object",
+                  required: ["entity_id", "property_id", "content"],
+                  additionalProperties: false,
+                  properties: {
+                    entity_id: {
+                      type: "string",
+                      minLength: 1,
+                      description: "Document entity ID whose cell to set",
+                    },
+                    property_id: {
+                      type: "string",
+                      minLength: 1,
+                      description:
+                        "Property ID, as returned by list_properties",
+                    },
+                    content: {
+                      description:
+                        "The value to set; 'type' must match the property.",
+                      anyOf: [
+                        {
+                          type: "object",
+                          properties: {
+                            type: {
+                              enum: ["text"],
+                              description:
+                                "Value type; must match the property's value type",
+                              type: "string",
+                            },
+                            value: {
+                              type: "string",
+                              description:
+                                "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell.",
+                            },
+                          },
+                          required: ["type", "value"],
+                          additionalProperties: false,
+                        },
+                        {
+                          type: "object",
+                          properties: {
+                            type: {
+                              enum: ["single-select"],
+                              description:
+                                "Value type; must match the property's value type",
+                              type: "string",
+                            },
+                            value: {
+                              anyOf: [
+                                {
+                                  type: "string",
+                                },
+                                {
+                                  type: "null",
+                                },
+                              ],
+                              description:
+                                "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell.",
+                            },
+                          },
+                          required: ["type", "value"],
+                          additionalProperties: false,
+                        },
+                        {
+                          type: "object",
+                          properties: {
+                            type: {
+                              enum: ["multi-select"],
+                              description:
+                                "Value type; must match the property's value type",
+                              type: "string",
+                            },
+                            value: {
+                              type: "array",
+                              items: {
+                                type: "string",
+                                minLength: 1,
+                              },
+                              description:
+                                "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell.",
+                            },
+                          },
+                          required: ["type", "value"],
+                          additionalProperties: false,
+                        },
+                        {
+                          type: "object",
+                          properties: {
+                            type: {
+                              enum: ["date"],
+                              description:
+                                "Value type; must match the property's value type",
+                              type: "string",
+                            },
+                            value: {
+                              anyOf: [
+                                {
+                                  type: "string",
+                                  format: "date",
+                                },
+                                {
+                                  type: "null",
+                                },
+                              ],
+                              description:
+                                "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell.",
+                            },
+                          },
+                          required: ["type", "value"],
+                          additionalProperties: false,
+                        },
+                        {
+                          type: "object",
+                          properties: {
+                            type: {
+                              enum: ["int"],
+                              description:
+                                "Value type; must match the property's value type",
+                              type: "string",
+                            },
+                            value: {
+                              type: "integer",
+                              description:
+                                "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell.",
+                            },
+                            currency: {
+                              anyOf: [
+                                {
+                                  type: "string",
+                                  minLength: 3,
+                                  maxLength: 3,
+                                },
+                                {
+                                  type: "null",
+                                },
+                              ],
+                              description:
+                                "For int values only: 3-letter ISO currency code, or null",
+                            },
+                          },
+                          required: ["type", "value"],
+                          additionalProperties: false,
+                        },
+                      ],
+                    },
+                  },
+                },
+              },
             },
           },
         },
@@ -611,13 +1278,15 @@ export const generatedRouteMap: RouteNode = {
             scope: "read",
             inputSchema: {
               type: "object",
+              required: ["contact_id"],
+              additionalProperties: false,
               properties: {
                 contact_id: {
                   type: "string",
+                  minLength: 1,
                   description: "Contact ID",
                 },
               },
-              required: ["contact_id"],
             },
           },
         },
@@ -653,15 +1322,17 @@ export const generatedRouteMap: RouteNode = {
             scope: "read",
             inputSchema: {
               type: "object",
+              required: [],
+              additionalProperties: false,
               properties: {
                 q: {
                   type: "string",
-                  description: "Search contact display names",
                   maxLength: 512,
+                  description: "Search contact display names",
                 },
                 type: {
-                  type: "string",
                   enum: ["person", "organization"],
+                  type: "string",
                   description: "Contact kind",
                 },
                 cursor: {
@@ -670,12 +1341,11 @@ export const generatedRouteMap: RouteNode = {
                 },
                 limit: {
                   type: "integer",
-                  description: "Maximum contacts to return",
                   minimum: 1,
                   maximum: 100,
+                  description: "Maximum contacts to return",
                 },
               },
-              additionalProperties: false,
             },
           },
         },
@@ -708,7 +1378,7 @@ export const generatedRouteMap: RouteNode = {
                 kind: "string",
                 repeatable: false,
                 description:
-                  "Display name; required when creating, non-empty when updating",
+                  "Display name; when creating it defaults to first + last name (person) or organization name (organization); non-empty when updating",
                 required: false,
               },
               {
@@ -751,39 +1421,71 @@ export const generatedRouteMap: RouteNode = {
             scope: "matters_write",
             inputSchema: {
               type: "object",
+              required: [],
+              additionalProperties: false,
               properties: {
                 contact_id: {
                   type: "string",
+                  minLength: 1,
                   description: "Contact ID to update; omit to create",
                 },
                 type: {
-                  type: "string",
                   enum: ["person", "organization"],
+                  type: "string",
                   description: "Contact kind; required when creating",
                 },
                 display_name: {
                   type: "string",
-                  description:
-                    "Display name; required when creating, non-empty when updating",
+                  minLength: 1,
                   maxLength: 512,
+                  description:
+                    "Display name; when creating it defaults to first + last name (person) or organization name (organization); non-empty when updating",
                 },
                 first_name: {
-                  type: ["string", "null"],
+                  anyOf: [
+                    {
+                      type: "string",
+                      maxLength: 256,
+                    },
+                    {
+                      type: "null",
+                    },
+                  ],
                   description: "First name; pass null to clear",
-                  maxLength: 256,
                 },
                 last_name: {
-                  type: ["string", "null"],
+                  anyOf: [
+                    {
+                      type: "string",
+                      maxLength: 256,
+                    },
+                    {
+                      type: "null",
+                    },
+                  ],
                   description: "Last name; pass null to clear",
-                  maxLength: 256,
                 },
                 organization_name: {
-                  type: ["string", "null"],
+                  anyOf: [
+                    {
+                      type: "string",
+                      maxLength: 512,
+                    },
+                    {
+                      type: "null",
+                    },
+                  ],
                   description: "Organization name; pass null to clear",
-                  maxLength: 512,
                 },
                 notes: {
-                  type: ["string", "null"],
+                  anyOf: [
+                    {
+                      type: "string",
+                    },
+                    {
+                      type: "null",
+                    },
+                  ],
                   description: "Free-text notes; pass null to clear",
                 },
               },
@@ -812,9 +1514,12 @@ export const generatedRouteMap: RouteNode = {
             scope: "matters_write",
             inputSchema: {
               type: "object",
+              required: ["contact_id"],
+              additionalProperties: false,
               properties: {
                 contact_id: {
                   type: "string",
+                  minLength: 1,
                   description: "Contact ID to delete",
                 },
                 confirm: {
@@ -823,7 +1528,6 @@ export const generatedRouteMap: RouteNode = {
                     "Must be true to run this irreversible operation. Set it only after a human user has explicitly approved the deletion.",
                 },
               },
-              required: ["contact_id"],
             },
           },
         },
@@ -871,9 +1575,10 @@ export const generatedRouteMap: RouteNode = {
             scope: "read",
             inputSchema: {
               type: "object",
+              required: ["registry", "query"],
+              additionalProperties: false,
               properties: {
                 registry: {
-                  type: "string",
                   enum: [
                     "ares",
                     "brreg",
@@ -887,16 +1592,17 @@ export const generatedRouteMap: RouteNode = {
                     "recherche-entreprises",
                     "vies",
                   ],
+                  type: "string",
                   description: "Business register to query",
                 },
                 query: {
                   type: "string",
+                  minLength: 1,
+                  maxLength: 256,
                   description:
                     "Canonical identifier (e.g. company number, VAT number) or company name",
-                  maxLength: 256,
                 },
               },
-              required: ["registry", "query"],
             },
           },
         },
@@ -918,19 +1624,15 @@ export const generatedRouteMap: RouteNode = {
             scope: "onboarding",
             inputSchema: {
               type: "object",
+              required: ["jurisdictions"],
+              additionalProperties: false,
               properties: {
                 jurisdictions: {
                   type: "array",
-                  description:
-                    "Practice jurisdictions for this organization. countryCode is an ISO 3166-1 alpha-2 code; exactly one entry should set isPrimary to true.",
-                  minItems: 1,
-                  maxItems: 12,
                   items: {
                     type: "object",
                     properties: {
                       countryCode: {
-                        type: "string",
-                        description: "ISO 3166-1 alpha-2 country code",
                         enum: [
                           "AD",
                           "AE",
@@ -1183,6 +1885,8 @@ export const generatedRouteMap: RouteNode = {
                           "ZM",
                           "ZW",
                         ],
+                        type: "string",
+                        description: "ISO 3166-1 alpha-2 country code",
                       },
                       isPrimary: {
                         type: "boolean",
@@ -1191,10 +1895,14 @@ export const generatedRouteMap: RouteNode = {
                       },
                     },
                     required: ["countryCode", "isPrimary"],
+                    additionalProperties: false,
                   },
+                  minItems: 1,
+                  maxItems: 12,
+                  description:
+                    "Practice jurisdictions for this organization. countryCode is an ISO 3166-1 alpha-2 code; exactly one entry should set isPrimary to true.",
                 },
               },
-              required: ["jurisdictions"],
             },
           },
         },
@@ -1232,34 +1940,39 @@ export const generatedRouteMap: RouteNode = {
             scope: "admin_write",
             inputSchema: {
               type: "object",
+              required: ["action"],
+              additionalProperties: false,
               properties: {
                 action: {
-                  type: "string",
                   enum: ["add_member", "remove_member", "update_org_settings"],
+                  type: "string",
                   description: "Administrative action to perform",
                 },
                 matter_id: {
                   type: "string",
+                  minLength: 1,
                   description:
                     "Matter/workspace id for add_member and remove_member",
                 },
                 user_id: {
                   type: "string",
+                  minLength: 1,
                   description:
                     "User id to add or remove for the member actions",
                 },
                 matter_number_pattern: {
                   type: "string",
+                  minLength: 1,
+                  maxLength: 128,
                   description:
                     "Matter-number pattern (update_org_settings); send with matter_number_padding",
-                  maxLength: 128,
                 },
                 matter_number_padding: {
                   type: "integer",
-                  description:
-                    "Matter-number zero-padding width (update_org_settings); send with matter_number_pattern",
                   minimum: 1,
                   maximum: 6,
+                  description:
+                    "Matter-number zero-padding width (update_org_settings); send with matter_number_pattern",
                 },
                 prompt_caching_enabled: {
                   type: "boolean",
@@ -1267,8 +1980,8 @@ export const generatedRouteMap: RouteNode = {
                     "Toggle AI prompt caching for the organization (update_org_settings)",
                 },
                 document_processing_mode: {
-                  type: "string",
                   enum: ["off", "searchable-text"],
+                  type: "string",
                   description:
                     "Set automatic PDF searchable-text extraction for the organization (update_org_settings)",
                 },
@@ -1278,7 +1991,6 @@ export const generatedRouteMap: RouteNode = {
                     "Required for the remove_member action: must be true to remove a member (an irreversible action). Set it only after a human user has approved the removal; ignored by the other actions.",
                 },
               },
-              required: ["action"],
             },
           },
         },
@@ -1316,34 +2028,39 @@ export const generatedRouteMap: RouteNode = {
             scope: "admin_write",
             inputSchema: {
               type: "object",
+              required: ["action"],
+              additionalProperties: false,
               properties: {
                 action: {
-                  type: "string",
                   enum: ["add_member", "remove_member", "update_org_settings"],
+                  type: "string",
                   description: "Administrative action to perform",
                 },
                 matter_id: {
                   type: "string",
+                  minLength: 1,
                   description:
                     "Matter/workspace id for add_member and remove_member",
                 },
                 user_id: {
                   type: "string",
+                  minLength: 1,
                   description:
                     "User id to add or remove for the member actions",
                 },
                 matter_number_pattern: {
                   type: "string",
+                  minLength: 1,
+                  maxLength: 128,
                   description:
                     "Matter-number pattern (update_org_settings); send with matter_number_padding",
-                  maxLength: 128,
                 },
                 matter_number_padding: {
                   type: "integer",
-                  description:
-                    "Matter-number zero-padding width (update_org_settings); send with matter_number_pattern",
                   minimum: 1,
                   maximum: 6,
+                  description:
+                    "Matter-number zero-padding width (update_org_settings); send with matter_number_pattern",
                 },
                 prompt_caching_enabled: {
                   type: "boolean",
@@ -1351,8 +2068,8 @@ export const generatedRouteMap: RouteNode = {
                     "Toggle AI prompt caching for the organization (update_org_settings)",
                 },
                 document_processing_mode: {
-                  type: "string",
                   enum: ["off", "searchable-text"],
+                  type: "string",
                   description:
                     "Set automatic PDF searchable-text extraction for the organization (update_org_settings)",
                 },
@@ -1362,7 +2079,6 @@ export const generatedRouteMap: RouteNode = {
                     "Required for the remove_member action: must be true to remove a member (an irreversible action). Set it only after a human user has approved the removal; ignored by the other actions.",
                 },
               },
-              required: ["action"],
             },
           },
         },
@@ -1422,34 +2138,39 @@ export const generatedRouteMap: RouteNode = {
             scope: "admin_write",
             inputSchema: {
               type: "object",
+              required: ["action"],
+              additionalProperties: false,
               properties: {
                 action: {
-                  type: "string",
                   enum: ["add_member", "remove_member", "update_org_settings"],
+                  type: "string",
                   description: "Administrative action to perform",
                 },
                 matter_id: {
                   type: "string",
+                  minLength: 1,
                   description:
                     "Matter/workspace id for add_member and remove_member",
                 },
                 user_id: {
                   type: "string",
+                  minLength: 1,
                   description:
                     "User id to add or remove for the member actions",
                 },
                 matter_number_pattern: {
                   type: "string",
+                  minLength: 1,
+                  maxLength: 128,
                   description:
                     "Matter-number pattern (update_org_settings); send with matter_number_padding",
-                  maxLength: 128,
                 },
                 matter_number_padding: {
                   type: "integer",
-                  description:
-                    "Matter-number zero-padding width (update_org_settings); send with matter_number_pattern",
                   minimum: 1,
                   maximum: 6,
+                  description:
+                    "Matter-number zero-padding width (update_org_settings); send with matter_number_pattern",
                 },
                 prompt_caching_enabled: {
                   type: "boolean",
@@ -1457,8 +2178,8 @@ export const generatedRouteMap: RouteNode = {
                     "Toggle AI prompt caching for the organization (update_org_settings)",
                 },
                 document_processing_mode: {
-                  type: "string",
                   enum: ["off", "searchable-text"],
+                  type: "string",
                   description:
                     "Set automatic PDF searchable-text extraction for the organization (update_org_settings)",
                 },
@@ -1468,7 +2189,6 @@ export const generatedRouteMap: RouteNode = {
                     "Required for the remove_member action: must be true to remove a member (an irreversible action). Set it only after a human user has approved the removal; ignored by the other actions.",
                 },
               },
-              required: ["action"],
             },
           },
         },
@@ -1514,6 +2234,7 @@ export const generatedRouteMap: RouteNode = {
                   maxLength: 512,
                 },
               },
+              additionalProperties: false,
             },
           },
         },
@@ -1582,6 +2303,7 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
               required: ["template_id", "values"],
+              additionalProperties: false,
             },
           },
         },
@@ -1699,6 +2421,7 @@ export const generatedRouteMap: RouteNode = {
                     "idempotency_key",
                     "values",
                   ],
+                  additionalProperties: false,
                 },
               },
             },
@@ -1813,6 +2536,7 @@ export const generatedRouteMap: RouteNode = {
                     "idempotency_key",
                     "values",
                   ],
+                  additionalProperties: false,
                 },
               },
             },
@@ -1829,8 +2553,7 @@ export const generatedRouteMap: RouteNode = {
                 prop: "template_id",
                 kind: "string",
                 repeatable: false,
-                description:
-                  "Existing template id to configure; omit when creating a template",
+                description: "Template to configure; omit when creating",
                 required: false,
               },
               {
@@ -1838,7 +2561,7 @@ export const generatedRouteMap: RouteNode = {
                 prop: "name",
                 kind: "string",
                 repeatable: false,
-                description: "Template display name; required when creating",
+                description: "Display name; required when creating",
                 required: false,
               },
               {
@@ -1846,8 +2569,7 @@ export const generatedRouteMap: RouteNode = {
                 prop: "docx_base64",
                 kind: "string",
                 repeatable: false,
-                description:
-                  "Base64-encoded DOCX bytes; required when creating, omit when configuring",
+                description: "Base64 DOCX bytes; required when creating",
                 required: false,
               },
             ],
@@ -1864,21 +2586,19 @@ export const generatedRouteMap: RouteNode = {
                 template_id: {
                   type: "string",
                   minLength: 1,
-                  description:
-                    "Existing template id to configure; omit when creating a template",
+                  description: "Template to configure; omit when creating",
                 },
                 name: {
                   type: "string",
                   minLength: 1,
                   maxLength: 256,
-                  description: "Template display name; required when creating",
+                  description: "Display name; required when creating",
                 },
                 docx_base64: {
                   type: "string",
                   minLength: 1,
                   maxLength: 69905068,
-                  description:
-                    "Base64-encoded DOCX bytes; required when creating, omit when configuring",
+                  description: "Base64 DOCX bytes; required when creating",
                 },
                 fields: {
                   type: "array",
@@ -1887,17 +2607,15 @@ export const generatedRouteMap: RouteNode = {
                     properties: {
                       path: {
                         type: "string",
-                        description:
-                          "Field path; must match a {{marker}} in the template",
+                        description: "Field path; must match a {{marker}}",
                       },
                       label: {
                         type: "string",
-                        description: "Human-readable field label",
+                        description: "Field label",
                       },
                       hint: {
                         type: "string",
-                        description:
-                          "Short fill guidance shown to the person filling the field",
+                        description: "Fill hint for the person filling",
                       },
                       inputType: {
                         enum: ["text", "number", "boolean", "date", "select"],
@@ -1909,15 +2627,14 @@ export const generatedRouteMap: RouteNode = {
                         items: {
                           type: "string",
                         },
-                        description:
-                          "Allowed values when inputType is 'select'",
+                        description: "Allowed values for a select field",
                       },
                       validation: {
                         type: "object",
                         properties: {
                           required: {
                             type: "boolean",
-                            description: "Whether a value is required",
+                            description: "Value is required",
                           },
                           minLength: {
                             type: "number",
@@ -1937,8 +2654,7 @@ export const generatedRouteMap: RouteNode = {
                           },
                           pattern: {
                             type: "string",
-                            description:
-                              "Regex matched against the complete value",
+                            description: "Regex for the whole value",
                           },
                           minItems: {
                             type: "number",
@@ -1955,22 +2671,19 @@ export const generatedRouteMap: RouteNode = {
                       },
                       required: {
                         type: "boolean",
-                        description: "Whether a value is required",
+                        description: "Value is required",
                       },
                       aiPrompt: {
                         type: "string",
-                        description:
-                          "Who-fills = AI: instruction the model uses to draft the value at fill time",
+                        description: "Who fills = AI: drafting instruction",
                       },
                       aiAdapt: {
                         type: "boolean",
-                        description:
-                          "Who-fills = Person+AI: the entered value is a stub AI rewrites per occurrence",
+                        description: "Who fills = person + AI",
                       },
                       aiSeesDocument: {
                         type: "boolean",
-                        description:
-                          "Include the rendered document in this AI field's prompt",
+                        description: "AI field also sees the document",
                       },
                       parts: {
                         type: "array",
@@ -1979,17 +2692,16 @@ export const generatedRouteMap: RouteNode = {
                           properties: {
                             key: {
                               type: "string",
-                              description:
-                                "Part key referenced by the field format",
+                              description: "Part key used in format",
                             },
                             label: {
                               type: "string",
-                              description: "Human-readable part label",
+                              description: "Part label",
                             },
                             inputType: {
                               enum: ["text", "select"],
                               type: "string",
-                              description: "Part input control type",
+                              description: "Part input control",
                             },
                             options: {
                               type: "array",
@@ -2000,25 +2712,22 @@ export const generatedRouteMap: RouteNode = {
                             },
                             pattern: {
                               type: "string",
-                              description:
-                                "Regex matched against the complete part value",
+                              description: "Regex for the whole part value",
                             },
                           },
                           required: ["key", "inputType"],
                           additionalProperties: false,
                         },
                         minItems: 1,
-                        description: "Composite field parts joined by format",
+                        description: "Composite field parts",
                       },
                       format: {
                         type: "string",
-                        description:
-                          "Join template over composite part keys, e.g. '{{title}} {{name}}'",
+                        description: "Join template over the part keys",
                       },
                       optionsFrom: {
                         type: "string",
-                        description:
-                          "Dependent select: path of another field whose values supply the options",
+                        description: "Dependent select: source field path",
                       },
                       lookup: {
                         type: "object",
@@ -2048,13 +2757,13 @@ export const generatedRouteMap: RouteNode = {
                                 key: {
                                   type: "string",
                                   description:
-                                    "Marker segment after the path: {{path.key}}",
+                                    "Format key, addressed as {{path.key}}",
                                 },
                                 template: {
                                   type: "string",
                                   maxLength: 2000,
                                   description:
-                                    "[token]-substituted rendering of the registry hit",
+                                    "[token] rendering of the registry hit",
                                 },
                               },
                               required: ["key", "template"],
@@ -2063,12 +2772,12 @@ export const generatedRouteMap: RouteNode = {
                             minItems: 1,
                             maxItems: 10,
                             description:
-                              "Named output renderings; the first is the default for the bare marker",
+                              "Named renderings; the first is the default",
                           },
                         },
                         required: ["registry", "formats"],
                         additionalProperties: false,
-                        description: "Who-fills = business-registry lookup",
+                        description: "Who fills = business-registry lookup",
                       },
                       source: {
                         anyOf: [
@@ -2205,26 +2914,22 @@ export const generatedRouteMap: RouteNode = {
                             additionalProperties: false,
                           },
                         ],
-                        description:
-                          "Matter or contact data resolved server-side",
+                        description: "Who fills = matter or contact data",
                       },
                       formula: {
                         type: "string",
-                        description:
-                          "Arithmetic expression derived from other fields",
+                        description: "Arithmetic over other fields",
                       },
                       condition: {
                         type: "string",
-                        description:
-                          "Boolean rule expression referenced by a {{#if field_path}} marker",
+                        description: "Boolean rule for an {{#if}} marker",
                       },
                       dateFormat: {
                         type: "object",
                         properties: {
                           locale: {
                             type: "string",
-                            description:
-                              "BCP-47 language tag, e.g. 'cs', 'de', 'pl'",
+                            description: "BCP-47 language tag",
                           },
                           style: {
                             enum: ["long", "medium", "short", "iso"],
@@ -2234,511 +2939,14 @@ export const generatedRouteMap: RouteNode = {
                         },
                         required: ["locale", "style"],
                         additionalProperties: false,
-                        description:
-                          "Locale-aware date rendering for a date field",
+                        description: "Date rendering config",
                       },
                     },
                     required: ["path"],
                     additionalProperties: false,
                   },
                   description:
-                    "Strict field configuration overlay; each path must match a template marker",
-                },
-              },
-            },
-          },
-        },
-      },
-    },
-    document: {
-      kind: "route",
-      children: {
-        list: {
-          kind: "leaf",
-          spec: {
-            commandPath: ["document", "list"],
-            toolName: "list_documents",
-            flags: [
-              {
-                flag: "--matter-id",
-                prop: "matter_id",
-                kind: "string",
-                repeatable: false,
-                description: "Matter/workspace ID to list documents in",
-                required: true,
-              },
-              {
-                flag: "--mode",
-                prop: "mode",
-                kind: "enum",
-                enum: ["flat", "children"],
-                repeatable: false,
-                description:
-                  "'flat' lists every document and folder in the matter; 'children' lists only the direct children of parent_id (or the matter root when parent_id is omitted). Defaults to 'flat', or 'children' when parent_id is provided. Passing parent_id with mode 'flat' is rejected.",
-                required: false,
-              },
-              {
-                flag: "--parent-id",
-                prop: "parent_id",
-                kind: "string",
-                repeatable: false,
-                description:
-                  "Folder entity ID whose direct children to list. Only valid in children mode; supplying it selects children mode when mode is omitted and is rejected together with mode 'flat'.",
-                required: false,
-              },
-            ],
-            inputOnly: [],
-            paginated: true,
-            windowedText: false,
-            itemsKey: "documents",
-            destructive: false,
-            scope: "read",
-            inputSchema: {
-              type: "object",
-              properties: {
-                matter_id: {
-                  type: "string",
-                  description: "Matter/workspace ID to list documents in",
-                },
-                mode: {
-                  type: "string",
-                  enum: ["flat", "children"],
-                  description:
-                    "'flat' lists every document and folder in the matter; 'children' lists only the direct children of parent_id (or the matter root when parent_id is omitted). Defaults to 'flat', or 'children' when parent_id is provided. Passing parent_id with mode 'flat' is rejected.",
-                },
-                parent_id: {
-                  type: "string",
-                  description:
-                    "Folder entity ID whose direct children to list. Only valid in children mode; supplying it selects children mode when mode is omitted and is rejected together with mode 'flat'.",
-                },
-                limit: {
-                  type: "integer",
-                  description: "Max entities to return",
-                  minimum: 1,
-                  maximum: 100,
-                },
-                cursor: {
-                  type: "string",
-                  description:
-                    "Opaque cursor from a previous list_documents call to fetch the next page",
-                  maxLength: 512,
-                },
-              },
-              required: ["matter_id"],
-            },
-          },
-        },
-        read: {
-          kind: "leaf",
-          spec: {
-            commandPath: ["document", "read"],
-            toolName: "read_document",
-            flags: [
-              {
-                flag: "--entity-id",
-                prop: "entity_id",
-                kind: "string",
-                repeatable: false,
-                description: "Document entity ID",
-                required: true,
-              },
-              {
-                flag: "--version-id",
-                prop: "version_id",
-                kind: "string",
-                repeatable: false,
-                description:
-                  "Return this version's metadata and field values instead of the current version",
-                required: false,
-              },
-              {
-                flag: "--compare-with-version-id",
-                prop: "compare_with_version_id",
-                kind: "string",
-                repeatable: false,
-                description:
-                  "With version_id, return a plain-text line diff of this version (base) against version_id (target)",
-                required: false,
-              },
-              {
-                flag: "--include-versions",
-                prop: "include_versions",
-                kind: "boolean",
-                repeatable: false,
-                description: "Also return the document's version history",
-                required: false,
-              },
-              {
-                flag: "--versions-cursor",
-                prop: "versions_cursor",
-                kind: "string",
-                repeatable: false,
-                description:
-                  "Opaque cursor from a previous call to fetch the next page of version history",
-                required: false,
-              },
-            ],
-            inputOnly: [],
-            paginated: false,
-            windowedText: false,
-            destructive: false,
-            scope: "read",
-            inputSchema: {
-              type: "object",
-              properties: {
-                entity_id: {
-                  type: "string",
-                  description: "Document entity ID",
-                },
-                version_id: {
-                  type: "string",
-                  description:
-                    "Return this version's metadata and field values instead of the current version",
-                },
-                compare_with_version_id: {
-                  type: "string",
-                  description:
-                    "With version_id, return a plain-text line diff of this version (base) against version_id (target)",
-                },
-                include_versions: {
-                  type: "boolean",
-                  description: "Also return the document's version history",
-                },
-                versions_cursor: {
-                  type: "string",
-                  description:
-                    "Opaque cursor from a previous call to fetch the next page of version history",
-                  maxLength: 512,
-                },
-              },
-              required: ["entity_id"],
-            },
-          },
-        },
-        save: {
-          kind: "leaf",
-          spec: {
-            commandPath: ["document", "save"],
-            toolName: "save_document",
-            flags: [
-              {
-                flag: "--entity-id",
-                prop: "entity_id",
-                kind: "string",
-                repeatable: false,
-                description: "Document entity ID to update; omit to create",
-                required: false,
-              },
-              {
-                flag: "--matter-id",
-                prop: "matter_id",
-                kind: "string",
-                repeatable: false,
-                description:
-                  "Matter/workspace ID to create the entity in; required when creating",
-                required: false,
-              },
-              {
-                flag: "--name",
-                prop: "name",
-                kind: "string",
-                repeatable: false,
-                description:
-                  "Display name: required when creating, or the new name when renaming",
-                required: false,
-              },
-              {
-                flag: "--parent-id",
-                prop: "parent_id",
-                kind: "string",
-                repeatable: false,
-                description:
-                  "Folder entity ID: to place the new entity inside when creating, or to move the document into when updating",
-                required: false,
-              },
-              {
-                flag: "--kind",
-                prop: "kind",
-                kind: "enum",
-                enum: ["document", "folder"],
-                repeatable: false,
-                description:
-                  "Entity kind to create; defaults to 'document'. Only valid when creating.",
-                required: false,
-              },
-              {
-                flag: "--move-to-root",
-                prop: "move_to_root",
-                kind: "boolean",
-                repeatable: false,
-                description:
-                  "Move the document to the matter root (no parent folder). Only valid when updating.",
-                required: false,
-              },
-              {
-                flag: "--version-id",
-                prop: "version_id",
-                kind: "string",
-                repeatable: false,
-                description:
-                  "Version ID to annotate; required when setting label or description. Only valid when updating.",
-                required: false,
-              },
-              {
-                flag: "--label",
-                prop: "label",
-                kind: "nullable-string",
-                repeatable: false,
-                description:
-                  "New label for version_id; pass null to clear, empty string is not allowed, omit to leave unchanged",
-                required: false,
-              },
-              {
-                flag: "--description",
-                prop: "description",
-                kind: "nullable-string",
-                repeatable: false,
-                description:
-                  "New description for version_id; pass null to clear, empty string is not allowed, omit to leave unchanged",
-                required: false,
-              },
-            ],
-            inputOnly: [],
-            paginated: false,
-            windowedText: false,
-            destructive: false,
-            scope: "documents_write",
-            inputSchema: {
-              type: "object",
-              properties: {
-                entity_id: {
-                  type: "string",
-                  description: "Document entity ID to update; omit to create",
-                },
-                matter_id: {
-                  type: "string",
-                  description:
-                    "Matter/workspace ID to create the entity in; required when creating",
-                },
-                name: {
-                  type: "string",
-                  description:
-                    "Display name: required when creating, or the new name when renaming",
-                  maxLength: 255,
-                },
-                parent_id: {
-                  type: "string",
-                  description:
-                    "Folder entity ID: to place the new entity inside when creating, or to move the document into when updating",
-                },
-                kind: {
-                  type: "string",
-                  enum: ["document", "folder"],
-                  description:
-                    "Entity kind to create; defaults to 'document'. Only valid when creating.",
-                },
-                move_to_root: {
-                  type: "boolean",
-                  description:
-                    "Move the document to the matter root (no parent folder). Only valid when updating.",
-                },
-                version_id: {
-                  type: "string",
-                  description:
-                    "Version ID to annotate; required when setting label or description. Only valid when updating.",
-                },
-                label: {
-                  type: ["string", "null"],
-                  description:
-                    "New label for version_id; pass null to clear, empty string is not allowed, omit to leave unchanged",
-                  maxLength: 128,
-                },
-                description: {
-                  type: ["string", "null"],
-                  description:
-                    "New description for version_id; pass null to clear, empty string is not allowed, omit to leave unchanged",
-                  maxLength: 1024,
-                },
-              },
-            },
-          },
-        },
-        delete: {
-          kind: "leaf",
-          spec: {
-            commandPath: ["document", "delete"],
-            toolName: "delete_document",
-            flags: [
-              {
-                flag: "--entity-id",
-                prop: "entity_id",
-                kind: "string",
-                repeatable: false,
-                description: "Document entity ID to delete",
-                required: true,
-              },
-              {
-                flag: "--version-id",
-                prop: "version_id",
-                kind: "string",
-                repeatable: false,
-                description:
-                  "Delete only this version instead of the whole document",
-                required: false,
-              },
-            ],
-            inputOnly: [],
-            paginated: false,
-            windowedText: false,
-            destructive: true,
-            scope: "documents_write",
-            inputSchema: {
-              type: "object",
-              properties: {
-                entity_id: {
-                  type: "string",
-                  description: "Document entity ID to delete",
-                },
-                version_id: {
-                  type: "string",
-                  description:
-                    "Delete only this version instead of the whole document",
-                },
-                confirm: {
-                  type: "boolean",
-                  description:
-                    "Must be true to run this irreversible operation. Set it only after a human user has explicitly approved the deletion.",
-                },
-              },
-              required: ["entity_id"],
-            },
-          },
-        },
-        properties: {
-          kind: "route",
-          children: {
-            list: {
-              kind: "leaf",
-              spec: {
-                commandPath: ["document", "properties", "list"],
-                toolName: "list_properties",
-                flags: [
-                  {
-                    flag: "--matter-id",
-                    prop: "matter_id",
-                    kind: "string",
-                    repeatable: false,
-                    description: "Matter/workspace ID to list properties for",
-                    required: true,
-                  },
-                ],
-                inputOnly: [],
-                paginated: true,
-                windowedText: false,
-                itemsKey: "properties",
-                destructive: false,
-                scope: "read",
-                inputSchema: {
-                  type: "object",
-                  properties: {
-                    matter_id: {
-                      type: "string",
-                      description: "Matter/workspace ID to list properties for",
-                    },
-                    limit: {
-                      type: "integer",
-                      description: "Max properties to return",
-                      minimum: 1,
-                      maximum: 100,
-                    },
-                    cursor: {
-                      type: "string",
-                      description:
-                        "Opaque cursor from a previous list_properties call to fetch the next page",
-                      maxLength: 512,
-                    },
-                  },
-                  required: ["matter_id"],
-                },
-              },
-            },
-          },
-        },
-        field: {
-          kind: "route",
-          children: {
-            set: {
-              kind: "leaf",
-              spec: {
-                commandPath: ["document", "field", "set"],
-                toolName: "set_field_value",
-                flags: [
-                  {
-                    flag: "--entity-id",
-                    prop: "entity_id",
-                    kind: "string",
-                    repeatable: false,
-                    description: "Document entity ID whose cell to set",
-                    required: true,
-                  },
-                  {
-                    flag: "--property-id",
-                    prop: "property_id",
-                    kind: "string",
-                    repeatable: false,
-                    description: "Property ID, as returned by list_properties",
-                    required: true,
-                  },
-                ],
-                inputOnly: ["content"],
-                paginated: false,
-                windowedText: false,
-                destructive: false,
-                scope: "documents_write",
-                inputSchema: {
-                  type: "object",
-                  properties: {
-                    entity_id: {
-                      type: "string",
-                      description: "Document entity ID whose cell to set",
-                    },
-                    property_id: {
-                      type: "string",
-                      description:
-                        "Property ID, as returned by list_properties",
-                    },
-                    content: {
-                      type: "object",
-                      description:
-                        "The value to set; 'type' must match the property.",
-                      properties: {
-                        type: {
-                          type: "string",
-                          enum: [
-                            "text",
-                            "single-select",
-                            "multi-select",
-                            "date",
-                            "int",
-                          ],
-                          description:
-                            "Value type; must match the property's value type",
-                        },
-                        value: {
-                          description:
-                            "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell.",
-                        },
-                        currency: {
-                          type: "string",
-                          description:
-                            "For int values only: 3-letter ISO currency code, or null",
-                          maxLength: 3,
-                        },
-                      },
-                      required: ["type", "value"],
-                    },
-                  },
-                  required: ["entity_id", "property_id", "content"],
+                    "Field configuration overlay; see stella://reference/template-fields",
                 },
               },
             },
@@ -2807,44 +3015,51 @@ export const generatedRouteMap: RouteNode = {
             scope: "read",
             inputSchema: {
               type: "object",
+              required: [],
+              additionalProperties: false,
               properties: {
                 matter_id: {
                   type: "string",
+                  minLength: 1,
                   description:
                     "Matter/workspace ID to list tasks in; required unless task_id is given",
                 },
                 task_id: {
                   type: "string",
+                  minLength: 1,
                   description: "Task entity ID to read in detail",
                 },
                 date_from: {
                   type: "string",
+                  format: "date",
+                  maxLength: 10,
                   description:
                     "List only tasks due on or after this ISO date (YYYY-MM-DD)",
-                  maxLength: 10,
                 },
                 date_to: {
                   type: "string",
+                  format: "date",
+                  maxLength: 10,
                   description:
                     "List only tasks due on or before this ISO date (YYYY-MM-DD)",
-                  maxLength: 10,
                 },
                 status: {
                   type: "string",
-                  description: "List only tasks with this status",
+                  minLength: 1,
                   maxLength: 32,
+                  description: "List only tasks with this status",
                 },
                 limit: {
                   type: "integer",
-                  description: "Max tasks to return",
                   minimum: 1,
                   maximum: 100,
+                  description: "Max tasks to return",
                 },
                 cursor: {
                   type: "string",
+                  maxLength: 512,
                   description:
                     "Opaque cursor from a previous list_tasks call to fetch the next page",
-                  maxLength: 512,
                 },
               },
             },
@@ -2907,6 +3122,31 @@ export const generatedRouteMap: RouteNode = {
                 required: false,
               },
               {
+                flag: "--list-id",
+                prop: "list_id",
+                kind: "string",
+                repeatable: false,
+                description: "List ID to create the item in (creating only)",
+                required: false,
+              },
+              {
+                flag: "--list-section-id",
+                prop: "list_section_id",
+                kind: "string",
+                repeatable: false,
+                description:
+                  "Section of list_id to create the item under (creating only)",
+                required: false,
+              },
+              {
+                flag: "--list-description",
+                prop: "list_description",
+                kind: "nullable-string",
+                repeatable: false,
+                description: "List item description; pass null to clear",
+                required: false,
+              },
+              {
                 flag: "--due-date",
                 prop: "due_date",
                 kind: "nullable-string",
@@ -2964,63 +3204,106 @@ export const generatedRouteMap: RouteNode = {
             scope: "matters_write",
             inputSchema: {
               type: "object",
+              required: [],
+              additionalProperties: false,
               properties: {
                 task_id: {
                   type: "string",
+                  minLength: 1,
                   description: "Task entity ID to update; omit to create",
                 },
                 matter_id: {
                   type: "string",
+                  minLength: 1,
                   description:
                     "Matter/workspace ID to create the task in; required when creating",
                 },
                 name: {
                   type: "string",
-                  description: "Task name; required when creating",
+                  minLength: 1,
                   maxLength: 255,
+                  description: "Task name; required when creating",
                 },
                 status: {
                   type: "string",
-                  description: "Task status (e.g. open, in_progress, done)",
+                  minLength: 1,
                   maxLength: 32,
+                  description: "Task status (e.g. open, in_progress, done)",
                 },
                 priority: {
                   type: "string",
-                  description: "Task priority (e.g. none, low, medium, high)",
+                  minLength: 1,
                   maxLength: 16,
+                  description: "Task priority (e.g. none, low, medium, high)",
                 },
                 item_type: {
-                  type: "string",
                   enum: ["task", "fact", "issue", "requirement", "event"],
+                  type: "string",
                   description: "What the List item represents",
                 },
+                list_id: {
+                  type: "string",
+                  format: "uuid",
+                  description: "List ID to create the item in (creating only)",
+                },
+                list_section_id: {
+                  type: "string",
+                  format: "uuid",
+                  description:
+                    "Section of list_id to create the item under (creating only)",
+                },
+                list_description: {
+                  anyOf: [
+                    {
+                      type: "string",
+                      maxLength: 10000,
+                    },
+                    {
+                      type: "null",
+                    },
+                  ],
+                  description: "List item description; pass null to clear",
+                },
                 due_date: {
-                  type: ["string", "null"],
+                  anyOf: [
+                    {
+                      type: "string",
+                      format: "date",
+                      maxLength: 10,
+                    },
+                    {
+                      type: "null",
+                    },
+                  ],
                   description: "Due date (ISO YYYY-MM-DD); pass null to clear",
-                  maxLength: 10,
                 },
                 workflow_reason: {
                   type: "string",
+                  minLength: 1,
+                  maxLength: 1000,
                   description:
                     "Reason for a governed status or deadline change",
-                  maxLength: 1000,
                 },
                 add_assignee_user_id: {
                   type: "string",
+                  minLength: 1,
                   description:
                     "User ID to assign to the task (must be a workspace member)",
                 },
                 remove_assignee_user_id: {
                   type: "string",
+                  minLength: 1,
                   description: "User ID to unassign from the task",
                 },
                 link_entity_id: {
                   type: "string",
+                  minLength: 1,
                   description:
                     "Entity ID to link to the task (document, folder, or another task)",
                 },
                 unlink_link_id: {
                   type: "string",
+                  minLength: 1,
                   description: "Entity-link ID to remove",
                 },
               },
@@ -3091,23 +3374,29 @@ export const generatedRouteMap: RouteNode = {
             scope: "read",
             inputSchema: {
               type: "object",
+              required: [],
+              additionalProperties: false,
               properties: {
                 clause_id: {
                   type: "string",
+                  minLength: 1,
                   description: "Clause id to read in detail; omit to list",
                 },
                 version_id: {
                   type: "string",
+                  minLength: 1,
                   description:
                     "With clause_id, return this version's body instead of the current clause",
                 },
                 category_id: {
                   type: "string",
+                  minLength: 1,
                   description:
                     "List only clauses filed under this category (list mode)",
                 },
                 query: {
                   type: "string",
+                  minLength: 1,
                   description:
                     "Filter clauses by a text query over title and body (list mode)",
                 },
@@ -3118,15 +3407,15 @@ export const generatedRouteMap: RouteNode = {
                 },
                 limit: {
                   type: "integer",
-                  description: "Max clauses to return",
                   minimum: 1,
                   maximum: 200,
+                  description: "Max clauses to return",
                 },
                 cursor: {
                   type: "string",
+                  maxLength: 512,
                   description:
                     "Opaque cursor from a previous list_clauses call to fetch the next page",
-                  maxLength: 512,
                 },
               },
             },
@@ -3206,20 +3495,22 @@ export const generatedRouteMap: RouteNode = {
             scope: "knowledge_write",
             inputSchema: {
               type: "object",
+              required: [],
+              additionalProperties: false,
               properties: {
                 clause_id: {
                   type: "string",
+                  minLength: 1,
                   description: "Clause id to update; omit to create",
                 },
                 title: {
                   type: "string",
-                  description: "Clause title; required when creating",
+                  minLength: 1,
                   maxLength: 256,
+                  description: "Clause title; required when creating",
                 },
                 body: {
                   type: "array",
-                  description:
-                    "Ordered clause body paragraphs; required when creating. Each paragraph carries text and optional formatting.",
                   items: {
                     type: "object",
                     properties: {
@@ -3237,8 +3528,6 @@ export const generatedRouteMap: RouteNode = {
                       },
                       runs: {
                         type: "array",
-                        description:
-                          "Optional inline formatting runs whose text concatenates to the paragraph",
                         items: {
                           type: "object",
                           properties: {
@@ -3256,11 +3545,14 @@ export const generatedRouteMap: RouteNode = {
                             },
                           },
                           required: ["text"],
+                          additionalProperties: false,
                         },
+                        description:
+                          "Optional inline formatting runs whose text concatenates to the paragraph",
                       },
                       listKind: {
-                        type: "string",
                         enum: ["bullet", "ordered"],
+                        type: "string",
                         description:
                           "List item kind when the paragraph is a list item",
                       },
@@ -3275,7 +3567,6 @@ export const generatedRouteMap: RouteNode = {
                           "Whether the paragraph is a template directive marker",
                       },
                       directiveKind: {
-                        type: "string",
                         enum: [
                           "if",
                           "elseif",
@@ -3284,6 +3575,7 @@ export const generatedRouteMap: RouteNode = {
                           "each",
                           "endeach",
                         ],
+                        type: "string",
                         description: "Directive kind when isDirective is set",
                       },
                       directiveExpression: {
@@ -3293,34 +3585,75 @@ export const generatedRouteMap: RouteNode = {
                       },
                     },
                     required: ["text"],
+                    additionalProperties: false,
                   },
+                  minItems: 1,
+                  description:
+                    "Ordered clause body paragraphs; required when creating. Each paragraph carries text and optional formatting.",
                 },
                 category_id: {
-                  type: ["string", "null"],
+                  anyOf: [
+                    {
+                      type: "string",
+                      minLength: 1,
+                    },
+                    {
+                      type: "null",
+                    },
+                  ],
                   description:
                     "Category id to file the clause under; pass null to clear",
                 },
                 language: {
-                  type: ["string", "null"],
+                  anyOf: [
+                    {
+                      type: "string",
+                      minLength: 1,
+                      maxLength: 10,
+                    },
+                    {
+                      type: "null",
+                    },
+                  ],
                   description:
                     "BCP-47 language tag for the clause; pass null to clear",
-                  maxLength: 10,
                 },
                 description: {
-                  type: ["string", "null"],
+                  anyOf: [
+                    {
+                      type: "string",
+                      maxLength: 2000,
+                    },
+                    {
+                      type: "null",
+                    },
+                  ],
                   description: "Short clause description; pass null to clear",
-                  maxLength: 2000,
                 },
                 usage_notes: {
-                  type: ["string", "null"],
+                  anyOf: [
+                    {
+                      type: "string",
+                      maxLength: 2000,
+                    },
+                    {
+                      type: "null",
+                    },
+                  ],
                   description:
                     "Guidance on when to use the clause; pass null to clear",
-                  maxLength: 2000,
                 },
                 metadata: {
-                  type: ["object", "null"],
+                  anyOf: [
+                    {
+                      type: "object",
+                      additionalProperties: {},
+                    },
+                    {
+                      type: "null",
+                    },
+                  ],
                   description: "Free-form metadata object; pass null to clear",
-                  additionalProperties: true,
                 },
                 snapshot_version: {
                   type: "boolean",
@@ -3353,9 +3686,12 @@ export const generatedRouteMap: RouteNode = {
             scope: "knowledge_write",
             inputSchema: {
               type: "object",
+              required: ["clause_id"],
+              additionalProperties: false,
               properties: {
                 clause_id: {
                   type: "string",
+                  minLength: 1,
                   description: "Clause id to delete",
                 },
                 confirm: {
@@ -3364,7 +3700,6 @@ export const generatedRouteMap: RouteNode = {
                     "Must be true to run this irreversible operation. Set it only after a human user has explicitly approved the deletion.",
                 },
               },
-              required: ["clause_id"],
             },
           },
         },
@@ -3397,23 +3732,26 @@ export const generatedRouteMap: RouteNode = {
             scope: "read",
             inputSchema: {
               type: "object",
+              required: [],
+              additionalProperties: false,
               properties: {
                 playbook_id: {
                   type: "string",
+                  minLength: 1,
                   description:
                     "Playbook id to read in detail; omit to list playbooks",
                 },
                 limit: {
                   type: "integer",
-                  description: "Max playbooks to return",
                   minimum: 1,
                   maximum: 100,
+                  description: "Max playbooks to return",
                 },
                 cursor: {
                   type: "string",
+                  maxLength: 512,
                   description:
                     "Opaque cursor from a previous list_playbooks call to fetch the next page",
-                  maxLength: 512,
                 },
               },
             },
@@ -3449,17 +3787,20 @@ export const generatedRouteMap: RouteNode = {
             scope: "knowledge_write",
             inputSchema: {
               type: "object",
+              required: ["matter_id", "playbook_id"],
+              additionalProperties: false,
               properties: {
                 matter_id: {
                   type: "string",
+                  minLength: 1,
                   description: "Matter/workspace id to run the playbook over",
                 },
                 playbook_id: {
                   type: "string",
+                  minLength: 1,
                   description: "Playbook id to run",
                 },
               },
-              required: ["matter_id", "playbook_id"],
             },
           },
         },
@@ -3544,53 +3885,61 @@ export const generatedRouteMap: RouteNode = {
             scope: "read",
             inputSchema: {
               type: "object",
+              required: [],
+              additionalProperties: false,
               properties: {
                 matter_id: {
                   type: "string",
+                  minLength: 1,
                   description:
                     "Matter/workspace ID to list time entries in; required unless time_entry_id is given",
                 },
                 time_entry_id: {
                   type: "string",
+                  minLength: 1,
                   description: "Time entry ID to read in detail",
                 },
                 entity_id: {
                   type: "string",
+                  minLength: 1,
                   description:
                     "List only entries logged against this entity (document, folder, or task the time is billed to)",
                 },
                 user_id: {
                   type: "string",
+                  minLength: 1,
                   description: "List only entries recorded by this user",
                 },
                 date_from: {
                   type: "string",
+                  format: "date",
+                  maxLength: 10,
                   description:
                     "List only entries worked on or after this ISO date (YYYY-MM-DD)",
-                  maxLength: 10,
                 },
                 date_to: {
                   type: "string",
+                  format: "date",
+                  maxLength: 10,
                   description:
                     "List only entries worked on or before this ISO date (YYYY-MM-DD)",
-                  maxLength: 10,
                 },
                 status: {
-                  type: "string",
                   enum: ["draft", "approved", "billed", "written_off"],
+                  type: "string",
                   description: "List only entries with this status",
                 },
                 limit: {
                   type: "integer",
-                  description: "Max entries to return",
                   minimum: 1,
                   maximum: 100,
+                  description: "Max entries to return",
                 },
                 cursor: {
                   type: "string",
+                  maxLength: 512,
                   description:
                     "Opaque cursor from a previous list_time_entries call to fetch the next page",
-                  maxLength: 512,
                 },
               },
             },
@@ -3714,50 +4063,72 @@ export const generatedRouteMap: RouteNode = {
             scope: "billing_write",
             inputSchema: {
               type: "object",
+              required: [],
+              additionalProperties: false,
               properties: {
                 time_entry_id: {
                   type: "string",
+                  minLength: 1,
                   description: "Time entry ID to update; omit to create",
                 },
                 matter_id: {
                   type: "string",
+                  minLength: 1,
                   description:
                     "Matter/workspace ID to create the entry in; required when creating",
                 },
                 entity_id: {
-                  type: ["string", "null"],
+                  anyOf: [
+                    {
+                      type: "string",
+                      minLength: 1,
+                    },
+                    {
+                      type: "null",
+                    },
+                  ],
                   description:
                     "Optional work item context (document, folder, or task). When updating, moves the entry to a different entity in the same matter; pass null to clear.",
                 },
                 date_worked: {
                   type: "string",
+                  format: "date",
+                  maxLength: 10,
                   description:
                     "Date the work was done (ISO YYYY-MM-DD); required when creating",
-                  maxLength: 10,
                 },
                 timezone_id: {
                   type: "string",
+                  minLength: 1,
+                  maxLength: 64,
                   description:
                     "IANA time zone the date_worked is interpreted in (e.g. Europe/Prague); required when creating or changing date_worked",
-                  maxLength: 64,
                 },
                 duration_minutes: {
                   type: "integer",
+                  minimum: 1,
                   description:
                     "Minutes worked (whole minutes); required when creating",
-                  minimum: 1,
                 },
                 narrative: {
                   type: "string",
+                  minLength: 1,
+                  maxLength: 10000,
                   description:
                     "Description of the work; required when creating",
-                  maxLength: 10000,
                 },
                 invoice_narrative: {
-                  type: ["string", "null"],
+                  anyOf: [
+                    {
+                      type: "string",
+                      maxLength: 10000,
+                    },
+                    {
+                      type: "null",
+                    },
+                  ],
                   description:
                     "Client-facing narrative shown on the invoice; pass null to clear. Only valid when updating.",
-                  maxLength: 10000,
                 },
                 billable: {
                   type: "boolean",
@@ -3769,14 +4140,28 @@ export const generatedRouteMap: RouteNode = {
                     "Whether the entry is recorded but not charged. Only valid when updating.",
                 },
                 task_code: {
-                  type: ["string", "null"],
+                  anyOf: [
+                    {
+                      type: "string",
+                      maxLength: 20,
+                    },
+                    {
+                      type: "null",
+                    },
+                  ],
                   description: "UTBMS/LEDES task code; pass null to clear",
-                  maxLength: 20,
                 },
                 activity_code: {
-                  type: ["string", "null"],
+                  anyOf: [
+                    {
+                      type: "string",
+                      maxLength: 20,
+                    },
+                    {
+                      type: "null",
+                    },
+                  ],
                   description: "UTBMS/LEDES activity code; pass null to clear",
-                  maxLength: 20,
                 },
               },
             },
@@ -3804,9 +4189,12 @@ export const generatedRouteMap: RouteNode = {
             scope: "billing_write",
             inputSchema: {
               type: "object",
+              required: ["time_entry_id"],
+              additionalProperties: false,
               properties: {
                 time_entry_id: {
                   type: "string",
+                  minLength: 1,
                   description: "Time entry ID to delete or write off",
                 },
                 confirm: {
@@ -3815,7 +4203,6 @@ export const generatedRouteMap: RouteNode = {
                     "Must be true to run this irreversible operation. Set it only after a human user has explicitly approved the deletion.",
                 },
               },
-              required: ["time_entry_id"],
             },
           },
         },
@@ -3862,22 +4249,26 @@ export const generatedRouteMap: RouteNode = {
             scope: "read",
             inputSchema: {
               type: "object",
+              required: ["matter_id", "user_id", "date"],
+              additionalProperties: false,
               properties: {
                 matter_id: {
                   type: "string",
+                  minLength: 1,
                   description: "Matter/workspace ID to resolve the rate in",
                 },
                 user_id: {
                   type: "string",
+                  minLength: 1,
                   description: "User ID to resolve the rate for",
                 },
                 date: {
                   type: "string",
-                  description: "Date to resolve the rate on (ISO YYYY-MM-DD)",
+                  format: "date",
                   maxLength: 10,
+                  description: "Date to resolve the rate on (ISO YYYY-MM-DD)",
                 },
               },
-              required: ["matter_id", "user_id", "date"],
             },
           },
         },
@@ -3918,27 +4309,31 @@ export const generatedRouteMap: RouteNode = {
             scope: "read",
             inputSchema: {
               type: "object",
+              required: [],
+              additionalProperties: false,
               properties: {
                 matter_id: {
                   type: "string",
+                  minLength: 1,
                   description:
                     "Matter/workspace ID to list invoices in; required unless invoice_id is given",
                 },
                 invoice_id: {
                   type: "string",
+                  minLength: 1,
                   description: "Invoice ID to read in detail",
                 },
                 limit: {
                   type: "integer",
-                  description: "Max invoices to return",
                   minimum: 1,
                   maximum: 100,
+                  description: "Max invoices to return",
                 },
                 cursor: {
                   type: "string",
+                  maxLength: 512,
                   description:
                     "Opaque cursor from a previous list_invoices call to fetch the next page",
-                  maxLength: 512,
                 },
               },
             },
@@ -3962,6 +4357,8 @@ export const generatedRouteMap: RouteNode = {
             scope: "read",
             inputSchema: {
               type: "object",
+              required: [],
+              additionalProperties: false,
               properties: {},
             },
           },
@@ -4088,56 +4485,63 @@ export const generatedRouteMap: RouteNode = {
             scope: "read",
             inputSchema: {
               type: "object",
+              required: [],
+              additionalProperties: false,
               properties: {
                 query: {
                   type: "string",
-                  description: "Free-text search over consolidated legislation",
+                  minLength: 1,
                   maxLength: 256,
+                  description: "Free-text search over consolidated legislation",
                 },
                 title: {
                   type: "string",
-                  description: "Filter search results by title text",
+                  minLength: 1,
                   maxLength: 256,
+                  description: "Filter search results by title text",
                 },
                 department_code: {
                   type: "string",
-                  description: "Filter search results by department code",
+                  minLength: 1,
                   maxLength: 32,
+                  description: "Filter search results by department code",
                 },
                 legal_range_code: {
                   type: "string",
+                  minLength: 1,
+                  maxLength: 32,
                   description:
                     "Filter search results by legal-range code (law rank)",
-                  maxLength: 32,
                 },
                 matter_code: {
                   type: "string",
-                  description: "Filter search results by subject-matter code",
+                  minLength: 1,
                   maxLength: 32,
+                  description: "Filter search results by subject-matter code",
                 },
                 date_from: {
                   type: "string",
+                  maxLength: 8,
                   description:
                     "Only laws published on or after this date (YYYYMMDD)",
-                  maxLength: 8,
                 },
                 date_to: {
                   type: "string",
+                  maxLength: 8,
                   description:
                     "Only laws published on or before this date (YYYYMMDD)",
-                  maxLength: 8,
                 },
                 limit: {
                   type: "integer",
-                  description: "Max search results to return",
                   minimum: 1,
                   maximum: 100,
+                  description: "Max search results to return",
                 },
                 cursor: {
                   type: "string",
+                  maxLength: 5,
                   description:
                     "Opaque cursor from a previous search_legislation call for the next page",
-                  maxLength: 5,
                 },
                 law_id: {
                   type: "string",
@@ -4146,12 +4550,12 @@ export const generatedRouteMap: RouteNode = {
                 },
                 block_id: {
                   type: "string",
+                  minLength: 1,
+                  maxLength: 128,
                   description:
                     "With law_id, return this text block's content instead of the whole law",
-                  maxLength: 128,
                 },
                 relation_type: {
-                  type: "string",
                   enum: [
                     "modifies",
                     "modifiedBy",
@@ -4159,6 +4563,7 @@ export const generatedRouteMap: RouteNode = {
                     "derogatedBy",
                     "all",
                   ],
+                  type: "string",
                   description:
                     "With law_id, list related laws of this relation kind instead of the law body",
                 },
@@ -4183,8 +4588,8 @@ export const generatedRouteMap: RouteNode = {
             toolName: "list_audit_log",
             flags: [
               {
-                flag: "--workspace-id",
-                prop: "workspace_id",
+                flag: "--matter-id",
+                prop: "matter_id",
                 kind: "string",
                 repeatable: false,
                 description: "Only entries scoped to this matter/workspace",
@@ -4253,7 +4658,7 @@ export const generatedRouteMap: RouteNode = {
               required: [],
               additionalProperties: false,
               properties: {
-                workspace_id: {
+                matter_id: {
                   type: "string",
                   minLength: 1,
                   description: "Only entries scoped to this matter/workspace",
@@ -4365,33 +4770,37 @@ export const generatedRouteMap: RouteNode = {
             scope: "feedback",
             inputSchema: {
               type: "object",
+              required: ["kind", "title", "body"],
+              additionalProperties: false,
               properties: {
                 kind: {
-                  type: "string",
                   enum: ["bug", "feature_request", "docs", "other"],
+                  type: "string",
                   description:
                     "Feedback category: bug, feature_request, docs, or other",
                 },
                 title: {
                   type: "string",
+                  minLength: 1,
+                  maxLength: 200,
                   description:
                     "Short one-line summary of the issue; no tenant data, ids, or secrets",
-                  maxLength: 200,
                 },
                 body: {
                   type: "string",
+                  minLength: 1,
+                  maxLength: 8000,
                   description:
                     "Markdown details: reproduction steps, expected vs actual behavior, environment. Never include tenant data, client or matter names, ids, or secrets; they are redacted server-side.",
-                  maxLength: 8000,
                 },
                 channel: {
-                  type: "string",
                   enum: ["github"],
+                  type: "string",
                   description:
                     "Delivery channel. github returns a prefilled issue URL the human submits under their own GitHub account.",
+                  default: "github",
                 },
               },
-              required: ["kind", "title", "body"],
             },
           },
         },
@@ -4512,7 +4921,7 @@ export const generatedRouteMap: RouteNode = {
               },
               {
                 flag: "--validate-only",
-                prop: "validateOnly",
+                prop: "validate_only",
                 kind: "boolean",
                 repeatable: false,
                 description:
@@ -4560,7 +4969,7 @@ export const generatedRouteMap: RouteNode = {
                   },
                   additionalProperties: false,
                 },
-                validateOnly: {
+                validate_only: {
                   type: "boolean",
                   description:
                     "When true, validate the input against the capability schema and return without executing.",
@@ -5246,8 +5655,17 @@ export const generatedRouteMap: RouteNode = {
                     part: "body",
                     partPath: "decisionId",
                   },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--note",
+                    prop: "note",
+                    required: false,
+                    part: "body",
+                    partPath: "note",
+                  },
                 ],
-                inputOnly: ["body.note"],
+                inputOnly: [],
                 paginated: false,
                 destructive: false,
                 scope: "matters_write",
@@ -6208,12 +6626,26 @@ export const generatedRouteMap: RouteNode = {
                     part: "body",
                     partPath: "name",
                   },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--description",
+                    prop: "description",
+                    required: false,
+                    part: "body",
+                    partPath: "description",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--parent-id",
+                    prop: "parentId",
+                    required: false,
+                    part: "body",
+                    partPath: "parentId",
+                  },
                 ],
-                inputOnly: [
-                  "body.description",
-                  "body.parentId",
-                  "body.sortOrder",
-                ],
+                inputOnly: ["body.sortOrder"],
                 paginated: false,
                 destructive: false,
                 scope: "knowledge_write",
@@ -6758,8 +7190,26 @@ export const generatedRouteMap: RouteNode = {
                     part: "body",
                     partPath: "instruction",
                   },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--usage-notes",
+                    prop: "usageNotes",
+                    required: false,
+                    part: "body",
+                    partPath: "usageNotes",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--title",
+                    prop: "title",
+                    required: false,
+                    part: "body",
+                    partPath: "title",
+                  },
                 ],
-                inputOnly: ["body.body", "body.usageNotes", "body.title"],
+                inputOnly: ["body.body"],
                 paginated: false,
                 destructive: false,
                 scope: "knowledge_write",
@@ -6982,6 +7432,24 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "title",
                   },
                   {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--category-id",
+                    prop: "categoryId",
+                    required: false,
+                    part: "body",
+                    partPath: "categoryId",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--language",
+                    prop: "language",
+                    required: false,
+                    part: "body",
+                    partPath: "language",
+                  },
+                  {
                     kind: "boolean",
                     repeatable: false,
                     flag: "--snapshot-version",
@@ -6990,15 +7458,26 @@ export const generatedRouteMap: RouteNode = {
                     part: "body",
                     partPath: "snapshotVersion",
                   },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--description",
+                    prop: "description",
+                    required: false,
+                    part: "body",
+                    partPath: "description",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--usage-notes",
+                    prop: "usageNotes",
+                    required: false,
+                    part: "body",
+                    partPath: "usageNotes",
+                  },
                 ],
-                inputOnly: [
-                  "body.categoryId",
-                  "body.language",
-                  "body.body",
-                  "body.description",
-                  "body.usageNotes",
-                  "body.metadata",
-                ],
+                inputOnly: ["body.body", "body.metadata"],
                 paginated: false,
                 destructive: false,
                 scope: "knowledge_write",
@@ -9033,6 +9512,60 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "contactId",
                   },
                   {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--prefix",
+                    prop: "prefix",
+                    required: false,
+                    part: "body",
+                    partPath: "prefix",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--first-name",
+                    prop: "firstName",
+                    required: false,
+                    part: "body",
+                    partPath: "firstName",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--middle-name",
+                    prop: "middleName",
+                    required: false,
+                    part: "body",
+                    partPath: "middleName",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--last-name",
+                    prop: "lastName",
+                    required: false,
+                    part: "body",
+                    partPath: "lastName",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--suffix",
+                    prop: "suffix",
+                    required: false,
+                    part: "body",
+                    partPath: "suffix",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--organization-name",
+                    prop: "organizationName",
+                    required: false,
+                    part: "body",
+                    partPath: "organizationName",
+                  },
+                  {
                     kind: "string",
                     repeatable: false,
                     flag: "--display-name",
@@ -9041,31 +9574,81 @@ export const generatedRouteMap: RouteNode = {
                     part: "body",
                     partPath: "displayName",
                   },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--notes",
+                    prop: "notes",
+                    required: false,
+                    part: "body",
+                    partPath: "notes",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--color",
+                    prop: "color",
+                    required: false,
+                    part: "body",
+                    partPath: "color",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--registration-number",
+                    prop: "registrationNumber",
+                    required: false,
+                    part: "body",
+                    partPath: "registrationNumber",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--tax-id",
+                    prop: "taxId",
+                    required: false,
+                    part: "body",
+                    partPath: "taxId",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--currency",
+                    prop: "currency",
+                    required: false,
+                    part: "body",
+                    partPath: "currency",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--originating-attorney-id",
+                    prop: "originatingAttorneyId",
+                    required: false,
+                    part: "body",
+                    partPath: "originatingAttorneyId",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--responsible-attorney-id",
+                    prop: "responsibleAttorneyId",
+                    required: false,
+                    part: "body",
+                    partPath: "responsibleAttorneyId",
+                  },
                 ],
                 inputOnly: [
                   "body.type",
-                  "body.prefix",
-                  "body.firstName",
-                  "body.middleName",
-                  "body.lastName",
-                  "body.suffix",
-                  "body.organizationName",
-                  "body.notes",
                   "body.emails",
                   "body.phones",
                   "body.addresses",
                   "body.metadata",
                   "body.tags",
-                  "body.color",
-                  "body.registrationNumber",
-                  "body.taxId",
                   "body.bankAccounts",
                   "body.billingAddress",
                   "body.defaultHourlyRate",
-                  "body.currency",
                   "body.paymentTermDays",
-                  "body.originatingAttorneyId",
-                  "body.responsibleAttorneyId",
                 ],
                 paginated: false,
                 destructive: false,
@@ -10237,6 +10820,15 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "targetWorkspaceId",
                   },
                   {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--target-parent-id",
+                    prop: "targetParentId",
+                    required: true,
+                    part: "body",
+                    partPath: "targetParentId",
+                  },
+                  {
                     kind: "boolean",
                     repeatable: false,
                     flag: "--delete-source",
@@ -10246,7 +10838,7 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "deleteSource",
                   },
                 ],
-                inputOnly: ["body.targetParentId"],
+                inputOnly: [],
                 paginated: false,
                 destructive: true,
                 scope: "matters_write",
@@ -10341,6 +10933,15 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "kind",
                   },
                   {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--parent-id",
+                    prop: "parentId",
+                    required: false,
+                    part: "body",
+                    partPath: "parentId",
+                  },
+                  {
                     kind: "string",
                     repeatable: false,
                     flag: "--name",
@@ -10350,7 +10951,7 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "name",
                   },
                 ],
-                inputOnly: ["body.parentId"],
+                inputOnly: [],
                 paginated: false,
                 destructive: false,
                 scope: "documents_write",
@@ -10441,8 +11042,17 @@ export const generatedRouteMap: RouteNode = {
                     part: "body",
                     partPath: "name",
                   },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--parent-id",
+                    prop: "parentId",
+                    required: false,
+                    part: "body",
+                    partPath: "parentId",
+                  },
                 ],
-                inputOnly: ["body.parentId"],
+                inputOnly: [],
                 paginated: false,
                 destructive: false,
                 scope: "documents_write",
@@ -11617,8 +12227,17 @@ export const generatedRouteMap: RouteNode = {
                     part: "body",
                     partPath: "entityId",
                   },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--parent-id",
+                    prop: "parentId",
+                    required: true,
+                    part: "body",
+                    partPath: "parentId",
+                  },
                 ],
-                inputOnly: ["body.parentId"],
+                inputOnly: [],
                 paginated: false,
                 destructive: false,
                 scope: "documents_write",
@@ -13624,8 +14243,17 @@ export const generatedRouteMap: RouteNode = {
                     part: "params",
                     partPath: "versionId",
                   },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--description",
+                    prop: "description",
+                    required: true,
+                    part: "body",
+                    partPath: "description",
+                  },
                 ],
-                inputOnly: ["body.description"],
+                inputOnly: [],
                 paginated: false,
                 destructive: false,
                 scope: "documents_write",
@@ -13717,8 +14345,17 @@ export const generatedRouteMap: RouteNode = {
                     part: "params",
                     partPath: "versionId",
                   },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--label",
+                    prop: "label",
+                    required: true,
+                    part: "body",
+                    partPath: "label",
+                  },
                 ],
-                inputOnly: ["body.label"],
+                inputOnly: [],
                 paginated: false,
                 destructive: false,
                 scope: "documents_write",
@@ -14012,6 +14649,15 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "description",
                   },
                   {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--invoice-description",
+                    prop: "invoiceDescription",
+                    required: false,
+                    part: "body",
+                    partPath: "invoiceDescription",
+                  },
+                  {
                     kind: "boolean",
                     repeatable: false,
                     flag: "--billable",
@@ -14021,11 +14667,7 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "billable",
                   },
                 ],
-                inputOnly: [
-                  "body.amount",
-                  "body.invoiceDescription",
-                  "body.markup",
-                ],
+                inputOnly: ["body.amount", "body.markup"],
                 paginated: false,
                 destructive: false,
                 scope: "billing_write",
@@ -14456,6 +15098,15 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "description",
                   },
                   {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--invoice-description",
+                    prop: "invoiceDescription",
+                    required: false,
+                    part: "body",
+                    partPath: "invoiceDescription",
+                  },
+                  {
                     kind: "boolean",
                     repeatable: false,
                     flag: "--billable",
@@ -14474,12 +15125,7 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "matterId",
                   },
                 ],
-                inputOnly: [
-                  "body.amount",
-                  "body.invoiceDescription",
-                  "body.markup",
-                  "body.status",
-                ],
+                inputOnly: ["body.amount", "body.markup", "body.status"],
                 paginated: false,
                 destructive: false,
                 scope: "billing_write",
@@ -15076,6 +15722,15 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "onlyAddedAt",
                   },
                   {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--group-value",
+                    prop: "groupValue",
+                    required: false,
+                    part: "body",
+                    partPath: "groupValue",
+                  },
+                  {
                     kind: "string-array",
                     repeatable: true,
                     flag: "--option-values",
@@ -15085,11 +15740,7 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "optionValues",
                   },
                 ],
-                inputOnly: [
-                  "body.filters",
-                  "body.groupByPropertyId",
-                  "body.groupValue",
-                ],
+                inputOnly: ["body.filters", "body.groupByPropertyId"],
                 paginated: false,
                 destructive: false,
                 scope: "matters_write",
@@ -16197,6 +16848,15 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "name",
                   },
                   {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--description",
+                    prop: "description",
+                    required: true,
+                    part: "body",
+                    partPath: "description",
+                  },
+                  {
                     kind: "boolean",
                     repeatable: false,
                     flag: "--enabled",
@@ -16206,7 +16866,7 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "enabled",
                   },
                 ],
-                inputOnly: ["body.description", "body.steps", "body.trigger"],
+                inputOnly: ["body.steps", "body.trigger"],
                 paginated: false,
                 destructive: false,
                 scope: "matters_write",
@@ -16853,8 +17513,17 @@ export const generatedRouteMap: RouteNode = {
                     part: "body",
                     partPath: "decision",
                   },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--note",
+                    prop: "note",
+                    required: false,
+                    part: "body",
+                    partPath: "note",
+                  },
                 ],
-                inputOnly: ["body.note"],
+                inputOnly: [],
                 paginated: false,
                 destructive: false,
                 scope: "matters_write",
@@ -17036,6 +17705,15 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "name",
                   },
                   {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--description",
+                    prop: "description",
+                    required: true,
+                    part: "body",
+                    partPath: "description",
+                  },
+                  {
                     kind: "boolean",
                     repeatable: false,
                     flag: "--enabled",
@@ -17045,7 +17723,7 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "enabled",
                   },
                 ],
-                inputOnly: ["body.description", "body.steps", "body.trigger"],
+                inputOnly: ["body.steps", "body.trigger"],
                 paginated: false,
                 destructive: false,
                 scope: "matters_write",
@@ -17462,6 +18140,24 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "invoiceDate",
                   },
                   {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--due-date",
+                    prop: "dueDate",
+                    required: false,
+                    part: "body",
+                    partPath: "dueDate",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--reference",
+                    prop: "reference",
+                    required: false,
+                    part: "body",
+                    partPath: "reference",
+                  },
+                  {
                     kind: "string",
                     repeatable: false,
                     flag: "--currency",
@@ -17469,6 +18165,15 @@ export const generatedRouteMap: RouteNode = {
                     required: true,
                     part: "body",
                     partPath: "currency",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--notes",
+                    prop: "notes",
+                    required: false,
+                    part: "body",
+                    partPath: "notes",
                   },
                   {
                     kind: "string-array",
@@ -17480,7 +18185,7 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "timeEntryIds",
                   },
                 ],
-                inputOnly: ["body.dueDate", "body.reference", "body.notes"],
+                inputOnly: [],
                 paginated: false,
                 destructive: false,
                 scope: "billing_write",
@@ -18011,6 +18716,24 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "invoiceDate",
                   },
                   {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--due-date",
+                    prop: "dueDate",
+                    required: false,
+                    part: "body",
+                    partPath: "dueDate",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--reference",
+                    prop: "reference",
+                    required: false,
+                    part: "body",
+                    partPath: "reference",
+                  },
+                  {
                     kind: "string",
                     repeatable: false,
                     flag: "--currency",
@@ -18019,8 +18742,17 @@ export const generatedRouteMap: RouteNode = {
                     part: "body",
                     partPath: "currency",
                   },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--notes",
+                    prop: "notes",
+                    required: false,
+                    part: "body",
+                    partPath: "notes",
+                  },
                 ],
-                inputOnly: ["body.dueDate", "body.reference", "body.notes"],
+                inputOnly: [],
                 paginated: false,
                 destructive: false,
                 scope: "billing_write",
@@ -18932,8 +19664,17 @@ export const generatedRouteMap: RouteNode = {
                     part: "body",
                     partPath: "name",
                   },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--description",
+                    prop: "description",
+                    required: false,
+                    part: "body",
+                    partPath: "description",
+                  },
                 ],
-                inputOnly: ["body.description"],
+                inputOnly: [],
                 paginated: false,
                 destructive: false,
                 scope: "matters_write",
@@ -20107,8 +20848,17 @@ export const generatedRouteMap: RouteNode = {
                     part: "body",
                     partPath: "decision",
                   },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--note",
+                    prop: "note",
+                    required: false,
+                    part: "body",
+                    partPath: "note",
+                  },
                 ],
-                inputOnly: ["body.note"],
+                inputOnly: [],
                 paginated: false,
                 destructive: false,
                 scope: "matters_write",
@@ -20220,8 +20970,17 @@ export const generatedRouteMap: RouteNode = {
                     part: "body",
                     partPath: "sourceEntityVersionId",
                   },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--quote",
+                    prop: "quote",
+                    required: false,
+                    part: "body",
+                    partPath: "quote",
+                  },
                 ],
-                inputOnly: ["body.locator", "body.quote"],
+                inputOnly: ["body.locator"],
                 paginated: false,
                 destructive: false,
                 scope: "matters_write",
@@ -20595,6 +21354,15 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "itemEntityId",
                   },
                   {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--section-id",
+                    prop: "sectionId",
+                    required: false,
+                    part: "body",
+                    partPath: "sectionId",
+                  },
+                  {
                     kind: "string",
                     repeatable: false,
                     flag: "--position",
@@ -20603,8 +21371,17 @@ export const generatedRouteMap: RouteNode = {
                     part: "body",
                     partPath: "position",
                   },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--description",
+                    prop: "description",
+                    required: false,
+                    part: "body",
+                    partPath: "description",
+                  },
                 ],
-                inputOnly: ["body.sectionId", "body.description"],
+                inputOnly: [],
                 paginated: false,
                 destructive: false,
                 scope: "matters_write",
@@ -20885,6 +21662,15 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "name",
                   },
                   {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--description",
+                    prop: "description",
+                    required: false,
+                    part: "body",
+                    partPath: "description",
+                  },
+                  {
                     kind: "string",
                     repeatable: false,
                     flag: "--status",
@@ -20894,7 +21680,7 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "status",
                   },
                 ],
-                inputOnly: ["body.description"],
+                inputOnly: [],
                 paginated: false,
                 destructive: false,
                 scope: "matters_write",
@@ -24477,14 +25263,30 @@ export const generatedRouteMap: RouteNode = {
                     part: "body",
                     partPath: "prompt",
                   },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--currency",
+                    prop: "currency",
+                    required: false,
+                    part: "body",
+                    partPath: "currency",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--fallback",
+                    prop: "fallback",
+                    required: false,
+                    part: "body",
+                    partPath: "fallback",
+                  },
                 ],
                 inputOnly: [
                   "body.contentType",
                   "body.toolType",
                   "body.dependencies",
                   "body.options",
-                  "body.currency",
-                  "body.fallback",
                 ],
                 paginated: false,
                 destructive: false,
@@ -27121,6 +27923,15 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "rateTableId",
                   },
                   {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--user-id",
+                    prop: "userId",
+                    required: false,
+                    part: "body",
+                    partPath: "userId",
+                  },
+                  {
                     kind: "string",
                     repeatable: false,
                     flag: "--effective-from",
@@ -27129,12 +27940,17 @@ export const generatedRouteMap: RouteNode = {
                     part: "body",
                     partPath: "effectiveFrom",
                   },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--effective-to",
+                    prop: "effectiveTo",
+                    required: false,
+                    part: "body",
+                    partPath: "effectiveTo",
+                  },
                 ],
-                inputOnly: [
-                  "body.userId",
-                  "body.hourlyRate",
-                  "body.effectiveTo",
-                ],
+                inputOnly: ["body.hourlyRate"],
                 paginated: false,
                 destructive: false,
                 scope: "billing_write",
@@ -27429,8 +28245,17 @@ export const generatedRouteMap: RouteNode = {
                     part: "body",
                     partPath: "effectiveFrom",
                   },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--effective-to",
+                    prop: "effectiveTo",
+                    required: false,
+                    part: "body",
+                    partPath: "effectiveTo",
+                  },
                 ],
-                inputOnly: ["body.hourlyRate", "body.effectiveTo"],
+                inputOnly: ["body.hourlyRate"],
                 paginated: false,
                 destructive: false,
                 scope: "billing_write",
@@ -28267,8 +29092,17 @@ export const generatedRouteMap: RouteNode = {
                     part: "params",
                     partPath: "signalId",
                   },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--assignee-user-id",
+                    prop: "assigneeUserId",
+                    required: true,
+                    part: "body",
+                    partPath: "assigneeUserId",
+                  },
                 ],
-                inputOnly: ["body.assigneeUserId"],
+                inputOnly: [],
                 paginated: false,
                 destructive: false,
                 scope: "matters_write",
@@ -28332,8 +29166,17 @@ export const generatedRouteMap: RouteNode = {
                     part: "params",
                     partPath: "signalId",
                   },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--reason",
+                    prop: "reason",
+                    required: false,
+                    part: "body",
+                    partPath: "reason",
+                  },
                 ],
-                inputOnly: ["body.reason"],
+                inputOnly: [],
                 paginated: false,
                 destructive: false,
                 scope: "matters_write",
@@ -28577,12 +29420,26 @@ export const generatedRouteMap: RouteNode = {
                     part: "body",
                     partPath: "description",
                   },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    required: false,
+                    part: "body",
+                    partPath: "matterId",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--assignee-user-id",
+                    prop: "assigneeUserId",
+                    required: false,
+                    part: "body",
+                    partPath: "assigneeUserId",
+                  },
                 ],
-                inputOnly: [
-                  "body.matterId",
-                  "body.assigneeUserId",
-                  "body.severity",
-                ],
+                inputOnly: ["body.severity"],
                 paginated: false,
                 destructive: false,
                 scope: "matters_write",
@@ -30752,8 +31609,26 @@ export const generatedRouteMap: RouteNode = {
                     part: "body",
                     partPath: "body",
                   },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--body-version",
+                    prop: "body.version",
+                    required: false,
+                    part: "body",
+                    partPath: "version",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--command",
+                    prop: "command",
+                    required: false,
+                    part: "body",
+                    partPath: "command",
+                  },
                 ],
-                inputOnly: ["body.version", "body.command"],
+                inputOnly: [],
                 paginated: false,
                 destructive: false,
                 inputSchema: {
@@ -32508,6 +33383,15 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "priority",
                   },
                   {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--due-date",
+                    prop: "dueDate",
+                    required: false,
+                    part: "body",
+                    partPath: "dueDate",
+                  },
+                  {
                     kind: "string",
                     repeatable: false,
                     flag: "--list-item-type",
@@ -32544,6 +33428,51 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "listPosition",
                   },
                   {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--list-description",
+                    prop: "listDescription",
+                    required: false,
+                    part: "body",
+                    partPath: "listDescription",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--start-at",
+                    prop: "startAt",
+                    required: false,
+                    part: "body",
+                    partPath: "startAt",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--end-at",
+                    prop: "endAt",
+                    required: false,
+                    part: "body",
+                    partPath: "endAt",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--occurred-at",
+                    prop: "occurredAt",
+                    required: false,
+                    part: "body",
+                    partPath: "occurredAt",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--remind-at",
+                    prop: "remindAt",
+                    required: false,
+                    part: "body",
+                    partPath: "remindAt",
+                  },
+                  {
                     kind: "boolean",
                     repeatable: false,
                     flag: "--all-day",
@@ -32551,6 +33480,51 @@ export const generatedRouteMap: RouteNode = {
                     required: false,
                     part: "body",
                     partPath: "allDay",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--time-zone",
+                    prop: "timeZone",
+                    required: false,
+                    part: "body",
+                    partPath: "timeZone",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--location",
+                    prop: "location",
+                    required: false,
+                    part: "body",
+                    partPath: "location",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--online-meeting-url",
+                    prop: "onlineMeetingUrl",
+                    required: false,
+                    part: "body",
+                    partPath: "onlineMeetingUrl",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--availability",
+                    prop: "availability",
+                    required: false,
+                    part: "body",
+                    partPath: "availability",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--sensitivity",
+                    prop: "sensitivity",
+                    required: false,
+                    part: "body",
+                    partPath: "sensitivity",
                   },
                   {
                     kind: "string-array",
@@ -32570,25 +33544,38 @@ export const generatedRouteMap: RouteNode = {
                     part: "body",
                     partPath: "ownerUserId",
                   },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--working-target-date",
+                    prop: "workingTargetDate",
+                    required: false,
+                    part: "body",
+                    partPath: "workingTargetDate",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--hard-deadline-date",
+                    prop: "hardDeadlineDate",
+                    required: false,
+                    part: "body",
+                    partPath: "hardDeadlineDate",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--source-description",
+                    prop: "sourceDescription",
+                    required: false,
+                    part: "body",
+                    partPath: "sourceDescription",
+                  },
                 ],
                 inputOnly: [
-                  "body.dueDate",
-                  "body.listDescription",
-                  "body.startAt",
-                  "body.endAt",
-                  "body.occurredAt",
-                  "body.remindAt",
-                  "body.timeZone",
-                  "body.location",
-                  "body.onlineMeetingUrl",
-                  "body.availability",
-                  "body.sensitivity",
                   "body.organizer",
                   "body.attendees",
                   "body.recurrence",
-                  "body.workingTargetDate",
-                  "body.hardDeadlineDate",
-                  "body.sourceDescription",
                 ],
                 paginated: false,
                 destructive: false,
@@ -33348,6 +34335,15 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "priority",
                   },
                   {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--due-date",
+                    prop: "dueDate",
+                    required: false,
+                    part: "body",
+                    partPath: "dueDate",
+                  },
+                  {
                     kind: "string",
                     repeatable: false,
                     flag: "--list-item-type",
@@ -33357,6 +34353,42 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "listItemType",
                   },
                   {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--start-at",
+                    prop: "startAt",
+                    required: false,
+                    part: "body",
+                    partPath: "startAt",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--end-at",
+                    prop: "endAt",
+                    required: false,
+                    part: "body",
+                    partPath: "endAt",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--occurred-at",
+                    prop: "occurredAt",
+                    required: false,
+                    part: "body",
+                    partPath: "occurredAt",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--remind-at",
+                    prop: "remindAt",
+                    required: false,
+                    part: "body",
+                    partPath: "remindAt",
+                  },
+                  {
                     kind: "boolean",
                     repeatable: false,
                     flag: "--all-day",
@@ -33364,6 +34396,60 @@ export const generatedRouteMap: RouteNode = {
                     required: false,
                     part: "body",
                     partPath: "allDay",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--time-zone",
+                    prop: "timeZone",
+                    required: false,
+                    part: "body",
+                    partPath: "timeZone",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--location",
+                    prop: "location",
+                    required: false,
+                    part: "body",
+                    partPath: "location",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--online-meeting-url",
+                    prop: "onlineMeetingUrl",
+                    required: false,
+                    part: "body",
+                    partPath: "onlineMeetingUrl",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--availability",
+                    prop: "availability",
+                    required: false,
+                    part: "body",
+                    partPath: "availability",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--sensitivity",
+                    prop: "sensitivity",
+                    required: false,
+                    part: "body",
+                    partPath: "sensitivity",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--sort-order",
+                    prop: "sortOrder",
+                    required: false,
+                    part: "body",
+                    partPath: "sortOrder",
                   },
                   {
                     kind: "string",
@@ -33376,20 +34462,9 @@ export const generatedRouteMap: RouteNode = {
                   },
                 ],
                 inputOnly: [
-                  "body.dueDate",
-                  "body.startAt",
-                  "body.endAt",
-                  "body.occurredAt",
-                  "body.remindAt",
-                  "body.timeZone",
-                  "body.location",
-                  "body.onlineMeetingUrl",
-                  "body.availability",
-                  "body.sensitivity",
                   "body.organizer",
                   "body.attendees",
                   "body.recurrence",
-                  "body.sortOrder",
                 ],
                 paginated: false,
                 destructive: false,
@@ -34327,12 +35402,26 @@ export const generatedRouteMap: RouteNode = {
                     part: "body",
                     partPath: "name",
                   },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--description",
+                    prop: "description",
+                    required: false,
+                    part: "body",
+                    partPath: "description",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--parent-id",
+                    prop: "parentId",
+                    required: false,
+                    part: "body",
+                    partPath: "parentId",
+                  },
                 ],
-                inputOnly: [
-                  "body.description",
-                  "body.parentId",
-                  "body.sortOrder",
-                ],
+                inputOnly: ["body.sortOrder"],
                 paginated: false,
                 destructive: false,
                 scope: "templates",
@@ -34662,8 +35751,17 @@ export const generatedRouteMap: RouteNode = {
                     part: "params",
                     partPath: "linkId",
                   },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--slot-name",
+                    prop: "slotName",
+                    required: true,
+                    part: "body",
+                    partPath: "slotName",
+                  },
                 ],
-                inputOnly: ["body.slotName"],
+                inputOnly: [],
                 paginated: false,
                 destructive: false,
                 scope: "templates",
@@ -35484,8 +36582,17 @@ export const generatedRouteMap: RouteNode = {
                     part: "body",
                     partPath: "number",
                   },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--format",
+                    prop: "format",
+                    required: true,
+                    part: "body",
+                    partPath: "format",
+                  },
                 ],
-                inputOnly: ["body.format"],
+                inputOnly: [],
                 paginated: false,
                 destructive: false,
                 scope: "templates",
@@ -35751,6 +36858,15 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "name",
                   },
                   {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--category-id",
+                    prop: "categoryId",
+                    required: false,
+                    part: "body",
+                    partPath: "categoryId",
+                  },
+                  {
                     kind: "string",
                     repeatable: false,
                     flag: "--manifest",
@@ -35769,6 +36885,24 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "tags",
                   },
                   {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--when-to-use",
+                    prop: "whenToUse",
+                    required: false,
+                    part: "body",
+                    partPath: "whenToUse",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--when-not-to-use",
+                    prop: "whenNotToUse",
+                    required: false,
+                    part: "body",
+                    partPath: "whenNotToUse",
+                  },
+                  {
                     kind: "string-array",
                     repeatable: true,
                     flag: "--languages",
@@ -35778,11 +36912,7 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "languages",
                   },
                 ],
-                inputOnly: [
-                  "body.categoryId",
-                  "body.whenToUse",
-                  "body.whenNotToUse",
-                ],
+                inputOnly: [],
                 paginated: false,
                 destructive: false,
                 scope: "templates",
@@ -36312,6 +37442,15 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "workspaceId",
                   },
                   {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--work-item-id",
+                    prop: "workItemId",
+                    required: false,
+                    part: "body",
+                    partPath: "workItemId",
+                  },
+                  {
                     kind: "string",
                     repeatable: false,
                     description: "Date the work was done (ISO YYYY-MM-DD)",
@@ -36352,13 +37491,26 @@ export const generatedRouteMap: RouteNode = {
                     part: "body",
                     partPath: "billable",
                   },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--task-code",
+                    prop: "taskCode",
+                    required: false,
+                    part: "body",
+                    partPath: "taskCode",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--activity-code",
+                    prop: "activityCode",
+                    required: false,
+                    part: "body",
+                    partPath: "activityCode",
+                  },
                 ],
-                inputOnly: [
-                  "body.workItemId",
-                  "body.durationMinutes",
-                  "body.taskCode",
-                  "body.activityCode",
-                ],
+                inputOnly: ["body.durationMinutes"],
                 paginated: false,
                 destructive: false,
                 scope: "billing_write",
@@ -37220,6 +38372,15 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "workspaceId",
                   },
                   {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--work-item-id",
+                    prop: "workItemId",
+                    required: false,
+                    part: "body",
+                    partPath: "workItemId",
+                  },
+                  {
                     kind: "string",
                     repeatable: false,
                     flag: "--timezone-id",
@@ -37238,7 +38399,7 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "narrative",
                   },
                 ],
-                inputOnly: ["body.workItemId"],
+                inputOnly: [],
                 paginated: false,
                 destructive: false,
                 scope: "billing_write",
@@ -37384,6 +38545,15 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "narrative",
                   },
                   {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--invoice-narrative",
+                    prop: "invoiceNarrative",
+                    required: false,
+                    part: "body",
+                    partPath: "invoiceNarrative",
+                  },
+                  {
                     kind: "boolean",
                     repeatable: false,
                     flag: "--billable",
@@ -37401,14 +38571,35 @@ export const generatedRouteMap: RouteNode = {
                     part: "body",
                     partPath: "noCharge",
                   },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--work-item-id",
+                    prop: "workItemId",
+                    required: false,
+                    part: "body",
+                    partPath: "workItemId",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--task-code",
+                    prop: "taskCode",
+                    required: false,
+                    part: "body",
+                    partPath: "taskCode",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--activity-code",
+                    prop: "activityCode",
+                    required: false,
+                    part: "body",
+                    partPath: "activityCode",
+                  },
                 ],
-                inputOnly: [
-                  "body.durationMinutes",
-                  "body.invoiceNarrative",
-                  "body.workItemId",
-                  "body.taskCode",
-                  "body.activityCode",
-                ],
+                inputOnly: ["body.durationMinutes"],
                 paginated: false,
                 destructive: false,
                 scope: "billing_write",
@@ -41783,6 +42974,51 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "entityId",
                   },
                   {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--owner-user-id",
+                    prop: "ownerUserId",
+                    required: false,
+                    part: "body",
+                    partPath: "ownerUserId",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--working-target-date",
+                    prop: "workingTargetDate",
+                    required: false,
+                    part: "body",
+                    partPath: "workingTargetDate",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--hard-deadline-date",
+                    prop: "hardDeadlineDate",
+                    required: false,
+                    part: "body",
+                    partPath: "hardDeadlineDate",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--source-entity-id",
+                    prop: "sourceEntityId",
+                    required: false,
+                    part: "body",
+                    partPath: "sourceEntityId",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--source-description",
+                    prop: "sourceDescription",
+                    required: false,
+                    part: "body",
+                    partPath: "sourceDescription",
+                  },
+                  {
                     kind: "string",
                     repeatable: false,
                     flag: "--reason",
@@ -41792,15 +43028,7 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "reason",
                   },
                 ],
-                inputOnly: [
-                  "body.ownerUserId",
-                  "body.type",
-                  "body.workingTargetDate",
-                  "body.hardDeadlineDate",
-                  "body.sourceType",
-                  "body.sourceEntityId",
-                  "body.sourceDescription",
-                ],
+                inputOnly: ["body.type", "body.sourceType"],
                 paginated: false,
                 destructive: false,
                 scope: "matters_write",
@@ -42997,13 +44225,35 @@ export const generatedRouteMap: RouteNode = {
                     part: "body",
                     partPath: "reference",
                   },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--billing-reference",
+                    prop: "billingReference",
+                    required: false,
+                    part: "body",
+                    partPath: "billingReference",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--color",
+                    prop: "color",
+                    required: false,
+                    part: "body",
+                    partPath: "color",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--lead-user-id",
+                    prop: "leadUserId",
+                    required: false,
+                    part: "body",
+                    partPath: "leadUserId",
+                  },
                 ],
-                inputOnly: [
-                  "body.billingReference",
-                  "body.color",
-                  "body.leadUserId",
-                  "body.promote",
-                ],
+                inputOnly: ["body.promote"],
                 paginated: false,
                 destructive: false,
                 scope: "matters_write",
@@ -43282,8 +44532,17 @@ export const generatedRouteMap: RouteNode = {
                     part: "body",
                     partPath: "isPrimary",
                   },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--notes",
+                    prop: "notes",
+                    required: false,
+                    part: "body",
+                    partPath: "notes",
+                  },
                 ],
-                inputOnly: ["body.notes"],
+                inputOnly: [],
                 paginated: false,
                 destructive: false,
                 scope: "matters_write",

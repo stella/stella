@@ -60,6 +60,8 @@ import {
 import { withTimeout } from "@/api/lib/with-timeout";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
+import { TEMPLATE_FIELD_REFERENCE_URI } from "@/api/mcp/template-field-reference";
+import { TEMPLATE_MARKER_REFERENCE_URI } from "@/api/mcp/template-marker-reference";
 import {
   claimTemplatePersistenceRequest,
   fingerprintTemplatePersistenceRequest,
@@ -121,9 +123,7 @@ const saveTemplateArgsSchema = v.pipe(
       v.pipe(
         v.string(),
         v.minLength(1),
-        v.description(
-          "Existing template id to configure; omit when creating a template",
-        ),
+        v.description("Template to configure; omit when creating"),
       ),
     ),
     name: v.optional(
@@ -131,7 +131,7 @@ const saveTemplateArgsSchema = v.pipe(
         v.string(),
         v.minLength(1),
         v.maxLength(256),
-        v.description("Template display name; required when creating"),
+        v.description("Display name; required when creating"),
       ),
     ),
     docx_base64: v.optional(
@@ -139,16 +139,14 @@ const saveTemplateArgsSchema = v.pipe(
         v.string(),
         v.minLength(1),
         v.maxLength(MAX_DOCX_BASE64_LENGTH),
-        v.description(
-          "Base64-encoded DOCX bytes; required when creating, omit when configuring",
-        ),
+        v.description("Base64 DOCX bytes; required when creating"),
       ),
     ),
     fields: v.optional(
       v.pipe(
         v.array(fieldMetaToolInputSchema),
         v.description(
-          "Strict field configuration overlay; each path must match a template marker",
+          `Field configuration overlay; see ${TEMPLATE_FIELD_REFERENCE_URI}`,
         ),
       ),
     ),
@@ -388,14 +386,14 @@ const SAVE_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
     "Create a document template from a DOCX, or configure an existing " +
     "template's fields. To create, pass docx_base64 (base64-encoded .docx / " +
     "Office Open XML bytes, max ~10 MB decoded) and a name; the {{field}} " +
-    "markers in the file become the template's fillable fields, and you can " +
-    "pass fields to configure them in the same call. To configure an existing " +
-    "template, pass template_id with fields and no docx_base64; only the " +
-    "manifest changes, the document's {{markers}} stay untouched. Each fields " +
-    "entry's path must match a {{marker}} in the template. Read the marker " +
-    "grammar from the template-markers reference resource when unsure. " +
-    "Returns the template id and field count when creating, or the updated " +
-    "field list when configuring.",
+    "markers in the file become the template's fillable fields, and fields " +
+    "can configure them in the same call. To configure an existing template, " +
+    "pass template_id with fields and no docx_base64; only the manifest " +
+    "changes, the document's {{markers}} stay untouched. Read " +
+    `${TEMPLATE_MARKER_REFERENCE_URI} before authoring a DOCX and ` +
+    `${TEMPLATE_FIELD_REFERENCE_URI} before configuring fields. Returns the ` +
+    "template id and field count when creating, or the updated field list " +
+    "when configuring.",
   inputSchema: saveTemplateArgsSchema,
   jsonSchemaProjectionWaiver: {
     ignoreActions: ["check", "finite", "partial_check"],
@@ -427,11 +425,9 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
       "tags, and usage guidance (whenToUse / whenNotToUse); prefer a template " +
       "whose whenToUse matches the request and skip any whose whenNotToUse " +
       "applies. Pass template_id to return that template's full field " +
-      "configuration (path, label, inputType, required, hint, options, " +
-      "optionsFrom, aiPrompt / aiAdapt, date format, composite parts, " +
-      "registry-lookup formats) plus its named conditions and formula fields; " +
-      "feed the same shape to save_template to update it. `required` controls " +
-      "form validation; omitted optional scalar placeholders render blank.",
+      "configuration, in the shape save_template's fields overlay takes " +
+      `(see ${TEMPLATE_FIELD_REFERENCE_URI}), plus its named conditions and ` +
+      "formula fields. Omitted optional scalar placeholders render blank.",
     inputSchema: {
       type: "object",
       properties: {
@@ -443,6 +439,7 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
           { maxLength: 512 },
         ),
       },
+      additionalProperties: false,
     },
     access: "read",
     anonymized: {
@@ -489,6 +486,7 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
         },
       },
       required: ["template_id", "values"],
+      additionalProperties: false,
     },
     // openWorldHint: true because a manifest with a registry-lookup field
     // (see lookup-fields.ts) sends the fill through the shared business-
@@ -551,6 +549,7 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
         "idempotency_key",
         "values",
       ],
+      additionalProperties: false,
     },
     annotations: {
       title: "Save filled template",

@@ -93,19 +93,14 @@ import type {
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
   bindWorkspaceRecorder,
-  confirmProp,
   DEFAULT_LIST_LIMIT,
   ensureActiveWorkspace,
   ensureWorkspaceAccess,
-  enumProp,
   errorResult,
   internalFailureResult,
-  intProp,
   isToolErrorResult,
   MAX_LIST_LIMIT,
   notFoundResult,
-  nullableStringProp,
-  stringProp,
   structuredErrorResult,
   toolDataResult,
   validationErrorResult,
@@ -125,15 +120,6 @@ type DocumentToolName =
 
 /** Kinds surfaced by list_documents; tasks/messages/links are other tools. */
 const LISTABLE_ENTITY_KINDS = ["document", "folder"] as const;
-
-/** Field/property value types set through set_field_value (binary/file excluded). */
-const SETTABLE_VALUE_TYPES = [
-  "text",
-  "single-select",
-  "multi-select",
-  "date",
-  "int",
-] as const;
 
 const PROPERTY_WRITE_METHODS = {
   file: "unsupported",
@@ -533,277 +519,6 @@ const OPEN_DOCUMENT_VERSION_UPLOAD_TOOL_DEFINITION = defineValibotMcpTool({
   scope: "stella:documents_write",
 });
 
-export const DOCUMENT_TOOL_DEFINITIONS = [
-  {
-    annotations: {
-      title: "List documents",
-      readOnlyHint: true,
-      openWorldHint: false,
-    },
-    description:
-      "List the documents and folders in a matter. Use 'flat' mode to " +
-      "enumerate every document and folder in the matter, or 'children' mode " +
-      "to walk the folder tree one level at a time (pass parent_id to list a " +
-      "folder's direct children, or omit it for the matter root). Returns each " +
-      "entity's id, name, kind (document or folder), and parentId. Read a " +
-      "document's metadata, fields, or versions with read_document.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        matter_id: stringProp("Matter/workspace ID to list documents in"),
-        mode: enumProp(
-          "'flat' lists every document and folder in the matter; 'children' " +
-            "lists only the direct children of parent_id (or the matter root " +
-            "when parent_id is omitted). Defaults to 'flat', or 'children' when " +
-            "parent_id is provided. Passing parent_id with mode 'flat' is " +
-            "rejected.",
-          ["flat", "children"],
-        ),
-        parent_id: stringProp(
-          "Folder entity ID whose direct children to list. Only valid in " +
-            "children mode; supplying it selects children mode when mode is " +
-            "omitted and is rejected together with mode 'flat'.",
-        ),
-        limit: intProp("Max entities to return", {
-          min: 1,
-          max: MAX_LIST_LIMIT,
-        }),
-        cursor: stringProp(
-          "Opaque cursor from a previous list_documents call to fetch the next page",
-          { maxLength: 512 },
-        ),
-      },
-      required: ["matter_id"],
-    },
-    access: "read",
-    anonymized: {
-      exposure: "anonymize",
-      textFields: [DOCUMENT_LIST_TEXT_FIELD_PATH],
-    },
-    name: "list_documents",
-    scope: "stella:read",
-  },
-  {
-    annotations: {
-      title: "Read document",
-      readOnlyHint: true,
-      openWorldHint: false,
-    },
-    description:
-      "Read a document's metadata and field values by entity ID. By default " +
-      "returns the current version's name, kind, and field/property values. " +
-      "The default response also reports contentState and searchIndexState, " +
-      "including an actionable remediation or escalation requirement when " +
-      "document text processing is required. " +
-      "Pass version_id to inspect a specific version instead. Pass version_id " +
-      "and compare_with_version_id to get a plain-text line diff between two " +
-      "versions. Pass include_versions to also return the version history. To " +
-      "read the document's extracted text content, use read_content_across_matters.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        entity_id: stringProp("Document entity ID"),
-        version_id: stringProp(
-          "Return this version's metadata and field values instead of the current version",
-        ),
-        compare_with_version_id: stringProp(
-          "With version_id, return a plain-text line diff of this version (base) against version_id (target)",
-        ),
-        include_versions: {
-          type: "boolean",
-          description: "Also return the document's version history",
-        },
-        versions_cursor: stringProp(
-          "Opaque cursor from a previous call to fetch the next page of version history",
-          { maxLength: 512 },
-        ),
-      },
-      required: ["entity_id"],
-    },
-    access: "read",
-    anonymized: {
-      exposure: "anonymize",
-      textFields: READ_DOCUMENT_TEXT_FIELD_PATHS,
-    },
-    name: "read_document",
-    scope: "stella:read",
-  },
-  {
-    description:
-      "Create a document or folder, or update an existing one. Omit entity_id " +
-      "to create: pass matter_id and name, optionally a parent_id folder and " +
-      "kind ('document' by default, or 'folder'). Creating makes an empty named " +
-      "entity; uploading file content is a separate step. Pass entity_id to " +
-      "update: set name to rename; parent_id to move it into a folder or " +
-      "move_to_root to move it to the matter root; version_id with label and/or " +
-      "description to annotate a version. An update needs at least one change. " +
-      "Returns the entity ID.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        entity_id: stringProp("Document entity ID to update; omit to create"),
-        matter_id: stringProp(
-          "Matter/workspace ID to create the entity in; required when creating",
-        ),
-        name: stringProp(
-          "Display name: required when creating, or the new name when renaming",
-          { maxLength: LIMITS.entityNameMaxLength },
-        ),
-        parent_id: stringProp(
-          "Folder entity ID: to place the new entity inside when creating, or to " +
-            "move the document into when updating",
-        ),
-        kind: enumProp(
-          "Entity kind to create; defaults to 'document'. Only valid when creating.",
-          ["document", "folder"],
-        ),
-        move_to_root: {
-          type: "boolean",
-          description:
-            "Move the document to the matter root (no parent folder). Only valid when updating.",
-        },
-        version_id: stringProp(
-          "Version ID to annotate; required when setting label or description. Only valid when updating.",
-        ),
-        label: nullableStringProp(
-          "New label for version_id; pass null to clear, empty string is not allowed, omit to leave unchanged",
-          { maxLength: 128 },
-        ),
-        description: nullableStringProp(
-          "New description for version_id; pass null to clear, empty string is not allowed, omit to leave unchanged",
-          { maxLength: 1024 },
-        ),
-      },
-    },
-    annotations: {
-      title: "Save document",
-      idempotentHint: false,
-      openWorldHint: false,
-    },
-    access: "write",
-    anonymized: { exposure: "excluded", reason: "write" },
-    name: "save_document",
-    scope: "stella:documents_write",
-  },
-  UPLOAD_DOCUMENT_VERSION_TOOL_DEFINITION,
-  OPEN_DOCUMENT_VERSION_UPLOAD_TOOL_DEFINITION,
-  {
-    annotations: {
-      title: "Delete document",
-      destructiveHint: true,
-      idempotentHint: true,
-      openWorldHint: false,
-    },
-    description:
-      "Delete a document and all its versions, or delete a single version when " +
-      "version_id is provided (the current version is promoted to the next " +
-      "latest; the only remaining version cannot be deleted). This is " +
-      "irreversible.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        entity_id: stringProp("Document entity ID to delete"),
-        version_id: stringProp(
-          "Delete only this version instead of the whole document",
-        ),
-        confirm: confirmProp(),
-      },
-      required: ["entity_id"],
-    },
-    access: "write",
-    anonymized: { exposure: "excluded", reason: "write" },
-    name: "delete_document",
-    scope: "stella:documents_write",
-  },
-  {
-    annotations: {
-      title: "List properties",
-      readOnlyHint: true,
-      openWorldHint: false,
-    },
-    description:
-      "List the property (column) definitions of a matter. Returns each " +
-      "property's id, name, value type (text, single-select, multi-select, " +
-      "date, int, or file), status, and writeMethod. Use set_field_value for " +
-      "scalar properties. Arbitrary file-property cells are not writable; document " +
-      "upload/version tools replace only a document's primary file.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        matter_id: stringProp("Matter/workspace ID to list properties for"),
-        limit: intProp("Max properties to return", {
-          min: 1,
-          max: MAX_LIST_LIMIT,
-        }),
-        cursor: stringProp(
-          "Opaque cursor from a previous list_properties call to fetch the next page",
-          { maxLength: 512 },
-        ),
-      },
-      required: ["matter_id"],
-    },
-    access: "read",
-    anonymized: {
-      exposure: "anonymize",
-      textFields: [PROPERTY_LIST_TEXT_FIELD_PATH],
-    },
-    name: "list_properties",
-    scope: "stella:read",
-  },
-  {
-    description:
-      "Set a document's value for a property (a cell in the matter's table). " +
-      "Pass the document entity_id, the property_id (from list_properties), and " +
-      "a content object whose 'type' matches the property's value type: text " +
-      "(value: string), single-select (value: string or null), multi-select " +
-      "(value: array of strings), date (value: ISO YYYY-MM-DD or null), or int " +
-      "(value: integer, optional currency: 3-letter ISO code). An empty value " +
-      "clears the cell.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        entity_id: stringProp("Document entity ID whose cell to set"),
-        property_id: stringProp("Property ID, as returned by list_properties"),
-        content: {
-          type: "object",
-          description: "The value to set; 'type' must match the property.",
-          properties: {
-            type: enumProp(
-              "Value type; must match the property's value type",
-              SETTABLE_VALUE_TYPES,
-            ),
-            value: {
-              description:
-                "The value: string for text, string or null for single-select, " +
-                "array of strings for multi-select, ISO YYYY-MM-DD or null for " +
-                "date, integer for int. Null or empty clears the cell.",
-            },
-            currency: stringProp(
-              "For int values only: 3-letter ISO currency code, or null",
-              { maxLength: 3 },
-            ),
-          },
-          required: ["type", "value"],
-        },
-      },
-      required: ["entity_id", "property_id", "content"],
-    },
-    // Not idempotent: upsertFieldHandler unconditionally deletes/reinserts and
-    // reindexes the cell and records a fresh audit event + updatedAt bump on
-    // every call, so a repeat with identical args has an observable additional
-    // effect (a duplicate audit entry) in this compliance context.
-    annotations: {
-      title: "Set field value",
-      idempotentHint: false,
-      openWorldHint: false,
-    },
-    access: "write",
-    anonymized: { exposure: "excluded", reason: "write" },
-    name: "set_field_value",
-    scope: "stella:documents_write",
-  },
-] as const satisfies readonly McpToolDefinition[];
-
 /** Entity kind the document tools operate on (same set list_documents surfaces). */
 type DocumentEntityKind = (typeof LISTABLE_ENTITY_KINDS)[number];
 
@@ -895,18 +610,52 @@ const decodeEntityPageCursor = (
 
 const listDocumentsArgsSchema = v.pipe(
   v.strictObject({
-    matter_id: v.pipe(v.string(), v.minLength(1)),
-    mode: v.optional(v.picklist(["flat", "children"])),
-    parent_id: v.optional(v.pipe(v.string(), v.minLength(1))),
+    matter_id: v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.description("Matter/workspace ID to list documents in"),
+    ),
+    mode: v.optional(
+      v.pipe(
+        v.picklist(["flat", "children"]),
+        v.description(
+          "'flat' lists every document and folder in the matter; 'children' " +
+            "lists only the direct children of parent_id (or the matter root " +
+            "when parent_id is omitted). Defaults to 'flat', or 'children' when " +
+            "parent_id is provided. Passing parent_id with mode 'flat' is " +
+            "rejected.",
+        ),
+      ),
+    ),
+    parent_id: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.description(
+          "Folder entity ID whose direct children to list. Only valid in " +
+            "children mode; supplying it selects children mode when mode is " +
+            "omitted and is rejected together with mode 'flat'.",
+        ),
+      ),
+    ),
     limit: v.optional(
       v.pipe(
         v.number(),
         v.integer(),
         v.minValue(1),
         v.maxValue(MAX_LIST_LIMIT),
+        v.description("Max entities to return"),
       ),
     ),
-    cursor: v.optional(v.pipe(v.string(), v.maxLength(512))),
+    cursor: v.optional(
+      v.pipe(
+        v.string(),
+        v.maxLength(512),
+        v.description(
+          "Opaque cursor from a previous list_documents call to fetch the next page",
+        ),
+      ),
+    ),
   }),
   // parent_id scopes to a folder's children, so it is meaningless in flat mode
   // (which enumerates the whole matter). Reject the explicit contradiction; an
@@ -1053,11 +802,44 @@ const decodeVersionsPageCursor = (
 
 const readDocumentArgsSchema = v.pipe(
   v.strictObject({
-    entity_id: v.pipe(v.string(), v.minLength(1)),
-    version_id: v.optional(v.pipe(v.string(), v.minLength(1))),
-    compare_with_version_id: v.optional(v.pipe(v.string(), v.minLength(1))),
-    include_versions: v.optional(v.boolean()),
-    versions_cursor: v.optional(v.pipe(v.string(), v.maxLength(512))),
+    entity_id: v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.description("Document entity ID"),
+    ),
+    version_id: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.description(
+          "Return this version's metadata and field values instead of the current version",
+        ),
+      ),
+    ),
+    compare_with_version_id: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.description(
+          "With version_id, return a plain-text line diff of this version (base) against version_id (target)",
+        ),
+      ),
+    ),
+    include_versions: v.optional(
+      v.pipe(
+        v.boolean(),
+        v.description("Also return the document's version history"),
+      ),
+    ),
+    versions_cursor: v.optional(
+      v.pipe(
+        v.string(),
+        v.maxLength(512),
+        v.description(
+          "Opaque cursor from a previous call to fetch the next page of version history",
+        ),
+      ),
+    ),
   }),
   // A diff needs both endpoints: compare_with_version_id (base) is only
   // meaningful alongside version_id (target).
@@ -1809,24 +1591,82 @@ const handleReadDocumentTool: TypedMcpToolHandler<
 
 const saveDocumentArgsSchema = v.pipe(
   v.strictObject({
-    entity_id: v.optional(v.pipe(v.string(), v.minLength(1))),
-    matter_id: v.optional(v.pipe(v.string(), v.minLength(1))),
+    entity_id: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.description("Document entity ID to update; omit to create"),
+      ),
+    ),
+    matter_id: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.description(
+          "Matter/workspace ID to create the entity in; required when creating",
+        ),
+      ),
+    ),
     name: v.optional(
       v.pipe(
         v.string(),
         v.minLength(1),
         v.maxLength(LIMITS.entityNameMaxLength),
+        v.description(
+          "Display name: required when creating, or the new name when renaming",
+        ),
       ),
     ),
-    parent_id: v.optional(v.pipe(v.string(), v.minLength(1))),
-    kind: v.optional(v.picklist(["document", "folder"])),
-    move_to_root: v.optional(v.boolean()),
-    version_id: v.optional(v.pipe(v.string(), v.minLength(1))),
+    parent_id: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.description(
+          "Folder entity ID: to place the new entity inside when creating, or to " +
+            "move the document into when updating",
+        ),
+      ),
+    ),
+    kind: v.optional(
+      v.pipe(
+        v.picklist(["document", "folder"]),
+        v.description(
+          "Entity kind to create; defaults to 'document'. Only valid when creating.",
+        ),
+      ),
+    ),
+    move_to_root: v.optional(
+      v.pipe(
+        v.boolean(),
+        v.description(
+          "Move the document to the matter root (no parent folder). Only valid when updating.",
+        ),
+      ),
+    ),
+    version_id: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.description(
+          "Version ID to annotate; required when setting label or description. Only valid when updating.",
+        ),
+      ),
+    ),
     label: v.optional(
-      v.nullable(v.pipe(v.string(), v.minLength(1), v.maxLength(128))),
+      v.pipe(
+        v.nullable(v.pipe(v.string(), v.minLength(1), v.maxLength(128))),
+        v.description(
+          "New label for version_id; pass null to clear, empty string is not allowed, omit to leave unchanged",
+        ),
+      ),
     ),
     description: v.optional(
-      v.nullable(v.pipe(v.string(), v.minLength(1), v.maxLength(1024))),
+      v.pipe(
+        v.nullable(v.pipe(v.string(), v.minLength(1), v.maxLength(1024))),
+        v.description(
+          "New description for version_id; pass null to clear, empty string is not allowed, omit to leave unchanged",
+        ),
+      ),
     ),
   }),
   // Creating (no entity_id) requires matter_id and name.
@@ -2309,9 +2149,27 @@ const handleOpenDocumentVersionUploadTool: McpToolHandler = async ({
 };
 
 const deleteDocumentArgsSchema = v.strictObject({
-  entity_id: v.pipe(v.string(), v.minLength(1)),
-  version_id: v.optional(v.pipe(v.string(), v.minLength(1))),
-  confirm: v.optional(v.boolean()),
+  entity_id: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.description("Document entity ID to delete"),
+  ),
+  version_id: v.optional(
+    v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.description("Delete only this version instead of the whole document"),
+    ),
+  ),
+  confirm: v.optional(
+    v.pipe(
+      v.boolean(),
+      v.description(
+        "Must be true to run this irreversible operation. Set it only after a " +
+          "human user has explicitly approved the deletion.",
+      ),
+    ),
+  ),
 });
 
 const handleDeleteDocumentTool: TypedMcpToolHandler<
@@ -2382,11 +2240,29 @@ const handleDeleteDocumentTool: TypedMcpToolHandler<
 };
 
 const listPropertiesArgsSchema = v.strictObject({
-  matter_id: v.pipe(v.string(), v.minLength(1)),
-  limit: v.optional(
-    v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(MAX_LIST_LIMIT)),
+  matter_id: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.description("Matter/workspace ID to list properties for"),
   ),
-  cursor: v.optional(v.pipe(v.string(), v.maxLength(512))),
+  limit: v.optional(
+    v.pipe(
+      v.number(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(MAX_LIST_LIMIT),
+      v.description("Max properties to return"),
+    ),
+  ),
+  cursor: v.optional(
+    v.pipe(
+      v.string(),
+      v.maxLength(512),
+      v.description(
+        "Opaque cursor from a previous list_properties call to fetch the next page",
+      ),
+    ),
+  ),
 });
 
 const propertyPageCursorCodec = createTimestampIdCursorCodec({
@@ -2481,31 +2357,87 @@ const handleListPropertiesTool: TypedMcpToolHandler<
   return { egress: "structured", payload, textFields };
 };
 
+const SET_FIELD_VALUE_TYPE_DESCRIPTION =
+  "Value type; must match the property's value type";
+const SET_FIELD_VALUE_VALUE_DESCRIPTION =
+  "The value: string for text, string or null for single-select, array of " +
+  "strings for multi-select, ISO YYYY-MM-DD or null for date, integer for " +
+  "int. Null or empty clears the cell.";
+
 const setFieldValueContentSchema = v.variant("type", [
-  v.strictObject({ type: v.literal("text"), value: v.string() }),
   v.strictObject({
-    type: v.literal("single-select"),
-    value: v.nullable(v.string()),
+    type: v.pipe(
+      v.literal("text"),
+      v.description(SET_FIELD_VALUE_TYPE_DESCRIPTION),
+    ),
+    value: v.pipe(v.string(), v.description(SET_FIELD_VALUE_VALUE_DESCRIPTION)),
   }),
   v.strictObject({
-    type: v.literal("multi-select"),
-    value: v.array(v.pipe(v.string(), v.minLength(1))),
+    type: v.pipe(
+      v.literal("single-select"),
+      v.description(SET_FIELD_VALUE_TYPE_DESCRIPTION),
+    ),
+    value: v.pipe(
+      v.nullable(v.string()),
+      v.description(SET_FIELD_VALUE_VALUE_DESCRIPTION),
+    ),
   }),
   v.strictObject({
-    type: v.literal("date"),
-    value: v.nullable(v.pipe(v.string(), v.isoDate())),
+    type: v.pipe(
+      v.literal("multi-select"),
+      v.description(SET_FIELD_VALUE_TYPE_DESCRIPTION),
+    ),
+    value: v.pipe(
+      v.array(v.pipe(v.string(), v.minLength(1))),
+      v.description(SET_FIELD_VALUE_VALUE_DESCRIPTION),
+    ),
   }),
   v.strictObject({
-    type: v.literal("int"),
-    value: v.pipe(v.number(), v.integer()),
-    currency: v.optional(v.nullable(v.pipe(v.string(), v.length(3)))),
+    type: v.pipe(
+      v.literal("date"),
+      v.description(SET_FIELD_VALUE_TYPE_DESCRIPTION),
+    ),
+    value: v.pipe(
+      v.nullable(v.pipe(v.string(), v.isoDate())),
+      v.description(SET_FIELD_VALUE_VALUE_DESCRIPTION),
+    ),
+  }),
+  v.strictObject({
+    type: v.pipe(
+      v.literal("int"),
+      v.description(SET_FIELD_VALUE_TYPE_DESCRIPTION),
+    ),
+    value: v.pipe(
+      v.number(),
+      v.integer(),
+      v.description(SET_FIELD_VALUE_VALUE_DESCRIPTION),
+    ),
+    currency: v.optional(
+      v.pipe(
+        v.nullable(v.pipe(v.string(), v.length(3))),
+        v.description(
+          "For int values only: 3-letter ISO currency code, or null",
+        ),
+      ),
+    ),
   }),
 ]);
 
 const setFieldValueArgsSchema = v.strictObject({
-  entity_id: v.pipe(v.string(), v.minLength(1)),
-  property_id: v.pipe(v.string(), v.minLength(1)),
-  content: setFieldValueContentSchema,
+  entity_id: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.description("Document entity ID whose cell to set"),
+  ),
+  property_id: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.description("Property ID, as returned by list_properties"),
+  ),
+  content: v.pipe(
+    setFieldValueContentSchema,
+    v.description("The value to set; 'type' must match the property."),
+  ),
 });
 
 type SetFieldValueContent = v.InferOutput<typeof setFieldValueContentSchema>;
@@ -2607,6 +2539,157 @@ const handleSetFieldValueTool: TypedMcpToolHandler<
     {} satisfies v.InferInput<typeof SET_FIELD_VALUE_PROJECTION>,
   );
 };
+
+export const DOCUMENT_TOOL_DEFINITIONS = [
+  defineValibotMcpTool({
+    annotations: {
+      title: "List documents",
+      readOnlyHint: true,
+      openWorldHint: false,
+    },
+    description:
+      "List the documents and folders in a matter. Use 'flat' mode to " +
+      "enumerate every document and folder in the matter, or 'children' mode " +
+      "to walk the folder tree one level at a time (pass parent_id to list a " +
+      "folder's direct children, or omit it for the matter root). Returns each " +
+      "entity's id, name, kind (document or folder), and parentId. Read a " +
+      "document's metadata, fields, or versions with read_document.",
+    inputSchema: listDocumentsArgsSchema,
+    jsonSchemaProjectionWaiver: {
+      ignoreActions: ["partial_check"],
+      reason:
+        "The mode/parent_id dependency remains authoritative in the runtime schema.",
+    },
+    access: "read",
+    anonymized: {
+      exposure: "anonymize",
+      textFields: [DOCUMENT_LIST_TEXT_FIELD_PATH],
+    },
+    name: "list_documents",
+    scope: "stella:read",
+  }),
+  defineValibotMcpTool({
+    annotations: {
+      title: "Read document",
+      readOnlyHint: true,
+      openWorldHint: false,
+    },
+    description:
+      "Read a document's metadata and field values by entity ID. By default " +
+      "returns the current version's name, kind, and field/property values. " +
+      "The default response also reports contentState and searchIndexState, " +
+      "including an actionable remediation or escalation requirement when " +
+      "document text processing is required. " +
+      "Pass version_id to inspect a specific version instead. Pass version_id " +
+      "and compare_with_version_id to get a plain-text line diff between two " +
+      "versions. Pass include_versions to also return the version history. To " +
+      "read the document's extracted text content, use read_content_across_matters.",
+    inputSchema: readDocumentArgsSchema,
+    jsonSchemaProjectionWaiver: {
+      ignoreActions: ["partial_check"],
+      reason:
+        "The compare_with_version_id/version_id dependency remains authoritative in the runtime schema.",
+    },
+    access: "read",
+    anonymized: {
+      exposure: "anonymize",
+      textFields: READ_DOCUMENT_TEXT_FIELD_PATHS,
+    },
+    name: "read_document",
+    scope: "stella:read",
+  }),
+  defineValibotMcpTool({
+    description:
+      "Create a document or folder, or update an existing one. Omit entity_id " +
+      "to create: pass matter_id and name, optionally a parent_id folder and " +
+      "kind ('document' by default, or 'folder'). Creating makes an empty named " +
+      "entity; uploading file content is a separate step. Pass entity_id to " +
+      "update: set name to rename; parent_id to move it into a folder or " +
+      "move_to_root to move it to the matter root; version_id with label and/or " +
+      "description to annotate a version. An update needs at least one change. " +
+      "Returns the entity ID.",
+    inputSchema: saveDocumentArgsSchema,
+    jsonSchemaProjectionWaiver: {
+      ignoreActions: ["partial_check"],
+      reason:
+        "The create/update field dependencies remain authoritative in the runtime schema.",
+    },
+    annotations: {
+      title: "Save document",
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+    access: "write",
+    anonymized: { exposure: "excluded", reason: "write" },
+    name: "save_document",
+    scope: "stella:documents_write",
+  }),
+  UPLOAD_DOCUMENT_VERSION_TOOL_DEFINITION,
+  OPEN_DOCUMENT_VERSION_UPLOAD_TOOL_DEFINITION,
+  defineValibotMcpTool({
+    annotations: {
+      title: "Delete document",
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    description:
+      "Delete a document and all its versions, or delete a single version when " +
+      "version_id is provided (the current version is promoted to the next " +
+      "latest; the only remaining version cannot be deleted). This is " +
+      "irreversible.",
+    inputSchema: deleteDocumentArgsSchema,
+    access: "write",
+    anonymized: { exposure: "excluded", reason: "write" },
+    name: "delete_document",
+    scope: "stella:documents_write",
+  }),
+  defineValibotMcpTool({
+    annotations: {
+      title: "List properties",
+      readOnlyHint: true,
+      openWorldHint: false,
+    },
+    description:
+      "List the property (column) definitions of a matter. Returns each " +
+      "property's id, name, value type (text, single-select, multi-select, " +
+      "date, int, or file), status, and writeMethod. Use set_field_value for " +
+      "scalar properties. Arbitrary file-property cells are not writable; document " +
+      "upload/version tools replace only a document's primary file.",
+    inputSchema: listPropertiesArgsSchema,
+    access: "read",
+    anonymized: {
+      exposure: "anonymize",
+      textFields: [PROPERTY_LIST_TEXT_FIELD_PATH],
+    },
+    name: "list_properties",
+    scope: "stella:read",
+  }),
+  defineValibotMcpTool({
+    description:
+      "Set a document's value for a property (a cell in the matter's table). " +
+      "Pass the document entity_id, the property_id (from list_properties), and " +
+      "a content object whose 'type' matches the property's value type: text " +
+      "(value: string), single-select (value: string or null), multi-select " +
+      "(value: array of strings), date (value: ISO YYYY-MM-DD or null), or int " +
+      "(value: integer, optional currency: 3-letter ISO code). An empty value " +
+      "clears the cell.",
+    inputSchema: setFieldValueArgsSchema,
+    // Not idempotent: upsertFieldHandler unconditionally deletes/reinserts and
+    // reindexes the cell and records a fresh audit event + updatedAt bump on
+    // every call, so a repeat with identical args has an observable additional
+    // effect (a duplicate audit entry) in this compliance context.
+    annotations: {
+      title: "Set field value",
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+    access: "write",
+    anonymized: { exposure: "excluded", reason: "write" },
+    name: "set_field_value",
+    scope: "stella:documents_write",
+  }),
+] as const satisfies readonly McpToolDefinition[];
 
 export const DOCUMENT_TOOL_HANDLERS = {
   delete_document: handleDeleteDocumentTool,

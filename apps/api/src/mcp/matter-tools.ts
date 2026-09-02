@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, asc, eq, gte, lte, sql } from "drizzle-orm";
 import * as v from "valibot";
 
@@ -82,24 +82,20 @@ import type {
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
   bindWorkspaceRecorder,
-  confirmProp,
   DEFAULT_LIST_LIMIT,
   ensureActiveWorkspace,
   ensureWorkspaceAccess,
-  enumProp,
   errorResult,
   internalFailureResult,
   getWorkspaceStatus,
-  intProp,
   ISO_DATE_SCHEMA,
   MAX_LIST_LIMIT,
   notFoundResult,
-  nullableStringProp,
-  stringProp,
   structuredErrorResult,
   toolDataResult,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
+import { defineValibotMcpTool } from "@/api/mcp/valibot-tool-definition";
 
 type MatterToolName =
   | "save_matter"
@@ -213,354 +209,62 @@ const TASK_DETAIL_TEXT_FIELD_PATHS = deriveTextFieldPaths(
   taskDetailTextFieldSpecs(""),
 );
 
-export const MATTER_TOOL_DEFINITIONS = [
-  {
-    description:
-      "Create, update, archive, or unarchive a matter. Omit matter_id to " +
-      "create a new matter (name required; pass client_id to attach a client " +
-      "contact). Pass matter_id to update an existing matter: set name, " +
-      "reference, or billing_reference, and/or set status to 'archived' or " +
-      "'active' to archive or unarchive it. Returns the matter ID.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        matter_id: stringProp(
-          "Matter/workspace ID to update; omit to create a new matter",
-        ),
-        name: stringProp("Matter name; required when creating", {
-          maxLength: 256,
-        }),
-        client_id: stringProp(
-          "Contact ID to attach in the client role. Only valid when " +
-            "creating a matter.",
-        ),
-        reference: stringProp(
-          "Matter reference (file number). Only valid when updating.",
-          { maxLength: 64 },
-        ),
-        billing_reference: nullableStringProp(
-          "Billing reference; pass null to clear. Only valid when updating.",
-          { maxLength: 128 },
-        ),
-        status: enumProp(
-          "Set 'archived' to archive the matter or 'active' to unarchive it. " +
-            "Only valid when updating.",
-          MATTER_STATUSES,
-        ),
-      },
-    },
-    annotations: {
-      title: "Save matter",
-      idempotentHint: false,
-      openWorldHint: false,
-    },
-    access: "write",
-    anonymized: { exposure: "excluded", reason: "write" },
-    name: "save_matter",
-    scope: "stella:matters_write",
-  },
-  {
-    annotations: {
-      title: "Delete matter",
-      destructiveHint: true,
-      idempotentHint: true,
-      openWorldHint: false,
-    },
-    description:
-      "Permanently delete a matter and all its documents, tasks, fields, and " +
-      "chat history. This is irreversible.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        matter_id: stringProp("Matter/workspace ID to delete"),
-        confirm: confirmProp(),
-      },
-      required: ["matter_id"],
-    },
-    access: "write",
-    anonymized: { exposure: "excluded", reason: "write" },
-    name: "delete_matter",
-    scope: "stella:matters_write",
-  },
-  {
-    annotations: {
-      title: "List contacts",
-      readOnlyHint: true,
-      openWorldHint: false,
-    },
-    description:
-      "List or search the organization's internal contact directory. Returns " +
-      "internal contact IDs accepted by read_contact, save_contact, and " +
-      "link_matter_contact. Use q to search display names and type to filter " +
-      "people or organizations.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        q: stringProp("Search contact display names", { maxLength: 512 }),
-        type: enumProp("Contact kind", CONTACT_TYPES),
-        cursor: stringProp("Opaque cursor from the previous page"),
-        limit: intProp("Maximum contacts to return", {
-          min: 1,
-          max: LIMITS.contactsPageSizeMax,
-        }),
-      },
-      additionalProperties: false,
-    },
-    access: "read",
-    anonymized: {
-      exposure: "excluded",
-      reason: "dynamic_tenant_payload",
-    },
-    name: "list_contacts",
-    scope: "stella:read",
-  },
-  {
-    description:
-      "Create or update a contact (a person or organization in the address " +
-      "book, shared across the whole organization). Omit contact_id to create " +
-      "(type and display_name required); pass contact_id to update. String " +
-      "fields other than display_name accept null to clear them.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        contact_id: stringProp("Contact ID to update; omit to create"),
-        type: enumProp("Contact kind; required when creating", CONTACT_TYPES),
-        display_name: stringProp(
-          "Display name; required when creating, non-empty when updating",
-          { maxLength: 512 },
-        ),
-        first_name: nullableStringProp("First name; pass null to clear", {
-          maxLength: 256,
-        }),
-        last_name: nullableStringProp("Last name; pass null to clear", {
-          maxLength: 256,
-        }),
-        organization_name: nullableStringProp(
-          "Organization name; pass null to clear",
-          { maxLength: 512 },
-        ),
-        notes: nullableStringProp("Free-text notes; pass null to clear"),
-      },
-    },
-    annotations: {
-      title: "Save contact",
-      idempotentHint: false,
-      openWorldHint: false,
-    },
-    access: "write",
-    anonymized: { exposure: "excluded", reason: "write" },
-    name: "save_contact",
-    scope: "stella:contacts_write",
-  },
-  {
-    annotations: {
-      title: "Delete contact",
-      destructiveHint: true,
-      idempotentHint: true,
-      openWorldHint: false,
-    },
-    description:
-      "Permanently delete a contact from the organization address book. " +
-      "Rejected while the contact is still the client of any matter. This is " +
-      "irreversible.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        contact_id: stringProp("Contact ID to delete"),
-        confirm: confirmProp(),
-      },
-      required: ["contact_id"],
-    },
-    access: "write",
-    anonymized: { exposure: "excluded", reason: "write" },
-    name: "delete_contact",
-    scope: "stella:contacts_write",
-  },
-  {
-    annotations: {
-      title: "Look up business registry",
-      readOnlyHint: true,
-      openWorldHint: true,
-    },
-    description:
-      "Look up a company in a public business register (ARES, Brreg, " +
-      "Companies House, EDGAR, GCIS, KRS, ORSR, PRH, recherche-entreprises, " +
-      "or VIES). Pass a canonical identifier (company/registration number, " +
-      "VAT number) for an exact match, or a company name to search where the " +
-      "register supports it. Returns registered names, addresses, and " +
-      "registry-specific details. Result IDs belong to the external registry, " +
-      "not stella's contact directory; create a contact with save_contact " +
-      "before using read_contact.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        registry: enumProp(
-          "Business register to query",
-          BUSINESS_REGISTRY_SLUGS,
-        ),
-        query: stringProp(
-          "Canonical identifier (e.g. company number, VAT number) or company name",
-          { maxLength: 256 },
-        ),
-      },
-      required: ["registry", "query"],
-    },
-    access: "read",
-    anonymized: { exposure: "passthrough" },
-    name: "lookup_business_registry",
-    scope: "stella:read",
-  },
-  {
-    annotations: {
-      title: "List tasks",
-      readOnlyHint: true,
-      openWorldHint: false,
-    },
-    description:
-      "List tasks in a matter, or read one task in detail. Pass task_id to " +
-      "get a single task's fields, assignees, and linked entities. Otherwise " +
-      "pass matter_id to list the matter's tasks, optionally filtered by a " +
-      "due-date range (date_from/date_to, ISO YYYY-MM-DD) and status. " +
-      "Returns each item's id, name, item type, status, priority, and due date.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        matter_id: stringProp(
-          "Matter/workspace ID to list tasks in; required unless task_id is given",
-        ),
-        task_id: stringProp("Task entity ID to read in detail"),
-        date_from: stringProp(
-          "List only tasks due on or after this ISO date (YYYY-MM-DD)",
-          { maxLength: 10 },
-        ),
-        date_to: stringProp(
-          "List only tasks due on or before this ISO date (YYYY-MM-DD)",
-          { maxLength: 10 },
-        ),
-        status: stringProp("List only tasks with this status", {
-          maxLength: 32,
-        }),
-        limit: intProp("Max tasks to return", { min: 1, max: MAX_LIST_LIMIT }),
-        cursor: stringProp(
-          "Opaque cursor from a previous list_tasks call to fetch the next page",
-          { maxLength: 512 },
-        ),
-      },
-    },
-    access: "read",
-    anonymized: {
-      exposure: "anonymize",
-      textFields: [TASK_LIST_TEXT_FIELD_PATH, ...TASK_DETAIL_TEXT_FIELD_PATHS],
-    },
-    name: "list_tasks",
-    scope: "stella:read",
-  },
-  {
-    description:
-      "Create or update a task, and manage its assignees and entity links. " +
-      "Omit task_id to create a task (matter_id and name required). Pass " +
-      "task_id to update: set name, item_type, status, priority, or due_date (ISO " +
-      "YYYY-MM-DD, null to clear); add or remove one assignee " +
-      "(add_assignee_user_id / remove_assignee_user_id); link the task to " +
-      "another entity (link_entity_id) or remove a link (unlink_link_id). " +
-      "Returns the task ID.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        task_id: stringProp("Task entity ID to update; omit to create"),
-        matter_id: stringProp(
-          "Matter/workspace ID to create the task in; required when creating",
-        ),
-        name: stringProp("Task name; required when creating", {
-          maxLength: 255,
-        }),
-        status: stringProp("Task status (e.g. open, in_progress, done)", {
-          maxLength: 32,
-        }),
-        priority: stringProp("Task priority (e.g. none, low, medium, high)", {
-          maxLength: 16,
-        }),
-        item_type: enumProp("What the List item represents", LIST_ITEM_TYPES),
-        due_date: nullableStringProp(
-          "Due date (ISO YYYY-MM-DD); pass null to clear",
-          { maxLength: 10 },
-        ),
-        workflow_reason: stringProp(
-          "Reason for a governed status or deadline change",
-          { maxLength: 1000 },
-        ),
-        add_assignee_user_id: stringProp(
-          "User ID to assign to the task (must be a workspace member)",
-        ),
-        remove_assignee_user_id: stringProp(
-          "User ID to unassign from the task",
-        ),
-        link_entity_id: stringProp(
-          "Entity ID to link to the task (document, folder, or another task)",
-        ),
-        unlink_link_id: stringProp("Entity-link ID to remove"),
-      },
-    },
-    annotations: {
-      title: "Save task",
-      idempotentHint: false,
-      openWorldHint: false,
-    },
-    access: "write",
-    anonymized: { exposure: "excluded", reason: "write" },
-    name: "save_task",
-    scope: "stella:matters_write",
-  },
-  {
-    description:
-      "Link a contact to a matter in a party role (opposing party/counsel, " +
-      "co-counsel, witness, expert witness, third party, judge, mediator, or " +
-      "other), or remove such a link. Pass contact_id with role to link. To " +
-      "unlink, pass workspace_contact_id (precise, from list_matters) " +
-      "or contact_id alone; contact_id alone is rejected when the contact " +
-      "holds several roles on the matter.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        matter_id: stringProp("Matter/workspace ID"),
-        contact_id: stringProp(
-          "Contact ID: with role to link the contact, or alone to unlink it " +
-            "from the matter",
-        ),
-        role: enumProp(
-          "Party role for the linked contact; provide it only when linking",
-          WORKSPACE_CONTACT_ROLES,
-        ),
-        workspace_contact_id: stringProp(
-          "Existing matter-contact link ID to remove, from list_matters",
-        ),
-      },
-      required: ["matter_id"],
-    },
-    annotations: {
-      title: "Link contact to matter",
-      idempotentHint: false,
-      openWorldHint: false,
-    },
-    access: "write",
-    anonymized: { exposure: "excluded", reason: "write" },
-    name: "link_matter_contact",
-    scope: "stella:matters_write",
-  },
-] as const satisfies readonly McpToolDefinition[];
-
 // --- save_matter --------------------------------------------------------
 
 const saveMatterArgsSchema = v.pipe(
   v.strictObject({
-    matter_id: v.optional(v.pipe(v.string(), v.minLength(1))),
-    name: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(256))),
-    client_id: v.optional(v.pipe(v.string(), v.minLength(1))),
-    reference: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(64))),
-    billing_reference: v.optional(
-      v.nullable(v.pipe(v.string(), v.maxLength(128))),
+    matter_id: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.description(
+          "Matter/workspace ID to update; omit to create a new matter",
+        ),
+      ),
     ),
-    status: v.optional(v.picklist(MATTER_STATUSES)),
+    name: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.maxLength(256),
+        v.description("Matter name; required when creating"),
+      ),
+    ),
+    client_id: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.description(
+          "Contact ID to attach in the client role. Only valid when creating a matter.",
+        ),
+      ),
+    ),
+    reference: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.maxLength(64),
+        v.description(
+          "Matter reference (file number). Only valid when updating.",
+        ),
+      ),
+    ),
+    billing_reference: v.optional(
+      v.pipe(
+        v.nullable(v.pipe(v.string(), v.maxLength(128))),
+        v.description(
+          "Billing reference; pass null to clear. Only valid when updating.",
+        ),
+      ),
+    ),
+    status: v.optional(
+      v.pipe(
+        v.picklist(MATTER_STATUSES),
+        v.description(
+          "Set 'archived' to archive the matter or 'active' to unarchive it. Only valid when updating.",
+        ),
+      ),
+    ),
   }),
   // Creating (no matter_id) requires a name.
   v.forward(
@@ -755,8 +459,20 @@ const handleSaveMatterTool: TypedMcpToolHandler<
 // --- delete_matter ------------------------------------------------------
 
 const deleteMatterArgsSchema = v.strictObject({
-  matter_id: v.pipe(v.string(), v.minLength(1)),
-  confirm: v.optional(v.boolean()),
+  matter_id: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.description("Matter/workspace ID to delete"),
+  ),
+  confirm: v.optional(
+    v.pipe(
+      v.boolean(),
+      v.description(
+        "Must be true to run this irreversible operation. Set it only after a " +
+          "human user has explicitly approved the deletion.",
+      ),
+    ),
+  ),
 });
 
 const handleDeleteMatterTool: TypedMcpToolHandler<
@@ -800,15 +516,26 @@ const handleDeleteMatterTool: TypedMcpToolHandler<
 // --- list_contacts ------------------------------------------------------
 
 const listContactsArgsSchema = v.strictObject({
-  q: v.optional(v.pipe(v.string(), v.maxLength(512))),
-  type: v.optional(v.picklist(CONTACT_TYPES)),
-  cursor: v.optional(v.string()),
+  q: v.optional(
+    v.pipe(
+      v.string(),
+      v.maxLength(512),
+      v.description("Search contact display names"),
+    ),
+  ),
+  type: v.optional(
+    v.pipe(v.picklist(CONTACT_TYPES), v.description("Contact kind")),
+  ),
+  cursor: v.optional(
+    v.pipe(v.string(), v.description("Opaque cursor from the previous page")),
+  ),
   limit: v.optional(
     v.pipe(
       v.number(),
       v.integer(),
       v.minValue(1),
       v.maxValue(LIMITS.contactsPageSizeMax),
+      v.description("Maximum contacts to return"),
     ),
   ),
 });
@@ -856,21 +583,96 @@ const handleListContactsTool: TypedMcpToolHandler<
 
 // --- save_contact -------------------------------------------------------
 
+type ContactNameParts = {
+  display_name?: string | undefined;
+  first_name?: string | null | undefined;
+  last_name?: string | null | undefined;
+  organization_name?: string | null | undefined;
+  type?: (typeof CONTACT_TYPES)[number] | undefined;
+};
+
+/**
+ * Display name a create should persist. An explicit `display_name` wins;
+ * otherwise it is derived from the name parts the caller did supply (a person
+ * from first + last, an organization from its organization name, each falling
+ * back to the other). "" means the create carries no name at all, which the
+ * schema rejects.
+ */
+export const deriveContactDisplayName = ({
+  display_name,
+  first_name,
+  last_name,
+  organization_name,
+  type,
+}: ContactNameParts): string => {
+  const explicit = display_name?.trim() ?? "";
+  if (explicit.length > 0) {
+    return explicit;
+  }
+  const personName = [first_name, last_name]
+    .map((part) => part?.trim() ?? "")
+    .filter((part) => part.length > 0)
+    .join(" ");
+  const organizationName = organization_name?.trim() ?? "";
+
+  return type === "organization"
+    ? organizationName || personName
+    : personName || organizationName;
+};
+
 const saveContactArgsSchema = v.pipe(
   v.strictObject({
-    contact_id: v.optional(v.pipe(v.string(), v.minLength(1))),
-    type: v.optional(v.picklist(CONTACT_TYPES)),
+    contact_id: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.description("Contact ID to update; omit to create"),
+      ),
+    ),
+    type: v.optional(
+      v.pipe(
+        v.picklist(CONTACT_TYPES),
+        v.description("Contact kind; required when creating"),
+      ),
+    ),
     display_name: v.optional(
-      v.pipe(v.string(), v.minLength(1), v.maxLength(512)),
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.maxLength(512),
+        v.description(
+          "Display name; when creating it defaults to first + last name " +
+            "(person) or organization name (organization); non-empty when " +
+            "updating",
+        ),
+      ),
     ),
-    first_name: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(256)))),
-    last_name: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(256)))),
+    first_name: v.optional(
+      v.pipe(
+        v.nullable(v.pipe(v.string(), v.maxLength(256))),
+        v.description("First name; pass null to clear"),
+      ),
+    ),
+    last_name: v.optional(
+      v.pipe(
+        v.nullable(v.pipe(v.string(), v.maxLength(256))),
+        v.description("Last name; pass null to clear"),
+      ),
+    ),
     organization_name: v.optional(
-      v.nullable(v.pipe(v.string(), v.maxLength(512))),
+      v.pipe(
+        v.nullable(v.pipe(v.string(), v.maxLength(512))),
+        v.description("Organization name; pass null to clear"),
+      ),
     ),
-    notes: v.optional(v.nullable(v.string())),
+    notes: v.optional(
+      v.pipe(
+        v.nullable(v.string()),
+        v.description("Free-text notes; pass null to clear"),
+      ),
+    ),
   }),
-  // Creating (no contact_id) requires type and display_name.
+  // Creating (no contact_id) requires type and a name to display.
   v.forward(
     v.partialCheck(
       [["contact_id"], ["type"]],
@@ -881,10 +683,18 @@ const saveContactArgsSchema = v.pipe(
   ),
   v.forward(
     v.partialCheck(
-      [["contact_id"], ["display_name"]],
-      ({ contact_id, display_name }) =>
-        contact_id !== undefined || display_name !== undefined,
-      "display_name is required to create a contact",
+      [
+        ["contact_id"],
+        ["type"],
+        ["display_name"],
+        ["first_name"],
+        ["last_name"],
+        ["organization_name"],
+      ],
+      (input) =>
+        input.contact_id !== undefined ||
+        deriveContactDisplayName(input).length > 0,
+      "display_name is required to create a contact, or first_name/last_name (person) or organization_name (organization) to derive it from",
     ),
     ["display_name"],
   ),
@@ -925,9 +735,11 @@ const handleSaveContactTool: TypedMcpToolHandler<
     if (!hasEffectiveAuthority(context, { contact: ["create"] })) {
       return errorResult("Forbidden");
     }
-    // The schema guarantees type and display_name are present on create.
-    const type = input.type ?? "person";
-    const displayName = input.display_name ?? "";
+    const { type } = input;
+    if (type === undefined) {
+      return panic("save_contact create branch reached without type");
+    }
+    const displayName = deriveContactDisplayName(input);
     const created = await Result.gen(() =>
       createContactHandler({
         safeDb: context.safeDb,
@@ -1000,8 +812,20 @@ const handleSaveContactTool: TypedMcpToolHandler<
 // --- delete_contact -----------------------------------------------------
 
 const deleteContactArgsSchema = v.strictObject({
-  contact_id: v.pipe(v.string(), v.minLength(1)),
-  confirm: v.optional(v.boolean()),
+  contact_id: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.description("Contact ID to delete"),
+  ),
+  confirm: v.optional(
+    v.pipe(
+      v.boolean(),
+      v.description(
+        "Must be true to run this irreversible operation. Set it only after a " +
+          "human user has explicitly approved the deletion.",
+      ),
+    ),
+  ),
 });
 
 const handleDeleteContactTool: TypedMcpToolHandler<
@@ -1035,8 +859,18 @@ const handleDeleteContactTool: TypedMcpToolHandler<
 // --- lookup_business_registry -------------------------------------------
 
 const lookupBusinessRegistryArgsSchema = v.strictObject({
-  registry: v.picklist(BUSINESS_REGISTRY_SLUGS),
-  query: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
+  registry: v.pipe(
+    v.picklist(BUSINESS_REGISTRY_SLUGS),
+    v.description("Business register to query"),
+  ),
+  query: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.maxLength(256),
+    v.description(
+      "Canonical identifier (e.g. company number, VAT number) or company name",
+    ),
+  ),
 });
 
 const handleLookupBusinessRegistryTool: TypedMcpToolHandler<
@@ -1108,20 +942,66 @@ const resolveTaskWorkspace = async ({
 
 const listTasksArgsSchema = v.pipe(
   v.strictObject({
-    matter_id: v.optional(v.pipe(v.string(), v.minLength(1))),
-    task_id: v.optional(v.pipe(v.string(), v.minLength(1))),
-    date_from: v.optional(ISO_DATE_SCHEMA),
-    date_to: v.optional(ISO_DATE_SCHEMA),
-    status: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(32))),
+    matter_id: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.description(
+          "Matter/workspace ID to list tasks in; required unless task_id is given",
+        ),
+      ),
+    ),
+    task_id: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.description("Task entity ID to read in detail"),
+      ),
+    ),
+    date_from: v.optional(
+      v.pipe(
+        ISO_DATE_SCHEMA,
+        v.maxLength(10),
+        v.description(
+          "List only tasks due on or after this ISO date (YYYY-MM-DD)",
+        ),
+      ),
+    ),
+    date_to: v.optional(
+      v.pipe(
+        ISO_DATE_SCHEMA,
+        v.maxLength(10),
+        v.description(
+          "List only tasks due on or before this ISO date (YYYY-MM-DD)",
+        ),
+      ),
+    ),
+    status: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.maxLength(32),
+        v.description("List only tasks with this status"),
+      ),
+    ),
     limit: v.optional(
       v.pipe(
         v.number(),
         v.integer(),
         v.minValue(1),
         v.maxValue(MAX_LIST_LIMIT),
+        v.description("Max tasks to return"),
       ),
     ),
-    cursor: v.optional(v.pipe(v.string(), v.maxLength(512))),
+    cursor: v.optional(
+      v.pipe(
+        v.string(),
+        v.maxLength(512),
+        v.description(
+          "Opaque cursor from a previous list_tasks call to fetch the next page",
+        ),
+      ),
+    ),
   }),
   // List mode needs a matter to scope to; detail mode uses task_id alone.
   v.forward(
@@ -1407,25 +1287,121 @@ const handleListTasksTool: TypedMcpToolHandler<
 
 const saveTaskArgsSchema = v.pipe(
   v.strictObject({
-    task_id: v.optional(v.pipe(v.string(), v.minLength(1))),
-    matter_id: v.optional(v.pipe(v.string(), v.minLength(1))),
-    name: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(255))),
-    status: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(32))),
-    priority: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(16))),
-    item_type: v.optional(v.picklist(LIST_ITEM_TYPES)),
-    list_id: v.optional(v.pipe(v.string(), v.uuid())),
-    list_section_id: v.optional(v.pipe(v.string(), v.uuid())),
+    task_id: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.description("Task entity ID to update; omit to create"),
+      ),
+    ),
+    matter_id: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.description(
+          "Matter/workspace ID to create the task in; required when creating",
+        ),
+      ),
+    ),
+    name: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.maxLength(255),
+        v.description("Task name; required when creating"),
+      ),
+    ),
+    status: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.maxLength(32),
+        v.description("Task status (e.g. open, in_progress, done)"),
+      ),
+    ),
+    priority: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.maxLength(16),
+        v.description("Task priority (e.g. none, low, medium, high)"),
+      ),
+    ),
+    item_type: v.optional(
+      v.pipe(
+        v.picklist(LIST_ITEM_TYPES),
+        v.description("What the List item represents"),
+      ),
+    ),
+    list_id: v.optional(
+      v.pipe(
+        v.string(),
+        v.uuid(),
+        v.description("List ID to create the item in (creating only)"),
+      ),
+    ),
+    list_section_id: v.optional(
+      v.pipe(
+        v.string(),
+        v.uuid(),
+        v.description(
+          "Section of list_id to create the item under (creating only)",
+        ),
+      ),
+    ),
     list_description: v.optional(
-      v.nullable(v.pipe(v.string(), v.maxLength(10_000))),
+      v.pipe(
+        v.nullable(v.pipe(v.string(), v.maxLength(10_000))),
+        v.description("List item description; pass null to clear"),
+      ),
     ),
-    due_date: v.optional(v.nullable(ISO_DATE_SCHEMA)),
+    due_date: v.optional(
+      v.pipe(
+        v.nullable(v.pipe(ISO_DATE_SCHEMA, v.maxLength(10))),
+        v.description("Due date (ISO YYYY-MM-DD); pass null to clear"),
+      ),
+    ),
     workflow_reason: v.optional(
-      v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(1000)),
+      v.pipe(
+        v.string(),
+        v.trim(),
+        v.minLength(1),
+        v.maxLength(1000),
+        v.description("Reason for a governed status or deadline change"),
+      ),
     ),
-    add_assignee_user_id: v.optional(v.pipe(v.string(), v.minLength(1))),
-    remove_assignee_user_id: v.optional(v.pipe(v.string(), v.minLength(1))),
-    link_entity_id: v.optional(v.pipe(v.string(), v.minLength(1))),
-    unlink_link_id: v.optional(v.pipe(v.string(), v.minLength(1))),
+    add_assignee_user_id: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.description(
+          "User ID to assign to the task (must be a workspace member)",
+        ),
+      ),
+    ),
+    remove_assignee_user_id: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.description("User ID to unassign from the task"),
+      ),
+    ),
+    link_entity_id: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.description(
+          "Entity ID to link to the task (document, folder, or another task)",
+        ),
+      ),
+    ),
+    unlink_link_id: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.description("Entity-link ID to remove"),
+      ),
+    ),
   }),
   // Creating (no task_id) requires matter_id and name.
   v.forward(
@@ -1898,10 +1874,38 @@ const handleSaveTaskTool: TypedMcpToolHandler<
 
 const linkMatterContactArgsSchema = v.pipe(
   v.strictObject({
-    matter_id: v.pipe(v.string(), v.minLength(1)),
-    contact_id: v.optional(v.pipe(v.string(), v.minLength(1))),
-    role: v.optional(v.picklist(WORKSPACE_CONTACT_ROLES)),
-    workspace_contact_id: v.optional(v.pipe(v.string(), v.minLength(1))),
+    matter_id: v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.description("Matter/workspace ID"),
+    ),
+    contact_id: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.description(
+          "Contact ID: with role to link the contact, or alone to unlink it " +
+            "from the matter",
+        ),
+      ),
+    ),
+    role: v.optional(
+      v.pipe(
+        v.picklist(WORKSPACE_CONTACT_ROLES),
+        v.description(
+          "Party role for the linked contact; provide it only when linking",
+        ),
+      ),
+    ),
+    workspace_contact_id: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.description(
+          "Existing matter-contact link ID to remove, from list_matters",
+        ),
+      ),
+    ),
   }),
   // Exactly one target selector: contact_id (link with role, or unlink the
   // contact) or workspace_contact_id (unlink one specific link).
@@ -2039,6 +2043,206 @@ const handleLinkMatterContactTool: TypedMcpToolHandler<
     workspaceContactId: created.value.id,
   } satisfies v.InferInput<typeof LINK_MATTER_CONTACT_LINK_PROJECTION>);
 };
+
+// --- tool definitions -----------------------------------------------------
+
+export const MATTER_TOOL_DEFINITIONS = [
+  defineValibotMcpTool({
+    description:
+      "Create, update, archive, or unarchive a matter. Omit matter_id to " +
+      "create a new matter (name required; pass client_id to attach a client " +
+      "contact). Pass matter_id to update an existing matter: set name, " +
+      "reference, or billing_reference, and/or set status to 'archived' or " +
+      "'active' to archive or unarchive it. Returns the matter ID.",
+    inputSchema: saveMatterArgsSchema,
+    jsonSchemaProjectionWaiver: {
+      ignoreActions: ["partial_check"],
+      reason:
+        "The cross-field create/update mode rules stay authoritative in the runtime schema; a JSON Schema client cannot express them.",
+    },
+    annotations: {
+      title: "Save matter",
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+    access: "write",
+    anonymized: { exposure: "excluded", reason: "write" },
+    name: "save_matter",
+    scope: "stella:matters_write",
+  }),
+  defineValibotMcpTool({
+    annotations: {
+      title: "Delete matter",
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    description:
+      "Permanently delete a matter and all its documents, tasks, fields, and " +
+      "chat history. This is irreversible.",
+    inputSchema: deleteMatterArgsSchema,
+    access: "write",
+    anonymized: { exposure: "excluded", reason: "write" },
+    name: "delete_matter",
+    scope: "stella:matters_write",
+  }),
+  defineValibotMcpTool({
+    annotations: {
+      title: "List contacts",
+      readOnlyHint: true,
+      openWorldHint: false,
+    },
+    description:
+      "List or search the organization's internal contact directory. Returns " +
+      "internal contact IDs accepted by read_contact, save_contact, and " +
+      "link_matter_contact. Use q to search display names and type to filter " +
+      "people or organizations.",
+    inputSchema: listContactsArgsSchema,
+    access: "read",
+    anonymized: {
+      exposure: "excluded",
+      reason: "dynamic_tenant_payload",
+    },
+    name: "list_contacts",
+    scope: "stella:read",
+  }),
+  defineValibotMcpTool({
+    description:
+      "Create or update a contact (a person or organization in the address " +
+      "book, shared across the whole organization). Omit contact_id to create " +
+      "(type required, plus display_name or the name parts it is derived " +
+      "from); pass contact_id to update. String fields other than " +
+      "display_name accept null to clear them.",
+    inputSchema: saveContactArgsSchema,
+    jsonSchemaProjectionWaiver: {
+      ignoreActions: ["partial_check"],
+      reason:
+        "The cross-field create/update mode rules stay authoritative in the runtime schema; a JSON Schema client cannot express them.",
+    },
+    annotations: {
+      title: "Save contact",
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+    access: "write",
+    anonymized: { exposure: "excluded", reason: "write" },
+    name: "save_contact",
+    scope: "stella:contacts_write",
+  }),
+  defineValibotMcpTool({
+    annotations: {
+      title: "Delete contact",
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    description:
+      "Permanently delete a contact from the organization address book. " +
+      "Rejected while the contact is still the client of any matter. This is " +
+      "irreversible.",
+    inputSchema: deleteContactArgsSchema,
+    access: "write",
+    anonymized: { exposure: "excluded", reason: "write" },
+    name: "delete_contact",
+    scope: "stella:contacts_write",
+  }),
+  defineValibotMcpTool({
+    annotations: {
+      title: "Look up business registry",
+      readOnlyHint: true,
+      openWorldHint: true,
+    },
+    description:
+      "Look up a company in a public business register (ARES, Brreg, " +
+      "Companies House, EDGAR, GCIS, KRS, ORSR, PRH, recherche-entreprises, " +
+      "or VIES). Pass a canonical identifier (company/registration number, " +
+      "VAT number) for an exact match, or a company name to search where the " +
+      "register supports it. Returns registered names, addresses, and " +
+      "registry-specific details. Result IDs belong to the external registry, " +
+      "not stella's contact directory; create a contact with save_contact " +
+      "before using read_contact.",
+    inputSchema: lookupBusinessRegistryArgsSchema,
+    access: "read",
+    anonymized: { exposure: "passthrough" },
+    name: "lookup_business_registry",
+    scope: "stella:read",
+  }),
+  defineValibotMcpTool({
+    annotations: {
+      title: "List tasks",
+      readOnlyHint: true,
+      openWorldHint: false,
+    },
+    description:
+      "List tasks in a matter, or read one task in detail. Pass task_id to " +
+      "get a single task's fields, assignees, and linked entities. Otherwise " +
+      "pass matter_id to list the matter's tasks, optionally filtered by a " +
+      "due-date range (date_from/date_to, ISO YYYY-MM-DD) and status. " +
+      "Returns each item's id, name, item type, status, priority, and due date.",
+    inputSchema: listTasksArgsSchema,
+    jsonSchemaProjectionWaiver: {
+      ignoreActions: ["partial_check"],
+      reason:
+        "The list-vs-detail mode requirement stays authoritative in the runtime schema; a JSON Schema client cannot express it.",
+    },
+    access: "read",
+    anonymized: {
+      exposure: "anonymize",
+      textFields: [TASK_LIST_TEXT_FIELD_PATH, ...TASK_DETAIL_TEXT_FIELD_PATHS],
+    },
+    name: "list_tasks",
+    scope: "stella:read",
+  }),
+  defineValibotMcpTool({
+    description:
+      "Create or update a task, and manage its assignees and entity links. " +
+      "Omit task_id to create a task (matter_id and name required). Pass " +
+      "task_id to update: set name, item_type, status, priority, or due_date (ISO " +
+      "YYYY-MM-DD, null to clear); add or remove one assignee " +
+      "(add_assignee_user_id / remove_assignee_user_id); link the task to " +
+      "another entity (link_entity_id) or remove a link (unlink_link_id). " +
+      "Returns the task ID.",
+    inputSchema: saveTaskArgsSchema,
+    jsonSchemaProjectionWaiver: {
+      ignoreActions: ["trim", "partial_check"],
+      reason:
+        "Trimming is server-side normalization, and the create/update field rules stay authoritative in the runtime schema.",
+    },
+    annotations: {
+      title: "Save task",
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+    access: "write",
+    anonymized: { exposure: "excluded", reason: "write" },
+    name: "save_task",
+    scope: "stella:matters_write",
+  }),
+  defineValibotMcpTool({
+    description:
+      "Link a contact to a matter in a party role (opposing party/counsel, " +
+      "co-counsel, witness, expert witness, third party, judge, mediator, or " +
+      "other), or remove such a link. Pass contact_id with role to link. To " +
+      "unlink, pass workspace_contact_id (precise, from list_matters) " +
+      "or contact_id alone; contact_id alone is rejected when the contact " +
+      "holds several roles on the matter.",
+    inputSchema: linkMatterContactArgsSchema,
+    jsonSchemaProjectionWaiver: {
+      ignoreActions: ["partial_check"],
+      reason:
+        "The exactly-one-target-selector rule stays authoritative in the runtime schema; a JSON Schema client cannot express it.",
+    },
+    annotations: {
+      title: "Link contact to matter",
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+    access: "write",
+    anonymized: { exposure: "excluded", reason: "write" },
+    name: "link_matter_contact",
+    scope: "stella:matters_write",
+  }),
+] as const satisfies readonly McpToolDefinition[];
 
 export const MATTER_TOOL_HANDLERS = {
   save_matter: handleSaveMatterTool,

@@ -5,7 +5,7 @@ import { Result } from "better-result";
 import type { Context } from "../context.js";
 import { formatCapabilityCommand } from "../generate-capability-tree.js";
 import { EXIT_CODES } from "../mcp-constants.js";
-import { buildOutputFlags, type OutputFlagValues } from "../output-flags.js";
+import { buildCommonFlags, type CommonFlagValues } from "../output-flags.js";
 import { buildRenderPlan, renderResult } from "../output.js";
 import {
   mapClientErrorExit,
@@ -27,14 +27,14 @@ const parseString = (input: string): string => input;
 const optionalStringFlag = (brief: string) =>
   ({ brief, kind: "parsed", optional: true, parse: parseString }) as const;
 
-type UploadFlags = OutputFlagValues & {
+type UploadFlags = CommonFlagValues & {
   readonly entityId: string | undefined;
   readonly file: string;
   readonly mimeType: string | undefined;
   readonly name: string | undefined;
   readonly parentId: string | undefined;
   readonly propertyId: string | undefined;
-  readonly workspace: string;
+  readonly matterId: string;
 };
 
 const renderNestedFailure = ({
@@ -132,7 +132,7 @@ export const uploadCommand: Command<Context> = buildCommand<
         filePath: flags.file,
         mimeType: flags.mimeType,
         name: flags.name,
-        workspaceId: flags.workspace,
+        workspaceId: flags.matterId,
         ...(flags.entityId === undefined
           ? {
               target: "new_document" as const,
@@ -164,19 +164,19 @@ export const uploadCommand: Command<Context> = buildCommand<
     }
     renderNestedFailure({ context: this, failure: uploaded.error.failure });
     writers.stderr(
-      `hint: retry finalization with '${formatCapabilityCommand("uploads.update")} --workspace-id ${flags.workspace} --upload-id ${uploaded.error.uploadId}'\n`,
+      `hint: retry finalization with '${formatCapabilityCommand("uploads.update")} --workspace-id ${flags.matterId} --upload-id ${uploaded.error.uploadId}'\n`,
     );
   },
   parameters: {
     flags: {
-      ...buildOutputFlags(),
+      ...buildCommonFlags(),
       file: {
         brief: "Local file path to upload",
         kind: "parsed",
         parse: parseString,
       },
-      workspace: {
-        brief: "Matter/workspace id that will own the document",
+      matterId: {
+        brief: "Matter id that will own the document",
         kind: "parsed",
         parse: parseString,
       },

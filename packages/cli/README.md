@@ -17,12 +17,21 @@ Run `stella --help` to list available commands.
 Authenticate against a stella server with:
 
 ```sh
-stella auth login
+stella auth login --server https://api.example.com
 ```
+
+A successful login stores that server as the default, so later commands need
+no `--server`. The server used by any command resolves in this order:
+
+1. `--server <url>` on the command;
+2. the `STELLA_SERVER_URL` environment variable;
+3. the default written by the last successful `stella auth login`.
 
 The login flow negotiates the server's advertised OAuth scopes. Optional
 scopes unsupported by an older server are omitted; scopes passed explicitly
-with `--scopes` must all be available.
+with `--scopes` must all be available. `--scopes` selects `stella:` resource
+scopes only: the identity scopes (`openid profile email offline_access`, which
+is what gets a refresh token issued) are always requested.
 
 To verify the public API contract without signing in:
 

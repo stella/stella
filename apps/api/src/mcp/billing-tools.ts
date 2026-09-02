@@ -57,23 +57,19 @@ import type {
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
   bindWorkspaceRecorder,
-  confirmProp,
   DEFAULT_LIST_LIMIT,
   ensureActiveWorkspace,
   ensureWorkspaceAccess,
-  enumProp,
   errorResult,
   internalFailureResult,
-  intProp,
   ISO_DATE_SCHEMA,
   MAX_LIST_LIMIT,
   notFoundResult,
-  nullableStringProp,
-  stringProp,
   structuredErrorResult,
   toolDataResult,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
+import { defineValibotMcpTool } from "@/api/mcp/valibot-tool-definition";
 
 type BillingToolName =
   | "list_time_entries"
@@ -294,277 +290,6 @@ const INVOICE_DETAIL_TEXT_FIELD_PATHS = deriveTextFieldPaths(
   invoiceDetailTextFieldSpecs(""),
 );
 
-export const BILLING_TOOL_DEFINITIONS = [
-  {
-    annotations: {
-      title: "List time entries",
-      readOnlyHint: true,
-      openWorldHint: false,
-    },
-    description:
-      "List time entries in a matter, or read one entry in detail. Pass " +
-      "time_entry_id to get a single entry. Otherwise pass matter_id to list " +
-      "the matter's entries, optionally filtered by entity_id (the item the " +
-      "time was logged against), user_id, a date-worked range (date_from/" +
-      "date_to, ISO YYYY-MM-DD), and status. Returns each entry's id, entity, " +
-      "user, date, minutes, rate (minor currency units), currency, narrative, " +
-      "and status. The response includes visibility: all_entries for billing " +
-      "reviewers, or own_entries when the caller can see only their own time; " +
-      "own_entries is not a matter total.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        matter_id: stringProp(
-          "Matter/workspace ID to list time entries in; required unless " +
-            "time_entry_id is given",
-        ),
-        time_entry_id: stringProp("Time entry ID to read in detail"),
-        entity_id: stringProp(
-          "List only entries logged against this entity (document, folder, or " +
-            "task the time is billed to)",
-        ),
-        user_id: stringProp("List only entries recorded by this user"),
-        date_from: stringProp(
-          "List only entries worked on or after this ISO date (YYYY-MM-DD)",
-          { maxLength: 10 },
-        ),
-        date_to: stringProp(
-          "List only entries worked on or before this ISO date (YYYY-MM-DD)",
-          { maxLength: 10 },
-        ),
-        status: enumProp(
-          "List only entries with this status",
-          TIME_ENTRY_STATUSES,
-        ),
-        limit: intProp("Max entries to return", {
-          min: 1,
-          max: MAX_LIST_LIMIT,
-        }),
-        cursor: stringProp(
-          "Opaque cursor from a previous list_time_entries call to fetch the next page",
-          { maxLength: 512 },
-        ),
-      },
-    },
-    access: "read",
-    anonymized: {
-      exposure: "anonymize",
-      textFields: [
-        ...TIME_ENTRY_LIST_TEXT_FIELD_PATHS,
-        ...TIME_ENTRY_DETAIL_TEXT_FIELD_PATHS,
-      ],
-    },
-    feature: "FEATURE_TIME_BILLING",
-    isVisibleToMemberRole: (memberRole) =>
-      roles[memberRole].authorize({ timeEntry: ["read"] }).success,
-    name: "list_time_entries",
-    scope: "stella:read",
-  },
-  {
-    description:
-      "Create or update a time entry. Omit time_entry_id to create (matter_id, " +
-      "date_worked, timezone_id, duration_minutes, and narrative required; " +
-      "entity_id is optional context). Pass time_entry_id to update: " +
-      "set date_worked (with timezone_id), duration_minutes, narrative, " +
-      "invoice_narrative, " +
-      "billable, no_charge, entity_id (move the entry), task_code, " +
-      "and/or activity_code. The timekeeper's effective rate is resolved " +
-      "server-side. Durations are whole minutes. Returns the time entry ID.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        time_entry_id: stringProp("Time entry ID to update; omit to create"),
-        matter_id: stringProp(
-          "Matter/workspace ID to create the entry in; required when creating",
-        ),
-        entity_id: nullableStringProp(
-          "Optional work item context (document, folder, or task). When " +
-            "updating, moves the entry to a different entity in the same " +
-            "matter; pass null to clear.",
-        ),
-        date_worked: stringProp(
-          "Date the work was done (ISO YYYY-MM-DD); required when creating",
-          { maxLength: 10 },
-        ),
-        timezone_id: stringProp(
-          "IANA time zone the date_worked is interpreted in (e.g. " +
-            "Europe/Prague); required when creating or changing date_worked",
-          { maxLength: 64 },
-        ),
-        duration_minutes: intProp(
-          "Minutes worked (whole minutes); required when creating",
-          { min: 1 },
-        ),
-        narrative: stringProp(
-          "Description of the work; required when creating",
-          { maxLength: 10_000 },
-        ),
-        invoice_narrative: nullableStringProp(
-          "Client-facing narrative shown on the invoice; pass null to clear. " +
-            "Only valid when updating.",
-          { maxLength: 10_000 },
-        ),
-        billable: {
-          type: "boolean",
-          description: "Whether the entry is billable to the client",
-        },
-        no_charge: {
-          type: "boolean",
-          description:
-            "Whether the entry is recorded but not charged. Only valid when updating.",
-        },
-        task_code: nullableStringProp(
-          "UTBMS/LEDES task code; pass null to clear",
-          { maxLength: 20 },
-        ),
-        activity_code: nullableStringProp(
-          "UTBMS/LEDES activity code; pass null to clear",
-          { maxLength: 20 },
-        ),
-      },
-    },
-    annotations: {
-      title: "Save time entry",
-      idempotentHint: false,
-      openWorldHint: false,
-    },
-    access: "write",
-    anonymized: { exposure: "excluded", reason: "write" },
-    feature: "FEATURE_TIME_BILLING",
-    isVisibleToMemberRole: (memberRole) =>
-      roles[memberRole].authorize({ timeEntry: ["create"] }).success ||
-      roles[memberRole].authorize({ timeEntry: ["update"] }).success,
-    name: "save_time_entry",
-    scope: "stella:billing_write",
-  },
-  {
-    annotations: {
-      title: "Delete time entry",
-      destructiveHint: true,
-      idempotentHint: true,
-      openWorldHint: false,
-    },
-    description:
-      "Delete a time entry. A draft entry is permanently deleted; an approved " +
-      "entry is written off instead (kept for the audit trail, excluded from " +
-      "billing). A billed entry cannot be deleted until its invoice is " +
-      "reverted. Returns whether the entry was hard-deleted.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        time_entry_id: stringProp("Time entry ID to delete or write off"),
-        confirm: confirmProp(),
-      },
-      required: ["time_entry_id"],
-    },
-    access: "write",
-    anonymized: { exposure: "excluded", reason: "write" },
-    feature: "FEATURE_TIME_BILLING",
-    isVisibleToMemberRole: (memberRole) =>
-      roles[memberRole].authorize({ timeEntry: ["delete"] }).success,
-    name: "delete_time_entry",
-    scope: "stella:billing_write",
-  },
-  {
-    annotations: {
-      title: "Resolve billing rate",
-      readOnlyHint: true,
-      openWorldHint: false,
-    },
-    description:
-      "Resolve the effective hourly rate for a user on a given date in a " +
-      "matter, using the matter's default rate table (user-specific rate " +
-      "first, then the table default). Returns the hourly rate in integer " +
-      "minor currency units (e.g. cents) and the currency, or nulls when no " +
-      "rate applies.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        matter_id: stringProp("Matter/workspace ID to resolve the rate in"),
-        user_id: stringProp("User ID to resolve the rate for"),
-        date: stringProp("Date to resolve the rate on (ISO YYYY-MM-DD)", {
-          maxLength: 10,
-        }),
-      },
-      required: ["matter_id", "user_id", "date"],
-    },
-    access: "read",
-    anonymized: { exposure: "passthrough" },
-    feature: "FEATURE_TIME_BILLING",
-    isVisibleToMemberRole: (memberRole) =>
-      roles[memberRole].authorize({ rate: ["read"] }).success,
-    name: "resolve_rate",
-    scope: "stella:read",
-  },
-  {
-    annotations: {
-      title: "List invoices",
-      readOnlyHint: true,
-      openWorldHint: false,
-    },
-    description:
-      "List invoices in a matter, or read one invoice in detail. Pass " +
-      "invoice_id to get a single invoice with its line items (time entries " +
-      "and expenses). Otherwise pass matter_id to list the matter's invoices. " +
-      "Returns each invoice's id, number, reference, status, dates, currency, " +
-      "and total (integer minor currency units).",
-    inputSchema: {
-      type: "object",
-      properties: {
-        matter_id: stringProp(
-          "Matter/workspace ID to list invoices in; required unless " +
-            "invoice_id is given",
-        ),
-        invoice_id: stringProp("Invoice ID to read in detail"),
-        limit: intProp("Max invoices to return", {
-          min: 1,
-          max: MAX_LIST_LIMIT,
-        }),
-        cursor: stringProp(
-          "Opaque cursor from a previous list_invoices call to fetch the next page",
-          { maxLength: 512 },
-        ),
-      },
-    },
-    access: "read",
-    anonymized: {
-      exposure: "anonymize",
-      textFields: [
-        INVOICE_LIST_TEXT_FIELD_PATH,
-        ...INVOICE_DETAIL_TEXT_FIELD_PATHS,
-      ],
-    },
-    feature: "FEATURE_TIME_BILLING",
-    isVisibleToMemberRole: (memberRole) =>
-      roles[memberRole].authorize({ workspace: ["read"] }).success,
-    name: "list_invoices",
-    scope: "stella:read",
-  },
-  {
-    annotations: {
-      title: "Get usage",
-      readOnlyHint: true,
-      openWorldHint: false,
-    },
-    description:
-      "Read the organization's current usage entitlement: plan, seats, billing " +
-      "period, and how many usage units (AI credits) remain this period. " +
-      "Returns { entitlement: null } when the organization has no active plan. " +
-      "Requires organization-settings management access.",
-    inputSchema: {
-      type: "object",
-      properties: {},
-    },
-    access: "read",
-    anonymized: { exposure: "passthrough" },
-    feature: "FEATURE_USAGE",
-    isVisibleToMemberRole: (memberRole) =>
-      roles[memberRole].authorize({ organizationSettings: ["update"] }).success,
-    name: "get_usage",
-    scope: "stella:read",
-  },
-] as const satisfies readonly McpToolDefinition[];
-
 /** Resolve the accessible workspace that owns a time entry, or null. */
 const resolveTimeEntryWorkspace = async ({
   context,
@@ -644,22 +369,82 @@ const loadUserNames = async ({
 
 const listTimeEntriesArgsSchema = v.pipe(
   v.strictObject({
-    matter_id: v.optional(v.pipe(v.string(), v.minLength(1))),
-    time_entry_id: v.optional(v.pipe(v.string(), v.minLength(1))),
-    entity_id: v.optional(v.pipe(v.string(), v.minLength(1))),
-    user_id: v.optional(v.pipe(v.string(), v.minLength(1))),
-    date_from: v.optional(ISO_DATE_SCHEMA),
-    date_to: v.optional(ISO_DATE_SCHEMA),
-    status: v.optional(v.picklist(TIME_ENTRY_STATUSES)),
+    matter_id: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.description(
+          "Matter/workspace ID to list time entries in; required unless " +
+            "time_entry_id is given",
+        ),
+      ),
+    ),
+    time_entry_id: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.description("Time entry ID to read in detail"),
+      ),
+    ),
+    entity_id: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.description(
+          "List only entries logged against this entity (document, folder, " +
+            "or task the time is billed to)",
+        ),
+      ),
+    ),
+    user_id: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.description("List only entries recorded by this user"),
+      ),
+    ),
+    date_from: v.optional(
+      v.pipe(
+        ISO_DATE_SCHEMA,
+        v.maxLength(10),
+        v.description(
+          "List only entries worked on or after this ISO date (YYYY-MM-DD)",
+        ),
+      ),
+    ),
+    date_to: v.optional(
+      v.pipe(
+        ISO_DATE_SCHEMA,
+        v.maxLength(10),
+        v.description(
+          "List only entries worked on or before this ISO date (YYYY-MM-DD)",
+        ),
+      ),
+    ),
+    status: v.optional(
+      v.pipe(
+        v.picklist(TIME_ENTRY_STATUSES),
+        v.description("List only entries with this status"),
+      ),
+    ),
     limit: v.optional(
       v.pipe(
         v.number(),
         v.integer(),
         v.minValue(1),
         v.maxValue(MAX_LIST_LIMIT),
+        v.description("Max entries to return"),
       ),
     ),
-    cursor: v.optional(v.pipe(v.string(), v.maxLength(512))),
+    cursor: v.optional(
+      v.pipe(
+        v.string(),
+        v.maxLength(512),
+        v.description(
+          "Opaque cursor from a previous list_time_entries call to fetch the next page",
+        ),
+      ),
+    ),
   }),
   // List mode needs a matter to scope to; detail mode uses time_entry_id alone.
   v.forward(
@@ -914,26 +699,103 @@ const handleListTimeEntriesTool: TypedMcpToolHandler<
 
 const saveTimeEntryArgsSchema = v.pipe(
   v.strictObject({
-    time_entry_id: v.optional(v.pipe(v.string(), v.minLength(1))),
-    matter_id: v.optional(v.pipe(v.string(), v.minLength(1))),
-    entity_id: v.optional(v.nullable(v.pipe(v.string(), v.minLength(1)))),
-    date_worked: v.optional(ISO_DATE_SCHEMA),
+    time_entry_id: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.description("Time entry ID to update; omit to create"),
+      ),
+    ),
+    matter_id: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.description(
+          "Matter/workspace ID to create the entry in; required when creating",
+        ),
+      ),
+    ),
+    entity_id: v.optional(
+      v.pipe(
+        v.nullable(v.pipe(v.string(), v.minLength(1))),
+        v.description(
+          "Optional work item context (document, folder, or task). When " +
+            "updating, moves the entry to a different entity in the same " +
+            "matter; pass null to clear.",
+        ),
+      ),
+    ),
+    date_worked: v.optional(
+      v.pipe(
+        ISO_DATE_SCHEMA,
+        v.maxLength(10),
+        v.description(
+          "Date the work was done (ISO YYYY-MM-DD); required when creating",
+        ),
+      ),
+    ),
     timezone_id: v.optional(
-      v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.maxLength(64),
+        v.description(
+          "IANA time zone the date_worked is interpreted in (e.g. " +
+            "Europe/Prague); required when creating or changing date_worked",
+        ),
+      ),
     ),
     duration_minutes: v.optional(
-      v.pipe(v.number(), v.integer(), v.minValue(1)),
+      v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(1),
+        v.description("Minutes worked (whole minutes); required when creating"),
+      ),
     ),
     narrative: v.optional(
-      v.pipe(v.string(), v.minLength(1), v.maxLength(10_000)),
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.maxLength(10_000),
+        v.description("Description of the work; required when creating"),
+      ),
     ),
     invoice_narrative: v.optional(
-      v.nullable(v.pipe(v.string(), v.maxLength(10_000))),
+      v.pipe(
+        v.nullable(v.pipe(v.string(), v.maxLength(10_000))),
+        v.description(
+          "Client-facing narrative shown on the invoice; pass null to clear. " +
+            "Only valid when updating.",
+        ),
+      ),
     ),
-    billable: v.optional(v.boolean()),
-    no_charge: v.optional(v.boolean()),
-    task_code: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(20)))),
-    activity_code: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(20)))),
+    billable: v.optional(
+      v.pipe(
+        v.boolean(),
+        v.description("Whether the entry is billable to the client"),
+      ),
+    ),
+    no_charge: v.optional(
+      v.pipe(
+        v.boolean(),
+        v.description(
+          "Whether the entry is recorded but not charged. Only valid when updating.",
+        ),
+      ),
+    ),
+    task_code: v.optional(
+      v.pipe(
+        v.nullable(v.pipe(v.string(), v.maxLength(20))),
+        v.description("UTBMS/LEDES task code; pass null to clear"),
+      ),
+    ),
+    activity_code: v.optional(
+      v.pipe(
+        v.nullable(v.pipe(v.string(), v.maxLength(20))),
+        v.description("UTBMS/LEDES activity code; pass null to clear"),
+      ),
+    ),
   }),
   // Creating (no time_entry_id) requires the full set the backing create schema
   // demands; list them in one message so a partial create is rejected up front.
@@ -1142,8 +1004,20 @@ const handleSaveTimeEntryTool: TypedMcpToolHandler<
 // --- delete_time_entry --------------------------------------------------
 
 const deleteTimeEntryArgsSchema = v.strictObject({
-  time_entry_id: v.pipe(v.string(), v.minLength(1)),
-  confirm: v.optional(v.boolean()),
+  time_entry_id: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.description("Time entry ID to delete or write off"),
+  ),
+  confirm: v.optional(
+    v.pipe(
+      v.boolean(),
+      v.description(
+        "Must be true to run this irreversible operation. Set it only after " +
+          "a human user has explicitly approved the deletion.",
+      ),
+    ),
+  ),
 });
 
 const handleDeleteTimeEntryTool: TypedMcpToolHandler<
@@ -1191,9 +1065,21 @@ const handleDeleteTimeEntryTool: TypedMcpToolHandler<
 // --- resolve_rate -------------------------------------------------------
 
 const resolveRateArgsSchema = v.strictObject({
-  matter_id: v.pipe(v.string(), v.minLength(1)),
-  user_id: v.pipe(v.string(), v.minLength(1)),
-  date: ISO_DATE_SCHEMA,
+  matter_id: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.description("Matter/workspace ID to resolve the rate in"),
+  ),
+  user_id: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.description("User ID to resolve the rate for"),
+  ),
+  date: v.pipe(
+    ISO_DATE_SCHEMA,
+    v.maxLength(10),
+    v.description("Date to resolve the rate on (ISO YYYY-MM-DD)"),
+  ),
 });
 
 const handleResolveRateTool: McpToolHandler = async ({ args, context }) => {
@@ -1257,17 +1143,41 @@ const handleResolveRateTool: McpToolHandler = async ({ args, context }) => {
 
 const listInvoicesArgsSchema = v.pipe(
   v.strictObject({
-    matter_id: v.optional(v.pipe(v.string(), v.minLength(1))),
-    invoice_id: v.optional(v.pipe(v.string(), v.minLength(1))),
+    matter_id: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.description(
+          "Matter/workspace ID to list invoices in; required unless " +
+            "invoice_id is given",
+        ),
+      ),
+    ),
+    invoice_id: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.description("Invoice ID to read in detail"),
+      ),
+    ),
     limit: v.optional(
       v.pipe(
         v.number(),
         v.integer(),
         v.minValue(1),
         v.maxValue(MAX_LIST_LIMIT),
+        v.description("Max invoices to return"),
       ),
     ),
-    cursor: v.optional(v.pipe(v.string(), v.maxLength(512))),
+    cursor: v.optional(
+      v.pipe(
+        v.string(),
+        v.maxLength(512),
+        v.description(
+          "Opaque cursor from a previous list_invoices call to fetch the next page",
+        ),
+      ),
+    ),
   }),
   v.forward(
     v.partialCheck(
@@ -1535,6 +1445,169 @@ const handleGetUsageTool: TypedMcpToolHandler<
   // (`readOrgEntitlementHandler`, handlers/usage/get-entitlement.ts).
   return toolDataResult(entitlement.value);
 };
+
+export const BILLING_TOOL_DEFINITIONS = [
+  defineValibotMcpTool({
+    annotations: {
+      title: "List time entries",
+      readOnlyHint: true,
+      openWorldHint: false,
+    },
+    description:
+      "List time entries in a matter, or read one entry in detail. Pass " +
+      "time_entry_id to get a single entry. Otherwise pass matter_id to list " +
+      "the matter's entries, optionally filtered by entity_id (the item the " +
+      "time was logged against), user_id, a date-worked range (date_from/" +
+      "date_to, ISO YYYY-MM-DD), and status. Returns each entry's id, entity, " +
+      "user, date, minutes, rate (minor currency units), currency, narrative, " +
+      "and status. The response includes visibility: all_entries for billing " +
+      "reviewers, or own_entries when the caller can see only their own time; " +
+      "own_entries is not a matter total.",
+    inputSchema: listTimeEntriesArgsSchema,
+    jsonSchemaProjectionWaiver: {
+      ignoreActions: ["partial_check"],
+      reason:
+        "The matter_id/time_entry_id cross-field requirement stays authoritative in the runtime schema.",
+    },
+    access: "read",
+    anonymized: {
+      exposure: "anonymize",
+      textFields: [
+        ...TIME_ENTRY_LIST_TEXT_FIELD_PATHS,
+        ...TIME_ENTRY_DETAIL_TEXT_FIELD_PATHS,
+      ],
+    },
+    feature: "FEATURE_TIME_BILLING",
+    isVisibleToMemberRole: (memberRole) =>
+      roles[memberRole].authorize({ timeEntry: ["read"] }).success,
+    name: "list_time_entries",
+    scope: "stella:read",
+  }),
+  defineValibotMcpTool({
+    description:
+      "Create or update a time entry. Omit time_entry_id to create (matter_id, " +
+      "date_worked, timezone_id, duration_minutes, and narrative required; " +
+      "entity_id is optional context). Pass time_entry_id to update: " +
+      "set date_worked (with timezone_id), duration_minutes, narrative, " +
+      "invoice_narrative, " +
+      "billable, no_charge, entity_id (move the entry), task_code, " +
+      "and/or activity_code. The timekeeper's effective rate is resolved " +
+      "server-side. Durations are whole minutes. Returns the time entry ID.",
+    inputSchema: saveTimeEntryArgsSchema,
+    jsonSchemaProjectionWaiver: {
+      ignoreActions: ["partial_check"],
+      reason:
+        "The create-vs-update field requirements stay authoritative in the runtime schema.",
+    },
+    annotations: {
+      title: "Save time entry",
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+    access: "write",
+    anonymized: { exposure: "excluded", reason: "write" },
+    feature: "FEATURE_TIME_BILLING",
+    isVisibleToMemberRole: (memberRole) =>
+      roles[memberRole].authorize({ timeEntry: ["create"] }).success ||
+      roles[memberRole].authorize({ timeEntry: ["update"] }).success,
+    name: "save_time_entry",
+    scope: "stella:billing_write",
+  }),
+  defineValibotMcpTool({
+    annotations: {
+      title: "Delete time entry",
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    description:
+      "Delete a time entry. A draft entry is permanently deleted; an approved " +
+      "entry is written off instead (kept for the audit trail, excluded from " +
+      "billing). A billed entry cannot be deleted until its invoice is " +
+      "reverted. Returns whether the entry was hard-deleted.",
+    inputSchema: deleteTimeEntryArgsSchema,
+    access: "write",
+    anonymized: { exposure: "excluded", reason: "write" },
+    feature: "FEATURE_TIME_BILLING",
+    isVisibleToMemberRole: (memberRole) =>
+      roles[memberRole].authorize({ timeEntry: ["delete"] }).success,
+    name: "delete_time_entry",
+    scope: "stella:billing_write",
+  }),
+  defineValibotMcpTool({
+    annotations: {
+      title: "Resolve billing rate",
+      readOnlyHint: true,
+      openWorldHint: false,
+    },
+    description:
+      "Resolve the effective hourly rate for a user on a given date in a " +
+      "matter, using the matter's default rate table (user-specific rate " +
+      "first, then the table default). Returns the hourly rate in integer " +
+      "minor currency units (e.g. cents) and the currency, or nulls when no " +
+      "rate applies.",
+    inputSchema: resolveRateArgsSchema,
+    access: "read",
+    anonymized: { exposure: "passthrough" },
+    feature: "FEATURE_TIME_BILLING",
+    isVisibleToMemberRole: (memberRole) =>
+      roles[memberRole].authorize({ rate: ["read"] }).success,
+    name: "resolve_rate",
+    scope: "stella:read",
+  }),
+  defineValibotMcpTool({
+    annotations: {
+      title: "List invoices",
+      readOnlyHint: true,
+      openWorldHint: false,
+    },
+    description:
+      "List invoices in a matter, or read one invoice in detail. Pass " +
+      "invoice_id to get a single invoice with its line items (time entries " +
+      "and expenses). Otherwise pass matter_id to list the matter's invoices. " +
+      "Returns each invoice's id, number, reference, status, dates, currency, " +
+      "and total (integer minor currency units).",
+    inputSchema: listInvoicesArgsSchema,
+    jsonSchemaProjectionWaiver: {
+      ignoreActions: ["partial_check"],
+      reason:
+        "The matter_id/invoice_id cross-field requirement stays authoritative in the runtime schema.",
+    },
+    access: "read",
+    anonymized: {
+      exposure: "anonymize",
+      textFields: [
+        INVOICE_LIST_TEXT_FIELD_PATH,
+        ...INVOICE_DETAIL_TEXT_FIELD_PATHS,
+      ],
+    },
+    feature: "FEATURE_TIME_BILLING",
+    isVisibleToMemberRole: (memberRole) =>
+      roles[memberRole].authorize({ workspace: ["read"] }).success,
+    name: "list_invoices",
+    scope: "stella:read",
+  }),
+  defineValibotMcpTool({
+    annotations: {
+      title: "Get usage",
+      readOnlyHint: true,
+      openWorldHint: false,
+    },
+    description:
+      "Read the organization's current usage entitlement: plan, seats, billing " +
+      "period, and how many usage units (AI credits) remain this period. " +
+      "Returns { entitlement: null } when the organization has no active plan. " +
+      "Requires organization-settings management access.",
+    inputSchema: getUsageArgsSchema,
+    access: "read",
+    anonymized: { exposure: "passthrough" },
+    feature: "FEATURE_USAGE",
+    isVisibleToMemberRole: (memberRole) =>
+      roles[memberRole].authorize({ organizationSettings: ["update"] }).success,
+    name: "get_usage",
+    scope: "stella:read",
+  }),
+] as const satisfies readonly McpToolDefinition[];
 
 export const BILLING_TOOL_HANDLERS = {
   list_time_entries: handleListTimeEntriesTool,

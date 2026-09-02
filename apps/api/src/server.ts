@@ -55,6 +55,11 @@ import { listsRoute } from "@/api/handlers/lists/routes";
 import { handleMcpAppSandboxRequest } from "@/api/handlers/mcp-app-sandbox/routes";
 import { mcpConnectorsRoute } from "@/api/handlers/mcp-connectors/routes";
 import { mcpRoute } from "@/api/handlers/mcp/routes";
+import { handleMcpPreflightRequest } from "@/api/handlers/mcp/routes-core";
+import {
+  createMcpTransportAddressRateLimitOptions,
+  createMcpTransportRateLimitOptions,
+} from "@/api/handlers/mcp/transport-rate-limit";
 import { meRoute } from "@/api/handlers/me/routes";
 import { memoriesRoute } from "@/api/handlers/memories/routes";
 import { notificationsRoute } from "@/api/handlers/notifications/routes";
@@ -369,6 +374,14 @@ const api = new Elysia()
       return interceptedResponse;
     }
 
+    // Ahead of the CORS layer below, which otherwise answers every preflight
+    // with the API-wide method list and leaves the MCP route's own preflight
+    // unreachable.
+    const mcpPreflightResponse = handleMcpPreflightRequest(request, set);
+    if (mcpPreflightResponse) {
+      return mcpPreflightResponse;
+    }
+
     return handleMcpAppSandboxRequest(request, set);
   })
   .use(
@@ -560,7 +573,17 @@ const api = new Elysia()
   .use(wellKnownRoute)
   .use(verifyRoute)
   .use(hostedUsageWebhookRoute)
-  .use(mcpRoute)
+  .use(
+    // The MCP transport paths sit at the root, outside the shared `/v1`
+    // budget, and one agent loop can otherwise issue unbounded JSON-RPC calls.
+    // The address budget runs first so rotating bearer values cannot dodge
+    // the credential budget. Each limiter's own `skip` keeps discovery and
+    // preflight unmetered.
+    new Elysia()
+      .use(rateLimit(createMcpTransportAddressRateLimitOptions()))
+      .use(rateLimit(createMcpTransportRateLimitOptions()))
+      .use(mcpRoute),
+  )
   .use(aiAutocompleteRoute)
   .use(feedbackPublicRoute)
   .use(memoriesRoute)

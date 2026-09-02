@@ -17,6 +17,9 @@
       ],
       "ignoreBinaries": ["scripts/dev.sh"]
     },
+    "packages/cli": {
+      "entry": ["src/**/*.test.ts"]
+    },
     "apps/api": {
       "entry": [
         "src/server.ts!",

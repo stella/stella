@@ -1,13 +1,8 @@
 // Token storage.
 //
-// OS keychain is the target end state (see the design brief and
-// `apps/desktop/src-tauri/src/keychain.rs`'s policy precedent), but wiring a
-// native keyring binding is real native-dependency surface (napi-rs
-// prebuilds, per-platform CI, etc.) that this phase deliberately does not
-// pull in without a separate flag-and-discuss. The XDG file is the only
-// backend today; `--no-keychain` (see `../commands/login.ts`) is accepted
-// and threaded through for forward compatibility but is currently a no-op,
-// since there is nothing else to fall back from yet.
+// The XDG file is the only backend; an OS keychain backend would add real
+// native-dependency surface (napi-rs prebuilds, per-platform CI) and is a
+// separate design decision, not a switch this module already anticipates.
 //
 // One credential per (serverUrl, orgId) pair, mode 0600, analogous to the
 // `aws`/`gh` multi-profile credential file pattern.
@@ -25,12 +20,6 @@ import {
 import path from "node:path";
 import * as v from "valibot";
 
-import { defaultConfigDir, resolveConfigDir } from "./config-dir.js";
-import type { ConfigPathOverrides } from "./config-dir.js";
-
-export { defaultConfigDir, resolveConfigDir };
-export type { ConfigPathOverrides };
-
 const CREDENTIALS_FILE_MODE = 0o600;
 
 // Hand-written rather than `v.InferOutput<typeof schema>`: this package
@@ -47,6 +36,13 @@ export type StoredCredential = {
    * happens entirely in the browser). Purely a display/lookup convenience.
    */
   readonly orgLabel?: string | undefined;
+  /**
+   * Account identity from the login `id_token` (see `auth/jwt.ts`). Absent
+   * when the server issued no `id_token` or left the claim out, which is why
+   * `whoami` still prints ids on their own.
+   */
+  readonly email?: string | undefined;
+  readonly name?: string | undefined;
   readonly clientId: string;
   readonly accessToken: string;
   readonly refreshToken?: string | undefined;
@@ -68,6 +64,8 @@ const storedCredentialSchema = v.strictObject({
   serverUrl: v.string(),
   orgId: v.string(),
   orgLabel: v.optional(v.string()),
+  email: v.optional(v.string()),
+  name: v.optional(v.string()),
   clientId: v.string(),
   accessToken: v.string(),
   refreshToken: v.optional(v.string()),

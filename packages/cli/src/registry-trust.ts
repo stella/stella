@@ -29,14 +29,14 @@ export const MAX_TOOLS = 200;
 /** Reject an `inputSchema` nested deeper than this. */
 export const MAX_SCHEMA_DEPTH = 8;
 /** Reject a single tool whose serialized `inputSchema` exceeds this (bytes). */
-export const MAX_TOOL_SCHEMA_BYTES: number = 64 * 1024; // 64 KiB
+const MAX_TOOL_SCHEMA_BYTES: number = 64 * 1024; // 64 KiB
 /** Reject an `enum` with more members than this. */
 export const MAX_ENUM = 300;
 /** Reject a `properties` object with more keys than this. */
 export const MAX_PROPS = 100;
 
 /** Tool names must match this (spec S5.5 rule 2). */
-export const TOOL_NAME_PATTERN: RegExp = /^[a-z][a-z0-9_]{0,63}$/u;
+const TOOL_NAME_PATTERN: RegExp = /^[a-z][a-z0-9_]{0,63}$/u;
 
 /**
  * Longest display title a fetched listing may carry, in UTF-16 code units
@@ -85,6 +85,9 @@ const SUPPORTED_SCHEMA_KEYWORDS: ReadonlySet<string> = new Set([
   "enum",
   "examples",
   "flags",
+  // Annotation-only per JSON Schema; the executor checks the formats it knows
+  // (`date`, `date-time`, `uuid`) and ignores the rest, see json-schema-validate.
+  "format",
   "items",
   "maxItems",
   "maxLength",

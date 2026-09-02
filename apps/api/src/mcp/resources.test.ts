@@ -8,9 +8,11 @@ import { MCP_APP_RESOURCE_MIME_TYPE } from "@stll/api-contract";
 import { envBase } from "@/api/env-base";
 import { DOCUMENT_UPLOAD_APP_RESOURCE_URI } from "@/api/mcp/document-file-upload";
 import { listMcpResources, readMcpResource } from "@/api/mcp/resources";
+import { buildFieldReference } from "@/api/mcp/template-field-reference";
 import { buildMarkerReference } from "@/api/mcp/template-marker-reference";
 
 const MARKER_REFERENCE_URI = "stella://reference/template-markers";
+const FIELD_REFERENCE_URI = "stella://reference/template-fields";
 const PRODUCT_IDENTITY_URI = "stella://about";
 
 describe("MCP resources", () => {
@@ -24,8 +26,9 @@ describe("MCP resources", () => {
       const uris = resources.map((resource) => resource.uri);
       expect(uris).toContain(PRODUCT_IDENTITY_URI);
       expect(uris).toContain(MARKER_REFERENCE_URI);
-      // The marker reference is static, public, and tenant-independent, so the
-      // set is identical across modes.
+      expect(uris).toContain(FIELD_REFERENCE_URI);
+      // The reference documents are static, public, and tenant-independent, so
+      // the set is identical across modes.
       expect(uris).toEqual(listMcpResources("default").map((r) => r.uri));
     }
   });
@@ -39,6 +42,25 @@ describe("MCP resources", () => {
     }
     expect(content.uri).toBe(MARKER_REFERENCE_URI);
     expect(content.text).toBe(buildMarkerReference());
+  });
+
+  test("reads the field reference carrying the prose the tool schema no longer ships", async () => {
+    const result = await readMcpResource(FIELD_REFERENCE_URI, "default");
+    const content = result.contents.at(0);
+    if (!content || !("text" in content)) {
+      throw new Error("Expected a text resource content entry");
+    }
+    expect(content.uri).toBe(FIELD_REFERENCE_URI);
+    expect(content.text).toBe(buildFieldReference());
+    // The per-property guidance an agent needs to configure fields: who fills
+    // the field, the dependent-select rule, the lookup format addressing, and
+    // the binding kinds with their allowed keys.
+    expect(content.text).toContain("Who fills = AI");
+    expect(content.text).toContain("`optionsFrom`");
+    expect(content.text).toContain("{{path.key}}");
+    expect(content.text).toContain('`kind: "party"`');
+    expect(content.text).toContain("dataBox");
+    expect(content.text).toContain(MARKER_REFERENCE_URI);
   });
 
   test("exposes canonical lowercase branding and verified product links", async () => {

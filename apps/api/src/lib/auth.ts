@@ -88,6 +88,7 @@ import {
   MACHINE_API_KEY_START_LENGTH,
 } from "@/api/lib/machine-api-key-config";
 import { isMemberRole } from "@/api/lib/member-roles";
+import { resolveLoopbackClientRegistrationOverride } from "@/api/lib/oauth-loopback-registration";
 import { getBetterAuthOAuthResources } from "@/api/lib/oauth-resource-policy";
 import { bridgeOauthUiInteraction } from "@/api/lib/oauth-ui-fragment";
 import {
@@ -1298,6 +1299,12 @@ const createAuth = () => {
       before: createAuthMiddleware(async (ctx) => {
         await assertSelfhostEmailOtpAllowed(ctx.path);
 
+        const loopbackRegistration =
+          resolveLoopbackClientRegistrationOverride(ctx);
+        if (loopbackRegistration) {
+          return loopbackRegistration;
+        }
+
         if (
           await resolveAuthoritativeSessionForSensitiveAuthPath({
             ctx,
@@ -1305,14 +1312,15 @@ const createAuth = () => {
               await getAuthoritativeSessionFromCtx({ ...ctx, path, request }),
           })
         ) {
-          return;
+          return undefined;
         }
 
         if (!shouldHandleSelfhostBootstrapPath(ctx.path)) {
-          return;
+          return undefined;
         }
 
         await assertSelfhostBootstrapSignUp(ctx.body);
+        return undefined;
       }),
       after: createAuthMiddleware(async (ctx) => {
         if (!isSessionCreatingAuthPath(ctx.path) || env.isDev) {

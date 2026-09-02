@@ -88,6 +88,27 @@ describe("--input contract help", () => {
     expect(rendered).toContain("body.entityId  string  required");
   });
 
+  test("a uuid example honours a version pinned by pattern", () => {
+    const schema: JsonSchema = {
+      type: "object",
+      properties: {
+        id: {
+          type: "string",
+          format: "uuid",
+          pattern:
+            "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+        },
+      },
+      required: ["id"],
+    };
+
+    const help = buildInputContractHelp({ schema, inputOnly: ["id"] });
+
+    expect(validateAgainstSchema(schema, completeExample(help)).valid).toBe(
+      true,
+    );
+  });
+
   test("documents oneOf branches with a schema-valid example", () => {
     const schema: JsonSchema = {
       type: "object",

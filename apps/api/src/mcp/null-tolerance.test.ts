@@ -160,7 +160,7 @@ const invokeValidateOnly = async (
   input: Record<string, unknown>,
 ) =>
   await handleMcpToolCall({
-    args: { capability, input, validateOnly: true },
+    args: { capability, input, validate_only: true },
     context: createContext(),
     toolName: "invoke_capability",
   });
@@ -336,7 +336,7 @@ describe("invoke_capability rejects explicit null on plain optional fields", () 
 
 describe("invoke_capability accepts explicit null on nullable fields", () => {
   // TypeBox null-union fields (catalog `nullable: true`) accept null: Check
-  // passes and validateOnly reports valid, with the null carried through.
+  // passes and validate_only reports valid, with the null carried through.
   const cases: {
     label: string;
     capability: string;

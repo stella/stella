@@ -1,4 +1,7 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 
 import { respondToMcpLifecycle } from "../../tests/mcp-test-lifecycle.js";
 import type { Context } from "../context.js";
@@ -134,5 +137,85 @@ describe("runWhoami with a machine API key", () => {
     }
     // No success identity was printed.
     expect(fake.stdout()).not.toContain("Organization:");
+  });
+});
+
+// whoami used to print opaque ids only, because the access token carries no
+// email or name. Login now stores both off the `id_token`.
+describe("runWhoami with a stored credential", () => {
+  const writeCredential = async (
+    configDir: string,
+    credential: Record<string, unknown>,
+  ): Promise<void> => {
+    await mkdir(configDir, { recursive: true });
+    await Bun.write(
+      path.join(configDir, "credentials.json"),
+      JSON.stringify({
+        version: 1,
+        defaultOrgByServer: { "https://api.example.test": "org_1" },
+        credentials: [credential],
+      }),
+    );
+  };
+
+  const storedCredential = (
+    identity: Record<string, unknown>,
+  ): Record<string, unknown> => ({
+    serverUrl: "https://api.example.test",
+    orgId: "org_1",
+    clientId: "client_1",
+    accessToken: "opaque-token",
+    scope: "stella:read",
+    tokenType: "Bearer",
+    expiresAt: Date.now() + 900_000,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    ...identity,
+  });
+
+  let configDir: string;
+
+  beforeEach(async () => {
+    configDir = await mkdtemp(path.join(os.tmpdir(), "stella-cli-whoami-"));
+  });
+
+  afterEach(async () => {
+    await rm(configDir, { force: true, recursive: true });
+  });
+
+  test("prints the account email and name when the credential carries them", async () => {
+    await writeCredential(
+      configDir,
+      storedCredential({ email: "person@example.com", name: "A Person" }),
+    );
+    const fake = fakeProcess();
+
+    const result = await runWhoami({
+      process: fake.process,
+      configDir,
+      orgFlag: undefined,
+      serverFlag: "https://api.example.test",
+      apiKey: undefined,
+    });
+
+    expect(result).toBeUndefined();
+    expect(fake.stdout()).toContain("Account: person@example.com (A Person)");
+  });
+
+  test("omits the account line for a credential written without identity claims", async () => {
+    await writeCredential(configDir, storedCredential({}));
+    const fake = fakeProcess();
+
+    const result = await runWhoami({
+      process: fake.process,
+      configDir,
+      orgFlag: undefined,
+      serverFlag: "https://api.example.test",
+      apiKey: undefined,
+    });
+
+    expect(result).toBeUndefined();
+    expect(fake.stdout()).not.toContain("Account:");
+    expect(fake.stdout()).toContain("Organization: org_1");
   });
 });

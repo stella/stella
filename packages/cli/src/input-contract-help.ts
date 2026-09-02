@@ -778,6 +778,8 @@ const patternIntersectionExample = (schema: JsonSchema): string | undefined => {
   });
 };
 
+const NIL_LIKE_UUID_EXAMPLE = "00000000-0000-4000-8000-000000000000";
+
 const stringExample = (schema: JsonSchema): string => {
   const format = schema["format"];
   if (format === "date") {
@@ -786,13 +788,22 @@ const stringExample = (schema: JsonSchema): string => {
   if (format === "date-time") {
     return "2026-01-01T00:00:00.000Z";
   }
+  const pattern = schema["pattern"];
+  if (format === "uuid") {
+    // A pattern beside the format may pin a version (a v7 id); only then does
+    // the fixed example give way to one derived from the pattern.
+    const example =
+      typeof pattern === "string"
+        ? boundedPatternExample(schema, pattern)
+        : undefined;
+    return example ?? NIL_LIKE_UUID_EXAMPLE;
+  }
   if (format === "integer") {
     const minimum = schema["minimum"];
     return String(typeof minimum === "number" ? minimum : 0);
   }
-  const pattern = schema["pattern"];
   if (typeof pattern === "string" && pattern.includes("[0-9a-fA-F]{8}")) {
-    return "00000000-0000-4000-8000-000000000000";
+    return NIL_LIKE_UUID_EXAMPLE;
   }
   if (typeof pattern === "string") {
     const example = boundedPatternExample(schema, pattern);

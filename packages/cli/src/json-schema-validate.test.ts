@@ -580,3 +580,56 @@ describe("validateAgainstSchema (interpreted, no codegen)", () => {
     ).toBe(true);
   });
 });
+
+describe("format", () => {
+  const schema = {
+    type: "object",
+    properties: {
+      day: { type: "string", format: "date" },
+      id: { type: "string", format: "uuid" },
+      at: { type: "string", format: "date-time" },
+      tag: { type: "string", format: "custom-annotation" },
+    },
+  } as const;
+
+  test("date-time requires the full RFC 3339 form", () => {
+    for (const at of [
+      "2026-01-01T00:00:00Z",
+      "2026-01-01T00:00:00.250z",
+      "2026-01-01T23:59:59+02:00",
+    ]) {
+      expect(validateAgainstSchema(schema, { at }).valid).toBe(true);
+    }
+    for (const at of [
+      // A bare date and a local time without an offset both parse under
+      // `Date.parse` and are not date-times.
+      "2026-01-01",
+      "2026-01-01T00:00:00",
+      "yesterday",
+    ]) {
+      const result = validateAgainstSchema(schema, { at });
+      expect(result.valid).toBe(false);
+    }
+  });
+
+  test("known formats are asserted", () => {
+    expect(validateAgainstSchema(schema, { day: "2026-09-02" }).valid).toBe(
+      true,
+    );
+    const bad = validateAgainstSchema(schema, { day: "2026-13-40" });
+    expect(bad.valid).toBe(false);
+    expect(bad.valid ? "" : bad.message).toBe("string is not a valid date");
+    expect(validateAgainstSchema(schema, { id: "not-a-uuid" }).valid).toBe(
+      false,
+    );
+    expect(
+      validateAgainstSchema(schema, {
+        id: "019fdc9d-203b-7000-868c-cf9de759a129",
+      }).valid,
+    ).toBe(true);
+  });
+
+  test("an unknown format is an annotation, not an assertion", () => {
+    expect(validateAgainstSchema(schema, { tag: "anything" }).valid).toBe(true);
+  });
+});

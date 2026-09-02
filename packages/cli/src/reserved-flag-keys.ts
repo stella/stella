@@ -2,6 +2,8 @@
 export const RESERVED_FLAG_KEYS = {
   input: "input",
   output: "output",
+  /** Server origin override; resolved before dispatch (see `cli.ts`). */
+  server: "server",
   json: "json",
   table: "table",
   cursor: "cursor",

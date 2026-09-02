@@ -30,16 +30,18 @@ npm i -g @stll/cli
 ## Authenticate
 
 ```sh
-stella auth login
+stella auth login --server <url>
 ```
 
 Login runs an OAuth 2.1 authorization-code flow with PKCE against the stella
 server, using a loopback listener (`http://127.0.0.1/callback`, ephemeral port)
 to capture the code. Credentials are stored per server origin, so one machine
-can hold sessions for several servers at once. Point at a non-default server
-with `--server <url>`; scope the session with `--scopes` (default scopes:
-`openid profile email stella:read stella:search`). `stella auth whoami` shows
-the active session; `stella auth logout` clears it.
+can hold sessions for several servers at once. The first login needs
+`--server <url>` (or `STELLA_SERVER_URL`); it then becomes the default, and
+every command accepts `--server <url>` to target another one. Scope the
+session with `--scopes`; the default scopes are
+`openid profile email offline_access stella:read stella:search`.
+`stella auth whoami` shows the active session; `stella auth logout` clears it.
 
 ## Conventions every agent must know
 
@@ -63,6 +65,10 @@ the active session; `stella auth logout` clears it.
   stays clean even with `--output json`. Every tool error carries a stable
   machine `code` that maps to the process exit code (see below): branch on the
   exit code, and read the `error:`/`hint:` lines for the human-readable message.
+- **Finding and reading text**: `stella search matters --query '<q>'` returns
+  matching documents with their entity ids, and
+  `stella document content --entity-id <id>` prints one document's text
+  (windowed, so follow `--cursor`).
 - **MCP resources**: `stella reference list` enumerates static server resources;
   `stella reference show <name>` prints one.
 
@@ -105,7 +111,7 @@ invoke <id> --input '<json>'`, where the JSON is `{ body?, params?, query? }`.
   workspace-scoped capabilities take a required `--workspace <id>`. Deep or
   ambiguous payloads use `--input` (the whole `{ body?, params?, query? }`).
 - **Dry run**: `--dry-run` validates the input server-side and returns without
-  executing (maps to `validateOnly`).
+  executing (maps to `validate_only`).
 - **Destructive** capabilities prompt on a TTY and need `--yes` off a TTY; the
   server's per-capability confirm gate is satisfied automatically once confirmed.
 - Exit codes are identical to the curated commands (see above).
@@ -143,6 +149,7 @@ requires (request it at `stella auth login --scopes`).
 | contact      | `stella contact lookup-registry`           | read                        |                                       |
 | contact      | `stella contact read`                      | read                        |                                       |
 | contact      | `stella contact save`                      | matters_write               |                                       |
+| document     | `stella document content`                  | read                        | paginated; windowed text              |
 | document     | `stella document delete`                   | documents_write             | destructive (needs `--yes` off a TTY) |
 | document     | `stella document field set`                | documents_write             |                                       |
 | document     | `stella document list`                     | read                        | paginated                             |
@@ -164,7 +171,6 @@ requires (request it at `stella auth login --scopes`).
 | playbook     | `stella playbook run`                      | knowledge_write             |                                       |
 | rate         | `stella rate resolve`                      | read                        |                                       |
 | search       | `stella search matters`                    | search                      | paginated                             |
-| search       | `stella search read`                       | read                        | paginated; windowed text              |
 | task         | `stella task list`                         | read                        | paginated                             |
 | task         | `stella task save`                         | matters_write               |                                       |
 | template     | `stella template fill`                     | templates                   |                                       |

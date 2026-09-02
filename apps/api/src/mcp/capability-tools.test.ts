@@ -387,7 +387,7 @@ describe("invoke_capability gates", () => {
           },
           params: { workspaceId: "ws_1" },
         },
-        validateOnly: true,
+        validate_only: true,
       },
       context: createContext({
         grantedScopes: [
@@ -409,7 +409,7 @@ describe("invoke_capability gates", () => {
   });
 
   // Scope-gate outcome for a read capability under a given granted-scope set.
-  // validateOnly stops after the scope + destructive gates, so the result is
+  // validate_only stops after the scope + destructive gates, so the result is
   // never the handler's DB execution: it is `missing_scope` when the gate
   // rejects, and anything else (validation payload / validation_error) when the
   // gate is satisfied.
@@ -418,7 +418,7 @@ describe("invoke_capability gates", () => {
     grantedScopes: readonly string[],
   ): Promise<string> => {
     const result = await handleMcpToolCall({
-      args: { capability, input: {}, validateOnly: true },
+      args: { capability, input: {}, validate_only: true },
       context: createContext({ grantedScopes }),
       toolName: "invoke_capability",
     });
@@ -475,12 +475,12 @@ describe("invoke_capability gates", () => {
     expect(issues.some((i) => i.path === "query.status")).toBe(true);
   });
 
-  test("validateOnly returns without executing", async () => {
+  test("validate_only returns without executing", async () => {
     const result = await handleMcpToolCall({
       args: {
         capability: "clauses.categories-create",
         input: { body: { name: "Draft category" } },
-        validateOnly: true,
+        validate_only: true,
       },
       context: createContext(),
       toolName: "invoke_capability",
@@ -628,7 +628,7 @@ describe("invoke_capability workspace resolution", () => {
           body: { decisionId: "00000000-0000-0000-0000-000000000000" },
           params: { workspaceId: "ws_1" },
         },
-        validateOnly: true,
+        validate_only: true,
       },
       context: createContext({
         pinServerValidatedWorkspaceId: (workspaceId) => {
@@ -855,7 +855,7 @@ describe("invoke_capability upload purpose gate", () => {
       args: {
         capability: "uploads.create",
         input: { body: skillPackBody, params: { workspaceId: "ws_1" } },
-        validateOnly: true,
+        validate_only: true,
       },
       context: createContext({ grantedScopes: ["stella:matters_write"] }),
       toolName: "invoke_capability",
@@ -870,7 +870,7 @@ describe("invoke_capability upload purpose gate", () => {
       args: {
         capability: "uploads.create",
         input: { body: skillPackBody, params: { workspaceId: "ws_1" } },
-        validateOnly: true,
+        validate_only: true,
       },
       context: createContext({
         grantedScopes: ["stella:matters_write", "stella:skills"],
@@ -885,7 +885,7 @@ describe("invoke_capability upload purpose gate", () => {
       args: {
         capability: "uploads.create",
         input: { body: documentBody, params: { workspaceId: "ws_1" } },
-        validateOnly: true,
+        validate_only: true,
       },
       context: createContext({ grantedScopes: ["stella:matters_write"] }),
       toolName: "invoke_capability",
@@ -900,7 +900,7 @@ describe("invoke_capability upload purpose gate", () => {
       args: {
         capability: "uploads.update",
         input: { params: { workspaceId: WORKSPACE_ID, uploadId: UPLOAD_ID } },
-        validateOnly: true,
+        validate_only: true,
       },
       context: createContext({
         grantedScopes: ["stella:matters_write"],
@@ -919,7 +919,7 @@ describe("invoke_capability upload purpose gate", () => {
       args: {
         capability: "uploads.update",
         input: { params: { workspaceId: WORKSPACE_ID, uploadId: UPLOAD_ID } },
-        validateOnly: true,
+        validate_only: true,
       },
       context: createContext({
         grantedScopes: ["stella:matters_write"],
@@ -940,7 +940,7 @@ describe("invoke_capability upload purpose gate", () => {
       args: {
         capability: "uploads.create",
         input: { body: skillPackBody, params: { workspaceId: "ws_1" } },
-        validateOnly: true,
+        validate_only: true,
       },
       // intern holds workspace:read (the config gate) but no agentSkill grant.
       context: createContext({
@@ -957,7 +957,7 @@ describe("invoke_capability upload purpose gate", () => {
       args: {
         capability: "uploads.create",
         input: { body: skillPackBody, params: { workspaceId: "ws_1" } },
-        validateOnly: true,
+        validate_only: true,
       },
       context: createContext({
         credentialPermissions: { workspace: ["read"] },
@@ -973,7 +973,7 @@ describe("invoke_capability upload purpose gate", () => {
       args: {
         capability: "uploads.create",
         input: { body: skillPackBody, params: { workspaceId: "ws_1" } },
-        validateOnly: true,
+        validate_only: true,
       },
       context: createContext({
         credentialPermissions: {
@@ -992,7 +992,7 @@ describe("invoke_capability upload purpose gate", () => {
       args: {
         capability: "uploads.update",
         input: { params: { workspaceId: WORKSPACE_ID, uploadId: UPLOAD_ID } },
-        validateOnly: true,
+        validate_only: true,
       },
       context: createContext({
         credentialPermissions: { workspace: ["read"] },
@@ -1011,7 +1011,7 @@ describe("invoke_capability upload purpose gate", () => {
         capability: "uploads.delete",
         confirm: true,
         input: { params: { workspaceId: WORKSPACE_ID, uploadId: UPLOAD_ID } },
-        validateOnly: true,
+        validate_only: true,
       },
       context: createContext({
         credentialPermissions: { workspace: ["read"] },
@@ -1069,12 +1069,12 @@ describe("invoke_capability credential permission set", () => {
     expect(errorEnvelope(result).code).toBe("permission_denied");
   });
 
-  test("validateOnly reports the same refusal as execution would", async () => {
+  test("validate_only reports the same refusal as execution would", async () => {
     const result = await handleMcpToolCall({
       args: {
         capability: "clauses.categories-create",
         input: { body: { name: "X" } },
-        validateOnly: true,
+        validate_only: true,
       },
       context: createContext({
         credentialPermissions: { workspace: ["read"] },
@@ -1116,15 +1116,15 @@ describe("case-law ingestion status admin gate (fix-2)", () => {
   });
 });
 
-// --- validateOnly enforces member permissions --------------------------------
+// --- validate_only enforces member permissions --------------------------------
 
-describe("invoke_capability validateOnly permission preflight", () => {
-  test("a role lacking the permission -> permission_denied from validateOnly", async () => {
+describe("invoke_capability validate_only permission preflight", () => {
+  test("a role lacking the permission -> permission_denied from validate_only", async () => {
     // case-law.ingestion.status is root-kind with auditLog:["read"] (owner/
-    // admin only); validateOnly must mirror the wrapper's gate, not report
+    // admin only); validate_only must mirror the wrapper's gate, not report
     // valid: true for a call that would 403 at execution.
     const result = await handleMcpToolCall({
-      args: { capability: "case-law.ingestion.status", validateOnly: true },
+      args: { capability: "case-law.ingestion.status", validate_only: true },
       context: createContext({ memberRole: "member" }),
       toolName: "invoke_capability",
     });
@@ -1135,7 +1135,7 @@ describe("invoke_capability validateOnly permission preflight", () => {
 
   test("a sufficient role still gets valid: true without executing", async () => {
     const result = await handleMcpToolCall({
-      args: { capability: "case-law.ingestion.status", validateOnly: true },
+      args: { capability: "case-law.ingestion.status", validate_only: true },
       context: createContext({ memberRole: "owner" }),
       toolName: "invoke_capability",
     });
@@ -1194,13 +1194,13 @@ describe("invoke_capability archived-workspace gate (fix-4)", () => {
     });
 
   test("an allowsArchivedWorkspace write passes the gate on an archived workspace", async () => {
-    // validateOnly reaches (and clears) the workspace gate without executing, so
+    // validate_only reaches (and clears) the workspace gate without executing, so
     // this asserts the gate result independent of the unarchive DB work.
     const result = await handleMcpToolCall({
       args: {
         capability: "workspaces.unarchive",
         input: { params: { workspaceId: "ws_arch" } },
-        validateOnly: true,
+        validate_only: true,
       },
       context: archivedCtx(),
       toolName: "invoke_capability",
@@ -1224,7 +1224,7 @@ describe("invoke_capability archived-workspace gate (fix-4)", () => {
           params: { workspaceId: "ws_arch" },
           body: { decisionId: "00000000-0000-0000-0000-000000000000" },
         },
-        validateOnly: true,
+        validate_only: true,
       },
       context: archivedCtx(),
       toolName: "invoke_capability",
@@ -1233,18 +1233,18 @@ describe("invoke_capability archived-workspace gate (fix-4)", () => {
   });
 });
 
-// --- fix-5: validateOnly runs workspace resolution first ---------------------
+// --- fix-5: validate_only runs workspace resolution first ---------------------
 
-describe("invoke_capability validateOnly ordering (fix-5)", () => {
-  test("validateOnly on a workspace capability fails when the workspace is missing", async () => {
-    // time-entries.export-csv declares no params schema, so pre-fix validateOnly
+describe("invoke_capability validate_only ordering (fix-5)", () => {
+  test("validate_only on a workspace capability fails when the workspace is missing", async () => {
+    // time-entries.export-csv declares no params schema, so pre-fix validate_only
     // returned { valid: true } before any workspace check. Now resolution runs
     // first, so a missing workspaceId surfaces as it would on a real invoke.
     const result = await handleMcpToolCall({
       args: {
         capability: "time-entries.export-csv",
         input: {},
-        validateOnly: true,
+        validate_only: true,
       },
       context: createContext(),
       toolName: "invoke_capability",
@@ -1254,12 +1254,12 @@ describe("invoke_capability validateOnly ordering (fix-5)", () => {
     expect(loadOrgSettingsMock).not.toHaveBeenCalled();
   });
 
-  test("validateOnly succeeds once the workspace resolves, still without executing", async () => {
+  test("validate_only succeeds once the workspace resolves, still without executing", async () => {
     const result = await handleMcpToolCall({
       args: {
         capability: "time-entries.export-csv",
         input: { params: { workspaceId: "ws_1" } },
-        validateOnly: true,
+        validate_only: true,
       },
       context: createContext(),
       toolName: "invoke_capability",
@@ -1406,7 +1406,7 @@ describe("invoke_capability file-input gate", () => {
     expect(loadOrgSettingsMock).not.toHaveBeenCalled();
   });
 
-  test("validateOnly is refused too (a string would falsely validate as a File)", async () => {
+  test("validate_only is refused too (a string would falsely validate as a File)", async () => {
     const result = await handleMcpToolCall({
       args: {
         capability: "entities.upload",
@@ -1414,7 +1414,7 @@ describe("invoke_capability file-input gate", () => {
           params: { workspaceId: "ws_1" },
           body: { file: "not-a-file" },
         },
-        validateOnly: true,
+        validate_only: true,
       },
       context: createContext(),
       toolName: "invoke_capability",
@@ -1434,7 +1434,7 @@ describe("invoke_capability file-input gate", () => {
           params: { templateId: "01234567-89ab-cdef-0123-456789abcdef" },
           body: { text: "Tenant: ACME" },
         },
-        validateOnly: true,
+        validate_only: true,
       },
       context: createContext({ grantedScopes: ["stella:templates"] }),
       toolName: "invoke_capability",
@@ -1559,14 +1559,14 @@ const mappedError = (
 // --- meta-tool argument shape validation (fail-closed dry runs) ---------------
 
 describe("invoke_capability argument shape validation", () => {
-  test('validateOnly: "true" (string) -> validation_error, capability NOT executed', async () => {
+  test('validate_only: "true" (string) -> validation_error, capability NOT executed', async () => {
     // The transport does not enforce the advertised JSON Schema; a mistyped
     // dry-run flag silently read as false would EXECUTE the capability.
     const result = await handleMcpToolCall({
       args: {
         capability: "clauses.categories-create",
         input: { body: { name: "Dry run intended" } },
-        validateOnly: "true",
+        validate_only: "true",
       },
       context: createContext(),
       toolName: "invoke_capability",
@@ -1574,7 +1574,7 @@ describe("invoke_capability argument shape validation", () => {
     const error = errorEnvelope(result);
     expect(error.code).toBe("validation_error");
     const issues = asTestRaw<{ path: string }[]>(error.issues);
-    expect(issues.some((i) => i.path === "validateOnly")).toBe(true);
+    expect(issues.some((i) => i.path === "validate_only")).toBe(true);
     // Refused before any dispatch: the org-settings loader never ran.
     expect(loadOrgSettingsMock).not.toHaveBeenCalled();
   });
@@ -1627,6 +1627,138 @@ describe("invoke_capability argument shape validation", () => {
     const described = await call("describe_capability", { capability: 42 });
     expect(errorEnvelope(described).code).toBe("validation_error");
   });
+
+  test("an input part sent at the top level -> validation_error naming it", async () => {
+    // Ignoring a misplaced `query` ran the capability with NO input: an agent
+    // asking for one audit entry got the whole default page.
+    const result = await handleMcpToolCall({
+      args: { capability: "audit-logs.list", query: { limit: 1 } },
+      context: createContext(),
+      toolName: "invoke_capability",
+    });
+    const error = errorEnvelope(result);
+    expect(error.code).toBe("validation_error");
+    const issues = asTestRaw<{ path: string; message: string }[]>(error.issues);
+    expect(issues.find((i) => i.path === "query")?.message).toContain(
+      "Unknown parameter: query",
+    );
+    expect(error.hint).toContain("input");
+    // Refused before any dispatch: nothing ran with the dropped filter.
+    expect(loadOrgSettingsMock).not.toHaveBeenCalled();
+  });
+
+  test("an unknown key inside input -> validation_error naming it", async () => {
+    // `readInvokeInput` keeps only body/params/query; a misspelt part would
+    // otherwise run the capability without the filter the agent asked for.
+    const result = await handleMcpToolCall({
+      args: { capability: "audit-logs.list", input: { queries: { limit: 1 } } },
+      context: createContext(),
+      toolName: "invoke_capability",
+    });
+    const error = errorEnvelope(result);
+    expect(error.code).toBe("validation_error");
+    const issues = asTestRaw<{ path: string; message: string }[]>(error.issues);
+    expect(issues.find((i) => i.path === "input.queries")?.message).toContain(
+      "body, params, query",
+    );
+    expect(loadOrgSettingsMock).not.toHaveBeenCalled();
+  });
+
+  test("every unknown top-level argument is named (no silent drop)", async () => {
+    const result = await handleMcpToolCall({
+      args: {
+        capability: "contacts.list",
+        body: { q: "acme" },
+        // The pre-rename spelling is an unknown argument now, not an alias.
+        validateOnly: true,
+      },
+      context: createContext(),
+      toolName: "invoke_capability",
+    });
+    const error = errorEnvelope(result);
+    expect(error.code).toBe("validation_error");
+    const issues = asTestRaw<{ path: string; message: string }[]>(error.issues);
+    expect(issues.map((i) => i.path).sort()).toEqual(["body", "validateOnly"]);
+    expect(issues.find((i) => i.path === "validateOnly")?.message).toContain(
+      "validate_only",
+    );
+    expect(loadOrgSettingsMock).not.toHaveBeenCalled();
+  });
+});
+
+// --- advertised schema == enforced schema ------------------------------------
+
+describe("invoke_capability enforces the advertised input schema", () => {
+  // contacts.list advertises a bounded `query.limit`; describe_capability and
+  // the invoke gate render it from the same projection, so the bound an agent
+  // reads is the bound it hits.
+  const CAPABILITY = "contacts.list";
+
+  const advertisedLimit = async (): Promise<Record<string, unknown>> => {
+    const described = await call("describe_capability", {
+      capability: CAPABILITY,
+    });
+    const payload = parseToolPayload<{
+      inputSchema: { query?: { properties?: Record<string, unknown> } };
+    }>(described);
+    const limit = payload.inputSchema.query?.properties?.["limit"];
+    if (typeof limit !== "object" || limit === null) {
+      throw new Error("Expected contacts.list to advertise query.limit");
+    }
+    return asTestRaw<Record<string, unknown>>(limit);
+  };
+
+  test("describe renders a bounded integer, not a coercion union", async () => {
+    // Elysia's t.Integer compiles to a string|integer union with the bounds
+    // hoisted above it; that shape is unreadable and unenforceable.
+    expect(await advertisedLimit()).toEqual({
+      type: "integer",
+      minimum: 1,
+      maximum: 100,
+    });
+  });
+
+  test("a value above the advertised maximum is refused, naming the path", async () => {
+    const maximum = (await advertisedLimit())["maximum"];
+    const result = await handleMcpToolCall({
+      args: {
+        capability: CAPABILITY,
+        input: { query: { limit: Number(maximum) + 1 } },
+        validate_only: true,
+      },
+      context: createContext(),
+      toolName: "invoke_capability",
+    });
+    const error = errorEnvelope(result);
+    expect(error.code).toBe("validation_error");
+    const issues = asTestRaw<{ path: string }[]>(error.issues);
+    expect(issues.some((i) => i.path === "query.limit")).toBe(true);
+  });
+
+  test("the advertised maximum itself validates, string form included", async () => {
+    const maximum = Number((await advertisedLimit())["maximum"]);
+    // The string form is what a REST caller sends; flattening the coercion
+    // union must not cost the conversion the union was there for.
+    const results = await Promise.all(
+      [maximum, String(maximum)].map(
+        async (limit) =>
+          await handleMcpToolCall({
+            args: {
+              capability: CAPABILITY,
+              input: { query: { limit } },
+              validate_only: true,
+            },
+            context: createContext(),
+            toolName: "invoke_capability",
+          }),
+      ),
+    );
+    for (const result of results) {
+      expect(
+        parseToolPayload<{ valid: boolean; capability: string }>(result),
+      ).toEqual({ valid: true, capability: CAPABILITY });
+    }
+  });
 });
 
 // --- Elysia-boundary input normalization (Value.Clean parity) ----------------
@@ -1648,7 +1780,7 @@ describe("invoke_capability input normalization", () => {
             unknownExtra: "would fail additionalProperties:false without Clean",
           },
         },
-        validateOnly: true,
+        validate_only: true,
       },
       context: createContext(),
       toolName: "invoke_capability",
@@ -1692,13 +1824,13 @@ describe("invoke_capability deployment feature gate", () => {
     expect(loadOrgSettingsMock).not.toHaveBeenCalled();
   });
 
-  test("validateOnly is refused too (the gate runs before everything)", async () => {
+  test("validate_only is refused too (the gate runs before everything)", async () => {
     disabledFeatures.add("FEATURE_TIME_BILLING");
     const result = await handleMcpToolCall({
       args: {
         capability: "time-entries.export-csv",
         input: { params: { workspaceId: "ws_1" } },
-        validateOnly: true,
+        validate_only: true,
       },
       context: createContext(),
       toolName: "invoke_capability",

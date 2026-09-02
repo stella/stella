@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 import { and, eq, inArray, sql } from "drizzle-orm";
+import * as v from "valibot";
 
 import { entities, extractedContent, fields } from "@/api/db/schema";
 import { readEntityByIdHandler } from "@/api/handlers/entities/get";
@@ -21,13 +22,12 @@ import {
   DEFAULT_COMPAT_SEARCH_LIMIT,
   ensureWorkspaceAccess,
   errorResult,
-  isToolErrorResult,
+  MAX_CURSOR_LENGTH,
   notFoundResult,
-  parseOptionalCursor,
-  parseRequiredString,
-  stringProp,
   structuredErrorResult,
+  validationErrorResult,
 } from "@/api/mcp/tool-utils";
+import { defineValibotMcpTool } from "@/api/mcp/valibot-tool-definition";
 
 type CompatToolName = "fetch" | "search";
 
@@ -228,8 +228,41 @@ const getCompatFetchPayload = ({
   };
 };
 
+const compatSearchArgsSchema = v.strictObject({
+  query: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.maxLength(LIMITS.searchQueryMaxLength),
+    v.description("Search query"),
+  ),
+  cursor: v.optional(
+    v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(MAX_CURSOR_LENGTH),
+      v.description(
+        "Opaque cursor from a previous search call to fetch the next page",
+      ),
+    ),
+  ),
+});
+
+const compatFetchArgsSchema = v.strictObject({
+  id: v.pipe(v.string(), v.minLength(1), v.description("Document/entity ID")),
+  cursor: v.optional(
+    v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(MAX_CURSOR_LENGTH),
+      v.description(
+        "Opaque cursor from a previous fetch call to read the next window of text",
+      ),
+    ),
+  ),
+});
+
 export const COMPAT_TOOL_DEFINITIONS = [
-  {
+  defineValibotMcpTool({
     annotations: { title: "Search", readOnlyHint: true, openWorldHint: false },
     access: "read",
     anonymized: {
@@ -242,23 +275,11 @@ export const COMPAT_TOOL_DEFINITIONS = [
     description:
       "Search knowledge across accessible matters using the OpenAI-compatible " +
       "search tool shape. Returns results with id, title, and url for follow-up fetch calls.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        query: stringProp("Search query", {
-          maxLength: LIMITS.searchQueryMaxLength,
-        }),
-        cursor: stringProp(
-          "Opaque cursor from a previous search call to fetch the next page",
-          { maxLength: 512 },
-        ),
-      },
-      required: ["query"],
-    },
+    inputSchema: compatSearchArgsSchema,
     name: "search",
     scope: "stella:search",
-  },
-  {
+  }),
+  defineValibotMcpTool({
     annotations: { title: "Fetch", readOnlyHint: true, openWorldHint: false },
     access: "read",
     anonymized: {
@@ -273,34 +294,18 @@ export const COMPAT_TOOL_DEFINITIONS = [
       "Fetch a knowledge document by id using the OpenAI-compatible fetch " +
       "tool shape. Use ids returned by the search tool. Long documents are " +
       "returned in windows; pass the returned nextCursor back as cursor to read more.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        id: stringProp("Document/entity ID"),
-        cursor: stringProp(
-          "Opaque cursor from a previous fetch call to read the next window of text",
-          { maxLength: 512 },
-        ),
-      },
-      required: ["id"],
-    },
+    inputSchema: compatFetchArgsSchema,
     name: "fetch",
     scope: "stella:read",
-  },
+  }),
 ] as const satisfies readonly McpToolDefinition[];
 
 const handleCompatSearchTool: McpToolHandler = async ({ args, context }) => {
-  const query = parseRequiredString(args, "query", {
-    maxLength: LIMITS.searchQueryMaxLength,
-  });
-  if (typeof query !== "string") {
-    return query;
+  const parsed = v.safeParse(compatSearchArgsSchema, args);
+  if (!parsed.success) {
+    return validationErrorResult(parsed.issues);
   }
-
-  const cursor = parseOptionalCursor({ args, key: "cursor" });
-  if (isToolErrorResult(cursor)) {
-    return cursor;
-  }
+  const { cursor, query } = parsed.output;
   // Reject an undecodable provider cursor instead of forwarding it: the
   // provider treats a malformed cursor as no cursor and silently returns the
   // first page, which would duplicate hits or loop a paginating client.
@@ -355,16 +360,12 @@ const handleCompatSearchTool: McpToolHandler = async ({ args, context }) => {
 };
 
 const handleCompatFetchTool: McpToolHandler = async ({ args, context }) => {
-  const rawEntityId = parseRequiredString(args, "id");
-  if (typeof rawEntityId !== "string") {
-    return rawEntityId;
+  const parsed = v.safeParse(compatFetchArgsSchema, args);
+  if (!parsed.success) {
+    return validationErrorResult(parsed.issues);
   }
+  const { cursor, id: rawEntityId } = parsed.output;
   const entityId = brandPersistedEntityId(rawEntityId);
-
-  const cursor = parseOptionalCursor({ args, key: "cursor" });
-  if (isToolErrorResult(cursor)) {
-    return cursor;
-  }
 
   if (context.accessibleWorkspaceIds.length === 0) {
     return errorResult("Document content is unavailable");

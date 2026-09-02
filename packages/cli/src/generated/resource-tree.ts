@@ -37,6 +37,15 @@ export const generatedResourceTree: ResourceNode = {
             uri: "stella://reference/template-markers",
           },
         },
+        "template-fields": {
+          kind: "leaf",
+          spec: {
+            kind: "show",
+            commandPath: ["reference", "show", "template-fields"],
+            name: "template-fields",
+            uri: "stella://reference/template-fields",
+          },
+        },
       },
     },
   },

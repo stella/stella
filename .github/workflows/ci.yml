@@ -829,6 +829,18 @@ jobs:
             DATABASE_URL=postgresql://invalid bun --no-env-file run knip --no-progress --include dependencies --workspace "$workspace"
           done
 
+      - name: Knip dead-export check (packages/cli)
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # The CLI is small enough to enforce the `exports`/`types` issue
+        # types today (the apps above are not; see the note in the step
+        # before). An exported helper that no runtime or test path calls is
+        # how "login never persists the default server" shipped: the
+        # persistence function existed, unused. Test files are entries in
+        # knip.json so test-only exports count as used; anything else that
+        # is exported but unreferenced fails here.
+        run: |
+          DATABASE_URL=postgresql://invalid bun --no-env-file run knip --no-progress --include exports,types,nsExports --workspace packages/cli
+
       - name: Catalogue pinned-content check
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         timeout-minutes: 5

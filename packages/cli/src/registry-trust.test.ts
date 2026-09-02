@@ -196,7 +196,6 @@ describe("validateFetchedToolsList: rule 2 (meta-schema)", () => {
       ["dependentRequired", { mode: ["value"] }],
       ["dependentSchemas", { mode: { required: ["value"] } }],
       ["else", { required: ["fallback"] }],
-      ["format", "email"],
       ["if", { required: ["mode"] }],
       ["not", { const: "forbidden" }],
       ["propertyNames", { pattern: "^safe-" }],

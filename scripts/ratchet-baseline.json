@@ -12,9 +12,9 @@
     "files": {}
   },
   "legacy-manual-mcp-input-schemas": {
-    "count": 44,
+    "count": 6,
     "files": {
-      "apps/api/src/mcp/static-tool-definitions.ts": 44
+      "apps/api/src/mcp/static-tool-definitions.ts": 6
     }
   },
   "nullish-array-fallback": {
@@ -502,7 +502,7 @@
       "apps/web/src/features/guides/use-guide-runner.ts": 7,
       "apps/web/src/hooks/external-file-drop.logic.ts": 5,
       "apps/web/src/hooks/use-effect.ts": 2,
-      "apps/web/src/lib/analytics/posthog.ts": 1,
+      "apps/web/src/lib/analytics/stack-redaction.ts": 1,
       "apps/web/src/lib/anonymize/anonymize-chat-worker-client.ts": 3,
       "apps/web/src/lib/anonymize/use-overlay-rects.ts": 1,
       "apps/web/src/lib/desktop-bridge.ts": 6,

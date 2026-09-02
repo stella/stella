@@ -1,6 +1,6 @@
 // The executor for generated capability leaves (spec 049 Phase 3). Unlike the
 // curated executor it calls the ONE generic `invoke_capability` tool with
-// `{ capability, input: { body?, params?, query? }, validateOnly?, confirm? }`,
+// `{ capability, input: { body?, params?, query? }, validate_only?, confirm? }`,
 // mapping each flag back to the input part its schema declared. It shares the
 // curated executor's helpers (confirm gates, scope precheck, `--all` follow,
 // output contract) so the output/behavior contract stays identical CLI-wide.
@@ -183,7 +183,7 @@ export const runCapabilityCommand = async ({
     input,
   };
   if (flags[RESERVED_FLAG_KEYS.dryRun] === true) {
-    toolArgs["validateOnly"] = true;
+    toolArgs["validate_only"] = true;
   }
 
   // Confirm gates. A known-destructive capability prompts up front; any

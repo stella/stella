@@ -1,4 +1,4 @@
-import { KindGuard, type TSchema } from "@sinclair/typebox";
+import { KindGuard, type TSchema, Type } from "@sinclair/typebox";
 import { ValueErrorType } from "@sinclair/typebox/errors";
 import { Value, type ValueError } from "@sinclair/typebox/value";
 import { panic } from "better-result";
@@ -346,6 +346,95 @@ const loadEndpoint = async (id: string): Promise<EndpointDefinition | null> => {
       : mod[dispatch.exportName];
   return isEndpointDefinition(raw) ? raw : null;
 };
+
+// --- Advertised input schemas ------------------------------------------------
+
+/**
+ * The `format` markers Elysia stamps on the string branch of a coercing scalar
+ * (`t.Integer`, `t.Numeric`, `t.BooleanString`). Any other format on a string
+ * branch is a real alternative the handler accepts, not a transport artifact.
+ */
+const COERCION_STRING_FORMATS = new Set(["integer", "numeric", "boolean"]);
+
+const isCoercionStringBranch = (schema: TSchema): boolean =>
+  KindGuard.IsString(schema) &&
+  typeof schema.format === "string" &&
+  COERCION_STRING_FORMATS.has(schema.format);
+
+const isCoercibleScalar = (schema: TSchema): boolean =>
+  KindGuard.IsNumber(schema) ||
+  KindGuard.IsInteger(schema) ||
+  KindGuard.IsBoolean(schema);
+
+/**
+ * The scalar branch of an Elysia coercion union, or `null` for every other
+ * schema. `t.Integer({ minimum, maximum })` compiles to a two-variant union of
+ * a coercing string branch (`{ type: "string", format: "integer", default: 0 }`)
+ * and the real scalar, with the bounds hoisted onto the union node. That shape
+ * leaks twice on the generic path: TypeBox enforces no keyword hoisted above a
+ * union, and `Value.Convert` matches the string branch first, so `limit:
+ * 100000` converts to `"100000"` and passes a schema advertising `maximum:
+ * 200`. Flattening to the scalar branch is what makes the advertised bounds
+ * enforceable; a JSON caller loses nothing, because `Value.Convert` still
+ * coerces `"20"` to `20` against the scalar alone.
+ */
+const coercionUnionScalar = (schema: TSchema): TSchema | null => {
+  if (!KindGuard.IsUnion(schema) || schema.anyOf.length !== 2) {
+    return null;
+  }
+  const strings = schema.anyOf.filter(isCoercionStringBranch);
+  const scalars = schema.anyOf.filter(isCoercibleScalar);
+  if (strings.length !== 1 || scalars.length !== 1) {
+    return null;
+  }
+  return scalars.at(0) ?? null;
+};
+
+/**
+ * One input part's schema as the MCP surface both advertises and enforces it.
+ * `describe_capability` renders this and `invoke_capability` validates against
+ * it, so what an agent reads and what the gate applies cannot diverge.
+ */
+const advertisedSchema = (schema: TSchema): TSchema => {
+  const scalar = coercionUnionScalar(schema);
+  if (scalar !== null) {
+    // `t.Optional` marks the union node, never the branch inside it, so the
+    // marker has to be carried across or a filter becomes required.
+    return KindGuard.IsOptional(schema) ? Type.Optional(scalar) : scalar;
+  }
+  if (KindGuard.IsObject(schema)) {
+    const properties: Record<string, TSchema> = {};
+    for (const [key, property] of Object.entries(schema.properties)) {
+      properties[key] = advertisedSchema(property);
+    }
+    return { ...schema, properties };
+  }
+  if (KindGuard.IsArray(schema)) {
+    return { ...schema, items: advertisedSchema(schema.items) };
+  }
+  if (KindGuard.IsUnion(schema)) {
+    return { ...schema, anyOf: schema.anyOf.map(advertisedSchema) };
+  }
+  if (KindGuard.IsIntersect(schema)) {
+    return { ...schema, allOf: schema.allOf.map(advertisedSchema) };
+  }
+  return schema;
+};
+
+type AdvertisedSchemas = {
+  body: TSchema | undefined;
+  params: TSchema | undefined;
+  query: TSchema | undefined;
+};
+
+/** The three advertised part schemas of one capability's live endpoint config. */
+const advertisedSchemas = (config: EndpointConfig): AdvertisedSchemas => ({
+  body: config.body === undefined ? undefined : advertisedSchema(config.body),
+  params:
+    config.params === undefined ? undefined : advertisedSchema(config.params),
+  query:
+    config.query === undefined ? undefined : advertisedSchema(config.query),
+});
 
 // --- TypeBox input validation ------------------------------------------------
 
@@ -873,12 +962,10 @@ const describeCapabilityHandler = async ({
   // The live TypeBox schemas are plain objects plus symbol metadata; the final
   // JSON serialization (toolDataResult in the egress pipeline) drops the symbols, so
   // they can go on the payload as-is. Uses the live config, never the snapshot,
-  // so a snapshot-truncated capability still describes fully.
-  const inputSchema = {
-    body: endpoint.config.body,
-    params: endpoint.config.params,
-    query: endpoint.config.query,
-  };
+  // so a snapshot-truncated capability still describes fully, and the same
+  // `advertisedSchemas` projection invoke_capability validates against, so an
+  // advertised bound is always an enforced bound.
+  const inputSchema = advertisedSchemas(endpoint.config);
 
   return {
     egress: "structured",
@@ -973,22 +1060,43 @@ const filelessFieldRefusal = (
   });
 };
 
-const INVOKE_BOOLEAN_ARGS = ["validateOnly", "confirm"] as const;
+const INVOKE_BOOLEAN_ARGS = ["validate_only", "confirm"] as const;
 const INVOKE_INPUT_PARTS = ["body", "params", "query"] as const;
+const INVOKE_ARG_KEYS = [
+  "capability",
+  "input",
+  ...INVOKE_BOOLEAN_ARGS,
+] as const;
+const INVOKE_ARG_KEY_SET = new Set<string>(INVOKE_ARG_KEYS);
+const INVOKE_INPUT_PART_SET = new Set<string>(INVOKE_INPUT_PARTS);
 
 /**
  * Strict shape check for invoke_capability's OWN arguments. The MCP transport
  * does not enforce the advertised JSON Schema on tool args, so a hand-built
- * request can mistype a flag — and `validateOnly: "true"` silently read as
- * `false` would EXECUTE a capability the caller intended as a dry run
- * (fail-open into execution). Every mistyped argument is therefore refused
- * with a named issue: booleans must be JSON booleans, `input` and its
+ * request can mistype a flag or misplace the capability's input — and either
+ * one, read leniently, fails open: `validate_only: "true"` silently read as
+ * `false` would EXECUTE a capability the caller intended as a dry run, and a
+ * top-level `query` neither rejected nor read would run the capability with NO
+ * input (an unfiltered, unpaginated call the agent never asked for). Every
+ * mistyped argument and every key outside the advertised set is therefore
+ * refused with a named issue: booleans must be JSON booleans, `input` and its
  * body/params/query parts must be objects. Never coerce, never ignore.
  */
 const invokeArgIssues = (
   args: Record<string, unknown>,
 ): McpValidationIssue[] => {
   const issues: McpValidationIssue[] = [];
+  for (const key of Object.keys(args)) {
+    if (INVOKE_ARG_KEY_SET.has(key)) {
+      continue;
+    }
+    issues.push({
+      path: key,
+      message: INVOKE_INPUT_PART_SET.has(key)
+        ? `Unknown argument: the capability's own input goes under \`input\`, as input.${key}`
+        : `Unknown argument. Expected one of: ${INVOKE_ARG_KEYS.join(", ")}`,
+    });
+  }
   for (const key of INVOKE_BOOLEAN_ARGS) {
     const value = args[key];
     if (value !== undefined && typeof value !== "boolean") {
@@ -1001,6 +1109,15 @@ const invokeArgIssues = (
   const input = args["input"];
   if (input !== undefined) {
     if (isRecord(input)) {
+      for (const key of Object.keys(input)) {
+        if (INVOKE_INPUT_PART_SET.has(key)) {
+          continue;
+        }
+        issues.push({
+          path: `input.${key}`,
+          message: `Unknown input part. Expected one of: ${INVOKE_INPUT_PARTS.join(", ")}`,
+        });
+      }
       for (const part of INVOKE_INPUT_PARTS) {
         const value = input[part];
         if (value !== undefined && !isRecord(value)) {
@@ -1107,16 +1224,17 @@ const invokeCapabilityHandler = async ({
   }
 
   // 0. The meta-tool's own argument shapes, before ANY gate: the transport
-  // does not enforce the advertised JSON Schema, and a mistyped flag must
-  // never be silently read as false (`validateOnly: "true"` would otherwise
-  // fail open into executing a request that intended a dry run).
+  // does not enforce the advertised JSON Schema, and neither a mistyped flag
+  // nor a misplaced input may be read leniently (`validate_only: "true"` would
+  // fail open into executing a request that intended a dry run; a top-level
+  // `query` would run the capability with no input at all).
   const argIssues = invokeArgIssues(args);
   if (argIssues.length > 0) {
     return structuredErrorResult({
       code: "validation_error",
       message: "invoke_capability arguments failed validation",
       issues: argIssues,
-      hint: "Fix the argument types named in issues[]: boolean flags must be JSON booleans (not strings), input and its body/params/query must be objects.",
+      hint: "Fix the arguments named in issues[]: the capability's own input goes under input: { body, params, query }, boolean flags must be JSON booleans (not strings), and input and its parts must be objects.",
     });
   }
 
@@ -1195,9 +1313,10 @@ const invokeCapabilityHandler = async ({
   }
 
   // Shapes were strictly validated up front (gate 0), so these reads are safe:
-  // validateOnly/confirm are real booleans (or absent), input parts are objects.
+  // validate_only/confirm are real booleans (or absent), input parts are
+  // objects, and no unknown argument reached here.
   const input = readInvokeInput(args["input"]);
-  const validateOnly = args["validateOnly"] === true;
+  const validateOnly = args["validate_only"] === true;
 
   // 6. Fileless mode. This capability reached here because its file field is
   // OPTIONAL, so the JSON modes run; the field itself still cannot cross. It is
@@ -1286,8 +1405,10 @@ const executeInvoke = async ({
   const endpoint = loaded.endpoint;
 
   const isWorkspace = entry.handlerKind === "workspace";
-  // 6. Input validation against the live TypeBox schemas (Default -> Convert ->
-  // Clean -> Check, mirroring the Elysia boundary; see validatePart). A
+  // 6. Input validation against the schemas describe_capability advertises
+  // (same `advertisedSchemas` projection of the live endpoint config, so a
+  // bound an agent read is a bound this gate enforces), run Default -> Convert
+  // -> Clean -> Check to mirror the Elysia boundary; see validatePart. A
   // workspace-scoped capability takes its workspace as
   // `input.params.workspaceId`; at REST that param belongs to the route macro's
   // schema, not the handler config's, so it is resolved from the RAW params
@@ -1300,14 +1421,15 @@ const executeInvoke = async ({
   // otherwise inject that placeholder string into the absent optional field and
   // then fail Check on it — a capability that is reachable in principle,
   // un-callable in practice.
+  const advertised = advertisedSchemas(endpoint.config);
   const bodySchema = schemaWithoutField(
-    endpoint.config.body,
+    advertised.body,
     filelessOnlyField(entry.transport),
   );
   const validations = [
     validatePart("body", bodySchema, input.body),
-    validatePart("params", endpoint.config.params, input.params),
-    validatePart("query", endpoint.config.query, input.query),
+    validatePart("params", advertised.params, input.params),
+    validatePart("query", advertised.query, input.query),
   ] as const;
 
   const issues = validations.flatMap((result) =>
@@ -1516,7 +1638,11 @@ export const mapHandlerResult = ({
 
 const CAPABILITY_TOOL_DEFINITIONS = [
   {
-    annotations: { title: "List capabilities", openWorldHint: false },
+    annotations: {
+      title: "List capabilities",
+      readOnlyHint: true,
+      openWorldHint: false,
+    },
     name: "list_capabilities",
     access: "read",
     anonymized: { exposure: "excluded", reason: "dynamic_tenant_payload" },
@@ -1549,7 +1675,11 @@ const CAPABILITY_TOOL_DEFINITIONS = [
     },
   },
   {
-    annotations: { title: "Describe capability", openWorldHint: false },
+    annotations: {
+      title: "Describe capability",
+      readOnlyHint: true,
+      openWorldHint: false,
+    },
     name: "describe_capability",
     access: "read",
     anonymized: { exposure: "excluded", reason: "dynamic_tenant_payload" },
@@ -1594,12 +1724,13 @@ const CAPABILITY_TOOL_DEFINITIONS = [
     // inside the handler from the target capability's `destructive` flag.
     description:
       "Invoke one capability by id (from list_capabilities/describe_capability). " +
-      "Pass its input under { body, params, query }; workspace-scoped " +
-      "capabilities take the target workspace as input.params.workspaceId. Real " +
-      "authority is enforced per capability: the session must hold the " +
-      "capability's scope and your member role its permissions. Set " +
-      "validateOnly: true to check input without running it; destructive " +
-      "capabilities require confirm: true after human approval.",
+      "Pass its input under input: { body, params, query } (no other top-level " +
+      "argument is accepted); workspace-scoped capabilities take the target " +
+      "workspace as input.params.workspaceId. Real authority is enforced per " +
+      "capability: the session must hold the capability's scope and your member " +
+      "role its permissions. Set validate_only: true to check input without " +
+      "running it; destructive capabilities require confirm: true after human " +
+      "approval.",
     inputSchema: {
       type: "object",
       properties: {
@@ -1632,7 +1763,7 @@ const CAPABILITY_TOOL_DEFINITIONS = [
           },
           additionalProperties: false,
         },
-        validateOnly: {
+        validate_only: {
           type: "boolean",
           description:
             "When true, validate the input against the capability schema and return without executing.",

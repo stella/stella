@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { toMcpTools } from "@/api/mcp/gateway/list-tools";
+import { MCP_CASING_RULE, MCP_INSTRUCTIONS } from "@/api/mcp/instructions";
 import {
   ANONYMIZED_MCP_TOOL_DEFINITIONS,
   DEFAULT_MCP_TOOL_DEFINITIONS,
@@ -69,9 +70,16 @@ const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
 // canonical strict field-configuration contract instead of a loose object
 // approximation: measured 63_213 chars. The new ceiling retains roughly 10%
 // review headroom without weakening the provider-visible schema.
+// anonymized bumped 22_000 -> 23_403, exactly the measured growth from deriving
+// every advertised schema from its runtime validator: +609 chars of
+// `additionalProperties`, +682 of `minLength`/`format` bounds the handlers
+// already enforced, +112 of explicit empty `required` lists. Stripping those
+// three keyword classes reproduces the previous payload byte for byte, so no
+// description, enum or property grew; the default surface still fits its
+// ceiling unchanged.
 const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
   default: 70_000,
-  anonymized: 22_000,
+  anonymized: 23_403,
 };
 
 // Longest description measured after plan 047: save_template at 724 chars
@@ -168,6 +176,17 @@ describe.each([...SURFACES])(
       expect(issues).toEqual([]);
     });
 
+    test("every advertised object schema states its unknown-key policy", () => {
+      const issues: string[] = [];
+      for (const tool of definitions) {
+        collectOpenObjectSchemas(tool.inputSchema, tool.name, issues);
+      }
+      expect(
+        issues,
+        `These advertised object schemas leave additionalProperties undeclared, so a client cannot tell whether a typo errors or is ignored: ${issues.join(", ")}. Derive the schema from the v.strictObject its handler parses (defineValibotMcpTool) for additionalProperties: false, or declare additionalProperties: true explicitly for a map whose keys are caller data.`,
+      ).toEqual([]);
+    });
+
     test("list_* and search_* tools accept a cursor; limit implies cursor", () => {
       for (const tool of definitions) {
         const properties = getInputProperties(tool);
@@ -210,6 +229,19 @@ describe("MCP registry access coherence", () => {
           tool.annotations.readOnlyHint,
           `Tool ${tool.name} is access: "write" but carries readOnlyHint`,
         ).not.toBe(true);
+      }
+    }
+  });
+
+  test('every access: "read" tool carries readOnlyHint', () => {
+    // The converse of the check above, and the reason it matters: a client that
+    // auto-approves read-only tools prompts for a read tool that omits the hint.
+    for (const tool of defaultTools) {
+      if (tool.access === "read") {
+        expect(
+          tool.annotations.readOnlyHint,
+          `Tool ${tool.name} is access: "read" but omits readOnlyHint`,
+        ).toBe(true);
       }
     }
   });
@@ -334,6 +366,60 @@ describe("MCP registry annotation coherence", () => {
   });
 });
 
+/**
+ * Advertised input property names. The anonymized surface is a projection of
+ * the same definitions, so checking the default surface covers both.
+ *
+ * The nested paths below are the remaining camelCase debt: object and array
+ * payloads that mirror internal document/field models (`knowledge-tools.ts`,
+ * `stella-tools.ts`, `template-tools.ts`). The set is exact, so a new
+ * camelCase name fails here and fixing one of these requires shrinking the
+ * constant. Every TOP-LEVEL name (the surface an agent types) must already be
+ * snake_case: none is listed, so any drift there fails immediately.
+ */
+const CAMEL_CASE_INPUT_PROPERTY_DEBT = [
+  "save_clause.body[].directiveExpression",
+  "save_clause.body[].directiveKind",
+  "save_clause.body[].isDirective",
+  "save_clause.body[].listKind",
+  "save_clause.body[].listLevel",
+  "save_template.fields[].aiAdapt",
+  "save_template.fields[].aiPrompt",
+  "save_template.fields[].aiSeesDocument",
+  "save_template.fields[].dateFormat",
+  "save_template.fields[].inputType",
+  "save_template.fields[].optionsFrom",
+  "save_template.fields[].parts[].inputType",
+  "save_template.fields[].validation.maxItems",
+  "save_template.fields[].validation.maxLength",
+  "save_template.fields[].validation.minItems",
+  "save_template.fields[].validation.minLength",
+  "set_practice_jurisdictions.jurisdictions[].countryCode",
+  "set_practice_jurisdictions.jurisdictions[].isPrimary",
+];
+
+describe("MCP registry input naming", () => {
+  test("input property names are snake_case, bar the recorded debt", () => {
+    const issues: string[] = [];
+    for (const tool of defaultTools) {
+      collectNonSnakeCaseProperties(tool.inputSchema, tool.name, issues);
+    }
+    expect([...new Set(issues)].sort()).toEqual(CAMEL_CASE_INPUT_PROPERTY_DEBT);
+  });
+
+  // The other half of the same convention: inputs are snake_case, payloads are
+  // camelCase. Property names are enforced structurally above; the payload half
+  // cannot be, so every surface states the rule at connect time instead.
+  test("every surface states the casing rule at connect time", () => {
+    for (const [mode, instructions] of Object.entries(MCP_INSTRUCTIONS)) {
+      expect(
+        instructions,
+        `The ${mode} instructions must state the snake_case-in/camelCase-out rule`,
+      ).toContain(MCP_CASING_RULE);
+    }
+  });
+});
+
 describe("MCP static tool-set coherence", () => {
   test("each static tool set binds exactly one handler per advertised definition", () => {
     for (const toolSet of DEFAULT_MCP_TOOL_SETS) {
@@ -414,6 +500,115 @@ const collectUndescribedProperties = (
     }
   }
   collectUndescribedProperties(schema["items"], `${path}[]`, issues);
+};
+
+/**
+ * Walks a JSON Schema and records the path of every object schema that leaves
+ * unknown keys UNDECLARED. A client must be able to predict, from the
+ * advertised schema alone, whether a typo is rejected or swallowed; silence is
+ * the one answer it cannot act on. Three declarations are honest:
+ * `additionalProperties: false` (the default for a curated tool),
+ * `additionalProperties: { ... }` (a constrained map: every key validated), and
+ * an explicit `additionalProperties: true` for an open map whose keys are
+ * caller data, such as a template's field-path -> value map.
+ */
+const collectOpenObjectSchemas = (
+  schema: unknown,
+  path: string,
+  issues: string[],
+): void => {
+  if (!isRecord(schema)) {
+    return;
+  }
+  const isObjectSchema =
+    schema["type"] === "object" || isRecord(schema["properties"]);
+  const additionalProperties = schema["additionalProperties"];
+  const declaresUnknownKeyPolicy =
+    additionalProperties === false ||
+    additionalProperties === true ||
+    isRecord(additionalProperties);
+  if (isObjectSchema && !declaresUnknownKeyPolicy) {
+    issues.push(path);
+  }
+  if (isRecord(schema["properties"])) {
+    for (const [key, property] of Object.entries(schema["properties"])) {
+      collectOpenObjectSchemas(property, `${path}.${key}`, issues);
+    }
+  }
+  if (isRecord(schema["patternProperties"])) {
+    for (const property of Object.values(schema["patternProperties"])) {
+      collectOpenObjectSchemas(property, `${path}[*]`, issues);
+    }
+  }
+  collectOpenObjectSchemas(
+    schema["additionalProperties"],
+    `${path}[*]`,
+    issues,
+  );
+  collectOpenObjectSchemas(schema["items"], `${path}[]`, issues);
+  for (const keyword of ["anyOf", "allOf", "oneOf"]) {
+    const branches = schema[keyword];
+    if (Array.isArray(branches)) {
+      for (const [index, branch] of branches.entries()) {
+        collectOpenObjectSchemas(
+          branch,
+          `${path}<${keyword}[${index}]>`,
+          issues,
+        );
+      }
+    }
+  }
+};
+
+// Advertised input property names: lowercase words joined by single
+// underscores. The name is the one part of a tool contract an agent has to
+// reproduce exactly, so a camelCase outlier (or a synonym like `workspace_id`
+// beside ten `matter_id`s) is a correctness cost, not a style preference.
+const SNAKE_CASE_PROPERTY = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/u;
+
+/**
+ * Walks every schema-bearing branch the CLI trust boundary admits
+ * (`registry-trust.ts`) and records the path of each non-snake_case property.
+ * Union branches share their parent's path, so one offending name is one
+ * entry however many branches carry it.
+ */
+const collectNonSnakeCaseProperties = (
+  schema: unknown,
+  path: string,
+  issues: string[],
+): void => {
+  if (!isRecord(schema)) {
+    return;
+  }
+  if (isRecord(schema["properties"])) {
+    for (const [key, property] of Object.entries(schema["properties"])) {
+      const propertyPath = `${path}.${key}`;
+      if (!SNAKE_CASE_PROPERTY.test(key)) {
+        issues.push(propertyPath);
+      }
+      collectNonSnakeCaseProperties(property, propertyPath, issues);
+    }
+  }
+  if (isRecord(schema["patternProperties"])) {
+    for (const property of Object.values(schema["patternProperties"])) {
+      collectNonSnakeCaseProperties(property, `${path}[*]`, issues);
+    }
+  }
+  collectNonSnakeCaseProperties(
+    schema["additionalProperties"],
+    `${path}[*]`,
+    issues,
+  );
+  collectNonSnakeCaseProperties(schema["items"], `${path}[]`, issues);
+  for (const keyword of ["allOf", "anyOf", "oneOf"] as const) {
+    const branches = schema[keyword];
+    if (!Array.isArray(branches)) {
+      continue;
+    }
+    for (const branch of branches) {
+      collectNonSnakeCaseProperties(branch, path, issues);
+    }
+  }
 };
 
 const getInputProperties = (

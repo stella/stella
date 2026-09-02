@@ -153,6 +153,7 @@ const runCli = async ({
   stdin,
   signedIn = true,
   expiresAt,
+  serverUrlEnv,
 }: {
   args: readonly string[];
   url: string;
@@ -160,6 +161,8 @@ const runCli = async ({
   stdin?: string;
   signedIn?: boolean;
   expiresAt?: number | undefined;
+  /** `STELLA_SERVER_URL` when the test needs it to differ from the credential's server. */
+  serverUrlEnv?: string;
 }): Promise<RunResult> => {
   const configHome = await mkdtemp(path.join(tmpdir(), "stella-cli-"));
   tempDirs.push(configHome);
@@ -172,7 +175,7 @@ const runCli = async ({
     env: {
       ...process.env,
       XDG_CONFIG_HOME: configHome,
-      STELLA_SERVER_URL: url,
+      STELLA_SERVER_URL: serverUrlEnv ?? url,
     },
     stdin: stdin === undefined ? "ignore" : "pipe",
     stdout: "pipe",
@@ -202,6 +205,43 @@ afterEach(async () => {
 
 const READ = makeToken(["read"]);
 const WRITE = makeToken(["read", "matters_write"]);
+
+describe("--server (every command)", () => {
+  test("a generated command targets the origin the flag names", async () => {
+    const server = startMockServer(() => ({
+      toolPayload: { matters: [{ id: "m1", name: "Acme" }] },
+    }));
+    const result = await runCli({
+      args: ["matter", "list", "--server", server.url, "--json"],
+      url: server.url,
+      // The env tier points somewhere unusable, so a pass means the flag (read
+      // before dispatch) selected the origin, not the fallback.
+      serverUrlEnv: "http://127.0.0.1:1",
+      token: READ,
+    });
+    server.stop();
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr).not.toContain("--server");
+    expect(server.requests).toHaveLength(1);
+  });
+
+  test("compatibility check falls back to STELLA_SERVER_URL", async () => {
+    const server = startMockServer(() => ({ toolPayload: {} }));
+    const result = await runCli({
+      args: ["compatibility", "check"],
+      url: server.url,
+      token: READ,
+      signedIn: false,
+    });
+    server.stop();
+
+    // The mock has no compatibility contract, so the check fails — but on the
+    // resolved origin, not on stricli's "expected input for flag" usage error.
+    expect(result.stderr).toContain(server.url);
+    expect(result.stderr).not.toContain("--server");
+  });
+});
 
 describe("one-command document upload", () => {
   test("discovers, reserves, PUTs and finalizes without external curl", async () => {
@@ -256,7 +296,7 @@ describe("one-command document upload", () => {
     const result = await runCli({
       args: [
         "upload",
-        "--workspace",
+        "--matter-id",
         "workspace-1",
         "--file",
         filePath,
@@ -307,7 +347,7 @@ describe("one-command document upload", () => {
 
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("--file");
-    expect(result.stdout).toContain("--workspace");
+    expect(result.stdout).toContain("--matter-id");
     expect(result.stdout).toContain("--json");
     expect(result.stdout).toContain("computes its SHA-256 checksum");
     expect(server.requests).toHaveLength(0);
@@ -340,7 +380,7 @@ describe("one-command document upload", () => {
     const result = await runCli({
       args: [
         "upload",
-        "--workspace",
+        "--matter-id",
         "workspace-1",
         "--file",
         filePath,
@@ -565,12 +605,12 @@ describe("list rendering and pagination (S4)", () => {
 });
 
 describe("windowed text (S4)", () => {
-  test("search read prints raw document text", async () => {
+  test("document content prints raw document text", async () => {
     const server = startMockServer(() => ({
       toolPayload: { name: "Doc", text: "THE FULL BODY", nextCursor: null },
     }));
     const result = await runCli({
-      args: ["search", "read", "--entity-id", "e1"],
+      args: ["document", "content", "--entity-id", "e1"],
       url: server.url,
       token: READ,
     });

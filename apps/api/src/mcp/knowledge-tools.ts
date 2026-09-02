@@ -72,19 +72,15 @@ import type {
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
   bindWorkspaceRecorder,
-  confirmProp,
   ensureActiveWorkspace,
-  enumProp,
   errorResult,
   internalFailureResult,
-  intProp,
   MCP_INTERNAL_ERROR_HINT,
-  nullableStringProp,
-  stringProp,
   structuredErrorResult,
   toolDataResult,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
+import { defineValibotMcpTool } from "@/api/mcp/valibot-tool-definition";
 
 type KnowledgeToolName =
   | "list_clauses"
@@ -92,58 +88,6 @@ type KnowledgeToolName =
   | "delete_clause"
   | "list_playbooks"
   | "run_playbook";
-
-/** One inline formatting run inside a clause paragraph. */
-const clauseRunItemSchema = {
-  type: "object",
-  properties: {
-    text: stringProp("Run text"),
-    bold: { type: "boolean", description: "Render the run bold" },
-    italic: { type: "boolean", description: "Render the run italic" },
-  },
-  required: ["text"],
-} as const;
-
-/** One clause body paragraph in the save_clause `body` array. */
-const clauseParagraphItemSchema = {
-  type: "object",
-  properties: {
-    text: stringProp("Paragraph plain text"),
-    style: stringProp("Optional paragraph style name"),
-    level: intProp("Optional heading/outline level"),
-    runs: {
-      type: "array",
-      description:
-        "Optional inline formatting runs whose text concatenates to the paragraph",
-      items: clauseRunItemSchema,
-    },
-    listKind: enumProp(
-      "List item kind when the paragraph is a list item",
-      CLAUSE_LIST_KINDS,
-    ),
-    listLevel: intProp("0-based list nesting depth for a list item"),
-    isDirective: {
-      type: "boolean",
-      description: "Whether the paragraph is a template directive marker",
-    },
-    directiveKind: enumProp(
-      "Directive kind when isDirective is set",
-      BLOCK_DIRECTIVE_KINDS,
-    ),
-    directiveExpression: stringProp(
-      "Directive expression for an if/each directive",
-    ),
-  },
-  required: ["text"],
-} as const;
-
-const clauseBodyProp = {
-  type: "array",
-  description:
-    "Ordered clause body paragraphs; required when creating. Each paragraph " +
-    "carries text and optional formatting.",
-  items: clauseParagraphItemSchema,
-} as const;
 
 // --- Text-field specs (plan 049, Option B) --------------------------------
 //
@@ -642,217 +586,70 @@ const playbookDetailTextFieldSpecs = (
   }),
 ];
 
-export const KNOWLEDGE_TOOL_DEFINITIONS = [
-  {
-    annotations: {
-      title: "List clauses",
-      readOnlyHint: true,
-      openWorldHint: false,
-    },
-    description:
-      "List the clause library for this organization, or read one clause in " +
-      "detail. Pass clause_id to get a clause's body, description, usage notes, " +
-      "variants, and version history; add version_id to read one version's " +
-      "body. Otherwise list clauses (newest first), optionally filtered by " +
-      "category_id or a text query, and set include_categories to also return " +
-      "the category tree. Returns each clause's id, title, category, language, " +
-      "and current version.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        clause_id: stringProp("Clause id to read in detail; omit to list"),
-        version_id: stringProp(
-          "With clause_id, return this version's body instead of the current clause",
-        ),
-        category_id: stringProp(
-          "List only clauses filed under this category (list mode)",
-        ),
-        query: stringProp(
-          "Filter clauses by a text query over title and body (list mode)",
-        ),
-        include_categories: {
-          type: "boolean",
-          description:
-            "Also return the organization's clause categories (list mode)",
-        },
-        limit: intProp("Max clauses to return", {
-          min: 1,
-          max: LIMITS.clausesPageSizeMax,
-        }),
-        cursor: stringProp(
-          "Opaque cursor from a previous list_clauses call to fetch the next page",
-          { maxLength: 512 },
-        ),
-      },
-    },
-    access: "read",
-    anonymized: {
-      exposure: "anonymize",
-      textFields: LIST_CLAUSES_TEXT_FIELD_PATHS,
-    },
-    name: "list_clauses",
-    scope: "stella:read",
-  },
-  {
-    description:
-      "Create or update a clause in the organization's clause library. Omit " +
-      "clause_id to create (title and body required); pass clause_id to update. " +
-      "body is an ordered array of paragraphs, each with text and optional " +
-      "formatting. category_id, language, description, usage_notes, and metadata " +
-      "accept null to clear them on update. Set snapshot_version true on an " +
-      "update to also append a version snapshot of the body. Returns the clause id.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        clause_id: stringProp("Clause id to update; omit to create"),
-        title: stringProp("Clause title; required when creating", {
-          maxLength: 256,
-        }),
-        body: clauseBodyProp,
-        category_id: nullableStringProp(
-          "Category id to file the clause under; pass null to clear",
-        ),
-        language: nullableStringProp(
-          "BCP-47 language tag for the clause; pass null to clear",
-          { maxLength: 10 },
-        ),
-        description: nullableStringProp(
-          "Short clause description; pass null to clear",
-          { maxLength: 2000 },
-        ),
-        usage_notes: nullableStringProp(
-          "Guidance on when to use the clause; pass null to clear",
-          { maxLength: 2000 },
-        ),
-        metadata: {
-          type: ["object", "null"],
-          description: "Free-form metadata object; pass null to clear",
-          additionalProperties: true,
-        },
-        snapshot_version: {
-          type: "boolean",
-          description:
-            "When updating, also append a version snapshot of the body",
-        },
-      },
-    },
-    annotations: {
-      title: "Save clause",
-      idempotentHint: false,
-      openWorldHint: false,
-    },
-    access: "write",
-    anonymized: { exposure: "excluded", reason: "write" },
-    name: "save_clause",
-    scope: "stella:knowledge_write",
-  },
-  {
-    annotations: {
-      title: "Delete clause",
-      destructiveHint: true,
-      idempotentHint: true,
-      openWorldHint: false,
-    },
-    description:
-      "Permanently delete a clause and all its variants and versions from the " +
-      "organization's clause library. This is irreversible.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        clause_id: stringProp("Clause id to delete"),
-        confirm: confirmProp(),
-      },
-      required: ["clause_id"],
-    },
-    access: "write",
-    anonymized: { exposure: "excluded", reason: "write" },
-    name: "delete_clause",
-    scope: "stella:knowledge_write",
-  },
-  {
-    annotations: {
-      title: "List playbooks",
-      readOnlyHint: true,
-      openWorldHint: false,
-    },
-    description:
-      "List the review playbooks in this organization, or read one in detail. " +
-      "Pass playbook_id to get a playbook's positions (the issues it reviews, " +
-      "their questions, tiered rules, and ideal language), scope, and " +
-      "description. " +
-      "Otherwise list playbooks (newest first). Returns each playbook's id, " +
-      "name, and description.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        playbook_id: stringProp(
-          "Playbook id to read in detail; omit to list playbooks",
-        ),
-        limit: intProp("Max playbooks to return", {
-          min: 1,
-          max: LIMITS.playbookDefinitionsPageSizeMax,
-        }),
-        cursor: stringProp(
-          "Opaque cursor from a previous list_playbooks call to fetch the next page",
-          { maxLength: 512 },
-        ),
-      },
-    },
-    access: "read",
-    anonymized: {
-      exposure: "anonymize",
-      textFields: [
-        ...deriveTextFieldPaths(playbookListTextFieldSpecs("")),
-        ...deriveTextFieldPaths(playbookDetailTextFieldSpecs("")),
-      ],
-    },
-    name: "list_playbooks",
-    scope: "stella:read",
-  },
-  {
-    description:
-      "Run a review playbook over a matter's documents. Materializes the " +
-      "playbook's extraction and verdict columns onto the matter's table and " +
-      "starts the AI review; findings populate asynchronously. Pass matter_id " +
-      "and playbook_id. Returns the number of columns queued for review.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        matter_id: stringProp("Matter/workspace id to run the playbook over"),
-        playbook_id: stringProp("Playbook id to run"),
-      },
-      required: ["matter_id", "playbook_id"],
-    },
-    annotations: {
-      title: "Run playbook",
-      idempotentHint: false,
-      openWorldHint: false,
-    },
-    access: "write",
-    anonymized: { exposure: "excluded", reason: "write" },
-    name: "run_playbook",
-    scope: "stella:knowledge_write",
-  },
-] as const satisfies readonly McpToolDefinition[];
-
 // --- list_clauses -------------------------------------------------------
 
 const listClausesArgsSchema = v.pipe(
   v.strictObject({
-    clause_id: v.optional(v.pipe(v.string(), v.minLength(1))),
-    version_id: v.optional(v.pipe(v.string(), v.minLength(1))),
-    category_id: v.optional(v.pipe(v.string(), v.minLength(1))),
-    query: v.optional(v.pipe(v.string(), v.minLength(1))),
-    include_categories: v.optional(v.boolean()),
+    clause_id: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.description("Clause id to read in detail; omit to list"),
+      ),
+    ),
+    version_id: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.description(
+          "With clause_id, return this version's body instead of the current clause",
+        ),
+      ),
+    ),
+    category_id: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.description(
+          "List only clauses filed under this category (list mode)",
+        ),
+      ),
+    ),
+    query: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.description(
+          "Filter clauses by a text query over title and body (list mode)",
+        ),
+      ),
+    ),
+    include_categories: v.optional(
+      v.pipe(
+        v.boolean(),
+        v.description(
+          "Also return the organization's clause categories (list mode)",
+        ),
+      ),
+    ),
     limit: v.optional(
       v.pipe(
         v.number(),
         v.integer(),
         v.minValue(1),
         v.maxValue(LIMITS.clausesPageSizeMax),
+        v.description("Max clauses to return"),
       ),
     ),
-    cursor: v.optional(v.pipe(v.string(), v.maxLength(512))),
+    cursor: v.optional(
+      v.pipe(
+        v.string(),
+        v.maxLength(512),
+        v.description(
+          "Opaque cursor from a previous list_clauses call to fetch the next page",
+        ),
+      ),
+    ),
   }),
   // version_id selects one version of a specific clause, so it needs clause_id.
   v.forward(
@@ -1114,41 +911,133 @@ const handleListClausesTool: TypedMcpToolHandler<
 // --- save_clause --------------------------------------------------------
 
 const clauseRunArgSchema = v.strictObject({
-  text: v.string(),
-  bold: v.optional(v.boolean()),
-  italic: v.optional(v.boolean()),
+  text: v.pipe(v.string(), v.description("Run text")),
+  bold: v.optional(v.pipe(v.boolean(), v.description("Render the run bold"))),
+  italic: v.optional(
+    v.pipe(v.boolean(), v.description("Render the run italic")),
+  ),
 });
 
 const clauseParagraphArgSchema = v.strictObject({
-  text: v.string(),
-  style: v.optional(v.string()),
-  level: v.optional(v.pipe(v.number(), v.integer())),
-  runs: v.optional(v.array(clauseRunArgSchema)),
-  listKind: v.optional(v.picklist(CLAUSE_LIST_KINDS)),
-  listLevel: v.optional(v.pipe(v.number(), v.integer())),
-  isDirective: v.optional(v.boolean()),
-  directiveKind: v.optional(v.picklist(BLOCK_DIRECTIVE_KINDS)),
-  directiveExpression: v.optional(v.string()),
+  text: v.pipe(v.string(), v.description("Paragraph plain text")),
+  style: v.optional(
+    v.pipe(v.string(), v.description("Optional paragraph style name")),
+  ),
+  level: v.optional(
+    v.pipe(
+      v.number(),
+      v.integer(),
+      v.description("Optional heading/outline level"),
+    ),
+  ),
+  runs: v.optional(
+    v.pipe(
+      v.array(clauseRunArgSchema),
+      v.description(
+        "Optional inline formatting runs whose text concatenates to the paragraph",
+      ),
+    ),
+  ),
+  listKind: v.optional(
+    v.pipe(
+      v.picklist(CLAUSE_LIST_KINDS),
+      v.description("List item kind when the paragraph is a list item"),
+    ),
+  ),
+  listLevel: v.optional(
+    v.pipe(
+      v.number(),
+      v.integer(),
+      v.description("0-based list nesting depth for a list item"),
+    ),
+  ),
+  isDirective: v.optional(
+    v.pipe(
+      v.boolean(),
+      v.description("Whether the paragraph is a template directive marker"),
+    ),
+  ),
+  directiveKind: v.optional(
+    v.pipe(
+      v.picklist(BLOCK_DIRECTIVE_KINDS),
+      v.description("Directive kind when isDirective is set"),
+    ),
+  ),
+  directiveExpression: v.optional(
+    v.pipe(
+      v.string(),
+      v.description("Directive expression for an if/each directive"),
+    ),
+  ),
 });
 
 const clauseBodyArgSchema = v.pipe(
   v.array(clauseParagraphArgSchema),
   v.minLength(1),
+  v.description(
+    "Ordered clause body paragraphs; required when creating. Each paragraph " +
+      "carries text and optional formatting.",
+  ),
 );
 
 const saveClauseArgsSchema = v.pipe(
   v.strictObject({
-    clause_id: v.optional(v.pipe(v.string(), v.minLength(1))),
-    title: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(256))),
-    body: v.optional(clauseBodyArgSchema),
-    category_id: v.optional(v.nullable(v.pipe(v.string(), v.minLength(1)))),
-    language: v.optional(
-      v.nullable(v.pipe(v.string(), v.minLength(1), v.maxLength(10))),
+    clause_id: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.description("Clause id to update; omit to create"),
+      ),
     ),
-    description: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(2000)))),
-    usage_notes: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(2000)))),
-    metadata: v.optional(v.nullable(v.record(v.string(), v.unknown()))),
-    snapshot_version: v.optional(v.boolean()),
+    title: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.maxLength(256),
+        v.description("Clause title; required when creating"),
+      ),
+    ),
+    body: v.optional(clauseBodyArgSchema),
+    category_id: v.optional(
+      v.pipe(
+        v.nullable(v.pipe(v.string(), v.minLength(1))),
+        v.description(
+          "Category id to file the clause under; pass null to clear",
+        ),
+      ),
+    ),
+    language: v.optional(
+      v.pipe(
+        v.nullable(v.pipe(v.string(), v.minLength(1), v.maxLength(10))),
+        v.description("BCP-47 language tag for the clause; pass null to clear"),
+      ),
+    ),
+    description: v.optional(
+      v.pipe(
+        v.nullable(v.pipe(v.string(), v.maxLength(2000))),
+        v.description("Short clause description; pass null to clear"),
+      ),
+    ),
+    usage_notes: v.optional(
+      v.pipe(
+        v.nullable(v.pipe(v.string(), v.maxLength(2000))),
+        v.description("Guidance on when to use the clause; pass null to clear"),
+      ),
+    ),
+    metadata: v.optional(
+      v.pipe(
+        v.nullable(v.record(v.string(), v.unknown())),
+        v.description("Free-form metadata object; pass null to clear"),
+      ),
+    ),
+    snapshot_version: v.optional(
+      v.pipe(
+        v.boolean(),
+        v.description(
+          "When updating, also append a version snapshot of the body",
+        ),
+      ),
+    ),
   }),
   // Creating (no clause_id) requires a title.
   v.forward(
@@ -1341,8 +1230,20 @@ const handleSaveClauseTool: TypedMcpToolHandler<
 // --- delete_clause ------------------------------------------------------
 
 const deleteClauseArgsSchema = v.strictObject({
-  clause_id: v.pipe(v.string(), v.minLength(1)),
-  confirm: v.optional(v.boolean()),
+  clause_id: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.description("Clause id to delete"),
+  ),
+  confirm: v.optional(
+    v.pipe(
+      v.boolean(),
+      v.description(
+        "Must be true to run this irreversible operation. Set it only after a " +
+          "human user has explicitly approved the deletion.",
+      ),
+    ),
+  ),
 });
 
 const handleDeleteClauseTool: TypedMcpToolHandler<
@@ -1377,16 +1278,31 @@ const handleDeleteClauseTool: TypedMcpToolHandler<
 
 const listPlaybooksArgsSchema = v.pipe(
   v.strictObject({
-    playbook_id: v.optional(v.pipe(v.string(), v.minLength(1))),
+    playbook_id: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.description("Playbook id to read in detail; omit to list playbooks"),
+      ),
+    ),
     limit: v.optional(
       v.pipe(
         v.number(),
         v.integer(),
         v.minValue(1),
         v.maxValue(LIMITS.playbookDefinitionsPageSizeMax),
+        v.description("Max playbooks to return"),
       ),
     ),
-    cursor: v.optional(v.pipe(v.string(), v.maxLength(512))),
+    cursor: v.optional(
+      v.pipe(
+        v.string(),
+        v.maxLength(512),
+        v.description(
+          "Opaque cursor from a previous list_playbooks call to fetch the next page",
+        ),
+      ),
+    ),
   }),
   // limit/cursor page the list; they have no meaning for a single playbook_id.
   v.partialCheck(
@@ -1483,8 +1399,16 @@ const handleListPlaybooksTool: TypedMcpToolHandler<
 // --- run_playbook -------------------------------------------------------
 
 const runPlaybookArgsSchema = v.strictObject({
-  matter_id: v.pipe(v.string(), v.minLength(1)),
-  playbook_id: v.pipe(v.string(), v.minLength(1)),
+  matter_id: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.description("Matter/workspace id to run the playbook over"),
+  ),
+  playbook_id: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.description("Playbook id to run"),
+  ),
 });
 
 /**
@@ -1610,6 +1534,128 @@ const handleRunPlaybookTool: TypedMcpToolHandler<
     runPropertyCount: outcome.materializedPropertyIds.length,
   } satisfies v.InferInput<typeof RUN_PLAYBOOK_PROJECTION>);
 };
+
+export const KNOWLEDGE_TOOL_DEFINITIONS = [
+  defineValibotMcpTool({
+    annotations: {
+      title: "List clauses",
+      readOnlyHint: true,
+      openWorldHint: false,
+    },
+    description:
+      "List the clause library for this organization, or read one clause in " +
+      "detail. Pass clause_id to get a clause's body, description, usage notes, " +
+      "variants, and version history; add version_id to read one version's " +
+      "body. Otherwise list clauses (newest first), optionally filtered by " +
+      "category_id or a text query, and set include_categories to also return " +
+      "the category tree. Returns each clause's id, title, category, language, " +
+      "and current version.",
+    inputSchema: listClausesArgsSchema,
+    jsonSchemaProjectionWaiver: {
+      ignoreActions: ["partial_check"],
+      reason:
+        "The CLI trust boundary does not interpret the clause_id/version_id " +
+        "dependency or the list-mode-only filters; both remain authoritative " +
+        "in the runtime schema.",
+    },
+    access: "read",
+    anonymized: {
+      exposure: "anonymize",
+      textFields: LIST_CLAUSES_TEXT_FIELD_PATHS,
+    },
+    name: "list_clauses",
+    scope: "stella:read",
+  }),
+  defineValibotMcpTool({
+    description:
+      "Create or update a clause in the organization's clause library. Omit " +
+      "clause_id to create (title and body required); pass clause_id to update. " +
+      "body is an ordered array of paragraphs, each with text and optional " +
+      "formatting. category_id, language, description, usage_notes, and metadata " +
+      "accept null to clear them on update. Set snapshot_version true on an " +
+      "update to also append a version snapshot of the body. Returns the clause id.",
+    inputSchema: saveClauseArgsSchema,
+    jsonSchemaProjectionWaiver: {
+      ignoreActions: ["partial_check"],
+      reason:
+        "The CLI trust boundary does not interpret the create/update " +
+        "cross-field dependencies; they remain authoritative in the runtime schema.",
+    },
+    annotations: {
+      title: "Save clause",
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+    access: "write",
+    anonymized: { exposure: "excluded", reason: "write" },
+    name: "save_clause",
+    scope: "stella:knowledge_write",
+  }),
+  defineValibotMcpTool({
+    annotations: {
+      title: "Delete clause",
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    description:
+      "Permanently delete a clause and all its variants and versions from the " +
+      "organization's clause library. This is irreversible.",
+    inputSchema: deleteClauseArgsSchema,
+    access: "write",
+    anonymized: { exposure: "excluded", reason: "write" },
+    name: "delete_clause",
+    scope: "stella:knowledge_write",
+  }),
+  defineValibotMcpTool({
+    annotations: {
+      title: "List playbooks",
+      readOnlyHint: true,
+      openWorldHint: false,
+    },
+    description:
+      "List the review playbooks in this organization, or read one in detail. " +
+      "Pass playbook_id to get a playbook's positions (the issues it reviews, " +
+      "their questions, tiered rules, and ideal language), scope, and " +
+      "description. " +
+      "Otherwise list playbooks (newest first). Returns each playbook's id, " +
+      "name, and description.",
+    inputSchema: listPlaybooksArgsSchema,
+    jsonSchemaProjectionWaiver: {
+      ignoreActions: ["partial_check"],
+      reason:
+        "The CLI trust boundary does not interpret the list-mode-only " +
+        "pagination dependency; it remains authoritative in the runtime schema.",
+    },
+    access: "read",
+    anonymized: {
+      exposure: "anonymize",
+      textFields: [
+        ...deriveTextFieldPaths(playbookListTextFieldSpecs("")),
+        ...deriveTextFieldPaths(playbookDetailTextFieldSpecs("")),
+      ],
+    },
+    name: "list_playbooks",
+    scope: "stella:read",
+  }),
+  defineValibotMcpTool({
+    description:
+      "Run a review playbook over a matter's documents. Materializes the " +
+      "playbook's extraction and verdict columns onto the matter's table and " +
+      "starts the AI review; findings populate asynchronously. Pass matter_id " +
+      "and playbook_id. Returns the number of columns queued for review.",
+    inputSchema: runPlaybookArgsSchema,
+    annotations: {
+      title: "Run playbook",
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+    access: "write",
+    anonymized: { exposure: "excluded", reason: "write" },
+    name: "run_playbook",
+    scope: "stella:knowledge_write",
+  }),
+] as const satisfies readonly McpToolDefinition[];
 
 export const KNOWLEDGE_TOOL_HANDLERS = {
   delete_clause: handleDeleteClauseTool,
