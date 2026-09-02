@@ -44,9 +44,7 @@ const liveElementDropTargets = new WeakMap<Element, string>();
  * pre-existing "second call silently wins" behaviour is kept there instead.
  */
 const isDropTargetRegistryGuarded = (): boolean =>
-  import.meta.env.DEV ||
-  import.meta.env.MODE === "test" ||
-  import.meta.env.NODE_ENV === "test";
+  import.meta.env.DEV || import.meta.env.NODE_ENV === "test";
 
 type AttachElementDropTargetParams = Parameters<
   typeof dropTargetForElements
