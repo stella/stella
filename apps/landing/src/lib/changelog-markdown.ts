@@ -1,12 +1,13 @@
 export type ChangelogMarkdownBlock =
   | { level: 1 | 2 | 3; text: string; type: "heading" }
+  | { alt: string; src: string; type: "image" }
   | { items: string[]; type: "list" }
   | { text: string; type: "paragraph" }
   | { src: string; type: "video" };
 
 const HTML_VIDEO_PATTERN =
   /^<video\b[^>]*\bsrc=["']([^"']+)["'][^>]*><\/video>$/iu;
-const MARKDOWN_VIDEO_PATTERN = /^!\[[^\]]*\]\((https:\/\/[^)\s]+)\)$/u;
+const MARKDOWN_IMAGE_PATTERN = /^!\[([^\]]*)\]\((https:\/\/[^)\s]+)\)$/u;
 
 const parseHeading = (line: string) => {
   if (line.startsWith("### ")) {
@@ -52,13 +53,20 @@ export const parseChangelogMarkdown = (body: string) => {
       continue;
     }
 
-    const htmlVideoSrc = HTML_VIDEO_PATTERN.exec(line)?.[1];
-    const markdownVideoSrc = MARKDOWN_VIDEO_PATTERN.exec(line)?.[1];
-    const videoSrc = htmlVideoSrc ?? markdownVideoSrc;
+    const videoSrc = HTML_VIDEO_PATTERN.exec(line)?.[1];
     if (videoSrc) {
       closeParagraph();
       closeList();
       blocks.push({ src: videoSrc, type: "video" });
+      continue;
+    }
+
+    const imageMatch = MARKDOWN_IMAGE_PATTERN.exec(line);
+    const imageSrc = imageMatch?.[2];
+    if (imageMatch && imageSrc) {
+      closeParagraph();
+      closeList();
+      blocks.push({ alt: imageMatch[1], src: imageSrc, type: "image" });
       continue;
     }
 

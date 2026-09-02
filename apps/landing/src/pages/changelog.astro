@@ -461,8 +461,21 @@ const formatReleaseDate = (publishedAt: string) =>
       width: 100%;
     }
 
+    :global(.changelog-body img) {
+      background: var(--muted);
+      border-radius: 0.5rem;
+      display: block;
+      height: auto;
+      margin-top: 1rem;
+      max-height: 42rem;
+      object-fit: contain;
+      outline: 1px solid color-mix(in srgb, var(--foreground) 6%, transparent);
+      width: 100%;
+    }
+
     @media (max-width: 640px) {
-      :global(.changelog-body video) {
+      :global(.changelog-body video),
+      :global(.changelog-body img) {
         border-radius: 0.375rem;
         margin-inline: -0.5rem;
         max-width: calc(100% + 1rem);
@@ -655,6 +668,21 @@ const formatReleaseDate = (publishedAt: string) =>
       const fragment = document.createDocumentFragment();
 
       for (const block of parseChangelogMarkdown(body)) {
+        if (block.type === "image") {
+          const safeSrc = safeHttpsUrl(block.src);
+          if (!safeSrc) {
+            continue;
+          }
+
+          const image = document.createElement("img");
+          image.alt = block.alt;
+          image.decoding = "async";
+          image.loading = "lazy";
+          image.src = safeSrc;
+          fragment.append(image);
+          continue;
+        }
+
         if (block.type === "video") {
           const safeSrc = safeHttpsUrl(block.src);
           if (!safeSrc) {

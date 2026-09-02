@@ -31,18 +31,23 @@ Example:
 
 ## We are shipping faster table editing, cleaner sorting, and smoother bulk actions.
 
+![A table with the updated sorting controls](https://github.com/user-attachments/assets/example-image-id)
+
 <video controls src="https://github.com/user-attachments/assets/example-video-id"></video>
 ```
 
 The changelog page renders `#` as the manual heading, `##` as the subheading,
-and safe `https://` video URLs as embedded videos. Generated commit entries keep
-their clickable pull request links under a collapsed `Full release notes`
-section.
+Markdown images with safe `https://` URLs as responsive screenshots, and
+`<video controls src="https://..."></video>` as an embedded video. Generated
+commit entries keep their clickable pull request links under a collapsed
+`Full release notes` section.
 
-Use GitHub user attachments for short videos: drag an `.mp4` into a GitHub issue,
-PR comment, or release description draft, then copy the generated
-`https://github.com/user-attachments/assets/...` URL into the changelog note.
-Keep videos short and compressed; the website embeds the file responsively.
+Use GitHub user attachments for screenshots and short videos. Paste an image
+into a GitHub issue, PR comment, or release description draft, then copy its
+generated Markdown into the changelog note. For a video, drag in an `.mp4` and
+put its `https://github.com/user-attachments/assets/...` URL in the `<video>`
+element shown above. Keep videos short and compressed; the website embeds the
+file responsively.
 
 Stable releases (`vX.Y.Z`) generate their commit list from the previous stable
 tag, so the stable release includes the changes shipped through earlier
