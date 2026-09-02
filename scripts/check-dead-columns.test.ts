@@ -75,6 +75,26 @@ describe("isColumnReferenced", () => {
       }),
     ).toBe(false);
   });
+
+  test("does not match a SQL name that ends a longer identifier", () => {
+    expect(
+      isColumnReferenced({
+        corpus: "sql`select legacy_auto_invoke_hint from x`",
+        tsKey: "autoInvokeHint",
+        sqlName: "auto_invoke_hint",
+      }),
+    ).toBe(false);
+  });
+
+  test("does not match a SQL name that starts a longer identifier", () => {
+    expect(
+      isColumnReferenced({
+        corpus: "sql`select auto_invoke_hint_v2 from x`",
+        tsKey: "autoInvokeHint",
+        sqlName: "auto_invoke_hint",
+      }),
+    ).toBe(false);
+  });
 });
 
 describe("shouldScanFile", () => {
