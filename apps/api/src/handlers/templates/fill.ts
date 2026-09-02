@@ -36,6 +36,7 @@ import { DOCX_EXT_RE, sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { secureDocumentResponse } from "@/api/lib/secure-document-response";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
 import { containsNull } from "@/api/lib/templates/template-data";
+import { collectMissingRequiredFields } from "@/api/lib/templates/template-optional-defaults";
 import { isRecord } from "@/api/lib/type-guards";
 import { DOCX_MIME_TYPE, OCTET_STREAM_MIME_TYPE } from "@/api/mime-types";
 
@@ -188,6 +189,28 @@ export const fillHandler = async ({
   let fillBuffer: Buffer = buffer;
   let adaptedPaths: readonly string[] = [];
   const manifest = await readManifest(buffer);
+
+  // Reject before any AI/registry work runs: a required, user-entered field
+  // left absent or empty must never download as an invented value or a raw
+  // `{{marker}}`. This route always enforces the full contract (unlike
+  // fill-preview, whose live typing preview legitimately allows partial
+  // values).
+  if (manifest) {
+    const missingRequiredFields = collectMissingRequiredFields({
+      fields: manifest.fields,
+      policy: "enforce",
+      values: fillData,
+    });
+    if (missingRequiredFields.length > 0) {
+      return new Response(
+        JSON.stringify({
+          error: "missing_required_fields",
+          missingFields: missingRequiredFields,
+        }),
+        { status: 400, headers: { "Content-Type": "application/json" } },
+      );
+    }
+  }
 
   const hasAiDraftFields = manifest?.fields.some((field) => field.aiPrompt);
   const hasAiAdaptFields = manifest?.fields.some((field) => field.aiAdapt);

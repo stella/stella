@@ -118,6 +118,80 @@ describe("fillTemplateDocx required-field rejection", () => {
     expect("requiredFieldsRejection" in result).toBe(true);
   });
 
+  test("rejects when the required field is whitespace-only", async () => {
+    const buffer = await makeManifestDocx([requiredTextField]);
+
+    const result = await fillTemplateDocx({
+      source: { name: "NDA", fileName: "nda.docx", buffer },
+      values: { governing_law: "   " },
+      scopedDb: stubScopedDb(),
+      organizationId,
+    });
+
+    expect("requiredFieldsRejection" in result).toBe(true);
+  });
+
+  test("rejects when a required loop item field is missing in one array row", async () => {
+    const buffer = await makeDocx(
+      WRAP(
+        [P("{{#each persons}}"), P("{{persons.member}}"), P("{{/each}}")].join(
+          "",
+        ),
+      ),
+    );
+    const withManifest = await writeManifest(buffer, {
+      version: 1,
+      fields: [{ path: "persons.member", label: "Member", required: true }],
+    });
+
+    const result = await fillTemplateDocx({
+      source: { name: "Roster", fileName: "roster.docx", buffer: withManifest },
+      values: { persons: [{ member: "Alice" }, { member: "" }] },
+      scopedDb: stubScopedDb(),
+      organizationId,
+    });
+
+    expect(result).toEqual({
+      requiredFieldsRejection: [
+        {
+          path: "persons.member",
+          label: "Member",
+          inputType: "text",
+          options: null,
+        },
+      ],
+    });
+  });
+
+  test("fills when every array row supplies the required loop item field", async () => {
+    const buffer = await makeDocx(
+      WRAP(
+        [P("{{#each persons}}"), P("{{persons.member}}"), P("{{/each}}")].join(
+          "",
+        ),
+      ),
+    );
+    const withManifest = await writeManifest(buffer, {
+      version: 1,
+      fields: [{ path: "persons.member", label: "Member", required: true }],
+    });
+
+    const result = await fillTemplateDocx({
+      source: { name: "Roster", fileName: "roster.docx", buffer: withManifest },
+      values: { persons: [{ member: "Alice" }, { member: "Bob" }] },
+      scopedDb: stubScopedDb(),
+      organizationId,
+    });
+
+    expect("requiredFieldsRejection" in result).toBe(false);
+    if (!("buffer" in result)) {
+      throw new Error("expected a filled document");
+    }
+    const texts = await extractTexts(result.buffer);
+    expect(texts.join("")).toContain("Alice");
+    expect(texts.join("")).toContain("Bob");
+  });
+
   test("fills when the required field is provided", async () => {
     const buffer = await makeManifestDocx([requiredTextField]);
 

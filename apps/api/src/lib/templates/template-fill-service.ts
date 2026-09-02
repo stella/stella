@@ -56,9 +56,13 @@ import {
 } from "./template-input-contract";
 import {
   applyOmittedOptionalPlaceholderDefaults,
-  isMissingRequiredFieldValue,
+  collectMissingRequiredFields,
   isTemplateFieldRequired,
 } from "./template-optional-defaults";
+import type { MissingRequiredField } from "./template-optional-defaults";
+
+export type { MissingRequiredField } from "./template-optional-defaults";
+
 // Data a template is filled with: open-ended field-path → value map (paths come
 // from the template's manifest/markers, not a fixed entity), patched in place
 // with resolved clause slots and AI-drafted fields before fill.
@@ -70,15 +74,6 @@ type TemplateUseRecording = "after-fill" | "caller";
 type TemplateInputRejection = {
   type: "unused-values";
   keys: string[];
-};
-
-/** One required field the caller omitted (or left empty), returned instead of
- *  either inventing a value or silently leaving the marker unfilled. */
-export type MissingRequiredField = {
-  path: string;
-  label: string | null;
-  inputType: InputType;
-  options: string[] | null;
 };
 
 type FillRejection<TUsageRejection> =
@@ -445,16 +440,14 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
   // field (not AI-fillable, not formula/condition/source-derived) that is
   // absent or empty must never be silently invented or left as a raw
   // `{{marker}}` in the output. Ask the caller for exactly these fields
-  // instead of guessing.
+  // instead of guessing. Every real fill enforces this; only the live
+  // fill-preview route (not this service) legitimately allows partial values.
   if (manifest) {
-    const missingRequiredFields: MissingRequiredField[] = manifest.fields
-      .filter((field) => isMissingRequiredFieldValue({ field, values: record }))
-      .map((field) => ({
-        path: field.path,
-        label: field.label ?? null,
-        inputType: field.inputType ?? "text",
-        options: field.options ?? null,
-      }));
+    const missingRequiredFields = collectMissingRequiredFields({
+      fields: manifest.fields,
+      policy: "enforce",
+      values: record,
+    });
     if (missingRequiredFields.length > 0) {
       return { requiredFieldsRejection: missingRequiredFields };
     }

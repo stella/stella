@@ -5,6 +5,7 @@ import { propertyConfig } from "@stll/property-testing";
 
 import {
   applyOmittedOptionalPlaceholderDefaults,
+  collectMissingRequiredFields,
   isMissingRequiredFieldValue,
   isTemplateFieldRequired,
 } from "./template-optional-defaults";
@@ -186,12 +187,152 @@ describe("isMissingRequiredFieldValue", () => {
             required &&
             !isDerived &&
             !isAiFillable &&
-            (value === undefined || value === "");
+            (value === undefined || value.trim() === "");
 
           expect(isMissingRequiredFieldValue({ field, values })).toBe(expected);
         },
       ),
       propertyConfig(),
     );
+  });
+
+  test("flags whitespace-only required text as missing, not just the exact empty string", () => {
+    expect(
+      isMissingRequiredFieldValue({
+        field: { path: "governing_law", required: true },
+        values: { governing_law: "   " },
+      }),
+    ).toBe(true);
+    expect(
+      isMissingRequiredFieldValue({
+        field: { path: "governing_law", required: true },
+        values: { governing_law: "\t\n " },
+      }),
+    ).toBe(true);
+    // Real (non-whitespace-only) content survives trimming untouched.
+    expect(
+      isMissingRequiredFieldValue({
+        field: { path: "governing_law", required: true },
+        values: { governing_law: "  Czech  " },
+      }),
+    ).toBe(false);
+  });
+
+  test("checks a required loop item field per array row, not the flat dotted path", () => {
+    const field = { path: "persons.member", required: true };
+
+    // resolvePath("persons.member", values) cannot index into the array and
+    // would report this as always missing; the per-row traversal must not.
+    expect(
+      isMissingRequiredFieldValue({
+        field,
+        values: { persons: [{ member: "Alice" }, { member: "Bob" }] },
+      }),
+    ).toBe(false);
+
+    // One row leaves it empty.
+    expect(
+      isMissingRequiredFieldValue({
+        field,
+        values: { persons: [{ member: "Alice" }, { member: "" }] },
+      }),
+    ).toBe(true);
+
+    // One row omits it entirely.
+    expect(
+      isMissingRequiredFieldValue({
+        field,
+        values: { persons: [{ member: "Alice" }, {}] },
+      }),
+    ).toBe(true);
+
+    // Whitespace-only counts as missing inside a row too.
+    expect(
+      isMissingRequiredFieldValue({
+        field,
+        values: { persons: [{ member: "  " }] },
+      }),
+    ).toBe(true);
+
+    // No rows: nothing to omit.
+    expect(
+      isMissingRequiredFieldValue({ field, values: { persons: [] } }),
+    ).toBe(false);
+
+    // The array itself absent: not a repeatable path in these values, so it
+    // falls back to the plain top-level check, which is also absent.
+    expect(isMissingRequiredFieldValue({ field, values: {} })).toBe(true);
+  });
+
+  test("does not check a required loop item field for a derived or AI-fillable row value", () => {
+    expect(
+      isMissingRequiredFieldValue({
+        field: {
+          path: "persons.member",
+          required: true,
+          aiPrompt: "Draft the member's role.",
+        },
+        values: { persons: [{ member: "" }] },
+      }),
+    ).toBe(false);
+  });
+});
+
+describe("collectMissingRequiredFields", () => {
+  const requiredField = {
+    path: "governing_law",
+    label: "Governing law",
+    inputType: "select",
+    options: ["Czech", "Slovak"],
+    required: true,
+  };
+
+  test("enforce: reports each missing required field with its display metadata", () => {
+    expect(
+      collectMissingRequiredFields({
+        fields: [requiredField],
+        policy: "enforce",
+        values: {},
+      }),
+    ).toEqual([
+      {
+        path: "governing_law",
+        label: "Governing law",
+        inputType: "select",
+        options: ["Czech", "Slovak"],
+      },
+    ]);
+  });
+
+  test("enforce: reports nothing once every required field is present", () => {
+    expect(
+      collectMissingRequiredFields({
+        fields: [requiredField],
+        policy: "enforce",
+        values: { governing_law: "Czech" },
+      }),
+    ).toEqual([]);
+  });
+
+  test("allow-partial: never reports a missing field, even when one is truly absent", () => {
+    expect(
+      collectMissingRequiredFields({
+        fields: [requiredField],
+        policy: "allow-partial",
+        values: {},
+      }),
+    ).toEqual([]);
+  });
+
+  test("defaults absent label/inputType/options to the same shape describeStoredTemplate uses", () => {
+    expect(
+      collectMissingRequiredFields({
+        fields: [{ path: "note", required: true }],
+        policy: "enforce",
+        values: {},
+      }),
+    ).toEqual([
+      { path: "note", label: null, inputType: "text", options: null },
+    ]);
   });
 });

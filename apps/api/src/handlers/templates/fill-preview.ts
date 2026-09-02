@@ -31,6 +31,7 @@ import { isTemplateData } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
 import { containsNull } from "@/api/lib/templates/template-data";
+import { collectMissingRequiredFields } from "@/api/lib/templates/template-optional-defaults";
 import { isRecord } from "@/api/lib/type-guards";
 
 import { assertTemplateFillUsage } from "./fill";
@@ -52,7 +53,7 @@ type FillPreviewProps = {
   body: { values: string };
 };
 
-const fillPreviewHandler = async function* ({
+export const fillPreviewHandler = async function* ({
   safeDb,
   scopedDb,
   organizationId,
@@ -129,6 +130,32 @@ const fillPreviewHandler = async function* ({
   let fillBuffer: Buffer = buffer;
   let adaptedPaths: readonly string[] = [];
   const manifest = await readManifest(buffer);
+
+  // Live preview: the values are typically still in progress (the person is
+  // mid-typing in the fill form), so partial values are explicitly allowed
+  // here — the one deliberate exception to the required-fields gate every
+  // other fill route (download, chat/MCP tool, workspace persistence)
+  // enforces. Named at the call site (`"allow-partial"`) rather than simply
+  // never calling the gate, so the exception stays visible and this route
+  // keeps tracking the gate's contract if it ever grows beyond a no-op for
+  // that policy.
+  if (manifest) {
+    const missingRequiredFields = collectMissingRequiredFields({
+      fields: manifest.fields,
+      policy: "allow-partial",
+      values: record,
+    });
+    if (missingRequiredFields.length > 0) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: `Missing required template values: ${missingRequiredFields
+            .map((field) => field.label ?? field.path)
+            .join(", ")}`,
+        }),
+      );
+    }
+  }
 
   const hasAiDraftFields = manifest?.fields.some((field) => field.aiPrompt);
   const hasAiAdaptFields = manifest?.fields.some((field) => field.aiAdapt);
