@@ -71,7 +71,7 @@ session with `--scopes`; the default scopes are
   (windowed, so follow `--cursor`).
 - **MCP resources**: `stella reference list` enumerates static server resources;
   `stella reference show <name>` prints one.
-- **No binary uploads**: the CLI cannot upload a new document version (a file) — `upload_document_version`/`open_document_version_upload` are MCP-only, excluded from the CLI. Upload a new version through an MCP-connected client or the stella web app.
+- **Uploading a file**: `stella upload --file <file> --matter-id <matter-id>` uploads a local file as a new document; add `--entity-id <id>` to upload it as a new version of an existing document instead — a CLI-native path (the CLI reads the file itself), separate from the MCP `upload_document_version`/`open_document_version_upload` tools (which take a host-supplied file reference and are excluded from the CLI).
 
 ## Command tree
 
@@ -301,8 +301,8 @@ invoke <id> --input '<json>'`, where the JSON is `{ body?, params?, query? }`.
 The curated commands above cover common tasks; anything else goes through the
 generic capability path. Current domains: `audit-logs`, `billing-codes`, `case-law`, `catalogue`, `chat`, `clauses`, `contacts`, `document-types`, `entities`, `expenses`, `fields`, `flows`, `invoices`, `legislation`, `lists`, `organization-settings`, `playbooks`, `properties`, `rates`, `reports`, `signals`, `skills`, `style-sets`, `tasks`, `template-packs`, `template-recipes`, `templates`, `time-entries`, `uploads`, `usage`, `view-templates`, `views`, `work-obligations`, `workspaces`.
 
-- Translate a document: `stella capability entities translate --field-id <id> --target-lang <lang>`.
-- Start workflow extraction: `stella capability workspaces workflow-start --workspace <id>`.
+- Translate a document: `stella capability entities translate --workspace <workspace> --field-id <field-id> --target-lang <target-lang>`.
+- Start workflow extraction: `stella capability workspaces workflow-start --workspace <workspace>`.
 - **`--input` casing is not uniform; never guess it.** A curated command's
   `--input` JSON (the table and flags above) uses the MCP tool schema's own
   keys, snake_case (`matter_id`, `contact_id`). A capability command's

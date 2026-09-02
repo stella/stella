@@ -67,6 +67,40 @@ const renderNestedFailure = ({
   );
 };
 
+/**
+ * This command's own flags (the shared `buildCommonFlags()` ones excluded),
+ * as one plain object literal `buildCommand` registers directly. Exported so
+ * the generated skill (`generate-skill.ts`) can state `stella upload`'s real
+ * invocation (which flags exist, which are required) from this SAME object
+ * instead of hand-typed prose that could silently drift from it. A flag here
+ * is required unless it carries `optional: true` (see `optionalStringFlag`).
+ */
+export const uploadSpecificFlags = {
+  file: {
+    brief: "Local file path to upload",
+    kind: "parsed",
+    parse: parseString,
+  },
+  matterId: {
+    brief: "Matter id that will own the document",
+    kind: "parsed",
+    parse: parseString,
+  },
+  propertyId: optionalStringFlag(
+    "File-property id override; by default the unique file property is discovered automatically",
+  ),
+  parentId: optionalStringFlag("Destination folder entity id"),
+  entityId: optionalStringFlag(
+    "Existing document entity id; when set, upload the file as its new version",
+  ),
+  name: optionalStringFlag(
+    "Document name override; defaults to the local file name",
+  ),
+  mimeType: optionalStringFlag(
+    "MIME type override; by default it is inferred from the standard extension database",
+  ),
+} as const;
+
 export const uploadCommand: Command<Context> = buildCommand<
   UploadFlags,
   [],
@@ -170,29 +204,7 @@ export const uploadCommand: Command<Context> = buildCommand<
   parameters: {
     flags: {
       ...buildCommonFlags(),
-      file: {
-        brief: "Local file path to upload",
-        kind: "parsed",
-        parse: parseString,
-      },
-      matterId: {
-        brief: "Matter id that will own the document",
-        kind: "parsed",
-        parse: parseString,
-      },
-      propertyId: optionalStringFlag(
-        "File-property id override; by default the unique file property is discovered automatically",
-      ),
-      parentId: optionalStringFlag("Destination folder entity id"),
-      entityId: optionalStringFlag(
-        "Existing document entity id; when set, upload the file as its new version",
-      ),
-      name: optionalStringFlag(
-        "Document name override; defaults to the local file name",
-      ),
-      mimeType: optionalStringFlag(
-        "MIME type override; by default it is inferred from the standard extension database",
-      ),
+      ...uploadSpecificFlags,
     },
   },
 });

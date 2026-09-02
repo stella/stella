@@ -7,10 +7,12 @@
 // from the command surface the CLI actually dispatches.
 
 import { CLI_DEFAULT_SCOPES } from "./auth/constants.js";
+import { uploadSpecificFlags } from "./commands/upload.js";
 import { flagKindFact } from "./flag-help.js";
 import { CAPABILITY_NAMESPACE } from "./generate-capability-tree.js";
 import {
   generateRouteMap,
+  kebabCase,
   RouteGenerationError,
 } from "./generate-route-map.js";
 import { DOCUMENT_VERSION_UPLOAD_TRANSPORT } from "./generated/document-version-upload-transport.js";
@@ -209,27 +211,72 @@ export type CapabilitySkillSummary = {
   commandCount: number;
   /** Domain segments actually present in the merged tree, see `capabilityDomainsOf`. */
   domains: readonly string[];
+  /**
+   * The merged tree (curated leaves + capability leaves). Worked examples
+   * below resolve a real `CapabilityLeafSpec` out of it, so an example's
+   * flags are derived from the leaf, never hand-typed.
+   */
+  tree: RouteNode;
+};
+
+/** The node at `path` in `tree`, or `undefined` if the path does not resolve. */
+const routeNodeAt = (
+  tree: RouteNode,
+  path: readonly string[],
+): RouteNode | undefined => {
+  let node: RouteNode = tree;
+  for (const segment of path) {
+    if (node.kind !== "route") {
+      return undefined;
+    }
+    const child = node.children[segment];
+    if (child === undefined) {
+      return undefined;
+    }
+    node = child;
+  }
+  return node;
 };
 
 /**
- * Two worked "no curated command" examples the skill states verbatim
- * (spec 049-flags deliverable 2). Checked against the live domain list below
- * rather than hand-trusted, so a catalog change that removes either domain
- * fails codegen instead of shipping a stale example.
+ * Two worked "no curated command" examples (spec 049-flags deliverable 2):
+ * task prose plus the command path to a real capability leaf. The invocation
+ * — every required flag, in the leaf's own flag order, placeholder named
+ * after the flag itself — is derived from that leaf at render time (see
+ * `capabilityExampleLine`), so a catalog change that renames a flag, adds a
+ * new required one, or drops the leaf fails codegen instead of shipping a
+ * stale example.
  */
 const CAPABILITY_WORKED_EXAMPLES = [
   {
-    domain: "entities",
     task: "Translate a document",
-    command:
-      "stella capability entities translate --field-id <id> --target-lang <lang>",
+    commandPath: [CAPABILITY_NAMESPACE, "entities", "translate"],
   },
   {
-    domain: "workspaces",
     task: "Start workflow extraction",
-    command: "stella capability workspaces workflow-start --workspace <id>",
+    commandPath: [CAPABILITY_NAMESPACE, "workspaces", "workflow-start"],
   },
 ] as const;
+
+const capabilityExampleLine = (
+  tree: RouteNode,
+  example: (typeof CAPABILITY_WORKED_EXAMPLES)[number],
+): string => {
+  const node = routeNodeAt(tree, example.commandPath);
+  if (node?.kind !== "capability-leaf") {
+    throw new RouteGenerationError(
+      `generateCliSkill: worked example "${example.task}" names command "stella ${example.commandPath.join(" ")}", which is not a capability command in the current tree; update or drop the example`,
+    );
+  }
+  const required = node.spec.flags.filter((flag) => flag.required);
+  const args = required
+    .map((flag) => `${flag.flag} <${flag.flag.replace(/^--/u, "")}>`)
+    .join(" ");
+  const invocation = [`stella ${example.commandPath.join(" ")}`, args]
+    .filter((part) => part.length > 0)
+    .join(" ");
+  return `- ${example.task}: \`${invocation}\`.`;
+};
 
 /**
  * The compact capability-tree section (spec 049 deliverable 4), extended with
@@ -239,13 +286,9 @@ const CAPABILITY_WORKED_EXAMPLES = [
  * enumerated, so the skill stays readable.
  */
 const renderCapabilitySection = (summary: CapabilitySkillSummary): string => {
-  for (const example of CAPABILITY_WORKED_EXAMPLES) {
-    if (!summary.domains.includes(example.domain)) {
-      throw new RouteGenerationError(
-        `generateCliSkill: worked example "${example.command}" names domain "${example.domain}", which is no longer in the capability tree; update or drop the example`,
-      );
-    }
-  }
+  const exampleLines = CAPABILITY_WORKED_EXAMPLES.map((example) =>
+    capabilityExampleLine(summary.tree, example),
+  );
   const domainList = summary.domains
     .map((domain) => `\`${domain}\``)
     .join(", ");
@@ -277,9 +320,7 @@ const renderCapabilitySection = (summary: CapabilitySkillSummary): string => {
     "The curated commands above cover common tasks; anything else goes through the",
     `generic capability path. Current domains: ${domainList}.`,
     "",
-    ...CAPABILITY_WORKED_EXAMPLES.map(
-      ({ task, command }) => `- ${task}: \`${command}\`.`,
-    ),
+    ...exampleLines,
     "- **`--input` casing is not uniform; never guess it.** A curated command's",
     "  `--input` JSON (the table and flags above) uses the MCP tool schema's own",
     "  keys, snake_case (`matter_id`, `contact_id`). A capability command's",
@@ -289,14 +330,29 @@ const renderCapabilitySection = (summary: CapabilitySkillSummary): string => {
   ].join("\n");
 };
 
+type UploadFlagEntry =
+  (typeof uploadSpecificFlags)[keyof typeof uploadSpecificFlags];
+
+const isOptionalUploadFlag = (flag: UploadFlagEntry): boolean =>
+  "optional" in flag;
+
+const uploadFlagName = (key: string): string => `--${kebabCase(key)}`;
+
+/** `stella upload`'s required flags, in invocation order (spec upload-note). */
+const REQUIRED_UPLOAD_KEYS = ["file", "matterId"] as const;
+
 /**
- * What the CLI structurally cannot do: binary-file MCP tools have no JSON
- * transport to ride. Derived from the two tools the document-version-upload
- * feature is built from (`document-version-upload-transport.ts`) so the note
- * disappears on its own if either tool is ever dropped from the exclusion
- * list, instead of silently going stale.
+ * Documents the real `stella upload` invocation, including uploading a new
+ * document VERSION (`--entity-id`) — a hand-wired top-level command
+ * (`commands/upload.ts`, registered directly in `build-cli-tree.ts`, never
+ * part of the generated route tree `generateRouteMap` walks). Its required
+ * flags are read off `uploadSpecificFlags`, the SAME object `buildCommand`
+ * registers, so the invocation cannot silently drift from what the command
+ * actually accepts. Contrasted with the excluded MCP tools
+ * (`document-version-upload-transport.ts`), which take a host-supplied file
+ * reference the CLI has no channel for and are genuinely unreachable.
  */
-const renderUploadGapNote = (
+const renderUploadNote = (
   annotations: Readonly<Record<string, ToolAnnotation>>,
 ): string => {
   const { toolName, pickerToolName } = DOCUMENT_VERSION_UPLOAD_TRANSPORT;
@@ -305,14 +361,31 @@ const renderUploadGapNote = (
     annotations[pickerToolName]?.excluded !== true
   ) {
     throw new RouteGenerationError(
-      `generateCliSkill: expected "${toolName}" and "${pickerToolName}" to be excluded CLI tools (binary file upload); update the upload-gap note if that changed`,
+      `generateCliSkill: expected "${toolName}" and "${pickerToolName}" to be excluded CLI tools (host-file-reference upload); update the upload note if that changed`,
     );
   }
+  for (const key of REQUIRED_UPLOAD_KEYS) {
+    if (isOptionalUploadFlag(uploadSpecificFlags[key])) {
+      throw new RouteGenerationError(
+        `generateCliSkill: expected "stella upload" flag "${uploadFlagName(key)}" to be required; update the upload note if that changed`,
+      );
+    }
+  }
+  if (!isOptionalUploadFlag(uploadSpecificFlags.entityId)) {
+    throw new RouteGenerationError(
+      'generateCliSkill: expected "stella upload" to offer an optional --entity-id (new-version mode); update the upload note if that changed',
+    );
+  }
+  const requiredInvocation = REQUIRED_UPLOAD_KEYS.map(
+    (key) => `${uploadFlagName(key)} <${kebabCase(key)}>`,
+  ).join(" ");
   return (
-    "- **No binary uploads**: the CLI cannot upload a new document version " +
-    `(a file) — \`${toolName}\`/\`${pickerToolName}\` are MCP-only, excluded ` +
-    "from the CLI. Upload a new version through an MCP-connected client or the " +
-    "stella web app."
+    `- **Uploading a file**: \`stella upload ${requiredInvocation}\` uploads ` +
+    `a local file as a new document; add \`${uploadFlagName("entityId")} <id>\` ` +
+    "to upload it as a new version of an existing document instead — a " +
+    "CLI-native path (the CLI reads the file itself), separate from the MCP " +
+    `\`${toolName}\`/\`${pickerToolName}\` tools (which take a host-supplied ` +
+    "file reference and are excluded from the CLI)."
   );
 };
 
@@ -332,7 +405,7 @@ export const generateCliSkill = (
   const flagsSection = renderCommandFlagsSection(leaves);
   const exitCodes = renderExitCodeTable();
   const capabilitySection = renderCapabilitySection(capability);
-  const uploadGapNote = renderUploadGapNote(annotations);
+  const uploadNote = renderUploadNote(annotations);
 
   const frontmatter = [
     "---",
@@ -410,7 +483,7 @@ export const generateCliSkill = (
     "  (windowed, so follow `--cursor`).",
     "- **MCP resources**: `stella reference list` enumerates static server resources;",
     "  `stella reference show <name>` prints one.",
-    uploadGapNote,
+    uploadNote,
     "",
     "## Command tree",
     "",

@@ -240,6 +240,7 @@ await writeFile(
   generateCliSkill(listings, toolAnnotations, {
     commandCount: capabilityStats.generated,
     domains: capabilityDomainsOf(routeMap),
+    tree: routeMap,
   }),
 );
 process.stderr.write(`Wrote ${skillUrl.pathname}\n`);
