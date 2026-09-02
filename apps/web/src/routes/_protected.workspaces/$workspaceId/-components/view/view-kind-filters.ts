@@ -91,10 +91,18 @@ const admittedKindsForAnd = (
   return result;
 };
 
-/** Union of children, but only when every child is itself restricted. */
+/**
+ * Union of children, but only when every child is itself restricted. An `or`
+ * with no children admits everything: the filter builder can leave such a
+ * group behind after its last child is removed, and the query compiler drops
+ * it, so the view is unrestricted.
+ */
 const admittedKindsForOr = (
   nodes: readonly ConditionNode[],
 ): ReadonlySet<EntityKind> | null => {
+  if (nodes.length === 0) {
+    return null;
+  }
   const kinds = new Set<EntityKind>();
   for (const node of nodes) {
     const childKinds = admittedKinds(node);
