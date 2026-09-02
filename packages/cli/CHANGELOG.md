@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 0.10.0
+
+### Minor Changes
+
+- [#2839](https://github.com/stella/stella/pull/2839) [`27f0a67`](https://github.com/stella/stella/commit/27f0a67434fbbf1d66da2236f767eccd31fbf451) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Rename the workspace-scoping tool input to `workspace_id`. Breaking for the generated commands that scoped to a workspace: they now take `--workspace-id` instead of `--matter-id`, as does `stella upload`. Matter-entity commands (`matter save`, `matter delete`, `matter list`, `matter link-contact`) keep `--matter-id`. `--input` still accepts the deprecated `matter_id` key for one release.
+
 ## 0.9.0
 
 ### Minor Changes

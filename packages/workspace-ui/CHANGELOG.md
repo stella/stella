@@ -1,5 +1,23 @@
 # @stll/workspace-ui
 
+## 0.8.0
+
+### Minor Changes
+
+- [#2854](https://github.com/stella/stella/pull/2854) [`47d3d57`](https://github.com/stella/stella/commit/47d3d5741d51d8b4e70f34cd7ab4535deb12fd0d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `WorkspaceFrame`'s described composition can now render its navigation through the sidebar shell from `@stll/ui/sidebar`. Pass `navigation.sidebar` to get the same collapsible sidebar Stella's own app uses: a header row at toolbar height with a brand slot and a collapse toggle, the described items as sidebar menu buttons with labels while expanded and tooltips while collapsed, and the footer slot below. `open`, `onOpenChange`, `defaultOpen`, and `forceCollapsed` pass through to the sidebar provider so the host owns persistence. Without `navigation.sidebar`, the frame renders the application rail exactly as before.
+
+  `WorkspaceViewSwitcher`'s strip is now one toolbar row (`TOOLBAR_ROW_HEIGHT`), the same height as the frame's top bar and a kanban column header, instead of taking its height from the tabs inside it.
+
+  `SidebarMenuButton` gains `size="rail"`: a 44px target while expanded and while collapsed to the icon rail, for a sidebar that stands in for the application rail.
+
+  `@stll/ui/sidebar` types the custom properties it sets on a local style type instead of a package-private module augmentation, so a consumer compiling the module from source no longer fails on `--sidebar-width`.
+
+### Patch Changes
+
+- [#2845](https://github.com/stella/stella/pull/2845) [`9dd7ff4`](https://github.com/stella/stella/commit/9dd7ff4554ffafc615f5495fd340619576c7a589) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Document that `WorkspaceFrame`'s `host-responsive` composition is where a host mounts an expandable/collapsible sidebar (such as the shell now published at `@stll/ui/sidebar`), while `described` always renders the narrower, fixed-width `ApplicationRail`.
+- Updated dependencies [[`d5170f5`](https://github.com/stella/stella/commit/d5170f5ea212deee686d5d8d6bfa0a431e2657d6), [`1943eed`](https://github.com/stella/stella/commit/1943eed7b652379b67522905518f06b4cd771e36), [`9dd7ff4`](https://github.com/stella/stella/commit/9dd7ff4554ffafc615f5495fd340619576c7a589), [`47d3d57`](https://github.com/stella/stella/commit/47d3d5741d51d8b4e70f34cd7ab4535deb12fd0d)]:
+  - @stll/ui@0.20.0
+
 ## 0.7.2
 
 ### Patch Changes
