@@ -12,7 +12,25 @@ import { notifications } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
+import type {
+  UnbackedProjectionKeys,
+  UnprojectedColumns,
+} from "@/api/lib/projection-totality";
 import { brandPersistedNotificationId } from "@/api/lib/safe-id-boundaries";
+
+type NotificationRow = typeof notifications.$inferSelect;
+
+// Columns intentionally not sent to the client.
+const UNPROJECTED_NOTIFICATION_COLUMNS = [
+  // RLS already pins every row to the caller; re-stating it client-side
+  // would be redundant with the identity the client already has.
+  "userId",
+  // The list endpoint scopes to the caller's active organization, which the
+  // client already knows from its own session.
+  "organizationId",
+  // Producer-only dedup key for replay-safe inserts; never read back.
+  "idempotencyKey",
+] as const satisfies readonly (keyof NotificationRow)[];
 
 export const notificationParamsSchema = t.Object({
   notificationId: tSafeId("notification"),
@@ -59,6 +77,24 @@ export const toNotificationListItem = (row: {
   readAt: row.readAt?.toISOString() ?? null,
   createdAt: row.createdAt.toISOString(),
 });
+
+// Totality guard, bidirectional: every schema column must be projected onto
+// the response or explicitly excused above, and the projection cannot carry
+// a field that traces back to no real column.
+type MissingProjectedNotificationColumn = UnprojectedColumns<
+  NotificationRow,
+  NotificationListItem,
+  (typeof UNPROJECTED_NOTIFICATION_COLUMNS)[number]
+>;
+type UnexpectedProjectedNotificationColumn = UnbackedProjectionKeys<
+  NotificationRow,
+  NotificationListItem
+>;
+
+true satisfies MissingProjectedNotificationColumn extends never ? true : never;
+true satisfies UnexpectedProjectedNotificationColumn extends never
+  ? true
+  : never;
 
 /**
  * Unread notifications for one user in one organization.

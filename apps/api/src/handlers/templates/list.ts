@@ -17,7 +17,41 @@ import {
   encodePaginationCursor,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
+import type {
+  UnbackedProjectionKeys,
+  UnprojectedColumns,
+} from "@/api/lib/projection-totality";
 import { brandPersistedTemplateId } from "@/api/lib/safe-id-boundaries";
+
+type TemplateRow = typeof templates.$inferSelect;
+
+// Columns intentionally not sent by this page. A new schema column must
+// either be added to the `.select()` below or added here with a reason, or
+// the totality check further down fails to typecheck.
+const UNPROJECTED_TEMPLATE_LIST_COLUMNS = [
+  // Tenant scope, implied by the caller's active organization.
+  "organizationId",
+  // Document vs report discriminator: as of 2026-09-02 nothing filters or
+  // surfaces `kind` on this list (or on templates.get), so a "report" kind
+  // template is indistinguishable from a "document" one here. Flagged as a
+  // real gap for review rather than fixed inline.
+  "kind",
+  // Internal object storage location; never sent to the client.
+  "s3Key",
+  // Large structural manifest, parsed at get-time only; omitted from the
+  // list view for payload size.
+  "manifest",
+  // Internal write-side counter for optimistic content-rotation locking.
+  // The client sees version numbers via templates.versions, not this row.
+  "currentVersion",
+  // Full provenance detail (pack attribution) belongs to the get view;
+  // the list view only ranks/filters by category.
+  "originType",
+  "origin",
+  // Resolved to authorName/authorImage via the member/user join below;
+  // the raw id is not needed client-side.
+  "createdBy",
+] as const satisfies readonly (keyof TemplateRow)[];
 
 const UNCATEGORIZED = "uncategorized" as const;
 
@@ -44,6 +78,46 @@ export const decodeTemplateListCursor = (
 
 export const encodeTemplateListCursor = (id: SafeId<"template">): string =>
   encodePaginationCursor([id]);
+
+// The shape the `.select({...})` below must project, plus the two
+// author-identity fields that come from the joined `user` row rather than
+// from `templates` itself.
+type TemplateListItem = Pick<
+  TemplateRow,
+  | "id"
+  | "name"
+  | "fileName"
+  | "fieldCount"
+  | "sizeBytes"
+  | "categoryId"
+  | "createdAt"
+  | "updatedAt"
+  | "lastUsedAt"
+  | "useCount"
+  | "tags"
+  | "languages"
+  | "whenToUse"
+  | "whenNotToUse"
+> & { authorName: string | null; authorImage: string | null };
+
+// Totality guard, bidirectional: every schema column must be projected onto
+// the response or explicitly excused above, and the projection cannot carry
+// a field that traces back to no real column, aside from the joined
+// authorName/authorImage.
+type MissingProjectedTemplateListColumn = UnprojectedColumns<
+  TemplateRow,
+  TemplateListItem,
+  (typeof UNPROJECTED_TEMPLATE_LIST_COLUMNS)[number]
+>;
+type UnexpectedProjectedTemplateListColumn = UnbackedProjectionKeys<
+  TemplateRow,
+  Omit<TemplateListItem, "authorName" | "authorImage">
+>;
+
+true satisfies MissingProjectedTemplateListColumn extends never ? true : never;
+true satisfies UnexpectedProjectedTemplateListColumn extends never
+  ? true
+  : never;
 
 type ListTemplatesProps = {
   safeDb: SafeDb;
@@ -125,8 +199,12 @@ export const listTemplatesHandler = async function* ({
     ),
   );
 
+  // Ties the `.select({...})` above to `TemplateListItem`: if either drops
+  // a field the other still names, this check stops typechecking.
+  const projectedResult = result satisfies TemplateListItem[];
+
   const page = createCursorPage({
-    rows: result,
+    rows: projectedResult,
     limit,
     cursorForItem: (item) => encodeTemplateListCursor(item.id),
   });
