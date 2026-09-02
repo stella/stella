@@ -13,7 +13,48 @@ import {
   encodePaginationCursor,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
+import type {
+  UnbackedProjectionKeys,
+  UnprojectedColumns,
+} from "@/api/lib/projection-totality";
 import { brandPersistedContactId } from "@/api/lib/safe-id-boundaries";
+
+type ContactRow = typeof contacts.$inferSelect;
+
+// Columns intentionally not sent by this page. The address book is a
+// directory summary, not the full contact record — `contacts.get` returns
+// the rest. A new schema column must either be added to the `.select()`
+// below or added here with a reason, or the totality check further down
+// fails to typecheck.
+const UNPROJECTED_CONTACT_LIST_COLUMNS = [
+  // Tenant scope, implied by the caller's active organization.
+  "organizationId",
+  // Person-only fields the directory summary omits; full detail is on
+  // contacts.get.
+  "prefix",
+  "middleName",
+  "suffix",
+  // Free-text notes are a detail-view field, not a directory summary field.
+  "notes",
+  "addresses",
+  "metadata",
+  // Billing fields belong to the invoicing surface, not the address-book
+  // summary; contacts.get returns them.
+  "registrationNumber",
+  "taxId",
+  "bankAccounts",
+  "billingAddress",
+  "defaultHourlyRate",
+  "currency",
+  "paymentTermDays",
+  // Attorney assignment surfaces on the matter (workspace) contact fields,
+  // not the standalone directory row.
+  "originatingAttorneyId",
+  "responsibleAttorneyId",
+  // Authorship/edit metadata is a detail-view field.
+  "createdBy",
+  "updatedAt",
+] as const satisfies readonly (keyof ContactRow)[];
 
 type ListContactsQuery = {
   cursor?: string;
@@ -77,6 +118,42 @@ const decodeCursor = (cursor: string): DecodedCursor | null => {
 
 const encodeCursor = (displayName: string, id: string): string =>
   encodePaginationCursor([displayName, id]);
+
+// The shape the `.select({...})` below must project, plus the one
+// aggregate (`clientMatterCount`) that traces back to no single column.
+type ContactListItem = Pick<
+  ContactRow,
+  | "id"
+  | "type"
+  | "displayName"
+  | "firstName"
+  | "lastName"
+  | "organizationName"
+  | "emails"
+  | "phones"
+  | "tags"
+  | "color"
+  | "createdAt"
+> & { clientMatterCount: number };
+
+// Totality guard, bidirectional: every schema column must be projected onto
+// the response or explicitly excused above, and the projection cannot carry
+// a field that traces back to no real column, aside from the join-derived
+// `clientMatterCount`.
+type MissingProjectedContactListColumn = UnprojectedColumns<
+  ContactRow,
+  ContactListItem,
+  (typeof UNPROJECTED_CONTACT_LIST_COLUMNS)[number]
+>;
+type UnexpectedProjectedContactListColumn = UnbackedProjectionKeys<
+  ContactRow,
+  Omit<ContactListItem, "clientMatterCount">
+>;
+
+true satisfies MissingProjectedContactListColumn extends never ? true : never;
+true satisfies UnexpectedProjectedContactListColumn extends never
+  ? true
+  : never;
 
 /** One tenant-scoped contact-directory query shared by HTTP and MCP. */
 export const listContactsPage = async ({
@@ -145,8 +222,12 @@ export const listContactsPage = async ({
       .orderBy(contacts.displayName, contacts.id)
       .limit(limit + 1);
 
+    // Ties the `.select({...})` above to `ContactListItem`: if either drops
+    // a field the other still names, this check stops typechecking.
+    const projectedRows = rows satisfies ContactListItem[];
+
     return createCursorPage({
-      rows,
+      rows: projectedRows,
       limit,
       cursorForItem: (item) => encodeCursor(item.displayName, item.id),
     });

@@ -13,9 +13,73 @@ import {
   encodePaginationCursor,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
+import type {
+  UnbackedProjectionKeys,
+  UnprojectedColumns,
+} from "@/api/lib/projection-totality";
 import { brandPersistedPlaybookDefinitionId } from "@/api/lib/safe-id-boundaries";
 
+type PlaybookDefinitionRow = typeof playbookDefinitions.$inferSelect;
+
 // ── List ────────────────────────────────────────────
+
+// Columns intentionally not sent by the list summary. A new schema column
+// must either be projected by `toPlaybookDefinitionListItem` below or added
+// here with a reason, or the totality check further down fails to
+// typecheck.
+const UNPROJECTED_PLAYBOOK_LIST_COLUMNS = [
+  // Tenant scope, implied by the caller's active organization.
+  "organizationId",
+  // Server-only bundled-starter correlation id; never read back (see the
+  // `starterId` doc comment on the schema column).
+  "starterId",
+  // unprojected as of 2026-09-02; review — the config description below
+  // claims this list carries "scope ... and approval metadata", but neither
+  // `scope`/`positions` nor `approvedAt`/`approvedBy` are actually selected
+  // or mapped here. Full detail is available via playbooks.get; flagging
+  // rather than silently adding fields that may not belong on the summary.
+  "scope",
+  "positions",
+  "approvedAt",
+  "approvedBy",
+] as const satisfies readonly (keyof PlaybookDefinitionRow)[];
+
+// The shape the list `.select({...})` below must project.
+type PlaybookDefinitionListRow = Pick<
+  PlaybookDefinitionRow,
+  "id" | "name" | "description" | "status" | "createdAt" | "updatedAt"
+>;
+
+const toPlaybookDefinitionListItem = (row: PlaybookDefinitionListRow) => ({
+  id: row.id,
+  name: row.name,
+  description: row.description,
+  status: row.status,
+  createdAt: row.createdAt.toISOString(),
+  updatedAt: row.updatedAt.toISOString(),
+});
+
+type PlaybookDefinitionListItem = ReturnType<
+  typeof toPlaybookDefinitionListItem
+>;
+
+// Totality guard, bidirectional: every schema column must be projected onto
+// the response or explicitly excused above, and the projection cannot carry
+// a field that traces back to no real column.
+type MissingProjectedPlaybookListColumn = UnprojectedColumns<
+  PlaybookDefinitionRow,
+  PlaybookDefinitionListItem,
+  (typeof UNPROJECTED_PLAYBOOK_LIST_COLUMNS)[number]
+>;
+type UnexpectedProjectedPlaybookListColumn = UnbackedProjectionKeys<
+  PlaybookDefinitionRow,
+  PlaybookDefinitionListItem
+>;
+
+true satisfies MissingProjectedPlaybookListColumn extends never ? true : never;
+true satisfies UnexpectedProjectedPlaybookListColumn extends never
+  ? true
+  : never;
 
 export const listPlaybookDefinitionsQuerySchema = t.Object({
   limit: t.Optional(
@@ -129,18 +193,74 @@ export const listPlaybookDefinitionsHandler = async function* ({
 
   return Result.ok({
     ...page,
-    items: page.items.map((row) => ({
-      id: row.id,
-      name: row.name,
-      description: row.description,
-      status: row.status,
-      createdAt: row.createdAt.toISOString(),
-      updatedAt: row.updatedAt.toISOString(),
-    })),
+    items: page.items.map(toPlaybookDefinitionListItem),
   });
 };
 
 // ── Get ─────────────────────────────────────────────
+
+// Columns intentionally not sent by the detail read. A new schema column
+// must either be projected by `toPlaybookDefinitionDetail` below or added
+// here with a reason, or the totality check further down fails to
+// typecheck.
+const UNPROJECTED_PLAYBOOK_DETAIL_COLUMNS = [
+  // Tenant scope, implied by the caller's active organization.
+  "organizationId",
+  // Server-only bundled-starter correlation id; never read back.
+  "starterId",
+  // unprojected as of 2026-09-02; review — set on approval
+  // (`playbooks/approve.ts`) but never read back to the client anywhere;
+  // possibly a real gap ("approved by whom") rather than deliberate.
+  "approvedBy",
+] as const satisfies readonly (keyof PlaybookDefinitionRow)[];
+
+// The shape the get `columns: {...}` query below must project.
+type PlaybookDefinitionDetailRow = Pick<
+  PlaybookDefinitionRow,
+  | "id"
+  | "name"
+  | "description"
+  | "scope"
+  | "positions"
+  | "status"
+  | "approvedAt"
+  | "createdAt"
+  | "updatedAt"
+>;
+
+const toPlaybookDefinitionDetail = (row: PlaybookDefinitionDetailRow) => ({
+  id: row.id,
+  name: row.name,
+  description: row.description,
+  scope: row.scope,
+  positions: row.positions,
+  status: row.status,
+  approvedAt: row.approvedAt ? row.approvedAt.toISOString() : null,
+  createdAt: row.createdAt.toISOString(),
+  updatedAt: row.updatedAt.toISOString(),
+});
+
+type PlaybookDefinitionDetail = ReturnType<typeof toPlaybookDefinitionDetail>;
+
+// Totality guard, bidirectional: every schema column must be projected onto
+// the response or explicitly excused above, and the projection cannot carry
+// a field that traces back to no real column.
+type MissingProjectedPlaybookDetailColumn = UnprojectedColumns<
+  PlaybookDefinitionRow,
+  PlaybookDefinitionDetail,
+  (typeof UNPROJECTED_PLAYBOOK_DETAIL_COLUMNS)[number]
+>;
+type UnexpectedProjectedPlaybookDetailColumn = UnbackedProjectionKeys<
+  PlaybookDefinitionRow,
+  PlaybookDefinitionDetail
+>;
+
+true satisfies MissingProjectedPlaybookDetailColumn extends never
+  ? true
+  : never;
+true satisfies UnexpectedProjectedPlaybookDetailColumn extends never
+  ? true
+  : never;
 
 type GetPlaybookDefinitionProps = {
   safeDb: SafeDb;
@@ -181,15 +301,5 @@ export const getPlaybookDefinitionHandler = async function* ({
     );
   }
 
-  return Result.ok({
-    id: playbook.id,
-    name: playbook.name,
-    description: playbook.description,
-    scope: playbook.scope,
-    positions: playbook.positions,
-    status: playbook.status,
-    approvedAt: playbook.approvedAt ? playbook.approvedAt.toISOString() : null,
-    createdAt: playbook.createdAt.toISOString(),
-    updatedAt: playbook.updatedAt.toISOString(),
-  });
+  return Result.ok(toPlaybookDefinitionDetail(playbook));
 };

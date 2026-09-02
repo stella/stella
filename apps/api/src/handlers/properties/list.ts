@@ -5,6 +5,10 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { LIMITS } from "@/api/lib/limits";
 import { deserializeAITool } from "@/api/lib/markdown/ai-tool";
+import type {
+  UnbackedProjectionKeys,
+  UnprojectedColumns,
+} from "@/api/lib/projection-totality";
 
 type PropertyRow = typeof properties.$inferSelect;
 
@@ -26,8 +30,6 @@ const UNPROJECTED_PROPERTY_COLUMNS = [
   "playbookSourceId",
   "playbookDefinitionId",
 ] as const satisfies readonly (keyof PropertyRow)[];
-
-type UnprojectedPropertyColumn = (typeof UNPROJECTED_PROPERTY_COLUMNS)[number];
 
 const toPropertyListItem = (
   property: PropertyRow,
@@ -75,21 +77,17 @@ const toPropertyListItem = (
 
 type PropertyListItem = ReturnType<typeof toPropertyListItem>;
 
-type ProjectedPropertyColumn = Exclude<
-  keyof PropertyRow,
-  UnprojectedPropertyColumn
->;
-
 // Totality guard, bidirectional: every schema column must be projected onto
 // the response or explicitly excused above, and the projection cannot carry
 // a field that traces back to no real column.
-type MissingProjectedPropertyColumn = Exclude<
-  ProjectedPropertyColumn,
-  keyof PropertyListItem
+type MissingProjectedPropertyColumn = UnprojectedColumns<
+  PropertyRow,
+  PropertyListItem,
+  (typeof UNPROJECTED_PROPERTY_COLUMNS)[number]
 >;
-type UnexpectedProjectedPropertyColumn = Exclude<
-  keyof PropertyListItem,
-  ProjectedPropertyColumn
+type UnexpectedProjectedPropertyColumn = UnbackedProjectionKeys<
+  PropertyRow,
+  PropertyListItem
 >;
 
 true satisfies MissingProjectedPropertyColumn extends never ? true : never;
