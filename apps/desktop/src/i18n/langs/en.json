@@ -133,6 +133,7 @@
     "keyboardNavigate": "← → navigate",
     "local": "Local",
     "memoryOnly": "Encrypted storage is unavailable. History will be kept only until stella desktop quits.",
+    "moreOptions": "More options",
     "noResults": "No matching clips",
     "noResultsDescription": "Try a different word or phrase.",
     "noGroup": "No group",

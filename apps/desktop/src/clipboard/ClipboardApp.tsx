@@ -27,6 +27,7 @@ import {
   CopyPlusIcon,
   CheckIcon,
   ClockIcon,
+  EllipsisIcon,
   FileTextIcon,
   FolderInputIcon,
   FolderPlusIcon,
@@ -1695,8 +1696,11 @@ const ClipboardApp = () => {
     };
   }, [handleKeyDown, handleKeyDownCapture]);
 
-  const nextCaptureStatus: ClipboardCaptureStatus =
-    snapshot.captureStatus === "active" ? "paused" : "active";
+  const captureActive = snapshot.captureStatus === "active";
+  const nextCaptureStatus: ClipboardCaptureStatus = captureActive
+    ? "paused"
+    : "active";
+  const captureActionLabel = captureActive ? t("pause") : t("resume");
   let persistenceWarningLabel = t("memoryOnly");
   if (snapshot.persistence.status === "deletionOnly") {
     persistenceWarningLabel = t("errorReadHistory");
@@ -1886,19 +1890,6 @@ const ClipboardApp = () => {
                 <ShieldAlertIcon aria-hidden="true" className="size-3.5" />
               </span>
             ) : null}
-            <Button
-              aria-label={t("welcomeHelp")}
-              className="size-11 rounded-full"
-              onClick={() => {
-                setWelcomeDismissed(false);
-                setWelcomeRequested(true);
-              }}
-              size="icon"
-              title={t("welcomeHelp")}
-              variant="ghost"
-            >
-              <CircleHelpIcon aria-hidden="true" className="size-4" />
-            </Button>
           </div>
 
           <nav
@@ -2015,77 +2006,83 @@ const ClipboardApp = () => {
         </InputGroup>
 
         <div className="flex shrink-0 items-center gap-0.5 justify-self-end">
-          <Button
-            aria-label={
-              snapshot.captureStatus === "active" ? t("pause") : t("resume")
-            }
-            className="size-11 rounded-full"
-            onClick={() => {
-              applySnapshotCommand("clipboard_set_capture_status", {
-                status: nextCaptureStatus,
-              });
-            }}
-            size="icon"
-            title={
-              snapshot.captureStatus === "active" ? t("pause") : t("resume")
-            }
-            variant="ghost"
-          >
-            {snapshot.captureStatus === "active" ? (
-              <PauseIcon aria-hidden="true" className="size-4" />
-            ) : (
-              <PlayIcon aria-hidden="true" className="size-4" />
-            )}
-          </Button>
           <Menu>
             <MenuTrigger
               render={
                 <Button
-                  aria-label={t("retention")}
+                  aria-label={t("moreOptions")}
                   className="size-11 rounded-full"
                   size="icon"
-                  title={t("retention")}
+                  title={t("moreOptions")}
                   variant="ghost"
                 />
               }
             >
-              <ClockIcon aria-hidden="true" className="size-4" />
+              <EllipsisIcon aria-hidden="true" className="size-4" />
             </MenuTrigger>
-            <MenuPopup align="end" className="w-56">
-              <MenuRadioGroup value={snapshot.retention}>
-                {CLIPBOARD_RETENTIONS.map((retention) => (
-                  <MenuRadioItem
-                    className="min-h-11 rounded-xl"
-                    key={retention}
-                    onClick={() => {
-                      applySnapshotCommand("clipboard_set_retention", {
-                        retention,
-                      });
-                    }}
-                    value={retention}
-                  >
-                    {t(RETENTION_LABEL_KEYS[retention])}
-                  </MenuRadioItem>
-                ))}
-              </MenuRadioGroup>
+            <MenuPopup align="end" className="w-60" side="top">
+              <MenuItem
+                className="min-h-11 rounded-xl"
+                onClick={() => {
+                  applySnapshotCommand("clipboard_set_capture_status", {
+                    status: nextCaptureStatus,
+                  });
+                }}
+              >
+                {captureActive ? <PauseIcon /> : <PlayIcon />}
+                {captureActionLabel}
+              </MenuItem>
+              <MenuSub>
+                <MenuSubTrigger className="min-h-11 rounded-xl">
+                  <ClockIcon />
+                  {t("retention")}
+                </MenuSubTrigger>
+                <MenuSubPopup className="w-56">
+                  <MenuRadioGroup value={snapshot.retention}>
+                    {CLIPBOARD_RETENTIONS.map((retention) => (
+                      <MenuRadioItem
+                        className="min-h-11 rounded-xl"
+                        key={retention}
+                        onClick={() => {
+                          applySnapshotCommand("clipboard_set_retention", {
+                            retention,
+                          });
+                        }}
+                        value={retention}
+                      >
+                        {t(RETENTION_LABEL_KEYS[retention])}
+                      </MenuRadioItem>
+                    ))}
+                  </MenuRadioGroup>
+                </MenuSubPopup>
+              </MenuSub>
+              <MenuItem
+                className="min-h-11 rounded-xl"
+                disabled={
+                  snapshot.items.length === 0 &&
+                  snapshot.persistence.status !== "deletionOnly"
+                }
+                onClick={() => {
+                  setDialog({ type: "clearHistory" });
+                }}
+                variant="destructive"
+              >
+                <Trash2Icon />
+                {t("clear")}
+              </MenuItem>
+              <MenuSeparator />
+              <MenuItem
+                className="min-h-11 rounded-xl"
+                onClick={() => {
+                  setWelcomeDismissed(false);
+                  setWelcomeRequested(true);
+                }}
+              >
+                <CircleHelpIcon />
+                {t("welcomeHelp")}
+              </MenuItem>
             </MenuPopup>
           </Menu>
-          <Button
-            aria-label={t("clear")}
-            className="size-11 rounded-full"
-            disabled={
-              snapshot.items.length === 0 &&
-              snapshot.persistence.status !== "deletionOnly"
-            }
-            onClick={() => {
-              setDialog({ type: "clearHistory" });
-            }}
-            size="icon"
-            title={t("clear")}
-            variant="ghost"
-          >
-            <Trash2Icon aria-hidden="true" className="size-4" />
-          </Button>
           <Button
             aria-label={t("close")}
             className="size-11 rounded-full"
