@@ -1,4 +1,11 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  setSystemTime,
+  test,
+} from "bun:test";
 
 import {
   addDays,
@@ -6,6 +13,7 @@ import {
   canonicalDecisionDate,
   isIsoDateString,
   parseIsoDateLocal,
+  toUtcDateString,
 } from "./dates";
 
 // Date's local-time methods read `process.env.TZ` on every call in Bun (and
@@ -96,13 +104,23 @@ describe("canonicalDecisionDate", () => {
     expect(canonicalDecisionDate("1800-01-01")).toBe("1800-01-01");
   });
 
-  test("accepts next year but not the one after", () => {
-    const currentYear = new Date().getUTCFullYear();
+  test("accepts today and tomorrow (UTC) but not the day after", () => {
+    // Pinned just before a UTC midnight: the guard reads its own clock, so
+    // an unpinned test could compute the fixture on one day and be judged on
+    // the next.
+    const now = new Date("2026-03-01T23:59:59.500Z");
+    setSystemTime(now);
+    try {
+      const day = (offset: number) => toUtcDateString(addUtcDays(now, offset));
 
-    expect(canonicalDecisionDate(`${currentYear + 1}-06-15`)).toBe(
-      `${currentYear + 1}-06-15`,
-    );
-    expect(canonicalDecisionDate(`${currentYear + 2}-06-15`)).toBeNull();
+      expect(canonicalDecisionDate(day(-1))).toBe("2026-02-28");
+      expect(canonicalDecisionDate(day(0))).toBe("2026-03-01");
+      expect(canonicalDecisionDate(day(1))).toBe("2026-03-02");
+      expect(canonicalDecisionDate(day(2))).toBeNull();
+      expect(canonicalDecisionDate(day(400))).toBeNull();
+    } finally {
+      setSystemTime();
+    }
   });
 
   test("rejects a far-future year", () => {

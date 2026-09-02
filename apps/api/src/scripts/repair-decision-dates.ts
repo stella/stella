@@ -36,8 +36,8 @@
  * running at the same time cannot deadlock against the repair.
  *
  * **The bounds are also a CHECK constraint.** `case_law_decisions_decision_date_bounds`
- * (migration 20260818090000) holds the same predicate, derived from the same
- * `DECISION_YEAR_BOUNDS`. Its `VALIDATE CONSTRAINT` fails while a corrupt row
+ * (migrations 20260818090000 and 20260902100000) holds the same predicate,
+ * derived from the same `DECISION_DATE_BOUNDS`. Its `VALIDATE CONSTRAINT` fails while a corrupt row
  * survives, and until then `ADD CONSTRAINT … NOT VALID` makes any unrelated
  * write touching such a row — a citation authority refresh, a corpus mirror
  * update, an index hash — fail on a column it never mentioned. So this runs
