@@ -31,6 +31,7 @@
     "bench:chat-read-surface": "NODE_ENV=development bun scripts/benchmark-chat-read-surface.ts",
     "eval:create-document": "NODE_ENV=development bun --env-file=.env evals/create-document-drafting.ts",
     "eval:suggest-changes": "NODE_ENV=development bun --env-file=.env evals/suggest-changes-precision.ts",
+    "eval:template-fill": "NODE_ENV=development bun --env-file=.env evals/template-fill.ts",
     "db:migrate": "bun run --env-file=.env src/db/migrate.ts",
     "db:audit-better-auth": "bun run --env-file=.env src/scripts/better-auth-migration-audit.ts",
     "db:derive-better-auth-microsoft-identities": "bun run --env-file=.env src/scripts/better-auth-microsoft-identity-map.ts",

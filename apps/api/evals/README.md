@@ -38,3 +38,6 @@ the default provider chain (see `getTanStackTextModelById`).
 - `suggest-changes-precision.ts`: given a DOCX and an edit request, does a
   model change exactly what was asked (no collateral edits), guard its
   operations with block hashes, and do the reviewer's skips match its intent.
+- `template-fill.ts`: can a model fill a DOCX template through the
+  `fill_template` contract: correct field paths and types, ISO and locale
+  date handling, and asking rather than inventing a missing required value.
