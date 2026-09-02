@@ -29,8 +29,8 @@
       ],
       "manualVerification": {
         "artifactsHash": "8f56ab75428299e3d615a81dfba575437ca430e8ec3cd4f58aed0d04a4361923",
-        "reason": "Server and document-processing fixes; no user interface changes",
-        "watchedPathsHash": "6a752eaa065d4b3d28dff5475f092e0fd01a103c9567796674e119bb95556983"
+        "reason": "Patch release, UX diff negligible",
+        "watchedPathsHash": "3435632455662ad4880ae3e126e2918887a8fd9495180b301c16d729d678452d"
       }
     },
     {
@@ -62,8 +62,8 @@
       ],
       "manualVerification": {
         "artifactsHash": "2bf87914a026f9902cf7bdc258f9104f65d981ac1e7874414dc0ea654e0c641c",
-        "reason": "Server and document-processing fixes; no user interface changes",
-        "watchedPathsHash": "6a752eaa065d4b3d28dff5475f092e0fd01a103c9567796674e119bb95556983"
+        "reason": "Patch release, UX diff negligible",
+        "watchedPathsHash": "3435632455662ad4880ae3e126e2918887a8fd9495180b301c16d729d678452d"
       }
     },
     {
@@ -95,8 +95,8 @@
       ],
       "manualVerification": {
         "artifactsHash": "0003c5f95bbf6e6d5ef11366a560c78bff6677a651c7488df49de3d371839034",
-        "reason": "Server and document-processing fixes; no user interface changes",
-        "watchedPathsHash": "6a752eaa065d4b3d28dff5475f092e0fd01a103c9567796674e119bb95556983"
+        "reason": "Patch release, UX diff negligible",
+        "watchedPathsHash": "3435632455662ad4880ae3e126e2918887a8fd9495180b301c16d729d678452d"
       }
     },
     {
@@ -128,8 +128,8 @@
       ],
       "manualVerification": {
         "artifactsHash": "27a416bccca42c3c9118daffda93942df5e7661ad8010bdb47f4e0db061e5f73",
-        "reason": "Server and document-processing fixes; no user interface changes",
-        "watchedPathsHash": "6a752eaa065d4b3d28dff5475f092e0fd01a103c9567796674e119bb95556983"
+        "reason": "Patch release, UX diff negligible",
+        "watchedPathsHash": "3435632455662ad4880ae3e126e2918887a8fd9495180b301c16d729d678452d"
       }
     },
     {
@@ -159,8 +159,8 @@
       ],
       "manualVerification": {
         "artifactsHash": "9970b7bbc3b9decd9c7533fbbce3e60ac5e4c008560f9365b5aaa2fe74e64f1f",
-        "reason": "Server and document-processing fixes; no user interface changes",
-        "watchedPathsHash": "020592029bd928ca8215c4374836f17b29e8cdcbc2aa99529cd59f681b003e87"
+        "reason": "Patch release, UX diff negligible",
+        "watchedPathsHash": "5ee338bb5e1e4f1f8917a3ae79f7bb7326d3403ce56ed36dafc51bcc2b99d853"
       }
     },
     {
@@ -190,8 +190,8 @@
       ],
       "manualVerification": {
         "artifactsHash": "2c48d16460b713dcdfb58b28f546c078b2bc1e78a54e60d1eb8eb65a6a3fc200",
-        "reason": "Server and document-processing fixes; no user interface changes",
-        "watchedPathsHash": "020592029bd928ca8215c4374836f17b29e8cdcbc2aa99529cd59f681b003e87"
+        "reason": "Patch release, UX diff negligible",
+        "watchedPathsHash": "5ee338bb5e1e4f1f8917a3ae79f7bb7326d3403ce56ed36dafc51bcc2b99d853"
       }
     },
     {
@@ -221,8 +221,8 @@
       ],
       "manualVerification": {
         "artifactsHash": "841c0f66ac7f36366f9a7932c43bf002219cb9e8c327031891c8620f27ba12b4",
-        "reason": "Server and document-processing fixes; no user interface changes",
-        "watchedPathsHash": "020592029bd928ca8215c4374836f17b29e8cdcbc2aa99529cd59f681b003e87"
+        "reason": "Patch release, UX diff negligible",
+        "watchedPathsHash": "5ee338bb5e1e4f1f8917a3ae79f7bb7326d3403ce56ed36dafc51bcc2b99d853"
       }
     },
     {
@@ -252,8 +252,8 @@
       ],
       "manualVerification": {
         "artifactsHash": "6b7556a4b86e9e7ee527479111b0c8671c9b3022d58cb98ed2866e81e97dda57",
-        "reason": "Server and document-processing fixes; no user interface changes",
-        "watchedPathsHash": "020592029bd928ca8215c4374836f17b29e8cdcbc2aa99529cd59f681b003e87"
+        "reason": "Patch release, UX diff negligible",
+        "watchedPathsHash": "5ee338bb5e1e4f1f8917a3ae79f7bb7326d3403ce56ed36dafc51bcc2b99d853"
       }
     },
     {
@@ -283,8 +283,8 @@
       ],
       "manualVerification": {
         "artifactsHash": "b93c61b1c8e4cf8aac4316a7d5962f91ad54979c482ee8f4ad132a3c355455d7",
-        "reason": "Server and document-processing fixes; no user interface changes",
-        "watchedPathsHash": "a0b4914f45e1bb6f7eb971f5ad5ae5d20e90307c3761e75cd4b86af7d9bd21ee"
+        "reason": "Patch release, UX diff negligible",
+        "watchedPathsHash": "05398726af17861d230e3a66a17f2269ac0561d11d7f21bf911ecbe62b327723"
       }
     },
     {
@@ -314,8 +314,8 @@
       ],
       "manualVerification": {
         "artifactsHash": "a73663ae6fc4e06c6348d0ba9988fd4fdbdf026342849e4355fb3d7f28f0b88b",
-        "reason": "Server and document-processing fixes; no user interface changes",
-        "watchedPathsHash": "a0b4914f45e1bb6f7eb971f5ad5ae5d20e90307c3761e75cd4b86af7d9bd21ee"
+        "reason": "Patch release, UX diff negligible",
+        "watchedPathsHash": "05398726af17861d230e3a66a17f2269ac0561d11d7f21bf911ecbe62b327723"
       }
     },
     {
@@ -345,8 +345,8 @@
       ],
       "manualVerification": {
         "artifactsHash": "6cb3d8b87eac11bc7f789fbfa9f745496823ae71f53db05d4c531c651161cbb4",
-        "reason": "Server and document-processing fixes; no user interface changes",
-        "watchedPathsHash": "a0b4914f45e1bb6f7eb971f5ad5ae5d20e90307c3761e75cd4b86af7d9bd21ee"
+        "reason": "Patch release, UX diff negligible",
+        "watchedPathsHash": "05398726af17861d230e3a66a17f2269ac0561d11d7f21bf911ecbe62b327723"
       }
     },
     {
@@ -376,8 +376,8 @@
       ],
       "manualVerification": {
         "artifactsHash": "421e9d44dbdf26db61386ccb596b4983c33caf82278fa509e45f4dc411cf0bd2",
-        "reason": "Server and document-processing fixes; no user interface changes",
-        "watchedPathsHash": "a0b4914f45e1bb6f7eb971f5ad5ae5d20e90307c3761e75cd4b86af7d9bd21ee"
+        "reason": "Patch release, UX diff negligible",
+        "watchedPathsHash": "05398726af17861d230e3a66a17f2269ac0561d11d7f21bf911ecbe62b327723"
       }
     },
     {
@@ -407,8 +407,8 @@
       ],
       "manualVerification": {
         "artifactsHash": "c0d8b1d8e0b7755986aaefeff063b3b96f52fc810be246ebf9f35360fb473e2b",
-        "reason": "Server and document-processing fixes; no user interface changes",
-        "watchedPathsHash": "a0b4914f45e1bb6f7eb971f5ad5ae5d20e90307c3761e75cd4b86af7d9bd21ee"
+        "reason": "Patch release, UX diff negligible",
+        "watchedPathsHash": "05398726af17861d230e3a66a17f2269ac0561d11d7f21bf911ecbe62b327723"
       }
     },
     {
@@ -438,8 +438,8 @@
       ],
       "manualVerification": {
         "artifactsHash": "e215e2753af636b64588fe28785c1d3f805f40120bd39388290d9a51e04943f6",
-        "reason": "Server and document-processing fixes; no user interface changes",
-        "watchedPathsHash": "a0b4914f45e1bb6f7eb971f5ad5ae5d20e90307c3761e75cd4b86af7d9bd21ee"
+        "reason": "Patch release, UX diff negligible",
+        "watchedPathsHash": "05398726af17861d230e3a66a17f2269ac0561d11d7f21bf911ecbe62b327723"
       }
     },
     {
@@ -469,8 +469,8 @@
       ],
       "manualVerification": {
         "artifactsHash": "876ef124e06ec83281a790dfc6d424b7ab9bfd463ca8c51542c7d46f60a160bb",
-        "reason": "Server and document-processing fixes; no user interface changes",
-        "watchedPathsHash": "a0b4914f45e1bb6f7eb971f5ad5ae5d20e90307c3761e75cd4b86af7d9bd21ee"
+        "reason": "Patch release, UX diff negligible",
+        "watchedPathsHash": "05398726af17861d230e3a66a17f2269ac0561d11d7f21bf911ecbe62b327723"
       }
     },
     {
@@ -500,8 +500,8 @@
       ],
       "manualVerification": {
         "artifactsHash": "2036d5aed4af4ffafec6a6373f38964c7f7eb6b9e684db0d45a8038040433fef",
-        "reason": "Server and document-processing fixes; no user interface changes",
-        "watchedPathsHash": "a0b4914f45e1bb6f7eb971f5ad5ae5d20e90307c3761e75cd4b86af7d9bd21ee"
+        "reason": "Patch release, UX diff negligible",
+        "watchedPathsHash": "05398726af17861d230e3a66a17f2269ac0561d11d7f21bf911ecbe62b327723"
       }
     },
     {
@@ -533,8 +533,8 @@
       ],
       "manualVerification": {
         "artifactsHash": "be40a6f150f73073a901f4bec07d90138daf79af87ec9624ed9c966d0e1656ca",
-        "reason": "Server and document-processing fixes; no user interface changes",
-        "watchedPathsHash": "a559d7b9e5e5f5a75dcd73aa5a118b4a7bd74998330e0059dd500c4d5ddd9582"
+        "reason": "Patch release, UX diff negligible",
+        "watchedPathsHash": "8e7ac0325077616f00dcd7ff2f90898b3eb8f3e7f3e29e77c5afc2ca35485200"
       }
     },
     {
@@ -566,8 +566,8 @@
       ],
       "manualVerification": {
         "artifactsHash": "8d5224dfcd00e767390ebe643d2b6aedcd8803994be03dc351d58a6a3faf569f",
-        "reason": "Server and document-processing fixes; no user interface changes",
-        "watchedPathsHash": "a559d7b9e5e5f5a75dcd73aa5a118b4a7bd74998330e0059dd500c4d5ddd9582"
+        "reason": "Patch release, UX diff negligible",
+        "watchedPathsHash": "8e7ac0325077616f00dcd7ff2f90898b3eb8f3e7f3e29e77c5afc2ca35485200"
       }
     },
     {
@@ -597,8 +597,8 @@
       ],
       "manualVerification": {
         "artifactsHash": "d6adf3b06a9698b7abe7b2958e764c2f101586de667b31fa3853a59a3b72a54e",
-        "reason": "Server and document-processing fixes; no user interface changes",
-        "watchedPathsHash": "a0b4914f45e1bb6f7eb971f5ad5ae5d20e90307c3761e75cd4b86af7d9bd21ee"
+        "reason": "Patch release, UX diff negligible",
+        "watchedPathsHash": "05398726af17861d230e3a66a17f2269ac0561d11d7f21bf911ecbe62b327723"
       }
     },
     {
@@ -628,8 +628,8 @@
       ],
       "manualVerification": {
         "artifactsHash": "37c7ea04cf749b272ec6055cc2d1c0ce03c23e20c81bf239f29d15a1b2cec133",
-        "reason": "Server and document-processing fixes; no user interface changes",
-        "watchedPathsHash": "a0b4914f45e1bb6f7eb971f5ad5ae5d20e90307c3761e75cd4b86af7d9bd21ee"
+        "reason": "Patch release, UX diff negligible",
+        "watchedPathsHash": "05398726af17861d230e3a66a17f2269ac0561d11d7f21bf911ecbe62b327723"
       }
     },
     {
@@ -662,8 +662,8 @@
       ],
       "manualVerification": {
         "artifactsHash": "4ecee485ce98d10b7251a30add807057ac101d3253b9163830ee01465852b868",
-        "reason": "Server and document-processing fixes; no user interface changes",
-        "watchedPathsHash": "7df3f5462828d3b3200a9ffd90a7d8e478f1bf605951d483758880ed2b6cea30"
+        "reason": "Patch release, UX diff negligible",
+        "watchedPathsHash": "ba4743417f80182625ce5f5c59af4fd9ebc6ee98a335d82f52c8359451d72897"
       }
     },
     {
@@ -696,8 +696,8 @@
       ],
       "manualVerification": {
         "artifactsHash": "c041de7be2a13dcdeea32efa826797eefda08f98897a1501f336275be2d3d6a2",
-        "reason": "Server and document-processing fixes; no user interface changes",
-        "watchedPathsHash": "7df3f5462828d3b3200a9ffd90a7d8e478f1bf605951d483758880ed2b6cea30"
+        "reason": "Patch release, UX diff negligible",
+        "watchedPathsHash": "ba4743417f80182625ce5f5c59af4fd9ebc6ee98a335d82f52c8359451d72897"
       }
     },
     {
@@ -728,8 +728,8 @@
       ],
       "manualVerification": {
         "artifactsHash": "0a30d91fb4602a4035da8984c2ed413f1f8f273f531c6af334cff9cbf5ac0725",
-        "reason": "Server and document-processing fixes; no user interface changes",
-        "watchedPathsHash": "0461e0e905afb155104779b978d19ff1ac4fc22e07b31f397655b6ac8072a8e3"
+        "reason": "Patch release, UX diff negligible",
+        "watchedPathsHash": "abe7992a20ed8cedcede291cc7b491057904e489ccb83a047ad5b56b14510c32"
       }
     },
     {
@@ -760,8 +760,8 @@
       ],
       "manualVerification": {
         "artifactsHash": "368c6775b963b14081e4ff7f6544c9294cd6a5c0a4509b892c24ba2fae29fa27",
-        "reason": "Server and document-processing fixes; no user interface changes",
-        "watchedPathsHash": "0461e0e905afb155104779b978d19ff1ac4fc22e07b31f397655b6ac8072a8e3"
+        "reason": "Patch release, UX diff negligible",
+        "watchedPathsHash": "abe7992a20ed8cedcede291cc7b491057904e489ccb83a047ad5b56b14510c32"
       }
     },
     {
@@ -791,8 +791,8 @@
       ],
       "manualVerification": {
         "artifactsHash": "d4d9522ddd8c22447b20d43d21cd991147844658ddd8188bf5e0a1bba767a997",
-        "reason": "Server and document-processing fixes; no user interface changes",
-        "watchedPathsHash": "a0b4914f45e1bb6f7eb971f5ad5ae5d20e90307c3761e75cd4b86af7d9bd21ee"
+        "reason": "Patch release, UX diff negligible",
+        "watchedPathsHash": "05398726af17861d230e3a66a17f2269ac0561d11d7f21bf911ecbe62b327723"
       }
     },
     {
@@ -822,8 +822,8 @@
       ],
       "manualVerification": {
         "artifactsHash": "e16ad597f3e1415603e3a282fcbf2d7fb1bab4b211a7048dca0e4236153efb4c",
-        "reason": "Server and document-processing fixes; no user interface changes",
-        "watchedPathsHash": "a0b4914f45e1bb6f7eb971f5ad5ae5d20e90307c3761e75cd4b86af7d9bd21ee"
+        "reason": "Patch release, UX diff negligible",
+        "watchedPathsHash": "05398726af17861d230e3a66a17f2269ac0561d11d7f21bf911ecbe62b327723"
       }
     },
     {
@@ -853,8 +853,8 @@
       ],
       "manualVerification": {
         "artifactsHash": "99ca42d8176a48da46f4640563067b0c984f97445ec6fbbeb521a88b3f610407",
-        "reason": "Server and document-processing fixes; no user interface changes",
-        "watchedPathsHash": "a0b4914f45e1bb6f7eb971f5ad5ae5d20e90307c3761e75cd4b86af7d9bd21ee"
+        "reason": "Patch release, UX diff negligible",
+        "watchedPathsHash": "05398726af17861d230e3a66a17f2269ac0561d11d7f21bf911ecbe62b327723"
       }
     },
     {
@@ -884,8 +884,8 @@
       ],
       "manualVerification": {
         "artifactsHash": "c68ef1a32cc3c4e249caa7f234a4b675498313c51c4d8ba0e73f989c1c53e0c4",
-        "reason": "Server and document-processing fixes; no user interface changes",
-        "watchedPathsHash": "a0b4914f45e1bb6f7eb971f5ad5ae5d20e90307c3761e75cd4b86af7d9bd21ee"
+        "reason": "Patch release, UX diff negligible",
+        "watchedPathsHash": "05398726af17861d230e3a66a17f2269ac0561d11d7f21bf911ecbe62b327723"
       }
     }
   ]
