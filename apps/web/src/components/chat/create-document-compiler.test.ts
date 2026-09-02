@@ -95,7 +95,7 @@ Neuzavřená ** značka
     expect(runs.at(1)?.formatting?.bold).not.toBe(true);
   });
 
-  test("does not turn an entire bilingual body paragraph bold", () => {
+  test("keeps an entire bilingual body paragraph bold as written and reports it", () => {
     const compiled = compileCreateDocumentSourceToDocument(`
 @doc kind=agreement locale=cs page=A4
 @paragraph
@@ -106,6 +106,12 @@ Neuzavřená ** značka
       return;
     }
 
+    // Nothing is rewritten behind the model's back: the compiler renders
+    // the emphasis and flags it, and the warning travels with the tool
+    // result so the model can reissue the source.
+    expect(compiled.warnings.map((warning) => warning.code)).toContain(
+      "whole-paragraph-emphasis",
+    );
     const paragraph = compiled.document.package.document.content.find(
       (block) =>
         block.type === "paragraph" && block.formatting?.styleId === "BodyText",
@@ -114,18 +120,8 @@ Neuzavřená ** značka
     if (paragraph?.type !== "paragraph") {
       return;
     }
-
     const runs = paragraph.content.filter((part) => part.type === "run");
-    expect(
-      runs.flatMap((run) =>
-        run.content.flatMap((content) =>
-          content.type === "text" ? [content.text] : [],
-        ),
-      ),
-    ).toEqual([
-      "Přijímající strana chrání Důvěrné informace. / The Receiving Party protects Confidential Information.",
-    ]);
-    expect(runs.some((run) => run.formatting?.bold === true)).toBe(false);
+    expect(runs.every((run) => run.formatting?.bold === true)).toBe(true);
   });
 
   test("preserves separate bold spans that cover an entire paragraph", () => {
