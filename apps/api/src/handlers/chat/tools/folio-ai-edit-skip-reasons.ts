@@ -12,6 +12,8 @@ export const FOLIO_AI_EDIT_SKIP_REASONS = [
   "staleRange",
   "emptyOperation",
   "noopOperation",
+  "documentVersionMismatch",
+  "documentNotEditable",
 ] as const satisfies readonly FolioAIEditSkipReason[];
 
 type MissingFolioAIEditSkipReason = Exclude<

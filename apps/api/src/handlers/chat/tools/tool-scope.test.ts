@@ -2,6 +2,7 @@ import { toolDefinition } from "@tanstack/ai";
 import { describe, expect, it } from "bun:test";
 import * as v from "valibot";
 
+import { SUGGEST_CHANGES_TOOL_NAME } from "@/api/handlers/chat/tools/folio-agent-tools";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import {
   CHAT_TOOL_SCOPE,
@@ -20,7 +21,7 @@ describe("restrictChatToolsToScope", () => {
   it("keeps only the suggest-template-fields allowlist", () => {
     const tools: ChatToolMap = {
       suggest_template_fields: makeTool("suggest_template_fields"),
-      "apply-active-docx-edits": makeTool("apply-active-docx-edits"),
+      [SUGGEST_CHANGES_TOOL_NAME]: makeTool(SUGGEST_CHANGES_TOOL_NAME),
       search_history: makeTool("search_history"),
       web_search: makeTool("web_search"),
       "create-document": makeTool("create-document"),
@@ -32,10 +33,9 @@ describe("restrictChatToolsToScope", () => {
       CHAT_TOOL_SCOPE.suggestTemplateFields,
     );
 
-    expect(Object.keys(restricted).toSorted()).toEqual([
-      "apply-active-docx-edits",
-      "suggest_template_fields",
-    ]);
+    expect(Object.keys(restricted).toSorted()).toEqual(
+      [SUGGEST_CHANGES_TOOL_NAME, "suggest_template_fields"].toSorted(),
+    );
   });
 
   it("returns an empty set when no registered tool is allowlisted", () => {

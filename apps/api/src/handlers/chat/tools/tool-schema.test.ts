@@ -26,7 +26,6 @@ import * as v from "valibot";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
-import { APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME } from "@/api/handlers/chat/tools/active-docx-edit-tool";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import {
   EXPAND_CHAT_HISTORY_TOOL_NAME,
@@ -39,11 +38,17 @@ import { REVIEW_FOLDER_CONSISTENCY_TOOL_NAME } from "@/api/handlers/chat/tools/f
 import {
   ADD_COMMENT_TOOL_NAME,
   FIND_TEXT_TOOL_NAME,
+  GET_DOCUMENT_OUTLINE_TOOL_NAME,
+  LIST_STORIES_TOOL_NAME,
   READ_CHANGES_TOOL_NAME,
   READ_COMMENTS_TOOL_NAME,
   READ_DOCUMENT_TOOL_NAME,
+  READ_SECTION_TOOL_NAME,
+  READ_STORY_TOOL_NAME,
   REPLY_COMMENT_TOOL_NAME,
   RESOLVE_COMMENT_TOOL_NAME,
+  SHOW_IN_DOCUMENT_TOOL_NAME,
+  SUGGEST_CHANGES_TOOL_NAME,
 } from "@/api/handlers/chat/tools/folio-agent-tools";
 import { WRITE_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { REMEMBER_TOOL_NAME } from "@/api/handlers/chat/tools/remember-tool";
@@ -155,6 +160,33 @@ const requireArray = (value: unknown, description: string): unknown[] => {
   return value;
 };
 
+/** The per-surface `type` enum a registered `suggest_changes` tool exposes. */
+const suggestChangesOperationTypeEnum = (
+  tool:
+    | { inputSchema?: Parameters<typeof convertSchemaToJsonSchema>[0] }
+    | undefined,
+): unknown[] => {
+  if (!tool) {
+    throw new Error("Expected suggest_changes to be registered");
+  }
+  const jsonSchema = requireRecord(
+    convertSchemaToJsonSchema(tool.inputSchema),
+    "suggest_changes input schema",
+  );
+  const operations = requireRecord(
+    requireRecord(jsonSchema["properties"], "input schema properties")[
+      "operations"
+    ],
+    "operations schema",
+  );
+  const items = requireRecord(operations["items"], "operations.items schema");
+  const type = requireRecord(
+    requireRecord(items["properties"], "operations.items.properties")["type"],
+    "operations.items.properties.type",
+  );
+  return requireArray(type["enum"], "operations.items.properties.type.enum");
+};
+
 // Construct args so every conditional tool group registers: owner role
 // (template use + create, and entity create for create_workspace_document),
 // an active (non-archived) workspace status for that same reason, active
@@ -197,8 +229,9 @@ const buildFullCoverageChatTools = (
     }),
     hasActiveDocxEditClient: true,
     hasActiveDocxFileClient: true,
+    docxSuggestionSurface: "file-overlay",
     // Explicit "manual": DEFAULT_CHAT_EDIT_APPLY_MODE is now "auto", which
-    // would suppress apply-active-docx-edits here (this call sets no
+    // would suppress suggest_changes here (this call sets no
     // activeFile, so the auto tool never registers either) and drop it out
     // of full coverage. Pin "manual" so this helper keeps exercising both
     // the manual tool's schema and its own dedicated authorization tests
@@ -594,6 +627,7 @@ describe("chat tool schemas", () => {
       }),
       hasActiveDocxEditClient: false,
       hasActiveDocxFileClient: false,
+      docxSuggestionSurface: "template-studio",
       webSearchEnabled: false,
       webSearchProviders: { webSearchProvider: null, urlFetcher: null },
       recordAuditEvent: noopAuditRecorder,
@@ -623,7 +657,7 @@ describe("chat tool schemas", () => {
     expect(tools).not.toHaveProperty("read-contact");
     // No live editor surface on this turn (`hasActiveDocxEditClient: false`):
     // the folio-agents doc tools must stay unregistered, same precondition
-    // as `apply-active-docx-edits`.
+    // as `suggest_changes`.
     expect(tools).not.toHaveProperty(READ_DOCUMENT_TOOL_NAME);
     expect(tools).not.toHaveProperty(FIND_TEXT_TOOL_NAME);
   });
@@ -648,6 +682,7 @@ describe("chat tool schemas", () => {
       }),
       hasActiveDocxEditClient: false,
       hasActiveDocxFileClient: false,
+      docxSuggestionSurface: "template-studio" as const,
       webSearchEnabled: false,
       webSearchProviders: { webSearchProvider: null, urlFetcher: null },
       recordAuditEvent: noopAuditRecorder,
@@ -687,7 +722,7 @@ describe("chat tool schemas", () => {
       // Explicit "manual": Template Studio has no entity-backed
       // `activeFile` (it uses `activeTemplate`), so the "auto" default
       // could never register `edit_workspace_document` there anyway; pin
-      // "manual" so this test keeps exercising apply-active-docx-edits's
+      // "manual" so this test keeps exercising suggest_changes's
       // registration independent of the production default, matching
       // this test's actual subject (the folio-agents read tools' own
       // narrower gate).
@@ -698,11 +733,12 @@ describe("chat tool schemas", () => {
       ...baseArgs,
       hasActiveDocxEditClient: false,
       hasActiveDocxFileClient: false,
+      docxSuggestionSurface: "template-studio",
     });
     expect(withoutClient).not.toHaveProperty(READ_DOCUMENT_TOOL_NAME);
     expect(withoutClient).not.toHaveProperty(FIND_TEXT_TOOL_NAME);
 
-    // Template Studio: `apply-active-docx-edits` is on (the combined
+    // Template Studio: `suggest_changes` is on (the combined
     // flag), but there is no client watcher that resolves
     // read_document/find_text there, so the narrower
     // `hasActiveDocxFileClient` flag must stay false and these tools
@@ -713,11 +749,22 @@ describe("chat tool schemas", () => {
       ...baseArgs,
       hasActiveDocxEditClient: true,
       hasActiveDocxFileClient: false,
+      docxSuggestionSurface: "template-studio",
     });
-    expect(templateOnly).toHaveProperty(APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME);
+    expect(templateOnly).toHaveProperty(SUGGEST_CHANGES_TOOL_NAME);
+    // No file-overlay client: `suggest_changes` gets the narrower
+    // Template Studio operation-type list, not the file overlay's.
+    expect(
+      suggestChangesOperationTypeEnum(templateOnly[SUGGEST_CHANGES_TOOL_NAME]),
+    ).toEqual(["replaceInBlock", "replaceBlock", "deleteBlock"]);
     expect(templateOnly).not.toHaveProperty(READ_DOCUMENT_TOOL_NAME);
     expect(templateOnly).not.toHaveProperty(FIND_TEXT_TOOL_NAME);
 
+    expect(templateOnly).not.toHaveProperty(GET_DOCUMENT_OUTLINE_TOOL_NAME);
+    expect(templateOnly).not.toHaveProperty(READ_SECTION_TOOL_NAME);
+    expect(templateOnly).not.toHaveProperty(LIST_STORIES_TOOL_NAME);
+    expect(templateOnly).not.toHaveProperty(READ_STORY_TOOL_NAME);
+    expect(templateOnly).not.toHaveProperty(SHOW_IN_DOCUMENT_TOOL_NAME);
     expect(templateOnly).not.toHaveProperty(READ_CHANGES_TOOL_NAME);
     expect(templateOnly).not.toHaveProperty(READ_COMMENTS_TOOL_NAME);
     expect(templateOnly).not.toHaveProperty(ADD_COMMENT_TOOL_NAME);
@@ -728,6 +775,7 @@ describe("chat tool schemas", () => {
       ...baseArgs,
       hasActiveDocxEditClient: true,
       hasActiveDocxFileClient: true,
+      docxSuggestionSurface: "file-overlay",
     });
     const readDocument = withClient[READ_DOCUMENT_TOOL_NAME];
     const findText = withClient[FIND_TEXT_TOOL_NAME];
@@ -736,6 +784,29 @@ describe("chat tool schemas", () => {
     if (!readDocument || !findText) {
       throw new Error("Expected folio-agents doc tools to be registered");
     }
+
+    // A live file-overlay client: `suggest_changes` gets the full file
+    // overlay operation-type list (no `formatRange`), unlike Template
+    // Studio's narrower list above.
+    expect(
+      suggestChangesOperationTypeEnum(withClient[SUGGEST_CHANGES_TOOL_NAME]),
+    ).toEqual([
+      "replaceInBlock",
+      "replaceRange",
+      "commentOnRange",
+      "insertAfterBlock",
+      "insertBeforeBlock",
+      "replaceBlock",
+      "deleteBlock",
+      "commentOnBlock",
+      "insertSignatureTable",
+      "insertTableRow",
+      "deleteTableRow",
+      "insertTableColumn",
+      "deleteTableColumn",
+      "mergeTableCells",
+      "splitTableCell",
+    ]);
 
     // Client-executed, read-only: no approval gate.
     expect(readDocument.needsApproval).toBeUndefined();
@@ -746,8 +817,17 @@ describe("chat tool schemas", () => {
       requiresAnonymization: false,
     });
 
-    // The live-editor comment/changes tools share the same file-client gate.
-    for (const name of [READ_CHANGES_TOOL_NAME, READ_COMMENTS_TOOL_NAME]) {
+    // The rest of the folio-agents read tools share the same file-client
+    // gate and are auto-run (no approval).
+    for (const name of [
+      GET_DOCUMENT_OUTLINE_TOOL_NAME,
+      READ_SECTION_TOOL_NAME,
+      LIST_STORIES_TOOL_NAME,
+      READ_STORY_TOOL_NAME,
+      SHOW_IN_DOCUMENT_TOOL_NAME,
+      READ_CHANGES_TOOL_NAME,
+      READ_COMMENTS_TOOL_NAME,
+    ]) {
       const tool = withClient[name];
       if (!tool) {
         throw new Error(`Expected ${name} to be registered`);
@@ -796,6 +876,7 @@ describe("chat tool schemas", () => {
       webSearchProviders: { webSearchProvider: null, urlFetcher: null },
       hasActiveDocxEditClient: false,
       hasActiveDocxFileClient: false,
+      docxSuggestionSurface: "template-studio",
     } as const;
     const activeFile = {
       entityId: toSafeId<"entity">("33333333-3333-4333-8333-333333333333"),
@@ -855,6 +936,7 @@ describe("chat tool schemas", () => {
       webSearchProviders: { webSearchProvider: null, urlFetcher: null },
       hasActiveDocxEditClient: false,
       hasActiveDocxFileClient: false,
+      docxSuggestionSurface: "template-studio",
       toolWorkspaceIds: resolveToolWorkspaceIds({
         pinnedIds: [],
         accessibleWorkspaceIds: [workspaceId],
@@ -881,6 +963,7 @@ describe("chat tool schemas", () => {
       webSearchProviders: { webSearchProvider: null, urlFetcher: null },
       hasActiveDocxEditClient: false,
       hasActiveDocxFileClient: false,
+      docxSuggestionSurface: "template-studio",
       activeFile: {
         entityId: toSafeId<"entity">("33333333-3333-4333-8333-333333333333"),
         fileFieldId: toSafeId<"field">("44444444-4444-4444-8444-444444444444"),
@@ -913,6 +996,7 @@ describe("chat tool schemas", () => {
       }),
       hasActiveDocxEditClient: false,
       hasActiveDocxFileClient: false,
+      docxSuggestionSurface: "template-studio",
       webSearchEnabled: false,
       webSearchProviders: { webSearchProvider: null, urlFetcher: null },
       activeSkillContext: editableActiveSkillContext,
@@ -969,6 +1053,7 @@ describe("chat tool schemas", () => {
       }),
       hasActiveDocxEditClient: false,
       hasActiveDocxFileClient: false,
+      docxSuggestionSurface: "template-studio",
       webSearchEnabled: false,
       webSearchProviders: { webSearchProvider: null, urlFetcher: null },
       activeSkillContext: {
@@ -1011,6 +1096,7 @@ describe("chat tool schemas", () => {
       }),
       hasActiveDocxEditClient: false,
       hasActiveDocxFileClient: false,
+      docxSuggestionSurface: "template-studio",
       webSearchEnabled: false,
       webSearchProviders: { webSearchProvider: null, urlFetcher: null },
     });
@@ -1823,6 +1909,7 @@ describe("chat tool schemas", () => {
       webSearchProviders: { webSearchProvider: null, urlFetcher: null },
       hasActiveDocxEditClient: false,
       hasActiveDocxFileClient: false,
+      docxSuggestionSurface: "template-studio",
       recordAuditEvent: noopAuditRecorder,
       workspaceId: null,
       toolWorkspaceIds: resolveToolWorkspaceIds({
@@ -1881,7 +1968,7 @@ describe("chat tool schemas", () => {
   // to an EXISTING document) rather than `entity: ["create"]` -- plus the
   // active-matter status gate, PLUS a review-mode gate
   // (`editApplyMode === "auto"`) that has no analogue on the create tool:
-  // this tool and the manual, client-executed `apply-active-docx-edits`
+  // this tool and the manual, client-executed `suggest_changes`
   // are mutually exclusive review-mode surfaces, never both registered for
   // the same turn.
   describe("edit_workspace_document authorization", () => {
@@ -1909,6 +1996,7 @@ describe("chat tool schemas", () => {
       webSearchProviders: { webSearchProvider: null, urlFetcher: null },
       hasActiveDocxEditClient: false,
       hasActiveDocxFileClient: false,
+      docxSuggestionSurface: "template-studio",
       recordAuditEvent: noopAuditRecorder,
       activeFile,
       workspaceId: null,
@@ -1989,7 +2077,7 @@ describe("chat tool schemas", () => {
     // The two review modes are mutually exclusive tool surfaces: the model
     // is never handed a choice between the headless writer and the
     // client-executed queue-for-review tool on the same turn.
-    describe("mutual exclusion with apply-active-docx-edits", () => {
+    describe("mutual exclusion with suggest_changes", () => {
       const mutualExclusionArgs = {
         ...baseArgs,
         memberRole: "owner" as const,
@@ -1997,21 +2085,21 @@ describe("chat tool schemas", () => {
         workspaceStatusById: new Map([[workspaceId, "active" as const]]),
       };
 
-      test("auto mode registers edit_workspace_document and NOT apply-active-docx-edits", () => {
+      test("auto mode registers edit_workspace_document and NOT suggest_changes", () => {
         const tools = getChatTools({
           ...mutualExclusionArgs,
           editApplyMode: "auto",
         });
         expect(tools).toHaveProperty(EDIT_WORKSPACE_DOCUMENT_TOOL_NAME);
-        expect(tools).not.toHaveProperty(APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME);
+        expect(tools).not.toHaveProperty(SUGGEST_CHANGES_TOOL_NAME);
       });
 
-      test("manual mode registers apply-active-docx-edits and NOT edit_workspace_document", () => {
+      test("manual mode registers suggest_changes and NOT edit_workspace_document", () => {
         const tools = getChatTools({
           ...mutualExclusionArgs,
           editApplyMode: "manual",
         });
-        expect(tools).toHaveProperty(APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME);
+        expect(tools).toHaveProperty(SUGGEST_CHANGES_TOOL_NAME);
         expect(tools).not.toHaveProperty(EDIT_WORKSPACE_DOCUMENT_TOOL_NAME);
       });
 
@@ -2021,7 +2109,7 @@ describe("chat tool schemas", () => {
       test("defaults to auto when editApplyMode is omitted", () => {
         const tools = getChatTools(mutualExclusionArgs);
         expect(tools).toHaveProperty(EDIT_WORKSPACE_DOCUMENT_TOOL_NAME);
-        expect(tools).not.toHaveProperty(APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME);
+        expect(tools).not.toHaveProperty(SUGGEST_CHANGES_TOOL_NAME);
       });
 
       test("validation accepts pending DOCX calls after the selector mode changes", () => {
@@ -2032,7 +2120,7 @@ describe("chat tool schemas", () => {
             includeAllDocxEditToolsForValidation: true,
           });
           expect(tools).toHaveProperty(EDIT_WORKSPACE_DOCUMENT_TOOL_NAME);
-          expect(tools).toHaveProperty(APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME);
+          expect(tools).toHaveProperty(SUGGEST_CHANGES_TOOL_NAME);
         }
       });
     });
@@ -2066,6 +2154,7 @@ describe("registry write tool approval policy", () => {
       }),
       hasActiveDocxEditClient: false,
       hasActiveDocxFileClient: false,
+      docxSuggestionSurface: "template-studio",
       webSearchEnabled: false,
       webSearchProviders: { webSearchProvider: null, urlFetcher: null },
       recordAuditEvent: noopAuditRecorder,
@@ -2106,6 +2195,7 @@ describe("registry write tool approval policy", () => {
       }),
       hasActiveDocxEditClient: false,
       hasActiveDocxFileClient: false,
+      docxSuggestionSurface: "template-studio",
       webSearchEnabled: false,
       webSearchProviders: { webSearchProvider: null, urlFetcher: null },
       recordAuditEvent: noopAuditRecorder,

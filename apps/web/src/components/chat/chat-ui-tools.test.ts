@@ -8,7 +8,6 @@ import {
   getToolApprovalGrant,
   getUserMessageHtmlHistory,
   hasApprovalResponseAwaitingModelStep,
-  hasApprovedActiveDocxEditAwaitingClientOutput,
   hasRunningToolCallInLatestAssistantMessage,
   isApprovalOnceChatToolName,
   isApprovalPart,
@@ -389,14 +388,14 @@ describe("isApprovalPart", () => {
     expect(isExternalInputChatToolName("boe_get_law")).toBe(false);
   });
 
-  test("treats active DOCX edit tools as approval parts", () => {
+  test("treats DOCX comment mutation tools as approval parts", () => {
     const part = {
       approval: { id: "approval-1", needsApproval: true },
-      arguments: JSON.stringify({ operations: [] }),
+      arguments: JSON.stringify({ blockId: "b-1", text: "Note" }),
       id: "tool-call-1",
-      input: { operations: [] },
+      input: { blockId: "b-1", text: "Note" },
       state: "approval-requested",
-      name: "apply-active-docx-edits",
+      name: "add_comment",
       type: "tool-call",
     } satisfies ChatPart;
 
@@ -531,64 +530,6 @@ describe("tool approval grants", () => {
     expect(isToolApprovedByGrant(grants, "mcp__krajta__fetch_document")).toBe(
       false,
     );
-  });
-});
-
-describe("hasApprovedActiveDocxEditAwaitingClientOutput", () => {
-  test("waits after approving an active DOCX edit until the client returns output", () => {
-    expect(
-      hasApprovedActiveDocxEditAwaitingClientOutput({
-        messages: [
-          {
-            id: "message-1",
-            parts: [
-              {
-                approval: {
-                  approved: true,
-                  id: "approval-1",
-                  needsApproval: true,
-                },
-                arguments: JSON.stringify({ operations: [] }),
-                id: "tool-call-1",
-                input: { operations: [] },
-                state: "approval-responded",
-                name: "apply-active-docx-edits",
-                type: "tool-call",
-              } satisfies ChatPart,
-            ],
-            role: "assistant",
-          },
-        ],
-      }),
-    ).toBe(true);
-  });
-
-  test("does not wait when the user rejects an active DOCX edit", () => {
-    expect(
-      hasApprovedActiveDocxEditAwaitingClientOutput({
-        messages: [
-          {
-            id: "message-1",
-            parts: [
-              {
-                approval: {
-                  approved: false,
-                  id: "approval-1",
-                  needsApproval: true,
-                },
-                arguments: JSON.stringify({ operations: [] }),
-                id: "tool-call-1",
-                input: { operations: [] },
-                state: "approval-responded",
-                name: "apply-active-docx-edits",
-                type: "tool-call",
-              } satisfies ChatPart,
-            ],
-            role: "assistant",
-          },
-        ],
-      }),
-    ).toBe(false);
   });
 });
 

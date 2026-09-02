@@ -54,7 +54,6 @@ import { sanitizeHref } from "@/lib/sanitize-href";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 
 type UpdateEntityFieldsInput = ChatUITools["update-entity-fields"]["input"];
-type ActiveDocxEditInput = ChatUITools["apply-active-docx-edits"]["input"];
 type CreateWorkspaceDocumentInput =
   ChatUITools["create_workspace_document"]["input"];
 type EditWorkspaceDocumentInput =
@@ -122,107 +121,124 @@ const UpdateSummary = ({ input }: UpdateSummaryProps) => {
 
 // -- Active DOCX edit summary --
 
-type ActiveDocxEditSummaryProps = {
-  input: ActiveDocxEditInput;
+type SuggestChangesSummaryProps = {
+  operations: readonly unknown[];
 };
 
-/** The block an operation anchors to; range ops carry it on the handle. */
-const docxOperationAnchorBlockId = (
-  operation: ActiveDocxEditInput["operations"][number],
-): string =>
-  operation.type === "replaceRange" || operation.type === "commentOnRange"
-    ? operation.range.blockId
-    : operation.blockId;
+/**
+ * The fields the card shows for one proposed operation. The model-facing
+ * `suggest_changes` input is loosely typed (folio's parser owns the
+ * contract), so the card narrows each operation locally and skips anything
+ * it cannot describe.
+ */
+type SummaryOperation = {
+  type: string;
+  blockId: string;
+  find?: string;
+  replace?: string;
+};
 
-const ActiveDocxEditSummary = ({ input }: ActiveDocxEditSummaryProps) => {
+const readOptionalString = (
+  value: Record<string, unknown>,
+  key: string,
+): string | undefined => {
+  const candidate = value[key];
+  return typeof candidate === "string" ? candidate : undefined;
+};
+
+const isPlainRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+/** Range ops carry their anchor on the `find_text` handle; block ops carry it directly. */
+const readSummaryOperation = (operation: unknown): SummaryOperation | null => {
+  if (!isPlainRecord(operation)) {
+    return null;
+  }
+  const type = readOptionalString(operation, "type");
+  const range = operation["range"];
+  const blockId =
+    readOptionalString(operation, "blockId") ??
+    (isPlainRecord(range) ? readOptionalString(range, "blockId") : undefined);
+  if (type === undefined || blockId === undefined) {
+    return null;
+  }
+  const find = readOptionalString(operation, "find");
+  const replace = readOptionalString(operation, "replace");
+  return {
+    type,
+    blockId,
+    ...(find !== undefined && { find }),
+    ...(replace !== undefined && { replace }),
+  };
+};
+
+const SuggestChangesSummary = ({ operations }: SuggestChangesSummaryProps) => {
   const t = useTranslations("chat.tool");
-  const previewOperations = input.operations.slice(0, 3);
-  const hiddenCount = input.operations.length - previewOperations.length;
+  const summaries = operations.flatMap((operation) => {
+    const summary = readSummaryOperation(operation);
+    return summary === null ? [] : [summary];
+  });
+  const previewOperations = summaries.slice(0, 3);
+  // Only describable operations can be "more"; the count line above still
+  // reports every operation the model sent.
+  const hiddenCount = summaries.length - previewOperations.length;
 
-  const renderOperationSummary = (
-    operation: ActiveDocxEditInput["operations"][number],
-  ) => {
+  const renderOperationSummary = (operation: SummaryOperation) => {
+    const { blockId } = operation;
     switch (operation.type) {
       case "replaceInBlock":
-        return t("docxReplaceSummary", {
-          find: operation.find,
-          replace: operation.replace,
-        });
-      case "replaceBlock":
-        return t("docxReplaceBlockSummary", {
-          blockId: operation.blockId,
-        });
+        return operation.find !== undefined && operation.replace !== undefined
+          ? t("docxReplaceSummary", {
+              find: operation.find,
+              replace: operation.replace,
+            })
+          : t("docxReplaceBlockSummary", { blockId });
       // Range-addressed ops reuse the block-level summaries: the range
       // handle anchors to one block, and the card only needs to say
       // which block is touched.
+      case "replaceBlock":
       case "replaceRange":
-        return t("docxReplaceBlockSummary", {
-          blockId: operation.range.blockId,
-        });
-      case "commentOnRange":
-        return t("docxCommentSummary", {
-          blockId: operation.range.blockId,
-        });
-      case "insertAfterBlock":
-        return t("docxInsertAfterSummary", {
-          blockId: operation.blockId,
-        });
-      case "insertBeforeBlock":
-        return t("docxInsertBeforeSummary", {
-          blockId: operation.blockId,
-        });
-      case "deleteBlock":
-        return t("docxDeleteSummary", {
-          blockId: operation.blockId,
-        });
+        return t("docxReplaceBlockSummary", { blockId });
       case "commentOnBlock":
-        return t("docxCommentSummary", {
-          blockId: operation.blockId,
-        });
+      case "commentOnRange":
+        return t("docxCommentSummary", { blockId });
+      case "insertAfterBlock":
+        return t("docxInsertAfterSummary", { blockId });
+      case "insertBeforeBlock":
+        return t("docxInsertBeforeSummary", { blockId });
+      case "deleteBlock":
+        return t("docxDeleteSummary", { blockId });
       case "insertSignatureTable":
-        return t("docxSignatureTableSummary", {
-          blockId: operation.blockId,
-        });
+        return t("docxSignatureTableSummary", { blockId });
       case "insertTableRow":
-        return t("docxInsertTableRowSummary", {
-          blockId: operation.blockId,
-        });
+        return t("docxInsertTableRowSummary", { blockId });
       case "deleteTableRow":
-        return t("docxDeleteTableRowSummary", {
-          blockId: operation.blockId,
-        });
+        return t("docxDeleteTableRowSummary", { blockId });
       case "insertTableColumn":
-        return t("docxInsertTableColumnSummary", {
-          blockId: operation.blockId,
-        });
+        return t("docxInsertTableColumnSummary", { blockId });
       case "deleteTableColumn":
-        return t("docxDeleteTableColumnSummary", {
-          blockId: operation.blockId,
-        });
+        return t("docxDeleteTableColumnSummary", { blockId });
       case "mergeTableCells":
-        return t("docxMergeTableCellsSummary", {
-          blockId: operation.blockId,
-        });
+        return t("docxMergeTableCellsSummary", { blockId });
       case "splitTableCell":
-        return t("docxSplitTableCellSummary", {
-          blockId: operation.blockId,
-        });
+        return t("docxSplitTableCellSummary", { blockId });
       default:
-        operation satisfies never;
-        return panic("Unsupported DOCX edit operation");
+        // An operation kind this card has no line for yet (folio's parser
+        // decides validity); the count above still includes it.
+        return t("docxReplaceBlockSummary", { blockId });
     }
   };
 
   return (
     <div className="border-border/50 flex flex-col gap-1.5 border-t px-3 py-2 text-xs">
       <div className="text-muted-foreground">
-        {t("docxEditSummary", { count: input.operations.length })}
+        {t("docxEditSummary", { count: operations.length })}
       </div>
       {previewOperations.map((operation, index) => (
         <div
           className="text-foreground-strong-muted truncate"
           // eslint-disable-next-line react/no-array-index-key -- previewOperations is a read-only summary of an immutable AI tool-call input; never edited/reordered by the user.
-          key={`${docxOperationAnchorBlockId(operation)}-${operation.type}-${index}`}
+          key={`${operation.blockId}-${operation.type}-${index}`}
         >
           {renderOperationSummary(operation)}
         </div>
@@ -648,8 +664,8 @@ const ToolApprovalSummary = ({
       {part.name === "update-entity-fields" && part.input !== undefined && (
         <UpdateSummary input={part.input} />
       )}
-      {part.name === "apply-active-docx-edits" && part.input !== undefined && (
-        <ActiveDocxEditSummary input={part.input} />
+      {part.name === "suggest_changes" && part.input !== undefined && (
+        <SuggestChangesSummary operations={part.input.operations} />
       )}
       {part.name === "create_workspace_document" &&
         part.input !== undefined && (
@@ -720,9 +736,9 @@ const useMattersById = (): ReadonlyMap<string, SummaryMatter> => {
  */
 // Clicking a DOCX-edit-batch card jumps the user to the document-review
 // facet for the entity those edits target, where the batch lists under
-// "From chat". The output's `queued` ids are the same client-side
-// suggestion ids the review store keys its session entries by, so we look
-// up the entity by matching any of them.
+// "From chat". The output's `queued` ids are folio operation ids, which each
+// queued review-store entry records as `operationId`, so we look up the
+// entity by matching any of them.
 const getDocxReviewPanelHandler = ({
   isDocxEditBatch,
   part,
@@ -732,11 +748,11 @@ const getDocxReviewPanelHandler = ({
 }) => {
   const output =
     isDocxEditBatch &&
-    part.name === "apply-active-docx-edits" &&
+    part.name === "suggest_changes" &&
     part.state === "complete"
       ? part.output
       : undefined;
-  const queued = output?.queued;
+  const queued = output?.ok === true ? output.result.queued : undefined;
   if (queued === undefined || queued.length === 0) {
     return null;
   }
@@ -745,7 +761,9 @@ const getDocxReviewPanelHandler = ({
     const opIds = new Set(queuedIds);
     const sessions = useReviewStore.getState().sessions;
     const entityIdMatch = Object.entries(sessions).find(([, items]) =>
-      items.some((item) => opIds.has(item.id)),
+      items.some(
+        (item) => item.operationId !== undefined && opIds.has(item.operationId),
+      ),
     )?.[0];
     if (!entityIdMatch) {
       return;
@@ -800,7 +818,7 @@ const getToolApprovalState = ({
   // grant can auto-approve a later call.
   const isApprovalOnce = isApprovalOnceChatToolName(name);
   const canAllowInConversation =
-    name !== "apply-active-docx-edits" &&
+    name !== "suggest_changes" &&
     !isApprovalOnce &&
     !isNonPersistentGrantChatToolName(name);
   /**
@@ -809,7 +827,7 @@ const getToolApprovalState = ({
    * compact status and auto-approves once so the queueing
    * handler can register the suggestions.
    */
-  const isDocxEditBatch = name === "apply-active-docx-edits";
+  const isDocxEditBatch = name === "suggest_changes";
   const externalMcpProviderName = getExternalMcpProviderName(name);
 
   return {

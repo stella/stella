@@ -111,6 +111,13 @@ const docxEditSnapshotSchema = t.Object({
       text: t.String(),
       displayLabel: t.Optional(t.String()),
       styleId: t.Optional(t.String()),
+      /**
+       * Folio's normalized text hash of the block at snapshot time. Shown to
+       * the model so it can echo it as `precondition.blockTextHash` on a
+       * `suggest_changes` operation, which makes an edit against a block that
+       * changed since this snapshot skip instead of landing on the wrong text.
+       */
+      blockTextHash: t.Optional(t.String()),
     }),
   ),
 });
@@ -137,9 +144,9 @@ export const activeDraftSchema = t.Object({
 /**
  * Template Studio surface: the user is authoring a reusable DOCX
  * template (org-scoped, not a workspace entity). The snapshot mirrors
- * the active-file one so `apply-active-docx-edits` operations target
- * the same block-id space; the Studio client converts queued
- * operations into in-document suggestions.
+ * the active-file one so `suggest_changes` operations target the same
+ * block-id space; the Studio client converts queued operations into
+ * in-document suggestions.
  */
 export const activeTemplateSchema = t.Object({
   templateId: tSafeId("template"),
@@ -230,7 +237,7 @@ const sendMessageCommonProperties = {
   /**
    * Which DOCX-edit review mode this turn uses; omitted means
    * `DEFAULT_CHAT_EDIT_APPLY_MODE`. Threaded into `getChatTools`, which
-   * registers exactly one of `apply-active-docx-edits` (manual) /
+   * registers exactly one of `suggest_changes` (manual) /
    * `edit_workspace_document` (auto) accordingly -- never both.
    */
   editApplyMode: t.Optional(

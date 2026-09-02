@@ -291,7 +291,7 @@ export const createTemplateAuthoringTools = ({
         "document text (or the part the user asked about). Returns suggested " +
         "fields: the exact literalText, a dotted fieldPath, an inputType and " +
         "an optional AI-draft prompt. After reviewing the suggestions, apply " +
-        "the ones that make sense with apply-active-docx-edits, replacing " +
+        "the ones that make sense with suggest_changes, replacing " +
         "each literalText occurrence with its {{fieldPath}} marker verbatim. " +
         "In bilingual or multi-column documents apply the marker in EVERY " +
         "language column (one edit per parallel occurrence), so the same " +

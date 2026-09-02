@@ -2,7 +2,7 @@
  * Spec → in-document AISuggestion mapping for the Template Studio chat.
  *
  * Turns (literal -> replacement) specs — derived from
- * `apply-active-docx-edits` tool operations — into one AISuggestion per
+ * `suggest_changes` tool operations — into one AISuggestion per
  * occurrence of each literal. Occurrences and their context windows come
  * from the same positional-text model the staleness resolver searches
  * (`buildPositionalText`, blocks joined with "\n") — contexts built any
@@ -13,14 +13,15 @@
 
 import type { Node as PMNode } from "prosemirror-model";
 
+import type {
+  FolioAIEditOperation,
+  FolioAIEditSeverity,
+  FolioAIEditSkipReason,
+} from "@stll/folio-core/ai-edits";
 import { buildPositionalText } from "@stll/folio-react";
 import type { AISuggestion } from "@stll/folio-react";
 import { isFieldPath } from "@stll/template-conditions";
 
-import type {
-  ApplyActiveDocxEditsInput,
-  ApplyActiveDocxEditsOutput,
-} from "@/features/chat/chat-query-contract";
 import { stableStringify } from "@/lib/stable-stringify";
 
 /** Chars of surrounding text recorded so suggestions survive document edits
@@ -131,16 +132,90 @@ export const buildReplacementSuggestions = (
   };
 };
 
-export type DocxEditOperation = ApplyActiveDocxEditsInput["operations"][number];
+type TemplateEditOperationMeta = {
+  /** folio's operation id once parsed; absent on ops read from the input stream. */
+  id?: string;
+  blockId: string;
+  comment?: { text: string };
+  severity?: FolioAIEditSeverity;
+  area?: string;
+};
 
-type SkippedOperation = ApplyActiveDocxEditsOutput["skipped"][number];
+/**
+ * The operations the Studio renders as text replacements: the
+ * `suggest_changes` subset its surface registers. Ops read from the
+ * streaming tool input and ops parsed by folio both project onto it.
+ */
+export type DocxEditOperation =
+  | (TemplateEditOperationMeta & {
+      type: "replaceInBlock";
+      find: string;
+      replace: string;
+    })
+  | (TemplateEditOperationMeta & { type: "replaceBlock"; text: string })
+  | (TemplateEditOperationMeta & { type: "deleteBlock" });
 
-/** The block an operation anchors to; range-addressed ops carry it on the
- *  `find_text` handle. */
+type SkippedOperation = { id: string; reason: FolioAIEditSkipReason };
+
+/**
+ * Project a folio-parsed operation onto the Studio subset; null for a kind
+ * the Studio cannot render (the tool schema excludes them, so this only
+ * guards a contract that widens later).
+ */
+export const toTemplateEditOperation = (
+  operation: FolioAIEditOperation,
+): DocxEditOperation | null => {
+  const meta: TemplateEditOperationMeta = {
+    id: operation.id,
+    blockId:
+      "blockId" in operation ? operation.blockId : operation.range.blockId,
+    ...(operation.severity !== undefined && { severity: operation.severity }),
+    ...(operation.area !== undefined && { area: operation.area }),
+  };
+  switch (operation.type) {
+    case "replaceInBlock":
+      return {
+        ...meta,
+        ...(operation.comment !== undefined && { comment: operation.comment }),
+        type: operation.type,
+        find: operation.find,
+        replace: operation.replace,
+      };
+    case "replaceBlock":
+      return {
+        ...meta,
+        ...(operation.comment !== undefined && { comment: operation.comment }),
+        type: operation.type,
+        text: operation.text,
+      };
+    case "deleteBlock":
+      return {
+        ...meta,
+        ...(operation.comment !== undefined && { comment: operation.comment }),
+        type: operation.type,
+      };
+    case "replaceRange":
+    case "commentOnRange":
+    case "formatRange":
+    case "insertAfterBlock":
+    case "insertBeforeBlock":
+    case "commentOnBlock":
+    case "insertSignatureTable":
+    case "insertTableRow":
+    case "deleteTableRow":
+    case "insertTableColumn":
+    case "deleteTableColumn":
+    case "mergeTableCells":
+    case "splitTableCell":
+      return null;
+    default:
+      operation satisfies never;
+      return null;
+  }
+};
+
 const operationAnchorBlockId = (operation: DocxEditOperation): string =>
-  operation.type === "replaceRange" || operation.type === "commentOnRange"
-    ? operation.range.blockId
-    : operation.blockId;
+  operation.blockId;
 
 /** Stable per-operation id echoed to the model in queued/skipped: the
  *  model-supplied contract id when present, else a positional fallback. */
@@ -182,7 +257,7 @@ export type BuildOperationSpecsResult = {
 };
 
 /**
- * `apply-active-docx-edits` operations → replacement specs.
+ * `suggest_changes` operations → replacement specs.
  *
  * A `replaceInBlock` whose blockId matches no snapshot block is NOT
  * rejected: the op still carries the literal to find, so the spec is
@@ -204,8 +279,7 @@ export const buildOperationSpecs = ({
   for (const [offset, operation] of operations.entries()) {
     const id = operationSpecId(operation, startIndex + offset);
     const blockText = blockTextById.get(operationAnchorBlockId(operation));
-    const commentText =
-      "comment" in operation ? operation.comment.text : undefined;
+    const commentText = operation.comment?.text;
     switch (operation.type) {
       case "replaceInBlock": {
         if (operation.find === operation.replace) {
@@ -219,7 +293,7 @@ export const buildOperationSpecs = ({
             replace: operation.replace,
             scopeText: blockText,
             comment: commentText,
-            area: operation.area,
+            area: operation.area ?? "",
           }),
         );
         break;
@@ -240,7 +314,7 @@ export const buildOperationSpecs = ({
             replace: operation.text,
             scopeText: blockText,
             comment: commentText,
-            area: operation.area,
+            area: operation.area ?? "",
           }),
         );
         break;
@@ -254,31 +328,10 @@ export const buildOperationSpecs = ({
           id,
           literalText: blockText,
           suggestedText: "",
-          topic: commentText ?? operation.area,
+          topic: commentText ?? operation.area ?? "",
           rationale: commentText ?? "",
           scopeText: blockText,
         });
-        break;
-      }
-      // The Studio renders suggestions as text replacements over the
-      // live document; structural inserts, comments, table operations,
-      // and range-addressed edits (the Studio surface registers no
-      // `find_text` tool, so the model has no valid handles here) have no
-      // such representation. The prompt steers the model away from them;
-      // skip defensively when it emits one anyway.
-      case "insertAfterBlock":
-      case "insertBeforeBlock":
-      case "commentOnBlock":
-      case "commentOnRange":
-      case "insertSignatureTable":
-      case "insertTableRow":
-      case "deleteTableRow":
-      case "insertTableColumn":
-      case "deleteTableColumn":
-      case "mergeTableCells":
-      case "splitTableCell":
-      case "replaceRange": {
-        skipped.push({ id, reason: "unsupportedBlock" });
         break;
       }
       default: {
@@ -317,9 +370,23 @@ export const extractCompletedStreamingOperations = (
     if (!isStreamedOperation(candidate)) {
       break;
     }
-    operations.push(candidate);
+    operations.push(normalizeStreamedComment(candidate));
   }
   return operations;
+};
+
+/**
+ * The tool contract lets the model write `comment` as a plain string (folio's
+ * parser wraps it into `{ text }`); a streamed op is read before that parse,
+ * so wrap it here or the fingerprint never matches the parsed counterpart.
+ */
+const normalizeStreamedComment = (
+  operation: DocxEditOperation,
+): DocxEditOperation => {
+  const comment: unknown = Reflect.get(operation, "comment");
+  return typeof comment === "string"
+    ? { ...operation, comment: { text: comment } }
+    : operation;
 };
 
 const OPERATION_SEVERITIES: readonly string[] = Object.freeze([
@@ -352,37 +419,33 @@ const isStreamedOperation = (value: unknown): value is DocxEditOperation => {
         typeof Reflect.get(value, "replace") === "string"
       );
     case "replaceBlock":
-    case "insertAfterBlock":
-    case "insertBeforeBlock":
       return typeof Reflect.get(value, "text") === "string";
     case "deleteBlock":
       return true;
-    case "commentOnBlock": {
-      const comment: unknown = Reflect.get(value, "comment");
-      return (
-        typeof comment === "object" &&
-        comment !== null &&
-        isNonEmptyString(Reflect.get(comment, "text"))
-      );
-    }
-    case "insertSignatureTable": {
-      const parties: unknown = Reflect.get(value, "parties");
-      return Array.isArray(parties) && parties.length > 0;
-    }
     default:
       return false;
   }
 };
 
 /**
- * Key-order-insensitive fingerprint, so an operation captured from the
- * input stream and its final schema-validated counterpart compare
- * equal. A mismatch means the finalized op no longer matches what was
- * provisionally placed (e.g. the schema stripped a stray key), and the
- * provisional suggestion must be replaced.
+ * Fingerprint of what a placement depends on, so an operation captured
+ * from the input stream and its folio-parsed counterpart compare equal:
+ * the parsed op carries a minted id and a wrapped comment the streamed
+ * one lacks, so only the placement-relevant fields take part. A mismatch
+ * means the finalized op no longer matches what was provisionally placed
+ * and the provisional suggestion must be replaced.
  */
 export const operationFingerprint = (operation: DocxEditOperation): string =>
-  stableStringify(operation);
+  stableStringify({
+    type: operation.type,
+    blockId: operation.blockId,
+    severity: operation.severity ?? null,
+    area: operation.area ?? null,
+    comment: operation.comment?.text ?? null,
+    find: operation.type === "replaceInBlock" ? operation.find : null,
+    replace: operation.type === "replaceInBlock" ? operation.replace : null,
+    text: operation.type === "replaceBlock" ? operation.text : null,
+  });
 
 /**
  * Field metadata recovered for a replacement whose `replace` text is a

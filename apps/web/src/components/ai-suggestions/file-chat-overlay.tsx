@@ -34,12 +34,31 @@ import { useTranslations } from "use-intl";
 import { v7 as uuidv7 } from "uuid";
 
 import {
+  DOCX_SUGGEST_CHANGES_OPTIONS_BY_SURFACE,
+  DOCX_SUGGESTION_SURFACE,
+} from "@stll/api-contract/chat-docx-suggestions";
+import {
   createEditorRefBridge,
   executeFolioToolCall,
   FOLIO_AGENT_TOOL_NAMES,
 } from "@stll/folio-agents";
-import type { FolioAgentBridge, FolioAgentToolName } from "@stll/folio-agents";
-import type { FolioAgentToolInputByName } from "@stll/folio-agents/tool-contract";
+import type {
+  FolioAgentBridge,
+  FolioAgentToolName,
+  FolioAgentToolOptions,
+} from "@stll/folio-agents";
+import type {
+  FolioAgentToolInputByName,
+  FolioToolCallResultFor,
+} from "@stll/folio-agents/tool-contract";
+import {
+  getFolioDocumentOperationIssues,
+  getFolioDocumentOperationReceipts,
+} from "@stll/folio-core";
+import type {
+  FolioDocumentOperationBatch,
+  FolioDocumentOperationResult,
+} from "@stll/folio-core";
 import type {
   DocxEditorRef,
   FolioAIEditOperation,
@@ -71,6 +90,7 @@ import {
   summarizeOperation,
 } from "@/components/ai-suggestions/review-suggestion-builder";
 import type { SnapshotBlock } from "@/components/ai-suggestions/review-suggestion-builder";
+import { withBlockTextHashes } from "@/components/ai-suggestions/snapshot-blocks";
 import {
   ChatSubmitPreservedError,
   useChatEditor,
@@ -83,18 +103,15 @@ import { ChatMatterPicker } from "@/components/chat/chat-matter-picker";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
 import {
-  getActiveDocxEditApprovalPart,
-  isApplyActiveDocxEditsInput,
   isApprovalPart,
-  selectUnresolvedActiveDocxEditToolCallParts,
   selectUnresolvedFolioAgentDocToolCallParts,
+  SUGGEST_CHANGES_TOOL_NAME,
 } from "@/components/chat/chat-ui-tools";
 import type {
   ApprovalToolName,
   ApprovalToolPart,
   PersistedChatMessage,
   RegisteredFolioAgentToolCallPart,
-  UnresolvedActiveDocxEditToolCallPart,
   UnresolvedFolioAgentDocToolCallPart,
 } from "@/components/chat/chat-ui-tools";
 import { COMPOSER_TEXT_CLASS } from "@/components/chat/composer-control-style";
@@ -107,10 +124,6 @@ import type { DocxComments } from "@/components/docx/app-docx-editor";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { useAIKeyGate } from "@/components/require-ai-key";
-import type {
-  ApplyActiveDocxEditsInput,
-  ApplyActiveDocxEditsOutput,
-} from "@/features/chat/chat-query-contract";
 import { ChatTitleRename } from "@/features/chat/components/chat-title-rename";
 import { SuggestedFollowupChips } from "@/features/chat/components/suggested-followup-chips";
 import { useChatSession } from "@/features/chat/hooks/use-chat-session";
@@ -187,47 +200,20 @@ type ActiveExternal = {
   url: string;
 };
 
-type ToolInputOperation = ApplyActiveDocxEditsInput["operations"][number];
-
 type PreparedOperation = {
+  /**
+   * The operation as queued: folio's parsed op, re-keyed to {@link id} and
+   * with inserted text cleaned of directive markers.
+   */
   folio: FolioAIEditOperation;
-  input: ToolInputOperation;
-  /** Internal suggestion/operation id — always generated (uuid-based) so
-   *  review-store entries stay unique across batches. */
+  /**
+   * Internal suggestion id, always generated: review-store entries must stay
+   * unique across batches, and folio keeps a model-supplied operation id
+   * verbatim (a model can reuse `op-1` on every call).
+   */
   id: string;
-  /** Id echoed to the model in `queued`/`skipped`: the model-supplied
-   *  operation id when present (folio contract), else {@link id}. */
+  /** Id echoed to the model in `queued` / `skipped`: folio's operation id. */
   reportId: string;
-};
-
-const getOperationComment = (
-  operation: ToolInputOperation,
-): { text: string } | undefined => {
-  switch (operation.type) {
-    case "replaceInBlock":
-    case "replaceRange":
-    case "insertAfterBlock":
-    case "insertBeforeBlock":
-    case "replaceBlock":
-    case "deleteBlock":
-    case "insertSignatureTable":
-      return operation.comment ? { text: operation.comment.text } : undefined;
-    // Table ops carry no `comment` field in the 0.12 union; never read
-    // `.comment` on them.
-    case "insertTableRow":
-    case "deleteTableRow":
-    case "insertTableColumn":
-    case "deleteTableColumn":
-    case "mergeTableCells":
-    case "splitTableCell":
-      return undefined;
-    case "commentOnBlock":
-    case "commentOnRange":
-      return { text: operation.comment.text };
-    default:
-      operation satisfies never;
-      return undefined;
-  }
 };
 
 // Defense-in-depth: even with the structural ops below, the model can
@@ -305,259 +291,72 @@ const cleanDirectiveText = (text: string): string => {
     .trim();
 };
 
-type PrepareOperationOptions = {
-  operation: ToolInputOperation;
-  id: string;
-  comment: { text: string } | undefined;
-};
-
-type RangeOperationOptions = {
-  operation: Extract<
-    ToolInputOperation,
-    { type: "commentOnRange" | "replaceRange" }
-  >;
-  id: string;
-  comment: { text: string } | undefined;
-};
-
-// Range-addressed operations pass the `find_text` handle straight
-// through; the apply engine re-validates it against the live document
-// and skips with `staleRange` when the selection no longer matches.
-const toFolioRangeOperation = ({
-  operation,
-  id,
-  comment,
-}: RangeOperationOptions): FolioAIEditOperation => {
-  if (operation.type === "commentOnRange") {
-    return {
-      comment: { text: operation.comment.text },
-      id,
-      range: operation.range,
-      type: operation.type,
-    };
-  }
-  const next: FolioAIEditOperation = {
-    id,
-    range: operation.range,
-    replace: operation.replace,
-    type: operation.type,
-  };
-  if (comment) {
-    next.comment = comment;
-  }
-  return next;
-};
-
-const toFolioOperation = ({
-  operation,
-  id,
-  comment,
-}: PrepareOperationOptions): FolioAIEditOperation | null => {
+/**
+ * Fold an emptied `replaceBlock` into the canonical `deleteBlock` (so the
+ * model never has to pick between two operations) and strip directive
+ * markers from inserted text. Every other operation queues as parsed.
+ */
+const normalizeQueuedOperation = (
+  operation: FolioAIEditOperation,
+): FolioAIEditOperation => {
   switch (operation.type) {
-    case "replaceInBlock": {
-      const next: FolioAIEditOperation = {
-        blockId: operation.blockId,
-        find: operation.find,
-        id,
-        replace: operation.replace,
-        type: operation.type,
-      };
-      if (comment) {
-        next.comment = comment;
-      }
-      return next;
-    }
     case "insertAfterBlock":
-    case "insertBeforeBlock": {
-      const next: FolioAIEditOperation = {
-        blockId: operation.blockId,
-        id,
-        text: cleanDirectiveText(operation.text),
-        type: operation.type,
-      };
-      if (operation.inheritFormatting !== undefined) {
-        next.inheritFormatting = operation.inheritFormatting;
-      }
-      if (operation.pageBreakBefore !== undefined) {
-        next.pageBreakBefore = operation.pageBreakBefore;
-      }
-      if (operation.styleId !== undefined) {
-        next.styleId = operation.styleId;
-      }
-      if (comment) {
-        next.comment = comment;
-      }
-      return next;
-    }
+    case "insertBeforeBlock":
+      return { ...operation, text: cleanDirectiveText(operation.text) };
     case "replaceBlock": {
-      const cleanedText = cleanDirectiveText(operation.text);
-      // Empty replacement = remove the block. The canonical op for
-      // that is `deleteBlock`; normalize at the boundary so the model
-      // doesn't have to pick between two operations.
-      if (cleanedText.length === 0) {
-        const next: FolioAIEditOperation = {
-          blockId: operation.blockId,
-          id,
-          type: "deleteBlock",
-        };
-        if (comment) {
-          next.comment = comment;
-        }
-        return next;
-      }
-      const next: FolioAIEditOperation = {
-        blockId: operation.blockId,
-        id,
-        text: cleanedText,
-        type: operation.type,
-      };
-      if (operation.preserveFormatting !== undefined) {
-        next.preserveFormatting = operation.preserveFormatting;
-      }
-      if (operation.styleId !== undefined) {
-        next.styleId = operation.styleId;
-      }
-      if (comment) {
-        next.comment = comment;
-      }
-      return next;
-    }
-    case "insertSignatureTable": {
-      const next: FolioAIEditOperation = {
-        blockId: operation.blockId,
-        id,
-        parties: operation.parties.map((p) => ({
-          name: p.name,
-          ...(p.signatory !== undefined && { signatory: p.signatory }),
-          ...(p.title !== undefined && { title: p.title }),
-        })),
-        type: operation.type,
-      };
-      if (operation.position !== undefined) {
-        next.position = operation.position;
-      }
-      if (comment) {
-        next.comment = comment;
-      }
-      return next;
-    }
-    case "deleteBlock": {
-      const next: FolioAIEditOperation = {
-        blockId: operation.blockId,
-        id,
-        type: operation.type,
-      };
-      if (comment) {
-        next.comment = comment;
-      }
-      return next;
-    }
-    case "commentOnBlock": {
-      const next: FolioAIEditOperation = {
-        blockId: operation.blockId,
-        comment: { text: operation.comment.text },
-        id,
-        type: operation.type,
-      };
-      if (operation.quote !== undefined) {
-        next.quote = operation.quote;
-      }
-      return next;
-    }
-    // Table ops apply natively in folio; stella only threads the anchor
-    // (`blockId`) and the op-specific fields through. Each is its own
-    // member of the folio union (unlike insertAfter/insertBefore, which
-    // share one), so they cannot be collapsed into a shared arm: an
-    // object literal with a multi-literal `type` is not assignable to any
-    // single member.
-    case "insertTableRow": {
-      const next: FolioAIEditOperation = {
-        blockId: operation.blockId,
-        id,
-        type: operation.type,
-      };
-      if (operation.position !== undefined) {
-        next.position = operation.position;
-      }
-      if (operation.cellTexts !== undefined) {
-        next.cellTexts = operation.cellTexts;
-      }
-      return next;
-    }
-    case "insertTableColumn": {
-      const next: FolioAIEditOperation = {
-        blockId: operation.blockId,
-        id,
-        type: operation.type,
-      };
-      if (operation.position !== undefined) {
-        next.position = operation.position;
-      }
-      if (operation.cellTexts !== undefined) {
-        next.cellTexts = operation.cellTexts;
-      }
-      return next;
-    }
-    case "deleteTableRow":
-      return { blockId: operation.blockId, id, type: operation.type };
-    case "deleteTableColumn":
-      return { blockId: operation.blockId, id, type: operation.type };
-    case "splitTableCell":
-      return { blockId: operation.blockId, id, type: operation.type };
-    case "mergeTableCells": {
-      // The op carries either an opposite-corner anchor (`endBlockId`)
-      // or a downward span (`rowCount`); the union enforces exactly one.
-      if (operation.endBlockId !== undefined) {
-        return {
-          blockId: operation.blockId,
-          endBlockId: operation.endBlockId,
-          id,
-          type: operation.type,
-        };
+      const text = cleanDirectiveText(operation.text);
+      if (text.length > 0) {
+        return { ...operation, text };
       }
       return {
+        id: operation.id,
+        type: "deleteBlock",
         blockId: operation.blockId,
-        id,
-        rowCount: operation.rowCount,
-        type: operation.type,
+        ...(operation.comment !== undefined && { comment: operation.comment }),
+        ...(operation.severity !== undefined && {
+          severity: operation.severity,
+        }),
+        ...(operation.area !== undefined && { area: operation.area }),
+        ...(operation.precondition !== undefined && {
+          precondition: operation.precondition,
+        }),
       };
     }
+    case "replaceInBlock":
     case "replaceRange":
     case "commentOnRange":
-      return toFolioRangeOperation({ operation, id, comment });
+    case "formatRange":
+    case "deleteBlock":
+    case "commentOnBlock":
+    case "insertSignatureTable":
+    case "insertTableRow":
+    case "deleteTableRow":
+    case "insertTableColumn":
+    case "deleteTableColumn":
+    case "mergeTableCells":
+    case "splitTableCell":
+      return operation;
     default:
       operation satisfies never;
-      return null;
+      return operation;
   }
 };
 
 const prepareOperations = (
-  operations: ApplyActiveDocxEditsInput["operations"],
-): PreparedOperation[] => {
-  const prepared: PreparedOperation[] = [];
-
-  for (const [index, operation] of operations.entries()) {
+  operations: readonly FolioAIEditOperation[],
+): PreparedOperation[] =>
+  operations.map((operation, index) => {
     const id = `ai-docx-${String(index + 1)}-${uuidv7()}`;
-    const comment = getOperationComment(operation);
-    const folio = toFolioOperation({ operation, id, comment });
-    if (folio === null) {
-      continue;
-    }
-    prepared.push({
-      folio,
-      input: operation,
+    return {
+      folio: { ...normalizeQueuedOperation(operation), id },
       id,
-      reportId: operation.id ?? id,
-    });
-  }
+      reportId: operation.id,
+    };
+  });
 
-  return prepared;
-};
-
-// Defensive fallbacks: persisted tool calls predate the schema
-// requiring `severity`/`area`, so old stored approvals can still
-// reach this code with the fields missing. Type narrowing says
-// they're always present; the runtime check is for legacy data.
+// The file-overlay `suggest_changes` options require `severity` / `area`,
+// so folio's parser rejects a call without them; the fallbacks cover the
+// contract's own optionality (a host queue can receive ops from elsewhere).
 const inputOperationSeverity = (operation: {
   severity?: FolioAIEditSeverity | undefined;
 }): FolioAIEditSeverity | "unspecified" => operation.severity ?? "unspecified";
@@ -609,7 +408,7 @@ const queueReviewSuggestions = ({
   const skipped: { id: string; reason: "noopOperation" | "missingBlock" }[] =
     [];
   const items: ReviewSuggestion[] = prepared.flatMap(
-    ({ id, reportId, input, folio }) => {
+    ({ id, reportId, folio }) => {
       // Drop true no-ops before they ever reach the panel: the model
       // occasionally emits `find === replace` (or replaceBlock text
       // identical to the source) as a side effect of running through
@@ -627,13 +426,14 @@ const queueReviewSuggestions = ({
       const blockLabel = labelsById.get(folioOperationBlockId(folio));
       const base: ReviewSuggestion = {
         id,
+        operationId: reportId,
         origin: REVIEW_SUGGESTION_ORIGIN.chat,
         blockId: folioOperationBlockId(folio),
         type: folio.type,
         summary: summarizeOperation(folio, blockLabel),
         preview,
-        severity: inputOperationSeverity(input),
-        area: inputOperationArea(input),
+        severity: inputOperationSeverity(folio),
+        area: inputOperationArea(folio),
         status: "pending",
         applyMode: null,
         revisionIds: null,
@@ -825,13 +625,13 @@ const persistQueuedSuggestions = async ({
 
 // No tools are auto-blocked when an active file is present. The
 // prompt already steers the model away from create-document for
-// edit requests on the active file (in favour of
-// apply-active-docx-edits); blocking it outright robbed users of
-// the legitimate "create a new document from this chat" flow.
+// edit requests on the active file (in favour of `suggest_changes`);
+// blocking it outright robbed users of the legitimate "create a new
+// document from this chat" flow.
 // The folio-agents comment MUTATION tools: client-executed against the live
 // editor bridge, but behind approval (unlike the auto-run read tools). After
 // the user approves, the overlay executes them via `executeFolioToolCall`, the
-// same shape as `apply-active-docx-edits`. Names mirror the server-side
+// same shape as `suggest_changes`. Names mirror the server-side
 // registration in `folio-agent-tools.ts`; kept as local literals like the
 // other tool names this surface matches on.
 const FOLIO_AGENT_COMMENT_MUTATION_TOOL_NAMES = [
@@ -854,10 +654,24 @@ type ExecutableFolioAgentToolCall<TName extends FolioAgentToolName> = {
   name: TName;
 };
 
+/** Same options the API registered the file overlay's `suggest_changes` with. */
+const FILE_OVERLAY_TOOL_OPTIONS: FolioAgentToolOptions = {
+  suggestChanges:
+    DOCX_SUGGEST_CHANGES_OPTIONS_BY_SURFACE[
+      DOCX_SUGGESTION_SURFACE.fileOverlay
+    ],
+};
+
 const executeTypedFolioToolCall = <TName extends FolioAgentToolName>(
   part: ExecutableFolioAgentToolCall<TName>,
   bridge: FolioAgentBridge,
-) => executeFolioToolCall(part.name, part.input, bridge);
+) =>
+  executeFolioToolCall(
+    part.name,
+    part.input,
+    bridge,
+    FILE_OVERLAY_TOOL_OPTIONS,
+  );
 
 // Stable empty context returned by `getContextMatterIds` before the picker
 // has seeded (its state is `string[] | null`). A named constant, not a `?? []`
@@ -1430,7 +1244,7 @@ const FileChatOverlayInner = ({
     return {
       ...activeFile,
       docxEditSnapshot: {
-        blocks: snapshot.blocks,
+        blocks: withBlockTextHashes(snapshot),
         canApplyEdits: Boolean(docxEditable),
       },
       supportsDocxEdits: true,
@@ -1450,32 +1264,36 @@ const FileChatOverlayInner = ({
     return {
       ...activeDraft,
       docxEditSnapshot: {
-        blocks: snapshot.blocks,
+        blocks: withBlockTextHashes(snapshot),
         canApplyEdits: Boolean(docxEditable),
       },
     };
   });
   const getActiveExternal = useLatestCallback(() => activeExternal);
-  const handleActiveDocxEditToolCall = useLatestCallback(
-    (input: ApplyActiveDocxEditsInput): ApplyActiveDocxEditsOutput => {
-      // All edit batches — single direct edits and structured
-      // reviews alike — are queued for the user. The editor is not
-      // touched here; the user reviews each suggestion in the
-      // panel and the unlock prompt only fires when the user
-      // actually clicks Accept.
+  /**
+   * Park a `suggest_changes` batch in the review panel. The editor is not
+   * touched here: the user reviews each suggestion in the panel and the
+   * unlock prompt only fires when the user actually clicks Accept.
+   */
+  const queueSuggestChangesBatch = useLatestCallback(
+    (batch: FolioDocumentOperationBatch): FolioDocumentOperationResult => {
       if (reviewEntityId === undefined) {
+        const skipped = batch.operations.map(({ id }) => ({
+          id,
+          reason: "documentNotEditable" as const,
+        }));
         return {
-          version: 1,
+          version: batch.version,
+          status: "rejected",
           applied: [],
-          queued: [],
-          skipped: input.operations.map((operation, index) => ({
-            id: operation.id ?? `ai-docx-${String(index + 1)}`,
-            reason: "documentNotEditable",
-          })),
+          skipped,
+          issues: getFolioDocumentOperationIssues(batch.operations, skipped),
+          receipts: [],
+          undoHandle: null,
         };
       }
 
-      const prepared = prepareOperations(input.operations);
+      const prepared = prepareOperations(batch.operations);
       // The most recent snapshot we sent the AI is the one its
       // operations target, so the reviewer's redline preview reads
       // against that text AND each pending suggestion carries that
@@ -1516,11 +1334,16 @@ const FileChatOverlayInner = ({
           "file-chat-overlay.persist-queued-suggestions",
         );
       }
+      const queued = queuedIds.map((id) => ({ id }));
       return {
-        version: 1,
+        version: batch.version,
+        status: "queued",
         applied: [],
-        queued: queuedIds.map((id) => ({ id })),
+        queued,
         skipped,
+        issues: getFolioDocumentOperationIssues(batch.operations, skipped),
+        receipts: getFolioDocumentOperationReceipts(batch.operations, queued),
+        undoHandle: null,
       };
     },
   );
@@ -1551,8 +1374,7 @@ const FileChatOverlayInner = ({
     ...(activeFile ? { getActiveFile: () => getActiveFile() } : {}),
     ...(hasDocxEditSurface
       ? {
-          handleActiveDocxEditToolCall: (input: ApplyActiveDocxEditsInput) =>
-            handleActiveDocxEditToolCall(input),
+          getDocxSuggestionSurface: () => DOCX_SUGGESTION_SURFACE.fileOverlay,
         }
       : {}),
     ...(getEditApplyMode === undefined
@@ -1879,6 +1701,27 @@ const FileChatOverlayInner = ({
     });
   });
 
+  // `suggest_changes` runs through a review-queue bridge: the live editor
+  // bridge for everything else, but `applyDocumentOperations` parks the
+  // batch in the review panel instead of writing. `snapshot()` returns the
+  // snapshot the model was shown, so folio stamps each operation's
+  // precondition against the text the model actually read; the accept-time
+  // apply re-checks it against the live document.
+  const createReviewQueueBridge = useLatestCallback(
+    (): FolioAgentBridge | null => {
+      const editorBridge = createFolioAgentBridge();
+      if (!editorBridge) {
+        return null;
+      }
+      return {
+        ...editorBridge,
+        snapshot: () =>
+          lastSentDocxEditSnapshotRef.current ?? editorBridge.snapshot(),
+        applyDocumentOperations: (batch) => queueSuggestChangesBatch(batch),
+      };
+    },
+  );
+
   // Latest approval-requested/responded tool-call part matching the given
   // approval id and tool name (newest message first). Used to recover the
   // streamed input of a client-executed approval tool once the user approves.
@@ -1970,33 +1813,10 @@ const FileChatOverlayInner = ({
     approvalId: string,
     toolName: ApprovalToolName,
   ) => {
-    if (toolName === "apply-active-docx-edits") {
-      const part = getActiveDocxEditApprovalPart(messages, approvalId);
-      if (!part) {
-        await handleApprove(approvalId, toolName);
-        return;
-      }
-
-      // DOCX edits no longer apply at approval time. We approve
-      // the tool call (so the LLM proceeds), queue the operations
-      // into the review panel via the tool call handler, and
-      // surface the queued ids back to the LLM. The actual apply
-      // (including the unlock prompt) happens when the user clicks
-      // Accept on a suggestion in the panel.
-      await handleApprove(approvalId, toolName);
-      const output = handleActiveDocxEditToolCall(part.input);
-      await addToolResult({
-        output,
-        tool: "apply-active-docx-edits",
-        toolCallId: part.id,
-      });
-      return;
-    }
-
     // folio-agents comment mutations are client-executed behind approval: once
     // the user approves, run the operation against the live editor bridge and
-    // answer the tool call with its result (same shape as apply-active-docx-
-    // edits). The read tools never reach here — they are auto-run, no approval.
+    // answer the tool call with its result. The auto-run tools (reads and
+    // `suggest_changes`) never reach here.
     if (isFolioAgentCommentMutationToolName(toolName)) {
       await approveAndRunFolioAgentCommentMutation({
         approvalId,
@@ -2032,18 +1852,49 @@ const FileChatOverlayInner = ({
     });
   };
 
-  // Auto-run watcher for the client-executed, no-approval folio-agents read
-  // tools (`read_document` / `find_text` / `read_changes` / `read_comments`).
-  // Nothing else in the runtime resolves these — there is no approval click to
-  // gate re-entrancy the way `handleApproveWithDocxUnlock` is, so this effect
-  // tracks which `toolCallId`s it has already dispatched itself. The comment
-  // MUTATION tools are approval-gated and never flow through here (they are
-  // excluded from `selectUnresolvedFolioAgentDocToolCallParts`).
+  // Auto-run watcher for the client-executed, no-approval folio-agents tools:
+  // the reads and the queue-only `suggest_changes`. Nothing else in the
+  // runtime resolves these — there is no approval click to gate re-entrancy
+  // the way `handleApproveWithDocxUnlock` is, so this effect tracks which
+  // `toolCallId`s it has already dispatched itself. The comment MUTATION
+  // tools are approval-gated and never flow through here (they are excluded
+  // from `selectUnresolvedFolioAgentDocToolCallParts`).
   const executedFolioAgentDocToolCallIdsRef = useRef<Set<string> | null>(null);
   executedFolioAgentDocToolCallIdsRef.current ??= new Set<string>();
+  // `suggest_changes` output is computed on the FIRST attempt per tool-call
+  // id. A retry (after an `addToolResult` failure re-arms the part) must
+  // re-send that exact output rather than recompute: queueing again would
+  // spawn duplicate review cards / server rows for one logical call.
+  const suggestChangesOutputCacheRef = useRef<Map<
+    string,
+    FolioToolCallResultFor<typeof SUGGEST_CHANGES_TOOL_NAME>
+  > | null>(null);
+  suggestChangesOutputCacheRef.current ??= new Map();
   const runFolioAgentDocToolCall = useLatestCallback(
     async (part: UnresolvedFolioAgentDocToolCallPart) => {
       try {
+        if (part.name === SUGGEST_CHANGES_TOOL_NAME) {
+          const outputCache = suggestChangesOutputCacheRef.current;
+          let output = outputCache?.get(part.id);
+          if (output === undefined) {
+            const queueBridge = createReviewQueueBridge();
+            output = queueBridge
+              ? executeFolioToolCall(
+                  SUGGEST_CHANGES_TOOL_NAME,
+                  part.input,
+                  queueBridge,
+                  FILE_OVERLAY_TOOL_OPTIONS,
+                )
+              : { ok: false, error: "No document is open." };
+            outputCache?.set(part.id, output);
+          }
+          await addToolResult({
+            tool: SUGGEST_CHANGES_TOOL_NAME,
+            toolCallId: part.id,
+            output,
+          });
+          return;
+        }
         // Read the ref fresh on every call rather than capturing it in a
         // memo: `docxEditorRef.current` can change identity (remount,
         // editor swap) between when this effect schedules the call and
@@ -2113,92 +1964,6 @@ const FileChatOverlayInner = ({
       );
     }
   }, [messages, runFolioAgentDocToolCall]);
-
-  // Auto-run watcher for the queue-only `apply-active-docx-edits` tool.
-  // It carries no approval gate (it never writes to the document — it
-  // only queues suggestions into the review panel), so nothing else
-  // resolves it; this effect queues the operations via the tool-call
-  // handler and answers the call with the queued ids, exactly what the
-  // old approval branch did on approve. Tracks dispatched `toolCallId`s
-  // in a ref so a re-render can't double-run the same call.
-  const executedActiveDocxEditToolCallIdsRef = useRef<Set<string> | null>(null);
-  executedActiveDocxEditToolCallIdsRef.current ??= new Set<string>();
-  // Output computed on the FIRST attempt per tool-call id. A retry (after an
-  // `addToolResult` failure re-arms the part) must re-send this exact output
-  // rather than recompute: `handleActiveDocxEditToolCall` mints fresh uuids
-  // and re-queues + re-persists the suggestions, so recomputing would spawn
-  // duplicate review cards / server rows for one logical tool call.
-  const activeDocxEditOutputCacheRef = useRef<Map<
-    string,
-    ApplyActiveDocxEditsOutput
-  > | null>(null);
-  activeDocxEditOutputCacheRef.current ??= new Map<
-    string,
-    ApplyActiveDocxEditsOutput
-  >();
-  const runActiveDocxEditToolCall = useLatestCallback(
-    async (part: UnresolvedActiveDocxEditToolCallPart) => {
-      const outputCache = activeDocxEditOutputCacheRef.current;
-      try {
-        // Compute (and queue + persist, inside the handler) only once; reuse
-        // the cached output on any retry.
-        let output = outputCache?.get(part.id);
-        if (output === undefined) {
-          output = isApplyActiveDocxEditsInput(part.input)
-            ? handleActiveDocxEditToolCall(part.input)
-            : { version: 1 as const, applied: [], queued: [], skipped: [] };
-          outputCache?.set(part.id, output);
-        }
-        await addToolResult({
-          output,
-          tool: "apply-active-docx-edits",
-          toolCallId: part.id,
-        });
-      } catch (toolCallError) {
-        // Allow a retry on a later render of the same unresolved part. The
-        // cached output above keeps that retry from re-queuing / re-persisting.
-        executedActiveDocxEditToolCallIdsRef.current?.delete(part.id);
-        getAnalytics().captureError(toolCallError);
-        try {
-          await addToolResult({
-            output: {
-              version: 1 as const,
-              applied: [],
-              queued: [],
-              skipped: [],
-            },
-            tool: "apply-active-docx-edits",
-            toolCallId: part.id,
-          });
-        } catch (reportError) {
-          getAnalytics().captureError(reportError);
-        }
-      }
-    },
-  );
-  useExternalSyncEffect(() => {
-    const message = messages.at(-1);
-    if (!message || message.role !== "assistant") {
-      return;
-    }
-
-    const executedIds = executedActiveDocxEditToolCallIdsRef.current;
-    if (!executedIds) {
-      return;
-    }
-
-    const partsToRun = selectUnresolvedActiveDocxEditToolCallParts(
-      message.parts,
-      executedIds,
-    );
-    for (const part of partsToRun) {
-      executedIds.add(part.id);
-      detached(
-        runActiveDocxEditToolCall(part),
-        "file-chat-overlay.run-active-docx-edit-tool-call",
-      );
-    }
-  }, [messages, runActiveDocxEditToolCall]);
 
   const threadScrollRef = useRef<HTMLDivElement>(null);
   const hasMessages = messages.length > 0;

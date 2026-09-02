@@ -10,6 +10,7 @@ import {
   resourceRef,
   RESOURCE_TYPE,
 } from "@stll/api-contract";
+import { DOCX_SUGGESTION_SURFACE } from "@stll/api-contract/chat-docx-suggestions";
 import type { SkillMetadata } from "@stll/skills";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
@@ -1030,6 +1031,9 @@ const prepareValidatedIncomingMessage = async ({
       activeFile: activeFileForTools,
       hasActiveDocxEditClient: true,
       hasActiveDocxFileClient: true,
+      // Validation must admit persisted calls from either surface; the file
+      // overlay's operation set is the superset.
+      docxSuggestionSurface: DOCX_SUGGESTION_SURFACE.fileOverlay,
       editApplyMode,
       docxEditRepresentation,
       includeAllDocxEditToolsForValidation: true,
@@ -1483,7 +1487,7 @@ export const createSendMessage = (
       // with a server defect so every toolset built this turn refuses to
       // re-execute the identical call (see `ChatToolDefectMemo`).
       const toolDefectMemo = createChatToolDefectMemo();
-      // Narrower than the combined `apply-active-docx-edits` gate below:
+      // Narrower than the combined `suggest_changes` gate below:
       // only the file overlay (`file-chat-overlay.tsx`) mounts the
       // auto-run watcher that resolves the folio-agents `read_document` /
       // `find_text` tools via `addToolResult`. Template Studio has no such
@@ -1492,8 +1496,16 @@ export const createSendMessage = (
       // streaming) and for the matching prompt guidance below.
       const hasActiveDocxFileClient =
         body.activeFile?.supportsDocxEdits === true;
+      // Which client executor resolves `suggest_changes`, hence which
+      // per-surface schema the model sees. Only Template Studio narrows to
+      // text replacements; the file overlay hosts both entity-backed files
+      // and unsaved generated drafts with the full operation set.
+      const docxSuggestionSurface =
+        body.activeTemplate !== undefined
+          ? DOCX_SUGGESTION_SURFACE.templateStudio
+          : DOCX_SUGGESTION_SURFACE.fileOverlay;
       // Per-turn DOCX-edit review-mode setting: which of the two mutually
-      // exclusive tools (`apply-active-docx-edits` manual /
+      // exclusive tools (`suggest_changes` manual /
       // `edit_workspace_document` auto) `getChatTools` registers, and (for
       // auto) which redline representation it applies with. Resolved once
       // and reused for both the validation and streaming tool sets below,
@@ -1838,7 +1850,7 @@ export const createSendMessage = (
 
         // Streaming tools mirror the surface the user is on: only the
         // DOCX file-overlay client knows how to satisfy
-        // apply-active-docx-edits (it queues into the review store and
+        // suggest_changes (it queues into the review store and
         // sends the output back via TanStack ChatClient.addToolResult).
         // PDF/file overlays
         // still send active-file context, but they must not expose the
@@ -1871,6 +1883,7 @@ export const createSendMessage = (
             body.activeDraft !== undefined ||
             body.activeTemplate !== undefined,
           hasActiveDocxFileClient,
+          docxSuggestionSurface,
           editApplyMode,
           docxEditRepresentation,
           webSearchEnabled: thread.data.webSearchEnabled,

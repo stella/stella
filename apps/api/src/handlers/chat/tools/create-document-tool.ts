@@ -12,7 +12,7 @@ export { CREATE_DOCUMENT_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat
 // matter-pick card), calls `POST /chat/tools/create-document`
 // to do the actual compile + persist, and posts the result
 // back via TanStack ChatClient.addToolResult. Mirrors the pattern
-// used by `apply-active-docx-edits`.
+// used by `suggest_changes`.
 //
 // `workspaceId` is intentionally NOT in the input schema —
 // matter resolution is a UI concern, not something the model

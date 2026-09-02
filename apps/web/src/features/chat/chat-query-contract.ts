@@ -1,7 +1,7 @@
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import { CHAT_TOOL_SCOPE } from "@stll/api-contract";
+import type { DocxSuggestionSurface } from "@stll/api-contract/chat-docx-suggestions";
 
-import type { ChatUITools } from "@/components/chat/chat-ui-tools";
 import type { ChatUserContext } from "@/features/chat/hooks/use-chat-user-context";
 import type {
   ChatEditApplyMode,
@@ -14,6 +14,8 @@ type ActiveFileContext = {
   docxEditSnapshot?:
     | {
         blocks: {
+          /** Folio's normalized text hash; the model echoes it as an edit precondition. */
+          blockTextHash?: string | undefined;
           displayLabel?: string | undefined;
           id: string;
           kind: "heading" | "listItem" | "paragraph";
@@ -87,12 +89,6 @@ export type GroupedChatThreadsKey = {
 export const SUGGEST_TEMPLATE_FIELDS_TOOL_SCOPE =
   CHAT_TOOL_SCOPE.suggestTemplateFields;
 
-export type ApplyActiveDocxEditsInput =
-  ChatUITools["apply-active-docx-edits"]["input"];
-
-export type ApplyActiveDocxEditsOutput =
-  ChatUITools["apply-active-docx-edits"]["output"];
-
 export type ChatThreadOptionsContext = {
   allowMissingThread?: boolean | undefined;
   getActiveDecision?: (() => ActiveDecisionContext | undefined) | undefined;
@@ -108,11 +104,12 @@ export type ChatThreadOptionsContext = {
     | undefined;
   getSendMode?: (() => ChatSendMode) | undefined;
   getUserContext?: (() => ChatUserContext) | undefined;
-  handleActiveDocxEditToolCall?:
-    | ((
-        input: ApplyActiveDocxEditsInput,
-      ) => ApplyActiveDocxEditsOutput | Promise<ApplyActiveDocxEditsOutput>)
-    | undefined;
+  /**
+   * Present on a surface that mounts a `suggest_changes` review-queue
+   * bridge (the file overlay). Its presence, not its value, keys the
+   * thread cache as "active-docx-edit"; see `getChatRuntimeContextKind`.
+   */
+  getDocxSuggestionSurface?: (() => DocxSuggestionSurface) | undefined;
 };
 
 export type ChatRuntimeContextKind =
@@ -131,7 +128,7 @@ type ChatThreadQueryKey = ChatThreadRef & {
 export const getChatRuntimeContextKind = (
   context: ChatThreadOptionsContext | undefined,
 ): ChatRuntimeContextKind => {
-  if (context?.handleActiveDocxEditToolCall) {
+  if (context?.getDocxSuggestionSurface) {
     return "active-docx-edit";
   }
   if (context?.getActiveFile) {

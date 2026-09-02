@@ -11,6 +11,11 @@ import { and, asc, count, eq, isNull, or, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { CHAT_THREAD_PLACEHOLDER_TITLE } from "@stll/api-contract";
+import {
+  DOCX_SUGGEST_CHANGES_OPTIONS_BY_SURFACE,
+  DOCX_SUGGESTION_SURFACE,
+} from "@stll/api-contract/chat-docx-suggestions";
+import { describeSuggestChangesCapabilities } from "@stll/folio-agents";
 import type { SkillMetadata } from "@stll/skills";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
@@ -150,10 +155,12 @@ export type ChatToolAvailability = {
   /** `web_search` + `fetch_url` are registered for this turn. */
   webResearch: boolean;
   /**
-   * The folio-agents `read_document` / `find_text` tools are
-   * registered for this turn (see `hasActiveDocxFileClient` in
-   * chat-tools.ts / send-message.ts). File-overlay-only: Template
-   * Studio never sets this, so its prompt never mentions these tools.
+   * The folio-agents read and comment tools (`read_document`,
+   * `get_document_outline`, `read_section`, `find_text`, `read_comments`,
+   * `read_changes`, ...) are registered for this turn (see
+   * `hasActiveDocxFileClient` in chat-tools.ts / send-message.ts).
+   * File-overlay-only: Template Studio never sets this, so its prompt
+   * never mentions these tools.
    */
   folioAgentDocTools: boolean;
   /**
@@ -1165,7 +1172,7 @@ const buildActiveFilePrompt = ({
       ? `\`create-document\` creates a separate new DOCX from legal-source directives. Do NOT use it to edit, rewrite, replace, save, or make a new version of the active file. Use \`${
           toolAvailability.docxEditMode === CHAT_EDIT_APPLY_MODE.auto
             ? "edit_workspace_document"
-            : "apply-active-docx-edits"
+            : "suggest_changes"
         }\` for the open file. Never create a substitute document.`
       : "`create-document` creates a separate new DOCX from legal-source directives. Do NOT use it to edit, rewrite, replace, save, or make a new version of the active file. Never create a substitute document.",
     canEditActiveDocx
@@ -1262,6 +1269,7 @@ const buildEditableBlocksPromptParts = (snapshot: ActiveDocxEditSnapshot) => {
         label?: string;
         styleId?: string;
         text: string;
+        blockTextHash?: string;
       } = {
         blockId: block.id,
         kind: block.kind,
@@ -1277,6 +1285,12 @@ const buildEditableBlocksPromptParts = (snapshot: ActiveDocxEditSnapshot) => {
       if (block.styleId) {
         promptBlock.styleId = block.styleId;
       }
+      // Hash of the full block text (not the truncated prompt text) so the
+      // model can pin a `suggest_changes` operation to the block as it was
+      // when read; folio skips the edit if the block has moved on since.
+      if (block.blockTextHash) {
+        promptBlock.blockTextHash = block.blockTextHash;
+      }
 
       return promptBlock;
     });
@@ -1291,7 +1305,7 @@ const buildEditableBlocksPromptParts = (snapshot: ActiveDocxEditSnapshot) => {
 
 /**
  * Template Studio appendix. The Studio mounts the same
- * `apply-active-docx-edits` executor as the file overlay, but queued
+ * `suggest_changes` executor as the file overlay, but queued
  * operations land as in-document accept/reject suggestions (not the
  * review panel), and only the text-replacement subset is supported.
  */
@@ -1318,12 +1332,12 @@ export const buildActiveTemplatePrompt = (
 
 // FIELD SUGGESTIONS has two shapes: with template authoring the model
 // is steered to `suggest_template_fields` for the analysis pass;
-// without it, straight to `apply-active-docx-edits` replacements.
+// without it, straight to `suggest_changes` replacements.
 const FIELD_SUGGESTIONS_WITH_AUTHORING =
-  "FIELD SUGGESTIONS: When the user asks which literal values should become fillable fields (or uses the suggest-fields preset), first call `suggest_template_fields` with the document text (block texts joined with newlines) and any user guidance as `instructions`. Then apply the suggestions you keep with `apply-active-docx-edits`: one `replaceInBlock` per occurrence, `find` = the exact literalText, `replace` = the `{{fieldPath}}` marker verbatim (e.g. `{{company.name}}`). Reuse the same fieldPath for every occurrence of the same value.";
+  "FIELD SUGGESTIONS: When the user asks which literal values should become fillable fields (or uses the suggest-fields preset), first call `suggest_template_fields` with the document text (block texts joined with newlines) and any user guidance as `instructions`. Then apply the suggestions you keep with `suggest_changes`: one `replaceInBlock` per occurrence, `find` = the exact literalText, `replace` = the `{{fieldPath}}` marker verbatim (e.g. `{{company.name}}`). Reuse the same fieldPath for every occurrence of the same value.";
 
 const FIELD_SUGGESTIONS_NO_AUTHORING =
-  "FIELD SUGGESTIONS: When the user asks which literal values should become fillable fields, propose them with `apply-active-docx-edits`: one `replaceInBlock` per occurrence, `find` = the exact literal text, `replace` = the `{{fieldPath}}` marker verbatim (e.g. `{{company.name}}`). Reuse the same fieldPath for every occurrence of the same value.";
+  "FIELD SUGGESTIONS: When the user asks which literal values should become fillable fields, propose them with `suggest_changes`: one `replaceInBlock` per occurrence, `find` = the exact literal text, `replace` = the `{{fieldPath}}` marker verbatim (e.g. `{{company.name}}`). Reuse the same fieldPath for every occurrence of the same value.";
 
 type BuildActiveTemplateEditSectionsProps = {
   snapshot: ActiveDocxEditSnapshot;
@@ -1337,8 +1351,13 @@ const buildActiveTemplateEditSections = ({
   const { blocks, truncationNotice } = buildEditableBlocksPromptParts(snapshot);
 
   return [
-    "TEMPLATE EDITING: When the user asks — in any language — to change, edit, replace, rewrite, fix, correct, review, or revise the template text, you MUST call `apply-active-docx-edits` in the same turn before claiming any work. Operations are queued as in-document suggestions the user accepts or dismisses one by one; NEVER claim the document was changed (only ids in `applied` represent real changes, which this surface does not produce).",
-    "SUPPORTED OPERATIONS: only `replaceInBlock` (exact `find`, copied verbatim from the block text), `replaceBlock`, and `deleteBlock`. The template studio cannot honour `insertAfterBlock`, `insertBeforeBlock`, `commentOnBlock`, or `insertSignatureTable` — such operations are skipped; do not emit them and do not promise insertions.",
+    "TEMPLATE EDITING: When the user asks — in any language — to change, edit, replace, rewrite, fix, correct, review, or revise the template text, you MUST call `suggest_changes` in the same turn before claiming any work. Operations are queued as in-document suggestions the user accepts or dismisses one by one; NEVER claim the document was changed (only ids in `applied` represent real changes, which this surface does not produce).",
+    `SUPPORTED OPERATIONS: ${describeSuggestChangesCapabilities(
+      DOCX_SUGGEST_CHANGES_OPTIONS_BY_SURFACE[
+        DOCX_SUGGESTION_SURFACE.templateStudio
+      ],
+    )} For \`replaceInBlock\`, copy \`find\` verbatim from the block text. The template studio renders text replacements only; do not promise insertions, comments, or table changes.`,
+    "PRECONDITIONS: When a block below carries a `blockTextHash`, copy it into `precondition.blockTextHash` on each operation that targets that block; omit `precondition` for a block without a hash, and never invent one.",
     toolAvailability.templateAuthoring
       ? FIELD_SUGGESTIONS_WITH_AUTHORING
       : FIELD_SUGGESTIONS_NO_AUTHORING,
@@ -1361,7 +1380,7 @@ const buildActiveDocxEditPrompt = (
   const snapshot = activeFile.docxEditSnapshot;
   if (!snapshot) {
     // Editor snapshot isn't ready yet, so we can't expose
-    // `apply-active-docx-edits`. Stay silent about the loading state
+    // `suggest_changes`. Stay silent about the loading state
     // — the user finds "please try again in a moment" jarring — and
     // just answer the request normally. Don't fabricate edits and
     // don't claim work that wasn't done.
@@ -1401,24 +1420,29 @@ const buildActiveDocxEditPrompt = (
 
   return [
     "ACTIVE DOCX EDITING: The open document is available for in-place editing. Whether or not the editor is currently unlocked is irrelevant to your decision to call the tool — the user's accept click in the review panel handles unlocking.",
-    'TOOL CALL IS MANDATORY when the user asks — in any language — to change, edit, replace, rewrite, fix, correct, review, redline, proofread, revise, or otherwise modify this document, or confirms an earlier proposal ("yes do it", "go ahead"). You MUST call `apply-active-docx-edits` before claiming any work. Do not refuse because the document might be read-only — your job is to propose; the user applies.',
-    'FORBIDDEN: Any reply that asserts work has been done, prepared, queued, suggested, drafted, or "is ready for review" — in any phrasing — without `apply-active-docx-edits` being called in the same turn is a TRUTHFULNESS violation. Examples of forbidden lies: "I prepared N suggestions", "the changes are ready in the panel", "formatting unification is ready", "draft is queued", "review is prepared". If you cannot produce any operations (nothing to fix, or the request is outside the tool\'s capability), say so plainly and DO NOT pretend otherwise.',
-    'TOOL CAPABILITY (and its limits): `apply-active-docx-edits` operates on TEXT CONTENT inside paragraphs, headings, and list items, and can insert a few structural elements: page breaks (`pageBreakBefore` on an insert), clause-heading paragraphs (via `styleId`), and side-by-side signature tables (`insertSignatureTable`). It CANNOT change visual run formatting — fonts, bold/italic/underline, font size, colour, indents, alignment, margins, line spacing, list bullet style, tabs, or arbitrary paragraph styles outside the supported set. If the user asks for run-formatting changes ("make headings bigger", "bold the parties", "change the font"), tell them honestly that the AI tool only edits text and the structural elements listed above; suggest they use the document\'s own formatting controls. Do NOT pretend you queued formatting changes that have no operation.',
+    'TOOL CALL IS MANDATORY when the user asks — in any language — to change, edit, replace, rewrite, fix, correct, review, redline, proofread, revise, or otherwise modify this document, or confirms an earlier proposal ("yes do it", "go ahead"). You MUST call `suggest_changes` before claiming any work. Do not refuse because the document might be read-only — your job is to propose; the user applies.',
+    'FORBIDDEN: Any reply that asserts work has been done, prepared, queued, suggested, drafted, or "is ready for review" — in any phrasing — without `suggest_changes` being called in the same turn is a TRUTHFULNESS violation. Examples of forbidden lies: "I prepared N suggestions", "the changes are ready in the panel", "formatting unification is ready", "draft is queued", "review is prepared". If you cannot produce any operations (nothing to fix, or the request is outside the tool\'s capability), say so plainly and DO NOT pretend otherwise.',
+    `TOOL CAPABILITY (and its limits): \`suggest_changes\` operates on TEXT CONTENT inside paragraphs, headings, and list items. ${describeSuggestChangesCapabilities(
+      DOCX_SUGGEST_CHANGES_OPTIONS_BY_SURFACE[
+        DOCX_SUGGESTION_SURFACE.fileOverlay
+      ],
+    )} If the user asks for run-formatting changes ("make headings bigger", "bold the parties", "change the font"), tell them honestly that the AI tool only edits text and the structural elements listed above; suggest they use the document's own formatting controls. Do NOT pretend you queued formatting changes that have no operation.`,
     'FIELD CODES: A block whose text shows odd gaps — e.g. "Section .", "Schedule No. .", "Page of", "Date: ." — has a Word field code (cross-reference, page number, date, sequence number) the user must edit IN WORD. The rendered number/text is generated from the field; it is not literal block text and `replaceInBlock` cannot fill it in. Skip those blocks: tell the user honestly that AI cannot edit cross-reference / field codes (they should refresh fields in Word with Ctrl+A then F9), and propose only the edits that target real block text. NEVER queue an op whose `find` contains a gap that\'s really a field code.',
-    "Do not call `execute_typescript` (or its `external_*` read functions) or `create-document` to satisfy active DOCX edit requests; `apply-active-docx-edits` is the only tool that can propose changes to the open document.",
+    "Do not call `execute_typescript` (or its `external_*` read functions) or `create-document` to satisfy active DOCX edit requests; `suggest_changes` is the only tool that can propose changes to the open document.",
     'CASCADING CHANGES: Before proposing any edit, scan the document for places that REFER TO or DEPEND ON the value being changed and include the dependent fixes in the SAME tool call. Examples: (a) the user changes a price — every restatement of that number in words, in totals, in instalment schedules, in deposit/balance lines, in penalty caps that reference it, must be updated together; (b) the user changes a party name — every occurrence (signature block, header, cross-reference list, defined-terms section) must follow; (c) the user changes a date — derived deadlines, anniversaries, and statute references that depend on it must follow; (d) the user changes a clause number — every cross-reference ("as set out in Article X") must follow. If the right cascade is genuinely ambiguous (e.g. user lowers the total but the document splits it into deposit + arrears and you cannot tell which side absorbs the delta), call `ask-user` ONCE with the specific cascade question before producing any operations. Don\'t propose half a change.',
     "Use the block ids below for tool operations. Prefer `replaceInBlock` with an exact `find` string for localized edits. Use `replaceBlock` when the whole paragraph/list item should change. Use `deleteBlock` to remove a paragraph. Use `insertAfterBlock` or `insertBeforeBlock` (anchored on the neighbouring block id) to add a new paragraph.",
     'STRUCTURAL INSERTS (use the canonical op, not directive text): For a page break, call `insertAfterBlock` with `pageBreakBefore: true` (the `text` may be empty). For a numbered heading (clause), call `insertAfterBlock` (or `insertBeforeBlock`) with `styleId: "ClauseHeading1"` (or `ClauseHeading2`, `ClauseHeading3`) and the heading text in `text`. For a signature block, call `insertSignatureTable` with one entry per party (`name` required; `signatory` and `title` optional). These ops produce real structural elements in the document. DO NOT emit directive markers like `@pagebreak`, `@clause`, `@signatures`, `@title`, or `[[placeholders]]` as paragraph text — those belong to `create-document`, not to this editor; in this tool they would land in the doc as literal characters. Pick one canonical op per intent and use it.',
-    'Tool input example: {"operations":[{"type":"replaceInBlock","blockId":"1A2B3C4D","find":"Acme Inc.","replace":"Example Ltd.","severity":"low","area":"Names"}]}. Operations must be objects, not strings. Use `blockId`, not `id`. Most block ids are 8-character uppercase hex (Word `w14:paraId`), with `seq-` fallback ids possible for older snapshots; always copy ids verbatim from the editable-blocks list below.',
+    'Tool input example: {"operations":[{"type":"replaceInBlock","blockId":"1A2B3C4D","precondition":{"blockTextHash":"h1a2b3"},"find":"Acme Inc.","replace":"Example Ltd.","severity":"low","area":"Names"}]}. Operations must be objects, not strings. Use `blockId`, not `id`. Most block ids are 8-character uppercase hex (Word `w14:paraId`), with `seq-` fallback ids possible for older snapshots; always copy ids verbatim from the editable-blocks list below.',
+    "PRECONDITIONS: When a block below carries a `blockTextHash`, copy it into `precondition.blockTextHash` on each operation that targets that block, so an edit against text that changed since this snapshot is skipped instead of landing on the wrong words. Omit `precondition` for a block without a hash. Never invent a hash.",
     'ALWAYS set `severity` and `area` on each operation. `severity`: "low" for typos / spelling / minor style, "medium" for routine wording or terminology fixes, "high" for substantive changes (numbers, dates, parties, legal effect). `area`: a short topic label that groups related ops, e.g. "Spelling", "Penalty", "Payment Terms", "Names", "Cross-references". The review panel sorts and groups by these — empty severity/area collapses everything into one undifferentiated bucket and is bad UX.',
     'After the tool returns, reply with ONE short sentence (in the user\'s language) covering the count and the high-level goal — e.g. "13 spelling and typo fixes are ready to review in the panel." Do NOT enumerate the operations, do NOT list block ids or before/after pairs in your reply — the panel already shows every suggestion with its full context. Repeating them is noise. NEVER claim the document was changed; only ids that appear in `applied` represent actual document changes (rare with this tool). Never paraphrase a `queued` result as a completed change.',
-    "CITATIONS IN PLAIN ANSWERS: When you summarise, quote, or refer to specific content from the open document in a normal text reply (i.e. NOT inside `apply-active-docx-edits`), wrap the supporting paragraph snippet in a Markdown link whose href is `#folio:<blockId>` (note the leading `#` — it is required, the link will be stripped without it). Example: `the contract is governed by [Delaware law](#folio:1A2B3C4D)`. Copy block ids verbatim from the block list — do NOT shorten, pad, prefix, or otherwise mangle them. The link TEXT must be a short, human-meaningful phrase quoted or paraphrased from the cited block — typically 1–6 words in the user's language (e.g. `[Delaware law]`, `[July 20, 2021]`, `[$1,500,000]`). NEVER use the href itself as the link text (NOT `[#folio:1A2B3C4D](#folio:1A2B3C4D)`), NEVER leave the text empty (`[](#folio:1A2B3C4D)`), NEVER use Markdown autolinks like `<#folio:1A2B3C4D>` — those render as broken citations. Cite at most a few blocks per reply (only the ones a user would want to verify); never invent a blockId that's not in the list.",
+    "CITATIONS IN PLAIN ANSWERS: When you summarise, quote, or refer to specific content from the open document in a normal text reply (i.e. NOT inside `suggest_changes`), wrap the supporting paragraph snippet in a Markdown link whose href is `#folio:<blockId>` (note the leading `#` — it is required, the link will be stripped without it). Example: `the contract is governed by [Delaware law](#folio:1A2B3C4D)`. Copy block ids verbatim from the block list — do NOT shorten, pad, prefix, or otherwise mangle them. The link TEXT must be a short, human-meaningful phrase quoted or paraphrased from the cited block — typically 1–6 words in the user's language (e.g. `[Delaware law]`, `[July 20, 2021]`, `[$1,500,000]`). NEVER use the href itself as the link text (NOT `[#folio:1A2B3C4D](#folio:1A2B3C4D)`), NEVER leave the text empty (`[](#folio:1A2B3C4D)`), NEVER use Markdown autolinks like `<#folio:1A2B3C4D>` — those render as broken citations. Cite at most a few blocks per reply (only the ones a user would want to verify); never invent a blockId that's not in the list.",
     truncationNotice,
     toolAvailability.folioAgentDocTools
       ? "LIVE DOCUMENT LOOKUPS: The block list below is current as of this turn only — it will not reflect edits you queue in this same turn. Reach for `read_document` (a fresh read of the current document) or `find_text` (locate an exact string match) only when the truncation notice above applies (blocks past the cutoff) or you need to confirm a verbatim match before referencing a `blockId`; for ordinary edits the block list below is already sufficient, so do not call either tool by default."
       : null,
     toolAvailability.folioAgentDocTools
-      ? "COMMENTS & TRACKED CHANGES: Use `read_comments` to list the document's comment threads and `read_changes` to list its pending tracked insertions/deletions when the user asks about review state or existing feedback. To act on comments, use `add_comment` (attach a new comment to a block), `reply_comment` (respond in an existing thread), or `resolve_comment` (mark a thread resolved / reopen it) — each needs the user to approve before it applies, so state plainly what you will do and wait. Prefer `apply-active-docx-edits` for editing the document text itself; use the comment tools only for commentary and review actions."
+      ? "COMMENTS & TRACKED CHANGES: Use `read_comments` to list the document's comment threads and `read_changes` to list its pending tracked insertions/deletions when the user asks about review state or existing feedback. To act on comments, use `add_comment` (attach a new comment to a block), `reply_comment` (respond in an existing thread), or `resolve_comment` (mark a thread resolved / reopen it) — each needs the user to approve before it applies, so state plainly what you will do and wait. Prefer `suggest_changes` for editing the document text itself; use the comment tools only for commentary and review actions."
       : null,
     ["Editable DOCX blocks:", "```json", JSON.stringify(blocks), "```"].join(
       "\n",

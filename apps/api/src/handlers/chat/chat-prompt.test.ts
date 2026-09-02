@@ -379,7 +379,7 @@ describe("chat prompt builders", () => {
 
     expect(prompt).toContain("Do NOT use it to edit");
     expect(prompt).not.toContain("ACTIVE DOCX EDITING");
-    expect(prompt).not.toContain("apply-active-docx-edits");
+    expect(prompt).not.toContain("suggest_changes");
   });
 
   test("grounds active email answers in source-bound citation blocks", () => {
@@ -516,7 +516,7 @@ describe("chat prompt builders", () => {
       workspaceId: WORKSPACE_ID,
     });
 
-    expect(prompt).toContain("apply-active-docx-edits");
+    expect(prompt).toContain("suggest_changes");
     // Confirms-an-earlier-proposal trigger is part of the mandatory
     // tool-call clause; the example phrasing is language-agnostic
     // since the prompt was scrubbed of locale-specific examples.
@@ -535,6 +535,56 @@ describe("chat prompt builders", () => {
     expect(prompt).toContain("`read_document`");
     expect(prompt).toContain("`find_text`");
     expect(prompt).toContain("truncation notice above");
+  });
+
+  test("passes blockTextHash through to the editable-blocks JSON when present", () => {
+    const prompt = buildActiveFileSection({
+      activeFile: {
+        docxEditSnapshot: {
+          blocks: [
+            {
+              id: "b-1",
+              kind: "paragraph",
+              text: "Has a hash",
+              blockTextHash: "h1a2b3",
+            },
+          ],
+        },
+        entityId: toSafeId<"entity">("entity_docx"),
+        fileName: "Kupni smlouva.docx",
+        supportsDocxEdits: true,
+      },
+      entityExists: true,
+      refRegistry: createChatRefRegistry(),
+      workspaceId: WORKSPACE_ID,
+    });
+
+    expect(prompt).toContain('"blockTextHash":"h1a2b3"');
+  });
+
+  test("omits blockTextHash from the editable-blocks JSON when the snapshot has none", () => {
+    const prompt = buildActiveFileSection({
+      activeFile: {
+        docxEditSnapshot: {
+          blocks: [{ id: "b-1", kind: "paragraph", text: "No hash here" }],
+        },
+        entityId: toSafeId<"entity">("entity_docx"),
+        fileName: "Kupni smlouva.docx",
+        supportsDocxEdits: true,
+      },
+      entityExists: true,
+      refRegistry: createChatRefRegistry(),
+      workspaceId: WORKSPACE_ID,
+    });
+
+    // Static PRECONDITIONS guidance and the tool-input example both
+    // mention `blockTextHash` by name regardless of the snapshot, so only
+    // the "Editable DOCX blocks" JSON itself must omit the key.
+    const editableBlocksJson =
+      /Editable DOCX blocks:\n```json\n(?<json>.+)\n```/u.exec(prompt)
+        ?.groups?.["json"];
+    expect(editableBlocksJson).toBeDefined();
+    expect(editableBlocksJson).not.toContain("blockTextHash");
   });
 
   test("omits the folio-agents doc-tool guidance when those tools are not registered for this turn", () => {
@@ -558,11 +608,16 @@ describe("chat prompt builders", () => {
       workspaceId: WORKSPACE_ID,
     });
 
-    // `apply-active-docx-edits` guidance is unaffected: it rides on the
+    // `suggest_changes` guidance is unaffected: it rides on the
     // combined `hasActiveDocxEditClient` flag, not this narrower one.
-    expect(prompt).toContain("apply-active-docx-edits");
+    expect(prompt).toContain("suggest_changes");
     expect(prompt).not.toContain("read_document");
-    expect(prompt).not.toContain("find_text");
+    // `describeSuggestChangesCapabilities`'s operation summaries mention
+    // `find_text` unconditionally as part of the `replaceRange` /
+    // `commentOnRange` descriptions, so only the folioAgentDocTools-gated
+    // "LIVE DOCUMENT LOOKUPS" section (which points the model AT the
+    // `find_text` tool) is actually absent here.
+    expect(prompt).not.toContain("LIVE DOCUMENT LOOKUPS");
   });
 
   test("aligns active DOCX guidance with the registered automatic edit tool", () => {
@@ -587,7 +642,7 @@ describe("chat prompt builders", () => {
     expect(prompt).toContain("edit_workspace_document");
     expect(prompt).toContain("saves a new document version");
     expect(prompt).toContain("baseVersionId");
-    expect(prompt).not.toContain("apply-active-docx-edits");
+    expect(prompt).not.toContain("suggest_changes");
     expect(prompt).not.toContain("ready to review in the panel");
   });
 
@@ -611,7 +666,7 @@ describe("chat prompt builders", () => {
     });
 
     expect(prompt).not.toContain("edit_workspace_document");
-    expect(prompt).not.toContain("apply-active-docx-edits");
+    expect(prompt).not.toContain("suggest_changes");
     expect(prompt).not.toContain("ACTIVE DOCX EDITING");
   });
 
@@ -626,7 +681,7 @@ describe("chat prompt builders", () => {
 
     expect(prompt).toContain("ACTIVE TEMPLATE");
     expect(prompt).toContain("Plna moc.docx");
-    expect(prompt).not.toContain("apply-active-docx-edits");
+    expect(prompt).not.toContain("suggest_changes");
     expect(prompt).not.toContain("suggest_template_fields");
   });
 
@@ -648,7 +703,7 @@ describe("chat prompt builders", () => {
 
     expect(prompt).toContain("ACTIVE UNSAVED DRAFT");
     expect(prompt).toContain("Plna moc.docx");
-    expect(prompt).toContain("apply-active-docx-edits");
+    expect(prompt).toContain("suggest_changes");
     expect(prompt).toContain('"blockId":"b-1"');
     expect(prompt).toContain("do not call matter retrieval or create-document");
     expect(prompt).toContain("Do not call `execute_typescript`");
@@ -674,13 +729,15 @@ describe("chat prompt builders", () => {
       FULL_TOOL_AVAILABILITY,
     );
 
-    expect(prompt).toContain("apply-active-docx-edits");
+    expect(prompt).toContain("suggest_changes");
     expect(prompt).toContain("suggest_template_fields");
     expect(prompt).toContain('"blockId":"b-1"');
     expect(prompt).toContain("Jan Novak");
-    // Only the text-replacement subset is honoured by the Studio.
+    // Only the text-replacement subset is honoured by the Studio: the
+    // template-studio operation-type list excludes structural-insert
+    // types, so the capability text never mentions them.
     expect(prompt).toContain("`replaceInBlock`");
-    expect(prompt).toContain("cannot honour `insertAfterBlock`");
+    expect(prompt).not.toContain("insertAfterBlock");
     // Internal component names must not leak into user-facing prompt.
     expect(prompt).not.toContain("Folio");
   });
@@ -712,10 +769,10 @@ describe("chat prompt builders", () => {
     // A `template: ["use"]`-only role (e.g. intern) never has
     // `suggest_template_fields` registered; the prompt must not steer
     // the model to it, but the field-marker workflow via
-    // `apply-active-docx-edits` stays available.
+    // `suggest_changes` stays available.
     expect(prompt).not.toContain("suggest_template_fields");
     expect(prompt).toContain("FIELD SUGGESTIONS");
-    expect(prompt).toContain("apply-active-docx-edits");
+    expect(prompt).toContain("suggest_changes");
     expect(prompt).toContain("`{{fieldPath}}` marker verbatim");
   });
 });
@@ -731,7 +788,7 @@ describe("system prompt tool-reference guard", () => {
   // Tools always registered by getChatTools regardless of config, and
   // referenced by name in the prompt scaffold. `create-document` and
   // (given an active-template snapshot, which implies
-  // hasActiveDocxEditClient) `apply-active-docx-edits` are always in
+  // hasActiveDocxEditClient) `suggest_changes` are always in
   // the map for the configurations swept here.
   const ALWAYS_REGISTERED_TOOL_NAMES = new Set([
     "ask-user",
@@ -740,7 +797,7 @@ describe("system prompt tool-reference guard", () => {
     "load-skill",
     "read-skill-resource",
     "create-document",
-    "apply-active-docx-edits",
+    "suggest_changes",
   ]);
   // Web research tools: registered only when `webResearch` is true.
   const WEB_RESEARCH_TOOL_NAMES = new Set([

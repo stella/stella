@@ -3,6 +3,7 @@ import {
   type ApprovalRequiredBuiltInChatToolName,
   type BuiltInChatToolPolicyKindByName,
 } from "@stll/api-contract";
+import type { DocxSuggestionSurface } from "@stll/api-contract/chat-docx-suggestions";
 import { roles } from "@stll/permissions";
 import type { SkillMetadata } from "@stll/skills";
 
@@ -17,10 +18,6 @@ import {
   type DocxEditRepresentation,
 } from "@/api/handlers/chat/chat-schema";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
-import {
-  APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME,
-  createActiveDocxEditTool,
-} from "@/api/handlers/chat/tools/active-docx-edit-tool";
 import type { AuthorizedToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import { createBoeTools } from "@/api/handlers/chat/tools/boe-tools";
 import { createBusinessRegistryTools } from "@/api/handlers/chat/tools/business-registry-tools";
@@ -36,7 +33,10 @@ import {
   type ChatCodeModeToolMap,
 } from "@/api/handlers/chat/tools/execute/chat-code-mode";
 import { createFolderConsistencyReviewTools } from "@/api/handlers/chat/tools/folder-consistency-review-tool";
-import { createFolioAgentDocTools } from "@/api/handlers/chat/tools/folio-agent-tools";
+import {
+  createFolioAgentDocTools,
+  createSuggestChangesTools,
+} from "@/api/handlers/chat/tools/folio-agent-tools";
 import { createInfosoudTools } from "@/api/handlers/chat/tools/infosoud-tools";
 import { createOrgTools } from "@/api/handlers/chat/tools/org-tools";
 import {
@@ -209,7 +209,7 @@ type SkillTools = ReturnType<typeof createSkillTools>;
 type BusinessRegistryTools = ReturnType<typeof createBusinessRegistryTools>;
 type BoeTools = ReturnType<typeof createBoeTools>;
 type InfosoudTools = ReturnType<typeof createInfosoudTools>;
-type ActiveDocxEditTools = ReturnType<typeof createActiveDocxEditTools>;
+type SuggestChangesTools = ReturnType<typeof createSuggestChangesTools>;
 type FolioAgentDocTools = ReturnType<typeof createFolioAgentDocTools>;
 type CreateDocumentTools = ReturnType<typeof createCreateDocumentTools>;
 type CreateWorkspaceDocumentTools = ReturnType<
@@ -245,7 +245,7 @@ type BuiltInChatTools = OrgTools &
   BoeTools &
   InfosoudTools &
   WorkspaceTools &
-  ActiveDocxEditTools &
+  SuggestChangesTools &
   FolioAgentDocTools &
   CreateDocumentTools &
   CreateWorkspaceDocumentTools &
@@ -336,30 +336,36 @@ type GetChatToolsProps = {
    */
   thirdPartyBoundary: ChatThirdPartyBoundary;
   /**
-   * `true` when the request comes from a surface that has the
-   * apply-active-docx-edits client executor mounted (the file
-   * overlay or the Template Studio). Other surfaces (standalone
-   * chat, global chat) MUST NOT see this tool: the server has no
-   * `execute` for it, the client never calls TanStack
-   * ChatClient.addToolResult, and the call would hang.
+   * `true` when the request comes from a surface that has a
+   * `suggest_changes` client executor mounted (the file overlay's
+   * review-queue bridge or the Template Studio's in-document
+   * suggestion bridge). Other surfaces (standalone chat, global chat)
+   * MUST NOT see this tool: the server has no `execute` for it, the
+   * client never calls TanStack ChatClient.addToolResult, and the call
+   * would hang.
    */
   hasActiveDocxEditClient: boolean;
   /**
    * `true` only for the file overlay: `activeFile.supportsDocxEdits`,
    * with no Template Studio fallback. Narrower than
    * `hasActiveDocxEditClient` on purpose — only `file-chat-overlay.tsx`
-   * mounts the auto-run watcher
-   * (`isUnresolvedFolioAgentDocToolCallPart` /
-   * `runFolioAgentDocToolCall`) that resolves the folio-agents
-   * `read_document` / `find_text` tools via `addToolResult`.
-   * Template Studio has no such watcher, so registering these tools
-   * there would hang the turn waiting for a client result that never
-   * arrives. Gates `createFolioAgentDocTools()` registration below;
-   * `apply-active-docx-edits` stays on the combined
-   * `hasActiveDocxEditClient` flag since Template Studio does handle
-   * that one.
+   * mounts the live-editor bridge that resolves the folio-agents read
+   * and comment tools via `addToolResult`. Template Studio has no
+   * editor ref, so registering those tools there would hang the turn
+   * waiting for a client result that never arrives. Gates
+   * `createFolioAgentDocTools()` registration below and picks the
+   * `suggest_changes` surface options; `suggest_changes` itself stays
+   * on the combined `hasActiveDocxEditClient` flag since Template
+   * Studio does handle that one.
    */
   hasActiveDocxFileClient: boolean;
+  /**
+   * Which client executor resolves `suggest_changes` this turn, and so
+   * which per-surface schema the model sees. Not derivable from the two
+   * flags above: an unsaved generated draft is hosted by the file overlay
+   * (full operation set) without being an entity-backed active file.
+   */
+  docxSuggestionSurface: DocxSuggestionSurface;
   /**
    * Per-thread opt-in for the web_search + fetch_url tools. Combined
    * with FEATURE_WEB_SEARCH (deploy gate), the org's
@@ -416,7 +422,7 @@ type GetChatToolsProps = {
   /**
    * Which DOCX-edit review mode this turn uses; defaults to
    * `DEFAULT_CHAT_EDIT_APPLY_MODE` ("auto": AI edits auto-apply as
-   * tracked changes by default). Gates `apply-active-docx-edits` and
+   * tracked changes by default). Gates `suggest_changes` and
    * `edit_workspace_document` into a mutually exclusive pair -- exactly
    * one of the two is ever registered for a given turn, never both.
    * Neither registers when `edit_workspace_document`'s own preconditions
@@ -453,10 +459,6 @@ type GetChatToolsProps = {
   promptCachingEnabled?: boolean | undefined;
   usageLane?: UsageEventLane | undefined;
 };
-
-const createActiveDocxEditTools = () => ({
-  [APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME]: createActiveDocxEditTool(),
-});
 
 const createCreateDocumentTools = () => ({
   [CREATE_DOCUMENT_TOOL_NAME]: createCreateDocumentTool(),
@@ -587,6 +589,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     thirdPartyBoundary,
     hasActiveDocxEditClient,
     hasActiveDocxFileClient,
+    docxSuggestionSurface,
     webSearchEnabled,
     webSearchProviders,
     externalTools = {},
@@ -693,10 +696,13 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     toolWorkspaceIds,
     workspaceStatusById,
   });
-  const activeDocxEditTools =
+  // The file overlay queues into the review panel with the full operation
+  // set; Template Studio renders in-document text replacements only, so it
+  // gets the narrower schema. Same tool, per-surface options.
+  const suggestChangesTools =
     registeredDocxEditMode === CHAT_EDIT_APPLY_MODE.manual ||
     (includeAllDocxEditToolsForValidation && hasActiveDocxEditClient)
-      ? createActiveDocxEditTools()
+      ? createSuggestChangesTools(docxSuggestionSurface)
       : {};
   const automaticDocxEditAvailableForValidation =
     includeAllDocxEditToolsForValidation &&
@@ -710,11 +716,11 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
       toolWorkspaceIds,
       workspaceStatusById,
     }) === CHAT_EDIT_APPLY_MODE.auto;
-  // Narrower than `apply-active-docx-edits` above: only the file
-  // overlay mounts the auto-run watcher that resolves these via
-  // `addToolResult` (see `hasActiveDocxFileClient` doc comment).
-  // Template Studio has no such watcher, so the tools must stay
-  // unregistered there rather than hang waiting for a client result.
+  // Narrower than `suggest_changes` above: only the file overlay mounts
+  // the live-editor bridge that resolves these via `addToolResult` (see
+  // `hasActiveDocxFileClient` doc comment). Template Studio has no editor
+  // ref, so the tools must stay unregistered there rather than hang
+  // waiting for a client result.
   const folioAgentDocTools = hasActiveDocxFileClient
     ? createFolioAgentDocTools()
     : {};
@@ -842,7 +848,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   });
 
   // edit_workspace_document is the headless (`auto`) counterpart to
-  // `apply-active-docx-edits`: it writes a new entity version directly
+  // `suggest_changes`: it writes a new entity version directly
   // instead of queuing suggestions into the browser review panel, so it
   // needs its own explicit authorization mirror rather than inheriting one
   // from the manual tool (which has none of its own -- it never writes).
@@ -852,7 +858,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   //     what makes the tool mutually exclusive with the manual one above.
   //   - An editable active DOCX file is present
   //     (`activeFile.supportsDocxEdits === true`), the same precondition
-  //     `apply-active-docx-edits` and `compare_versions` use.
+  //     `suggest_changes` and `compare_versions` use.
   //   - `entity: ["update"]` permission -- this tool overwrites the active
   //     document's content, the same grant `docx-suggestions/create.ts`,
   //     `resolve.ts`, and `upload-version.ts` require for DOCX edits.
@@ -971,7 +977,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
       ...createDocumentTools,
       ...createWorkspaceDocumentTools,
       ...editWorkspaceDocumentTools,
-      ...activeDocxEditTools,
+      ...suggestChangesTools,
       ...folioAgentDocTools,
       ...versionCompareTools,
       ...folderConsistencyReviewTools,

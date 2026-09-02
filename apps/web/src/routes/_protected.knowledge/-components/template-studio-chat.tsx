@@ -6,7 +6,7 @@
  * Differences from the file overlay:
  *   - context is `activeTemplate` (org-scoped template, no entity);
  *   - the model gets `suggest_template_fields` plus the general tools;
- *   - approved `apply-active-docx-edits` operations land as in-document
+ *   - `suggest_changes` operations land as in-document
  *     AISuggestions (decorations + stepper + cards) instead of the
  *     inspector review panel. Accepting a `{{field}}` replacement also
  *     registers the field in the Studio session.
@@ -23,6 +23,26 @@ import type { EditorView } from "prosemirror-view";
 import { useTranslations } from "use-intl";
 import { v7 as uuidv7 } from "uuid";
 
+import {
+  DOCX_SUGGEST_CHANGES_OPTIONS_BY_SURFACE,
+  DOCX_SUGGESTION_SURFACE,
+} from "@stll/api-contract/chat-docx-suggestions";
+import { executeFolioToolCall } from "@stll/folio-agents";
+import type {
+  FolioAgentBridge,
+  FolioAgentToolOptions,
+} from "@stll/folio-agents";
+import type { FolioToolCallResultFor } from "@stll/folio-agents/tool-contract";
+import {
+  getFolioDocumentOperationIssues,
+  getFolioDocumentOperationReceipts,
+} from "@stll/folio-core";
+import type {
+  FolioAIEditSkipReason,
+  FolioAIEditSkippedOperation,
+  FolioDocumentOperationBatch,
+  FolioDocumentOperationResult,
+} from "@stll/folio-core";
 import {
   applySuggestions,
   resolveSuggestionAnchor,
@@ -48,28 +68,24 @@ import {
 } from "@/components/ai-suggestions/host";
 import type { PromptBarPresetScope } from "@/components/ai-suggestions/host";
 import { scrollEditorToPos } from "@/components/ai-suggestions/scroll-editor-to-pos";
+import { withBlockTextHashes } from "@/components/ai-suggestions/snapshot-blocks";
 import { useChatEditor } from "@/components/chat-editor-provider";
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
 import { ChatComposerDock } from "@/components/chat/chat-composer-dock";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
 import {
-  getActiveDocxEditApprovalPart,
-  isApplyActiveDocxEditsInput,
-  selectUnresolvedActiveDocxEditToolCallParts,
+  selectUnresolvedFolioAgentDocToolCallParts,
+  SUGGEST_CHANGES_TOOL_NAME,
 } from "@/components/chat/chat-ui-tools";
 import type {
   ApprovalToolName,
   PersistedChatMessage,
-  UnresolvedActiveDocxEditToolCallPart,
+  UnresolvedFolioAgentDocToolCallPart,
 } from "@/components/chat/chat-ui-tools";
 import { COMPOSER_TEXT_CLASS } from "@/components/chat/composer-control-style";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import { isInputType } from "@/components/templates/template-field-manifest";
-import type {
-  ApplyActiveDocxEditsInput,
-  ApplyActiveDocxEditsOutput,
-} from "@/features/chat/chat-query-contract";
 import {
   chatKeys,
   SUGGEST_TEMPLATE_FIELDS_TOOL_SCOPE,
@@ -108,7 +124,7 @@ import {
   extractFieldMarkerPath,
   filledByForFieldMeta,
   operationFingerprint,
-  operationSpecId,
+  toTemplateEditOperation,
 } from "@/routes/_protected.knowledge/-components/template-studio-suggestions";
 import type {
   BuildReplaceSpecArgs,
@@ -118,6 +134,9 @@ import type {
 } from "@/routes/_protected.knowledge/-components/template-studio-suggestions";
 
 const SUGGEST_FIELDS_PRESET_ID = "suggest-template-fields";
+
+/** Snapshot handed to folio when the Studio editor has not produced one yet. */
+const EMPTY_EDIT_SNAPSHOT: FolioAIEditSnapshot = { blocks: [], anchors: {} };
 
 const protectedRouteApi = getRouteApi("/_protected");
 
@@ -340,7 +359,7 @@ const TemplateStudioChatInner = ({
       fileName,
       ...(snapshot === null
         ? {}
-        : { docxEditSnapshot: { blocks: snapshot.blocks } }),
+        : { docxEditSnapshot: { blocks: withBlockTextHashes(snapshot) } }),
     };
   });
 
@@ -608,7 +627,7 @@ const TemplateStudioChatInner = ({
   // user's composer-wide edit-mode preference -- because Template Studio
   // has no entity-backed active file for `edit_workspace_document` (the
   // `auto` tool) to write a version against; `getChatTools` only keeps
-  // `apply-active-docx-edits` (the manual, client-executed tool this
+  // `suggest_changes` (the manual, client-executed tool this
   // surface's suggestion stepper depends on) registered when
   // `editApplyMode !== "auto"`. There is no edit-mode selector rendered on
   // this surface (see `ChatComposerDock` below, no `endExtras`), so this
@@ -942,7 +961,7 @@ const TemplateStudioChatInner = ({
     for (const part of message.parts) {
       if (
         part.type !== "tool-call" ||
-        part.name !== "apply-active-docx-edits"
+        part.name !== SUGGEST_CHANGES_TOOL_NAME
       ) {
         continue;
       }
@@ -963,170 +982,221 @@ const TemplateStudioChatInner = ({
   }, [messages, placeStreamedOperations, discardStreamedPlacements]);
 
   /**
-   * Client executor for `apply-active-docx-edits`: convert the approved
-   * operations into in-document AISuggestions anchored via positional
-   * text, and report queued/skipped ids back to the model. Reconciles
-   * with the streaming pass exactly once: outcomes whose op matches the
-   * finalized input are reused (no duplicate suggestions); drifted
-   * provisional suggestions are removed and their ops re-placed.
+   * Client executor for `suggest_changes`: convert the parsed operations
+   * into in-document AISuggestions anchored via positional text, and
+   * report queued/skipped ids back to the model. Reconciles with the
+   * streaming pass exactly once: outcomes whose op matches the finalized
+   * input are reused (no duplicate suggestions); drifted provisional
+   * suggestions are removed and their ops re-placed.
    */
-  const handleActiveDocxEditToolCall = useLatestCallback(
-    async (
-      input: ApplyActiveDocxEditsInput,
-      toolCallId: string,
-    ): Promise<ApplyActiveDocxEditsOutput> => {
-      const record = streamingPlacements.get(toolCallId);
-      streamingPlacements.delete(toolCallId);
+  const placeSuggestChangesBatch = ({
+    batch,
+    toolCallId,
+    view,
+  }: {
+    batch: FolioDocumentOperationBatch;
+    toolCallId: string;
+    view: EditorView | null;
+  }): FolioDocumentOperationResult => {
+    const record = streamingPlacements.get(toolCallId);
+    streamingPlacements.delete(toolCallId);
 
-      // Folio creates the editing view lazily; wait for it rather than
-      // failing a doc the user never clicked into.
-      const view = getView() ?? (await awaitView());
-      if (!view) {
-        // Provisional placements were made against a view that has
-        // since gone away; drop them so nothing dangles unreported.
-        const provisionalIds: string[] = [];
-        if (record) {
-          for (const outcome of record.outcomes.values()) {
-            provisionalIds.push(...outcome.suggestionIds);
-          }
-        }
-        removePendingSuggestions(provisionalIds);
-        return {
-          version: 1,
-          applied: [],
-          queued: [],
-          skipped: input.operations.map((operation, index) => ({
-            id: operationSpecId(operation, index),
-            reason: "documentNotEditable",
-          })),
-        };
-      }
-
-      // Pass 1: match provisional outcomes against the finalized ops;
-      // drifted suggestions are removed first so their spans free up
-      // for re-placement.
-      const reusable = new Map<number, OperationPlacementOutcome>();
-      const driftedIds = new Set<string>();
+    if (!view) {
+      // Provisional placements were made against a view that has
+      // since gone away; drop them so nothing dangles unreported.
+      const provisionalIds: string[] = [];
       if (record) {
-        for (const [index, prior] of record.outcomes) {
-          const operation = input.operations.at(index);
-          if (
-            operation !== undefined &&
-            prior.fingerprint === operationFingerprint(operation)
-          ) {
-            reusable.set(index, prior);
-            continue;
-          }
-          for (const id of prior.suggestionIds) {
-            driftedIds.add(id);
-          }
+        for (const outcome of record.outcomes.values()) {
+          provisionalIds.push(...outcome.suggestionIds);
         }
       }
-      if (driftedIds.size > 0) {
-        removePendingSuggestions([...driftedIds]);
-      }
+      removePendingSuggestions(provisionalIds);
+      const skipped = batch.operations.map(({ id }) => ({
+        id,
+        reason: "documentNotEditable" as const,
+      }));
+      return {
+        version: batch.version,
+        status: "rejected",
+        applied: [],
+        skipped,
+        issues: getFolioDocumentOperationIssues(batch.operations, skipped),
+        receipts: [],
+        undoHandle: null,
+      };
+    }
 
-      const blockTextById = collectOperationBlockTexts();
-      const fieldMetaByPath = collectSuggestedFieldMeta(messages);
-      const occupiedRanges: (typeof suggestions)[number]["range"][] = [];
-      for (const suggestion of suggestions) {
-        if (suggestion.status === "pending" && !driftedIds.has(suggestion.id)) {
-          occupiedRanges.push(suggestion.range);
+    const operations = batch.operations.map(toTemplateEditOperation);
+
+    // Pass 1: match provisional outcomes against the finalized ops;
+    // drifted suggestions are removed first so their spans free up
+    // for re-placement.
+    const reusable = new Map<number, OperationPlacementOutcome>();
+    const driftedIds = new Set<string>();
+    if (record) {
+      for (const [index, prior] of record.outcomes) {
+        const operation = operations.at(index);
+        if (
+          operation !== undefined &&
+          operation !== null &&
+          prior.fingerprint === operationFingerprint(operation)
+        ) {
+          reusable.set(index, prior);
+          continue;
+        }
+        for (const id of prior.suggestionIds) {
+          driftedIds.add(id);
         }
       }
+    }
+    if (driftedIds.size > 0) {
+      removePendingSuggestions([...driftedIds]);
+    }
 
-      const queued: { id: string }[] = [];
-      const skipped: ApplyActiveDocxEditsOutput["skipped"] = [];
-      for (const [index, operation] of input.operations.entries()) {
-        const id = operationSpecId(operation, index);
-        const outcome =
-          reusable.get(index) ??
-          placeOperation({
-            operation,
-            index,
-            view,
-            blockTextById,
-            fieldMetaByPath,
-            occupiedRanges,
-          });
-        if (outcome.result.queued) {
-          queued.push({ id });
-        } else {
-          skipped.push({ id, reason: outcome.result.reason });
-        }
+    const blockTextById = collectOperationBlockTexts();
+    const fieldMetaByPath = collectSuggestedFieldMeta(messages);
+    const occupiedRanges: (typeof suggestions)[number]["range"][] = [];
+    for (const suggestion of suggestions) {
+      if (suggestion.status === "pending" && !driftedIds.has(suggestion.id)) {
+        occupiedRanges.push(suggestion.range);
       }
+    }
 
-      return { version: 1, applied: [], queued, skipped };
-    },
-  );
+    const queued: { id: string }[] = [];
+    const skipped: FolioAIEditSkippedOperation[] = [];
+    for (const [index, parsed] of batch.operations.entries()) {
+      const operation = operations.at(index) ?? null;
+      if (operation === null) {
+        skipped.push({ id: parsed.id, reason: "unsupportedBlock" });
+        continue;
+      }
+      const outcome =
+        reusable.get(index) ??
+        placeOperation({
+          operation,
+          index,
+          view,
+          blockTextById,
+          fieldMetaByPath,
+          occupiedRanges,
+        });
+      if (outcome.result.queued) {
+        queued.push({ id: parsed.id });
+      } else {
+        skipped.push({ id: parsed.id, reason: outcome.result.reason });
+      }
+    }
 
-  // Approving an apply-active-docx-edits call client-executes it: the
-  // operations become in-document suggestions and the queued/skipped
-  // summary goes back to the model via addToolResult. (The approval
-  // card auto-approves DOCX edit batches; review happens per
-  // suggestion in the document.)
+    return {
+      version: batch.version,
+      status: "queued",
+      applied: [],
+      queued,
+      skipped,
+      issues: getFolioDocumentOperationIssues(batch.operations, skipped),
+      receipts: getFolioDocumentOperationReceipts(batch.operations, queued),
+      undoHandle: null,
+    };
+  };
+
+  /**
+   * One bridge per tool call: the executor hands the parsed batch to
+   * `placeSuggestChangesBatch`, which needs the call id to reconcile the
+   * streamed placements. `snapshot()` is the snapshot the model was shown,
+   * so folio stamps preconditions against the text the model read. The
+   * Studio has no comment or tracked-change surface, so those members are
+   * inert.
+   */
+  const createStudioBridge = ({
+    toolCallId,
+    view,
+  }: {
+    toolCallId: string;
+    view: EditorView | null;
+  }): FolioAgentBridge => ({
+    // With no snapshot there is nothing to stamp preconditions from; the
+    // apply below then reports every operation as `documentNotEditable`
+    // (the view is null whenever the snapshot is).
+    snapshot: () =>
+      lastSentSnapshotRef.current ??
+      editorRef.current?.createAIEditSnapshot() ??
+      EMPTY_EDIT_SNAPSHOT,
+    applyDocumentOperations: (batch) =>
+      placeSuggestChangesBatch({ batch, toolCallId, view }),
+    getComments: () => [],
+    getChanges: () => [],
+    replyToComment: () => false,
+    resolveComment: () => false,
+  });
+
+  // `suggest_changes` never reaches the approval flow (it is auto-run and
+  // queue-only); every other tool approves through the shared handler.
   const handleApproveForTemplate = async (
     approvalId: string,
     toolName: ApprovalToolName,
   ) => {
-    if (toolName === "apply-active-docx-edits") {
-      const part = getActiveDocxEditApprovalPart(messages, approvalId);
-      if (!part) {
-        await handleApprove(approvalId, toolName);
-        return;
-      }
-      const latestUserMessageId = getLatestUserMessageId(messages);
-      const scopedContinuationOptions =
-        latestUserMessageId === activeScopedPresetTurnMessageIdRef.current
-          ? { body: { toolScope: SUGGEST_TEMPLATE_FIELDS_TOOL_SCOPE } }
-          : undefined;
-      await handleApprove(approvalId, toolName, scopedContinuationOptions);
-      const output = await handleActiveDocxEditToolCall(part.input, part.id);
-      await addToolResult(
-        {
-          output,
-          tool: "apply-active-docx-edits",
-          toolCallId: part.id,
-        },
-        scopedContinuationOptions,
-      );
-      return;
-    }
-
     await handleApprove(approvalId, toolName);
   };
 
-  // Auto-run watcher for the queue-only `apply-active-docx-edits` tool.
-  // The tool is `needsApproval: false`, so it now arrives as an
-  // `input-complete` client tool call with no approval click to gate it —
-  // `handleApproveForTemplate` only fires for persisted approval parts, so
-  // without this the turn would stall forever waiting on a result. This
-  // effect client-executes each unresolved call once (placing the ops as
-  // in-document suggestions via `handleActiveDocxEditToolCall`) and answers
-  // it with `addToolResult`, mirroring the file overlay's watcher. Tracks
-  // dispatched `toolCallId`s in a ref so a re-render can't double-run one.
-  // The scoped-preset continuation options ride the result the same way the
+  // Auto-run watcher for the queue-only `suggest_changes` tool. The tool
+  // is `needsApproval: false`, so it arrives as an `input-complete` client
+  // tool call with no approval click to gate it; without this the turn
+  // would stall forever waiting on a result. This effect client-executes
+  // each unresolved call once (placing the ops as in-document suggestions
+  // through the Studio bridge) and answers it with `addToolResult`,
+  // mirroring the file overlay's watcher. Tracks dispatched `toolCallId`s
+  // in a ref so a re-render can't double-run one, and caches each call's
+  // output so a retry re-sends it instead of placing the ops twice. The
+  // scoped-preset continuation options ride the result the same way the
   // approval path threaded them, so a "Suggest fields" preset that emits
   // edits keeps its suggest-template-fields tool allowlist on the follow-up.
   const executedActiveDocxEditToolCallIdsRef = useRef<Set<string> | null>(null);
   executedActiveDocxEditToolCallIdsRef.current ??= new Set<string>();
+  const suggestChangesOutputCacheRef = useRef<Map<
+    string,
+    FolioToolCallResultFor<typeof SUGGEST_CHANGES_TOOL_NAME>
+  > | null>(null);
+  suggestChangesOutputCacheRef.current ??= new Map();
   const runActiveDocxEditToolCall = useLatestCallback(
-    async (part: UnresolvedActiveDocxEditToolCallPart) => {
+    async (part: UnresolvedFolioAgentDocToolCallPart) => {
       const latestUserMessageId = getLatestUserMessageId(messages);
       const scopedContinuationOptions =
         latestUserMessageId === activeScopedPresetTurnMessageIdRef.current
           ? { body: { toolScope: SUGGEST_TEMPLATE_FIELDS_TOOL_SCOPE } }
           : undefined;
-      try {
-        const output = isApplyActiveDocxEditsInput(part.input)
-          ? await handleActiveDocxEditToolCall(part.input, part.id)
-          : { version: 1 as const, applied: [], queued: [], skipped: [] };
+      if (part.name !== SUGGEST_CHANGES_TOOL_NAME) {
+        // Only `suggest_changes` is registered on this surface; nothing
+        // else has an executor here.
         await addToolResult(
           {
-            output,
-            tool: "apply-active-docx-edits",
+            output: {
+              ok: false,
+              error: "This tool is not available in the template studio.",
+            },
+            tool: part.name,
             toolCallId: part.id,
           },
+          scopedContinuationOptions,
+        );
+        return;
+      }
+      try {
+        const outputCache = suggestChangesOutputCacheRef.current;
+        let output = outputCache?.get(part.id);
+        if (output === undefined) {
+          // Folio creates the editing view lazily; wait for it rather than
+          // failing a doc the user never clicked into.
+          const view = getView() ?? (await awaitView());
+          output = executeFolioToolCall(
+            SUGGEST_CHANGES_TOOL_NAME,
+            part.input,
+            createStudioBridge({ toolCallId: part.id, view }),
+            STUDIO_TOOL_OPTIONS,
+          );
+          outputCache?.set(part.id, output);
+        }
+        await addToolResult(
+          { output, tool: SUGGEST_CHANGES_TOOL_NAME, toolCallId: part.id },
           scopedContinuationOptions,
         );
       } catch (toolCallError) {
@@ -1137,12 +1207,13 @@ const TemplateStudioChatInner = ({
           await addToolResult(
             {
               output: {
-                version: 1 as const,
-                applied: [],
-                queued: [],
-                skipped: [],
+                ok: false,
+                error:
+                  toolCallError instanceof Error
+                    ? toolCallError.message
+                    : String(toolCallError),
               },
-              tool: "apply-active-docx-edits",
+              tool: SUGGEST_CHANGES_TOOL_NAME,
               toolCallId: part.id,
             },
             scopedContinuationOptions,
@@ -1164,7 +1235,7 @@ const TemplateStudioChatInner = ({
       return;
     }
 
-    const partsToRun = selectUnresolvedActiveDocxEditToolCallParts(
+    const partsToRun = selectUnresolvedFolioAgentDocToolCallParts(
       message.parts,
       executedIds,
     );
@@ -1172,7 +1243,7 @@ const TemplateStudioChatInner = ({
       executedIds.add(part.id);
       detached(
         runActiveDocxEditToolCall(part),
-        "template-studio-chat.run-active-docx-edit-tool-call",
+        "template-studio-chat.run-suggest-changes-tool-call",
       );
     }
   }, [messages, runActiveDocxEditToolCall]);
@@ -1445,8 +1516,15 @@ const TemplateStudioChatInner = ({
 // Progressive (streamed) placement types
 // ---------------------------------------------------------------------------
 
-type SkippedOperationReason =
-  ApplyActiveDocxEditsOutput["skipped"][number]["reason"];
+type SkippedOperationReason = FolioAIEditSkipReason;
+
+/** Same options the API registered the Studio's `suggest_changes` with. */
+const STUDIO_TOOL_OPTIONS: FolioAgentToolOptions = {
+  suggestChanges:
+    DOCX_SUGGEST_CHANGES_OPTIONS_BY_SURFACE[
+      DOCX_SUGGESTION_SURFACE.templateStudio
+    ],
+};
 
 /** Result of placing one operation, in tool-output terms. */
 type OperationPlacementOutcome = {
@@ -1535,8 +1613,8 @@ const isSuggestedTemplateFieldsToolOutput = (
 
 /**
  * Field metadata by path, joined from every `suggest_template_fields`
- * output in the thread (later outputs win). Lets an
- * `apply-active-docx-edits` replacement whose `replace` is a
+ * output in the thread (later outputs win). Lets a
+ * `suggest_changes` replacement whose `replace` is a
  * `{{field.path}}` marker recover the proposed input type / AI prompt.
  */
 const collectSuggestedFieldMeta = (

@@ -303,6 +303,68 @@ describe("operationFingerprint", () => {
       operationFingerprint(finalized),
     );
   });
+
+  test("a streamed operation (no id) fingerprints the same as its folio-parsed counterpart (minted id)", () => {
+    // Genuine streamed-ingestion path: `extractCompletedStreamingOperations`
+    // never mints an `id` — folio's own parser does that once the call
+    // input is complete. The two representations of the same edit must
+    // still de-duplicate against each other, so the fingerprint must
+    // ignore `id`.
+    const [streamed] = extractCompletedStreamingOperations({
+      operations: [
+        {
+          type: "replaceInBlock",
+          blockId: "B1",
+          find: "Acme",
+          replace: "{{seller.name}}",
+          severity: "low",
+          area: "Names",
+        },
+        // Trailing element makes the first one "completed".
+        { type: "replaceInBlock", blockId: "B2" },
+      ],
+    });
+    if (!streamed) {
+      throw new Error("expected a streamed operation");
+    }
+    expect(streamed.id).toBeUndefined();
+
+    const parsed: DocxEditOperation = { ...streamed, id: "minted-op-id" };
+
+    expect(operationFingerprint(streamed)).toBe(operationFingerprint(parsed));
+  });
+
+  test("a streamed plain-string comment fingerprints the same as folio's wrapped comment", () => {
+    // The tool contract lets the model write `comment` as a string; folio's
+    // parser wraps it into `{ text }`. The streamed side must wrap too, or
+    // every commented op would be re-placed after the parse.
+    const [streamed] = extractCompletedStreamingOperations({
+      operations: [
+        {
+          type: "deleteBlock",
+          blockId: "B1",
+          comment: "Duplicate clause",
+          severity: "medium",
+          area: "Wording",
+        },
+        { type: "deleteBlock", blockId: "B2" },
+      ],
+    });
+    if (!streamed) {
+      throw new Error("expected a streamed operation");
+    }
+    expect(streamed.comment).toEqual({ text: "Duplicate clause" });
+
+    const parsed: DocxEditOperation = {
+      id: "minted-op-id",
+      type: "deleteBlock",
+      blockId: "B1",
+      comment: { text: "Duplicate clause" },
+      severity: "medium",
+      area: "Wording",
+    };
+    expect(operationFingerprint(streamed)).toBe(operationFingerprint(parsed));
+  });
 });
 
 describe("extractFieldMarkerPath", () => {

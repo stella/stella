@@ -119,9 +119,6 @@ export type ApprovalToolPart = RegisteredChatUIToolCallPart & {
     needsApproval: boolean;
   };
 };
-export type ActiveDocxEditApprovalPart = ApprovalToolPart & {
-  name: "apply-active-docx-edits";
-};
 export type AskUserInput = SharedChatUITools["ask-user"]["input"];
 // Built-in tool names whose backend policy kind is `K`, derived from
 // `BuiltInChatToolPolicyKindByName` (the backend's single source of truth
@@ -158,21 +155,31 @@ const USER_INPUT_TOOL_NAMES = {
   "ask-user": true,
 } as const satisfies Record<string, true>;
 
-// Read-only folio-agents tools the file overlay auto-runs against the live
-// editor bridge (no approval). The comment MUTATION tools (`add_comment`,
+// folio-agents tools a DOCX surface auto-runs against its bridge with no
+// approval click: the read tools, plus `suggest_changes`, which is queue-only
+// on every chat surface (the bridge parks operations for per-suggestion
+// review and never writes). The comment MUTATION tools (`add_comment`,
 // `reply_comment`, `resolve_comment`) are deliberately NOT here: they carry
 // `needsApproval` and are resolved through the approval flow, not this
 // auto-run watcher.
 const FOLIO_AGENT_DOC_TOOL_NAMES = {
   [FOLIO_AGENT_TOOL_NAMES.findText]: true,
+  [FOLIO_AGENT_TOOL_NAMES.getDocumentOutline]: true,
+  [FOLIO_AGENT_TOOL_NAMES.listStories]: true,
   [FOLIO_AGENT_TOOL_NAMES.readChanges]: true,
   [FOLIO_AGENT_TOOL_NAMES.readComments]: true,
   [FOLIO_AGENT_TOOL_NAMES.readDocument]: true,
+  [FOLIO_AGENT_TOOL_NAMES.readSection]: true,
+  [FOLIO_AGENT_TOOL_NAMES.readStory]: true,
+  [FOLIO_AGENT_TOOL_NAMES.showInDocument]: true,
+  [FOLIO_AGENT_TOOL_NAMES.suggestChanges]: true,
 } as const satisfies Record<string, true>;
+
+/** The one DOCX mutation tool: queue-only, so it never carries an approval gate. */
+export const SUGGEST_CHANGES_TOOL_NAME = FOLIO_AGENT_TOOL_NAMES.suggestChanges;
 
 const CHAT_TOOL_TITLE_KEYS = {
   add_comment: "chat.tool.add_comment",
-  "apply-active-docx-edits": "chat.tool.apply-active-docx-edits",
   "ask-user": "chat.tool.ask-user",
   boe_find_related_laws: "chat.tool.boe_find_related_laws",
   boe_get_law: "chat.tool.boe_get_law",
@@ -195,8 +202,8 @@ const CHAT_TOOL_TITLE_KEYS = {
   // Code-mode discovery companion to execute_typescript: fetches a read tool's
   // full signature on demand.
   discover_tools: "chat.tool.discover_tools",
-  // Headless (auto) counterpart to apply-active-docx-edits: writes a new
-  // entity version directly, no per-suggestion review step.
+  // Headless (auto) counterpart to suggest_changes: writes a new entity
+  // version directly, no per-suggestion review step.
   edit_workspace_document: "chat.tool.edit_workspace_document",
   // Code-mode sandbox runner (replaces run-stella-query).
   execute_typescript: "chat.tool.execute_typescript",
@@ -204,8 +211,10 @@ const CHAT_TOOL_TITLE_KEYS = {
   fetch_url: "chat.tool.fetch_url",
   fill_template: "chat.tool.fill_template",
   find_text: "chat.tool.find_text",
+  get_document_outline: "chat.tool.get_document_outline",
   infosoud_lookup_case: "chat.tool.infosoud_lookup_case",
   link_matter_contact: "chat.tool.link_matter_contact",
+  list_stories: "chat.tool.list_stories",
   list_templates: "chat.tool.list_templates",
   manage_organization: "chat.tool.manage_organization",
   run_playbook: "chat.tool.run_playbook",
@@ -224,11 +233,15 @@ const CHAT_TOOL_TITLE_KEYS = {
   read_changes: "chat.tool.read_changes",
   read_comments: "chat.tool.read_comments",
   read_document: "chat.tool.read_document",
+  read_section: "chat.tool.read_section",
+  read_story: "chat.tool.read_story",
   remember: "chat.tool.remember",
   reply_comment: "chat.tool.reply_comment",
   resolve_comment: "chat.tool.resolve_comment",
   "read-skill-resource": "chat.tool.read-skill-resource",
   "search-chat-history": "chat.tool.search-chat-history",
+  show_in_document: "chat.tool.show_in_document",
+  suggest_changes: "chat.tool.suggest_changes",
   "update-current-skill-body": "common.edit",
   "update-current-skill-resource": "common.edit",
   "update-entity-fields": "chat.tool.update-entity-fields",
@@ -240,6 +253,9 @@ const CHAT_TOOL_TITLE_KEYS = {
 // title keys around so historical chat history still renders with a
 // recognisable label rather than the generic "unknown" fallback.
 const RETIRED_CHAT_TOOL_TITLE_KEYS = {
+  // The manual DOCX edit tool that `suggest_changes` replaced; persisted
+  // threads still carry its calls.
+  "apply-active-docx-edits": "chat.tool.apply-active-docx-edits",
   ares_lookup_company: "chat.tool.ares_lookup_company",
   ares_search_companies: "chat.tool.ares_search_companies",
   // Retired hand-rolled code-execution tools, replaced by the code-mode
@@ -573,70 +589,6 @@ export const isApprovalPart = (part: unknown): part is ApprovalToolPart => {
   );
 };
 
-type ApplyActiveDocxEditsToolInput =
-  ChatUITools["apply-active-docx-edits"]["input"];
-
-export const isApplyActiveDocxEditsInput = (
-  input: unknown,
-): input is ApplyActiveDocxEditsToolInput =>
-  typeof input === "object" &&
-  input !== null &&
-  "operations" in input &&
-  Array.isArray(input.operations);
-
-/**
- * Latest apply-active-docx-edits part matching the given approval id
- * (newest message first). Used by the surfaces that client-execute
- * the tool (file overlay, Template Studio) to recover the operations
- * the user just approved.
- */
-export const getActiveDocxEditApprovalPart = (
-  messages: PersistedChatMessage[],
-  approvalId: string,
-):
-  | (ActiveDocxEditApprovalPart & { input: ApplyActiveDocxEditsToolInput })
-  | null => {
-  for (
-    let messageIndex = messages.length - 1;
-    messageIndex >= 0;
-    messageIndex -= 1
-  ) {
-    const message = messages.at(messageIndex);
-    if (!message || message.role !== "assistant") {
-      continue;
-    }
-
-    for (const part of message.parts) {
-      if (!isApprovalPart(part) || part.name !== "apply-active-docx-edits") {
-        continue;
-      }
-
-      const input = part.input;
-      if (
-        (part.state === "approval-requested" ||
-          part.state === "approval-responded") &&
-        part.approval.id === approvalId &&
-        isApplyActiveDocxEditsInput(input)
-      ) {
-        return { ...part, input };
-      }
-    }
-  }
-
-  return null;
-};
-
-export const isApprovedActiveDocxEditPart = (
-  part: ChatPart,
-): part is ActiveDocxEditApprovalPart & {
-  approval: { approved: true; id: string; needsApproval: boolean };
-  state: "approval-responded";
-} =>
-  part.type === "tool-call" &&
-  part.name === "apply-active-docx-edits" &&
-  part.state === "approval-responded" &&
-  part.approval?.approved === true;
-
 export const isApprovalRespondedPart = (
   part: ChatPart,
 ): part is ApprovalToolPart & {
@@ -651,19 +603,6 @@ export const isApprovalRespondedPart = (
   typeof part.approval.id === "string" &&
   "approved" in part.approval &&
   typeof part.approval.approved === "boolean";
-
-export const hasApprovedActiveDocxEditAwaitingClientOutput = ({
-  messages,
-}: {
-  messages: PersistedChatMessage[];
-}) => {
-  const message = messages.at(-1);
-  if (!message || message.role !== "assistant") {
-    return false;
-  }
-
-  return message.parts.some(isApprovedActiveDocxEditPart);
-};
 
 export const hasApprovalResponseAwaitingModelStep = ({
   messages,
@@ -722,8 +661,8 @@ export const hasRunningToolCallInLatestAssistantMessage = ({
 };
 
 /**
- * An unresolved `read_document` / `find_text` tool-call part, narrowed by
- * {@link isUnresolvedFolioAgentDocToolCallPart}.
+ * An unresolved auto-run folio-agents tool-call part (a read tool or
+ * `suggest_changes`), narrowed by {@link isUnresolvedFolioAgentDocToolCallPart}.
  */
 export type UnresolvedFolioAgentDocToolCallPart =
   RegisteredFolioAgentToolCallPart<keyof typeof FOLIO_AGENT_DOC_TOOL_NAMES> & {
@@ -731,14 +670,15 @@ export type UnresolvedFolioAgentDocToolCallPart =
   };
 
 /**
- * A `read_document` / `find_text` tool-call part whose input has fully
- * streamed in but that has not yet been answered with a result.
+ * An auto-run folio-agents tool-call part (a read tool or `suggest_changes`)
+ * whose input has fully streamed in but that has not yet been answered with
+ * a result.
  *
- * These two tools (from `@stll/folio-agents`) are client-executed and
- * carry no `needsApproval` gate, so nothing else resolves them — the file
- * overlay's auto-run watcher (`file-chat-overlay.tsx`) uses this predicate
- * to find calls it still needs to execute against the live editor and
- * answer via `addToolResult`.
+ * These tools (from `@stll/folio-agents`) are client-executed and carry no
+ * `needsApproval` gate, so nothing else resolves them — the DOCX surfaces'
+ * auto-run watchers (`file-chat-overlay.tsx`, `template-studio-chat.tsx`)
+ * use this predicate to find calls they still need to execute against
+ * their bridge and answer via `addToolResult`.
  */
 export const isUnresolvedFolioAgentDocToolCallPart = (
   part: unknown,
@@ -787,59 +727,6 @@ export const selectUnresolvedFolioAgentDocToolCallParts = (
   messageParts.filter(
     (part): part is UnresolvedFolioAgentDocToolCallPart =>
       isUnresolvedFolioAgentDocToolCallPart(part) && !executedIds.has(part.id),
-  );
-
-/**
- * An `apply-active-docx-edits` tool-call part whose input has fully
- * streamed in but that has not yet been answered with a result.
- *
- * The tool carries no `needsApproval` gate (it only queues suggestions
- * into the client review panel — it never writes to the document), so
- * like the folio-agents read tools nothing else resolves it. The file
- * overlay's auto-run watcher finds these and answers them via
- * `addToolResult` after queuing the suggestions.
- */
-export type UnresolvedActiveDocxEditToolCallPart = ChatToolCallPart & {
-  name: "apply-active-docx-edits";
-  state: "input-complete";
-};
-
-export const isUnresolvedActiveDocxEditToolCallPart = (
-  part: unknown,
-): part is UnresolvedActiveDocxEditToolCallPart => {
-  if (
-    typeof part !== "object" ||
-    part === null ||
-    !("type" in part) ||
-    !("state" in part) ||
-    typeof part.type !== "string" ||
-    typeof part.state !== "string"
-  ) {
-    return false;
-  }
-
-  if (part.type !== "tool-call" || part.state !== "input-complete") {
-    return false;
-  }
-
-  return "name" in part && part.name === "apply-active-docx-edits";
-};
-
-/**
- * Core decision loop for the file overlay's active-DOCX-edit auto-run
- * watcher: which `apply-active-docx-edits` parts in the latest assistant
- * message still need a client-executed (queue-only) result. Pure and
- * colocated with {@link isUnresolvedActiveDocxEditToolCallPart} so the
- * effect stays a thin dispatch loop. `executedIds` excludes parts the
- * watcher has already dispatched itself in a prior render.
- */
-export const selectUnresolvedActiveDocxEditToolCallParts = (
-  messageParts: readonly ChatPart[],
-  executedIds: ReadonlySet<string>,
-): UnresolvedActiveDocxEditToolCallPart[] =>
-  messageParts.filter(
-    (part): part is UnresolvedActiveDocxEditToolCallPart =>
-      isUnresolvedActiveDocxEditToolCallPart(part) && !executedIds.has(part.id),
   );
 
 // Terminal state a dead running tool-call part is rewritten to at
