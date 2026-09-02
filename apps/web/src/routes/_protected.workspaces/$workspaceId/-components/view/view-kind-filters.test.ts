@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { includesListItems, viewEntityKinds } from "./view-kind-filters";
+import {
+  admitsOnlyTaskKind,
+  includesListItems,
+  viewEntityKinds,
+} from "./view-kind-filters";
 
 describe("view entity kinds", () => {
   test("reads the kinds a view admits, nested groups included", () => {
@@ -284,6 +288,51 @@ describe("view entity kinds", () => {
         },
       ]),
     ).toEqual(["message"]);
+  });
+});
+
+describe("admitsOnlyTaskKind", () => {
+  test("true for a view restricted to task alone", () => {
+    expect(
+      admitsOnlyTaskKind([
+        {
+          type: "predicate",
+          operand: { type: "kind" },
+          op: "in",
+          value: ["task"],
+        },
+      ]),
+    ).toBe(true);
+  });
+
+  test("false for a view admitting several kinds", () => {
+    expect(
+      admitsOnlyTaskKind([
+        {
+          type: "predicate",
+          operand: { type: "kind" },
+          op: "in",
+          value: ["task", "message"],
+        },
+      ]),
+    ).toBe(false);
+  });
+
+  test("false for an unrestricted view", () => {
+    expect(admitsOnlyTaskKind([])).toBe(false);
+  });
+
+  test("false for a view restricted to a non-task kind alone", () => {
+    expect(
+      admitsOnlyTaskKind([
+        {
+          type: "predicate",
+          operand: { type: "kind" },
+          op: "in",
+          value: ["document"],
+        },
+      ]),
+    ).toBe(false);
   });
 });
 

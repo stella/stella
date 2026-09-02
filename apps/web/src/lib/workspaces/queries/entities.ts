@@ -194,6 +194,7 @@ export const entitiesWindowOptions = (key: EntitiesWindowOptionsInput) =>
                   )
                 : [],
             previewableForAi: key.previewableForAi ?? false,
+            includeAssignees: key.includeAssignees ?? false,
             ...(pageParam !== undefined && { cursor: pageParam }),
           },
           { fetch: { signal } },

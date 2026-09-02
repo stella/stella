@@ -97,6 +97,7 @@ import { ExtractionRunProgress } from "@/routes/_protected.workspaces/$workspace
 import { isGroupableProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.logic";
 import { RowActions } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions";
 import { ExportReportControl } from "@/routes/_protected.workspaces/$workspaceId/-components/view/export-report-dialog";
+import { admitsOnlyTaskKind } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
 import { FilterChips } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-filters";
 import { SortChips } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-sorts";
 import type { TableContentMode } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
@@ -117,6 +118,10 @@ export const ViewToolbar = ({ view, workspaceId }: ViewToolbarProps) => {
   const folderState = useWorkspaceStore((s) => s.folderState);
   const toggleAllFolders = useWorkspaceStore((s) => s.toggleAllFolders);
   const selectedEntities = useTableStore((s) => s.selectedEntities[view.id]);
+  // Assignee sub-grouping needs a board scoped to tasks alone (see
+  // kanban-view.logic.ts's `assigneeGroup`); a view admitting several kinds,
+  // or one that does not provably restrict its kinds, does not offer it.
+  const allowAssigneeGrouping = admitsOnlyTaskKind(filters);
 
   const handleUpdate = (changes: Partial<ViewLayout>) => {
     updateView.mutate({
@@ -162,6 +167,7 @@ export const ViewToolbar = ({ view, workspaceId }: ViewToolbarProps) => {
         <>
           <span className="bg-border mx-1 h-4 w-px" />
           <KanbanGroupingSettings
+            allowAssigneeGrouping={allowAssigneeGrouping}
             groupByPropertyId={view.layout.groupByPropertyId}
             onChange={(groupByPropertyId, subgroupByPropertyId) =>
               handleUpdate({ groupByPropertyId, subgroupByPropertyId })
@@ -1055,6 +1061,11 @@ type KanbanGroupingSettingsProps = {
     subgroupByPropertyId: string | undefined,
   ) => void;
   properties: WorkspaceProperty[];
+  // Server paging and counts for the assignee sub-group only support a board
+  // scoped to tasks alone (see kanban-view.logic.ts's `assigneeGroup`); a
+  // view that also admits documents/folders, or that does not provably
+  // restrict its kinds at all, does not offer it.
+  allowAssigneeGrouping: boolean;
 };
 
 const KanbanGroupingSettings = ({
@@ -1062,6 +1073,7 @@ const KanbanGroupingSettings = ({
   subgroupByPropertyId,
   onChange,
   properties,
+  allowAssigneeGrouping,
 }: KanbanGroupingSettingsProps) => {
   const t = useTranslations();
   const resolvedGroupBy = resolveKanbanGroupBy(
@@ -1117,7 +1129,7 @@ const KanbanGroupingSettings = ({
             <GroupByControl
               allowNone
               allowCreatedByGrouping
-              allowAssigneeGrouping
+              allowAssigneeGrouping={allowAssigneeGrouping}
               allowPersonGrouping
               ariaLabel={t("workspaces.views.subgroup")}
               excludedPropertyId={resolvedGroupBy}

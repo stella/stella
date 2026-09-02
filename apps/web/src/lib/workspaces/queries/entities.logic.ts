@@ -21,6 +21,10 @@ export type EntitiesPageKey = {
 
 export type EntitiesWindowKey = Omit<EntitiesPageKey, "page" | "pageSize"> & {
   limit?: number;
+  // Off by default: the assignees join is extra work every other window
+  // caller skips. Only the kanban assignee sub-group's window request
+  // sets this.
+  includeAssignees?: boolean;
 };
 
 export type FilesystemEntitiesKey = Omit<
@@ -103,6 +107,7 @@ export const entitiesKeys = {
     fieldIds,
     excludedKinds,
     previewableForAi,
+    includeAssignees,
   }: EntitiesWindowKey) => {
     const normalizedFieldMode = fieldMode ?? "full";
     return [
@@ -120,6 +125,7 @@ export const entitiesKeys = {
             : [],
         excludedKinds: excludedKinds ? excludedKinds.toSorted() : [],
         previewableForAi: previewableForAi ?? false,
+        includeAssignees: includeAssignees ?? false,
       },
     ];
   },

@@ -13278,6 +13278,15 @@ export const generatedRouteMap: RouteNode = {
                     part: "body",
                     partPath: "previewableForAi",
                   },
+                  {
+                    kind: "boolean",
+                    repeatable: false,
+                    flag: "--include-assignees",
+                    prop: "includeAssignees",
+                    required: false,
+                    part: "body",
+                    partPath: "includeAssignees",
+                  },
                 ],
                 inputOnly: ["body.filters", "body.sorts", "body.fieldMode"],
                 paginated: true,
@@ -13663,6 +13672,9 @@ export const generatedRouteMap: RouteNode = {
                           },
                         },
                         previewableForAi: {
+                          type: "boolean",
+                        },
+                        includeAssignees: {
                           type: "boolean",
                         },
                       },
@@ -32255,6 +32267,112 @@ export const generatedRouteMap: RouteNode = {
                           minLength: 1,
                           maxLength: 128,
                           type: "string",
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      properties: {
+                        workspaceId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["workspaceId"],
+                    },
+                  },
+                },
+              },
+            },
+            "assignees-move": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "tasks", "assignees-move"],
+                capabilityId: "tasks.assignees.move",
+                description:
+                  "Reassign a task from one member to another in one atomic step: removes fromUserId (when not null) and adds toUserId (when not null) together, so a failed add can never leave the task with neither assignee. At least one of the two must be non-null. Refused when a new toUserId is not a member of this matter and when the task is read-only.",
+                access: "write",
+                flags: [
+                  {
+                    flag: "--workspace",
+                    prop: "workspace",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "workspaceId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--task-id",
+                    prop: "taskId",
+                    required: true,
+                    part: "body",
+                    partPath: "taskId",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--from-user-id",
+                    prop: "fromUserId",
+                    required: true,
+                    part: "body",
+                    partPath: "fromUserId",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--to-user-id",
+                    prop: "toUserId",
+                    required: true,
+                    part: "body",
+                    partPath: "toUserId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "matters_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["taskId", "fromUserId", "toUserId"],
+                      properties: {
+                        taskId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        fromUserId: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              minLength: 1,
+                              maxLength: 128,
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                        toUserId: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              minLength: 1,
+                              maxLength: 128,
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
                         },
                       },
                     },

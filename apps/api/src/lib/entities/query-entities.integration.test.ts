@@ -290,7 +290,10 @@ describe("task assignee projection", () => {
     return entityId;
   };
 
-  const readAssignees = async (entityId: SafeId<"entity">) => {
+  const readAssignees = async (
+    entityId: SafeId<"entity">,
+    includeAssignees = true,
+  ) => {
     const result = await queryEntities({
       safeDb,
       workspaceId: ids.wsA1,
@@ -301,6 +304,7 @@ describe("task assignee projection", () => {
       limit: 10,
       fieldMode: "visible",
       fieldIds: [],
+      includeAssignees,
     });
     if (Result.isError(result)) {
       throw result.error;
@@ -314,6 +318,19 @@ describe("task assignee projection", () => {
     const entityId = await seedTask();
 
     expect(await readAssignees(entityId)).toEqual([]);
+  });
+
+  test("omits assignees when includeAssignees is false, even for a task with assignees", async () => {
+    const entityId = await seedTask();
+    await testDb.insert(taskAssignees).values({
+      id: createSafeId<"taskAssignee">(),
+      workspaceId: ids.wsA1,
+      entityId,
+      userId: ids.userA1,
+      role: TASK_ASSIGNEE_ROLE.ASSIGNEE,
+    });
+
+    expect(await readAssignees(entityId, false)).toEqual([]);
   });
 
   test("returns one entry for a task with a single assignee", async () => {

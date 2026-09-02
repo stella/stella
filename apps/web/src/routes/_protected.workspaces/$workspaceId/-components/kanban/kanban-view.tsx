@@ -53,10 +53,7 @@ import {
   useUpsertField,
 } from "@/lib/workspaces/mutations/entities";
 import { useUpdateProperty } from "@/lib/workspaces/mutations/properties";
-import {
-  useAddTaskAssignee,
-  useRemoveTaskAssignee,
-} from "@/lib/workspaces/mutations/tasks";
+import { useMoveTaskAssignee } from "@/lib/workspaces/mutations/tasks";
 import {
   isGradableProperty,
   isPlaybookVerdictProperty,
@@ -83,6 +80,7 @@ import {
   resolveWorkspaceKanbanGrouping,
   resolveWorkspaceKanbanGroupValue,
   resolveWorkspaceKanbanSubgroup,
+  windowIncludesAssignees,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.logic";
 import { useWorkspaceKanbanSchema } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/use-kanban-schema";
 import { viewEntityKinds } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
@@ -112,8 +110,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
   const renameEntity = useRenameEntity();
   const updateProperty = useUpdateProperty();
   const createEntities = useCreateEntities();
-  const addTaskAssignee = useAddTaskAssignee(workspaceId);
-  const removeTaskAssignee = useRemoveTaskAssignee(workspaceId);
+  const moveTaskAssignee = useMoveTaskAssignee(workspaceId);
   const updateView = useUpdateView(workspaceId);
   const queryClient = useQueryClient();
   const [hiddenGroups, setHiddenGroups] = useState(new Set());
@@ -317,6 +314,10 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       limit: KANBAN_GROUP_PAGE_SIZE,
       fieldMode: "visible",
       fieldIds,
+      // Derived from the raw layout, same as the route loader's preload, so
+      // the two agree and a preloaded assignee-subgroup board never
+      // discards its preload for lacking this flag.
+      includeAssignees: windowIncludesAssignees(view),
     }),
     enabled:
       hasSupportedSubgroup &&
@@ -729,9 +730,9 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
   // from rather than always the first. `undefined` means the payload carried
   // no lane at all (the card never declared one) — only then do we fall back
   // to this module's usual single-value read for the axis, the first
-  // assignee. Moving within the same value is a no-op; otherwise the old
-  // assignee is removed before the new one is added, matching the
-  // add/remove handler order.
+  // assignee. The remove and the add run as a single atomic request
+  // (tasks.assignees-move) so a failed add can never leave the task with
+  // neither assignee; staying in the same lane is a no-op.
   const handleAssigneeLaneDrop = async (
     sourceEntity: WorkspaceEntity,
     targetLaneValue: string | null,
@@ -745,18 +746,14 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       sourceLaneValue,
       targetLaneValue,
     );
-    if (removeUserId !== null) {
-      await removeTaskAssignee.mutateAsync({
-        taskId: sourceEntity.entityId,
-        userId: removeUserId,
-      });
+    if (removeUserId === null && addUserId === null) {
+      return;
     }
-    if (addUserId !== null) {
-      await addTaskAssignee.mutateAsync({
-        taskId: sourceEntity.entityId,
-        userId: addUserId,
-      });
-    }
+    await moveTaskAssignee.mutateAsync({
+      taskId: sourceEntity.entityId,
+      fromUserId: removeUserId,
+      toUserId: addUserId,
+    });
   };
 
   const handleDropCardInCell = async (
