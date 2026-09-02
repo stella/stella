@@ -3,15 +3,10 @@ import { t } from "elysia";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { templateFills } from "@/api/db/schema";
-import { isTemplateOutputValid } from "@/api/handlers/templates/validate-template-output";
-import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import {
-  assertUsageAvailableForHandler,
-  createSafeRootHandler,
-} from "@/api/lib/api-handlers";
+import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { adaptAiFields } from "@/api/lib/docx/adapt-ai-fields";
@@ -34,8 +29,10 @@ import { convertToPdf } from "@/api/lib/files/gotenberg";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { DOCX_EXT_RE, sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { secureDocumentResponse } from "@/api/lib/secure-document-response";
-import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
 import { containsNull } from "@/api/lib/templates/template-data";
+import { assertTemplateFillUsage } from "@/api/lib/templates/template-fill-usage";
+import { collectMissingRequiredFields } from "@/api/lib/templates/template-optional-defaults";
+import { isTemplateOutputValid } from "@/api/lib/templates/validate-template-output";
 import { isRecord } from "@/api/lib/type-guards";
 import { DOCX_MIME_TYPE, OCTET_STREAM_MIME_TYPE } from "@/api/mime-types";
 
@@ -77,49 +74,6 @@ const usageRejectionResponse = (error: HandlerError<402 | 500>): Response =>
       headers: { "Content-Type": "application/json" },
     },
   );
-
-type TemplateFillUsageArgs = {
-  /** Org AI (BYOK) config; null when the org has no usable AI config, in which
-   *  case the generators are no-ops and no model call (or quota) occurs. */
-  orgAIConfig: OrgAIConfig | null;
-  /** Whether the manifest declares any AI-drafted/adapted field. */
-  hasAiFields: boolean;
-  organizationId: SafeId<"organization">;
-  userId: SafeId<"user">;
-  safeDb: SafeDb;
-};
-
-/**
- * Usage preflight for the template-fill routes, gated on a model call actually
- * running (an org AI config plus a manifest AI field). A deterministic fill
- * spends no AI quota, so the static `requiresUsage` config is omitted and this
- * runs in-handler instead. Returns the framework's 402/500 `HandlerError` (the
- * caller returns it as `Result.err`) or `null` to proceed.
- */
-export const assertTemplateFillUsage = async ({
-  orgAIConfig,
-  hasAiFields,
-  organizationId,
-  userId,
-  safeDb,
-}: TemplateFillUsageArgs): Promise<HandlerError<402 | 500> | null> => {
-  // Skip only when there is no AI field to bill, or no provider could run a
-  // model at all. With an instance provider but no org BYOK, the fill still
-  // calls the fast model (the instance provider resolves it), so the quota
-  // check must apply — a null org config is not "no model call". The metering
-  // layer prices the instance-provider call (non-BYOK rate).
-  if (!hasAiFields || (!orgAIConfig && !hasTanStackInstanceProvider())) {
-    return null;
-  }
-  return await assertUsageAvailableForHandler({
-    metering: { actionType: "chat", modelRole: "fast" },
-    organizationId,
-    orgAIConfig,
-    workspaceId: null,
-    userId,
-    safeDb,
-  });
-};
 
 export const fillHandler = async ({
   safeDb,
@@ -188,6 +142,28 @@ export const fillHandler = async ({
   let fillBuffer: Buffer = buffer;
   let adaptedPaths: readonly string[] = [];
   const manifest = await readManifest(buffer);
+
+  // Reject before any AI/registry work runs: a required, user-entered field
+  // left absent or empty must never download as an invented value or a raw
+  // `{{marker}}`. This route always enforces the full contract (unlike
+  // fill-preview, whose live typing preview legitimately allows partial
+  // values).
+  if (manifest) {
+    const missingRequiredFields = collectMissingRequiredFields({
+      fields: manifest.fields,
+      policy: "enforce",
+      values: fillData,
+    });
+    if (missingRequiredFields.length > 0) {
+      return new Response(
+        JSON.stringify({
+          error: "missing_required_fields",
+          missingFields: missingRequiredFields,
+        }),
+        { status: 400, headers: { "Content-Type": "application/json" } },
+      );
+    }
+  }
 
   const hasAiDraftFields = manifest?.fields.some((field) => field.aiPrompt);
   const hasAiAdaptFields = manifest?.fields.some((field) => field.aiAdapt);

@@ -63,6 +63,7 @@ import {
   type FillTemplateSource,
 } from "@/api/lib/templates/template-fill-service";
 import { isFillableTemplateInputField } from "@/api/lib/templates/template-input-contract";
+import type { MissingRequiredField } from "@/api/lib/templates/template-optional-defaults";
 import { isTemplateFieldRequired } from "@/api/lib/templates/template-optional-defaults";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 
@@ -210,7 +211,7 @@ type FillCall = {
   values: Record<string, unknown>;
   result:
     | { text: string; unmatchedPlaceholders: string[]; unusedValues: string[] }
-    | { error: string };
+    | { error: string; missingFields?: MissingRequiredField[] };
 };
 
 // Matches the "Template not found." message `describeStoredTemplate` and
@@ -298,6 +299,16 @@ const createFixtureTools = ({
       return panic(
         "fillTemplateDocx returned a usage rejection without a usage check",
       );
+    }
+    if ("requiredFieldsRejection" in filled) {
+      // The production gate: the model gets the exact missing fields back
+      // and is expected to ask for them rather than guess.
+      const result = {
+        error: "missing_required_fields",
+        missingFields: filled.requiredFieldsRejection,
+      };
+      fillCalls.push({ templateId, values, result });
+      return result;
     }
     if ("error" in filled) {
       const result = { error: filled.error };

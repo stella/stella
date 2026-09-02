@@ -650,6 +650,155 @@ describe("fill handler validation", () => {
   });
 });
 
+// ── Handler: fill required fields ────────────────────────
+// fillHandler backs the raw-upload download route, which — unlike the fill
+// service — used to run applyManifestFillSteps/fillTemplate directly with no
+// required-field check at all. It must apply the same shared gate
+// (collectMissingRequiredFields) as every other real fill.
+
+describe("fill handler required fields", () => {
+  const requiredFieldManifest: TemplateManifest = {
+    version: 1,
+    fields: [{ path: "governing_law", label: "Governing law", required: true }],
+  };
+
+  test("rejects a download omitting a required field", async () => {
+    let buf = await makeDocx(WRAP(P("Governed by {{governing_law}} law.")));
+    buf = await writeManifest(buf, requiredFieldManifest);
+    const file = await makeDocxFile(buf);
+
+    const result = await fillHandler({
+      safeDb: stubSafeDb,
+      scopedDb: stubScopedDb,
+      organizationId: fakeOrgId,
+      userId: fakeUserId,
+      query: {},
+      body: { file, values: "{}" },
+    });
+
+    expect(result).toBeInstanceOf(Response);
+    expect(result.status).toBe(400);
+    const body = await readTestJson<{
+      error: string;
+      missingFields: { path: string }[];
+    }>(result);
+    expect(body.error).toBe("missing_required_fields");
+    expect(body.missingFields).toEqual([
+      expect.objectContaining({ path: "governing_law" }),
+    ]);
+  });
+
+  test("rejects a download whose required value is whitespace-only", async () => {
+    let buf = await makeDocx(WRAP(P("Governed by {{governing_law}} law.")));
+    buf = await writeManifest(buf, requiredFieldManifest);
+    const file = await makeDocxFile(buf);
+
+    const result = await fillHandler({
+      safeDb: stubSafeDb,
+      scopedDb: stubScopedDb,
+      organizationId: fakeOrgId,
+      userId: fakeUserId,
+      query: {},
+      body: { file, values: '{"governing_law": "   "}' },
+    });
+
+    expect(result).toBeInstanceOf(Response);
+    expect(result.status).toBe(400);
+    const body = await readTestJson<{ error: string }>(result);
+    expect(body.error).toBe("missing_required_fields");
+  });
+
+  test("fills a download once the required field is provided", async () => {
+    let buf = await makeDocx(WRAP(P("Governed by {{governing_law}} law.")));
+    buf = await writeManifest(buf, requiredFieldManifest);
+    const file = await makeDocxFile(buf);
+
+    const result = await fillHandler({
+      safeDb: stubSafeDb,
+      scopedDb: stubScopedDb,
+      organizationId: fakeOrgId,
+      userId: fakeUserId,
+      query: {},
+      body: { file, values: '{"governing_law": "Czech"}' },
+    });
+
+    expect(result).toBeInstanceOf(Response);
+    expect(result.status).toBe(200);
+  });
+
+  test("rejects when a required loop item field is missing in one row", async () => {
+    let buf = await makeDocx(
+      WRAP(
+        [P("{{#each persons}}"), P("{{persons.member}}"), P("{{/each}}")].join(
+          "",
+        ),
+      ),
+    );
+    buf = await writeManifest(buf, {
+      version: 1,
+      fields: [{ path: "persons.member", label: "Member", required: true }],
+    });
+    const file = await makeDocxFile(buf);
+
+    const result = await fillHandler({
+      safeDb: stubSafeDb,
+      scopedDb: stubScopedDb,
+      organizationId: fakeOrgId,
+      userId: fakeUserId,
+      query: {},
+      body: {
+        file,
+        values: JSON.stringify({
+          persons: [{ member: "Alice" }, { member: "" }],
+        }),
+      },
+    });
+
+    expect(result).toBeInstanceOf(Response);
+    expect(result.status).toBe(400);
+    const body = await readTestJson<{
+      error: string;
+      missingFields: { path: string }[];
+    }>(result);
+    expect(body.error).toBe("missing_required_fields");
+    expect(body.missingFields).toEqual([
+      expect.objectContaining({ path: "persons.member" }),
+    ]);
+  });
+
+  test("fills when every row supplies the required loop item field", async () => {
+    let buf = await makeDocx(
+      WRAP(
+        [P("{{#each persons}}"), P("{{persons.member}}"), P("{{/each}}")].join(
+          "",
+        ),
+      ),
+    );
+    buf = await writeManifest(buf, {
+      version: 1,
+      fields: [{ path: "persons.member", label: "Member", required: true }],
+    });
+    const file = await makeDocxFile(buf);
+
+    const result = await fillHandler({
+      safeDb: stubSafeDb,
+      scopedDb: stubScopedDb,
+      organizationId: fakeOrgId,
+      userId: fakeUserId,
+      query: {},
+      body: {
+        file,
+        values: JSON.stringify({
+          persons: [{ member: "Alice" }, { member: "Bob" }],
+        }),
+      },
+    });
+
+    expect(result).toBeInstanceOf(Response);
+    expect(result.status).toBe(200);
+  });
+});
+
 // ── Handler: fill diagnostic headers ─────────────────────
 
 describe("fill handler diagnostic headers", () => {

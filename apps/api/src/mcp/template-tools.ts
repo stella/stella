@@ -49,7 +49,10 @@ import {
   DEFAULT_TEMPLATE_FILL_COMPLETION_MODE,
   TEMPLATE_FILL_COMPLETION_MODES,
 } from "@/api/lib/templates/template-fill-completion";
-import type { DescribeTemplateResult } from "@/api/lib/templates/template-fill-service";
+import type {
+  DescribeTemplateResult,
+  MissingRequiredField,
+} from "@/api/lib/templates/template-fill-service";
 import {
   describeStoredTemplate,
   fillStoredTemplateDocx,
@@ -430,7 +433,10 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
       "applies. Pass template_id to return that template's full field " +
       "configuration, in the shape the field reference documents " +
       `(see ${TEMPLATE_FIELD_REFERENCE_URI}), plus its named conditions and ` +
-      "formula fields. Omitted optional scalar placeholders render blank.",
+      "formula fields. Omitted optional scalar placeholders render blank. " +
+      "A required, non-AI-fillable field omitted or empty fails " +
+      "fill_template; `arrays` marks {{#each}} fields as arrays of objects, " +
+      "not dotted keys.",
     inputSchema: {
       type: "object",
       properties: {
@@ -464,8 +470,11 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
       'path-to-value map (for example, {"tenant.name":"ACME"}). Registry, ' +
       "composite, formula, and AI fields resolve automatically. Unknown keys " +
       "fail unless allow_unused_values is true; unfilled placeholders fail " +
-      "unless completion_mode is allow_partial. Successful output includes " +
-      "completionStatus.",
+      "unless completion_mode is allow_partial. A required field that is not " +
+      "AI-fillable must be provided: an omitted or empty one fails with the " +
+      "exact list of missing fields instead of a guessed value or a raw " +
+      "placeholder in the output — ask the user for those values and retry. " +
+      "Successful output includes completionStatus.",
     inputSchema: {
       type: "object",
       properties: {
@@ -514,8 +523,11 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
       "action='create_document' to create a new document (optionally inside " +
       "parent_id), or action='create_version' with entity_id to append a " +
       "version to an existing document. Call list_templates first to learn " +
-      "the field paths. Returns the entity and version identifiers plus any " +
-      "unmatched placeholders or unused values.",
+      "the field paths and which are required. A required field that is not " +
+      "AI-fillable must be provided, or the fill fails with the exact list of " +
+      "missing fields; ask the user for those values instead of guessing. " +
+      "Returns the entity and version identifiers plus any unmatched " +
+      "placeholders or unused values.",
     inputSchema: {
       type: "object",
       properties: {
@@ -733,6 +745,45 @@ const describeTemplateDetail: TypedMcpToolHandler<
   };
 };
 
+/** One line describing a missing required field for the issues list: its
+ *  label (falling back to the path) plus enough shape (input type, options)
+ *  for an agent to ask the user the right question without another
+ *  describe_template round trip. */
+const describeMissingRequiredField = (field: MissingRequiredField): string => {
+  const name = field.label ?? field.path;
+  const options =
+    field.options && field.options.length > 0
+      ? ` (options: ${field.options.join(", ")})`
+      : "";
+  return `${name} [${field.inputType}]${options} is required and was not provided.`;
+};
+
+/** Shared structured-rejection envelope for a fill blocked on missing
+ *  required fields: `fillTemplateDocxWithPolicy` returns this before any
+ *  clause/AI/lookup work runs, so this is the only place either tool renders
+ *  it. */
+const requiredFieldsRejectionResult = (
+  missingFields: MissingRequiredField[],
+): ReturnType<typeof structuredErrorResult> => {
+  // The preview keeps the summary `message` short; `issues` (below) still
+  // carries every missing field in full — an agent must be able to supply
+  // all of them in one retry, not just the first ten.
+  const preview = missingFields.slice(0, 10);
+  const omitted = missingFields.length - preview.length;
+  const suffix = omitted > 0 ? ` (${omitted} more omitted)` : "";
+  return structuredErrorResult({
+    code: "validation_error",
+    message: `Missing required template values: ${preview
+      .map((field) => field.label ?? field.path)
+      .join(", ")}${suffix}`,
+    issues: missingFields.map((field) => ({
+      path: `values.${field.path}`,
+      message: describeMissingRequiredField(field),
+    })),
+    hint: "Ask the user for these values (they are required and not AI-fillable), then retry with them added to 'values'.",
+  });
+};
+
 const fillTemplateArgsSchema = v.strictObject({
   template_id: v.pipe(v.string(), v.minLength(1)),
   values: v.record(v.string(), v.unknown()),
@@ -838,6 +889,9 @@ const handleFillTemplateTool: McpToolHandler = async ({ args, context }) => {
   }
   if ("error" in filled) {
     return errorResult(filled.error);
+  }
+  if ("requiredFieldsRejection" in filled) {
+    return requiredFieldsRejectionResult(filled.requiredFieldsRejection);
   }
   if ("inputRejection" in filled) {
     const preview = filled.inputRejection.keys.slice(0, 10);
@@ -1277,6 +1331,10 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
   if ("error" in filled) {
     await releaseClaim();
     return errorResult(filled.error);
+  }
+  if ("requiredFieldsRejection" in filled) {
+    await releaseClaim();
+    return requiredFieldsRejectionResult(filled.requiredFieldsRejection);
   }
   // Never cross the non-idempotent persistence boundary after either the
   // caller disconnects or the server-owned render deadline expires, even if

@@ -611,7 +611,7 @@
       "singleReadWhen": "template_id"
     },
     "name": "list_templates",
-    "description": "List the document templates in this organization (NDAs, powers of attorney, leases), or describe one template's fillable fields. Omit template_id to list templates: each template's id, name, field count, tags, and usage guidance (whenToUse / whenNotToUse); prefer a template whose whenToUse matches the request and skip any whose whenNotToUse applies. Pass template_id to return that template's full field configuration, in the shape the field reference documents (see stella://reference/template-fields), plus its named conditions and formula fields. Omitted optional scalar placeholders render blank.",
+    "description": "List the document templates in this organization (NDAs, powers of attorney, leases), or describe one template's fillable fields. Omit template_id to list templates: each template's id, name, field count, tags, and usage guidance (whenToUse / whenNotToUse); prefer a template whose whenToUse matches the request and skip any whose whenNotToUse applies. Pass template_id to return that template's full field configuration, in the shape the field reference documents (see stella://reference/template-fields), plus its named conditions and formula fields. Omitted optional scalar placeholders render blank. A required, non-AI-fillable field omitted or empty fails fill_template; `arrays` marks {{#each}} fields as arrays of objects, not dotted keys.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -639,7 +639,7 @@
       "scope": "templates"
     },
     "name": "fill_template",
-    "description": "Fill a template and return text plus the DOCX as base64. First call list_templates with template_id for field paths, then pass values as a path-to-value map (for example, {\"tenant.name\":\"ACME\"}). Registry, composite, formula, and AI fields resolve automatically. Unknown keys fail unless allow_unused_values is true; unfilled placeholders fail unless completion_mode is allow_partial. Successful output includes completionStatus.",
+    "description": "Fill a template and return text plus the DOCX as base64. First call list_templates with template_id for field paths, then pass values as a path-to-value map (for example, {\"tenant.name\":\"ACME\"}). Registry, composite, formula, and AI fields resolve automatically. Unknown keys fail unless allow_unused_values is true; unfilled placeholders fail unless completion_mode is allow_partial. A required field that is not AI-fillable must be provided: an omitted or empty one fails with the exact list of missing fields instead of a guessed value or a raw placeholder in the output — ask the user for those values and retry. Successful output includes completionStatus.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -721,7 +721,7 @@
       }
     },
     "name": "save_filled_template",
-    "description": "Fill a registered template and persist the generated DOCX directly in a matter, without requiring the client to upload bytes. Use action='create_document' to create a new document (optionally inside parent_id), or action='create_version' with entity_id to append a version to an existing document. Call list_templates first to learn the field paths. Returns the entity and version identifiers plus any unmatched placeholders or unused values.",
+    "description": "Fill a registered template and persist the generated DOCX directly in a matter, without requiring the client to upload bytes. Use action='create_document' to create a new document (optionally inside parent_id), or action='create_version' with entity_id to append a version to an existing document. Call list_templates first to learn the field paths and which are required. A required field that is not AI-fillable must be provided, or the fill fails with the exact list of missing fields; ask the user for those values instead of guessing. Returns the entity and version identifiers plus any unmatched placeholders or unused values.",
     "inputSchema": {
       "type": "object",
       "properties": {

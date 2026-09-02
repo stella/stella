@@ -236,6 +236,22 @@ const fillTemplateToWorkspace = createSafeHandler(
       );
     }
 
+    if ("requiredFieldsRejection" in filled) {
+      const names = filled.requiredFieldsRejection.map(
+        (field) => field.label ?? field.path,
+      );
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: `Missing required template values: ${names.join(", ")}`,
+          // The message alone loses each field's input type/options; carry
+          // the full rejection so a client can render the right control per
+          // field and retry with all of them at once.
+          requiredFields: filled.requiredFieldsRejection,
+        }),
+      );
+    }
+
     const fileName = resolveDocumentFileName(body.name, filled.fileName);
 
     const created = yield* Result.await(
