@@ -1,8 +1,8 @@
-// Runs after `vite build` inside the web image build. When a PostHog CLI key
-// is present, the client chunks are injected with chunk ids and their hidden
-// source maps uploaded, so stack frames resolve to source in the tracker
-// while the served bundle stays minified. With or without a key, no map file
-// survives into the runtime image.
+// Runs after `vite build` inside the web image build. When the build opts
+// into publishing, the client chunks are injected with chunk ids and their
+// hidden source maps uploaded, so stack frames resolve to source in the
+// tracker while the served bundle stays minified. Whether or not it
+// publishes, no map file survives into the runtime image.
 import { panic } from "better-result";
 import { readFile, rm } from "node:fs/promises";
 import path from "node:path";
@@ -18,33 +18,83 @@ const RELEASE_NAME = "stella-web";
 const CHUNK_ID_MARKER = "//# chunkId=";
 
 export type SourcemapPublishPlan =
-  | { type: "skip"; reason: "no_api_key" }
-  | { type: "publish"; host: string; projectId: string; version: string };
+  | { type: "skip" }
+  | {
+      type: "publish";
+      apiKey: string;
+      host: string;
+      projectId: string;
+      version: string;
+    };
 
 const trimmed = (value: string | undefined): string => value?.trim() ?? "";
 
+const isHttpsUrl = (value: string): boolean => {
+  if (!URL.canParse(value)) {
+    return false;
+  }
+  return new URL(value).protocol === "https:";
+};
+
 /**
- * A key alone opts the build into publishing; the host, project and version
- * are then mandatory, because a silent default would upload the maps to the
- * wrong place or under no release and the failure would only show up later
- * as unresolved frames.
+ * Publishing is an explicit, non-secret opt-in (`POSTHOG_SOURCEMAP_PUBLISH`)
+ * rather than "a key happens to be present": the build argument is part of
+ * the image cache key, so a cached no-publish layer can never stand in for
+ * a publishing build, and a build that opts in without its key or
+ * destination fails here instead of shipping unresolvable frames.
  */
 export const planSourcemapPublish = (
   env: Record<string, string | undefined>,
 ): SourcemapPublishPlan => {
-  if (trimmed(env["POSTHOG_CLI_API_KEY"]) === "") {
-    return { type: "skip", reason: "no_api_key" };
+  if (trimmed(env["POSTHOG_SOURCEMAP_PUBLISH"]) !== "true") {
+    return { type: "skip" };
   }
+  const apiKey = trimmed(env["POSTHOG_CLI_API_KEY"]);
   const host = trimmed(env["POSTHOG_CLI_HOST"]);
   const projectId = trimmed(env["POSTHOG_CLI_PROJECT_ID"]);
   const version = trimmed(env["STELLA_VERSION"]);
-  if (host === "" || projectId === "" || version === "") {
+  if (apiKey === "" || host === "" || projectId === "" || version === "") {
     return panic(
-      "POSTHOG_CLI_API_KEY is set, so POSTHOG_CLI_HOST, POSTHOG_CLI_PROJECT_ID and STELLA_VERSION must be set as well",
+      "POSTHOG_SOURCEMAP_PUBLISH=true requires POSTHOG_CLI_API_KEY, POSTHOG_CLI_HOST, POSTHOG_CLI_PROJECT_ID and STELLA_VERSION",
     );
   }
-  return { type: "publish", host, projectId, version };
+  // The key rides in a bearer header; a plain-text host would send it in
+  // the clear.
+  if (!isHttpsUrl(host)) {
+    return panic("POSTHOG_CLI_HOST must be an https:// URL");
+  }
+  return { type: "publish", apiKey, host, projectId, version };
 };
+
+export type SourcemapProcessCommand = {
+  cmd: string[];
+  env: Record<string, string>;
+};
+
+/** The CLI invocation for a plan: `inject` and `upload` in one pass. */
+export const sourcemapProcessCommand = (
+  plan: Extract<SourcemapPublishPlan, { type: "publish" }>,
+  clientRoot: string,
+): SourcemapProcessCommand => ({
+  cmd: [
+    "bun",
+    "x",
+    POSTHOG_CLI_PACKAGE,
+    "sourcemap",
+    "process",
+    "--directory",
+    clientRoot,
+    "--release-name",
+    RELEASE_NAME,
+    "--release-version",
+    plan.version,
+  ],
+  env: {
+    POSTHOG_CLI_API_KEY: plan.apiKey,
+    POSTHOG_CLI_HOST: plan.host,
+    POSTHOG_CLI_PROJECT_ID: plan.projectId,
+  },
+});
 
 export const listSourcemaps = async (root: string): Promise<string[]> => {
   const files: string[] = [];
@@ -59,7 +109,11 @@ export const listSourcemaps = async (root: string): Promise<string[]> => {
 
 export const removeSourcemaps = async (root: string): Promise<number> => {
   const files = await listSourcemaps(root);
-  await Promise.all(files.map((file) => rm(file)));
+  await Promise.all(
+    files.map(async (file) => {
+      await rm(file);
+    }),
+  );
   const remaining = await listSourcemaps(root);
   if (remaining.length > 0) {
     return panic(`source maps survived removal: ${remaining.join(", ")}`);
@@ -91,35 +145,17 @@ export const assertChunksInjected = async (
   return count;
 };
 
-const publish = (plan: Extract<SourcemapPublishPlan, { type: "publish" }>) => {
-  const result = Bun.spawnSync(
-    [
-      "bun",
-      "x",
-      POSTHOG_CLI_PACKAGE,
-      "sourcemap",
-      "process",
-      "--directory",
-      CLIENT_DIST_PATH,
-      "--release-name",
-      RELEASE_NAME,
-      "--release-version",
-      plan.version,
-    ],
-    {
-      env: {
-        ...Bun.env,
-        POSTHOG_CLI_HOST: plan.host,
-        POSTHOG_CLI_PROJECT_ID: plan.projectId,
-      },
-      stderr: "inherit",
-      stdout: "inherit",
-    },
-  );
+const publish = (
+  plan: Extract<SourcemapPublishPlan, { type: "publish" }>,
+): void => {
+  const { cmd, env } = sourcemapProcessCommand(plan, CLIENT_DIST_PATH);
+  const result = Bun.spawnSync(cmd, {
+    env: { ...Bun.env, ...env },
+    stderr: "inherit",
+    stdout: "inherit",
+  });
   if (result.exitCode !== 0) {
-    return panic(
-      `posthog-cli sourcemap process exited with ${result.exitCode}`,
-    );
+    panic(`posthog-cli sourcemap process exited with ${result.exitCode}`);
   }
 };
 
@@ -132,7 +168,9 @@ if (import.meta.main) {
       `Uploaded source maps for ${injected} client chunks as ${RELEASE_NAME}@${plan.version}.`,
     );
   } else {
-    console.log("No POSTHOG_CLI_API_KEY; source maps are not published.");
+    console.log(
+      "POSTHOG_SOURCEMAP_PUBLISH is not true; maps stay unpublished.",
+    );
   }
   const removed = await removeSourcemaps(DIST_PATH);
   console.log(`Removed ${removed} source map files from dist.`);

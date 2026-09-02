@@ -15,13 +15,11 @@ inputs:
     description: Browser-visible PostHog project key required for official Stella builds; passed separately so it is never committed.
     required: true
   posthog-cli-api-key:
-    description: PostHog personal API key with error-tracking write scope; when set, the build publishes the client source maps. Empty skips the upload.
-    required: false
-    default: ""
+    description: PostHog personal API key with error-tracking write scope. Non-empty opts the build into publishing the client source maps; every caller states it so a missing wire-up is visible, an empty value skips the upload.
+    required: true
   posthog-project-id:
-    description: Numeric PostHog project id that receives the source maps; required whenever posthog-cli-api-key is set.
-    required: false
-    default: ""
+    description: Numeric PostHog project id that receives the source maps; must be non-empty whenever posthog-cli-api-key is.
+    required: true
   source-path:
     description: Checkout containing the exact source commit to build.
     required: false
@@ -157,6 +155,7 @@ runs:
         build-args: |
           STELLA_VERSION=${{ steps.args.outputs.version }}
           STELLA_COMMIT_SHA=${{ inputs.release-sha }}
+          POSTHOG_SOURCEMAP_PUBLISH=${{ inputs.posthog-cli-api-key != '' }}
           POSTHOG_SOURCEMAP_PROJECT_ID=${{ inputs.posthog-project-id }}
           ${{ steps.args.outputs.values }}
           ${{ steps.args.outputs.posthog-name }}=${{ inputs.posthog-key }}

@@ -8,7 +8,16 @@ import {
   listSourcemaps,
   planSourcemapPublish,
   removeSourcemaps,
+  sourcemapProcessCommand,
 } from "./publish-sourcemaps";
+
+const PUBLISH_ENV = {
+  POSTHOG_SOURCEMAP_PUBLISH: "true",
+  POSTHOG_CLI_API_KEY: "phx_test",
+  POSTHOG_CLI_HOST: "https://eu.posthog.com",
+  POSTHOG_CLI_PROJECT_ID: "42",
+  STELLA_VERSION: "1.2.3",
+};
 
 const createDist = async () => {
   const root = await mkdtemp(path.join(tmpdir(), "stella-sourcemaps-"));
@@ -25,41 +34,77 @@ const createDist = async () => {
 };
 
 describe("planSourcemapPublish", () => {
-  test("skips without a key, including a whitespace-only one", () => {
-    expect(planSourcemapPublish({})).toEqual({
-      type: "skip",
-      reason: "no_api_key",
-    });
-    expect(planSourcemapPublish({ POSTHOG_CLI_API_KEY: "  " })).toEqual({
-      type: "skip",
-      reason: "no_api_key",
-    });
-  });
-
-  test("publishes with the host, project and version the key implies", () => {
+  test("skips unless the build opts in, even when a key is present", () => {
+    expect(planSourcemapPublish({})).toEqual({ type: "skip" });
+    expect(
+      planSourcemapPublish({ ...PUBLISH_ENV, POSTHOG_SOURCEMAP_PUBLISH: "" }),
+    ).toEqual({ type: "skip" });
     expect(
       planSourcemapPublish({
-        POSTHOG_CLI_API_KEY: "phx_test",
-        POSTHOG_CLI_HOST: "https://eu.posthog.com",
-        POSTHOG_CLI_PROJECT_ID: "42",
-        STELLA_VERSION: "1.2.3",
+        ...PUBLISH_ENV,
+        POSTHOG_SOURCEMAP_PUBLISH: "false",
       }),
-    ).toEqual({
+    ).toEqual({ type: "skip" });
+  });
+
+  test("publishes with the key, host, project and version", () => {
+    expect(planSourcemapPublish(PUBLISH_ENV)).toEqual({
       type: "publish",
+      apiKey: "phx_test",
       host: "https://eu.posthog.com",
       projectId: "42",
       version: "1.2.3",
     });
   });
 
-  test("refuses a key without a destination rather than defaulting one", () => {
+  test("an opted-in build without its key or destination fails, never skips", () => {
+    expect(() =>
+      planSourcemapPublish({ ...PUBLISH_ENV, POSTHOG_CLI_API_KEY: " " }),
+    ).toThrow(/POSTHOG_CLI_API_KEY/u);
+    expect(() =>
+      planSourcemapPublish({ ...PUBLISH_ENV, POSTHOG_CLI_PROJECT_ID: "" }),
+    ).toThrow(/POSTHOG_CLI_PROJECT_ID/u);
+  });
+
+  test("refuses a host that would carry the key in clear text", () => {
     expect(() =>
       planSourcemapPublish({
+        ...PUBLISH_ENV,
+        POSTHOG_CLI_HOST: "http://eu.posthog.com",
+      }),
+    ).toThrow(/https/u);
+    expect(() =>
+      planSourcemapPublish({ ...PUBLISH_ENV, POSTHOG_CLI_HOST: "posthog" }),
+    ).toThrow(/https/u);
+  });
+});
+
+describe("sourcemapProcessCommand", () => {
+  test("runs inject and upload against the client chunks under the release", () => {
+    const plan = planSourcemapPublish(PUBLISH_ENV);
+    if (plan.type !== "publish") {
+      throw new Error("expected a publish plan");
+    }
+    expect(sourcemapProcessCommand(plan, "/app/dist/client")).toEqual({
+      cmd: [
+        "bun",
+        "x",
+        "@posthog/cli@0.18.0",
+        "sourcemap",
+        "process",
+        "--directory",
+        "/app/dist/client",
+        "--release-name",
+        "stella-web",
+        "--release-version",
+        "1.2.3",
+      ],
+      env: {
         POSTHOG_CLI_API_KEY: "phx_test",
         POSTHOG_CLI_HOST: "https://eu.posthog.com",
-        STELLA_VERSION: "1.2.3",
-      }),
-    ).toThrow(/POSTHOG_CLI_PROJECT_ID/u);
+        POSTHOG_CLI_PROJECT_ID: "42",
+      },
+    });
   });
 });
 
@@ -82,7 +127,14 @@ describe("assertChunksInjected", () => {
       path.join(clientRoot, "assets/vendor-XyZw5678.js"),
       'console.log("vendor");\n',
     );
-    await expect(assertChunksInjected(clientRoot)).rejects.toThrow(
+    let failure: unknown;
+    try {
+      await assertChunksInjected(clientRoot);
+    } catch (error) {
+      failure = error;
+    }
+    expect(failure).toBeInstanceOf(Error);
+    expect(failure instanceof Error ? failure.message : "").toMatch(
       /vendor-XyZw5678\.js/u,
     );
   });
