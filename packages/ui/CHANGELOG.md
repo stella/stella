@@ -1,5 +1,15 @@
 # @stll/ui
 
+## 0.16.0
+
+### Minor Changes
+
+- [#2770](https://github.com/stella/stella/pull/2770) [`baa8677`](https://github.com/stella/stella/commit/baa86771abbe8e7f50d1ced611a434328a478b3c) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `KanbanCellAction`, the shared full-width ghost row that ends a kanban cell with its add action, so every board renders the same footer.
+
+### Patch Changes
+
+- [#2769](https://github.com/stella/stella/pull/2769) [`0e93dee`](https://github.com/stella/stella/commit/0e93deec1bcf1284fe6b61fe24dde916ee53b29d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Keep combobox, select, and menu item content inside the popup: the content track now shrinks below its content so truncating children clip instead of widening the item.
+
 ## 0.15.0
 
 ### Minor Changes
