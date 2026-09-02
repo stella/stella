@@ -293,6 +293,7 @@ const createFixtureTools = ({
       values,
       scopedDb,
       organizationId,
+      requiredFields: "enforce",
     });
     if ("usageRejection" in filled) {
       // No usage check is configured for this call, so this branch is

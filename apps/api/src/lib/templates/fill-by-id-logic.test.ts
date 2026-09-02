@@ -66,7 +66,12 @@ const stubDb = (fileName: string) =>
   createScopedDbMock({
     query: {
       templates: {
-        findFirst: async () => ({ s3Key, fileName, languages: null }),
+        findFirst: async () => ({
+          name: "Template",
+          fileName,
+          s3Key,
+          languages: [],
+        }),
       },
       organizationSettings: { findFirst: async () => undefined },
     },

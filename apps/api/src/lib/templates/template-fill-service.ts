@@ -1,9 +1,13 @@
 /**
- * Shared template orchestration for the chat (MCP) tools: load a stored
- * template's DOCX from S3, then either describe its fields or fill it and
- * return the assembled text. Mirrors the fill-preview route's recipe
- * (discover clause slots → fill → extractText), reusing the same underlying,
- * already-tested functions.
+ * The single template fill pipeline. Every fill boundary — the REST routes
+ * (raw upload, by-id download, live preview, fill-to-workspace), the chat and
+ * MCP tools, and the report exporter — resolves its source through here and
+ * runs exactly one sequence: required-fields gate → clause slots → AI usage
+ * preflight → manifest fill steps (lookups, composites, formulas, dependent
+ * selects) → AI drafting/adaptation → substitution. Route-specific concerns
+ * (request parsing, usage metering wiring, response shaping, audit rows, S3
+ * writes) stay with the caller; only genuinely different fill semantics are
+ * options here (see `requiredFields`).
  */
 
 import { panic } from "better-result";
@@ -59,7 +63,10 @@ import {
   collectMissingRequiredFields,
   isTemplateFieldRequired,
 } from "./template-optional-defaults";
-import type { MissingRequiredField } from "./template-optional-defaults";
+import type {
+  MissingRequiredField,
+  RequiredFieldsPolicy,
+} from "./template-optional-defaults";
 
 export type { MissingRequiredField } from "./template-optional-defaults";
 
@@ -82,22 +89,62 @@ type FillRejection<TUsageRejection> =
   | { requiredFieldsRejection: MissingRequiredField[] }
   | { usageRejection: TUsageRejection };
 
-const loadTemplate = async (
-  templateId: SafeId<"template">,
-  scopedDb: ScopedDb,
-): Promise<{ name: string; fileName: string; buffer: Buffer } | null> => {
-  // RLS on scopedDb scopes this to the caller's organization.
+/**
+ * An already-resolved DOCX to fill: the loaded bytes plus display metadata.
+ * A stored template also carries its `templateId`, which enables clause-slot
+ * resolution and use recording; a built-in / in-memory template (e.g. the
+ * report layout) omits it — it has no linked clauses and no row to increment.
+ */
+export type FillTemplateSource = {
+  name: string;
+  fileName: string;
+  buffer: Buffer;
+  templateId?: SafeId<"template"> | undefined;
+  /** The template's declared document languages. The aiAdapt rewriter
+   *  conjugates its per-occurrence rendering in them, so a caller that builds
+   *  that collaborator passes these through. */
+  documentLanguages?: readonly string[] | undefined;
+};
+
+/**
+ * Resolve a stored template into a fill source: its row plus the DOCX bytes
+ * from S3. Null when no such template exists for the caller, which every
+ * boundary reports as not found.
+ *
+ * The organization predicate is redundant with RLS on `scopedDb` and stays
+ * anyway: tenant isolation on a cross-tenant-addressable id should not rest on
+ * a single mechanism, and a session whose RLS role is ever misconfigured must
+ * still not read another organization's template.
+ */
+export const loadStoredTemplateSource = async ({
+  templateId,
+  organizationId,
+  scopedDb,
+}: {
+  templateId: SafeId<"template">;
+  organizationId: SafeId<"organization">;
+  scopedDb: ScopedDb;
+}): Promise<FillTemplateSource | null> => {
   const template = await scopedDb((tx) =>
     tx.query.templates.findFirst({
-      where: { id: { eq: templateId } },
-      columns: { name: true, fileName: true, s3Key: true },
+      where: {
+        id: { eq: templateId },
+        organizationId: { eq: organizationId },
+      },
+      columns: { name: true, fileName: true, s3Key: true, languages: true },
     }),
   );
   if (!template) {
     return null;
   }
   const buffer = Buffer.from(await readS3ArrayBuffer(template.s3Key));
-  return { name: template.name, fileName: template.fileName, buffer };
+  return {
+    name: template.name,
+    fileName: template.fileName,
+    buffer,
+    templateId,
+    documentLanguages: template.languages,
+  };
 };
 
 type DescribedField = {
@@ -208,12 +255,18 @@ export type DescribeTemplateResult =
 
 export const describeStoredTemplate = async ({
   templateId,
+  organizationId,
   scopedDb,
 }: {
   templateId: SafeId<"template">;
+  organizationId: SafeId<"organization">;
   scopedDb: ScopedDb;
 }): Promise<DescribeTemplateResult> => {
-  const loaded = await loadTemplate(templateId, scopedDb);
+  const loaded = await loadStoredTemplateSource({
+    templateId,
+    organizationId,
+    scopedDb,
+  });
   if (!loaded) {
     return { error: "Template not found." };
   }
@@ -301,22 +354,45 @@ export const describeStoredTemplate = async ({
  */
 type FillUsagePreflight<TRejection> = () => Promise<TRejection | null>;
 
+/** The model-backed collaborators a manifest's AI fields need: a generator for
+ *  AI-fillable fields (`aiPrompt`), a decider for AI-decided boolean fields (a
+ *  boolean field with an `aiPrompt`), and a per-occurrence adapter for
+ *  `aiAdapt` fields. Each is optional; an absent one leaves its fields
+ *  unresolved rather than failing the fill. */
+export type AiFillCollaborators = {
+  generateAiValue?: AiFieldGenerator | undefined;
+  decideAiCondition?: AiConditionDecider | undefined;
+  adaptAiValue?: AiOccurrenceAdapter | undefined;
+};
+
+/**
+ * Builds {@link AiFillCollaborators}, invoked once and only when the manifest
+ * declares an AI-drafted or AI-adapted field. Deferred because building them
+ * costs the caller an org AI config read and a metered analytics trace: a
+ * deterministic fill must pay neither.
+ */
+type AiFillCollaboratorProvider = () =>
+  | AiFillCollaborators
+  | Promise<AiFillCollaborators>;
+
 type FillServiceOptions<TRejection = never> = {
   templateId: SafeId<"template">;
   values: FillValues;
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
+  /** Whether a required, user-entered field left absent or empty rejects the
+   *  fill. `"enforce"` is the contract for every real fill; `"allow-partial"`
+   *  is the live preview's deliberate exception (see
+   *  {@link RequiredFieldsPolicy}). Mandatory so each boundary names its
+   *  stance. */
+  requiredFields: RequiredFieldsPolicy;
   /** Per-fill clause edits keyed by slot patch key (`@clause:Name`). When a
    *  key matches a discovered slot, the override body is inserted for that slot
    *  instead of the linked clause's resolved body (mirrors fill-by-id). */
   clauseOverrides?: Record<string, ClauseBody> | undefined;
-  /** Optional model-backed generator for AI-fillable fields (aiPrompt). */
-  generateAiValue?: AiFieldGenerator | undefined;
-  /** Optional model-backed decider for AI-decided boolean fields (a boolean
-   *  field with an aiPrompt). */
-  decideAiCondition?: AiConditionDecider | undefined;
-  /** Optional model-backed per-occurrence adapter for aiAdapt fields. */
-  adaptAiValue?: AiOccurrenceAdapter | undefined;
+  /** Deferred builder for the AI collaborators; omitted by a caller that never
+   *  drafts (the fill then leaves AI fields unresolved). */
+  aiCollaborators?: AiFillCollaboratorProvider | undefined;
   /** Optional usage preflight run only when the manifest declares AI fields,
    *  before any model call. A non-null return aborts the fill with a
    *  `{ usageRejection }` result the caller surfaces as its own response. */
@@ -341,19 +417,6 @@ type FilledDocx = {
   structureErrors: Awaited<ReturnType<typeof fillTemplate>>["structureErrors"];
 };
 
-/**
- * An already-resolved DOCX to fill: the loaded bytes plus display metadata.
- * A stored template also carries its `templateId`, which enables clause-slot
- * resolution and use recording; a built-in / in-memory template (e.g. the
- * report layout) omits it — it has no linked clauses and no row to increment.
- */
-export type FillTemplateSource = {
-  name: string;
-  fileName: string;
-  buffer: Buffer;
-  templateId?: SafeId<"template"> | undefined;
-};
-
 type FillDocxOptions<TRejection = never> = Omit<
   FillServiceOptions<TRejection>,
   "templateId"
@@ -367,22 +430,20 @@ type FillDocxWithPolicyOptions<TRejection = never> =
   };
 
 /**
- * Shared fill recipe over an already-loaded DOCX: resolve clause slots (stored
- * templates only), run the manifest fill steps (lookups, composites, formulas,
- * dependent selects), draft/adapt AI fields, then substitute. Records the
- * template use when a `templateId` is present. Backs both the stored-template
- * fill below and the built-in report export, so a template fills identically at
- * every boundary.
+ * Shared fill recipe over an already-loaded DOCX: gate required fields,
+ * resolve clause slots (stored templates only), run the manifest fill steps
+ * (lookups, composites, formulas, dependent selects), draft/adapt AI fields,
+ * then substitute. Records the template use when a `templateId` is present.
+ * Backs every fill boundary, so a template fills identically at each of them.
  */
 const fillTemplateDocxWithPolicy = async <TRejection = never>({
   source,
   values,
   scopedDb,
   organizationId,
+  requiredFields,
   clauseOverrides,
-  generateAiValue,
-  decideAiCondition,
-  adaptAiValue,
+  aiCollaborators,
   assertUsageAvailable,
   useRecording = "after-fill",
   workspaceId,
@@ -449,12 +510,12 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
   // field (not AI-fillable, not formula/condition/source-derived) that is
   // absent or empty must never be silently invented or left as a raw
   // `{{marker}}` in the output. Ask the caller for exactly these fields
-  // instead of guessing. Every real fill enforces this; only the live
-  // fill-preview route (not this service) legitimately allows partial values.
+  // instead of guessing. Every real fill passes "enforce" here; the live
+  // fill-preview route names its exception with "allow-partial".
   if (manifest) {
     const missingRequiredFields = collectMissingRequiredFields({
       fields: manifest.fields,
-      policy: "enforce",
+      policy: requiredFields,
       values: record,
     });
     if (missingRequiredFields.length > 0) {
@@ -491,6 +552,23 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
   let fillBuffer = loaded.buffer;
   let adaptedPaths: readonly string[] = [];
   if (manifest) {
+    // Gate the AI usage preflight and the collaborator build on a model call
+    // actually running: both cost the caller quota or an org AI config read,
+    // and a deterministic fill must spend neither. Runs before the manifest
+    // fill steps so an over-quota fill rejects without first calling out to a
+    // registry for its lookup fields.
+    const hasAiFields = manifest.fields.some(
+      (field) => Boolean(field.aiPrompt) || field.aiAdapt === true,
+    );
+    if (assertUsageAvailable && hasAiFields) {
+      const usageRejection = await assertUsageAvailable();
+      if (usageRejection !== null) {
+        return { usageRejection };
+      }
+    }
+    const { generateAiValue, decideAiCondition, adaptAiValue } =
+      aiCollaborators && hasAiFields ? await aiCollaborators() : {};
+
     // Resolve the data-binding context only when this fill targets a matter and
     // the manifest actually declares a bound field, so a transient fill or a
     // template with no bindings fires no extra queries.
@@ -522,21 +600,6 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
     });
     if (stepError !== null) {
       return { error: stepError };
-    }
-
-    // Gate the AI usage preflight on a model call actually running: the
-    // generators below are no-ops unless the manifest declares AI fields, so a
-    // deterministic fill spends no quota and must not be rejected for it.
-    if (assertUsageAvailable) {
-      const hasAiFields = manifest.fields.some(
-        (field) => Boolean(field.aiPrompt) || field.aiAdapt === true,
-      );
-      if (hasAiFields) {
-        const usageRejection = await assertUsageAvailable();
-        if (usageRejection !== null) {
-          return { usageRejection };
-        }
-      }
     }
 
     const documentText = await documentTextForAiFields(
@@ -638,43 +701,28 @@ export const fillTemplateDocxStrict = async <TRejection = never>(
 
 /**
  * Load a stored template's DOCX from S3 and fill it via {@link fillTemplateDocx}.
- * Mirrors the fill-by-id route's pipeline so a stored template fills identically
- * at every boundary. Backs the fill-to-workspace route and the chat tools.
+ * Backs the fill-by-id and fill-to-workspace routes, the chat tools, and the
+ * report exporter.
  */
 export const fillStoredTemplateDocx = async <TRejection = never>({
   templateId,
-  values,
-  scopedDb,
-  organizationId,
-  clauseOverrides,
-  generateAiValue,
-  decideAiCondition,
-  adaptAiValue,
-  assertUsageAvailable,
-  workspaceId,
+  ...options
 }: FillServiceOptions<TRejection>): Promise<
   | FilledDocx
   | { error: string }
   | { requiredFieldsRejection: MissingRequiredField[] }
   | { usageRejection: TRejection }
 > => {
-  const loaded = await loadTemplate(templateId, scopedDb);
+  const loaded = await loadStoredTemplateSource({
+    templateId,
+    organizationId: options.organizationId,
+    scopedDb: options.scopedDb,
+  });
   if (!loaded) {
     return { error: "Template not found." };
   }
 
-  return await fillTemplateDocx({
-    source: { ...loaded, templateId },
-    values,
-    scopedDb,
-    organizationId,
-    clauseOverrides,
-    generateAiValue,
-    decideAiCondition,
-    adaptAiValue,
-    assertUsageAvailable,
-    workspaceId,
-  });
+  return await fillTemplateDocx({ ...options, source: loaded });
 };
 
 export type FillTemplateResult =
@@ -740,21 +788,26 @@ export const fillStoredTemplateWithText = async <TRejection = never>(
   return await withExtractedText(filled);
 };
 
-export const fillStoredTemplateWithTextStrict = async <TRejection = never>(
-  options: FillServiceOptions<TRejection>,
-): Promise<
+export const fillStoredTemplateWithTextStrict = async <TRejection = never>({
+  templateId,
+  ...options
+}: FillServiceOptions<TRejection>): Promise<
   | FillTemplateWithDocxResult
   | { inputRejection: TemplateInputRejection }
   | { requiredFieldsRejection: MissingRequiredField[] }
   | { usageRejection: TRejection }
 > => {
-  const loaded = await loadTemplate(options.templateId, options.scopedDb);
+  const loaded = await loadStoredTemplateSource({
+    templateId,
+    organizationId: options.organizationId,
+    scopedDb: options.scopedDb,
+  });
   if (!loaded) {
     return { error: "Template not found." };
   }
   const filled = await fillTemplateDocxStrict({
     ...options,
-    source: { ...loaded, templateId: options.templateId },
+    source: loaded,
   });
   if (
     "usageRejection" in filled ||

@@ -119,40 +119,33 @@ export const createTemplateTools = ({
   orgAIConfig,
   recordAuditEvent,
 }: CreateTemplateToolsArgs) => {
-  const aiAnalytics = buildTemplateAiAnalytics({
-    safeDb,
-    organizationId,
-    userId,
-    orgAIConfig,
-    feature: "templates.fill",
-  });
-  // Model-backed generator for AI-fillable fields (FieldMeta.aiPrompt); shared
-  // with the web fill routes so AI placeholders behave identically. A failed or
+  // Model-backed collaborators for the manifest's AI fields, shared with the
+  // web fill routes so AI placeholders behave identically: a generator for
+  // AI-fillable fields (FieldMeta.aiPrompt), a decider for AI-decided boolean
+  // conditions, and a per-occurrence adapter for aiAdapt stubs. A failed or
   // unavailable model just leaves the field unfilled rather than erroring.
+  // The fill service builds these only when the manifest declares an AI field.
   // tenantWorkspaceIds is empty: a chat-driven template action is org-scoped,
-  // not bound to a matter (see buildTemplateAiAnalytics above).
-  const generateAiValue = buildAiFieldGenerator({
-    orgAIConfig: orgAIConfig ?? null,
-    organizationId,
-    aiAnalytics,
-    tenantWorkspaceIds: [],
-  });
-  // Decider for AI-decided boolean conditions (a boolean field with an
-  // aiPrompt); same fallback semantics as generateAiValue.
-  const decideAiCondition = buildAiConditionDecider({
-    orgAIConfig: orgAIConfig ?? null,
-    organizationId,
-    aiAnalytics,
-    tenantWorkspaceIds: [],
-  });
-  // Per-occurrence adapter for aiAdapt fields (stub rewritten to fit each
-  // marker's surrounding text); same fallback semantics as generateAiValue.
-  const adaptAiValue = buildAiOccurrenceAdapter({
-    orgAIConfig: orgAIConfig ?? null,
-    organizationId,
-    aiAnalytics,
-    tenantWorkspaceIds: [],
-  });
+  // not bound to a matter (see buildTemplateAiAnalytics below).
+  const aiCollaborators = () => {
+    const shared = {
+      orgAIConfig: orgAIConfig ?? null,
+      organizationId,
+      aiAnalytics: buildTemplateAiAnalytics({
+        safeDb,
+        organizationId,
+        userId,
+        orgAIConfig,
+        feature: "templates.fill",
+      }),
+      tenantWorkspaceIds: [],
+    };
+    return {
+      generateAiValue: buildAiFieldGenerator(shared),
+      decideAiCondition: buildAiConditionDecider(shared),
+      adaptAiValue: buildAiOccurrenceAdapter(shared),
+    };
+  };
 
   return {
     [LIST_TEMPLATES_TOOL_NAME]: toolDefinition({
@@ -200,6 +193,7 @@ export const createTemplateTools = ({
       async ({ templateId }) =>
         await describeStoredTemplate({
           templateId: brandPersistedTemplateId(templateId),
+          organizationId,
           scopedDb,
         }),
     ),
@@ -226,9 +220,8 @@ export const createTemplateTools = ({
         values,
         scopedDb,
         organizationId,
-        generateAiValue,
-        decideAiCondition,
-        adaptAiValue,
+        requiredFields: "enforce",
+        aiCollaborators,
       });
       if ("requiredFieldsRejection" in result) {
         // A required, non-AI-fillable field was omitted or empty: reject

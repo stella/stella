@@ -10,6 +10,7 @@ import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 
 import {
   describeStoredTemplate,
+  fillStoredTemplateDocx,
   fillTemplateDocx,
 } from "./template-fill-service";
 
@@ -95,6 +96,7 @@ describe("fillTemplateDocx required-field rejection", () => {
       values: {},
       scopedDb: stubScopedDb(),
       organizationId,
+      requiredFields: "enforce",
     });
 
     expect(result).toEqual({
@@ -117,6 +119,7 @@ describe("fillTemplateDocx required-field rejection", () => {
       values: { governing_law: "" },
       scopedDb: stubScopedDb(),
       organizationId,
+      requiredFields: "enforce",
     });
 
     expect("requiredFieldsRejection" in result).toBe(true);
@@ -130,6 +133,7 @@ describe("fillTemplateDocx required-field rejection", () => {
       values: { governing_law: "   " },
       scopedDb: stubScopedDb(),
       organizationId,
+      requiredFields: "enforce",
     });
 
     expect("requiredFieldsRejection" in result).toBe(true);
@@ -153,6 +157,7 @@ describe("fillTemplateDocx required-field rejection", () => {
       values: { persons: [{ member: "Alice" }, { member: "" }] },
       scopedDb: stubScopedDb(),
       organizationId,
+      requiredFields: "enforce",
     });
 
     expect(result).toEqual({
@@ -185,6 +190,7 @@ describe("fillTemplateDocx required-field rejection", () => {
       values: { persons: [{ member: "Alice" }, { member: "Bob" }] },
       scopedDb: stubScopedDb(),
       organizationId,
+      requiredFields: "enforce",
     });
 
     expect("requiredFieldsRejection" in result).toBe(false);
@@ -204,6 +210,7 @@ describe("fillTemplateDocx required-field rejection", () => {
       values: { governing_law: "Czech" },
       scopedDb: stubScopedDb(),
       organizationId,
+      requiredFields: "enforce",
     });
 
     expect("requiredFieldsRejection" in result).toBe(false);
@@ -230,7 +237,8 @@ describe("fillTemplateDocx required-field rejection", () => {
       values: {},
       scopedDb: stubScopedDb(),
       organizationId,
-      generateAiValue: async () => "Slovak",
+      requiredFields: "enforce",
+      aiCollaborators: async () => ({ generateAiValue: async () => "Slovak" }),
     });
 
     expect("requiredFieldsRejection" in result).toBe(false);
@@ -257,11 +265,35 @@ describe("fillTemplateDocx required-field rejection", () => {
       values: {},
       scopedDb: stubScopedDb(),
       organizationId,
+      requiredFields: "enforce",
     });
 
     // No matter is bound (no workspaceId), so the source field simply stays
     // unfilled rather than being flagged as a caller-correctable omission.
     expect("requiredFieldsRejection" in result).toBe(false);
+  });
+
+  // The collaborator factory costs an org AI config read and a metered trace,
+  // so the service must not resolve it for a manifest that declares no AI
+  // field. A factory that throws proves it was never called.
+  test("never resolves the AI collaborators for a deterministic manifest", async () => {
+    const buffer = await makeManifestDocx([requiredTextField]);
+
+    const result = await fillTemplateDocx({
+      source: { name: "NDA", fileName: "nda.docx", buffer },
+      values: { governing_law: "Czech" },
+      scopedDb: stubScopedDb(),
+      organizationId,
+      requiredFields: "enforce",
+      aiCollaborators: () =>
+        panic("deterministic fill resolved the AI collaborators"),
+    });
+
+    if (!("buffer" in result)) {
+      throw new Error("expected a filled document");
+    }
+    const texts = await extractTexts(result.buffer);
+    expect(texts.join("")).toContain("Governed by Czech law.");
   });
 
   test("does not check required fields on a manifest-less template", async () => {
@@ -272,9 +304,124 @@ describe("fillTemplateDocx required-field rejection", () => {
       values: {},
       scopedDb: stubScopedDb(),
       organizationId,
+      requiredFields: "enforce",
     });
 
     expect("requiredFieldsRejection" in result).toBe(false);
+  });
+});
+
+// The service owns the use counter, but a persistence caller that writes its
+// own atomic transaction (fill-by-id, save_filled_template) takes it over with
+// `useRecording: "caller"`. `fillStoredTemplateDocx` dropped that option while
+// forwarding, so those callers bumped the counter twice per fill; these run
+// through that wrapper, the one that was broken.
+
+describe("fillStoredTemplateDocx use recording", () => {
+  const usedTemplateId = toSafeId<"template">("tmpl_use");
+  const storedS3Key = "fake-key-use-recording";
+  const storedRow = {
+    name: "NDA",
+    fileName: "nda.docx",
+    s3Key: storedS3Key,
+    languages: [],
+  };
+
+  /** ScopedDb stub serving the stored template row and counting the
+   *  `templates` use-counter update. `findFirst` honours the organization
+   *  predicate the loader sends, so a mismatch reads as "not found" exactly as
+   *  the query would in Postgres. */
+  const storedTemplateScopedDb = (): {
+    scopedDb: ScopedDb;
+    updates: () => number;
+  } => {
+    let updates = 0;
+    const fakeTx = {
+      query: {
+        templates: {
+          findFirst: async ({
+            where,
+          }: {
+            where: {
+              id: { eq: string };
+              organizationId?: { eq: string } | undefined;
+            };
+          }) =>
+            // An absent predicate returns the row: that is what the query
+            // looked like before, so the cross-organization case below fails
+            // if the predicate is ever dropped again.
+            where.id.eq === usedTemplateId &&
+            (where.organizationId === undefined ||
+              where.organizationId.eq === organizationId)
+              ? storedRow
+              : undefined,
+        },
+        organizationSettings: { findFirst: async () => undefined },
+      },
+      update: () => {
+        updates += 1;
+        return { set: () => ({ where: async () => undefined }) };
+      },
+    };
+    // SAFETY: test stub; this fill touches only the template row, the
+    // registry-gate read, and the use-counter update counted above.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    const scopedDb = (async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn(fakeTx)) as unknown as ScopedDb;
+    return { scopedDb, updates: () => updates };
+  };
+
+  const fillStored = async (
+    options: Pick<
+      Parameters<typeof fillStoredTemplateDocx>[0],
+      "organizationId" | "useRecording"
+    >,
+  ) => {
+    const buffer = await makeManifestDocx([requiredTextField]);
+    const { scopedDb, updates } = storedTemplateScopedDb();
+    const fakeS3 = startFakeS3();
+    try {
+      fakeS3.put("stella", storedS3Key, buffer);
+      const result = await fillStoredTemplateDocx({
+        templateId: usedTemplateId,
+        values: { governing_law: "Czech" },
+        scopedDb,
+        requiredFields: "enforce",
+        ...options,
+      });
+      return { result, updates: updates() };
+    } finally {
+      fakeS3.stop();
+    }
+  };
+
+  test("bumps the use counter once by default", async () => {
+    const { result, updates } = await fillStored({ organizationId });
+
+    expect("buffer" in result).toBe(true);
+    expect(updates).toBe(1);
+  });
+
+  test("leaves the counter to the caller under useRecording: caller", async () => {
+    const { result, updates } = await fillStored({
+      organizationId,
+      useRecording: "caller",
+    });
+
+    expect("buffer" in result).toBe(true);
+    expect(updates).toBe(0);
+  });
+
+  // Tenant isolation on a cross-tenant-addressable id must not rest on RLS
+  // alone: the loader's own predicate has to reject a template that belongs to
+  // another organization even when the session role does not.
+  test("does not load a template belonging to another organization", async () => {
+    const { result, updates } = await fillStored({
+      organizationId: toSafeId<"organization">("org_other"),
+    });
+
+    expect(result).toEqual({ error: "Template not found." });
+    expect(updates).toBe(0);
   });
 });
 
@@ -330,6 +477,7 @@ describe("describeStoredTemplate array shape", () => {
       fakeS3.put("stella", s3Key, buffer);
       const result = await describeStoredTemplate({
         templateId,
+        organizationId,
         scopedDb: stubDescribeScopedDb(),
       });
 
@@ -373,6 +521,7 @@ describe("describeStoredTemplate array shape", () => {
       fakeS3.put("stella", s3Key, buffer);
       const result = await describeStoredTemplate({
         templateId,
+        organizationId,
         scopedDb: stubDescribeScopedDb(),
       });
 

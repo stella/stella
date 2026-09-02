@@ -63,7 +63,12 @@ const stubDb = () =>
   createScopedDbMock({
     query: {
       templates: {
-        findFirst: async () => ({ s3Key }),
+        findFirst: async () => ({
+          name: "Template",
+          fileName: "template.docx",
+          s3Key,
+          languages: [],
+        }),
       },
       organizationSettings: { findFirst: async () => undefined },
     },
@@ -79,16 +84,14 @@ describe("fillPreviewLogic required fields (allow-partial)", () => {
       fakeS3.put("stella", s3Key, buffer);
       const { safeDb, scopedDb } = stubDb();
 
-      const result = await Result.gen(() =>
-        fillPreviewLogic({
-          safeDb,
-          scopedDb,
-          organizationId,
-          userId,
-          templateId,
-          body: { values: "{}" },
-        }),
-      );
+      const result = await fillPreviewLogic({
+        safeDb,
+        scopedDb,
+        organizationId,
+        userId,
+        templateId,
+        body: { values: "{}" },
+      });
 
       expect(Result.isOk(result)).toBe(true);
       if (Result.isOk(result)) {
@@ -110,16 +113,14 @@ describe("fillPreviewLogic required fields (allow-partial)", () => {
       fakeS3.put("stella", s3Key, buffer);
       const { safeDb, scopedDb } = stubDb();
 
-      const result = await Result.gen(() =>
-        fillPreviewLogic({
-          safeDb,
-          scopedDb,
-          organizationId,
-          userId,
-          templateId,
-          body: { values: '{"governing_law": "Czech"}' },
-        }),
-      );
+      const result = await fillPreviewLogic({
+        safeDb,
+        scopedDb,
+        organizationId,
+        userId,
+        templateId,
+        body: { values: '{"governing_law": "Czech"}' },
+      });
 
       expect(Result.isOk(result)).toBe(true);
       if (Result.isOk(result)) {
