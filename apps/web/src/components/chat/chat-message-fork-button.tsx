@@ -72,9 +72,13 @@ export const ChatMessageForkButton = ({
       return unwrapEden(response);
     },
     onSuccess: async ({ threadId }) => {
-      pendingForkThreadId.current = null;
       await invalidateChatThreadLists({ queryClient, workspaceId });
       await navigate(chatThreadRoute({ threadId, workspaceId }));
+      // Released only once the fork is reachable. A navigation that rejects
+      // here (a loader or beforeLoad throw) surfaces as a failed mutation,
+      // and the retry must resolve to the fork the server already created,
+      // not mint a second one.
+      pendingForkThreadId.current = null;
     },
     onError: (error) => {
       getAnalytics().captureError(error);
