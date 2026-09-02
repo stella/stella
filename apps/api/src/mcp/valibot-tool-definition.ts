@@ -56,12 +56,12 @@ const deriveMcpInputSchema = (
   }
 
   const { properties, ...objectSchema } = jsonSchema;
-  const cleaned = withoutTrivialPropertyNames(objectSchema);
+  const cleaned = projectSchemaKeywords(objectSchema);
   return properties === undefined
     ? { ...cleaned, type: "object" }
     : {
         ...cleaned,
-        properties: withoutTrivialPropertyNamesInMap(properties),
+        properties: projectSchemaKeywordsInMap(properties),
         type: "object",
       };
 };
@@ -82,48 +82,86 @@ const SCHEMA_MAP_KEYWORDS = new Set([
 ]);
 
 /**
- * `v.record(v.string(), ...)` projects `propertyNames: { type: "string" }`,
- * which every JSON object satisfies. The keyword says nothing to a caller and
- * sits on the CLI trust boundary's deny list, so it is dropped wherever it is
- * trivial; a non-trivial `propertyNames` (a pattern, an enum) is kept as-is.
+ * Two keyword rewrites the wire schema needs that the Valibot export does not
+ * make on its own:
+ *
+ * - `v.record(v.string(), ...)` projects `propertyNames: { type: "string" }`,
+ *   which every JSON object satisfies. The keyword says nothing to a caller
+ *   and sits on the CLI trust boundary's deny list, so it is dropped wherever
+ *   it is trivial; a non-trivial `propertyNames` (a pattern, an enum) is kept.
+ * - `v.variant` projects `oneOf` and `v.literal` projects `const`. Neither
+ *   keyword is in the provider-safe dialect the chat tool surface serializes
+ *   these same definitions into. Variant branches are discriminated, hence
+ *   mutually exclusive, so `anyOf` accepts exactly the same values; a
+ *   one-value `enum` is the literal.
  */
-const withoutTrivialPropertyNames = (
+const projectSchemaKeywords = (
   schema: Record<string, unknown>,
 ): Record<string, unknown> => {
-  const { propertyNames, ...rest } = schema;
+  const { oneOf, propertyNames, ...rest } = schema;
   const keep =
     isSchemaRecord(propertyNames) &&
     !(
       Object.keys(propertyNames).length === 1 &&
       propertyNames["type"] === "string"
     );
+  if (oneOf !== undefined && rest["anyOf"] !== undefined) {
+    return panic("A schema node carries both oneOf and anyOf; cannot fold");
+  }
+  if ("const" in rest && rest["enum"] !== undefined) {
+    return panic("A schema node carries both const and enum; cannot fold");
+  }
   const entries = Object.entries(rest).map(
-    ([key, value]): [string, unknown] => [
-      key,
-      SCHEMA_MAP_KEYWORDS.has(key) && isSchemaRecord(value)
-        ? withoutTrivialPropertyNamesInMap(value)
-        : withoutTrivialPropertyNamesIn(value),
-    ],
+    ([key, value]): [string, unknown] => {
+      if (key === "const") {
+        return ["enum", [value]];
+      }
+      return [
+        key,
+        SCHEMA_MAP_KEYWORDS.has(key) && isSchemaRecord(value)
+          ? projectSchemaKeywordsInMap(value)
+          : projectSchemaKeywordsIn(value),
+      ];
+    },
   );
+  if (oneOf !== undefined) {
+    entries.push(["anyOf", projectSchemaKeywordsIn(oneOf)]);
+  }
+  if ("const" in rest && rest["type"] === undefined) {
+    const literalType = jsonLiteralType(rest["const"]);
+    if (literalType !== undefined) {
+      entries.push(["type", literalType]);
+    }
+  }
   const cleaned = Object.fromEntries(entries);
   return keep ? { ...cleaned, propertyNames } : cleaned;
 };
 
-const withoutTrivialPropertyNamesInMap = (
+const jsonLiteralType = (value: unknown): string | undefined => {
+  if (value === null) {
+    return "null";
+  }
+  const type = typeof value;
+  return type === "string" || type === "number" || type === "boolean"
+    ? type
+    : undefined;
+};
+
+const projectSchemaKeywordsInMap = (
   map: Record<string, unknown>,
 ): Record<string, unknown> =>
   Object.fromEntries(
     Object.entries(map).map(([key, value]): [string, unknown] => [
       key,
-      withoutTrivialPropertyNamesIn(value),
+      projectSchemaKeywordsIn(value),
     ]),
   );
 
-const withoutTrivialPropertyNamesIn = (value: unknown): unknown => {
+const projectSchemaKeywordsIn = (value: unknown): unknown => {
   if (Array.isArray(value)) {
-    return value.map(withoutTrivialPropertyNamesIn);
+    return value.map(projectSchemaKeywordsIn);
   }
-  return isSchemaRecord(value) ? withoutTrivialPropertyNames(value) : value;
+  return isSchemaRecord(value) ? projectSchemaKeywords(value) : value;
 };
 
 /**

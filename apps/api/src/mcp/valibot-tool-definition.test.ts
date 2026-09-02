@@ -86,6 +86,51 @@ describe("Valibot-backed MCP tool definitions", () => {
     ).toBe(false);
   });
 
+  test("projects variants and literals into the provider-safe dialect", () => {
+    // `oneOf` and `const` are what the export emits; neither survives the chat
+    // surface's provider-safe check, and both have exact equivalents.
+    const definition = defineValibotMcpTool({
+      access: "write",
+      annotations: { title: "Set example", readOnlyHint: false },
+      anonymized: { exposure: "excluded", reason: "write" },
+      description: "Set an example.",
+      inputSchema: v.strictObject({
+        content: v.variant("type", [
+          v.strictObject({ type: v.literal("text"), value: v.string() }),
+          v.strictObject({ type: v.literal("count"), value: v.number() }),
+        ]),
+      }),
+      name: "set_example",
+      scope: "stella:documents_write",
+    });
+
+    expect(definition.inputSchema.properties?.["content"]).toEqual({
+      anyOf: [
+        {
+          type: "object",
+          properties: {
+            type: { enum: ["text"], type: "string" },
+            value: { type: "string" },
+          },
+          required: ["type", "value"],
+          additionalProperties: false,
+        },
+        {
+          type: "object",
+          properties: {
+            type: { enum: ["count"], type: "string" },
+            value: { type: "number" },
+          },
+          required: ["type", "value"],
+          additionalProperties: false,
+        },
+      ],
+    });
+    const serialized = JSON.stringify(definition.inputSchema);
+    expect(serialized).not.toContain('"oneOf"');
+    expect(serialized).not.toContain('"const"');
+  });
+
   test("rejects an unsupported action without an explicit projection waiver", () => {
     expect(() =>
       defineValibotMcpTool({

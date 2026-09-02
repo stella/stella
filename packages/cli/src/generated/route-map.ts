@@ -1117,14 +1117,17 @@ export const generatedRouteMap: RouteNode = {
                         "Property ID, as returned by list_properties",
                     },
                     content: {
-                      oneOf: [
+                      description:
+                        "The value to set; 'type' must match the property.",
+                      anyOf: [
                         {
                           type: "object",
                           properties: {
                             type: {
-                              const: "text",
+                              enum: ["text"],
                               description:
                                 "Value type; must match the property's value type",
+                              type: "string",
                             },
                             value: {
                               type: "string",
@@ -1139,9 +1142,10 @@ export const generatedRouteMap: RouteNode = {
                           type: "object",
                           properties: {
                             type: {
-                              const: "single-select",
+                              enum: ["single-select"],
                               description:
                                 "Value type; must match the property's value type",
+                              type: "string",
                             },
                             value: {
                               anyOf: [
@@ -1163,9 +1167,10 @@ export const generatedRouteMap: RouteNode = {
                           type: "object",
                           properties: {
                             type: {
-                              const: "multi-select",
+                              enum: ["multi-select"],
                               description:
                                 "Value type; must match the property's value type",
+                              type: "string",
                             },
                             value: {
                               type: "array",
@@ -1184,9 +1189,10 @@ export const generatedRouteMap: RouteNode = {
                           type: "object",
                           properties: {
                             type: {
-                              const: "date",
+                              enum: ["date"],
                               description:
                                 "Value type; must match the property's value type",
+                              type: "string",
                             },
                             value: {
                               anyOf: [
@@ -1209,9 +1215,10 @@ export const generatedRouteMap: RouteNode = {
                           type: "object",
                           properties: {
                             type: {
-                              const: "int",
+                              enum: ["int"],
                               description:
                                 "Value type; must match the property's value type",
+                              type: "string",
                             },
                             value: {
                               type: "integer",
@@ -1237,8 +1244,6 @@ export const generatedRouteMap: RouteNode = {
                           additionalProperties: false,
                         },
                       ],
-                      description:
-                        "The value to set; 'type' must match the property.",
                     },
                   },
                 },

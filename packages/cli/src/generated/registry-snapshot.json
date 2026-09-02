@@ -1502,13 +1502,15 @@
           "description": "Property ID, as returned by list_properties"
         },
         "content": {
-          "oneOf": [
+          "description": "The value to set; 'type' must match the property.",
+          "anyOf": [
             {
               "type": "object",
               "properties": {
                 "type": {
-                  "const": "text",
-                  "description": "Value type; must match the property's value type"
+                  "enum": ["text"],
+                  "description": "Value type; must match the property's value type",
+                  "type": "string"
                 },
                 "value": {
                   "type": "string",
@@ -1522,8 +1524,9 @@
               "type": "object",
               "properties": {
                 "type": {
-                  "const": "single-select",
-                  "description": "Value type; must match the property's value type"
+                  "enum": ["single-select"],
+                  "description": "Value type; must match the property's value type",
+                  "type": "string"
                 },
                 "value": {
                   "anyOf": [
@@ -1544,8 +1547,9 @@
               "type": "object",
               "properties": {
                 "type": {
-                  "const": "multi-select",
-                  "description": "Value type; must match the property's value type"
+                  "enum": ["multi-select"],
+                  "description": "Value type; must match the property's value type",
+                  "type": "string"
                 },
                 "value": {
                   "type": "array",
@@ -1563,8 +1567,9 @@
               "type": "object",
               "properties": {
                 "type": {
-                  "const": "date",
-                  "description": "Value type; must match the property's value type"
+                  "enum": ["date"],
+                  "description": "Value type; must match the property's value type",
+                  "type": "string"
                 },
                 "value": {
                   "anyOf": [
@@ -1586,8 +1591,9 @@
               "type": "object",
               "properties": {
                 "type": {
-                  "const": "int",
-                  "description": "Value type; must match the property's value type"
+                  "enum": ["int"],
+                  "description": "Value type; must match the property's value type",
+                  "type": "string"
                 },
                 "value": {
                   "type": "integer",
@@ -1610,8 +1616,7 @@
               "required": ["type", "value"],
               "additionalProperties": false
             }
-          ],
-          "description": "The value to set; 'type' must match the property."
+          ]
         }
       }
     },
