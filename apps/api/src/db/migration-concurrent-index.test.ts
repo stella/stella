@@ -85,9 +85,10 @@ const APPROVED_PROCEDURAL_STATEMENTS = new Set([
   // VALIDATE that follows it outside the migrator transaction.
   "20260818090000_case_law_decision_date_bounds/migration.sql:31f2786a7f7aed2d2e55bd3161acad6ad49e606ec1bc75e9235de07cdadd96e0",
   // Retries the decision-date constraint swap on lock_not_available with
-  // short waits: metadata-only DDL on a table the corpus workers write to
-  // without pause.
-  "20260902100000_case_law_decision_date_ceiling/migration.sql:eac25446c58abfad48e38e289fdb1ce5ac6b7a9a2eea210838f6a7f611271642",
+  // waits that lengthen in tiers: metadata-only DDL on a table the corpus
+  // workers write to without pause, in transactions that outlast a short
+  // wait.
+  "20260902100000_case_law_decision_date_ceiling/migration.sql:d799f99eb97532f1f3819aae3e325fcc65d123f2a3bc7b98d4e9f41e417f8491",
   // Fails the Better Auth cutover before any constraint or index state is
   // committed when the trusted issuer backfill is incomplete. The static body
   // performs one bounded existence read and raises; it executes no dynamic SQL.

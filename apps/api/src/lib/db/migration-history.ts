@@ -311,15 +311,18 @@ const rewrittenMigrationHistories = {
   // in the file and moved the repair and the validation to the online repair
   // in src/db/decision-date-ceiling-repair.ts, but waited a single second for
   // the swap's ACCESS EXCLUSIVE lock, which the corpus workers' writes never
-  // yielded. 0.8.12 retries the swap with short waits. A database that
-  // applied either earlier file has the same constraint; the online repair
-  // finds nothing to do where the 0.8.10 file ran.
+  // yielded. 0.8.12 retried the swap with 2s waits, sixty of them, and the
+  // workers' transactions outlasted every one. 0.8.13 lengthens the waits in
+  // tiers once short ones have failed. A database that applied any earlier
+  // file has the same constraint; the online repair finds nothing to do
+  // where the 0.8.10 file ran.
   "20260902100000_case_law_decision_date_ceiling": {
     currentHash:
-      "6643de59d34aaeadb0ae79e03e4e209ac6f4a3565b735ec9af4954c1f26389b4",
+      "a8020848968a35595ee1ed952cc5002ca5c821ab567a555bc6a1b509401ee7b3",
     priorHashes: [
       "4540a61248f7d0176954c2a59afc7d697903c8b57e1cb8d60eecc870552a5cf0",
       "4197553d4a7015cd2a6c3c0d2f53399e075f7fc525e4b4a3791fba496d7b009e",
+      "6643de59d34aaeadb0ae79e03e4e209ac6f4a3565b735ec9af4954c1f26389b4",
     ],
     requiredIndexes: [],
   },
