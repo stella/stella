@@ -62,6 +62,21 @@ type FormatCommand =
   | "bulletedList"
   | "numberedList";
 
+type InlineFormatCommand = Exclude<
+  FormatCommand,
+  "bulletedList" | "numberedList"
+>;
+
+const INLINE_FORMATS = {
+  bold: { element: "strong", tags: ["b", "strong"] },
+  italic: { element: "em", tags: ["em", "i"] },
+  strikethrough: { element: "s", tags: ["s", "strike"] },
+  underline: { element: "u", tags: ["u"] },
+} as const satisfies Record<
+  InlineFormatCommand,
+  { element: string; tags: readonly string[] }
+>;
+
 const EDITOR_BLOCK_TAGS = new Set([
   "BLOCKQUOTE",
   "DIV",
@@ -134,6 +149,214 @@ const listItemsFromSelection = (fragment: DocumentFragment) => {
   return items;
 };
 
+const shallowCloneElement = (source: HTMLElement) => {
+  const clone = document.createElement(source.localName);
+  for (const attribute of Array.from(source.attributes)) {
+    clone.setAttribute(attribute.name, attribute.value);
+  }
+  return clone;
+};
+
+const isFormatElement = (element: HTMLElement, tags: readonly string[]) =>
+  tags.includes(element.localName);
+
+const hasFormatAncestor = (
+  node: Node,
+  editor: HTMLDivElement,
+  tags: readonly string[],
+) => {
+  let ancestor = node instanceof HTMLElement ? node : node.parentElement;
+  while (ancestor && ancestor !== editor) {
+    if (isFormatElement(ancestor, tags)) {
+      return true;
+    }
+    ancestor = ancestor.parentElement;
+  }
+  return false;
+};
+
+const rangeSelectsNodeContent = (range: Range, node: Node) => {
+  if (!range.intersectsNode(node)) {
+    return false;
+  }
+  if (!(node instanceof Text)) {
+    return true;
+  }
+  const start = node === range.startContainer ? range.startOffset : 0;
+  const end = node === range.endContainer ? range.endOffset : node.length;
+  return start < end;
+};
+
+const selectionIsFormatted = (
+  editor: HTMLDivElement,
+  range: Range,
+  tags: readonly string[],
+) => {
+  const walker = document.createTreeWalker(editor, NodeFilter.SHOW_ALL);
+  let hasSelectedFormattedBreak = false;
+  let hasSelectedFormattedText = false;
+  let node = walker.nextNode();
+  while (node) {
+    if (
+      node instanceof Text &&
+      node.length > 0 &&
+      rangeSelectsNodeContent(range, node)
+    ) {
+      const start = node === range.startContainer ? range.startOffset : 0;
+      const end = node === range.endContainer ? range.endOffset : node.length;
+      const selectedText = node.data.slice(start, end);
+      if (hasFormatAncestor(node, editor, tags)) {
+        hasSelectedFormattedText = true;
+      } else if (selectedText.trim()) {
+        return false;
+      }
+    }
+    if (
+      node instanceof HTMLElement &&
+      node.tagName === "BR" &&
+      rangeSelectsNodeContent(range, node) &&
+      hasFormatAncestor(node, editor, tags)
+    ) {
+      hasSelectedFormattedBreak = true;
+    }
+    node = walker.nextNode();
+  }
+  return hasSelectedFormattedText || hasSelectedFormattedBreak;
+};
+
+const outermostFormatAncestor = (
+  node: Node,
+  otherBoundary: Node,
+  editor: HTMLDivElement,
+  tags: readonly string[],
+) => {
+  let ancestor = node instanceof HTMLElement ? node : node.parentElement;
+  let match: HTMLElement | null = null;
+  while (ancestor && ancestor !== editor) {
+    if (isFormatElement(ancestor, tags) && ancestor.contains(otherBoundary)) {
+      match = ancestor;
+    }
+    ancestor = ancestor.parentElement;
+  }
+  return match;
+};
+
+const fragmentHasContent = (fragment: DocumentFragment) =>
+  Boolean(fragment.textContent) || fragment.querySelector("br") !== null;
+
+const removeFormatFromFragment = (
+  fragment: DocumentFragment,
+  tags: readonly string[],
+) => {
+  for (const element of Array.from(fragment.querySelectorAll(tags.join(",")))) {
+    element.replaceWith(...Array.from(element.childNodes));
+  }
+};
+
+const removeInlineFormat = (
+  editor: HTMLDivElement,
+  range: Range,
+  selection: Selection,
+  tags: readonly string[],
+) => {
+  if (!selectionIsFormatted(editor, range, tags)) {
+    return false;
+  }
+
+  const formattedAncestor = outermostFormatAncestor(
+    range.startContainer,
+    range.endContainer,
+    editor,
+    tags,
+  );
+  if (!formattedAncestor?.parentNode) {
+    const selected = range.extractContents();
+    removeFormatFromFragment(selected, tags);
+    const selectedNodes = Array.from(selected.childNodes);
+    const firstSelectedNode = selectedNodes.at(0);
+    const lastSelectedNode = selectedNodes.at(-1);
+    if (!firstSelectedNode || !lastSelectedNode) {
+      return false;
+    }
+    range.insertNode(selected);
+    selection.removeAllRanges();
+    const unformattedRange = document.createRange();
+    unformattedRange.setStartBefore(firstSelectedNode);
+    unformattedRange.setEndAfter(lastSelectedNode);
+    selection.addRange(unformattedRange);
+    editor.focus();
+    return true;
+  }
+
+  const beforeRange = document.createRange();
+  beforeRange.selectNodeContents(formattedAncestor);
+  beforeRange.setEnd(range.startContainer, range.startOffset);
+  const before = beforeRange.cloneContents();
+
+  const afterRange = document.createRange();
+  afterRange.selectNodeContents(formattedAncestor);
+  afterRange.setStart(range.endContainer, range.endOffset);
+  const after = afterRange.cloneContents();
+
+  const selected = range.cloneContents();
+  removeFormatFromFragment(selected, tags);
+
+  const sharedAncestors: HTMLElement[] = [];
+  let ancestor =
+    range.startContainer instanceof HTMLElement
+      ? range.startContainer
+      : range.startContainer.parentElement;
+  while (ancestor && ancestor !== formattedAncestor) {
+    if (
+      ancestor.contains(range.endContainer) &&
+      !isFormatElement(ancestor, tags)
+    ) {
+      sharedAncestors.push(ancestor);
+    }
+    ancestor = ancestor.parentElement;
+  }
+
+  const unformatted = document.createDocumentFragment();
+  let selectedParent: DocumentFragment | HTMLElement = unformatted;
+  for (const sharedAncestor of sharedAncestors.toReversed()) {
+    const wrapper = shallowCloneElement(sharedAncestor);
+    selectedParent.append(wrapper);
+    selectedParent = wrapper;
+  }
+  selectedParent.append(selected);
+
+  const selectedNodes = Array.from(unformatted.childNodes);
+  const firstSelectedNode = selectedNodes.at(0);
+  const lastSelectedNode = selectedNodes.at(-1);
+  if (!firstSelectedNode || !lastSelectedNode) {
+    return false;
+  }
+
+  const replacement = document.createDocumentFragment();
+  if (fragmentHasContent(before)) {
+    const beforeWrapper = shallowCloneElement(formattedAncestor);
+    beforeWrapper.append(before);
+    replacement.append(beforeWrapper);
+  }
+  replacement.append(unformatted);
+  if (fragmentHasContent(after)) {
+    const afterWrapper = shallowCloneElement(formattedAncestor);
+    afterWrapper.append(after);
+    replacement.append(afterWrapper);
+  }
+
+  formattedAncestor.before(replacement);
+  formattedAncestor.remove();
+
+  selection.removeAllRanges();
+  const unformattedRange = document.createRange();
+  unformattedRange.setStartBefore(firstSelectedNode);
+  unformattedRange.setEndAfter(lastSelectedNode);
+  selection.addRange(unformattedRange);
+  editor.focus();
+  return true;
+};
+
 /** Returns whether the editor content changed. */
 const applyFormat = (editor: HTMLDivElement, command: FormatCommand) => {
   const selection = window.getSelection();
@@ -159,16 +382,11 @@ const applyFormat = (editor: HTMLDivElement, command: FormatCommand) => {
     editor.focus();
     return true;
   }
-  const inlineTags = {
-    bold: "strong",
-    italic: "em",
-    strikethrough: "s",
-    underline: "u",
-  } as const satisfies Record<
-    Exclude<FormatCommand, "bulletedList" | "numberedList">,
-    string
-  >;
-  const formatted = document.createElement(inlineTags[command]);
+  const inlineFormat = INLINE_FORMATS[command];
+  if (removeInlineFormat(editor, range, selection, inlineFormat.tags)) {
+    return true;
+  }
+  const formatted = document.createElement(inlineFormat.element);
   formatted.append(range.extractContents());
   range.insertNode(formatted);
   selection.removeAllRanges();

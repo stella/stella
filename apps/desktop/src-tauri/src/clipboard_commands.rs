@@ -8,7 +8,8 @@ use tauri::{AppHandle, Emitter, State, WebviewWindow};
 use crate::{
   clipboard::{
     ClipboardAppState, ClipboardCaptureStatus, ClipboardGroup, ClipboardGroupColor,
-    ClipboardItem, ClipboardRetention, ClipboardSnapshot, write_item,
+    ClipboardGroupDeletionMode, ClipboardItem, ClipboardRetention, ClipboardSnapshot,
+    write_item,
   },
   clipboard_window::{self, ClipboardStartupTrace},
   desktop_telemetry::{
@@ -175,12 +176,31 @@ pub fn clipboard_create_group(
 #[tauri::command]
 pub fn clipboard_delete_group(
   id: String,
+  mode: ClipboardGroupDeletionMode,
   state: State<'_, ClipboardAppState>,
   window: WebviewWindow,
 ) -> Result<ClipboardSnapshot, String> {
   let snapshot = {
     let mut manager = state.lock().map_err(|_| lock_error())?;
-    if !manager.delete_group(&id)? {
+    if !manager.delete_group(&id, mode)? {
+      return Err(GROUP_NOT_FOUND_ERROR.to_string());
+    }
+    manager.snapshot()
+  };
+  let _ = window.emit(HISTORY_EVENT, ());
+  Ok(snapshot)
+}
+
+#[tauri::command]
+pub fn clipboard_rename_group(
+  id: String,
+  name: String,
+  state: State<'_, ClipboardAppState>,
+  window: WebviewWindow,
+) -> Result<ClipboardSnapshot, String> {
+  let snapshot = {
+    let mut manager = state.lock().map_err(|_| lock_error())?;
+    if !manager.rename_group(&id, &name)? {
       return Err(GROUP_NOT_FOUND_ERROR.to_string());
     }
     manager.snapshot()
