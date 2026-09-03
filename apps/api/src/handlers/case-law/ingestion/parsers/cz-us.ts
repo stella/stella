@@ -60,7 +60,11 @@ import {
   CZ_JUDGE_NAME_RE as JUDGE_NAME_RE,
   CZ_JUDGE_TITLE_RE as SIGNATURE_RE,
 } from "./cz-patterns";
-import { inlinesToPlainText, stripInlinePrefix } from "./shared-inlines";
+import {
+  inlinesToPlainText,
+  stripFurniturePrefix,
+  stripInlinePrefix,
+} from "./shared-inlines";
 
 // ── Public API ─────────────────────────────────────────────
 
@@ -436,8 +440,14 @@ const extractLines = ($: cheerio.CheerioAPI): ParsedLine[] => {
 
 // ── Patterns ───────────────────────────────────────────────
 
-/** Decorative lines to skip entirely. */
-const SKIP_RE = /^\[OBRÁZEK\]|^Česká republika$|^ČESKÁ REPUBLIKA$/u;
+/**
+ * Image placeholders for the court emblem, which the export glues to the
+ * start of whatever line follows them rather than setting on their own.
+ */
+const EMBLEM_PREFIX_RE = /^(?:\[OBRÁZEK\]\s*)*/u;
+
+/** Decorative lines carrying no content once the emblem is peeled. */
+const DECORATIVE_LINE_RE = /^(?:Česká republika|ČESKÁ REPUBLIKA)$/u;
 
 /** Decision title (level 1). */
 const TITLE_RE =
@@ -501,15 +511,16 @@ const classifyLines = (lines: readonly ParsedLine[]): Block[] => {
     if (consumedLines.has(line)) {
       continue;
     }
-    const { plainText, inlines } = line;
-
     // Skip empty sentinel lines (paragraph breaks)
-    if (!plainText) {
+    if (!line.plainText) {
       continue;
     }
 
-    // Skip decorative lines
-    if (SKIP_RE.test(plainText)) {
+    // Peel the emblem rather than dropping the line it is glued to, then skip
+    // what turns out to have been decoration and nothing else.
+    const inlines = stripFurniturePrefix(line.inlines, EMBLEM_PREFIX_RE);
+    const plainText = inlinesToPlainText(inlines).trim();
+    if (!plainText || DECORATIVE_LINE_RE.test(plainText)) {
       continue;
     }
 
