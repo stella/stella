@@ -563,11 +563,49 @@ const extractCorpusSnippet = (
   return raw.replaceAll("<b>", "<mark>").replaceAll("</b>", "</mark>");
 };
 
-const hydratedDecisionRowsQuery = (
+type DecisionRowsQueryOptions = {
+  filters: SQL[];
+  generation: string;
+  ids: SafeId<"caseLawDecision">[];
+};
+
+/**
+ * What blending a candidate needs, and nothing else. A request reads this for
+ * every candidate the scan reaches — a few hundred of them — so every column
+ * here is paid for a couple of hundred times to serve a page of ten. The
+ * authority drives the blend, the group key folds the language versions of one
+ * judgment, and the request's filters are applied in SQL rather than read back.
+ */
+const candidateDecisionRowsQuery = (
   tx: CaseLawPublicReadTransaction,
-  ids: SafeId<"caseLawDecision">[],
-  filters: SQL[],
-  generation: string,
+  { filters, generation, ids }: DecisionRowsQueryOptions,
+) =>
+  tx
+    .select({
+      id: caseLawDecisions.id,
+      citationAuthority: caseLawDecisions.citationAuthority,
+      languageGroupKey: caseLawDecisions.languageGroupKey,
+    })
+    .from(caseLawDecisions)
+    .leftJoin(
+      caseLawCorpusIndexProjections,
+      caseLawCorpusProjectionJoin(generation),
+    )
+    .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
+    .where(and(inArray(caseLawDecisions.id, ids), ...filters));
+
+type CandidateDecisionRow = Awaited<
+  ReturnType<typeof candidateDecisionRowsQuery>
+>[number];
+
+/**
+ * Everything a result card shows, read only for the ids the page emits. The
+ * publisher summary and the identifier aggregate are the expensive parts, and
+ * a page of ten is the only place they are wanted.
+ */
+const pageDecisionRowsQuery = (
+  tx: CaseLawPublicReadTransaction,
+  { filters, generation, ids }: DecisionRowsQueryOptions,
 ) =>
   tx
     .select({
@@ -595,7 +633,6 @@ const hydratedDecisionRowsQuery = (
       sourceUrl: caseLawDecisions.sourceUrl,
       headnote: publisherSummaryMetadataSql(caseLawDecisions.metadata),
       citationCount: caseLawDecisions.citationCount,
-      citationAuthority: caseLawDecisions.citationAuthority,
       createdAt: caseLawDecisions.createdAt,
     })
     .from(caseLawDecisions)
@@ -606,8 +643,8 @@ const hydratedDecisionRowsQuery = (
     .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
     .where(and(inArray(caseLawDecisions.id, ids), ...filters));
 
-type HydratedDecisionRow = Awaited<
-  ReturnType<typeof hydratedDecisionRowsQuery>
+type PageDecisionRow = Awaited<
+  ReturnType<typeof pageDecisionRowsQuery>
 >[number];
 
 /**
@@ -617,7 +654,50 @@ type HydratedDecisionRow = Awaited<
  * each round re-reads what the earlier rounds read, and the request's
  * database work grows with the square of the rounds.
  */
-type HydratedDecisionRows = Map<string, HydratedDecisionRow | null>;
+type HydratedDecisionRows = Map<string, CandidateDecisionRow | null>;
+
+/**
+ * Reapply the request filters against the current rows: a stale corpus hit
+ * (metadata changed, async re-index/delete pending) must not satisfy filters
+ * it no longer matches. Both reads apply them, so the page read that actually
+ * emits publisher text re-proves the row is still servable rather than
+ * inheriting the candidate read's answer.
+ */
+const caseLawSearchRowFilters = (
+  body: SearchDecisionsBody,
+  generation: string,
+): SQL[] => {
+  const filters: SQL[] = [
+    redistributableCaseLawSource,
+    // Prefer the generation-specific projection state; generations that
+    // predate durable rebuild checkpoints fall back to the serving marker.
+    // Both paths reject a scrubbed or pending row, so a stale physical
+    // copy cannot serve outdated or erased snippets.
+    currentCaseLawCorpusProjection(generation),
+  ];
+  if (body.court) {
+    filters.push(eq(caseLawDecisions.court, body.court));
+  }
+  if (body.country) {
+    filters.push(eq(caseLawDecisions.country, body.country));
+  }
+  if (body.dateFrom) {
+    filters.push(sql`${caseLawDecisions.decisionDate} >= ${body.dateFrom}`);
+  }
+  if (body.dateTo) {
+    filters.push(sql`${caseLawDecisions.decisionDate} <= ${body.dateTo}`);
+  }
+  if (body.decisionType) {
+    filters.push(eq(caseLawDecisions.decisionType, body.decisionType));
+  }
+  if (body.sourceId) {
+    filters.push(eq(caseLawDecisions.sourceId, body.sourceId));
+  }
+  if (body.language) {
+    filters.push(eq(caseLawDecisions.language, body.language));
+  }
+  return filters;
+};
 
 /**
  * Brackets the database call a read makes, so a caller measuring Postgres
@@ -627,6 +707,45 @@ type HydratedDecisionRows = Map<string, HydratedDecisionRow | null>;
 type TimeDbRead = <TRead>(run: () => Promise<TRead>) => Promise<TRead>;
 
 const untimedDbRead: TimeDbRead = async (run) => await run();
+
+type ReadCaseLawPageDecisionRowsOptions = {
+  body: SearchDecisionsBody;
+  caseLawDb: CaseLawPublicReadDb;
+  generation: string;
+  /** The ids the page emits, after ranking and the language-group fold. */
+  ids: readonly string[];
+  timeDbRead?: TimeDbRead | undefined;
+};
+
+/**
+ * The wide read, for one page. Kept independently callable for the same
+ * reason the candidate read is: the restricted-role census executes the exact
+ * production projection without a live search engine.
+ */
+export const readCaseLawPageDecisionRows = async ({
+  body,
+  caseLawDb,
+  generation,
+  ids,
+  timeDbRead = untimedDbRead,
+}: ReadCaseLawPageDecisionRowsOptions): Promise<
+  Map<string, PageDecisionRow>
+> => {
+  if (ids.length === 0) {
+    return new Map();
+  }
+  const rows = await timeDbRead(
+    async () =>
+      await caseLawDb((tx) =>
+        pageDecisionRowsQuery(tx, {
+          filters: caseLawSearchRowFilters(body, generation),
+          generation,
+          ids: ids.map((id) => toSafeId<"caseLawDecision">(id)),
+        }),
+      ),
+  );
+  return new Map(rows.map((row) => [String(row.id), row]));
+};
 
 type RehydrateCaseLawCandidatesOptions = {
   body: SearchDecisionsBody;
@@ -654,56 +773,17 @@ export const rehydrateCaseLawCandidates = async ({
   const ids = candidates
     .filter((candidate) => !hydrated.has(candidate.id))
     .map((candidate) => toSafeId<"caseLawDecision">(candidate.id));
-  // Reapply the request filters against the current rows: a stale
-  // corpus hit (metadata changed, async re-index/delete pending) must
-  // not satisfy filters it no longer matches.
-  const rehydrationFilters: SQL[] = [
-    redistributableCaseLawSource,
-    // Prefer the generation-specific projection state; generations that
-    // predate durable rebuild checkpoints fall back to the serving marker.
-    // Both paths reject a scrubbed or pending row, so a stale physical
-    // copy cannot serve outdated or erased snippets.
-    currentCaseLawCorpusProjection(generation),
-  ];
-  if (body.court) {
-    rehydrationFilters.push(eq(caseLawDecisions.court, body.court));
-  }
-  if (body.country) {
-    rehydrationFilters.push(eq(caseLawDecisions.country, body.country));
-  }
-  if (body.dateFrom) {
-    rehydrationFilters.push(
-      sql`${caseLawDecisions.decisionDate} >= ${body.dateFrom}`,
-    );
-  }
-  if (body.dateTo) {
-    rehydrationFilters.push(
-      sql`${caseLawDecisions.decisionDate} <= ${body.dateTo}`,
-    );
-  }
-  if (body.decisionType) {
-    rehydrationFilters.push(
-      eq(caseLawDecisions.decisionType, body.decisionType),
-    );
-  }
-  if (body.sourceId) {
-    rehydrationFilters.push(eq(caseLawDecisions.sourceId, body.sourceId));
-  }
-  if (body.language) {
-    rehydrationFilters.push(eq(caseLawDecisions.language, body.language));
-  }
   const rows =
     ids.length === 0
       ? []
       : await timeDbRead(
           async () =>
             await caseLawDb((tx) =>
-              hydratedDecisionRowsQuery(
-                tx,
-                ids,
-                rehydrationFilters,
+              candidateDecisionRowsQuery(tx, {
+                filters: caseLawSearchRowFilters(body, generation),
                 generation,
-              ),
+                ids,
+              }),
             ),
         );
   for (const id of ids) {
@@ -713,7 +793,7 @@ export const rehydrateCaseLawCandidates = async ({
     hydrated.set(String(row.id), row);
   }
 
-  const byId = new Map<string, HydratedDecisionRow>();
+  const byId = new Map<string, CandidateDecisionRow>();
   for (const [id, row] of hydrated) {
     if (row !== null) {
       byId.set(id, row);
@@ -738,7 +818,10 @@ export const rehydrateCaseLawCandidates = async ({
     (hitId) => byId.get(hitId)?.languageGroupKey ?? null,
   );
 
-  return { context: { byId }, ranked: representatives };
+  // No context travels with the ranking: what a page displays is read once
+  // the page is decided, for its ids only, so nothing the blend read has to
+  // be carried through the scan.
+  return { context: null, ranked: representatives };
 };
 
 type DecisionIdentity = Extract<DecisionQueryIntent, { type: "identifier" }>;
@@ -794,7 +877,7 @@ export const findDecisionIdsByIdentity = async ({
 /** The language groups a page spans, for the alternates read. */
 const languageGroupKeysOf = (
   pageRanked: readonly RankedHit[],
-  byId: ReadonlyMap<string, HydratedDecisionRow>,
+  byId: ReadonlyMap<string, { languageGroupKey: string | null }>,
 ): string[] => [
   ...new Set(
     pageRanked
@@ -808,7 +891,7 @@ type DecisionHitsPageOptions = {
     ReturnType<typeof readPublicDecisionLanguageAlternatesByGroup>
   >;
   anchorIdById: ReadonlyMap<string, string>;
-  byId: ReadonlyMap<string, HydratedDecisionRow>;
+  byId: ReadonlyMap<string, PageDecisionRow>;
   nextCursor: string | null;
   pageRanked: readonly RankedHit[];
   snippetById: ReadonlyMap<string, string>;
@@ -897,6 +980,7 @@ const searchCorpusIndexDecisions = async (
   // Shared by the identity path and the scan, so `hydrated.size` counts the
   // candidates the whole request read, once each.
   const hydrated: HydratedDecisionRows = new Map();
+  let pageRowsRead = 0;
   const intent = parseDecisionQuery(body.query);
   const queryClass = decisionQueryClass(intent);
   const report = (hitsReturned: number, scan: CorpusIndexScanReport): void => {
@@ -905,6 +989,7 @@ const searchCorpusIndexDecisions = async (
       country: body.country,
       db: dbTimer.timing(),
       hitsReturned,
+      pageRowsRead,
       queryClass,
       totalMs: performance.now() - startedAt,
       ...scan,
@@ -919,6 +1004,22 @@ const searchCorpusIndexDecisions = async (
       ),
   );
   const generation = serving.generation;
+
+  /** The wide read, for the ids a page emits and no others. */
+  const readPageRows = async (
+    pageRanked: readonly RankedHit[],
+  ): Promise<Map<string, PageDecisionRow>> => {
+    const rows = await readCaseLawPageDecisionRows({
+      body,
+      caseLawDb,
+      generation,
+      ids: pageRanked.map((hit) => hit.id),
+      timeDbRead: async (run) =>
+        await dbTimer.time(CASE_LAW_SEARCH_DB_READ.page, run),
+    });
+    pageRowsRead += rows.size;
+    return rows;
+  };
 
   // An entry that names a decision is answered by identity, and only falls
   // through to the text index when nothing answers to it. A cursor means the
@@ -945,7 +1046,7 @@ const searchCorpusIndexDecisions = async (
       // the requested size, and identity never pages past it.
       const identityPage = identityRanking.ranked.slice(0, limit);
       if (identityPage.length > 0) {
-        const { byId } = identityRanking.context;
+        const byId = await readPageRows(identityPage);
         // Timed around the call rather than through the timer's thunk: the
         // alternates read must stay a direct call in this function, which a
         // lint rule enforces so no search path can drop it.
@@ -1018,18 +1119,17 @@ const searchCorpusIndexDecisions = async (
       }),
   });
 
-  const {
-    anchorIdById,
-    context: { byId },
-    pageRanked,
-    scan,
-    snippetById,
-  } = searchPage;
+  const { anchorIdById, pageRanked, scan, snippetById } = searchPage;
 
   const nextCursor =
     searchPage.nextCursor === null
       ? null
       : encodeCorpusIndexCursor(searchPage.nextCursor);
+
+  // A row the candidate read saw and this one no longer answers for was
+  // scrubbed mid-request; it drops out of the page rather than being served
+  // from a stale copy, and the cursor keeps pointing past it.
+  const byId = await readPageRows(pageRanked);
 
   // Timed around the call for the same reason as on the identity path.
   const alternatesStartedAt = performance.now();

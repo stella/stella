@@ -60,17 +60,19 @@ describe("the completed-search record", () => {
       candidatesHydrated: 42,
       country,
       db: {
-        reads: 3,
+        reads: 4,
         msByRead: {
           alternates: 3.2,
           candidates: 8.4,
           identity: 0,
+          page: 4.6,
           servingGeneration: 0.8,
         },
       },
       earlyStopped: true,
       hitsReturned: 20,
       indexMs: 88.6,
+      pageRowsRead: 20,
       passagesScanned: 300,
       queryClass: classOf('"náhrada škody"'),
       roundCapHit: false,
@@ -95,13 +97,15 @@ describe("the completed-search record", () => {
       rounds: 1,
       passagesScanned: 300,
       candidatesHydrated: 42,
+      pageRowsRead: 20,
       hitsReturned: 20,
       indexMs: 89,
-      dbReads: 3,
-      dbMs: 12,
+      dbReads: 4,
+      dbMs: 17,
       dbAlternatesMs: 3,
       dbCandidatesMs: 8,
       dbIdentityMs: 0,
+      dbPageMs: 5,
       dbServingGenerationMs: 1,
       totalMs: 130,
       roundCapHit: false,
@@ -118,7 +122,7 @@ describe("the completed-search record", () => {
     );
     // A read that grows has to show up in one of these, and a read nobody
     // named would make the two disagree.
-    expect(parts).toHaveLength(4);
+    expect(parts).toHaveLength(5);
     const breakdown = parts.reduce((total, [, ms]) => total + Number(ms), 0);
     expect(Number(attributes["dbMs"])).toBe(breakdown);
   });

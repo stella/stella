@@ -21,6 +21,7 @@ import { listDecisionsHandler } from "@/api/handlers/case-law/decisions/list";
 import { withRedistributableSubject } from "@/api/handlers/case-law/decisions/public-subject";
 import {
   findDecisionIdsByIdentity,
+  readCaseLawPageDecisionRows,
   rehydrateCaseLawCandidates,
 } from "@/api/handlers/case-law/decisions/search";
 import {
@@ -583,6 +584,16 @@ describe("public-law reader role", () => {
       generation: "case_law_v3",
     });
     expect(search.ranked).toEqual([]);
+
+    // Search reads twice: narrow rows for every candidate it blends, wide
+    // rows for the ids the page emits. Both have to clear the reader role.
+    const pageRows = await readCaseLawPageDecisionRows({
+      body: { query: "reader role census" },
+      caseLawDb,
+      generation: "case_law_v3",
+      ids: [createSafeId<"caseLawDecision">()],
+    });
+    expect(pageRows.size).toBe(0);
 
     const byDocket = await findDecisionIdsByIdentity({
       caseLawDb,
