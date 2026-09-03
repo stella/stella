@@ -214,6 +214,7 @@ export const DEFAULT_MODELS = {
  */
 export const BYOK_MODEL_OPTIONS = {
   google: [
+    "gemini-3.8-flash",
     "gemini-3.7-flash",
     "gemini-3.6-flash",
     "gemini-3.5-flash-lite",
@@ -245,6 +246,7 @@ export const BYOK_MODEL_OPTIONS = {
   openrouter: [
     "openai/gpt-5.6-luna",
     "openai/gpt-5.6-terra",
+    "google/gemini-3.8-flash",
     "google/gemini-3.7-flash",
     "google/gemini-3.6-flash",
     "google/gemini-3.5-flash-lite",
@@ -307,6 +309,10 @@ export type ModelDisplayMetadata = {
  * creator's icon while their routing provider remains available separately.
  */
 export const MODEL_DISPLAY_METADATA = {
+  "gemini-3.8-flash": {
+    displayName: "Gemini 3.8 Flash",
+    iconProvider: "google",
+  },
   "gemini-3.7-flash": {
     displayName: "Gemini 3.7 Flash",
     iconProvider: "google",
@@ -390,6 +396,10 @@ export const MODEL_DISPLAY_METADATA = {
   "openai/gpt-5.6-terra": {
     displayName: "GPT-5.6 Terra",
     iconProvider: "openai",
+  },
+  "google/gemini-3.8-flash": {
+    displayName: "Gemini 3.8 Flash",
+    iconProvider: "google",
   },
   "google/gemini-3.7-flash": {
     displayName: "Gemini 3.7 Flash",
@@ -975,6 +985,12 @@ export const MODEL_RATES = {
     outputPerMTok: 375_000,
     cachedInputPerMTok: 7500,
   },
+  "gemini-3.8-flash": {
+    kind: "flat",
+    inputPerMTok: 75_000,
+    outputPerMTok: 375_000,
+    cachedInputPerMTok: 7500,
+  },
   "gemini-3.1-pro-preview": {
     kind: "input-token-tiered",
     inputTokenThreshold: 200_000,
@@ -1289,6 +1305,7 @@ export const CONTEXT_WINDOW_TOKENS = {
   "gemini-3.5-flash-lite": 1_048_576,
   "gemini-3.6-flash": 1_048_576,
   "gemini-3.7-flash": 1_048_576,
+  "gemini-3.8-flash": 1_048_576,
   "gemini-3.1-pro-preview": 1_048_576,
   // OpenAI: GPT-4o family 128K; GPT-5 varies by generation.
   "gpt-4o-mini": 128_000,
@@ -1322,6 +1339,7 @@ export const CONTEXT_WINDOW_TOKENS = {
   "magistral-small": 128_000,
   "pixtral-large-latest": 128_000,
   // OpenRouter provider-prefixed slugs mirror their upstream windows.
+  "google/gemini-3.8-flash": 1_048_576,
   "google/gemini-3.7-flash": 1_048_576,
   "google/gemini-3.6-flash": 1_048_576,
   "google/gemini-3.5-flash-lite": 1_048_576,
