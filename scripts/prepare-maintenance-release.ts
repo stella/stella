@@ -147,21 +147,26 @@ export const parseMaintenanceReleaseOptions = (
   return { recordingReviewReason: reason };
 };
 
-const readReleaseDates = (rootDir: string): Record<string, string> => {
+// A `null` value records a stable tag that was built but never promoted; the
+// landing changelog omits it. Preserved as written: a maintenance release
+// after an unpromoted one must not turn that record into a publication date.
+const readReleaseDates = (rootDir: string): Record<string, string | null> => {
   const parsed: unknown = JSON.parse(
     readFileSync(nodePath.join(rootDir, RELEASE_DATES_PATH), "utf-8"),
   );
   if (
     !isRecord(parsed) ||
-    Object.values(parsed).some((value) => typeof value !== "string")
+    Object.values(parsed).some(
+      (value) => typeof value !== "string" && value !== null,
+    )
   ) {
     throw new MaintenanceReleaseError(
-      `${RELEASE_DATES_PATH} must be an object of string values`,
+      `${RELEASE_DATES_PATH} must be an object of string or null values`,
     );
   }
-  const releaseDates: Record<string, string> = {};
+  const releaseDates: Record<string, string | null> = {};
   for (const [key, value] of Object.entries(parsed)) {
-    if (typeof value === "string") {
+    if (typeof value === "string" || value === null) {
       releaseDates[key] = value;
     }
   }
@@ -255,7 +260,9 @@ export const prepareMaintenanceReleaseFiles = ({
 
   const releaseDatesPath = nodePath.join(rootDir, RELEASE_DATES_PATH);
   const releaseDates = readReleaseDates(rootDir);
-  releaseDates[previousTag] = publishedAt;
+  if (releaseDates[previousTag] !== null) {
+    releaseDates[previousTag] = publishedAt;
+  }
   return withFileRollback({
     operation: () => {
       // VERSION is the commit marker: every dependent file is durable before

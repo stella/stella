@@ -16,7 +16,11 @@ export type ChangelogRelease = {
 
 // Widen the literal-keyed JSON import so lookups by arbitrary tag are typed as
 // possibly absent (a new release lands before its date entry is committed).
-const RELEASE_DATES: Partial<Record<string, string>> = releaseDates;
+// A `null` entry records a stable tag whose release was built but never
+// promoted to production: its notes file exists, and nothing here lists it.
+const RELEASE_DATES: Partial<Record<string, string | null>> = releaseDates;
+
+const isUnpromoted = (tagName: string) => RELEASE_DATES[tagName] === null;
 
 const CHANGELOG_DIR = resolveRepoPath("docs", "changelog");
 const STABLE_CHANGELOG_FILE_PATTERN = /^v\d+\.\d+\.\d+\.md$/u;
@@ -36,8 +40,12 @@ const listReleaseTags = (): string[] => {
 
   const tags: string[] = [];
   for (const fileName of readdirSync(CHANGELOG_DIR)) {
-    if (STABLE_CHANGELOG_FILE_PATTERN.test(fileName)) {
-      tags.push(fileName.replace(/\.md$/u, ""));
+    if (!STABLE_CHANGELOG_FILE_PATTERN.test(fileName)) {
+      continue;
+    }
+    const tagName = fileName.replace(/\.md$/u, "");
+    if (!isUnpromoted(tagName)) {
+      tags.push(tagName);
     }
   }
 
@@ -68,6 +76,16 @@ const readRelease = (tagName: string): ChangelogRelease => {
 
 export const getChangelogReleases = (): ChangelogRelease[] =>
   listReleaseTags().map(readRelease);
+
+/**
+ * Stable tags recorded as never promoted. The live GitHub feed on the
+ * changelog page drops these too: their release objects may still be
+ * published, since the draft-until-promoted publication came later.
+ */
+export const getUnpromotedReleaseTags = (): string[] =>
+  Object.entries(RELEASE_DATES)
+    .filter(([, publishedAt]) => publishedAt === null)
+    .map(([tagName]) => tagName);
 
 export const getChangelogReleaseEntries = () =>
   groupMaintenanceReleases(
