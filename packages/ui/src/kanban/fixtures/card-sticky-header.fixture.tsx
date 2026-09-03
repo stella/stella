@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
 
 import { KanbanCardShell } from "../card-shell";
@@ -37,11 +37,49 @@ const matrix = buildKanbanBoardMatrix({
     grouping.type === "built-in" ? "open" : "ada",
 });
 
+/**
+ * Publishes what the row around it carries in the frame the browser is about
+ * to paint it in. The read is scheduled from a layout effect but taken in the
+ * frame's animation callback, which is the one point that is past every
+ * synchronous re-render a layout effect provoked and still short of the
+ * frame's resize-observation step: a cell that measures its pinned action in a
+ * layout effect has published its reach by then, and a cell that leaves the
+ * measurement to an observer has published nothing but the board's own offset,
+ * which is exactly the frame a card's identity row spends pinned where the
+ * action is about to be.
+ */
+const FirstLayoutProbe = () => {
+  const anchor = useRef<HTMLSpanElement>(null);
+
+  useLayoutEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      const row = anchor.current?.closest<HTMLElement>("[data-index]");
+
+      if (
+        !row ||
+        document.documentElement.dataset["kanbanCardStickyTopFirstLayout"] !==
+          undefined
+      ) {
+        return;
+      }
+      document.documentElement.dataset["kanbanCardStickyTopFirstLayout"] =
+        row.style.getPropertyValue("--kanban-card-sticky-top");
+    });
+
+    return () => {
+      cancelAnimationFrame(frame);
+    };
+  }, []);
+
+  return <span hidden ref={anchor} />;
+};
+
 const CardStickyHeaderFixture = () => {
   useEffect(() => {
     document.documentElement.dataset["kanbanCardStickyHeaderReady"] = "true";
     return () => {
       delete document.documentElement.dataset["kanbanCardStickyHeaderReady"];
+      delete document.documentElement.dataset["kanbanCardStickyTopFirstLayout"];
     };
   }, []);
 
@@ -87,6 +125,7 @@ const CardStickyHeaderFixture = () => {
                   <p className="text-muted-foreground text-xs">
                     A card far taller than the board it scrolls through.
                   </p>
+                  {row.id === "card-1" ? <FirstLayoutProbe /> : null}
                 </KanbanCardShell>
               </div>
             )}
