@@ -232,6 +232,84 @@ describe("parseNssDecisionHtml", () => {
       const texts = documentAst.blocks.map((b) => b.plainText);
       expect(texts.some((t) => t === "pokračování")).toBe(false);
     });
+
+    /**
+     * Aspose sets a page's emblem and running header inside the first
+     * paragraph of that page's body rather than as their own paragraph, so a
+     * page opening mid-sentence carries the whole of that paragraph behind
+     * the furniture. Dropping the chunk for starting with "[OBRÁZEK]" lost
+     * every such page: whole reasoning paragraphs absent from the AST while
+     * present in the source.
+     */
+    const pagedHtml = `<html><body>
+      <p style="text-align:center">[OBRÁZEK]58 A 65/2012-46</p>
+      <p style="text-align:center">
+        <span style="font-weight:bold">ROZSUDEK</span>
+      </p>
+      <p style="text-align:center">
+        <span style="font-weight:bold">Odůvodnění:</span>
+      </p>
+      <p>[OBRÁZEK][OBRÁZEK]pokračování 3 58 A 65/2012 [3] Žalovaný ve svém
+      vyjádření k žalobě popřel oprávněnost žaloby.</p>
+      <p>[OBRÁZEK][OBRÁZEK]pokračování 4 58 A 65/2012</p>
+      <p>[OBRÁZEK][OBRÁZEK]Státní hranici překročil v úkrytu.</p>
+      <p>[OBRÁZEK]ČESKÁ REPUBLIKA</p>
+    </body></html>`;
+
+    test("keeps body text a page header is glued to", () => {
+      const { documentAst, fulltext } = parseNssDecisionHtml(
+        baseInput(pagedHtml),
+      );
+      const texts = documentAst.blocks.map((b) => b.plainText);
+
+      expect(fulltext).toContain("popřel oprávněnost žaloby");
+      expect(fulltext).toContain("Státní hranici překročil v úkrytu");
+      // The furniture itself is peeled off the text it was glued to.
+      expect(texts.some((t) => t.includes("[OBRÁZEK]"))).toBe(false);
+      expect(texts.some((t) => t.includes("pokračování"))).toBe(false);
+    });
+
+    test("still drops a chunk holding nothing but page furniture", () => {
+      const { documentAst } = parseNssDecisionHtml(baseInput(pagedHtml));
+      const texts = documentAst.blocks.map((b) => b.plainText);
+
+      expect(texts).not.toContain("pokračování 4 58 A 65/2012");
+      expect(texts).not.toContain("ČESKÁ REPUBLIKA");
+      // The page-one header carries the case number, which is content.
+      expect(texts).toContain("58 A 65/2012-46");
+    });
+
+    /**
+     * The letter-first registers carry no leading panel number at all
+     * (`Konf`, `Nad`), so a running header built around one leaves the header
+     * in the AST and hides the numbered-paragraph prefix behind it.
+     */
+    const letterFirstHtml = `<html><body>
+      <p style="text-align:center">
+        <span style="font-weight:bold">ROZSUDEK</span>
+      </p>
+      <p style="text-align:center">
+        <span style="font-weight:bold">Odůvodnění:</span>
+      </p>
+      <p>[OBRÁZEK][OBRÁZEK]pokračování 2 Konf 4/2011 [3] Zvláštní senát rozhodl o kompetenčním sporu.</p>
+      <p>[OBRÁZEK][OBRÁZEK]pokračování 3 Nad 224/2014-53 [4] Věc byla přikázána jinému soudu.</p>
+      <p>[OBRÁZEK][OBRÁZEK]pokračování 4 Konf 4/2011</p>
+    </body></html>`;
+
+    test("peels a running header whose docket is letter-first", () => {
+      const { documentAst, fulltext } = parseNssDecisionHtml(
+        baseInput(letterFirstHtml),
+      );
+      const texts = documentAst.blocks.map((b) => b.plainText);
+
+      // Body text survives, and with the header peeled the numbered-paragraph
+      // prefix behind it is recognised, so "[3]" becomes the block's number
+      // rather than staying in its text.
+      expect(fulltext).toContain("Zvláštní senát rozhodl o kompetenčním sporu");
+      expect(fulltext).toContain("Věc byla přikázána jinému soudu");
+      expect(texts.some((t) => t.includes("pokračování"))).toBe(false);
+      expect(texts.some((t) => t.includes("Konf 4/2011"))).toBe(false);
+    });
   });
 
   describe("section separators", () => {

@@ -437,6 +437,33 @@ describe("parseUsDecisionHtml", () => {
       expect(texts).not.toContain("Česká republika");
     });
 
+    test("keeps text the emblem placeholder is glued to", () => {
+      const rtf = [
+        "[OBRÁZEK]Česká republika",
+        "\\par",
+        "[OBRÁZEK][OBRÁZEK]Ústavní soud návrhu vyhověl.",
+        "\\par",
+        "V Brně dne 1. ledna 2025",
+      ].join("\n");
+
+      const html = `
+        <html><body>
+          <span id="lblDecisionForm">NÁLEZ</span>
+          <input id="docContentHidden" value="${rtf}" />
+          <input id="docIdHidden" value="12345" />
+          <div class="DocContent"><p>Text</p></div>
+        </body></html>
+      `;
+
+      const { documentAst, fulltext } = parseUsDecisionHtml(baseInput(html));
+      const texts = documentAst.blocks.map((b) => b.plainText);
+
+      expect(fulltext).toContain("Ústavní soud návrhu vyhověl");
+      expect(texts.some((t) => t.includes("[OBRÁZEK]"))).toBe(false);
+      // The emblem glued to a decorative line leaves nothing to keep.
+      expect(texts).not.toContain("Česká republika");
+    });
+
     test("skips ČESKÁ REPUBLIKA decorative line", () => {
       const rtf = [
         "ČESKÁ REPUBLIKA",

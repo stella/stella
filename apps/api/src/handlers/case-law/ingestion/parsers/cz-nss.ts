@@ -41,6 +41,7 @@ import {
 } from "./cz-patterns";
 import {
   inlinesToPlainText,
+  stripFurniturePrefix,
   stripInlinePrefix,
   walkInlines as walkInlinesShared,
 } from "./shared-inlines";
@@ -552,11 +553,44 @@ const parseFontSize = (style: string): number => {
 // ── Patterns ───────────────────────────────────────────────
 
 /**
- * Lines to skip entirely (decorative/header content).
- * [OBRÁZEK] is always dropped regardless of suffix
- * (e.g. "[OBRÁZEK]ČESKÁ REPUBLIKA" in one <p>).
+ * Page furniture Aspose repeats at the top of every page: image placeholders
+ * for the court emblem, then the running header "pokračování <page> <case
+ * number>" on every page after the first.
+ *
+ * It is glued to the first paragraph of the page's body rather than set as
+ * its own paragraph, so the furniture is peeled off the chunk instead of the
+ * chunk being dropped for starting with it. Every part is optional, so an
+ * ordinary paragraph matches the empty string and is left alone.
+ *
+ * The docket's leading panel number is optional because the letter-first
+ * registers have none: `Konf 4/2011`, `Nad 224/2014`. Same shape the citation
+ * extractor accepts, and the `pokračování` literal is what keeps the optional
+ * digits from reaching ordinary prose.
  */
-const SKIP_RE = /^\[OBRÁZEK\]|^pokračování$|^ČESKÁ REPUBLIKA$/u;
+const PAGE_FURNITURE_RE =
+  /^(?:\[OBRÁZEK\]\s*)*(?:pokračování\s+\d+\s+(?:\d+\s*)?\p{Lu}\p{L}*\s+\d+\/\d{4}(?:\s*-\s*\d+)?)?\s*/u;
+
+/** Decorative lines carrying no content once the furniture is peeled. */
+const DECORATIVE_LINE_RE = /^(?:pokračování|ČESKÁ REPUBLIKA)$/u;
+
+type ChunkContent = { plainText: string; inlines: Inline[] };
+
+/**
+ * Peel page furniture off a chunk, or report it as wholly decorative.
+ *
+ * Null means nothing but furniture was in the chunk. Anything else is body
+ * text that shared a paragraph with the header, which is the common case: a
+ * page opening mid-sentence carries the whole of that page's first paragraph
+ * behind the emblem.
+ */
+const stripPageFurniture = (chunk: PChunk): ChunkContent | null => {
+  const inlines = stripFurniturePrefix(chunk.inlines, PAGE_FURNITURE_RE);
+  const plainText = inlinesToPlainText(inlines).trim();
+
+  return plainText && !DECORATIVE_LINE_RE.test(plainText)
+    ? { plainText, inlines }
+    : null;
+};
 
 /**
  * Decision titles keyed by their semantic letters. Older Aspose exports split
@@ -659,18 +693,13 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
   let sawTitle = false;
 
   for (const chunk of chunks) {
-    const {
-      plainText,
-      inlines,
-      centered,
-      bold,
-      letterSpacing: _letterSpacing,
-    } = chunk;
+    const { centered, bold, letterSpacing: _letterSpacing } = chunk;
 
-    // Skip decorative lines
-    if (SKIP_RE.test(plainText)) {
+    const content = stripPageFurniture(chunk);
+    if (content === null) {
       continue;
     }
+    const { plainText, inlines } = content;
 
     if (chunk.footnote !== null) {
       // A footnote the publisher set over several paragraphs arrives as

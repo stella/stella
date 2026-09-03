@@ -379,3 +379,28 @@ export const stripInlinePrefix = (
 
   return trimLeadingWhitespace(result);
 };
+
+/**
+ * Strip a leading run of presentational page furniture, matched by `pattern`
+ * against the chunk's own plain text.
+ *
+ * Aspose glues a page's running header onto the first paragraph of that
+ * page's body, so a chunk that *starts* with furniture usually carries body
+ * text behind it. Peeling the prefix and letting the caller judge the
+ * remainder keeps that text, where testing the whole chunk against the same
+ * pattern and dropping it loses the page. `pattern` is matched from the first
+ * non-whitespace character, so it anchors with `^` and needs no allowance for
+ * the leading whitespace an inline walk may leave.
+ */
+export const stripFurniturePrefix = (
+  inlines: readonly Inline[],
+  pattern: RegExp,
+): Inline[] => {
+  const text = inlinesToPlainText(inlines);
+  const lead = text.length - text.trimStart().length;
+  const match = pattern.exec(text.slice(lead))?.at(0);
+
+  return match === undefined || match.length === 0
+    ? [...inlines]
+    : stripInlinePrefix(inlines, lead + match.length);
+};
