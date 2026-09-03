@@ -2,8 +2,10 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import { clearRootDbMocks } from "@/api/tests/helpers/mock-root-db";
 
-const { atCourtsAdapter } =
+const { createAtCourtsAdapter } =
   await import("@/api/handlers/case-law/ingestion/adapters/at-courts");
+const { fetchWithRetry } =
+  await import("@/api/handlers/case-law/ingestion/adapters/retry");
 const { czNsAdapter } =
   await import("@/api/handlers/case-law/ingestion/adapters/cz-ns");
 const { czRegionalAdapter } =
@@ -14,6 +16,17 @@ const { skCourtsAdapter } =
   await import("@/api/handlers/case-law/ingestion/adapters/sk-courts");
 
 const originalFetch = globalThis.fetch;
+
+// The registry's adapter reserves a slot on the process-wide RIS publisher
+// gate before every request, so a file that walked any RIS adapter within the
+// gate's interval would make this test wait that interval out, which is the
+// test's whole budget. The gate is not under test here: the mocked fetch is
+// reached through the plain retrying request instead.
+const atCourtsAdapter = createAtCourtsAdapter({
+  now: () => new Date(),
+  request: fetchWithRetry,
+  sleep: async () => {},
+});
 
 type MockRoute = {
   pattern: string;
