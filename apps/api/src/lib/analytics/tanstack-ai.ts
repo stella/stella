@@ -20,6 +20,7 @@ import {
   providerStatusFields,
 } from "@/api/lib/ai-error";
 import { captureError as captureTelemetryError } from "@/api/lib/analytics/capture";
+import type { ErrorTelemetryContext } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
@@ -86,6 +87,15 @@ type TanStackAIAnalyticsProps = {
   sessionId?: string;
   distinctId?: string;
   properties?: AnalyticsMetadata;
+  /**
+   * Correlation ids for the exception this run reports, whichever path
+   * reports it. Separate from `properties`, which reaches the product
+   * analytics events through a fixed allowlist. A caller cannot attach
+   * these with a `captureError` of its own beside this one: the sink
+   * throttles by structural fingerprint alone, so the second call is
+   * dropped as a repeat and its context never ships.
+   */
+  errorContext?: ErrorTelemetryContext;
   analytics?: Analytics;
   modelRole?: ModelRole;
   /**
@@ -427,6 +437,7 @@ export const createTanStackAIAnalyticsCallbacks = ({
       logger.error("tanstack_ai.generation.failed", attributes);
     }
     captureTelemetryError(error, {
+      ...config.errorContext,
       feature: config.feature,
       organization_id: analyticsOrganizationId ?? "",
       trace_id: config.traceId,

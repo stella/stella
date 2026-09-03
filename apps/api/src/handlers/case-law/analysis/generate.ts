@@ -271,6 +271,7 @@ const runGeneration = async ({
 }: RunGenerationOptions) => {
   // audit: skip — background AI analysis output
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+    errorContext: { source: "case-law-analysis", decisionId },
     feature: "case-law.analysis",
     modelRole: "fast",
     organizationId,
@@ -326,10 +327,6 @@ const runGeneration = async ({
 
     await analysisStore().save({ analysis, contentHash, decisionId });
   } catch (error) {
-    captureError(error, {
-      source: "case-law-analysis",
-      decisionId,
-    });
     aiAnalytics.captureError(error);
     await analysisStore()
       .clear({ decisionId, sentinel })

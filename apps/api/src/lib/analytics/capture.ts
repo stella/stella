@@ -26,7 +26,7 @@ import { getRequestContext } from "@/api/lib/observability/request-context";
  * Pass `context` with safe correlation IDs (entity IDs, request
  * IDs) to make errors traceable without leaking content.
  */
-type ErrorTelemetryContext = Record<string, string>;
+export type ErrorTelemetryContext = Record<string, string>;
 
 type CaptureErrorOptions = {
   context?: ErrorTelemetryContext | undefined;

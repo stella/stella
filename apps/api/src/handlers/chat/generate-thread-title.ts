@@ -55,6 +55,7 @@ export const generateThreadTitle = async ({
       userId,
       workspaceId: threadWorkspaceId,
     },
+    errorContext: { threadId },
     feature: "chat.thread_title",
     modelRole: "fast",
     orgAIConfig,
@@ -162,6 +163,5 @@ export const generateThreadTitle = async ({
     }
   } catch (error) {
     aiAnalytics.captureError(error);
-    captureError(error, { threadId });
   }
 };

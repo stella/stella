@@ -3,6 +3,7 @@ import { describe, expect, spyOn, test } from "bun:test";
 
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
+import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { SERVER_ANALYTICS_EVENTS } from "./types";
@@ -686,6 +687,44 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
         provider: "openai",
       },
     });
+  });
+
+  test("reports the caller's correlation context from either path", async () => {
+    const { createTanStackAIAnalyticsCallbacks } =
+      await loadTanStackAIAnalytics();
+    const telemetry = installRecordingAnalytics();
+
+    try {
+      createTanStackAIAnalyticsCallbacks({
+        errorContext: { threadId: "thread_context" },
+        feature: "chat.thread_title",
+        orgAIConfig: createOpenAIOrgAIConfig(),
+        traceId: "trace_catch",
+      }).captureError(new Error("boom"));
+
+      // A failure raised inside the run is reported by the middleware, which
+      // leaves the caller's own capture a no-op, so the context cannot be
+      // handed over at the catch; it has to be configured for the run.
+      const meteredRun = createTanStackAIAnalyticsCallbacks({
+        errorContext: { threadId: "thread_context" },
+        feature: "chat.thread_title",
+        orgAIConfig: createOpenAIOrgAIConfig(),
+        traceId: "trace_middleware",
+      });
+      await meteredRun.middleware.onError?.(createMiddlewareContext(), {
+        duration: 50,
+        error: new Error("provider failed"),
+      });
+
+      expect(
+        telemetry.exceptions().map((event) => event.properties),
+      ).toMatchObject([
+        { threadId: "thread_context", trace_id: "trace_catch" },
+        { threadId: "thread_context", trace_id: "trace_middleware" },
+      ]);
+    } finally {
+      telemetry.restore();
+    }
   });
 
   test("keeps model metadata lookup best-effort", async () => {
