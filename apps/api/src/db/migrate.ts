@@ -9,6 +9,10 @@ import nodePath from "node:path";
 // file in the runtime image, which has no tsconfig to resolve paths.
 import { resolveDatabaseUrl } from "../db-url";
 import { assertMigrationHistory } from "../lib/db/migration-history";
+import {
+  CORPUS_SCHEMA_LANE_LOCK_SQL,
+  CORPUS_SCHEMA_LANE_UNLOCK_SQL,
+} from "./corpus-schema-lane";
 import { runOnlineMigrations } from "./online-migrations";
 import { APPLICATION_RLS_ROLE_NAME } from "./role-names";
 
@@ -90,8 +94,17 @@ $$;
 const migrationsFolder = nodePath.resolve(import.meta.dir, "../../drizzle");
 type AppliedMigrationRow = { hash: string };
 
+// The corpus schema lane, exclusive, for the whole upgrade: the schema
+// migrations and the online phase both run DDL on the corpus tables. Taking
+// it here waits for the corpus batches in flight and holds every new one at
+// its boundary until the upgrade releases the lane (see
+// corpus-schema-lane.ts). One connection (`max: 1`), so the session lock,
+// the migrator, and the online phase share the session that holds it.
+let laneHeld = false;
 try {
   await client.unsafe(bootstrapRoleSql);
+  await client.unsafe(CORPUS_SCHEMA_LANE_LOCK_SQL);
+  laneHeld = true;
   const database = drizzle({ client });
   await migrate(database, { migrationsFolder });
   await assertMigrationHistory({
@@ -125,5 +138,8 @@ try {
   console.error("[migrate] failed:", error);
   process.exitCode = 1;
 } finally {
+  if (laneHeld) {
+    await client.unsafe(CORPUS_SCHEMA_LANE_UNLOCK_SQL);
+  }
   await client.end();
 }

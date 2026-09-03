@@ -24,6 +24,8 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 
+import { CORPUS_SCHEMA_LANE_SHARED_XACT_SQL } from "./corpus-schema-lane";
+
 // Generic constraint accepts any drizzle instance (prod or
 // test PGlite) without importing test-only types.
 type ScopedTransactionBase = {
@@ -183,6 +185,12 @@ export const createMembershipScopedDb =
 // case-law ingestion daemon — narrowed to writes on case_law_*
 // (see 20260516000000_case_law_ingestion_role). No app.* settings
 // because the corpus is global; there is no tenant to scope.
+//
+// Every transaction also holds the corpus schema lane shared for its
+// duration: this is the write boundary every corpus batch goes through, so
+// an upgrade that takes the lane exclusive knows no batch is in flight
+// (see corpus-schema-lane.ts). A batch queued behind an upgrade waits here,
+// at its own boundary, rather than mid-write.
 export const createIngestionDb =
   <TTransaction extends ScopedTransactionBase>(
     database: RlsDatabase<TTransaction>,
@@ -192,6 +200,7 @@ export const createIngestionDb =
       await tx.execute(
         sql`SELECT set_config('role', '${sql.raw(stellaIngestion.name)}', true)`,
       );
+      await tx.execute(sql.raw(CORPUS_SCHEMA_LANE_SHARED_XACT_SQL));
       return await fn(tx);
     });
 
