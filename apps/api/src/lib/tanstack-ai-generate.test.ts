@@ -17,7 +17,7 @@ import {
 } from "@stll/ai-catalog";
 
 import type { CachingDecision } from "@/api/lib/ai-config";
-import { classifyAIError } from "@/api/lib/ai-error";
+import { classifyAIError, isAnticipatedAIFailure } from "@/api/lib/ai-error";
 import { toSafeId } from "@/api/lib/branded-types";
 import { StructuredOutputBudgetError } from "@/api/lib/structured-output-budget";
 import {
@@ -824,6 +824,9 @@ describe("TanStack AI text generation", () => {
     );
 
     expect(caught).toMatchObject({ status: 502 });
+    // The 502 is what the caller answers with; the cause is what keeps a
+    // failure sink from grading a caller-requested cancellation as a defect.
+    expect(isAnticipatedAIFailure(caught, classifyAIError(caught))).toBe(true);
   });
 
   test("keeps the output of a run that finished before the cancellation", async () => {

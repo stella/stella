@@ -37,7 +37,10 @@ import type {
   GuardedModelMessages,
   GuardedSystemPrompt,
 } from "@/api/lib/chat/model-ingress-guard";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  AIGenerationCancelledError,
+  HandlerError,
+} from "@/api/lib/errors/tagged-errors";
 import { logger } from "@/api/lib/observability/logger";
 import { markAiRequest } from "@/api/lib/observability/request-context";
 import {
@@ -145,6 +148,8 @@ type ResolveTextModelOptions = Pick<
   "modelId" | "organizationId" | "orgAIConfig" | "reasoningEffort" | "role"
 >;
 
+const CANCELLED_GENERATION_MESSAGE = "AI generation was cancelled";
+
 export const generateTanStackTextForRole = async (
   options: GenerateTanStackTextForRoleOptions,
 ): Promise<string> => {
@@ -188,7 +193,10 @@ export const generateTanStackTextForRole = async (
   if (!state.finished && options.abortSignal?.aborted === true) {
     throw new HandlerError({
       status: 502,
-      message: "AI generation was cancelled",
+      message: CANCELLED_GENERATION_MESSAGE,
+      cause: new AIGenerationCancelledError({
+        message: CANCELLED_GENERATION_MESSAGE,
+      }),
     });
   }
 
