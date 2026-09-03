@@ -1052,6 +1052,11 @@ const capabilityProbes = [
   },
 ] as const satisfies readonly CapabilityProbe[];
 
+export const canaryCapabilityProbeTimeout = (
+  name: string,
+): number | undefined =>
+  capabilityProbes.find((probe) => probe.name === name)?.timeoutMs;
+
 const probes = [
   ...modelRoleProbes,
   ...structuredOutputModelRoleProbes,

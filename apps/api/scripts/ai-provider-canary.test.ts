@@ -16,6 +16,7 @@ import {
   CanaryCredentialRejectedError,
   CanaryProviderRunError,
   CATALOG_SWEEP_BUDGET_MS,
+  canaryCapabilityProbeTimeout,
   catalogModelIds,
   classifyCanaryFailure,
   createPdfCanaryMessages,
@@ -34,6 +35,16 @@ import {
   toolRoundTripPromptForProvider,
 } from "./ai-provider-canary";
 import { CANARY_PROVIDERS } from "./ai-provider-canary-config";
+
+describe("AI provider canary probe deadlines", () => {
+  test("gives the budget-edge probe the extended structured-output deadline", () => {
+    expect(
+      canaryCapabilityProbeTimeout("structured-output-budget-edge"),
+    ).toBe(45_000);
+    expect(canaryCapabilityProbeTimeout("structured-output")).toBe(20_000);
+    expect(canaryCapabilityProbeTimeout("unknown-probe")).toBeUndefined();
+  });
+});
 
 describe("AI provider catalog canary coverage", () => {
   test("declares every selectable model id of a provider exactly once", () => {
