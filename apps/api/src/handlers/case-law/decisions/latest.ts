@@ -10,15 +10,13 @@ import {
   type ShelfCourt,
 } from "@/api/handlers/case-law/decisions/shelf-courts";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
-import {
-  decisionHeadnoteSql,
-  normalizeDecisionHeadnote,
-} from "@/api/lib/case-law/decision-headnote";
+import { normalizeDecisionHeadnote } from "@/api/lib/case-law/decision-headnote";
 import {
   type PublicDecisionLanguageAlternate,
   readPublicDecisionLanguageAlternatesByGroup,
 } from "@/api/lib/case-law/language-alternates";
 import { readNonRedistributableCaseLawSourceIds } from "@/api/lib/case-law/non-redistributable-sources";
+import { publisherSummaryMetadataSql } from "@/api/lib/case-law/publisher-summary";
 import { redistributableCaseLawSourceSqlFor } from "@/api/lib/case-law/redistribution";
 import { errorTag } from "@/api/lib/errors/utils";
 import { createTtlResultCache } from "@/api/lib/legal-search/browse-facets-cache";
@@ -141,7 +139,7 @@ export const readLatestDecisionsByCourt = async ({
           d.decision_date,
           d.decision_type,
           d.citation_count,
-          ${decisionHeadnoteSql(sql.raw("d.metadata"))} AS headnote
+          ${publisherSummaryMetadataSql(sql.raw("d.metadata"))} AS headnote
         FROM jsonb_array_elements_text(${JSON.stringify(courts.map((shelf) => shelf.court))}::text::jsonb)
           WITH ORDINALITY AS shelf(court, ordinality)
         CROSS JOIN LATERAL (

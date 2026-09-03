@@ -3,11 +3,9 @@ import { and, eq, inArray } from "drizzle-orm";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
-import {
-  decisionHeadnoteSql,
-  normalizeDecisionHeadnote,
-} from "@/api/lib/case-law/decision-headnote";
+import { normalizeDecisionHeadnote } from "@/api/lib/case-law/decision-headnote";
 import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
+import { publisherSummaryMetadataSql } from "@/api/lib/case-law/publisher-summary";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 
 type ReadPublicDecisionSummariesOptions = {
@@ -41,7 +39,7 @@ export const readPublicDecisionSummaries = async ({
         decisionDate: caseLawDecisions.decisionDate,
         decisionType: caseLawDecisions.decisionType,
         sourceUrl: caseLawDecisions.sourceUrl,
-        headnote: decisionHeadnoteSql(caseLawDecisions.metadata),
+        headnote: publisherSummaryMetadataSql(caseLawDecisions.metadata),
         citationCount: caseLawDecisions.citationCount,
         createdAt: caseLawDecisions.createdAt,
       })

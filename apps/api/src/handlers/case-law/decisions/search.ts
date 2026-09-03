@@ -35,12 +35,10 @@ import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
-import {
-  decisionHeadnoteSql,
-  normalizeDecisionHeadnote,
-} from "@/api/lib/case-law/decision-headnote";
+import { normalizeDecisionHeadnote } from "@/api/lib/case-law/decision-headnote";
 import { decisionIdentifierProjection } from "@/api/lib/case-law/decision-identifiers";
 import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
+import { publisherSummaryMetadataSql } from "@/api/lib/case-law/publisher-summary";
 import {
   redistributableCaseLawSource,
   redistributableCaseLawSourceSqlFor,
@@ -282,7 +280,7 @@ const searchPostgresDecisions = async (
       d.decision_date,
       d.decision_type,
       d.source_url,
-      ${decisionHeadnoteSql(sql.raw("d.metadata"))} AS headnote,
+      ${publisherSummaryMetadataSql(sql.raw("d.metadata"))} AS headnote,
       ts_headline(
         ${headlineRegconfig},
         left(
@@ -566,7 +564,7 @@ const hydratedDecisionRowsQuery = (
       decisionDate: caseLawDecisions.decisionDate,
       decisionType: caseLawDecisions.decisionType,
       sourceUrl: caseLawDecisions.sourceUrl,
-      headnote: decisionHeadnoteSql(caseLawDecisions.metadata),
+      headnote: publisherSummaryMetadataSql(caseLawDecisions.metadata),
       citationCount: caseLawDecisions.citationCount,
       citationAuthority: caseLawDecisions.citationAuthority,
       createdAt: caseLawDecisions.createdAt,
