@@ -5,6 +5,7 @@ import { detached } from "@/api/lib/detached";
 import { errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import {
+  createLazyRedisClient,
   createRedisClient,
   isTransientRedisConnectionError,
 } from "@/api/lib/redis-client";
@@ -34,12 +35,10 @@ const createDocumentOcrReadinessClient = () =>
     enableOfflineQueue: false,
   });
 
-let readinessReader: ReturnType<typeof createRedisClient> | null = null;
-
-const getReadinessReader = () => {
-  readinessReader ??= createDocumentOcrReadinessClient();
-  return readinessReader;
-};
+// Both readiness clients are process-lifetime, so each is held through the
+// lazy holder rather than as a bare client: a connection that closes is
+// dropped with it and the next command builds a replacement.
+const readinessReader = createLazyRedisClient(createDocumentOcrReadinessClient);
 
 export const readDocumentOcrWorkerAvailability = async (
   readLease: () => Promise<string | null>,
@@ -58,14 +57,13 @@ export const isDocumentOcrWorkerAvailable = async (
 ): Promise<boolean> => {
   const availability = await Result.tryPromise({
     try: async () =>
-      await readDocumentOcrWorkerAvailability(
-        async () =>
-          await (
-            createClient === createDocumentOcrReadinessClient
-              ? getReadinessReader()
-              : createClient()
-          ).get(DOCUMENT_OCR_WORKER_READINESS_KEY),
-      ),
+      await readDocumentOcrWorkerAvailability(async () => {
+        const client =
+          createClient === createDocumentOcrReadinessClient
+            ? await readinessReader.ready()
+            : createClient();
+        return await client.get(DOCUMENT_OCR_WORKER_READINESS_KEY);
+      }),
     catch: (cause) => cause,
   });
   if (Result.isError(availability)) {
@@ -84,6 +82,22 @@ export const isDocumentOcrWorkerAvailable = async (
   return availability.value;
 };
 
+const HEARTBEAT_TIMEOUT_LABEL = "document OCR readiness heartbeat";
+
+/** Apply the lease constants. Unbounded: the caller decides its own deadline. */
+const writeReadinessLease = async (
+  writeLease: (
+    key: CoordinationKey,
+    value: string,
+    ttlSeconds: number,
+  ) => Promise<unknown>,
+): Promise<unknown> =>
+  await writeLease(
+    DOCUMENT_OCR_WORKER_READINESS_KEY,
+    DOCUMENT_OCR_WORKER_READINESS_VALUE,
+    DOCUMENT_OCR_WORKER_READINESS_TTL_SECONDS,
+  );
+
 export const refreshDocumentOcrWorkerReadiness = async (
   writeLease: (
     key: CoordinationKey,
@@ -92,26 +106,64 @@ export const refreshDocumentOcrWorkerReadiness = async (
   ) => Promise<unknown>,
   timeoutMs = DOCUMENT_OCR_REDIS_COMMAND_TIMEOUT_MS,
 ): Promise<void> => {
-  await withTimeout(
-    async () =>
-      await writeLease(
-        DOCUMENT_OCR_WORKER_READINESS_KEY,
-        DOCUMENT_OCR_WORKER_READINESS_VALUE,
-        DOCUMENT_OCR_WORKER_READINESS_TTL_SECONDS,
-      ),
-    {
-      label: "document OCR readiness heartbeat",
-      timeoutMs,
+  const write = writeReadinessLease(writeLease);
+  await withTimeout(async () => await write, {
+    label: HEARTBEAT_TIMEOUT_LABEL,
+    timeoutMs,
+  });
+};
+
+/**
+ * One beat, split into the work and the caller's view of it. They are not the
+ * same promise: a deadline bounds how long the caller waits, but it cancels
+ * nothing, so the write and the connect behind it keep running after the
+ * caller has given up on them.
+ */
+export type SingleFlightBeat = {
+  /**
+   * The underlying work. This alone decides when the slot is free, because a
+   * slot released on the caller's deadline would let the next interval attach
+   * a second continuation to the same pending connect.
+   */
+  chain: Promise<unknown>;
+  /** What the caller awaits and reports on; may settle before `chain`. */
+  observed: Promise<unknown>;
+};
+
+/**
+ * One beat at a time, its connect included. `start` returns the caller's view
+ * of the beat it started, or null when one was already running, so a caller
+ * cannot observe "in flight" and act on it separately.
+ */
+export const createSingleFlightBeat = (runBeat: () => SingleFlightBeat) => {
+  let inFlight: Promise<unknown> | null = null;
+  return {
+    start: (): Promise<unknown> | null => {
+      if (inFlight !== null) {
+        return null;
+      }
+      const { chain, observed } = runBeat();
+      const release = (): void => {
+        inFlight = null;
+      };
+      // Released on either outcome: a failed beat has to free the slot too,
+      // or one failure would silence the heartbeat for the life of the
+      // process. Swallowing here is not losing the failure — it reaches the
+      // caller through `observed`.
+      inFlight = chain.then(release, release);
+      return observed;
     },
-  );
+  };
 };
 
 export const startDocumentOcrWorkerReadiness = () => {
-  const client = createDocumentOcrReadinessClient();
-  let writeInFlight: Promise<unknown> | null = null;
-  const refresh = async (): Promise<void> => {
-    await refreshDocumentOcrWorkerReadiness(async (key, value, ttlSeconds) => {
-      const write = client.send(
+  const heartbeatClient = createLazyRedisClient(
+    createDocumentOcrReadinessClient,
+  );
+  const beat = createSingleFlightBeat(() => {
+    const chain = writeReadinessLease(async (key, value, ttlSeconds) => {
+      const client = await heartbeatClient.ready();
+      const reply: unknown = await client.send(
         "SET",
         coordinationSetArguments({
           key,
@@ -119,33 +171,37 @@ export const startDocumentOcrWorkerReadiness = () => {
           ttl: { unit: "seconds", value: ttlSeconds },
         }),
       );
-      writeInFlight = write;
-      const markSettled = (): void => {
-        if (writeInFlight === write) {
-          writeInFlight = null;
-        }
-      };
-      detached(
-        write.then(markSettled, markSettled),
-        "document-processing.readiness-heartbeat-settlement",
-      );
-      await write;
+      return reply;
     });
-  };
+    return {
+      chain,
+      // The deadline bounds only what this interval waits for and logs. The
+      // connect and write keep going, and `chain` is what holds the slot, so
+      // a beat that timed out while connecting still blocks the next one.
+      observed: withTimeout(async () => await chain, {
+        label: HEARTBEAT_TIMEOUT_LABEL,
+        timeoutMs: DOCUMENT_OCR_REDIS_COMMAND_TIMEOUT_MS,
+      }),
+    };
+  });
   const heartbeat = (): void => {
-    if (writeInFlight !== null) {
+    const started = beat.start();
+    if (started === null) {
       return;
     }
     // A dropped Redis socket rejects the first write after an idle window;
     // the 90s lease outlives one missed 30s beat, and the next beat writes
-    // on a reconnected socket. Other failures keep flowing to `detached`'s
-    // exception capture.
+    // on a reconnected socket. Anything else is a defect and is captured.
     detached(
-      refresh().catch((error: unknown) => {
-        if (!isTransientRedisConnectionError(error)) {
-          throw error;
+      started.catch((error: unknown) => {
+        if (isTransientRedisConnectionError(error)) {
+          logger.warn("document_processing.readiness_heartbeat_disrupted", {
+            "error.type": errorTag(error),
+          });
+          return;
         }
-        logger.warn("document_processing.readiness_heartbeat_disrupted", {
+        captureError(error);
+        logger.error("document_processing.readiness_heartbeat_failed", {
           "error.type": errorTag(error),
         });
       }),
@@ -163,7 +219,7 @@ export const startDocumentOcrWorkerReadiness = () => {
   return {
     close: (): void => {
       clearInterval(interval);
-      client.close();
+      heartbeatClient.close();
     },
   };
 };

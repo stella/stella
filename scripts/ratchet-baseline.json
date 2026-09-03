@@ -88,7 +88,7 @@
     "files": {}
   },
   "throw-outside-boundary": {
-    "count": 885,
+    "count": 881,
     "files": {
       "apps/api/src/handlers/case-law/corpus-index.ts": 12,
       "apps/api/src/handlers/case-law/decisions/latest.ts": 3,
@@ -222,7 +222,6 @@
       "apps/api/src/lib/legal-search/corpus-index-client.ts": 23,
       "apps/api/src/lib/legal-search/corpus-index-pagination.ts": 1,
       "apps/api/src/lib/legal-search/corpus-index-projection-desired-state.ts": 4,
-      "apps/api/src/lib/legal-search/corpus-index-provider.ts": 2,
       "apps/api/src/lib/legal-search/corpus-pack.ts": 6,
       "apps/api/src/lib/legal-search/corpus-storage.ts": 4,
       "apps/api/src/lib/legal-search/ingestion-normalization.ts": 4,
@@ -234,7 +233,6 @@
       "apps/api/src/lib/ocr-searchable-pdf-worker.ts": 1,
       "apps/api/src/lib/organization-storage-teardown.ts": 4,
       "apps/api/src/lib/rate-limit/redis-context.ts": 3,
-      "apps/api/src/lib/redis-client.ts": 2,
       "apps/api/src/lib/s3-presign.ts": 8,
       "apps/api/src/lib/s3.ts": 12,
       "apps/api/src/lib/scheduler/bullmq.ts": 1,

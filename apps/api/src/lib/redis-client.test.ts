@@ -17,9 +17,16 @@ const {
   connectWithColdStartRetries,
   createBullMqConnection,
   createLazyRedisClient,
+  createRedisClient,
   isRecoverableRedisPollError,
   isTransientRedisConnectionError,
+  redisClientOptions,
 } = await import("@/api/lib/redis-client");
+
+const REDIS_URL = "redis://127.0.0.1:6379";
+// Bun reads `maxRetries` as a u32, so the ceiling is the value rather than an
+// arbitrary large number: `Number.MAX_SAFE_INTEGER` is rejected outright.
+const U32_CEILING = 4_294_967_295;
 
 describe("BullMQ Redis connection", () => {
   test("lets BullMQ own connection startup", () => {
@@ -32,6 +39,61 @@ describe("BullMQ Redis connection", () => {
       expect.anything(),
       { lazyConnect: true },
     ]);
+  });
+});
+
+/**
+ * The class these pin: a long-lived client that stops reconnecting is one its
+ * holder can never use again, because a closed Bun client cannot be reopened.
+ * Both halves have to hold — the ladder must not run out, and the close
+ * callback the BullMQ adapter and the holders hang their recovery on has to
+ * actually reach Bun's setter.
+ */
+describe("the reconnect policy", () => {
+  test("the reconnect ladder is unbounded", () => {
+    expect(redisClientOptions(REDIS_URL).maxRetries).toBe(U32_CEILING);
+  });
+
+  test("no call site can reintroduce a bounded ladder", () => {
+    const options = redisClientOptions(REDIS_URL, {
+      // Type-level half of the same guard: the overrides parameter omits
+      // `maxRetries`, so a bounded ladder cannot come back through a caller.
+      // @ts-expect-error -- maxRetries is not an override a caller may pass
+      maxRetries: 20,
+      enableOfflineQueue: false,
+    });
+
+    // The policy is applied after the spread, so even a cast past the type
+    // does not land.
+    expect(options.maxRetries).toBe(U32_CEILING);
+    expect(options.enableOfflineQueue).toBe(false);
+  });
+
+  test("a reconnecting client does not buffer commands for the whole outage", () => {
+    // The two policies are a pair: an unbounded ladder plus Bun's default
+    // offline queue would buffer every command issued during an outage, so a
+    // caller blocks for its whole length instead of failing and retrying, and
+    // the backlog is replayed against a server that has since moved on.
+    expect(redisClientOptions(REDIS_URL).enableOfflineQueue).toBe(false);
+    // A caller whose framework owns buffering across a reconnect (the BullMQ
+    // adapter) can still opt back in; `maxRetries` above cannot.
+    expect(
+      redisClientOptions(REDIS_URL, { enableOfflineQueue: true })
+        .enableOfflineQueue,
+    ).toBe(true);
+  });
+
+  test("assigning onclose reaches Bun's setter", () => {
+    const client = createRedisClient();
+
+    // Through `[[Set]]`, the way BullMQ's adapter registers its own callback.
+    Reflect.set(client, "onclose", () => undefined);
+
+    // A class field installs an own data property that shadows the prototype
+    // setter, and a callback stored there never fires — which is how BullMQ's
+    // adapter would lose the close event it schedules its reconnects on.
+    expect(Object.getOwnPropertyDescriptor(client, "onclose")).toBeUndefined();
+    client.close();
   });
 });
 
@@ -139,9 +201,11 @@ describe("isTransientRedisConnectionError", () => {
 describe("createLazyRedisClient", () => {
   /** A stand-in for the real client, recording its own lifecycle. */
   const fakeClient = () => {
+    const closeHandlers = new Set<() => void>();
     const client = {
       close: () => {
         client.closed += 1;
+        client.fireClose();
       },
       closed: 0,
       connect: async () => {
@@ -150,6 +214,18 @@ describe("createLazyRedisClient", () => {
       },
       connectResult: async () => await Promise.resolve(),
       connects: 0,
+      /** Drive the close callback the way Bun does when a socket ends. */
+      fireClose: () => {
+        for (const handler of [...closeHandlers]) {
+          handler();
+        }
+      },
+      onClose: (handler: () => void) => {
+        closeHandlers.add(handler);
+        return () => {
+          closeHandlers.delete(handler);
+        };
+      },
     };
     return client;
   };
@@ -210,6 +286,27 @@ describe("createLazyRedisClient", () => {
     expect(after).not.toBe(before);
     expect(clients).toHaveLength(2);
     expect(clients.at(0)?.closed).toBe(1);
+    expect(clients.at(1)?.connects).toBe(1);
+  });
+
+  test("a lazy client rebuilds after its connection closes", async () => {
+    const clients: ReturnType<typeof fakeClient>[] = [];
+    const lazy = createLazyRedisClient(() => {
+      const client = fakeClient();
+      clients.push(client);
+      return client;
+    });
+
+    const before = await lazy.ready();
+    // Nothing closed the holder: the socket ended on its own, and a closed Bun
+    // client cannot be reopened.
+    before.fireClose();
+    const after = await lazy.ready();
+
+    // Keeping the closed client would send every later command here into a
+    // socket that never comes back.
+    expect(after).not.toBe(before);
+    expect(clients).toHaveLength(2);
     expect(clients.at(1)?.connects).toBe(1);
   });
 

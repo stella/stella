@@ -1,11 +1,13 @@
 import { Queue } from "bullmq";
 import type { QueueOptions } from "bullmq";
-import type { RedisOptions } from "bun";
 
-import { createBullMqConnection } from "@/api/lib/redis-client";
+import {
+  createBullMqConnection,
+  type RedisClientOverrides,
+} from "@/api/lib/redis-client";
 
 type LazyBullMqQueueOptions = Omit<QueueOptions, "connection"> & {
-  connectionOptions?: RedisOptions;
+  connectionOptions?: RedisClientOverrides;
   name: string;
 };
 

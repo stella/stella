@@ -16,41 +16,111 @@ export {
   isTransientRedisConnectionError,
 } from "@/api/lib/redis-error-classification";
 
+/**
+ * Every client built here is long-lived, and Bun caps its reconnect ladder at
+ * `maxRetries` (default 20, ≈31s of the 50ms→2s capped backoff). A client that
+ * exhausts the ladder closes for good and cannot be revived in place, so its
+ * holder would keep issuing commands into a socket that will never come back.
+ * Reconnect without a cap instead and let the holder own the give-up decision:
+ * a broker restart longer than the ladder is an outage to ride out, not a
+ * reason to stop trying. Bun's backoff is unchanged, so this adds no load.
+ *
+ * The value is Bun's u32 ceiling; the option is read as a u32 and
+ * `Number.MAX_SAFE_INTEGER` is rejected with `ERR_OUT_OF_RANGE`.
+ */
+const RECONNECT_ATTEMPT_LIMIT = 4_294_967_295;
+
+/**
+ * The connection options a caller may tune. `maxRetries` is not among them:
+ * a bounded ladder is what closes a long-lived client for good, so it is set
+ * once here rather than left open to a per-call-site override.
+ */
+export type RedisClientOverrides = Omit<RedisOptions, "maxRetries">;
+
+/**
+ * The options every client here is constructed with. A named value rather
+ * than an inline object literal because Bun's RedisClient does not expose
+ * what it was built with, so this is the only place the reconnect policy can
+ * be read back and asserted.
+ */
+export const redisClientOptions = (
+  url: string,
+  overrides?: RedisClientOverrides,
+): RedisOptions => ({
+  // An unbounded reconnect ladder and an unbounded offline queue do not
+  // belong on the same client: a client that keeps reconnecting for the whole
+  // outage would also keep buffering every command issued during it, so
+  // callers block instead of failing and the backlog is replayed against a
+  // server that has since forgotten the state they were written for. Fail the
+  // command instead and let the caller decide — a periodic loop records the
+  // failure and retries on its next tick, a request path degrades. Every
+  // request-path client here already opts out explicitly; this makes that the
+  // default rather than something each new call site has to remember.
+  enableOfflineQueue: false,
+  ...redisConnectionOptions(url),
+  ...overrides,
+  maxRetries: RECONNECT_ATTEMPT_LIMIT,
+});
+
 class ConfiguredRedisClient extends RedisClient implements BunRedisRawClient {
+  readonly #closeHandlers = new Set<() => void>();
   readonly #connectHandlers = new Set<() => void>();
 
-  override onclose: (error?: Error) => void = () => undefined;
-  // Declared as a non-null field so the class satisfies `BunRedisRawClient`
-  // (Bun types the inherited `onconnect` as nullable). The field's own-property
-  // is removed in the constructor before the real callback is registered — see
+  // Declared as non-null fields so the class satisfies `BunRedisRawClient`
+  // (Bun types both inherited callbacks as nullable). Their own-properties are
+  // removed in the constructor before the real callbacks are registered — see
   // there for why the runtime path cannot be a plain field assignment.
+  override onclose: (error?: Error) => void = () => undefined;
   override onconnect: () => void = () => undefined;
   readonly url: string;
 
   constructor(
     url = envDocumentProcessingWorker.REDIS_URL,
-    overrides?: RedisOptions,
+    overrides?: RedisClientOverrides,
   ) {
-    super(url, { ...redisConnectionOptions(url), ...overrides });
+    super(url, redisClientOptions(url, overrides));
     this.url = url;
-    // Register one owned dispatcher on Bun's native `onconnect` setter so a
-    // pub/sub subscriber can observe reconnects. Two facts (both verified
-    // against a mock RESP3 server) shape this: (1) `onconnect` must be reached
-    // through `[[Set]]` so Bun registers the callback — the class field above
-    // defines an own data property that shadows the prototype setter, and a
-    // callback stored that way never fires; deleting the own property first
+    // Register one owned dispatcher on each of Bun's native `onconnect` /
+    // `onclose` setters, so a pub/sub subscriber can observe reconnects and a
+    // holder can observe a client going away for good. Two facts (both
+    // verified against a mock RESP3 server) shape this: (1) the callback must
+    // be reached through `[[Set]]` so Bun registers it — the class fields
+    // above define own data properties that shadow the prototype setters, and
+    // a callback stored that way never fires; deleting the own property first
     // makes the setter reachable. (2) Bun's RedisClient is not an EventTarget,
     // so a direct `this.onconnect = …` is the only real option, but the
     // prefer-add-event-listener lint rule bans that syntax — `Reflect.set`
     // performs the same `[[Set]]` without the banned member-assignment form.
-    // The dispatcher fans every (re)connection out to the handlers registered
-    // via `onReconnect`.
+    //
+    // The shadow matters beyond this class: BullMQ's Bun adapter assigns
+    // `raw.onclose` to drive its own reconnect scheduling, and an own data
+    // property left in place would swallow that assignment silently.
     Reflect.deleteProperty(this, "onconnect");
     Reflect.set(this, "onconnect", () => {
       for (const handler of this.#connectHandlers) {
         handler();
       }
     });
+    Reflect.deleteProperty(this, "onclose");
+    Reflect.set(this, "onclose", () => {
+      for (const handler of this.#closeHandlers) {
+        handler();
+      }
+    });
+  }
+
+  /**
+   * Register `handler` to run when this client's connection closes, whether
+   * from an explicit `close()` or from Bun giving up on the socket. A closed
+   * Bun client cannot be reopened, so a holder that wants to keep working past
+   * one has to build a replacement (see `createLazyRedisClient`). Returns a
+   * disposer that removes the handler.
+   */
+  onClose(handler: () => void): () => void {
+    this.#closeHandlers.add(handler);
+    return () => {
+      this.#closeHandlers.delete(handler);
+    };
   }
 
   /**
@@ -70,7 +140,7 @@ class ConfiguredRedisClient extends RedisClient implements BunRedisRawClient {
 }
 
 export const createRedisClient = (
-  overrides?: RedisOptions,
+  overrides?: RedisClientOverrides,
 ): ConfiguredRedisClient =>
   new ConfiguredRedisClient(envDocumentProcessingWorker.REDIS_URL, overrides);
 
@@ -82,17 +152,16 @@ export const createRedisClient = (
 // on the first failure, with no retry of its own for that initial attempt.
 // Retry a handful of times with a short capped backoff so that expected,
 // self-recovering cold-start blips log at warn instead of paging as an
-// error; once retries are exhausted the error is rethrown so BullMQ's own
-// (unchanged) error handling still surfaces a persistent outage loudly.
+// error; the last attempt is left unguarded so a persistent outage still
+// reaches BullMQ's own (unchanged) error handling loudly.
 const COLD_START_CONNECT_RETRY_DELAYS_MS = [200, 500, 1000, 2000];
 
 export const connectWithColdStartRetries = async (
   connectOnce: () => Promise<void>,
 ): Promise<void> => {
-  for (let attempt = 0; ; attempt += 1) {
-    // catch returns the raw cause unchanged so a final, retries-exhausted
-    // rethrow preserves the original error identity (code, syscall, class)
-    // for whichever consumer's `worker.on("error")` handler logs it loudly.
+  for (const delayMs of COLD_START_CONNECT_RETRY_DELAYS_MS) {
+    // catch returns the raw cause unchanged so the warning below reports the
+    // original error identity (code, syscall, class).
     // oxlint-disable-next-line no-await-in-loop -- each retry must observe whether the connection came up before deciding to wait and try again
     const result = await Result.tryPromise({
       try: connectOnce,
@@ -101,10 +170,6 @@ export const connectWithColdStartRetries = async (
     if (result.isOk()) {
       return;
     }
-    const delayMs = COLD_START_CONNECT_RETRY_DELAYS_MS[attempt];
-    if (delayMs === undefined) {
-      throw result.error;
-    }
     logger.warn(
       "redis.cold_start_reconnect",
       connectionErrorFields(result.error),
@@ -112,17 +177,33 @@ export const connectWithColdStartRetries = async (
     // oxlint-disable-next-line no-await-in-loop -- retries are intentionally sequential backoff, not parallel work
     await sleep(delayMs);
   }
+  // One attempt per delay, then a final unguarded one: its rejection is the
+  // caller's, with the original error identity intact for whichever
+  // consumer's `worker.on("error")` handler logs the outage.
+  await connectOnce();
 };
 
-/** The two capabilities a lazily connected client has to expose. */
+/** The capabilities a lazily connected client has to expose. */
 type ManagedRedisClient = {
   close: () => void;
   connect: () => Promise<void>;
+  onClose: (handler: () => void) => () => void;
 };
 
 type LazyRedisClient<Client> = {
   close: () => void;
   ready: () => Promise<Client>;
+};
+
+/** One client, and the readiness of the connect attempt that built it. */
+type ClientAttempt<Client> = {
+  /**
+   * Settle `ready` as a failure without waiting for the connect to return,
+   * so a close during the ladder rejects the callers waiting on it.
+   */
+  abandon: (error: RedisClientClosedError) => void;
+  client: Client;
+  ready: Promise<Client>;
 };
 
 /**
@@ -133,50 +214,79 @@ type LazyRedisClient<Client> = {
  * built with the offline queue disabled, where such a command rejects
  * immediately instead of waiting for the socket.
  *
- * The connect runs once per client while it succeeds, and a rejected
- * attempt is discarded so the next caller retries rather than inheriting a
- * cached rejection. `close` drops the client and that memo together: a
- * caller after a shutdown builds and connects a fresh one instead of
- * receiving a resolved promise for a closed client, and a `ready()` still
- * in flight across a `close` fails rather than handing out the client it
- * was connecting.
+ * The connect runs once per client while it succeeds, and a failed attempt is
+ * discarded so the next caller builds and connects a fresh client rather than
+ * inheriting a cached rejection. The attempt is also discarded when the
+ * connection closes, whether from `close()` or from Bun ending the socket: a
+ * closed Bun client cannot be reopened, so keeping it would make every later
+ * `ready()` hand out a dead socket. That is what lets the holder outlive a
+ * broker restart longer than the client's own reconnect ladder.
+ *
+ * A `close()` while a connect is still climbing rejects the callers waiting on
+ * it, rather than handing them the client it was connecting.
  */
 export const createLazyRedisClient = <Client extends ManagedRedisClient>(
   createClient: () => Client,
 ): LazyRedisClient<Client> => {
-  let client: Client | null = null;
-  let connected: Promise<void> | null = null;
+  let current: ClientAttempt<Client> | null = null;
+
+  const startAttempt = (): ClientAttempt<Client> => {
+    const client = createClient();
+    const abandoned = Promise.withResolvers<never>();
+    const connected = connectWithColdStartRetries(async () => {
+      await client.connect();
+    }).then(() => client);
+    const attempt: ClientAttempt<Client> = {
+      abandon: abandoned.reject,
+      client,
+      // Whichever settles first wins, so a close is what rejects a waiting
+      // caller, at the close itself rather than through a check after the
+      // connect has run its course.
+      ready: Promise.race([connected, abandoned.promise]),
+    };
+    // A closed Bun client cannot be reopened, so the attempt goes with it and
+    // the next caller builds a replacement. Guarded on identity: a close
+    // arriving after this attempt was already replaced must not drop its
+    // successor, which would leave the new client connecting twice over.
+    client.onClose(() => {
+      if (current === attempt) {
+        current = null;
+      }
+    });
+    return attempt;
+  };
+
   return {
     close: () => {
-      client?.close();
-      client = null;
-      connected = null;
+      const closing = current;
+      current = null;
+      if (closing === null) {
+        return;
+      }
+      closing.abandon(
+        new RedisClientClosedError({
+          message: "Redis client closed while connecting",
+        }),
+      );
+      closing.client.close();
     },
     ready: async () => {
-      client ??= createClient();
-      const target = client;
-      if (connected === null) {
-        const attempt: Promise<void> = connectWithColdStartRetries(async () => {
-          await target.connect();
-        }).catch((error: unknown) => {
-          // Only this attempt may clear its own memo. A close and a later
-          // caller can install another client's attempt while this ladder
-          // is still climbing, and clearing that one would leave the new
-          // client connecting twice over.
-          if (connected === attempt) {
-            connected = null;
-          }
-          throw error;
-        });
-        connected = attempt;
+      current ??= startAttempt();
+      const attempt = current;
+      const outcome = await Result.tryPromise({
+        try: async () => await attempt.ready,
+        catch: (cause: unknown) => cause,
+      });
+      if (Result.isOk(outcome)) {
+        return outcome.value;
       }
-      await connected;
-      if (client !== target) {
-        throw new RedisClientClosedError({
-          message: "Redis client closed while connecting",
-        });
+      // A failure is not memoized: the next caller builds and connects a
+      // fresh client instead of inheriting this one's rejection. Re-awaiting
+      // the settled attempt hands this caller the original failure unchanged.
+      if (current === attempt) {
+        current = null;
       }
-      return target;
+      return await attempt.ready;
     },
   };
 };
@@ -213,9 +323,13 @@ const withColdStartConnectRetries = (
  * introduce a prefix, and do not add unhashtagged keys anywhere else.
  */
 export const createBullMqConnection = (
-  overrides?: RedisOptions,
+  overrides?: RedisClientOverrides,
 ): ReturnType<typeof createBunRedisClient> => {
-  const raw = createRedisClient(overrides);
+  // BullMQ's adapter owns command buffering across a reconnect (it schedules
+  // its own and replays what it holds), so the connection keeps the offline
+  // queue the factory otherwise defaults off. A queue that wants its enqueues
+  // to fail fast still says so through `overrides`.
+  const raw = createRedisClient({ enableOfflineQueue: true, ...overrides });
   const connection = createBunRedisClient(raw, {
     // Railway's Redis proxy can trigger Bun's eager adapter read path before
     // BullMQ has completed its own readiness flow. Let BullMQ connect lazily.
