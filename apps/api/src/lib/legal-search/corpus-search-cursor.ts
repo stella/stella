@@ -40,8 +40,6 @@
  * One metadata segment therefore means a window rank and nothing else.
  */
 
-import { TaggedError } from "better-result";
-
 import type { SearchCursor } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
   type ExpansionDictionaryIdentity,
@@ -60,28 +58,6 @@ import { decodeCursor, encodeCursor } from "@/api/lib/search/cursor";
 export type CorpusSearchCursor = SearchCursor & {
   dictionary: ExpansionDictionaryIdentity;
 };
-
-/**
- * Why a cursor cannot be continued: it did not decode at all, or it names a
- * dictionary other than the one this request resolved. Named rather than
- * flagged, because both answers are "start over" to a client and only the
- * reason tells an operator which.
- */
-export type InvalidCorpusSearchCursorReason =
-  | "dictionary_mismatch"
-  | "undecodable";
-
-/**
- * A continuation page cannot be served for the cursor it was asked with. Read
- * paths without an HTTP status of their own fail on this rather than restarting
- * at page one, which a client that appends pages reads as duplicates.
- */
-export class InvalidCorpusSearchCursorError extends TaggedError(
-  "InvalidCorpusSearchCursorError",
-)<{
-  message: string;
-  reason: InvalidCorpusSearchCursorReason;
-}> {}
 
 /**
  * A window rank on the wire: decimal digits, bounded so the parse is total.

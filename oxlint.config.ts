@@ -10,6 +10,8 @@ import {
   stellaLowercasePluginSpecifier,
 } from "@stll/oxlint-config";
 
+import { RESULT_CONVENTION_EXCLUDE_GLOBS } from "./scripts/result-boundary-globs.ts";
+
 // All workspaces run oxlint from the repo root via:
 //   cd ../.. && oxlint -c oxlint.config.ts --type-aware <workspace-dir>
 // Override paths are therefore relative to the repo root.
@@ -272,6 +274,12 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("suppression-hygiene.fixture.ts", [
     "suppression-hygiene/no-foreign-directive",
     "suppression-hygiene/require-description",
+  ]),
+  fixtureRuleOverride("no-throw-outside-boundary.fixture.ts", [
+    "no-throw-outside-boundary/no-throw-outside-boundary",
+  ]),
+  fixtureRuleOverride("no-try-catch-outside-boundary.fixture.ts", [
+    "no-try-catch-outside-boundary/no-try-catch-outside-boundary",
   ]),
 ];
 
@@ -1062,6 +1070,8 @@ export default defineConfig({
     "./.oxlint-plugins/require-coordination-key.ts",
     "./.oxlint-plugins/no-async-context-enter-with.ts",
     "./.oxlint-plugins/no-omitted-prop-respread.ts",
+    "./.oxlint-plugins/no-throw-outside-boundary.ts",
+    "./.oxlint-plugins/no-try-catch-outside-boundary.ts",
   ],
 
   overrides: [
@@ -3535,6 +3545,122 @@ export default defineConfig({
         "typescript/no-unsafe-argument": "off",
         "typescript/no-unsafe-return": "off",
         "typescript/strict-boolean-expressions": "off",
+      },
+    },
+    {
+      // better-result boundary lint, part 1: enable on directories already
+      // at zero violations.
+      //
+      // AGENTS.md mandates better-result Result types over throw/try-catch
+      // outside explicit boundary modules. The non-boundary scope is
+      // apps/api/src/lib/**, apps/api/src/handlers/**, apps/api/src/mcp/**,
+      // and packages/*/src/** minus the boundary list in the next override.
+      // apps/web is out of scope for now: its framework (TanStack Router
+      // loaders, error boundaries) throws by design.
+      //
+      // That scope currently holds roughly 900 throw sites and 300
+      // try/catch blocks (see the per-directory table this override was
+      // generated from), so enabling both rules across the whole scope
+      // would break CI outright. Instead this `files` list is the exact
+      // set of two-levels-deep directories that already have zero
+      // violations of both rules; every other in-scope directory stays
+      // unlisted (rules default to off) until the `throw-outside-boundary`
+      // and `try-catch-outside-boundary` ratchet counters in
+      // scripts/ratchet.ts walk it to zero, at which point its directory
+      // moves into this list.
+      files: [
+        "apps/api/src/handlers/agent-auth/**/*.ts",
+        "apps/api/src/handlers/ai-config/**/*.ts",
+        "apps/api/src/handlers/audit-logs/**/*.ts",
+        "apps/api/src/handlers/auth/**/*.ts",
+        "apps/api/src/handlers/bilingual-translations/**/*.ts",
+        "apps/api/src/handlers/billing-codes/**/*.ts",
+        "apps/api/src/handlers/clauses/**/*.ts",
+        "apps/api/src/handlers/contacts/**/*.ts",
+        "apps/api/src/handlers/dev/**/*.ts",
+        "apps/api/src/handlers/document-translations/**/*.ts",
+        "apps/api/src/handlers/document-types/**/*.ts",
+        "apps/api/src/handlers/docx-suggestions/**/*.ts",
+        "apps/api/src/handlers/expenses/**/*.ts",
+        "apps/api/src/handlers/files/**/*.ts",
+        "apps/api/src/handlers/flows/**/*.ts",
+        "apps/api/src/handlers/folio-collab/**/*.ts",
+        "apps/api/src/handlers/mcp/**/*.ts",
+        "apps/api/src/handlers/me/**/*.ts",
+        "apps/api/src/handlers/memories/**/*.ts",
+        "apps/api/src/handlers/notifications/**/*.ts",
+        "apps/api/src/handlers/operator/**/*.ts",
+        "apps/api/src/handlers/organization-settings/**/*.ts",
+        "apps/api/src/handlers/reports/**/*.ts",
+        "apps/api/src/handlers/saved-searches/**/*.ts",
+        "apps/api/src/handlers/search/**/*.ts",
+        "apps/api/src/handlers/tasks/**/*.ts",
+        "apps/api/src/handlers/template-packs/**/*.ts",
+        "apps/api/src/handlers/template-recipes/**/*.ts",
+        "apps/api/src/handlers/uploads/**/*.ts",
+        "apps/api/src/handlers/usage/**/*.ts",
+        "apps/api/src/handlers/user-files/**/*.ts",
+        "apps/api/src/handlers/verify/**/*.ts",
+        "apps/api/src/handlers/work-obligations/**/*.ts",
+        "apps/api/src/lib/bbox/**/*.ts",
+        "apps/api/src/lib/clauses/**/*.ts",
+        "apps/api/src/lib/conditions/**/*.ts",
+        "apps/api/src/lib/document-review/**/*.ts",
+        "apps/api/src/lib/document-types/**/*.ts",
+        "apps/api/src/lib/extraction-runs/**/*.ts",
+        "apps/api/src/lib/infosoud/**/*.ts",
+        "apps/api/src/lib/json-schema/**/*.ts",
+        "apps/api/src/lib/lists/**/*.ts",
+        "apps/api/src/lib/markdown/**/*.ts",
+        "apps/api/src/lib/mcp-connectors/**/*.ts",
+        "apps/api/src/lib/memory/**/*.ts",
+        "apps/api/src/lib/observability/**/*.ts",
+        "apps/api/src/lib/properties/**/*.ts",
+        "apps/api/src/lib/smoke-session/**/*.ts",
+        "apps/api/src/lib/template-binding/**/*.ts",
+        "apps/api/src/lib/uploads/**/*.ts",
+        "apps/api/src/lib/usage/**/*.ts",
+        "apps/api/src/lib/user-files/**/*.ts",
+        "apps/api/src/lib/work-obligations/**/*.ts",
+        "apps/api/src/mcp/generated/**/*.ts",
+        "packages/ai-catalog/src/**/*.ts",
+        "packages/api-client/src/**/*.ts",
+        "packages/auth-model/src/**/*.ts",
+        "packages/calculations/src/**/*.ts",
+        "packages/catalogue/src/**/*.ts",
+        "packages/chat-limits/src/**/*.ts",
+        "packages/conditions/src/**/*.ts",
+        "packages/country-codes/src/**/*.ts",
+        "packages/docx-utils/src/**/*.ts",
+        "packages/errors/src/**/*.ts",
+        "packages/fetch/src/**/*.ts",
+        "packages/legal-atlas/src/**/*.ts",
+        "packages/permissions/src/**/*.ts",
+        "packages/template-packs/src/**/*.ts",
+        "packages/text-normalize/src/**/*.ts",
+        "packages/time/src/**/*.ts",
+        "packages/workspace-model/src/**/*.ts",
+        "packages/workspace-ui/src/**/*.{ts,tsx}",
+      ],
+      rules: {
+        "no-throw-outside-boundary/no-throw-outside-boundary": "error",
+        "no-try-catch-outside-boundary/no-try-catch-outside-boundary": "error",
+      },
+    },
+    {
+      // better-result boundary lint, part 2: the boundary carve-out.
+      //
+      // These modules legitimately throw or catch: framework route mounts,
+      // queue/worker entry points that must convert an uncaught exception
+      // into a job failure, scripts run outside the request lifecycle, and
+      // generated/test/fixture files. Scoped narrower than the enable list
+      // above so it wins even for a boundary file that lives inside an
+      // otherwise-enabled directory (e.g. a `routes.ts` under a clean
+      // handler directory).
+      files: [...RESULT_CONVENTION_EXCLUDE_GLOBS],
+      rules: {
+        "no-throw-outside-boundary/no-throw-outside-boundary": "off",
+        "no-try-catch-outside-boundary/no-try-catch-outside-boundary": "off",
       },
     },
     {

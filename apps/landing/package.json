@@ -13,7 +13,7 @@
     "typecheck": "bun --bun astro check",
     "i18n:check": "bun ../../packages/scripts/src/i18n-typegen.ts src/i18n/messages --check && bun ../../packages/scripts/src/i18n-check.ts src/i18n/messages && bun ../../packages/scripts/src/i18n-lint.ts src/i18n/messages --glossary=../web/src/i18n/glossary.json",
     "i18n:sync": "bun ../../packages/scripts/src/i18n-check.ts src/i18n/messages --sync && bun ../../packages/scripts/src/i18n-typegen.ts src/i18n/messages",
-    "lint": "bun --bun astro sync && bun scripts/check-logical-properties.ts && cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware apps/landing/astro.config.mjs apps/landing/postcss.config.mjs apps/landing/scripts apps/landing/src",
+    "lint": "bun scripts/check-logical-properties.ts && cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware apps/landing/astro.config.mjs apps/landing/postcss.config.mjs apps/landing/scripts apps/landing/src",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix apps/landing/astro.config.mjs apps/landing/postcss.config.mjs apps/landing/scripts apps/landing/src",
     "format": "oxfmt .",
     "test": "bun scripts/precompute-anonymize-demo-sample.ts --check && bun scripts/check-meta-budgets.ts && bun scripts/check-img-alt.ts && bun test --pass-with-no-tests"

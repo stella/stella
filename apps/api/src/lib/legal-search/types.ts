@@ -7,6 +7,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { LegalBrowseFacetsError } from "@/api/lib/legal-search/browse-facets";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-family";
 import type { EmptyAst } from "@/api/lib/legal-search/document-types";
+import type { LegalSearchError } from "@/api/lib/legal-search/search-error";
 import type { FacetBucket } from "@/api/lib/search/types";
 
 type LegalSearchDocumentFamily = Extract<CorpusFamily, "case_law">;
@@ -135,7 +136,13 @@ export type LegalBrowseFacets = {
  * corpus-index.ts), not request-path operations.
  */
 export type LegalSearchProvider = {
-  search: (query: LegalSearchQuery) => Promise<LegalSearchResult>;
+  /**
+   * Search failures are values: malformed provider cursors never restart at
+   * page one, and operational failures retain a tagged cause for telemetry.
+   */
+  search: (
+    query: LegalSearchQuery,
+  ) => Promise<Result<LegalSearchResult, LegalSearchError>>;
   /**
    * Corpus-wide facet counts for the browse page. Returns a Result rather
    * than throwing: facets are navigational, and the caller degrades to an

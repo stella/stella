@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { sql } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
@@ -15,6 +16,10 @@ import { loadDocumentContext } from "@/api/lib/legal-search/document-context";
 import { loadFtsSearchConfigs } from "@/api/lib/legal-search/fts-config";
 import { pgFtsBrowseFacets } from "@/api/lib/legal-search/pg-fts-browse-facets";
 import { buildPgFtsSearchSql } from "@/api/lib/legal-search/pg-fts-query";
+import {
+  InvalidLegalSearchCursorError,
+  LegalSearchUnavailableError,
+} from "@/api/lib/legal-search/search-error";
 import type {
   LegalSearchHit,
   LegalSearchProvider,
@@ -43,7 +48,10 @@ const toNullableString = (x: unknown): string | null =>
 
 const headlineRegconfig = sql`'public.stella_unaccent'::regconfig`;
 
-const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
+const searchResult = async (
+  query: LegalSearchQuery,
+  parsedCursor: ReturnType<typeof decodeCursor>,
+): Promise<LegalSearchResult> => {
   const limit = query.limit;
   const ftsSearch = buildPgFtsSearchSql({
     configs: await loadFtsSearchConfigs(),
@@ -54,8 +62,6 @@ const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
       vector: sql`sd.tsv`,
     },
   });
-
-  const parsedCursor = query.cursor ? decodeCursor(query.cursor) : null;
 
   // Filters. jurisdiction -> country, documentType -> decision_type.
   const courtFilter = query.court ? sql`AND d.court = ${query.court}` : sql``;
@@ -241,6 +247,27 @@ const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
       };
 
   return { hits, facets, nextCursor, limit };
+};
+
+const search = async (query: LegalSearchQuery) => {
+  const parsedCursor = query.cursor ? decodeCursor(query.cursor) : null;
+  if (query.cursor !== undefined && parsedCursor === null) {
+    return Result.err(
+      new InvalidLegalSearchCursorError({
+        message: "Search cursor did not decode.",
+        reason: "undecodable",
+      }),
+    );
+  }
+
+  return await Result.tryPromise({
+    try: async () => await searchResult(query, parsedCursor),
+    catch: (cause) =>
+      new LegalSearchUnavailableError({
+        message: "Postgres legal search failed.",
+        cause,
+      }),
+  });
 };
 
 export const pgFtsLegalProvider: LegalSearchProvider = {

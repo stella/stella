@@ -48,7 +48,7 @@ export const indexDocumentProjection = async ({
 }: {
   indexEntity: () => Promise<void>;
   timeoutMs?: number;
-}): Promise<void> => {
+}) => {
   const indexed = await Result.tryPromise({
     try: async () =>
       await withTimeout(indexEntity, {
@@ -58,12 +58,15 @@ export const indexDocumentProjection = async ({
     catch: (cause) => cause,
   });
   if (Result.isError(indexed)) {
-    throw new DocumentProcessingJobError({
-      code: SEARCH_INDEX_FAILURE_CODE,
-      message: "Document text was stored but search indexing failed",
-      cause: indexed.error,
-    });
+    return Result.err(
+      new DocumentProcessingJobError({
+        code: SEARCH_INDEX_FAILURE_CODE,
+        message: "Document text was stored but search indexing failed",
+        cause: indexed.error,
+      }),
+    );
   }
+  return Result.ok(undefined);
 };
 
 export const isCurrentOcrSource = ({
