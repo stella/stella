@@ -20,21 +20,23 @@ import {
 import { blendedRankSql } from "@/api/lib/legal-search/authority-sql";
 import { readServingCorpusIndexGenerationTx } from "@/api/lib/legal-search/corpus-index-generation-store";
 import type { SearchCursor } from "@/api/lib/legal-search/corpus-index-pagination";
-import {
-  decodeCorpusIndexCursor,
-  encodeCorpusIndexCursor,
-  readCorpusIndexSearchPage,
-} from "@/api/lib/legal-search/corpus-index-pagination";
+import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
   corpusFreeTextClause,
   quoteCorpusValue,
 } from "@/api/lib/legal-search/corpus-query";
+import {
+  decodeCorpusSearchCursor,
+  encodeCorpusSearchCursor,
+  isStaleCorpusSearchCursor,
+} from "@/api/lib/legal-search/corpus-search-cursor";
 import { loadFtsSearchConfigs } from "@/api/lib/legal-search/fts-config";
 import {
   corpusIndexId,
   corpusIndexPattern,
   isCorpusIndexJurisdiction,
 } from "@/api/lib/legal-search/index-naming";
+import { NO_EXPANSION_DICTIONARY_IDENTITY } from "@/api/lib/legal-search/morphology/dictionary";
 import { buildPgFtsSearchSql } from "@/api/lib/legal-search/pg-fts-query";
 import {
   blendStableCitationAuthority,
@@ -403,10 +405,16 @@ const corpusIndexSearch = async (
     pageRanked,
     snippetById,
   } = searchPage;
+  // Legislation queries are never expanded, so the identity a legislation
+  // page reports is always `none` — one wire format across both corpora, and
+  // a cursor that crosses them is refused rather than misread.
   const nextCursor =
     searchPage.nextCursor === null
       ? null
-      : encodeCorpusIndexCursor(searchPage.nextCursor);
+      : encodeCorpusSearchCursor({
+          ...searchPage.nextCursor,
+          dictionary: NO_EXPANSION_DICTIONARY_IDENTITY,
+        });
 
   const hits = pageRanked.flatMap((hit): LegislationHit[] => {
     const row = byId.get(hit.id);
@@ -452,12 +460,20 @@ export const searchLegislationHandler = async (
     return status(400, { message: "Invalid jurisdiction" });
   }
 
+  // One rejection for every way a cursor can fail to name a page of this
+  // corpus, checked before either search path reads anything. A cursor that
+  // names a dictionary was issued by an expanded case-law search: legislation
+  // is never expanded, so its score, id and window describe a ranking of
+  // other documents entirely, and applying them here would page a legislation
+  // result set from a case-law boundary.
   const parsedCursor = body.cursor
-    ? decodeCorpusIndexCursor(body.cursor)
+    ? decodeCorpusSearchCursor(body.cursor)
     : null;
   if (
     body.cursor !== undefined &&
-    (parsedCursor === null || !isUuid(parsedCursor.id))
+    (parsedCursor === null ||
+      !isUuid(parsedCursor.id) ||
+      isStaleCorpusSearchCursor(parsedCursor, NO_EXPANSION_DICTIONARY_IDENTITY))
   ) {
     return status(400, { message: "Invalid cursor" });
   }

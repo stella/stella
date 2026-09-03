@@ -4,15 +4,20 @@ import { extractCitations } from "@/api/handlers/case-law/ingestion/citation-ext
 import {
   CORPUS_QUERY_LEAF_BUDGET,
   corpusFreeTextClause,
+  type CorpusStemming,
+  type CorpusTermExpander,
   tokenizeCorpusFreeText,
 } from "@/api/lib/legal-search/corpus-query";
 import {
   expandTermWith,
   expansionLanguageForJurisdiction,
+  resolveExpandedCorpusQuery,
+  rewrittenCorpusQuery,
   shadowExpansionAttributes,
 } from "@/api/lib/legal-search/expansion";
 import {
   type ExpansionBucket,
+  NO_EXPANSION_DICTIONARY_IDENTITY,
   parseExpansionDictionary,
   serializeExpansionDictionary,
 } from "@/api/lib/legal-search/morphology/dictionary";
@@ -273,4 +278,84 @@ test("the shadow event carries no query text", () => {
   expect(Object.values(attributes)).toEqual(
     expect.arrayContaining([3, 9, 6, true, "cs", "expanded"]),
   );
+});
+
+// The identity travels with the query so a cursor can pin it. Every mode that
+// runs the unexpanded query reports the same `none`, which is what lets a page
+// built under one of them be continued under another, and refused against a
+// dictionary.
+test.each(["off", "on", "shadow"] as const)(
+  "%p reports no dictionary when nothing was expanded",
+  async (mode) => {
+    const resolved = await resolveExpandedCorpusQuery({
+      build: (expand) => corpusFreeTextClause("nájemné", { expand }),
+      // An unscoped search spans every index and expands against nothing, so
+      // no mode reaches object storage from here.
+      jurisdiction: undefined,
+      mode,
+      text: "nájemné",
+    });
+
+    expect(resolved).toEqual({
+      dictionary: NO_EXPANSION_DICTIONARY_IDENTITY,
+      query: '("nájemné")',
+      type: "query",
+    });
+  },
+);
+
+// The `on` branch, at the point where the identity is chosen. A dictionary
+// that matched nothing the reader typed leaves the pre-expansion query, and a
+// page built from those bytes must stay continuable across the next rebuild.
+//
+// Built against a generation that declares stem fields, so both sides of the
+// comparison carry leaves expansion did not put there: what makes the two
+// queries equal has to be the dictionary adding nothing, not the builder
+// emitting less.
+test("a dictionary that changed nothing is not the dictionary a page reports", () => {
+  const entries = dictionaryOf(CS_BUCKETS);
+  const contentHash = "a".repeat(64);
+  const stemming = {
+    language: "cs",
+    fields: ["text_stem"],
+  } as const satisfies CorpusStemming;
+  const clauseOf = (text: string, expand?: CorpusTermExpander) =>
+    corpusFreeTextClause(text, { expand, stemming }) ?? "";
+  const rewriteOf = (text: string) =>
+    rewrittenCorpusQuery({
+      baseQuery: clauseOf(text),
+      contentHash,
+      expandedQuery: clauseOf(text, (term) => expandTermWith(entries, term)),
+    });
+
+  // `smlouva` has no bucket, so the rewrite is the identity on these bytes —
+  // stem leaf and all.
+  expect(clauseOf("smlouva")).toContain("text_stem:");
+  expect(rewriteOf("smlouva")).toEqual({
+    dictionary: NO_EXPANSION_DICTIONARY_IDENTITY,
+    query: clauseOf("smlouva"),
+    type: "query",
+  });
+
+  // `nájemné` does, so the payload that widened the query is what the page
+  // reports and what its cursor pins.
+  const expanded = clauseOf("nájemné", (term) => expandTermWith(entries, term));
+  expect(expanded).toContain('"nájemného"');
+  expect(expanded).not.toBe(clauseOf("nájemné"));
+  expect(rewriteOf("nájemné")).toEqual({
+    dictionary: { contentHash, type: "dictionary" },
+    query: expanded,
+    type: "query",
+  });
+});
+
+test("free text with no searchable token resolves to an empty page", async () => {
+  const resolved = await resolveExpandedCorpusQuery({
+    build: (expand) => corpusFreeTextClause("§ ,,,", { expand }),
+    jurisdiction: undefined,
+    mode: "off",
+    text: "§ ,,,",
+  });
+
+  expect(resolved).toEqual({ type: "empty" });
 });

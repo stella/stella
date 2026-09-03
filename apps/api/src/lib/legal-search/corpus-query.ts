@@ -123,6 +123,12 @@ const noTermExpansion: CorpusTermExpander = () => [];
  * asked to match adjacently; a term stands for a word and may carry that
  * word's other inflections. Total over the token union, so a new token kind
  * cannot reach the engine without a decision recorded here.
+ *
+ * This holds under every expansion mode: no dictionary form is ever
+ * substituted into a phrase, so a phrase matches the exact surface forms the
+ * reader typed and quoting stays the way to ask for those and no others. The
+ * stem leaf beside it is the generation's own and is that same phrase,
+ * stemmed word for word, not another wording of it.
  */
 const TOKEN_EXPANSION_POLICY = {
   phrase: "verbatim",

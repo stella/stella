@@ -355,7 +355,7 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
   PUBLIC_URL:
     "Public API origin for verification links and OAuth callbacks. Defaults to BETTER_AUTH_URL.",
   QUERY_EXPANSION_MODE:
-    'Morphological expansion of case-law search terms: "off" builds today\'s query, "shadow" runs the unexpanded query and records leaf counts comparing it with the expanded one (never the query text). "on" runs the expanded query and is currently refused at startup, pending cursors that carry the dictionary version.',
+    'Morphological expansion of case-law search terms: "off" builds today\'s query, "shadow" runs the unexpanded query and records leaf counts comparing it with the expanded one (never the query text). "on" runs the expanded query; a search cursor names the dictionary its page used, so a continuation built against another one is rejected as invalid.',
   REDIS_TLS_REJECT_UNAUTHORIZED:
     "Whether a rediss:// connection verifies the server certificate chain. " +
     "Leave on unless the endpoint presents a certificate no trust anchor can " +

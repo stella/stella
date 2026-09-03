@@ -54,14 +54,9 @@ import {
   currentCaseLawCorpusProjection,
 } from "@/api/lib/legal-search/case-law-corpus-projection";
 import { readServingCorpusIndexGenerationTx } from "@/api/lib/legal-search/corpus-index-generation-store";
-import type {
-  CorpusIndexScanReport,
-  SearchCursor,
-} from "@/api/lib/legal-search/corpus-index-pagination";
+import type { CorpusIndexScanReport } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
-  decodeCorpusIndexCursor,
   emptyCorpusIndexScan,
-  encodeCorpusIndexCursor,
   readCorpusIndexSearchPage,
 } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
@@ -72,7 +67,16 @@ import {
   caseLawCorpusQuery,
   type CorpusTermExpander,
 } from "@/api/lib/legal-search/corpus-query";
-import { resolveExpandedCorpusQuery } from "@/api/lib/legal-search/expansion";
+import {
+  type CorpusSearchCursor,
+  decodeCorpusSearchCursor,
+  encodeCorpusSearchCursor,
+  isStaleCorpusSearchCursor,
+} from "@/api/lib/legal-search/corpus-search-cursor";
+import {
+  type ExpandedCorpusQuery,
+  resolveExpandedCorpusQuery,
+} from "@/api/lib/legal-search/expansion";
 import { loadFtsSearchConfigs } from "@/api/lib/legal-search/fts-config";
 import {
   corpusIndexRoute,
@@ -537,7 +541,7 @@ const resolveCorpusIndexQuery = async ({
   body,
   generation,
   jurisdictionClause,
-}: ResolveCorpusIndexQueryOptions): Promise<string | null> => {
+}: ResolveCorpusIndexQueryOptions): Promise<ExpandedCorpusQuery> => {
   const fields = caseLawCorpusQueryFields({
     generation,
     jurisdiction: body.country,
@@ -959,9 +963,9 @@ const searchCorpusIndexDecisions = async (
   const startedAt = performance.now();
   const limit = body.limit ?? LIMITS.caseLawSearchPageSizeDefault;
 
-  let parsedCursor: SearchCursor | null = null;
+  let parsedCursor: CorpusSearchCursor | null = null;
   if (body.cursor) {
-    parsedCursor = decodeCorpusIndexCursor(body.cursor);
+    parsedCursor = decodeCorpusSearchCursor(body.cursor);
     if (!parsedCursor || !isUuid(parsedCursor.id)) {
       return status(400, { message: "Invalid cursor" });
     }
@@ -1081,20 +1085,26 @@ const searchCorpusIndexDecisions = async (
     body.country,
   );
 
-  const query = await resolveCorpusIndexQuery({
+  const resolved = await resolveCorpusIndexQuery({
     body,
     generation,
     jurisdictionClause,
   });
-  if (query === null) {
+  if (resolved.type === "empty") {
     report(0, emptyCorpusIndexScan());
     return { hits: [], facets: null, totalCount: null, nextCursor: null };
+  }
+  // A page boundary only means something inside the ranking that produced it,
+  // and expansion makes the dictionary part of that ranking. A cursor from a
+  // different one is stale, and takes the same path a tampered one does.
+  if (isStaleCorpusSearchCursor(parsedCursor, resolved.dictionary)) {
+    return status(400, { message: "Invalid cursor" });
   }
 
   const searchPage = await readCorpusIndexSearchPage({
     cluster: serving.cluster,
     indexId,
-    query,
+    query: resolved.query,
     limit,
     parsedCursor,
     snippetFields: ["text"],
@@ -1124,7 +1134,10 @@ const searchCorpusIndexDecisions = async (
   const nextCursor =
     searchPage.nextCursor === null
       ? null
-      : encodeCorpusIndexCursor(searchPage.nextCursor);
+      : encodeCorpusSearchCursor({
+          ...searchPage.nextCursor,
+          dictionary: resolved.dictionary,
+        });
 
   // A row the candidate read saw and this one no longer answers for was
   // scrubbed mid-request; it drops out of the page rather than being served

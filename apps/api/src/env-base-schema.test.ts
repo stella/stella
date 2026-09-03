@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
 
-import { envBaseInvariantViolation } from "@/api/env-base-schema";
+import {
+  envBaseInvariantViolation,
+  envBaseServerSchema,
+} from "@/api/env-base-schema";
+import { QUERY_EXPANSION_MODES } from "@/api/lib/legal-search/query-expansion-mode";
 
 const deployedCorpusEnvironment = {
   CORPUS_INDEX_BACKPRESSURE_HIGH_WATERMARK: 80,
@@ -12,7 +17,6 @@ const deployedCorpusEnvironment = {
   LEGAL_CORPUS_S3_BUCKET: "stella-staging-legal-corpus",
   LEGAL_SEARCH_INDEX_GENERATION: "case_law_v2",
   LEGAL_SEARCH_PROVIDER: "corpus-index",
-  QUERY_EXPANSION_MODE: "off",
   S3_CREDENTIALS_PROVIDER: "aws-runtime",
   S3_ENDPOINT: "https://s3.eu-central-1.amazonaws.com",
   isDev: false,
@@ -70,5 +74,26 @@ describe("corpus cluster endpoint transport", () => {
     ).toBe(
       "CORPUS_INDEX_Q09_ENDPOINT must use HTTPS unless it targets loopback or the private corpus-index-v09 Cloud Map service.",
     );
+  });
+});
+
+describe("query expansion mode", () => {
+  // Every mode is deployable. `on` was reserved by a boot refusal while a
+  // corpus cursor could not say which dictionary built its page; the cursor
+  // carries that now, so nothing is left to reserve.
+  test.each([...QUERY_EXPANSION_MODES])("accepts %p", (mode) => {
+    expect(v.parse(envBaseServerSchema.QUERY_EXPANSION_MODE, mode)).toBe(mode);
+  });
+
+  test("defaults to off", () => {
+    expect(v.parse(envBaseServerSchema.QUERY_EXPANSION_MODE, undefined)).toBe(
+      "off",
+    );
+  });
+
+  test("rejects a mode outside the union", () => {
+    expect(
+      v.safeParse(envBaseServerSchema.QUERY_EXPANSION_MODE, "live").success,
+    ).toBe(false);
   });
 });

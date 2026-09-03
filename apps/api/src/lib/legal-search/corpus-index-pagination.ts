@@ -4,8 +4,13 @@ import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client
 import { quoteCorpusValue } from "@/api/lib/legal-search/corpus-query";
 import type { RankedHit, ScoredCandidate } from "@/api/lib/legal-search/rerank";
 import { LIMITS } from "@/api/lib/limits";
-import { decodeCursor, encodeCursor } from "@/api/lib/search/cursor";
 
+/**
+ * A page boundary as the scan means it. `corpus-search-cursor` owns how it
+ * reaches a client and back, together with the dictionary the ranked query was
+ * built against: what the scan needs and what expansion needs are one string
+ * on the wire, and one codec answers for it.
+ */
 export type SearchCursor = {
   score: number;
   id: string;
@@ -18,37 +23,6 @@ export type SearchCursor = {
    * reached and the window moves on.
    */
   windowStart: number;
-};
-
-/**
- * The cursor as the client sees it: the shared `score:id` payload with the
- * window the scan must resume in folded into the id half. A payload without a
- * window prefix names window 0, which is what a cursor issued before windows
- * existed means and what a caller building one by hand should get.
- */
-export const encodeCorpusIndexCursor = ({
-  score,
-  id,
-  windowStart,
-}: SearchCursor): string => encodeCursor(score, `${windowStart}:${id}`);
-
-export const decodeCorpusIndexCursor = (
-  cursor: string,
-): SearchCursor | null => {
-  const decoded = decodeCursor(cursor);
-  if (decoded === null) {
-    return null;
-  }
-  const separatorIndex = decoded.id.indexOf(":");
-  if (separatorIndex === -1) {
-    return { ...decoded, windowStart: 0 };
-  }
-  const windowStart = Number(decoded.id.slice(0, separatorIndex));
-  const id = decoded.id.slice(separatorIndex + 1);
-  if (!Number.isInteger(windowStart) || windowStart < 0 || id.length === 0) {
-    return null;
-  }
-  return { score: decoded.score, id, windowStart };
 };
 
 type CorpusIndexRanking<TContext> = {

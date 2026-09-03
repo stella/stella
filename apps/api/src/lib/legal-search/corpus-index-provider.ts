@@ -22,13 +22,15 @@ import {
 } from "@/api/lib/legal-search/case-law-corpus-projection";
 import { corpusIndexBrowseFacets } from "@/api/lib/legal-search/corpus-index-facets";
 import { readServingCorpusIndexGenerationTx } from "@/api/lib/legal-search/corpus-index-generation-store";
-import {
-  decodeCorpusIndexCursor,
-  encodeCorpusIndexCursor,
-  readCorpusIndexSearchPage,
-} from "@/api/lib/legal-search/corpus-index-pagination";
+import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
 import { caseLawCorpusQueryFields } from "@/api/lib/legal-search/corpus-index-read-contract";
 import { caseLawCorpusQuery } from "@/api/lib/legal-search/corpus-query";
+import {
+  decodeCorpusSearchCursor,
+  encodeCorpusSearchCursor,
+  InvalidCorpusSearchCursorError,
+  isStaleCorpusSearchCursor,
+} from "@/api/lib/legal-search/corpus-search-cursor";
 import { loadDocumentContext } from "@/api/lib/legal-search/document-context";
 import { resolveExpandedCorpusQuery } from "@/api/lib/legal-search/expansion";
 import { corpusIndexRoute } from "@/api/lib/legal-search/index-naming";
@@ -139,6 +141,20 @@ export const rehydrateCorpusIndexProviderCandidates =
 const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
   const limit = query.limit;
   const family = query.documentFamily ?? "case_law";
+
+  // Before the generation read, and before any engine work: a cursor that does
+  // not decode must fail rather than fall back to page one, which a client
+  // appending pages cannot tell from a page and reads as duplicates.
+  const parsedCursor = query.cursor
+    ? decodeCorpusSearchCursor(query.cursor)
+    : null;
+  if (query.cursor !== undefined && parsedCursor === null) {
+    throw new InvalidCorpusSearchCursorError({
+      message: "Search cursor did not decode.",
+      reason: "undecodable",
+    });
+  }
+
   const serving = await caseLawPublicReadDb(
     async (tx) => await readServingCorpusIndexGenerationTx(tx, family),
   );
@@ -152,10 +168,6 @@ const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
     query.jurisdiction,
   );
 
-  const parsedCursor = query.cursor
-    ? decodeCorpusIndexCursor(query.cursor)
-    : null;
-
   // The jurisdiction also selects the expansion dictionary, which is why the
   // resolver takes it separately from the clause.
   // The generation decides which fields exist to be named; the language
@@ -165,7 +177,7 @@ const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
     jurisdiction: query.jurisdiction,
     language: query.language,
   });
-  const engineQuery = await resolveExpandedCorpusQuery({
+  const resolved = await resolveExpandedCorpusQuery({
     build: (expand) =>
       caseLawCorpusQuery({
         text: query.query,
@@ -186,14 +198,23 @@ const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
     mode: envBase.QUERY_EXPANSION_MODE,
     text: query.query,
   });
-  if (engineQuery === null) {
+  if (resolved.type === "empty") {
     return { hits: [], facets: null, nextCursor: null, limit };
+  }
+  // This boundary has no HTTP status to answer with, so a cursor from another
+  // dictionary fails the read rather than paging a different result set.
+  if (isStaleCorpusSearchCursor(parsedCursor, resolved.dictionary)) {
+    throw new InvalidCorpusSearchCursorError({
+      message:
+        "Search cursor was built against a different expansion dictionary.",
+      reason: "dictionary_mismatch",
+    });
   }
 
   const searchPage = await readCorpusIndexSearchPage({
     cluster: serving.cluster,
     indexId,
-    query: engineQuery,
+    query: resolved.query,
     limit,
     parsedCursor,
     snippetFields: ["text"],
@@ -252,7 +273,10 @@ const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
   const nextCursor =
     searchPage.nextCursor === null
       ? null
-      : encodeCorpusIndexCursor(searchPage.nextCursor);
+      : encodeCorpusSearchCursor({
+          ...searchPage.nextCursor,
+          dictionary: resolved.dictionary,
+        });
 
   const hits: LegalSearchHit[] = pageRanked.flatMap((hit) => {
     const row = displayById.get(hit.id);
