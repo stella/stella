@@ -40,10 +40,12 @@
  * derived from the same `DECISION_DATE_BOUNDS`. Its `VALIDATE CONSTRAINT` fails while a corrupt row
  * survives, and until then `ADD CONSTRAINT … NOT VALID` makes any unrelated
  * write touching such a row — a citation authority refresh, a corpus mirror
- * update, an index hash — fail on a column it never mentioned. So this runs
- * against a database before that migration is applied to it; a report finding
- * zero rows is the precondition, and once the constraint is validated the
- * selection is empty by construction.
+ * update, an index hash — fail on a column it never mentioned. The migrate
+ * entrypoint therefore runs these same batches itself, as the online repair in
+ * `db/decision-date-ceiling-repair.ts`, and validates the constraint once the
+ * selection is empty; an upgrade needs no operator step. This script is the
+ * report an operator reads, and a way to run the batches ahead of an upgrade.
+ * Once the constraint is validated the selection is empty by construction.
  *
  * Without `--apply` nothing is written and nothing is locked: the run reports
  * the population per source and per year, then how many of those rows a repair
@@ -66,30 +68,20 @@
 import { panic } from "better-result";
 
 import {
-  lockCitationGraph,
-  reopenCitationsForDecisionKey,
-  reopenCitationsForKeys,
-  reopenCitationsFrom,
-  reopenCitationsResolvedTo,
-} from "@/api/handlers/case-law/citation-resolution";
-import {
   enterCaseLawMaintenanceLane,
   openCaseLawReadOnlySession,
 } from "@/api/lib/case-law/maintenance-lane";
-import { isCaseLawJurisdiction } from "@/api/lib/legal-search/ingestion-constants";
 import { isRecord } from "@/api/lib/type-guards";
-import type {
-  CorruptDecisionDateRow,
-  DecisionDateRepair,
-} from "@/api/scripts/repair-decision-dates-plan";
+import type { DecisionDateRepairBatch } from "@/api/scripts/repair-decision-dates-plan";
 import {
-  applyDecisionDateRepairsStatement,
   DECISION_DATE_REPAIR_OUTCOMES,
   DECISION_DATE_ROW_LOCKS,
   decideDecisionDateRepair,
   decisionDateSourceSurveyStatement,
   decisionDateYearSurveyStatement,
+  executedRows,
   parseCorruptDecisionDateRow,
+  repairDecisionDateBatch,
   selectCorruptDecisionDatesStatement,
 } from "@/api/scripts/repair-decision-dates-plan";
 
@@ -152,17 +144,6 @@ const { rootDb } = apply
   : await openCaseLawReadOnlySession();
 const limit = flagInteger("limit", DEFAULT_LIMIT);
 
-/** Rows from `execute` under either driver shape (bare array or `{ rows }`). */
-const executedRows = (result: unknown): unknown[] => {
-  if (Array.isArray(result)) {
-    return result;
-  }
-  if (isRecord(result) && Array.isArray(result["rows"])) {
-    return result["rows"];
-  }
-  return [];
-};
-
 const surveyNumber = (row: Record<string, unknown>, key: string): number => {
   const value = row[key];
   if (typeof value !== "number") {
@@ -216,116 +197,15 @@ const printSurvey = async (): Promise<number> => {
   return total;
 };
 
-/**
- * Tell the citation graph that this decision's date is no longer what it was.
- *
- * The resolver filters candidates on `decision_date` and reads NULL on either
- * side as permissive, so clearing a date both revives citations that were time
- * filtered away from this decision and contests edges that were drawn while it
- * was excluded. Neither is discoverable from the citing side, and the standing
- * walk only revisits unsettled rows, so an edge left alone here stays wrong
- * forever. Same four steps, in the same order, as the ingestion pipeline's own
- * resolution-identity change.
- */
-const reopenAffectedCitations = async (
-  tx: Parameters<typeof lockCitationGraph>[0],
-  row: CorruptDecisionDateRow,
-  repaired: DecisionDateRepair,
-): Promise<void> => {
-  await reopenCitationsResolvedTo(tx, row.id);
-  await reopenCitationsFrom(tx, row.id);
-  if (row.citationKey === null) {
-    return;
-  }
-  await reopenCitationsForKeys(tx, [row.citationKey]);
-  if (!isCaseLawJurisdiction(row.country)) {
-    // A stored country nobody declares a resolution policy for. Loud rather
-    // than defaulted, matching the pipeline: guessing a reach would write
-    // cross-border edges on an assumption.
-    console.error(
-      `${row.id}: country ${row.country} declares no resolution policy; key not re-announced`,
-    );
-    return;
-  }
-  await reopenCitationsForDecisionKey(tx, {
-    citationKey: row.citationKey,
-    decisionId: row.id,
-    jurisdiction: row.country,
-    decisionDate: repaired.decisionDate,
-  });
-};
-
-type BatchResult = {
-  cleared: number;
-  rederived: number;
-  /** Rows a concurrent observation had already repaired; skipped, not undone. */
-  skipped: number;
-};
-
-/**
- * Announce each written row to the citation graph, one after another.
- *
- * Recursive rather than a loop with an awaited body: the reopen statements are
- * graph mutations under one lock, so they must not fan out, and expressing that
- * as a walk keeps the sequencing structural instead of a suppressed lint.
- */
-const reopenWrittenAt = async (
-  tx: Parameters<typeof lockCitationGraph>[0],
-  rows: readonly CorruptDecisionDateRow[],
-  repairs: readonly DecisionDateRepair[],
-  written: ReadonlySet<string>,
-  counts: { cleared: number; rederived: number },
-  offset = 0,
-): Promise<void> => {
-  const row = rows.at(offset);
-  if (row === undefined) {
-    return;
-  }
-  const repaired = repairs.at(offset);
-  if (repaired === undefined) {
-    panic("Repair decisions and selected rows fell out of step");
-  }
-  if (written.has(row.id)) {
-    if (repaired.outcome === DECISION_DATE_REPAIR_OUTCOMES.REDERIVED) {
-      counts.rederived += 1;
-    } else {
-      counts.cleared += 1;
-    }
-    await reopenAffectedCitations(tx, row, repaired);
-  }
-  await reopenWrittenAt(tx, rows, repairs, written, counts, offset + 1);
-};
-
-const repairBatch = async (size: number): Promise<BatchResult> =>
+const repairBatch = async (size: number): Promise<DecisionDateRepairBatch> =>
   await rootDb.transaction(async (tx) => {
-    // Decision rows first, citation graph second — the order the ingestion
-    // pipeline takes them in, which is the only thing that keeps a concurrent
-    // refresh of one of these decisions from deadlocking against this batch.
-    // Holding the rows is also what makes the graph work below sound: nothing
-    // can move a claimed row's date between the reopen and the commit.
-    const rows = executedRows(
-      await tx.execute(
-        selectCorruptDecisionDatesStatement({
-          limit: size,
-          lock: DECISION_DATE_ROW_LOCKS.FOR_UPDATE,
-        }),
-      ),
-    ).map(parseCorruptDecisionDateRow);
-    if (rows.length === 0) {
-      return { cleared: 0, rederived: 0, skipped: 0 };
+    const batch = await repairDecisionDateBatch(tx, size);
+    for (const row of batch.unannounced) {
+      console.error(
+        `${row.id}: country ${row.country} declares no resolution policy; key not re-announced`,
+      );
     }
-    await lockCitationGraph(tx);
-
-    const repairs = rows.map(decideDecisionDateRepair);
-    const written = new Set(
-      executedRows(await tx.execute(applyDecisionDateRepairsStatement(repairs)))
-        .filter(isRecord)
-        .map((row) => String(row["id"])),
-    );
-
-    const counts = { cleared: 0, rederived: 0 };
-    await reopenWrittenAt(tx, rows, repairs, written, counts);
-    return { ...counts, skipped: rows.length - written.size };
+    return batch;
   });
 
 /**
