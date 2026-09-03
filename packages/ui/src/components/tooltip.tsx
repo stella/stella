@@ -3,6 +3,7 @@
 import { Tooltip as TooltipPrimitive } from "@base-ui/react/tooltip";
 
 import {
+  OVERLAY_COLLISION_PADDING,
   OVERLAY_LAYER_CLASS_NAMES,
   type OverlayLayer,
 } from "../lib/overlay-layer";
@@ -35,10 +36,13 @@ const TooltipPopup = ({
   <TooltipPrimitive.Portal>
     <TooltipPrimitive.Positioner
       align={align}
+      // Same payload-driven staleness as the popover positioner: size to the
+      // rendered popup instead of to `--positioner-width`.
       className={cn(
-        "h-(--positioner-height) w-(--positioner-width) max-w-(--available-width) transition-[top,left,right,bottom,transform] data-instant:transition-none",
+        "h-(--positioner-height) w-max max-w-(--available-width) transition-[top,left,right,bottom,transform] data-instant:transition-none",
         OVERLAY_LAYER_CLASS_NAMES[layer],
       )}
+      collisionPadding={OVERLAY_COLLISION_PADDING}
       data-slot="tooltip-positioner"
       side={side}
       sideOffset={sideOffset}

@@ -6,6 +6,7 @@ import type { ComponentProps } from "react";
 import { Popover as PopoverPrimitive } from "@base-ui/react/popover";
 
 import {
+  OVERLAY_COLLISION_PADDING,
   OVERLAY_LAYER_CLASS_NAMES,
   type OverlayLayer,
 } from "../lib/overlay-layer";
@@ -53,10 +54,18 @@ const PopoverPopup = ({
       align={align}
       alignOffset={alignOffset}
       anchor={anchor}
+      // `--positioner-width` is written from the popup *payload*, so a popup
+      // whose content grows from local state (a picker swapping to an editor)
+      // left the positioner at the old width. Base UI collision-tests the
+      // positioner, so `shift()` saw no overflow while the popup rendered wider
+      // and ran off-screen. Sizing to content keeps the two in step; the popup
+      // still animates its own width through `--popup-width`, and `max-content`
+      // tracks that as it interpolates.
       className={cn(
-        "h-(--positioner-height) w-(--positioner-width) max-w-(--available-width)",
+        "h-(--positioner-height) w-max max-w-(--available-width)",
         OVERLAY_LAYER_CLASS_NAMES[layer],
       )}
+      collisionPadding={OVERLAY_COLLISION_PADDING}
       data-slot="popover-positioner"
       side={side}
       sideOffset={sideOffset}
