@@ -145,7 +145,7 @@ function ChatIndex() {
   // composer bound to it via `useChatEditor`) rebind to the fresh id instead
   // of staying on the abandoned draft.
   const [, rotateDraftThread] = useState(0);
-  // eslint-disable-next-line react/react-compiler -- draft-thread identity held in a ref and rotated imperatively (each rotation is paired with rotateDraftThread to force the dependent render); reading the current id here to derive this render's threadRef and query key is intentional
+  // eslint-disable-next-line react/refs -- draft-thread identity held in a ref and rotated imperatively (each rotation is paired with rotateDraftThread to force the dependent render); reading the current id here to derive this render's threadRef and query key is intentional
   const draftThreadId = threadIdRef.current;
   const threadRef: ChatThreadRef = {
     scope: "global",

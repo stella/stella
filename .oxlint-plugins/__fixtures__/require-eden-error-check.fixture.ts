@@ -382,7 +382,7 @@ export const uncheckedConditionalResponse = async () => {
 
 // MUST flag: a sibling declarator consumes data before the later error check.
 export const siblingDeclaratorConsumesDataFirst = async () => {
-  // oxlint-disable-next-line require-eden-error-check/require-eden-error-check -- fixture: sibling initializer consumes data before error inspection
+  // oxlint-disable-next-line require-eden-error-check/require-eden-error-check, eslint/one-var -- fixture: the sibling declarator shape must remain intact so the custom rule sees data consumed before error inspection
   const response = await api.tasks.get(),
     selectedData = response.data;
   consume(response.error);

@@ -35,7 +35,7 @@ export const useFileTabRename = ({ tabs }: UseFileTabRenameOptions) => {
         candidate.type === "pdf" && candidate.id === pendingRenameTabId,
     );
     if (target) {
-      // eslint-disable-next-line react/react-compiler -- commit-safe store request relay; layout timing opens rename before paint when either the keyed request or async tab arrives
+      // eslint-disable-next-line react/set-state-in-effect -- commit-safe store request relay; layout timing opens rename before paint when either the keyed request or async tab arrives
       startRename(target);
       const store = useInspectorCommandStore.getState();
       if (store.pendingRenameTabId === pendingRenameTabId) {

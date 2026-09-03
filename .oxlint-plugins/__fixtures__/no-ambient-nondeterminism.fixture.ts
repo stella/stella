@@ -119,7 +119,6 @@ export const nodeDefaultWebcryptoIdentifier =
   nodeCryptoDefault.webcrypto.randomUUID();
 
 const {
-  // eslint-disable-next-line typescript/unbound-method -- fixture: destructured imported webcrypto methods are the rejected API surface
   webcrypto: { randomUUID: destructuredNodeWebcryptoRandomUuid },
 } = nodeCryptoNamespace;
 
@@ -218,20 +217,14 @@ const [arrayDestructuredMathRandom] = [Math.random];
 const [arrayDestructuredLocalNow] = [() => 0];
 const { random: destructuredMathRandom } = Math;
 const {
-  // eslint-disable-next-line typescript/unbound-method -- fixture: destructured global crypto methods are the rejected API surface
   getRandomValues: destructuredGetRandomValues,
-  // eslint-disable-next-line typescript/unbound-method -- fixture: destructured global crypto methods are the rejected API surface
   randomUUID: destructuredRandomUuid,
 } = crypto;
 const {
-  // eslint-disable-next-line typescript/unbound-method -- fixture: nested global methods are the rejected API surface
   Date: { now: nestedGlobalDateNow },
-  // eslint-disable-next-line typescript/unbound-method -- fixture: nested global methods are the rejected API surface
   Math: { random: nestedGlobalMathRandom },
   crypto: {
-    // eslint-disable-next-line typescript/unbound-method -- fixture: nested global crypto methods are the rejected API surface
     getRandomValues: nestedGlobalGetRandomValues,
-    // eslint-disable-next-line typescript/unbound-method -- fixture: nested global crypto methods are the rejected API surface
     randomUUID: nestedGlobalRandomUuid,
   },
 } = globalThis;
@@ -245,7 +238,7 @@ export const boundAliasedEpoch = boundReadNow();
 // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: immediately invoked bound ambient functions retain provenance
 export const directlyBoundEpoch = Date.now.bind(null)();
 
-// eslint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism, typescript/strict-void-return -- fixture: scheduling a bound ambient function executes the retained clock provenance
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: scheduling a bound ambient function executes the retained clock provenance
 export const boundAmbientTimer = setTimeout(Date.now.bind(null), 0);
 
 const localBoundClockHost = {
@@ -412,7 +405,6 @@ export const nodeGlobalIdentifier = global.crypto.randomUUID();
 const ambientRoot = globalThis;
 const secondAmbientRoot = ambientRoot;
 const {
-  // eslint-disable-next-line typescript/unbound-method -- fixture: nested global method aliases are the rejected API surface
   Date: { now: nestedAliasedRootNow },
 } = ambientRoot;
 
@@ -453,11 +445,10 @@ export const templateComputedEpoch = Date[templateComputedDateMethod]();
 export const directTemplateComputedEpoch = Date[`now`]();
 
 export const conditionalAmbientClock = (monotonic: boolean) =>
-  // eslint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism, typescript/unbound-method -- fixture: conditional callees retain both ambient outcomes
+  // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: conditional callees retain both ambient outcomes
   (monotonic ? performance.now : Date.now)();
 
 export const directlyAliasedConditionalAmbientClock = (monotonic: boolean) => {
-  // eslint-disable-next-line typescript/unbound-method -- fixture: the alias deliberately stores either ambient unbound method
   const ambientClock = monotonic ? performance.now : Date.now;
   return (
     // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: immutable aliases of conditional ambient callees retain provenance
@@ -847,18 +838,18 @@ export const callbackDateStrings = [1, 2].map(Date);
 // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: Array.from's mapper executes ambient functions
 export const callbackArrayFromEpochs = Array.from([1, 2], Date.now);
 
-// eslint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism, typescript/strict-void-return -- fixture: timer callbacks execute ambient value-returning function aliases
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: timer callbacks execute ambient value-returning function aliases
 export const ambientTimer = setTimeout(directClock.now, 0);
 
-// eslint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism, typescript/strict-void-return -- fixture: imported ambient value-returning functions retain provenance in callback positions
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: imported ambient value-returning functions retain provenance in callback positions
 export const importedAmbientTimer = setTimeout(randomUUID, 0);
 
 const scheduleAmbientCallback = setTimeout;
 
-// eslint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism, typescript/strict-void-return -- fixture: immutable callback-host aliases retain global timer provenance
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: immutable callback-host aliases retain global timer provenance
 export const aliasedAmbientTimer = scheduleAmbientCallback(Date.now, 0);
 
-// eslint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism, typescript/strict-void-return -- fixture: explicit global callback hosts retain timer provenance
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: explicit global callback hosts retain timer provenance
 export const globalAmbientTimer = globalThis.setTimeout(Date.now, 0);
 
 export const withShadowedScheduler = (
@@ -888,7 +879,7 @@ const customCallbackStore = {
 };
 export const customMethodStoredCallback = customCallbackStore.map(Date.now);
 
-// eslint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism, typescript/strict-void-return -- fixture: native Promise executors invoke ambient value-returning function references
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: native Promise executors invoke ambient value-returning function references
 export const ambientPromiseExecutor = new Promise(Date.now);
 
 // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: native Promise callbacks execute ambient function references
@@ -940,9 +931,7 @@ export const withShadowedBindings = (
   },
 ) => ({
   epoch: Date.now(),
-  // oxlint-disable-next-line unicorn/new-for-builtins -- fixture: the shadowed callable is deliberately not the Date built-in
   dateString: Date(),
-  // oxlint-disable-next-line unicorn/new-for-builtins -- fixture: the shadowed callable accepts arguments unlike the Date built-in
   dateStringWithArgument: Date(0),
   instant: new Date(),
   sample: Math.random(),
@@ -1022,7 +1011,6 @@ mutableRoot = {
   },
 };
 const {
-  // eslint-disable-next-line typescript/unbound-method -- fixture: a mutable-root nested alias must remain allowed by the custom rule
   Date: { now: mutableNestedNow },
 } = mutableRoot;
 export const mutableRootResult = mutableRoot.Date.now();

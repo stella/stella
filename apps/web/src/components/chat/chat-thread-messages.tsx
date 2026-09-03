@@ -221,7 +221,6 @@ export const ChatThreadMessages = ({
   // and streaming keep the first id, so they skip this and stick-to-
   // bottom handles them; a thread switch changes the id too but has no
   // captured anchor, so it is also skipped.
-  // eslint-disable-next-line react/react-compiler -- scroll anchoring mutates the forwarded DOM scroll container in a layout effect
   useLayoutEffect(() => {
     const previousFirstId = prevFirstMessageIdRef.current;
     prevFirstMessageIdRef.current = firstMessageId;
@@ -234,7 +233,7 @@ export const ChatThreadMessages = ({
     if (!container) {
       return;
     }
-    // eslint-disable-next-line react/react-compiler -- adjust the forwarded DOM node after a prepend to preserve the viewport anchor
+    // eslint-disable-next-line react/immutability -- adjust the forwarded DOM node after a prepend to preserve the viewport anchor
     container.scrollTop += container.scrollHeight - previousScrollHeight;
   }, [firstMessageId, scrollRef]);
 
@@ -509,7 +508,7 @@ const StickyUserTurn = ({
     if (!container || !sentinel) {
       return;
     }
-    // eslint-disable-next-line react/react-compiler -- imperative scroll of the container DOM node (reached through the forwarded scrollRef prop) inside a click handler; a legitimate event-handler DOM mutation, not render state
+    // eslint-disable-next-line react/immutability -- imperative scroll of the container DOM node (reached through the forwarded scrollRef prop) inside a click handler; a legitimate event-handler DOM mutation, not render state
     container.scrollTop +=
       sentinel.getBoundingClientRect().top -
       container.getBoundingClientRect().top;

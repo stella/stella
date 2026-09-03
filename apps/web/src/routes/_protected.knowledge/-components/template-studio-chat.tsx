@@ -308,7 +308,7 @@ const TemplateStudioChatInner = ({
   // where `createAIEditSnapshot()` still returns null. A send in that
   // window gives the model no editable blocks. Poll until the first
   // non-null snapshot, then stop (mirrors the file overlay).
-  // eslint-disable-next-line react/react-compiler -- mount-time seed of readiness from the imperative Folio editor instance; the ref read runs once in the useState initializer, and the poll below keeps it in sync
+  // eslint-disable-next-line react/refs -- mount-time seed of readiness from the imperative Folio editor instance; the ref read runs once in the useState initializer, and the poll below keeps it in sync
   const [editorReady, setEditorReady] = useState(() =>
     Boolean(editorRef.current?.createAIEditSnapshot()),
   );

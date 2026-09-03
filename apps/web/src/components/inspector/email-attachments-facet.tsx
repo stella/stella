@@ -559,7 +559,7 @@ const AttachmentPreviewContent = ({
           </p>
         ) : null}
         <pre
-          className="min-h-0 flex-1 overflow-auto p-4 font-mono text-sm leading-6 break-words whitespace-pre-wrap"
+          className="min-h-0 flex-1 overflow-auto p-4 font-mono text-sm leading-6 wrap-break-word whitespace-pre-wrap"
           dir="auto"
         >
           {decodeEmailTextAttachment({ buffer: previewBuffer, charset })}

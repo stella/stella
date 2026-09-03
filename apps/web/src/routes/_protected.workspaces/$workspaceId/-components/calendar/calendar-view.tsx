@@ -391,7 +391,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
     const target = startOfUTCMonth(getCurrentViewDate());
     const key = getUTCMonthKey(target);
     pendingScrollMonthKey.current = key;
-    // eslint-disable-next-line react/react-compiler -- layout effect priming the scroll target and month window on a mode switch; must stay in the layout phase to coordinate with the sibling scroll effect
+    // eslint-disable-next-line react/set-state-in-effect -- layout effect priming the scroll target and month window on a mode switch; must stay in the layout phase to coordinate with the sibling scroll effect
     setMonthWindowStart((start) =>
       getMonthWindowStartContaining(start, target),
     );

@@ -2390,7 +2390,6 @@ export const runIngestionPipeline = async ({
     return observedPageResult.value;
   };
 
-  // oxlint-disable-next-line no-unreachable-loop -- successful pages advance the cursor and pagesProcessed at the loop tail; break paths halt ingestion
   while (pagesProcessed < maxPages) {
     // oxlint-disable-next-line no-await-in-loop -- sequential paginated crawl (each page's cursor depends on the previous page)
     const observedPage = await fetchNextObservedPage();

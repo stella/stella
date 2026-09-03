@@ -419,7 +419,8 @@ export const useI18nStore = create<State & Actions>()(
           return;
         }
 
-        const requestId = (loadRequestId += 1);
+        loadRequestId += 1;
+        const requestId = loadRequestId;
         set({ lang, isLoaded: false });
 
         let messages: LocaleMessages;

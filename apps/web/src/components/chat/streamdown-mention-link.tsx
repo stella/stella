@@ -1130,7 +1130,7 @@ const FaviconChip = ({
         className={cn(
           "border-border bg-popover text-popover-foreground",
           "pointer-events-none absolute start-[calc(100%+0.25em)] top-1/2",
-          "z-10 max-w-[20em] -translate-y-1/2 truncate whitespace-nowrap",
+          "z-10 max-w-[20em] -translate-y-1/2 wrap-break-word whitespace-normal",
           "rounded-md border px-1.5 py-0.5 text-[0.78em] leading-none shadow-sm",
           "opacity-0 transition-opacity duration-150",
           "group-focus-within/citation:opacity-100 group-hover/citation:opacity-100",

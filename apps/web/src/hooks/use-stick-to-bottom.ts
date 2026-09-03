@@ -9,7 +9,7 @@ import { panic } from "better-result";
 // the resize observer from yanking the view back and flickering the button.
 const PINNED_BOTTOM_THRESHOLD_PX = 8;
 
-type StickToBottomContext = {
+type StickToBottomContextValue = {
   scrollRef: RefCallback<HTMLDivElement>;
   /** The element `scrollRef` is attached to, for consumers that read or
    *  adjust scroll metrics directly (e.g. load-older anchoring and the
@@ -21,11 +21,10 @@ type StickToBottomContext = {
   scrollToBottom: () => void;
 };
 
-export const StickToBottomContext = createContext<StickToBottomContext | null>(
-  null,
-);
+export const StickToBottomContext =
+  createContext<StickToBottomContextValue | null>(null);
 
-export const useStickToBottomContext = (): StickToBottomContext => {
+export const useStickToBottomContext = (): StickToBottomContextValue => {
   const ctx = use(StickToBottomContext);
   if (!ctx) {
     panic(
@@ -41,8 +40,8 @@ export const useStickToBottomContext = (): StickToBottomContext => {
  * render both inside a `Conversation` and inside a bespoke scroll
  * container (e.g. the file-chat overlay).
  */
-export const useMaybeStickToBottomContext = (): StickToBottomContext | null =>
-  use(StickToBottomContext);
+export const useMaybeStickToBottomContext =
+  (): StickToBottomContextValue | null => use(StickToBottomContext);
 
 /**
  * Checks whether the user is actively selecting text inside

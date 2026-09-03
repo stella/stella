@@ -109,9 +109,7 @@ export const AICellSourceCard = ({
   const cardContent = (
     <>
       {title !== undefined && (
-        <span className="text-foreground-strong text-xs font-semibold">
-          {title}
-        </span>
+        <span className="text-foreground text-xs font-semibold">{title}</span>
       )}
       {showSourceFile && primaryFile && (
         <span className="flex min-w-0 items-center gap-1.5 text-xs font-medium">

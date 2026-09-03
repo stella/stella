@@ -5,6 +5,7 @@
  * map, the palettes, the base layer, and the custom utilities; the globs below
  * name the sources Tailwind cannot find on its own. */
 @import "tailwindcss";
+@import "tw-animate-css";
 @import "@stll/ui/theme.css";
 
 /* The design system's components live outside this app's source tree, so
@@ -12,7 +13,6 @@
 @source "../../../../packages/ui/src/**/*.{ts,tsx}";
 @source "../../../../packages/chat/src/**/*.{ts,tsx}";
 @source "../../../../packages/workspace-ui/src/**/*.{ts,tsx}";
-@source "../../../../packages/chat/src/**/*.{ts,tsx}";
 /* The folio editor chrome uses Tailwind utilities but ships no utility CSS of
  * its own (its editor.css only carries document/ProseMirror styles), so the
  * compiled package output must be scanned explicitly: node_modules is outside

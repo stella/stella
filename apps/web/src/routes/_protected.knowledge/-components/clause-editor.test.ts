@@ -756,7 +756,8 @@ describe("canReviewFlushReportResolved", () => {
 
     // The review resolves: `onReviewResolved` mints the epoch's token and
     // its own flush settles successfully.
-    const reviewFlushToken = (reviewFlushEpoch += 1);
+    reviewFlushEpoch += 1;
+    const reviewFlushToken = reviewFlushEpoch;
     settleSave(reviewFlushToken);
     expect(state.reported).toBe("resolved");
   });
@@ -1024,7 +1025,8 @@ describe("write-ordering matrix: saveBody vs. a stale in-flight save", () => {
     const startSave = (body: string) => {
       latestRequestedBody = body;
 
-      const sequence = (sequenceCounter += 1);
+      sequenceCounter += 1;
+      const sequence = sequenceCounter;
       inFlightAbort?.abort();
       const controller = new AbortController();
       inFlightAbort = controller;

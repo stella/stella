@@ -22,7 +22,7 @@ const THIRTY_DAY_MONTHS = new Set([4, 6, 9, 11]);
  * `microseconds-naive` is the same UTC-rendered six-digit value without the
  * `Z`, issued before the marker was added; its boundary must therefore keep
  * the former explicit UTC re-anchor. `milliseconds` marks the oldest ISO
- * `…​.123Z` cursor. It cannot identify a position inside that millisecond;
+ * `….123Z` cursor. It cannot identify a position inside that millisecond;
  * callers that can resolve its row by id replace it with the exact database
  * timestamp, while the generic fallback skips the ambiguous interval.
  */

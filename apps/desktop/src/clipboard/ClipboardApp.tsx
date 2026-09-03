@@ -320,7 +320,7 @@ const ClipboardCard = ({
     : undefined;
   const rendersHtml = item.type === "formattedText" && !query;
   const previewClassName = cn(
-    "text-foreground line-clamp-[8] text-sm leading-5 text-pretty break-words",
+    "text-foreground line-clamp-[8] text-sm leading-5 text-pretty wrap-break-word",
     // HTML collapses its source whitespace; only plain text (and <pre>) keeps it.
     rendersHtml
       ? "[&_blockquote]:border-s-2 [&_blockquote]:ps-3 [&_code]:font-mono [&_li]:ms-4 [&_ol]:list-decimal [&_pre]:whitespace-pre-wrap [&_strong]:font-semibold [&_ul]:list-disc"
@@ -1130,7 +1130,7 @@ const ClipboardWelcomeDialog = ({ onClose }: ClipboardWelcomeDialogProps) => {
             <ClipboardIcon aria-hidden="true" className="size-5" />
           </span>
           <span className="min-w-0">
-            <DialogTitle className="text-wrap-balance text-lg leading-tight">
+            <DialogTitle className="text-lg leading-tight text-balance">
               {t("welcomeTitle")}
             </DialogTitle>
             <DialogDescription className="mt-1 leading-relaxed text-pretty">
@@ -1913,7 +1913,7 @@ const ClipboardApp = () => {
                 <ClipboardIcon aria-hidden="true" className="size-5" />
               )}
             </span>
-            <p className="text-foreground/82 text-wrap-balance max-w-sm text-sm font-medium">
+            <p className="text-foreground/82 max-w-sm text-sm font-medium text-balance">
               {filterQuery || activeGroupId
                 ? emptyStateTitle
                 : t("emptyDescription")}

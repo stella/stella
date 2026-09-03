@@ -517,7 +517,6 @@ export const writeS3ObjectWithRetry = async (
       await Bun.sleep(s3WriteRetryDelayMs(attempt));
     }
   }
-  // eslint-disable-next-line no-throw-literal -- preserve the SDK rejection object and its retry/status metadata for callers
   throw lastError;
 };
 
@@ -683,9 +682,8 @@ export const listS3ObjectKeys = async ({
   maxKeys,
   signal,
 }: ListS3ObjectKeysOptions): Promise<string[]> => {
-  const client = (_abortableClient ??= buildAbortableS3Client(
-    staticCredentialsFromEnv(),
-  ));
+  _abortableClient ??= buildAbortableS3Client(staticCredentialsFromEnv());
+  const client = _abortableClient;
   const keys: string[] = [];
   // Each page names the next one, so the walk recurses instead of looping;
   // depth is bounded by the ceiling.

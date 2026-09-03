@@ -405,13 +405,167 @@ const pragmaticDragAdapterDeepImportBan = {
     "Import only '@atlaskit/pragmatic-drag-and-drop/element/adapter'; it has no public subpaths.",
 };
 
+// Oxlint 1.80 split the monolithic react/react-compiler rule into categories.
+// These are one logical ruleset: spreads preserve the former whole-compiler
+// exemption only where the compiler cannot meaningfully analyze the source.
+const reactCompilerRulesOff = {
+  "react/capitalized-calls": "off",
+  "react/error-boundaries": "off",
+  "react/exhaustive-effect-dependencies": "off",
+  "react/globals": "off",
+  "react/hooks": "off",
+  "react/immutability": "off",
+  "react/incompatible-library": "off",
+  "react/invariant": "off",
+  "react/memo-dependencies": "off",
+  "react/no-deriving-state-in-effects": "off",
+  "react/preserve-manual-memoization": "off",
+  "react/purity": "off",
+  "react/refs": "off",
+  "react/rule-suppression": "off",
+  "react/set-state-in-effect": "off",
+  "react/set-state-in-render": "off",
+  "react/static-components": "off",
+  "react/syntax": "off",
+  "react/todo": "off",
+  "react/unsupported-syntax": "off",
+  "react/use-memo": "off",
+  "react/void-use-memo": "off",
+} satisfies NonNullable<OxlintOverride["rules"]>;
+
+// oxlint-tailwindcss validates generated utilities. These classes are owned by
+// component CSS or inline <style> blocks instead, so list each spelling rather
+// than exempting broad prefixes that could hide a Tailwind typo.
+const customCssClassNames = [
+  "animate-flow-in",
+  "animate-slide-in",
+  "auth-gradient",
+  "catalogue-row-in",
+  "chat-editor",
+  "clause-directive",
+  "clause-editor",
+  "cli-client",
+  "cli-command",
+  "cli-command-character",
+  "cli-cursor",
+  "cli-discover-tag",
+  "cli-idle-prompt",
+  "cli-main-window",
+  "cli-response",
+  "cli-result",
+  "cli-selected",
+  "cli-story",
+  "cli-story-auto",
+  "cli-story-reflection",
+  "cli-story-scene-only",
+  "cli-story-transparent",
+  "cli-story-two-window",
+  "cli-story-wash",
+  "cli-story-with-scroll-reveal",
+  "cli-summary",
+  "cli-window",
+  "cwp-draw",
+  "cwp-pop",
+  "cwp-press",
+  "cwp-rise",
+  "document-preview-surface",
+  "draft-line",
+  "entity-span",
+  "error-gradient",
+  "folio-ai-bar-editor",
+  "folio-ai-bar-editor--custom-placeholder",
+  "folio-ai-host",
+  "folio-docx-preview",
+  "folio-peek",
+  "fixture-board",
+  "is-assistant",
+  "is-system",
+  "is-user",
+  "kanban-test-list",
+  "line",
+  "mac-titlebar",
+  "mac-traffic-glyph",
+  "mac-traffic-light",
+  "mac-traffic-minus",
+  "mac-window",
+  "markdown-hybrid-editor",
+  "ray",
+  "reader-apparatus",
+  "reader-apparatus-summary",
+  "reader-justify",
+  "reader-note-back",
+  "reader-note-label",
+  "reader-note-ref",
+  "reader-page-marker",
+  "reader-page-tick",
+  "reader-paper",
+  "reader-scroll",
+  "reader-signature",
+  "reader-statute",
+  "research-burst",
+  "review-line",
+  "scan",
+  "search-document-highlight",
+  "showcase-description",
+  "showcase-grid",
+  "showcase-tile",
+  "showcase-title",
+  "stella-office-spreadsheet",
+  "story-step",
+  "story-step-visible",
+  "view-layout-preview-fade-in",
+  "view-layout-preview-fade-out",
+  "view-layout-preview-move",
+  "word",
+] satisfies string[];
+
 export default defineConfig({
   extends: [core, react],
+  settings: {
+    tailwindcss: {
+      entryPoint: [
+        { files: "apps/web/**", use: "apps/web/src/styles/app.css" },
+        {
+          files: "apps/desktop/**",
+          use: "apps/desktop/src/mainview/index.css",
+        },
+        {
+          files: "apps/playground/**",
+          use: "apps/playground/src/styles.css",
+        },
+        {
+          files: "apps/landing/**",
+          use: "apps/landing/src/styles/global.css",
+        },
+        // Shared packages use the web entry point as the canonical complete
+        // @stll/ui theme. Consumer-specific entry points are intentionally
+        // checked above before this shared fallback.
+        { files: "packages/ui/**", use: "apps/web/src/styles/app.css" },
+        { files: "packages/chat/**", use: "apps/web/src/styles/app.css" },
+        {
+          files: "packages/workspace-ui/**",
+          use: "apps/web/src/styles/app.css",
+        },
+      ],
+      // `style` and `styles` commonly hold CSSProperties or unrelated values;
+      // Tailwind classes remain covered in JSX attributes and cn/cva calls.
+      exclude: { variablePatterns: ["^styles?$"] },
+    },
+  },
   rules: {
     ...libraryRules,
     // Override ultracite defaults for Stella
     "no-console": "error",
     "no-shadow": "error",
+    "no-unused-vars": [
+      "error",
+      {
+        argsIgnorePattern: "^_",
+        caughtErrorsIgnorePattern: "^_",
+        ignoreRestSiblings: true,
+        varsIgnorePattern: "^_",
+      },
+    ],
     // The TypeScript extension below recognizes returned thenables. Retain
     // the base rule only for JavaScript through the override below.
     "require-await": "off",
@@ -663,6 +817,12 @@ export default defineConfig({
     "react_perf/jsx-no-new-function-as-prop": "off",
 
     "react/hook-use-state": "off",
+    // These categories report React Compiler implementation limits and internal
+    // invariants. The former monolithic rule filtered them unless
+    // reportAllBailouts was enabled; keep that behavior while actionable
+    // categories remain enabled by Ultracite.
+    "react/invariant": "off",
+    "react/todo": "off",
     // `react/jsx-key` and `react/no-array-index-key` are enabled ("error") for
     // apps/web/src and packages/workspace-ui/src via the overrides below. The
     // other React surfaces (folio, ui, desktop, landing, playground) are not
@@ -766,6 +926,7 @@ export default defineConfig({
     "@tanstack/eslint-plugin-query",
     "@tanstack/eslint-plugin-router",
     "eslint-plugin-drizzle",
+    "oxlint-tailwindcss",
     "@stll/oxlint-config/no-raw-colors",
     "./.oxlint-plugins/no-raw-date-input.ts",
     "./.oxlint-plugins/no-raw-date-parsing.ts",
@@ -907,6 +1068,78 @@ export default defineConfig({
     ...(core.overrides ?? []),
     ...libraryOverrides,
     {
+      files: [
+        "apps/web/**/*.{js,jsx,ts,tsx}",
+        "apps/desktop/src/**/*.{js,jsx,ts,tsx}",
+        "apps/playground/src/**/*.{js,jsx,ts,tsx}",
+        "apps/landing/src/**/*.{js,jsx,ts,tsx}",
+        "packages/ui/src/**/*.{js,jsx,ts,tsx}",
+        "packages/chat/src/**/*.{js,jsx,ts,tsx}",
+        "packages/workspace-ui/src/**/*.{js,jsx,ts,tsx}",
+      ],
+      rules: {
+        "tailwindcss/no-conflicting-classes": [
+          "error",
+          {
+            // Revealing an sr-only control resets it to static positioning;
+            // these keyboard-focus variants deliberately reposition it.
+            allow: [
+              [
+                "^(?:focus|focus-visible):not-sr-only$",
+                "^(?:focus|focus-visible):(absolute|w-max|border)$",
+              ],
+            ],
+          },
+        ],
+        "tailwindcss/no-deprecated-classes": "error",
+        "tailwindcss/no-duplicate-classes": "error",
+        "tailwindcss/no-unknown-classes": [
+          "error",
+          { allowlist: customCssClassNames },
+        ],
+      },
+    },
+    {
+      // Oxlint 1.80 split React Compiler diagnostics into independently
+      // configurable categories. These files are the dependency-analysis
+      // backlog first exposed by that split; exact paths keep new code and
+      // new files checked while the legacy cases are repaired individually.
+      files: [
+        "apps/desktop/src/clipboard/ClipboardApp.tsx",
+        "apps/landing/src/components/react/AnonymizeLiveDemo.tsx",
+        "apps/landing/src/components/react/EditorLiveDemo.tsx",
+        "apps/landing/src/components/react/previews/CliMcpPreview.tsx",
+        "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx",
+        "apps/web/src/components/chat/chat-thread-messages.tsx",
+        "apps/web/src/components/chat-editor-provider.tsx",
+        "apps/web/src/components/inspector/anonymization-facet.tsx",
+        "apps/web/src/components/inspector/inspector-panel.tsx",
+        "apps/web/src/routes/_protected.knowledge/-components/template-studio-chat.tsx",
+        "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view.tsx",
+        "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx",
+        "packages/ui/src/components/hex-color-picker.tsx",
+      ],
+      rules: {
+        "react/exhaustive-effect-dependencies": "off",
+      },
+    },
+    {
+      // These APIs intentionally return unstable functions. Preserve the
+      // compiler's existing bailout for the current call sites, but keep the
+      // category enabled everywhere else so the list can only shrink.
+      files: [
+        "apps/web/src/components/bilingual-review-rows.tsx",
+        "apps/web/src/components/search-dialog.tsx",
+        "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx",
+        "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx",
+        "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/index.tsx",
+        "packages/ui/src/kanban/virtual-cell.tsx",
+      ],
+      rules: {
+        "react/incompatible-library": "off",
+      },
+    },
+    {
       // TanStack route objects are initialized before their components, while
       // those components read the exported Route object. Function declarations
       // preserve that intentional two-way declaration order without a TDZ. The
@@ -940,13 +1173,27 @@ export default defineConfig({
         "no-nested-ternary": "off",
         // Regression fixtures deliberately embed ref-during-render and
         // stale-closure patterns to exercise the custom plugin rules; they
-        // are not product code, so react-compiler noise stays off here.
-        "react/react-compiler": "off",
+        // are not product code, so React Compiler noise stays off here.
+        ...reactCompilerRulesOff,
         // Plugin sources and fixtures embed directive strings as
         // documentation/regression examples; do not lint them as real
         // directives.
         "suppression-hygiene/require-description": "off",
         "suppression-hygiene/no-foreign-directive": "off",
+      },
+    },
+    {
+      // This fixture intentionally passes unbound and value-returning ambient
+      // functions through callback positions. Those TypeScript diagnostics
+      // vary with Oxlint's target set, while the custom-rule directives are
+      // the mutation proof this fixture owns.
+      files: [
+        ".oxlint-plugins/__fixtures__/no-ambient-nondeterminism.fixture.ts",
+      ],
+      rules: {
+        "typescript/no-implied-eval": "off",
+        "typescript/strict-void-return": "off",
+        "typescript/unbound-method": "off",
       },
     },
     {
@@ -1912,7 +2159,7 @@ export default defineConfig({
         // These generic wrappers intentionally accept opaque callbacks and
         // dependency arrays. Their call sites own dependency correctness, so
         // the compiler cannot analyze them as ordinary component hooks.
-        "react/react-compiler": "off",
+        ...reactCompilerRulesOff,
       },
     },
     {

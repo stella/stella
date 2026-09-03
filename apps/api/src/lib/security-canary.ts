@@ -129,7 +129,8 @@ export const createSecurityCanaryAlertDeduplicator = ({
 
     const result = await Result.tryPromise({
       try: async () => {
-        const client = (redis ??= createRedis());
+        redis ??= createRedis();
+        const client = redis;
         redisConnection ??= client.connect().catch((error: unknown) => {
           redisConnection = null;
           throw error;

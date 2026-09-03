@@ -750,7 +750,8 @@ const ClauseBodyEditor = ({
       );
       retryPendingTokenRef.current = undefined;
 
-      const sequence = (saveSequenceRef.current += 1);
+      saveSequenceRef.current += 1;
+      const sequence = saveSequenceRef.current;
       inFlightSaveAbortRef.current?.abort();
       const controller = new AbortController();
       inFlightSaveAbortRef.current = controller;
@@ -867,7 +868,8 @@ const ClauseBodyEditor = ({
     // blocked until a later successful save — any trigger, no token of
     // its own required — picks that retry token up and lifts it.
     debouncedSave.cancel();
-    const reviewFlushToken = (reviewFlushEpochRef.current += 1);
+    reviewFlushEpochRef.current += 1;
+    const reviewFlushToken = reviewFlushEpochRef.current;
     await saveBody(body, reviewFlushToken);
   };
 
@@ -1638,7 +1640,8 @@ const HistoryTab = ({
       return;
     }
 
-    const generation = (requestGenerationRef.current += 1);
+    requestGenerationRef.current += 1;
+    const generation = requestGenerationRef.current;
     setSelectedId(versionId);
     setLoading(true);
     setDiffResult(null);

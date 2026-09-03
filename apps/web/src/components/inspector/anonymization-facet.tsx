@@ -598,7 +598,7 @@ export const AnonymizationFacet = ({
       // term rows live above it and are always visible.
       detectedGroups.some(([label]) => label === docSelectionLabel)
     ) {
-      // eslint-disable-next-line react/react-compiler -- external subscription: two-pass reaction to a doc-selection store bump; this commit expands the target group, the effect re-run then scrolls + flashes via DOM imperatives that depend on the expand having committed
+      // eslint-disable-next-line react/set-state-in-effect -- external subscription: two-pass reaction to a doc-selection store bump; this commit expands the target group, the effect re-run then scrolls + flashes via DOM imperatives that depend on the expand having committed
       setExpandedGroups((prev) => {
         const next = new Set(prev);
         next.add(docSelectionLabel);

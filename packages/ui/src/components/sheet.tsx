@@ -154,7 +154,7 @@ const SheetFooter = ({
 
 const SheetTitle = ({ className, ...props }: SheetPrimitive.Title.Props) => (
   <SheetPrimitive.Title
-    className={cn("font-heading text-xl leading-none font-semibold", className)}
+    className={cn("text-xl leading-none font-semibold", className)}
     data-slot="sheet-title"
     {...props}
   />

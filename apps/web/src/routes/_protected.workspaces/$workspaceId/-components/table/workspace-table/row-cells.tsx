@@ -748,7 +748,7 @@ const SelectRowContent = ({
     } else {
       row.toggleSelected();
     }
-    // eslint-disable-next-line react/react-compiler -- lastSelectedIndex is a RefObject prop; writing `.current` is the intended ref write (shared with the parent), not a prop mutation
+    // eslint-disable-next-line react/immutability -- lastSelectedIndex is a RefObject prop; writing `.current` is the intended ref write (shared with the parent), not a prop mutation
     lastSelectedIndex.current = index;
   };
 

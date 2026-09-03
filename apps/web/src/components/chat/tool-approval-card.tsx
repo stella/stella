@@ -759,7 +759,7 @@ const RegistryWriteSummaryRow = ({
     <dt className="text-muted-foreground text-xs">
       {matter ? stripIdSuffix(label) : label}
     </dt>
-    <dd className="text-xs break-words">
+    <dd className="text-xs wrap-break-word">
       {matter ? (
         <span className="inline-flex min-w-0 items-center gap-1.5">
           <MatterIcon
@@ -854,7 +854,7 @@ const ExternalMcpInputSummary = ({
             {rows.map((row) => (
               <div className="grid gap-1 sm:grid-cols-[9rem_1fr]" key={row.key}>
                 <dt className="text-muted-foreground text-xs">{row.label}</dt>
-                <dd className="text-xs break-words">{row.value}</dd>
+                <dd className="text-xs wrap-break-word">{row.value}</dd>
               </div>
             ))}
           </dl>

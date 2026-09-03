@@ -472,7 +472,7 @@ export const DocumentAiSourceBar = ({
         </Button>
       </div>
       {isAnswerExpanded && shortAnswer !== null && (
-        <div className="text-foreground-strong-muted relative max-h-32 min-w-0 overflow-y-auto pb-2 text-xs leading-relaxed break-words">
+        <div className="text-foreground-strong-muted relative max-h-32 min-w-0 overflow-y-auto pb-2 text-xs leading-relaxed wrap-break-word">
           {justificationNodes}
         </div>
       )}

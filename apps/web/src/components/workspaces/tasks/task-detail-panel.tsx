@@ -831,7 +831,7 @@ const TaskDetailPanelContent = ({
                       </p>
                       {event.reason && (
                         <p
-                          className="text-muted-foreground break-words"
+                          className="text-muted-foreground wrap-break-word"
                           dir="auto"
                         >
                           {event.reason}

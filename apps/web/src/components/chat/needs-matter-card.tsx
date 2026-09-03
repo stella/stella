@@ -228,7 +228,7 @@ const DocumentPreview = ({ name, source }: DocumentPreviewProps) => {
         )}
         {snippet ? (
           <MarkdownPreview
-            className="text-muted-foreground max-h-15 overflow-hidden text-xs leading-5 break-words [&_h1]:mb-0 [&_h1]:text-xs [&_h2]:mb-0 [&_h2]:text-xs [&_h3]:mb-0 [&_h3]:text-xs [&_p]:my-0"
+            className="text-muted-foreground max-h-15 overflow-hidden text-xs leading-5 wrap-break-word [&_h1]:mb-0 [&_h1]:text-xs [&_h2]:mb-0 [&_h2]:text-xs [&_h3]:mb-0 [&_h3]:text-xs [&_p]:my-0"
             fallbackChildren={assistantMessageFallbackText(snippet)}
           >
             {snippet}
