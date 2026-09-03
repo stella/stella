@@ -561,9 +561,14 @@ const parseFontSize = (style: string): number => {
  * its own paragraph, so the furniture is peeled off the chunk instead of the
  * chunk being dropped for starting with it. Every part is optional, so an
  * ordinary paragraph matches the empty string and is left alone.
+ *
+ * The docket's leading panel number is optional because the letter-first
+ * registers have none: `Konf 4/2011`, `Nad 224/2014`. Same shape the citation
+ * extractor accepts, and the `pokračování` literal is what keeps the optional
+ * digits from reaching ordinary prose.
  */
 const PAGE_FURNITURE_RE =
-  /^(?:\[OBRÁZEK\]\s*)*(?:pokračování\s+\d+\s+\d+\s*\p{Lu}\p{L}*\s+\d+\/\d{4}(?:\s*-\s*\d+)?)?\s*/u;
+  /^(?:\[OBRÁZEK\]\s*)*(?:pokračování\s+\d+\s+(?:\d+\s*)?\p{Lu}\p{L}*\s+\d+\/\d{4}(?:\s*-\s*\d+)?)?\s*/u;
 
 /** Decorative lines carrying no content once the furniture is peeled. */
 const DECORATIVE_LINE_RE = /^(?:pokračování|ČESKÁ REPUBLIKA)$/u;

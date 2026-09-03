@@ -278,6 +278,38 @@ describe("parseNssDecisionHtml", () => {
       // The page-one header carries the case number, which is content.
       expect(texts).toContain("58 A 65/2012-46");
     });
+
+    /**
+     * The letter-first registers carry no leading panel number at all
+     * (`Konf`, `Nad`), so a running header built around one leaves the header
+     * in the AST and hides the numbered-paragraph prefix behind it.
+     */
+    const letterFirstHtml = `<html><body>
+      <p style="text-align:center">
+        <span style="font-weight:bold">ROZSUDEK</span>
+      </p>
+      <p style="text-align:center">
+        <span style="font-weight:bold">Odůvodnění:</span>
+      </p>
+      <p>[OBRÁZEK][OBRÁZEK]pokračování 2 Konf 4/2011 [3] Zvláštní senát rozhodl o kompetenčním sporu.</p>
+      <p>[OBRÁZEK][OBRÁZEK]pokračování 3 Nad 224/2014-53 [4] Věc byla přikázána jinému soudu.</p>
+      <p>[OBRÁZEK][OBRÁZEK]pokračování 4 Konf 4/2011</p>
+    </body></html>`;
+
+    test("peels a running header whose docket is letter-first", () => {
+      const { documentAst, fulltext } = parseNssDecisionHtml(
+        baseInput(letterFirstHtml),
+      );
+      const texts = documentAst.blocks.map((b) => b.plainText);
+
+      // Body text survives, and with the header peeled the numbered-paragraph
+      // prefix behind it is recognised, so "[3]" becomes the block's number
+      // rather than staying in its text.
+      expect(fulltext).toContain("Zvláštní senát rozhodl o kompetenčním sporu");
+      expect(fulltext).toContain("Věc byla přikázána jinému soudu");
+      expect(texts.some((t) => t.includes("pokračování"))).toBe(false);
+      expect(texts.some((t) => t.includes("Konf 4/2011"))).toBe(false);
+    });
   });
 
   describe("section separators", () => {
