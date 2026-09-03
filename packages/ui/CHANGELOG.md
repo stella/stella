@@ -1,5 +1,23 @@
 # @stll/ui
 
+## 0.20.0
+
+### Minor Changes
+
+- [#2843](https://github.com/stella/stella/pull/2843) [`d5170f5`](https://github.com/stella/stella/commit/d5170f5ea212deee686d5d8d6bfa0a431e2657d6) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `InspectorEntityTab` (a rail tab for an open entity: the active tab's icon or a short glyph for every inactive one, with a tooltip and a middle-click close) and its `entityTabGlyph` helper, plus `InspectorFacetBar` (the inspector's overflow-aware row of facet chips) to `@stll/ui/inspector`, so a host can render the same open-entity rail and facet row without rebuilding them locally.
+
+- [#2850](https://github.com/stella/stella/pull/2850) [`1943eed`](https://github.com/stella/stella/commit/1943eed7b652379b67522905518f06b4cd771e36) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add an optional `accent` prop to `KanbanVirtualCell` (`@stll/ui/kanban`) so a host can carry a column's option colour onto the cell surface itself, not just its header swatch. With no `accent`, the surface renders exactly as before. With an `accent`, the resting surface gets a faint colour-derived tint, and while `active` is also set (a card dragged over the cell) the tint strengthens into an accent-coloured wash and ring, replacing the generic highlight instead of layering under it.
+
+- [#2845](https://github.com/stella/stella/pull/2845) [`9dd7ff4`](https://github.com/stella/stella/commit/9dd7ff4554ffafc615f5495fd340619576c7a589) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add a generic, host-agnostic sidebar shell at `@stll/ui/sidebar`: `SidebarProvider`/`useSidebar` (controlled or uncontrolled open state, mobile sheet, icon-collapse), `Sidebar`, `SidebarHeader`/`Content`/`Footer`/`Separator`, the `SidebarGroup*` family, the `SidebarMenu*` family (with a tooltip shown only while collapsed), `SidebarInset`, `SidebarRail`, `SidebarTrigger`, and the `SIDEBAR_WIDTH_PX`/`SIDEBAR_WIDTH_ICON_PX` size constants.
+
+- [#2854](https://github.com/stella/stella/pull/2854) [`47d3d57`](https://github.com/stella/stella/commit/47d3d5741d51d8b4e70f34cd7ab4535deb12fd0d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `WorkspaceFrame`'s described composition can now render its navigation through the sidebar shell from `@stll/ui/sidebar`. Pass `navigation.sidebar` to get the same collapsible sidebar Stella's own app uses: a header row at toolbar height with a brand slot and a collapse toggle, the described items as sidebar menu buttons with labels while expanded and tooltips while collapsed, and the footer slot below. `open`, `onOpenChange`, `defaultOpen`, and `forceCollapsed` pass through to the sidebar provider so the host owns persistence. Without `navigation.sidebar`, the frame renders the application rail exactly as before.
+
+  `WorkspaceViewSwitcher`'s strip is now one toolbar row (`TOOLBAR_ROW_HEIGHT`), the same height as the frame's top bar and a kanban column header, instead of taking its height from the tabs inside it.
+
+  `SidebarMenuButton` gains `size="rail"`: a 44px target while expanded and while collapsed to the icon rail, for a sidebar that stands in for the application rail.
+
+  `@stll/ui/sidebar` types the custom properties it sets on a local style type instead of a package-private module augmentation, so a consumer compiling the module from source no longer fails on `--sidebar-width`.
+
 ## 0.19.0
 
 ### Minor Changes
