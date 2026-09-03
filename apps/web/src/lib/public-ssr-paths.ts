@@ -1,5 +1,6 @@
-export const isPublicSsrPath = (pathname: string) =>
-  pathname === "/law" ||
-  pathname.startsWith("/law/") ||
-  pathname === "/tools" ||
-  pathname.startsWith("/tools/");
+import { createPathMatcher } from "@stll/ssr-kit";
+
+export const isPublicSsrPath = createPathMatcher([
+  { type: "subtree", path: "/law" },
+  { type: "subtree", path: "/tools" },
+]);

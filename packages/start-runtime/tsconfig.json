@@ -1,0 +1,10 @@
+{
+  "extends": "@stll/typescript-config/base.json",
+  "compilerOptions": {
+    "lib": ["DOM", "ESNext"],
+    "module": "ESNext",
+    "types": ["bun-types"]
+  },
+  "include": ["."],
+  "exclude": ["dist", "node_modules"]
+}

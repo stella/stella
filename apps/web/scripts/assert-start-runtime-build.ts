@@ -135,6 +135,7 @@ const assetReferencePatterns = [
 ] as const;
 
 const requiredFiles = [
+  "dist/runtime.js",
   "dist/server/server.js",
   "dist/client/prepaint-init.js",
 ] as const;

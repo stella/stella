@@ -1,3 +1,5 @@
+import { assertSsrDocument } from "@stll/ssr-testkit";
+
 import { expect, test } from "../helpers/test";
 
 const PUBLIC_SSR_TIMEOUT_MS = 45_000;
@@ -13,10 +15,12 @@ test("public tools catalogue returns SSR content for anonymous visitors", async 
     waitUntil: "commit",
   });
 
-  expect(response?.status()).toBe(200);
-  const html = await response?.text();
-  expect(html).toContain("<main");
-  expect(html).toContain('href="/tools/contract-review"');
+  assertSsrDocument({
+    contentType: response?.headers()["content-type"] ?? null,
+    html: (await response?.text()) ?? "",
+    requiredContent: ["<main", 'href="/tools/contract-review"'],
+    status: response?.status() ?? 0,
+  });
 });
 
 test("anonymous visitors can search and browse by legal task", async ({

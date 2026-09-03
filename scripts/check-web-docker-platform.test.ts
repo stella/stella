@@ -83,7 +83,6 @@ describe("web container platform boundary", () => {
       "runner: COPY --from=deps-prod /app/ .",
       "runner: COPY --chown=stella:stella --from=pruner /app/out/json/ .",
       "runner: COPY --chown=stella:stella --from=builder /app/web-runtime-stage/ .",
-      "runner: COPY --chown=stella:stella --from=builder /app/apps/web/start-runtime.js ./apps/web/start-runtime.js",
       "runner: COPY --chown=stella:stella --from=builder /app/apps/web/dist ./apps/web/dist",
     ]);
   });

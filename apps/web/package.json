@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev",
-    "build": "vite build && bun scripts/assert-start-runtime-build.ts",
+    "build": "vite build && bun build --target=bun --outfile=dist/runtime.js src/runtime.ts && bun scripts/assert-start-runtime-build.ts",
     "build:analyze": "vite build --mode analyze",
     "clean": "git clean -xdf .cache .turbo node_modules",
     "typegen": "bun ../../packages/scripts/src/i18n-typegen.ts src/i18n/langs && bun scripts/sync-prepaint-locales.ts",
@@ -72,6 +72,8 @@
     "@stll/money": "workspace:*",
     "@stll/permissions": "workspace:*",
     "@stll/skills": "workspace:*",
+    "@stll/ssr-kit": "workspace:^",
+    "@stll/start-runtime": "workspace:^",
     "@stll/template-conditions": "workspace:*",
     "@stll/text-normalize": "workspace:*",
     "@stll/time": "workspace:*",
@@ -147,6 +149,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.62.0",
+    "@stll/ssr-testkit": "workspace:^",
     "@stll/typescript-config": "workspace:*",
     "@tailwindcss/vite": "catalog:",
     "@tanstack/devtools-vite": "^0.8.5",

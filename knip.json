@@ -49,7 +49,7 @@
       "entry": [
         "src/client.tsx",
         "src/server.ts!",
-        "start-runtime.js!",
+        "src/runtime.ts!",
         "vite.config.ts",
         "src/**/*.test.ts",
         "src/**/*.test.tsx",

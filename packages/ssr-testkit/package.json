@@ -1,0 +1,53 @@
+{
+  "name": "@stll/ssr-testkit",
+  "version": "0.0.0",
+  "description": "Runtime-agnostic assertions for the observable HTML contract of server-rendered routes.",
+  "keywords": [
+    "server-rendering",
+    "ssr",
+    "testing",
+    "typescript"
+  ],
+  "homepage": "https://github.com/stella/stella/tree/main/packages/ssr-testkit",
+  "bugs": {
+    "url": "https://github.com/stella/stella/issues"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/stella/stella.git",
+    "directory": "packages/ssr-testkit"
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/assert-document.ts"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "clean": "git clean -xdf dist .cache .turbo node_modules",
+    "build": "tsdown",
+    "pack:dry-run": "bun pm pack --dry-run",
+    "test": "bun test src",
+    "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware packages/ssr-testkit",
+    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/ssr-testkit",
+    "format": "oxfmt .",
+    "prepack": "bun run build"
+  },
+  "dependencies": {
+    "better-result": "catalog:"
+  },
+  "devDependencies": {
+    "@stll/typescript-config": "workspace:*",
+    "bun-types": "catalog:",
+    "tsdown": "catalog:"
+  }
+}

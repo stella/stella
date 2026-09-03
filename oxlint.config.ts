@@ -1552,13 +1552,6 @@ export default defineConfig({
       rules: { "no-bare-error/no-bare-error": "off" },
     },
     {
-      // The web runtime boot wrapper must stay dependency-free: importing
-      // better-result would itself rely on the runtime module resolution
-      // the wrapper exists to verify before serving traffic.
-      files: ["apps/web/start-runtime.js"],
-      rules: { "no-bare-error/no-bare-error": "off" },
-    },
-    {
       // Test-only adapter helper consumed exclusively from
       // `**/*.test.ts`. Not part of any production code path.
       files: [

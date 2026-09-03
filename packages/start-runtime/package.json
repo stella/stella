@@ -1,0 +1,53 @@
+{
+  "name": "@stll/start-runtime",
+  "version": "0.0.0",
+  "description": "Bun runtime primitives for serving TanStack Start applications with explicit asset, health, and startup checks.",
+  "keywords": [
+    "bun",
+    "server-rendering",
+    "ssr",
+    "tanstack-start"
+  ],
+  "homepage": "https://github.com/stella/stella/tree/main/packages/start-runtime",
+  "bugs": {
+    "url": "https://github.com/stella/stella/issues"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/stella/stella.git",
+    "directory": "packages/start-runtime"
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/runtime.ts"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "clean": "git clean -xdf dist .cache .turbo node_modules",
+    "build": "tsdown",
+    "pack:dry-run": "bun pm pack --dry-run",
+    "test": "bun test src",
+    "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware packages/start-runtime",
+    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/start-runtime",
+    "format": "oxfmt .",
+    "prepack": "bun run build"
+  },
+  "dependencies": {
+    "better-result": "catalog:"
+  },
+  "devDependencies": {
+    "@stll/typescript-config": "workspace:*",
+    "bun-types": "catalog:",
+    "tsdown": "catalog:"
+  }
+}
