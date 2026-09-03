@@ -153,7 +153,8 @@ export const createLazyRedisClient = <Client extends ManagedRedisClient>(
       connected = null;
     },
     ready: async () => {
-      const target = (client ??= createClient());
+      client ??= createClient();
+      const target = client;
       if (connected === null) {
         const attempt: Promise<void> = connectWithColdStartRetries(async () => {
           await target.connect();

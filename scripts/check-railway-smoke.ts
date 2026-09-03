@@ -125,7 +125,6 @@ const runProbe = async (name: string, probe: () => Promise<void>) => {
   }
 
   if (lastError) {
-    // eslint-disable-next-line no-throw-literal -- preserve the probe's concrete Error subtype and attached diagnostics
     throw lastError;
   }
   throw new RailwaySmokeError(`${name} failed`);

@@ -577,7 +577,7 @@ export const OutlineRail = ({
       <button
         aria-controls={panelId}
         aria-expanded={panelOpen}
-        className="focus-visible:ring-ring bg-popover text-popover-foreground sr-only absolute end-0 top-2 z-30 w-max -translate-x-6 rounded-md border px-2 py-1 text-xs focus:not-sr-only focus-visible:ring-2 focus-visible:outline-none"
+        className="focus-visible:ring-ring bg-popover text-popover-foreground sr-only end-0 top-2 z-30 -translate-x-6 text-xs focus:not-sr-only focus:absolute focus:w-max focus:rounded-md focus:border focus:px-2 focus:py-1 focus-visible:ring-2 focus-visible:outline-none"
         id={triggerId}
         onClick={() => {
           if (pinned) {

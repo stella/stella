@@ -1429,7 +1429,8 @@ const RegistryAutofillControl = ({
     if (q === "") {
       return;
     }
-    const seq = (lookupSeq.current += 1);
+    lookupSeq.current += 1;
+    const seq = lookupSeq.current;
     setLoading(true);
     // A timeout, dropped connection, or DNS failure throws instead of
     // resolving to an Eden `.error` response, which would otherwise leave
@@ -1625,10 +1626,10 @@ export const TemplateForm = ({
     Record<string, string | null>
   >({});
   const touchedRef = useRef(touched);
-  // eslint-disable-next-line react/react-compiler -- latest-value ref mirror read only from submit/validation callbacks, never during render
+  // eslint-disable-next-line react/refs -- latest-value ref mirror read only from submit/validation callbacks, never during render
   touchedRef.current = touched;
   const valuesRef = useRef(values);
-  // eslint-disable-next-line react/react-compiler -- latest-value ref mirror read only from submit/validation callbacks, never during render
+  // eslint-disable-next-line react/refs -- latest-value ref mirror read only from submit/validation callbacks, never during render
   valuesRef.current = values;
 
   // Notify once with the merged initial snapshot, matching the on-change

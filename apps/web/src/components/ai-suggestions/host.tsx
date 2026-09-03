@@ -1242,7 +1242,7 @@ export const SuggestionCard = (props: SuggestionCardProps) => {
 
       {display ? (
         <>
-          <div className="bg-muted text-foreground mt-2 rounded-md px-2.5 py-1.5 text-[13px] leading-snug text-pretty break-words">
+          <div className="bg-muted text-foreground mt-2 rounded-md px-2.5 py-1.5 text-[13px] leading-snug text-pretty wrap-break-word">
             <span className="decoration-foreground-ghost line-through">
               {suggestion.originalText}
             </span>
@@ -1253,7 +1253,7 @@ export const SuggestionCard = (props: SuggestionCardProps) => {
         </>
       ) : (
         <>
-          <div className="bg-muted text-muted-foreground mt-2 flex flex-col gap-0.5 rounded-md px-2.5 py-1.5 text-[12.5px] leading-snug text-pretty break-words">
+          <div className="bg-muted text-muted-foreground mt-2 flex flex-col gap-0.5 rounded-md px-2.5 py-1.5 text-[12.5px] leading-snug text-pretty wrap-break-word">
             <div className="flex gap-1.5">
               <span
                 className="text-muted-foreground w-3 shrink-0 text-center tabular-nums"
@@ -1266,7 +1266,7 @@ export const SuggestionCard = (props: SuggestionCardProps) => {
               </span>
             </div>
           </div>
-          <div className="bg-muted text-foreground mt-1 flex flex-col gap-0.5 rounded-md px-2.5 py-1.5 text-[12.5px] leading-snug text-pretty break-words">
+          <div className="bg-muted text-foreground mt-1 flex flex-col gap-0.5 rounded-md px-2.5 py-1.5 text-[12.5px] leading-snug text-pretty wrap-break-word">
             <div className="flex gap-1.5">
               <span
                 className="text-muted-foreground w-3 shrink-0 text-center tabular-nums"

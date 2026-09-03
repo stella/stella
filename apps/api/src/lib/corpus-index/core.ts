@@ -705,7 +705,6 @@ export const settleAll = async <T>(
     }
   }
   if (rejected) {
-    // eslint-disable-next-line no-throw-literal -- preserve the first Promise rejection reason exactly after every sibling settles
     throw firstError;
   }
   return values;
@@ -1632,7 +1631,6 @@ export const createCorpusIndexer = <
 
     // Surface a failure so the daemon retries the un-indexed groups.
     if (firstError) {
-      // eslint-disable-next-line no-throw-literal -- CorpusIndexError (TaggedError); rethrow to abort the batch for retry
       throw firstError;
     }
 

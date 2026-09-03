@@ -50,7 +50,7 @@ export const RedlinePreview = ({
   compact = false,
 }: RedlinePreviewProps) => {
   const baseCls = cn(
-    "text-foreground [font-family:Calibri,Arial,sans-serif] break-words",
+    "text-foreground [font-family:Calibri,Arial,sans-serif] wrap-break-word",
     compact
       ? "line-clamp-1 text-[13.5px] leading-5"
       : "text-[14.5px] leading-6",

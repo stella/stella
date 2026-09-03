@@ -204,7 +204,7 @@ export const DocumentPropertiesSection = ({
           workspaceId={workspaceId}
         />
       ) : (
-        <span className="text-foreground text-sm break-words">
+        <span className="text-foreground text-sm wrap-break-word">
           {renderValue(property.value)}
         </span>
       )}

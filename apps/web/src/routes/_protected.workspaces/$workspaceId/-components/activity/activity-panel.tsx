@@ -1403,7 +1403,7 @@ const ActivityDetailsSheet = ({
                         {activityTargetIcon(batchItem)}
                       </span>
                       <span className="min-w-0">
-                        <BidiText as="span" className="block break-words">
+                        <BidiText as="span" className="block wrap-break-word">
                           <TargetName item={batchItem} />
                         </BidiText>
                         <span className="text-muted-foreground mt-0.5 block text-xs leading-4 tabular-nums">
@@ -1507,7 +1507,7 @@ const ActivityDetailsSheet = ({
                 <dt className="text-muted-foreground text-xs font-medium">
                   {row.label}
                 </dt>
-                <dd className="min-w-0 text-sm break-words">{row.value}</dd>
+                <dd className="min-w-0 text-sm wrap-break-word">{row.value}</dd>
               </div>
             ))}
           </dl>

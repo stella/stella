@@ -356,14 +356,14 @@ const createWorkspaceRoot = ({
   const validRootPackage = {
     ...rootPackageJson,
     catalog: {
-      oxlint: "1.77.0",
+      oxlint: "1.81.0",
       typescript: "6.0.3",
       ...(isRecord(rootPackageJson["catalog"])
         ? rootPackageJson["catalog"]
         : {}),
     },
     devDependencies: {
-      "@stll/oxlint-config": "0.6.0",
+      "@stll/oxlint-config": "0.7.0",
       "@typescript/native": "npm:typescript@7.0.2",
       "oxlint-tsgolint": "7.0.2001",
       typescript: "catalog:",

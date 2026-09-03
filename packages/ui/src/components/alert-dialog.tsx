@@ -149,7 +149,7 @@ const AlertDialogTitle = ({
   ...props
 }: AlertDialogPrimitive.Title.Props) => (
   <AlertDialogPrimitive.Title
-    className={cn("font-heading text-xl leading-none font-semibold", className)}
+    className={cn("text-xl leading-none font-semibold", className)}
     data-slot="alert-dialog-title"
     {...props}
   />

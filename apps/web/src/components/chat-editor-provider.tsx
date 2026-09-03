@@ -572,10 +572,10 @@ export const useChatEditor = ({
     : undefined;
   const resolvedPlaceholder = tabToAskText ?? placeholder ?? defaultPlaceholder;
   const placeholderRef = useRef(resolvedPlaceholder);
-  // eslint-disable-next-line react/react-compiler -- latest-ref mirror: the imperative editor's Placeholder plugin reads placeholderRef.current out-of-render, so it must hold this render's value
+  // eslint-disable-next-line react/refs -- latest-ref mirror: the imperative editor's Placeholder plugin reads placeholderRef.current out-of-render, so it must hold this render's value
   placeholderRef.current = resolvedPlaceholder;
   const suggestedFollowupPromptRef = useRef(suggestedFollowupPrompt);
-  // eslint-disable-next-line react/react-compiler -- latest-ref mirror: consumed by out-of-render editor handlers, must reflect this render's prop
+  // eslint-disable-next-line react/refs -- latest-ref mirror: consumed by out-of-render editor handlers, must reflect this render's prop
   suggestedFollowupPromptRef.current = suggestedFollowupPrompt;
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -601,7 +601,7 @@ export const useChatEditor = ({
   const sentMessageHistoryHtmlRef = useRef<readonly string[]>([]);
   const messageHistoryIndexRef = useRef<number | null>(null);
   const markDraftStartedRef = useRef<(() => void) | null>(null);
-  // eslint-disable-next-line react/react-compiler -- latest-ref mirror: the message-history key handler reads this out-of-render, must reflect this render's prop
+  // eslint-disable-next-line react/refs -- latest-ref mirror: the message-history key handler reads this out-of-render, must reflect this render's prop
   sentMessageHistoryHtmlRef.current =
     sentMessageHistoryHtml ?? EMPTY_SENT_MESSAGE_HISTORY;
   const threadKey = getChatThreadKey(threadRef);
@@ -642,7 +642,7 @@ export const useChatEditor = ({
     setIsEmpty(nextIsEmpty);
   });
   const attachmentsRef = useRef(attachments);
-  // eslint-disable-next-line react/react-compiler -- latest-ref mirror: read at submit time out-of-render, must hold this render's attachments
+  // eslint-disable-next-line react/refs -- latest-ref mirror: read at submit time out-of-render, must hold this render's attachments
   attachmentsRef.current = attachments;
   const pendingWorkspaceEntitySearchRef = useRef<{
     queryKey: QueryKey | null;
@@ -657,7 +657,7 @@ export const useChatEditor = ({
     draftStartedThreadKeyRef.current = threadKey;
     onDraftStart?.();
   }, [onDraftStart, threadKey]);
-  // eslint-disable-next-line react/react-compiler -- latest-ref mirror: editor plugins invoke markDraftStartedRef.current out-of-render, must point at this render's callback
+  // eslint-disable-next-line react/refs -- latest-ref mirror: editor plugins invoke markDraftStartedRef.current out-of-render, must point at this render's callback
   markDraftStartedRef.current = markDraftStarted;
 
   const committedThreadKeyRef = useRef(threadKey);
@@ -1003,7 +1003,7 @@ export const useChatEditor = ({
   // throws "Maximum update depth exceeded" and drops in-flight keystrokes.
   // Event handlers (`onCreate`, `onUpdate`, ...) are exempt: the binding
   // excludes them from the comparison and always calls the latest one.
-  // eslint-disable-next-line react/react-compiler -- ref read deferred into the plugin's placeholder callback (invoked out-of-render), not read during render
+  // eslint-disable-next-line react/refs -- ref read deferred into the plugin's placeholder callback (invoked out-of-render), not read during render
   const [extensions] = useState(() => [
     createPromptEditorDocument(),
     Paragraph,
@@ -1165,7 +1165,7 @@ export const useChatEditor = ({
     },
   });
 
-  // eslint-disable-next-line react/react-compiler -- latest-ref mirror: holds the live editor instance for imperative access from out-of-render handlers and plugins
+  // eslint-disable-next-line react/refs -- latest-ref mirror: holds the live editor instance for imperative access from out-of-render handlers and plugins
   editorRef.current = editor;
 
   const syncEditorPlugins = useCallback(

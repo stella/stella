@@ -504,7 +504,7 @@ const EmailParticipantRow = ({
       data-stella-email-anchor={citationBlockId}
     >
       <dt>{label}</dt>
-      <dd className="min-w-0 text-start break-words">
+      <dd className="min-w-0 text-start wrap-break-word">
         {values.map((value, index) => (
           <Fragment key={getOccurrenceKey(value, valueOccurrences)}>
             {index > 0 ? ", " : null}

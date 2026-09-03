@@ -1206,7 +1206,7 @@ const FileChatOverlayInner = ({
   // hold several file fields, so an entity-only key would keep `editorReady`
   // true when switching to another file/version on the same entity and skip the
   // snapshot poll for the newly mounted editor.
-  // eslint-disable-next-line react/react-compiler -- mount-time seed of readiness from the imperative Folio editor instance so a transition-induced remount of an already-ready editor starts ready; the ref read runs once in the useState initializer
+  // eslint-disable-next-line react/refs -- mount-time seed of readiness from the imperative Folio editor instance so a transition-induced remount of an already-ready editor starts ready; the ref read runs once in the useState initializer
   const [editorReady, setEditorReady] = useState(() =>
     Boolean(docxEditorRef?.current?.createAIEditSnapshot()),
   );

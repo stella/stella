@@ -429,7 +429,6 @@ export const redactCaseLawDecision = async ({
           generation,
           scopedDb,
         });
-        // eslint-disable-next-line no-throw-literal -- preserve the first lease-claim rejection reason after all claims settle
         throw firstClaimError;
       }
       if (leases.size !== targets.size) {
@@ -486,7 +485,6 @@ export const redactCaseLawDecision = async ({
       if (firstError) {
         // Keep every projection and indexedGeneration target for a durable
         // retry. The local canonical stores have already been scrubbed.
-        // eslint-disable-next-line no-throw-literal -- CorpusIndexError (TaggedError); rethrow so the caller retries the redaction
         throw firstError;
       }
       await scopedDb(async (tx) => {

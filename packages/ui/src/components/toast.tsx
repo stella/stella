@@ -271,7 +271,7 @@ const Toasts = ({ position }: { position: ToastPosition }) => {
                       data-slot="toast-title"
                     />
                     <Toast.Description
-                      className="text-muted-foreground break-words"
+                      className="text-muted-foreground wrap-break-word"
                       data-slot="toast-description"
                     />
                   </div>
@@ -373,7 +373,7 @@ const AnchoredToasts = () => {
                           data-slot="toast-title"
                         />
                         <Toast.Description
-                          className="text-muted-foreground break-words"
+                          className="text-muted-foreground wrap-break-word"
                           data-slot="toast-description"
                         />
                       </div>

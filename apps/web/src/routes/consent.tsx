@@ -177,7 +177,7 @@ function ConsentPage() {
     <main className="flex flex-1 overflow-y-auto px-4 py-6 sm:px-6 sm:py-10">
       <Frame className="m-auto w-full max-w-2xl">
         <FrameHeader className="gap-4 sm:flex-row sm:items-start">
-          <div className="bg-background outline-foreground/8 flex size-11 shrink-0 items-center justify-center rounded-xl shadow-xs outline outline-1">
+          <div className="bg-background outline-foreground/8 flex size-11 shrink-0 items-center justify-center rounded-xl shadow-xs outline-1">
             <StellaMark className="text-foreground size-6" />
           </div>
           <div className="flex min-w-0 flex-col gap-0.5">

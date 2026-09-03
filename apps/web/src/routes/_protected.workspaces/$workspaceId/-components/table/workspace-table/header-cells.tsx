@@ -194,7 +194,7 @@ export const DraggableHeaderCell = ({
       {headerContent}
       {header.column.getCanResize() && (
         <button
-          className="user-select-none absolute top-0 -right-2 z-30 hidden h-full w-4 cursor-col-resize touch-none py-1 group-hover/table-head:flex"
+          className="absolute top-0 -right-2 z-30 hidden h-full w-4 cursor-col-resize touch-none py-1 select-none group-hover/table-head:flex"
           data-row-expansion-ignore
           onDoubleClick={() => header.column.resetSize()}
           onMouseDown={header.getResizeHandler()}

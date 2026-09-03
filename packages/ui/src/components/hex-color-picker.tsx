@@ -407,9 +407,9 @@ const InteractiveArea = ({
       {...rest}
       className="absolute inset-0 touch-none rounded-[inherit] outline-none"
       onKeyDown={handleKeyDown}
-      // eslint-disable-next-line react/react-compiler -- containedHandler receives the ref object, not a render-time `.current` read; this ref+containedHandler shape is mandated by require-contained-handler
+      // eslint-disable-next-line react/refs -- containedHandler receives the ref object, not a render-time `.current` read; this ref+containedHandler shape is mandated by require-contained-handler
       onMouseDown={containedHandler(container, handleStart)}
-      // eslint-disable-next-line react/react-compiler -- containedHandler receives the ref object, not a render-time `.current` read; this ref+containedHandler shape is mandated by require-contained-handler
+      // eslint-disable-next-line react/refs -- containedHandler receives the ref object, not a render-time `.current` read; this ref+containedHandler shape is mandated by require-contained-handler
       onTouchStart={containedHandler(container, handleStart)}
       ref={container}
       // eslint-disable-next-line jsx-a11y/role-has-required-aria-props -- aria-value* props are passed via ...rest by callers
