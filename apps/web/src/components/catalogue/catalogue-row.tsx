@@ -1,5 +1,6 @@
 import { useTranslations } from "use-intl";
 
+import { ContextMenu, type ContextMenuAction } from "@stll/ui/context-menu";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -9,7 +10,6 @@ import {
 } from "@/components/catalogue/catalogue-badges";
 import { CatalogueEntryIcon } from "@/components/catalogue/catalogue-entry-icon";
 import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
-import { ContextMenu, type ContextMenuAction } from "@/components/context-menu";
 
 /**
  * Minimal display fields shared by onboarding (`LoadedCatalogueEntry`)

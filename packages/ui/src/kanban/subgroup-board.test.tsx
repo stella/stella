@@ -100,13 +100,17 @@ describe("KanbanSubgroupBoard", () => {
     const expanded = renderBoard(matrix, true);
 
     expect(collapsed).toContain("lane:lin:0");
-    expect(collapsed).toContain('data-kanban-lane-column-count="1"');
+    // Only the collapsed (empty) lanes carry a count row; the open lane
+    // shows its cells instead.
     expect(collapsed).toContain('data-kanban-lane-column-count="0"');
+    expect(collapsed).not.toContain('data-kanban-lane-column-count="1"');
     expect(collapsed).not.toContain("cell:lin:open:0");
     expect(collapsed).toContain('aria-expanded="false"');
     expect(expanded).toContain("cell:lin:open:0");
     expect(expanded).toContain("cell:lin:done:0");
-    expect(expanded).toContain('data-kanban-lane-column-count="0"');
+    // An open lane shows its cells; the count row stands in only while
+    // the lane is collapsed.
+    expect(expanded).not.toContain("data-kanban-lane-column-count");
   });
 
   test("renders one board row when subgrouping is absent", () => {
@@ -302,9 +306,10 @@ describe("KanbanSubgroupBoard with column bands", () => {
     // The band's column headers and cells are gone from the flow...
     expect(markup).not.toContain("column:open:1");
     expect(markup).not.toContain("cell:ada:open:1");
-    // ...replaced by one folded slot per lane carrying both hidden cells.
+    // ...replaced by one folded slot per lane carrying both hidden cells;
+    // the slot carries its own count, so the open lane adds no count row.
     expect(markup).toContain("folded:ada:todo:2:2");
-    expect(markup).toContain('data-kanban-lane-column-count="2"');
+    expect(markup).not.toContain("data-kanban-lane-column-count");
     // Columns outside the band are untouched.
     expect(markup).toContain("column:done:1");
     expect(markup).toContain("cell:ada:done:1");

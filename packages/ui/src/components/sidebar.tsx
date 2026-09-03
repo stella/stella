@@ -580,7 +580,10 @@ const sidebarMenuButtonVariants = cva(
         lg: "h-12 text-sm",
         /** A 44px target in both states, for a sidebar that stands in for
          * the application rail on touch and hybrid devices. */
-        rail: "h-11 text-sm group-data-[collapsible=icon]:size-11! group-data-[collapsible=icon]:justify-center",
+        // Collapsed, the label leaves the layout flow (not just its
+        // opacity) so the icon centres in the 44px cell, while `sr-only`
+        // keeps it as the button's accessible name.
+        rail: "h-11 text-sm group-data-[collapsible=icon]:size-11! group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0! group-data-[collapsible=icon]:[&>span:last-child]:sr-only",
       },
     },
     defaultVariants: {

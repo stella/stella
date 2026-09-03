@@ -37,6 +37,8 @@ import {
   ComboboxList,
   ComboboxPopup,
 } from "@stll/ui/combobox";
+import { ContextMenu } from "@stll/ui/context-menu";
+import type { ContextMenuAction } from "@stll/ui/context-menu";
 import {
   Dialog,
   DialogClose,
@@ -62,8 +64,6 @@ import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
-import { ContextMenu } from "@/components/context-menu";
-import type { ContextMenuAction } from "@/components/context-menu";
 import Tooltip from "@/components/tooltip";
 import { UserAvatar } from "@/components/user-avatar";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";

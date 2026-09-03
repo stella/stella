@@ -18,6 +18,7 @@ import {
   type LoadedCatalogueEntry,
 } from "@stll/catalogue";
 import { Button } from "@stll/ui/button";
+import type { ContextMenuAction } from "@stll/ui/context-menu";
 import { Form } from "@stll/ui/form";
 import {
   InputGroup,
@@ -33,7 +34,6 @@ import {
   type CatalogueRowDisplay,
 } from "@/components/catalogue/catalogue-row";
 import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
-import type { ContextMenuAction } from "@/components/context-menu";
 import { useLocale } from "@/i18n/formatting-context";
 import { compareByLocale } from "@/lib/collation";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
