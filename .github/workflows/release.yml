@@ -990,10 +990,19 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
         run: |
-          # Not "latest" yet: release-desktop.yml flips that in its final
-          # step, after the signed installers are attached, so
-          # /releases/latest/download/Stella-* never 404s in between.
-          # Publishing a draft would otherwise make it latest by default.
+          # Only a draft is published here. A rerun against a release that
+          # an earlier run already published (and that release-desktop.yml
+          # may since have made Latest) must leave it exactly as it is:
+          # `--latest=false` on a published release would clear Latest.
+          # Not "latest" at publication: release-desktop.yml flips that in
+          # its final step, after the signed installers are attached, so
+          # /releases/latest/download/Stella-* never 404s in between, and
+          # publishing a draft would otherwise make it Latest by default.
+          is_draft="$(gh release view "$RELEASE_REF" --json isDraft --jq '.isDraft')"
+          if [[ "$is_draft" != "true" ]]; then
+            echo "Release $RELEASE_REF is already published; leaving it unchanged."
+            exit 0
+          fi
           gh release edit "$RELEASE_REF" --draft=false --latest=false
 
       - name: Set up Docker Buildx
@@ -1063,4 +1072,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
-        run: gh release edit "$RELEASE_REF" --draft=false --prerelease
+        run: |
+          # Same rerun rule as the production publish: only a draft changes.
+          is_draft="$(gh release view "$RELEASE_REF" --json isDraft --jq '.isDraft')"
+          if [[ "$is_draft" != "true" ]]; then
+            echo "Release $RELEASE_REF is already published; leaving it unchanged."
+            exit 0
+          fi
+          gh release edit "$RELEASE_REF" --draft=false --prerelease

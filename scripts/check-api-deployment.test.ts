@@ -248,11 +248,21 @@ describe("API deployment health receipt", () => {
     expect(releasePublished).toBeGreaterThan(productionVerified);
     expect(aliasesAdvanced).toBeGreaterThan(releasePublished);
     expect(promoteJob).toContain("--draft=false --latest=false");
+    // A rerun against an already published release must not touch it: the
+    // publish is gated on the draft state, so Latest is never cleared.
+    const publishStep = promoteJob.slice(releasePublished, aliasesAdvanced);
+    expect(publishStep.indexOf("--json isDraft")).toBeGreaterThan(-1);
+    expect(publishStep.indexOf("--json isDraft")).toBeLessThan(
+      publishStep.indexOf("--draft=false --latest=false"),
+    );
     const stagingJob = releaseWorkflow.slice(stagingJobStart);
     expect(stagingJob.indexOf("Publish GitHub prerelease")).toBeGreaterThan(
       stagingJob.indexOf("Promote to staging"),
     );
     expect(stagingJob).toContain("--draft=false --prerelease");
+    expect(stagingJob.indexOf("--json isDraft")).toBeLessThan(
+      stagingJob.indexOf("--draft=false --prerelease"),
+    );
     expect(releaseWorkflow).toContain(
       `group: release-\${{ github.event_name == 'workflow_dispatch' && inputs.release_ref || github.ref_name }}`,
     );
