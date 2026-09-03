@@ -229,8 +229,39 @@ describe("API deployment health receipt", () => {
       `Immutable image tag \${image}:\${tag} points to a different digest.`,
     );
     expect(manifestJob).toContain('"STELLA_COMMIT_SHA=" + $commit');
-    expect(manifestJob.indexOf("Publish GitHub release manifest")).toBeLessThan(
-      manifestJob.indexOf("Advance stable image tags"),
+    // Publication is the promote job's last act: the release object is a
+    // draft and the mutable image aliases stay put until production
+    // verifiably serves the release.
+    expect(manifestJob).toContain("gh release create");
+    expect(manifestJob).toContain(
+      "*-rc.*) extra_args+=(--draft --prerelease) ;;",
+    );
+    expect(manifestJob).toContain("*) extra_args+=(--draft) ;;");
+    expect(manifestJob).not.toContain("Advance stable image tags");
+    expect(manifestJob).not.toContain(":latest");
+    const productionVerified = promoteJob.indexOf(
+      "Verify production web serves the release commit",
+    );
+    const releasePublished = promoteJob.indexOf("Publish GitHub release");
+    const aliasesAdvanced = promoteJob.indexOf("Advance stable image tags");
+    expect(productionVerified).toBeGreaterThan(-1);
+    expect(releasePublished).toBeGreaterThan(productionVerified);
+    expect(aliasesAdvanced).toBeGreaterThan(releasePublished);
+    expect(promoteJob).toContain("--draft=false --latest=false");
+    // A rerun against an already published release must not touch it: the
+    // publish is gated on the draft state, so Latest is never cleared.
+    const publishStep = promoteJob.slice(releasePublished, aliasesAdvanced);
+    expect(publishStep.indexOf("--json isDraft")).toBeGreaterThan(-1);
+    expect(publishStep.indexOf("--json isDraft")).toBeLessThan(
+      publishStep.indexOf("--draft=false --latest=false"),
+    );
+    const stagingJob = releaseWorkflow.slice(stagingJobStart);
+    expect(stagingJob.indexOf("Publish GitHub prerelease")).toBeGreaterThan(
+      stagingJob.indexOf("Promote to staging"),
+    );
+    expect(stagingJob).toContain("--draft=false --prerelease");
+    expect(stagingJob.indexOf("--json isDraft")).toBeLessThan(
+      stagingJob.indexOf("--draft=false --prerelease"),
     );
     expect(releaseWorkflow).toContain(
       `group: release-\${{ github.event_name == 'workflow_dispatch' && inputs.release_ref || github.ref_name }}`,
