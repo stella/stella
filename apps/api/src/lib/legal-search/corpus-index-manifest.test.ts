@@ -7,6 +7,7 @@ import {
   corpusIndexIdFromManifest,
   corpusIndexManifestDigest,
   corpusIndexPublisherSummaryField,
+  corpusIndexStemFields,
   requireCorpusIndexIdForManifest,
   requireCorpusIndexManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
@@ -20,7 +21,7 @@ const EXPECTED_DIGESTS = {
   case_law_v5:
     "7ee1e1bdbc0a1c746407333cac6eba21446d32b0eca461235569eac4197ed0ce",
   case_law_v6:
-    "81a11a8216b59eaf076253b016c1dac8901d890e3ab183a6ac3f34fd051b0aea",
+    "1fc5f09b5471e49a4e5588c9f59c3ce78c08a9aa54b55e5edef168bc315accc8",
   legislation_v2:
     "dc252d8635081d8037e7f9b1aca6713181a27390e8eb6dda54139ae6a1e68583",
 } as const satisfies Record<keyof typeof CORPUS_INDEX_MANIFESTS, string>;
@@ -322,12 +323,12 @@ test("final manifests make every storage and index cost explicit", () => {
       min_shards: 1,
     });
     expect(manifest.engine.indexConfig.retention).toBeNull();
-    expect(
-      manifest.engine.indexConfig.search_settings.default_search_fields.slice(
-        0,
-        2,
-      ),
-    ).toEqual(["title", "text"]);
+    // Exact, over every generation: a hit is a passage and its stored `text`
+    // is the excerpt that stands for the match, so a field written to one
+    // passage of a document may never be reachable by a bare term.
+    expect(manifest.engine.indexConfig.search_settings).toEqual({
+      default_search_fields: ["title", "text"],
+    });
   }
 });
 
@@ -398,8 +399,10 @@ test("v6 adds the publisher summary and nothing else", () => {
   expect(v6.field_mappings.map(({ name }) => name)).toEqual([
     ...v5.field_mappings.map(({ name }) => name),
     "headnote",
+    "text_stem",
+    "headnote_stem",
   ]);
-  expect(v6.field_mappings.at(-1)).toEqual({
+  expect(v6.field_mappings.at(-3)).toEqual({
     name: "headnote",
     type: "text",
     tokenizer: "folded",
@@ -412,15 +415,6 @@ test("v6 adds the publisher summary and nothing else", () => {
   expect(v6.mode).toBe("strict");
   expect(v6.tag_fields).toEqual(v5.tag_fields);
   expect(v6.timestamp_field).toBe(v5.timestamp_field);
-  expect(
-    CORPUS_INDEX_MANIFESTS.case_law_v6.engine.indexConfig.search_settings,
-  ).toEqual({ default_search_fields: ["title", "text", "headnote"] });
-  // The reason the field can be a default search field at all: it is written
-  // once per document, so a free-text term reaching it cannot fan out over a
-  // decision's passages.
-  expect(
-    CORPUS_INDEX_MANIFESTS.case_law_v5.engine.indexConfig.search_settings,
-  ).toEqual({ default_search_fields: ["title", "text"] });
   expect(CORPUS_INDEX_MANIFESTS.case_law_v6.projection.builderVersion).toBe(
     "case-law-passages-v2",
   );
@@ -446,5 +440,49 @@ test("only a generation that maps the field reports one", () => {
         ({ name }) => name === field,
       ),
     ).toBe(true);
+  }
+});
+
+test("v6 keeps the default search fields v5 has", () => {
+  // The load-bearing property behind the whole design: a hit is a passage, and
+  // its stored `text` is what a reader and the research answer runner are
+  // handed as the excerpt that matched. A field written to the opening passage
+  // only — the summary, or either stem — must never be reachable by a bare
+  // term, or a summary-only match would answer with a passage whose text does
+  // not carry the terms. The query builder names those fields explicitly.
+  const defaultsOf = (generation: "case_law_v5" | "case_law_v6") =>
+    CORPUS_INDEX_MANIFESTS[generation].engine.indexConfig.search_settings
+      .default_search_fields;
+
+  expect(defaultsOf("case_law_v6")).toEqual(["title", "text"]);
+  expect(defaultsOf("case_law_v6")).toEqual(defaultsOf("case_law_v5"));
+  for (const absent of ["headnote", "text_stem", "headnote_stem"]) {
+    expect(defaultsOf("case_law_v6")).not.toContain(absent);
+  }
+});
+
+test("only a generation that maps the stem fields reports them", () => {
+  expect(corpusIndexStemFields(CORPUS_INDEX_MANIFESTS.case_law_v5)).toBeNull();
+  expect(corpusIndexStemFields(CORPUS_INDEX_MANIFESTS.case_law_v6)).toEqual({
+    text: "text_stem",
+    publisherSummary: "headnote_stem",
+  });
+  expect(
+    corpusIndexStemFields(CORPUS_INDEX_MANIFESTS.legislation_v2),
+  ).toBeNull();
+  for (const manifest of Object.values(CORPUS_INDEX_MANIFESTS)) {
+    const fields = corpusIndexStemFields(manifest);
+    if (fields === null) {
+      continue;
+    }
+    const declared = new Set(
+      manifest.engine.indexConfig.doc_mapping.field_mappings.map(
+        ({ name }) => name,
+      ),
+    );
+    expect([
+      declared.has(fields.text),
+      declared.has(fields.publisherSummary),
+    ]).toEqual([true, true]);
   }
 });

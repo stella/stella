@@ -126,18 +126,18 @@ test("a decomposed query term reaches the same bucket as its precomposed spellin
 });
 
 test("the typed term is never repeated inside its own group", () => {
-  const clause = corpusFreeTextClause("nájemné", (term) =>
-    expandTermWith(dictionaryOf(CS_BUCKETS), term),
-  );
+  const clause = corpusFreeTextClause("nájemné", {
+    expand: (term) => expandTermWith(dictionaryOf(CS_BUCKETS), term),
+  });
   expect(clause).toBe(
     '(("nájemné" OR "nájemného" OR "nájemném" OR "nájemnému"))',
   );
 });
 
 test("phrases are never expanded", () => {
-  const clause = corpusFreeTextClause('"nájemné smlouvy" nájemné', (term) =>
-    expandTermWith(dictionaryOf(CS_BUCKETS), term),
-  );
+  const clause = corpusFreeTextClause('"nájemné smlouvy" nájemné', {
+    expand: (term) => expandTermWith(dictionaryOf(CS_BUCKETS), term),
+  });
   expect(clause).toBe(
     '("nájemné smlouvy" AND ("nájemné" OR "nájemného" OR "nájemném" OR "nájemnému"))',
   );
@@ -151,10 +151,9 @@ test("expansion stops at the leaf budget, leftmost terms first", () => {
       stem: "aaa",
     },
   ]);
-  const clause = corpusFreeTextClause(
-    "aaa aaa aaa aaa aaa aaa aaa aaa",
-    (term) => expandTermWith(entries, term),
-  );
+  const clause = corpusFreeTextClause("aaa aaa aaa aaa aaa aaa aaa aaa", {
+    expand: (term) => expandTermWith(entries, term),
+  });
   expect(clause).not.toBeNull();
   // Eight tokens, each expandable by three: the budget admits five groups
   // (8 + 5*3 = 23) and the sixth would cross it.
@@ -174,7 +173,9 @@ test.each([
   'smlouva) OR (court:"X" AND text:*',
   "  spaced   out  ",
 ])("an expander with nothing to add leaves %p byte-identical", (text) => {
-  expect(corpusFreeTextClause(text, () => [])).toBe(corpusFreeTextClause(text));
+  expect(corpusFreeTextClause(text, { expand: () => [] })).toBe(
+    corpusFreeTextClause(text),
+  );
 });
 
 // Citation identifiers reach the builder as whatever the tokenizer makes of

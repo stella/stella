@@ -65,6 +65,10 @@ import {
   readCorpusIndexSearchPage,
 } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
+  caseLawCorpusQueryFields,
+  type CaseLawCorpusQueryFields,
+} from "@/api/lib/legal-search/corpus-index-read-contract";
+import {
   caseLawCorpusQuery,
   type CorpusTermExpander,
 } from "@/api/lib/legal-search/corpus-query";
@@ -490,16 +494,25 @@ const searchPostgresDecisions = async (
 };
 
 // `country` is deliberately absent from the filters: it selects the index,
-// not a clause. It does select the expansion dictionary, which is why the
-// expander is resolved from it here rather than inside the query builder.
-const buildCorpusIndexQuery = (
-  body: SearchDecisionsBody,
-  jurisdictionClause: string | undefined,
-  expand?: CorpusTermExpander,
-): string | null =>
-  caseLawCorpusQuery(
-    body.query,
-    {
+// not a clause. It does select the expansion dictionary and the stemming
+// language, which is why both are resolved from it here rather than inside
+// the query builder.
+type CorpusIndexQueryOptions = {
+  body: SearchDecisionsBody;
+  jurisdictionClause: string | undefined;
+  fields: CaseLawCorpusQueryFields;
+  expand?: CorpusTermExpander | undefined;
+};
+
+const buildCorpusIndexQuery = ({
+  body,
+  jurisdictionClause,
+  fields,
+  expand,
+}: CorpusIndexQueryOptions): string | null =>
+  caseLawCorpusQuery({
+    text: body.query,
+    filters: {
       court: body.court,
       dateFrom: body.dateFrom,
       dateTo: body.dateTo,
@@ -509,19 +522,35 @@ const buildCorpusIndexQuery = (
       source: body.sourceId,
     },
     expand,
-  );
+    stemming: fields.stemming,
+    surfaceFields: fields.surfaceFields,
+  });
+
+type ResolveCorpusIndexQueryOptions = {
+  body: SearchDecisionsBody;
+  generation: string;
+  jurisdictionClause: string | undefined;
+};
 
 /** Mode, dictionary, and shadow accounting are the shared resolver's. */
-const resolveCorpusIndexQuery = async (
-  body: SearchDecisionsBody,
-  jurisdictionClause: string | undefined,
-): Promise<string | null> =>
-  await resolveExpandedCorpusQuery({
-    build: (expand) => buildCorpusIndexQuery(body, jurisdictionClause, expand),
+const resolveCorpusIndexQuery = async ({
+  body,
+  generation,
+  jurisdictionClause,
+}: ResolveCorpusIndexQueryOptions): Promise<string | null> => {
+  const fields = caseLawCorpusQueryFields({
+    generation,
+    jurisdiction: body.country,
+    language: body.language,
+  });
+  return await resolveExpandedCorpusQuery({
+    build: (expand) =>
+      buildCorpusIndexQuery({ body, jurisdictionClause, fields, expand }),
     jurisdiction: body.country,
     mode: envBase.QUERY_EXPANSION_MODE,
     text: body.query,
   });
+};
 
 const extractCorpusSnippet = (
   snippet: Record<string, unknown> | undefined,
@@ -951,7 +980,11 @@ const searchCorpusIndexDecisions = async (
     body.country,
   );
 
-  const query = await resolveCorpusIndexQuery(body, jurisdictionClause);
+  const query = await resolveCorpusIndexQuery({
+    body,
+    generation,
+    jurisdictionClause,
+  });
   if (query === null) {
     report(0, emptyCorpusIndexScan());
     return { hits: [], facets: null, totalCount: null, nextCursor: null };

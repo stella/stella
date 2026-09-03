@@ -14,6 +14,7 @@ import type {
   CaseLawProjectionInput,
   LegislationV2ProjectionInput,
 } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
+import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
 
 const REVISION = toSafeId<"corpusIndexProjectionIntent">(
   "0198e331-e578-7000-8000-000000000001",
@@ -250,6 +251,105 @@ test("v5 never emits a field its strict mapping does not declare", () => {
 
   for (const document of documents) {
     expect("headnote" in document).toBe(false);
+    expect(
+      Object.keys(document).every((key) =>
+        manifestFields("case_law_v5").has(key),
+      ),
+    ).toBe(true);
+  }
+});
+
+test("v6 writes a stem beside each field a reader's words reach", () => {
+  const [document] = buildCaseLawProjectionDocuments({
+    manifest: CORPUS_INDEX_MANIFESTS.case_law_v6,
+    input: {
+      ...CASE_LAW_INPUT,
+      language: "cs",
+      metadata: { legalSentence: "Nájemního bytu se to netýká." },
+    },
+    payload: { text: "Nájemního bytu se to netýká.", ast: null },
+    revision: REVISION,
+  });
+
+  expect(document).toMatchObject({
+    text: "Nájemního bytu se to netýká.",
+    headnote: "Nájemního bytu se to netýká.",
+  });
+  // One stem per token, so the stem stream lines up with the surface stream
+  // and a stemmed phrase matches adjacently. Counted rather than compared to a
+  // pinned string: the assertion is the alignment, not this stemmer's output.
+  const tokenCount = (value: string | undefined): number =>
+    corpusTokens(value ?? "").length;
+
+  expect(tokenCount(document?.text_stem)).toBeGreaterThan(0);
+  expect(tokenCount(document?.text_stem)).toBe(tokenCount(document?.text));
+  expect(tokenCount(document?.headnote_stem)).toBe(
+    tokenCount(document?.headnote),
+  );
+  expect(
+    Object.keys(document ?? {}).every((key) =>
+      manifestFields("case_law_v6").has(key),
+    ),
+  ).toBe(true);
+});
+
+test("a language with no stemmer writes no stem field at all", () => {
+  const documents = buildCaseLawProjectionDocuments({
+    manifest: CORPUS_INDEX_MANIFESTS.case_law_v6,
+    input: {
+      ...CASE_LAW_INPUT,
+      language: "de",
+      metadata: { legalSentence: "Der Mietvertrag." },
+    },
+    payload: { text: "Der Mietvertrag wurde gekündigt.", ast: null },
+    revision: REVISION,
+  });
+
+  for (const document of documents) {
+    // Not an empty string under a stem name: a field the writer cannot fill
+    // is a field it does not emit.
+    expect("text_stem" in document).toBe(false);
+    expect("headnote_stem" in document).toBe(false);
+    expect("headnote" in document).toBe(true);
+  }
+});
+
+test("the summary stem is written to the opening passage only", () => {
+  const documents = buildCaseLawProjectionDocuments({
+    manifest: CORPUS_INDEX_MANIFESTS.case_law_v6,
+    input: {
+      ...CASE_LAW_INPUT,
+      language: "cs",
+      metadata: { legalSentence: "Právní věta." },
+    },
+    payload: {
+      text: `${"první ".repeat(400)}\n\n${"druhý ".repeat(400)}`,
+      ast: null,
+    },
+    revision: REVISION,
+  });
+
+  expect(documents.length).toBeGreaterThan(1);
+  for (const [index, document] of documents.entries()) {
+    expect("headnote_stem" in document).toBe(index === 0);
+    // The passage stem is per passage, beside that passage's own text.
+    expect("text_stem" in document).toBe(true);
+  }
+});
+
+test("v5 emits neither stem field", () => {
+  const documents = buildCaseLawProjectionDocuments({
+    manifest: CORPUS_INDEX_MANIFESTS.case_law_v5,
+    input: {
+      ...CASE_LAW_INPUT,
+      language: "cs",
+      metadata: { legalSentence: "Právní věta." },
+    },
+    payload: { text: "Nájemního bytu se to netýká.", ast: null },
+    revision: REVISION,
+  });
+
+  for (const document of documents) {
     expect(
       Object.keys(document).every((key) =>
         manifestFields("case_law_v5").has(key),

@@ -8,6 +8,7 @@ import type { CorpusDocumentPayload } from "@/api/lib/corpus-index/core";
 import { UNDATED_DECISION_TIMESTAMP } from "@/api/lib/legal-search/corpus-index-config";
 import {
   corpusIndexPublisherSummaryField,
+  corpusIndexStemFields,
   type CorpusIndexManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
@@ -15,6 +16,8 @@ import {
   type CaseLawProjectionInput,
   type LegislationV2ProjectionInput,
 } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
+import { documentMorphologyLanguage } from "@/api/lib/legal-search/morphology/corpus-language";
+import { stemCorpusText } from "@/api/lib/legal-search/morphology/stem-text";
 
 type ProjectionRevision = SafeId<"corpusIndexProjectionIntent">;
 
@@ -39,6 +42,8 @@ type CaseLawProjectionDocument = SharedProjectionDocument & {
   decision_year?: number;
   ecli?: string;
   headnote?: string;
+  text_stem?: string;
+  headnote_stem?: string;
 };
 
 type LegislationV2ProjectionDocument = SharedProjectionDocument & {
@@ -126,9 +131,25 @@ export const buildCaseLawProjectionDocuments = ({
     summaryField === null
       ? null
       : publisherSummaryOf({ documentAst: ast, metadata: input.metadata });
+  // Stems come from the decision's own language, not its jurisdiction: an
+  // index group spans several countries and a court may publish in more than
+  // one language. A language with no stemmer writes no stem fields at all,
+  // rather than a copy of the surface text under a stem name.
+  const stemFields = corpusIndexStemFields(manifest);
+  const stemLanguage = documentMorphologyLanguage(input.language);
+  const stemmed =
+    stemFields === null || stemLanguage === null
+      ? null
+      : { fields: stemFields, language: stemLanguage };
+  const summaryStem =
+    stemmed === null || summary === null
+      ? null
+      : stemCorpusText(summary, stemmed.language);
   const chunks = chunkDocument({ ast, fallbackText: payload.text });
   const documents: CaseLawProjectionDocument[] = [];
   for (const chunk of chunks) {
+    const textStem =
+      stemmed === null ? null : stemCorpusText(chunk.text, stemmed.language);
     documents.push({
       ...shared,
       text: chunk.text,
@@ -139,9 +160,18 @@ export const buildCaseLawProjectionDocuments = ({
         : {}),
       // Opening passage only, like `title`: a document-level line repeated on
       // every passage would let one decision answer a broad query as many
-      // times as it has passages.
+      // times as it has passages. The summary's stem follows it, so the two
+      // are always written together or not at all.
       ...(chunk.seq === 0 && summaryField !== null && summary !== null
         ? { [summaryField]: summary }
+        : {}),
+      ...(chunk.seq === 0 && stemmed !== null && summaryStem !== null
+        ? { [stemmed.fields.publisherSummary]: summaryStem }
+        : {}),
+      // Per passage, beside that passage's own text, so a stemmed phrase
+      // matches inside one passage exactly as a surface phrase does.
+      ...(stemmed !== null && textStem !== null && textStem !== ""
+        ? { [stemmed.fields.text]: textStem }
         : {}),
       ...(chunk.anchorId === null ? {} : { anchor_id: chunk.anchorId }),
     });

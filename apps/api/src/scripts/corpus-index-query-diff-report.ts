@@ -2,6 +2,7 @@ import { Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
 import type { CorpusIndexHit } from "@/api/lib/legal-search/corpus-index-client";
+import { caseLawCorpusQueryFields } from "@/api/lib/legal-search/corpus-index-read-contract";
 import { caseLawCorpusQuery } from "@/api/lib/legal-search/corpus-query";
 import {
   corpusIndexRoute,
@@ -112,9 +113,19 @@ export const goldenQueryRequest = (
     generation,
     query.jurisdiction,
   );
-  const engineQuery = caseLawCorpusQuery(query.text, {
-    ...query.filters,
-    jurisdiction: jurisdictionClause,
+  // The diff compares generations, so the query each one gets is the query
+  // that generation's schema supports: a clause over a field an index never
+  // mapped would compare an invalid query with a valid one.
+  const { surfaceFields, stemming } = caseLawCorpusQueryFields({
+    generation,
+    jurisdiction: query.jurisdiction,
+    language: query.filters?.language,
+  });
+  const engineQuery = caseLawCorpusQuery({
+    text: query.text,
+    filters: { ...query.filters, jurisdiction: jurisdictionClause },
+    stemming,
+    surfaceFields,
   });
   return engineQuery === null ? null : { indexId, engineQuery };
 };

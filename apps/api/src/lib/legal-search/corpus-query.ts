@@ -1,3 +1,7 @@
+import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
+import type { MorphologyLanguage } from "@/api/lib/legal-search/morphology/stem";
+import { stemCorpusText } from "@/api/lib/legal-search/morphology/stem-text";
+
 /**
  * Quote a trusted-shape filter value for a corpus-index field clause.
  * Backslashes are escaped before quotes so a trailing backslash cannot
@@ -24,14 +28,6 @@ const PHRASE_QUOTE_CLOSERS = new Map<string, string>([
   ["«", "»"],
   ["»", "«"],
 ]);
-
-/**
- * Unicode word characters only, or null when the text holds none. Everything
- * the engine could parse as DSL is dropped here rather than escaped, inside a
- * phrase exactly as outside one.
- */
-const corpusTerms = (text: string): RegExpMatchArray | null =>
-  text.match(/[\p{L}\p{N}]+/gu);
 
 /**
  * Index of the first character in `closers`, or -1. Every quote character is
@@ -75,11 +71,8 @@ export const tokenizeCorpusFreeText = (text: string): CorpusQueryToken[] => {
   let plain = "";
 
   const flushPlain = () => {
-    const terms = corpusTerms(plain);
+    const terms = corpusTokens(plain);
     plain = "";
-    if (terms === null) {
-      return;
-    }
     for (const term of terms) {
       tokens.push({ type: "term", value: term });
     }
@@ -102,8 +95,8 @@ export const tokenizeCorpusFreeText = (text: string): CorpusQueryToken[] => {
     }
 
     flushPlain();
-    const words = corpusTerms(text.slice(index + 1, end));
-    if (words !== null) {
+    const words = corpusTokens(text.slice(index + 1, end));
+    if (words.length > 0) {
       tokens.push({ type: "phrase", value: words.join(" ") });
     }
     index = end + 1;
@@ -148,12 +141,89 @@ const TOKEN_EXPANSION_POLICY = {
 export const CORPUS_QUERY_LEAF_BUDGET = 24;
 
 /**
- * `("typed" OR "other" ...)` — a bare grouped OR, never a field-scoped one:
- * the engine parses `(a OR b)` inside the default fields, and a field-scoped
- * group in this position does not parse at all.
+ * The stem fields a query may name, and the language the reader's words are
+ * stemmed against.
+ *
+ * Both halves are required and neither is guessed: the fields come from the
+ * generation's manifest, because a `strict` index rejects a clause over a
+ * field it never declared, and the language comes from the query's
+ * jurisdiction, because the corpus was stemmed under that language when it was
+ * projected. Null wherever either is missing, which is what keeps a query
+ * against an older generation byte-identical to what it is today.
  */
-const orGroup = (typed: string, extras: readonly string[]): string =>
-  `(${[typed, ...extras].map(quoteCorpusValue).join(" OR ")})`;
+export type CorpusStemming = {
+  language: MorphologyLanguage;
+  fields: readonly string[];
+};
+
+/**
+ * `field:"stem"` for each stem field, or nothing when the text stems to
+ * nothing. The stem is computed from the words as typed, so it is right
+ * exactly when the reader wrote the diacritics; a reader who did not still
+ * matches the surface fields, and the dictionary expander is what supplies
+ * the accented forms in that case.
+ */
+const stemLeaves = (
+  value: string,
+  stemming: CorpusStemming | null,
+): string[] => {
+  if (stemming === null) {
+    return [];
+  }
+  const stem = stemCorpusText(value, stemming.language);
+  if (stem === "") {
+    return [];
+  }
+  return stemming.fields.map((field) => `${field}:${quoteCorpusValue(stem)}`);
+};
+
+/**
+ * `field:"word"` for each extra surface field: the reader's words as typed,
+ * against a field the index does not search by default.
+ *
+ * Naming the field is the whole point. A default search field decides what a
+ * bare term matches, and every hit is a passage whose stored `text` is handed
+ * on as the excerpt that matched; a field written to the opening passage only
+ * would answer with a passage whose text does not carry the terms. A caller
+ * that wants those matches asks for them here, and one that needs every hit to
+ * be a matching passage simply does not.
+ */
+const surfaceFieldLeaves = (
+  value: string,
+  fields: readonly string[],
+): string[] => fields.map((field) => `${field}:${quoteCorpusValue(value)}`);
+
+/**
+ * Surface forms to accept beside the one the reader typed. A phrase gets
+ * none: rewriting its words would silently change what it asked to match
+ * adjacently. Total over the token union through `TOKEN_EXPANSION_POLICY`, so
+ * a new token kind cannot reach the engine without that decision recorded.
+ */
+const expansionLeaves = (
+  token: CorpusQueryToken,
+  expand: CorpusTermExpander,
+): string[] => {
+  const policy = TOKEN_EXPANSION_POLICY[token.type];
+  switch (policy) {
+    case "verbatim":
+      return [];
+    case "expandable":
+      return [...expand(token.value)].map(quoteCorpusValue);
+    default:
+      return policy satisfies never;
+  }
+};
+
+export type CorpusFreeTextOptions = {
+  expand?: CorpusTermExpander | undefined;
+  stemming?: CorpusStemming | null | undefined;
+  /**
+   * Fields matched with the reader's words as typed, beside the default search
+   * fields. Empty for a caller whose every hit has to be a passage that
+   * carries the terms.
+   */
+  surfaceFields?: readonly string[] | undefined;
+};
 
 /**
  * Convert free user text into a safe corpus-index query clause. The engine's
@@ -163,18 +233,29 @@ const orGroup = (typed: string, extras: readonly string[]): string =>
  * token, AND them. Returns null when no searchable token remains; callers
  * return an empty page without querying the engine.
  *
- * `title` and `text` — the default search fields — record positions, so a bare
- * quoted clause is a positional phrase match over both. A phrase and a term are
- * quoted identically because a phrase is no more expressive than a term here:
- * only the grouping differs.
+ * The default search fields record positions, so a bare quoted clause is a
+ * positional phrase match over all of them. A phrase and a term are quoted
+ * identically because a phrase is no more expressive than a term here: only
+ * the grouping differs.
  *
- * With no expander this emits exactly what it emitted before expansion
- * existed, byte for byte; the expanded form differs only by OR groups in the
- * positions expansion chose.
+ * A group mixes an unscoped leaf with field-scoped ones — `("slovo" OR
+ * headnote:"slovo" OR text_stem:"slov")` — which the engine reads leaf by
+ * leaf: the first is matched against the default fields and the rest against
+ * the field each names. Every extra leaf is an alternative beside the surface
+ * leaf, never instead of it, so a generation with more fields answers
+ * everything the same query answered without them, plus the wider matches.
+ *
+ * With no expander, no extra fields and no stemming this emits exactly what it
+ * emitted before any of them existed, byte for byte; the wider forms differ
+ * only by OR groups in the positions those features chose.
  */
 export const corpusFreeTextClause = (
   text: string,
-  expand: CorpusTermExpander = noTermExpansion,
+  {
+    expand = noTermExpansion,
+    stemming = null,
+    surfaceFields = [],
+  }: CorpusFreeTextOptions = {},
 ): string | null => {
   const tokens = tokenizeCorpusFreeText(text);
   if (tokens.length === 0) {
@@ -183,26 +264,23 @@ export const corpusFreeTextClause = (
 
   let leaves = tokens.length;
   const clauses = tokens.map((token) => {
-    const policy = TOKEN_EXPANSION_POLICY[token.type];
-    switch (policy) {
-      case "verbatim": {
-        return quoteCorpusValue(token.value);
-      }
-      case "expandable": {
-        const extras = expand(token.value);
-        if (
-          extras.length === 0 ||
-          leaves + extras.length > CORPUS_QUERY_LEAF_BUDGET
-        ) {
-          return quoteCorpusValue(token.value);
-        }
-        leaves += extras.length;
-        return orGroup(token.value, extras);
-      }
-      default: {
-        return policy satisfies never;
-      }
+    const typed = quoteCorpusValue(token.value);
+    const extras = [
+      ...expansionLeaves(token, expand),
+      ...surfaceFieldLeaves(token.value, surfaceFields),
+      ...stemLeaves(token.value, stemming),
+    ];
+    // The budget is spent left to right: a token whose group would cross it
+    // stays a single leaf rather than truncating a group into a clause that
+    // asks for something narrower than either alternative.
+    if (
+      extras.length === 0 ||
+      leaves + extras.length > CORPUS_QUERY_LEAF_BUDGET
+    ) {
+      return typed;
     }
+    leaves += extras.length;
+    return `(${[typed, ...extras].join(" OR ")})`;
   });
 
   return `(${clauses.join(" AND ")})`;
@@ -226,6 +304,14 @@ export type CaseLawCorpusFilters = {
   source?: string | undefined;
 };
 
+export type CaseLawCorpusQueryOptions = {
+  text: string;
+  filters: CaseLawCorpusFilters;
+  expand?: CorpusTermExpander | undefined;
+  stemming?: CorpusStemming | null | undefined;
+  surfaceFields?: readonly string[] | undefined;
+};
+
 /**
  * The one assembler for a case-law corpus-index query. Both read paths (the
  * public search handler and the shared search provider) go through it, so
@@ -233,12 +319,18 @@ export type CaseLawCorpusFilters = {
  * to audit. Null when the free text carries no searchable term: callers return
  * an empty page rather than querying the engine.
  */
-export const caseLawCorpusQuery = (
-  text: string,
-  filters: CaseLawCorpusFilters,
-  expand?: CorpusTermExpander,
-): string | null => {
-  const freeText = corpusFreeTextClause(text, expand);
+export const caseLawCorpusQuery = ({
+  text,
+  filters,
+  expand,
+  stemming,
+  surfaceFields,
+}: CaseLawCorpusQueryOptions): string | null => {
+  const freeText = corpusFreeTextClause(text, {
+    expand,
+    stemming,
+    surfaceFields,
+  });
   if (freeText === null) {
     return null;
   }
