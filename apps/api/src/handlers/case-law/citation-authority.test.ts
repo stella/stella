@@ -542,6 +542,30 @@ test("courtWeightEntries option drives the SQL instead of the legacy tiers", asy
   );
 });
 
+test("an unseeded registry recomputes at the default weight", async () => {
+  // A registry with no rows renders no CASE branches, and a branchless
+  // `CASE ... ELSE 1 END` is a syntax error: the whole recompute failed
+  // instead of weighing every citing court at the default nothing ranks.
+  await markAllDue();
+  try {
+    await sweep(1000, { courtWeightEntries: [] });
+
+    const unranked = citationScore([...CITED_CITATIONS], NOW, new Map());
+    expect(await authorityOf(citedId)).toBeCloseTo(unranked, 9);
+    // Not vacuous: the seeded registry ranks the same citations higher, so the
+    // equality above cannot pass on a sweep that ranked them after all.
+    expect(unranked).not.toBeCloseTo(
+      citationScore([...CITED_CITATIONS], NOW, SEED_MAP),
+      2,
+    );
+  } finally {
+    // The corpus is shared with every test below, so a failed assertion must
+    // not leave them reading authority computed against an empty registry.
+    await markAllDue();
+    await sweep(1000);
+  }
+});
+
 test("an unrankable corpus is detected before a sweep walks it", async () => {
   expect(await db.transaction(hasResolvedCitations)).toBe(true);
 });

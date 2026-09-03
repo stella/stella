@@ -3,6 +3,7 @@ import type { SQL } from "drizzle-orm";
 
 import type { FtsSearchConfig } from "@/api/lib/legal-search/fts-config";
 import { buildPlainSearchTsQuery } from "@/api/lib/search/query";
+import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 
 type PgFtsSearchSqlRefs = {
   language: SQL;
@@ -52,12 +53,12 @@ export const buildPgFtsSearchSql = ({
   const fallbackQuery = buildPlainSearchTsQuery("", {});
 
   return {
-    headlineQuery: sql`(CASE ${sql.join(
-      branches.map(
+    headlineQuery: sql`(${sqlCaseFragment({
+      branches: branches.map(
         ({ condition, tsQuery }) => sql`WHEN ${condition} THEN ${tsQuery}`,
       ),
-      sql` `,
-    )} ELSE ${fallbackQuery} END)`,
+      fallback: fallbackQuery,
+    })})`,
     predicate: sql`(${sql.join(
       branches.map(
         ({ condition, tsQuery }) =>
@@ -65,13 +66,13 @@ export const buildPgFtsSearchSql = ({
       ),
       sql` OR `,
     )})`,
-    rank: sql`(CASE ${sql.join(
-      branches.map(
+    rank: sql`(${sqlCaseFragment({
+      branches: branches.map(
         ({ condition, tsQuery }) =>
           sql`WHEN ${condition} THEN ts_rank(${refs.vector}, ${tsQuery})::float8`,
       ),
-      sql` `,
-    )} ELSE 0::float8 END)`,
+      fallback: sql`0::float8`,
+    })})`,
   };
 };
 

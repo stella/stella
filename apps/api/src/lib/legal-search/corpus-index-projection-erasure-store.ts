@@ -16,6 +16,7 @@ import {
   entityIdsForCorpusProjectionWorkScope,
   type CorpusProjectionScopedWorkOptions,
 } from "@/api/lib/legal-search/corpus-index-projection-scope";
+import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 
 export const CORPUS_PROJECTION_ERASURE_MAX_BATCH_SIZE = 256;
 export const CORPUS_PROJECTION_ERASURE_MAX_REVISIONS = 1024;
@@ -203,12 +204,13 @@ export const advanceCorpusProjectionErasuresTx = async <
         barrier: corpusIndexUnknownAppendBarrierAt(appendStartedAt, manifest),
       };
     });
-    const barrierSql = sql`CASE ${corpusIndexProjectionIntents.id} ${sql.join(
-      barriers.map(
+    const barrierSql = sqlCaseFragment({
+      operand: sql`${corpusIndexProjectionIntents.id}`,
+      branches: barriers.map(
         ({ id, barrier }) => sql`WHEN ${id} THEN ${barrier}::timestamptz`,
       ),
-      sql.raw(" "),
-    )} ELSE ${corpusIndexProjectionIntents.appendPublishBarrierAt} END`;
+      fallback: sql`${corpusIndexProjectionIntents.appendPublishBarrierAt}`,
+    });
     await tx
       .update(corpusIndexProjectionIntents)
       .set({

@@ -5,6 +5,7 @@ import { documentTypes } from "@/api/db/schema";
 import { reorderDocumentTypesBodySchema } from "@/api/handlers/document-types/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 
 const config = {
   description:
@@ -54,7 +55,12 @@ const reorderDocumentTypes = createSafeRootHandler(
         await tx
           .update(documentTypes)
           .set({
-            sortOrder: sql`(case ${sql.join(cases, sql` `)} end)`,
+            sortOrder: sqlCaseFragment({
+              branches: cases,
+              // The WHERE clause restricts the update to the ids the branches
+              // name, so the ELSE only ever renders; it never evaluates.
+              fallback: sql`${documentTypes.sortOrder}`,
+            }),
             updatedAt: now,
           })
           .where(

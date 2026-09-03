@@ -2,6 +2,10 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import {
+  courtWeight,
+  courtWeightSql,
+} from "@/api/handlers/case-law/citation-score";
 import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
 import {
   courtTierSqlFromMap,
@@ -236,6 +240,52 @@ test("Postgres resolves an overlapping court to the tier the lookup does", async
   );
   // The higher rank wins in both, though the map holds the lower one first.
   expect(Number(row?.v)).toBe(4);
+});
+
+test("an unseeded registry renders ranking SQL Postgres accepts", async () => {
+  // Every registry-driven expression is a CASE over rows, and a CASE needs a
+  // WHEN: an install whose registry table holds nothing has to rank at the
+  // default rather than fail the statement it is interpolated into. Rendered
+  // *and executed*, because the fault is a syntax error the renderer alone
+  // cannot show.
+  const empty: CourtWeightMap = new Map();
+  const courtTier = sql.raw(
+    courtTierSqlFromMap({
+      countryColumn: "d.country",
+      courtColumn: "d.court",
+      map: empty,
+    }),
+  );
+  const citingWeight = sql.raw(courtWeightSql("d.court", []));
+
+  const [row] = await db
+    .select({
+      tier: sql<number>`(${courtTier})::float8`,
+      weight: sql<number>`(${citingWeight})::float8`,
+      // The search path's whole score, which is where the tier lands.
+      blended: sql<number>`(${blendedRankSql({
+        authority: authorityLiteral(2),
+        courtTier,
+        lexicalRank: sql`0.5::float8`,
+      })})::float8`,
+    })
+    .from(sql`(VALUES ('Ústavní soud', 'CZE')) AS d(court, country)`);
+
+  // The same default the TypeScript lookup falls back to for a court no row
+  // ranks, which is every court while the registry is empty.
+  expect(Number(row?.tier)).toBe(
+    courtWeightFromMap(empty, "Ústavní soud", "CZE").tier,
+  );
+  expect(Number(row?.weight)).toBe(courtWeight("Ústavní soud", empty));
+  expect(Number(row?.blended)).toBeCloseTo(
+    0.5 + DEFAULT_AUTHORITY_WEIGHT * saturateAuthority(2),
+    12,
+  );
+  // Not vacuous: the seeded registry ranks this court above that default, so
+  // the assertions above cannot pass on a registry that ranked it after all.
+  expect(
+    courtWeightFromMap(courtWeightMapFromSeed(), "Ústavní soud", "CZE").tier,
+  ).toBeGreaterThan(Number(row?.tier));
 });
 
 // Every Postgres ranking path, and what it feeds the blend. A path that scores

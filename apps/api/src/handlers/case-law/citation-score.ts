@@ -33,6 +33,7 @@ import type {
   CourtWeightEntry,
   CourtWeightMap,
 } from "@/api/lib/case-law/court-weights";
+import { sqlCaseExpression } from "@/api/lib/sql-case-expression";
 
 /** Average (Julian) year, used for citation-age decay. A duration. */
 const MS_PER_YEAR = 365.25 * DAY_IN_MS;
@@ -144,33 +145,31 @@ export const citationScore = (
  * polarity cannot reach the database with no weight decided for it. NULL
  * falls to the ELSE branch, which is `unknown`'s weight by construction.
  */
-export const polarityWeightSql = (polarityColumn: string): string => {
-  const cases = Object.entries(POLARITY_AUTHORITY_WEIGHT)
-    .filter(([polarity]) => polarity !== POLARITY.UNKNOWN)
-    .map(
-      ([polarity, weight]) =>
-        `WHEN ${polarityColumn} = '${polarity}' THEN ${weight}`,
-    )
-    .join("\n      ");
-
-  return `CASE ${cases}\n      ELSE ${POLARITY_AUTHORITY_WEIGHT[POLARITY.UNKNOWN]} END`;
-};
+export const polarityWeightSql = (polarityColumn: string): string =>
+  sqlCaseExpression({
+    branches: Object.entries(POLARITY_AUTHORITY_WEIGHT)
+      .filter(([polarity]) => polarity !== POLARITY.UNKNOWN)
+      .map(
+        ([polarity, weight]) =>
+          `WHEN ${polarityColumn} = '${polarity}' THEN ${weight}`,
+      ),
+    fallback: POLARITY_AUTHORITY_WEIGHT[POLARITY.UNKNOWN],
+  });
 
 /**
  * The SQL CASE expression for court weights, rendered from the seeded
  * entries (highest tier first, so the first matching branch is the rank).
- * No entries renders a bare `ELSE`: every court weighs the default.
+ * No entries renders the default weight alone: an unseeded registry weighs
+ * every court the same rather than failing the statement.
  */
 export const courtWeightSql = (
   courtColumn: string,
   entries: readonly CourtWeightEntry[],
-): string => {
-  const cases = entries
-    .map((e) => {
+): string =>
+  sqlCaseExpression({
+    branches: entries.map((e) => {
       const src = e.pattern.source.replace(/'/gu, "''");
       return `WHEN ${courtColumn} ~* '${src}' THEN ${e.weight}`;
-    })
-    .join("\n      ");
-
-  return `CASE ${cases}\n      ELSE ${DEFAULT_WEIGHT} END`;
-};
+    }),
+    fallback: DEFAULT_WEIGHT,
+  });

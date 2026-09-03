@@ -6,6 +6,7 @@
 import { arrayOrEmpty } from "@/api/lib/array";
 import { readCourtWeightRows } from "@/api/lib/case-law/case-law-config-store";
 import { logger } from "@/api/lib/observability/logger";
+import { SQL_NULL, sqlCaseExpression } from "@/api/lib/sql-case-expression";
 import { withTimeout } from "@/api/lib/with-timeout";
 
 // -- Types ---------------------------------------------------------------
@@ -193,9 +194,10 @@ type CourtTierSqlOptions = {
 /**
  * `courtWeightFromMap`'s tier lookup rendered as SQL, branch for branch: the
  * decision's own country first, then every jurisdiction's patterns, then the
- * default tier. A CASE with no ELSE evaluates to NULL when nothing matches,
- * which is what makes COALESCE the fallback chain the TypeScript walks with
- * `return`.
+ * default tier. A CASE whose ELSE is NULL evaluates to NULL when nothing
+ * matches, which is what makes COALESCE the fallback chain the TypeScript
+ * walks with `return`. An unseeded registry renders no branches at all, and
+ * both CASEs collapse to that NULL, leaving the default tier.
  *
  * Both CASEs are emitted from the same precedence-ordered list the TypeScript
  * walks, because a CASE takes its first true branch just as the lookup takes
@@ -213,10 +215,6 @@ export const courtTierSqlFromMap = ({
   map,
 }: CourtTierSqlOptions): string => {
   const ordered = flattenCourtWeightEntries(map);
-  if (ordered.length === 0) {
-    return String(DEFAULT_TIER);
-  }
-
   const scoped = ordered.map(
     (entry) =>
       `WHEN ${countryColumn} = ${sqlLiteral(entry.country)} AND ${courtColumn} ~* ${sqlLiteral(entry.pattern.source)} THEN ${entry.tier}`,
@@ -227,8 +225,8 @@ export const courtTierSqlFromMap = ({
   );
 
   return `COALESCE(
-      CASE ${scoped.join("\n      ")} END,
-      CASE ${anyCountry.join("\n      ")} END,
+      ${sqlCaseExpression({ branches: scoped, fallback: SQL_NULL })},
+      ${sqlCaseExpression({ branches: anyCountry, fallback: SQL_NULL })},
       ${DEFAULT_TIER}
     )`;
 };

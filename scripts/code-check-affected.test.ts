@@ -442,6 +442,28 @@ describe("Turbo cache input contract", () => {
     );
   });
 
+  test("landing's generated types survive a typecheck cache hit", () => {
+    // Ordering alone does not deliver the types: `astro check` writes them,
+    // and a task whose outputs are unrecorded replays its logs on a cache hit
+    // and writes nothing. The dependent lint then reads `astro:content` as
+    // `error` on any checkout that has not run the generator itself.
+    const turboConfig = readFileSync("turbo.json", "utf-8");
+    const landingTypecheckStart = turboConfig.indexOf(
+      '    "@stll/landing#typecheck":',
+    );
+    expect(landingTypecheckStart).toBeGreaterThan(-1);
+    const nextTaskStart = turboConfig.indexOf(
+      '    "lint":',
+      landingTypecheckStart,
+    );
+    expect(nextTaskStart).toBeGreaterThan(landingTypecheckStart);
+    const landingTypecheckConfig = turboConfig.slice(
+      landingTypecheckStart,
+      nextTaskStart,
+    );
+    expect(landingTypecheckConfig).toContain('"outputs": [".astro/**"]');
+  });
+
   test("keeps planner-wide inputs exactly aligned with their Turbo tasks", () => {
     const turboConfig = readFileSync("turbo.json", "utf-8");
     const typecheckStart = turboConfig.indexOf('    "typecheck":');

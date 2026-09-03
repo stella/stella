@@ -15,6 +15,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
+import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 
 const batchUpdateBodySchema = t.Object({
   ids: t.Array(tSafeId("timeEntry"), { minItems: 1, maxItems: 200 }),
@@ -289,23 +290,23 @@ const batchUpdate = createSafeHandler(
             });
             const rateAtEntry =
               rateCases.length > 0
-                ? sql<number>`CASE ${sql.join(
-                    rateCases.map(
+                ? sqlCaseFragment({
+                    branches: rateCases.map(
                       ({ id, rateAtEntry: rate }) =>
                         sql`WHEN ${eq(timeEntries.id, id)} THEN ${rate}`,
                     ),
-                    sql.raw(" "),
-                  )} ELSE ${timeEntries.rateAtEntry} END`
+                    fallback: sql`${timeEntries.rateAtEntry}`,
+                  })
                 : undefined;
             const currency =
               rateCases.length > 0
-                ? sql<string>`CASE ${sql.join(
-                    rateCases.map(
+                ? sqlCaseFragment({
+                    branches: rateCases.map(
                       ({ id, currency: value }) =>
                         sql`WHEN ${eq(timeEntries.id, id)} THEN ${value}`,
                     ),
-                    sql.raw(" "),
-                  )} ELSE ${timeEntries.currency} END`
+                    fallback: sql`${timeEntries.currency}`,
+                  })
                 : undefined;
             const updated = await tx
               .update(timeEntries)
