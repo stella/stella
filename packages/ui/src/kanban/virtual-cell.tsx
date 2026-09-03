@@ -28,6 +28,7 @@ import {
   type KanbanVirtualScrollRequest,
   type UseKanbanDropTargetOptions,
 } from "./sortable-interactions";
+import { KANBAN_STICKY_TOP_CLASS } from "./sticky-lane";
 
 const DEFAULT_ESTIMATE_SIZE_PX = 128;
 const DEFAULT_OVERSCAN = 8;
@@ -47,8 +48,16 @@ const KANBAN_CELL_ACCENT_ACTIVE_ALPHA = 22;
  *  still reads as the drag-over affordance rather than more background tint. */
 const KANBAN_CELL_ACCENT_ACTIVE_RING_ALPHA = 55;
 
+/** The neutral resting surface, in one place: a pinned action repaints it
+ *  over an opaque base, and the two must read as one surface. */
+const KANBAN_CELL_SURFACE_CLASS = "bg-muted/20";
+/** A caller's own surface (an explicit colour, or the accent wash), published
+ *  so a pinned action can repaint that one instead. */
+const KANBAN_CELL_SURFACE_VAR = "--kanban-cell-surface" as const;
+
 type KanbanCellStyle = CSSProperties & {
   [KANBAN_CELL_ACCENT_VAR]?: string;
+  [KANBAN_CELL_SURFACE_VAR]?: string;
 };
 
 const retainActiveSortableIndex = (
@@ -111,6 +120,19 @@ export type KanbanVirtualCellProps<TRow> = {
    */
   accent?: OptionColor | undefined;
   footer?: ReactNode;
+  /**
+   * Where the `footer` sits. `"end"` closes the cell after its rows.
+   * `"sticky-start"` puts it first and pins it to the top of the scroll
+   * container the cell lives in, so the action stays reachable through a
+   * lane hundreds of cards tall and releases where the lane ends.
+   *
+   * The offset comes from `KANBAN_STICKY_TOP_VAR`, which the board publishes
+   * for its own sticky header. A cell that keeps its bounded surface is its
+   * own scroll container, and the board's header means nothing inside it:
+   * reset the variable to `0px` on such a cell (`[--kanban-sticky-top:0px]`)
+   * so the action rests at the cell's own top.
+   */
+  footerPlacement?: "end" | "sticky-start" | undefined;
   estimateSize?: number | undefined;
   overscan?: number | undefined;
   loadMoreThreshold?: number | undefined;
@@ -129,6 +151,7 @@ export const KanbanVirtualCell = <TRow,>({
   backgroundColor,
   accent,
   footer,
+  footerPlacement = "end",
   estimateSize = DEFAULT_ESTIMATE_SIZE_PX,
   overscan = DEFAULT_OVERSCAN,
   loadMoreThreshold = DEFAULT_LOAD_MORE_THRESHOLD_PX,
@@ -214,11 +237,13 @@ export const KanbanVirtualCell = <TRow,>({
     active && accentVariants !== undefined
       ? `0 0 0 2px color-mix(in srgb, var(${KANBAN_CELL_ACCENT_VAR}) ${KANBAN_CELL_ACCENT_ACTIVE_RING_ALPHA}%, transparent)`
       : undefined;
+  const surface = backgroundColor ?? accentBackground;
   const style: KanbanCellStyle | undefined =
-    backgroundColor === undefined && accentVariants === undefined
+    surface === undefined
       ? undefined
       : {
-          backgroundColor: backgroundColor ?? accentBackground,
+          backgroundColor: surface,
+          [KANBAN_CELL_SURFACE_VAR]: surface,
           ...(activeAccentRing === undefined
             ? undefined
             : { boxShadow: activeAccentRing }),
@@ -227,10 +252,36 @@ export const KanbanVirtualCell = <TRow,>({
             : { [KANBAN_CELL_ACCENT_VAR]: accentVariants.color }),
         };
 
+  // The resting surface is translucent unless a caller sets one of their own,
+  // so a pinned action repaints the cell's surface over an opaque base: cards
+  // pass behind the action instead of reading through it. The row keeps the
+  // cards' own bottom padding, so pinning it shifts nothing below.
+  const stickyFooter =
+    footerPlacement === "sticky-start" &&
+    footer !== null &&
+    footer !== undefined ? (
+      <div
+        className={cn("bg-background sticky z-10", KANBAN_STICKY_TOP_CLASS)}
+        data-kanban-cell-footer="sticky-start"
+      >
+        <div
+          className={cn(
+            "pb-2",
+            surface === undefined
+              ? KANBAN_CELL_SURFACE_CLASS
+              : "bg-(--kanban-cell-surface)",
+          )}
+        >
+          {footer}
+        </div>
+      </div>
+    ) : null;
+
   const content = (
     <div
       className={cn(
-        "bg-muted/20 max-h-[min(60vh,40rem)] min-h-20 overflow-y-auto overscroll-y-contain rounded-xl p-2 transition-[background-color,outline-color]",
+        KANBAN_CELL_SURFACE_CLASS,
+        "max-h-[min(60vh,40rem)] min-h-20 overflow-y-auto overscroll-y-contain rounded-xl p-2 transition-[background-color,outline-color]",
         active &&
           accentVariants === undefined &&
           "bg-primary/5 ring-primary/50 ring-2",
@@ -244,6 +295,7 @@ export const KanbanVirtualCell = <TRow,>({
       ref={setScrollElement}
       style={style}
     >
+      {stickyFooter}
       <div className="relative" style={{ height: virtualizer.getTotalSize() }}>
         {virtualizer.getVirtualItems().map((virtualRow) => {
           const row = rows.at(virtualRow.index);
@@ -263,7 +315,7 @@ export const KanbanVirtualCell = <TRow,>({
           );
         })}
       </div>
-      {footer}
+      {footerPlacement === "end" ? footer : null}
     </div>
   );
 

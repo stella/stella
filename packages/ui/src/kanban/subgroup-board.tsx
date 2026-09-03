@@ -24,6 +24,11 @@ import type {
   KanbanBoardColumn,
   KanbanBoardMatrix,
 } from "./matrix";
+import {
+  KANBAN_STICKY_TOP_VAR,
+  KanbanCollapsedBandCaption,
+} from "./sticky-lane";
+import type { KanbanStickyTopStyle } from "./sticky-lane";
 
 const groupValueKey = (value: string | null): string =>
   value === null ? "null" : `value:${value.length}:${value}`;
@@ -124,7 +129,9 @@ export type KanbanSubgroupBoardProps<TRow> = {
   /**
    * A lane's slot while its band is collapsed. Defaults to the band's name
    * set vertically over the count; a host that accepts drops into a collapsed
-   * band renders its target here.
+   * band renders its target here. Fill the slot's height (`h-full`) and
+   * compose `KanbanCollapsedBandCaption` inside, so the name still stays
+   * under the header halfway down a tall lane.
    */
   renderCollapsedBandCell?:
     | ((context: KanbanSubgroupCollapsedBandCellContext<TRow>) => ReactNode)
@@ -207,6 +214,22 @@ export const KanbanSubgroupBoard = <TRow,>({
     () => new Set<string>(),
   );
   const [peekingBandId, setPeekingBandId] = useState<string | null>(null);
+  // How far the sticky header block reaches into this scroll container. Lane
+  // controls stick under it (see `sticky-lane.tsx`); zero until measured, so
+  // server-rendered markup carries a usable offset.
+  const headerRef = useRef<HTMLDivElement>(null);
+  const [headerHeight, setHeaderHeight] = useState(0);
+  useEffect(() => {
+    const header = headerRef.current;
+    if (header === null) {
+      return undefined;
+    }
+    const observer = new ResizeObserver(() => {
+      setHeaderHeight(header.getBoundingClientRect().height);
+    });
+    observer.observe(header);
+    return () => observer.disconnect();
+  }, []);
   // The peek's timing rules live in one controller (see `band-peek.ts`); the
   // board only mirrors which band it reports open.
   const [peek] = useState(() =>
@@ -519,14 +542,17 @@ export const KanbanSubgroupBoard = <TRow,>({
       );
     }
     return (
+      // The caption travels through the slot's full height, so it stays
+      // under the header until the lane ends rather than scrolling away
+      // with the first cards.
       <div
-        className="text-muted-foreground flex flex-col items-center gap-2 py-2 text-xs"
+        className="flex h-full flex-col items-center"
         data-kanban-collapsed-band-count={count}
       >
-        <span className="max-h-40 truncate font-medium [writing-mode:vertical-rl]">
-          {band.label}
-        </span>
-        <span className="tabular-nums">{formatCount(count)}</span>
+        <KanbanCollapsedBandCaption
+          label={band.label}
+          meta={formatCount(count)}
+        />
       </div>
     );
   };
@@ -548,10 +574,21 @@ export const KanbanSubgroupBoard = <TRow,>({
     );
   };
 
+  const stickyTopStyle: KanbanStickyTopStyle = {
+    [KANBAN_STICKY_TOP_VAR]: `${String(headerHeight)}px`,
+  };
+
   return (
-    <div className={cn("h-full overflow-auto px-4 pb-4", className)}>
+    <div
+      className={cn("h-full overflow-auto px-4 pb-4", className)}
+      style={stickyTopStyle}
+    >
       <div className="min-w-max">
-        <div className="bg-background sticky top-0 z-20 pt-2 pb-2">
+        <div
+          className="bg-background sticky top-0 z-20 pt-2 pb-2"
+          data-kanban-board-header=""
+          ref={headerRef}
+        >
           {hasBands ? (
             <div className="flex items-end gap-3 pb-1" data-kanban-band-row="">
               {spans.map((span) => {

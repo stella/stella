@@ -215,6 +215,10 @@ const WorkspaceKanbanSubgroupCell = ({
           : undefined
       }
       active={isDragOver}
+      // The cell keeps its own bounded scroll surface, so it is the scroll
+      // container its pinned action sticks in: the board's header offset
+      // would push the action down past the first cards.
+      className="[--kanban-sticky-top:0px]"
       containerRef={cellRef}
       footer={
         columnValue !== null && canCreateTask ? (
@@ -226,6 +230,7 @@ const WorkspaceKanbanSubgroupCell = ({
           />
         ) : null
       }
+      footerPlacement="sticky-start"
       getRowKey={(entity) => entity.entityId}
       pagination={
         hasMore
