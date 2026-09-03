@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { QUERY_EXPANSION_MODES } from "../apps/api/src/lib/legal-search/query-expansion-mode";
 import {
   ENV_CATALOG,
   ENV_EXPOSURE,
@@ -442,13 +443,6 @@ describe("environment doctor output", () => {
         CORPUS_INDEXING_ENABLED: "true",
       },
     },
-    // Removed together with the invariant, in the PR that makes a corpus
-    // cursor carry the dictionary version it was built against.
-    {
-      expected:
-        'QUERY_EXPANSION_MODE="on" requires dictionary-version-carrying cursors; not yet implemented — use "shadow".',
-      overrides: { QUERY_EXPANSION_MODE: "on" },
-    },
     {
       expected:
         "CONTENT_ENCRYPTION_KEY is required when NODE_ENV is 'production' or 'staging'.",
@@ -642,11 +636,11 @@ describe("environment doctor output", () => {
     }
   });
 
-  // The other half of the `on` invariant above: it must refuse exactly one
-  // mode. A guard that rejected `shadow` too would block the only way to
-  // gather the evidence for lifting it. Removed with the invariant, in the PR
-  // that makes a corpus cursor carry its dictionary version.
-  test.each(["off", "shadow"] as const)(
+  // Every mode is configurable: `on` became one once corpus cursors started
+  // naming the dictionary they were built against, and a guard left behind
+  // would keep the mode unreachable for no remaining reason. Driven by the
+  // canonical list, so a mode added later cannot skip the doctor invariant.
+  test.each([...QUERY_EXPANSION_MODES])(
     "QUERY_EXPANSION_MODE=%p passes the runtime invariants",
     (mode) => {
       expect(

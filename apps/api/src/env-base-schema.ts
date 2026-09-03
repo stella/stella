@@ -17,10 +17,7 @@ import {
   resolveCorpusStorageMode,
 } from "@/api/lib/corpus-storage-mode";
 import { parseCorpusIndexClusterForGeneration } from "@/api/lib/legal-search/corpus-generation-contract";
-import {
-  QUERY_EXPANSION_MODES,
-  type QueryExpansionMode,
-} from "@/api/lib/legal-search/query-expansion-mode";
+import { QUERY_EXPANSION_MODES } from "@/api/lib/legal-search/query-expansion-mode";
 import { isUsableStaticCredential } from "@/api/lib/s3-credentials";
 import {
   isLoopbackHostname,
@@ -296,8 +293,9 @@ export const envBaseServerSchema = {
   // `off` is byte-identical to the pre-expansion query builder and fetches
   // no dictionary; `shadow` executes the unexpanded query and records how the
   // expanded one compares (leaf counts only, never query text). `on` executes
-  // the expanded query and is refused at boot by the invariant below until
-  // corpus cursors carry the dictionary version they were built against.
+  // the expanded query; a corpus cursor names the dictionary it was built
+  // against, so a continuation page is either ranked against that same
+  // dictionary or refused as a stale cursor.
   QUERY_EXPANSION_MODE: v.optional(v.picklist(QUERY_EXPANSION_MODES), "off"),
   isDev: v.boolean(),
 };
@@ -332,7 +330,6 @@ type EnvBaseInvariantInput = {
   LEGAL_CORPUS_S3_BUCKET?: string | undefined;
   LEGAL_SEARCH_INDEX_GENERATION: string;
   LEGAL_SEARCH_PROVIDER: "pg-fts" | "corpus-index";
-  QUERY_EXPANSION_MODE: QueryExpansionMode;
   S3_ACCESS_KEY_ID?: string | undefined;
   S3_CREDENTIALS_PROVIDER: "auto" | "env" | "aws-runtime" | "none";
   S3_ENDPOINT: string;
@@ -411,7 +408,6 @@ const corpusEndpointInvariantViolation = ({
   CORPUS_INDEX_Q09_ENDPOINT,
   CORPUS_INDEX_Q09_SEARCH_ENDPOINT,
   CORPUS_INDEX_SEARCH_ENDPOINT,
-  QUERY_EXPANSION_MODE,
   isDev,
 }: EnvBaseInvariantInput): string | null => {
   if (
@@ -443,19 +439,6 @@ const corpusEndpointInvariantViolation = ({
     !isSecureOrPrivateQ09MutationEndpoint(CORPUS_INDEX_Q09_ENDPOINT)
   ) {
     return "CORPUS_INDEX_Q09_ENDPOINT must use HTTPS unless it targets loopback or the private corpus-index-v09 Cloud Map service.";
-  }
-  // REMOVAL CONDITION: delete this invariant in the PR that makes a corpus
-  // cursor carry the dictionary version it was built against.
-  //
-  // Under `on` the engine query depends on which dictionary the serving
-  // replica loaded, so a page-2 request landing on a replica mid-refresh
-  // rebuilds a different query and ranks a different result set against page
-  // 1's cursor, skipping or repeating decisions. `shadow` cannot reach this,
-  // because it executes the unexpanded query. Refusing the mode at boot is
-  // what keeps the broken combination unreachable rather than merely
-  // documented.
-  if (QUERY_EXPANSION_MODE === "on") {
-    return 'QUERY_EXPANSION_MODE="on" requires dictionary-version-carrying cursors; not yet implemented — use "shadow".';
   }
   return null;
 };
