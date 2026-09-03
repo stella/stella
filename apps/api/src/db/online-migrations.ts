@@ -4,7 +4,17 @@ import {
   REWRITTEN_MIGRATION_INDEXES,
   type RequiredMigrationIndex,
 } from "../lib/db/migration-history";
+import { DECISION_DATE_CEILING_REPAIR } from "./decision-date-ceiling-repair";
+import type {
+  OnlineMigrationConnection,
+  OnlineMigrationPool,
+  OnlineRepair,
+} from "./online-migration-connection";
 
+// Sized for index builds: a DDL lock that queues behind live traffic fails
+// fast instead of holding the queue. A repair may set its own for its own
+// statements; the phase restores this one after it.
+const ONLINE_MIGRATION_LOCK_TIMEOUT_SQL = "SET lock_timeout = '1s'";
 const ONLINE_MIGRATIONS_LOCK_SQL =
   "SELECT pg_advisory_lock(hashtext('stella-online-migrations'))";
 const ONLINE_MIGRATIONS_UNLOCK_SQL =
@@ -202,18 +212,15 @@ const ONLINE_INDEX_REPLACEMENTS: readonly OnlineIndexReplacement[] = [
   },
 ];
 
-type OnlineMigrationConnection = {
-  execute: (query: string, params?: readonly unknown[]) => Promise<void>;
-  query: (
-    query: string,
-    params?: readonly unknown[],
-  ) => Promise<readonly unknown[]>;
-  release: () => void;
-};
-
-export type OnlineMigrationPool = {
-  reserve: () => Promise<OnlineMigrationConnection>;
-};
+/**
+ * Data repairs a schema migration left to this phase, run after the index
+ * steps so an index a repair walks is one that already exists. Each is
+ * self-checkpointing (see `OnlineRepair`); the phase only sequences them and
+ * validates their completion.
+ */
+export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
+  DECISION_DATE_CEILING_REPAIR,
+];
 
 type PresentIndexState = {
   definition: string;
@@ -248,7 +255,7 @@ const processOnlineMigrations = async (
     lockAcquired = true;
 
     if (operation === "repair") {
-      await connection.execute("SET lock_timeout = '1s'");
+      await connection.execute(ONLINE_MIGRATION_LOCK_TIMEOUT_SQL);
       await connection.execute("SET statement_timeout = '0'");
     }
 
@@ -257,6 +264,7 @@ const processOnlineMigrations = async (
     if (operation === "repair") {
       await retireReplacedIndexAt(connection);
     }
+    await processOnlineRepairAt(connection, operation);
   } finally {
     try {
       if (lockAcquired) {
@@ -302,6 +310,24 @@ const processOnlineIndexCutoverAt = async (
     await assertIndexReady(connection, cutover.final);
   }
   await processOnlineIndexCutoverAt(connection, operation, offset + 1);
+};
+
+const processOnlineRepairAt = async (
+  connection: OnlineMigrationConnection,
+  operation: OnlineMigrationOperation,
+  offset = 0,
+): Promise<void> => {
+  const repair = ONLINE_MIGRATION_REPAIRS.at(offset);
+  if (!repair) {
+    return;
+  }
+
+  if (operation === "repair") {
+    await repair.repair(connection);
+    await connection.execute(ONLINE_MIGRATION_LOCK_TIMEOUT_SQL);
+  }
+  await repair.assertComplete(connection);
+  await processOnlineRepairAt(connection, operation, offset + 1);
 };
 
 const retireReplacedIndexAt = async (

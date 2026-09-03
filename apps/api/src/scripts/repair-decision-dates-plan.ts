@@ -14,9 +14,17 @@ import { panic } from "better-result";
 import type { SQL } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 
+import {
+  lockCitationGraph,
+  reopenCitationsForDecisionKey,
+  reopenCitationsForKeys,
+  reopenCitationsFrom,
+  reopenCitationsResolvedTo,
+} from "@/api/handlers/case-law/citation-resolution";
 import type { SafeId } from "@/api/lib/branded-types";
 import { canonicalDecisionDate } from "@/api/lib/dates";
 import { decisionDateOutOfBoundsSql } from "@/api/lib/decision-date-bounds-sql";
+import { isCaseLawJurisdiction } from "@/api/lib/legal-search/ingestion-constants";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -301,4 +309,155 @@ export const applyDecisionDateRepairsStatement = (
        AND ${decisionDateOutOfBoundsSql(sql.raw("d.decision_date"))}
     RETURNING d.id
   `;
+};
+
+/** Rows from `execute` under either driver shape (bare array or `{ rows }`). */
+export const executedRows = (result: unknown): unknown[] => {
+  if (Array.isArray(result)) {
+    return result;
+  }
+  if (isRecord(result) && Array.isArray(result["rows"])) {
+    return result["rows"];
+  }
+  return [];
+};
+
+type CitationGraphTx = Parameters<typeof lockCitationGraph>[0];
+
+/**
+ * Tell the citation graph that this decision's date is no longer what it was.
+ *
+ * The resolver filters candidates on `decision_date` and reads NULL on either
+ * side as permissive, so clearing a date both revives citations that were time
+ * filtered away from this decision and contests edges that were drawn while it
+ * was excluded. Neither is discoverable from the citing side, and the standing
+ * walk only revisits unsettled rows, so an edge left alone here stays wrong
+ * forever. Same four steps, in the same order, as the ingestion pipeline's own
+ * resolution-identity change.
+ *
+ * False when the row's stored country declares no resolution policy: the key
+ * is then not re-announced, because guessing a reach would write cross-border
+ * edges on an assumption, which is the pipeline's stance too. The caller
+ * reports it rather than defaulting it.
+ */
+const reopenAffectedCitations = async (
+  tx: CitationGraphTx,
+  row: CorruptDecisionDateRow,
+  repaired: DecisionDateRepair,
+): Promise<boolean> => {
+  await reopenCitationsResolvedTo(tx, row.id);
+  await reopenCitationsFrom(tx, row.id);
+  if (row.citationKey === null) {
+    return true;
+  }
+  await reopenCitationsForKeys(tx, [row.citationKey]);
+  if (!isCaseLawJurisdiction(row.country)) {
+    return false;
+  }
+  await reopenCitationsForDecisionKey(tx, {
+    citationKey: row.citationKey,
+    decisionId: row.id,
+    jurisdiction: row.country,
+    decisionDate: repaired.decisionDate,
+  });
+  return true;
+};
+
+export type DecisionDateRepairBatch = {
+  cleared: number;
+  rederived: number;
+  /** Rows a concurrent observation had already repaired; skipped, not undone. */
+  skipped: number;
+  /**
+   * Written rows whose stored country declares no resolution policy. Their
+   * date is repaired; their key was not re-announced to the graph.
+   */
+  unannounced: CorruptDecisionDateRow[];
+};
+
+type ReopenWalk = {
+  batch: DecisionDateRepairBatch;
+  repairs: readonly DecisionDateRepair[];
+  rows: readonly CorruptDecisionDateRow[];
+  written: ReadonlySet<string>;
+};
+
+/**
+ * Announce each written row to the citation graph, one after another.
+ *
+ * Recursive rather than a loop with an awaited body: the reopen statements are
+ * graph mutations under one lock, so they must not fan out, and expressing that
+ * as a walk keeps the sequencing structural instead of a suppressed lint.
+ */
+const reopenWrittenAt = async (
+  tx: CitationGraphTx,
+  { batch, repairs, rows, written }: ReopenWalk,
+  offset = 0,
+): Promise<void> => {
+  const row = rows.at(offset);
+  if (row === undefined) {
+    return;
+  }
+  const repaired = repairs.at(offset);
+  if (repaired === undefined) {
+    panic("Repair decisions and selected rows fell out of step");
+  }
+  if (written.has(row.id)) {
+    if (repaired.outcome === DECISION_DATE_REPAIR_OUTCOMES.REDERIVED) {
+      batch.rederived += 1;
+    } else {
+      batch.cleared += 1;
+    }
+    const announced = await reopenAffectedCitations(tx, row, repaired);
+    if (!announced) {
+      batch.unannounced.push(row);
+    }
+  }
+  await reopenWrittenAt(tx, { batch, repairs, rows, written }, offset + 1);
+};
+
+/**
+ * One bounded batch of the repair, inside the caller's transaction.
+ *
+ * Decision rows first, citation graph second: the order the ingestion pipeline
+ * takes them in, which is the only thing that keeps a concurrent refresh of one
+ * of these decisions from deadlocking against this batch. Holding the rows is
+ * also what makes the graph work sound: nothing can move a claimed row's date
+ * between the reopen and the commit.
+ *
+ * An empty batch is the fixed point: every repaired row leaves the selection
+ * predicate, so a caller loops until one returns nothing claimed.
+ */
+export const repairDecisionDateBatch = async (
+  tx: CitationGraphTx,
+  size: number,
+): Promise<DecisionDateRepairBatch> => {
+  const batch: DecisionDateRepairBatch = {
+    cleared: 0,
+    rederived: 0,
+    skipped: 0,
+    unannounced: [],
+  };
+  const rows = executedRows(
+    await tx.execute(
+      selectCorruptDecisionDatesStatement({
+        limit: size,
+        lock: DECISION_DATE_ROW_LOCKS.FOR_UPDATE,
+      }),
+    ),
+  ).map(parseCorruptDecisionDateRow);
+  if (rows.length === 0) {
+    return batch;
+  }
+  await lockCitationGraph(tx);
+
+  const repairs = rows.map(decideDecisionDateRepair);
+  const written = new Set(
+    executedRows(await tx.execute(applyDecisionDateRepairsStatement(repairs)))
+      .filter(isRecord)
+      .map((row) => String(row["id"])),
+  );
+  await reopenWrittenAt(tx, { batch, repairs, rows, written });
+  batch.skipped = rows.length - written.size;
+  return batch;
 };

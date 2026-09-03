@@ -17,6 +17,8 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
+import { HIGH_VOLUME_TABLES } from "../apps/api/src/db/high-volume-tables";
+
 type Statement = {
   line: number;
   // Comment, string, and identifier content masked to spaces so keyword scans
@@ -45,10 +47,11 @@ type GuardedRule = {
   matches?: (statement: string) => boolean;
 };
 
+// Never acknowledgeable: the statement has to be rewritten.
 type StatementInvariantRule = {
   id: string;
   description: string;
-  pattern: RegExp;
+  matches: (statement: Statement) => boolean;
   guidance: string;
 };
 
@@ -557,15 +560,85 @@ const GUARDED_RULES: GuardedRule[] = [
   },
 ];
 
+const HIGH_VOLUME_TABLE_NAMES = new Set<string>(HIGH_VOLUME_TABLES);
+
+// A DML verb and the relation it targets, read from unmasked text so a quoted
+// or schema-qualified name is still a name; the qualifier may carry whitespace
+// around its dot, as PostgreSQL allows. An INSERT is judged below by whether
+// it copies rows out of another relation.
+const DML_TARGET_PATTERN =
+  /\b(?<verb>UPDATE|DELETE\s+FROM|INSERT\s+INTO|MERGE\s+INTO)\s+(?:ONLY\s+)?(?:"?public"?\s*\.\s*)?"?(?<table>[A-Za-z_][A-Za-z0-9_]*)"?/giu;
+
+// True when the statement rewrites rows of a registered high-volume table.
+// `raw` still carries quoted identifiers, which `text` masks, so the target is
+// read from `raw`; the verb is then checked at the same offset of `text`, where
+// a keyword inside a comment or a string literal has been masked away. Both
+// views index the same characters, `text` additionally carrying the masked
+// comment block that precedes the statement.
+const isHighVolumeTableDml = ({ deferred, raw, text }: Statement): boolean => {
+  // A stored-routine body executes nothing at migration time.
+  if (deferred) {
+    return false;
+  }
+
+  const textOffset = text.length - raw.length;
+  const words = wordsWithDepth(text);
+
+  for (const match of raw.matchAll(DML_TARGET_PATTERN)) {
+    const verb = match.groups?.["verb"];
+    const table = match.groups?.["table"]?.toLowerCase();
+    if (
+      verb === undefined ||
+      table === undefined ||
+      !HIGH_VOLUME_TABLE_NAMES.has(table)
+    ) {
+      continue;
+    }
+
+    const verbIndex = match.index + textOffset;
+    if (text.slice(verbIndex, verbIndex + verb.length) !== verb) {
+      continue;
+    }
+
+    const verbWord = verb.split(/\s+/u)[0]?.toUpperCase();
+    const position = words.findIndex(({ index }) => index === verbIndex);
+    const previousWord = words[position - 1]?.word ?? "";
+    if (
+      verbWord === UPDATE_KEYWORD &&
+      UPDATE_CLAUSE_PREFIXES.has(previousWord)
+    ) {
+      continue;
+    }
+    if (verbWord === "INSERT" && !isInsertFromQuery(text)) {
+      continue;
+    }
+
+    return true;
+  }
+
+  return false;
+};
+
 const STATEMENT_INVARIANT_RULES: StatementInvariantRule[] = [
   {
     id: "on-conflict-column-target",
     description: "uses a column-target ON CONFLICT clause",
-    pattern: /\bON\s+CONFLICT\s*\([^)]*\)/iu,
+    matches: ({ text }) => /\bON\s+CONFLICT\s*\([^)]*\)/iu.test(text),
     guidance:
       "Use ON CONFLICT ON CONSTRAINT for a named table constraint, or use WHERE NOT EXISTS when the arbiter is a partial unique index.",
   },
+  {
+    id: "high-volume-table-dml",
+    description:
+      "rewrites rows of a high-volume table inside the migration transaction",
+    matches: isHighVolumeTableDml,
+    guidance: `The table holds millions of rows in production and the statement runs under the migration's statement budget whatever its WHERE clause matches. Keep the migration to DDL and register the data repair as an online repair in apps/api/src/db/online-migrations.ts (bounded batches over an indexed access path, resumable, validated on completion). Registered tables: ${HIGH_VOLUME_TABLES.join(", ")}.`,
+  },
 ];
+
+const STATEMENT_INVARIANT_RULE_IDS = new Set(
+  STATEMENT_INVARIANT_RULES.map((rule) => rule.id),
+);
 
 // Statements allowed before the timeouts are set: only other SET commands. The
 // timeouts must precede the first migration operation, or that operation runs
@@ -1078,6 +1151,20 @@ const parseAcknowledgements = (
     }
 
     const { ruleIds } = body;
+    const structuralIds = ruleIds.filter((id) =>
+      STATEMENT_INVARIANT_RULE_IDS.has(id),
+    );
+
+    if (structuralIds.length > 0) {
+      errors.push({
+        file,
+        line: lineNumber,
+        ruleId: "unacknowledgeable-rule",
+        description: `${structuralIds.join(", ")} cannot be acknowledged: the statement is structurally unsafe and has to be rewritten`,
+      });
+      continue;
+    }
+
     const unknownIds = ruleIds.filter((id) => !KNOWN_RULE_IDS.has(id));
 
     if (unknownIds.length > 0) {
@@ -1196,7 +1283,7 @@ const checkFile = (file: string): FileCheckResult => {
 
   for (const statement of statements) {
     for (const rule of STATEMENT_INVARIANT_RULES) {
-      if (rule.pattern.test(statement.text)) {
+      if (rule.matches(statement)) {
         invariantFindings.push({
           file,
           line: statement.line,

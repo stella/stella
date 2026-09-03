@@ -670,4 +670,110 @@ describe("check-migration-safety", () => {
       PROPERTY_TEST_TIMEOUT_MS,
     );
   });
+
+  describe("high-volume-table-dml", () => {
+    // The shape that outran the migration budget on a corpus-sized table: a
+    // filtered UPDATE whose predicate the table cannot serve from an index.
+    const CITATION_REOPEN = `
+      WITH affected AS (
+        SELECT "id", "citation_key"
+          FROM "case_law_decisions"
+         WHERE "decision_date" >= ((now() AT TIME ZONE 'UTC')::date + 2)
+      )
+      UPDATE "case_law_citations" c
+         SET "resolution_status" = 'pending',
+             "cited_decision_id" = NULL
+       WHERE c."resolution_status" <> 'pending'
+         AND (
+              c."citing_decision_id" IN (SELECT "id" FROM affected)
+           OR c."cited_decision_id" IN (SELECT "id" FROM affected)
+           OR c."citation_key" IN (SELECT "citation_key" FROM affected)
+         );
+    `;
+
+    it("rejects a filtered UPDATE of a high-volume table", () => {
+      const result = runChecker(CITATION_REOPEN);
+
+      expectFinding(result, "high-volume-table-dml");
+      expect(result.stderr).toContain("online repair");
+    });
+
+    it("cannot be acknowledged", () => {
+      const result = runChecker(`
+        -- stella-migration-safety: reviewed high-volume-table-dml - bounded by the date index, a handful of rows
+        ${CITATION_REOPEN}
+      `);
+
+      expectFinding(result, "high-volume-table-dml");
+      expectFinding(result, "unacknowledgeable-rule");
+    });
+
+    it("rejects DELETE, INSERT ... SELECT and MERGE against a registered table", () => {
+      expectFinding(
+        runChecker(
+          `DELETE FROM public."case_law_decisions" WHERE "id" = '00000000-0000-0000-0000-000000000000';`,
+        ),
+        "high-volume-table-dml",
+      );
+      // A qualifier with whitespace around its dot is the same relation.
+      expectFinding(
+        runChecker(
+          `UPDATE ONLY "public" . case_law_decisions SET "indexed_hash" = NULL WHERE "id" = 'x';`,
+        ),
+        "high-volume-table-dml",
+      );
+      expectFinding(
+        runChecker(`
+          INSERT INTO case_law_search_documents ("decision_id")
+          SELECT "id" FROM "case_law_decisions" WHERE "indexed_hash" IS NULL;
+        `),
+        "high-volume-table-dml",
+      );
+      expectFinding(
+        runChecker(`
+          MERGE INTO "case_law_citations" c
+          USING "case_law_decisions" d ON d."id" = c."cited_decision_id"
+          WHEN MATCHED THEN UPDATE SET "resolution_status" = 'pending';
+        `),
+        "high-volume-table-dml",
+      );
+    });
+
+    it("allows the same statements against an unregistered table", () => {
+      expectClean(
+        runChecker(`
+          UPDATE "case_law_polarity_rules"
+             SET "source" = 'retired'
+           WHERE "pattern" = 'x';
+        `),
+      );
+    });
+
+    it("allows DDL, seed rows and row locks on a registered table", () => {
+      expectClean(
+        runChecker(`
+          ALTER TABLE "case_law_citations" ADD COLUMN "note" text;
+          CREATE INDEX CONCURRENTLY "case_law_citations_note_idx"
+            ON "case_law_citations" ("note");
+          INSERT INTO "case_law_decisions" ("id") VALUES ('x')
+            ON CONFLICT ON CONSTRAINT "case_law_decisions_pkey" DO UPDATE SET "id" = 'x';
+          SELECT "id" FROM "case_law_decisions" WHERE "id" = 'x' FOR UPDATE;
+        `),
+      );
+    });
+
+    it("ignores the table name inside comments, strings and routine bodies", () => {
+      expectClean(
+        runChecker(`
+          -- UPDATE "case_law_citations" SET "resolution_status" = 'pending';
+          /* DELETE FROM case_law_decisions; */
+          INSERT INTO "audit_notes" ("body")
+            VALUES ('UPDATE case_law_citations SET resolution_status = NULL');
+          CREATE OR REPLACE FUNCTION repair_later() RETURNS void AS $$
+            UPDATE "case_law_citations" SET "resolution_status" = 'pending';
+          $$ LANGUAGE sql;
+        `),
+      );
+    });
+  });
 });

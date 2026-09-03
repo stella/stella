@@ -21,6 +21,8 @@ if (!FILTER_INDEX_CUTOVER) {
 }
 const FILTER_INDEX = FILTER_INDEX_CUTOVER.final.name;
 const FILTER_INDEX_REPLACEMENT = FILTER_INDEX_CUTOVER.staged.name;
+const DECISION_DATE_CONSTRAINT = "case_law_decisions_decision_date_bounds";
+const VALIDATE_CONSTRAINT_FRAGMENT = `VALIDATE CONSTRAINT "${DECISION_DATE_CONSTRAINT}"`;
 
 describe("online migrations", () => {
   test("accepts an already valid index without rebuilding it", async () => {
@@ -283,6 +285,50 @@ describe("online migrations", () => {
     expect(dropOffset).toBeGreaterThan(reindexOffset);
     expect(renameOffset).toBeGreaterThan(dropOffset);
   });
+
+  test("validates the decision-date constraint after the index steps, once the repair finds nothing", async () => {
+    const harness = createHarness();
+
+    await runOnlineMigrations(harness.pool);
+
+    const validateOffset = indexOfStatement(
+      harness.statements,
+      VALIDATE_CONSTRAINT_FRAGMENT,
+    );
+    expect(validateOffset).toBeGreaterThan(
+      indexOfStatement(
+        harness.statements,
+        `DROP INDEX CONCURRENTLY IF EXISTS public."${LEGACY_SOURCE_CASE_INDEX}"`,
+      ),
+    );
+    expect(indexOfStatement(harness.statements, "UPDATE case_law_")).toBe(-1);
+    // The repair's own lock wait does not leak past it.
+    expect(
+      harness.statements
+        .slice(validateOffset + 1)
+        .includes("SET lock_timeout = '1s'"),
+    ).toBe(true);
+    expect(harness.released()).toBe(true);
+  });
+
+  test("startup validation rejects an unvalidated decision-date constraint without repairing", async () => {
+    const harness = createHarness({ constraintValidated: false });
+
+    const rejection: unknown = await assertOnlineMigrationsApplied(
+      harness.pool,
+    ).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(rejection).toMatchObject({
+      message: `Online repair decision-date-ceiling is not complete: constraint ${DECISION_DATE_CONSTRAINT} is not validated`,
+    });
+    expect(
+      indexOfStatement(harness.statements, VALIDATE_CONSTRAINT_FRAGMENT),
+    ).toBe(-1);
+    expect(harness.released()).toBe(true);
+  });
 });
 
 type IndexState =
@@ -295,6 +341,8 @@ type Artifacts = Readonly<Record<string, Artifact[]>>;
 
 type HarnessOptions = {
   artifacts?: Artifacts;
+  /** What `pg_constraint` reports for the decision-date constraint. */
+  constraintValidated?: boolean;
   indexStates?: IndexStates;
 };
 
@@ -305,6 +353,7 @@ const artifactPrefix = (name: string, suffix: "_ccnew" | "_ccold") =>
 
 const createHarness = ({
   artifacts = {},
+  constraintValidated = true,
   indexStates = {},
 }: HarnessOptions = {}) => {
   const statements: string[] = [];
@@ -341,6 +390,13 @@ const createHarness = ({
         },
         query: async (query: string, params: readonly unknown[] = []) => {
           statements.push(`${query}\n-- params ${JSON.stringify(params)}`);
+          if (query.includes("pg_constraint")) {
+            return [{ isValidated: constraintValidated }];
+          }
+          // The decision-date repair's selection: nothing left to repair.
+          if (query.includes("corrupt AS MATERIALIZED")) {
+            return [];
+          }
           if (query.includes("starts_with")) {
             const newPrefix = params.at(2);
             const oldPrefix = params.at(3);

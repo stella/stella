@@ -221,9 +221,6 @@ test("the migration adds the expression the schema declares", () => {
   if (added === undefined) {
     throw new Error("migration does not add the constraint NOT VALID");
   }
-  expect(migration).toContain(
-    `VALIDATE CONSTRAINT "${CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT}"`,
-  );
 
   // The dialect qualifies the column with its table; DDL inside ALTER TABLE
   // does not. Whitespace is layout, not meaning, on both sides.

@@ -304,6 +304,22 @@ const rewrittenMigrationHistories = {
       },
     ],
   },
+  // 0.8.10 cleared the dates past the new ceiling and reopened their citation
+  // edges inside the migration, with one UPDATE over `case_law_citations`
+  // whose predicate the table cannot serve from an index; it exceeded the
+  // statement budget on a large corpus. 0.8.11 keeps only the constraint swap
+  // in the file and runs the repair and the validation as the online repair
+  // in src/db/decision-date-ceiling-repair.ts. A database that applied the
+  // 0.8.10 file has repaired and validated already; the online repair finds
+  // nothing to do there.
+  "20260902100000_case_law_decision_date_ceiling": {
+    currentHash:
+      "4197553d4a7015cd2a6c3c0d2f53399e075f7fc525e4b4a3791fba496d7b009e",
+    priorHashes: [
+      "4540a61248f7d0176954c2a59afc7d697903c8b57e1cb8d60eecc870552a5cf0",
+    ],
+    requiredIndexes: [],
+  },
 } as const satisfies Readonly<Record<string, RewrittenMigrationHistory>>;
 
 export const REWRITTEN_MIGRATION_HISTORIES: Readonly<
