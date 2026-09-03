@@ -133,7 +133,7 @@
     "elysia": "catalog:",
     "entities": "^8.0.0",
     "franc": "catalog:",
-    "ip-address": "^10.5.0",
+    "ip-address": "^10.7.0",
     "jose": "^6.2.10",
     "jszip": "catalog:",
     "nodemailer": "^9.0.6",
