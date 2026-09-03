@@ -56,7 +56,37 @@ const expectRestingOnAction = async (header: Locator, actionBottom: number) => {
   );
 };
 
+/** How far the row was told to pin, out of `calc(var(...) + Npx)`. */
+const pinnedAboveOf = (offset: string) => {
+  const match = /\+\s*(?<pixels>\d+(?:\.\d+)?)px/u.exec(offset);
+
+  return match?.groups ? Number(match.groups["pixels"]) : 0;
+};
+
 test.describe("card sticky header", () => {
+  test("carries the action's reach on the board's first layout", async ({
+    page,
+  }) => {
+    await openFixture(page);
+    // Read in the frame the row is first painted in: a measurement left to an
+    // observer leaves this at the bare board offset, and every card's row
+    // spends that frame pinned where the action is about to be.
+    const firstLayout = await page.evaluate(
+      () => document.documentElement.dataset["kanbanCardStickyTopFirstLayout"],
+    );
+
+    expect(firstLayout).toBeDefined();
+    expect(pinnedAboveOf(firstLayout ?? "")).toBeGreaterThan(0);
+    // And it is the action's own height, not some arbitrary offset.
+    const actionHeight = await pinnedAction(page).evaluate(
+      (element) => element.getBoundingClientRect().height,
+    );
+
+    expect(
+      Math.abs(pinnedAboveOf(firstLayout ?? "") - actionHeight),
+    ).toBeLessThanOrEqual(TOLERANCE_PX);
+  });
+
   test("holds a card's identity row under the lane's pinned action", async ({
     page,
   }) => {

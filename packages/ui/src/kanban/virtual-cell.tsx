@@ -4,8 +4,8 @@ import {
   type ReactNode,
   type RefObject,
   type UIEvent,
-  useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
 } from "react";
@@ -270,18 +270,26 @@ export const KanbanVirtualCell = <TRow,>({
 
   // A card's own pinned header rests under this action, so the cell has to say
   // how tall the action turned out: the caller controls its content, and it
-  // reflows with the cell's width. Zero until measured, and zero whenever the
-  // footer closes the cell instead, which leaves the board's offset alone.
+  // reflows with the cell's width. Measured before the first paint, so no
+  // frame ever pins a card's header at the action's place, and zero whenever
+  // the footer closes the cell instead, which leaves the board's offset alone.
   const stickyFooterRef = useRef<HTMLDivElement>(null);
   const [stickyFooterHeight, setStickyFooterHeight] = useState(0);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const element = stickyFooterRef.current;
     if (element === null) {
       setStickyFooterHeight(0);
       return undefined;
     }
+    // A repeat of the height React already rendered would only cost a render.
+    const measure = (height: number) => {
+      setStickyFooterHeight((current) =>
+        current === height ? current : height,
+      );
+    };
+    measure(element.getBoundingClientRect().height);
     const observer = new ResizeObserver(() => {
-      setStickyFooterHeight(element.getBoundingClientRect().height);
+      measure(element.getBoundingClientRect().height);
     });
     observer.observe(element);
     return () => observer.disconnect();
