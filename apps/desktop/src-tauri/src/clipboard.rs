@@ -826,8 +826,6 @@ impl ClipboardManager {
             item.set_group_id(None);
           }
         }
-        // Clips that just lost their organiser fall under the history rules.
-        prune_items(&mut self.items, self.retention, Utc::now());
       }
     }
     self.persist_or_restore(checkpoint)?;
@@ -2190,7 +2188,7 @@ mod tests {
   }
 
   #[test]
-  fn losing_the_last_organiser_reapplies_retention() {
+  fn ungrouping_an_item_reapplies_retention() {
     let now = Utc::now();
     let mut manager = ready_manager();
     let group_id = manager
@@ -2218,12 +2216,6 @@ mod tests {
         .any(|item| item.plain_text() == "orphaned")
     );
 
-    assert!(
-      manager
-        .delete_group(&group_id, ClipboardGroupDeletionMode::KeepClips)
-        .unwrap()
-    );
-    assert!(manager.items.is_empty());
   }
 
   #[test]
@@ -2547,16 +2539,12 @@ mod tests {
   #[test]
   fn deleting_a_group_can_preserve_its_clips() {
     let mut manager = ready_manager();
-    assert!(capture(&mut manager, "grouped", None, Utc::now()));
     let group_id = manager
       .create_group("Research", ClipboardGroupColor::Blue)
       .unwrap();
-    let item_id = manager.items[0].id().to_string();
-    assert!(
-      manager
-        .update_item(&item_id, "grouped", None, Some(group_id.clone()))
-        .unwrap()
-    );
+    let mut grouped = text_item(Utc::now() - Duration::days(400), "grouped");
+    grouped.set_group_id(Some(group_id.clone()));
+    manager.items.push(grouped);
 
     assert!(
       manager
