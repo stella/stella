@@ -27,6 +27,21 @@ import {
   MODEL_REASONING_EFFORTS,
   MODEL_TEMPERATURE_POLICIES,
 } from "./capabilities.gen";
+import type { ModelRate } from "./model-rate";
+import { MODEL_RATES } from "./model-rates.gen";
+
+export {
+  MODEL_RATE_UNITS_PER_USD,
+  getStandardModelRate,
+  resolveModelRate,
+} from "./model-rate";
+export type { ModelRate, ModelRateAmounts } from "./model-rate";
+export {
+  MODELS_DEV_RATE_PROVIDER_BY_CATALOG_PROVIDER,
+  MODELS_DEV_RATE_SOURCE_ALIASES,
+  RETAINED_MODELS_DEV_RATE_ENTRIES,
+} from "./model-rate-policy";
+export type { ModelsDevRateProvider } from "./model-rate-policy";
 
 /**
  * Logical model roles. Call sites declare *what* they need, not
@@ -743,11 +758,11 @@ type OfferedAggregatorUnderlyingModelId =
       : NormalizedCatalogId<TId>
     : never;
 
-/**
- * Provider-native IDs that are exact aliases of an offered catalog ID.
- * Every metadata lookup normalizes here, so instance/dev overrides cannot
- * bypass rates or capabilities and duplicated alias rows cannot drift apart.
- */
+type RequiredModelRateId =
+  | OfferedAggregatorUnderlyingModelId
+  | OfferedFirstPartyModelId
+  | OfferedPlatformModelId;
+
 /**
  * Per-provider model served when a user's included budget is exhausted
  * and no explicit selection overrides it. Falls back to each
@@ -767,6 +782,11 @@ export const FALLBACK_CHAT_MODEL_BY_PROVIDER = {
   huggingface: null,
 } as const satisfies Record<AIProvider, string | null>;
 
+/**
+ * Provider-native IDs that are exact aliases of an offered catalog ID.
+ * Every metadata lookup normalizes here, so instance/dev overrides cannot
+ * bypass rates or capabilities and duplicated alias rows cannot drift apart.
+ */
 export const MODEL_CATALOG_ID_ALIASES = {
   "gpt-5.6-sol": "gpt-5.6",
   // Aggregator listings use the dotted marketing forms; the catalog's
@@ -880,383 +900,10 @@ export const resolveReasoningEffort = ({
   return asResolvedReasoningEffort(nearest);
 };
 
-/**
- * Per-model ledger rates, normalized micro-units per 1M tokens.
- *
- * Keys are the canonical model IDs stella passes to provider adapters.
- * Consumers (`apps/api/src/lib/usage/unit-model.ts`) fall back to a
- * defensive default for unknown IDs. The nightly
- * `model-catalog-upstream` check validates that every offered
- * first-party model has an entry and that entries stay mutually
- * consistent with upstream catalog cost metadata, so a stale entry
- * fails CI instead of silently mis-attributing usage.
- */
-export type ModelRateAmounts = {
-  /** Normalized micro-units per 1M input tokens. */
-  inputPerMTok: number;
-  /** Normalized micro-units per 1M output tokens. */
-  outputPerMTok: number;
-  /**
-   * Normalized micro-units per 1M cached input tokens, when the
-   * provider offers a cache-read adjustment. Falls back to
-   * `inputPerMTok` when undefined.
-   */
-  cachedInputPerMTok?: number;
-};
+export { MODEL_RATES };
 
-/**
- * A discriminated rate schedule. Consumers must resolve the schedule from the
- * request's total input tokens before reading any prices, so a model with a
- * long-context premium cannot accidentally be metered at its base rate.
- */
-export type ModelRate =
-  | ({ kind: "flat" } & ModelRateAmounts)
-  | {
-      kind: "input-token-tiered";
-      /** The base tier applies at or below this total input-token count. */
-      inputTokenThreshold: number;
-      standard: ModelRateAmounts;
-      /** Applies to the entire request once input exceeds the threshold. */
-      aboveThreshold: ModelRateAmounts;
-    };
-
-export const getStandardModelRate = (rate: ModelRate): ModelRateAmounts =>
-  rate.kind === "flat" ? rate : rate.standard;
-
-export const resolveModelRate = (
-  rate: ModelRate,
-  inputTokens: number,
-): ModelRateAmounts =>
-  rate.kind === "input-token-tiered" && inputTokens > rate.inputTokenThreshold
-    ? rate.aboveThreshold
-    : getStandardModelRate(rate);
-
-/**
- * Providers whose catalog entries are first-party API model IDs and so
- * must carry an explicit rate. Mirrors `MODELS_DEV_PROVIDER` in the
- * nightly check; `openrouter` (provider-prefixed slugs) and the
- * legacy/custom-deployment providers are metered by their underlying
- * model IDs or the fallback rate.
- */
-// `satisfies Record<OfferedFirstPartyModelId, ...>` makes offering a
-// first-party model without a rate a compile error; the intersection
-// with `Record<string, ...>` keeps room for retired models that still
-// appear in historical ledger rows.
-export const MODEL_RATES = {
-  "gemini-2.5-flash": {
-    kind: "flat",
-    inputPerMTok: 30_000,
-    outputPerMTok: 250_000,
-    cachedInputPerMTok: 7500,
-  },
-  "gemini-2.5-pro": {
-    kind: "flat",
-    inputPerMTok: 125_000,
-    outputPerMTok: 1_000_000,
-    cachedInputPerMTok: 31_250,
-  },
-  "gemini-3.1-flash-lite": {
-    kind: "flat",
-    inputPerMTok: 25_000,
-    outputPerMTok: 150_000,
-    cachedInputPerMTok: 2500,
-  },
-  "gemini-3.5-flash": {
-    kind: "flat",
-    inputPerMTok: 150_000,
-    outputPerMTok: 900_000,
-    cachedInputPerMTok: 15_000,
-  },
-  "gemini-3.5-flash-lite": {
-    kind: "flat",
-    inputPerMTok: 30_000,
-    outputPerMTok: 250_000,
-    cachedInputPerMTok: 3000,
-  },
-  "gemini-3.6-flash": {
-    kind: "flat",
-    inputPerMTok: 75_000,
-    outputPerMTok: 375_000,
-    cachedInputPerMTok: 7500,
-  },
-  "gemini-3.7-flash": {
-    kind: "flat",
-    inputPerMTok: 75_000,
-    outputPerMTok: 375_000,
-    cachedInputPerMTok: 7500,
-  },
-  "gemini-3.8-flash": {
-    kind: "flat",
-    inputPerMTok: 75_000,
-    outputPerMTok: 375_000,
-    cachedInputPerMTok: 7500,
-  },
-  "gemini-3.1-pro-preview": {
-    kind: "input-token-tiered",
-    inputTokenThreshold: 200_000,
-    standard: {
-      inputPerMTok: 200_000,
-      outputPerMTok: 1_200_000,
-      cachedInputPerMTok: 20_000,
-    },
-    aboveThreshold: {
-      inputPerMTok: 400_000,
-      outputPerMTok: 1_800_000,
-      cachedInputPerMTok: 40_000,
-    },
-  },
-  "gpt-4o-mini": {
-    kind: "flat",
-    inputPerMTok: 15_000,
-    outputPerMTok: 60_000,
-    cachedInputPerMTok: 7500,
-  },
-  "gpt-4o": {
-    kind: "flat",
-    inputPerMTok: 250_000,
-    outputPerMTok: 1_000_000,
-    cachedInputPerMTok: 125_000,
-  },
-  "gpt-5.2": {
-    kind: "flat",
-    inputPerMTok: 175_000,
-    outputPerMTok: 1_400_000,
-    cachedInputPerMTok: 17_500,
-  },
-  "gpt-5.4-nano": {
-    kind: "flat",
-    inputPerMTok: 20_000,
-    outputPerMTok: 125_000,
-    cachedInputPerMTok: 2000,
-  },
-  "gpt-5.4-mini": {
-    kind: "flat",
-    inputPerMTok: 75_000,
-    outputPerMTok: 450_000,
-    cachedInputPerMTok: 7500,
-  },
-  "gpt-5.4": {
-    kind: "input-token-tiered",
-    inputTokenThreshold: 272_000,
-    standard: {
-      inputPerMTok: 250_000,
-      outputPerMTok: 1_500_000,
-      cachedInputPerMTok: 25_000,
-    },
-    aboveThreshold: {
-      inputPerMTok: 500_000,
-      outputPerMTok: 2_250_000,
-      cachedInputPerMTok: 50_000,
-    },
-  },
-  "gpt-5.5": {
-    kind: "input-token-tiered",
-    inputTokenThreshold: 272_000,
-    standard: {
-      inputPerMTok: 500_000,
-      outputPerMTok: 3_000_000,
-      cachedInputPerMTok: 50_000,
-    },
-    aboveThreshold: {
-      inputPerMTok: 1_000_000,
-      outputPerMTok: 4_500_000,
-      cachedInputPerMTok: 100_000,
-    },
-  },
-  "gpt-5.6": {
-    kind: "input-token-tiered",
-    inputTokenThreshold: 272_000,
-    standard: {
-      inputPerMTok: 400_000,
-      outputPerMTok: 2_000_000,
-      cachedInputPerMTok: 40_000,
-    },
-    aboveThreshold: {
-      // OpenAI prices the entire >272K request at 2x input and 1.5x output.
-      inputPerMTok: 800_000,
-      outputPerMTok: 3_000_000,
-      cachedInputPerMTok: 80_000,
-    },
-  },
-  // Luna/Terra verified against the published price list 2026-08-16
-  // (Luna's 2026-07-30 price cut).
-  "gpt-5.6-luna": {
-    kind: "input-token-tiered",
-    inputTokenThreshold: 272_000,
-    standard: {
-      inputPerMTok: 20_000,
-      outputPerMTok: 120_000,
-      cachedInputPerMTok: 2000,
-    },
-    aboveThreshold: {
-      // OpenAI prices the entire >272K request at 2x input and 1.5x output.
-      inputPerMTok: 40_000,
-      outputPerMTok: 180_000,
-      cachedInputPerMTok: 4000,
-    },
-  },
-  "gpt-5.6-terra": {
-    kind: "input-token-tiered",
-    inputTokenThreshold: 272_000,
-    standard: {
-      inputPerMTok: 200_000,
-      outputPerMTok: 1_200_000,
-      cachedInputPerMTok: 20_000,
-    },
-    aboveThreshold: {
-      inputPerMTok: 400_000,
-      outputPerMTok: 1_800_000,
-      cachedInputPerMTok: 40_000,
-    },
-  },
-  "claude-haiku-4-5-20251001": {
-    kind: "flat",
-    inputPerMTok: 100_000,
-    outputPerMTok: 500_000,
-    cachedInputPerMTok: 10_000,
-  },
-  "claude-sonnet-4-6": {
-    kind: "flat",
-    inputPerMTok: 300_000,
-    outputPerMTok: 1_500_000,
-    cachedInputPerMTok: 30_000,
-  },
-  "claude-sonnet-5": {
-    kind: "flat",
-    inputPerMTok: 200_000,
-    outputPerMTok: 1_000_000,
-    cachedInputPerMTok: 20_000,
-  },
-  "claude-opus-4-6": {
-    kind: "flat",
-    inputPerMTok: 500_000,
-    outputPerMTok: 2_500_000,
-    cachedInputPerMTok: 50_000,
-  },
-  "claude-opus-4-7": {
-    kind: "flat",
-    inputPerMTok: 500_000,
-    outputPerMTok: 2_500_000,
-    cachedInputPerMTok: 50_000,
-  },
-  "claude-opus-4-8": {
-    kind: "flat",
-    inputPerMTok: 500_000,
-    outputPerMTok: 2_500_000,
-    cachedInputPerMTok: 50_000,
-  },
-  "claude-opus-5": {
-    kind: "flat",
-    inputPerMTok: 500_000,
-    outputPerMTok: 2_500_000,
-    cachedInputPerMTok: 50_000,
-  },
-  "claude-fable-5": {
-    kind: "flat",
-    inputPerMTok: 1_000_000,
-    outputPerMTok: 5_000_000,
-    cachedInputPerMTok: 100_000,
-  },
-  "claude-fable-5-1": {
-    kind: "flat",
-    inputPerMTok: 1_000_000,
-    outputPerMTok: 5_000_000,
-    cachedInputPerMTok: 25_000,
-  },
-  "mistral-small-latest": {
-    kind: "flat",
-    inputPerMTok: 15_000,
-    outputPerMTok: 60_000,
-  },
-  "mistral-large-latest": {
-    kind: "flat",
-    inputPerMTok: 50_000,
-    outputPerMTok: 150_000,
-  },
-  "mistral-medium-latest": {
-    kind: "flat",
-    inputPerMTok: 150_000,
-    outputPerMTok: 750_000,
-  },
-  "mistral-medium-3-5": {
-    kind: "flat",
-    inputPerMTok: 150_000,
-    outputPerMTok: 750_000,
-  },
-  "magistral-medium-latest": {
-    kind: "flat",
-    inputPerMTok: 200_000,
-    outputPerMTok: 500_000,
-  },
-  "magistral-small": {
-    kind: "flat",
-    inputPerMTok: 50_000,
-    outputPerMTok: 150_000,
-  },
-  "magistral-small-latest": {
-    kind: "flat",
-    inputPerMTok: 50_000,
-    outputPerMTok: 150_000,
-  },
-  "pixtral-large-latest": {
-    kind: "flat",
-    inputPerMTok: 200_000,
-    outputPerMTok: 600_000,
-  },
-  // AWS Bedrock serverless rates (verified 2026-08-16). Cached-input
-  // rates are listed only where Bedrock publishes one; the rest settle
-  // cache reads at the full input rate, which can only over-count.
-  "us.anthropic.claude-sonnet-4-5-20250929-v1:0": {
-    kind: "flat",
-    inputPerMTok: 300_000,
-    outputPerMTok: 1_500_000,
-    cachedInputPerMTok: 30_000,
-  },
-  "us.anthropic.claude-haiku-4-5-20251001-v1:0": {
-    kind: "flat",
-    inputPerMTok: 100_000,
-    outputPerMTok: 500_000,
-    cachedInputPerMTok: 10_000,
-  },
-  "us.amazon.nova-pro-v1:0": {
-    kind: "flat",
-    inputPerMTok: 80_000,
-    outputPerMTok: 320_000,
-  },
-  "us.amazon.nova-lite-v1:0": {
-    kind: "flat",
-    inputPerMTok: 6000,
-    outputPerMTok: 24_000,
-  },
-  "us.amazon.nova-micro-v1:0": {
-    kind: "flat",
-    inputPerMTok: 3500,
-    outputPerMTok: 14_000,
-  },
-  "openai.gpt-oss-120b-1:0": {
-    kind: "flat",
-    inputPerMTok: 15_000,
-    outputPerMTok: 60_000,
-  },
-  "openai.gpt-oss-20b-1:0": {
-    kind: "flat",
-    inputPerMTok: 7000,
-    outputPerMTok: 30_000,
-  },
-  "us.deepseek.r1-v1:0": {
-    kind: "flat",
-    inputPerMTok: 135_000,
-    outputPerMTok: 540_000,
-  },
-} as const satisfies Record<
-  | OfferedAggregatorUnderlyingModelId
-  | OfferedFirstPartyModelId
-  | OfferedPlatformModelId,
-  ModelRate
-> &
-  Record<string, ModelRate>;
-
-const MODEL_RATES_BY_ID: Readonly<Record<string, ModelRate>> = MODEL_RATES;
+const MODEL_RATES_BY_ID: Readonly<Record<string, ModelRate>> =
+  MODEL_RATES satisfies Readonly<Record<RequiredModelRateId, ModelRate>>;
 
 const OPENROUTER_UNDERLYING_MODEL_ID_BY_ID: Readonly<Record<string, string>> =
   Object.fromEntries(

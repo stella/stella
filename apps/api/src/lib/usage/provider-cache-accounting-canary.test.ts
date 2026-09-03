@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 /**
- * Canary tests binding PROVIDER_CACHE_READ_ACCOUNTING (unit-model.ts) to the
+ * Canary tests binding PROVIDER_CACHE_ACCOUNTING (unit-model.ts) to the
  * REAL adapter usage builders, not to hand-written fixtures that restate the
  * map's own assumptions. Each test feeds a production-shaped provider usage
  * payload through the adapter code that ships to production and asserts the
@@ -17,7 +17,7 @@ import { describe, expect, test } from "bun:test";
  * Providers not exercised here: the bedrock and openai adapters currently
  * emit no `cachedTokens` at all (verified against their dist output), so
  * their map entries cannot mis-meter today; if an upgrade adds cache fields,
- * the anomaly telemetry (`cache-read-exceeds-included-prompt`) is the runtime
+ * the anomaly telemetry (`cache-tokens-exceed-included-prompt`) is the runtime
  * backstop until a canary is added for them.
  */
 import { buildAnthropicUsage } from "../../../../../node_modules/@tanstack/ai-anthropic/dist/esm/usage.js";

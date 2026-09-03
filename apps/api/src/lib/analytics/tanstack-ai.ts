@@ -240,6 +240,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const recordTanStackConsumption = async ({
   cacheReadTokens,
+  cacheWriteTokens,
   completionTokens,
   config,
   iteration,
@@ -249,6 +250,7 @@ const recordTanStackConsumption = async ({
   uncachedInputTokens,
 }: {
   cacheReadTokens: number;
+  cacheWriteTokens: number;
   completionTokens: number;
   config: TanStackAIAnalyticsProps;
   iteration: number;
@@ -269,6 +271,7 @@ const recordTanStackConsumption = async ({
   const { unitsConsumed, rawUsageMicroUnits } = usageUnitsFromTokens({
     actionType: metering.actionType,
     cacheReadTokens,
+    cacheWriteTokens,
     isByok: modelInfo.keySource === "byok",
     modelId: modelInfo.modelId,
     outputTokens: completionTokens,
@@ -365,10 +368,10 @@ export const createTanStackAIAnalyticsCallbacks = ({
         return modelInfo;
       }
 
-      try {
-        // An explicit per-turn selection outranks the role default:
-        // metering must rate the model that actually served the turn.
-        modelInfo =
+      const resolved = Result.try({
+        try: () =>
+          // An explicit per-turn selection outranks the role default:
+          // metering must rate the model that actually served the turn.
           selectedModelId !== undefined
             ? getTanStackTextModelInfoById(
                 selectedModelId,
@@ -377,14 +380,18 @@ export const createTanStackAIAnalyticsCallbacks = ({
               )
             : getTanStackTextModelInfoForRole(modelRole, config.orgAIConfig, {
                 organizationId: analyticsOrganizationId,
-              });
-      } catch (error) {
+              }),
+        catch: (error) => error,
+      });
+      if (Result.isError(resolved)) {
         modelInfo = null;
         logger.warn("tanstack_ai.analytics.model_info_unavailable", {
           "ai.feature": config.feature,
           "ai.role": modelRole,
-          "error.type": errorTag(error),
+          "error.type": errorTag(resolved.error),
         });
+      } else {
+        modelInfo = resolved.value;
       }
 
       return modelInfo;
@@ -578,57 +585,76 @@ export const createTanStackAIAnalyticsCallbacks = ({
           },
         });
       },
-      // Framework-hook boundaries (the one place try-catch is allowed): a
-      // fault here must never propagate into the provider stream and take
-      // the process down with it, and metering and observability are
-      // isolated from each other so an analytics fault cannot drop a
-      // billable usage event. A bug loses that one event and reports it; it
-      // never loses the server.
+      // A fault here must never propagate into the provider stream and take
+      // the process down with it. Metering and observability are isolated so
+      // an analytics fault cannot drop a billable usage event. A bug loses
+      // that one event and reports it; it never loses the server.
       onUsage: (ctx, usage) => {
         const resolvedModelInfo = resolveAnalyticsModelInfo();
         if (!resolvedModelInfo) {
           return;
         }
         const run = runState(ctx);
-        try {
-          run.usage.promptTokens += usage.promptTokens;
-          run.usage.completionTokens += usage.completionTokens;
-          run.usage.totalTokens += usage.totalTokens;
-          run.usageReported = true;
-        } catch (error) {
+        const usageSnapshot = Result.try({
+          try: () => ({
+            promptTokens: usage.promptTokens,
+            completionTokens: usage.completionTokens,
+            totalTokens: usage.totalTokens,
+          }),
+          catch: (error) => error,
+        });
+        if (Result.isError(usageSnapshot)) {
           // The payload itself is unreadable: neither side effect can use it.
-          captureTelemetryError(error, {
+          captureTelemetryError(usageSnapshot.error, {
             source: "usage.tanstack_ai",
             trace_id: config.traceId,
           });
           return;
         }
+        run.usage.promptTokens += usageSnapshot.value.promptTokens;
+        run.usage.completionTokens += usageSnapshot.value.completionTokens;
+        run.usage.totalTokens += usageSnapshot.value.totalTokens;
+        run.usageReported = true;
 
         const metering = config.usageMetering;
         if (metering) {
-          try {
-            const { uncachedInputTokens, cacheReadTokens } =
-              normalizeProviderPromptTokens({
-                provider: resolvedModelInfo.provider,
-                modelId: resolvedModelInfo.modelId,
-                promptTokens: usage.promptTokens,
-                cacheReadTokens: usage.promptTokensDetails?.cachedTokens ?? 0,
-                cacheWriteTokens:
-                  usage.promptTokensDetails?.cacheWriteTokens ?? 0,
-              });
-            const consumption = recordTanStackConsumption({
-              cacheReadTokens,
-              completionTokens: usage.completionTokens,
-              config,
-              iteration: ctx.iteration,
-              modelInfo: resolvedModelInfo,
-              runId: ctx.runId,
-              serviceTier: usageServiceTierFromModelOptions({
-                fallback: metering.serviceTier,
-                modelOptions: ctx.modelOptions,
-              }),
-              uncachedInputTokens,
-            }).catch((error: unknown) => {
+          const consumptionArgs = Result.try({
+            try: () => {
+              const { uncachedInputTokens, cacheReadTokens, cacheWriteTokens } =
+                normalizeProviderPromptTokens({
+                  provider: resolvedModelInfo.provider,
+                  modelId: resolvedModelInfo.modelId,
+                  promptTokens: usage.promptTokens,
+                  cacheReadTokens: usage.promptTokensDetails?.cachedTokens ?? 0,
+                  cacheWriteTokens:
+                    usage.promptTokensDetails?.cacheWriteTokens ?? 0,
+                });
+              return {
+                cacheReadTokens,
+                cacheWriteTokens,
+                completionTokens: usage.completionTokens,
+                config,
+                iteration: ctx.iteration,
+                modelInfo: resolvedModelInfo,
+                runId: ctx.runId,
+                serviceTier: usageServiceTierFromModelOptions({
+                  fallback: metering.serviceTier,
+                  modelOptions: ctx.modelOptions,
+                }),
+                uncachedInputTokens,
+              };
+            },
+            catch: (error) => error,
+          });
+          if (Result.isError(consumptionArgs)) {
+            captureTelemetryError(consumptionArgs.error, {
+              source: "usage.tanstack_ai",
+              trace_id: config.traceId,
+            });
+          } else {
+            const consumption = recordTanStackConsumption(
+              consumptionArgs.value,
+            ).catch((error: unknown) => {
               // A rejected deferred settles inside the stream lifecycle;
               // capture it here so it cannot surface as an unhandled
               // rejection there.
@@ -639,23 +665,21 @@ export const createTanStackAIAnalyticsCallbacks = ({
               });
             });
             ctx.defer(consumption);
-          } catch (error) {
-            captureTelemetryError(error, {
-              source: "usage.tanstack_ai",
-              trace_id: config.traceId,
-            });
           }
         }
 
-        try {
-          captureGeneration({
-            ctx,
-            iterationStartedAt: run.iterationStartedAt,
-            modelInfo: resolvedModelInfo,
-            usage,
-          });
-        } catch (error) {
-          captureTelemetryError(error, {
+        const captured = Result.try({
+          try: () =>
+            captureGeneration({
+              ctx,
+              iterationStartedAt: run.iterationStartedAt,
+              modelInfo: resolvedModelInfo,
+              usage,
+            }),
+          catch: (error) => error,
+        });
+        if (Result.isError(captured)) {
+          captureTelemetryError(captured.error, {
             source: "analytics.tanstack_ai",
             trace_id: config.traceId,
           });

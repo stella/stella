@@ -23,6 +23,14 @@ const modelId = resolveWorkingBYOKModelForRole({
 The package contains data and validation only. It does not read environment
 variables, store credentials, or initialize provider SDKs.
 
+Model rates are committed in `src/model-rates.gen.ts` so application startup
+never depends on a pricing service. Regenerate the snapshot from
+[models.dev](https://models.dev) with `bun --filter @stll/ai-catalog gen:rates`;
+rate-related pull requests verify the committed output against that source.
+The snapshot covers text input/output, cache reads/writes, and context tiers.
+Audio pricing is deliberately excluded because Stella does not route audio
+model input; an unknown models.dev cost field fails generation.
+
 ## Install
 
 ```sh

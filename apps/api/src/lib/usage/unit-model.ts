@@ -160,7 +160,7 @@ const scaleTokenCost = (tokens: number, ratePerMTok: number): number => {
   return Number(scaled);
 };
 
-type CacheReadAccounting = "included-in-input" | "separate-from-input";
+type CacheAccounting = "included-in-input" | "separate-from-input";
 
 /**
  * How each provider's reported input/prompt token count relates to its
@@ -172,7 +172,7 @@ type CacheReadAccounting = "included-in-input" | "separate-from-input";
  * so on a warm cache the cached count legitimately exceeds the input
  * count; Bedrock's Converse usage follows the same split.
  */
-const PROVIDER_CACHE_READ_ACCOUNTING = {
+const PROVIDER_CACHE_ACCOUNTING = {
   anthropic: "separate-from-input",
   azure_foundry: "included-in-input",
   bedrock: "separate-from-input",
@@ -182,7 +182,7 @@ const PROVIDER_CACHE_READ_ACCOUNTING = {
   openai: "included-in-input",
   openai_compatible: "included-in-input",
   openrouter: "included-in-input",
-} as const satisfies Record<AIProvider, CacheReadAccounting>;
+} as const satisfies Record<AIProvider, CacheAccounting>;
 
 type NormalizeProviderPromptTokensOptions = {
   provider: AIProvider;
@@ -198,13 +198,15 @@ type NormalizeProviderPromptTokensOptions = {
 type NormalizedPromptTokens = {
   uncachedInputTokens: number;
   cacheReadTokens: number;
+  cacheWriteTokens: number;
 };
 
 /**
  * Normalize a provider's native prompt-token accounting into the
  * non-overlapping components the unit model bills: uncached input at the
- * full input rate, cache reads at the cache-read rate. This is the only
- * place provider cache semantics may be interpreted; downstream code
+ * full input rate, cache reads at the cache-read rate, and cache writes at
+ * the cache-write rate. This is the only place provider cache semantics may
+ * be interpreted; downstream code
  * never subtracts one provider-reported count from another.
  */
 export const normalizeProviderPromptTokens = ({
@@ -229,39 +231,44 @@ export const normalizeProviderPromptTokens = ({
     field: "cacheWriteTokens",
     value: cacheWriteTokens,
   });
-  const accounting = PROVIDER_CACHE_READ_ACCOUNTING[provider];
+  const accounting = PROVIDER_CACHE_ACCOUNTING[provider];
   switch (accounting) {
     case "separate-from-input":
-      // Cache writes are billable prompt tokens the provider excludes
-      // from its input count. The rate table carries no write-premium
-      // rate, so they meter at the full input rate.
       return {
-        uncachedInputTokens: prompt + cacheWrite,
+        uncachedInputTokens: prompt,
         cacheReadTokens: cacheRead,
+        cacheWriteTokens: cacheWrite,
       };
     case "included-in-input": {
-      if (cacheRead > prompt) {
+      const cachedTokens = cacheRead + cacheWrite;
+      if (cachedTokens > prompt) {
         // Under subset semantics the cached count can never exceed the
         // prompt count: a shape disagreement with the provider, not an
         // internal invariant. Fall back to separate accounting — bill the
-        // full prompt at the input rate AND the reported cache reads at
-        // the cache rate. That over-meters relative to either consistent
-        // reading, which is the conservative direction; discarding the
-        // larger cache-read count would under-meter.
+        // full prompt at the input rate AND the reported cache operations at
+        // their rates. That over-meters relative to either consistent reading,
+        // which is the conservative direction; discarding the larger cache
+        // count would under-meter.
         reportUsageShapeAnomaly({
           modelId,
-          anomaly: "cache-read-exceeds-included-prompt",
+          anomaly: "cache-tokens-exceed-included-prompt",
           context: {
             provider,
             promptTokens: String(prompt),
             cacheReadTokens: String(cacheRead),
+            cacheWriteTokens: String(cacheWrite),
           },
         });
-        return { uncachedInputTokens: prompt, cacheReadTokens: cacheRead };
+        return {
+          uncachedInputTokens: prompt,
+          cacheReadTokens: cacheRead,
+          cacheWriteTokens: cacheWrite,
+        };
       }
       return {
-        uncachedInputTokens: prompt - cacheRead,
+        uncachedInputTokens: prompt - cachedTokens,
         cacheReadTokens: cacheRead,
+        cacheWriteTokens: cacheWrite,
       };
     }
     default: {
@@ -274,7 +281,7 @@ export const normalizeProviderPromptTokens = ({
 type UsageInput = {
   modelId: string;
   /**
-   * Input tokens billed at the full input rate. Excludes cache reads:
+   * Input tokens billed at the full input rate. Excludes cache reads/writes:
    * provider usage must pass through `normalizeProviderPromptTokens`
    * first, never a raw provider prompt total.
    */
@@ -287,6 +294,8 @@ type UsageInput = {
    * normal input tokens. Defaults to 0.
    */
   cacheReadTokens?: number;
+  /** Tokens written to the provider's prompt cache. Defaults to 0. */
+  cacheWriteTokens?: number;
 };
 
 /**
@@ -301,6 +310,7 @@ export const computeRawUsageMicroUnits = ({
   uncachedInputTokens,
   outputTokens,
   cacheReadTokens = 0,
+  cacheWriteTokens = 0,
 }: UsageInput): number => {
   const uncachedInput = sanitizeTokenCount({
     modelId,
@@ -317,18 +327,26 @@ export const computeRawUsageMicroUnits = ({
     field: "cacheReadTokens",
     value: cacheReadTokens,
   });
+  const cacheWrite = sanitizeTokenCount({
+    modelId,
+    field: "cacheWriteTokens",
+    value: cacheWriteTokens,
+  });
   // Long-context rate tiers key on what the model actually read, so tier
   // resolution counts cached prompt tokens too.
-  const totalInputTokens = uncachedInput + cacheRead;
+  const totalInputTokens = uncachedInput + cacheRead + cacheWrite;
   const rate = resolveModelRate(
     getModelRateOrFallback(modelId),
     totalInputTokens,
   );
   const cachedRate = rate.cachedInputPerMTok ?? rate.inputPerMTok;
+  const cachedWriteRate = rate.cachedWriteInputPerMTok ?? rate.inputPerMTok;
   const inputCost = scaleTokenCost(uncachedInput, rate.inputPerMTok);
   const cacheCost = scaleTokenCost(cacheRead, cachedRate);
+  const cacheWriteCost = scaleTokenCost(cacheWrite, cachedWriteRate);
   const outputCost = scaleTokenCost(output, rate.outputPerMTok);
-  const rawUsageMicroUnits = inputCost + cacheCost + outputCost;
+  const rawUsageMicroUnits =
+    inputCost + cacheCost + cacheWriteCost + outputCost;
   if (!Number.isSafeInteger(rawUsageMicroUnits)) {
     panic("computed raw usage exceeds the safe integer range");
   }
@@ -360,6 +378,7 @@ export const usageUnitsFromTokens = ({
   uncachedInputTokens,
   outputTokens,
   cacheReadTokens = 0,
+  cacheWriteTokens = 0,
   actionType,
   serviceTier,
   isByok,
@@ -369,6 +388,7 @@ export const usageUnitsFromTokens = ({
     uncachedInputTokens,
     outputTokens,
     cacheReadTokens,
+    cacheWriteTokens,
   });
   if (isByok) {
     return { rawUsageMicroUnits, unitsConsumed: 0 };
