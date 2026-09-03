@@ -115,7 +115,10 @@ impl ClipboardStore {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::clipboard::{ClipboardCaptureStatus, ClipboardItem, ClipboardRetention};
+  use crate::clipboard::{
+    ClipboardCaptureStatus, ClipboardItem, ClipboardItemRetentionClass,
+    ClipboardRetention,
+  };
   use chrono::Utc;
 
   fn unique_path() -> PathBuf {
@@ -138,6 +141,7 @@ mod tests {
         id: "item-1".to_string(),
         name: Some("Privileged draft".to_string()),
         plain_text: "privileged draft text".to_string(),
+        retention_class: ClipboardItemRetentionClass::Kept,
         source_app: None,
       }],
       retention: ClipboardRetention::Month,

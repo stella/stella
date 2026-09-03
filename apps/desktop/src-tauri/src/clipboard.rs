@@ -131,6 +131,20 @@ pub struct ClipboardSourceAppVisual {
   pub key: String,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) enum ClipboardItemRetentionClass {
+  #[default]
+  History,
+  Kept,
+}
+
+impl ClipboardItemRetentionClass {
+  fn is_history(&self) -> bool {
+    *self == Self::History
+  }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum ClipboardItem {
@@ -144,6 +158,13 @@ pub enum ClipboardItem {
     name: Option<String>,
     #[serde(rename = "plainText", alias = "plain_text")]
     plain_text: String,
+    #[serde(
+      default,
+      rename = "retentionClass",
+      alias = "retention_class",
+      skip_serializing_if = "ClipboardItemRetentionClass::is_history"
+    )]
+    retention_class: ClipboardItemRetentionClass,
     #[serde(default, rename = "sourceApp", alias = "source_app")]
     source_app: Option<ClipboardSourceApp>,
   },
@@ -158,6 +179,13 @@ pub enum ClipboardItem {
     name: Option<String>,
     #[serde(rename = "plainText", alias = "plain_text")]
     plain_text: String,
+    #[serde(
+      default,
+      rename = "retentionClass",
+      alias = "retention_class",
+      skip_serializing_if = "ClipboardItemRetentionClass::is_history"
+    )]
+    retention_class: ClipboardItemRetentionClass,
     /// The source app's RTF, written back verbatim on paste so RTF-first
     /// targets receive the original formatting. Never crosses IPC (see
     /// `for_webview`) and is dropped once the clip is edited.
@@ -230,8 +258,18 @@ impl ClipboardItem {
 
   /// The item as the webview sees it: the paste-back payload stays native-side.
   pub fn for_webview(mut self) -> Self {
-    if let Self::FormattedText { rtf, .. } = &mut self {
-      *rtf = None;
+    match &mut self {
+      Self::Text {
+        retention_class, ..
+      } => *retention_class = ClipboardItemRetentionClass::History,
+      Self::FormattedText {
+        retention_class,
+        rtf,
+        ..
+      } => {
+        *retention_class = ClipboardItemRetentionClass::History;
+        *rtf = None;
+      }
     }
     self
   }
@@ -244,10 +282,23 @@ impl ClipboardItem {
     }
   }
 
-  /// Deliberately kept by the user: named or filed into a group. Such
-  /// items are exempt from retention and count pruning.
+  fn retention_class(&self) -> ClipboardItemRetentionClass {
+    match self {
+      Self::Text {
+        retention_class, ..
+      }
+      | Self::FormattedText {
+        retention_class, ..
+      } => *retention_class,
+    }
+  }
+
+  /// Deliberately kept by the user: retained after deleting a group, named,
+  /// or filed into a group. Such items are exempt from retention and count pruning.
   fn is_organised(&self) -> bool {
-    self.group_id().is_some() || self.name().is_some()
+    self.retention_class() == ClipboardItemRetentionClass::Kept
+      || self.group_id().is_some()
+      || self.name().is_some()
   }
 
   fn source_app(&self) -> Option<&ClipboardSourceApp> {
@@ -268,9 +319,30 @@ impl ClipboardItem {
 
   fn set_group_id(&mut self, new_group_id: Option<String>) {
     match self {
-      Self::Text { group_id, .. } | Self::FormattedText { group_id, .. } => {
-        *group_id = new_group_id;
+      Self::Text {
+        group_id,
+        retention_class,
+        ..
       }
+      | Self::FormattedText {
+        group_id,
+        retention_class,
+        ..
+      } => {
+        *group_id = new_group_id;
+        *retention_class = ClipboardItemRetentionClass::History;
+      }
+    }
+  }
+
+  fn set_retention_class(&mut self, new_class: ClipboardItemRetentionClass) {
+    match self {
+      Self::Text {
+        retention_class, ..
+      }
+      | Self::FormattedText {
+        retention_class, ..
+      } => *retention_class = new_class,
     }
   }
 
@@ -291,12 +363,13 @@ impl ClipboardItem {
   }
 
   fn replace_content(&mut self, new_plain_text: String, new_html: Option<String>) {
-    let (copied_at, group_id, id, name, source_app) = match self {
+    let (copied_at, group_id, id, name, retention_class, source_app) = match self {
       Self::Text {
         copied_at,
         group_id,
         id,
         name,
+        retention_class,
         source_app,
         ..
       }
@@ -305,6 +378,7 @@ impl ClipboardItem {
         group_id,
         id,
         name,
+        retention_class,
         source_app,
         ..
       } => (
@@ -312,6 +386,7 @@ impl ClipboardItem {
         group_id.clone(),
         id.clone(),
         name.clone(),
+        *retention_class,
         source_app.clone(),
       ),
     };
@@ -323,6 +398,7 @@ impl ClipboardItem {
         id,
         name,
         plain_text: new_plain_text,
+        retention_class,
         rtf: None,
         source_app,
       },
@@ -332,6 +408,7 @@ impl ClipboardItem {
         id,
         name,
         plain_text: new_plain_text,
+        retention_class,
         source_app,
       },
     };
@@ -348,6 +425,7 @@ impl ClipboardItem {
         group_id,
         name,
         plain_text,
+        retention_class,
         source_app,
         ..
       } => Self::Text {
@@ -356,6 +434,7 @@ impl ClipboardItem {
         id,
         name: name.clone(),
         plain_text: plain_text.clone(),
+        retention_class: *retention_class,
         source_app: source_app.clone(),
       },
       Self::FormattedText {
@@ -363,6 +442,7 @@ impl ClipboardItem {
         html,
         name,
         plain_text,
+        retention_class,
         rtf,
         source_app,
         ..
@@ -373,6 +453,7 @@ impl ClipboardItem {
         id,
         name: name.clone(),
         plain_text: plain_text.clone(),
+        retention_class: *retention_class,
         rtf: rtf.clone(),
         source_app: source_app.clone(),
       },
@@ -824,6 +905,7 @@ impl ClipboardManager {
         for item in &mut self.items {
           if item.group_id() == Some(id) {
             item.set_group_id(None);
+            item.set_retention_class(ClipboardItemRetentionClass::Kept);
           }
         }
       }
@@ -858,7 +940,9 @@ impl ClipboardManager {
     if !item.same_content(plain_text, html.as_deref()) {
       item.replace_content(plain_text.to_string(), html);
     }
-    item.set_group_id(group_id);
+    if item.group_id() != group_id.as_deref() {
+      item.set_group_id(group_id);
+    }
     prune_items_preserving(&mut self.items, self.retention, Utc::now(), Some(id));
     self.persist_or_restore(checkpoint)?;
     Ok(true)
@@ -955,13 +1039,15 @@ impl ClipboardManager {
         (
           item.group_id().map(str::to_string),
           item.name().map(str::to_string),
+          item.retention_class(),
         )
       });
     self
       .items
       .retain(|item| !item.same_content(&plain_text, html.as_deref()));
     let id = uuid::Uuid::new_v4().to_string();
-    let (group_id, name) = preserved_metadata.unwrap_or((None, None));
+    let (group_id, name, retention_class) =
+      preserved_metadata.unwrap_or((None, None, ClipboardItemRetentionClass::History));
     let item = match html {
       Some(html) => ClipboardItem::FormattedText {
         copied_at,
@@ -970,6 +1056,7 @@ impl ClipboardManager {
         id,
         name,
         plain_text,
+        retention_class,
         rtf,
         source_app,
       },
@@ -979,6 +1066,7 @@ impl ClipboardManager {
         id,
         name,
         plain_text,
+        retention_class,
         source_app,
       },
     };
@@ -1797,6 +1885,7 @@ mod tests {
       id: uuid::Uuid::new_v4().to_string(),
       name: None,
       plain_text: text.to_string(),
+      retention_class: ClipboardItemRetentionClass::History,
       source_app: None,
     }
   }
@@ -2001,6 +2090,7 @@ mod tests {
       id: "original".to_string(),
       name: Some("Key clause".to_string()),
       plain_text: "Clause".to_string(),
+      retention_class: ClipboardItemRetentionClass::History,
       source_app: Some(ClipboardSourceApp {
         identifier: Some("com.microsoft.Word".to_string()),
         name: "Microsoft Word".to_string(),
@@ -2215,7 +2305,6 @@ mod tests {
         .iter()
         .any(|item| item.plain_text() == "orphaned")
     );
-
   }
 
   #[test]
@@ -2500,6 +2589,7 @@ mod tests {
       id: "item-id".to_string(),
       name: Some("Formatted note".to_string()),
       plain_text: "formatted".to_string(),
+      retention_class: ClipboardItemRetentionClass::History,
       rtf: None,
       source_app: Some(ClipboardSourceApp {
         identifier: Some("com.apple.TextEdit".to_string()),
@@ -2511,6 +2601,7 @@ mod tests {
 
     assert_eq!(value["type"], "formattedText");
     assert!(value.get("rtf").is_none());
+    assert!(value.get("retentionClass").is_none());
     assert!(value.get("copiedAt").is_some());
     assert_eq!(value["plainText"], "formatted");
     assert_eq!(value["name"], "Formatted note");
@@ -2553,6 +2644,15 @@ mod tests {
     );
     assert_eq!(manager.items.len(), 1);
     assert_eq!(manager.items[0].group_id(), None);
+    assert!(!manager.prune_expired(Utc::now()).unwrap());
+
+    let persisted = serde_json::to_value(&manager.items[0]).unwrap();
+    assert_eq!(persisted["retentionClass"], "kept");
+    let restored: ClipboardItem = serde_json::from_value(persisted).unwrap();
+    assert!(restored.is_organised());
+
+    let webview = serde_json::to_value(restored.for_webview()).unwrap();
+    assert!(webview.get("retentionClass").is_none());
   }
 
   #[test]
