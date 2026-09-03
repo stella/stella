@@ -48,8 +48,12 @@ if (!url) {
 type CountRow = { count: number };
 type DigestRow = { digest: string };
 
-/** How long each contending transaction holds its row lock. */
-const CONTENTION_HOLD_MS = 1500;
+/**
+ * How long each contending transaction holds its row locks: longer than a
+ * short DDL lock wait, the way the corpus workers' batches are, so a
+ * migration that only ever waits briefly fails here as it did in production.
+ */
+const CONTENTION_HOLD_MS = 5000;
 /** Printed once the first contending transaction holds its locks. */
 const CONTENTION_HELD_LINE = "contending: locks held";
 /** Tables production's workers write to continuously, with a no-op touch. */
