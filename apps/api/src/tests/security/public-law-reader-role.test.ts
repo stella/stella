@@ -584,21 +584,21 @@ describe("public-law reader role", () => {
     });
     expect(search.ranked).toEqual([]);
 
-    const byDocket = await findDecisionIdsByIdentity(
+    const byDocket = await findDecisionIdsByIdentity({
       caseLawDb,
-      { type: "identifier", kind: "docket", value: "22 Cdo 1/2026" },
-      "CZE",
-    );
+      country: "CZE",
+      identity: { type: "identifier", kind: "docket", value: "22 Cdo 1/2026" },
+    });
     expect(byDocket).toEqual([]);
-    const byEcli = await findDecisionIdsByIdentity(
+    const byEcli = await findDecisionIdsByIdentity({
       caseLawDb,
-      {
+      country: undefined,
+      identity: {
         type: "identifier",
         kind: "ecli",
         value: "ECLI:CZ:NS:2026:22.CDO.1.2026.1",
       },
-      undefined,
-    );
+    });
     expect(byEcli).toEqual([]);
   });
 

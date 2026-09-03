@@ -56,7 +56,36 @@ type CorpusIndexSearchPageResult<TContext> = {
    */
   passageCountById: Map<string, number>;
   hasMore: boolean;
+  /** What the scan spent reaching this page, and why it stopped. */
+  scan: CorpusIndexScanReport;
 };
+
+/**
+ * The cost of one scan. A response looks the same whether it took one engine
+ * round trip or the cap's worth, so the count is only observable if the scan
+ * reports it.
+ */
+export type CorpusIndexScanReport = {
+  /** Engine round trips spent accumulating candidates. */
+  rounds: number;
+  /** Hits the engine returned across those rounds. */
+  passagesScanned: number;
+  /** Summed wall time of those engine calls. */
+  indexMs: number;
+  /** Stopped because no unseen candidate could out-blend the page. */
+  earlyStopped: boolean;
+  /** Stopped at `LIMITS.corpusIndexSearchMaxRounds` instead. */
+  roundCapHit: boolean;
+};
+
+/** What a request that never reached the index spent on it. */
+export const emptyCorpusIndexScan = (): CorpusIndexScanReport => ({
+  rounds: 0,
+  passagesScanned: 0,
+  indexMs: 0,
+  earlyStopped: false,
+  roundCapHit: false,
+});
 
 /**
  * Passage-layout indexes return several hits per document, so a fixed
@@ -134,6 +163,8 @@ export const readCorpusIndexSearchPage = async <TContext>({
   let totalHits = Number.POSITIVE_INFINITY;
   let rounds = 0;
   let roundCapHit = false;
+  let earlyStopped = false;
+  let indexMs = 0;
 
   // Chunk-space scan budget, grown to keep result-space reach constant
   // across index layouts. Recomputed each round from what the scan has seen so
@@ -176,6 +207,7 @@ export const readCorpusIndexSearchPage = async <TContext>({
     // Sort by BM25 explicitly: without it the engine returns hits in
     // document-id order and the rank-based lexical score below would be
     // meaningless.
+    const roundStartedAt = performance.now();
     // oxlint-disable-next-line no-await-in-loop -- offset pagination: each scan depends on the previous startOffset
     const result = await getCorpusIndexClient(cluster).search({
       indexId,
@@ -185,6 +217,7 @@ export const readCorpusIndexSearchPage = async <TContext>({
       sortBy: "_score",
       snippetFields,
     });
+    indexMs += performance.now() - roundStartedAt;
     if (result.isErr()) {
       throw result.error;
     }
@@ -238,6 +271,7 @@ export const readCorpusIndexSearchPage = async <TContext>({
         corpusIndexLexicalScore(totalHits, startOffset),
       );
       if (nextUnseen < cursorScore) {
+        earlyStopped = true;
         break;
       }
     }
@@ -266,5 +300,12 @@ export const readCorpusIndexSearchPage = async <TContext>({
     anchorIdById,
     passageCountById,
     hasMore,
+    scan: {
+      rounds,
+      passagesScanned: startOffset,
+      indexMs,
+      earlyStopped,
+      roundCapHit,
+    },
   };
 };

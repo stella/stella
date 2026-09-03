@@ -21,6 +21,12 @@ import {
 } from "@/api/handlers/case-law/citation-score";
 import { loadCourtWeightEntriesForSql } from "@/api/handlers/case-law/court-weights";
 import type { searchDecisionsBodySchema } from "@/api/handlers/case-law/decisions/search-schema";
+import {
+  CASE_LAW_SEARCH_DB_READ,
+  createCaseLawSearchDbTimer,
+  decisionQueryClass,
+  reportCaseLawSearchCompleted,
+} from "@/api/handlers/case-law/decisions/search-telemetry";
 import { bareCitationKey } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { arrayOrEmpty } from "@/api/lib/array";
 // eslint-disable-next-line no-restricted-imports -- search boundary: brands document ids returned by the corpus index before re-hydrating from Postgres
@@ -50,7 +56,11 @@ import {
   currentCaseLawCorpusProjection,
 } from "@/api/lib/legal-search/case-law-corpus-projection";
 import { readServingCorpusIndexGenerationTx } from "@/api/lib/legal-search/corpus-index-generation-store";
-import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
+import type { CorpusIndexScanReport } from "@/api/lib/legal-search/corpus-index-pagination";
+import {
+  emptyCorpusIndexScan,
+  readCorpusIndexSearchPage,
+} from "@/api/lib/legal-search/corpus-index-pagination";
 import {
   caseLawCorpusQuery,
   type CorpusTermExpander,
@@ -577,6 +587,15 @@ type HydratedDecisionRow = Awaited<
  */
 type HydratedDecisionRows = Map<string, HydratedDecisionRow | null>;
 
+/**
+ * Brackets the database call a read makes, so a caller measuring Postgres
+ * time measures the wait and not the work around it. Absent wherever nothing
+ * is being measured.
+ */
+type TimeDbRead = <TRead>(run: () => Promise<TRead>) => Promise<TRead>;
+
+const untimedDbRead: TimeDbRead = async (run) => await run();
+
 type RehydrateCaseLawCandidatesOptions = {
   body: SearchDecisionsBody;
   candidates: readonly ScoredCandidate[];
@@ -584,6 +603,7 @@ type RehydrateCaseLawCandidatesOptions = {
   generation: string;
   /** The request's record of rows read so far; only ids absent from it are read. */
   hydrated?: HydratedDecisionRows | undefined;
+  timeDbRead?: TimeDbRead | undefined;
 };
 
 /**
@@ -597,6 +617,7 @@ export const rehydrateCaseLawCandidates = async ({
   caseLawDb,
   generation,
   hydrated = new Map(),
+  timeDbRead = untimedDbRead,
 }: RehydrateCaseLawCandidatesOptions) => {
   const ids = candidates
     .filter((candidate) => !hydrated.has(candidate.id))
@@ -642,8 +663,16 @@ export const rehydrateCaseLawCandidates = async ({
   const rows =
     ids.length === 0
       ? []
-      : await caseLawDb((tx) =>
-          hydratedDecisionRowsQuery(tx, ids, rehydrationFilters, generation),
+      : await timeDbRead(
+          async () =>
+            await caseLawDb((tx) =>
+              hydratedDecisionRowsQuery(
+                tx,
+                ids,
+                rehydrationFilters,
+                generation,
+              ),
+            ),
         );
   for (const id of ids) {
     hydrated.set(id, null);
@@ -690,11 +719,19 @@ type DecisionIdentity = Extract<DecisionQueryIntent, { type: "identifier" }>;
  * the citator resolves by, and the ECLI as published. Bounded by the page
  * size: past that the entry names a list, not a decision.
  */
-export const findDecisionIdsByIdentity = async (
-  caseLawDb: CaseLawPublicReadDb,
-  identity: DecisionIdentity,
-  country: string | undefined,
-): Promise<SafeId<"caseLawDecision">[]> => {
+type FindDecisionIdsByIdentityOptions = {
+  caseLawDb: CaseLawPublicReadDb;
+  country: string | undefined;
+  identity: DecisionIdentity;
+  timeDbRead?: TimeDbRead | undefined;
+};
+
+export const findDecisionIdsByIdentity = async ({
+  caseLawDb,
+  country,
+  identity,
+  timeDbRead = untimedDbRead,
+}: FindDecisionIdsByIdentityOptions): Promise<SafeId<"caseLawDecision">[]> => {
   const identityPredicate =
     identity.kind === "ecli"
       ? inArray(caseLawDecisions.ecli, [
@@ -702,19 +739,22 @@ export const findDecisionIdsByIdentity = async (
           identity.value.toUpperCase(),
         ])
       : eq(caseLawDecisions.citationKey, bareCitationKey(identity.value));
-  const rows = await caseLawDb((tx) =>
-    tx
-      .select({ id: caseLawDecisions.id })
-      .from(caseLawDecisions)
-      .where(
-        and(
-          identityPredicate,
-          country === undefined
-            ? undefined
-            : eq(caseLawDecisions.country, country),
-        ),
-      )
-      .limit(LIMITS.caseLawSearchPageSizeMax),
+  const rows = await timeDbRead(
+    async () =>
+      await caseLawDb((tx) =>
+        tx
+          .select({ id: caseLawDecisions.id })
+          .from(caseLawDecisions)
+          .where(
+            and(
+              identityPredicate,
+              country === undefined
+                ? undefined
+                : eq(caseLawDecisions.country, country),
+            ),
+          )
+          .limit(LIMITS.caseLawSearchPageSizeMax),
+      ),
   );
   return rows.map((row) => row.id);
 };
@@ -801,6 +841,7 @@ const searchCorpusIndexDecisions = async (
   body: SearchDecisionsBody,
   caseLawDb: CaseLawPublicReadDb,
 ) => {
+  const startedAt = performance.now();
   const limit = body.limit ?? LIMITS.caseLawSearchPageSizeDefault;
 
   let parsedCursor: { score: number; id: string } | null = null;
@@ -815,45 +856,87 @@ const searchCorpusIndexDecisions = async (
     return status(400, { message: "Invalid country" });
   }
 
-  const serving = await caseLawDb(
-    async (tx) => await readServingCorpusIndexGenerationTx(tx, "case_law"),
+  // Where the request's time went. The engine half is the scan's to report;
+  // this side is every Postgres read, bracketed at the database call itself so
+  // the numbers are wait, not work: the candidate read hands the timer down to
+  // where it opens its transaction, because the ranking, folding and
+  // collapsing around it are not database time.
+  const dbTimer = createCaseLawSearchDbTimer();
+  // Shared by the identity path and the scan, so `hydrated.size` counts the
+  // candidates the whole request read, once each.
+  const hydrated: HydratedDecisionRows = new Map();
+  const intent = parseDecisionQuery(body.query);
+  const queryClass = decisionQueryClass(intent);
+  const report = (hitsReturned: number, scan: CorpusIndexScanReport): void => {
+    reportCaseLawSearchCompleted({
+      candidatesHydrated: hydrated.size,
+      country: body.country,
+      db: dbTimer.timing(),
+      hitsReturned,
+      queryClass,
+      totalMs: performance.now() - startedAt,
+      ...scan,
+    });
+  };
+
+  const serving = await dbTimer.time(
+    CASE_LAW_SEARCH_DB_READ.servingGeneration,
+    async () =>
+      await caseLawDb(
+        async (tx) => await readServingCorpusIndexGenerationTx(tx, "case_law"),
+      ),
   );
   const generation = serving.generation;
 
   // An entry that names a decision is answered by identity, and only falls
   // through to the text index when nothing answers to it. A cursor means the
   // reader is already paging a text search, which identity never returns.
-  const intent = parseDecisionQuery(body.query);
   if (intent.type === "identifier" && parsedCursor === null) {
-    const ids = await findDecisionIdsByIdentity(
+    const ids = await findDecisionIdsByIdentity({
       caseLawDb,
-      intent,
-      body.country,
-    );
+      country: body.country,
+      identity: intent,
+      timeDbRead: async (run) =>
+        await dbTimer.time(CASE_LAW_SEARCH_DB_READ.identity, run),
+    });
     if (ids.length > 0) {
       const identityRanking = await rehydrateCaseLawCandidates({
         body,
         candidates: ids.map((id) => ({ id, score: 1 })),
         caseLawDb,
         generation,
+        hydrated,
+        timeDbRead: async (run) =>
+          await dbTimer.time(CASE_LAW_SEARCH_DB_READ.candidates, run),
       });
       // A docket can name decisions at several courts; the page still honours
       // the requested size, and identity never pages past it.
       const identityPage = identityRanking.ranked.slice(0, limit);
       if (identityPage.length > 0) {
         const { byId } = identityRanking.context;
-        return decisionHitsPage({
-          alternatesByGroupKey:
-            await readPublicDecisionLanguageAlternatesByGroup({
-              caseLawDb,
-              languageGroupKeys: languageGroupKeysOf(identityPage, byId),
-            }),
+        // Timed around the call rather than through the timer's thunk: the
+        // alternates read must stay a direct call in this function, which a
+        // lint rule enforces so no search path can drop it.
+        const identityAlternatesStartedAt = performance.now();
+        const identityAlternates =
+          await readPublicDecisionLanguageAlternatesByGroup({
+            caseLawDb,
+            languageGroupKeys: languageGroupKeysOf(identityPage, byId),
+          });
+        dbTimer.record(
+          CASE_LAW_SEARCH_DB_READ.alternates,
+          performance.now() - identityAlternatesStartedAt,
+        );
+        const page = decisionHitsPage({
+          alternatesByGroupKey: identityAlternates,
           anchorIdById: new Map(),
           byId,
           nextCursor: null,
           pageRanked: identityPage,
           snippetById: new Map(),
         });
+        report(page.hits.length, emptyCorpusIndexScan());
+        return page;
       }
     }
   }
@@ -867,10 +950,10 @@ const searchCorpusIndexDecisions = async (
 
   const query = await resolveCorpusIndexQuery(body, jurisdictionClause);
   if (query === null) {
+    report(0, emptyCorpusIndexScan());
     return { hits: [], facets: null, totalCount: null, nextCursor: null };
   }
 
-  const hydrated: HydratedDecisionRows = new Map();
   const searchPage = await readCorpusIndexSearchPage({
     cluster: serving.cluster,
     indexId,
@@ -894,6 +977,8 @@ const searchCorpusIndexDecisions = async (
         caseLawDb,
         generation,
         hydrated,
+        timeDbRead: async (run) =>
+          await dbTimer.time(CASE_LAW_SEARCH_DB_READ.candidates, run),
       }),
   });
 
@@ -902,21 +987,33 @@ const searchCorpusIndexDecisions = async (
     context: { byId },
     hasMore,
     pageRanked,
+    scan,
     snippetById,
   } = searchPage;
 
   const last = pageRanked.at(-1);
   const nextCursor = hasMore && last ? encodeCursor(last.score, last.id) : null;
 
-  return decisionHitsPage({
-    alternatesByGroupKey: await readPublicDecisionLanguageAlternatesByGroup({
+  // Timed around the call for the same reason as on the identity path.
+  const alternatesStartedAt = performance.now();
+  const alternatesByGroupKey =
+    await readPublicDecisionLanguageAlternatesByGroup({
       caseLawDb,
       languageGroupKeys: languageGroupKeysOf(pageRanked, byId),
-    }),
+    });
+  dbTimer.record(
+    CASE_LAW_SEARCH_DB_READ.alternates,
+    performance.now() - alternatesStartedAt,
+  );
+
+  const page = decisionHitsPage({
+    alternatesByGroupKey,
     anchorIdById,
     byId,
     nextCursor,
     pageRanked,
     snippetById,
   });
+  report(page.hits.length, scan);
+  return page;
 };

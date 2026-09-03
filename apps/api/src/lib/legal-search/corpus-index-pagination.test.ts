@@ -262,6 +262,14 @@ describe("the scan is bounded by engine round trips", () => {
     // The page is still full and its own window holds more, so paging
     // continues within what the capped scan reached.
     expect(page.hasMore).toBe(true);
+    expect(page.scan.rounds).toBe(LIMITS.corpusIndexSearchMaxRounds);
+    expect(page.scan.passagesScanned).toBe(
+      LIMITS.corpusIndexSearchMaxRounds *
+        LIMITS.corpusIndexSearchCandidateLimit,
+    );
+    expect(page.scan.roundCapHit).toBe(true);
+    expect(page.scan.earlyStopped).toBe(false);
+    expect(page.scan.indexMs).toBeGreaterThanOrEqual(0);
   });
 
   test("a capped scan advertises only what a rescan can reach again", async () => {
@@ -305,6 +313,12 @@ describe("the scan is bounded by engine round trips", () => {
 
     expect(requestCount).toBe(1);
     expect(page.pageRanked).toHaveLength(10);
+    expect(page.scan.rounds).toBe(1);
+    expect(page.scan.passagesScanned).toBe(
+      LIMITS.corpusIndexSearchCandidateLimit,
+    );
+    expect(page.scan.earlyStopped).toBe(true);
+    expect(page.scan.roundCapHit).toBe(false);
   });
 });
 
