@@ -160,6 +160,56 @@ const shallowCloneElement = (source: HTMLElement) => {
 const isFormatElement = (element: HTMLElement, tags: readonly string[]) =>
   tags.includes(element.localName);
 
+const hasFormatAncestor = (
+  node: Node,
+  editor: HTMLDivElement,
+  tags: readonly string[],
+) => {
+  let ancestor = node instanceof HTMLElement ? node : node.parentElement;
+  while (ancestor && ancestor !== editor) {
+    if (isFormatElement(ancestor, tags)) {
+      return true;
+    }
+    ancestor = ancestor.parentElement;
+  }
+  return false;
+};
+
+const rangeSelectsNodeContent = (range: Range, node: Node) => {
+  if (!range.intersectsNode(node)) {
+    return false;
+  }
+  if (!(node instanceof Text)) {
+    return true;
+  }
+  const start = node === range.startContainer ? range.startOffset : 0;
+  const end = node === range.endContainer ? range.endOffset : node.length;
+  return start < end;
+};
+
+const selectionIsFormatted = (
+  editor: HTMLDivElement,
+  range: Range,
+  tags: readonly string[],
+) => {
+  const walker = document.createTreeWalker(editor, NodeFilter.SHOW_ALL);
+  let hasSelectedContent = false;
+  let node = walker.nextNode();
+  while (node) {
+    const isContent =
+      (node instanceof Text && node.length > 0) ||
+      (node instanceof HTMLElement && node.tagName === "BR");
+    if (isContent && rangeSelectsNodeContent(range, node)) {
+      hasSelectedContent = true;
+      if (!hasFormatAncestor(node, editor, tags)) {
+        return false;
+      }
+    }
+    node = walker.nextNode();
+  }
+  return hasSelectedContent;
+};
+
 const outermostFormatAncestor = (
   node: Node,
   otherBoundary: Node,
@@ -195,6 +245,10 @@ const removeInlineFormat = (
   selection: Selection,
   tags: readonly string[],
 ) => {
+  if (!selectionIsFormatted(editor, range, tags)) {
+    return false;
+  }
+
   const formattedAncestor = outermostFormatAncestor(
     range.startContainer,
     range.endContainer,
@@ -202,7 +256,22 @@ const removeInlineFormat = (
     tags,
   );
   if (!formattedAncestor?.parentNode) {
-    return false;
+    const selected = range.extractContents();
+    removeFormatFromFragment(selected, tags);
+    const selectedNodes = Array.from(selected.childNodes);
+    const firstSelectedNode = selectedNodes.at(0);
+    const lastSelectedNode = selectedNodes.at(-1);
+    if (!firstSelectedNode || !lastSelectedNode) {
+      return false;
+    }
+    range.insertNode(selected);
+    selection.removeAllRanges();
+    const unformattedRange = document.createRange();
+    unformattedRange.setStartBefore(firstSelectedNode);
+    unformattedRange.setEndAfter(lastSelectedNode);
+    selection.addRange(unformattedRange);
+    editor.focus();
+    return true;
   }
 
   const beforeRange = document.createRange();
