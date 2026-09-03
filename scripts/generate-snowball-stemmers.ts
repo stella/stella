@@ -26,10 +26,12 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { SNOWBALL_BASE_STEMMER_SHA256 } from "@/api/lib/legal-search/morphology/snowball/base-stemmer";
+import {
+  SNOWBALL_BASE_STEMMER_SHA256,
+  SNOWBALL_RELEASE,
+} from "@/api/lib/legal-search/morphology/snowball/base-stemmer";
 
 const SNOWBALL_REPO = "https://github.com/snowballstem/snowball";
-const SNOWBALL_TAG = "v3.1.1";
 /** Commit the tag resolves to; recorded so the checkout is verifiable. */
 const SNOWBALL_COMMIT = "cd195b51e948a902a4312f023f4a14392516a543";
 
@@ -138,7 +140,7 @@ const licenceHeader = (algorithm: string, used: HeaderImports) => `/**
  *   bun scripts/generate-snowball-stemmers.ts --write
  *
  * Upstream:  ${SNOWBALL_REPO}
- * Version:   ${SNOWBALL_TAG} (commit ${SNOWBALL_COMMIT})
+ * Version:   ${SNOWBALL_RELEASE} (commit ${SNOWBALL_COMMIT})
  * Command:   ./snowball algorithms/${algorithm}.sbl -js -o ${algorithm}
  *
  * The generator emits JavaScript; the committed module is that output with
@@ -170,7 +172,7 @@ const fixtureHeader = (
 # last ${SAMPLE_EDGE}) of the official reference vocabulary:
 #   ${SNOWBALL_DATA_REPO} @ ${SNOWBALL_DATA_COMMIT}
 #   ${algorithm}/voc.txt -> ${algorithm}/output.txt
-# produced by Snowball ${SNOWBALL_TAG}.
+# produced by Snowball ${SNOWBALL_RELEASE}.
 #
 # Format: <word>\\t<stem>, one pair per line. The reader checks the row count
 # against the declaration below, so a truncated fixture fails loudly instead
@@ -403,11 +405,11 @@ const buildArtifacts = async (
   const snowballDir = path.join(workDir, "snowball");
   const dataDir = path.join(workDir, "snowball-data");
 
-  await $`git clone --depth 1 --branch ${SNOWBALL_TAG} ${SNOWBALL_REPO} ${snowballDir}`.quiet();
+  await $`git clone --depth 1 --branch ${SNOWBALL_RELEASE} ${SNOWBALL_REPO} ${snowballDir}`.quiet();
   const head = (await $`git -C ${snowballDir} rev-parse HEAD`.text()).trim();
   if (head !== SNOWBALL_COMMIT) {
     panic(
-      `${SNOWBALL_TAG} resolved to ${head}, expected ${SNOWBALL_COMMIT}; the tag moved`,
+      `${SNOWBALL_RELEASE} resolved to ${head}, expected ${SNOWBALL_COMMIT}; the tag moved`,
     );
   }
   await $`make -C ${snowballDir} snowball`.quiet();
@@ -472,11 +474,11 @@ const main = async (): Promise<number> => {
     }
     if (drift.length > 0) {
       console.error(
-        `\n${drift.length} file(s) differ from Snowball ${SNOWBALL_TAG}. Run with --write.`,
+        `\n${drift.length} file(s) differ from Snowball ${SNOWBALL_RELEASE}. Run with --write.`,
       );
       return 1;
     }
-    console.log(`${artifacts.length} files match Snowball ${SNOWBALL_TAG}`);
+    console.log(`${artifacts.length} files match Snowball ${SNOWBALL_RELEASE}`);
     return 0;
   } finally {
     await rm(workDir, { recursive: true, force: true });

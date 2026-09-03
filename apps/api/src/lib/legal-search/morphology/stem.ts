@@ -19,6 +19,7 @@
  */
 
 import { stemSlovak } from "@/api/lib/legal-search/morphology/slovak";
+import { SNOWBALL_RELEASE } from "@/api/lib/legal-search/morphology/snowball/base-stemmer";
 import { CzechStemmer } from "@/api/lib/legal-search/morphology/snowball/czech.gen";
 import { DanishStemmer } from "@/api/lib/legal-search/morphology/snowball/danish.gen";
 import { DutchStemmer } from "@/api/lib/legal-search/morphology/snowball/dutch.gen";
@@ -62,6 +63,29 @@ export const MORPHOLOGY_LANGUAGES = [
 ] as const;
 
 export type MorphologyLanguage = (typeof MORPHOLOGY_LANGUAGES)[number];
+
+/**
+ * What this module stems as, for anything that has to re-do work when the
+ * answer changes.
+ *
+ * Stems are content, not schema: a generation's stem *fields* are pinned by
+ * its manifest digest, but what those fields hold depends on the algorithms
+ * behind them, so a document stemmed under one release carries stems the next
+ * would write differently. The projection folds this into the fingerprint of
+ * a generation that writes stem fields, which is what makes a new language or
+ * a Snowball upgrade re-project the documents it changes instead of leaving
+ * stale stems under a field the read path queries.
+ *
+ * Derived from the stemmer set rather than declared beside it: adding a
+ * language moves the list, and a Snowball upgrade moves the release. The one
+ * change it does not see is an edit to the vendored Slovak stemmer, which
+ * carries no upstream version of its own.
+ */
+export const MORPHOLOGY_VERSION = `${SNOWBALL_RELEASE}+${[
+  ...MORPHOLOGY_LANGUAGES,
+]
+  .toSorted()
+  .join(",")}`;
 
 /**
  * Snowball stemmer instances carry per-call cursor state and are not

@@ -315,6 +315,45 @@ test("a language with no stemmer writes no stem field at all", () => {
   }
 });
 
+const openingTextStem = (
+  jurisdiction: string,
+  language: string,
+  text: string,
+): string | undefined => {
+  const [document] = buildCaseLawProjectionDocuments({
+    manifest: CORPUS_INDEX_MANIFESTS.case_law_v6,
+    input: { ...CASE_LAW_INPUT, jurisdiction, language },
+    payload: { text, ast: null },
+    revision: REVISION,
+  });
+  return document?.text_stem;
+};
+
+test("a German decision stems with the German algorithm", () => {
+  // Pinned rather than compared to a call on the same helper: the point is
+  // which algorithm ran, and German umlauts survive it where a neighbouring
+  // Germanic algorithm folds them.
+  expect(
+    openingTextStem("aut", "de", "Die Verträge der Gerichte wurden gekündigt."),
+  ).toBe("die vertrag der gericht wurd gekundigt");
+});
+
+test("a European decision stems with the language it is written in", () => {
+  // The European index carries 24 languages under one jurisdiction, so the
+  // jurisdiction names none of them: only the decision's own language can
+  // pick the algorithm.
+  expect(
+    openingTextStem(
+      "eu",
+      "fr",
+      "Les jugements des tribunaux sur les requêtes.",
+    ),
+  ).toBe("le jug de tribunal sur le requêt");
+  expect(
+    openingTextStem("eu", "de", "Die Verträge der Gerichte wurden gekündigt."),
+  ).toBe("die vertrag der gericht wurd gekundigt");
+});
+
 test("the summary stem is written to the opening passage only", () => {
   const documents = buildCaseLawProjectionDocuments({
     manifest: CORPUS_INDEX_MANIFESTS.case_law_v6,

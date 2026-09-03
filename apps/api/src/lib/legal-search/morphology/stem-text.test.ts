@@ -55,9 +55,9 @@ test("a jurisdiction and a document resolve their own language", () => {
   expect(corpusMorphologyLanguage("CZE")).toBe("cs");
   expect(corpusMorphologyLanguage("svk")).toBe("sk");
   expect(corpusMorphologyLanguage("POL")).toBe("pl");
-  // German, and 24 languages under one jurisdiction: neither has one language
-  // to stem against.
-  expect(corpusMorphologyLanguage("AUT")).toBeNull();
+  expect(corpusMorphologyLanguage("AUT")).toBe("de");
+  // 24 languages under one jurisdiction: no one language to stem against, so
+  // a European search stems only when the request names a language.
   expect(corpusMorphologyLanguage("EU")).toBeNull();
   expect(corpusMorphologyLanguage("XXX")).toBeNull();
   // An unscoped search spans every jurisdiction of a generation.
