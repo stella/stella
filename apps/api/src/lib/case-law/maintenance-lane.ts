@@ -40,6 +40,7 @@ import { SQL } from "bun";
 import { sql } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
 
+import { runUnderCorpusSchemaLane } from "@/api/db/corpus-schema-lane";
 import type { rootDb as rootDatabase, Transaction } from "@/api/db/root";
 import { logger } from "@/api/lib/observability/logger";
 
@@ -85,8 +86,14 @@ export type CaseLawScriptHandles = {
   ingestionDb: CaseLawIngestionHandle;
 };
 
+/**
+ * The write door's handles. Its `rootDb` is the narrow handle, every
+ * transaction of which holds the corpus schema lane shared (see
+ * `db/corpus-schema-lane.ts`): a root writer would otherwise slip past the
+ * lane an upgrade drains, and race its DDL the way the workers used to.
+ */
 export type CaseLawWriteHandles = {
-  rootDb: typeof rootDatabase;
+  rootDb: CaseLawRootHandle;
   ingestionDb: CaseLawIngestionHandle;
 };
 
@@ -127,10 +134,31 @@ const openLaneConnection = async (): Promise<MaintenanceLaneSql> => {
   return new SQL({ url: envBase.DATABASE_URL, max: 1 });
 };
 
+/**
+ * The root handle with every transaction under the shared corpus schema
+ * lane. `execute` outside a transaction runs inside one, so there is no path
+ * around the lane.
+ */
+const laneRootHandle = (rootDb: typeof rootDatabase): CaseLawRootHandle => {
+  const transaction = async <T>(
+    fn: (tx: Transaction) => Promise<T>,
+  ): Promise<T> =>
+    await runUnderCorpusSchemaLane({ database: rootDb, work: fn });
+  return {
+    transaction,
+    execute: async <TRow extends Record<string, unknown>>(
+      query: SQLWrapper | string,
+    ) => await transaction(async (tx) => await tx.execute<TRow>(query)),
+  };
+};
+
 const loadWriteHandles = async (): Promise<CaseLawWriteHandles> => {
   const { rlsDb, rootDb } = await import("@/api/db/root");
   const { createIngestionDb } = await import("@/api/db/scoped");
-  return { rootDb, ingestionDb: createIngestionDb(rlsDb) };
+  return {
+    rootDb: laneRootHandle(rootDb),
+    ingestionDb: createIngestionDb(rlsDb),
+  };
 };
 
 /**
