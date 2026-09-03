@@ -35,10 +35,8 @@ export const assertSsrDocument = ({
       message: `Expected SSR response status ${expectedStatus}, received ${status}.`,
     });
   }
-  if (
-    contentType === null ||
-    !contentType.toLowerCase().includes("text/html")
-  ) {
+  const mediaType = contentType?.split(";", 1).at(0)?.trim().toLowerCase();
+  if (mediaType !== "text/html") {
     throw new SsrDocumentAssertionError({
       code: "invalid-content-type",
       message: `Expected an HTML SSR response, received ${contentType ?? "no content type"}.`,

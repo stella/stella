@@ -244,7 +244,7 @@ jobs:
             # ordinary app-source changes are covered by web-build's cheaper
             # in-checkout boot smoke instead of a full image build.
             case "$file" in
-              apps/web/Dockerfile|apps/web/src/runtime.ts|apps/web/vite.config.ts|packages/*/package.json|scripts/stage-web-runtime.ts|scripts/publish-manifest.ts|scripts/web-runtime-closure.ts|bun.lock|.dockerignore|.github/workflows/ci.yml)
+              apps/web/Dockerfile|apps/web/src/runtime.ts|apps/web/vite.config.ts|packages/start-runtime/**|packages/*/package.json|scripts/stage-web-runtime.ts|scripts/publish-manifest.ts|scripts/web-runtime-closure.ts|bun.lock|.dockerignore|.github/workflows/ci.yml)
                 web_image_smoke_required=true
                 ;;
             esac

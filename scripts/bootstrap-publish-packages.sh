@@ -27,7 +27,7 @@ fi
 # First publication needs an npm token; trusted publishing can only be configured
 # after each package exists. `anonymize-chat` depends on the already-published
 # `anonymize-wasm` package.
-packages=(auth-model ai-catalog anonymize-chat)
+packages=(auth-model ai-catalog anonymize-chat start-runtime ssr-kit ssr-testkit)
 manifests=()
 integrities=()
 publish_modes=()

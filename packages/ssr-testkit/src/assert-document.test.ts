@@ -38,6 +38,24 @@ describe("SSR document contract", () => {
       },
     },
     {
+      code: "invalid-content-type",
+      input: {
+        contentType: "application/json; profile=text/html",
+        html: "<main>Catalogue</main>",
+        requiredContent: ["Catalogue"],
+        status: 200,
+      },
+    },
+    {
+      code: "invalid-content-type",
+      input: {
+        contentType: "text/htmlx",
+        html: "<main>Catalogue</main>",
+        requiredContent: ["Catalogue"],
+        status: 200,
+      },
+    },
+    {
       code: "missing-content",
       input: {
         contentType: "text/html",

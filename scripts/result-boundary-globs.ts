@@ -33,6 +33,11 @@ export const RESULT_BOUNDARY_GLOBS = [
   "apps/api/src/lib/workflow-queue.ts",
   "apps/api/src/scripts/**",
   "apps/api/src/handlers/mcp-app-sandbox/**",
+  // These packages are boundary adapters by design: the runtime turns
+  // invalid startup state into fatal exceptions, while the testkit exposes
+  // assertion failures to test runners.
+  "packages/start-runtime/src/runtime.ts",
+  "packages/ssr-testkit/src/assert-document.ts",
 ] as const;
 
 // Non-authored source and test surfaces do not carry migration debt. Keep the
