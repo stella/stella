@@ -1,5 +1,15 @@
 # @stll/ui
 
+## 0.22.0
+
+### Minor Changes
+
+- [#2889](https://github.com/stella/stella/pull/2889) [`a7ffd5e`](https://github.com/stella/stella/commit/a7ffd5eadeb4f09e859bb9d0daf95a2ad7bc1a01) Thanks [@jan-kubica](https://github.com/jan-kubica)! - A lane's controls stay reachable while its cells scroll. `KanbanSubgroupBoard` measures its sticky header block and publishes the reach on its scroll container as `KANBAN_STICKY_TOP_VAR` (`--kanban-sticky-top`), so anything that must stay readable rests just under the header and releases where its lane ends. `KanbanVirtualCell` takes `footerPlacement="sticky-start"`, which leads the rows with the `footer` and pins it there instead of closing the cell with it (marked `data-kanban-cell-footer="sticky-start"`, repainting the cell's own surface, accent wash included, over an opaque base so cards pass behind it), and the new `KanbanCollapsedBandCaption` keeps a folded band's name and count in view down a lane hundreds of cards tall. A cell that keeps its own bounded scroll surface is its own scroll container, where the board's header offset means nothing: reset the variable on such a cell so its action rests at the cell's own top.
+
+### Patch Changes
+
+- [#2887](https://github.com/stella/stella/pull/2887) [`f38684c`](https://github.com/stella/stella/commit/f38684c842ac1dd7dca0897a3afa56c80c202e48) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `Popover` and `Tooltip` size their positioner to the rendered popup (`w-max`, still capped by `max-w-(--available-width)`) instead of to `--positioner-width`, and pass an 8px `collisionPadding`. Base UI writes `--positioner-width` from the popup payload, so a popup whose content grew from local state (a picker view swapping to a wide editor view) left the positioner at the old width; Base UI positions and collision-tests the positioner, so `shift()` saw no overflow while the popup rendered wider and ran past the viewport edge. `max-content` also tracks `--popup-width` as it interpolates, so payload transitions keep animating their width and no longer need the variable on the positioner.
+
 ## 0.21.0
 
 ### Minor Changes

@@ -1,5 +1,11 @@
 # @stll/ai-catalog
 
+## 0.1.6
+
+### Patch Changes
+
+- [#2867](https://github.com/stella/stella/pull/2867) [`5de796a`](https://github.com/stella/stella/commit/5de796a05e94a1575fec5cb9e609652d38ca4fb6) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Offer Gemini 3.8 Flash with its upstream rates, 1M context window, and generated capabilities.
+
 ## 0.1.5
 
 ### Patch Changes
