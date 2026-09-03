@@ -27,10 +27,14 @@
 #                                      apps/api/src/scripts/seed-migration-rehearsal-plan.ts)
 #   REHEARSAL_MIGRATE_BUDGET_SECONDS   default 900
 #
-# Exits non-zero when the database is not empty, the base schema cannot be
-# applied, the seed fails, the upgrade fails or outruns its budget, the rerun
-# changes the applied migrations, a CHECK constraint's validity, or the rows
-# an online repair rewrites, or the schema drifts from schema.ts.
+# The upgrade and the rerun run against a writer that keeps short
+# transactions open on the corpus tables, the way production's ingestion and
+# projection workers do: DDL that needs ACCESS EXCLUSIVE on those tables has
+# to win a gap between writer transactions, and a single short lock wait does
+# not. Exits non-zero when the database is not empty, the base schema cannot
+# be applied, the seed fails, the upgrade fails or outruns its budget, the
+# rerun changes the applied migrations, a CHECK constraint's validity, or the
+# rows an online repair rewrites, or the schema drifts from schema.ts.
 #
 # The base image is pulled only when it is not already present, so a caller
 # that pulled it with credentials this script never sees (CI does, before it
@@ -107,6 +111,17 @@ seed_started="$(date +%s)"
 (cd "$repo_root/apps/api" && bun run src/scripts/seed-migration-rehearsal.ts "${seed_args[@]}")
 seed_seconds=$(( $(date +%s) - seed_started ))
 
+log "Starting the contending writer"
+bun "$repo_root/scripts/migration-rehearsal-db.ts" contend &
+contender_pid=$!
+stop_contender() {
+  if kill -0 "$contender_pid" 2>/dev/null; then
+    kill "$contender_pid" 2>/dev/null || true
+    wait "$contender_pid" 2>/dev/null || true
+  fi
+}
+trap stop_contender EXIT
+
 log "Upgrading to this checkout (budget ${budget}s)"
 upgrade_started="$(date +%s)"
 if ! (cd "$repo_root/apps/api" && timeout --foreground "$budget" bun run src/db/migrate.ts); then
@@ -129,6 +144,7 @@ if [[ "$state_before" != "$state_after" ]]; then
   printf 'before: %s\nafter:  %s\n' "$state_before" "$state_after"
   fail "Rerunning the migrate entrypoint changed the database: the upgrade is not a fixed point."
 fi
+stop_contender
 
 log "Checking the migrated schema against schema.ts"
 parity_output="$(cd "$repo_root/apps/api" && bun --bun drizzle-kit push --explain 2>&1)" || true
@@ -144,7 +160,7 @@ fi
   echo "| --- | --- |"
   echo "| Base release | \`${base_ref}\` (${base_source}) |"
   echo "| Seed | ${seed_seconds}s |"
-  echo "| Upgrade | ${upgrade_seconds}s of ${budget}s |"
+  echo "| Upgrade | ${upgrade_seconds}s of ${budget}s, against a contending writer |"
   echo "| Rerun | ${rerun_seconds}s, state unchanged |"
   echo "| Schema parity | no changes detected |"
 } | tee -a "$summary"
