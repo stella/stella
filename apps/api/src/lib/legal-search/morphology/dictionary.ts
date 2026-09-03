@@ -103,6 +103,79 @@ export const isMorphologyDictionaryContentHash = (value: string): boolean =>
   CONTENT_HASH_PATTERN.test(value);
 
 /**
+ * Which dictionary a query was built against: one payload, or none at all.
+ *
+ * A search cursor carries this, so a continuation page can only be ranked
+ * against the payload its first page was built with. `none` is one answer
+ * rather than several: a mode that expands nothing, a jurisdiction with no
+ * dictionary, and a payload that could not be read all executed the same
+ * unexpanded query, so they page against each other consistently.
+ */
+export type ExpansionDictionaryIdentity =
+  | { contentHash: string; type: "dictionary" }
+  | { type: "none" };
+
+/**
+ * Serialized `none`. A sha256 hex string is 64 characters, so this can never
+ * collide with a payload's identity.
+ */
+const NO_EXPANSION_DICTIONARY = "none";
+
+export const NO_EXPANSION_DICTIONARY_IDENTITY: ExpansionDictionaryIdentity = {
+  type: "none",
+};
+
+export const serializeExpansionDictionaryIdentity = (
+  identity: ExpansionDictionaryIdentity,
+): string => {
+  switch (identity.type) {
+    case "dictionary": {
+      return identity.contentHash;
+    }
+    case "none": {
+      return NO_EXPANSION_DICTIONARY;
+    }
+    default: {
+      return identity satisfies never;
+    }
+  }
+};
+
+/**
+ * Read an identity back off the wire. The value arrives inside a cursor a
+ * client hands back, so the hash shape is enforced rather than trusted:
+ * anything that is neither the sentinel nor a sha256 hex string is not an
+ * identity this service ever issued.
+ *
+ * Enforced with this module's own hash guard rather than a schema of its own.
+ * The shape has one owner here — the same guard admits the pointer object that
+ * chooses which payload key is read — and a second spelling of what a content
+ * hash is would be a rule that can drift from the one the loader applies.
+ */
+export const parseExpansionDictionaryIdentity = (
+  value: string,
+): ExpansionDictionaryIdentity | null => {
+  if (value === NO_EXPANSION_DICTIONARY) {
+    return NO_EXPANSION_DICTIONARY_IDENTITY;
+  }
+  return isMorphologyDictionaryContentHash(value)
+    ? { contentHash: value, type: "dictionary" }
+    : null;
+};
+
+/**
+ * Whether two identities name the same payload. Compared through the
+ * serialized form, so what a cursor carries and what the comparison reads
+ * cannot drift into two answers.
+ */
+export const sameExpansionDictionary = (
+  left: ExpansionDictionaryIdentity,
+  right: ExpansionDictionaryIdentity,
+): boolean =>
+  serializeExpansionDictionaryIdentity(left) ===
+  serializeExpansionDictionaryIdentity(right);
+
+/**
  * Lookup key for a surface form: lowercased, then folded to ASCII.
  *
  * Keys are folded, values are not. The corpus is written with diacritics and

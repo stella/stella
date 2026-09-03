@@ -2,17 +2,22 @@ import { expect, test } from "bun:test";
 
 import { FOLDED_TOKENIZER } from "@/api/lib/legal-search/corpus-index-config";
 import {
+  type ExpansionDictionaryIdentity,
   foldExpansionKey,
   isMorphologyDictionaryContentHash,
   isSurfaceForm,
   MAX_FORMS_PER_BUCKET,
+  NO_EXPANSION_DICTIONARY_IDENTITY,
   SURFACE_FORM_MAX_LENGTH,
   SURFACE_FORM_MIN_LENGTH,
   morphologyDictionaryKey,
   morphologyDictionaryPointerKey,
   parseExpansionDictionary,
+  parseExpansionDictionaryIdentity,
   parseExpansionDictionaryOffLoop,
+  sameExpansionDictionary,
   serializeExpansionDictionary,
+  serializeExpansionDictionaryIdentity,
 } from "@/api/lib/legal-search/morphology/dictionary";
 
 test("serialize and parse are the same contract", () => {
@@ -236,3 +241,40 @@ test("a sha256 hex hash is accepted and addresses one key", () => {
     "legal-corpus/morphology/language=pl/current.txt",
   );
 });
+
+test("an identity round-trips through its serialized form", () => {
+  const hash = "b".repeat(64);
+  for (const identity of [
+    { contentHash: hash, type: "dictionary" },
+    NO_EXPANSION_DICTIONARY_IDENTITY,
+  ] as const satisfies readonly ExpansionDictionaryIdentity[]) {
+    expect(
+      parseExpansionDictionaryIdentity(
+        serializeExpansionDictionaryIdentity(identity),
+      ),
+    ).toEqual(identity);
+  }
+});
+
+// The sentinel and a payload's hash share one field, so they must be
+// distinguishable in it: a hash is 64 hex characters and the sentinel is not.
+test("no dictionary is never the same identity as a dictionary", () => {
+  expect(
+    sameExpansionDictionary(NO_EXPANSION_DICTIONARY_IDENTITY, {
+      contentHash: "c".repeat(64),
+      type: "dictionary",
+    }),
+  ).toBe(false);
+  expect(
+    isMorphologyDictionaryContentHash(
+      serializeExpansionDictionaryIdentity(NO_EXPANSION_DICTIONARY_IDENTITY),
+    ),
+  ).toBe(false);
+});
+
+test.each(["", "none ", "NONE", "d".repeat(63), `${"d".repeat(63)}Z`])(
+  "an identity field of %p is not one this service issued",
+  (value) => {
+    expect(parseExpansionDictionaryIdentity(value)).toBeNull();
+  },
+);

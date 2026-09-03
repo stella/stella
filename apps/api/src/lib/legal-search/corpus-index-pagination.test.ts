@@ -4,8 +4,6 @@ import type { CorpusIndexHit } from "@/api/lib/legal-search/corpus-index-client"
 import type { SearchCursor } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
   corpusIndexLexicalScore,
-  decodeCorpusIndexCursor,
-  encodeCorpusIndexCursor,
   HIGHLIGHT_COPIES_PER_PASSAGE,
   readCorpusIndexSearchPage,
 } from "@/api/lib/legal-search/corpus-index-pagination";
@@ -15,7 +13,6 @@ import {
   stableBlendUpperBound,
 } from "@/api/lib/legal-search/rerank";
 import { LIMITS } from "@/api/lib/limits";
-import { encodeCursor } from "@/api/lib/search/cursor";
 
 /**
  * Grouping passage hits back into document hits. A passage-granular generation
@@ -593,37 +590,6 @@ describe("a passage flood does not strand the reader", () => {
     expect(new Set(seen).size).toBe(seen.length);
     expect(seen).toContain("doc-flood");
     expect(seen).toContain(documentId(59));
-  });
-});
-
-describe("the cursor survives its wire form", () => {
-  test("a window cursor round-trips", () => {
-    const cursor = {
-      score: 0.5,
-      id: "4a1b6f6e-0e5a-4a51-9e9f-1a2b3c4d5e6f",
-      windowStart: 900,
-    };
-
-    expect(decodeCorpusIndexCursor(encodeCorpusIndexCursor(cursor))).toEqual(
-      cursor,
-    );
-  });
-
-  test("a payload without a window names the first one", () => {
-    // What a cursor issued before windows existed decodes to, and what a
-    // caller that builds the payload by hand gets.
-    const legacy = encodeCursor(0.5, "4a1b6f6e-0e5a-4a51-9e9f-1a2b3c4d5e6f");
-
-    expect(decodeCorpusIndexCursor(legacy)).toEqual({
-      score: 0.5,
-      id: "4a1b6f6e-0e5a-4a51-9e9f-1a2b3c4d5e6f",
-      windowStart: 0,
-    });
-  });
-
-  test("a malformed window is rejected rather than guessed", () => {
-    expect(decodeCorpusIndexCursor(encodeCursor(0.5, "-3:abc"))).toBeNull();
-    expect(decodeCorpusIndexCursor(encodeCursor(0.5, "12:"))).toBeNull();
   });
 });
 

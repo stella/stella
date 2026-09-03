@@ -30,12 +30,14 @@ import {
 } from "@/api/lib/legal-search/corpus-query";
 import { corpusMorphologyLanguage } from "@/api/lib/legal-search/morphology/corpus-language";
 import {
+  type ExpansionDictionaryIdentity,
   foldExpansionKey,
   isMorphologyDictionaryContentHash,
   isSurfaceForm,
   MORPHOLOGY_DICTIONARY_MAX_BYTES,
   morphologyDictionaryKey,
   morphologyDictionaryPointerKey,
+  NO_EXPANSION_DICTIONARY_IDENTITY,
   parseExpansionDictionaryOffLoop,
   unpackExpansionForms,
 } from "@/api/lib/legal-search/morphology/dictionary";
@@ -664,6 +666,63 @@ type ResolveExpandedQueryOptions = {
 };
 
 /**
+ * The engine query, and which dictionary produced it.
+ *
+ * The identity travels with the query rather than beside it: a caller that
+ * paginates must write it into the cursor, and one that resolved a query it
+ * could pair with any identity is the mismatch the cursor exists to catch.
+ * `empty` is the free text carrying no searchable term, where callers return
+ * an empty page without querying the engine.
+ */
+export type ExpandedCorpusQuery =
+  | { dictionary: ExpansionDictionaryIdentity; query: string; type: "query" }
+  | { type: "empty" };
+
+/** The pre-expansion query, which no dictionary was applied to. */
+const unexpandedCorpusQuery = (query: string): ExpandedCorpusQuery => ({
+  dictionary: NO_EXPANSION_DICTIONARY_IDENTITY,
+  query,
+  type: "query",
+});
+
+type RewrittenCorpusQueryOptions = {
+  baseQuery: string;
+  contentHash: string;
+  expandedQuery: string;
+};
+
+/**
+ * What a rewrite reports as the dictionary behind it.
+ *
+ * A payload that changed nothing did not rank this query: the bytes sent to
+ * the engine are the pre-expansion ones, so the page is continuable by any
+ * request that builds the same pre-expansion query. Naming the payload here
+ * instead would expire a live cursor on the next rebuild over a dictionary
+ * that cannot affect this query either way.
+ *
+ * Both sides are the assembled clause, so the comparison sees the generation's
+ * own leaves (a summary field, the stem fields) exactly as the engine will.
+ * Only the expansion leaves can differ between them, which is what makes
+ * equality here mean "the dictionary added nothing" rather than "the two
+ * builds happened to agree".
+ *
+ * Exported for the test that pins this rule; the request path reaches it
+ * through `resolveExpandedCorpusQuery`, which is the only caller.
+ */
+export const rewrittenCorpusQuery = ({
+  baseQuery,
+  contentHash,
+  expandedQuery,
+}: RewrittenCorpusQueryOptions): ExpandedCorpusQuery =>
+  expandedQuery === baseQuery
+    ? unexpandedCorpusQuery(baseQuery)
+    : {
+        dictionary: { contentHash, type: "dictionary" },
+        query: expandedQuery,
+        type: "query",
+      };
+
+/**
  * The query a corpus-index search sends to the engine, under the deployment's
  * expansion mode.
  *
@@ -678,35 +737,31 @@ type ResolveExpandedQueryOptions = {
  * executes the unexpanded one. `on` executes the expanded one. Every failure
  * inside resolves to the unexpanded query, so a search never depends on the
  * dictionary being reachable.
- */
-/**
- * `on` is unreachable by configuration, and this is why.
  *
- * The query a request builds depends on which dictionary its replica has
- * loaded, so a page-2 request served by a replica mid-refresh (or holding a
- * fallback payload) rebuilds a different engine query while reusing page 1's
- * cursor, which ranks a different result set against an old score/id boundary
- * and can skip or repeat decisions. Replicas converge on the pointer, so the
- * window is a rebuild or a failed refresh rather than steady state, and
- * `shadow` cannot hit it at all because it executes the unexpanded query.
+ * A query's ranking is only comparable with another built the same way, which
+ * is why every branch reports the dictionary it applied — the payload's hash
+ * under `on` when it rewrote the query, and `none` wherever the unexpanded
+ * query ran, including a mode that expands nothing, a jurisdiction with no
+ * dictionary, a payload that could not be read, and one that matched nothing
+ * the reader typed. `corpus-search-cursor` pins that answer into the page
+ * boundary so a continuation cannot be served from a different result set.
  *
- * `envBaseInvariantViolation` refuses to boot under `on` for that reason;
- * the branch below stays because the mode is part of the union, not because
- * it is reachable today. Closing this means the cursor carries the dictionary
- * version and later pages resolve that same version, which in turn means
- * retaining superseded payloads. Until then the shadow event reports which
- * payload answered (`dictionaryHash`), so replica convergence is measurable
- * from real traffic before that work is scoped.
+ * Quoted phrases are never rewritten (`corpus-query` holds the policy), so a
+ * phrase keeps matching the exact surface forms the reader typed under every
+ * mode.
  */
 export const resolveExpandedCorpusQuery = async ({
   build,
   jurisdiction,
   mode,
   text,
-}: ResolveExpandedQueryOptions): Promise<string | null> => {
+}: ResolveExpandedQueryOptions): Promise<ExpandedCorpusQuery> => {
   const baseQuery = build();
-  if (mode === "off" || baseQuery === null) {
-    return baseQuery;
+  if (baseQuery === null) {
+    return { type: "empty" };
+  }
+  if (mode === "off") {
+    return unexpandedCorpusQuery(baseQuery);
   }
 
   const countryScoped = jurisdiction !== undefined;
@@ -733,19 +788,25 @@ export const resolveExpandedCorpusQuery = async ({
         reach: expanderMissReach(language),
       });
     }
-    return baseQuery;
+    return unexpandedCorpusQuery(baseQuery);
   }
 
   // Both builds tokenize the same text, so this is null only when `baseQuery`
   // already was; returning the base query keeps the branch total anyway.
   const expandedQuery = build(expand.expand);
   if (expandedQuery === null) {
-    return baseQuery;
+    return unexpandedCorpusQuery(baseQuery);
   }
 
   switch (mode) {
     case "on": {
-      return expandedQuery;
+      // The identity names what built the query, not what happened to be
+      // loaded while it was built.
+      return rewrittenCorpusQuery({
+        baseQuery,
+        contentHash: expand.contentHash,
+        expandedQuery,
+      });
     }
     case "shadow": {
       const baseLeaves = freeTextLeaves(text);
@@ -760,7 +821,7 @@ export const resolveExpandedCorpusQuery = async ({
         // guards, or ran out of budget did not expand this query.
         reach: expandedLeaves > baseLeaves ? "expanded" : "dictionary_inert",
       });
-      return baseQuery;
+      return unexpandedCorpusQuery(baseQuery);
     }
     default: {
       return mode satisfies never;
