@@ -53,6 +53,7 @@ import {
   TRACKED_SUPPRESSION_RULES,
   type TrackedRule,
 } from "./lint-suppressions";
+import { isResultBoundaryFile } from "./result-boundary-globs";
 import {
   ALL_SOURCE_GLOBS,
   isExcludedSource,
@@ -72,6 +73,22 @@ const APP_SOURCE_GLOBS = [
   "apps/api/src/**/*.{ts,tsx}",
   "apps/web/src/**/*.{ts,tsx}",
 ] as const;
+
+// Non-boundary `better-result` call sites: API library, handler and MCP code
+// plus every published package, excluding the `RESULT_BOUNDARY_GLOBS`
+// allowlist below.
+const RESULT_CONVENTION_SOURCE_GLOBS = [
+  "apps/api/src/lib/**/*.{ts,tsx}",
+  "apps/api/src/handlers/**/*.{ts,tsx}",
+  "apps/api/src/mcp/**/*.{ts,tsx}",
+  "packages/*/src/**/*.{ts,tsx}",
+] as const;
+
+const isExcludedFromResultConventionMetrics = (file: string): boolean =>
+  isExcludedSource(file) ||
+  file.includes("/specs/") ||
+  file.includes("/__fixtures__/") ||
+  isResultBoundaryFile(file);
 
 // --- Counters ---------------------------------------------------------------
 // All counters take raw file text and return a per-file occurrence count. They
@@ -316,6 +333,76 @@ const countEntityKindGlyphs = (content: string): number => {
       continue;
     }
     total += (code.match(ENTITY_GLYPH_IDENTIFIER) ?? []).length;
+  }
+  return total;
+};
+
+// A `throw` statement, matched at line start (after stripping comments and
+// blanking string/template contents) so `throw` mentioned inside a string,
+// or trailing on a line as a comment's subject, never counts. Known fidelity
+// limit shared with the rest of this file's line-based counters: a `throw` on
+// the same line as other code (`if (x) throw new Error();`) is not detected
+// — accepted because oxfmt gives every `throw` statement its own line.
+const THROW_STATEMENT_START = /^\s*throw\b/u;
+// A bare re-throw of the catch binding: `throw error;` / `throw error`. This
+// is the one `throw` shape `better-result` migration leaves alone — it just
+// forwards a caught value, it does not construct a new failure.
+const THROW_RETHROW_BARE_IDENTIFIER = /^\s*throw\s+[A-Za-z_$][\w$]*\s*;?\s*$/u;
+// `throw panic(...)`: `panic` already signals an impossible internal
+// invariant (see AGENTS.md "Error Handling"), so it is exempt by design.
+const THROW_PANIC_CALL = /^\s*throw\s+panic\s*\(/u;
+
+const countThrowsOutsideBoundary = (content: string): number => {
+  let total = 0;
+  let inBlockComment = false;
+  let literalState = NO_OPEN_TEMPLATE;
+
+  for (const raw of content.split("\n")) {
+    const { code: lineCode, state } = stripLine(raw, literalState);
+    literalState = state;
+    const blockResult = stripBlockComments(lineCode, inBlockComment);
+    const code = blockResult.code;
+    inBlockComment = blockResult.inBlockComment;
+    if (COMMENT_LINE.test(code)) {
+      continue;
+    }
+    if (
+      THROW_RETHROW_BARE_IDENTIFIER.test(code) ||
+      THROW_PANIC_CALL.test(code)
+    ) {
+      continue;
+    }
+    if (THROW_STATEMENT_START.test(code)) {
+      total += 1;
+    }
+  }
+  return total;
+};
+
+// A `catch` clause opener: `catch (e) {` or `catch {`, with or without the
+// closing `}` of the `try` block on the same line. Requires `(` or `{`
+// immediately (modulo whitespace) after `catch`, so an object key named
+// `catch` — `Result.tryPromise({ try: ..., catch: (cause) => cause })` — is
+// never mistaken for a clause: a key is always followed by `:`.
+const CATCH_CLAUSE_OPEN = /^\s*\}?\s*catch\s*[({]/u;
+
+const countTryCatchOutsideBoundary = (content: string): number => {
+  let total = 0;
+  let inBlockComment = false;
+  let literalState = NO_OPEN_TEMPLATE;
+
+  for (const raw of content.split("\n")) {
+    const { code: lineCode, state } = stripLine(raw, literalState);
+    literalState = state;
+    const blockResult = stripBlockComments(lineCode, inBlockComment);
+    const code = blockResult.code;
+    inBlockComment = blockResult.inBlockComment;
+    if (COMMENT_LINE.test(code)) {
+      continue;
+    }
+    if (CATCH_CLAUSE_OPEN.test(code)) {
+      total += 1;
+    }
   }
   return total;
 };
@@ -1404,6 +1491,22 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     exclude: isExcludedSource,
     count: countUnboundedPaginationCursorSchema,
   },
+  {
+    id: "throw-outside-boundary",
+    description:
+      "`throw` statements outside the `better-result` boundary (RESULT_BOUNDARY_GLOBS), excl. bare re-throws and `throw panic(...)`",
+    include: RESULT_CONVENTION_SOURCE_GLOBS,
+    exclude: isExcludedFromResultConventionMetrics,
+    count: countThrowsOutsideBoundary,
+  },
+  {
+    id: "try-catch-outside-boundary",
+    description:
+      "`catch` clauses outside the `better-result` boundary (RESULT_BOUNDARY_GLOBS); excludes Result.tryPromise's `catch:` object key",
+    include: RESULT_CONVENTION_SOURCE_GLOBS,
+    exclude: isExcludedFromResultConventionMetrics,
+    count: countTryCatchOutsideBoundary,
+  },
   ...PER_RULE_SUPPRESSION_METRICS,
   {
     id: "lint-suppression-directives",
@@ -2410,6 +2513,84 @@ const WORKSPACE_ONLY_RLS_FIXTURE_LINES = [
 ];
 const SELF_TEST_WORKSPACE_ONLY_RLS = `${WORKSPACE_ONLY_RLS_FIXTURE_LINES.join("\n")}\n`;
 
+const THROW_OUTSIDE_BOUNDARY_FIXTURE_LINES = [
+  "const single = () => {",
+  '  throw new Error("bad");',
+  "};",
+  "const multiLine = () => {",
+  "  throw new CustomError(",
+  '    "bad",',
+  "    { cause },",
+  "  );",
+  "};",
+  "const factoryThrow = () => {",
+  "  throw factory(x);",
+  "};",
+  "const rethrow = (error) => {",
+  "  throw error;",
+  "};",
+  "const rethrowNoSemicolon = (error) => {",
+  "  throw error",
+  "};",
+  "const invariant = () => {",
+  '  throw panic("impossible state");',
+  "};",
+  '// throw new Error("commented out") must not count',
+];
+const SELF_TEST_THROW_OUTSIDE_BOUNDARY = `${THROW_OUTSIDE_BOUNDARY_FIXTURE_LINES.join("\n")}\n`;
+// Expected: `single`(1), `multiLine`(1, counted once despite spanning four
+// lines), `factoryThrow`(1) = 3. The bare re-throws (with and without a
+// trailing semicolon), `throw panic(...)`, and the commented-out throw are
+// all excluded.
+const EXPECTED_THROW_OUTSIDE_BOUNDARY = 3;
+
+const TRY_CATCH_OUTSIDE_BOUNDARY_FIXTURE_LINES = [
+  "const withBinding = () => {",
+  "  try {",
+  "    doSomething();",
+  "  } catch (error) {",
+  "    handle(error);",
+  "  }",
+  "};",
+  "const withoutBinding = () => {",
+  "  try {",
+  "    doSomethingElse();",
+  "  } catch {",
+  "    handleElse();",
+  "  }",
+  "};",
+  "const wrapped = Result.tryPromise({",
+  "  try: () => doAsync(),",
+  "  catch: (cause) => cause,",
+  "});",
+  "const cleanupOnly = () => {",
+  "  try {",
+  "    prepare();",
+  "  } finally {",
+  "    release();",
+  "  }",
+  "};",
+  "// } catch (ignored) { must not count",
+];
+const SELF_TEST_TRY_CATCH_OUTSIDE_BOUNDARY = `${TRY_CATCH_OUTSIDE_BOUNDARY_FIXTURE_LINES.join("\n")}\n`;
+// Expected: `} catch (error) {`(1) + `catch {`(1) = 2. The `catch:` object
+// key inside `Result.tryPromise`, the `try`/`finally` with no `catch`, and
+// the commented-out clause are all excluded.
+const EXPECTED_TRY_CATCH_OUTSIDE_BOUNDARY = 2;
+
+// A boundary file (matches RESULT_BOUNDARY_GLOBS) carrying the same shapes:
+// proves the exclude, not just the counters.
+const RESULT_BOUNDARY_FILE_FIXTURE_LINES = [
+  "export const handleRequest = async (req) => {",
+  "  try {",
+  '    throw new Error("boundary throws are allowed here");',
+  "  } catch (error) {",
+  "    return toErrorResponse(error);",
+  "  }",
+  "};",
+];
+const SELF_TEST_RESULT_BOUNDARY_FILE = `${RESULT_BOUNDARY_FILE_FIXTURE_LINES.join("\n")}\n`;
+
 // Two pairs in one file and one in another: the count is the number of
 // ledger lines, not of files.
 const SELF_TEST_INTERNAL_MODULE_MOCK_LEDGER = `${JSON.stringify(
@@ -2513,6 +2694,30 @@ const EXPECTED_FILE_TRANSPORT_SUPPRESSED = 3;
 // fixture; the read-on-read-scope and write-on-write-scope entries, and every
 // earlier fixture entry lacking access/scope, are excluded.
 const EXPECTED_READ_CAPABILITIES_WITH_WRITE_SCOPE = 2;
+
+// The two better-result convention counters share one shape of check: the
+// fixture count matches, and the boundary fixture file stays out of the
+// per-file map.
+const resultConventionSelfTestFailures = (snapshot: Baseline): string[] => {
+  const failures: string[] = [];
+  const checks = [
+    { expected: EXPECTED_THROW_OUTSIDE_BOUNDARY, id: "throw-outside-boundary" },
+    {
+      expected: EXPECTED_TRY_CATCH_OUTSIDE_BOUNDARY,
+      id: "try-catch-outside-boundary",
+    },
+  ] as const;
+  for (const { expected, id } of checks) {
+    const metric = requireSnapshot(snapshot, id);
+    if (metric.count !== expected) {
+      failures.push(`${id} counted ${metric.count}, expected ${expected}`);
+    }
+    if ("apps/api/src/lib/api-handlers.ts" in metric.files) {
+      failures.push(`${id} did not exclude a RESULT_BOUNDARY_GLOBS file`);
+    }
+  }
+  return failures;
+};
 
 const runSelfTest = (): number => {
   const failures: string[] = [];
@@ -2710,6 +2915,23 @@ const runSelfTest = (): number => {
       root,
       "apps/api/src/db/schema/workspace-only-rls.ts",
       SELF_TEST_WORKSPACE_ONLY_RLS,
+    );
+    writeFixture(
+      root,
+      "apps/api/src/lib/result-throws.ts",
+      SELF_TEST_THROW_OUTSIDE_BOUNDARY,
+    );
+    writeFixture(
+      root,
+      "apps/api/src/lib/result-catches.ts",
+      SELF_TEST_TRY_CATCH_OUTSIDE_BOUNDARY,
+    );
+    // Boundary file: matches RESULT_BOUNDARY_GLOBS (apps/api/src/lib/api-
+    // handlers.ts), so throws and catches here must not be counted.
+    writeFixture(
+      root,
+      "apps/api/src/lib/api-handlers.ts",
+      SELF_TEST_RESULT_BOUNDARY_FILE,
     );
     writeFixture(
       root,
@@ -3075,6 +3297,8 @@ const runSelfTest = (): number => {
         `workspace-only-rls-on-org-tables counted ${workspaceOnlyRlsMetric.count}, expected ${EXPECTED_WORKSPACE_ONLY_RLS}`,
       );
     }
+
+    failures.push(...resultConventionSelfTestFailures(snapshot));
 
     // The subject-gate counter reads calls, not text: a mention in a comment
     // or a string, and a method of the same name on some object, are not the
