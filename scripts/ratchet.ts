@@ -398,7 +398,17 @@ const countThrowsOutsideBoundary = (content: string): number => {
 // immediately (modulo whitespace) after `catch`, so an object key named
 // `catch` — `Result.tryPromise({ try: ..., catch: (cause) => cause })` — is
 // never mistaken for a clause: a key is always followed by `:`.
-const CATCH_CLAUSE_OPEN = /^\s*\}?\s*catch\s*[({]/u;
+const isCatchClauseOpen = (code: string): boolean => {
+  let remainder = code.trimStart();
+  if (remainder.startsWith("}")) {
+    remainder = remainder.slice(1).trimStart();
+  }
+  if (!remainder.startsWith("catch")) {
+    return false;
+  }
+  const firstAfterCatch = remainder.slice("catch".length).trimStart().at(0);
+  return firstAfterCatch === "(" || firstAfterCatch === "{";
+};
 
 const countTryCatchOutsideBoundary = (content: string): number => {
   let total = 0;
@@ -414,7 +424,7 @@ const countTryCatchOutsideBoundary = (content: string): number => {
     if (COMMENT_LINE.test(code)) {
       continue;
     }
-    if (CATCH_CLAUSE_OPEN.test(code)) {
+    if (isCatchClauseOpen(code)) {
       total += 1;
     }
   }

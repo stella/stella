@@ -4,10 +4,8 @@
     "files": {}
   },
   "super-linear-regexes": {
-    "count": 1,
-    "files": {
-      "scripts/ratchet.ts": 1
-    }
+    "count": 0,
+    "files": {}
   },
   "legacy-realtime-invalidation-producers": {
     "count": 0,
