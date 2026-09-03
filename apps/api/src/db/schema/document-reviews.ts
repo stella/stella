@@ -163,6 +163,13 @@ export const documentReviewRuns = p.pgTable(
       .uniqueIndex("document_review_runs_active_document_uidx")
       .on(table.workspaceId, table.entityId, table.fileFieldId)
       .where(sql`${table.status} IN (${RUN_ACTIVE_STATUS_SQL_VALUES})`),
+    // The reconciler's keyset walk over runs still waiting for a worker.
+    // Table-executed runs are paced by the files-table property DAG and were
+    // never handed to that queue, so they stay out of the index.
+    p
+      .index("document_review_runs_queued_worker_idx")
+      .on(table.createdAt, table.id)
+      .where(sql`${table.status} = 'queued' AND ${table.executor} = 'worker'`),
     p.check(
       "document_review_runs_status_values_check",
       sql`${table.status} IN (${RUN_STATUS_SQL_VALUES})`,

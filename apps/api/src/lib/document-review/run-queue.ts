@@ -18,7 +18,7 @@
 
 import { panic, Result } from "better-result";
 import { Worker } from "bullmq";
-import { and, eq, inArray, lt, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, lt, or, sql } from "drizzle-orm";
 
 import { DAY_IN_MS } from "@stll/time";
 
@@ -41,6 +41,12 @@ import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
+import {
+  QUEUE_REQUEUE_OUTCOME,
+  requeueDeterministicJob,
+} from "@/api/lib/bullmq-requeue";
+import type { RequeueableQueue } from "@/api/lib/bullmq-requeue";
+import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import {
   buildDocumentReviewFindingRow,
   recountDocumentReviewFindingProgress,
@@ -69,6 +75,12 @@ import type { ReviewRunPlan } from "@/api/lib/document-review/run-plan";
 import { errorTag } from "@/api/lib/errors/utils";
 import { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval";
 import { logger } from "@/api/lib/observability/logger";
+import {
+  RECONCILE_SCAN_PAGE_SIZE,
+  reconcileCursorTimestamp,
+  scanPendingRows,
+} from "@/api/lib/queue-reconcile-scan";
+import type { ReconcileScanResult } from "@/api/lib/queue-reconcile-scan";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import { createBullMqConnection } from "@/api/lib/redis-client";
 import { createRootSafeDb, createRootScopedDb } from "@/api/lib/root-scoped-db";
@@ -239,6 +251,121 @@ export const reconcileStuckDocumentReviewRuns = async (): Promise<number> => {
     )
     .returning({ id: documentReviewRuns.id });
   return recovered.length;
+};
+
+/** The (timestamp, id) keyset this sweep's walk pages on. */
+const reviewRunCursorCodec = createTimestampIdCursorCodec({
+  column: documentReviewRuns.createdAt,
+  brandId: brandPersistedDocumentReviewRunId,
+});
+
+type QueuedReviewRunRow = {
+  createdCursor: string;
+  id: SafeId<"documentReviewRun">;
+  organizationId: SafeId<"organization">;
+  requestedBy: string | null;
+  workspaceId: SafeId<"workspace">;
+};
+
+type ReconcileQueuedDocumentReviewRunsOptions = {
+  db?: Pick<typeof rootDb, "select">;
+  queue?: RequeueableQueue<DocumentReviewRunJobDataV2>;
+};
+
+type ReconcileQueuedDocumentReviewRunsResult = ReconcileScanResult & {
+  /**
+   * `requested_by` is nulled when the requester's account is deleted, and the
+   * job carries an actor. Counted rather than dropped quietly, so a population
+   * this sweep cannot repair stays visible; the staleness janitor above fails
+   * those rows once they age out.
+   */
+  unattributed: number;
+};
+
+/**
+ * Hand `queued` runs back to the queue when nothing owns them anymore.
+ *
+ * The row is created inside the request's transaction and the job is added
+ * after it commits, so a crash in between — or a queue that lost its waiting
+ * jobs — leaves a run that no worker will ever pick up. Nothing observes that
+ * from the row: a run waiting for a live job and a run whose job is gone are
+ * the same `queued`. Re-adding is safe to repeat because the job id is derived
+ * from the run id and only a `queued` row is claimable, so a duplicate
+ * delivery is a no-op rather than a second metered execution.
+ *
+ * The walk pages forward on a keyset cursor rather than re-reading one fixed
+ * page: a run the queue still owns keeps its `queued` row, so a sweep bounded
+ * by the first page would inspect the same healthy backlog every tick and
+ * never reach the orphan behind it.
+ *
+ * Table-executed runs are excluded: they are paced by the files-table property
+ * DAG and were never handed to this queue.
+ */
+export const reconcileQueuedDocumentReviewRuns = async ({
+  db = rootDb,
+  queue = getQueue(),
+}: ReconcileQueuedDocumentReviewRunsOptions = {}): Promise<ReconcileQueuedDocumentReviewRunsResult> => {
+  let unattributed = 0;
+
+  const after = (cursor: QueuedReviewRunRow | null) => {
+    if (cursor === null) {
+      return undefined;
+    }
+    return reviewRunCursorCodec.keysetAfter({
+      cursor: {
+        timestamp: reconcileCursorTimestamp(cursor.createdCursor),
+        id: cursor.id,
+      },
+      idColumn: documentReviewRuns.id,
+      direction: "ascending",
+    });
+  };
+
+  const readPage = async (cursor: QueuedReviewRunRow | null) =>
+    await db
+      .select({
+        createdCursor: reviewRunCursorCodec.cursorValue,
+        id: documentReviewRuns.id,
+        organizationId: documentReviewRuns.organizationId,
+        requestedBy: documentReviewRuns.requestedBy,
+        workspaceId: documentReviewRuns.workspaceId,
+      })
+      .from(documentReviewRuns)
+      .where(
+        and(
+          eq(documentReviewRuns.status, "queued"),
+          eq(documentReviewRuns.executor, DOCUMENT_REVIEW_RUN_EXECUTOR.WORKER),
+          after(cursor),
+        ),
+      )
+      .orderBy(asc(documentReviewRuns.createdAt), asc(documentReviewRuns.id))
+      .limit(RECONCILE_SCAN_PAGE_SIZE);
+
+  const handle = async (run: QueuedReviewRunRow): Promise<boolean> => {
+    if (run.requestedBy === null) {
+      unattributed += 1;
+      return false;
+    }
+    const { data, name, opts } = runJob({
+      organizationId: run.organizationId,
+      runId: run.id,
+      userId: brandPersistedUserId(run.requestedBy),
+      workspaceId: run.workspaceId,
+    });
+    const outcome = await Result.tryPromise({
+      try: async () =>
+        await requeueDeterministicJob({ data, jobId: opts.jobId, name, queue }),
+      catch: (cause) => cause,
+    });
+    if (Result.isError(outcome)) {
+      captureError(outcome.error, { runId: run.id });
+      return false;
+    }
+    return outcome.value === QUEUE_REQUEUE_OUTCOME.REQUEUED;
+  };
+
+  const scan = await scanPendingRows({ handle, readPage });
+  return { ...scan, unattributed };
 };
 
 export const initDocumentReviewRunWorker = () => {

@@ -69,15 +69,17 @@ describe("style set package cleanup reference check", () => {
     });
 
     await deleteUnreferencedStyleSetPackage(liveKey, testDb);
-    // Still recorded in the row's cleanup outbox: not this job's to delete.
-    await deleteUnreferencedStyleSetPackage(replacedKey, testDb);
     expect(storedKeys()).toEqual([liveKey, replacedKey]);
 
-    await testDb
-      .update(styleSets)
-      .set({ cleanupS3Key: null })
-      .where(eq(styleSets.id, styleSetId));
+    // Recorded in the row's cleanup outbox: the row is asking for exactly this
+    // deletion, and the job releases the marker once the object is gone.
     await deleteUnreferencedStyleSetPackage(replacedKey, testDb);
     expect(storedKeys()).toEqual([liveKey]);
+
+    const [row] = await testDb
+      .select({ cleanupS3Key: styleSets.cleanupS3Key })
+      .from(styleSets)
+      .where(eq(styleSets.id, styleSetId));
+    expect(row?.cleanupS3Key).toBeNull();
   });
 });

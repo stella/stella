@@ -49,6 +49,12 @@ import { checkTranslationConsistency } from "@/api/lib/bilingual/rows";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
+import {
+  QUEUE_REQUEUE_OUTCOME,
+  requeueDeterministicJob,
+} from "@/api/lib/bullmq-requeue";
+import type { RequeueableQueue } from "@/api/lib/bullmq-requeue";
+import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { createEntityVersionFromBuffer } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import { loadEntityVersionDocxBuffer } from "@/api/lib/entity-versions/load-entity-version-docx-buffer";
 import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buffer";
@@ -56,6 +62,12 @@ import { errorTag } from "@/api/lib/errors/utils";
 import { getScanWarnings, scanFile } from "@/api/lib/file-scan/scan";
 import { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval";
 import { logger } from "@/api/lib/observability/logger";
+import {
+  RECONCILE_SCAN_PAGE_SIZE,
+  reconcileCursorTimestamp,
+  scanPendingRows,
+} from "@/api/lib/queue-reconcile-scan";
+import type { ReconcileScanResult } from "@/api/lib/queue-reconcile-scan";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import { createBullMqConnection } from "@/api/lib/redis-client";
 import { createRootSafeDb, createRootScopedDb } from "@/api/lib/root-scoped-db";
@@ -99,17 +111,25 @@ const getQueue = createLazyBullMqQueue<BilingualRunJobData>({
   },
 });
 
-export const enqueueBilingualRun = async ({
+/** One job, described exactly as the queue takes it. The run id IS the job
+ *  identity: a duplicate enqueue collapses onto the job already in flight
+ *  instead of scheduling a second metered execution. */
+const runJob = ({
   runId,
   workspaceId,
   organizationId,
   userId,
-}: EnqueueBilingualRunArgs): Promise<void> => {
-  await getQueue().add(
-    JOB_NAME,
-    { runId, workspaceId, organizationId, userId },
-    { jobId: createBullMqJobId(workspaceId, runId) },
-  );
+}: EnqueueBilingualRunArgs) => ({
+  name: JOB_NAME,
+  data: { runId, workspaceId, organizationId, userId },
+  opts: { jobId: createBullMqJobId(workspaceId, runId) },
+});
+
+export const enqueueBilingualRun = async (
+  args: EnqueueBilingualRunArgs,
+): Promise<void> => {
+  const { data, name, opts } = runJob(args);
+  await getQueue().add(name, data, opts);
 };
 
 /** Flip abandoned runs to `failed` so the read endpoint stops reporting them
@@ -135,6 +155,113 @@ export const reconcileStuckBilingualRuns = async (): Promise<number> => {
     )
     .returning({ id: bilingualTranslationRuns.id });
   return recovered.length;
+};
+
+/** The (timestamp, id) keyset this sweep's walk pages on. */
+const bilingualRunCursorCodec = createTimestampIdCursorCodec({
+  column: bilingualTranslationRuns.createdAt,
+  brandId: brandPersistedBilingualTranslationRunId,
+});
+
+type QueuedBilingualRunRow = {
+  createdCursor: string;
+  id: SafeId<"bilingualTranslationRun">;
+  organizationId: SafeId<"organization">;
+  requestedBy: string | null;
+  workspaceId: SafeId<"workspace">;
+};
+
+type ReconcileQueuedBilingualRunsOptions = {
+  db?: Pick<typeof rootDb, "select">;
+  queue?: RequeueableQueue<BilingualRunJobData>;
+};
+
+type ReconcileQueuedBilingualRunsResult = ReconcileScanResult & {
+  /**
+   * `requested_by` is nulled when the requester's account is deleted, and the
+   * job carries an actor. Counted rather than dropped quietly; the staleness
+   * janitor above fails those rows once they age out.
+   */
+  unattributed: number;
+};
+
+/**
+ * Hand `queued` runs back to the queue when nothing owns them anymore.
+ *
+ * The run row commits before its job is added, so a crash in between — or a
+ * queue that lost its waiting jobs — leaves a run no worker will ever pick up,
+ * and the row alone cannot tell that apart from a run still waiting its turn.
+ * Repeating the enqueue is safe: the job id is derived from the run id and
+ * only a `queued` row is claimable, so a duplicate delivery is a no-op rather
+ * than a second metered execution.
+ *
+ * The walk pages forward on a keyset cursor rather than re-reading one fixed
+ * page: a run the queue still owns keeps its `queued` row, so a sweep bounded
+ * by the first page would inspect the same healthy backlog every tick and
+ * never reach the orphan behind it.
+ */
+export const reconcileQueuedBilingualRuns = async ({
+  db = rootDb,
+  queue = getQueue(),
+}: ReconcileQueuedBilingualRunsOptions = {}): Promise<ReconcileQueuedBilingualRunsResult> => {
+  let unattributed = 0;
+
+  const after = (cursor: QueuedBilingualRunRow | null) => {
+    if (cursor === null) {
+      return undefined;
+    }
+    return bilingualRunCursorCodec.keysetAfter({
+      cursor: {
+        timestamp: reconcileCursorTimestamp(cursor.createdCursor),
+        id: cursor.id,
+      },
+      idColumn: bilingualTranslationRuns.id,
+      direction: "ascending",
+    });
+  };
+
+  const readPage = async (cursor: QueuedBilingualRunRow | null) =>
+    await db
+      .select({
+        createdCursor: bilingualRunCursorCodec.cursorValue,
+        id: bilingualTranslationRuns.id,
+        organizationId: bilingualTranslationRuns.organizationId,
+        requestedBy: bilingualTranslationRuns.requestedBy,
+        workspaceId: bilingualTranslationRuns.workspaceId,
+      })
+      .from(bilingualTranslationRuns)
+      .where(and(eq(bilingualTranslationRuns.status, "queued"), after(cursor)))
+      .orderBy(
+        asc(bilingualTranslationRuns.createdAt),
+        asc(bilingualTranslationRuns.id),
+      )
+      .limit(RECONCILE_SCAN_PAGE_SIZE);
+
+  const handle = async (run: QueuedBilingualRunRow): Promise<boolean> => {
+    if (run.requestedBy === null) {
+      unattributed += 1;
+      return false;
+    }
+    const { data, name, opts } = runJob({
+      organizationId: run.organizationId,
+      runId: run.id,
+      userId: brandPersistedUserId(run.requestedBy),
+      workspaceId: run.workspaceId,
+    });
+    const outcome = await Result.tryPromise({
+      try: async () =>
+        await requeueDeterministicJob({ data, jobId: opts.jobId, name, queue }),
+      catch: (cause) => cause,
+    });
+    if (Result.isError(outcome)) {
+      captureError(outcome.error, { runId: run.id });
+      return false;
+    }
+    return outcome.value === QUEUE_REQUEUE_OUTCOME.REQUEUED;
+  };
+
+  const scan = await scanPendingRows({ handle, readPage });
+  return { ...scan, unattributed };
 };
 
 export const initBilingualRunWorker = () => {

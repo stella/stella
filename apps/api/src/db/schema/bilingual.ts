@@ -106,6 +106,11 @@ export const bilingualTranslationRuns = p.pgTable(
       .uniqueIndex("bilingual_translation_runs_active_document_uidx")
       .on(table.workspaceId, table.entityId, table.fileFieldId)
       .where(sql`${table.status} IN (${RUN_ACTIVE_STATUS_SQL_VALUES})`),
+    // The reconciler's keyset walk over runs still waiting for a worker.
+    p
+      .index("bilingual_translation_runs_queued_idx")
+      .on(table.createdAt, table.id)
+      .where(sql`${table.status} = 'queued'`),
     p.check(
       "bilingual_translation_runs_status_values_check",
       sql`${table.status} IN (${RUN_STATUS_SQL_VALUES})`,

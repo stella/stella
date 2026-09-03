@@ -1,3 +1,5 @@
+import { sql } from "drizzle-orm";
+
 import {
   organization,
   orgPolicies,
@@ -33,6 +35,13 @@ export const styleSets = p.pgTable(
     p
       .index("style_sets_organization_id_updated_at_idx")
       .on(table.organizationId, table.updatedAt, table.id),
+    // The cleanup reconciler's keyset walk over packages a replacement left
+    // behind. Partial so it stays the size of the outstanding work, not of
+    // the table.
+    p
+      .index("style_sets_pending_package_cleanup_idx")
+      .on(table.updatedAt, table.id)
+      .where(sql`${table.cleanupS3Key} IS NOT NULL`),
     ...orgPolicies(),
   ],
 );

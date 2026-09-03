@@ -1,5 +1,9 @@
 import { createBullMqDispatchTask } from "@/api/lib/scheduler/bullmq";
 import {
+  RECONCILE_BILINGUAL_RUNS_TASK,
+  reconcileBilingualRuns,
+} from "@/api/lib/scheduler/tasks/bilingual-run-reconcile";
+import {
   RECONCILE_BUFFER_INTENTS_TASK,
   reconcileBufferIntents,
 } from "@/api/lib/scheduler/tasks/buffer-intent-reconciliation";
@@ -23,6 +27,10 @@ import {
   DISPATCH_DOCUMENT_OCR_TASK,
   dispatchDocumentOcr,
 } from "@/api/lib/scheduler/tasks/document-processing-ocr";
+import {
+  RECONCILE_DOCUMENT_REVIEW_RUNS_TASK,
+  reconcileDocumentReviewRuns,
+} from "@/api/lib/scheduler/tasks/document-review-run-reconcile";
 import {
   REPAIR_FILE_DERIVATIVES_TASK,
   repairFileDerivatives,
@@ -59,6 +67,10 @@ import {
   REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK,
   repairSearchSemanticTimestampsTask,
 } from "@/api/lib/scheduler/tasks/search-semantic-timestamps";
+import {
+  RECONCILE_STYLE_SET_PACKAGE_CLEANUPS_TASK,
+  reconcileStyleSetPackageCleanups,
+} from "@/api/lib/scheduler/tasks/style-set-package-cleanup-reconcile";
 import {
   CLEAN_TEMPLATE_DELETION_OBJECTS_TASK,
   cleanTemplateDeletionObjects,
@@ -103,6 +115,9 @@ const SCHEDULER_TASKS = {
   [CLEAN_TEMPLATE_DELETION_OBJECTS_TASK]: cleanTemplateDeletionObjects,
   [REPAIR_FILE_DERIVATIVES_TASK]: repairFileDerivatives,
   [RECONCILE_FLOW_RUN_ORPHANS_TASK]: reconcileFlowRunOrphans,
+  [RECONCILE_DOCUMENT_REVIEW_RUNS_TASK]: reconcileDocumentReviewRuns,
+  [RECONCILE_BILINGUAL_RUNS_TASK]: reconcileBilingualRuns,
+  [RECONCILE_STYLE_SET_PACKAGE_CLEANUPS_TASK]: reconcileStyleSetPackageCleanups,
 } as const satisfies Record<string, SchedulerTask>;
 
 export type RegisteredSchedulerTaskName = keyof typeof SCHEDULER_TASKS;
