@@ -563,6 +563,11 @@ const formatReleaseDate = (publishedAt: string) =>
     // Stable tags built but never promoted; their release objects predate the
     // draft-until-promoted publication and are still published on GitHub.
     let unpromotedReleaseTags = new Set<string>();
+    const isListedStellaRelease = (release: GitHubRelease) =>
+      !release.draft &&
+      !release.prerelease &&
+      isStellaReleaseTag(release.tag_name) &&
+      !unpromotedReleaseTags.has(release.tag_name);
     const readCurrentPage = () => {
       const page = Number(new URLSearchParams(window.location.search).get("page"));
       if (!Number.isInteger(page) || page < 1) {
@@ -1131,15 +1136,7 @@ const formatReleaseDate = (publishedAt: string) =>
 
         // eslint-disable-next-line no-await-in-loop -- body of the sequentially fetched page; see above
         const releases = parseGitHubReleases(await response.json());
-        stellaReleases.push(
-          ...releases.filter(
-            (release) =>
-              !release.draft &&
-              !release.prerelease &&
-              isStellaReleaseTag(release.tag_name) &&
-              !unpromotedReleaseTags.has(release.tag_name),
-          ),
-        );
+        stellaReleases.push(...releases.filter(isListedStellaRelease));
         releaseEntries = groupMaintenanceReleases(
           stellaReleases,
           getReleaseSummaryTitle,
