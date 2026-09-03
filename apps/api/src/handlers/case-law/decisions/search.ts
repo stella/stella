@@ -568,11 +568,22 @@ type HydratedDecisionRow = Awaited<
   ReturnType<typeof hydratedDecisionRowsQuery>
 >[number];
 
+/**
+ * What one request has read so far: a row, or null for an id the current
+ * rows no longer answer for (filtered out, scrubbed, pending). A scan ranks
+ * everything it has accumulated after every round, so without this record
+ * each round re-reads what the earlier rounds read, and the request's
+ * database work grows with the square of the rounds.
+ */
+type HydratedDecisionRows = Map<string, HydratedDecisionRow | null>;
+
 type RehydrateCaseLawCandidatesOptions = {
   body: SearchDecisionsBody;
   candidates: readonly ScoredCandidate[];
   caseLawDb: CaseLawPublicReadDb;
   generation: string;
+  /** The request's record of rows read so far; only ids absent from it are read. */
+  hydrated?: HydratedDecisionRows | undefined;
 };
 
 /**
@@ -585,10 +596,11 @@ export const rehydrateCaseLawCandidates = async ({
   candidates,
   caseLawDb,
   generation,
+  hydrated = new Map(),
 }: RehydrateCaseLawCandidatesOptions) => {
-  const ids = candidates.map((candidate) =>
-    toSafeId<"caseLawDecision">(candidate.id),
-  );
+  const ids = candidates
+    .filter((candidate) => !hydrated.has(candidate.id))
+    .map((candidate) => toSafeId<"caseLawDecision">(candidate.id));
   // Reapply the request filters against the current rows: a stale
   // corpus hit (metadata changed, async re-index/delete pending) must
   // not satisfy filters it no longer matches.
@@ -633,9 +645,21 @@ export const rehydrateCaseLawCandidates = async ({
       : await caseLawDb((tx) =>
           hydratedDecisionRowsQuery(tx, ids, rehydrationFilters, generation),
         );
-  const byId = new Map(rows.map((row) => [String(row.id), row]));
+  for (const id of ids) {
+    hydrated.set(id, null);
+  }
+  for (const row of rows) {
+    hydrated.set(String(row.id), row);
+  }
+
+  const byId = new Map<string, HydratedDecisionRow>();
+  for (const [id, row] of hydrated) {
+    if (row !== null) {
+      byId.set(id, row);
+    }
+  }
   const authorityById = new Map(
-    rows.map((row) => [String(row.id), row.citationAuthority]),
+    [...byId].map(([id, row]) => [id, row.citationAuthority]),
   );
 
   // Candidates missing from Postgres (index/DB drift) are dropped. Every
@@ -846,6 +870,7 @@ const searchCorpusIndexDecisions = async (
     return { hits: [], facets: null, totalCount: null, nextCursor: null };
   }
 
+  const hydrated: HydratedDecisionRows = new Map();
   const searchPage = await readCorpusIndexSearchPage({
     cluster: serving.cluster,
     indexId,
@@ -868,6 +893,7 @@ const searchCorpusIndexDecisions = async (
         candidates,
         caseLawDb,
         generation,
+        hydrated,
       }),
   });
 
