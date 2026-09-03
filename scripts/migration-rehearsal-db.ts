@@ -17,8 +17,8 @@
 //     do while an upgrade runs: two sessions, each updating one row per
 //     table in a transaction held open for several seconds, over and over,
 //     staggered by half a hold, until the process is killed. Each
-//     transaction holds the corpus schema lane shared, as every corpus
-//     batch does through createIngestionDb, so an upgrade that takes the
+//     transaction holds the corpus schema lane shared, tried and backed
+//     off exactly as createIngestionDb does, so an upgrade that takes the
 //     lane exclusive drains them and runs its DDL against an idle table.
 //     With two holders out of phase there is never a moment when both end
 //     within a short wait, so an upgrade that skipped the lane and only
@@ -31,7 +31,11 @@
 import { panic } from "better-result";
 import { SQL } from "bun";
 
-import { CORPUS_SCHEMA_LANE_SHARED_XACT_SQL } from "../apps/api/src/db/corpus-schema-lane";
+import {
+  CORPUS_SCHEMA_LANE_RETRY_MS,
+  CORPUS_SCHEMA_LANE_TRY_SHARED_XACT_SQL,
+  isCorpusSchemaLaneGranted,
+} from "../apps/api/src/db/corpus-schema-lane";
 
 const COMMANDS = ["assert-empty", "contend", "digest"] as const;
 type Command = (typeof COMMANDS)[number];
@@ -86,9 +90,16 @@ const contendForever = async (
   connection: SQL,
   onHeld: (() => void) | null,
 ): Promise<never> => {
-  await connection.unsafe(
-    `BEGIN; ${CORPUS_SCHEMA_LANE_SHARED_XACT_SQL}; ${CONTENDED_UPDATES.join("; ")};`,
+  await connection.unsafe("BEGIN");
+  const granted = isCorpusSchemaLaneGranted(
+    await connection.unsafe(CORPUS_SCHEMA_LANE_TRY_SHARED_XACT_SQL),
   );
+  if (!granted) {
+    await connection.unsafe("ROLLBACK");
+    await Bun.sleep(CORPUS_SCHEMA_LANE_RETRY_MS);
+    return await contendForever(connection, onHeld);
+  }
+  await connection.unsafe(CONTENDED_UPDATES.join("; "));
   onHeld?.();
   await Bun.sleep(CONTENTION_HOLD_MS);
   await connection.unsafe("COMMIT");

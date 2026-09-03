@@ -9,15 +9,23 @@
  * long wait stalls every reader queued behind it. Retrying with longer waits
  * shifts the odds; it does not remove the race.
  *
- * The lane removes it. Every corpus batch transaction takes the lane SHARED
- * for its duration (`takeCorpusSchemaLaneSharedSql`, applied by
- * `createIngestionDb`, the write boundary every corpus writer goes through).
- * The migrate entrypoint takes the lane EXCLUSIVE for the whole upgrade
- * (`CORPUS_SCHEMA_LANE_LOCK_SQL`). PostgreSQL grants lock requests in
- * queue order: the exclusive request waits for the batches in flight when it
- * queued, new batches wait behind it at their own boundary, and once it is
- * granted no corpus transaction is open, so DDL wins its table lock at once
- * with a short wait. Batches resume when the upgrade releases the lane.
+ * The lane removes it. Every corpus batch transaction holds the lane SHARED
+ * for its duration (applied by `createIngestionDb`, the write boundary every
+ * corpus writer goes through). The migrate entrypoint takes the lane
+ * EXCLUSIVE for the whole upgrade (`CORPUS_SCHEMA_LANE_LOCK_SQL`), which
+ * waits for the batches in flight; once it is granted no corpus transaction
+ * is open, so DDL wins its table lock at once with a short wait. Batches
+ * resume when the upgrade releases the lane.
+ *
+ * A batch never *waits* for the lane inside a transaction. A transaction
+ * blocked on a lock still holds its snapshot, and a concurrent index build
+ * in the upgrade waits for every older snapshot to end: the build would wait
+ * for the batch, and the batch for the build's lane, a deadlock PostgreSQL
+ * resolves by aborting one side. So a batch *tries* the lane
+ * (`CORPUS_SCHEMA_LANE_TRY_SHARED_XACT_SQL`), and when refused it ends its
+ * empty transaction, sleeps, and tries again; nothing of it outlives the
+ * attempt. PostgreSQL queues lock requests, so a try is refused as soon as
+ * an exclusive request is waiting, which is what lets the upgrade drain.
  *
  * Distinct from the operator scripts' maintenance lane
  * (`lib/case-law/maintenance-lane.ts`), which serializes whole operator runs
@@ -37,16 +45,42 @@ export const CORPUS_SCHEMA_LANE = {
 const KEY_SQL = `hashtext('${CORPUS_SCHEMA_LANE.domain}'), hashtext('${CORPUS_SCHEMA_LANE.lane}')`;
 
 /**
- * Take the lane shared for the current transaction. Released at commit or
- * rollback; there is nothing to unlock by hand.
+ * Try the lane shared for the current transaction; one row, `granted`
+ * boolean. Held until commit or rollback when granted.
  */
-export const CORPUS_SCHEMA_LANE_SHARED_XACT_SQL = `SELECT pg_advisory_xact_lock_shared(${KEY_SQL})`;
+export const CORPUS_SCHEMA_LANE_TRY_SHARED_XACT_SQL = `SELECT pg_try_advisory_xact_lock_shared(${KEY_SQL}) AS "granted"`;
+
+/** How long a refused batch sleeps, outside any transaction, before trying again. */
+export const CORPUS_SCHEMA_LANE_RETRY_MS = 250;
 
 /**
  * Take the lane exclusive for the session. Blocks until every shared holder
  * has committed; pair with `CORPUS_SCHEMA_LANE_UNLOCK_SQL` on the same
- * connection, and let the session end release it on any other exit.
+ * connection, and let the session end release it on any other exit. The
+ * holder waits with nothing else held, so it cannot deadlock.
  */
 export const CORPUS_SCHEMA_LANE_LOCK_SQL = `SELECT pg_advisory_lock(${KEY_SQL})`;
 
 export const CORPUS_SCHEMA_LANE_UNLOCK_SQL = `SELECT pg_advisory_unlock(${KEY_SQL})`;
+
+/** Whether a try-lock result (either driver shape) reports the lane granted. */
+export const isCorpusSchemaLaneGranted = (result: unknown): boolean => {
+  let rows: unknown[] = [];
+  if (Array.isArray(result)) {
+    rows = result;
+  } else if (
+    typeof result === "object" &&
+    result !== null &&
+    "rows" in result &&
+    Array.isArray(result.rows)
+  ) {
+    rows = result.rows;
+  }
+  const row: unknown = rows.at(0);
+  return (
+    typeof row === "object" &&
+    row !== null &&
+    "granted" in row &&
+    row.granted === true
+  );
+};

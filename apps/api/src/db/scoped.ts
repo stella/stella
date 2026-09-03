@@ -24,7 +24,11 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 
-import { CORPUS_SCHEMA_LANE_SHARED_XACT_SQL } from "./corpus-schema-lane";
+import {
+  CORPUS_SCHEMA_LANE_RETRY_MS,
+  CORPUS_SCHEMA_LANE_TRY_SHARED_XACT_SQL,
+  isCorpusSchemaLaneGranted,
+} from "./corpus-schema-lane";
 
 // Generic constraint accepts any drizzle instance (prod or
 // test PGlite) without importing test-only types.
@@ -181,28 +185,65 @@ export const createMembershipScopedDb =
       fn,
     });
 
+/** A transaction that ended without running its work: the lane was refused. */
+const CORPUS_SCHEMA_LANE_BUSY: unique symbol = Symbol(
+  "stella.corpusSchemaLaneBusy",
+);
+
+/**
+ * One attempt at a corpus batch: try the lane, and only when granted assume
+ * the ingestion role and run the work. A refused attempt commits an empty
+ * transaction and the caller sleeps outside any transaction before the next
+ * one, so no snapshot outlives a refusal (see corpus-schema-lane.ts).
+ * Recursive rather than a loop with an awaited body: each attempt must end
+ * before the next begins, so the sequencing is structural.
+ */
+const runIngestionTransaction = async <
+  TTransaction extends ScopedTransactionBase,
+  T,
+>(
+  database: RlsDatabase<TTransaction>,
+  fn: (tx: TTransaction) => Promise<T>,
+): Promise<T> => {
+  const outcome = await database.transaction(
+    async (
+      tx: TTransaction,
+    ): Promise<typeof CORPUS_SCHEMA_LANE_BUSY | { value: T }> => {
+      const granted = isCorpusSchemaLaneGranted(
+        await tx.execute(sql.raw(CORPUS_SCHEMA_LANE_TRY_SHARED_XACT_SQL)),
+      );
+      if (!granted) {
+        return CORPUS_SCHEMA_LANE_BUSY;
+      }
+      await tx.execute(
+        sql`SELECT set_config('role', '${sql.raw(stellaIngestion.name)}', true)`,
+      );
+      return { value: await fn(tx) };
+    },
+  );
+  if (outcome === CORPUS_SCHEMA_LANE_BUSY) {
+    await Bun.sleep(CORPUS_SCHEMA_LANE_RETRY_MS);
+    return await runIngestionTransaction(database, fn);
+  }
+  return outcome.value;
+};
+
 // SET LOCAL ROLE stella_ingestion per transaction. Used by the
 // case-law ingestion daemon — narrowed to writes on case_law_*
 // (see 20260516000000_case_law_ingestion_role). No app.* settings
 // because the corpus is global; there is no tenant to scope.
 //
-// Every transaction also holds the corpus schema lane shared for its
-// duration: this is the write boundary every corpus batch goes through, so
-// an upgrade that takes the lane exclusive knows no batch is in flight
-// (see corpus-schema-lane.ts). A batch queued behind an upgrade waits here,
-// at its own boundary, rather than mid-write.
+// Every transaction holds the corpus schema lane shared for its duration:
+// this is the write boundary every corpus batch goes through, so an upgrade
+// that takes the lane exclusive knows no batch is in flight (see
+// corpus-schema-lane.ts). A batch that meets an upgrade backs off at its own
+// boundary, rather than mid-write, until the lane is free again.
 export const createIngestionDb =
   <TTransaction extends ScopedTransactionBase>(
     database: RlsDatabase<TTransaction>,
   ) =>
   async <T>(fn: (tx: TTransaction) => Promise<T>): Promise<T> =>
-    await database.transaction(async (tx: TTransaction) => {
-      await tx.execute(
-        sql`SELECT set_config('role', '${sql.raw(stellaIngestion.name)}', true)`,
-      );
-      await tx.execute(sql.raw(CORPUS_SCHEMA_LANE_SHARED_XACT_SQL));
-      return await fn(tx);
-    });
+    await runIngestionTransaction(database, fn);
 
 const toSafeDbError = (cause: unknown): SafeDbError => {
   const code = getPgErrorCode(cause);
