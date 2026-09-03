@@ -51,6 +51,13 @@ const TOOL_CALL_ROLE = "chat" satisfies ModelRole;
 const CAPABILITY_PROBE_TIMEOUT_MS = 20_000;
 const MODEL_ROLE_PROBE_TIMEOUT_MS = 30_000;
 const TOOL_ROUND_TRIP_PROBE_TIMEOUT_MS = 45_000;
+// The budget-edge probe sends the largest schema the canary knows how to
+// build and asks for one answer per property in it (~4K output tokens at
+// OpenAI's documented 100 000-byte budget), against a grammar the provider
+// compiles for that schema. Every other capability probe answers in one
+// line, so the deadline they share aborts this one mid-generation; it gets
+// the longest deadline the canary already waits on a single call.
+const BUDGET_EDGE_PROBE_TIMEOUT_MS = TOOL_ROUND_TRIP_PROBE_TIMEOUT_MS;
 // A provider's overload response ("high demand", 503) or a slow first
 // answer must not read as a capability regression: three attempts, with the
 // wait growing from 5s to 20s so a short capacity spike has time to pass.
@@ -950,7 +957,7 @@ const capabilityProbes = [
     // constrained-decoding grammar limits here, not in a user's workflow run.
     type: "capability",
     name: "structured-output-budget-edge",
-    timeoutMs: CAPABILITY_PROBE_TIMEOUT_MS,
+    timeoutMs: BUDGET_EDGE_PROBE_TIMEOUT_MS,
     run: async ({ config, provider }, signal) => {
       const modelId = DEFAULT_MODELS[provider][CAPABILITY_ROLE];
       const edge = buildBudgetEdgeSchema({ provider, modelId });
@@ -1044,6 +1051,11 @@ const capabilityProbes = [
     },
   },
 ] as const satisfies readonly CapabilityProbe[];
+
+export const canaryCapabilityProbeTimeout = (
+  name: string,
+): number | undefined =>
+  capabilityProbes.find((probe) => probe.name === name)?.timeoutMs;
 
 const probes = [
   ...modelRoleProbes,
