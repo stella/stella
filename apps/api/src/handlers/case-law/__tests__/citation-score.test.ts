@@ -9,12 +9,12 @@ import {
   weightedCitationSum,
 } from "@/api/handlers/case-law/citation-score";
 import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
-import { flattenCourtWeightEntries } from "@/api/handlers/case-law/court-weights";
 import {
   POLARITIES,
   POLARITY,
   POLARITY_AUTHORITY_WEIGHT,
 } from "@/api/handlers/case-law/polarity/consts";
+import { flattenCourtWeightEntries } from "@/api/lib/case-law/court-weights";
 
 /** The seeded weights, as production reads them from the migrated table. */
 const SEED_MAP = courtWeightMapFromSeed();
@@ -347,12 +347,14 @@ describe("courtWeightSql", () => {
   test("generates from the given entries alone", () => {
     const generated = courtWeightSql("citing_d.court", [
       {
+        country: "AUT",
         pattern: /verfassungsgerichtshof/iu,
         tier: 4,
         tierLabel: "constitutional",
         weight: 10,
       },
       {
+        country: "AUT",
         pattern: /oberster gerichtshof/iu,
         tier: 3,
         tierLabel: "supreme",

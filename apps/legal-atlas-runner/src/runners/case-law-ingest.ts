@@ -25,6 +25,7 @@ import { SOURCE_TOTAL_ORIGIN, caseLawIngestionEvents } from "@/api/db/schema";
 import { corpusStorageMode, envBase } from "@/api/env-base";
 import {
   hasResolvedCitations,
+  loadCitationCourtWeightEntries,
   tryRecomputeCitationAuthorityBatch,
 } from "@/api/handlers/case-law/citation-authority";
 import {
@@ -81,7 +82,6 @@ import {
   createCaseLawSource,
   findCaseLawSource,
   ingestionDb,
-  loadCourtWeightEntries,
 } from "../db";
 import { LEGAL_ATLAS_RUNNER_ENV } from "../env";
 import {
@@ -1226,8 +1226,6 @@ export const runCaseLawIngest = async (
             "[citation-authority] Idle (no resolved citations to rank yet)",
           );
         } else {
-          // oxlint-disable-next-line no-await-in-loop -- one bounded batch at a time; the next only starts once this one is durable
-          const courtWeightEntries = await loadCourtWeightEntries();
           // A rolling window, not a pinned one: the sweep is continuous and
           // has no start, and a row recomputed an interval ago is due again
           // whatever this process was doing then. Expressed as an age so both
@@ -1235,12 +1233,18 @@ export const runCaseLawIngest = async (
           // running ahead of the database would otherwise leave every row it
           // just stamped still older than the boundary, and the walk would
           // rewrite the same oldest rows forever.
+          //
+          // The weights load inside the deadline that covers the work they
+          // feed: their loader reads through the API's root pool on a cache
+          // miss, and a reaped connection there would otherwise wedge the
+          // recompute loop with nothing watching it.
           // oxlint-disable-next-line no-await-in-loop -- one bounded batch at a time; the next only starts once this one is durable
           const batch = await runWithHardDeadline(
             "citation-authority",
             BACKFILL_HARD_DEADLINE_MS,
-            async () =>
-              await ingestionDb(
+            async () => {
+              const courtWeightEntries = await loadCitationCourtWeightEntries();
+              return await ingestionDb(
                 async (tx) =>
                   await tryRecomputeCitationAuthorityBatch(tx, {
                     limit: CITATION_AUTHORITY_BATCH_SIZE,
@@ -1250,7 +1254,8 @@ export const runCaseLawIngest = async (
                     },
                     courtWeightEntries,
                   }),
-              ),
+              );
+            },
           );
           if (batch === null) {
             outcome = RECOMPUTE_OUTCOME.SKIPPED;

@@ -23,16 +23,16 @@
 
 import { DAY_IN_MS } from "@stll/time";
 
-import { courtWeightFromMap } from "@/api/handlers/case-law/court-weights";
-import type {
-  CourtWeightEntry,
-  CourtWeightMap,
-} from "@/api/handlers/case-law/court-weights";
 import {
   POLARITY,
   POLARITY_AUTHORITY_WEIGHT,
 } from "@/api/handlers/case-law/polarity/consts";
 import type { Polarity } from "@/api/handlers/case-law/polarity/consts";
+import { courtWeightFromMap } from "@/api/lib/case-law/court-weights";
+import type {
+  CourtWeightEntry,
+  CourtWeightMap,
+} from "@/api/lib/case-law/court-weights";
 
 /** Average (Julian) year, used for citation-age decay. A duration. */
 const MS_PER_YEAR = 365.25 * DAY_IN_MS;

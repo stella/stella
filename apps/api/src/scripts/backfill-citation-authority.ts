@@ -26,8 +26,10 @@
  */
 import { panic } from "better-result";
 
-import { recomputeCitationAuthorityBatch } from "@/api/handlers/case-law/citation-authority";
-import { loadCourtWeightEntriesForSql } from "@/api/handlers/case-law/court-weights";
+import {
+  loadCitationCourtWeightEntries,
+  recomputeCitationAuthorityBatch,
+} from "@/api/handlers/case-law/citation-authority";
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
 
 // Hold the maintenance lane before the first statement: operator passes over
@@ -78,7 +80,7 @@ console.log(
     "(pass it back with --as-of to resume this sweep rather than start a new one)",
 );
 
-const courtWeightEntries = await loadCourtWeightEntriesForSql();
+const courtWeightEntries = await loadCitationCourtWeightEntries();
 
 let recomputed = 0;
 let cited = 0;

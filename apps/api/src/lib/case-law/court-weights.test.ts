@@ -3,8 +3,8 @@ import { describe, expect, test } from "bun:test";
 import {
   courtWeightFromMap,
   flattenCourtWeightEntries,
-} from "@/api/handlers/case-law/court-weights";
-import type { CourtWeightMap } from "@/api/handlers/case-law/court-weights";
+} from "@/api/lib/case-law/court-weights";
+import type { CourtWeightMap } from "@/api/lib/case-law/court-weights";
 
 const buildMap = (): CourtWeightMap =>
   new Map([
@@ -12,18 +12,26 @@ const buildMap = (): CourtWeightMap =>
       "CZE",
       [
         {
+          country: "CZE",
           pattern: /ústavní soud/iu,
           tier: 4,
           tierLabel: "constitutional",
           weight: 10,
         },
-        { pattern: /nejvyšší/iu, tier: 3, tierLabel: "supreme", weight: 8 },
+        {
+          country: "CZE",
+          pattern: /nejvyšší/iu,
+          tier: 3,
+          tierLabel: "supreme",
+          weight: 8,
+        },
       ],
     ],
     [
       "POL",
       [
         {
+          country: "POL",
           pattern: /sąd najwyższy/iu,
           tier: 3,
           tierLabel: "supreme",
@@ -80,5 +88,13 @@ describe("flattenCourtWeightEntries", () => {
     // Both country's entries are present, not just the first country's.
     expect(flattened.map((e) => e.tierLabel)).toContain("constitutional");
     expect(flattened.filter((e) => e.tierLabel === "supreme")).toHaveLength(2);
+  });
+
+  test("ties break by country then pattern, so the order is total", () => {
+    // Same tier in both jurisdictions: without a tie-break the winner would
+    // be whichever country the map happened to hold first.
+    const flattened = flattenCourtWeightEntries(buildMap());
+    const supreme = flattened.filter((e) => e.tierLabel === "supreme");
+    expect(supreme.map((e) => e.country)).toEqual(["CZE", "POL"]);
   });
 });

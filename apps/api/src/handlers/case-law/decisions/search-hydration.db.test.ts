@@ -3,6 +3,7 @@ import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
 import {
   readCaseLawPageDecisionRows,
   rehydrateCaseLawCandidates,
@@ -47,6 +48,9 @@ type HydratedRows = NonNullable<
 >;
 
 const candidatesOf = (...ids: string[]) => ids.map((id) => ({ id, score: 1 }));
+
+/** The registry as a request holds it, without a database to read it from. */
+const courtWeights = courtWeightMapFromSeed();
 
 beforeAll(
   async () => {
@@ -134,12 +138,13 @@ afterAll(async () => {
   await client.close();
 });
 
-test("the blend read carries the authority and the group key, and nothing a card shows", async () => {
+test("the blend read carries what ranking and the fold need, and nothing a card shows", async () => {
   const hydrated: HydratedRows = new Map();
   const ranking = await rehydrateCaseLawCandidates({
     body: { query: "promlčení" },
     candidates: candidatesOf(czechId, slovakId),
     caseLawDb,
+    courtWeights,
     generation: GENERATION,
     hydrated,
   });
@@ -153,6 +158,8 @@ test("the blend read carries the authority and the group key, and nothing a card
   for (const row of hydrated.values()) {
     expect(Object.keys(row ?? {}).toSorted()).toEqual([
       "citationAuthority",
+      "country",
+      "court",
       "id",
       "languageGroupKey",
     ]);
@@ -165,6 +172,7 @@ test("a candidate is read once however many rounds ask for it", async () => {
     body: { query: "promlčení" },
     candidates: candidatesOf(czechId),
     caseLawDb,
+    courtWeights,
     generation: GENERATION,
     hydrated,
   });
@@ -176,6 +184,7 @@ test("a candidate is read once however many rounds ask for it", async () => {
     body: { query: "promlčení" },
     candidates: candidatesOf(czechId, slovakId),
     caseLawDb,
+    courtWeights,
     generation: GENERATION,
     hydrated,
   });
@@ -186,6 +195,7 @@ test("a candidate is read once however many rounds ask for it", async () => {
     body: { query: "promlčení" },
     candidates: candidatesOf(czechId, slovakId),
     caseLawDb,
+    courtWeights,
     generation: GENERATION,
     hydrated,
   });
@@ -226,6 +236,7 @@ test("both reads reapply the request filters and the redistribution boundary", a
   const scoped = {
     body: { country: "CZE", query: "promlčení" },
     caseLawDb,
+    courtWeights,
     generation: GENERATION,
   };
 

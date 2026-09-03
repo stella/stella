@@ -38,7 +38,7 @@
  * Court weights are passed in via `courtWeightEntries` rather than loaded
  * internally: this keeps the function a `tx`-in/count-out unit that is safe to
  * exercise against a pglite fixture in tests. Production callers load the
- * current DB-seeded weights themselves (`loadCourtWeightEntriesForSql()`)
+ * current DB-seeded weights with `loadCitationCourtWeightEntries()` below
  * before calling in; omitting the option falls back to `courtWeightSql`'s
  * legacy hardcoded tiers.
  */
@@ -51,7 +51,11 @@ import {
   courtWeightSql,
   polarityWeightSql,
 } from "@/api/handlers/case-law/citation-score";
-import type { CourtWeightEntry } from "@/api/handlers/case-law/court-weights";
+import {
+  flattenCourtWeightEntries,
+  loadCourtWeights,
+} from "@/api/lib/case-law/court-weights";
+import type { CourtWeightEntry } from "@/api/lib/case-law/court-weights";
 import { redistributableCaseLawSourceSqlFor } from "@/api/lib/case-law/redistribution";
 import { setCorpusBackfillStatementTimeout } from "@/api/lib/legal-search/backfill-statement-timeout";
 import { isRecord } from "@/api/lib/type-guards";
@@ -81,6 +85,18 @@ const firstNumber = (result: unknown, key: string): number => {
   const value = Number(row[key] ?? 0);
   return Number.isFinite(value) ? value : 0;
 };
+
+/**
+ * The weights a production caller passes as `courtWeightEntries`. Flattened
+ * across every jurisdiction rather than scoped to one, because the *citing*
+ * court decides the contribution and citation graphs cross borders.
+ *
+ * It lives here, with the option it satisfies, so a caller does not have to
+ * reach into the registry to answer a question only this module asks.
+ */
+export const loadCitationCourtWeightEntries = async (): Promise<
+  CourtWeightEntry[]
+> => flattenCourtWeightEntries(await loadCourtWeights());
 
 /** The SQL aliases a contribution expression may read. */
 export type CitationContributionAliases = {

@@ -1,10 +1,14 @@
 import { panic } from "better-result";
 
+import { arrayOrEmpty } from "@/api/lib/array";
+import {
+  compareCourtWeightPrecedence,
+  flattenCourtWeightEntries,
+} from "@/api/lib/case-law/court-weights";
 import type {
   CourtWeightEntry,
   CourtWeightMap,
-} from "@/api/handlers/case-law/court-weights";
-import { arrayOrEmpty } from "@/api/lib/array";
+} from "@/api/lib/case-law/court-weights";
 
 /**
  * The court rank declaration every jurisdiction ships with. The migration
@@ -133,6 +137,7 @@ export const COURT_WEIGHT_SEED: readonly CourtWeightSeedRow[] = [
 ];
 
 const compile = (row: CourtWeightSeedRow): CourtWeightEntry => ({
+  country: row.country,
   pattern: new RegExp(row.courtPattern, "iu"),
   tier: row.tier,
   tierLabel: row.tierLabel,
@@ -152,7 +157,7 @@ export const courtWeightMapFromSeed = (): CourtWeightMap => {
     map.set(row.country, entries);
   }
   for (const entries of map.values()) {
-    entries.sort((a, b) => b.tier - a.tier);
+    entries.sort(compareCourtWeightPrecedence);
   }
   return map;
 };
@@ -168,11 +173,9 @@ export const seededCourtWeightEntries = (
   courtWeightMapFromSeed().get(country) ??
   panic(`court weight seed declares no jurisdiction ${country}`);
 
-/** Every seeded entry across jurisdictions, highest tier first. */
+/** Every seeded entry across jurisdictions, in precedence order. */
 export const courtWeightEntriesFromSeed = (): CourtWeightEntry[] =>
-  [...courtWeightMapFromSeed().values()]
-    .flat()
-    .toSorted((a, b) => b.tier - a.tier);
+  flattenCourtWeightEntries(courtWeightMapFromSeed());
 
 const sqlLiteral = (value: string): string => `'${value.replace(/'/gu, "''")}'`;
 

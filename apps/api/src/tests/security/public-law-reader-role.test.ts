@@ -581,6 +581,10 @@ describe("public-law reader role", () => {
       body: { query: "reader role census" },
       candidates: [{ id: createSafeId<"caseLawDecision">(), score: 1 }],
       caseLawDb,
+      // The census exercises the projection under the reader role; the court
+      // registry is read by the request, not by this query, and an empty one
+      // still ranks every court.
+      courtWeights: new Map(),
       generation: "case_law_v3",
     });
     expect(search.ranked).toEqual([]);
