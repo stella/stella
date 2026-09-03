@@ -38,9 +38,9 @@ import { CANARY_PROVIDERS } from "./ai-provider-canary-config";
 
 describe("AI provider canary probe deadlines", () => {
   test("gives the budget-edge probe the extended structured-output deadline", () => {
-    expect(
-      canaryCapabilityProbeTimeout("structured-output-budget-edge"),
-    ).toBe(45_000);
+    expect(canaryCapabilityProbeTimeout("structured-output-budget-edge")).toBe(
+      45_000,
+    );
     expect(canaryCapabilityProbeTimeout("structured-output")).toBe(20_000);
     expect(canaryCapabilityProbeTimeout("unknown-probe")).toBeUndefined();
   });
