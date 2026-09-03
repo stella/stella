@@ -374,7 +374,9 @@ describe("courtWeightSql", () => {
 
   test("no entries renders the default weight for every court", () => {
     // An unmigrated table: nothing to rank by, and nothing to fall back to.
+    // A branchless `CASE` is a syntax error, so the weight stands alone and
+    // the statement still runs; `authority-sql.test.ts` executes it.
     const generated = courtWeightSql("citing_d.court", []);
-    expect(generated).toBe("CASE \n      ELSE 1 END");
+    expect(generated).toBe("1");
   });
 });

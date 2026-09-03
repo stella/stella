@@ -75,6 +75,7 @@ runtime validation, or integration tests.
 
 - [`confine-redis-client`](./confine-redis-client.ts) (`confine-redis-client`): confines direct Redis client construction and imports to the owned infrastructure module.
 - [`no-bare-jsonb-cast`](./no-bare-jsonb-cast.ts) (`no-bare-jsonb-cast`): rejects bare PostgreSQL JSONB casts that bypass the typed JSONB expression helper.
+- [`no-hand-rolled-sql-case`](./no-hand-rolled-sql-case.ts) (`no-hand-rolled-sql-case`): rejects a SQL `CASE` whose branch list is generated in the interpolation, where an empty list renders a branchless `CASE`; the shared renderers return the fallback instead.
 - [`no-db-await-in-loop`](./no-db-await-in-loop.ts) (`no-db-await-in-loop`): catches database calls awaited serially in loops and unbounded `Promise.all` query fan-out.
 - [`no-direct-audit-log-insert`](./no-direct-audit-log-insert.ts) (`no-direct-audit-log-insert`): keeps audit-log insertion behind the canonical append-only audit service.
 - [`no-direct-buffer-cleanup-intent-delete`](./no-direct-buffer-cleanup-intent-delete.ts) (`no-direct-buffer-cleanup-intent-delete`): keeps publication-time cleanup-intent retirement behind the transaction-owned reconciliation helper; tests and the owning reconciliation module may delete directly.

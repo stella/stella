@@ -39,8 +39,8 @@
  * internally: this keeps the function a `tx`-in/count-out unit that is safe to
  * exercise against a pglite fixture in tests. Production callers load the
  * current DB-seeded weights with `loadCitationCourtWeightEntries()` below
- * before calling in; omitting the option falls back to `courtWeightSql`'s
- * legacy hardcoded tiers.
+ * before calling in; there is no built-in list behind them, so an unseeded
+ * registry weighs every citing court at the default.
  */
 
 import { panic } from "better-result";

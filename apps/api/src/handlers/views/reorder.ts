@@ -17,6 +17,7 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { broadcastWorkspaceResourceChanges } from "@/api/lib/resource-realtime";
+import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 
 const config = {
   description:
@@ -110,7 +111,12 @@ const reorderViews = createSafeHandler(
         await tx
           .update(workspaceViews)
           .set({
-            position: sql`case ${sql.join(cases, sql` `)} end`,
+            position: sqlCaseFragment({
+              branches: cases,
+              // Every view in the workspace is validated to be in `viewIds`
+              // above, so the ELSE renders but never evaluates.
+              fallback: sql`${workspaceViews.position}`,
+            }),
           })
           .where(eq(workspaceViews.workspaceId, workspaceId));
 

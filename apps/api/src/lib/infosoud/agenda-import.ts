@@ -20,6 +20,7 @@ import {
   INFO_SOUD_TIME_ZONE,
   toHearingRecord,
 } from "@/api/lib/scouts/infosoud-hearings.logic";
+import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 
 type InfoSoudAgendaItem = {
   agendaKind: AgendaItemKind;
@@ -197,7 +198,11 @@ export const importInfoSoudAgendaItems = async ({
     await tx
       .update(entities)
       .set({
-        currentVersionId: sql`case ${entities.id} ${sql.join(currentVersionCases, sql` `)} else ${entities.currentVersionId} end`,
+        currentVersionId: sqlCaseFragment({
+          operand: sql`${entities.id}`,
+          branches: currentVersionCases,
+          fallback: sql`${entities.currentVersionId}`,
+        }),
       })
       .where(
         inArray(

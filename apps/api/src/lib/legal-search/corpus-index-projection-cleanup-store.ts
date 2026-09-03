@@ -31,6 +31,7 @@ import {
   CORPUS_PROJECTION_LEASE_MAX_MS,
   CORPUS_PROJECTION_LEASE_MIN_MS,
 } from "@/api/lib/legal-search/corpus-index-projection-store";
+import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 
 type ProjectionIntentId = SafeId<"corpusIndexProjectionIntent">;
 
@@ -885,12 +886,13 @@ export const recoverExpiredCorpusProjectionIntentsTx = async <
         ),
       };
     });
-    const barrierSql = sql`CASE ${corpusIndexProjectionIntents.id} ${sql.join(
-      barriers.map(
+    const barrierSql = sqlCaseFragment({
+      operand: sql`${corpusIndexProjectionIntents.id}`,
+      branches: barriers.map(
         ({ id, barrier }) => sql`WHEN ${id} THEN ${barrier}::timestamptz`,
       ),
-      sql.raw(" "),
-    )} ELSE ${corpusIndexProjectionIntents.appendPublishBarrierAt} END`;
+      fallback: sql`${corpusIndexProjectionIntents.appendPublishBarrierAt}`,
+    });
     await tx
       .update(corpusIndexProjectionIntents)
       .set({
