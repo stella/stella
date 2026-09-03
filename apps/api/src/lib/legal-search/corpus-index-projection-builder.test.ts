@@ -298,10 +298,11 @@ test("a language with no stemmer writes no stem field at all", () => {
     manifest: CORPUS_INDEX_MANIFESTS.case_law_v6,
     input: {
       ...CASE_LAW_INPUT,
-      language: "de",
-      metadata: { legalSentence: "Der Mietvertrag." },
+      // Snowball ships no Bulgarian algorithm, so its text goes unstemmed.
+      language: "bg",
+      metadata: { legalSentence: "Договорът за наем." },
     },
-    payload: { text: "Der Mietvertrag wurde gekündigt.", ast: null },
+    payload: { text: "Договорът за наем беше прекратен.", ast: null },
     revision: REVISION,
   });
 

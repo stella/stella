@@ -8,21 +8,40 @@
  */
 
 import { panic } from "better-result";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 export type VocabularyPair = { readonly word: string; readonly stem: string };
 
-/** Snowball algorithm name, i.e. the fixture basename. */
-export type ConformanceAlgorithm = "czech" | "polish";
+const FIXTURE_SUFFIX = ".conformance.txt";
+
+/** Declared row count, so a truncated fixture cannot pass a thinner sample. */
+const DECLARED_PAIRS = /^# pairs: (\d+)$/mu;
+
+/**
+ * The algorithms the fixture directory holds, read from disk rather than
+ * listed: a generated fixture no test case names would otherwise go
+ * unexercised.
+ */
+export const conformanceAlgorithms = (): readonly string[] =>
+  readdirSync(import.meta.dir)
+    .filter((entry) => entry.endsWith(FIXTURE_SUFFIX))
+    .map((entry) => entry.slice(0, -FIXTURE_SUFFIX.length))
+    .sort();
 
 export const readConformanceVocabulary = (
-  algorithm: ConformanceAlgorithm,
-): readonly VocabularyPair[] =>
-  readFileSync(
-    path.join(import.meta.dir, `${algorithm}.conformance.txt`),
+  algorithm: string,
+): readonly VocabularyPair[] => {
+  const contents = readFileSync(
+    path.join(import.meta.dir, `${algorithm}${FIXTURE_SUFFIX}`),
     "utf-8",
-  )
+  );
+  const declared = DECLARED_PAIRS.exec(contents);
+  if (declared?.[1] === undefined) {
+    panic(`${algorithm}: fixture declares no pair count`);
+  }
+
+  const pairs = contents
     .split("\n")
     .filter((line) => line !== "" && !line.startsWith("#"))
     .map((line) => {
@@ -34,3 +53,11 @@ export const readConformanceVocabulary = (
       }
       return { word, stem };
     });
+
+  if (pairs.length !== Number(declared[1])) {
+    panic(
+      `${algorithm}: fixture declares ${declared[1]} pairs but holds ${pairs.length}`,
+    );
+  }
+  return pairs;
+};

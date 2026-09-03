@@ -60,15 +60,78 @@ type StemmerTarget = {
   readonly className: string;
 };
 
+/**
+ * Every language the corpus can hold that the pinned Snowball release ships
+ * an algorithm for: German plus the EU official languages. Snowball has no
+ * algorithm for Bulgarian, Croatian, Latvian, Maltese, Slovenian or Slovak;
+ * Slovak runs the vendored light stemmer instead (see `../morphology/slovak`)
+ * and the rest go unstemmed.
+ */
 const TARGETS = [
   { algorithm: "czech", module: "czech.gen", className: "CzechStemmer" },
+  { algorithm: "danish", module: "danish.gen", className: "DanishStemmer" },
+  { algorithm: "dutch", module: "dutch.gen", className: "DutchStemmer" },
+  { algorithm: "english", module: "english.gen", className: "EnglishStemmer" },
+  {
+    algorithm: "estonian",
+    module: "estonian.gen",
+    className: "EstonianStemmer",
+  },
+  { algorithm: "finnish", module: "finnish.gen", className: "FinnishStemmer" },
+  { algorithm: "french", module: "french.gen", className: "FrenchStemmer" },
+  { algorithm: "german", module: "german.gen", className: "GermanStemmer" },
+  { algorithm: "greek", module: "greek.gen", className: "GreekStemmer" },
+  {
+    algorithm: "hungarian",
+    module: "hungarian.gen",
+    className: "HungarianStemmer",
+  },
+  { algorithm: "irish", module: "irish.gen", className: "IrishStemmer" },
+  { algorithm: "italian", module: "italian.gen", className: "ItalianStemmer" },
+  {
+    algorithm: "lithuanian",
+    module: "lithuanian.gen",
+    className: "LithuanianStemmer",
+  },
   { algorithm: "polish", module: "polish.gen", className: "PolishStemmer" },
+  {
+    algorithm: "portuguese",
+    module: "portuguese.gen",
+    className: "PortugueseStemmer",
+  },
+  {
+    algorithm: "romanian",
+    module: "romanian.gen",
+    className: "RomanianStemmer",
+  },
+  { algorithm: "spanish", module: "spanish.gen", className: "SpanishStemmer" },
+  { algorithm: "swedish", module: "swedish.gen", className: "SwedishStemmer" },
 ] as const satisfies readonly StemmerTarget[];
 
 const BASE_STEMMER_IMPORT =
   "@/api/lib/legal-search/morphology/snowball/base-stemmer";
 
-const licenceHeader = (algorithm: string) => `/**
+/**
+ * Imports the module actually uses. An algorithm with no substitution table
+ * never reads one, and the repo's TypeScript settings reject the unused
+ * import.
+ */
+type HeaderImports = {
+  readonly amongTable: boolean;
+  readonly substitution: boolean;
+};
+
+const imports = ({ amongTable, substitution }: HeaderImports) =>
+  [
+    amongTable
+      ? `import type { AmongTable } from "${BASE_STEMMER_IMPORT}";`
+      : null,
+    `import {\n  BaseStemmer,${substitution ? "\n  substitution," : ""}\n} from "${BASE_STEMMER_IMPORT}";`,
+  ]
+    .filter((line) => line !== null)
+    .join("\n");
+
+const licenceHeader = (algorithm: string, used: HeaderImports) => `/**
  * Generated Snowball stemmer. Do not edit by hand.
  *
  * Regenerate with:
@@ -80,8 +143,9 @@ const licenceHeader = (algorithm: string) => `/**
  *
  * The generator emits JavaScript; the committed module is that output with
  * mechanical, script-applied edits only (module header, named export, type
- * annotations the repo's strict TypeScript settings require, and total
- * substitution-table reads). No algorithm logic is edited.
+ * annotations the repo's strict TypeScript settings require, total
+ * substitution-table reads, and the removal of labels nothing jumps to).
+ * No algorithm logic is edited.
  *
  * Copyright (c) 2001, Dr Martin Porter
  * Copyright (c) 2004,2005, Richard Boulton
@@ -91,11 +155,7 @@ const licenceHeader = (algorithm: string) => `/**
  * full notice in ./base-stemmer.ts.
  */
 
-import type { AmongTable } from "${BASE_STEMMER_IMPORT}";
-import {
-  BaseStemmer,
-  substitution,
-} from "${BASE_STEMMER_IMPORT}";
+${imports(used)}
 `;
 
 const fixtureHeader = (
@@ -110,9 +170,13 @@ const fixtureHeader = (
 # last ${SAMPLE_EDGE}) of the official reference vocabulary:
 #   ${SNOWBALL_DATA_REPO} @ ${SNOWBALL_DATA_COMMIT}
 #   ${algorithm}/voc.txt -> ${algorithm}/output.txt
-# produced by Snowball ${SNOWBALL_TAG}. ${pairs} pairs.
+# produced by Snowball ${SNOWBALL_TAG}.
 #
-# Format: <word>\\t<stem>, one pair per line.
+# Format: <word>\\t<stem>, one pair per line. The reader checks the row count
+# against the declaration below, so a truncated fixture fails loudly instead
+# of passing a thinner vocabulary.
+#
+# pairs: ${pairs}
 #
 # The vocabularies are derived from third-party corpora; see
 # ${algorithm}/COPYING upstream for their licence terms. The Snowball
@@ -147,14 +211,14 @@ const rewritesFor = (target: StemmerTarget): readonly Rewrite[] => [
   ],
   // Locals: `let /** number */ x;` has no initialiser to infer from.
   [
-    /^( *)let \/\*\* number \*\/ (\w+);$/gmu,
-    (_match, indent, name) => `${indent}let ${name}: number;`,
+    /^( *)let \/\*\* (number|string|boolean) \*\/ (\w+);$/gmu,
+    (_match, indent, type, name) => `${indent}let ${name}: ${type};`,
   ],
   // Locals with an initialiser: inference already covers them.
-  [/const \/\*\* number \*\/ /gu, () => "const "],
+  [/const \/\*\* (?:number|string|boolean) \*\/ /gu, () => "const "],
   // Private field with a trailing JSDoc type comment.
   [
-    /^( *)#(\w+)\/\*\* number \*\/ = /gmu,
+    /^( *)#(\w+)\/\*\* (?:number|string|boolean) \*\/ = /gmu,
     (_match, indent, name) => `${indent}#${name} = `,
   ],
   // Named export in place of the anonymous default.
@@ -174,6 +238,54 @@ const rewritesFor = (target: StemmerTarget): readonly Rewrite[] => [
   ],
 ];
 
+/** A labelled statement the generator emitted, with its `deno-lint` note. */
+const LABEL_DECLARATION =
+  /^ *\/\/ deno-lint-ignore no-unused-labels\n( *)((?:go)?lab\d+): /gmu;
+
+const LABEL_JUMP = /\b(?:break|continue) ((?:go)?lab\d+);/gu;
+
+/**
+ * Class members, at four spaces of indentation. A `break` cannot leave the
+ * function it sits in, so a label is unreferenced exactly when its own member
+ * holds no jump to it. Label numbering restarts per member, which is why the
+ * question cannot be asked of the whole file.
+ */
+const MEMBERS = /^ {4}(?=#?\w+\()/mu;
+
+/**
+ * Drop labels nothing jumps to.
+ *
+ * Snowball labels every block it may break out of and lets the target
+ * language's linter sort out the ones no branch reaches; the repo's
+ * TypeScript settings reject those instead. Removing an unreferenced label
+ * leaves a plain block or loop, which is the same statement: no algorithm
+ * logic changes.
+ */
+const dropUnusedLabels = (source: string, algorithm: string) =>
+  source
+    .split(MEMBERS)
+    .map((member) => {
+      const declared = new Set(
+        [...member.matchAll(LABEL_DECLARATION)].map((match) => match[2]),
+      );
+      const referenced = new Set(
+        [...member.matchAll(LABEL_JUMP)].map(([, name]) => name),
+      );
+      for (const name of referenced) {
+        if (name !== undefined && !declared.has(name)) {
+          // The split put a jump and its label in different members, so the
+          // member boundary is wrong and "unreferenced" cannot be trusted.
+          panic(`${algorithm}: jump to ${name} outside its declaring member`);
+        }
+      }
+      return member.replace(
+        LABEL_DECLARATION,
+        (match, indent: string, name: string) =>
+          referenced.has(name) ? match : indent,
+      );
+    })
+    .join("    ");
+
 const toTypeScriptModule = (generated: string, target: StemmerTarget) => {
   let source = generated
     .split("\n")
@@ -185,15 +297,20 @@ const toTypeScriptModule = (generated: string, target: StemmerTarget) => {
       replace(match, ...groups),
     );
   }
+  source = dropUnusedLabels(source, target.algorithm);
 
   if (source.includes("export default class extends B")) {
     panic(`${target.algorithm}: class declaration was not rewritten`);
   }
-  if (/\/\*\*\s*(?:Array<|number|string)/u.test(source)) {
+  if (/\/\*\*\s*(?:Array<|number|string|boolean)/u.test(source)) {
     panic(`${target.algorithm}: a JSDoc type comment survived the rewrite`);
   }
 
-  return `${licenceHeader(target.algorithm)}\n${source.trimEnd()}\n`;
+  const header = licenceHeader(target.algorithm, {
+    amongTable: source.includes("AmongTable"),
+    substitution: source.includes("substitution("),
+  });
+  return `${header}\n${source.trimEnd()}\n`;
 };
 
 const sampleIndexes = (total: number): readonly number[] => {

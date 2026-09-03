@@ -118,5 +118,6 @@ test("the language filter, not the jurisdiction, decides how words stem", () => 
   expect(stemmingOf("CZE", "pl")?.language).toBe("pl");
   // A language no stemmer covers yields none, rather than falling back to the
   // jurisdiction's and stemming against a language the documents are not in.
-  expect(stemmingOf("CZE", "de")).toBeNull();
+  // Snowball ships no Bulgarian algorithm.
+  expect(stemmingOf("CZE", "bg")).toBeNull();
 });

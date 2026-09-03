@@ -10,38 +10,89 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { readConformanceVocabulary } from "@/api/lib/legal-search/morphology/snowball/__fixtures__/vocabulary";
+import {
+  conformanceAlgorithms,
+  readConformanceVocabulary,
+} from "@/api/lib/legal-search/morphology/snowball/__fixtures__/vocabulary";
 import { CzechStemmer } from "@/api/lib/legal-search/morphology/snowball/czech.gen";
+import { DanishStemmer } from "@/api/lib/legal-search/morphology/snowball/danish.gen";
+import { DutchStemmer } from "@/api/lib/legal-search/morphology/snowball/dutch.gen";
+import { EnglishStemmer } from "@/api/lib/legal-search/morphology/snowball/english.gen";
+import { EstonianStemmer } from "@/api/lib/legal-search/morphology/snowball/estonian.gen";
+import { FinnishStemmer } from "@/api/lib/legal-search/morphology/snowball/finnish.gen";
+import { FrenchStemmer } from "@/api/lib/legal-search/morphology/snowball/french.gen";
+import { GermanStemmer } from "@/api/lib/legal-search/morphology/snowball/german.gen";
+import { GreekStemmer } from "@/api/lib/legal-search/morphology/snowball/greek.gen";
+import { HungarianStemmer } from "@/api/lib/legal-search/morphology/snowball/hungarian.gen";
+import { IrishStemmer } from "@/api/lib/legal-search/morphology/snowball/irish.gen";
+import { ItalianStemmer } from "@/api/lib/legal-search/morphology/snowball/italian.gen";
+import { LithuanianStemmer } from "@/api/lib/legal-search/morphology/snowball/lithuanian.gen";
 import { PolishStemmer } from "@/api/lib/legal-search/morphology/snowball/polish.gen";
+import { PortugueseStemmer } from "@/api/lib/legal-search/morphology/snowball/portuguese.gen";
+import { RomanianStemmer } from "@/api/lib/legal-search/morphology/snowball/romanian.gen";
+import { SpanishStemmer } from "@/api/lib/legal-search/morphology/snowball/spanish.gen";
+import { SwedishStemmer } from "@/api/lib/legal-search/morphology/snowball/swedish.gen";
+import type { MorphologyLanguage } from "@/api/lib/legal-search/morphology/stem";
 
-const czech = new CzechStemmer();
-const polish = new PolishStemmer();
+/**
+ * Slovak is the one stemmable language with no Snowball algorithm and so no
+ * reference vocabulary; `../slovak.test.ts` covers it instead.
+ */
+type SnowballLanguage = Exclude<MorphologyLanguage, "sk">;
 
-const CASES = [
-  {
-    algorithm: "czech",
-    stem: (term: string) => czech.stem(term),
-    pairs: readConformanceVocabulary("czech"),
-  },
-  {
-    algorithm: "polish",
-    stem: (term: string) => polish.stem(term),
-    pairs: readConformanceVocabulary("polish"),
-  },
-] as const;
+/**
+ * A fresh stemmer per algorithm, keyed by the language that dispatches to it.
+ * Total over the Snowball-backed languages, so a language added to the
+ * stemmer has to be exercised here rather than shipping unchecked.
+ */
+const STEMMERS = {
+  cs: { algorithm: "czech", create: () => new CzechStemmer() },
+  da: { algorithm: "danish", create: () => new DanishStemmer() },
+  de: { algorithm: "german", create: () => new GermanStemmer() },
+  el: { algorithm: "greek", create: () => new GreekStemmer() },
+  en: { algorithm: "english", create: () => new EnglishStemmer() },
+  es: { algorithm: "spanish", create: () => new SpanishStemmer() },
+  et: { algorithm: "estonian", create: () => new EstonianStemmer() },
+  fi: { algorithm: "finnish", create: () => new FinnishStemmer() },
+  fr: { algorithm: "french", create: () => new FrenchStemmer() },
+  ga: { algorithm: "irish", create: () => new IrishStemmer() },
+  hu: { algorithm: "hungarian", create: () => new HungarianStemmer() },
+  it: { algorithm: "italian", create: () => new ItalianStemmer() },
+  lt: { algorithm: "lithuanian", create: () => new LithuanianStemmer() },
+  nl: { algorithm: "dutch", create: () => new DutchStemmer() },
+  pl: { algorithm: "polish", create: () => new PolishStemmer() },
+  pt: { algorithm: "portuguese", create: () => new PortugueseStemmer() },
+  ro: { algorithm: "romanian", create: () => new RomanianStemmer() },
+  sv: { algorithm: "swedish", create: () => new SwedishStemmer() },
+} as const satisfies Record<
+  SnowballLanguage,
+  { algorithm: string; create: () => { stem: (term: string) => string } }
+>;
 
 describe("snowball conformance", () => {
-  for (const { algorithm, stem, pairs } of CASES) {
+  test("every committed fixture is exercised", () => {
+    // Read from disk, so a fixture the generator wrote and this suite never
+    // names fails here instead of going unchecked.
+    expect<readonly string[]>(conformanceAlgorithms()).toEqual(
+      Object.values(STEMMERS)
+        .map(({ algorithm }) => algorithm)
+        .sort(),
+    );
+  });
+
+  for (const { algorithm, create } of Object.values(STEMMERS)) {
+    const pairs = readConformanceVocabulary(algorithm);
+    const shared = create();
+
     test(`${algorithm} reproduces the reference vocabulary`, () => {
-      // A truncated or empty fixture must not let this pass vacuously.
-      expect<number>(pairs.length).toBeGreaterThan(2000);
+      // A thin fixture must not let this pass near-vacuously; the reader
+      // already rejects one truncated below its declared count.
+      expect<number>(pairs.length).toBeGreaterThan(1000);
 
       const mismatches = pairs
-        .filter(({ word, stem: expected }) => stem(word) !== expected)
+        .filter(({ word, stem }) => shared.stem(word) !== stem)
         .slice(0, 10)
-        .map(
-          ({ word, stem: expected }) => `${word}: ${stem(word)} != ${expected}`,
-        );
+        .map(({ word, stem }) => `${word}: ${shared.stem(word)} != ${stem}`);
 
       expect<readonly string[]>(mismatches).toEqual([]);
     });
@@ -49,14 +100,9 @@ describe("snowball conformance", () => {
     test(`${algorithm} reuses one stemmer instance without carrying state`, () => {
       // The public surface holds a single instance per language; a stemmer
       // that leaked cursor state between calls would diverge here.
-      const shared = pairs.map(({ word }) => stem(word));
-      const fresh = pairs.map(({ word }) =>
-        algorithm === "czech"
-          ? new CzechStemmer().stem(word)
-          : new PolishStemmer().stem(word),
-      );
-
-      expect<readonly string[]>(shared).toEqual(fresh);
+      expect<readonly string[]>(
+        pairs.map(({ word }) => shared.stem(word)),
+      ).toEqual(pairs.map(({ word }) => create().stem(word)));
     });
   }
 });

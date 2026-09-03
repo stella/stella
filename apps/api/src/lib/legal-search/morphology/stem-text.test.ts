@@ -14,6 +14,8 @@ const SAMPLES = [
   "  Přezkoumání   rozhodnutí\tsprávního\norgánu  ",
   "Odstąpienie od umowy najmu lokalu mieszkalnego.",
   "Rozhodnutie odvolacieho súdu o náhrade škody.",
+  "Der Mietvertrag wurde auf bestimmte Zeit geschlossen.",
+  "L'arrêt de la Cour de justice concernant l'exécution.",
 ];
 
 /**
@@ -63,7 +65,10 @@ test("a jurisdiction and a document resolve their own language", () => {
 
   expect(documentMorphologyLanguage("cs")).toBe("cs");
   expect(documentMorphologyLanguage("SK")).toBe("sk");
-  expect(documentMorphologyLanguage("de")).toBeNull();
+  expect(documentMorphologyLanguage("de")).toBe("de");
+  expect(documentMorphologyLanguage("fr")).toBe("fr");
+  // Snowball has no Bulgarian algorithm, so its text goes unstemmed.
+  expect(documentMorphologyLanguage("bg")).toBeNull();
   expect(documentMorphologyLanguage("")).toBeNull();
 });
 
