@@ -70,7 +70,11 @@
     },
     "@stll/landing#typecheck": {
       "dependsOn": ["transit"],
-      "outputs": []
+      // `astro check` generates the content types that type-aware lint reads,
+      // so they are the task's outputs. Left unrecorded, a cache hit replays
+      // the logs and writes nothing, and the lint that depends on this task
+      // then resolves `astro:content` to `error` on a fresh checkout.
+      "outputs": [".astro/**"]
     },
     "lint": {
       "dependsOn": ["transit"],
