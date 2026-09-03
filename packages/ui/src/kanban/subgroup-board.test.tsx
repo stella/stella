@@ -6,6 +6,7 @@ import { KanbanColumnBandHeader } from "./column-band-header";
 import type { KanbanSchema } from "./grouping";
 import { resolveKanbanGrouping } from "./grouping";
 import { buildKanbanBoardMatrix } from "./matrix";
+import { KANBAN_STICKY_TOP_VAR } from "./sticky-lane";
 import { KanbanSubgroupBoard } from "./subgroup-board";
 
 type Row = { id: string; owner: string | null; status: string | null };
@@ -131,6 +132,12 @@ describe("KanbanSubgroupBoard", () => {
 
   test("renders no band chrome when no column carries a band", () => {
     expect(renderBoard()).not.toContain("data-kanban-band");
+  });
+
+  test("publishes the sticky header's reach on its scroll container", () => {
+    // Nothing is measured before the board is in a document, so the offset
+    // starts at zero rather than leaving the property undeclared.
+    expect(renderBoard()).toContain(`${KANBAN_STICKY_TOP_VAR}:0px`);
   });
 });
 
@@ -296,6 +303,32 @@ describe("KanbanSubgroupBoard with column bands", () => {
     expect(foldedHeader).not.toContain(">To do<");
     expect(folded).toContain("[writing-mode:vertical-rl]");
     expect(folded).toContain('data-kanban-collapsed-band-count="2"');
+  });
+
+  test("keeps a folded band's caption under the header down its lane", () => {
+    const folded = renderToStaticMarkup(
+      <KanbanSubgroupBoard
+        isBandCollapsed={(band) => band.id === "todo"}
+        isLaneCollapsed={() => false}
+        matrix={bandedMatrix}
+        renderCell={() => <span>cell</span>}
+        renderColumnHeader={() => <span>column</span>}
+        renderLaneIdentity={() => <span>lane</span>}
+        onBandCollapsedChange={() => undefined}
+        onLaneCollapsedChange={() => undefined}
+      />,
+    );
+    const slot =
+      /<div[^>]*data-kanban-collapsed-band-count="2"[^>]*>/u.exec(
+        folded,
+      )?.[0] ?? "";
+
+    // The slot fills the lane, which is the height the caption travels
+    // through; the caption itself sticks under the board's header.
+    expect(slot).toContain("h-full");
+    expect(slot).toContain("flex-col");
+    expect(folded).toContain('data-kanban-collapsed-band-caption=""');
+    expect(folded).toContain(`top-(${KANBAN_STICKY_TOP_VAR},0px)`);
   });
 
   test("folds a collapsed band into one slot per row and keeps its cells reachable", () => {

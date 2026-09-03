@@ -236,6 +236,41 @@ reachable, and the slot peeks open while a pointer rests on it. Pass
 />
 ```
 
+### Lane controls that survive a scroll
+
+The board measures its sticky header block and publishes its height on the
+scroll container as `KANBAN_STICKY_TOP_VAR` (`--kanban-sticky-top`), so a
+lane's controls can rest just under the header and release where the lane
+ends. `KanbanVirtualCell` takes `footerPlacement="sticky-start"` to pin its
+`footer` above the rows instead of closing the cell with it, and
+`KanbanCollapsedBandCaption` keeps a folded band's name and count in view down
+a tall lane. A cell that keeps its own bounded scroll surface is its own
+scroll container, where the board's header offset means nothing; reset the
+variable on it so the action rests at the cell's own top.
+
+```tsx
+<KanbanVirtualCell
+  className="[--kanban-sticky-top:0px]"
+  footer={<KanbanCellAction onClick={addCard}>New card</KanbanCellAction>}
+  footerPlacement="sticky-start"
+  getRowKey={(row) => row.id}
+  pagination={{ type: "none" }}
+  renderRow={(row) => <Card row={row} />}
+  rows={cell.rows}
+/>
+```
+
+A host rendering its own collapsed band cell fills the slot and composes the
+caption inside it:
+
+```tsx
+renderCollapsedBandCell={({ band, cells, count }) => (
+  <FoldedDropTarget bandId={band.id} cells={cells}>
+    <KanbanCollapsedBandCaption label={band.label} meta={count} />
+  </FoldedDropTarget>
+)}
+```
+
 ## Styles
 
 No compiled CSS ships. The components carry Tailwind class names, so the

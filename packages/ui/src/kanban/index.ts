@@ -135,6 +135,11 @@ export {
   KANBAN_BAND_PEEK_LINGER_MS,
 } from "./band-peek";
 export { KanbanSubgroupBoard } from "./subgroup-board";
+export type { KanbanCollapsedBandCaptionProps } from "./sticky-lane";
+export {
+  KANBAN_STICKY_TOP_VAR,
+  KanbanCollapsedBandCaption,
+} from "./sticky-lane";
 export type {
   KanbanVirtualCellPagination,
   KanbanVirtualCellProps,
