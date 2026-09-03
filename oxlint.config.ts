@@ -10,6 +10,8 @@ import {
   stellaLowercasePluginSpecifier,
 } from "@stll/oxlint-config";
 
+import { RESULT_CONVENTION_EXCLUDE_GLOBS } from "./scripts/result-boundary-globs.ts";
+
 // All workspaces run oxlint from the repo root via:
 //   cd ../.. && oxlint -c oxlint.config.ts --type-aware <workspace-dir>
 // Override paths are therefore relative to the repo root.
@@ -3655,26 +3657,7 @@ export default defineConfig({
       // above so it wins even for a boundary file that lives inside an
       // otherwise-enabled directory (e.g. a `routes.ts` under a clean
       // handler directory).
-      files: [
-        "apps/api/src/lib/api-handlers.ts",
-        "apps/api/src/handlers/**/routes.ts",
-        "apps/api/src/handlers/**/*route.ts",
-        "apps/api/src/server.ts",
-        "apps/api/src/lib/*queue*.ts",
-        "apps/api/src/lib/**/run-queue.ts",
-        "apps/api/src/lib/flows/flow-run-worker.ts",
-        "apps/api/src/lib/document-deadline-scout-worker.ts",
-        "apps/api/src/scripts/**",
-        "apps/api/src/handlers/mcp-app-sandbox/**",
-        "apps/api/evals/**",
-        "apps/api/src/tests/**",
-        "**/*.test.*",
-        "**/*.spec.*",
-        "**/__tests__/**",
-        "**/__fixtures__/**",
-        "**/*.gen.*",
-        "**/*.d.ts",
-      ],
+      files: [...RESULT_CONVENTION_EXCLUDE_GLOBS],
       rules: {
         "no-throw-outside-boundary/no-throw-outside-boundary": "off",
         "no-try-catch-outside-boundary/no-try-catch-outside-boundary": "off",

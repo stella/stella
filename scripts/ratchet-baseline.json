@@ -4,9 +4,9 @@
     "files": {}
   },
   "super-linear-regexes": {
-    "count": 2,
+    "count": 1,
     "files": {
-      "scripts/ratchet.ts": 2
+      "scripts/ratchet.ts": 1
     }
   },
   "legacy-realtime-invalidation-producers": {
@@ -90,7 +90,7 @@
     "files": {}
   },
   "throw-outside-boundary": {
-    "count": 890,
+    "count": 885,
     "files": {
       "apps/api/src/handlers/case-law/corpus-index.ts": 12,
       "apps/api/src/handlers/case-law/decisions/latest.ts": 3,
@@ -249,7 +249,6 @@
       "apps/api/src/lib/sse-broadcast.ts": 1,
       "apps/api/src/lib/style-set-editor.ts": 1,
       "apps/api/src/lib/subprocess.ts": 1,
-      "apps/api/src/lib/tanstack-ai-generate.ts": 5,
       "apps/api/src/lib/tanstack-ai-models.ts": 9,
       "apps/api/src/lib/tasks/update-task.ts": 6,
       "apps/api/src/lib/two-factor.ts": 1,
@@ -317,7 +316,7 @@
     }
   },
   "try-catch-outside-boundary": {
-    "count": 336,
+    "count": 334,
     "files": {
       "apps/api/src/handlers/ai-autocomplete/stream.ts": 1,
       "apps/api/src/handlers/api-keys/mint.ts": 1,
@@ -433,7 +432,6 @@
       "apps/api/src/lib/sse-broadcast.ts": 1,
       "apps/api/src/lib/sse.ts": 19,
       "apps/api/src/lib/subprocess.ts": 2,
-      "apps/api/src/lib/tanstack-ai-generate.ts": 2,
       "apps/api/src/lib/template-clause-links.ts": 1,
       "apps/api/src/lib/templates/suggest-template-fields.ts": 1,
       "apps/api/src/lib/user-shortcuts.ts": 1,

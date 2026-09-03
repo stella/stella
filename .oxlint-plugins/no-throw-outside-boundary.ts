@@ -27,33 +27,18 @@
 //   return panic("unreachable");
 //   throw panic("defensive throw wrapper");
 
-import { eslintCompatPlugin } from "@oxlint/plugins";
+import { eslintCompatPlugin, type ESTree, type Scope } from "@oxlint/plugins";
 
 import { isAstNode, isIdentifier } from "./utils.ts";
+
+const isIdentifierReference = (
+  node: unknown,
+): node is ESTree.IdentifierReference => isIdentifier(node);
 
 const isPanicCall = (node: unknown): boolean =>
   isAstNode(node) &&
   node.type === "CallExpression" &&
   isIdentifier(node.callee, "panic");
-
-// Walk up from the throw argument to the nearest enclosing `CatchClause`
-// and check whether that clause's binding is the identifier being thrown.
-// This covers a plain re-throw (`catch (err) { throw err; }`); anything
-// else, including a throw of a newly constructed error inside the same
-// catch block, is a wrap rather than a re-throw and stays flagged.
-const isRethrowOfCatchBinding = (argument: unknown): boolean => {
-  if (!isIdentifier(argument)) {
-    return false;
-  }
-  let current = argument.parent;
-  while (isAstNode(current)) {
-    if (current.type === "CatchClause") {
-      return isIdentifier(current.param, argument.name);
-    }
-    current = current.parent;
-  }
-  return false;
-};
 
 export default eslintCompatPlugin({
   meta: { name: "no-throw-outside-boundary" },
@@ -70,6 +55,38 @@ export default eslintCompatPlugin({
         },
       },
       createOnce(context) {
+        const isRethrowOfCatchBinding = (argument: unknown): boolean => {
+          if (!isIdentifierReference(argument)) {
+            return false;
+          }
+
+          let scope: Scope | null = context.sourceCode.getScope(argument);
+          while (scope !== null) {
+            const variable = scope.set.get(argument.name);
+            if (variable !== undefined) {
+              if (
+                variable.defs.length !== 1 ||
+                variable.defs.at(0)?.type !== "CatchClause"
+              ) {
+                return false;
+              }
+
+              let current: Scope | null = context.sourceCode.getScope(argument);
+              while (current !== null && current !== variable.scope) {
+                // A captured catch value thrown by a callback is a new async
+                // failure, not the synchronous re-throw this exception allows.
+                if (current.type === "function" || current.type === "catch") {
+                  return false;
+                }
+                current = current.upper;
+              }
+              return current === variable.scope;
+            }
+            scope = scope.upper;
+          }
+          return false;
+        };
+
         return {
           ThrowStatement(node: unknown) {
             if (!isAstNode(node)) {

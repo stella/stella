@@ -12,6 +12,7 @@ import {
   ROOT_SCRIPT_LINT_INPUTS,
   SHARED_COMPILER_CACHE_INPUTS,
   TYPECHECK_ONLY_CACHE_INPUTS,
+  resultBoundaryLintCommand,
   scopedCommands,
 } from "./code-check-affected";
 import { isChangedLintPath } from "./lint-paths";
@@ -37,6 +38,38 @@ const plan = (
     affectedWorkspacePaths,
     workspacePaths: WORKSPACES,
   });
+
+describe("changed-file result boundary lint", () => {
+  test("enforces the exact Oxlint rules in legacy-debt directories", () => {
+    expect(
+      resultBoundaryLintCommand([
+        "apps/api/src/lib/deepl/client.ts",
+        "apps/api/src/lib/deepl/client.ts",
+        "packages/boe/src/client.ts",
+      ]),
+    ).toEqual([
+      "bun",
+      "--bun",
+      "oxlint",
+      "-c",
+      "oxlint.result-boundary.config.ts",
+      "--deny-warnings",
+      "apps/api/src/lib/deepl/client.ts",
+      "packages/boe/src/client.ts",
+    ]);
+  });
+
+  test("skips boundaries, generated output, tests, and unrelated source", () => {
+    expect(
+      resultBoundaryLintCommand([
+        "apps/api/src/lib/document-processing-queue.ts",
+        "apps/api/src/lib/document-processing-queue.test.ts",
+        "apps/api/src/mcp/generated/capability-dispatch.ts",
+        "apps/web/src/lib/example.ts",
+      ]),
+    ).toBeNull();
+  });
+});
 
 describe("affected code-check planning", () => {
   test("checks complete changed workspaces and reverse dependants", () => {

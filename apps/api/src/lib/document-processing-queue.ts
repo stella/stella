@@ -685,6 +685,19 @@ const completeDocumentProcessingRun = async ({
   return true;
 };
 
+type IndexDocumentProjectionAtJobBoundaryOptions = {
+  indexEntity: () => Promise<void>;
+};
+
+export const indexDocumentProjectionAtJobBoundary = async ({
+  indexEntity,
+}: IndexDocumentProjectionAtJobBoundaryOptions): Promise<void> => {
+  const indexed = await indexDocumentProjection({ indexEntity });
+  if (Result.isError(indexed)) {
+    throw indexed.error;
+  }
+};
+
 export const processDocumentProcessingRun = async (
   runId: SafeId<"documentProcessingRun">,
   lifecycleSignal: AbortSignal,
@@ -959,7 +972,7 @@ export const processDocumentProcessingRun = async (
             await markRunCancelled(run.id, claimToken, "source_superseded");
             return;
           }
-          await indexDocumentProjection({
+          await indexDocumentProjectionAtJobBoundary({
             indexEntity: async () =>
               await getSearchProvider().indexEntity(run.entityId),
           });
@@ -1039,7 +1052,7 @@ export const processDocumentProcessingRun = async (
         });
       }
 
-      await indexDocumentProjection({
+      await indexDocumentProjectionAtJobBoundary({
         indexEntity: async () =>
           await getSearchProvider().indexEntity(run.entityId),
       });

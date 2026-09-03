@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import type { FieldContent } from "@/api/db/schema-validators";
@@ -8,6 +9,7 @@ import {
   createDocumentProcessingLeaseRenewal,
   DOCUMENT_PROCESSING_RECONCILIATION_PHASE_FEEDS,
   DOCUMENT_PROCESSING_RECONCILIATION_PHASES,
+  indexDocumentProjectionAtJobBoundary,
   mapWithConcurrency,
   readRepairScanCursor,
   RECONCILE_BATCH_SIZE,
@@ -712,26 +714,46 @@ describe("automatic projection ownership", () => {
 
 describe("bounded search-index replay", () => {
   test("classifies a stalled initial index write for durable replay", async () => {
-    const rejection: unknown = await indexDocumentProjection({
+    const indexed = await indexDocumentProjection({
       indexEntity: async () => await new Promise<void>(() => {}),
       timeoutMs: 5,
-    }).then(
-      () => null,
-      (error: unknown) => error,
-    );
+    });
 
-    expect(rejection).toBeInstanceOf(DocumentProcessingJobError);
-    if (!(rejection instanceof DocumentProcessingJobError)) {
+    expect(Result.isError(indexed)).toBe(true);
+    if (Result.isOk(indexed)) {
       return;
     }
-    expect(rejection.code).toBe("search_index_failed");
-    expect(isRetryableSearchIndexFailure(rejection.code)).toBe(true);
-    expect(rejection.cause).toBeInstanceOf(TimeoutError);
-    expect(rejection.cause).toMatchObject({
+    expect(indexed.error).toBeInstanceOf(DocumentProcessingJobError);
+    expect(indexed.error.code).toBe("search_index_failed");
+    expect(isRetryableSearchIndexFailure(indexed.error.code)).toBe(true);
+    expect(indexed.error.cause).toBeInstanceOf(TimeoutError);
+    expect(indexed.error.cause).toMatchObject({
       label: "document processing initial search index",
       timeoutMs: 5,
     });
-    expect(queueSource).toContain("await indexDocumentProjection({");
+  });
+
+  test("surfaces index failures through the shared job boundary", async () => {
+    const providerFailure = new Error("search provider unavailable");
+
+    expect(
+      indexDocumentProjectionAtJobBoundary({
+        indexEntity: async () => await Promise.reject(providerFailure),
+      }),
+    ).rejects.toMatchObject({
+      code: "search_index_failed",
+      cause: providerFailure,
+    });
+
+    const processStart = queueSource.indexOf(
+      "export const processDocumentProcessingRun",
+    );
+    const processEnd = queueSource.indexOf("\nconst errorCode", processStart);
+    const processSource = queueSource.slice(processStart, processEnd);
+    expect(
+      processSource.match(/await indexDocumentProjectionAtJobBoundary/gu),
+    ).toHaveLength(2);
+    expect(processSource).not.toContain("await indexDocumentProjection({");
   });
 
   test("recovers from the current projection rather than the failed run source", () => {

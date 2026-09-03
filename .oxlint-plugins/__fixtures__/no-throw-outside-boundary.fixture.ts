@@ -14,6 +14,7 @@ declare const toAPIError: (error: unknown) => Error;
 declare const redirect: (target: string) => Error;
 declare const recordRetryAttempt: () => void;
 declare const cause: unknown;
+declare const standaloneError: SomeTaggedError;
 
 // Flagged: throwing a newly constructed tagged error.
 const _throwsNewTaggedError = (): never => {
@@ -33,6 +34,12 @@ const _throwsRedirect = (): never => {
   throw redirect("/login");
 };
 
+// Flagged: an identifier throw outside any catch is not a re-throw.
+const _throwsStandaloneIdentifier = (): never => {
+  // oxlint-disable-next-line no-throw-outside-boundary/no-throw-outside-boundary -- fixture: throwing an identifier outside a catch is not a re-throw
+  throw standaloneError;
+};
+
 // Flagged: a catch block that throws a NEW error (wrapping), not a
 // re-throw of the caught binding.
 const _wrapsCaughtError = (): never => {
@@ -41,6 +48,36 @@ const _wrapsCaughtError = (): never => {
   } catch (error) {
     // oxlint-disable-next-line no-throw-outside-boundary/no-throw-outside-boundary -- fixture: wrapping the caught error in a new throw is not a re-throw
     throw new SomeTaggedError(`wrapped: ${String(error)}`);
+  }
+};
+
+// Flagged: a closure captures the catch binding, but its later throw is not
+// the synchronous re-throw this narrow exception permits.
+const _throwsCatchBindingFromClosure = (): never => {
+  try {
+    return _throwsNewTaggedError();
+  } catch (error) {
+    const throwLater = (): never => {
+      // oxlint-disable-next-line no-throw-outside-boundary/no-throw-outside-boundary -- fixture: a closure throw is not a synchronous catch re-throw
+      throw error;
+    };
+    return throwLater();
+  }
+};
+
+// Flagged: the nested block's binding shadows the catch parameter.
+const _throwsShadowedCatchBinding = (): never => {
+  try {
+    return _throwsNewTaggedError();
+  } catch (error) {
+    recordRetryAttempt();
+    void error;
+    {
+      // oxlint-disable-next-line no-shadow -- fixture: shadowing proves the thrown binding is resolved by scope rather than spelling
+      const error = standaloneError;
+      // oxlint-disable-next-line no-throw-outside-boundary/no-throw-outside-boundary -- fixture: a shadowing local is not the catch binding
+      throw error;
+    }
   }
 };
 
@@ -78,7 +115,10 @@ export const __noThrowOutsideBoundaryFixture = {
   _throwsNewTaggedError,
   _throwsFactoryError,
   _throwsRedirect,
+  _throwsStandaloneIdentifier,
   _wrapsCaughtError,
+  _throwsCatchBindingFromClosure,
+  _throwsShadowedCatchBinding,
   _rethrowsCatchBinding,
   _panicsOnImpossibleState,
   _returnsPanic,

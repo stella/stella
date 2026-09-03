@@ -6,7 +6,7 @@
 // `--write` to lock in the improvement so it can never regress. This
 // generalizes the ad hoc per-guard baselines (React Compiler bailouts, MCP
 // pending) into one declarative table of dumb, deterministic, line-based
-// counters — no AST, no oxlint, fast enough to keep the local loop honest.
+// counters: no AST, no oxlint, fast enough to keep the local loop honest.
 //
 // To add a metric: append an entry to RATCHET_METRICS with a stable `id`, a
 // human `description`, the `include` globs (repo-relative), an `exclude`
@@ -53,7 +53,10 @@ import {
   TRACKED_SUPPRESSION_RULES,
   type TrackedRule,
 } from "./lint-suppressions";
-import { isResultBoundaryFile } from "./result-boundary-globs";
+import {
+  isResultConventionExcludedFile,
+  RESULT_CONVENTION_SOURCE_GLOBS,
+} from "./result-boundary-globs";
 import {
   ALL_SOURCE_GLOBS,
   isExcludedSource,
@@ -74,21 +77,10 @@ const APP_SOURCE_GLOBS = [
   "apps/web/src/**/*.{ts,tsx}",
 ] as const;
 
-// Non-boundary `better-result` call sites: API library, handler and MCP code
-// plus every published package, excluding the `RESULT_BOUNDARY_GLOBS`
-// allowlist below.
-const RESULT_CONVENTION_SOURCE_GLOBS = [
-  "apps/api/src/lib/**/*.{ts,tsx}",
-  "apps/api/src/handlers/**/*.{ts,tsx}",
-  "apps/api/src/mcp/**/*.{ts,tsx}",
-  "packages/*/src/**/*.{ts,tsx}",
-] as const;
-
 const isExcludedFromResultConventionMetrics = (file: string): boolean =>
   isExcludedSource(file) ||
   file.includes("/specs/") ||
-  file.includes("/__fixtures__/") ||
-  isResultBoundaryFile(file);
+  isResultConventionExcludedFile(file);
 
 // --- Counters ---------------------------------------------------------------
 // All counters take raw file text and return a per-file occurrence count. They
@@ -337,20 +329,44 @@ const countEntityKindGlyphs = (content: string): number => {
   return total;
 };
 
-// A `throw` statement, matched at line start (after stripping comments and
-// blanking string/template contents) so `throw` mentioned inside a string,
-// or trailing on a line as a comment's subject, never counts. Known fidelity
-// limit shared with the rest of this file's line-based counters: a `throw` on
-// the same line as other code (`if (x) throw new Error();`) is not detected
-// — accepted because oxfmt gives every `throw` statement its own line.
+// Oxlint owns precise syntax and scope enforcement for changed files. This
+// migration-debt counter deliberately tracks only non-identifier throw shapes,
+// preserving its established baseline without putting an AST parse in the
+// ratchet's hot path.
 const THROW_STATEMENT_START = /^\s*throw\b/u;
-// A bare re-throw of the catch binding: `throw error;` / `throw error`. This
-// is the one `throw` shape `better-result` migration leaves alone — it just
-// forwards a caught value, it does not construct a new failure.
-const THROW_RETHROW_BARE_IDENTIFIER = /^\s*throw\s+[A-Za-z_$][\w$]*\s*;?\s*$/u;
-// `throw panic(...)`: `panic` already signals an impossible internal
-// invariant (see AGENTS.md "Error Handling"), so it is exempt by design.
 const THROW_PANIC_CALL = /^\s*throw\s+panic\s*\(/u;
+
+const isAsciiIdentifierCodePoint = (codePoint: number): boolean =>
+  (codePoint >= 48 && codePoint <= 57) ||
+  (codePoint >= 65 && codePoint <= 90) ||
+  codePoint === 95 ||
+  codePoint === 36 ||
+  (codePoint >= 97 && codePoint <= 122);
+
+const isBareIdentifierThrow = (code: string): boolean => {
+  const statement = code.trim();
+  if (!statement.startsWith("throw")) {
+    return false;
+  }
+  const expressionWithTerminator = statement.slice("throw".length).trim();
+  const expression = expressionWithTerminator.endsWith(";")
+    ? expressionWithTerminator.slice(0, -1).trim()
+    : expressionWithTerminator;
+  if (expression.length === 0) {
+    return false;
+  }
+  const first = expression.codePointAt(0);
+  if (first === undefined || (first >= 48 && first <= 57)) {
+    return false;
+  }
+  for (let index = 0; index < expression.length; index += 1) {
+    const codePoint = expression.codePointAt(index);
+    if (codePoint === undefined || !isAsciiIdentifierCodePoint(codePoint)) {
+      return false;
+    }
+  }
+  return true;
+};
 
 const countThrowsOutsideBoundary = (content: string): number => {
   let total = 0;
@@ -363,11 +379,9 @@ const countThrowsOutsideBoundary = (content: string): number => {
     const blockResult = stripBlockComments(lineCode, inBlockComment);
     const code = blockResult.code;
     inBlockComment = blockResult.inBlockComment;
-    if (COMMENT_LINE.test(code)) {
-      continue;
-    }
     if (
-      THROW_RETHROW_BARE_IDENTIFIER.test(code) ||
+      COMMENT_LINE.test(code) ||
+      isBareIdentifierThrow(code) ||
       THROW_PANIC_CALL.test(code)
     ) {
       continue;
@@ -1494,7 +1508,7 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
   {
     id: "throw-outside-boundary",
     description:
-      "`throw` statements outside the `better-result` boundary (RESULT_BOUNDARY_GLOBS), excl. bare re-throws and `throw panic(...)`",
+      "non-identifier `throw` statements outside the `better-result` boundary (RESULT_BOUNDARY_GLOBS), excl. `throw panic(...)`; Oxlint owns precise enforcement for changed files",
     include: RESULT_CONVENTION_SOURCE_GLOBS,
     exclude: isExcludedFromResultConventionMetrics,
     count: countThrowsOutsideBoundary,
@@ -2526,11 +2540,35 @@ const THROW_OUTSIDE_BOUNDARY_FIXTURE_LINES = [
   "const factoryThrow = () => {",
   "  throw factory(x);",
   "};",
-  "const rethrow = (error) => {",
-  "  throw error;",
+  'const standaloneError = new Error("not caught");',
+  "const identifierThrow = () => {",
+  "  throw standaloneError;",
   "};",
-  "const rethrowNoSemicolon = (error) => {",
-  "  throw error",
+  "const rethrow = () => {",
+  "  try {",
+  "    work();",
+  "  } catch (error) {",
+  "    throw error;",
+  "  }",
+  "};",
+  "const capturedRethrow = () => {",
+  "  try {",
+  "    work();",
+  "  } catch (error) {",
+  "    return () => {",
+  "      throw error;",
+  "    };",
+  "  }",
+  "};",
+  "const shadowedRethrow = () => {",
+  "  try {",
+  "    work();",
+  "  } catch (error) {",
+  "    {",
+  '      const error = new Error("shadowed");',
+  "      throw error;",
+  "    }",
+  "  }",
   "};",
   "const invariant = () => {",
   '  throw panic("impossible state");',
@@ -2538,10 +2576,10 @@ const THROW_OUTSIDE_BOUNDARY_FIXTURE_LINES = [
   '// throw new Error("commented out") must not count',
 ];
 const SELF_TEST_THROW_OUTSIDE_BOUNDARY = `${THROW_OUTSIDE_BOUNDARY_FIXTURE_LINES.join("\n")}\n`;
-// Expected: `single`(1), `multiLine`(1, counted once despite spanning four
-// lines), `factoryThrow`(1) = 3. The bare re-throws (with and without a
-// trailing semicolon), `throw panic(...)`, and the commented-out throw are
-// all excluded.
+// The lexical ratchet counts `single`, `multiLine`, and `factoryThrow` (3).
+// Identifier throws are excluded from this debt budget; Oxlint performs the
+// precise scope-aware enforcement on changed files. `throw panic(...)` and the
+// commented-out throw are also excluded.
 const EXPECTED_THROW_OUTSIDE_BOUNDARY = 3;
 
 const TRY_CATCH_OUTSIDE_BOUNDARY_FIXTURE_LINES = [
@@ -2573,10 +2611,11 @@ const TRY_CATCH_OUTSIDE_BOUNDARY_FIXTURE_LINES = [
   "// } catch (ignored) { must not count",
 ];
 const SELF_TEST_TRY_CATCH_OUTSIDE_BOUNDARY = `${TRY_CATCH_OUTSIDE_BOUNDARY_FIXTURE_LINES.join("\n")}\n`;
-// Expected: `} catch (error) {`(1) + `catch {`(1) = 2. The `catch:` object
-// key inside `Result.tryPromise`, the `try`/`finally` with no `catch`, and
-// the commented-out clause are all excluded.
-const EXPECTED_TRY_CATCH_OUTSIDE_BOUNDARY = 2;
+// Expected: the two clauses above plus the three catch fixtures in
+// SELF_TEST_THROW_OUTSIDE_BOUNDARY = 5. The `catch:` object key inside
+// `Result.tryPromise`, the `try`/`finally` with no `catch`, and the commented-
+// out clause are excluded.
+const EXPECTED_TRY_CATCH_OUTSIDE_BOUNDARY = 5;
 
 // A boundary file (matches RESULT_BOUNDARY_GLOBS) carrying the same shapes:
 // proves the exclude, not just the counters.

@@ -15,6 +15,10 @@ import { existsSync, readdirSync } from "node:fs";
 import path from "node:path";
 
 import { isChangedLintPath } from "./lint-paths";
+import {
+  isResultConventionExcludedFile,
+  isResultConventionSourceFile,
+} from "./result-boundary-globs";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const DEFAULT_BASE = "origin/main";
@@ -44,6 +48,7 @@ export const ALL_WORKSPACE_TYPECHECK_CACHE_INPUTS = [
 ] as const;
 const OXLINT_CONFIGURATION_CACHE_INPUTS = [
   "$TURBO_ROOT$/oxlint.config.ts",
+  "$TURBO_ROOT$/oxlint.result-boundary.config.ts",
   "$TURBO_ROOT$/.oxlint-plugins/**",
 ] as const;
 export const LINT_ONLY_CACHE_INPUTS = [
@@ -383,6 +388,27 @@ const sameScope = (left: TaskScope, right: TaskScope): boolean => {
 const hasTargets = (scope: TaskScope): boolean =>
   scope.type === "all" || scope.targets.length > 0;
 
+export const resultBoundaryLintCommand = (
+  changedFiles: readonly string[],
+): string[] | null => {
+  const paths = [...new Set(changedFiles)]
+    .filter(isResultConventionSourceFile)
+    .filter((file) => !isResultConventionExcludedFile(file))
+    .sort();
+  if (paths.length === 0) {
+    return null;
+  }
+  return [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.result-boundary.config.ts",
+    "--deny-warnings",
+    ...paths,
+  ];
+};
+
 export const scopedCommands = (plan: ScopedCheckPlan): string[][] => {
   const commands: string[][] = [];
   const rootChecks = new Set(plan.rootChecks);
@@ -442,11 +468,21 @@ export const scopedCommands = (plan: ScopedCheckPlan): string[][] => {
 const main = () => {
   const options = parseArgs(process.argv.slice(2));
   const changed = changedPaths(options.base);
+  const presentChangedPaths = changed.paths.filter((changedPath) =>
+    existsSync(path.join(REPO_ROOT, changedPath)),
+  );
+  const resultBoundaryCommand = resultBoundaryLintCommand(presentChangedPaths);
+  if (resultBoundaryCommand !== null) {
+    process.stdout.write("code-check: exact result boundary lint\n");
+    if (options.dryRun) {
+      process.stdout.write(`  ${resultBoundaryCommand.join(" ")}\n`);
+    } else {
+      run(resultBoundaryCommand);
+    }
+  }
   const plan = planCheck({
     changedPaths: changed.paths,
-    presentChangedPaths: changed.paths.filter((changedPath) =>
-      existsSync(path.join(REPO_ROOT, changedPath)),
-    ),
+    presentChangedPaths,
     affectedWorkspacePaths: affectedWorkspacePaths(changed.mergeBase),
     workspacePaths: workspacePaths(),
   });
