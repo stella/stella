@@ -137,6 +137,7 @@ export {
 export { KanbanSubgroupBoard } from "./subgroup-board";
 export type { KanbanCollapsedBandCaptionProps } from "./sticky-lane";
 export {
+  KANBAN_CARD_STICKY_TOP_VAR,
   KANBAN_STICKY_TOP_VAR,
   KanbanCollapsedBandCaption,
 } from "./sticky-lane";

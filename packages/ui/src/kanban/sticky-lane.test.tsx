@@ -3,9 +3,12 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "bun:test";
 
 import {
+  KANBAN_CARD_STICKY_TOP_CLASS,
+  KANBAN_CARD_STICKY_TOP_VAR,
   KANBAN_STICKY_TOP_CLASS,
   KANBAN_STICKY_TOP_VAR,
   KanbanCollapsedBandCaption,
+  resolveKanbanCardStickyTop,
 } from "./sticky-lane";
 
 describe("KANBAN_STICKY_TOP_VAR", () => {
@@ -15,6 +18,39 @@ describe("KANBAN_STICKY_TOP_VAR", () => {
     // renamed variable that left the utility behind would stick every lane
     // control at the fallback offset instead, silently.
     expect(KANBAN_STICKY_TOP_CLASS).toBe(`top-(${KANBAN_STICKY_TOP_VAR},0px)`);
+  });
+});
+
+describe("KANBAN_CARD_STICKY_TOP_VAR", () => {
+  test("names the property the cell publishes and the card shell reads", () => {
+    expect(KANBAN_CARD_STICKY_TOP_VAR).toBe("--kanban-card-sticky-top");
+    expect(KANBAN_CARD_STICKY_TOP_CLASS).toBe(
+      `top-(${KANBAN_CARD_STICKY_TOP_VAR},0px)`,
+    );
+  });
+});
+
+describe("resolveKanbanCardStickyTop", () => {
+  test("adds the pinned action to the board's own offset", () => {
+    expect(resolveKanbanCardStickyTop({ pinnedAbove: 52, rowOffset: 0 })).toBe(
+      "calc(var(--kanban-sticky-top, 0px) + 52px)",
+    );
+  });
+
+  test("subtracts the translation the row is already carrying", () => {
+    // A row 608px down asks for its offset in its own translated space, so the
+    // browser resolves it to the same place on screen as the first row's.
+    expect(
+      resolveKanbanCardStickyTop({ pinnedAbove: 52, rowOffset: 608 }),
+    ).toBe("calc(var(--kanban-sticky-top, 0px) - 556px)");
+  });
+
+  test("keeps the offset a single signed term", () => {
+    // `calc(var(--x) + -556px)` parses in no engine: the sign has to be the
+    // operator, not part of the value.
+    expect(
+      resolveKanbanCardStickyTop({ pinnedAbove: 0, rowOffset: 556 }),
+    ).not.toContain("+ -");
   });
 });
 
