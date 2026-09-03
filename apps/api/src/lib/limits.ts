@@ -451,6 +451,16 @@ export const LIMITS = {
   // Max corpus-index lexical candidates scanned across windows for one
   // cursor request.
   corpusIndexSearchScanLimit: 10_000,
+  /**
+   * Engine round trips one corpus-index search may spend accumulating
+   * candidates. The scan normally ends as soon as no unseen candidate can
+   * out-blend the page, but a query whose lexical scores separate slowly
+   * reaches that point only deep into the hit list, and every further round
+   * is another sequential engine round trip the reader waits through. This
+   * caps that wait: a scan that reaches it answers from what it has, and
+   * stops advertising candidates a rescan could never get back to.
+   */
+  corpusIndexSearchMaxRounds: 3,
   // Decisions pushed to corpus index per indexer batch.
   corpusIndexBatchSize: 50,
   /** Max UTF-8 bytes in one corpus-index NDJSON ingest request. A batch is

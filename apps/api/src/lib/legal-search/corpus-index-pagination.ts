@@ -68,6 +68,11 @@ type CorpusIndexSearchPageResult<TContext> = {
  * most this factor on a passage-layout one. The cap is what bounds the extra
  * engine work; a document whose matching passages exceed it simply consumes
  * more of the budget than its share.
+ *
+ * It bounds candidates, not requests: what the reader waits through is the
+ * number of sequential engine round trips, which
+ * `LIMITS.corpusIndexSearchMaxRounds` bounds independently of how wide this
+ * factor lets the budget grow.
  */
 const PASSAGE_OVER_FETCH = 4;
 
@@ -127,6 +132,8 @@ export const readCorpusIndexSearchPage = async <TContext>({
   let windowed: RankedHit[] = [];
   let startOffset = 0;
   let totalHits = Number.POSITIVE_INFINITY;
+  let rounds = 0;
+  let roundCapHit = false;
 
   // Chunk-space scan budget, grown to keep result-space reach constant
   // across index layouts. Recomputed each round from what the scan has seen so
@@ -149,6 +156,14 @@ export const readCorpusIndexSearchPage = async <TContext>({
   };
 
   while (startOffset < totalHits && startOffset < scanBudget()) {
+    // Every round is one more sequential engine round trip in front of the
+    // reader. The budget above bounds how many candidates a scan may reach;
+    // this bounds how long it may take to give up trying.
+    if (rounds >= LIMITS.corpusIndexSearchMaxRounds) {
+      roundCapHit = true;
+      break;
+    }
+
     const maxHits = Math.min(
       LIMITS.corpusIndexSearchCandidateLimit,
       scanBudget() - startOffset,
@@ -156,6 +171,7 @@ export const readCorpusIndexSearchPage = async <TContext>({
     if (maxHits <= 0) {
       break;
     }
+    rounds += 1;
 
     // Sort by BM25 explicitly: without it the engine returns hits in
     // document-id order and the rank-based lexical score below would be
@@ -236,8 +252,11 @@ export const readCorpusIndexSearchPage = async <TContext>({
   const pageRanked = hasMoreInWindow ? windowed.slice(0, limit) : windowed;
   // A follow-up request rescans from offset 0 and can only reach deeper
   // candidates while the scan cap is not exhausted; past the cap a
-  // cursor could never be satisfied and must not be advertised.
-  const scanCanContinue = startOffset < totalHits && startOffset < scanBudget();
+  // cursor could never be satisfied and must not be advertised. The round
+  // cap binds the same way: a rescan spends the same rounds and stops at the
+  // same offset, so nothing past it is reachable by paging.
+  const scanCanContinue =
+    !roundCapHit && startOffset < totalHits && startOffset < scanBudget();
   const hasMore = hasMoreInWindow || (scanCanContinue && pageRanked.length > 0);
 
   return {

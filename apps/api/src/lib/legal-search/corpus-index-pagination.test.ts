@@ -211,6 +211,103 @@ describe("a single document cannot monopolise the scan", () => {
   });
 });
 
+/**
+ * What the reader waits through is the number of sequential engine round
+ * trips, so the scan is bounded twice: it stops as soon as no unseen
+ * candidate can out-blend the page, and, failing that, at a fixed number of
+ * rounds. The second bound is what a query whose lexical scores separate
+ * slowly runs into.
+ */
+describe("the scan is bounded by engine round trips", () => {
+  /** A bound no page score can fall below: the early stop never fires. */
+  const readCappedPage = async (
+    limit: number,
+    parsedCursor: { score: number; id: string } | null = null,
+  ) =>
+    await readCorpusIndexSearchPage({
+      cluster: "q08",
+      indexId: "case_law_v2_cze",
+      query: "text:smlouva",
+      limit,
+      parsedCursor,
+      snippetFields: ["text"],
+      extractId: (hit: CorpusIndexHit) =>
+        typeof hit["document_id"] === "string" ? hit["document_id"] : null,
+      extractSnippet: () => null,
+      unseenScoreUpperBound: () => Number.POSITIVE_INFINITY,
+      rankCandidates: async (candidates) => ({
+        context: null,
+        ranked: candidates.map((candidate) => ({
+          id: candidate.id,
+          score: candidate.score,
+          lexicalScore: candidate.score,
+          citationAuthority: 0,
+        })),
+      }),
+    });
+
+  beforeEach(() => {
+    // Far more hits than the round cap can reach, one passage each, so only
+    // the cap can end the scan.
+    engineHits = Array.from({ length: 5000 }, (_, index) => ({
+      document_id: `doc-${String(index).padStart(4, "0")}`,
+    }));
+  });
+
+  test("a scan whose stop condition never fires ends at the round cap", async () => {
+    const page = await readCappedPage(10);
+
+    expect(requestCount).toBe(LIMITS.corpusIndexSearchMaxRounds);
+    expect(page.pageRanked).toHaveLength(10);
+    // The page is still full and its own window holds more, so paging
+    // continues within what the capped scan reached.
+    expect(page.hasMore).toBe(true);
+  });
+
+  test("a capped scan advertises only what a rescan can reach again", async () => {
+    const reachable =
+      LIMITS.corpusIndexSearchMaxRounds *
+      LIMITS.corpusIndexSearchCandidateLimit;
+
+    const page = await readCappedPage(reachable);
+
+    // Everything the cap allowed fits on one page, and a follow-up request
+    // would spend the same rounds and see the same candidates, so there is
+    // no next page to offer.
+    expect(page.pageRanked).toHaveLength(reachable);
+    expect(page.hasMore).toBe(false);
+  });
+
+  test("a cursor pages through what the capped scan reached", async () => {
+    const first = await readCappedPage(10);
+    const last = first.pageRanked.at(-1);
+    if (last === undefined) {
+      throw new Error("the first page must not be empty");
+    }
+
+    const second = await readCappedPage(10, { score: last.score, id: last.id });
+
+    expect(requestCount).toBe(LIMITS.corpusIndexSearchMaxRounds * 2);
+    expect(second.pageRanked.map((hit) => hit.id)).toEqual(
+      Array.from(
+        { length: 10 },
+        (_, index) => `doc-${String(index + 10).padStart(4, "0")}`,
+      ),
+    );
+    const firstIds = new Set(first.pageRanked.map((hit) => hit.id));
+    expect(second.pageRanked.some((hit) => firstIds.has(hit.id))).toBe(false);
+  });
+
+  test("a scan that can stop early spends one round", async () => {
+    // The same hit list read through a bound that no unseen candidate can
+    // beat: the page is answered from the first window.
+    const page = await readPage(10);
+
+    expect(requestCount).toBe(1);
+    expect(page.pageRanked).toHaveLength(10);
+  });
+});
+
 describe("document paging survives the passage fan-out", () => {
   test("a page holds `limit` documents even when each matched several passages", async () => {
     const documentIds = Array.from({ length: 8 }, (_, i) => `doc-${i}`);
