@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import { parseDecisionQuery } from "@/features/case-law/decision-query-intent";
+import { parseDecisionQuery } from "@stll/api-contract/decision-query-intent";
+
 import { parseStatuteQuery } from "@/features/statutes/statute-query-intent";
 import { STATUTE_COUNTRIES } from "@/lib/statute-route";
 import {

@@ -2,14 +2,15 @@ import type { QueryClient } from "@tanstack/react-query";
 import type { useNavigate } from "@tanstack/react-router";
 
 import {
-  CASE_LAW_ALL_COUNTRIES,
-  fromCaseLawCountryParam,
-} from "@/features/case-law/case-law-jurisdiction";
-import {
   type DecisionQueryIntent,
   exactDecisionMatches,
   parseDecisionQuery,
-} from "@/features/case-law/decision-query-intent";
+} from "@stll/api-contract/decision-query-intent";
+
+import {
+  CASE_LAW_ALL_COUNTRIES,
+  fromCaseLawCountryParam,
+} from "@/features/case-law/case-law-jurisdiction";
 import {
   decisionsInfiniteOptions,
   type DecisionListFilters,

@@ -12,6 +12,10 @@ import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
+import {
+  type DecisionQueryIntent,
+  exactDecisionMatches,
+} from "@stll/api-contract/decision-query-intent";
 import { Button } from "@stll/ui/button";
 import { Skeleton } from "@stll/ui/skeleton";
 
@@ -31,10 +35,6 @@ import {
   DecisionTable,
 } from "@/features/case-law/components/decision-table";
 import type { Decision } from "@/features/case-law/components/decision-table";
-import {
-  type DecisionQueryIntent,
-  exactDecisionMatches,
-} from "@/features/case-law/decision-query-intent";
 import {
   caseLawCountryScope,
   createDecisionFiltersFromSearch,

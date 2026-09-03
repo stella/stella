@@ -55,6 +55,7 @@ export const PUBLIC_LAW_COLUMNS_BY_RELATION = {
     "case_number",
     "slug",
     "ecli",
+    "citation_key",
     "court",
     "country",
     "language",
