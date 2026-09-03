@@ -16,6 +16,7 @@
     "allow-clipboard-clear-history",
     "allow-clipboard-create-group",
     "allow-clipboard-delete-group",
+    "allow-clipboard-rename-group",
     "allow-clipboard-set-item-name",
     "allow-clipboard-set-item-group",
     "allow-clipboard-open-editor",

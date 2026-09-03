@@ -46,6 +46,7 @@ import { useFormatter, useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
+import { ContextMenu } from "@stll/ui/context-menu";
 import {
   Dialog,
   DialogClose,
@@ -520,7 +521,15 @@ type ClipboardDialogState =
   | { type: "closed" }
   | { type: "clearHistory" }
   | { color: ClipboardGroupColor; name: string; type: "createGroup" }
-  | { type: "deleteGroup"; groupId: string; groupName: string };
+  | {
+      groupId: string;
+      groupName: string;
+      mode: ClipboardGroupDeletionMode;
+      type: "deleteGroup";
+    }
+  | { groupId: string; name: string; type: "renameGroup" };
+
+type ClipboardGroupDeletionMode = "deleteClips" | "keepClips";
 
 type DialogShellProps = {
   children: ReactNode;
@@ -710,17 +719,114 @@ const ClipboardDialog = ({
           destructive
           onClose={close}
           onSubmit={() => {
-            onCommand("clipboard_delete_group", { id: dialog.groupId }, () => {
-              onGroupDeleted(dialog.groupId);
-              close();
-            });
+            onCommand(
+              "clipboard_delete_group",
+              { id: dialog.groupId, mode: dialog.mode },
+              () => {
+                onGroupDeleted(dialog.groupId);
+                close();
+              },
+            );
           }}
-          submitLabel={t("deleteGroup")}
+          submitLabel={
+            dialog.mode === "deleteClips"
+              ? t("deleteGroupDeleteClips")
+              : t("deleteGroup")
+          }
           title={t("deleteGroup")}
         >
-          <p className="text-muted-foreground text-sm leading-relaxed text-pretty">
-            {t("deleteGroupConfirmation", { groupName: dialog.groupName })}
-          </p>
+          <fieldset>
+            <legend className="text-muted-foreground text-sm leading-relaxed text-pretty">
+              {t("deleteGroupConfirmation", { groupName: dialog.groupName })}
+            </legend>
+            <div className="mt-4 grid gap-2">
+              {(
+                [
+                  {
+                    description: t("deleteGroupKeepClipsDescription"),
+                    label: t("deleteGroupKeepClips"),
+                    mode: "keepClips",
+                  },
+                  {
+                    description: t("deleteGroupDeleteClipsDescription"),
+                    label: t("deleteGroupDeleteClips"),
+                    mode: "deleteClips",
+                  },
+                ] as const
+              ).map((option) => (
+                <label
+                  aria-label={option.label}
+                  className="border-border has-[:checked]:border-destructive/50 has-[:checked]:bg-destructive/6 flex min-h-16 cursor-pointer items-start gap-3 rounded-2xl border p-3"
+                  key={option.mode}
+                >
+                  <input
+                    checked={dialog.mode === option.mode}
+                    className="accent-destructive mt-0.5 size-4 shrink-0"
+                    name="delete-group-mode"
+                    onChange={() =>
+                      onChange({
+                        groupId: dialog.groupId,
+                        groupName: dialog.groupName,
+                        mode: option.mode,
+                        type: "deleteGroup",
+                      })
+                    }
+                    type="radio"
+                    value={option.mode}
+                  />
+                  <span className="min-w-0">
+                    <span className="text-foreground block text-sm font-medium">
+                      {option.label}
+                    </span>
+                    <span className="text-muted-foreground mt-0.5 block text-xs leading-relaxed text-pretty">
+                      {option.description}
+                    </span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        </DialogShell>
+      );
+    case "renameGroup":
+      return (
+        <DialogShell
+          onClose={close}
+          onSubmit={() => {
+            onCommand(
+              "clipboard_rename_group",
+              { id: dialog.groupId, name: dialog.name },
+              close,
+            );
+          }}
+          submitDisabled={!dialog.name.trim()}
+          submitLabel={t("renameGroup")}
+          title={t("renameGroup")}
+        >
+          <label className="block">
+            <span className="text-muted-foreground text-xs">
+              {t("groupName")}
+            </span>
+            <Input
+              autoFocus
+              className="mt-2 h-11 rounded-2xl"
+              dir="auto"
+              onChange={(event) => {
+                if (
+                  Array.from(event.target.value).length >
+                  MAX_GROUP_NAME_CHARACTERS
+                ) {
+                  return;
+                }
+                onChange({
+                  groupId: dialog.groupId,
+                  name: event.target.value,
+                  type: "renameGroup",
+                });
+              }}
+              value={dialog.name}
+            />
+          </label>
         </DialogShell>
       );
     default: {
@@ -1971,51 +2077,56 @@ const ClipboardApp = () => {
                   CLIPBOARD_GROUP_ACCENTS[group.color],
               };
               return (
-                <Button
-                  aria-pressed={activeGroupId === group.id}
-                  className="clipboard-group-chip h-11 shrink-0 rounded-full px-3 text-xs"
-                  data-clipboard-group-id={group.id}
-                  data-drop-target={isDropTarget(group.id) ? "" : undefined}
-                  data-group-chip=""
+                <ContextMenu
+                  actions={[
+                    {
+                      icon: <PencilIcon aria-hidden="true" />,
+                      label: t("renameGroup"),
+                      onClick: () =>
+                        setDialog({
+                          groupId: group.id,
+                          name: group.name,
+                          type: "renameGroup",
+                        }),
+                    },
+                    {
+                      icon: <Trash2Icon aria-hidden="true" />,
+                      label: t("deleteGroup"),
+                      onClick: () =>
+                        setDialog({
+                          groupId: group.id,
+                          groupName: group.name,
+                          mode: "keepClips",
+                          type: "deleteGroup",
+                        }),
+                      separatorBefore: true,
+                      variant: "destructive",
+                    },
+                  ]}
                   key={group.id}
-                  onClick={() => {
-                    setSelectedGroupId(group.id);
-                    setSelectedIndex(0);
-                  }}
-                  style={groupStyle}
-                  variant="ghost"
                 >
-                  <span
-                    aria-hidden="true"
-                    className="clipboard-group-chip-dot size-2 shrink-0 rounded-full"
-                  />
-                  {group.name}
-                </Button>
+                  <Button
+                    aria-pressed={activeGroupId === group.id}
+                    className="clipboard-group-chip h-11 shrink-0 rounded-full px-3 text-xs"
+                    data-clipboard-group-id={group.id}
+                    data-drop-target={isDropTarget(group.id) ? "" : undefined}
+                    data-group-chip=""
+                    onClick={() => {
+                      setSelectedGroupId(group.id);
+                      setSelectedIndex(0);
+                    }}
+                    style={groupStyle}
+                    variant="ghost"
+                  >
+                    <span
+                      aria-hidden="true"
+                      className="clipboard-group-chip-dot size-2 shrink-0 rounded-full"
+                    />
+                    {group.name}
+                  </Button>
+                </ContextMenu>
               );
             })}
-            {activeGroupId ? (
-              <Button
-                aria-label={t("deleteGroup")}
-                className="size-11 shrink-0 rounded-full"
-                onClick={() => {
-                  const group = snapshot.groups.find(
-                    (candidate) => candidate.id === activeGroupId,
-                  );
-                  if (group) {
-                    setDialog({
-                      type: "deleteGroup",
-                      groupId: group.id,
-                      groupName: group.name,
-                    });
-                  }
-                }}
-                size="icon"
-                title={t("deleteGroup")}
-                variant="ghost"
-              >
-                <Trash2Icon aria-hidden="true" className="size-3.5" />
-              </Button>
-            ) : null}
           </nav>
         </div>
 

@@ -401,6 +401,13 @@ pub struct ClipboardGroup {
   pub name: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ClipboardGroupDeletionMode {
+  DeleteClips,
+  KeepClips,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(tag = "status", rename_all = "camelCase")]
 pub enum ClipboardPersistenceStatus {
@@ -749,46 +756,80 @@ impl ClipboardManager {
     name: &str,
     color: ClipboardGroupColor,
   ) -> Result<String, String> {
-    let name = name.trim();
-    if name.is_empty() || name.chars().count() > MAX_GROUP_NAME_CHARACTERS {
-      return Err("clipboard group name is invalid".to_string());
-    }
     if self.groups.len() >= MAX_GROUPS {
       return Err("clipboard group limit reached".to_string());
     }
-    let normalized_name = name.to_lowercase();
-    if self
-      .groups
-      .iter()
-      .any(|group| group.name.to_lowercase() == normalized_name)
-    {
-      return Err("clipboard group name already exists".to_string());
-    }
+    let name = self.valid_group_name(name, None)?;
     let id = uuid::Uuid::new_v4().to_string();
     let checkpoint = self.checkpoint();
     self.groups.push(ClipboardGroup {
       color,
       id: id.clone(),
-      name: name.to_string(),
+      name,
     });
     self.persist_or_restore(checkpoint)?;
     Ok(id)
   }
 
-  pub fn delete_group(&mut self, id: &str) -> Result<bool, String> {
+  pub fn rename_group(&mut self, id: &str, name: &str) -> Result<bool, String> {
+    if !self.groups.iter().any(|group| group.id == id) {
+      return Ok(false);
+    }
+    let name = self.valid_group_name(name, Some(id))?;
+    let checkpoint = self.checkpoint();
+    let Some(group) = self.groups.iter_mut().find(|group| group.id == id) else {
+      return Ok(false);
+    };
+    group.name = name;
+    self.persist_or_restore(checkpoint)?;
+    Ok(true)
+  }
+
+  fn valid_group_name(
+    &self,
+    name: &str,
+    excluded_group_id: Option<&str>,
+  ) -> Result<String, String> {
+    let name = name.trim();
+    if name.is_empty() || name.chars().count() > MAX_GROUP_NAME_CHARACTERS {
+      return Err("clipboard group name is invalid".to_string());
+    }
+    let normalized_name = name.to_lowercase();
+    if self.groups.iter().any(|group| {
+      Some(group.id.as_str()) != excluded_group_id
+        && group.name.to_lowercase() == normalized_name
+    }) {
+      return Err("clipboard group name already exists".to_string());
+    }
+    Ok(name.to_string())
+  }
+
+  pub fn delete_group(
+    &mut self,
+    id: &str,
+    mode: ClipboardGroupDeletionMode,
+  ) -> Result<bool, String> {
     let original_len = self.groups.len();
     let checkpoint = self.checkpoint();
     self.groups.retain(|group| group.id != id);
     if original_len == self.groups.len() {
       return Ok(false);
     }
-    for item in &mut self.items {
-      if item.group_id() == Some(id) {
-        item.set_group_id(None);
+
+    match mode {
+      ClipboardGroupDeletionMode::DeleteClips => {
+        self.items.retain(|item| item.group_id() != Some(id));
+      }
+      ClipboardGroupDeletionMode::KeepClips => {
+        for item in &mut self.items {
+          if item.group_id() == Some(id) {
+            item.set_group_id(None);
+          }
+        }
+        // Clips that just lost their organiser fall under the history rules.
+        prune_items(&mut self.items, self.retention, Utc::now());
       }
     }
-    // Clips that just lost their organiser fall under the history rules.
-    prune_items(&mut self.items, self.retention, Utc::now());
     self.persist_or_restore(checkpoint)?;
     Ok(true)
   }
@@ -2177,7 +2218,11 @@ mod tests {
         .any(|item| item.plain_text() == "orphaned")
     );
 
-    assert!(manager.delete_group(&group_id).unwrap());
+    assert!(
+      manager
+        .delete_group(&group_id, ClipboardGroupDeletionMode::KeepClips)
+        .unwrap()
+    );
     assert!(manager.items.is_empty());
   }
 
@@ -2500,7 +2545,7 @@ mod tests {
   }
 
   #[test]
-  fn deleting_a_group_preserves_its_items() {
+  fn deleting_a_group_can_preserve_its_clips() {
     let mut manager = ready_manager();
     assert!(capture(&mut manager, "grouped", None, Utc::now()));
     let group_id = manager
@@ -2513,9 +2558,53 @@ mod tests {
         .unwrap()
     );
 
-    assert!(manager.delete_group(&group_id).unwrap());
+    assert!(
+      manager
+        .delete_group(&group_id, ClipboardGroupDeletionMode::KeepClips)
+        .unwrap()
+    );
     assert_eq!(manager.items.len(), 1);
     assert_eq!(manager.items[0].group_id(), None);
+  }
+
+  #[test]
+  fn deleting_a_group_can_delete_its_clips() {
+    let mut manager = ready_manager();
+    assert!(capture(&mut manager, "grouped", None, Utc::now()));
+    assert!(capture(&mut manager, "ungrouped", None, Utc::now()));
+    let group_id = manager
+      .create_group("Research", ClipboardGroupColor::Blue)
+      .unwrap();
+    let grouped_id = manager.items[1].id().to_string();
+    assert!(
+      manager
+        .set_item_group(&grouped_id, Some(group_id.clone()))
+        .unwrap()
+    );
+
+    assert!(
+      manager
+        .delete_group(&group_id, ClipboardGroupDeletionMode::DeleteClips)
+        .unwrap()
+    );
+    assert_eq!(manager.items.len(), 1);
+    assert_eq!(manager.items[0].plain_text(), "ungrouped");
+  }
+
+  #[test]
+  fn renaming_a_group_trims_and_rejects_duplicate_names() {
+    let mut manager = ready_manager();
+    let research_id = manager
+      .create_group("Research", ClipboardGroupColor::Blue)
+      .unwrap();
+    manager
+      .create_group("Templates", ClipboardGroupColor::Gray)
+      .unwrap();
+
+    assert!(manager.rename_group(&research_id, "  Sources  ").unwrap());
+    assert_eq!(manager.groups[0].name, "Sources");
+    assert!(manager.rename_group(&research_id, "templates").is_err());
+    assert_eq!(manager.groups[0].name, "Sources");
   }
 
   #[test]
