@@ -19,6 +19,8 @@ import {
   AlertDialogTitle,
 } from "@stll/ui/alert-dialog";
 import { Button } from "@stll/ui/button";
+import { ContextMenu } from "@stll/ui/context-menu";
+import type { ContextMenuAction } from "@stll/ui/context-menu";
 import {
   Dialog,
   DialogClose,
@@ -37,8 +39,6 @@ import {
 } from "@stll/ui/menu";
 import { cn } from "@stll/ui/utils";
 
-import { ContextMenu } from "@/components/context-menu";
-import type { ContextMenuAction } from "@/components/context-menu";
 import { detached } from "@/lib/detached";
 
 // ── Types ────────────────────────────────────────────

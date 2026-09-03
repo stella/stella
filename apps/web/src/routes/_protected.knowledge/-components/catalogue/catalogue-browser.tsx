@@ -17,6 +17,7 @@ import { useTranslations } from "use-intl";
 
 import { EU_MEMBER_STATES } from "@stll/catalogue";
 import { Button } from "@stll/ui/button";
+import type { ContextMenuAction } from "@stll/ui/context-menu";
 import {
   InputGroup,
   InputGroupAddon,
@@ -32,7 +33,6 @@ import {
   type CatalogueRowDisplay,
 } from "@/components/catalogue/catalogue-row";
 import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
-import type { ContextMenuAction } from "@/components/context-menu";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
 import { McpIcon } from "@/components/mcp-icon";

@@ -551,12 +551,9 @@ export const KanbanSubgroupBoard = <TRow,>({
   return (
     <div className={cn("h-full overflow-auto px-4 pb-4", className)}>
       <div className="min-w-max">
-        <div className="bg-background sticky top-0 z-20 pt-4 pb-3">
+        <div className="bg-background sticky top-0 z-20 pt-2 pb-2">
           {hasBands ? (
-            <div
-              className="flex items-end gap-3 pb-1.5"
-              data-kanban-band-row=""
-            >
+            <div className="flex items-end gap-3 pb-1" data-kanban-band-row="">
               {spans.map((span) => {
                 const band = span.band;
                 if (band === null) {
@@ -664,7 +661,7 @@ export const KanbanSubgroupBoard = <TRow,>({
 
           return (
             <section
-              className="border-border/60 border-b py-2 first:pt-0 last:border-b-0"
+              className="border-border/60 border-b py-1 first:pt-0 last:border-b-0"
               key={groupValueKey(group.value)}
             >
               <div className="bg-background/95 sticky start-0 z-10 flex min-h-11 items-center backdrop-blur-sm">
@@ -689,23 +686,28 @@ export const KanbanSubgroupBoard = <TRow,>({
                 </button>
               </div>
 
-              {renderRow({
-                label: "Lane column counts",
-                renderColumn: (column) => {
-                  const columnRows = cellFor(column)?.rows.length ?? 0;
-                  return (
-                    <div
-                      className="px-3"
-                      data-kanban-lane-column-count={columnRows}
-                    >
-                      <span className="text-muted-foreground text-xs tabular-nums">
-                        {formatCount(columnRows)}
-                      </span>
-                    </div>
-                  );
-                },
-                renderFoldedBand: (_band, span) => foldedCount(span, cells),
-              })}
+              {/* Per-column counts stand in for the cells only while the
+               * lane is collapsed. An open lane shows its cells, and a
+               * folded band's slot already carries its own count, so the
+               * extra row would only push the cards down. */}
+              {collapsed &&
+                renderRow({
+                  label: "Lane column counts",
+                  renderColumn: (column) => {
+                    const columnRows = cellFor(column)?.rows.length ?? 0;
+                    return (
+                      <div
+                        className="px-3"
+                        data-kanban-lane-column-count={columnRows}
+                      >
+                        <span className="text-muted-foreground text-xs tabular-nums">
+                          {formatCount(columnRows)}
+                        </span>
+                      </div>
+                    );
+                  },
+                  renderFoldedBand: (_band, span) => foldedCount(span, cells),
+                })}
 
               {!collapsed &&
                 renderRow({

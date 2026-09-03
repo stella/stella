@@ -45,6 +45,7 @@
     "./combobox": "./src/components/combobox.tsx",
     "./command": "./src/components/command.tsx",
     "./composer": "./src/components/composer.tsx",
+    "./context-menu": "./src/components/context-menu.tsx",
     "./control-size": "./src/lib/control-size.ts",
     "./calendar": "./src/calendar/index.ts",
     "./data-table": "./src/data-table/index.ts",

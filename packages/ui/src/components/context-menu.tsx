@@ -1,16 +1,19 @@
+"use client";
+
 import type { ReactNode } from "react";
 
 import { ContextMenu as ContextMenuPrimitive } from "@base-ui/react/context-menu";
 
+import { cn } from "../lib/utils";
 import {
+  MenuCheckboxItem,
   MenuItem,
   MenuPopup,
   MenuSeparator,
   MenuSub,
   MenuSubPopup,
   MenuSubTrigger,
-} from "@stll/ui/menu";
-import { cn } from "@stll/ui/utils";
+} from "./menu";
 
 export type ContextMenuAction = {
   label: string;
@@ -18,14 +21,19 @@ export type ContextMenuAction = {
   onClick?: () => void;
   variant?: "default" | "destructive";
   disabled?: boolean;
+  /** Set on a toggle-style action: it renders as a checkbox item whose
+   *  state assistive technology can read. `onClick` flips it. */
   checked?: boolean;
   submenu?: readonly ContextMenuAction[];
   /** Draw a divider above this item — e.g. to set a trailing "New …" action
    *  apart from the list of existing choices above it. */
   separatorBefore?: boolean;
+  /** Keep the menu open after the click, for a toggle the user may flip
+   *  several of in a row. */
+  closeOnClick?: boolean;
 };
 
-type ContextMenuProps = {
+export type ContextMenuProps = {
   actions: readonly ContextMenuAction[];
   children: ReactNode;
 };
@@ -47,17 +55,20 @@ type ContextMenuProps = {
 export const ContextMenu = ({
   actions,
   children,
-}: ContextMenuProps): React.ReactNode => {
+}: ContextMenuProps): ReactNode => {
   if (actions.length === 0) {
     return children;
   }
 
   return (
     <ContextMenuPrimitive.Root>
-      <ContextMenuPrimitive.Trigger render={<div className="contents" />}>
+      <ContextMenuPrimitive.Trigger
+        data-slot="context-menu-trigger"
+        render={<div className="contents" />}
+      >
         {children}
       </ContextMenuPrimitive.Trigger>
-      <MenuPopup>
+      <MenuPopup data-slot="context-menu-popup">
         {actions.map((action) => (
           <ContextMenuActionItem action={action} key={action.label} />
         ))}
@@ -88,11 +99,31 @@ const ContextMenuActionItem = ({ action }: { action: ContextMenuAction }) => {
     );
   }
 
+  if (action.checked !== undefined) {
+    // A toggle is a checkbox item, so assistive technology reads its state
+    // (`menuitemcheckbox` with `aria-checked`) rather than a bare glyph.
+    return (
+      <>
+        {separator}
+        <MenuCheckboxItem
+          checked={action.checked}
+          closeOnClick={action.closeOnClick ?? true}
+          disabled={action.disabled === true}
+          onCheckedChange={() => action.onClick?.()}
+        >
+          {action.icon}
+          {action.label}
+        </MenuCheckboxItem>
+      </>
+    );
+  }
+
   return (
     <>
       {separator}
       <MenuItem
         className={cn(action.variant === "destructive" && "text-destructive")}
+        closeOnClick={action.closeOnClick ?? true}
         disabled={action.disabled === true}
         onClick={action.onClick}
       >
