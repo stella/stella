@@ -1,8 +1,20 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import type { CorpusIndexHit } from "@/api/lib/legal-search/corpus-index-client";
-import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
+import type { SearchCursor } from "@/api/lib/legal-search/corpus-index-pagination";
+import {
+  corpusIndexLexicalScore,
+  decodeCorpusIndexCursor,
+  encodeCorpusIndexCursor,
+  readCorpusIndexSearchPage,
+} from "@/api/lib/legal-search/corpus-index-pagination";
+import {
+  blendStableCitationAuthority,
+  DEFAULT_AUTHORITY_WEIGHT,
+  stableBlendUpperBound,
+} from "@/api/lib/legal-search/rerank";
 import { LIMITS } from "@/api/lib/limits";
+import { encodeCursor } from "@/api/lib/search/cursor";
 
 /**
  * Grouping passage hits back into document hits. A passage-granular generation
@@ -211,6 +223,377 @@ describe("a single document cannot monopolise the scan", () => {
   });
 });
 
+/**
+ * The rank-derived lexical score decays by a factor of e per round of
+ * candidates, which is what lets a page settle inside the first round: the
+ * blend's whole additive weight cannot carry a hit from the next round past
+ * the page's last hit. These tests run the real blend and the real bound, and
+ * grant no authority to anything, which is the worst case — the page's cursor
+ * score gets nothing from authority while the bound assumes an unseen hit
+ * takes all of it.
+ */
+describe("a page settles within one scan round", () => {
+  const readBlendedPage = async (
+    limit: number,
+    weight: number,
+    parsedCursor: SearchCursor | null = null,
+  ) =>
+    await readCorpusIndexSearchPage({
+      cluster: "q08",
+      indexId: "case_law_v2_cze",
+      query: "text:smlouva",
+      limit,
+      parsedCursor,
+      snippetFields: ["text"],
+      extractId: (hit: CorpusIndexHit) =>
+        typeof hit["document_id"] === "string" ? hit["document_id"] : null,
+      extractSnippet: () => null,
+      unseenScoreUpperBound: (score) => stableBlendUpperBound(score, weight),
+      rankCandidates: async (candidates) => ({
+        context: null,
+        ranked: blendStableCitationAuthority({
+          candidates,
+          authorityById: new Map(),
+          weight,
+        }),
+      }),
+    });
+
+  const documentId = (index: number) => `doc-${String(index).padStart(5, "0")}`;
+
+  beforeEach(() => {
+    engineHits = Array.from({ length: 30_000 }, (_, index) => ({
+      document_id: documentId(index),
+    }));
+  });
+
+  test("a page of a very large hit list is answered from one round", async () => {
+    const page = await readBlendedPage(20, DEFAULT_AUTHORITY_WEIGHT);
+
+    expect(requestCount).toBe(1);
+    expect(page.scan.rounds).toBe(1);
+    expect(page.scan.earlyStopped).toBe(true);
+    expect(page.pageRanked).toHaveLength(20);
+    expect(page.nextCursor).not.toBeNull();
+  });
+
+  test("the largest page the API serves still settles in one round", async () => {
+    const page = await readBlendedPage(
+      LIMITS.caseLawSearchPageSizeMax,
+      DEFAULT_AUTHORITY_WEIGHT,
+    );
+
+    expect(requestCount).toBe(1);
+    expect(page.scan.earlyStopped).toBe(true);
+  });
+
+  test("a wider additive weight still settles in one round", async () => {
+    // Headroom for a second additive signal: the bound widens to the sum of
+    // the weights, and the decay has to outrun the sum, not one term of it.
+    const combinedWeight = 0.5;
+    expect(
+      stableBlendUpperBound(corpusIndexLexicalScore(300), combinedWeight),
+    ).toBeLessThan(corpusIndexLexicalScore(19));
+
+    const page = await readBlendedPage(20, combinedWeight);
+
+    expect(requestCount).toBe(1);
+    expect(page.scan.earlyStopped).toBe(true);
+  });
+
+  test("a cursor continues the same scores without repeating a hit", async () => {
+    const first = await readBlendedPage(20, DEFAULT_AUTHORITY_WEIGHT);
+    const last = first.pageRanked.at(-1);
+    if (last === undefined) {
+      throw new Error("the first page must not be empty");
+    }
+    // The cursor encodes the score the rank alone produces, so the rescan
+    // behind page two assigns the emitted hits exactly the same values.
+    expect(last.score).toBe(corpusIndexLexicalScore(19));
+
+    const second = await readBlendedPage(
+      20,
+      DEFAULT_AUTHORITY_WEIGHT,
+      first.nextCursor,
+    );
+
+    expect(second.pageRanked.at(0)?.id).toBe(documentId(20));
+    expect(second.pageRanked.at(0)?.score).toBe(corpusIndexLexicalScore(20));
+    expect(second.pageRanked).toHaveLength(20);
+    const firstIds = new Set(first.pageRanked.map((hit) => hit.id));
+    expect(second.pageRanked.some((hit) => firstIds.has(hit.id))).toBe(false);
+  });
+
+  test("a hit's score reads its rank and nothing about the hit count", async () => {
+    const large = await readBlendedPage(20, DEFAULT_AUTHORITY_WEIGHT);
+    engineHits = Array.from({ length: 1000 }, (_, index) => ({
+      document_id: documentId(index),
+    }));
+
+    const small = await readBlendedPage(20, DEFAULT_AUTHORITY_WEIGHT);
+
+    // The same ranks in a hit list thirty times smaller: an emitted score no
+    // longer moves when the corpus grows under a reader holding a cursor.
+    expect(small.pageRanked.map((hit) => hit.score)).toEqual(
+      large.pageRanked.map((hit) => hit.score),
+    );
+    expect(corpusIndexLexicalScore(0)).toBe(1);
+    expect(corpusIndexLexicalScore(1)).toBeLessThan(corpusIndexLexicalScore(0));
+  });
+});
+
+/**
+ * What the reader waits through is the number of sequential engine round
+ * trips, so the scan is bounded twice: it stops as soon as no unseen
+ * candidate can out-blend the page, and, failing that, at a fixed number of
+ * rounds. The second bound is what a query whose lexical scores separate
+ * slowly runs into.
+ */
+describe("the scan is bounded by engine round trips", () => {
+  const documentId = (index: number) => `doc-${String(index).padStart(4, "0")}`;
+
+  /** A bound no page score can fall below: the early stop never fires. */
+  const readCappedPage = async (
+    limit: number,
+    parsedCursor: SearchCursor | null = null,
+  ) =>
+    await readCorpusIndexSearchPage({
+      cluster: "q08",
+      indexId: "case_law_v2_cze",
+      query: "text:smlouva",
+      limit,
+      parsedCursor,
+      snippetFields: ["text"],
+      extractId: (hit: CorpusIndexHit) =>
+        typeof hit["document_id"] === "string" ? hit["document_id"] : null,
+      extractSnippet: () => null,
+      unseenScoreUpperBound: (score) => score + 1,
+      rankCandidates: async (candidates) => ({
+        context: null,
+        ranked: candidates.map((candidate) => ({
+          id: candidate.id,
+          score: candidate.score,
+          lexicalScore: candidate.score,
+          citationAuthority: 0,
+        })),
+      }),
+    });
+
+  beforeEach(() => {
+    // Far more hits than the round cap can reach, one passage each, so only
+    // the cap can end the scan.
+    engineHits = Array.from({ length: 5000 }, (_, index) => ({
+      document_id: documentId(index),
+    }));
+  });
+
+  test("a scan whose stop condition never fires ends at the round cap", async () => {
+    const page = await readCappedPage(10);
+
+    expect(requestCount).toBe(LIMITS.corpusIndexSearchMaxRounds);
+    expect(page.pageRanked).toHaveLength(10);
+    // The page is still full and its own window holds more, so paging
+    // continues within what the capped scan reached.
+    expect(page.nextCursor).not.toBeNull();
+    expect(page.scan.rounds).toBe(LIMITS.corpusIndexSearchMaxRounds);
+    expect(page.scan.passagesScanned).toBe(
+      LIMITS.corpusIndexSearchMaxRounds *
+        LIMITS.corpusIndexSearchCandidateLimit,
+    );
+    expect(page.scan.roundCapHit).toBe(true);
+    expect(page.scan.earlyStopped).toBe(false);
+    expect(page.scan.indexMs).toBeGreaterThanOrEqual(0);
+  });
+
+  test("a capped scan whose window is exhausted opens the next one", async () => {
+    const reachable =
+      LIMITS.corpusIndexSearchMaxRounds *
+      LIMITS.corpusIndexSearchCandidateLimit;
+
+    const page = await readCappedPage(reachable);
+
+    // Everything the cap allowed fits on one page, so replaying this window
+    // would return the same hits; the reader continues in the next one.
+    expect(page.pageRanked).toHaveLength(reachable);
+    expect(page.nextCursor?.windowStart).toBe(reachable);
+  });
+
+  test("a scan that reached the end of the hit list offers no next window", async () => {
+    engineHits = Array.from({ length: 40 }, (_, index) => ({
+      document_id: documentId(index),
+    }));
+
+    const page = await readCappedPage(40);
+
+    expect(page.scan.roundCapHit).toBe(false);
+    expect(page.nextCursor).toBeNull();
+  });
+
+  test("a cursor pages through what the capped scan reached", async () => {
+    const first = await readCappedPage(10);
+    const last = first.pageRanked.at(-1);
+    if (last === undefined) {
+      throw new Error("the first page must not be empty");
+    }
+
+    const second = await readCappedPage(10, first.nextCursor);
+
+    expect(requestCount).toBe(LIMITS.corpusIndexSearchMaxRounds * 2);
+    expect(second.pageRanked.map((hit) => hit.id)).toEqual(
+      Array.from({ length: 10 }, (_, index) => documentId(index + 10)),
+    );
+    const firstIds = new Set(first.pageRanked.map((hit) => hit.id));
+    expect(second.pageRanked.some((hit) => firstIds.has(hit.id))).toBe(false);
+  });
+
+  test("a scan that can stop early spends one round", async () => {
+    // The same hit list read through a bound that no unseen candidate can
+    // beat: the page is answered from the first window.
+    const page = await readPage(10);
+
+    expect(requestCount).toBe(1);
+    expect(page.pageRanked).toHaveLength(10);
+    expect(page.scan.rounds).toBe(1);
+    expect(page.scan.passagesScanned).toBe(
+      LIMITS.corpusIndexSearchCandidateLimit,
+    );
+    expect(page.scan.earlyStopped).toBe(true);
+    expect(page.scan.roundCapHit).toBe(false);
+  });
+});
+
+/**
+ * A decision long enough to fill the whole capped window with its own
+ * passages. Nothing bounds passages per document anywhere near the scan
+ * budget — the chunker's ceiling is a hostile-input bound orders of magnitude
+ * higher — so the page cannot be made whole by sizing the cap. It is made
+ * whole by moving the window instead.
+ */
+describe("a passage flood does not strand the reader", () => {
+  const documentId = (index: number) => `doc-${String(index).padStart(4, "0")}`;
+  const floodSize = 1000;
+
+  const readFloodPage = async (
+    limit: number,
+    parsedCursor: SearchCursor | null = null,
+  ) =>
+    await readCorpusIndexSearchPage({
+      cluster: "q08",
+      indexId: "case_law_v2_cze",
+      query: "text:smlouva",
+      limit,
+      parsedCursor,
+      snippetFields: ["text"],
+      extractId: (hit: CorpusIndexHit) =>
+        typeof hit["document_id"] === "string" ? hit["document_id"] : null,
+      extractSnippet: () => null,
+      unseenScoreUpperBound: (score) =>
+        stableBlendUpperBound(score, DEFAULT_AUTHORITY_WEIGHT),
+      rankCandidates: async (candidates) => ({
+        context: null,
+        ranked: blendStableCitationAuthority({
+          candidates,
+          authorityById: new Map(),
+          weight: DEFAULT_AUTHORITY_WEIGHT,
+        }),
+      }),
+    });
+
+  beforeEach(() => {
+    // One decision's passages fill more than the cap can scan, then ordinary
+    // decisions follow.
+    engineHits = [
+      ...Array.from({ length: floodSize }, (_, seq) => ({
+        document_id: "doc-flood",
+        anchor_id: `flood-p${seq}`,
+      })),
+      ...Array.from({ length: 60 }, (_, index) => ({
+        document_id: documentId(index),
+      })),
+    ];
+  });
+
+  test("the flooded page still offers a way forward", async () => {
+    const page = await readFloodPage(10);
+
+    // The capped window held one decision, so the page is one hit — but the
+    // reader is not stranded on it.
+    expect(page.pageRanked.map((hit) => hit.id)).toEqual(["doc-flood"]);
+    expect(page.scan.roundCapHit).toBe(true);
+    expect(page.nextCursor?.windowStart).toBe(
+      LIMITS.corpusIndexSearchMaxRounds *
+        LIMITS.corpusIndexSearchCandidateLimit,
+    );
+  });
+
+  test("the next page continues past the flood without rescanning it", async () => {
+    const first = await readFloodPage(10);
+    requestCount = 0;
+
+    const second = await readFloodPage(10, first.nextCursor);
+
+    // Every round of page two reads past where page one stopped, and the
+    // decision that filled page one does not come back.
+    expect(second.pageRanked.map((hit) => hit.id)).toEqual(
+      Array.from({ length: 10 }, (_, index) => documentId(index)),
+    );
+    expect(second.scan.passagesScanned).toBeLessThanOrEqual(
+      LIMITS.corpusIndexSearchMaxRounds *
+        LIMITS.corpusIndexSearchCandidateLimit,
+    );
+    expect(requestCount).toBeLessThanOrEqual(LIMITS.corpusIndexSearchMaxRounds);
+  });
+
+  test("paging reaches every decision behind the flood", async () => {
+    const seen: string[] = [];
+    let cursor: SearchCursor | null = null;
+    for (let pageIndex = 0; pageIndex < 20; pageIndex += 1) {
+      // oxlint-disable-next-line no-await-in-loop -- each page depends on the cursor the previous one emitted
+      const page = await readFloodPage(10, cursor);
+      seen.push(...page.pageRanked.map((hit) => hit.id));
+      if (page.nextCursor === null) {
+        break;
+      }
+      cursor = page.nextCursor;
+    }
+
+    expect(new Set(seen).size).toBe(seen.length);
+    expect(seen).toContain("doc-flood");
+    expect(seen).toContain(documentId(59));
+  });
+});
+
+describe("the cursor survives its wire form", () => {
+  test("a window cursor round-trips", () => {
+    const cursor = {
+      score: 0.5,
+      id: "4a1b6f6e-0e5a-4a51-9e9f-1a2b3c4d5e6f",
+      windowStart: 900,
+    };
+
+    expect(decodeCorpusIndexCursor(encodeCorpusIndexCursor(cursor))).toEqual(
+      cursor,
+    );
+  });
+
+  test("a payload without a window names the first one", () => {
+    // What a cursor issued before windows existed decodes to, and what a
+    // caller that builds the payload by hand gets.
+    const legacy = encodeCursor(0.5, "4a1b6f6e-0e5a-4a51-9e9f-1a2b3c4d5e6f");
+
+    expect(decodeCorpusIndexCursor(legacy)).toEqual({
+      score: 0.5,
+      id: "4a1b6f6e-0e5a-4a51-9e9f-1a2b3c4d5e6f",
+      windowStart: 0,
+    });
+  });
+
+  test("a malformed window is rejected rather than guessed", () => {
+    expect(decodeCorpusIndexCursor(encodeCursor(0.5, "-3:abc"))).toBeNull();
+    expect(decodeCorpusIndexCursor(encodeCursor(0.5, "12:"))).toBeNull();
+  });
+});
+
 describe("document paging survives the passage fan-out", () => {
   test("a page holds `limit` documents even when each matched several passages", async () => {
     const documentIds = Array.from({ length: 8 }, (_, i) => `doc-${i}`);
@@ -237,7 +620,7 @@ describe("document paging survives the passage fan-out", () => {
       expect(page.anchorIdById.get(hit.id)).toBe(`${hit.id}-p0`);
       expect(page.passageCountById.get(hit.id)).toBe(3);
     }
-    expect(page.hasMore).toBe(true);
+    expect(page.nextCursor).not.toBeNull();
   });
 });
 
@@ -253,7 +636,7 @@ describe("ranker-folded candidates stay folded across pages", () => {
 
   const readFoldedPage = async (
     limit: number,
-    parsedCursor: { score: number; id: string } | null,
+    parsedCursor: SearchCursor | null,
   ) =>
     await readCorpusIndexSearchPage({
       cluster: "q08",
@@ -306,21 +689,21 @@ describe("ranker-folded candidates stay folded across pages", () => {
       "other-0",
       "other-1",
     ]);
-    expect(page.hasMore).toBe(true);
+    expect(page.nextCursor).not.toBeNull();
   });
 
   test("no folded member resurfaces on later pages", async () => {
     const seen: string[] = [];
-    let cursor: { score: number; id: string } | null = null;
+    let cursor: SearchCursor | null = null;
     for (let pageIndex = 0; pageIndex < 20; pageIndex += 1) {
       // oxlint-disable-next-line no-await-in-loop -- each page depends on the cursor the previous one emitted
       const page = await readFoldedPage(3, cursor);
       seen.push(...page.pageRanked.map((hit) => hit.id));
       const last = page.pageRanked.at(-1);
-      if (!page.hasMore || last === undefined) {
+      if (page.nextCursor === null || last === undefined) {
         break;
       }
-      cursor = { score: last.score, id: last.id };
+      cursor = page.nextCursor;
     }
 
     expect(seen.filter((id) => groupOf(id) !== null)).toEqual(["c-131-12-l0"]);

@@ -82,46 +82,46 @@ afterAll(async () => {
 });
 
 test("a docket resolves by its citation key however the reader spaces it", async () => {
-  const spaced = await findDecisionIdsByIdentity(
+  const spaced = await findDecisionIdsByIdentity({
     caseLawDb,
-    { type: "identifier", kind: "docket", value: "Pl. ÚS 24/10" },
-    "CZE",
-  );
+    country: "CZE",
+    identity: { type: "identifier", kind: "docket", value: "Pl. ÚS 24/10" },
+  });
   expect(spaced).toEqual([plenaryId]);
 
-  const unscoped = await findDecisionIdsByIdentity(
+  const unscoped = await findDecisionIdsByIdentity({
     caseLawDb,
-    { type: "identifier", kind: "docket", value: "23 Cdo 1572/2012" },
-    undefined,
-  );
+    country: undefined,
+    identity: { type: "identifier", kind: "docket", value: "23 Cdo 1572/2012" },
+  });
   expect(unscoped).toEqual([supremeId]);
 });
 
 test("an ECLI resolves by equality regardless of the reader's case", async () => {
-  const ids = await findDecisionIdsByIdentity(
+  const ids = await findDecisionIdsByIdentity({
     caseLawDb,
-    {
+    country: "CZE",
+    identity: {
       type: "identifier",
       kind: "ecli",
       value: "ecli:cz:ns:2012:23.cdo.1572.2012.1",
     },
-    "CZE",
-  );
+  });
   expect(ids).toEqual([supremeId]);
 });
 
 test("an identifier nobody holds, or held in another jurisdiction, resolves to nothing", async () => {
-  const unknown = await findDecisionIdsByIdentity(
+  const unknown = await findDecisionIdsByIdentity({
     caseLawDb,
-    { type: "identifier", kind: "docket", value: "22 Cdo 1/2026" },
-    "CZE",
-  );
+    country: "CZE",
+    identity: { type: "identifier", kind: "docket", value: "22 Cdo 1/2026" },
+  });
   expect(unknown).toEqual([]);
 
-  const elsewhere = await findDecisionIdsByIdentity(
+  const elsewhere = await findDecisionIdsByIdentity({
     caseLawDb,
-    { type: "identifier", kind: "docket", value: "Pl. ÚS 24/10" },
-    "SVK",
-  );
+    country: "SVK",
+    identity: { type: "identifier", kind: "docket", value: "Pl. ÚS 24/10" },
+  });
   expect(elsewhere).toEqual([]);
 });
