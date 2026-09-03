@@ -71,10 +71,14 @@ marketing:reshoot` re-records only the stale captures (see
 5. Merge the commit to `main`. The `tag-on-version-bump.yml` workflow pushes
    the matching `vX.Y.Z` tag automatically. The tag then triggers
    `release.yml`.
-6. Wait for the release workflow to publish the image, manifest, and GitHub
-   release notes. Stable releases are promoted automatically; the workflow does
-   not succeed until `https://api.stll.app/health` reports the exact release
-   commit. RCs continue to target staging.
+6. Wait for the release workflow. It builds and attests the immutable
+   images, creates the GitHub release as a draft with the manifest attached,
+   and promotes stable releases automatically; the release is published and
+   the `latest` image aliases advance only after `https://api.stll.app/ready`
+   and the web origin report the exact release commit. A failed promotion
+   leaves the tag, the immutable images, and the draft; rerunning the
+   workflow for the same tag reuses them. RCs continue to target staging and
+   are published as prereleases once the staging promotion finishes.
 7. After a stable release succeeds, `publish-npm.yml` checks out the same
    release commit, packs the CLI, installs that exact tarball under plain Node,
    and runs its unauthenticated compatibility canary against production. Only

@@ -655,6 +655,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: [resolve, build, prepare-web-image, smoke]
+    outputs:
+      api-image-digest: ${{ steps.manifest.outputs.digest }}
     permissions:
       contents: write
       packages: write
@@ -883,27 +885,27 @@ jobs:
           } > NOTES.with-manual.md
           mv NOTES.with-manual.md NOTES.md
 
-      - name: Publish GitHub release manifest
+      - name: Create draft GitHub release with the manifest
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
         run: |
+          # A draft: absent from /releases, the public API and
+          # /releases/latest until the promote job for its channel has
+          # verified that the environment serves this commit and publishes
+          # it. A failed promotion therefore leaves an immutable tag,
+          # immutable images and a draft, and the previous release stays
+          # what users see. `gh` resolves a draft by its tag, so a rerun
+          # reuses the object; a release already published by an earlier
+          # run is left as it is. Beta and alpha tags promote nowhere, so
+          # nothing would publish their draft: they are published here.
           if ! gh release view "$RELEASE_REF" >/dev/null 2>&1; then
             extra_args=()
-            if [[ "$RELEASE_REF" == *-* ]]; then
-              extra_args+=(--prerelease)
-            else
-              # Defer the "latest" flag until release-desktop.yml has
-              # uploaded the signed installers. Without this, GitHub
-              # auto-promotes the new stable release on creation, but
-              # the desktop build runs as a workflow_run trigger and
-              # takes another ~25 min — during that window
-              # /releases/latest/download/Stella-macos-universal.dmg
-              # 404s for end users. release-desktop.yml flips the
-              # flag in its final step, after both Mac + Windows
-              # signed installers are attached to the release.
-              extra_args+=(--latest=false)
-            fi
+            case "$RELEASE_REF" in
+              *-rc.*) extra_args+=(--draft --prerelease) ;;
+              *-*) extra_args+=(--prerelease) ;;
+              *) extra_args+=(--draft) ;;
+            esac
             gh release create "$RELEASE_REF" \
               --title "$RELEASE_REF" \
               --notes-file NOTES.md \
@@ -911,21 +913,6 @@ jobs:
               "${extra_args[@]}"
           fi
           gh release upload "$RELEASE_REF" release-manifest.json --clobber
-
-      - name: Advance stable image tags
-        if: ${{ !contains(needs.resolve.outputs.release_ref, '-') }}
-        env:
-          API_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          API_IMAGE_DIGEST: ${{ steps.manifest.outputs.digest }}
-          WEB_IMAGE: ${{ env.REGISTRY }}/${{ env.WEB_IMAGE_NAME }}
-          WEB_IMAGE_DIGEST: ${{ needs.prepare-web-image.outputs.digest }}
-        run: |
-          docker buildx imagetools create \
-            --tag "${API_IMAGE}:latest" \
-            "${API_IMAGE}@${API_IMAGE_DIGEST}"
-          docker buildx imagetools create \
-            --tag "${WEB_IMAGE}:latest" \
-            "${WEB_IMAGE}@${WEB_IMAGE_DIGEST}"
 
   promote:
     # Auto-promote stable releases (vX.Y.Z) to production. Any tag
@@ -939,7 +926,8 @@ jobs:
     needs: [resolve, manifest, prepare-web-image, smoke]
     if: ${{ !contains(needs.resolve.outputs.release_ref, '-') }}
     permissions:
-      contents: read
+      contents: write # publish the draft release
+      packages: write # advance the mutable image aliases
     # Release App key lives in this environment (main and v* tags only).
     environment: release-app
     steps:
@@ -994,6 +982,51 @@ jobs:
           API_DEPLOYMENT_URL: https://my.stll.app
         run: bun scripts/check-api-deployment.ts
 
+      # Everything below is the publication: it runs only once production
+      # verifiably serves the release, so nothing users can reach moves on a
+      # failed promotion. Each step is idempotent for a rerun.
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
+        run: |
+          # Not "latest" yet: release-desktop.yml flips that in its final
+          # step, after the signed installers are attached, so
+          # /releases/latest/download/Stella-* never 404s in between.
+          # Publishing a draft would otherwise make it latest by default.
+          gh release edit "$RELEASE_REF" --draft=false --latest=false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Advance stable image tags
+        env:
+          API_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          API_IMAGE_DIGEST: ${{ needs.manifest.outputs.api-image-digest }}
+          WEB_IMAGE: ${{ env.REGISTRY }}/${{ env.WEB_IMAGE_NAME }}
+          WEB_IMAGE_DIGEST: ${{ needs.prepare-web-image.outputs.digest }}
+        run: |
+          set -euo pipefail
+          for digest in "$API_IMAGE_DIGEST" "$WEB_IMAGE_DIGEST"; do
+            if [[ ! "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+              echo "::error::A release image digest was not resolved from the manifest jobs."
+              exit 1
+            fi
+          done
+          docker buildx imagetools create \
+            --tag "${API_IMAGE}:latest" \
+            "${API_IMAGE}@${API_IMAGE_DIGEST}"
+          docker buildx imagetools create \
+            --tag "${WEB_IMAGE}:latest" \
+            "${WEB_IMAGE}@${WEB_IMAGE_DIGEST}"
+
   promote-staging:
     # Auto-promote release-candidate tags (vX.Y.Z-rc.N) to staging.
     # Same dispatch pattern as `promote` above; the infra workflow
@@ -1004,7 +1037,7 @@ jobs:
     needs: [resolve, manifest, prepare-web-image, smoke]
     if: ${{ contains(needs.resolve.outputs.release_ref, '-rc.') }}
     permissions:
-      contents: read
+      contents: write # publish the draft prerelease
     environment: release-app
     steps:
       # The workflow's own revision, not the release's: this job can be
@@ -1025,3 +1058,9 @@ jobs:
           release-ref: ${{ needs.resolve.outputs.release_ref }}
           target-environment: staging
           web-image-digest: ${{ needs.prepare-web-image.outputs.digest }}
+
+      - name: Publish GitHub prerelease
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
+        run: gh release edit "$RELEASE_REF" --draft=false --prerelease

@@ -40,11 +40,12 @@ concurrency:
 jobs:
   resolve:
     # Only a successful Release Artifacts run may trigger the desktop
-    # publication path. Release Artifacts creates the GitHub Release before
-    # promotion, so accepting `failure` here would let a failed production
-    # promotion reach the latest and CDN publication steps below. Manual
-    # dispatch remains available for recovery, but its stable path is gated
-    # by the post-build production verification job.
+    # publication path. Release Artifacts publishes the GitHub Release only
+    # after production promotion is verified, so a failed run leaves a draft;
+    # accepting `failure` here would attach installers to that draft and
+    # reach the CDN publication steps below. Manual dispatch remains
+    # available for recovery, but its stable path is gated by the post-build
+    # production verification job.
     #
     # Skip `cancelled` (a newer release.yml run replaced it; that newer run
     # will trigger us instead) and `skipped` (release.yml never actually ran,
