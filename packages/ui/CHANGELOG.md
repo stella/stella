@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.23.1
+
+### Patch Changes
+
+- [#2900](https://github.com/stella/stella/pull/2900) [`1e78a6a`](https://github.com/stella/stella/commit/1e78a6abf67d0d4a87015b1db1e86bda34b4f596) Thanks [@jan-kubica](https://github.com/jan-kubica)! - A virtualized cell measures its pinned action before the first paint, so a card's sticky identity row rests under it from the first frame.
+
 ## 0.23.0
 
 ### Minor Changes

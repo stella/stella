@@ -852,7 +852,7 @@
     },
     "packages/ui": {
       "name": "@stll/ui",
-      "version": "0.23.0",
+      "version": "0.23.1",
       "dependencies": {
         "better-result": "catalog:",
         "class-variance-authority": "^0.7.1",
