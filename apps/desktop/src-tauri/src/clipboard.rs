@@ -958,11 +958,14 @@ impl ClipboardManager {
     {
       return Err("clipboard group does not exist".to_string());
     }
-    let checkpoint = self.checkpoint();
-    let Some(item) = self.items.iter_mut().find(|item| item.id() == id) else {
+    let Some(item_index) = self.items.iter().position(|item| item.id() == id) else {
       return Ok(false);
     };
-    item.set_group_id(group_id);
+    if self.items[item_index].group_id() == group_id.as_deref() {
+      return Ok(true);
+    }
+    let checkpoint = self.checkpoint();
+    self.items[item_index].set_group_id(group_id);
     // Ungrouping puts the clip back under the history rules.
     prune_items(&mut self.items, self.retention, Utc::now());
     self.persist_or_restore(checkpoint)?;
@@ -2634,6 +2637,7 @@ mod tests {
       .create_group("Research", ClipboardGroupColor::Blue)
       .unwrap();
     let mut grouped = text_item(Utc::now() - Duration::days(400), "grouped");
+    let grouped_id = grouped.id().to_string();
     grouped.set_group_id(Some(group_id.clone()));
     manager.items.push(grouped);
 
@@ -2644,6 +2648,7 @@ mod tests {
     );
     assert_eq!(manager.items.len(), 1);
     assert_eq!(manager.items[0].group_id(), None);
+    assert!(manager.set_item_group(&grouped_id, None).unwrap());
     assert!(!manager.prune_expired(Utc::now()).unwrap());
 
     let persisted = serde_json::to_value(&manager.items[0]).unwrap();
