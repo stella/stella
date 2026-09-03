@@ -160,6 +160,8 @@ type CaseLawSearchCompletedEvent = {
   roundCapHit: boolean;
   /** Engine round trips the scan spent. */
   rounds: number;
+  /** Engine round trips spent highlighting the page: one, or none for an empty page. */
+  highlightRounds: number;
   totalMs: number;
 };
 
@@ -180,6 +182,7 @@ export const reportCaseLawSearchCompleted = ({
   queryClass,
   roundCapHit,
   rounds,
+  highlightRounds,
   totalMs,
 }: CaseLawSearchCompletedEvent): void => {
   // Flat, one attribute per read, and the total is what those attributes add
@@ -197,6 +200,7 @@ export const reportCaseLawSearchCompleted = ({
     queryClass,
     ...(country === undefined ? {} : { country }),
     rounds,
+    highlightRounds,
     passagesScanned,
     candidatesHydrated,
     pageRowsRead,

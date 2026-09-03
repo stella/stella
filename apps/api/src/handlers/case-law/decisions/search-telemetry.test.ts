@@ -77,6 +77,7 @@ describe("the completed-search record", () => {
       queryClass: classOf('"náhrada škody"'),
       roundCapHit: false,
       rounds: 1,
+      highlightRounds: 1,
       totalMs: 130.2,
     });
     const record = recording.records.at(0);
@@ -95,6 +96,7 @@ describe("the completed-search record", () => {
       queryClass: "phrase",
       country: "cz",
       rounds: 1,
+      highlightRounds: 1,
       passagesScanned: 300,
       candidatesHydrated: 42,
       pageRowsRead: 20,
