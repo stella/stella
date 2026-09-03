@@ -194,7 +194,7 @@ const selectionIsFormatted = (
 ) => {
   const walker = document.createTreeWalker(editor, NodeFilter.SHOW_ALL);
   let hasSelectedFormattedBreak = false;
-  let hasSelectedText = false;
+  let hasSelectedFormattedText = false;
   let node = walker.nextNode();
   while (node) {
     if (
@@ -202,8 +202,12 @@ const selectionIsFormatted = (
       node.length > 0 &&
       rangeSelectsNodeContent(range, node)
     ) {
-      hasSelectedText = true;
-      if (!hasFormatAncestor(node, editor, tags)) {
+      const start = node === range.startContainer ? range.startOffset : 0;
+      const end = node === range.endContainer ? range.endOffset : node.length;
+      const selectedText = node.data.slice(start, end);
+      if (hasFormatAncestor(node, editor, tags)) {
+        hasSelectedFormattedText = true;
+      } else if (selectedText.trim()) {
         return false;
       }
     }
@@ -217,7 +221,7 @@ const selectionIsFormatted = (
     }
     node = walker.nextNode();
   }
-  return hasSelectedText || hasSelectedFormattedBreak;
+  return hasSelectedFormattedText || hasSelectedFormattedBreak;
 };
 
 const outermostFormatAncestor = (
