@@ -123,9 +123,9 @@ test("no dictionary can produce a clause that escapes its own quoting", () => {
   fc.assert(
     fc.property(dictionaryText, queryText, (text, query) => {
       const { entries } = parseExpansionDictionary(text);
-      const clause = corpusFreeTextClause(query, (term) =>
-        expandTermWith(entries, term),
-      );
+      const clause = corpusFreeTextClause(query, {
+        expand: (term) => expandTermWith(entries, term),
+      });
       if (clause === null) {
         return;
       }
@@ -144,9 +144,9 @@ test("expansion never pushes a clause past the leaf budget it started under", ()
     fc.property(dictionaryText, queryText, (text, query) => {
       const { entries } = parseExpansionDictionary(text);
       const base = corpusFreeTextClause(query);
-      const expanded = corpusFreeTextClause(query, (term) =>
-        expandTermWith(entries, term),
-      );
+      const expanded = corpusFreeTextClause(query, {
+        expand: (term) => expandTermWith(entries, term),
+      });
       if (base === null || expanded === null) {
         return;
       }
@@ -168,9 +168,9 @@ test("expansion only ever adds leaves to the unexpanded clause", () => {
     fc.property(dictionaryText, queryText, (text, query) => {
       const { entries } = parseExpansionDictionary(text);
       const base = corpusFreeTextClause(query);
-      const expanded = corpusFreeTextClause(query, (term) =>
-        expandTermWith(entries, term),
-      );
+      const expanded = corpusFreeTextClause(query, {
+        expand: (term) => expandTermWith(entries, term),
+      });
       expect(expanded === null).toBe(base === null);
       if (base === null || expanded === null) {
         return;

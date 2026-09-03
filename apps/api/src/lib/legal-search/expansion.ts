@@ -28,6 +28,7 @@ import {
   corpusFreeTextClause,
   type CorpusTermExpander,
 } from "@/api/lib/legal-search/corpus-query";
+import { corpusMorphologyLanguage } from "@/api/lib/legal-search/morphology/corpus-language";
 import {
   foldExpansionKey,
   isMorphologyDictionaryContentHash,
@@ -45,49 +46,42 @@ import { logger } from "@/api/lib/observability/logger";
 import { readCorpusS3BytesBounded } from "@/api/lib/s3";
 
 /**
- * Jurisdictions the corpus index serves, and the language whose dictionary
- * their text is expanded against. `null` means the jurisdiction is served
- * without expansion.
+ * Whether a language's dictionary payload exists to be read.
  *
- * Slovak resolves to `null` in phase 1: the stemmer exists, but no Slovak
- * dictionary is published yet, and pointing SVK at a language with no payload
- * would make every Slovak search pay a pointer read that can only miss.
- * Publishing the dictionary and flipping this one entry enables it.
+ * Expansion needs one and stemming does not, which is the whole difference
+ * between this and `corpusMorphologyLanguage`: Slovak has a stemmer but no
+ * published dictionary, so pointing a Slovak search at it would pay a pointer
+ * read that can only miss. Publishing the payload and flipping this one entry
+ * enables expansion for it.
  *
- * The EU index carries 24 languages under one jurisdiction, so a single
- * dictionary could not be chosen for it at all.
+ * Total, so a language added to the stemmer has to answer this too rather
+ * than silently inheriting a dictionary it has none of.
  */
-const EXPANSION_LANGUAGE_BY_JURISDICTION = {
-  CZE: "cs",
-  EU: null,
-  POL: "pl",
-  SVK: null,
-} as const satisfies Record<string, MorphologyLanguage | null>;
-
-type ExpansionJurisdiction = keyof typeof EXPANSION_LANGUAGE_BY_JURISDICTION;
-
-const isExpansionJurisdiction = (
-  value: string,
-): value is ExpansionJurisdiction =>
-  Object.hasOwn(EXPANSION_LANGUAGE_BY_JURISDICTION, value);
+const EXPANSION_DICTIONARY = {
+  cs: "published",
+  pl: "published",
+  sk: "unpublished",
+} as const satisfies Record<MorphologyLanguage, "published" | "unpublished">;
 
 /**
  * Which language a request's jurisdiction expands against, or null for no
- * expansion. An unscoped search (no country: the index pattern spans every
- * jurisdiction) resolves to null, because no one language describes its text.
- * An unrecognised jurisdiction resolves to null for the same reason; this
- * lookup's miss is the documented phase-1 scope, not a defect to report.
+ * expansion.
+ *
+ * The jurisdiction's language is `corpusMorphologyLanguage`, the one map the
+ * projection stems against as well, so the two sides cannot disagree about
+ * what a jurisdiction is written in. Only the dictionary question is answered
+ * here. An unscoped search (no country: the index pattern spans every
+ * jurisdiction) resolves to null there, because no one language describes its
+ * text, and so does a jurisdiction with no single language of its own.
  */
 export const expansionLanguageForJurisdiction = (
   country: string | undefined,
 ): MorphologyLanguage | null => {
-  if (country === undefined) {
+  const language = corpusMorphologyLanguage(country);
+  if (language === null) {
     return null;
   }
-  const jurisdiction = country.toUpperCase();
-  return isExpansionJurisdiction(jurisdiction)
-    ? EXPANSION_LANGUAGE_BY_JURISDICTION[jurisdiction]
-    : null;
+  return EXPANSION_DICTIONARY[language] === "published" ? language : null;
 };
 
 /**
@@ -639,7 +633,7 @@ const countLeaves = (clause: string): number => {
  * filter clauses never enter the count.
  */
 const freeTextLeaves = (text: string, expand?: CorpusTermExpander): number => {
-  const clause = corpusFreeTextClause(text, expand);
+  const clause = corpusFreeTextClause(text, { expand });
   return clause === null ? 0 : countLeaves(clause);
 };
 

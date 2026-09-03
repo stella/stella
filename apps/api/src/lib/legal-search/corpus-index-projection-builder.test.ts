@@ -1,17 +1,20 @@
 import { expect, test } from "bun:test";
 
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
+
 import { toSafeId } from "@/api/lib/branded-types";
 import { UNDATED_DECISION_TIMESTAMP } from "@/api/lib/legal-search/corpus-index-config";
 import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
-  buildCaseLawV5ProjectionDocuments,
+  buildCaseLawProjectionDocuments,
   buildCorpusProjectionDocuments,
   buildLegislationV2ProjectionDocuments,
 } from "@/api/lib/legal-search/corpus-index-projection-builder";
 import type {
-  CaseLawV5ProjectionInput,
+  CaseLawProjectionInput,
   LegislationV2ProjectionInput,
 } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
+import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
 
 const REVISION = toSafeId<"corpusIndexProjectionIntent">(
   "0198e331-e578-7000-8000-000000000001",
@@ -34,7 +37,8 @@ const CASE_LAW_INPUT = {
   court: "Nejvyšší správní soud",
   decisionDate: null,
   ecli: null,
-} as const satisfies CaseLawV5ProjectionInput;
+  metadata: null,
+} as const satisfies CaseLawProjectionInput;
 const LEGISLATION_INPUT = {
   family: "legislation",
   documentId: "0198e331-e578-7000-8000-000000000004",
@@ -54,17 +58,20 @@ const LEGISLATION_INPUT = {
 const DATED_CASE_LAW_INPUT = {
   ...CASE_LAW_INPUT,
   decisionDate: "2008-01-30",
-} as const satisfies CaseLawV5ProjectionInput;
+} as const satisfies CaseLawProjectionInput;
 
-const manifestFields = (family: "case_law" | "legislation"): Set<string> =>
+const manifestFields = (
+  generation: keyof typeof CORPUS_INDEX_MANIFESTS,
+): Set<string> =>
   new Set(
     CORPUS_INDEX_MANIFESTS[
-      family === "case_law" ? "case_law_v5" : "legislation_v2"
+      generation
     ].engine.indexConfig.doc_mapping.field_mappings.map(({ name }) => name),
   );
 
 test("case-law v5 emits exact attempt identity and one opening passage", () => {
-  const documents = buildCaseLawV5ProjectionDocuments({
+  const documents = buildCaseLawProjectionDocuments({
+    manifest: CORPUS_INDEX_MANIFESTS.case_law_v5,
     input: DATED_CASE_LAW_INPUT,
     payload: {
       text: `${"první ".repeat(400)}\n\n${"druhý ".repeat(400)}`,
@@ -89,13 +96,16 @@ test("case-law v5 emits exact attempt identity and one opening passage", () => {
     expect("title" in document).toBe(index === 0);
     expect("decision_year" in document).toBe(index === 0);
     expect(
-      Object.keys(document).every((key) => manifestFields("case_law").has(key)),
+      Object.keys(document).every((key) =>
+        manifestFields("case_law_v5").has(key),
+      ),
     ).toBe(true);
   }
 });
 
 test("case-law v5 omits a year for an undated decision", () => {
-  const [document] = buildCaseLawV5ProjectionDocuments({
+  const [document] = buildCaseLawProjectionDocuments({
+    manifest: CORPUS_INDEX_MANIFESTS.case_law_v5,
     input: CASE_LAW_INPUT,
     payload: { text: "Usnesení", ast: null },
     revision: REVISION,
@@ -133,7 +143,7 @@ test("legislation v2 emits one strict pointer-free document", () => {
   ]);
   expect(
     Object.keys(documents[0]).every((key) =>
-      manifestFields("legislation").has(key),
+      manifestFields("legislation_v2").has(key),
     ),
   ).toBe(true);
 });
@@ -141,6 +151,7 @@ test("legislation v2 emits one strict pointer-free document", () => {
 test("builder dispatch is exhaustive over manifest-owned versions", () => {
   expect(
     buildCorpusProjectionDocuments({
+      family: "case_law",
       manifest: CORPUS_INDEX_MANIFESTS.case_law_v5,
       input: CASE_LAW_INPUT,
       payload: { text: "Rozsudek", ast: null },
@@ -149,10 +160,200 @@ test("builder dispatch is exhaustive over manifest-owned versions", () => {
   ).toHaveLength(1);
   expect(
     buildCorpusProjectionDocuments({
+      family: "legislation",
       manifest: CORPUS_INDEX_MANIFESTS.legislation_v2,
       input: LEGISLATION_INPUT,
       payload: { text: "Zákon", ast: null },
       revision: REVISION,
     }),
   ).toHaveLength(1);
+});
+
+const SUMMARY_AST = {
+  version: 1,
+  source: {
+    system: "test",
+    documentId: "1",
+    webUrl: "https://example.test/1",
+    printUrl: "https://example.test/1.pdf",
+  },
+  metadata: {
+    caseNumber: null,
+    ecli: null,
+    court: null,
+    decisionDate: null,
+    decisionType: null,
+    keywords: [],
+    statutes: [],
+  },
+  blocks: [
+    {
+      id: "b1",
+      anchorId: "b1",
+      type: "paragraph",
+      role: "headnotes",
+      inlines: [{ type: "text", text: "Právní věta" }],
+      plainText: "Právní věta",
+    },
+    {
+      id: "b2",
+      anchorId: "b2",
+      type: "paragraph",
+      role: "argumentation",
+      inlines: [{ type: "text", text: "Odůvodnění" }],
+      plainText: "Odůvodnění",
+    },
+  ],
+} as const satisfies DocumentAst;
+
+test("v6 writes the publisher summary on the opening passage only", () => {
+  const documents = buildCaseLawProjectionDocuments({
+    manifest: CORPUS_INDEX_MANIFESTS.case_law_v6,
+    input: { ...CASE_LAW_INPUT, metadata: { legalArea: "Daně" } },
+    payload: {
+      text: `${"první ".repeat(400)}\n\n${"druhý ".repeat(400)}`,
+      ast: null,
+    },
+    revision: REVISION,
+  });
+
+  expect(documents.length).toBeGreaterThan(1);
+  // Metadata only, because this payload carries no AST.
+  expect(documents.at(0)).toMatchObject({ headnote: "Daně" });
+  for (const [index, document] of documents.entries()) {
+    expect("headnote" in document).toBe(index === 0);
+    expect(
+      Object.keys(document).every((key) =>
+        manifestFields("case_law_v6").has(key),
+      ),
+    ).toBe(true);
+  }
+});
+
+test("v6 prefers a marked apparatus paragraph to a metadata key", () => {
+  const [document] = buildCaseLawProjectionDocuments({
+    manifest: CORPUS_INDEX_MANIFESTS.case_law_v6,
+    input: { ...CASE_LAW_INPUT, metadata: { legalArea: "Daně" } },
+    payload: { text: "Právní věta\n\nOdůvodnění", ast: SUMMARY_AST },
+    revision: REVISION,
+  });
+
+  expect(document).toMatchObject({ headnote: "Právní věta" });
+});
+
+test("v5 never emits a field its strict mapping does not declare", () => {
+  const documents = buildCaseLawProjectionDocuments({
+    manifest: CORPUS_INDEX_MANIFESTS.case_law_v5,
+    input: { ...CASE_LAW_INPUT, metadata: { legalArea: "Daně" } },
+    payload: { text: "Právní věta", ast: SUMMARY_AST },
+    revision: REVISION,
+  });
+
+  for (const document of documents) {
+    expect("headnote" in document).toBe(false);
+    expect(
+      Object.keys(document).every((key) =>
+        manifestFields("case_law_v5").has(key),
+      ),
+    ).toBe(true);
+  }
+});
+
+test("v6 writes a stem beside each field a reader's words reach", () => {
+  const [document] = buildCaseLawProjectionDocuments({
+    manifest: CORPUS_INDEX_MANIFESTS.case_law_v6,
+    input: {
+      ...CASE_LAW_INPUT,
+      language: "cs",
+      metadata: { legalSentence: "Nájemního bytu se to netýká." },
+    },
+    payload: { text: "Nájemního bytu se to netýká.", ast: null },
+    revision: REVISION,
+  });
+
+  expect(document).toMatchObject({
+    text: "Nájemního bytu se to netýká.",
+    headnote: "Nájemního bytu se to netýká.",
+  });
+  // One stem per token, so the stem stream lines up with the surface stream
+  // and a stemmed phrase matches adjacently. Counted rather than compared to a
+  // pinned string: the assertion is the alignment, not this stemmer's output.
+  const tokenCount = (value: string | undefined): number =>
+    corpusTokens(value ?? "").length;
+
+  expect(tokenCount(document?.text_stem)).toBeGreaterThan(0);
+  expect(tokenCount(document?.text_stem)).toBe(tokenCount(document?.text));
+  expect(tokenCount(document?.headnote_stem)).toBe(
+    tokenCount(document?.headnote),
+  );
+  expect(
+    Object.keys(document ?? {}).every((key) =>
+      manifestFields("case_law_v6").has(key),
+    ),
+  ).toBe(true);
+});
+
+test("a language with no stemmer writes no stem field at all", () => {
+  const documents = buildCaseLawProjectionDocuments({
+    manifest: CORPUS_INDEX_MANIFESTS.case_law_v6,
+    input: {
+      ...CASE_LAW_INPUT,
+      language: "de",
+      metadata: { legalSentence: "Der Mietvertrag." },
+    },
+    payload: { text: "Der Mietvertrag wurde gekündigt.", ast: null },
+    revision: REVISION,
+  });
+
+  for (const document of documents) {
+    // Not an empty string under a stem name: a field the writer cannot fill
+    // is a field it does not emit.
+    expect("text_stem" in document).toBe(false);
+    expect("headnote_stem" in document).toBe(false);
+    expect("headnote" in document).toBe(true);
+  }
+});
+
+test("the summary stem is written to the opening passage only", () => {
+  const documents = buildCaseLawProjectionDocuments({
+    manifest: CORPUS_INDEX_MANIFESTS.case_law_v6,
+    input: {
+      ...CASE_LAW_INPUT,
+      language: "cs",
+      metadata: { legalSentence: "Právní věta." },
+    },
+    payload: {
+      text: `${"první ".repeat(400)}\n\n${"druhý ".repeat(400)}`,
+      ast: null,
+    },
+    revision: REVISION,
+  });
+
+  expect(documents.length).toBeGreaterThan(1);
+  for (const [index, document] of documents.entries()) {
+    expect("headnote_stem" in document).toBe(index === 0);
+    // The passage stem is per passage, beside that passage's own text.
+    expect("text_stem" in document).toBe(true);
+  }
+});
+
+test("v5 emits neither stem field", () => {
+  const documents = buildCaseLawProjectionDocuments({
+    manifest: CORPUS_INDEX_MANIFESTS.case_law_v5,
+    input: {
+      ...CASE_LAW_INPUT,
+      language: "cs",
+      metadata: { legalSentence: "Právní věta." },
+    },
+    payload: { text: "Nájemního bytu se to netýká.", ast: null },
+    revision: REVISION,
+  });
+
+  for (const document of documents) {
+    expect(
+      Object.keys(document).every((key) =>
+        manifestFields("case_law_v5").has(key),
+      ),
+    ).toBe(true);
+  }
 });

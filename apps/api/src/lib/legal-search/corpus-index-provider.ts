@@ -27,6 +27,7 @@ import {
   encodeCorpusIndexCursor,
   readCorpusIndexSearchPage,
 } from "@/api/lib/legal-search/corpus-index-pagination";
+import { caseLawCorpusQueryFields } from "@/api/lib/legal-search/corpus-index-read-contract";
 import { caseLawCorpusQuery } from "@/api/lib/legal-search/corpus-query";
 import { loadDocumentContext } from "@/api/lib/legal-search/document-context";
 import { resolveExpandedCorpusQuery } from "@/api/lib/legal-search/expansion";
@@ -157,11 +158,18 @@ const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
 
   // The jurisdiction also selects the expansion dictionary, which is why the
   // resolver takes it separately from the clause.
+  // The generation decides which fields exist to be named; the language
+  // filter, then the jurisdiction, decides how the reader's words are stemmed.
+  const { surfaceFields, stemming } = caseLawCorpusQueryFields({
+    generation,
+    jurisdiction: query.jurisdiction,
+    language: query.language,
+  });
   const engineQuery = await resolveExpandedCorpusQuery({
     build: (expand) =>
-      caseLawCorpusQuery(
-        query.query,
-        {
+      caseLawCorpusQuery({
+        text: query.query,
+        filters: {
           court: query.court,
           dateFrom: query.dateFrom,
           dateTo: query.dateTo,
@@ -171,7 +179,9 @@ const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
           source: query.source,
         },
         expand,
-      ),
+        stemming,
+        surfaceFields,
+      }),
     jurisdiction: query.jurisdiction,
     mode: envBase.QUERY_EXPANSION_MODE,
     text: query.query,

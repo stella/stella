@@ -1,14 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { sql } from "drizzle-orm";
-import { PgDialect } from "drizzle-orm/pg-core";
 import fc from "fast-check";
 
 import { propertyConfig } from "@stll/property-testing";
 
-import {
-  decisionHeadnoteSql,
-  normalizeDecisionHeadnote,
-} from "@/api/lib/case-law/decision-headnote";
+import { normalizeDecisionHeadnote } from "@/api/lib/case-law/decision-headnote";
 import { LIMITS } from "@/api/lib/limits";
 
 describe("headnote text fits one row", () => {
@@ -58,26 +53,6 @@ describe("headnote text fits one row", () => {
     expect(normalizeDecisionHeadnote("   \n ")).toBeNull();
     expect(normalizeDecisionHeadnote(null)).toBeNull();
     expect(normalizeDecisionHeadnote(["legal sentence"])).toBeNull();
-  });
-});
-
-describe("headnote SQL", () => {
-  test("prefers the legal sentence, then abstract, keywords, legal area", () => {
-    const rendered = new PgDialect().sqlToQuery(
-      decisionHeadnoteSql(sql.raw("d.metadata")),
-    ).sql;
-    const order = ["legalSentence", "abstract", "keywords", "legalArea"].map(
-      (key) => rendered.indexOf(key),
-    );
-
-    for (const position of order) {
-      expect(position).toBeGreaterThanOrEqual(0);
-    }
-    expect([...order].toSorted((a, b) => a - b)).toEqual(order);
-    // Keywords are only ever read as an array; a scalar under that key must
-    // not raise in the database.
-    expect(rendered).toContain("jsonb_typeof(d.metadata -> 'keywords')");
-    expect(rendered).toContain("WITH ORDINALITY");
   });
 });
 

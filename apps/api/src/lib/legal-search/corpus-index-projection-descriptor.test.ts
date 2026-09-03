@@ -2,9 +2,9 @@ import { expect, test } from "bun:test";
 
 import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
-  caseLawV5Title,
+  caseLawProjectionTitle,
   deriveCorpusIndexProjectionDescriptor,
-  type CaseLawV5ProjectionInput,
+  type CaseLawProjectionInput,
   type LegislationV2ProjectionInput,
 } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
 import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/lib/legal-search/corpus-storage";
@@ -27,7 +27,8 @@ const CASE_LAW_INPUT = {
   court: "Nejvyšší správní soud",
   decisionDate: "2008-02-27",
   ecli: null,
-} as const satisfies CaseLawV5ProjectionInput;
+  metadata: null,
+} as const satisfies CaseLawProjectionInput;
 
 const LEGISLATION_INPUT = {
   family: "legislation",
@@ -47,7 +48,7 @@ const LEGISLATION_INPUT = {
 } as const satisfies LegislationV2ProjectionInput;
 
 test("case-law title and fingerprint canonicalize identifier order", () => {
-  expect(caseLawV5Title(CASE_LAW_INPUT)).toBe(
+  expect(caseLawProjectionTitle(CASE_LAW_INPUT)).toBe(
     "4 As 3/2008 · NSS-4-AS-3-2008 — Nejvyšší správní soud",
   );
   const first = deriveCorpusIndexProjectionDescriptor(
@@ -127,4 +128,48 @@ test("manifest and projection families cannot be crossed", () => {
       CASE_LAW_INPUT,
     ),
   ).toThrow("Corpus projection family mismatch");
+});
+
+test("only a generation that indexes the summary fingerprints it", () => {
+  const withSummary = {
+    ...CASE_LAW_INPUT,
+    metadata: { legalSentence: "Právní věta" },
+  };
+
+  // v5 never writes the field, so a publisher editing the summary must not
+  // re-project the generation currently serving.
+  expect(
+    deriveCorpusIndexProjectionDescriptor(
+      CORPUS_INDEX_MANIFESTS.case_law_v5,
+      withSummary,
+    ),
+  ).toEqual(
+    deriveCorpusIndexProjectionDescriptor(
+      CORPUS_INDEX_MANIFESTS.case_law_v5,
+      CASE_LAW_INPUT,
+    ),
+  );
+  expect(
+    deriveCorpusIndexProjectionDescriptor(
+      CORPUS_INDEX_MANIFESTS.case_law_v6,
+      withSummary,
+    ),
+  ).not.toEqual(
+    deriveCorpusIndexProjectionDescriptor(
+      CORPUS_INDEX_MANIFESTS.case_law_v6,
+      CASE_LAW_INPUT,
+    ),
+  );
+  // A metadata key no source of the summary names changes nothing anywhere.
+  expect(
+    deriveCorpusIndexProjectionDescriptor(CORPUS_INDEX_MANIFESTS.case_law_v6, {
+      ...CASE_LAW_INPUT,
+      metadata: { unrelated: "bookkeeping" },
+    }),
+  ).toEqual(
+    deriveCorpusIndexProjectionDescriptor(
+      CORPUS_INDEX_MANIFESTS.case_law_v6,
+      CASE_LAW_INPUT,
+    ),
+  );
 });

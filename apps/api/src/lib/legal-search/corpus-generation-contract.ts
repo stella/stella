@@ -45,7 +45,7 @@ type FinalManifestGenerationByFamily = {
 };
 
 const FINAL_Q09_GENERATIONS = {
-  case_law: ["case_law_v5"],
+  case_law: ["case_law_v5", "case_law_v6"],
   legislation: ["legislation_v2"],
 } as const satisfies {
   [Family in CorpusFamily]: readonly FinalManifestGenerationByFamily[Family][];

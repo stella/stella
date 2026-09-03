@@ -348,6 +348,44 @@ export const DECISION_TIMESTAMP_FIELD = "decision_date_ts";
  */
 export const UNDATED_DECISION_TIMESTAMP = "1800-01-01";
 
+/**
+ * The index field carrying a decision's publisher summary: the publisher's
+ * own sentence about the case, from `publisher-summary.ts`. Its own field
+ * rather than a prefix of `text`, so a term matching the summary is a
+ * document-level hit that ranks and reads as one, and so `heading_path`'s
+ * problem cannot recur: it is written to the opening passage only, exactly
+ * like `title`, and therefore answers once per document.
+ *
+ * Not stored: the line a reader sees is read from Postgres, so a copy in the
+ * docstore would pay object-storage bytes for nothing.
+ *
+ * A generation carries it only if its manifest declares it. Adding the field
+ * to a mapping an index was already created with does nothing, and writing it
+ * into a `strict` index that never mapped it drops the whole document, so it
+ * arrives with a generation and never before one.
+ */
+export const PUBLISHER_SUMMARY_FIELD = "headnote";
+
+/**
+ * The stem companions of the two full-text fields a reader's words reach.
+ *
+ * The corpus languages inflect heavily, and the `folded` tokenizer only
+ * lowercases and folds diacritics: a query written in the nominative does not
+ * reach a judgment that carries the genitive, and a phrase can match only the
+ * exact surface forms it was typed in. These fields carry the same text
+ * reduced to stems, so a query stemmed the same way matches across the
+ * inflection.
+ *
+ * Companions rather than a replacement: the surface fields keep answering
+ * exactly what they answer today, and a stem clause is an alternative beside
+ * the surface clause, never instead of it. Not stored, because nothing reads
+ * them back; they exist to be matched.
+ */
+export const STEM_FIELD_OF = {
+  text: "text_stem",
+  [PUBLISHER_SUMMARY_FIELD]: "headnote_stem",
+} as const;
+
 const FAMILY_FIELDS: Record<CorpusFamily, CorpusIndexFieldMapping[]> = {
   case_law: [
     // The docket, exactly as the court wrote it. Raw-tokenized, so it answers

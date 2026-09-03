@@ -551,7 +551,7 @@ const storageAndIndexInvariantViolation = ({
     CORPUS_INDEX_Q09_SEARCH_ENDPOINT === undefined &&
     CORPUS_INDEX_Q09_ENDPOINT === undefined
   ) {
-    return "Serving case_law_v5 on q09 requires CORPUS_INDEX_Q09_SEARCH_ENDPOINT or CORPUS_INDEX_Q09_ENDPOINT.";
+    return `Serving ${LEGAL_SEARCH_INDEX_GENERATION} on q09 requires CORPUS_INDEX_Q09_SEARCH_ENDPOINT or CORPUS_INDEX_Q09_ENDPOINT.`;
   }
   if (CORPUS_INDEXING_ENABLED && CORPUS_INDEX_ENDPOINT === undefined) {
     return "Corpus indexing requires CORPUS_INDEX_ENDPOINT for legislation_v1 on q08.";
@@ -561,7 +561,7 @@ const storageAndIndexInvariantViolation = ({
     caseLawCluster === "q09" &&
     CORPUS_INDEX_Q09_ENDPOINT === undefined
   ) {
-    return "Indexing case_law_v5 on q09 requires CORPUS_INDEX_Q09_ENDPOINT.";
+    return `Indexing ${LEGAL_SEARCH_INDEX_GENERATION} on q09 requires CORPUS_INDEX_Q09_ENDPOINT.`;
   }
   if (
     CORPUS_INDEXING_ENABLED !== (CORPUS_PROJECTION_OWNER === "embedded") &&

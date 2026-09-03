@@ -1,7 +1,9 @@
 import { expect, test } from "bun:test";
 
 import {
+  CORPUS_QUERY_LEAF_BUDGET,
   caseLawCorpusQuery,
+  type CorpusStemming,
   corpusFreeTextClause,
   quoteCorpusValue,
   tokenizeCorpusFreeText,
@@ -200,14 +202,17 @@ test("the clause is exactly the tokenization, quoted and ANDed", () => {
 
 test("the assembler ANDs filter clauses onto the free-text clause", () => {
   expect(
-    caseLawCorpusQuery('"náhrada škody"', {
-      court: "Nejvyšší soud",
-      dateFrom: "2020-01-01",
-      dateTo: "2024-12-31",
-      documentType: "rozsudek",
-      jurisdiction: "CZE",
-      language: "cs",
-      source: "7449df27-2067-4827-b22f-3091f564ae50",
+    caseLawCorpusQuery({
+      text: '"náhrada škody"',
+      filters: {
+        court: "Nejvyšší soud",
+        dateFrom: "2020-01-01",
+        dateTo: "2024-12-31",
+        documentType: "rozsudek",
+        jurisdiction: "CZE",
+        language: "cs",
+        source: "7449df27-2067-4827-b22f-3091f564ae50",
+      },
     }),
   ).toBe(
     '("náhrada škody")' +
@@ -221,31 +226,162 @@ test("the assembler ANDs filter clauses onto the free-text clause", () => {
 });
 
 test("an open-ended date range keeps the wildcard bound", () => {
-  expect(caseLawCorpusQuery("smlouva", { dateFrom: "2020-01-01" })).toBe(
-    '("smlouva") AND decision_date:[2020-01-01 TO *]',
-  );
-  expect(caseLawCorpusQuery("smlouva", { dateTo: "2020-01-01" })).toBe(
-    '("smlouva") AND decision_date:[* TO 2020-01-01]',
-  );
+  expect(
+    caseLawCorpusQuery({
+      text: "smlouva",
+      filters: { dateFrom: "2020-01-01" },
+    }),
+  ).toBe('("smlouva") AND decision_date:[2020-01-01 TO *]');
+  expect(
+    caseLawCorpusQuery({
+      text: "smlouva",
+      filters: { dateTo: "2020-01-01" },
+    }),
+  ).toBe('("smlouva") AND decision_date:[* TO 2020-01-01]');
 });
 
 test("no filters leaves the free-text clause alone", () => {
-  expect(caseLawCorpusQuery("smlouva", {})).toBe('("smlouva")');
+  expect(caseLawCorpusQuery({ text: "smlouva", filters: {} })).toBe(
+    '("smlouva")',
+  );
 });
 
 test("text without a searchable term yields no query", () => {
-  expect(caseLawCorpusQuery("?!()", { court: "Nejvyšší soud" })).toBeNull();
-  expect(caseLawCorpusQuery('""', {})).toBeNull();
+  expect(
+    caseLawCorpusQuery({
+      text: "?!()",
+      filters: { court: "Nejvyšší soud" },
+    }),
+  ).toBeNull();
+  expect(caseLawCorpusQuery({ text: '""', filters: {} })).toBeNull();
 });
 
 // A filter value reaching the engine unescaped would let a caller that does
 // not validate its inputs (the provider takes them straight from its caller)
 // close the clause and append DSL of its own.
 test("filter values cannot close their clause", () => {
-  expect(caseLawCorpusQuery("smlouva", { court: 'X" OR text:*' })).toBe(
-    '("smlouva") AND court:"X\\" OR text:*"',
+  expect(
+    caseLawCorpusQuery({
+      text: "smlouva",
+      filters: { court: 'X" OR text:*' },
+    }),
+  ).toBe('("smlouva") AND court:"X\\" OR text:*"');
+  expect(
+    caseLawCorpusQuery({
+      text: "smlouva",
+      filters: { language: "cs\\" },
+    }),
+  ).toBe('("smlouva") AND language:"cs\\\\"');
+});
+
+const CS_STEMMING = {
+  language: "cs",
+  fields: ["text_stem", "headnote_stem"],
+} as const satisfies CorpusStemming;
+
+test("a term carries a stem alternative beside the word as typed", () => {
+  // The surface leaf is unscoped and still reaches every default field; the
+  // stem leaves name their fields, because a bare term must never be matched
+  // against a spelling the reader did not write.
+  expect(corpusFreeTextClause("nájemního", { stemming: CS_STEMMING })).toBe(
+    '(("nájemního" OR text_stem:"nájemn" OR headnote_stem:"nájemn"))',
   );
-  expect(caseLawCorpusQuery("smlouva", { language: "cs\\" })).toBe(
-    '("smlouva") AND language:"cs\\\\"',
+});
+
+test("an extra surface field is named, never reached by a bare term", () => {
+  expect(
+    corpusFreeTextClause("nájemního", { surfaceFields: ["headnote"] }),
+  ).toBe('(("nájemního" OR headnote:"nájemního"))');
+  expect(
+    corpusFreeTextClause('"nájemního bytu"', { surfaceFields: ["headnote"] }),
+  ).toBe('(("nájemního bytu" OR headnote:"nájemního bytu"))');
+});
+
+/**
+ * The research answer runner hands every hit's stored `text` to the answer
+ * model as the excerpt that matched, so its retrieval must never match a field
+ * written to one passage of a document: a summary-only hit would return the
+ * opening passage with text that does not carry the terms. It builds its
+ * clause with no extra fields, and the index's default fields no longer carry
+ * the summary, so neither half can reach one.
+ */
+test("a clause built with no extra fields names no field at all", () => {
+  const clause = corpusFreeTextClause("nájemního bytu");
+
+  expect(clause).toBe('("nájemního" AND "bytu")');
+  expect(clause).not.toContain("headnote");
+  expect(clause).not.toContain("_stem");
+});
+
+test("the decisions query names the summary where its generation maps one", () => {
+  const decisions = caseLawCorpusQuery({
+    text: "nájemního",
+    filters: { jurisdiction: "CZE" },
+    surfaceFields: ["headnote"],
+    stemming: CS_STEMMING,
+  });
+
+  expect(decisions).toContain('headnote:"nájemního"');
+  expect(decisions).toContain('headnote_stem:"nájemn"');
+  // The same query for a generation that maps neither is what it is today.
+  expect(
+    caseLawCorpusQuery({ text: "nájemního", filters: { jurisdiction: "CZE" } }),
+  ).toBe('("nájemního") AND jurisdiction:"CZE"');
+});
+
+test("a phrase carries a stemmed phrase, word for word", () => {
+  // Stems joined by single spaces, so the stemmed phrase is as adjacent as
+  // the surface phrase: two words in, two stems out.
+  expect(
+    corpusFreeTextClause('"nájemního bytu"', { stemming: CS_STEMMING }),
+  ).toBe(
+    '(("nájemního bytu" OR text_stem:"nájemn byt" OR headnote_stem:"nájemn byt"))',
   );
+});
+
+test("stem clauses compose with expansion rather than replacing it", () => {
+  const clause = corpusFreeTextClause("nájemné", {
+    expand: () => ["nájemného"],
+    stemming: CS_STEMMING,
+  });
+
+  expect(clause).toBe(
+    '(("nájemné" OR "nájemného" OR text_stem:"nájemn" OR headnote_stem:"nájemn"))',
+  );
+});
+
+test("a generation without extra fields gets the query it gets today", () => {
+  for (const text of [
+    "náhrada škody",
+    '"dobrá víra" a "náhrada škody"',
+    "§ 2235 odst. 1",
+  ]) {
+    expect(
+      corpusFreeTextClause(text, { stemming: null, surfaceFields: [] }),
+    ).toBe(corpusFreeTextClause(text));
+    expect(caseLawCorpusQuery({ text, filters: { jurisdiction: "CZE" } })).toBe(
+      caseLawCorpusQuery({
+        text,
+        filters: { jurisdiction: "CZE" },
+        stemming: null,
+      }),
+    );
+  }
+});
+
+test("text that stems to nothing carries no stem leaf", () => {
+  // Digits tokenize but stem to themselves, so the leaf is still worth
+  // emitting; text with no token at all yields no clause in the first place.
+  expect(corpusFreeTextClause("§ ()", { stemming: CS_STEMMING })).toBeNull();
+});
+
+test("the leaf budget counts stem leaves too", () => {
+  const clause = corpusFreeTextClause(
+    "nájemního nájemního nájemního nájemního nájemního nájemního nájemního nájemního",
+    { stemming: CS_STEMMING },
+  );
+
+  expect(clause).not.toBeNull();
+  const leaves = [...(clause ?? "").matchAll(/"/gu)].length / 2;
+  expect(leaves).toBeLessThanOrEqual(CORPUS_QUERY_LEAF_BUDGET);
 });

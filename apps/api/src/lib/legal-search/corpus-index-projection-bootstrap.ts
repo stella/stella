@@ -107,6 +107,7 @@ type BootstrapCaseLawRow = {
   court: string;
   decisionDate: string | null;
   ecli: string | null;
+  metadata: Record<string, unknown> | null;
   projectionEpoch: bigint;
 };
 
@@ -262,6 +263,7 @@ const bootstrapCaseLaw = async (
       court: caseLawDecisions.court,
       decisionDate: caseLawDecisions.decisionDate,
       ecli: caseLawDecisions.ecli,
+      metadata: caseLawDecisions.metadata,
       projectionEpoch: caseLawDecisions.projectionEpoch,
     })
     .from(caseLawDecisions)
@@ -371,6 +373,7 @@ const bootstrapCaseLaw = async (
         court: row.court,
         decisionDate: row.decisionDate,
         ecli: row.ecli,
+        metadata: row.metadata,
       }),
     }),
   );
