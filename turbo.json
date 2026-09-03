@@ -91,6 +91,25 @@
         "$TURBO_ROOT$/types/**"
       ]
     },
+    "@stll/landing#lint": {
+      // Astro check generates the content types consumed by type-aware Oxlint.
+      // Running a second astro sync concurrently races on the same temp file.
+      "dependsOn": ["typecheck"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/.npmrc",
+        "$TURBO_ROOT$/bunfig.toml",
+        "$TURBO_ROOT$/package.json",
+        "$TURBO_ROOT$/bun.lock",
+        "$TURBO_ROOT$/oxlint.config.ts",
+        "$TURBO_ROOT$/oxlint.result-boundary.config.ts",
+        "$TURBO_ROOT$/.oxlint-plugins/**",
+        "$TURBO_ROOT$/packages/typescript-config/**",
+        "$TURBO_ROOT$/patches/**",
+        "$TURBO_ROOT$/tsconfig.tooling.json",
+        "$TURBO_ROOT$/types/**"
+      ]
+    },
     "lint:fix": {
       "dependsOn": ["transit"],
       "inputs": [

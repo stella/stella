@@ -417,16 +417,43 @@ describe("Turbo cache input contract", () => {
     );
   });
 
+  test("landing generates Astro types once before type-aware lint", () => {
+    const landingPackage = JSON.parse(
+      readFileSync("apps/landing/package.json", "utf-8"),
+    );
+    expect(landingPackage.scripts.lint).not.toContain("astro sync");
+
+    const turboConfig = readFileSync("turbo.json", "utf-8");
+    const landingLintStart = turboConfig.indexOf('    "@stll/landing#lint":');
+    const lintFixStart = turboConfig.indexOf('    "lint:fix":');
+    expect(landingLintStart).toBeGreaterThan(-1);
+    expect(lintFixStart).toBeGreaterThan(landingLintStart);
+    const landingLintConfig = turboConfig.slice(landingLintStart, lintFixStart);
+    expect(landingLintConfig).toContain('"dependsOn": ["typecheck"]');
+
+    const rootInputs = [
+      ...landingLintConfig.matchAll(/"(\$TURBO_ROOT\$\/[^"\n]+)"/gu),
+    ]
+      .map((match) => match.at(1))
+      .filter((input) => input !== undefined)
+      .sort();
+    expect(rootInputs).toEqual(
+      [...ALL_WORKSPACE_CACHE_INPUTS, ...LINT_ONLY_CACHE_INPUTS].sort(),
+    );
+  });
+
   test("keeps planner-wide inputs exactly aligned with their Turbo tasks", () => {
     const turboConfig = readFileSync("turbo.json", "utf-8");
     const typecheckStart = turboConfig.indexOf('    "typecheck":');
     const rootTypecheckStart = turboConfig.indexOf('    "//#typecheck:repo":');
     const lintStart = turboConfig.indexOf('    "lint":');
+    const landingLintStart = turboConfig.indexOf('    "@stll/landing#lint":');
     const lintFixStart = turboConfig.indexOf('    "lint:fix":');
     expect(typecheckStart).toBeGreaterThan(-1);
     expect(rootTypecheckStart).toBeGreaterThan(typecheckStart);
     expect(lintStart).toBeGreaterThan(rootTypecheckStart);
-    expect(lintFixStart).toBeGreaterThan(lintStart);
+    expect(landingLintStart).toBeGreaterThan(lintStart);
+    expect(lintFixStart).toBeGreaterThan(landingLintStart);
     const typecheckConfig = turboConfig.slice(
       typecheckStart,
       rootTypecheckStart,
@@ -435,7 +462,7 @@ describe("Turbo cache input contract", () => {
       rootTypecheckStart,
       lintStart,
     );
-    const lintConfig = turboConfig.slice(lintStart, lintFixStart);
+    const lintConfig = turboConfig.slice(lintStart, landingLintStart);
     const rootInputs = (taskConfig: string) =>
       [...taskConfig.matchAll(/"(\$TURBO_ROOT\$\/[^"\n]+)"/gu)]
         .map((match) => match.at(1))
