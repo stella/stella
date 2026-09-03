@@ -486,3 +486,19 @@ test("only a generation that maps the stem fields reports them", () => {
     ]).toEqual([true, true]);
   }
 });
+
+test("which language fills a stem field is projection content, not index identity", () => {
+  // The stem field *names* are physical schema and are digested. Which
+  // algorithm stems the text into them is decided per document and per
+  // request, outside the manifest, so changing that mapping changes what a
+  // rebuild writes and never what the generation is: the digest every
+  // projection fingerprint derives from must not move, or the whole corpus
+  // re-projects.
+  expect(corpusIndexStemFields(CORPUS_INDEX_MANIFESTS.case_law_v6)).toEqual({
+    text: "text_stem",
+    publisherSummary: "headnote_stem",
+  });
+  expect(corpusIndexManifestDigest(CORPUS_INDEX_MANIFESTS.case_law_v6)).toBe(
+    EXPECTED_DIGESTS.case_law_v6,
+  );
+});

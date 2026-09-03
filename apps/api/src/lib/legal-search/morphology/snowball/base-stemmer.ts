@@ -48,6 +48,15 @@
 import { panic } from "better-result";
 
 /**
+ * The Snowball release every generated stemmer in this directory, and this
+ * hand-port of its runtime, was cut from. The regeneration script clones this
+ * tag rather than carrying a second copy of it, and the projection folds it
+ * into what a stemmed generation fingerprints, so a release upgrade
+ * re-projects the stems it changes.
+ */
+export const SNOWBALL_RELEASE = "v3.1.1";
+
+/**
  * SHA-256 of upstream `javascript/base-stemmer.js` at the pinned tag. The
  * regeneration script compares the upstream file against this digest so an
  * upstream runtime change cannot land silently while this port stays put.

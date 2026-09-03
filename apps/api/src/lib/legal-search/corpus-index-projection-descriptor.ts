@@ -7,9 +7,11 @@ import {
   corpusIndexIdFromManifest,
   corpusIndexManifestDigest,
   corpusIndexPublisherSummaryField,
+  corpusIndexStemFields,
   type CorpusIndexManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/lib/legal-search/corpus-storage";
+import { MORPHOLOGY_VERSION } from "@/api/lib/legal-search/morphology/stem";
 
 type ProjectionInputBase = {
   documentId: string;
@@ -107,6 +109,16 @@ export const deriveCorpusIndexProjectionDescriptor = (
   }
 
   const indexId = corpusIndexIdFromManifest(manifest, input.jurisdiction);
+  // The manifest digest pins the stem *fields*; the algorithms filling them
+  // live outside it, so a new language or a Snowball upgrade would otherwise
+  // leave already-projected documents holding stems the read path no longer
+  // asks for. A generation that writes stem fields folds the stemmer set in
+  // and re-projects when it moves; one that writes none keeps the
+  // fingerprints it already has.
+  const morphology =
+    corpusIndexStemFields(manifest) === null
+      ? {}
+      : { morphology: MORPHOLOGY_VERSION };
   const common = {
     contract: "corpus-index-projection-v1",
     manifestDigest: corpusIndexManifestDigest(manifest),
@@ -118,6 +130,7 @@ export const deriveCorpusIndexProjectionDescriptor = (
     language: input.language,
     documentType: input.documentType,
     redistributionEligible: true,
+    ...morphology,
   } as const;
 
   switch (input.family) {

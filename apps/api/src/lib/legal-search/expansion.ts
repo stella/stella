@@ -51,18 +51,34 @@ import { readCorpusS3BytesBounded } from "@/api/lib/s3";
  * Whether a language's dictionary payload exists to be read.
  *
  * Expansion needs one and stemming does not, which is the whole difference
- * between this and `corpusMorphologyLanguage`: Slovak has a stemmer but no
- * published dictionary, so pointing a Slovak search at it would pay a pointer
- * read that can only miss. Publishing the payload and flipping this one entry
- * enables expansion for it.
+ * between this and `corpusMorphologyLanguage`: most stemmable languages have
+ * no published dictionary, so pointing their searches at one would pay a
+ * pointer read that can only miss. Publishing the payload and flipping that
+ * language's entry enables expansion for it.
  *
  * Total, so a language added to the stemmer has to answer this too rather
  * than silently inheriting a dictionary it has none of.
  */
 const EXPANSION_DICTIONARY = {
   cs: "published",
+  da: "unpublished",
+  de: "unpublished",
+  el: "unpublished",
+  en: "unpublished",
+  es: "unpublished",
+  et: "unpublished",
+  fi: "unpublished",
+  fr: "unpublished",
+  ga: "unpublished",
+  hu: "unpublished",
+  it: "unpublished",
+  lt: "unpublished",
+  nl: "unpublished",
   pl: "published",
+  pt: "unpublished",
+  ro: "unpublished",
   sk: "unpublished",
+  sv: "unpublished",
 } as const satisfies Record<MorphologyLanguage, "published" | "unpublished">;
 
 /**

@@ -4,6 +4,7 @@ import {
   caseLawCorpusQueryFields,
   corpusIndexReadContract,
 } from "@/api/lib/legal-search/corpus-index-read-contract";
+import { corpusFreeTextClause } from "@/api/lib/legal-search/corpus-query";
 
 test("legacy and final case-law reads use their declared schema", () => {
   expect(corpusIndexReadContract("case_law", "case_law_v4")).toEqual({
@@ -72,10 +73,12 @@ test("extra fields and stemming both need a generation that maps them", () => {
       language: undefined,
     }),
   ).toEqual({ surfaceFields: [], stemming: null });
+  // The European index carries 24 languages under one jurisdiction, so the
+  // jurisdiction alone names none of them.
   expect(
     caseLawCorpusQueryFields({
       generation: "case_law_v6",
-      jurisdiction: "AUT",
+      jurisdiction: "EU",
       language: undefined,
     }).stemming,
   ).toBeNull();
@@ -116,7 +119,27 @@ test("the language filter, not the jurisdiction, decides how words stem", () => 
     fields: ["text_stem", "headnote_stem"],
   });
   expect(stemmingOf("CZE", "pl")?.language).toBe("pl");
+  // Austria publishes in German, so an unfiltered Austrian search stems the
+  // reader's words the way the projection stemmed the decisions.
+  expect(stemmingOf("AUT", undefined)?.language).toBe("de");
   // A language no stemmer covers yields none, rather than falling back to the
   // jurisdiction's and stemming against a language the documents are not in.
-  expect(stemmingOf("CZE", "de")).toBeNull();
+  // Snowball ships no Bulgarian algorithm.
+  expect(stemmingOf("CZE", "bg")).toBeNull();
+});
+
+test("a request filtered to German queries the German stems the projection wrote", () => {
+  // End to end from the request's language filter to the leaves the engine
+  // sees, because the two sides only agree if they pick the same algorithm:
+  // the projection stems an Austrian decision with German, so a German
+  // filtered query has to emit the same stem.
+  const { stemming } = caseLawCorpusQueryFields({
+    generation: "case_law_v6",
+    jurisdiction: "AUT",
+    language: "de",
+  });
+
+  expect(corpusFreeTextClause("Mietverträge", { stemming })).toBe(
+    '(("Mietverträge" OR text_stem:"mietvertrag" OR headnote_stem:"mietvertrag"))',
+  );
 });

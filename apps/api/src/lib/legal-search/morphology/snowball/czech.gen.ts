@@ -10,8 +10,9 @@
  *
  * The generator emits JavaScript; the committed module is that output with
  * mechanical, script-applied edits only (module header, named export, type
- * annotations the repo's strict TypeScript settings require, and total
- * substitution-table reads). No algorithm logic is edited.
+ * annotations the repo's strict TypeScript settings require, total
+ * substitution-table reads, and the removal of labels nothing jumps to).
+ * No algorithm logic is edited.
  *
  * Copyright (c) 2001, Dr Martin Porter
  * Copyright (c) 2004,2005, Richard Boulton

@@ -7,9 +7,13 @@
 # last 100) of the official reference vocabulary:
 #   https://github.com/snowballstem/snowball-data @ a0ec0d0a2839ec885878868de20fcb63209d92b0
 #   polish/voc.txt -> polish/output.txt
-# produced by Snowball v3.1.1. 2695 pairs.
+# produced by Snowball v3.1.1.
 #
-# Format: <word>\t<stem>, one pair per line.
+# Format: <word>\t<stem>, one pair per line. The reader checks the row count
+# against the declaration below, so a truncated fixture fails loudly instead
+# of passing a thinner vocabulary.
+#
+# pairs: 2695
 #
 # The vocabularies are derived from third-party corpora; see
 # polish/COPYING upstream for their licence terms. The Snowball

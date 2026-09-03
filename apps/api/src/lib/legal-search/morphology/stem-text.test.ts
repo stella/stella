@@ -14,6 +14,8 @@ const SAMPLES = [
   "  Přezkoumání   rozhodnutí\tsprávního\norgánu  ",
   "Odstąpienie od umowy najmu lokalu mieszkalnego.",
   "Rozhodnutie odvolacieho súdu o náhrade škody.",
+  "Der Mietvertrag wurde auf bestimmte Zeit geschlossen.",
+  "L'arrêt de la Cour de justice concernant l'exécution.",
 ];
 
 /**
@@ -53,9 +55,9 @@ test("a jurisdiction and a document resolve their own language", () => {
   expect(corpusMorphologyLanguage("CZE")).toBe("cs");
   expect(corpusMorphologyLanguage("svk")).toBe("sk");
   expect(corpusMorphologyLanguage("POL")).toBe("pl");
-  // German, and 24 languages under one jurisdiction: neither has one language
-  // to stem against.
-  expect(corpusMorphologyLanguage("AUT")).toBeNull();
+  expect(corpusMorphologyLanguage("AUT")).toBe("de");
+  // 24 languages under one jurisdiction: no one language to stem against, so
+  // a European search stems only when the request names a language.
   expect(corpusMorphologyLanguage("EU")).toBeNull();
   expect(corpusMorphologyLanguage("XXX")).toBeNull();
   // An unscoped search spans every jurisdiction of a generation.
@@ -63,7 +65,10 @@ test("a jurisdiction and a document resolve their own language", () => {
 
   expect(documentMorphologyLanguage("cs")).toBe("cs");
   expect(documentMorphologyLanguage("SK")).toBe("sk");
-  expect(documentMorphologyLanguage("de")).toBeNull();
+  expect(documentMorphologyLanguage("de")).toBe("de");
+  expect(documentMorphologyLanguage("fr")).toBe("fr");
+  // Snowball has no Bulgarian algorithm, so its text goes unstemmed.
+  expect(documentMorphologyLanguage("bg")).toBeNull();
   expect(documentMorphologyLanguage("")).toBeNull();
 });
 

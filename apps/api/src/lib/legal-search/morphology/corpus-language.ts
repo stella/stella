@@ -17,12 +17,12 @@ import {
  * would index stems nothing ever queries.
  *
  * Total over the declared jurisdictions, so a new corpus has to answer rather
- * than inherit a null. Austria is German and the European index carries 24
- * languages under one jurisdiction, so neither has one language to stem
- * against.
+ * than inherit a null. The European index carries 24 languages under one
+ * jurisdiction, so it has no one language to stem against and its queries
+ * stem only when the request names a language.
  */
 const CORPUS_MORPHOLOGY_LANGUAGE_BY_JURISDICTION = {
-  AUT: null,
+  AUT: "de",
   CZE: "cs",
   EU: null,
   POL: "pl",

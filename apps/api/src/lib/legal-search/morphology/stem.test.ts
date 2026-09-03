@@ -8,8 +8,10 @@ import {
 
 /**
  * One legal paradigm per language, chosen so a stemmer that silently became
- * an identity function (a broken generated module, a dispatch wired to the
- * wrong language) fails here.
+ * an identity function (a broken generated module) fails here, and so no two
+ * languages produce the same stems for it: a dispatch wired to a neighbouring
+ * algorithm has to show up somewhere, and the test below holds the table to
+ * that.
  */
 const PARADIGMS = {
   cs: [
@@ -18,17 +20,113 @@ const PARADIGMS = {
     ["žalobě", "žalob"],
     ["soudu", "soud"],
   ],
+  da: [
+    ["dommene", "dom"],
+    ["afgørelsen", "afgør"],
+    ["kontrakter", "kontrak"],
+    ["domstolene", "domstol"],
+  ],
+  de: [
+    ["urteile", "urteil"],
+    ["verträge", "vertrag"],
+    ["gerichten", "gericht"],
+    ["klagen", "klag"],
+  ],
+  el: [
+    ["δικαστηρίου", "δικαστηρ"],
+    ["αποφάσεις", "αποφασ"],
+    ["συμβάσεις", "συμβασ"],
+    ["προσφυγές", "προσφυγ"],
+  ],
+  en: [
+    ["judgments", "judgment"],
+    ["liabilities", "liabil"],
+    ["proceedings", "proceed"],
+    ["enforceable", "enforc"],
+  ],
+  es: [
+    ["sentencias", "sentenci"],
+    ["contratos", "contrat"],
+    ["tribunales", "tribunal"],
+    ["demandas", "demand"],
+  ],
+  et: [
+    ["kohtuotsused", "kohtuotsuse"],
+    ["lepingud", "lepingu"],
+    ["kohtutes", "koh"],
+    ["hagid", "hagi"],
+  ],
+  fi: [
+    ["tuomioistuimet", "tuomioistuim"],
+    ["sopimukset", "sopimuks"],
+    ["tuomiot", "tuomio"],
+    ["kanteet", "kant"],
+  ],
+  fr: [
+    ["jugements", "jug"],
+    ["contrats", "contrat"],
+    ["tribunaux", "tribunal"],
+    ["requêtes", "requêt"],
+  ],
+  ga: [
+    ["reachtaíochta", "reacht"],
+    ["comhaontachta", "comhaont"],
+    ["coirpiúlacht", "coirpiúl"],
+    ["cúirteanna", "cúirteanna"],
+  ],
+  hu: [
+    ["bíróságok", "bíróság"],
+    ["szerződések", "szerződés"],
+    ["ítéletek", "ítélet"],
+    ["keresetek", "kereset"],
+  ],
+  it: [
+    ["sentenze", "sentenz"],
+    ["impugnazioni", "impugn"],
+    ["risarcimento", "risarc"],
+    ["tribunali", "tribunal"],
+  ],
+  lt: [
+    ["teismai", "teism"],
+    ["sutartys", "sutart"],
+    ["sprendimai", "sprendim"],
+    ["ieškiniai", "ieškin"],
+  ],
+  nl: [
+    ["vonnissen", "vonnis"],
+    ["overeenkomsten", "overeenkomst"],
+    ["rechtbanken", "rechtbank"],
+    ["vorderingen", "vorder"],
+  ],
   pl: [
     ["wyroku", "wyrok"],
     ["umowy", "umow"],
     ["sądu", "sąd"],
     ["skargi", "skarg"],
   ],
+  pt: [
+    ["sentenças", "sentenc"],
+    ["contratos", "contrat"],
+    ["tribunais", "tribun"],
+    ["recursos", "recurs"],
+  ],
+  ro: [
+    ["hotărâri", "hotărâr"],
+    ["judecătorești", "judecător"],
+    ["instanțe", "instanț"],
+    ["acțiuni", "acțiun"],
+  ],
   sk: [
     ["rozsudkom", "rozsudk"],
     ["zmluvy", "zmluv"],
     ["žalobami", "žalob"],
     ["súdoch", "súd"],
+  ],
+  sv: [
+    ["domarna", "dom"],
+    ["avtalen", "avtal"],
+    ["domstolar", "domstol"],
+    ["överklaganden", "överklag"],
   ],
 } as const satisfies Record<
   (typeof MORPHOLOGY_LANGUAGES)[number],
@@ -42,6 +140,22 @@ describe("stemLegalTerm", () => {
     expect<readonly string[]>(Object.keys(PARADIGMS).toSorted()).toEqual(
       [...MORPHOLOGY_LANGUAGES].toSorted(),
     );
+  });
+
+  test("each paradigm identifies the algorithm it is meant to exercise", () => {
+    // Without this, a language whose paradigm another stemmer reproduces
+    // would pass its own test while dispatching to the wrong algorithm.
+    const indistinguishable = MORPHOLOGY_LANGUAGES.flatMap((language) => {
+      const stems = (other: (typeof MORPHOLOGY_LANGUAGES)[number]) =>
+        PARADIGMS[language]
+          .map(([word]) => stemLegalTerm(word, other))
+          .join(" ");
+      return MORPHOLOGY_LANGUAGES.filter(
+        (other) => other !== language && stems(other) === stems(language),
+      ).map((other) => `${language} stems exactly like ${other}`);
+    });
+
+    expect<readonly string[]>(indistinguishable).toEqual([]);
   });
 
   for (const language of MORPHOLOGY_LANGUAGES) {
@@ -71,6 +185,15 @@ describe("stemLegalTerm", () => {
       );
     });
   }
+
+  test("a term an algorithm strips entirely still yields a stem", () => {
+    // Estonian, Finnish and Lithuanian treat an apostrophe as ignorable and
+    // stem it away completely. The stem stream stands in for the surface
+    // stream position by position, so a token may never vanish from it.
+    for (const language of MORPHOLOGY_LANGUAGES) {
+      expect<string>(stemLegalTerm("'", language)).toBe("'");
+    }
+  });
 
   test("a decomposed term stems exactly like its precomposed form", () => {
     // The suffix tables hold precomposed code points, and toLowerCase()
