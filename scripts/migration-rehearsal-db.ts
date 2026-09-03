@@ -18,8 +18,10 @@
 //     held open for a moment, over and over, until the process is killed.
 //     A DDL statement that waits a single short lock_timeout for ACCESS
 //     EXCLUSIVE on such a table fails against this, as it does in
-//     production; one that retries wins a gap. Never run this against a
-//     database that matters.
+//     production; one that retries wins a gap. Prints CONTENTION_HELD_LINE
+//     once the first transaction holds its locks, so a caller can wait for
+//     that before it starts the work under test, and exits non-zero if a
+//     write fails. Never run this against a database that matters.
 
 import { SQL } from "bun";
 
@@ -48,6 +50,8 @@ type DigestRow = { digest: string };
 
 /** How long each contending transaction holds its row lock. */
 const CONTENTION_HOLD_MS = 1500;
+/** Printed once the first contending transaction holds its locks. */
+const CONTENTION_HELD_LINE = "contending: locks held";
 /** Tables production's workers write to continuously, with a no-op touch. */
 const CONTENDED_UPDATES = [
   "UPDATE case_law_decisions SET updated_at = updated_at WHERE id = (SELECT id FROM case_law_decisions ORDER BY id LIMIT 1)",
@@ -57,13 +61,21 @@ const CONTENDED_UPDATES = [
 /**
  * One held transaction after another, until the process is killed.
  * Recursive rather than a loop with an awaited body: each transaction must
- * commit before the next begins, so the sequencing is structural.
+ * commit before the next begins, so the sequencing is structural. The
+ * readiness line goes out after the first transaction's updates have
+ * acquired their locks, never before.
  */
-const contendForever = async (connection: SQL): Promise<never> => {
+const contendForever = async (
+  connection: SQL,
+  announced = false,
+): Promise<never> => {
   await connection.unsafe(`BEGIN; ${CONTENDED_UPDATES.join("; ")};`);
+  if (!announced) {
+    console.log(CONTENTION_HELD_LINE);
+  }
   await Bun.sleep(CONTENTION_HOLD_MS);
   await connection.unsafe("COMMIT");
-  return await contendForever(connection);
+  return await contendForever(connection, true);
 };
 
 const client = new SQL({ url, max: 1, connectionTimeout: 30 });
@@ -81,7 +93,6 @@ try {
   await client.unsafe("SET statement_timeout = '10min'");
 
   if (command === "contend") {
-    console.log("contending for the corpus tables until killed");
     await contendForever(client);
   }
 

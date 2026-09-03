@@ -111,16 +111,36 @@ seed_started="$(date +%s)"
 (cd "$repo_root/apps/api" && bun run src/scripts/seed-migration-rehearsal.ts "${seed_args[@]}")
 seed_seconds=$(( $(date +%s) - seed_started ))
 
+# The writer must hold its locks before the upgrade starts, and must still
+# be running when it ends: an upgrade that ran without contention proves
+# nothing about lock waits.
 log "Starting the contending writer"
-bun "$repo_root/scripts/migration-rehearsal-db.ts" contend &
+contender_log="$(mktemp)"
+bun "$repo_root/scripts/migration-rehearsal-db.ts" contend >"$contender_log" 2>&1 &
 contender_pid=$!
 stop_contender() {
   if kill -0 "$contender_pid" 2>/dev/null; then
     kill "$contender_pid" 2>/dev/null || true
     wait "$contender_pid" 2>/dev/null || true
   fi
+  rm -f "$contender_log"
 }
 trap stop_contender EXIT
+assert_contender_alive() {
+  if ! kill -0 "$contender_pid" 2>/dev/null; then
+    cat "$contender_log"
+    fail "The contending writer exited: $1"
+  fi
+}
+for _ in $(seq 1 120); do
+  if grep -q "contending: locks held" "$contender_log"; then
+    break
+  fi
+  assert_contender_alive "before it held its locks."
+  sleep 0.5
+done
+grep -q "contending: locks held" "$contender_log" \
+  || fail "The contending writer did not report holding its locks within 60s."
 
 log "Upgrading to this checkout (budget ${budget}s)"
 upgrade_started="$(date +%s)"
@@ -144,6 +164,7 @@ if [[ "$state_before" != "$state_after" ]]; then
   printf 'before: %s\nafter:  %s\n' "$state_before" "$state_after"
   fail "Rerunning the migrate entrypoint changed the database: the upgrade is not a fixed point."
 fi
+assert_contender_alive "during the upgrade, so part of it ran without contention."
 stop_contender
 
 log "Checking the migrated schema against schema.ts"
