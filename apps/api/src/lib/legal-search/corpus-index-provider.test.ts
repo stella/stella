@@ -1,7 +1,8 @@
+import { Result } from "better-result";
 import { expect, test } from "bun:test";
 
 import { corpusIndexProvider } from "@/api/lib/legal-search/corpus-index-provider";
-import { InvalidCorpusSearchCursorError } from "@/api/lib/legal-search/corpus-search-cursor";
+import { InvalidLegalSearchCursorError } from "@/api/lib/legal-search/search-error";
 
 // This provider has no HTTP status to answer with, so an undecodable cursor
 // has to fail the read. Falling back to page one looks like a page to a client
@@ -11,14 +12,16 @@ import { InvalidCorpusSearchCursorError } from "@/api/lib/legal-search/corpus-se
 // request input, and this assertion is only reachable at all because nothing
 // queried a database or an engine first.
 test("an undecodable cursor fails the read instead of restarting at page one", async () => {
-  const rejection = await corpusIndexProvider
-    .search({ cursor: "not a cursor", limit: 10, query: "nájemné" })
-    .catch((error: unknown) => error);
+  const result = await corpusIndexProvider.search({
+    cursor: "not a cursor",
+    limit: 10,
+    query: "nájemné",
+  });
 
-  expect(rejection).toBeInstanceOf(InvalidCorpusSearchCursorError);
-  expect(
-    rejection instanceof InvalidCorpusSearchCursorError
-      ? rejection.reason
-      : null,
-  ).toBe("undecodable");
+  expect(Result.isError(result)).toBe(true);
+  if (Result.isOk(result)) {
+    return;
+  }
+  expect(result.error).toBeInstanceOf(InvalidLegalSearchCursorError);
+  expect(result.error).toMatchObject({ reason: "undecodable" });
 });

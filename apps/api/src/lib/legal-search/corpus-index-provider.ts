@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import {
@@ -28,7 +29,6 @@ import { caseLawCorpusQuery } from "@/api/lib/legal-search/corpus-query";
 import {
   decodeCorpusSearchCursor,
   encodeCorpusSearchCursor,
-  InvalidCorpusSearchCursorError,
   isStaleCorpusSearchCursor,
 } from "@/api/lib/legal-search/corpus-search-cursor";
 import { loadDocumentContext } from "@/api/lib/legal-search/document-context";
@@ -38,6 +38,11 @@ import {
   blendStableCitationAuthority,
   stableBlendUpperBound,
 } from "@/api/lib/legal-search/rerank";
+import {
+  InvalidLegalSearchCursorError,
+  type LegalSearchError,
+  LegalSearchUnavailableError,
+} from "@/api/lib/legal-search/search-error";
 import type {
   LegalSearchHit,
   LegalSearchProvider,
@@ -138,7 +143,9 @@ export const rehydrateCorpusIndexProviderCandidates =
         ),
   );
 
-const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
+const searchResult = async (
+  query: LegalSearchQuery,
+): Promise<Result<LegalSearchResult, InvalidLegalSearchCursorError>> => {
   const limit = query.limit;
   const family = query.documentFamily ?? "case_law";
 
@@ -149,10 +156,12 @@ const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
     ? decodeCorpusSearchCursor(query.cursor)
     : null;
   if (query.cursor !== undefined && parsedCursor === null) {
-    throw new InvalidCorpusSearchCursorError({
-      message: "Search cursor did not decode.",
-      reason: "undecodable",
-    });
+    return Result.err(
+      new InvalidLegalSearchCursorError({
+        message: "Search cursor did not decode.",
+        reason: "undecodable",
+      }),
+    );
   }
 
   const serving = await caseLawPublicReadDb(
@@ -199,16 +208,18 @@ const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
     text: query.query,
   });
   if (resolved.type === "empty") {
-    return { hits: [], facets: null, nextCursor: null, limit };
+    return Result.ok({ hits: [], facets: null, nextCursor: null, limit });
   }
   // This boundary has no HTTP status to answer with, so a cursor from another
   // dictionary fails the read rather than paging a different result set.
   if (isStaleCorpusSearchCursor(parsedCursor, resolved.dictionary)) {
-    throw new InvalidCorpusSearchCursorError({
-      message:
-        "Search cursor was built against a different expansion dictionary.",
-      reason: "dictionary_mismatch",
-    });
+    return Result.err(
+      new InvalidLegalSearchCursorError({
+        message:
+          "Search cursor was built against a different expansion dictionary.",
+        reason: "dictionary_mismatch",
+      }),
+    );
   }
 
   const searchPage = await readCorpusIndexSearchPage({
@@ -312,7 +323,24 @@ const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
   // Exact facet counts over broad queries are expensive in corpus index; the
   // shipped UI already tolerates null facets (returned on paginated
   // pages). corpus index aggregations are a follow-up.
-  return { hits, facets: null, nextCursor, limit };
+  return Result.ok({ hits, facets: null, nextCursor, limit });
+};
+
+const search = async (
+  query: LegalSearchQuery,
+): Promise<Result<LegalSearchResult, LegalSearchError>> => {
+  const attempted = await Result.tryPromise({
+    try: async () => await searchResult(query),
+    catch: (cause) =>
+      new LegalSearchUnavailableError({
+        message: "Corpus index legal search failed.",
+        cause,
+      }),
+  });
+  if (Result.isError(attempted)) {
+    return attempted;
+  }
+  return attempted.value;
 };
 
 export const corpusIndexProvider: LegalSearchProvider = {
