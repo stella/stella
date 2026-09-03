@@ -295,6 +295,48 @@ describe("workspace hygiene", () => {
     });
   });
 
+  test("keeps caller catalog additions from overriding toolchain pins", () => {
+    const rootDir = createWorkspaceRoot({
+      rootPackageJson: {
+        catalog: {
+          oxlint: "1.77.0",
+          typescript: "5.9.3",
+        },
+        devDependencies: {
+          turbo: "2.10.3",
+        },
+      },
+      webPackageJson: {
+        dependencies: {},
+        devDependencies: {},
+        name: "@stll/web",
+      },
+    });
+
+    expect(validateWorkspaceRoot(rootDir)).toEqual([]);
+  });
+
+  test("rejects a stale centralized lint configuration", () => {
+    const rootDir = createWorkspaceRoot({
+      rootPackageJson: {
+        devDependencies: {
+          "@stll/oxlint-config": "0.6.0",
+          turbo: "2.10.3",
+        },
+      },
+      webPackageJson: {
+        dependencies: {},
+        devDependencies: {},
+        name: "@stll/web",
+      },
+    });
+
+    expect(validateWorkspaceRoot(rootDir)).toContainEqual({
+      message: "devDependencies.@stll/oxlint-config must be 0.7.0; found 0.6.0",
+      path: "package.json",
+    });
+  });
+
   test("rejects deprecated Oxc and non-native TypeScript toolchains", () => {
     const rootDir = createWorkspaceRoot({
       rootPackageJson: {
@@ -356,11 +398,11 @@ const createWorkspaceRoot = ({
   const validRootPackage = {
     ...rootPackageJson,
     catalog: {
-      oxlint: "1.81.0",
-      typescript: "6.0.3",
       ...(isRecord(rootPackageJson["catalog"])
         ? rootPackageJson["catalog"]
         : {}),
+      oxlint: "1.81.0",
+      typescript: "6.0.3",
     },
     devDependencies: {
       "@stll/oxlint-config": "0.7.0",

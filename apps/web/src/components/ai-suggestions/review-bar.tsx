@@ -298,7 +298,7 @@ export const ReviewBar = ({
         DOCKED_COMPOSER_WIDTH_CLASS,
         "bg-(--doc-float-surface) [--doc-float-surface:var(--color-white)] dark:[--doc-float-surface:var(--popover)]",
         "shadow-[0_0_0_1px_rgb(0_0_0/0.02),0_1px_2px_rgb(0_0_0/0.03),0_8px_20px_rgb(0_0_0/0.05)]",
-        "animate-in fade-in-0 slide-in-from-bottom-1",
+        "animate-in fade-in-0 slide-in-from-bottom-1 motion-reduce:animate-none",
       )}
       role="toolbar"
     >

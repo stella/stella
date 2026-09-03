@@ -522,7 +522,7 @@ export const ChatThreadCard = ({
         "hover:bg-popover focus-within:bg-popover",
         "transition-[background-color,border-color] duration-200 ease-out",
         "shadow-[0_1px_2px_rgb(0_0_0/0.06),0_20px_64px_rgb(0_0_0/0.18)]",
-        "animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-1",
+        "animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-1 motion-reduce:animate-none",
       )}
       role="dialog"
     >

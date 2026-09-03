@@ -254,7 +254,7 @@
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 737,
+    "count": 736,
     "files": {
       "apps/api/scripts/ai-provider-canary.ts": 5,
       "apps/api/scripts/backfill-image-thumbnails.ts": 9,
@@ -453,7 +453,7 @@
       "apps/landing/src/components/react/EditorLiveDemo.tsx": 1,
       "apps/landing/src/components/react/previews/CliMcpPreview.tsx": 1,
       "apps/legal-atlas-runner/src/runners/case-law-corpus-storage-backfill.ts": 10,
-      "apps/legal-atlas-runner/src/runners/case-law-ingest.ts": 19,
+      "apps/legal-atlas-runner/src/runners/case-law-ingest.ts": 18,
       "apps/legal-atlas-runner/src/runners/case-law-reconciliation.ts": 2,
       "apps/legal-atlas-runner/src/runners/citation-resolution-drain.ts": 3,
       "apps/legal-atlas-runner/src/runners/sk-document-drain.ts": 3,

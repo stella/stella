@@ -896,7 +896,7 @@ const NavBadge = ({
   digit: number;
 }) => (
   <SidebarMenuBadge className={className}>
-    <kbd className="animate-in bg-muted text-muted-foreground fade-in rounded border px-1.5 py-0.5 text-[0.625rem] duration-150">
+    <kbd className="animate-in bg-muted text-muted-foreground fade-in rounded border px-1.5 py-0.5 text-[0.625rem] duration-150 motion-reduce:animate-none">
       {digit}
     </kbd>
   </SidebarMenuBadge>
