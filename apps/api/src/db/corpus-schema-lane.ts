@@ -172,15 +172,19 @@ export const runUnderCorpusSchemaLane = async <
   if (outcome !== LANE_BUSY) {
     return outcome.value;
   }
-  if (waitedMs >= laneWaitMs) {
+  // The budget is the caller's, so the last pause ends exactly on it: a try
+  // never starts past the budget, and the failure names the budget spent.
+  const remainingMs = laneWaitMs - waitedMs;
+  if (remainingMs <= 0) {
     throw new CorpusSchemaLaneUnavailableError({
       message: `The corpus schema lane stayed unavailable for ${String(waitedMs)}ms; an upgrade is holding it`,
       waitedMs,
     });
   }
-  await sleep(CORPUS_SCHEMA_LANE_RETRY_MS);
+  const sleepMs = Math.min(CORPUS_SCHEMA_LANE_RETRY_MS, remainingMs);
+  await sleep(sleepMs);
   return await runUnderCorpusSchemaLane(
     { database, work, laneWaitMs, sleep },
-    waitedMs + CORPUS_SCHEMA_LANE_RETRY_MS,
+    waitedMs + sleepMs,
   );
 };

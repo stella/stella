@@ -117,3 +117,33 @@ test("a batch that outlives its budget fails instead of entering the lane late",
   });
   expect(ran).toBe(false);
 });
+
+test("a budget that is not a multiple of the retry pause is honoured exactly", async () => {
+  const granted = scriptedDatabase([false, false, true]);
+  const sleeps: number[] = [];
+  const value = await runUnderCorpusSchemaLane({
+    database: granted.database,
+    work: async () => "done",
+    laneWaitMs: 300,
+    sleep: async (ms) => {
+      sleeps.push(ms);
+    },
+  });
+  expect(value).toBe("done");
+  // The second pause is cut to the 50 ms left, so the last try lands on the
+  // budget, never past it.
+  expect(sleeps).toEqual([CORPUS_SCHEMA_LANE_RETRY_MS, 50]);
+
+  const refused = scriptedDatabase([false, false, false]);
+  const rejection: unknown = await runUnderCorpusSchemaLane({
+    database: refused.database,
+    work: async () => "done",
+    laneWaitMs: 300,
+    sleep: async () => {},
+  }).then(
+    () => null,
+    (error: unknown) => error,
+  );
+  expect(rejection).toMatchObject({ waitedMs: 300 });
+  expect(refused.attempts.filter((step) => step === "begin")).toHaveLength(3);
+});
