@@ -21,7 +21,6 @@ import { t } from "elysia";
 import { reportExports } from "@/api/db/schema";
 import { isReportRowCountOverCap } from "@/api/handlers/reports/build-report-data";
 import { getBuiltinReportTemplate } from "@/api/handlers/reports/builtin-templates";
-import { enqueueReportExport } from "@/api/handlers/reports/report-export-queue";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -30,6 +29,7 @@ import { queryEntities } from "@/api/lib/entities/query-entities";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { extractLangFromRequest } from "@/api/lib/locale";
+import { enqueueReportExport } from "@/api/lib/report-export-enqueue";
 import { excludedEntityKindsForView } from "@/api/lib/views";
 import { parseStoredViewLayout } from "@/api/lib/views-schema";
 
@@ -160,6 +160,11 @@ const exportViewReport = createSafeHandler(
       );
     }
 
+    // Resolved once and written to the row as well as the job, so a job the
+    // queue loses can be rebuilt from the row alone.
+    const format = body.format ?? "docx";
+    const aiNarrative = body.aiNarrative ?? true;
+
     const exportId = yield* Result.await(
       safeDb(async (tx) => {
         const [inserted] = await tx
@@ -171,6 +176,8 @@ const exportViewReport = createSafeHandler(
             viewId: view.id,
             layout,
             mode: body.mode,
+            format,
+            aiNarrative,
             notificationLang: extractLangFromRequest(request),
             notificationStatus: "pending",
             status: "queued",
@@ -207,8 +214,8 @@ const exportViewReport = createSafeHandler(
           workspaceId,
           organizationId,
           userId: user.id,
-          format: body.format ?? "docx",
-          aiNarrative: body.aiNarrative ?? true,
+          format,
+          aiNarrative,
         }),
       catch: (cause) => cause,
     });

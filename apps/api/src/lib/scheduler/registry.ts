@@ -24,6 +24,10 @@ import {
   expireDesktopEditSessions,
 } from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry";
 import {
+  RECOVER_DOCUMENT_DEADLINE_SCOUTS_TASK,
+  recoverDocumentDeadlineScouts,
+} from "@/api/lib/scheduler/tasks/document-deadline-scout-recovery";
+import {
   DISPATCH_DOCUMENT_OCR_TASK,
   dispatchDocumentOcr,
 } from "@/api/lib/scheduler/tasks/document-processing-ocr";
@@ -55,6 +59,10 @@ import {
   MEMORY_EXTRACTOR_TASK,
   extractMemoriesFromCompactions,
 } from "@/api/lib/scheduler/tasks/memory-extractor";
+import {
+  RECONCILE_REPORT_EXPORTS_TASK,
+  reconcileReportExports,
+} from "@/api/lib/scheduler/tasks/report-export-reconcile";
 import {
   REPAIR_CHAT_SEARCH_INDEX_TASK,
   repairChatSearchIndex,
@@ -118,6 +126,8 @@ const SCHEDULER_TASKS = {
   [RECONCILE_DOCUMENT_REVIEW_RUNS_TASK]: reconcileDocumentReviewRuns,
   [RECONCILE_BILINGUAL_RUNS_TASK]: reconcileBilingualRuns,
   [RECONCILE_STYLE_SET_PACKAGE_CLEANUPS_TASK]: reconcileStyleSetPackageCleanups,
+  [RECONCILE_REPORT_EXPORTS_TASK]: reconcileReportExports,
+  [RECOVER_DOCUMENT_DEADLINE_SCOUTS_TASK]: recoverDocumentDeadlineScouts,
 } as const satisfies Record<string, SchedulerTask>;
 
 export type RegisteredSchedulerTaskName = keyof typeof SCHEDULER_TASKS;

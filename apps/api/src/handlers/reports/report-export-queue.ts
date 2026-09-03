@@ -19,7 +19,7 @@ import { and, eq, inArray } from "drizzle-orm";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { reportExports } from "@/api/db/schema";
-import type { ReportTemplateRef } from "@/api/db/schema";
+import type { ReportExportFormat, ReportTemplateRef } from "@/api/db/schema";
 import { env } from "@/api/env";
 import type { AssembledReport } from "@/api/handlers/reports/build-report-data";
 import { buildReportData } from "@/api/handlers/reports/build-report-data";
@@ -38,8 +38,6 @@ import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack
 import { assertUsageAvailableForHandler } from "@/api/lib/api-handlers";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
-import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
 import {
   buildAiConditionDecider,
   buildAiFieldGenerator,
@@ -52,8 +50,9 @@ import { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval"
 import { logger } from "@/api/lib/observability/logger";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import { createBullMqConnection } from "@/api/lib/redis-client";
+import { REPORT_EXPORT_QUEUE_NAME } from "@/api/lib/report-export-enqueue";
+import type { ReportExportJobData } from "@/api/lib/report-export-enqueue";
 import { listPendingReportExportNotifications } from "@/api/lib/report-export-notification-recovery";
-import { recoverStuckReportExports } from "@/api/lib/report-export-recovery";
 import { createRootSafeDb, createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { writeS3ObjectWithRetry } from "@/api/lib/s3";
 import {
@@ -74,67 +73,10 @@ import {
 import { parseStoredViewLayout } from "@/api/lib/views-schema";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
-const QUEUE_NAME = "report-exports";
-const JOB_NAME = "export-report";
 const WORKER_CONCURRENCY = 2;
-// One attempt: the fill runs metered AI and (in workspace mode) creates a
-// document; a BullMQ retry would double both. Failures are persisted on the row.
-const JOB_ATTEMPTS = 1;
 const ERROR_MESSAGE_MAX_CHARS = 1000;
 const DOCX_TO_PDF_ERROR = "Failed to convert the report to PDF.";
 const NOTIFICATION_RECONCILE_INTERVAL_MS = 60_000;
-
-/** Delivery format chosen at export time. Carried on the job (not the export
- *  row): the worker needs it to convert + name the artifact, and the status
- *  endpoint derives the download filename from the stored key's extension, so
- *  no schema column is required. */
-export type ReportExportFormat = "docx" | "pdf";
-
-type ReportExportJobData = {
-  exportId: string;
-  workspaceId: string;
-  organizationId: string;
-  userId: string;
-  format: ReportExportFormat;
-  /** Include AI-drafted narrative sections. Carried on the job (not the export
-   *  row): the worker needs it to gate the AI generators + template sections.
-   *  Optional for back-compat with jobs enqueued before this field existed;
-   *  absent means "on". */
-  aiNarrative?: boolean;
-};
-
-export type EnqueueReportExportArgs = {
-  exportId: SafeId<"reportExport">;
-  workspaceId: SafeId<"workspace">;
-  organizationId: SafeId<"organization">;
-  userId: SafeId<"user">;
-  format: ReportExportFormat;
-  aiNarrative: boolean;
-};
-
-const getQueue = createLazyBullMqQueue<ReportExportJobData>({
-  name: QUEUE_NAME,
-  defaultJobOptions: {
-    attempts: JOB_ATTEMPTS,
-    removeOnComplete: 100,
-    removeOnFail: 500,
-  },
-});
-
-export const enqueueReportExport = async ({
-  exportId,
-  workspaceId,
-  organizationId,
-  userId,
-  format,
-  aiNarrative,
-}: EnqueueReportExportArgs): Promise<void> => {
-  await getQueue().add(
-    JOB_NAME,
-    { exportId, workspaceId, organizationId, userId, format, aiNarrative },
-    { jobId: createBullMqJobId(workspaceId, exportId) },
-  );
-};
 
 /** Human-readable failure string persisted on the export row. */
 export const toExportErrorMessage = (cause: unknown): string => {
@@ -148,24 +90,10 @@ export const toExportErrorMessage = (cause: unknown): string => {
 };
 
 export const initReportExportWorker = () => {
-  // Heal exports stranded by a previous process's hard death before serving new
-  // ones. Fire-and-forget: a sweep failure must not block worker startup, and
-  // the next boot re-attempts it.
-  recoverStuckReportExports()
-    .then((count) => {
-      if (count > 0) {
-        logger.warn("report_export.recovered_stuck", { count: String(count) });
-      }
-      return count;
-    })
-    .catch((error: unknown) => {
-      captureError(error, { operation: "report_export.recover_stuck" });
-    });
-
   const workerConnection = createBullMqConnection();
 
   const worker = new Worker<ReportExportJobData>(
-    QUEUE_NAME,
+    REPORT_EXPORT_QUEUE_NAME,
     async (job) => {
       await processReportExportJob(job.data);
     },
@@ -542,8 +470,7 @@ const runExport = async ({
   // Download mode: write under the root exports/ prefix (S3 lifecycle prefix
   // filters anchor at the key start, so the scratch prefix must lead the key;
   // org/workspace segments keep the key tenant-scoped); the status endpoint
-  // presigns it. The stored key's extension is what the status endpoint uses
-  // to name the download, so no format column is needed on the export row.
+  // presigns it and names the download from the stored key's extension.
   const key = `exports/${actor.organizationId}/${actor.workspaceId}/${actor.exportId}.${delivery.ext}`;
   await writeS3ObjectWithRetry({
     contentType: delivery.mimeType,
