@@ -1,6 +1,7 @@
 import type { QuickwitCluster } from "@/api/lib/legal-search/corpus-generation-contract";
 import type { CorpusIndexHit } from "@/api/lib/legal-search/corpus-index-client";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
+import { quoteCorpusValue } from "@/api/lib/legal-search/corpus-query";
 import type { RankedHit, ScoredCandidate } from "@/api/lib/legal-search/rerank";
 import { LIMITS } from "@/api/lib/limits";
 import { decodeCursor, encodeCursor } from "@/api/lib/search/cursor";
@@ -61,6 +62,11 @@ type CorpusIndexSearchPageInput<TContext> = {
   query: string;
   limit: number;
   parsedCursor: SearchCursor | null;
+  /**
+   * Fields the engine highlights. Requested for the passages the page emits
+   * and never for the scan: highlighting is per-hit work, and a scan reaches
+   * a couple of hundred passages to answer with ten.
+   */
   snippetFields: string[];
   extractId: (hit: CorpusIndexHit) => string | null;
   extractSnippet: (
@@ -113,12 +119,18 @@ export type CorpusIndexScanReport = {
   rounds: number;
   /** Hits the engine returned across those rounds. */
   passagesScanned: number;
-  /** Summed wall time of those engine calls. */
+  /** Summed wall time of every engine call the read made. */
   indexMs: number;
   /** Stopped because no unseen candidate could out-blend the page. */
   earlyStopped: boolean;
   /** Stopped at `LIMITS.corpusIndexSearchMaxRounds` instead. */
   roundCapHit: boolean;
+  /**
+   * Engine round trips spent highlighting the page: one, or none when the
+   * page is empty. Separate from `rounds` because it reaches a page's worth
+   * of passages rather than the scan's, and a reader waits through both.
+   */
+  highlightRounds: number;
 };
 
 /** What a request that never reached the index spent on it. */
@@ -128,6 +140,7 @@ export const emptyCorpusIndexScan = (): CorpusIndexScanReport => ({
   indexMs: 0,
   earlyStopped: false,
   roundCapHit: false,
+  highlightRounds: 0,
 });
 
 /**
@@ -151,6 +164,107 @@ const PASSAGE_OVER_FETCH = 4;
 const readAnchorId = (hit: CorpusIndexHit): string | null => {
   const anchorId = hit["anchor_id"];
   return typeof anchorId === "string" && anchorId.length > 0 ? anchorId : null;
+};
+
+/**
+ * Physical copies of one passage the highlight round is willing to receive.
+ *
+ * A passage clause names a passage, not a row: `chunk_id` is deterministic
+ * (`<document_id>:<seq>`) rather than unique, and during a content refresh the
+ * old and new copies coexist — ingestion appends, and the engine applies the
+ * delete asynchronously. Asking for one hit per clause would let a document
+ * mid-refresh consume another document's slot and cost that document its
+ * snippet. The multiplier is the overlap allowance; a passage carrying more
+ * copies than this degrades to no snippet, never to another document's.
+ */
+export const HIGHLIGHT_COPIES_PER_PASSAGE = 4;
+
+/**
+ * The clause that addresses exactly this hit again. `chunk_id` on a
+ * passage-granular generation, `document_id` where the document is the
+ * indexed unit; both are raw-tokenised, so a quoted value is an exact term
+ * lookup rather than a text match. Read from the hit rather than from the
+ * generation's configuration, so a layout the index actually serves decides
+ * it.
+ */
+const passageClause = (hit: CorpusIndexHit): string | null => {
+  const chunkId = hit["chunk_id"];
+  if (typeof chunkId === "string" && chunkId.length > 0) {
+    return `chunk_id:${quoteCorpusValue(chunkId)}`;
+  }
+  const documentId = hit["document_id"];
+  return typeof documentId === "string" && documentId.length > 0
+    ? `document_id:${quoteCorpusValue(documentId)}`
+    : null;
+};
+
+type ReadPageSnippetsOptions = {
+  clauses: readonly string[];
+  cluster: QuickwitCluster;
+  extractId: (hit: CorpusIndexHit) => string | null;
+  extractSnippet: (
+    snippet: Record<string, unknown> | undefined,
+  ) => string | null;
+  indexId: string;
+  query: string;
+  snippetFields: string[];
+};
+
+type PageSnippets = {
+  indexMs: number;
+  rounds: number;
+  snippetById: Map<string, string>;
+};
+
+/**
+ * Highlight the passages the page emits, and only those.
+ *
+ * The scan's query is kept whole and narrowed by the page's passage clauses,
+ * so the engine highlights against exactly the terms it matched on: the
+ * snippet a hit gets here is the snippet the scan would have produced for it.
+ * Hits arrive best-first, so the first hit seen for a document supplies its
+ * snippet, matching how the scan chose the document's passage.
+ */
+const readPageSnippets = async ({
+  clauses,
+  cluster,
+  extractId,
+  extractSnippet,
+  indexId,
+  query,
+  snippetFields,
+}: ReadPageSnippetsOptions): Promise<PageSnippets> => {
+  const snippetById = new Map<string, string>();
+  if (clauses.length === 0 || snippetFields.length === 0) {
+    return { indexMs: 0, rounds: 0, snippetById };
+  }
+
+  const startedAt = performance.now();
+  const result = await getCorpusIndexClient(cluster).search({
+    indexId,
+    query: `(${query}) AND (${clauses.join(" OR ")})`,
+    maxHits: clauses.length * HIGHLIGHT_COPIES_PER_PASSAGE,
+    sortBy: "_score",
+    snippetFields,
+  });
+  const indexMs = performance.now() - startedAt;
+  if (result.isErr()) {
+    throw result.error;
+  }
+
+  // Best-first, so the first snippet a document gets is its best-scoring
+  // copy's; the later ones are the refresh overlap and are dropped.
+  for (const [index, hit] of result.value.hits.entries()) {
+    const id = extractId(hit);
+    if (id === null || snippetById.has(id)) {
+      continue;
+    }
+    const snippet = extractSnippet(result.value.snippets[index]);
+    if (snippet !== null) {
+      snippetById.set(id, snippet);
+    }
+  }
+  return { indexMs, rounds: 1, snippetById };
 };
 
 export const isAfterSearchCursor = (
@@ -214,7 +328,8 @@ export const readCorpusIndexSearchPage = async <TContext>({
   CorpusIndexSearchPageResult<TContext>
 > => {
   const candidates: ScoredCandidate[] = [];
-  const snippetById = new Map<string, string>();
+  /** Best passage per document, as the clause a snippet round addresses it by. */
+  const passageClauseById = new Map<string, string>();
   const anchorIdById = new Map<string, string>();
   const passageCountById = new Map<string, number>();
   let ranking: CorpusIndexRanking<TContext> | null = null;
@@ -282,7 +397,6 @@ export const readCorpusIndexSearchPage = async <TContext>({
       maxHits,
       startOffset,
       sortBy: "_score",
-      snippetFields,
     });
     indexMs += performance.now() - roundStartedAt;
     if (result.isErr()) {
@@ -312,9 +426,9 @@ export const readCorpusIndexSearchPage = async <TContext>({
       }
 
       // Hits arrive best-first, so the first hit seen for a document is its
-      // best-scoring passage: it sets the document's rank, its snippet, and
-      // the anchor the result deep-links to. Later passages of the same
-      // document only add to its breadth count.
+      // best-scoring passage: it sets the document's rank, the passage a
+      // snippet is later cut from, and the anchor the result deep-links to.
+      // Later passages of the same document only add to its breadth count.
       const seen = passageCountById.get(id);
       if (seen !== undefined) {
         passageCountById.set(id, seen + 1);
@@ -327,9 +441,9 @@ export const readCorpusIndexSearchPage = async <TContext>({
         score: corpusIndexLexicalScore(startOffset + index),
       });
 
-      const snippet = extractSnippet(result.value.snippets[index]);
-      if (snippet !== null) {
-        snippetById.set(id, snippet);
+      const clause = passageClause(hit);
+      if (clause !== null) {
+        passageClauseById.set(id, clause);
       }
       const anchorId = readAnchorId(hit);
       if (anchorId !== null) {
@@ -402,19 +516,30 @@ export const readCorpusIndexSearchPage = async <TContext>({
   };
   const nextCursor = resolveNextCursor();
 
+  const snippets = await readPageSnippets({
+    clauses: pageRanked.flatMap((hit) => passageClauseById.get(hit.id) ?? []),
+    cluster,
+    extractId,
+    extractSnippet,
+    indexId,
+    query,
+    snippetFields,
+  });
+
   return {
     pageRanked,
     context: ranking.context,
-    snippetById,
+    snippetById: snippets.snippetById,
     anchorIdById,
     passageCountById,
     nextCursor,
     scan: {
       rounds,
       passagesScanned: scanned,
-      indexMs,
+      indexMs: indexMs + snippets.indexMs,
       earlyStopped,
       roundCapHit,
+      highlightRounds: snippets.rounds,
     },
   };
 };

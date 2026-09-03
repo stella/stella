@@ -6,6 +6,7 @@ import {
   corpusIndexLexicalScore,
   decodeCorpusIndexCursor,
   encodeCorpusIndexCursor,
+  HIGHLIGHT_COPIES_PER_PASSAGE,
   readCorpusIndexSearchPage,
 } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
@@ -33,23 +34,45 @@ let responseBody: unknown;
  * way it would against the real engine; `responseBody` stays available for the
  * single-window cases.
  */
-let engineHits: { document_id: string; anchor_id?: string }[] | null;
-let requestCount: number;
+let engineHits:
+  | { document_id: string; anchor_id?: string; chunk_id?: string }[]
+  | null;
+let requestBodies: Record<string, unknown>[];
+/**
+ * Wall time the fake engine spends on every request. Zero by default, so only
+ * the test that reads `indexMs` pays for it; that test needs the number to be
+ * made of something it can predict a floor for.
+ */
+let requestDelayMs: number;
+/**
+ * What the fake engine answers the highlight round with, when that has to
+ * differ from what the scan saw — a passage the index holds more than one
+ * physical copy of, say.
+ */
+let snippetResponseBody: unknown;
 
 beforeEach(() => {
   responseBody = { num_hits: 0, hits: [], snippets: [] };
   engineHits = null;
-  requestCount = 0;
+  requestBodies = [];
+  requestDelayMs = 0;
+  snippetResponseBody = null;
   const stub = async (
     _input: Parameters<typeof fetch>[0],
     init?: Parameters<typeof fetch>[1],
   ): Promise<Response> => {
-    requestCount += 1;
+    const body: Record<string, unknown> =
+      typeof init?.body === "string" ? JSON.parse(init.body) : {};
+    requestBodies.push(body);
+    if (requestDelayMs > 0) {
+      await Bun.sleep(requestDelayMs);
+    }
+    if (snippetResponseBody !== null && body["snippet_fields"] !== undefined) {
+      return new Response(JSON.stringify(snippetResponseBody), { status: 200 });
+    }
     if (engineHits === null) {
       return new Response(JSON.stringify(responseBody), { status: 200 });
     }
-    const body: Record<string, unknown> =
-      typeof init?.body === "string" ? JSON.parse(init.body) : {};
     const offset = Number(body["start_offset"] ?? 0);
     const window = engineHits.slice(offset, offset + Number(body["max_hits"]));
     return new Response(
@@ -69,6 +92,14 @@ beforeEach(() => {
 afterEach(() => {
   globalThis.fetch = originalFetch;
 });
+
+/**
+ * Engine calls the scan itself made. The page's snippet round is the one
+ * request that asks for highlighting, so the scan's own rounds are everything
+ * else.
+ */
+const scanRequestCount = (): number =>
+  requestBodies.filter((body) => body["snippet_fields"] === undefined).length;
 
 const readPage = async (limit = 10) =>
   await readCorpusIndexSearchPage({
@@ -201,7 +232,7 @@ describe("a single document cannot monopolise the scan", () => {
     // Only a flood that overruns one window proves the scan kept walking to
     // reach the other decisions; a smaller one is served in a single request.
     if (floodSize > LIMITS.corpusIndexSearchCandidateLimit) {
-      expect(requestCount).toBeGreaterThan(1);
+      expect(scanRequestCount()).toBeGreaterThan(1);
     }
     expect(page.passageCountById.get("doc-flood")).toBe(floodSize);
     for (const hit of page.pageRanked.slice(1)) {
@@ -270,7 +301,7 @@ describe("a page settles within one scan round", () => {
   test("a page of a very large hit list is answered from one round", async () => {
     const page = await readBlendedPage(20, DEFAULT_AUTHORITY_WEIGHT);
 
-    expect(requestCount).toBe(1);
+    expect(scanRequestCount()).toBe(1);
     expect(page.scan.rounds).toBe(1);
     expect(page.scan.earlyStopped).toBe(true);
     expect(page.pageRanked).toHaveLength(20);
@@ -283,7 +314,7 @@ describe("a page settles within one scan round", () => {
       DEFAULT_AUTHORITY_WEIGHT,
     );
 
-    expect(requestCount).toBe(1);
+    expect(scanRequestCount()).toBe(1);
     expect(page.scan.earlyStopped).toBe(true);
   });
 
@@ -297,7 +328,7 @@ describe("a page settles within one scan round", () => {
 
     const page = await readBlendedPage(20, combinedWeight);
 
-    expect(requestCount).toBe(1);
+    expect(scanRequestCount()).toBe(1);
     expect(page.scan.earlyStopped).toBe(true);
   });
 
@@ -390,7 +421,7 @@ describe("the scan is bounded by engine round trips", () => {
   test("a scan whose stop condition never fires ends at the round cap", async () => {
     const page = await readCappedPage(10);
 
-    expect(requestCount).toBe(LIMITS.corpusIndexSearchMaxRounds);
+    expect(scanRequestCount()).toBe(LIMITS.corpusIndexSearchMaxRounds);
     expect(page.pageRanked).toHaveLength(10);
     // The page is still full and its own window holds more, so paging
     // continues within what the capped scan reached.
@@ -438,7 +469,7 @@ describe("the scan is bounded by engine round trips", () => {
 
     const second = await readCappedPage(10, first.nextCursor);
 
-    expect(requestCount).toBe(LIMITS.corpusIndexSearchMaxRounds * 2);
+    expect(scanRequestCount()).toBe(LIMITS.corpusIndexSearchMaxRounds * 2);
     expect(second.pageRanked.map((hit) => hit.id)).toEqual(
       Array.from({ length: 10 }, (_, index) => documentId(index + 10)),
     );
@@ -451,7 +482,7 @@ describe("the scan is bounded by engine round trips", () => {
     // beat: the page is answered from the first window.
     const page = await readPage(10);
 
-    expect(requestCount).toBe(1);
+    expect(scanRequestCount()).toBe(1);
     expect(page.pageRanked).toHaveLength(10);
     expect(page.scan.rounds).toBe(1);
     expect(page.scan.passagesScanned).toBe(
@@ -528,7 +559,7 @@ describe("a passage flood does not strand the reader", () => {
 
   test("the next page continues past the flood without rescanning it", async () => {
     const first = await readFloodPage(10);
-    requestCount = 0;
+    requestBodies = [];
 
     const second = await readFloodPage(10, first.nextCursor);
 
@@ -541,7 +572,9 @@ describe("a passage flood does not strand the reader", () => {
       LIMITS.corpusIndexSearchMaxRounds *
         LIMITS.corpusIndexSearchCandidateLimit,
     );
-    expect(requestCount).toBeLessThanOrEqual(LIMITS.corpusIndexSearchMaxRounds);
+    expect(scanRequestCount()).toBeLessThanOrEqual(
+      LIMITS.corpusIndexSearchMaxRounds,
+    );
   });
 
   test("paging reaches every decision behind the flood", async () => {
@@ -709,5 +742,195 @@ describe("ranker-folded candidates stay folded across pages", () => {
     expect(seen.filter((id) => groupOf(id) !== null)).toEqual(["c-131-12-l0"]);
     expect(seen.filter((id) => groupOf(id) === null)).toHaveLength(24);
     expect(new Set(seen).size).toBe(seen.length);
+  });
+});
+
+/**
+ * Highlighting is per-hit work the engine does, so a scan that asked for it
+ * highlighted every passage it walked — a few hundred of them — to serve a
+ * page of ten. The page decides which passages are worth highlighting, so the
+ * snippets are cut after it, in one request addressing exactly those passages.
+ */
+describe("only the passages a page emits are highlighted", () => {
+  const snippetRequests = (): Record<string, unknown>[] =>
+    requestBodies.filter((body) => body["snippet_fields"] !== undefined);
+
+  test("the scan asks for no highlighting and the page round asks for it once", async () => {
+    engineHits = Array.from({ length: 5000 }, (_, index) => ({
+      chunk_id: `doc-${index}:0`,
+      document_id: `doc-${index}`,
+    }));
+
+    const page = await readPage(3);
+
+    expect(scanRequestCount()).toBeGreaterThan(0);
+    expect(snippetRequests()).toHaveLength(1);
+    expect(page.scan.highlightRounds).toBe(1);
+    const snippetRequest = snippetRequests().at(0);
+    expect(snippetRequest?.["snippet_fields"]).toBe("text");
+    // One passage per emitted hit, with room for the physical copies a
+    // passage mid-refresh has: bounded by the page, not by the scan.
+    expect(snippetRequest?.["max_hits"]).toBe(3 * HIGHLIGHT_COPIES_PER_PASSAGE);
+    expect(snippetRequest?.["query"]).toBe(
+      '(text:promlčení) AND (chunk_id:"doc-0:0" OR chunk_id:"doc-1:0" OR chunk_id:"doc-2:0")',
+    );
+  });
+
+  test("a document-granular generation is addressed by document", async () => {
+    const hits = [{ document_id: "doc-a" }, { document_id: "doc-b" }];
+    responseBody = {
+      num_hits: hits.length,
+      hits,
+      snippets: hits.map((hit) => ({ text: [`whole ${hit.document_id}`] })),
+    };
+
+    const page = await readPage();
+
+    expect(snippetRequests().at(0)?.["query"]).toBe(
+      '(text:promlčení) AND (document_id:"doc-a" OR document_id:"doc-b")',
+    );
+    expect(page.snippetById.get("doc-a")).toBe("whole doc-a");
+  });
+
+  test("the highlighted passage is the one the document ranked by", async () => {
+    const hits = [
+      { document_id: "doc-b", chunk_id: "doc-b:7" },
+      { document_id: "doc-a", chunk_id: "doc-a:2" },
+      { document_id: "doc-a", chunk_id: "doc-a:9" },
+    ];
+    responseBody = {
+      num_hits: hits.length,
+      hits,
+      snippets: hits.map((hit) => ({ text: [`passage ${hit.chunk_id}`] })),
+    };
+
+    const page = await readPage();
+
+    // doc-a matched three passages; only its best is worth highlighting, and
+    // it is the same passage the anchor deep-links to.
+    expect(snippetRequests().at(0)?.["query"]).toBe(
+      '(text:promlčení) AND (chunk_id:"doc-b:7" OR chunk_id:"doc-a:2")',
+    );
+    expect(page.snippetById.get("doc-a")).toBe("passage doc-a:2");
+  });
+
+  test("an empty page asks the engine for nothing to highlight", async () => {
+    responseBody = { num_hits: 0, hits: [] };
+
+    const page = await readPage();
+
+    expect(page.pageRanked).toEqual([]);
+    expect(page.snippetById.size).toBe(0);
+    expect(snippetRequests()).toEqual([]);
+    expect(page.scan.highlightRounds).toBe(0);
+  });
+
+  test("a passage the index holds twice does not cost another hit its snippet", async () => {
+    // Mid-refresh: ingestion has appended doc-a's new copy and the engine has
+    // not applied the delete yet, so one clause matches two rows.
+    const scanned = [
+      { document_id: "doc-a", chunk_id: "doc-a:0" },
+      { document_id: "doc-b", chunk_id: "doc-b:0" },
+      { document_id: "doc-c", chunk_id: "doc-c:0" },
+    ];
+    responseBody = {
+      num_hits: scanned.length,
+      hits: scanned,
+      snippets: scanned.map(() => ({ text: ["scanned"] })),
+    };
+    const highlighted = [
+      { document_id: "doc-a", chunk_id: "doc-a:0" },
+      { document_id: "doc-a", chunk_id: "doc-a:0" },
+      { document_id: "doc-b", chunk_id: "doc-b:0" },
+      { document_id: "doc-c", chunk_id: "doc-c:0" },
+    ];
+    snippetResponseBody = {
+      num_hits: highlighted.length,
+      hits: highlighted,
+      snippets: [
+        { text: ["doc-a current"] },
+        { text: ["doc-a superseded"] },
+        { text: ["doc-b"] },
+        { text: ["doc-c"] },
+      ],
+    };
+
+    const page = await readPage();
+
+    // Room for the overlap, so the duplicate does not push doc-c out of the
+    // answer, and the copy that ranked first is the one the reader sees.
+    expect(snippetRequests().at(0)?.["max_hits"]).toBe(
+      3 * HIGHLIGHT_COPIES_PER_PASSAGE,
+    );
+    expect(page.snippetById.get("doc-a")).toBe("doc-a current");
+    expect(page.snippetById.get("doc-b")).toBe("doc-b");
+    expect(page.snippetById.get("doc-c")).toBe("doc-c");
+    for (const hit of page.pageRanked) {
+      expect(page.snippetById.get(hit.id)).toBeDefined();
+    }
+  });
+});
+
+/**
+ * `indexMs` is the engine half of a search's latency, and a page now spends it
+ * in two places: the scan's rounds and the one round that highlights the page.
+ * The two counts are what reconcile the total, so a round trip that stopped
+ * being counted — or a duration that stopped being added — has to fail here
+ * rather than surface as engine time nobody can attribute.
+ */
+describe("the reported engine time accounts for every round trip", () => {
+  /** Long enough that the floors below cannot be met by scheduling noise. */
+  const DELAY_MS = 20;
+
+  test("every engine request is one of the counted rounds", async () => {
+    engineHits = Array.from({ length: 5000 }, (_, index) => ({
+      chunk_id: `doc-${index}:0`,
+      document_id: `doc-${index}`,
+    }));
+
+    const page = await readPage(3);
+
+    expect(page.scan.rounds).toBeGreaterThan(0);
+    expect(page.scan.highlightRounds).toBe(1);
+    expect(requestBodies).toHaveLength(
+      page.scan.rounds + page.scan.highlightRounds,
+    );
+  });
+
+  test("the total covers the highlight round, not the scan alone", async () => {
+    requestDelayMs = DELAY_MS;
+    engineHits = Array.from({ length: 5000 }, (_, index) => ({
+      chunk_id: `doc-${index}:0`,
+      document_id: `doc-${index}`,
+    }));
+
+    const startedAt = performance.now();
+    const page = await readPage(3);
+    const elapsedMs = performance.now() - startedAt;
+
+    // One round of scanning plus one of highlighting, each of which the fake
+    // engine held open for a known minimum: a total that dropped either would
+    // fall under this floor. The read's own elapsed time is the ceiling —
+    // engine time is time the read spent, so a duration counted twice would
+    // cross it.
+    expect(page.scan.rounds).toBe(1);
+    expect(page.scan.highlightRounds).toBe(1);
+    expect(page.scan.indexMs).toBeGreaterThanOrEqual(2 * DELAY_MS);
+    expect(page.scan.indexMs).toBeLessThanOrEqual(elapsedMs);
+  });
+
+  test("a page that highlights nothing is charged for the scan only", async () => {
+    requestDelayMs = DELAY_MS;
+    responseBody = { num_hits: 0, hits: [] };
+
+    const startedAt = performance.now();
+    const page = await readPage();
+    const elapsedMs = performance.now() - startedAt;
+
+    expect(page.scan.rounds).toBe(1);
+    expect(page.scan.highlightRounds).toBe(0);
+    expect(requestBodies).toHaveLength(1);
+    expect(page.scan.indexMs).toBeGreaterThanOrEqual(DELAY_MS);
+    expect(page.scan.indexMs).toBeLessThanOrEqual(elapsedMs);
   });
 });

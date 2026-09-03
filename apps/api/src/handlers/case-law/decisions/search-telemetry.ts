@@ -67,6 +67,8 @@ export const CASE_LAW_SEARCH_DB_READ = {
   candidates: "candidates",
   /** The decisions an entry names outright. */
   identity: "identity",
+  /** The display rows of the decisions the page emits. */
+  page: "page",
   /** Which corpus-index generation currently serves. */
   servingGeneration: "servingGeneration",
 } as const;
@@ -83,6 +85,7 @@ const DB_READ_ATTRIBUTE = {
   alternates: "dbAlternatesMs",
   candidates: "dbCandidatesMs",
   identity: "dbIdentityMs",
+  page: "dbPageMs",
   servingGeneration: "dbServingGenerationMs",
 } as const satisfies Record<CaseLawSearchDbRead, string>;
 
@@ -116,6 +119,7 @@ export const createCaseLawSearchDbTimer = (): CaseLawSearchDbTimer => {
     alternates: 0,
     candidates: 0,
     identity: 0,
+    page: 0,
     servingGeneration: 0,
   };
   let reads = 0;
@@ -138,7 +142,7 @@ export const createCaseLawSearchDbTimer = (): CaseLawSearchDbTimer => {
 };
 
 type CaseLawSearchCompletedEvent = {
-  /** Candidates read from Postgres, including ones the filters dropped. */
+  /** Candidate rows read for blending, including ones the filters dropped. */
   candidatesHydrated: number;
   country: string | undefined;
   /** This request's Postgres reads, per read. The total is their sum. */
@@ -148,12 +152,16 @@ type CaseLawSearchCompletedEvent = {
   hitsReturned: number;
   /** Summed wall time of this request's engine calls. */
   indexMs: number;
+  /** Wide rows read for the page, after ranking decided which ids it holds. */
+  pageRowsRead: number;
   passagesScanned: number;
   queryClass: DecisionQueryClass;
   /** The scan stopped at the round cap rather than at its own bound. */
   roundCapHit: boolean;
   /** Engine round trips the scan spent. */
   rounds: number;
+  /** Engine round trips spent highlighting the page: one, or none for an empty page. */
+  highlightRounds: number;
   totalMs: number;
 };
 
@@ -169,10 +177,12 @@ export const reportCaseLawSearchCompleted = ({
   earlyStopped,
   hitsReturned,
   indexMs,
+  pageRowsRead,
   passagesScanned,
   queryClass,
   roundCapHit,
   rounds,
+  highlightRounds,
   totalMs,
 }: CaseLawSearchCompletedEvent): void => {
   // Flat, one attribute per read, and the total is what those attributes add
@@ -190,8 +200,10 @@ export const reportCaseLawSearchCompleted = ({
     queryClass,
     ...(country === undefined ? {} : { country }),
     rounds,
+    highlightRounds,
     passagesScanned,
     candidatesHydrated,
+    pageRowsRead,
     hitsReturned,
     indexMs: Math.round(indexMs),
     dbReads: db.reads,
