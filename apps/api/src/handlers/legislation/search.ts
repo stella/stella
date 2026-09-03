@@ -19,7 +19,12 @@ import {
 } from "@/api/lib/custom-schema";
 import { blendedRankSql } from "@/api/lib/legal-search/authority-sql";
 import { readServingCorpusIndexGenerationTx } from "@/api/lib/legal-search/corpus-index-generation-store";
-import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
+import type { SearchCursor } from "@/api/lib/legal-search/corpus-index-pagination";
+import {
+  decodeCorpusIndexCursor,
+  encodeCorpusIndexCursor,
+  readCorpusIndexSearchPage,
+} from "@/api/lib/legal-search/corpus-index-pagination";
 import {
   corpusFreeTextClause,
   quoteCorpusValue,
@@ -41,7 +46,7 @@ import {
   type LegislationReadDb,
 } from "@/api/lib/legislation-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
-import { decodeCursor, encodeCursor } from "@/api/lib/search/cursor";
+import { encodeCursor } from "@/api/lib/search/cursor";
 import {
   escapeAndHighlight,
   TS_HEADLINE_CONFIG,
@@ -116,7 +121,7 @@ const headlineRegconfig = sql`'public.stella_unaccent'::regconfig`;
 
 const pgSearch = async (
   body: SearchLegislationBody,
-  parsedCursor: { score: number; id: string } | null,
+  parsedCursor: SearchCursor | null,
   legislationDb: LegislationReadDb,
   dependencies: SearchLegislationDependencies,
 ): Promise<{ hits: LegislationHit[]; nextCursor: string | null }> => {
@@ -352,7 +357,7 @@ export const rehydrateLegislationCandidates = async ({
 
 const corpusIndexSearch = async (
   body: SearchLegislationBody,
-  parsedCursor: { score: number; id: string } | null,
+  parsedCursor: SearchCursor | null,
   legislationDb: LegislationReadDb,
 ): Promise<{ hits: LegislationHit[]; nextCursor: string | null }> => {
   const limit = body.limit ?? LIMITS.caseLawSearchPageSizeDefault;
@@ -395,12 +400,13 @@ const corpusIndexSearch = async (
 
   const {
     context: { byId },
-    hasMore,
     pageRanked,
     snippetById,
   } = searchPage;
-  const last = pageRanked.at(-1);
-  const nextCursor = hasMore && last ? encodeCursor(last.score, last.id) : null;
+  const nextCursor =
+    searchPage.nextCursor === null
+      ? null
+      : encodeCorpusIndexCursor(searchPage.nextCursor);
 
   const hits = pageRanked.flatMap((hit): LegislationHit[] => {
     const row = byId.get(hit.id);
@@ -446,7 +452,9 @@ export const searchLegislationHandler = async (
     return status(400, { message: "Invalid jurisdiction" });
   }
 
-  const parsedCursor = body.cursor ? decodeCursor(body.cursor) : null;
+  const parsedCursor = body.cursor
+    ? decodeCorpusIndexCursor(body.cursor)
+    : null;
   if (
     body.cursor !== undefined &&
     (parsedCursor === null || !isUuid(parsedCursor.id))

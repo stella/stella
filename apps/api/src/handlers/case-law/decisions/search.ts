@@ -56,9 +56,14 @@ import {
   currentCaseLawCorpusProjection,
 } from "@/api/lib/legal-search/case-law-corpus-projection";
 import { readServingCorpusIndexGenerationTx } from "@/api/lib/legal-search/corpus-index-generation-store";
-import type { CorpusIndexScanReport } from "@/api/lib/legal-search/corpus-index-pagination";
+import type {
+  CorpusIndexScanReport,
+  SearchCursor,
+} from "@/api/lib/legal-search/corpus-index-pagination";
 import {
+  decodeCorpusIndexCursor,
   emptyCorpusIndexScan,
+  encodeCorpusIndexCursor,
   readCorpusIndexSearchPage,
 } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
@@ -844,9 +849,9 @@ const searchCorpusIndexDecisions = async (
   const startedAt = performance.now();
   const limit = body.limit ?? LIMITS.caseLawSearchPageSizeDefault;
 
-  let parsedCursor: { score: number; id: string } | null = null;
+  let parsedCursor: SearchCursor | null = null;
   if (body.cursor) {
-    parsedCursor = decodeCursor(body.cursor);
+    parsedCursor = decodeCorpusIndexCursor(body.cursor);
     if (!parsedCursor || !isUuid(parsedCursor.id)) {
       return status(400, { message: "Invalid cursor" });
     }
@@ -985,14 +990,15 @@ const searchCorpusIndexDecisions = async (
   const {
     anchorIdById,
     context: { byId },
-    hasMore,
     pageRanked,
     scan,
     snippetById,
   } = searchPage;
 
-  const last = pageRanked.at(-1);
-  const nextCursor = hasMore && last ? encodeCursor(last.score, last.id) : null;
+  const nextCursor =
+    searchPage.nextCursor === null
+      ? null
+      : encodeCorpusIndexCursor(searchPage.nextCursor);
 
   // Timed around the call for the same reason as on the identity path.
   const alternatesStartedAt = performance.now();

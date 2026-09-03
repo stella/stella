@@ -22,7 +22,11 @@ import {
 } from "@/api/lib/legal-search/case-law-corpus-projection";
 import { corpusIndexBrowseFacets } from "@/api/lib/legal-search/corpus-index-facets";
 import { readServingCorpusIndexGenerationTx } from "@/api/lib/legal-search/corpus-index-generation-store";
-import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
+import {
+  decodeCorpusIndexCursor,
+  encodeCorpusIndexCursor,
+  readCorpusIndexSearchPage,
+} from "@/api/lib/legal-search/corpus-index-pagination";
 import { caseLawCorpusQuery } from "@/api/lib/legal-search/corpus-query";
 import { loadDocumentContext } from "@/api/lib/legal-search/document-context";
 import { resolveExpandedCorpusQuery } from "@/api/lib/legal-search/expansion";
@@ -41,7 +45,6 @@ import {
   definePublicLawSharedQuery,
   PUBLIC_LAW_SHARED_QUERY,
 } from "@/api/lib/public-law-shared-query";
-import { encodeCursor, decodeCursor } from "@/api/lib/search/cursor";
 
 /**
  * corpus index legal-search provider: two-stage retrieve-then-rerank.
@@ -148,7 +151,9 @@ const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
     query.jurisdiction,
   );
 
-  const parsedCursor = query.cursor ? decodeCursor(query.cursor) : null;
+  const parsedCursor = query.cursor
+    ? decodeCorpusIndexCursor(query.cursor)
+    : null;
 
   // The jurisdiction also selects the expansion dictionary, which is why the
   // resolver takes it separately from the clause.
@@ -229,14 +234,15 @@ const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
   const {
     anchorIdById,
     context: { displayById },
-    hasMore,
     pageRanked,
     passageCountById,
     snippetById,
   } = searchPage;
 
-  const last = pageRanked.at(-1);
-  const nextCursor = hasMore && last ? encodeCursor(last.score, last.id) : null;
+  const nextCursor =
+    searchPage.nextCursor === null
+      ? null
+      : encodeCorpusIndexCursor(searchPage.nextCursor);
 
   const hits: LegalSearchHit[] = pageRanked.flatMap((hit) => {
     const row = displayById.get(hit.id);
