@@ -44,6 +44,7 @@ import {
 } from "@/api/lib/document-processing-queue-policy";
 import { createReconciliationProgress } from "@/api/lib/document-processing-reconciliation-progress";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
+import { isTransientRedisConnectionError } from "@/api/lib/redis-error-classification";
 
 const queueSource = await Bun.file(
   new URL("document-processing-queue.ts", import.meta.url),
@@ -1126,6 +1127,55 @@ describe("worker interruption lifecycle", () => {
  * saturated phase as drained and lets the batch worker exit mid-drain, so
  * each phase states its own saturation and this only collects the answers.
  */
+/**
+ * The class this pins: a closed broker connection used to end the loop's
+ * usefulness for the rest of the process's life, because nothing behind the
+ * phase ever reconnected. Recovery is the connection's own property now, so
+ * the loop only has to survive the tick that saw the failure and run the next
+ * one against the replacement.
+ */
+describe("reconciliation across a closed broker connection", () => {
+  test("the tick after a closed-connection failure reports real counts", async () => {
+    const connectionClosed = Object.assign(new Error("Connection closed"), {
+      code: "ERR_REDIS_CONNECTION_CLOSED",
+    });
+    // The classifier is what decides this failure is worth another tick; a
+    // drifted code would make the assertions below pass for the wrong reason.
+    expect(isTransientRedisConnectionError(connectionClosed)).toBe(true);
+
+    let ticks = 0;
+    const errors: unknown[] = [];
+    const runTick = async () =>
+      await runDocumentProcessingReconciliationPhases({
+        onPhaseError: (error) => {
+          errors.push(error);
+        },
+        phases: [
+          {
+            name: "repair",
+            run: async () => {
+              ticks += 1;
+              if (ticks === 1) {
+                throw connectionClosed;
+              }
+              return await Promise.resolve({ count: 3, hasMore: false });
+            },
+          },
+        ],
+      });
+
+    const first = await runTick();
+    const second = await runTick();
+
+    expect(errors).toEqual([connectionClosed]);
+    // A failed phase proves nothing about its own backlog, so the tick that
+    // hit the closed connection reports work left behind...
+    expect(first.repair).toEqual({ count: 0, hasMore: true });
+    // ...and the next one drains for real instead of repeating the failure.
+    expect(second.repair).toEqual({ count: 3, hasMore: false });
+  });
+});
+
 describe("reconciliationLeftWorkBehind", () => {
   const resultsOf = async (
     phases: Parameters<

@@ -23,14 +23,19 @@ export const isRecoverableRedisPollError = (error: unknown): boolean =>
   error instanceof Error &&
   safeErrorCode(error) === RECOVERABLE_REDIS_POLL_ERROR_CODE;
 
-// Bun's RedisClient auto-reconnects a dropped socket, but a command issued
-// against the dead connection — the first touch after an idle window, or a
-// command in flight when the drop happens — rejects with
-// ERR_REDIS_CONNECTION_CLOSED instead of waiting for the reconnect. For a
-// periodic loop whose next tick retries anyway, that rejection is an
-// expected operational transient, not a defect; a persistent outage keeps
-// failing and stays visible through the loop's own error logging and the
-// worker/broadcast error paths.
+// Bun's RedisClient reconnects a dropped socket, but a command issued against
+// the dead connection — the first touch after an idle window, or a command in
+// flight when the drop happens — rejects with ERR_REDIS_CONNECTION_CLOSED
+// instead of waiting for the reconnect. For a periodic loop whose next tick
+// retries anyway, that rejection is an expected operational transient, not a
+// defect; a persistent outage keeps failing and stays visible through the
+// loop's own error logging and the worker/broadcast error paths.
+//
+// What makes this downgrade sound is that the connection always comes back:
+// `redis-client.ts` reconnects without an attempt cap, and the holders there
+// replace a client that closed anyway. Reintroduce a bounded ladder and this
+// code stops meaning "retry later" and starts meaning "this client is done",
+// at which point the downgrade would hide a permanent failure.
 const TRANSIENT_REDIS_CONNECTION_ERROR_CODE = "ERR_REDIS_CONNECTION_CLOSED";
 
 export const isTransientRedisConnectionError = (error: unknown): boolean =>
