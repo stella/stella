@@ -1,0 +1,38 @@
+name: Landing canary
+
+# Proves stll.app serves whole between deploys: the homepage, a few routes,
+# and every hashed asset the served homepage references. The same check the
+# landing deploy runs after publishing; here it runs on a schedule, so a page
+# that lost its assets is caught within the hour by a job rather than by a
+# visitor. A failed run alerts through scheduled-run-alerts.yml. Costs
+# nothing beyond a few seconds of hosted-runner time; nothing in AWS.
+
+on:
+  schedule:
+    # Every fifteen minutes, off the hour so it does not queue behind the
+    # hourly crowd.
+    - cron: "7,22,37,52 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  served:
+    name: stll.app serves whole
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout default branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: scripts/check-landing-served.sh
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Check the served site
+        env:
+          LANDING_SITE: https://stll.app
+        run: bash scripts/check-landing-served.sh
