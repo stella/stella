@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { getChangelogReleaseEntries, getChangelogReleases } from "./changelog";
+import {
+  getChangelogReleaseEntries,
+  getChangelogReleases,
+  getUnpromotedReleaseTags,
+} from "./changelog";
 
 describe("changelog release dates", () => {
   // A release page without a date entry renders dateless silently; the entry
@@ -15,6 +19,20 @@ describe("changelog release dates", () => {
       .filter((release) => release.publishedAt === null)
       .map((release) => release.tagName);
     expect(undated).toEqual([]);
+  });
+
+  // A stable tag that was built but never promoted has its notes file (the
+  // release cut requires one) and a `null` date entry; it must not surface
+  // anywhere the list feeds: the changelog, its preview pages, the homepage.
+  test("a release recorded as never promoted is omitted", () => {
+    const unpromoted = getUnpromotedReleaseTags();
+    expect(unpromoted).toContain("v0.8.10");
+    const listed = new Set(
+      getChangelogReleases().map(({ tagName }) => tagName),
+    );
+    for (const tagName of unpromoted) {
+      expect([tagName, listed.has(tagName)]).toEqual([tagName, false]);
+    }
   });
 
   test("grouped entries preserve every release exactly once", () => {
