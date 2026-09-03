@@ -16,7 +16,11 @@ import {
  * the rest of the connection metadata.
  */
 
-const COMPONENT_KEYS = [
+/**
+ * The components this helper requires when it assembles a URL. DB_SSLMODE is
+ * absent on purpose: it defaults to `require` when unset.
+ */
+export const DATABASE_COMPONENT_KEYS = [
   "DB_HOST",
   "DB_PORT",
   "DB_USER",
@@ -109,7 +113,7 @@ export const resolveDatabaseUrl = (
     DB_PASSWORD === undefined ||
     !DB_NAME
   ) {
-    const missing = COMPONENT_KEYS.filter((k) =>
+    const missing = DATABASE_COMPONENT_KEYS.filter((k) =>
       k === "DB_PASSWORD" ? env[k] === undefined : !env[k],
     );
     panic(

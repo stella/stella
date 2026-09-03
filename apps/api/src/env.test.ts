@@ -53,18 +53,42 @@ const readSelfhostLocalPasswordAuth = (
   return result.stdout.toString().trim();
 };
 
-const bootApiEnvironment = (env: Record<string, string | undefined>) =>
+const spawnApiEnvironment = (
+  env: Record<string, string | undefined>,
+  script: string,
+  // The repository .env would otherwise supply a DATABASE_URL, hiding the
+  // database-component path these cases exist to exercise.
+  ignoreEnvFile = false,
+) =>
   Bun.spawnSync({
     cmd: [
       process.execPath,
+      ...(ignoreEnvFile ? ["--no-env-file"] : []),
       "-e",
-      `const { env } = await import(${JSON.stringify(envModuleUrl)}); console.log(String(Object.isFrozen(env)));`,
+      script,
     ],
     cwd: repoRoot,
     env,
     stderr: "pipe",
     stdout: "pipe",
   });
+
+const FREEZE_SCRIPT = `const { env } = await import(${JSON.stringify(envModuleUrl)}); console.log(String(Object.isFrozen(env)));`;
+const DATABASE_URL_SCRIPT = `import { env } from ${JSON.stringify(envModuleUrl)}; console.log(env.DATABASE_URL);`;
+
+const bootApiEnvironment = (env: Record<string, string | undefined>) =>
+  spawnApiEnvironment(env, FREEZE_SCRIPT);
+
+const bootDerivedDatabaseEnvironment = (
+  env: Record<string, string | undefined>,
+) => spawnApiEnvironment(env, FREEZE_SCRIPT, true);
+
+const readDerivedDatabaseUrl = (env: Record<string, string | undefined>) => {
+  const result = spawnApiEnvironment(env, DATABASE_URL_SCRIPT, true);
+
+  expect(result.exitCode).toBe(0);
+  return result.stdout.toString().trim();
+};
 
 describe("API environment", () => {
   test("infers SMTP provider from complete SMTP settings", () => {
@@ -159,6 +183,91 @@ describe("API environment", () => {
     expect(result.exitCode).not.toBe(0);
     expect(result.stderr.toString()).toContain(
       'S3_CREDENTIALS_PROVIDER="env" requires static S3 credentials.',
+    );
+  });
+
+  test("reads a provisioning placeholder in an optional credential as absent", () => {
+    const result = bootApiEnvironment({
+      ...baseEnv,
+      S3_ACCESS_KEY_ID: "PLACEHOLDER_SET_ME",
+      S3_CREDENTIALS_PROVIDER: "env",
+      S3_SECRET_ACCESS_KEY: "UNCONFIGURED",
+    });
+
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr.toString()).toContain(
+      'S3_CREDENTIALS_PROVIDER="env" requires static S3 credentials.',
+    );
+  });
+
+  test("refuses to boot when a required value holds a placeholder", () => {
+    const result = bootApiEnvironment({
+      ...baseEnv,
+      S3_BUCKET: "PLACEHOLDER_SET_ME",
+    });
+
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr.toString()).toContain(
+      "S3_BUCKET must be set to a real value",
+    );
+  });
+
+  const databaseComponents = {
+    DB_HOST: "localhost",
+    DB_NAME: "stella",
+    DB_PASSWORD: "postgres",
+    DB_PORT: "5432",
+    DB_SSLMODE: "require",
+    DB_USER: "postgres",
+  } as const;
+  const { DATABASE_URL: _databaseUrl, ...envWithoutDatabaseUrl } = baseEnv;
+
+  test("refuses to assemble a database URL from a placeholder component", () => {
+    const result = bootDerivedDatabaseEnvironment({
+      ...envWithoutDatabaseUrl,
+      ...databaseComponents,
+      DB_PASSWORD: "PLACEHOLDER_SET_ME",
+    });
+
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr.toString()).toContain(
+      "DB_PASSWORD must be set to a real value",
+    );
+  });
+
+  test("ignores placeholder components when DATABASE_URL is supplied", () => {
+    const result = bootApiEnvironment({
+      ...baseEnv,
+      ...databaseComponents,
+      DB_PASSWORD: "PLACEHOLDER_SET_ME",
+      DB_USER: "UNCONFIGURED",
+    });
+
+    expect(result.stderr.toString()).not.toContain("placeholder");
+    expect(result.exitCode).toBe(0);
+  });
+
+  test("defaults the SSL mode when the component is empty", () => {
+    expect(
+      readDerivedDatabaseUrl({
+        ...envWithoutDatabaseUrl,
+        ...databaseComponents,
+        DB_SSLMODE: "",
+      }),
+    ).toBe(
+      "postgres://postgres:postgres@localhost:5432/stella?sslmode=require",
+    );
+  });
+
+  test("defaults the SSL mode when the component holds a placeholder", () => {
+    expect(
+      readDerivedDatabaseUrl({
+        ...envWithoutDatabaseUrl,
+        ...databaseComponents,
+        DB_SSLMODE: "UNCONFIGURED",
+      }),
+    ).toBe(
+      "postgres://postgres:postgres@localhost:5432/stella?sslmode=require",
     );
   });
 
