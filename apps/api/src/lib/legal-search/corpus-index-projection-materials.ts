@@ -172,6 +172,10 @@ const readCaseLawMaterials = async (
       court: caseLawDecisions.court,
       decisionDate: caseLawDecisions.decisionDate,
       ecli: caseLawDecisions.ecli,
+      // Read for `publisherSummaryOf` only. The decision's AST is not read
+      // here: the builder already holds it, from the payload object this
+      // transaction hands on a pointer to.
+      metadata: caseLawDecisions.metadata,
       projectionEpoch: caseLawDecisions.projectionEpoch,
       textS3Key: caseLawDecisions.textS3Key,
       astS3Key: caseLawDecisions.astS3Key,

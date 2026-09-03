@@ -398,6 +398,7 @@ const buildPreparedEntry = async (
     switch (material.family) {
       case "case_law":
         return buildCorpusProjectionDocuments({
+          family: material.family,
           manifest: material.manifest,
           input: material.input,
           payload: payload.value,
@@ -405,6 +406,7 @@ const buildPreparedEntry = async (
         });
       case "legislation":
         return buildCorpusProjectionDocuments({
+          family: material.family,
           manifest: material.manifest,
           input: material.input,
           payload: payload.value,

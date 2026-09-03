@@ -6,13 +6,21 @@ import {
   corpusIndexConfigFromManifest,
   corpusIndexIdFromManifest,
   corpusIndexManifestDigest,
+  corpusIndexPublisherSummaryField,
   requireCorpusIndexIdForManifest,
   requireCorpusIndexManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 
+/**
+ * A published generation's digest is the identity every projection fingerprint
+ * is derived from, so it may never move: a changed digest re-projects the whole
+ * corpus. Extend this map with a new generation; never edit an entry.
+ */
 const EXPECTED_DIGESTS = {
   case_law_v5:
     "7ee1e1bdbc0a1c746407333cac6eba21446d32b0eca461235569eac4197ed0ce",
+  case_law_v6:
+    "81a11a8216b59eaf076253b016c1dac8901d890e3ab183a6ac3f34fd051b0aea",
   legislation_v2:
     "dc252d8635081d8037e7f9b1aca6713181a27390e8eb6dda54139ae6a1e68583",
 } as const satisfies Record<keyof typeof CORPUS_INDEX_MANIFESTS, string>;
@@ -20,10 +28,14 @@ const EXPECTED_DIGESTS = {
 test("the final-generation registry is exact and fails closed", () => {
   expect(Object.keys(CORPUS_INDEX_MANIFESTS).sort()).toEqual([
     "case_law_v5",
+    "case_law_v6",
     "legislation_v2",
   ]);
   expect(requireCorpusIndexManifest("case_law", "case_law_v5")).toBe(
     CORPUS_INDEX_MANIFESTS.case_law_v5,
+  );
+  expect(requireCorpusIndexManifest("case_law", "case_law_v6")).toBe(
+    CORPUS_INDEX_MANIFESTS.case_law_v6,
   );
   expect(requireCorpusIndexManifest("legislation", "legislation_v2")).toBe(
     CORPUS_INDEX_MANIFESTS.legislation_v2,
@@ -39,6 +51,9 @@ test("the final-generation registry is exact and fails closed", () => {
 test("manifest digests pin every semantic array and ignore object key order", () => {
   expect(corpusIndexManifestDigest(CORPUS_INDEX_MANIFESTS.case_law_v5)).toBe(
     EXPECTED_DIGESTS.case_law_v5,
+  );
+  expect(corpusIndexManifestDigest(CORPUS_INDEX_MANIFESTS.case_law_v6)).toBe(
+    EXPECTED_DIGESTS.case_law_v6,
   );
   expect(corpusIndexManifestDigest(CORPUS_INDEX_MANIFESTS.legislation_v2)).toBe(
     EXPECTED_DIGESTS.legislation_v2,
@@ -307,9 +322,12 @@ test("final manifests make every storage and index cost explicit", () => {
       min_shards: 1,
     });
     expect(manifest.engine.indexConfig.retention).toBeNull();
-    expect(manifest.engine.indexConfig.search_settings).toEqual({
-      default_search_fields: ["title", "text"],
-    });
+    expect(
+      manifest.engine.indexConfig.search_settings.default_search_fields.slice(
+        0,
+        2,
+      ),
+    ).toEqual(["title", "text"]);
   }
 });
 
@@ -371,4 +389,62 @@ test("route topology and tag pruning are part of the manifest", () => {
     "status",
     "language",
   ]);
+});
+
+test("v6 adds the publisher summary and nothing else", () => {
+  const v5 = CORPUS_INDEX_MANIFESTS.case_law_v5.engine.indexConfig.doc_mapping;
+  const v6 = CORPUS_INDEX_MANIFESTS.case_law_v6.engine.indexConfig.doc_mapping;
+
+  expect(v6.field_mappings.map(({ name }) => name)).toEqual([
+    ...v5.field_mappings.map(({ name }) => name),
+    "headnote",
+  ]);
+  expect(v6.field_mappings.at(-1)).toEqual({
+    name: "headnote",
+    type: "text",
+    tokenizer: "folded",
+    record: "position",
+    fieldnorms: true,
+    indexed: true,
+    stored: false,
+    fast: false,
+  });
+  expect(v6.mode).toBe("strict");
+  expect(v6.tag_fields).toEqual(v5.tag_fields);
+  expect(v6.timestamp_field).toBe(v5.timestamp_field);
+  expect(
+    CORPUS_INDEX_MANIFESTS.case_law_v6.engine.indexConfig.search_settings,
+  ).toEqual({ default_search_fields: ["title", "text", "headnote"] });
+  // The reason the field can be a default search field at all: it is written
+  // once per document, so a free-text term reaching it cannot fan out over a
+  // decision's passages.
+  expect(
+    CORPUS_INDEX_MANIFESTS.case_law_v5.engine.indexConfig.search_settings,
+  ).toEqual({ default_search_fields: ["title", "text"] });
+  expect(CORPUS_INDEX_MANIFESTS.case_law_v6.projection.builderVersion).toBe(
+    "case-law-passages-v2",
+  );
+});
+
+test("only a generation that maps the field reports one", () => {
+  expect(
+    corpusIndexPublisherSummaryField(CORPUS_INDEX_MANIFESTS.case_law_v5),
+  ).toBeNull();
+  expect(
+    corpusIndexPublisherSummaryField(CORPUS_INDEX_MANIFESTS.case_law_v6),
+  ).toBe("headnote");
+  expect(
+    corpusIndexPublisherSummaryField(CORPUS_INDEX_MANIFESTS.legislation_v2),
+  ).toBeNull();
+  for (const manifest of Object.values(CORPUS_INDEX_MANIFESTS)) {
+    const field = corpusIndexPublisherSummaryField(manifest);
+    if (field === null) {
+      continue;
+    }
+    expect(
+      manifest.engine.indexConfig.doc_mapping.field_mappings.some(
+        ({ name }) => name === field,
+      ),
+    ).toBe(true);
+  }
 });

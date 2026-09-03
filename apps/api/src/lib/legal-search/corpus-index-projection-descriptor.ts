@@ -1,10 +1,12 @@
 import { panic } from "better-result";
 
+import { publisherSummaryOf } from "@/api/lib/case-law/publisher-summary";
 import { UNDATED_DECISION_TIMESTAMP } from "@/api/lib/legal-search/corpus-index-config";
 import {
   corpusIndexContractDigest,
   corpusIndexIdFromManifest,
   corpusIndexManifestDigest,
+  corpusIndexPublisherSummaryField,
   type CorpusIndexManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/lib/legal-search/corpus-storage";
@@ -19,7 +21,7 @@ type ProjectionInputBase = {
   redistributionEligible: boolean;
 };
 
-export type CaseLawV5ProjectionInput = ProjectionInputBase & {
+export type CaseLawProjectionInput = ProjectionInputBase & {
   family: "case_law";
   redacted: boolean;
   caseNumber: string;
@@ -27,6 +29,13 @@ export type CaseLawV5ProjectionInput = ProjectionInputBase & {
   court: string;
   decisionDate: string | null;
   ecli: string | null;
+  /**
+   * Publisher metadata as the adapter recorded it, read only through
+   * `publisherSummaryOf`. The document AST is that summary's other source and
+   * is deliberately absent here: it lives in object storage, while this input
+   * is assembled per row inside the canonical transaction.
+   */
+  metadata: Record<string, unknown> | null;
 };
 
 export type LegislationV2ProjectionInput = ProjectionInputBase & {
@@ -40,7 +49,7 @@ export type LegislationV2ProjectionInput = ProjectionInputBase & {
 };
 
 export type CorpusIndexProjectionInput =
-  | CaseLawV5ProjectionInput
+  | CaseLawProjectionInput
   | LegislationV2ProjectionInput;
 
 export type CorpusIndexProjectionDescriptor =
@@ -48,8 +57,8 @@ export type CorpusIndexProjectionDescriptor =
   | { action: "upsert"; fingerprint: string; indexId: string };
 
 const compareIdentifiers = (
-  left: CaseLawV5ProjectionInput["identifiers"][number],
-  right: CaseLawV5ProjectionInput["identifiers"][number],
+  left: CaseLawProjectionInput["identifiers"][number],
+  right: CaseLawProjectionInput["identifiers"][number],
 ): number => {
   if (left.type < right.type) {
     return -1;
@@ -63,12 +72,12 @@ const compareIdentifiers = (
   return left.value > right.value ? 1 : 0;
 };
 
-export const caseLawV5Title = ({
+export const caseLawProjectionTitle = ({
   identifiers,
   caseNumber,
   court,
 }: Pick<
-  CaseLawV5ProjectionInput,
+  CaseLawProjectionInput,
   "identifiers" | "caseNumber" | "court"
 >): string => {
   const canonicalIdentifiers = identifiers.toSorted(compareIdentifiers);
@@ -112,21 +121,37 @@ export const deriveCorpusIndexProjectionDescriptor = (
   } as const;
 
   switch (input.family) {
-    case "case_law":
+    case "case_law": {
+      // A fingerprint has to cover everything the generation writes. The
+      // summary's AST source is already covered through `contentHash`; its
+      // metadata source is not, so a generation carrying the field folds the
+      // metadata reading in and re-projects when a publisher edits it. A
+      // generation without the field keeps the fingerprints it already has.
+      const publisherSummary =
+        corpusIndexPublisherSummaryField(manifest) === null
+          ? {}
+          : {
+              publisherSummary: publisherSummaryOf({
+                documentAst: null,
+                metadata: input.metadata,
+              }),
+            };
       return {
         action: "upsert",
         indexId,
         fingerprint: corpusIndexContractDigest({
           ...common,
-          title: caseLawV5Title(input),
+          title: caseLawProjectionTitle(input),
           caseNumber: input.caseNumber,
           court: input.court,
           decisionDate: input.decisionDate,
           decisionDateTimestamp:
             input.decisionDate ?? UNDATED_DECISION_TIMESTAMP,
           ecli: input.ecli,
+          ...publisherSummary,
         }),
       };
+    }
     case "legislation":
       return {
         action: "upsert",

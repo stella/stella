@@ -13,6 +13,13 @@ test("legacy and final case-law reads use their declared schema", () => {
     openingPassageQuery: "is_opening:true",
     yearFacetField: "decision_year",
   });
+  // v6 changes what a bare term reaches, which the index decides, not the
+  // reader: the read contract is unchanged.
+  expect(corpusIndexReadContract("case_law", "case_law_v6")).toEqual({
+    family: "case_law",
+    openingPassageQuery: "is_opening:true",
+    yearFacetField: "decision_year",
+  });
 });
 
 test("legislation reads derive the final opening marker", () => {

@@ -15,6 +15,7 @@ import {
   CORPUS_INDEX_DATE_INPUT_FORMATS,
   DECISION_TIMESTAMP_FIELD,
   FOLDED_TOKENIZER,
+  PUBLISHER_SUMMARY_FIELD,
   canonicalCorpusIndexMaturationPeriod,
   type CorpusIndexConfig,
 } from "@/api/lib/legal-search/corpus-index-config";
@@ -41,17 +42,39 @@ type CorpusIndexManifestBase = {
   };
 };
 
-type CaseLawV5Manifest = CorpusIndexManifestBase & {
+type CaseLawManifestBase = CorpusIndexManifestBase & {
   family: "case_law";
+  route: {
+    type: "case_law_group";
+    byJurisdiction: typeof CASE_LAW_INDEX_GROUP_OF;
+  };
+};
+
+type CaseLawV5Manifest = CaseLawManifestBase & {
   generation: "case_law_v5";
   projection: CorpusIndexProjectionContract & {
     layout: "passage";
     builderVersion: "case-law-passages-v1";
     yearFacetField: "decision_year";
   };
-  route: {
-    type: "case_law_group";
-    byJurisdiction: typeof CASE_LAW_INDEX_GROUP_OF;
+};
+
+/**
+ * v5 plus the publisher summary, as its own searchable field on the opening
+ * passage. A new generation rather than a field added to v5: the case-law doc
+ * mapping is `strict`, so an index created without the field drops every
+ * document that carries it, and the engine never diffs the mapping of an
+ * index that already exists. v5 therefore keeps its exact bytes, and with them
+ * its manifest digest and every projection fingerprint derived from it, while
+ * v6 builds beside it.
+ */
+type CaseLawV6Manifest = CaseLawManifestBase & {
+  generation: "case_law_v6";
+  projection: CorpusIndexProjectionContract & {
+    layout: "passage";
+    builderVersion: "case-law-passages-v2";
+    yearFacetField: "decision_year";
+    publisherSummaryField: typeof PUBLISHER_SUMMARY_FIELD;
   };
 };
 
@@ -68,7 +91,10 @@ type LegislationV2Manifest = CorpusIndexManifestBase & {
   route: { type: "jurisdiction" };
 };
 
-export type CorpusIndexManifest = CaseLawV5Manifest | LegislationV2Manifest;
+export type CorpusIndexManifest =
+  | CaseLawV5Manifest
+  | CaseLawV6Manifest
+  | LegislationV2Manifest;
 export type CorpusIndexManifestGeneration = CorpusIndexManifest["generation"];
 
 type CorpusIndexFieldMapping =
@@ -147,11 +173,25 @@ const commonFields = (): CorpusIndexFieldMapping[] => [
   },
 ];
 
-const indexConfig = (
-  fieldMappings: CorpusIndexFieldMapping[],
-  tagFields: string[],
-  timestampField?: string,
-): Omit<CorpusIndexConfig, "index_id"> => ({
+type IndexConfigOptions = {
+  fieldMappings: CorpusIndexFieldMapping[];
+  tagFields: string[];
+  timestampField?: string;
+  /**
+   * What a bare free-text term reaches. Only a field written once per document
+   * belongs here: under a passage layout a field repeated across a document's
+   * passages lets one document answer a broad query with as many hits as it
+   * has passages.
+   */
+  defaultSearchFields: string[];
+};
+
+const indexConfig = ({
+  fieldMappings,
+  tagFields,
+  timestampField,
+  defaultSearchFields,
+}: IndexConfigOptions): Omit<CorpusIndexConfig, "index_id"> => ({
   version: CORPUS_FINAL_INDEX_CONFIG_VERSION,
   doc_mapping: {
     mode: "strict",
@@ -173,7 +213,7 @@ const indexConfig = (
     resources: { heap_size: CORPUS_FINAL_INDEX_HEAP_SIZE_BYTES },
   },
   ingest_settings: { min_shards: CORPUS_FINAL_INDEX_MIN_SHARDS },
-  search_settings: { default_search_fields: ["title", "text"] },
+  search_settings: { default_search_fields: defaultSearchFields },
   retention: null,
 });
 
@@ -188,43 +228,86 @@ const deepFreeze = <T>(value: T): T => {
   return value;
 };
 
+const caseLawFields = (): CorpusIndexFieldMapping[] => [
+  ...commonFields(),
+  {
+    name: "anchor_id",
+    type: "text",
+    indexed: false,
+    stored: true,
+    fast: false,
+    fieldnorms: false,
+  },
+  rawField("case_number", { stored: false, fast: false }),
+  rawField("court", { stored: false, fast: true }),
+  dateField("decision_date"),
+  // Quickwit 0.9 supports only fixed, not calendar, date-histogram
+  // intervals. The projection emits this exact civil year on the one
+  // opening passage only, avoiding both leap-year drift and per-passage
+  // fast-field duplication for browse facets.
+  unsignedIntegerField("decision_year"),
+  {
+    ...dateField(DECISION_TIMESTAMP_FIELD),
+    fast_precision: "seconds",
+  },
+  rawField("ecli", { stored: false, fast: false }),
+];
+
+const CASE_LAW_TAG_FIELDS = [
+  "jurisdiction",
+  "document_type",
+  "source",
+  "court",
+  "language",
+];
+
 const CASE_LAW_V5_INDEX_CONFIG = deepFreeze(
   structuredClone(
-    indexConfig(
-      [
-        ...commonFields(),
+    indexConfig({
+      fieldMappings: caseLawFields(),
+      tagFields: [...CASE_LAW_TAG_FIELDS],
+      timestampField: DECISION_TIMESTAMP_FIELD,
+      defaultSearchFields: ["title", "text"],
+    }),
+  ),
+);
+
+const CASE_LAW_V6_INDEX_CONFIG = deepFreeze(
+  structuredClone(
+    indexConfig({
+      fieldMappings: [
+        ...caseLawFields(),
+        // Positions and fieldnorms because the summary is prose a reader
+        // quotes from: a phrase has to match adjacently, and BM25 has to see
+        // how long the line is. Not stored, because the line a reader sees
+        // comes from Postgres; not fast, because nothing filters, sorts or
+        // aggregates on it.
         {
-          name: "anchor_id",
+          name: PUBLISHER_SUMMARY_FIELD,
           type: "text",
-          indexed: false,
-          stored: true,
+          tokenizer: FOLDED_TOKENIZER.name,
+          record: "position",
+          fieldnorms: true,
+          indexed: true,
+          stored: false,
           fast: false,
-          fieldnorms: false,
         },
-        rawField("case_number", { stored: false, fast: false }),
-        rawField("court", { stored: false, fast: true }),
-        dateField("decision_date"),
-        // Quickwit 0.9 supports only fixed, not calendar, date-histogram
-        // intervals. The projection emits this exact civil year on the one
-        // opening passage only, avoiding both leap-year drift and per-passage
-        // fast-field duplication for browse facets.
-        unsignedIntegerField("decision_year"),
-        {
-          ...dateField(DECISION_TIMESTAMP_FIELD),
-          fast_precision: "seconds",
-        },
-        rawField("ecli", { stored: false, fast: false }),
       ],
-      ["jurisdiction", "document_type", "source", "court", "language"],
-      DECISION_TIMESTAMP_FIELD,
-    ),
+      tagFields: [...CASE_LAW_TAG_FIELDS],
+      timestampField: DECISION_TIMESTAMP_FIELD,
+      // Safe to widen here and nowhere else: the summary is written to the
+      // opening passage only, so a free-text term reaching it answers once per
+      // document, exactly as `title` does. A generation's search settings are
+      // fixed when its indexes are created, so v5 keeps searching two fields.
+      defaultSearchFields: ["title", "text", PUBLISHER_SUMMARY_FIELD],
+    }),
   ),
 );
 
 const LEGISLATION_V2_INDEX_CONFIG = deepFreeze(
   structuredClone(
-    indexConfig(
-      [
+    indexConfig({
+      fieldMappings: [
         ...commonFields(),
         rawField("status", { stored: false, fast: true }),
         dateField("effective_date"),
@@ -232,8 +315,15 @@ const LEGISLATION_V2_INDEX_CONFIG = deepFreeze(
         dateField("version_valid_to"),
         rawField("eli", { stored: false, fast: false }),
       ],
-      ["jurisdiction", "document_type", "source", "status", "language"],
-    ),
+      tagFields: [
+        "jurisdiction",
+        "document_type",
+        "source",
+        "status",
+        "language",
+      ],
+      defaultSearchFields: ["title", "text"],
+    }),
   ),
 );
 
@@ -254,6 +344,29 @@ export const CORPUS_INDEX_MANIFESTS = deepFreeze({
       projectionRevisionField: "projection_revision",
       openingField: "is_opening",
       yearFacetField: "decision_year",
+    },
+    route: {
+      type: "case_law_group",
+      byJurisdiction: { ...CASE_LAW_INDEX_GROUP_OF },
+    },
+  },
+  case_law_v6: {
+    schemaVersion: CORPUS_INDEX_MANIFEST_SCHEMA_VERSION,
+    family: "case_law",
+    generation: "case_law_v6",
+    cluster: "q09",
+    engine: {
+      binaryVersion: QUICKWIT_V09_BINARY_VERSION,
+      indexConfig: CASE_LAW_V6_INDEX_CONFIG,
+    },
+    projection: {
+      layout: "passage",
+      builderVersion: "case-law-passages-v2",
+      documentIdField: "document_id",
+      projectionRevisionField: "projection_revision",
+      openingField: "is_opening",
+      yearFacetField: "decision_year",
+      publisherSummaryField: PUBLISHER_SUMMARY_FIELD,
     },
     route: {
       type: "case_law_group",
@@ -289,15 +402,42 @@ export const requireCorpusIndexManifest = (
 ): CorpusIndexManifest => {
   switch (family) {
     case "case_law":
-      return generation === "case_law_v5"
-        ? CORPUS_INDEX_MANIFESTS.case_law_v5
-        : panic(`Unknown case-law index manifest: ${generation}`);
+      switch (generation) {
+        case "case_law_v5":
+          return CORPUS_INDEX_MANIFESTS.case_law_v5;
+        case "case_law_v6":
+          return CORPUS_INDEX_MANIFESTS.case_law_v6;
+        default:
+          return panic(`Unknown case-law index manifest: ${generation}`);
+      }
     case "legislation":
       return generation === "legislation_v2"
         ? CORPUS_INDEX_MANIFESTS.legislation_v2
         : panic(`Unknown legislation index manifest: ${generation}`);
     default:
       return panic("Unknown corpus index manifest family");
+  }
+};
+
+/**
+ * The index field a generation carries the publisher summary in, or null for
+ * a generation whose indexes never mapped one. Total over every generation, so
+ * a new one has to answer rather than inherit: writing the field into a
+ * `strict` index that does not map it drops the whole document, and the engine
+ * reports that as a successful ingest.
+ */
+export const corpusIndexPublisherSummaryField = (
+  manifest: CorpusIndexManifest,
+): typeof PUBLISHER_SUMMARY_FIELD | null => {
+  switch (manifest.generation) {
+    case "case_law_v5":
+      return null;
+    case "case_law_v6":
+      return manifest.projection.publisherSummaryField;
+    case "legislation_v2":
+      return null;
+    default:
+      return manifest satisfies never;
   }
 };
 

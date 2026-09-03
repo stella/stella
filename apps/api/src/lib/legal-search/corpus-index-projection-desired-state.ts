@@ -21,7 +21,7 @@ import {
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
   deriveCorpusIndexProjectionDescriptor,
-  type CaseLawV5ProjectionInput,
+  type CaseLawProjectionInput,
   type CorpusIndexProjectionDescriptor,
   type CorpusIndexProjectionInput,
   type LegislationV2ProjectionInput,
@@ -101,6 +101,7 @@ export type CaseLawProjectionCanonicalInput = {
   court: string;
   decisionDate: string | null;
   ecli: string | null;
+  metadata: Record<string, unknown> | null;
   sourceDescriptor: Parameters<typeof isRedistributable>[0];
 };
 
@@ -117,8 +118,9 @@ export const caseLawProjectionInputFromCanonical = ({
   court,
   decisionDate,
   ecli,
+  metadata,
   sourceDescriptor,
-}: CaseLawProjectionCanonicalInput): CaseLawV5ProjectionInput => ({
+}: CaseLawProjectionCanonicalInput): CaseLawProjectionInput => ({
   family: "case_law",
   documentId,
   sourceId,
@@ -133,6 +135,7 @@ export const caseLawProjectionInputFromCanonical = ({
   court,
   decisionDate,
   ecli,
+  metadata,
 });
 
 export type LegislationProjectionCanonicalInput = {
@@ -369,6 +372,7 @@ const lockCaseLawProjectionInput = async (
       court: caseLawDecisions.court,
       decisionDate: caseLawDecisions.decisionDate,
       ecli: caseLawDecisions.ecli,
+      metadata: caseLawDecisions.metadata,
       projectionEpoch: caseLawDecisions.projectionEpoch,
     })
     .from(caseLawDecisions)
