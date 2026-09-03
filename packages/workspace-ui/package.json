@@ -77,7 +77,7 @@
     "@base-ui/react": "catalog:",
     "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
-    "@tanstack/react-table": "9.2.3",
+    "@tanstack/react-table": "9.2.4",
     "@types/react": "catalog:react19",
     "@types/react-dom": "catalog:react19",
     "bun-types": "catalog:",
