@@ -68,6 +68,15 @@ marketing:reshoot` re-records only the stale captures (see
    For RCs, use matching values such as `VERSION=1.2.3-rc.1` and
    `docs/changelog/v1.2.3-rc.1.md`.
 
+   A pull request that changes `VERSION` (or any migration) also runs the
+   `migration-upgrade-rehearsal` CI job: it applies the schema of the release
+   production currently serves from that release's published image, fills the
+   registered high-volume tables with scale-shaped rows, then runs this
+   commit's migrate entrypoint under a budget, reruns it, and checks schema
+   parity. Its summary reports the base release and the timings.
+   `scripts/rehearse-migration-upgrade.sh` runs the same rehearsal locally
+   against an empty database.
+
 5. Merge the commit to `main`. The `tag-on-version-bump.yml` workflow pushes
    the matching `vX.Y.Z` tag automatically. The tag then triggers
    `release.yml`.

@@ -48,6 +48,7 @@ jobs:
       landing_build_required: ${{ steps.changed-files.outputs.landing_build_required }}
       legal_atlas_image_required: ${{ steps.changed-files.outputs.legal_atlas_image_required }}
       marketing_screenshots_required: ${{ steps.changed-files.outputs.marketing_screenshots_required }}
+      migration_rehearsal_required: ${{ steps.changed-files.outputs.migration_rehearsal_required }}
       mobile_build_required: ${{ steps.changed-files.outputs.mobile_build_required }}
       package_checks_required: ${{ steps.changed-files.outputs.package_checks_required }}
       release_typecheck_required: ${{ steps.changed-files.outputs.release_typecheck_required }}
@@ -104,6 +105,7 @@ jobs:
               echo "landing_build_required=true"
               echo "legal_atlas_image_required=true"
               echo "marketing_screenshots_required=true"
+              echo "migration_rehearsal_required=true"
               echo "mobile_build_required=true"
               echo "package_checks_required=true"
               echo "release_typecheck_required=false"
@@ -129,6 +131,7 @@ jobs:
               echo "landing_build_required=false"
               echo "legal_atlas_image_required=false"
               echo "marketing_screenshots_required=false"
+              echo "migration_rehearsal_required=false"
               echo "mobile_build_required=false"
               echo "package_checks_required=true"
               echo "release_typecheck_required=false"
@@ -166,6 +169,7 @@ jobs:
           collab_redis_required=false
           landing_build_required=false
           legal_atlas_image_required=false
+          migration_rehearsal_required=false
           mobile_build_required=false
           release_typecheck_required=false
           stack_redaction_browsers_required=false
@@ -176,6 +180,17 @@ jobs:
             if [[ "$file" == "VERSION" ]]; then
               release_typecheck_required=true
             fi
+            # The upgrade rehearsal: what a promotion of this change would run
+            # against production's schema at production's row counts. A
+            # release PR always rehearses; so does anything that changes what
+            # the migrate entrypoint applies (the migration files, the db and
+            # lib/db modules, and the script modules the online repairs
+            # reuse) or how the rehearsal seeds and measures.
+            case "$file" in
+              VERSION|apps/api/drizzle/*|apps/api/src/db/*|apps/api/src/lib/db/*|apps/api/src/lib/decision-date-bounds-sql.ts|apps/api/src/handlers/case-law/citation-resolution.ts|apps/api/src/scripts/*|scripts/rehearse-migration-upgrade.sh|scripts/migration-rehearsal-db.ts|.github/workflows/ci.yml)
+                migration_rehearsal_required=true
+                ;;
+            esac
             case "$file" in
               .github/workflows/agent-sandbox-canary.yml|.github/workflows/ci.yml|packages/agent-engine/*|package.json|bun.lock|scripts/bun-ci-retry.sh)
                 agent_sandbox_docker_required=true
@@ -253,6 +268,7 @@ jobs:
             echo "landing_build_required=$landing_build_required"
             echo "legal_atlas_image_required=$legal_atlas_image_required"
             echo "marketing_screenshots_required=$marketing_screenshots_required"
+            echo "migration_rehearsal_required=$migration_rehearsal_required"
             echo "mobile_build_required=$mobile_build_required"
             echo "package_checks_required=$package_checks_required"
             echo "release_typecheck_required=$release_typecheck_required"
@@ -1238,6 +1254,90 @@ jobs:
   # A VERSION change is the last review boundary before tag creation. Pay the
   # cost of the compiler's complete, uncached project graph there while keeping
   # ordinary pull requests on the fast Oxc diagnostics path.
+  migration-upgrade-rehearsal:
+    # Promotes this change's migrate entrypoint the way production would:
+    # the promoted release's schema (from its published image), the
+    # registered high-volume tables at scale, then this checkout's schema
+    # migrations and online phase under a budget, a rerun, and schema
+    # parity. See scripts/rehearse-migration-upgrade.sh.
+    needs: ci-plan
+    if: >-
+      (needs.ci-plan.outputs.trusted == 'true'
+       || github.event_name == 'workflow_dispatch')
+      && needs.ci-plan.outputs.migration_rehearsal_required == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      packages: read # pull the promoted release's API image
+
+    services:
+      postgres:
+        image: postgres:18.4@sha256:a02db8cac496f15b094798a38254f14d6e00741f709360e5e00bb6668ea31636
+        env:
+          POSTGRES_USER: stella_owner
+          POSTGRES_PASSWORD: stella
+          POSTGRES_DB: stella
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U stella_owner -d stella"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@2703e4d3ed115089e593e4ca5cc749be4a5d8cee
+
+      - name: Install dependencies
+        run: bash scripts/bun-ci-retry.sh --ignore-scripts
+        env:
+          # .npmrc references NPM_TOKEN, but PR installs must not expose
+          # the real npm token to dependency lifecycle scripts.
+          NPM_TOKEN: ""
+
+      # The base image is pulled here, in workflow-owned steps, and the
+      # registry credential is discarded before any checked-out script runs:
+      # a pull request must not inherit a token that reads private packages.
+      - name: Resolve the promoted release
+        id: base
+        run: |
+          set -euo pipefail
+          version="$(curl -fsS --max-time 15 https://api.stll.app/ready | jq -r '.version // empty')"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Production did not report a stable version (got '${version}')."
+            exit 1
+          fi
+          echo "ref=v${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull the promoted release's API image
+        env:
+          BASE_IMAGE: ghcr.io/${{ github.repository_owner }}/stella-api:${{ steps.base.outputs.ref }}
+        run: docker pull --quiet "$BASE_IMAGE"
+
+      - name: Drop the registry credential
+        run: docker logout ghcr.io
+
+      - name: Rehearse the upgrade from the promoted release at scale
+        env:
+          DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
+          REHEARSAL_BASE_IMAGE_REPOSITORY: ghcr.io/${{ github.repository_owner }}/stella-api
+          REHEARSAL_BASE_REF: ${{ steps.base.outputs.ref }}
+        run: bash scripts/rehearse-migration-upgrade.sh
+
   release-typecheck:
     needs: ci-plan
     if: >-
@@ -2365,6 +2465,7 @@ jobs:
         mobile-build,
         landing-build,
         marketing-screenshots,
+        migration-upgrade-rehearsal,
         e2e,
         stack-redaction-browsers,
         api-image-deps,
@@ -2390,6 +2491,7 @@ jobs:
           CODE_QUALITY_RESULT: ${{ needs.code-quality.result }}
           LEGAL_ATLAS_IMAGE_RESULT: ${{ needs.legal-atlas-image.result }}
           MARKETING_SCREENSHOTS_RESULT: ${{ needs.marketing-screenshots.result }}
+          MIGRATION_REHEARSAL_RESULT: ${{ needs.migration-upgrade-rehearsal.result }}
           MOBILE_RESULT: ${{ needs.mobile-build.result }}
           TRUSTED: ${{ needs.ci-plan.outputs.trusted }}
           PLAN_RESULT: ${{ needs.ci-plan.result }}
@@ -2422,6 +2524,7 @@ jobs:
                   || "$MOBILE_RESULT" == "failure" || "$MOBILE_RESULT" == "cancelled" \
                   || "$LANDING_RESULT" == "failure" || "$LANDING_RESULT" == "cancelled" \
                   || "$MARKETING_SCREENSHOTS_RESULT" == "failure" || "$MARKETING_SCREENSHOTS_RESULT" == "cancelled" \
+                  || "$MIGRATION_REHEARSAL_RESULT" == "failure" || "$MIGRATION_REHEARSAL_RESULT" == "cancelled" \
                   || "$E2E_RESULT" == "failure" || "$E2E_RESULT" == "cancelled" \
                   || "$API_IMAGE_DEPS_RESULT" == "failure" || "$API_IMAGE_DEPS_RESULT" == "cancelled" \
                   || "$LEGAL_ATLAS_IMAGE_RESULT" == "failure" || "$LEGAL_ATLAS_IMAGE_RESULT" == "cancelled" \
@@ -2453,12 +2556,12 @@ jobs:
 
           # "cancelled" means cancel-in-progress replaced this
           # run with a newer one; the newer run is authoritative.
-          if [[ "$AGENT_SANDBOX_DOCKER_RESULT" == "cancelled" || "$CI_RESULT" == "cancelled" || "$COLLAB_REDIS_RESULT" == "cancelled" || "$CODE_QUALITY_RESULT" == "cancelled" || "$POSTGRES_SUITES_RESULT" == "cancelled" || "$RELEASE_TYPECHECK_RESULT" == "cancelled" || "$STACK_REDACTION_BROWSERS_RESULT" == "cancelled" || "$TYPECHECK_BASELINE_RESULT" == "cancelled" || "$WEB_RESULT" == "cancelled" || "$WEB_IMAGE_SMOKE_RESULT" == "cancelled" || "$MOBILE_RESULT" == "cancelled" || "$LANDING_RESULT" == "cancelled" || "$MARKETING_SCREENSHOTS_RESULT" == "cancelled" || "$E2E_RESULT" == "cancelled" || "$API_IMAGE_DEPS_RESULT" == "cancelled" || "$LEGAL_ATLAS_IMAGE_RESULT" == "cancelled" || "$WINDOWS_SCRIPTS_RESULT" == "cancelled" || "$CHANGESET_RESULT" == "cancelled" || "$DESKTOP_CLIPPY_RESULT" == "cancelled" ]]; then
+          if [[ "$AGENT_SANDBOX_DOCKER_RESULT" == "cancelled" || "$CI_RESULT" == "cancelled" || "$COLLAB_REDIS_RESULT" == "cancelled" || "$CODE_QUALITY_RESULT" == "cancelled" || "$POSTGRES_SUITES_RESULT" == "cancelled" || "$RELEASE_TYPECHECK_RESULT" == "cancelled" || "$STACK_REDACTION_BROWSERS_RESULT" == "cancelled" || "$TYPECHECK_BASELINE_RESULT" == "cancelled" || "$WEB_RESULT" == "cancelled" || "$WEB_IMAGE_SMOKE_RESULT" == "cancelled" || "$MOBILE_RESULT" == "cancelled" || "$LANDING_RESULT" == "cancelled" || "$MARKETING_SCREENSHOTS_RESULT" == "cancelled" || "$MIGRATION_REHEARSAL_RESULT" == "cancelled" || "$E2E_RESULT" == "cancelled" || "$API_IMAGE_DEPS_RESULT" == "cancelled" || "$LEGAL_ATLAS_IMAGE_RESULT" == "cancelled" || "$WINDOWS_SCRIPTS_RESULT" == "cancelled" || "$CHANGESET_RESULT" == "cancelled" || "$DESKTOP_CLIPPY_RESULT" == "cancelled" ]]; then
             echo "CI run was superseded by a newer run (cancel-in-progress). Passing."
             exit 0
           fi
 
-          if [[ "$AGENT_SANDBOX_DOCKER_RESULT" == "failure" || "$CI_RESULT" == "failure" || "$COLLAB_REDIS_RESULT" == "failure" || "$CODE_QUALITY_RESULT" == "failure" || "$POSTGRES_SUITES_RESULT" == "failure" || "$RELEASE_TYPECHECK_RESULT" == "failure" || "$STACK_REDACTION_BROWSERS_RESULT" == "failure" || "$TYPECHECK_BASELINE_RESULT" == "failure" || "$WEB_RESULT" == "failure" || "$WEB_IMAGE_SMOKE_RESULT" == "failure" || "$MOBILE_RESULT" == "failure" || "$LANDING_RESULT" == "failure" || "$MARKETING_SCREENSHOTS_RESULT" == "failure" || "$E2E_RESULT" == "failure" || "$API_IMAGE_DEPS_RESULT" == "failure" || "$LEGAL_ATLAS_IMAGE_RESULT" == "failure" || "$WINDOWS_SCRIPTS_RESULT" == "failure" || "$CHANGESET_RESULT" == "failure" || "$DESKTOP_CLIPPY_RESULT" == "failure" ]]; then
+          if [[ "$AGENT_SANDBOX_DOCKER_RESULT" == "failure" || "$CI_RESULT" == "failure" || "$COLLAB_REDIS_RESULT" == "failure" || "$CODE_QUALITY_RESULT" == "failure" || "$POSTGRES_SUITES_RESULT" == "failure" || "$RELEASE_TYPECHECK_RESULT" == "failure" || "$STACK_REDACTION_BROWSERS_RESULT" == "failure" || "$TYPECHECK_BASELINE_RESULT" == "failure" || "$WEB_RESULT" == "failure" || "$WEB_IMAGE_SMOKE_RESULT" == "failure" || "$MOBILE_RESULT" == "failure" || "$LANDING_RESULT" == "failure" || "$MARKETING_SCREENSHOTS_RESULT" == "failure" || "$MIGRATION_REHEARSAL_RESULT" == "failure" || "$E2E_RESULT" == "failure" || "$API_IMAGE_DEPS_RESULT" == "failure" || "$LEGAL_ATLAS_IMAGE_RESULT" == "failure" || "$WINDOWS_SCRIPTS_RESULT" == "failure" || "$CHANGESET_RESULT" == "failure" || "$DESKTOP_CLIPPY_RESULT" == "failure" ]]; then
             echo "::error::CI checks failed."
             exit 1
           fi
