@@ -10,6 +10,7 @@
     "./chat": "./src/chat.ts",
     "./chat-docx-suggestions": "./src/chat-docx-suggestions.ts",
     "./chat-file-types": "./src/chat-file-types.ts",
+    "./decision-query-intent": "./src/decision-query-intent.ts",
     "./desktop-rpc": "./src/desktop-rpc.gen.ts",
     "./document-translation": "./src/document-translation.ts",
     "./entity-options": "./src/entity-options.ts",

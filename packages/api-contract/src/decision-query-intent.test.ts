@@ -6,7 +6,7 @@ import { propertyConfig } from "@stll/property-testing";
 import {
   exactDecisionMatches,
   parseDecisionQuery,
-} from "@/features/case-law/decision-query-intent";
+} from "./decision-query-intent";
 
 /** Dockets as the corpus's courts print them, one per grammar. */
 const canonicalDockets = [

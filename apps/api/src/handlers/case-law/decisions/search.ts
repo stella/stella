@@ -4,6 +4,11 @@ import { status } from "elysia";
 import type { Static } from "elysia";
 
 import {
+  type DecisionQueryIntent,
+  parseDecisionQuery,
+} from "@stll/api-contract/decision-query-intent";
+
+import {
   caseLawCorpusIndexProjections,
   caseLawDecisionIdentifiers,
   caseLawDecisions,
@@ -16,10 +21,14 @@ import {
 } from "@/api/handlers/case-law/citation-score";
 import { loadCourtWeightEntriesForSql } from "@/api/handlers/case-law/court-weights";
 import type { searchDecisionsBodySchema } from "@/api/handlers/case-law/decisions/search-schema";
+import { bareCitationKey } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { arrayOrEmpty } from "@/api/lib/array";
 // eslint-disable-next-line no-restricted-imports -- search boundary: brands document ids returned by the corpus index before re-hydrating from Postgres
-import { toSafeId } from "@/api/lib/branded-types";
-import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import { type SafeId, toSafeId } from "@/api/lib/branded-types";
+import type {
+  CaseLawPublicReadDb,
+  CaseLawPublicReadTransaction,
+} from "@/api/lib/case-law-public-read-db";
 import {
   decisionHeadnoteSql,
   normalizeDecisionHeadnote,
@@ -58,7 +67,7 @@ import {
   blendStableCitationAuthority,
   stableBlendUpperBound,
 } from "@/api/lib/legal-search/rerank";
-import type { ScoredCandidate } from "@/api/lib/legal-search/rerank";
+import type { RankedHit, ScoredCandidate } from "@/api/lib/legal-search/rerank";
 import { LIMITS } from "@/api/lib/limits";
 import { decodeCursor, encodeCursor } from "@/api/lib/search/cursor";
 import {
@@ -512,11 +521,69 @@ const extractCorpusSnippet = (
   return raw.replaceAll("<b>", "<mark>").replaceAll("</b>", "</mark>");
 };
 
+const hydratedDecisionRowsQuery = (
+  tx: CaseLawPublicReadTransaction,
+  ids: SafeId<"caseLawDecision">[],
+  filters: SQL[],
+  generation: string,
+) =>
+  tx
+    .select({
+      id: caseLawDecisions.id,
+      caseNumber: caseLawDecisions.caseNumber,
+      slug: caseLawDecisions.slug,
+      ecli: caseLawDecisions.ecli,
+      identifiers: sql<unknown>`coalesce((
+        SELECT jsonb_agg(
+          jsonb_build_object(
+            'type', identifier.type,
+            'value', identifier.value
+          )
+          ORDER BY identifier.type, identifier.value
+        )
+        FROM ${caseLawDecisionIdentifiers} identifier
+        WHERE identifier.decision_id = ${caseLawDecisions.id}
+      ), '[]'::jsonb)`,
+      court: caseLawDecisions.court,
+      country: caseLawDecisions.country,
+      language: caseLawDecisions.language,
+      languageGroupKey: caseLawDecisions.languageGroupKey,
+      decisionDate: caseLawDecisions.decisionDate,
+      decisionType: caseLawDecisions.decisionType,
+      sourceUrl: caseLawDecisions.sourceUrl,
+      headnote: decisionHeadnoteSql(caseLawDecisions.metadata),
+      citationCount: caseLawDecisions.citationCount,
+      citationAuthority: caseLawDecisions.citationAuthority,
+      createdAt: caseLawDecisions.createdAt,
+    })
+    .from(caseLawDecisions)
+    .leftJoin(
+      caseLawCorpusIndexProjections,
+      caseLawCorpusProjectionJoin(generation),
+    )
+    .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
+    .where(and(inArray(caseLawDecisions.id, ids), ...filters));
+
+type HydratedDecisionRow = Awaited<
+  ReturnType<typeof hydratedDecisionRowsQuery>
+>[number];
+
+/**
+ * What one request has read so far: a row, or null for an id the current
+ * rows no longer answer for (filtered out, scrubbed, pending). A scan ranks
+ * everything it has accumulated after every round, so without this record
+ * each round re-reads what the earlier rounds read, and the request's
+ * database work grows with the square of the rounds.
+ */
+type HydratedDecisionRows = Map<string, HydratedDecisionRow | null>;
+
 type RehydrateCaseLawCandidatesOptions = {
   body: SearchDecisionsBody;
   candidates: readonly ScoredCandidate[];
   caseLawDb: CaseLawPublicReadDb;
   generation: string;
+  /** The request's record of rows read so far; only ids absent from it are read. */
+  hydrated?: HydratedDecisionRows | undefined;
 };
 
 /**
@@ -529,10 +596,11 @@ export const rehydrateCaseLawCandidates = async ({
   candidates,
   caseLawDb,
   generation,
+  hydrated = new Map(),
 }: RehydrateCaseLawCandidatesOptions) => {
-  const ids = candidates.map((candidate) =>
-    toSafeId<"caseLawDecision">(candidate.id),
-  );
+  const ids = candidates
+    .filter((candidate) => !hydrated.has(candidate.id))
+    .map((candidate) => toSafeId<"caseLawDecision">(candidate.id));
   // Reapply the request filters against the current rows: a stale
   // corpus hit (metadata changed, async re-index/delete pending) must
   // not satisfy filters it no longer matches.
@@ -575,52 +643,23 @@ export const rehydrateCaseLawCandidates = async ({
     ids.length === 0
       ? []
       : await caseLawDb((tx) =>
-          tx
-            .select({
-              id: caseLawDecisions.id,
-              caseNumber: caseLawDecisions.caseNumber,
-              slug: caseLawDecisions.slug,
-              ecli: caseLawDecisions.ecli,
-              identifiers: sql<unknown>`coalesce((
-                SELECT jsonb_agg(
-                  jsonb_build_object(
-                    'type', identifier.type,
-                    'value', identifier.value
-                  )
-                  ORDER BY identifier.type, identifier.value
-                )
-                FROM ${caseLawDecisionIdentifiers} identifier
-                WHERE identifier.decision_id = ${caseLawDecisions.id}
-              ), '[]'::jsonb)`,
-              court: caseLawDecisions.court,
-              country: caseLawDecisions.country,
-              language: caseLawDecisions.language,
-              languageGroupKey: caseLawDecisions.languageGroupKey,
-              decisionDate: caseLawDecisions.decisionDate,
-              decisionType: caseLawDecisions.decisionType,
-              sourceUrl: caseLawDecisions.sourceUrl,
-              headnote: decisionHeadnoteSql(caseLawDecisions.metadata),
-              citationCount: caseLawDecisions.citationCount,
-              citationAuthority: caseLawDecisions.citationAuthority,
-              createdAt: caseLawDecisions.createdAt,
-            })
-            .from(caseLawDecisions)
-            .leftJoin(
-              caseLawCorpusIndexProjections,
-              caseLawCorpusProjectionJoin(generation),
-            )
-            .innerJoin(
-              caseLawSources,
-              eq(caseLawSources.id, caseLawDecisions.sourceId),
-            )
-            .where(
-              and(inArray(caseLawDecisions.id, ids), ...rehydrationFilters),
-            ),
+          hydratedDecisionRowsQuery(tx, ids, rehydrationFilters, generation),
         );
+  for (const id of ids) {
+    hydrated.set(id, null);
+  }
+  for (const row of rows) {
+    hydrated.set(String(row.id), row);
+  }
 
-  const byId = new Map(rows.map((row) => [String(row.id), row]));
+  const byId = new Map<string, HydratedDecisionRow>();
+  for (const [id, row] of hydrated) {
+    if (row !== null) {
+      byId.set(id, row);
+    }
+  }
   const authorityById = new Map(
-    rows.map((row) => [String(row.id), row.citationAuthority]),
+    [...byId].map(([id, row]) => [id, row.citationAuthority]),
   );
 
   // Candidates missing from Postgres (index/DB drift) are dropped. Every
@@ -641,89 +680,77 @@ export const rehydrateCaseLawCandidates = async ({
   return { context: { byId }, ranked: representatives };
 };
 
-const searchCorpusIndexDecisions = async (
-  body: SearchDecisionsBody,
+type DecisionIdentity = Extract<DecisionQueryIntent, { type: "identifier" }>;
+
+/**
+ * The decisions an entry names outright. A docket or an ECLI tokenises into
+ * numbers and abbreviations the text index matches loosely (a plenary docket
+ * ranks every plenary decision sharing a number with it), so an identifier
+ * is answered from the identity columns instead: the canonical citation key
+ * the citator resolves by, and the ECLI as published. Bounded by the page
+ * size: past that the entry names a list, not a decision.
+ */
+export const findDecisionIdsByIdentity = async (
   caseLawDb: CaseLawPublicReadDb,
-) => {
-  const limit = body.limit ?? LIMITS.caseLawSearchPageSizeDefault;
-
-  let parsedCursor: { score: number; id: string } | null = null;
-  if (body.cursor) {
-    parsedCursor = decodeCursor(body.cursor);
-    if (!parsedCursor || !isUuid(parsedCursor.id)) {
-      return status(400, { message: "Invalid cursor" });
-    }
-  }
-
-  if (body.country !== undefined && !isCorpusIndexJurisdiction(body.country)) {
-    return status(400, { message: "Invalid country" });
-  }
-
-  const serving = await caseLawDb(
-    async (tx) => await readServingCorpusIndexGenerationTx(tx, "case_law"),
+  identity: DecisionIdentity,
+  country: string | undefined,
+): Promise<SafeId<"caseLawDecision">[]> => {
+  const identityPredicate =
+    identity.kind === "ecli"
+      ? inArray(caseLawDecisions.ecli, [
+          identity.value,
+          identity.value.toUpperCase(),
+        ])
+      : eq(caseLawDecisions.citationKey, bareCitationKey(identity.value));
+  const rows = await caseLawDb((tx) =>
+    tx
+      .select({ id: caseLawDecisions.id })
+      .from(caseLawDecisions)
+      .where(
+        and(
+          identityPredicate,
+          country === undefined
+            ? undefined
+            : eq(caseLawDecisions.country, country),
+        ),
+      )
+      .limit(LIMITS.caseLawSearchPageSizeMax),
   );
-  const generation = serving.generation;
-  // Scoped query → that country's index, plus a jurisdiction clause when that
-  // index holds other countries; unscoped → the generation glob.
-  const { indexId, jurisdictionClause } = corpusIndexRoute(
-    generation,
-    body.country,
-  );
+  return rows.map((row) => row.id);
+};
 
-  const query = await resolveCorpusIndexQuery(body, jurisdictionClause);
-  if (query === null) {
-    return { hits: [], facets: null, totalCount: null, nextCursor: null };
-  }
+/** The language groups a page spans, for the alternates read. */
+const languageGroupKeysOf = (
+  pageRanked: readonly RankedHit[],
+  byId: ReadonlyMap<string, HydratedDecisionRow>,
+): string[] => [
+  ...new Set(
+    pageRanked
+      .map((hit) => byId.get(hit.id)?.languageGroupKey ?? null)
+      .filter((value): value is string => value !== null),
+  ),
+];
 
-  const searchPage = await readCorpusIndexSearchPage({
-    cluster: serving.cluster,
-    indexId,
-    query,
-    limit,
-    parsedCursor,
-    snippetFields: ["text"],
-    extractId: (hit) => {
-      const id = hit["document_id"];
-      return typeof id === "string" && isUuid(id) ? id : null;
-    },
-    extractSnippet: extractCorpusSnippet,
-    // Upper bound for the pagination early-stop: scanning may end only once
-    // no unseen candidate could out-blend the page cursor. Saturated
-    // authority is bounded by 1, so the bound reads nothing from the corpus.
-    unseenScoreUpperBound: stableBlendUpperBound,
-    rankCandidates: async (candidates) =>
-      await rehydrateCaseLawCandidates({
-        body,
-        candidates,
-        caseLawDb,
-        generation,
-      }),
-  });
+type DecisionHitsPageOptions = {
+  alternatesByGroupKey: Awaited<
+    ReturnType<typeof readPublicDecisionLanguageAlternatesByGroup>
+  >;
+  anchorIdById: ReadonlyMap<string, string>;
+  byId: ReadonlyMap<string, HydratedDecisionRow>;
+  nextCursor: string | null;
+  pageRanked: readonly RankedHit[];
+  snippetById: ReadonlyMap<string, string>;
+};
 
-  const {
-    anchorIdById,
-    context: { byId },
-    hasMore,
-    pageRanked,
-    snippetById,
-  } = searchPage;
-
-  const languageGroupKeys = [
-    ...new Set(
-      pageRanked
-        .map((hit) => byId.get(hit.id)?.languageGroupKey ?? null)
-        .filter((value): value is string => value !== null),
-    ),
-  ];
-  const alternatesByGroupKey =
-    await readPublicDecisionLanguageAlternatesByGroup({
-      caseLawDb,
-      languageGroupKeys,
-    });
-
-  const last = pageRanked.at(-1);
-  const nextCursor = hasMore && last ? encodeCursor(last.score, last.id) : null;
-
+/** One page of ranked, hydrated decisions in the search response shape. */
+const decisionHitsPage = ({
+  alternatesByGroupKey,
+  anchorIdById,
+  byId,
+  nextCursor,
+  pageRanked,
+  snippetById,
+}: DecisionHitsPageOptions) => {
   const hits = pageRanked.flatMap((hit) => {
     const row = byId.get(hit.id);
     if (!row) {
@@ -753,7 +780,8 @@ const searchCorpusIndexDecisions = async (
         headline: snippetById.get(hit.id) ?? null,
         // Additive: the anchor of the passage the snippet came from, so a
         // result can open the decision scrolled to what matched. Null on a
-        // document-granular generation and on unanchored fallback passages.
+        // document-granular generation, on unanchored fallback passages, and
+        // on a decision the entry named outright.
         anchorId: anchorIdById.get(hit.id) ?? null,
         citationCount: row.citationCount,
         createdAt: row.createdAt.toISOString(),
@@ -767,4 +795,128 @@ const searchCorpusIndexDecisions = async (
     totalCount: null,
     nextCursor,
   };
+};
+
+const searchCorpusIndexDecisions = async (
+  body: SearchDecisionsBody,
+  caseLawDb: CaseLawPublicReadDb,
+) => {
+  const limit = body.limit ?? LIMITS.caseLawSearchPageSizeDefault;
+
+  let parsedCursor: { score: number; id: string } | null = null;
+  if (body.cursor) {
+    parsedCursor = decodeCursor(body.cursor);
+    if (!parsedCursor || !isUuid(parsedCursor.id)) {
+      return status(400, { message: "Invalid cursor" });
+    }
+  }
+
+  if (body.country !== undefined && !isCorpusIndexJurisdiction(body.country)) {
+    return status(400, { message: "Invalid country" });
+  }
+
+  const serving = await caseLawDb(
+    async (tx) => await readServingCorpusIndexGenerationTx(tx, "case_law"),
+  );
+  const generation = serving.generation;
+
+  // An entry that names a decision is answered by identity, and only falls
+  // through to the text index when nothing answers to it. A cursor means the
+  // reader is already paging a text search, which identity never returns.
+  const intent = parseDecisionQuery(body.query);
+  if (intent.type === "identifier" && parsedCursor === null) {
+    const ids = await findDecisionIdsByIdentity(
+      caseLawDb,
+      intent,
+      body.country,
+    );
+    if (ids.length > 0) {
+      const identityRanking = await rehydrateCaseLawCandidates({
+        body,
+        candidates: ids.map((id) => ({ id, score: 1 })),
+        caseLawDb,
+        generation,
+      });
+      // A docket can name decisions at several courts; the page still honours
+      // the requested size, and identity never pages past it.
+      const identityPage = identityRanking.ranked.slice(0, limit);
+      if (identityPage.length > 0) {
+        const { byId } = identityRanking.context;
+        return decisionHitsPage({
+          alternatesByGroupKey:
+            await readPublicDecisionLanguageAlternatesByGroup({
+              caseLawDb,
+              languageGroupKeys: languageGroupKeysOf(identityPage, byId),
+            }),
+          anchorIdById: new Map(),
+          byId,
+          nextCursor: null,
+          pageRanked: identityPage,
+          snippetById: new Map(),
+        });
+      }
+    }
+  }
+
+  // Scoped query → that country's index, plus a jurisdiction clause when that
+  // index holds other countries; unscoped → the generation glob.
+  const { indexId, jurisdictionClause } = corpusIndexRoute(
+    generation,
+    body.country,
+  );
+
+  const query = await resolveCorpusIndexQuery(body, jurisdictionClause);
+  if (query === null) {
+    return { hits: [], facets: null, totalCount: null, nextCursor: null };
+  }
+
+  const hydrated: HydratedDecisionRows = new Map();
+  const searchPage = await readCorpusIndexSearchPage({
+    cluster: serving.cluster,
+    indexId,
+    query,
+    limit,
+    parsedCursor,
+    snippetFields: ["text"],
+    extractId: (hit) => {
+      const id = hit["document_id"];
+      return typeof id === "string" && isUuid(id) ? id : null;
+    },
+    extractSnippet: extractCorpusSnippet,
+    // Upper bound for the pagination early-stop: scanning may end only once
+    // no unseen candidate could out-blend the page cursor. Saturated
+    // authority is bounded by 1, so the bound reads nothing from the corpus.
+    unseenScoreUpperBound: stableBlendUpperBound,
+    rankCandidates: async (candidates) =>
+      await rehydrateCaseLawCandidates({
+        body,
+        candidates,
+        caseLawDb,
+        generation,
+        hydrated,
+      }),
+  });
+
+  const {
+    anchorIdById,
+    context: { byId },
+    hasMore,
+    pageRanked,
+    snippetById,
+  } = searchPage;
+
+  const last = pageRanked.at(-1);
+  const nextCursor = hasMore && last ? encodeCursor(last.score, last.id) : null;
+
+  return decisionHitsPage({
+    alternatesByGroupKey: await readPublicDecisionLanguageAlternatesByGroup({
+      caseLawDb,
+      languageGroupKeys: languageGroupKeysOf(pageRanked, byId),
+    }),
+    anchorIdById,
+    byId,
+    nextCursor,
+    pageRanked,
+    snippetById,
+  });
 };

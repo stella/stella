@@ -19,7 +19,10 @@ import {
 } from "@/api/handlers/case-law/decisions/get";
 import { listDecisionsHandler } from "@/api/handlers/case-law/decisions/list";
 import { withRedistributableSubject } from "@/api/handlers/case-law/decisions/public-subject";
-import { rehydrateCaseLawCandidates } from "@/api/handlers/case-law/decisions/search";
+import {
+  findDecisionIdsByIdentity,
+  rehydrateCaseLawCandidates,
+} from "@/api/handlers/case-law/decisions/search";
 import {
   listSitemapShardDecisionsHandler,
   listSitemapShardsHandler,
@@ -580,6 +583,23 @@ describe("public-law reader role", () => {
       generation: "case_law_v3",
     });
     expect(search.ranked).toEqual([]);
+
+    const byDocket = await findDecisionIdsByIdentity(
+      caseLawDb,
+      { type: "identifier", kind: "docket", value: "22 Cdo 1/2026" },
+      "CZE",
+    );
+    expect(byDocket).toEqual([]);
+    const byEcli = await findDecisionIdsByIdentity(
+      caseLawDb,
+      {
+        type: "identifier",
+        kind: "ecli",
+        value: "ECLI:CZ:NS:2026:22.CDO.1.2026.1",
+      },
+      undefined,
+    );
+    expect(byEcli).toEqual([]);
   });
 
   test("executes every declared shared-reader query as the reader role", async () => {
