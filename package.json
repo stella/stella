@@ -115,7 +115,7 @@
     "eslint-plugin-drizzle": "catalog:",
     "fast-check": "catalog:",
     "i18n-unused": "^0.20.0",
-    "knip": "^6.32.3",
+    "knip": "^6.33.0",
     "lefthook": "^2.1.10",
     "oxc-transform-react": "catalog:",
     "oxfmt": "catalog:",
