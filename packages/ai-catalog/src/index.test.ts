@@ -308,6 +308,9 @@ describe("MODEL_RATES economic ordering", () => {
     expect(getModelRate("google/gemini-3.7-flash")).toBe(
       getModelRate("gemini-3.7-flash"),
     );
+    expect(getModelRate("google/gemini-3.8-flash")).toBe(
+      getModelRate("gemini-3.8-flash"),
+    );
   });
 
   test("floating provider pointers do not inherit fixed-model metadata", () => {
@@ -323,6 +326,12 @@ describe("MODEL_RATES economic ordering", () => {
 
   test("canonical model rates match expected amounts", () => {
     expect(getModelRate("gemini-3.6-flash")).toEqual({
+      kind: "flat",
+      inputPerMTok: 75_000,
+      outputPerMTok: 375_000,
+      cachedInputPerMTok: 7500,
+    });
+    expect(getModelRate("gemini-3.8-flash")).toEqual({
       kind: "flat",
       inputPerMTok: 75_000,
       outputPerMTok: 375_000,
