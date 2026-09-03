@@ -20,6 +20,9 @@ import { sql, type SQL } from "drizzle-orm";
 import {
   AUTHORITY_PIVOT,
   DEFAULT_AUTHORITY_WEIGHT,
+  DEFAULT_COURT_TIER_WEIGHT,
+  HIGHEST_COURT_TIER,
+  LOWEST_COURT_TIER,
 } from "@/api/lib/legal-search/rerank";
 
 /**
@@ -36,10 +39,45 @@ export const authorityBlendSql = (authority: SQL): SQL =>
   sql`(${sql.raw(String(DEFAULT_AUTHORITY_WEIGHT))} * ${saturatedAuthoritySql(authority)})`;
 
 /**
- * The blended ranking score: lexical relevance plus the bounded authority
- * term. Both the ORDER BY and the cursor predicate must interpolate this same
- * value, which is why every Postgres ranking path builds it once per
- * statement and reuses the fragment.
+ * `courtTierValue()` in SQL: the tier clamped to the registry's range and
+ * mapped onto [0, 1]. The divisor is a float literal so integer tiers do not
+ * divide to zero.
  */
-export const blendedRankSql = (lexicalRank: SQL, authority: SQL): SQL =>
-  sql`(${lexicalRank} + ${authorityBlendSql(authority)})`;
+export const courtTierValueSql = (tier: SQL): SQL =>
+  sql`((LEAST(GREATEST(${tier}, ${sql.raw(String(LOWEST_COURT_TIER))}), ${sql.raw(String(HIGHEST_COURT_TIER))}) - ${sql.raw(String(LOWEST_COURT_TIER))})::float8
+    / ${sql.raw(String(HIGHEST_COURT_TIER - LOWEST_COURT_TIER))}::float8)`;
+
+/** What the deciding court adds to a lexical score: `weight * tierValue`. */
+export const courtTierBlendSql = (tier: SQL): SQL =>
+  sql`(${sql.raw(String(DEFAULT_COURT_TIER_WEIGHT))} * ${courtTierValueSql(tier)})`;
+
+/**
+ * The tier for a corpus that holds no decisions. A statute is not decided by
+ * a court, so it sits at the tier every unranked court falls back to and the
+ * term contributes nothing — the score stays lexical plus authority, exactly
+ * as it was before the court-tier term existed.
+ */
+export const noCourtTierSql = (): SQL =>
+  sql`${sql.raw(String(LOWEST_COURT_TIER))}`;
+
+type BlendedRankOptions = {
+  /** How much the decision is cited, raw; the fragment saturates it. */
+  authority: SQL;
+  /** The deciding court's tier, as the registry ranks it. */
+  courtTier: SQL;
+  lexicalRank: SQL;
+};
+
+/**
+ * The blended ranking score: lexical relevance plus the bounded authority and
+ * court-tier terms, the same two signals `blendStableCitationAuthority` adds.
+ * Both the ORDER BY and the cursor predicate must interpolate this same value,
+ * which is why every Postgres ranking path builds it once per statement and
+ * reuses the fragment.
+ */
+export const blendedRankSql = ({
+  authority,
+  courtTier,
+  lexicalRank,
+}: BlendedRankOptions): SQL =>
+  sql`(${lexicalRank} + ${authorityBlendSql(authority)} + ${courtTierBlendSql(courtTier)})`;

@@ -8,6 +8,10 @@ import {
   courtWeightSeedSql,
   seededCourtWeightEntries,
 } from "@/api/handlers/case-law/court-weight-seed";
+import {
+  HIGHEST_COURT_TIER,
+  LOWEST_COURT_TIER,
+} from "@/api/lib/legal-search/rerank";
 
 const MIGRATION = nodePath.resolve(
   import.meta.dir,
@@ -72,6 +76,28 @@ describe("court weight seed", () => {
         label,
       ]);
     }
+  });
+
+  test("the seeded tiers stay inside the range the search blend scales", () => {
+    // `courtTierValue` maps this range onto [0, 1]. A seed row outside it
+    // would clamp, silently flattening two ranks into one prior.
+    for (const row of COURT_WEIGHT_SEED) {
+      expect([
+        row.country,
+        row.courtPattern,
+        row.tier >= LOWEST_COURT_TIER,
+      ]).toEqual([row.country, row.courtPattern, true]);
+      expect([
+        row.country,
+        row.courtPattern,
+        row.tier <= HIGHEST_COURT_TIER,
+      ]).toEqual([row.country, row.courtPattern, true]);
+    }
+    // The top of the scale is a rank something actually holds, so the tier
+    // prior's full weight is reachable.
+    expect(Math.max(...COURT_WEIGHT_SEED.map((row) => row.tier))).toBe(
+      HIGHEST_COURT_TIER,
+    );
   });
 
   test("patterns are unique per jurisdiction and compile case-insensitively", () => {

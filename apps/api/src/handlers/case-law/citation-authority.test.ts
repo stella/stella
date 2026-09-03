@@ -19,11 +19,11 @@ import {
   type CitationInput,
 } from "@/api/handlers/case-law/citation-score";
 import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
-import { flattenCourtWeightEntries } from "@/api/handlers/case-law/court-weights";
-import type { CourtWeightEntry } from "@/api/handlers/case-law/court-weights";
 import { POLARITY } from "@/api/handlers/case-law/polarity/consts";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { flattenCourtWeightEntries } from "@/api/lib/case-law/court-weights";
+import type { CourtWeightEntry } from "@/api/lib/case-law/court-weights";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 // The materialized citation_authority column must equal citationScore()
@@ -484,6 +484,7 @@ test("courtWeightEntries option drives the SQL instead of the legacy tiers", asy
   const customCitingId = createSafeId<"caseLawDecision">();
   const CUSTOM_ENTRIES = [
     {
+      country: "CZE",
       pattern: /^Custom Seeded Court$/u,
       tier: 5,
       tierLabel: "seeded-only",

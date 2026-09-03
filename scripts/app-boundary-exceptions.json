@@ -38,12 +38,6 @@
   {
     "kind": "source-import",
     "source": "apps/legal-atlas-runner/src/db.ts",
-    "specifier": "@/api/handlers/case-law/court-weights",
-    "target": "apps/api"
-  },
-  {
-    "kind": "source-import",
-    "source": "apps/legal-atlas-runner/src/db.ts",
     "specifier": "@/api/lib/with-timeout",
     "target": "apps/api"
   },

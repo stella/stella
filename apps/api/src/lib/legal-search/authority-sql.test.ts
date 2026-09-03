@@ -2,14 +2,27 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
+import {
+  courtTierSqlFromMap,
+  courtWeightFromMap,
+} from "@/api/lib/case-law/court-weights";
+import type { CourtWeightMap } from "@/api/lib/case-law/court-weights";
 import {
   authorityBlendSql,
   blendedRankSql,
+  courtTierValueSql,
+  noCourtTierSql,
   saturatedAuthoritySql,
 } from "@/api/lib/legal-search/authority-sql";
 import {
   AUTHORITY_PIVOT,
+  blendStableCitationAuthority,
+  courtTierSignal,
+  courtTierValue,
   DEFAULT_AUTHORITY_WEIGHT,
+  HIGHEST_COURT_TIER,
+  LOWEST_COURT_TIER,
   saturateAuthority,
 } from "@/api/lib/legal-search/rerank";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
@@ -77,16 +90,152 @@ test("an authority of 5 adds less than the whole weight", async () => {
   expect(gained).toBeCloseTo(DEFAULT_AUTHORITY_WEIGHT * (5 / 6), 12);
 });
 
-test("the blended rank is the lexical score plus the bounded term", async () => {
+test("the blended rank is the lexical score plus the bounded terms", async () => {
   const blended = await evaluate(
-    blendedRankSql(sql`0.5::float8`, authorityLiteral(5)),
+    blendedRankSql({
+      authority: authorityLiteral(5),
+      courtTier: noCourtTierSql(),
+      lexicalRank: sql`0.5::float8`,
+    }),
   );
   expect(blended).toBeCloseTo(0.5 + DEFAULT_AUTHORITY_WEIGHT * (5 / 6), 12);
-  // Same arithmetic the TypeScript blend does for the same inputs.
+  // Same arithmetic the TypeScript blend does for the same inputs, and a
+  // corpus with no courts in it adds nothing for the court it does not have.
   expect(blended).toBeCloseTo(
     0.5 + DEFAULT_AUTHORITY_WEIGHT * saturateAuthority(5),
     12,
   );
+});
+
+test("the SQL court-tier scale equals courtTierValue(), rank for rank", async () => {
+  for (const tier of [LOWEST_COURT_TIER, 2, 3, HIGHEST_COURT_TIER]) {
+    // oxlint-disable-next-line no-await-in-loop -- one round-trip per rank against an in-process database
+    const inPostgres = await evaluate(
+      courtTierValueSql(sql`${sql.raw(String(tier))}::int`),
+    );
+    expect(inPostgres).toBeCloseTo(courtTierValue(tier), 12);
+  }
+  // Integer division would collapse every rank between the ends to zero.
+  expect(await evaluate(courtTierValueSql(sql`2::int`))).toBeCloseTo(1 / 3, 12);
+  // Clamped on both sides, as in TypeScript, so a registry row outside the
+  // range cannot push the term past the weight the bound assumes.
+  expect(await evaluate(courtTierValueSql(sql`0::int`))).toBe(0);
+  expect(await evaluate(courtTierValueSql(sql`99::int`))).toBe(1);
+});
+
+/**
+ * Decisions the two runtimes must agree on: a ranked court in its own
+ * jurisdiction, one no pattern matches, one whose country the registry does
+ * not know, and one named in another jurisdiction's language — the case that
+ * exercises the cross-country fallback both sides walk in map order.
+ */
+const BLEND_FIXTURES = [
+  { authority: 0, country: "CZE", court: "Ústavní soud", lexical: 0.5 },
+  { authority: 2, country: "CZE", court: "Nejvyšší soud", lexical: 0.42 },
+  {
+    authority: 1,
+    country: "CZE",
+    court: "Okresní soud v Kolíně",
+    lexical: 0.9,
+  },
+  {
+    authority: 0.3,
+    country: "SVK",
+    court: "Najvyšší súd Slovenskej republiky",
+    lexical: 0.7,
+  },
+  { authority: 0, country: "CZE", court: "Sąd Najwyższy", lexical: 0.6 },
+  { authority: 4, country: "XYZ", court: "A court nobody ranks", lexical: 0.1 },
+] as const;
+
+test("the Postgres blend equals the TypeScript blend for the same decision", async () => {
+  const map = courtWeightMapFromSeed();
+  const courtTier = sql.raw(
+    courtTierSqlFromMap({
+      countryColumn: "d.country",
+      courtColumn: "d.court",
+      map,
+    }),
+  );
+
+  for (const { authority, country, court, lexical } of BLEND_FIXTURES) {
+    const [inTypeScript] = blendStableCitationAuthority({
+      candidates: [{ id: court, score: lexical }],
+      authorityById: new Map([[court, authority]]),
+      signals: [
+        courtTierSignal(
+          new Map([[court, courtWeightFromMap(map, court, country).tier]]),
+        ),
+      ],
+    });
+
+    const scored = sql<number>`(${blendedRankSql({
+      authority: authorityLiteral(authority),
+      courtTier,
+      lexicalRank: sql`${sql.raw(lexical.toString())}::float8`,
+    })})::float8`;
+    const [row] =
+      // oxlint-disable-next-line no-await-in-loop -- one round-trip per fixture against an in-process database
+      await db
+        .select({ v: scored })
+        .from(sql`(VALUES (${court}, ${country})) AS d(court, country)`);
+
+    expect(Number(row?.v), court).toBeCloseTo(
+      inTypeScript?.score ?? Number.NaN,
+      12,
+    );
+  }
+});
+
+test("Postgres resolves an overlapping court to the tier the lookup does", async () => {
+  // Two jurisdictions whose patterns both match one court name, at different
+  // ranks. The CASE takes its first true branch and the lookup takes its
+  // first match, so they agree only while both walk the precedence order.
+  const overlapping: CourtWeightMap = new Map([
+    [
+      "XBB",
+      [
+        {
+          country: "XBB",
+          pattern: /shared court/iu,
+          tier: 2,
+          tierLabel: "regional",
+          weight: 4,
+        },
+      ],
+    ],
+    [
+      "XAA",
+      [
+        {
+          country: "XAA",
+          pattern: /shared court/iu,
+          tier: 4,
+          tierLabel: "constitutional",
+          weight: 10,
+        },
+      ],
+    ],
+  ]);
+  const courtTier = sql.raw(
+    courtTierSqlFromMap({
+      countryColumn: "d.country",
+      courtColumn: "d.court",
+      map: overlapping,
+    }),
+  );
+
+  // A country the registry does not rank, so both runtimes take the
+  // cross-jurisdiction fallback rather than the scoped branch.
+  const [row] = await db
+    .select({ v: sql<number>`(${courtTier})::float8` })
+    .from(sql`(VALUES ('Shared Court', 'XZZ')) AS d(court, country)`);
+
+  expect(Number(row?.v)).toBe(
+    courtWeightFromMap(overlapping, "Shared Court", "XZZ").tier,
+  );
+  // The higher rank wins in both, though the map holds the lower one first.
+  expect(Number(row?.v)).toBe(4);
 });
 
 // Every Postgres ranking path, and what it feeds the blend. A path that scores
@@ -108,9 +257,9 @@ test("every Postgres ranking path scores authority through the shared fragment",
       const source = await Bun.file(`${import.meta.dir}/${path}`).text();
       return {
         path,
-        blendedThrough: source.includes(
-          `blendedRankSql(ftsSearch.rank, sql\`${authority}\`)`,
-        ),
+        blendedThrough:
+          source.includes("blendedRankSql({") &&
+          source.includes(`authority: sql\`${authority}\``),
         // The whole match, not a boolean, so a failure names the offender.
         rawAuthorityBlend: RAW_AUTHORITY_BLEND.exec(source)?.[0] ?? null,
       };
@@ -122,6 +271,34 @@ test("every Postgres ranking path scores authority through the shared fragment",
       path,
       blendedThrough: true,
       rawAuthorityBlend: null,
+    })),
+  );
+});
+
+/**
+ * Which court-tier expression each ranking path feeds the blend: the registry
+ * lookup for the two case-law paths, the no-court constant for legislation. A
+ * path that stops resolving the tier ranks a jurisdiction's apex court like
+ * any other, which is the drift the whole module exists to prevent.
+ */
+const RANKING_COURT_TIER = {
+  "../../handlers/case-law/decisions/search.ts": "courtTierSqlFromMap({",
+  "../../handlers/legislation/search.ts": "courtTier: noCourtTierSql()",
+  "./pg-fts-legal-provider.ts": "courtTierSqlFromMap({",
+} as const satisfies Record<keyof typeof RANKING_SQL_PATHS, string>;
+
+test("every Postgres ranking path resolves the court tier the same way", async () => {
+  const audited = await Promise.all(
+    Object.entries(RANKING_COURT_TIER).map(async ([path, expression]) => {
+      const source = await Bun.file(`${import.meta.dir}/${path}`).text();
+      return { path, resolvesTier: source.includes(expression) };
+    }),
+  );
+
+  expect(audited).toEqual(
+    Object.keys(RANKING_COURT_TIER).map((path) => ({
+      path,
+      resolvesTier: true,
     })),
   );
 });

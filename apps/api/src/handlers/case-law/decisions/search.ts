@@ -19,7 +19,6 @@ import {
   courtWeightSql,
   polarityWeightSql,
 } from "@/api/handlers/case-law/citation-score";
-import { loadCourtWeightEntriesForSql } from "@/api/handlers/case-law/court-weights";
 import type { searchDecisionsBodySchema } from "@/api/handlers/case-law/decisions/search-schema";
 import {
   CASE_LAW_SEARCH_DB_READ,
@@ -35,6 +34,13 @@ import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import {
+  courtTierSqlFromMap,
+  courtWeightFromMap,
+  flattenCourtWeightEntries,
+  loadCourtWeights,
+} from "@/api/lib/case-law/court-weights";
+import type { CourtWeightMap } from "@/api/lib/case-law/court-weights";
 import { normalizeDecisionHeadnote } from "@/api/lib/case-law/decision-headnote";
 import { decisionIdentifierProjection } from "@/api/lib/case-law/decision-identifiers";
 import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
@@ -86,9 +92,15 @@ import { collapseByLanguageGroup } from "@/api/lib/legal-search/language-group-c
 import { buildPgFtsSearchSql } from "@/api/lib/legal-search/pg-fts-query";
 import {
   blendStableCitationAuthority,
+  courtTierSignal,
+  DEFAULT_AUTHORITY_WEIGHT,
   stableBlendUpperBound,
 } from "@/api/lib/legal-search/rerank";
-import type { RankedHit, ScoredCandidate } from "@/api/lib/legal-search/rerank";
+import type {
+  BlendSignal,
+  RankedHit,
+  ScoredCandidate,
+} from "@/api/lib/legal-search/rerank";
 import { LIMITS } from "@/api/lib/limits";
 import { decodeCursor, encodeCursor } from "@/api/lib/search/cursor";
 import {
@@ -179,7 +191,20 @@ const searchPostgresDecisions = async (
     ? sql`AND d.language = ${body.language}`
     : sql``;
 
-  const scoreExpr = blendedRankSql(ftsSearch.rank, sql`cb.authority`);
+  // One registry for both places the statement reads it: the tier prior on the
+  // decision itself, and the weight each incoming citation carries below.
+  const courtWeights = await loadCourtWeights();
+  const scoreExpr = blendedRankSql({
+    authority: sql`cb.authority`,
+    courtTier: sql.raw(
+      courtTierSqlFromMap({
+        countryColumn: "d.country",
+        courtColumn: "d.court",
+        map: courtWeights,
+      }),
+    ),
+    lexicalRank: ftsSearch.rank,
+  });
 
   // The ORDER BY and the cursor predicate read the same materialized score
   // column: keyset pagination is only stable while the two agree.
@@ -200,11 +225,13 @@ const searchPostgresDecisions = async (
     ${languageFilter}
   `;
 
-  // DB-seeded weights (case_law_court_weights, 60s cache) cover every
-  // jurisdiction; courtWeightSql falls back to the legacy CZ/SK-only
-  // tiers only when the table has not been seeded yet.
-  const courtWeightEntries = await loadCourtWeightEntriesForSql();
-  const courtWeightExpr = courtWeightSql("citing_d.court", courtWeightEntries);
+  // The citing court can belong to any jurisdiction — citation graphs cross
+  // borders — so this side of the statement reads the flattened registry
+  // rather than the decision's own country.
+  const courtWeightExpr = courtWeightSql(
+    "citing_d.court",
+    flattenCourtWeightEntries(courtWeights),
+  );
 
   const citationAuthorityLateral = sql.raw(`
     LATERAL (
@@ -577,8 +604,9 @@ type DecisionRowsQueryOptions = {
  * What blending a candidate needs, and nothing else. A request reads this for
  * every candidate the scan reaches — a few hundred of them — so every column
  * here is paid for a couple of hundred times to serve a page of ten. The
- * authority drives the blend, the group key folds the language versions of one
- * judgment, and the request's filters are applied in SQL rather than read back.
+ * authority and the deciding court drive the blend, the group key folds the
+ * language versions of one judgment, and the request's filters are applied in
+ * SQL rather than read back.
  */
 const candidateDecisionRowsQuery = (
   tx: CaseLawPublicReadTransaction,
@@ -588,6 +616,10 @@ const candidateDecisionRowsQuery = (
     .select({
       id: caseLawDecisions.id,
       citationAuthority: caseLawDecisions.citationAuthority,
+      // The court's rank is a blend signal; the country scopes the pattern
+      // match that resolves it, since court names repeat across borders.
+      court: caseLawDecisions.court,
+      country: caseLawDecisions.country,
       languageGroupKey: caseLawDecisions.languageGroupKey,
     })
     .from(caseLawDecisions)
@@ -755,11 +787,48 @@ type RehydrateCaseLawCandidatesOptions = {
   body: SearchDecisionsBody;
   candidates: readonly ScoredCandidate[];
   caseLawDb: CaseLawPublicReadDb;
+  /**
+   * The court rank registry, read once for the request. Every court a
+   * jurisdiction ranks is in it; an empty map ranks every court at the
+   * default tier, which contributes nothing to the blend.
+   */
+  courtWeights: CourtWeightMap;
   generation: string;
   /** The request's record of rows read so far; only ids absent from it are read. */
   hydrated?: HydratedDecisionRows | undefined;
   timeDbRead?: TimeDbRead | undefined;
 };
+
+/**
+ * The signals case-law search blends on top of the lexical score, beyond the
+ * citation authority every stable blend already carries. The ranking and the
+ * pagination early-stop bound are both built from this list, so a signal
+ * cannot widen one without widening the other.
+ */
+const caseLawBlendSignals = (
+  courtTierById: ReadonlyMap<string, number>,
+): BlendSignal[] => [courtTierSignal(courtTierById)];
+
+/**
+ * Everything the blend can add on top of the lexical score: the citation
+ * authority every stable blend carries, plus this search's own signals.
+ * Summed from that same list, so a signal cannot widen the blend without
+ * widening the bound. It reads the weights alone, never the values.
+ */
+const caseLawBlendWeight = (): number =>
+  caseLawBlendSignals(new Map()).reduce(
+    (total, signal) => total + signal.weight,
+    DEFAULT_AUTHORITY_WEIGHT,
+  );
+
+/**
+ * Upper bound for the pagination early-stop: scanning may end only once no
+ * unseen candidate could out-blend the page cursor. Every signal saturates
+ * below 1, so the summed weight is the whole of it and the bound reads
+ * nothing from the corpus.
+ */
+const caseLawUnseenScoreUpperBound = (nextLexicalScore: number): number =>
+  stableBlendUpperBound(nextLexicalScore, caseLawBlendWeight());
 
 /**
  * The PostgreSQL half of corpus-index search. Keeping it independently
@@ -770,6 +839,7 @@ export const rehydrateCaseLawCandidates = async ({
   body,
   candidates,
   caseLawDb,
+  courtWeights,
   generation,
   hydrated = new Map(),
   timeDbRead = untimedDbRead,
@@ -803,9 +873,19 @@ export const rehydrateCaseLawCandidates = async ({
       byId.set(id, row);
     }
   }
-  const authorityById = new Map(
-    [...byId].map(([id, row]) => [id, row.citationAuthority]),
-  );
+  const authorityById = new Map<string, number>();
+  // The court a decision comes from is known the day it is published, which
+  // is what citation authority cannot say about a judgment nothing cites yet.
+  // Resolved here rather than read from the index because the registry is a
+  // per-jurisdiction pattern table an operator can revise without a rebuild.
+  const courtTierById = new Map<string, number>();
+  for (const [id, row] of byId) {
+    authorityById.set(id, row.citationAuthority);
+    courtTierById.set(
+      id,
+      courtWeightFromMap(courtWeights, row.court, row.country).tier,
+    );
+  }
 
   // Candidates missing from Postgres (index/DB drift) are dropped. Every
   // version is blended before the fold, so a version whose citation authority
@@ -816,6 +896,7 @@ export const rehydrateCaseLawCandidates = async ({
   const ranked = blendStableCitationAuthority({
     candidates: candidates.filter((candidate) => byId.has(candidate.id)),
     authorityById,
+    signals: caseLawBlendSignals(courtTierById),
   });
   const { representatives } = collapseByLanguageGroup(
     ranked,
@@ -1008,6 +1089,14 @@ const searchCorpusIndexDecisions = async (
       ),
   );
   const generation = serving.generation;
+  // Read once for the request and threaded through every hydration round: the
+  // loader caches for a minute, but the ranking must see one registry across a
+  // whole page. The timer brackets the query rather than the call, so a
+  // request served from the cache reports no read instead of a phantom one.
+  const courtWeights = await loadCourtWeights({
+    onRead: async (run) =>
+      await dbTimer.time(CASE_LAW_SEARCH_DB_READ.courtWeights, run),
+  });
 
   /** The wide read, for the ids a page emits and no others. */
   const readPageRows = async (
@@ -1041,6 +1130,7 @@ const searchCorpusIndexDecisions = async (
         body,
         candidates: ids.map((id) => ({ id, score: 1 })),
         caseLawDb,
+        courtWeights,
         generation,
         hydrated,
         timeDbRead: async (run) =>
@@ -1113,15 +1203,13 @@ const searchCorpusIndexDecisions = async (
       return typeof id === "string" && isUuid(id) ? id : null;
     },
     extractSnippet: extractCorpusSnippet,
-    // Upper bound for the pagination early-stop: scanning may end only once
-    // no unseen candidate could out-blend the page cursor. Saturated
-    // authority is bounded by 1, so the bound reads nothing from the corpus.
-    unseenScoreUpperBound: stableBlendUpperBound,
+    unseenScoreUpperBound: caseLawUnseenScoreUpperBound,
     rankCandidates: async (candidates) =>
       await rehydrateCaseLawCandidates({
         body,
         candidates,
         caseLawDb,
+        courtWeights,
         generation,
         hydrated,
         timeDbRead: async (run) =>

@@ -1,10 +1,10 @@
 import { sql } from "drizzle-orm";
 
+import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import {
   type CourtWeightEntry,
   loadCourtWeightsForCountry,
-} from "@/api/handlers/case-law/court-weights";
-import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+} from "@/api/lib/case-law/court-weights";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 

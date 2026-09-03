@@ -65,6 +65,8 @@ export const CASE_LAW_SEARCH_DB_READ = {
   alternates: "alternates",
   /** The scan's candidates, rehydrated and refiltered. */
   candidates: "candidates",
+  /** The court rank registry the blend's tier signal reads. */
+  courtWeights: "courtWeights",
   /** The decisions an entry names outright. */
   identity: "identity",
   /** The display rows of the decisions the page emits. */
@@ -84,6 +86,7 @@ export type CaseLawSearchDbRead =
 const DB_READ_ATTRIBUTE = {
   alternates: "dbAlternatesMs",
   candidates: "dbCandidatesMs",
+  courtWeights: "dbCourtWeightsMs",
   identity: "dbIdentityMs",
   page: "dbPageMs",
   servingGeneration: "dbServingGenerationMs",
@@ -118,6 +121,7 @@ export const createCaseLawSearchDbTimer = (): CaseLawSearchDbTimer => {
   const msByRead: Record<CaseLawSearchDbRead, number> = {
     alternates: 0,
     candidates: 0,
+    courtWeights: 0,
     identity: 0,
     page: 0,
     servingGeneration: 0,

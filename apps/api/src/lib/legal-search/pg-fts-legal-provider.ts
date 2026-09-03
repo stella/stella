@@ -1,6 +1,10 @@
 import { sql } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
+import {
+  courtTierSqlFromMap,
+  loadCourtWeights,
+} from "@/api/lib/case-law/court-weights";
 import { decisionIdentifierProjection } from "@/api/lib/case-law/decision-identifiers";
 import {
   bodyPreviewJoin,
@@ -76,7 +80,17 @@ const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
 
   // One fragment for the ORDER BY and the cursor predicate alike: keyset
   // pagination is only stable while the two are the same expression.
-  const scoreExpr = blendedRankSql(ftsSearch.rank, sql`d.citation_authority`);
+  const scoreExpr = blendedRankSql({
+    authority: sql`d.citation_authority`,
+    courtTier: sql.raw(
+      courtTierSqlFromMap({
+        countryColumn: "d.country",
+        courtColumn: "d.court",
+        map: await loadCourtWeights(),
+      }),
+    ),
+    lexicalRank: ftsSearch.rank,
+  });
 
   const cursorFilter = parsedCursor
     ? sql`AND (${scoreExpr}, sd.decision_id) < (${parsedCursor.score}::float8, ${parsedCursor.id})`
