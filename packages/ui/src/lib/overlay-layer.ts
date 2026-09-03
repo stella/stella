@@ -29,3 +29,11 @@ export const OVERLAY_LAYER_CLASS_NAMES = {
 } as const;
 
 export type OverlayLayer = keyof typeof OVERLAY_LAYER_CLASS_NAMES;
+
+/**
+ * Gap kept between a collision-shifted floating surface and its boundary, in
+ * pixels. Base UI's 5px default puts the popup shadow flush against the
+ * viewport edge once `shift()` has to move a popup that is wider than its
+ * anchor, which reads as a clipped surface rather than a repositioned one.
+ */
+export const OVERLAY_COLLISION_PADDING = 8;
