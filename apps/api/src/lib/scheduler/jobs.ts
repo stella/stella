@@ -25,6 +25,7 @@ import { RECONCILE_FLOW_RUN_ORPHANS_TASK } from "@/api/lib/scheduler/tasks/flow-
 import { INFO_SOUD_SYNC_TRACKED_CASES_TASK } from "@/api/lib/scheduler/tasks/infosoud";
 import { MEMORY_CURATOR_TASK } from "@/api/lib/scheduler/tasks/memory-curator";
 import { MEMORY_EXTRACTOR_TASK } from "@/api/lib/scheduler/tasks/memory-extractor";
+import { RECONCILE_REPORT_EXPORTS_TASK } from "@/api/lib/scheduler/tasks/report-export-reconcile";
 import { REPAIR_CHAT_SEARCH_INDEX_TASK } from "@/api/lib/scheduler/tasks/search-chat-index";
 import { REPAIR_SEARCH_PROJECTIONS_TASK } from "@/api/lib/scheduler/tasks/search-projection-repair";
 import { REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK } from "@/api/lib/scheduler/tasks/search-semantic-timestamps";
@@ -248,6 +249,14 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
     task: RECONCILE_BILINGUAL_RUNS_TASK,
+  },
+  {
+    description:
+      "Re-drive report exports no queued job owns anymore, and fail the ones that outlived it",
+    id: "reportExports.reconcileQueued.fiveMinute",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
+    task: RECONCILE_REPORT_EXPORTS_TASK,
   },
   {
     description: "Delete style set packages a replacement left behind",

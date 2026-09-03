@@ -56,6 +56,10 @@ import {
   extractMemoriesFromCompactions,
 } from "@/api/lib/scheduler/tasks/memory-extractor";
 import {
+  RECONCILE_REPORT_EXPORTS_TASK,
+  reconcileReportExports,
+} from "@/api/lib/scheduler/tasks/report-export-reconcile";
+import {
   REPAIR_CHAT_SEARCH_INDEX_TASK,
   repairChatSearchIndex,
 } from "@/api/lib/scheduler/tasks/search-chat-index";
@@ -118,6 +122,7 @@ const SCHEDULER_TASKS = {
   [RECONCILE_DOCUMENT_REVIEW_RUNS_TASK]: reconcileDocumentReviewRuns,
   [RECONCILE_BILINGUAL_RUNS_TASK]: reconcileBilingualRuns,
   [RECONCILE_STYLE_SET_PACKAGE_CLEANUPS_TASK]: reconcileStyleSetPackageCleanups,
+  [RECONCILE_REPORT_EXPORTS_TASK]: reconcileReportExports,
 } as const satisfies Record<string, SchedulerTask>;
 
 export type RegisteredSchedulerTaskName = keyof typeof SCHEDULER_TASKS;
