@@ -4,8 +4,10 @@ import {
   type ReactNode,
   type RefObject,
   type UIEvent,
+  useEffect,
   useId,
   useRef,
+  useState,
 } from "react";
 
 import { useDndContext, type UniqueIdentifier } from "@dnd-kit/core";
@@ -28,7 +30,12 @@ import {
   type KanbanVirtualScrollRequest,
   type UseKanbanDropTargetOptions,
 } from "./sortable-interactions";
-import { KANBAN_STICKY_TOP_CLASS } from "./sticky-lane";
+import {
+  KANBAN_CARD_STICKY_TOP_VAR,
+  KANBAN_STICKY_TOP_CLASS,
+  resolveKanbanCardStickyTop,
+  type KanbanCardStickyTopStyle,
+} from "./sticky-lane";
 
 const DEFAULT_ESTIMATE_SIZE_PX = 128;
 const DEFAULT_OVERSCAN = 8;
@@ -131,6 +138,10 @@ export type KanbanVirtualCellProps<TRow> = {
    * own scroll container, and the board's header means nothing inside it:
    * reset the variable to `0px` on such a cell (`[--kanban-sticky-top:0px]`)
    * so the action rests at the cell's own top.
+   *
+   * Either way the cell publishes the total reach of what is pinned above a
+   * card as `KANBAN_CARD_STICKY_TOP_VAR` on every row it renders, so a card's
+   * own sticky header comes to rest under the action rather than behind it.
    */
   footerPlacement?: "end" | "sticky-start" | undefined;
   estimateSize?: number | undefined;
@@ -252,30 +263,52 @@ export const KanbanVirtualCell = <TRow,>({
             : { [KANBAN_CELL_ACCENT_VAR]: accentVariants.color }),
         };
 
+  const hasStickyFooter =
+    footerPlacement === "sticky-start" &&
+    footer !== null &&
+    footer !== undefined;
+
+  // A card's own pinned header rests under this action, so the cell has to say
+  // how tall the action turned out: the caller controls its content, and it
+  // reflows with the cell's width. Zero until measured, and zero whenever the
+  // footer closes the cell instead, which leaves the board's offset alone.
+  const stickyFooterRef = useRef<HTMLDivElement>(null);
+  const [stickyFooterHeight, setStickyFooterHeight] = useState(0);
+  useEffect(() => {
+    const element = stickyFooterRef.current;
+    if (element === null) {
+      setStickyFooterHeight(0);
+      return undefined;
+    }
+    const observer = new ResizeObserver(() => {
+      setStickyFooterHeight(element.getBoundingClientRect().height);
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [hasStickyFooter]);
+
   // The resting surface is translucent unless a caller sets one of their own,
   // so a pinned action repaints the cell's surface over an opaque base: cards
   // pass behind the action instead of reading through it. The row keeps the
   // cards' own bottom padding, so pinning it shifts nothing below.
-  const stickyFooter =
-    footerPlacement === "sticky-start" &&
-    footer !== null &&
-    footer !== undefined ? (
+  const stickyFooter = hasStickyFooter ? (
+    <div
+      className={cn("bg-background sticky z-10", KANBAN_STICKY_TOP_CLASS)}
+      data-kanban-cell-footer="sticky-start"
+      ref={stickyFooterRef}
+    >
       <div
-        className={cn("bg-background sticky z-10", KANBAN_STICKY_TOP_CLASS)}
-        data-kanban-cell-footer="sticky-start"
+        className={cn(
+          "pb-2",
+          surface === undefined
+            ? KANBAN_CELL_SURFACE_CLASS
+            : "bg-(--kanban-cell-surface)",
+        )}
       >
-        <div
-          className={cn(
-            "pb-2",
-            surface === undefined
-              ? KANBAN_CELL_SURFACE_CLASS
-              : "bg-(--kanban-cell-surface)",
-          )}
-        >
-          {footer}
-        </div>
+        {footer}
       </div>
-    ) : null;
+    </div>
+  ) : null;
 
   const content = (
     <div
@@ -302,13 +335,20 @@ export const KanbanVirtualCell = <TRow,>({
           if (row === undefined) {
             return null;
           }
+          const rowStyle: KanbanCardStickyTopStyle = {
+            transform: `translateY(${String(virtualRow.start)}px)`,
+            [KANBAN_CARD_STICKY_TOP_VAR]: resolveKanbanCardStickyTop({
+              pinnedAbove: stickyFooterHeight,
+              rowOffset: virtualRow.start,
+            }),
+          };
           return (
             <div
               className="absolute inset-x-0 top-0 pb-2"
               data-index={virtualRow.index}
               key={getRowKey(row)}
               ref={virtualizer.measureElement}
-              style={{ transform: `translateY(${virtualRow.start}px)` }}
+              style={rowStyle}
             >
               {renderRow(row)}
             </div>

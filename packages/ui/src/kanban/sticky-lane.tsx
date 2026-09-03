@@ -24,6 +24,54 @@ export type KanbanStickyTopStyle = CSSProperties & {
   [KANBAN_STICKY_TOP_VAR]?: string;
 };
 
+/**
+ * How far everything already pinned above a card reaches: the board's header
+ * block plus a cell's own pinned action, where the cell pins one. A card taller
+ * than the viewport keeps its identity row visible by sticking at this offset,
+ * so the row comes to rest under the action rather than behind it. The cell
+ * publishes it on each row it renders, because only the cell knows how tall its
+ * own pinned action turned out and how far it translated that row.
+ */
+export const KANBAN_CARD_STICKY_TOP_VAR = "--kanban-card-sticky-top" as const;
+
+/**
+ * Sticks a card's identity row under everything pinned above it. The fallback
+ * keeps the row usable inside a card rendered outside a cell that publishes the
+ * offset, where nothing is pinned above it at all.
+ */
+export const KANBAN_CARD_STICKY_TOP_CLASS =
+  "top-(--kanban-card-sticky-top,0px)";
+
+export type KanbanCardStickyTopStyle = CSSProperties & {
+  [KANBAN_CARD_STICKY_TOP_VAR]?: string;
+};
+
+type ResolveKanbanCardStickyTopOptions = {
+  /** How far the cell's own pinned action reaches, in pixels. */
+  pinnedAbove: number;
+  /** How far the virtualizer translated the row the card sits in, in pixels. */
+  rowOffset: number;
+};
+
+/**
+ * The offset a card's identity row sticks at, in the row's own coordinates.
+ *
+ * A virtualized row is translated into place, and a transform between a sticky
+ * box and its scroll container is resolved in the translated space: asking for
+ * the board's offset there lands the row that far below its card, which parks
+ * it at the card's end instead. Subtracting the translation back out states the
+ * offset in the space the browser actually resolves it in, so every card pins
+ * where the chrome above it ends no matter how far down the lane it is.
+ */
+export const resolveKanbanCardStickyTop = ({
+  pinnedAbove,
+  rowOffset,
+}: ResolveKanbanCardStickyTopOptions) => {
+  const offset = pinnedAbove - rowOffset;
+  const sign = offset < 0 ? "-" : "+";
+  return `calc(var(${KANBAN_STICKY_TOP_VAR}, 0px) ${sign} ${String(Math.abs(offset))}px)`;
+};
+
 export type KanbanCollapsedBandCaptionProps = {
   label: string;
   /** What the folded band stands in for: its count, already formatted. */
