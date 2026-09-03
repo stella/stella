@@ -1574,11 +1574,31 @@ export type DocumentProcessingReconciliationDependencies = {
   }) => Promise<boolean>;
 };
 
-const recoverDocumentDeadlineScoutDispatches = async (
-  dependencies: DocumentProcessingReconciliationDependencies,
-): Promise<ReconciliationPhaseResult> => {
+/** The two dependencies this sweep needs, so the scheduler can run it without
+ *  assembling the whole reconciliation set and a test can drive it with a
+ *  stubbed queue. */
+type RecoverDocumentDeadlineScoutDispatchesOptions = {
+  database?: DocumentProcessingReconciliationDependencies["database"];
+  enqueueDocumentDeadlineScout?: DocumentProcessingReconciliationDependencies["enqueueDocumentDeadlineScout"];
+};
+
+/**
+ * Return expired scout dispatches to `pending` and hand every pending one to
+ * the scout queue.
+ *
+ * Exported because the scout worker and this dispatcher live in different
+ * processes: the worker starts with the API server, while the reconciliation
+ * loop that used to be the dispatcher's only driver runs in the document
+ * processing worker. Wherever that worker is absent, `pending` rows had
+ * nothing to dispatch them. The scheduler runs it too; the enqueue is keyed by
+ * the source run, so the two drivers converge rather than duplicating work.
+ */
+export const recoverDocumentDeadlineScoutDispatches = async ({
+  database = rootDb,
+  enqueueDocumentDeadlineScout: enqueueScout = enqueueDocumentDeadlineScout,
+}: RecoverDocumentDeadlineScoutDispatchesOptions = {}): Promise<ReconciliationPhaseResult> => {
   const staleBefore = new Date(Date.now() - DEADLINE_SCOUT_LEASE_TIMEOUT_MS);
-  const staleDispatches = await dependencies.database
+  const staleDispatches = await database
     .select({ id: documentProcessingRuns.id })
     .from(documentProcessingRuns)
     .where(
@@ -1592,24 +1612,38 @@ const recoverDocumentDeadlineScoutDispatches = async (
       asc(documentProcessingRuns.id),
     )
     .limit(RECONCILE_BATCH_SIZE);
-  if (staleDispatches.length > 0) {
-    await dependencies.database
-      .update(documentProcessingRuns)
-      .set({
-        deadlineScoutClaimedAt: null,
-        deadlineScoutErrorCode: "worker_lease_expired",
-        deadlineScoutStatus: "pending",
-        updatedAt: new Date(),
-      })
-      .where(
-        inArray(
-          documentProcessingRuns.id,
-          staleDispatches.map(({ id }) => id),
-        ),
-      );
-  }
+  // Compare-and-set on the state the select matched, not on the id alone.
+  // This sweep runs in the scheduler and in the processing worker's own
+  // reconciliation loop, so two of them can select the same expired dispatch.
+  // Once the first resets it a worker claims a fresh attempt, and an id-only
+  // update from the second would push that live claim back to `pending`: the
+  // worker's settlement predicate then rejects its own result and the metered
+  // scan is replayed on every later sweep. Re-asserting `running` and the same
+  // expired claim makes the second update match nothing.
+  const reclaimedDispatches =
+    staleDispatches.length === 0
+      ? []
+      : await database
+          .update(documentProcessingRuns)
+          .set({
+            deadlineScoutClaimedAt: null,
+            deadlineScoutErrorCode: "worker_lease_expired",
+            deadlineScoutStatus: "pending",
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              inArray(
+                documentProcessingRuns.id,
+                staleDispatches.map(({ id }) => id),
+              ),
+              eq(documentProcessingRuns.deadlineScoutStatus, "running"),
+              lt(documentProcessingRuns.deadlineScoutClaimedAt, staleBefore),
+            ),
+          )
+          .returning({ id: documentProcessingRuns.id });
 
-  const staleCensusRuns = await dependencies.database
+  const staleCensusRuns = await database
     .select({ id: scoutRuns.id })
     .from(scoutRuns)
     .where(
@@ -1621,23 +1655,31 @@ const recoverDocumentDeadlineScoutDispatches = async (
     )
     .orderBy(asc(scoutRuns.startedAt), asc(scoutRuns.id))
     .limit(RECONCILE_BATCH_SIZE);
-  if (staleCensusRuns.length > 0) {
-    await dependencies.database
-      .update(scoutRuns)
-      .set({
-        error: "worker_lease_expired",
-        finishedAt: new Date(),
-        status: SCOUT_RUN_STATUS.FAILED,
-      })
-      .where(
-        inArray(
-          scoutRuns.id,
-          staleCensusRuns.map(({ id }) => id),
-        ),
-      );
-  }
+  // Same compare-and-set, so a census run that restarted between the select
+  // and this update is not retired out from under its worker.
+  const failedCensusRuns =
+    staleCensusRuns.length === 0
+      ? []
+      : await database
+          .update(scoutRuns)
+          .set({
+            error: "worker_lease_expired",
+            finishedAt: new Date(),
+            status: SCOUT_RUN_STATUS.FAILED,
+          })
+          .where(
+            and(
+              inArray(
+                scoutRuns.id,
+                staleCensusRuns.map(({ id }) => id),
+              ),
+              eq(scoutRuns.status, SCOUT_RUN_STATUS.RUNNING),
+              lt(scoutRuns.startedAt, staleBefore),
+            ),
+          )
+          .returning({ id: scoutRuns.id });
 
-  const pending = await dependencies.database
+  const pending = await database
     .select({ sourceRunId: documentProcessingRuns.id })
     .from(documentProcessingRuns)
     .where(eq(documentProcessingRuns.deadlineScoutStatus, "pending"))
@@ -1652,7 +1694,7 @@ const recoverDocumentDeadlineScoutDispatches = async (
     limit: DEADLINE_SCOUT_DISPATCH_CONCURRENCY,
     operation: async ({ sourceRunId }) =>
       await Result.tryPromise(async () => {
-        await dependencies.enqueueDocumentDeadlineScout({ sourceRunId });
+        await enqueueScout({ sourceRunId });
       }),
   });
   for (const result of results) {
@@ -1662,9 +1704,11 @@ const recoverDocumentDeadlineScoutDispatches = async (
   }
 
   return {
+    // Rows actually transitioned, not rows selected: a candidate another
+    // sweep already reclaimed is not this sweep's effect.
     count:
-      staleDispatches.length +
-      staleCensusRuns.length +
+      reclaimedDispatches.length +
+      failedCensusRuns.length +
       results.filter(Result.isOk).length,
     hasMore:
       cappedSelectionHasMore({
