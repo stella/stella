@@ -17,6 +17,7 @@ import {
   envBaseServerSchema,
   KNOWN_NODE_ENVS,
   NODE_ENV_KIND,
+  resolveApiEnvironmentPlaceholders,
 } from "@/api/env-base-schema";
 import { resolveCorpusStorageMode } from "@/api/lib/corpus-storage-mode";
 
@@ -29,12 +30,20 @@ if (nodeEnvKind === NODE_ENV_KIND.unknown) {
   );
 }
 
+const baseRuntimeEnv = resolveApiEnvironmentPlaceholders({
+  schema: envBaseServerSchema,
+  values: process.env,
+});
+if (baseRuntimeEnv.violation !== null) {
+  panic(baseRuntimeEnv.violation);
+}
+
 export const envBase = createEnv({
   server: envBaseServerSchema,
   emptyStringAsUndefined: true,
   runtimeEnv: {
-    ...process.env,
-    DATABASE_URL: resolveDatabaseUrl(),
+    ...baseRuntimeEnv.runtimeEnv,
+    DATABASE_URL: resolveDatabaseUrl(baseRuntimeEnv.runtimeEnv),
     isDev: nodeEnvKind === NODE_ENV_KIND.local,
   },
 });

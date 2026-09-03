@@ -8,6 +8,15 @@ import {
   envApiServerSchema,
   resolveEmailProvider,
 } from "@/api/env-schema";
+import { resolveConfigurationPlaceholders } from "@/api/lib/configuration-placeholders";
+
+const apiRuntimeEnv = resolveConfigurationPlaceholders({
+  schema: envApiServerSchema,
+  values: process.env,
+});
+if (apiRuntimeEnv.violation !== null) {
+  panic(apiRuntimeEnv.violation);
+}
 
 /**
  * API-specific environment variables. These are only required when the full
@@ -17,7 +26,7 @@ import {
 const envApi = createEnv({
   server: envApiServerSchema,
   emptyStringAsUndefined: true,
-  runtimeEnv: process.env,
+  runtimeEnv: apiRuntimeEnv.runtimeEnv,
 });
 
 const emailProvider = resolveEmailProvider(envApi);

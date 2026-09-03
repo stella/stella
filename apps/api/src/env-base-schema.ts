@@ -9,7 +9,11 @@
  */
 import * as v from "valibot";
 
-import { hasSecureDatabaseTransport } from "@/api/db-url";
+import {
+  DATABASE_COMPONENT_KEYS,
+  hasSecureDatabaseTransport,
+} from "@/api/db-url";
+import { resolveConfigurationPlaceholders } from "@/api/lib/configuration-placeholders";
 import {
   CORPUS_STORAGE_MODES,
   type CorpusStorageMode,
@@ -308,6 +312,46 @@ export const databaseComponentEnvSchema = {
   DB_PASSWORD: v.optional(v.string()),
   DB_NAME: v.optional(v.string()),
   DB_SSLMODE: v.optional(v.picklist(["require", "verify-ca", "verify-full"])),
+};
+
+// Derived from the keys resolveDatabaseUrl() insists on, so renaming a
+// component cannot leave this behind.
+const requiredDatabaseComponentSchema = Object.fromEntries(
+  DATABASE_COMPONENT_KEYS.map((name) => [
+    name,
+    databaseComponentEnvSchema[name],
+  ]),
+);
+
+type ResolveApiEnvironmentPlaceholdersOptions = {
+  schema: Record<string, { readonly type: string }>;
+  values: Record<string, string | undefined>;
+};
+
+/**
+ * Placeholder resolution for the API environment, shared by the runtime and
+ * the environment doctor so the two cannot report a configuration
+ * differently.
+ *
+ * The database components are scanned only when they are the selected source
+ * for DATABASE_URL. A supplied URL wins over them, and a placeholder among
+ * inputs nothing reads is not an error; on the derived path the components
+ * the URL cannot be assembled without are named, while DB_SSLMODE reads as
+ * unset and takes its default.
+ */
+export const resolveApiEnvironmentPlaceholders = ({
+  schema,
+  values,
+}: ResolveApiEnvironmentPlaceholdersOptions) => {
+  const resolved = resolveConfigurationPlaceholders({ schema, values });
+  if (resolved.violation !== null || resolved.runtimeEnv["DATABASE_URL"]) {
+    return resolved;
+  }
+  return resolveConfigurationPlaceholders({
+    schema: databaseComponentEnvSchema,
+    values: resolved.runtimeEnv,
+    derivationInputs: requiredDatabaseComponentSchema,
+  });
 };
 
 type EnvBaseInvariantInput = {

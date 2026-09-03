@@ -6,11 +6,20 @@ import {
   documentProcessingEnvInvariantViolation,
   envDocumentProcessingWorkerServerSchema,
 } from "@/api/env-document-processing-worker-schema";
+import { resolveConfigurationPlaceholders } from "@/api/lib/configuration-placeholders";
+
+const workerRuntimeEnv = resolveConfigurationPlaceholders({
+  schema: envDocumentProcessingWorkerServerSchema,
+  values: process.env,
+});
+if (workerRuntimeEnv.violation !== null) {
+  panic(workerRuntimeEnv.violation);
+}
 
 const envDocumentProcessingWorkerSpecific = createEnv({
   server: envDocumentProcessingWorkerServerSchema,
   emptyStringAsUndefined: true,
-  runtimeEnv: process.env,
+  runtimeEnv: workerRuntimeEnv.runtimeEnv,
 });
 
 const invariantViolation = documentProcessingEnvInvariantViolation({

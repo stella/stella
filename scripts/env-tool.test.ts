@@ -295,7 +295,7 @@ describe("environment doctor output", () => {
       }),
     ).toEqual({
       DB_PASSWORD: "",
-      DB_SSLMODE: "",
+      DB_SSLMODE: undefined,
       EMAIL_PROVIDER: undefined,
     });
   });
@@ -319,7 +319,79 @@ describe("environment doctor output", () => {
     );
   });
 
-  test("rejects an empty database SSL mode like API startup", () => {
+  test("rejects a placeholder database component by name", () => {
+    const input = validApiInput();
+    delete input["DATABASE_URL"];
+    Object.assign(input, {
+      DB_HOST: "localhost",
+      DB_NAME: "stella",
+      DB_PASSWORD: "PLACEHOLDER_SET_ME",
+      DB_PORT: "5432",
+      DB_SSLMODE: "require",
+      DB_USER: "postgres",
+    });
+
+    const result = validateDoctorEnvironment({ app: "api", input });
+    expect(result.status).toBe("invalid");
+    if (result.status === "invalid") {
+      expect(result.issues).toContain(
+        "DB_PASSWORD must be set to a real value; the configured value is a placeholder.",
+      );
+    }
+  });
+
+  test("ignores placeholder components when DATABASE_URL is supplied", () => {
+    const input = validApiInput();
+    Object.assign(input, {
+      DB_HOST: "localhost",
+      DB_NAME: "stella",
+      DB_PASSWORD: "PLACEHOLDER_SET_ME",
+      DB_PORT: "5432",
+      DB_USER: "UNCONFIGURED",
+    });
+
+    const result = validateDoctorEnvironment({ app: "api", input });
+    expect(result.status).toBe("valid");
+  });
+
+  test("defaults the SSL mode when the component holds a placeholder", () => {
+    const input = validApiInput();
+    delete input["DATABASE_URL"];
+    Object.assign(input, {
+      DB_HOST: "localhost",
+      DB_NAME: "stella",
+      DB_PASSWORD: "postgres",
+      DB_PORT: "5432",
+      DB_SSLMODE: "UNCONFIGURED",
+      DB_USER: "postgres",
+    });
+
+    const result = validateDoctorEnvironment({ app: "api", input });
+    expect(result.status).toBe("valid");
+    expect(result.values["DATABASE_URL"]).toBe(
+      "postgres://postgres:postgres@localhost:5432/stella?sslmode=require",
+    );
+  });
+
+  // The collab runtime hands raw values to createEnv, so the doctor must not
+  // read a placeholder there as an unset value and report the default.
+  test("reports a collab placeholder exactly as the collab runtime does", () => {
+    const result = validateDoctorEnvironment({
+      app: "collab",
+      input: {
+        STELLA_API_URL: "https://api.example.com",
+        STELLA_COLLAB_MODE: "UNCONFIGURED",
+        STELLA_COLLAB_SERVICE_TOKEN: "x".repeat(32),
+      },
+    });
+
+    expect(result.status).toBe("invalid");
+    if (result.status === "invalid") {
+      expect(result.issues.join(" ")).toContain("STELLA_COLLAB_MODE");
+    }
+  });
+
+  test("defaults an empty database SSL mode like API startup", () => {
     const input = validApiInput();
     delete input["DATABASE_URL"];
     Object.assign(input, {
@@ -332,12 +404,10 @@ describe("environment doctor output", () => {
     });
 
     const result = validateDoctorEnvironment({ app: "api", input });
-    expect(result.status).toBe("invalid");
-    if (result.status === "invalid") {
-      expect(result.issues).toContain(
-        "DATABASE_URL: invalid database component settings.",
-      );
-    }
+    expect(result.status).toBe("valid");
+    expect(result.values["DATABASE_URL"]).toBe(
+      "postgres://postgres:@localhost:5432/stella?sslmode=require",
+    );
   });
 
   test("rejects a non-PostgreSQL case-law database URL", () => {
@@ -470,6 +540,14 @@ describe("environment doctor output", () => {
         S3_ACCESS_KEY_ID: " use-iam-role ",
         S3_CREDENTIALS_PROVIDER: "env",
         S3_SECRET_ACCESS_KEY: "USE-IAM-ROLE",
+      },
+    },
+    {
+      expected: 'S3_CREDENTIALS_PROVIDER="env" requires static S3 credentials.',
+      overrides: {
+        S3_ACCESS_KEY_ID: "PLACEHOLDER_SET_ME",
+        S3_CREDENTIALS_PROVIDER: "env",
+        S3_SECRET_ACCESS_KEY: "UNCONFIGURED",
       },
     },
     {

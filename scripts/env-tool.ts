@@ -19,12 +19,14 @@ import {
   envBaseInvariantViolation,
   KNOWN_NODE_ENVS,
   NODE_ENV_KIND,
+  resolveApiEnvironmentPlaceholders,
 } from "../apps/api/src/env-base-schema";
 import { documentProcessingEnvInvariantViolation } from "../apps/api/src/env-document-processing-worker-schema";
 import {
   envApiInvariantViolation,
   resolveEmailProvider,
 } from "../apps/api/src/env-schema";
+import { EMPTY_VALUE_VARIABLES } from "../apps/api/src/lib/configuration-placeholders";
 import { envWebInvariantViolation } from "../apps/web/src/env-schema";
 import {
   AMBIENT_ENV_KEYS,
@@ -851,15 +853,11 @@ type DoctorValidationResult =
 const isEnvApp = (value: string): value is EnvApp =>
   Object.values(ENV_APP).some((app) => app === value);
 
-const EMPTY_DATABASE_COMPONENT_KEYS = new Set(["DB_PASSWORD", "DB_SSLMODE"]);
-
 export const normalizeEmptyEnvironment = (input: DoctorInput): DoctorInput => {
   const normalized: DoctorInput = {};
   for (const [name, value] of Object.entries(input)) {
     normalized[name] =
-      value === "" && !EMPTY_DATABASE_COMPONENT_KEYS.has(name)
-        ? undefined
-        : value;
+      value === "" && !EMPTY_VALUE_VARIABLES.has(name) ? undefined : value;
   }
   return normalized;
 };
@@ -880,16 +878,31 @@ const validateSchema = (
 };
 
 const validateApiEnvironment = (input: DoctorInput): DoctorValidationResult => {
-  const databaseUrl = Result.try(() => resolveDatabaseUrl(input));
+  // Mirrors apps/api/src/env-base.ts: placeholders go first, so the doctor
+  // and the runtime derive DATABASE_URL from the same values.
+  const placeholders = resolveApiEnvironmentPlaceholders({
+    schema: API_ENV_SCHEMA,
+    values: input,
+  });
+  if (placeholders.violation !== null) {
+    return {
+      status: "invalid",
+      issues: [placeholders.violation],
+      values: input,
+    };
+  }
+  const configured = placeholders.runtimeEnv;
+
+  const databaseUrl = Result.try(() => resolveDatabaseUrl(configured));
   if (Result.isError(databaseUrl)) {
     return {
       status: "invalid",
       issues: ["DATABASE_URL: invalid database component settings."],
-      values: input,
+      values: configured,
     };
   }
 
-  const nodeEnv = input["NODE_ENV"];
+  const nodeEnv = configured["NODE_ENV"];
   const nodeEnvKind = classifyNodeEnv(nodeEnv);
   if (nodeEnvKind === NODE_ENV_KIND.unknown) {
     return {
@@ -897,12 +910,12 @@ const validateApiEnvironment = (input: DoctorInput): DoctorValidationResult => {
       issues: [
         `NODE_ENV: "${nodeEnv}" is not one of ${KNOWN_NODE_ENVS.join(", ")}.`,
       ],
-      values: input,
+      values: configured,
     };
   }
 
   const runtimeInput = {
-    ...input,
+    ...configured,
     DATABASE_URL: databaseUrl.value,
     isDev: nodeEnvKind === NODE_ENV_KIND.local,
   };
