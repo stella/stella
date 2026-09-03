@@ -60,6 +60,71 @@ const readStringField = (entry: unknown, key: string): string => {
   return typeof value === "string" ? value : "";
 };
 
+// Every `DOMException` is coerced to this one class name (and every legacy
+// `DOMError` to its own), so the entry type cannot tell an `AbortError` from a
+// `QuotaExceededError` or a `SecurityError`. The distinguishing `name` is
+// carried in the value instead, which the redaction below blanks, leaving the
+// class as the sole identity of unrelated failures.
+const DOM_EXCEPTION_CLASS = /^DOM(?:Error|Exception)$/u;
+
+// The standard DOM exception names (WebIDL's name table). The coerced value is
+// either the name alone or `name: message`, and a `DOMException` can be
+// constructed with any name, so only a standard name is read back: a custom
+// one could carry an identifier, and it falls back to the bare class.
+const DOM_EXCEPTION_NAMES: ReadonlySet<string> = new Set([
+  "AbortError",
+  "ConstraintError",
+  "DataCloneError",
+  "DataError",
+  "EncodingError",
+  "HierarchyRequestError",
+  "InUseAttributeError",
+  "IndexSizeError",
+  "InvalidAccessError",
+  "InvalidCharacterError",
+  "InvalidModificationError",
+  "InvalidNodeTypeError",
+  "InvalidStateError",
+  "NamespaceError",
+  "NetworkError",
+  "NoModificationAllowedError",
+  "NotAllowedError",
+  "NotFoundError",
+  "NotReadableError",
+  "NotSupportedError",
+  "OperationError",
+  "OptOutError",
+  "QuotaExceededError",
+  "ReadOnlyError",
+  "SecurityError",
+  "SyntaxError",
+  "TimeoutError",
+  "TransactionInactiveError",
+  "TypeMismatchError",
+  "URLMismatchError",
+  "UnknownError",
+  "VersionError",
+  "WrongDocumentError",
+]);
+
+// Recovers the specific error name of a DOM exception, keeping each kind of DOM
+// failure a distinct class. This matches `telemetryErrorType`, which already
+// identifies hand-captured errors by `error.name`.
+const domExceptionClass = (type: string, value: string): string => {
+  if (!DOM_EXCEPTION_CLASS.test(type)) {
+    return type;
+  }
+  const separator = value.indexOf(":");
+  const name = separator === -1 ? value : value.slice(0, separator);
+  return DOM_EXCEPTION_NAMES.has(name) ? name : type;
+};
+
+// The reason a cancelled request rejects with. The router and the query layer
+// cancel in-flight requests on every navigation and unmount and treat that as
+// cancellation, never as failure; one that escapes to the global rejection
+// handler still names no defect, only that a request was cut short.
+const CANCELLED_REQUEST_CLASS = "AbortError";
+
 const isNoiseException = (event: {
   properties?: Record<string, unknown>;
 }): boolean => {
@@ -71,8 +136,11 @@ const isNoiseException = (event: {
   return entries.some((entry) => {
     const value = readStringField(entry, "value");
     const type = readStringField(entry, "type");
-    return EXCEPTION_NOISE_PATTERNS.some(
-      (pattern) => pattern.test(value) || pattern.test(type),
+    return (
+      domExceptionClass(type, value) === CANCELLED_REQUEST_CLASS ||
+      EXCEPTION_NOISE_PATTERNS.some(
+        (pattern) => pattern.test(value) || pattern.test(type),
+      )
     );
   });
 };
@@ -215,7 +283,10 @@ const sanitizeFrame = (frame: unknown): SanitizedFrame => {
 };
 
 const sanitizeExceptionEntry = (entry: unknown) => {
-  const type = normalizeTelemetryErrorTypeName(readStringField(entry, "type"));
+  const type = domExceptionClass(
+    normalizeTelemetryErrorTypeName(readStringField(entry, "type")),
+    readStringField(entry, "value"),
+  );
   const stacktrace = isRecord(entry) ? entry["stacktrace"] : undefined;
   const frames = isRecord(stacktrace) ? stacktrace["frames"] : undefined;
   return {

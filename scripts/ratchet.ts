@@ -661,12 +661,14 @@ const countPresence = (): number => 1;
 // keep it open for days), never anchored to a component lifecycle. `\b`
 // after `Map`/`Set` deliberately does NOT match `WeakMap`/`WeakSet` — those
 // are GC-safe by construction (keys drop out once nothing else references
-// them) and are excluded from this metric on purpose. The `^` anchor (no
-// leading whitespace) is the "module scope, not inside a function" heuristic:
-// a declaration indented under a function/hook is scoped to that call, not
-// the module.
+// them) and are excluded from this metric on purpose. A binding typed
+// `ReadonlySet`/`ReadonlyMap` is excluded too: the type strips `add`/`set`/
+// `delete`, so nothing can turn it into a registry without an `as` cast, which
+// the as-casts metric holds at zero. The `^` anchor (no leading whitespace) is
+// the "module scope, not inside a function" heuristic: a declaration indented
+// under a function/hook is scoped to that call, not the module.
 const MODULE_MUTABLE_COLLECTION =
-  /^(?:export\s+)?(?:const|let)\s+\w+\s*(?::.+?)?=\s*new\s+(?:Map|Set)\b/u;
+  /^(?:export\s+)?(?:const|let)\s+\w+\s*(?::(?!\s*Readonly(?:Map|Set)\b).+?)?=\s*new\s+(?:Map|Set)\b/u;
 
 const countModuleLevelMutableCollections = (content: string): number => {
   let total = 0;
@@ -2114,7 +2116,9 @@ const MODULE_COLLECTION_FIXTURE_LINES = [
   "const frozenSet = new Set([1, 2, 3]);",
   "export const exportedRegistry = new Map<string, number>();",
   "let mutableCounter = new Set<string>();",
-  'const typed: ReadonlySet<string> = new Set(["a"]);',
+  'const readonlyTyped: ReadonlySet<string> = new Set(["a"]);',
+  "const readonlyMapTyped: ReadonlyMap<string, number> = new Map();",
+  "const typed: Set<string> = new Set();",
   "const withArrowType: Map<string, () => void> = new Map();",
   "const multiline = new Map<",
   "  string,",
@@ -2131,8 +2135,8 @@ const MODULE_COLLECTION_FIXTURE_LINES = [
 const SELF_TEST_MODULE_COLLECTIONS = `${MODULE_COLLECTION_FIXTURE_LINES.join("\n")}\n`;
 // Expected: frozenSet(1) + exportedRegistry(1) + mutableCounter(1) + typed(1)
 // + withArrowType(1) + multiline(1, counted on its opening line even though
-// `new Map<` spans to a later `>()`) = 6. WeakMap/WeakSet, the indented
-// (function-scoped)
+// `new Map<` spans to a later `>()`) = 6. The `ReadonlySet`/`ReadonlyMap`
+// typed bindings, WeakMap/WeakSet, the indented (function-scoped)
 // declaration, and the commented-out line are all excluded.
 const EXPECTED_MODULE_COLLECTIONS = 6;
 

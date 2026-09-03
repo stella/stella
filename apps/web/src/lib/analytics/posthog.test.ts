@@ -272,6 +272,105 @@ describe("PostHog browser analytics adapter", () => {
     }
   });
 
+  test("identifies a DOM exception by its error name", () => {
+    createPostHogAnalytics({ host: "https://posthog.test", key: "phc_test" });
+
+    const sanitized = initOptions?.before_send({
+      event: WEB_ANALYTICS_EVENTS.exception,
+      properties: {
+        $exception_list: [
+          {
+            type: "DOMException",
+            value: "QuotaExceededError: Smith v Example",
+          },
+        ],
+      },
+    });
+
+    expect(sanitized?.properties).toEqual({
+      $exception_fingerprint: "QuotaExceededError|||",
+      $exception_list: [{ type: "QuotaExceededError", value: "" }],
+      $exception_type: "QuotaExceededError",
+    });
+  });
+
+  test("separates DOM exceptions that differ only by error name", () => {
+    createPostHogAnalytics({ host: "https://posthog.test", key: "phc_test" });
+
+    const fingerprintOf = (value: string) =>
+      initOptions?.before_send({
+        event: WEB_ANALYTICS_EVENTS.exception,
+        properties: { $exception_list: [{ type: "DOMException", value }] },
+      })?.properties?.["$exception_fingerprint"];
+
+    // A message-less DOM exception carries the bare name as its value.
+    expect(fingerprintOf("NetworkError")).toBe("NetworkError|||");
+    expect(fingerprintOf("NotAllowedError: denied")).toBe("NotAllowedError|||");
+    expect(fingerprintOf("NetworkError")).not.toBe(
+      fingerprintOf("SecurityError"),
+    );
+  });
+
+  test("falls back to the class when a DOM exception name is not a symbol", () => {
+    createPostHogAnalytics({ host: "https://posthog.test", key: "phc_test" });
+
+    const sanitized = initOptions?.before_send({
+      event: WEB_ANALYTICS_EVENTS.exception,
+      properties: {
+        $exception_list: [
+          { type: "DOMException", value: "Client Smith v Example: leaked" },
+        ],
+      },
+    });
+
+    expect(sanitized?.properties).toEqual({
+      $exception_fingerprint: "DOMException|||",
+      $exception_list: [{ type: "DOMException", value: "" }],
+      $exception_type: "DOMException",
+    });
+  });
+
+  test("keeps only standard DOM exception names, never a custom one", () => {
+    createPostHogAnalytics({ host: "https://posthog.test", key: "phc_test" });
+
+    const typeOf = (value: string) =>
+      initOptions?.before_send({
+        event: WEB_ANALYTICS_EVENTS.exception,
+        properties: { $exception_list: [{ type: "DOMException", value }] },
+      })?.properties?.["$exception_type"];
+
+    expect(typeOf("TimeoutError: signal timed out")).toBe("TimeoutError");
+    // A constructor-supplied name is free text even when symbol-shaped.
+    expect(typeOf("Matter2041Error: leaked")).toBe("DOMException");
+    expect(typeOf("SmithVExampleError")).toBe("DOMException");
+  });
+
+  test("drops a cancelled request's abort reason as noise", () => {
+    createPostHogAnalytics({ host: "https://posthog.test", key: "phc_test" });
+
+    for (const value of [
+      "AbortError",
+      "AbortError: signal is aborted without reason",
+    ]) {
+      expect(
+        initOptions?.before_send({
+          event: WEB_ANALYTICS_EVENTS.exception,
+          properties: { $exception_list: [{ type: "DOMException", value }] },
+        }),
+      ).toBeNull();
+    }
+
+    // Other DOM failures keep flowing under their own name.
+    expect(
+      initOptions?.before_send({
+        event: WEB_ANALYTICS_EVENTS.exception,
+        properties: {
+          $exception_list: [{ type: "DOMException", value: "SecurityError" }],
+        },
+      })?.properties?.["$exception_type"],
+    ).toBe("SecurityError");
+  });
+
   test("keeps actionable rejection types without their raw value", () => {
     createPostHogAnalytics({ host: "https://posthog.test", key: "phc_test" });
 

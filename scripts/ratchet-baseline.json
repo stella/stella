@@ -36,12 +36,10 @@
     "files": {}
   },
   "module-level-mutable-collections": {
-    "count": 5,
+    "count": 3,
     "files": {
       "apps/web/src/boot-prefetch.ts": 1,
       "apps/web/src/components/ai-suggestions/use-review-actions.ts": 1,
-      "apps/web/src/components/chat/rehype-anon-spans.ts": 1,
-      "apps/web/src/components/templates/template-field-manifest.ts": 1,
       "apps/web/src/lib/relative-time.ts": 1
     }
   },
