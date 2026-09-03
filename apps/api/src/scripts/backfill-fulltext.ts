@@ -140,11 +140,14 @@ const CONFIGS: BackfillConfig[] = [
 
 const backfillAdapter = async (config: BackfillConfig) => {
   // Get source ID
-  const [source] = await rootDb
-    .select({ id: caseLawSources.id })
-    .from(caseLawSources)
-    .where(eq(caseLawSources.adapterKey, config.adapterKey))
-    .limit(1);
+  const [source] = await rootDb.transaction(
+    async (tx) =>
+      await tx
+        .select({ id: caseLawSources.id })
+        .from(caseLawSources)
+        .where(eq(caseLawSources.adapterKey, config.adapterKey))
+        .limit(1),
+  );
 
   if (!source) {
     console.log(`[${config.adapterKey}] No source found, skipping`);
@@ -152,13 +155,16 @@ const backfillAdapter = async (config: BackfillConfig) => {
   }
 
   // Count missing
-  const result = await rootDb
-    .select({ count: sql<number>`count(*)` })
-    .from(caseLawDecisions)
-    .where(
-      sql`${caseLawDecisions.sourceId} = ${source.id}
-          AND ${caseLawDecisions.fulltext} IS NULL`,
-    );
+  const result = await rootDb.transaction(
+    async (tx) =>
+      await tx
+        .select({ count: sql<number>`count(*)` })
+        .from(caseLawDecisions)
+        .where(
+          sql`${caseLawDecisions.sourceId} = ${source.id}
+              AND ${caseLawDecisions.fulltext} IS NULL`,
+        ),
+  );
 
   const count = result.at(0)?.count ?? 0;
   console.log(`[${config.adapterKey}] ${count} decisions missing fulltext`);
@@ -172,19 +178,22 @@ const backfillAdapter = async (config: BackfillConfig) => {
 
   while (true) {
     // oxlint-disable-next-line no-await-in-loop -- bounded memory: fetch one batch of missing-fulltext rows at a time
-    const batch = await rootDb
-      .select({
-        id: caseLawDecisions.id,
-        sourceUrl: caseLawDecisions.sourceUrl,
-        documentUrl: caseLawDecisions.documentUrl,
-        caseNumber: caseLawDecisions.caseNumber,
-      })
-      .from(caseLawDecisions)
-      .where(
-        sql`${caseLawDecisions.sourceId} = ${source.id}
-            AND ${caseLawDecisions.fulltext} IS NULL`,
-      )
-      .limit(BATCH_SIZE);
+    const batch = await rootDb.transaction(
+      async (tx) =>
+        await tx
+          .select({
+            id: caseLawDecisions.id,
+            sourceUrl: caseLawDecisions.sourceUrl,
+            documentUrl: caseLawDecisions.documentUrl,
+            caseNumber: caseLawDecisions.caseNumber,
+          })
+          .from(caseLawDecisions)
+          .where(
+            sql`${caseLawDecisions.sourceId} = ${source.id}
+                AND ${caseLawDecisions.fulltext} IS NULL`,
+          )
+          .limit(BATCH_SIZE),
+    );
 
     if (batch.length === 0) {
       break;
@@ -197,10 +206,12 @@ const backfillAdapter = async (config: BackfillConfig) => {
       if (!url) {
         // No URL available — mark as empty to prevent re-query
         // oxlint-disable-next-line no-await-in-loop -- mark this row empty before continuing; keeps progress per row
-        await rootDb
-          .update(caseLawDecisions)
-          .set({ fulltext: "" })
-          .where(eq(caseLawDecisions.id, row.id));
+        await rootDb.transaction(async (tx) => {
+          await tx
+            .update(caseLawDecisions)
+            .set({ fulltext: "" })
+            .where(eq(caseLawDecisions.id, row.id));
+        });
         failed++;
         processed++;
         continue;
@@ -213,10 +224,12 @@ const backfillAdapter = async (config: BackfillConfig) => {
       // the NULL check no longer matches and we don't re-query
       // this row forever.
       // oxlint-disable-next-line no-await-in-loop -- update this row's fulltext after its sequential, rate-limited fetch
-      await rootDb
-        .update(caseLawDecisions)
-        .set({ fulltext: fulltext ?? "" })
-        .where(eq(caseLawDecisions.id, row.id));
+      await rootDb.transaction(async (tx) => {
+        await tx
+          .update(caseLawDecisions)
+          .set({ fulltext: fulltext ?? "" })
+          .where(eq(caseLawDecisions.id, row.id));
+      });
 
       if (fulltext) {
         filled++;

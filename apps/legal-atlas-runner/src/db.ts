@@ -22,7 +22,6 @@ import { withTimeout } from "@/api/lib/with-timeout";
 
 import { LEGAL_ATLAS_RUNNER_ENV } from "./env";
 
-const rawIngestionDb = createIngestionDb(rlsDb);
 const transactionTimeoutMs = LEGAL_ATLAS_RUNNER_ENV.dbTransactionTimeoutMs;
 const backfillTransactionTimeoutMs =
   LEGAL_ATLAS_RUNNER_ENV.dbBackfillTransactionTimeoutMs;
@@ -38,9 +37,19 @@ const rootQueryTimeoutMs = LEGAL_ATLAS_RUNNER_ENV.dbRootQueryTimeoutMs;
  * which otherwise leaves the transaction idle and the awaiting caller
  * suspended forever.
  */
-const createBoundedIngestionDb =
-  (label: string, timeoutMs: number): ScopedDb =>
-  async (fn) => {
+const createBoundedIngestionDb = (
+  label: string,
+  timeoutMs: number,
+): ScopedDb => {
+  // The lane wait shares the transaction budget: a batch that cannot enter
+  // the corpus schema lane within it fails here, at the same moment the
+  // wall-clock guard below gives up, instead of entering late and running
+  // its work after this caller has moved on.
+  const rawIngestionDb = createIngestionDb(
+    rlsDb,
+    timeoutMs === 0 ? {} : { laneWaitMs: timeoutMs },
+  );
+  return async (fn) => {
     const operation = async () =>
       await rawIngestionDb(async (tx) => {
         if (timeoutMs > 0) {
@@ -57,6 +66,7 @@ const createBoundedIngestionDb =
       timeoutMs: timeoutMs === 0 ? 0 : timeoutMs + TRANSACTION_TIMEOUT_GRACE_MS,
     });
   };
+};
 
 /** Transaction runner for adapter ingest cycles (long pipeline writes). */
 export const ingestionDb: ScopedDb = createBoundedIngestionDb(

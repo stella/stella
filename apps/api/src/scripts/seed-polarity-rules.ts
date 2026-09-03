@@ -31,25 +31,27 @@ console.log(`Seeding ${SEED_RULES.length} polarity rules...`);
 
 for (const rule of SEED_RULES) {
   // oxlint-disable-next-line no-await-in-loop -- sequential seeding preserves upsert order across rules
-  await rootDb
-    .insert(caseLawPolarityRules)
-    .values({
-      pattern: rule.pattern,
-      polarity: rule.polarity,
-      language: rule.language,
-      source: "manual",
-      confidence: 1,
-    })
-    .onConflictDoUpdate({
-      target: [caseLawPolarityRules.pattern, caseLawPolarityRules.language],
-      // `source` is part of the state being seeded, not incidental metadata:
-      // the rule loader reads `manual` and `llm-promoted` only, so a seed that
-      // collided with an `llm-proposed` rule of the same pattern and language
-      // used to leave it excluded — a successful run that changed nothing a
-      // classifier would ever see. The insert and the update have to establish
-      // the same row.
-      set: { polarity: rule.polarity, confidence: 1, source: "manual" },
-    });
+  await rootDb.transaction(async (tx) => {
+    await tx
+      .insert(caseLawPolarityRules)
+      .values({
+        pattern: rule.pattern,
+        polarity: rule.polarity,
+        language: rule.language,
+        source: "manual",
+        confidence: 1,
+      })
+      .onConflictDoUpdate({
+        target: [caseLawPolarityRules.pattern, caseLawPolarityRules.language],
+        // `source` is part of the state being seeded, not incidental
+        // metadata: the rule loader reads `manual` and `llm-promoted` only,
+        // so a seed that collided with an `llm-proposed` rule of the same
+        // pattern and language used to leave it excluded — a successful run
+        // that changed nothing a classifier would ever see. The insert and
+        // the update have to establish the same row.
+        set: { polarity: rule.polarity, confidence: 1, source: "manual" },
+      });
+  });
 }
 
 /** Rows reset per statement; bounded so the lock never spans the table. */
@@ -57,20 +59,23 @@ const RESET_BATCH = 5000;
 
 let resetIds: string[] = [];
 if (RETIRED_SEED_RULES.length > 0) {
-  const retired = await rootDb
-    .update(caseLawPolarityRules)
-    .set({ source: RULE_SOURCE.RETIRED })
-    .where(
-      or(
-        ...RETIRED_SEED_RULES.map((rule) =>
-          and(
-            eq(caseLawPolarityRules.pattern, rule.pattern),
-            eq(caseLawPolarityRules.language, rule.language),
+  const retired = await rootDb.transaction(
+    async (tx) =>
+      await tx
+        .update(caseLawPolarityRules)
+        .set({ source: RULE_SOURCE.RETIRED })
+        .where(
+          or(
+            ...RETIRED_SEED_RULES.map((rule) =>
+              and(
+                eq(caseLawPolarityRules.pattern, rule.pattern),
+                eq(caseLawPolarityRules.language, rule.language),
+              ),
+            ),
           ),
-        ),
-      ),
-    )
-    .returning({ id: caseLawPolarityRules.id });
+        )
+        .returning({ id: caseLawPolarityRules.id }),
+  );
 
   // A retired rule's verdicts go with it: the citations it labelled return
   // to the unclassified pool, and `scripts/classify-citations.ts` reads them
@@ -78,17 +83,20 @@ if (RETIRED_SEED_RULES.length > 0) {
   // keep speaking through every row it ever touched.
   const retiredIds = retired.map((rule) => rule.id);
   const resetBatch = async (): Promise<string[]> => {
-    const reset = await rootDb
-      .update(caseLawCitations)
-      .set({ polarity: null, polarityRuleId: null })
-      .where(
-        sql`${caseLawCitations.id} IN (
-          SELECT ${caseLawCitations.id} FROM ${caseLawCitations}
-          WHERE ${inArray(caseLawCitations.polarityRuleId, retiredIds)}
-          LIMIT ${RESET_BATCH}
-        )`,
-      )
-      .returning({ id: caseLawCitations.id });
+    const reset = await rootDb.transaction(
+      async (tx) =>
+        await tx
+          .update(caseLawCitations)
+          .set({ polarity: null, polarityRuleId: null })
+          .where(
+            sql`${caseLawCitations.id} IN (
+              SELECT ${caseLawCitations.id} FROM ${caseLawCitations}
+              WHERE ${inArray(caseLawCitations.polarityRuleId, retiredIds)}
+              LIMIT ${RESET_BATCH}
+            )`,
+          )
+          .returning({ id: caseLawCitations.id }),
+    );
     const ids = reset.map((row) => row.id);
     return reset.length < RESET_BATCH ? ids : [...ids, ...(await resetBatch())];
   };

@@ -13,6 +13,7 @@ import {
   CORPUS_SCHEMA_LANE_LOCK_SQL,
   CORPUS_SCHEMA_LANE_UNLOCK_SQL,
 } from "./corpus-schema-lane";
+import type { OnlineMigrationConnection } from "./online-migration-connection";
 import { runOnlineMigrations } from "./online-migrations";
 import { APPLICATION_RLS_ROLE_NAME } from "./role-names";
 
@@ -98,14 +99,16 @@ type AppliedMigrationRow = { hash: string };
 // migrations and the online phase both run DDL on the corpus tables. Taking
 // it here waits for the corpus batches in flight and holds every new one at
 // its boundary until the upgrade releases the lane (see
-// corpus-schema-lane.ts). One connection (`max: 1`), so the session lock,
-// the migrator, and the online phase share the session that holds it.
+// corpus-schema-lane.ts). The lock is session-scoped, so everything runs on
+// one reserved connection: a pool would hand later statements a replacement
+// connection, and the lock with it, if the first one closed.
 let laneHeld = false;
+const connection = await client.reserve();
 try {
-  await client.unsafe(bootstrapRoleSql);
-  await client.unsafe(CORPUS_SCHEMA_LANE_LOCK_SQL);
+  await connection.unsafe(bootstrapRoleSql);
+  await connection.unsafe(CORPUS_SCHEMA_LANE_LOCK_SQL);
   laneHeld = true;
-  const database = drizzle({ client });
+  const database = drizzle({ client: connection });
   await migrate(database, { migrationsFolder });
   await assertMigrationHistory({
     context: "migrate",
@@ -118,18 +121,18 @@ try {
     },
     remedy: "Migration completion requires every bundled migration hash.",
   });
-  await runOnlineMigrations({
-    reserve: async () => {
-      const connection = await client.reserve();
-      return {
-        execute: async (query, params = []) => {
-          await connection.unsafe(query, [...params]);
-        },
-        query: async (query, params = []) =>
-          await connection.unsafe(query, [...params]),
-        release: () => connection.release(),
-      };
+  // The same reserved connection, released once below with the lane; the
+  // phase's own release is therefore nothing.
+  const onlineConnection: OnlineMigrationConnection = {
+    execute: async (query, params = []) => {
+      await connection.unsafe(query, [...params]);
     },
+    query: async (query, params = []) =>
+      await connection.unsafe(query, [...params]),
+    release: (): void => undefined,
+  };
+  await runOnlineMigrations({
+    reserve: async () => await Promise.resolve(onlineConnection),
   });
   // eslint-disable-next-line no-console -- migrate CLI entrypoint; stdout is its interface (no app logger in this minimal-env task)
   console.info("[migrate] migrations applied");
@@ -139,7 +142,8 @@ try {
   process.exitCode = 1;
 } finally {
   if (laneHeld) {
-    await client.unsafe(CORPUS_SCHEMA_LANE_UNLOCK_SQL);
+    await connection.unsafe(CORPUS_SCHEMA_LANE_UNLOCK_SQL);
   }
+  connection.release();
   await client.end();
 }

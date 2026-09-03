@@ -31,11 +31,7 @@
 import { panic } from "better-result";
 import { SQL } from "bun";
 
-import {
-  CORPUS_SCHEMA_LANE_RETRY_MS,
-  CORPUS_SCHEMA_LANE_TRY_SHARED_XACT_SQL,
-  isCorpusSchemaLaneGranted,
-} from "../apps/api/src/db/corpus-schema-lane";
+import { runUnderCorpusSchemaLane } from "../apps/api/src/db/corpus-schema-lane";
 
 const COMMANDS = ["assert-empty", "contend", "digest"] as const;
 type Command = (typeof COMMANDS)[number];
@@ -79,6 +75,27 @@ const CONTENDED_UPDATES = [
   "UPDATE case_law_citations SET resolution_rule_id = resolution_rule_id WHERE id = (SELECT id FROM case_law_citations ORDER BY id LIMIT 1)",
 ] as const;
 
+type RawTransaction = { execute: (query: string) => Promise<unknown> };
+
+/** One session's `BEGIN`/`COMMIT` pair as the lane helper's database. */
+const rawTransactions = (connection: SQL) => ({
+  transaction: async <TResult>(
+    fn: (tx: RawTransaction) => Promise<TResult>,
+  ): Promise<TResult> => {
+    await connection.unsafe("BEGIN");
+    try {
+      const result = await fn({
+        execute: async (query) => await connection.unsafe(query),
+      });
+      await connection.unsafe("COMMIT");
+      return result;
+    } catch (error: unknown) {
+      await connection.unsafe("ROLLBACK");
+      throw error;
+    }
+  },
+});
+
 /**
  * One held transaction after another on one session, until the process is
  * killed. Recursive rather than a loop with an awaited body: each
@@ -90,19 +107,14 @@ const contendForever = async (
   connection: SQL,
   onHeld: (() => void) | null,
 ): Promise<never> => {
-  await connection.unsafe("BEGIN");
-  const granted = isCorpusSchemaLaneGranted(
-    await connection.unsafe(CORPUS_SCHEMA_LANE_TRY_SHARED_XACT_SQL),
-  );
-  if (!granted) {
-    await connection.unsafe("ROLLBACK");
-    await Bun.sleep(CORPUS_SCHEMA_LANE_RETRY_MS);
-    return await contendForever(connection, onHeld);
-  }
-  await connection.unsafe(CONTENDED_UPDATES.join("; "));
-  onHeld?.();
-  await Bun.sleep(CONTENTION_HOLD_MS);
-  await connection.unsafe("COMMIT");
+  await runUnderCorpusSchemaLane({
+    database: rawTransactions(connection),
+    work: async () => {
+      await connection.unsafe(CONTENDED_UPDATES.join("; "));
+      onHeld?.();
+      await Bun.sleep(CONTENTION_HOLD_MS);
+    },
+  });
   return await contendForever(connection, null);
 };
 
