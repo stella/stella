@@ -24,6 +24,8 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 
+import { runUnderCorpusSchemaLane } from "./corpus-schema-lane";
+
 // Generic constraint accepts any drizzle instance (prod or
 // test PGlite) without importing test-only types.
 type ScopedTransactionBase = {
@@ -179,20 +181,42 @@ export const createMembershipScopedDb =
       fn,
     });
 
+export type CreateIngestionDbOptions = {
+  /**
+   * How long a batch keeps trying to enter the corpus schema lane. Pass the
+   * caller's own transaction budget: a batch that has outlived it must fail
+   * here rather than enter the lane late and run its work after the caller
+   * gave up on it.
+   */
+  laneWaitMs?: number;
+};
+
 // SET LOCAL ROLE stella_ingestion per transaction. Used by the
 // case-law ingestion daemon — narrowed to writes on case_law_*
 // (see 20260516000000_case_law_ingestion_role). No app.* settings
 // because the corpus is global; there is no tenant to scope.
+//
+// Every transaction holds the corpus schema lane shared for its duration:
+// this is the write boundary every corpus batch goes through, so an upgrade
+// that takes the lane exclusive knows no batch is in flight (see
+// corpus-schema-lane.ts). A batch that meets an upgrade backs off at its own
+// boundary, rather than mid-write, until the lane is free again or its
+// budget is spent.
 export const createIngestionDb =
   <TTransaction extends ScopedTransactionBase>(
     database: RlsDatabase<TTransaction>,
+    { laneWaitMs }: CreateIngestionDbOptions = {},
   ) =>
   async <T>(fn: (tx: TTransaction) => Promise<T>): Promise<T> =>
-    await database.transaction(async (tx: TTransaction) => {
-      await tx.execute(
-        sql`SELECT set_config('role', '${sql.raw(stellaIngestion.name)}', true)`,
-      );
-      return await fn(tx);
+    await runUnderCorpusSchemaLane({
+      database,
+      work: async (tx) => {
+        await tx.execute(
+          sql`SELECT set_config('role', '${sql.raw(stellaIngestion.name)}', true)`,
+        );
+        return await fn(tx);
+      },
+      ...(laneWaitMs === undefined ? {} : { laneWaitMs }),
     });
 
 const toSafeDbError = (cause: unknown): SafeDbError => {

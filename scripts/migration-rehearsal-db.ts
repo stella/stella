@@ -16,11 +16,13 @@
 //     Writes to the high-volume corpus tables the way production's workers
 //     do while an upgrade runs: two sessions, each updating one row per
 //     table in a transaction held open for several seconds, over and over,
-//     staggered by half a hold, until the process is killed. With two
-//     holders out of phase there is never a moment when both end within a
-//     short wait, so DDL that only waits briefly for ACCESS EXCLUSIVE on
-//     such a table cannot win, as in production; DDL that waits longer
-//     wins once the transactions in flight when it queued have ended.
+//     staggered by half a hold, until the process is killed. Each
+//     transaction holds the corpus schema lane shared, tried and backed
+//     off exactly as createIngestionDb does, so an upgrade that takes the
+//     lane exclusive drains them and runs its DDL against an idle table.
+//     With two holders out of phase there is never a moment when both end
+//     within a short wait, so an upgrade that skipped the lane and only
+//     waited briefly for ACCESS EXCLUSIVE could not win, as in production.
 //     Prints CONTENTION_HELD_LINE once both sessions hold their locks, so a
 //     caller can wait for that before it starts the work under test, and
 //     exits non-zero if a write fails. Never run this against a database
@@ -28,6 +30,8 @@
 
 import { panic } from "better-result";
 import { SQL } from "bun";
+
+import { runUnderCorpusSchemaLane } from "../apps/api/src/db/corpus-schema-lane";
 
 const COMMANDS = ["assert-empty", "contend", "digest"] as const;
 type Command = (typeof COMMANDS)[number];
@@ -71,6 +75,27 @@ const CONTENDED_UPDATES = [
   "UPDATE case_law_citations SET resolution_rule_id = resolution_rule_id WHERE id = (SELECT id FROM case_law_citations ORDER BY id LIMIT 1)",
 ] as const;
 
+type RawTransaction = { execute: (query: string) => Promise<unknown> };
+
+/** One session's `BEGIN`/`COMMIT` pair as the lane helper's database. */
+const rawTransactions = (connection: SQL) => ({
+  transaction: async <TResult>(
+    fn: (tx: RawTransaction) => Promise<TResult>,
+  ): Promise<TResult> => {
+    await connection.unsafe("BEGIN");
+    try {
+      const result = await fn({
+        execute: async (query) => await connection.unsafe(query),
+      });
+      await connection.unsafe("COMMIT");
+      return result;
+    } catch (error: unknown) {
+      await connection.unsafe("ROLLBACK");
+      throw error;
+    }
+  },
+});
+
 /**
  * One held transaction after another on one session, until the process is
  * killed. Recursive rather than a loop with an awaited body: each
@@ -82,10 +107,14 @@ const contendForever = async (
   connection: SQL,
   onHeld: (() => void) | null,
 ): Promise<never> => {
-  await connection.unsafe(`BEGIN; ${CONTENDED_UPDATES.join("; ")};`);
-  onHeld?.();
-  await Bun.sleep(CONTENTION_HOLD_MS);
-  await connection.unsafe("COMMIT");
+  await runUnderCorpusSchemaLane({
+    database: rawTransactions(connection),
+    work: async () => {
+      await connection.unsafe(CONTENDED_UPDATES.join("; "));
+      onHeld?.();
+      await Bun.sleep(CONTENTION_HOLD_MS);
+    },
+  });
   return await contendForever(connection, null);
 };
 
