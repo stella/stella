@@ -193,21 +193,31 @@ const selectionIsFormatted = (
   tags: readonly string[],
 ) => {
   const walker = document.createTreeWalker(editor, NodeFilter.SHOW_ALL);
-  let hasSelectedContent = false;
+  let hasSelectedFormattedBreak = false;
+  let hasSelectedText = false;
   let node = walker.nextNode();
   while (node) {
-    const isContent =
-      (node instanceof Text && node.length > 0) ||
-      (node instanceof HTMLElement && node.tagName === "BR");
-    if (isContent && rangeSelectsNodeContent(range, node)) {
-      hasSelectedContent = true;
+    if (
+      node instanceof Text &&
+      node.length > 0 &&
+      rangeSelectsNodeContent(range, node)
+    ) {
+      hasSelectedText = true;
       if (!hasFormatAncestor(node, editor, tags)) {
         return false;
       }
     }
+    if (
+      node instanceof HTMLElement &&
+      node.tagName === "BR" &&
+      rangeSelectsNodeContent(range, node) &&
+      hasFormatAncestor(node, editor, tags)
+    ) {
+      hasSelectedFormattedBreak = true;
+    }
     node = walker.nextNode();
   }
-  return hasSelectedContent;
+  return hasSelectedText || hasSelectedFormattedBreak;
 };
 
 const outermostFormatAncestor = (
