@@ -568,7 +568,7 @@
     },
     "packages/chat": {
       "name": "@stll/chat",
-      "version": "0.1.11",
+      "version": "0.1.12",
       "dependencies": {
         "@stll/ai-catalog": "workspace:^",
         "@stll/ui": "workspace:^",
@@ -852,7 +852,7 @@
     },
     "packages/ui": {
       "name": "@stll/ui",
-      "version": "0.22.0",
+      "version": "0.23.0",
       "dependencies": {
         "better-result": "catalog:",
         "class-variance-authority": "^0.7.1",
@@ -907,7 +907,7 @@
     },
     "packages/workspace-ui": {
       "name": "@stll/workspace-ui",
-      "version": "0.8.2",
+      "version": "0.8.3",
       "dependencies": {
         "@stll/calculations": "workspace:^",
         "@stll/conditions": "workspace:^",
