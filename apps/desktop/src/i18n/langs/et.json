@@ -162,6 +162,7 @@
     "timeline": "Lõikelaua ajajoon",
     "title": "Lõikelaud",
     "welcomeCaptureDescription": "Igas rakenduses kopeeritud tekst ja pildid ilmuvad siia automaatselt.",
+    "welcomeCaptureDescriptionTextOnly": "Igas rakenduses kopeeritud tekst ilmub siia automaatselt.",
     "welcomeCaptureTitle": "Kopeeri nagu tavaliselt.",
     "welcomeDescription": "Stella hoiab kopeeritud sisu käepärast ega sega sinu tööd.",
     "welcomeHelp": "Kuidas lõikelaud töötab",

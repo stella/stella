@@ -162,6 +162,7 @@
     "timeline": "Zwischenablage-Zeitleiste",
     "title": "Zwischenablage",
     "welcomeCaptureDescription": "Text und Bilder aus jeder App erscheinen nach dem Kopieren automatisch hier.",
+    "welcomeCaptureDescriptionTextOnly": "Kopierter Text aus jeder App erscheint automatisch hier.",
     "welcomeCaptureTitle": "Kopieren Sie wie gewohnt.",
     "welcomeDescription": "Stella hält kopierte Inhalte griffbereit, ohne Ihre Arbeit zu unterbrechen.",
     "welcomeHelp": "So funktioniert die Zwischenablage",

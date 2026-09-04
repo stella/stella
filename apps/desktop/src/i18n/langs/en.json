@@ -164,6 +164,7 @@
     "timeline": "Clipboard timeline",
     "title": "Clipboard",
     "welcomeCaptureDescription": "Text and images copied in any app appear here automatically.",
+    "welcomeCaptureDescriptionTextOnly": "Text copied in any app appears here automatically.",
     "welcomeCaptureTitle": "Copy as usual.",
     "welcomeDescription": "Stella keeps copied content close at hand, without interrupting your work.",
     "welcomeHelp": "How the clipboard works",

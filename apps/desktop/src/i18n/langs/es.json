@@ -162,6 +162,7 @@
     "timeline": "Cronología del portapapeles",
     "title": "Portapapeles",
     "welcomeCaptureDescription": "El texto y las imágenes que copies en cualquier aplicación aparecerán aquí automáticamente.",
+    "welcomeCaptureDescriptionTextOnly": "El texto que copies en cualquier aplicación aparecerá aquí automáticamente.",
     "welcomeCaptureTitle": "Copia como siempre.",
     "welcomeDescription": "Stella mantiene a mano el contenido copiado sin interrumpir tu trabajo.",
     "welcomeHelp": "Cómo funciona el portapapeles",

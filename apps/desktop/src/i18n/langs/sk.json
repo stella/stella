@@ -162,6 +162,7 @@
     "timeline": "Časová os schránky",
     "title": "Schránka",
     "welcomeCaptureDescription": "Text a obrázky skopírované v ľubovoľnej aplikácii sa tu zobrazia automaticky.",
+    "welcomeCaptureDescriptionTextOnly": "Text skopírovaný v ľubovoľnej aplikácii sa tu zobrazí automaticky.",
     "welcomeCaptureTitle": "Kopírujte ako zvyčajne.",
     "welcomeDescription": "Stella uchováva skopírovaný obsah poruke bez toho, aby vás rušila pri práci.",
     "welcomeHelp": "Ako funguje schránka",

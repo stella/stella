@@ -162,6 +162,7 @@
     "timeline": "Chronologie du presse-papiers",
     "title": "Presse-papiers",
     "welcomeCaptureDescription": "Le texte et les images copiés dans n’importe quelle application apparaissent ici automatiquement.",
+    "welcomeCaptureDescriptionTextOnly": "Le texte copié dans n’importe quelle application apparaît ici automatiquement.",
     "welcomeCaptureTitle": "Copiez comme d’habitude.",
     "welcomeDescription": "Stella garde le contenu copié à portée de main sans interrompre votre travail.",
     "welcomeHelp": "Fonctionnement du presse-papiers",

@@ -1042,7 +1042,11 @@ const ClipboardWelcomeDialog = ({ onClose }: ClipboardWelcomeDialogProps) => {
   });
   const features = [
     {
-      description: t("welcomeCaptureDescription"),
+      description: t(
+        IMAGE_CLIPBOARD_CAPTURE_SUPPORTED
+          ? "welcomeCaptureDescription"
+          : "welcomeCaptureDescriptionTextOnly",
+      ),
       icon: ClipboardIcon,
       title: t("welcomeCaptureTitle"),
     },
