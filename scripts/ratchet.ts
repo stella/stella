@@ -2319,10 +2319,8 @@ const scanMetric = (metric: RatchetMetric, root: string): MetricSnapshot => {
       return sortedSnapshot({ count, files });
     }
     default: {
-      const unreachable: never = metric;
-      return panic(
-        `ratchet metric has an unknown scope: ${String(unreachable)}`,
-      );
+      metric satisfies never;
+      return panic(`ratchet metric has an unknown scope: ${String(metric)}`);
     }
   }
 };
