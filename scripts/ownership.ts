@@ -135,6 +135,11 @@ export const OWNERSHIP = [
             "Queue transport: worker owns its dedicated blocking connection.",
         },
         {
+          path: "apps/api/src/lib/pdf-anonymization/run-queue.ts",
+          reason:
+            "Durable database runs survive Valkey outages and are reconciled into the queue.",
+        },
+        {
           path: "apps/api/src/lib/flows/flow-run-worker.ts",
           reason:
             "Queue transport: worker owns its dedicated blocking connection.",
