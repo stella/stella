@@ -173,6 +173,7 @@ runtime validation, or integration tests.
 ### Architecture, configuration, AI, and type safety
 
 - [`ai-output-strict-schema`](./ai-output-strict-schema.ts) (`ai-output-strict-schema`): requires AI structured-output schemas to reject unknown properties instead of silently accepting model drift.
+- [`require-complete-compaction-generation`](./require-complete-compaction-generation.ts) (`require-complete-compaction-generation`): requires every compaction-owned text generation call to apply the shared complete-output policy before its durable checkpoint can advance.
 - [`docs-source-policy`](./docs-source-policy.ts) (`docs-source-policy`): requires every direct external dependency to be covered by one exact llms.txt source or an explained no-source quarantine that expires within 31 days.
 - [`forbid-dev-runner-config-reads`](./forbid-dev-runner-config-reads.ts) (`forbid-dev-runner-config-reads`): prevents application code from importing or reading development-runner configuration.
 - [`forbid-process-env-outside-env-ts`](./forbid-process-env-outside-env-ts.ts) (`forbid-process-env-outside-env-ts`): confines unvalidated environment reads to explicit env, config, test, and script boundaries.
