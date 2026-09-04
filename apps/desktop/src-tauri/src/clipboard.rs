@@ -934,11 +934,14 @@ pub fn load_persisted() -> (ClipboardLoad, ClipboardInitTimings) {
           timings,
         );
       }
-      if !state.pending_image_blob_ids.is_empty()
-        && remove_pending_image_blobs(&store, &state.pending_image_blob_ids)
-      {
-        let pending_image_blob_ids = std::mem::take(&mut state.pending_image_blob_ids);
-        if let Err(error) = store.persist(&state) {
+      if !state.pending_image_blob_ids.is_empty() {
+        let pending_image_blob_ids = state.pending_image_blob_ids.clone();
+        let remaining =
+          remove_pending_image_blobs(&store, &state.pending_image_blob_ids);
+        state.pending_image_blob_ids = remaining;
+        if state.pending_image_blob_ids != pending_image_blob_ids
+          && let Err(error) = store.persist(&state)
+        {
           state.pending_image_blob_ids = pending_image_blob_ids;
           tracing::warn!(
             error = %error,
@@ -997,9 +1000,14 @@ pub fn load_persisted() -> (ClipboardLoad, ClipboardInitTimings) {
           timings,
         );
       }
-      if remove_pending_image_blobs(&store, &state.pending_image_blob_ids) {
-        let pending_image_blob_ids = std::mem::take(&mut state.pending_image_blob_ids);
-        if let Err(error) = store.persist(&state) {
+      if !state.pending_image_blob_ids.is_empty() {
+        let pending_image_blob_ids = state.pending_image_blob_ids.clone();
+        let remaining =
+          remove_pending_image_blobs(&store, &state.pending_image_blob_ids);
+        state.pending_image_blob_ids = remaining;
+        if state.pending_image_blob_ids != pending_image_blob_ids
+          && let Err(error) = store.persist(&state)
+        {
           state.pending_image_blob_ids = pending_image_blob_ids;
           tracing::warn!(
             error = %error,
@@ -1845,13 +1853,15 @@ impl ClipboardManager {
       }
       return Err(error);
     }
-    if !self.pending_image_blob_ids.is_empty()
-      && remove_pending_image_blobs(store, &self.pending_image_blob_ids)
-    {
-      let pending_image_blob_ids = std::mem::take(&mut self.pending_image_blob_ids);
+    if !self.pending_image_blob_ids.is_empty() {
+      let pending_image_blob_ids = self.pending_image_blob_ids.clone();
+      let remaining = remove_pending_image_blobs(store, &self.pending_image_blob_ids);
+      self.pending_image_blob_ids = remaining;
       let mut completed_state = state.clone();
-      completed_state.pending_image_blob_ids.clear();
-      if let Err(error) = store.persist(&completed_state) {
+      completed_state.pending_image_blob_ids = self.pending_image_blob_ids.clone();
+      if self.pending_image_blob_ids != pending_image_blob_ids
+        && let Err(error) = store.persist(&completed_state)
+      {
         self.pending_image_blob_ids = pending_image_blob_ids;
         tracing::warn!(
           error = %error,
@@ -1900,11 +1910,11 @@ fn remove_created_image_blobs(
 fn remove_pending_image_blobs(
   store: &ClipboardStore,
   pending_blob_ids: &BTreeSet<String>,
-) -> bool {
-  let mut completed = true;
+) -> BTreeSet<String> {
+  let mut remaining = BTreeSet::new();
   for blob_id in pending_blob_ids {
     if let Err(error) = store.remove_image(blob_id) {
-      completed = false;
+      remaining.insert(blob_id.clone());
       tracing::warn!(
         error = %error,
         blob_id,
@@ -1912,7 +1922,7 @@ fn remove_pending_image_blobs(
       );
     }
   }
-  completed
+  remaining
 }
 
 fn queue_discovered_orphaned_image_blobs(
@@ -2657,15 +2667,26 @@ fn first_supported_clipboard_representation<T>(
   supported_formats: &[&str],
   mut read: impl FnMut(&str) -> Result<T, String>,
 ) -> Result<T, String> {
-  let mut last_error = None;
-  for supported_format in supported_formats {
-    if !advertised_formats
+  first_successful_clipboard_representation(
+    supported_formats
       .iter()
-      .any(|format| format.eq_ignore_ascii_case(supported_format))
-    {
-      continue;
-    }
-    match read(supported_format) {
+      .copied()
+      .filter(|supported_format| {
+        advertised_formats
+          .iter()
+          .any(|format| format.eq_ignore_ascii_case(supported_format))
+      }),
+    &mut read,
+  )
+}
+
+fn first_successful_clipboard_representation<T, C>(
+  candidates: impl IntoIterator<Item = C>,
+  mut read: impl FnMut(C) -> Result<T, String>,
+) -> Result<T, String> {
+  let mut last_error = None;
+  for candidate in candidates {
+    match read(candidate) {
       Ok(value) => return Ok(value),
       Err(error) => last_error = Some(error),
     }
@@ -2745,13 +2766,16 @@ fn decode_bounded_clipboard_image(encoded: Vec<u8>) -> Result<RustImageData, Str
 fn bounded_windows_clipboard_image() -> Result<RustImageData, String> {
   use clipboard_win::{formats, is_format_avail};
 
-  let format = if is_format_avail(formats::CF_DIBV5) {
-    formats::CF_DIBV5
-  } else if is_format_avail(formats::CF_DIB) {
-    formats::CF_DIB
-  } else {
-    return Err("clipboard image format is unsupported".to_string());
-  };
+  first_successful_clipboard_representation(
+    [formats::CF_DIBV5, formats::CF_DIB]
+      .into_iter()
+      .filter(|format| is_format_avail(*format)),
+    bounded_windows_bitmap,
+  )
+}
+
+#[cfg(target_os = "windows")]
+fn bounded_windows_bitmap(format: u32) -> Result<RustImageData, String> {
   let encoded = bounded_windows_clipboard_bytes(format)?;
   let mut decoder = BmpDecoder::new_without_file_header(Cursor::new(encoded))
     .map_err(|error| format!("clipboard bitmap is invalid: {error}"))?;
@@ -3299,6 +3323,23 @@ mod tests {
   }
 
   #[test]
+  fn native_image_capture_tries_the_next_available_format_after_an_error() {
+    let mut attempted = Vec::new();
+
+    let selected = first_successful_clipboard_representation([17, 8], |format| {
+      attempted.push(format);
+      if format == 17 {
+        return Err("malformed DIBV5".to_string());
+      }
+      Ok(format)
+    })
+    .unwrap();
+
+    assert_eq!(selected, 8);
+    assert_eq!(attempted, [17, 8]);
+  }
+
+  #[test]
   fn clipboard_image_source_size_is_bounded_before_copying() {
     assert!(validate_clipboard_image_source_size(0).is_err());
     assert!(validate_clipboard_image_source_size(MAX_ITEM_IMAGE_SOURCE_BYTES).is_ok());
@@ -3653,6 +3694,52 @@ mod tests {
     std::fs::remove_dir(&image_path).unwrap();
     assert!(manager.prune_expired(Utc::now()).unwrap());
     assert!(manager.pending_image_blob_ids.is_empty());
+    ClipboardStore::remove(&store_path).unwrap();
+  }
+
+  #[test]
+  fn successful_image_deletions_leave_only_failures_in_the_retry_journal() {
+    let store_path = unique_store_path();
+    let store = ClipboardStore::new([7; 32], store_path.clone());
+    let blocked_blob_id = uuid::Uuid::new_v4().to_string();
+    let removable_blob_id = uuid::Uuid::new_v4().to_string();
+    for blob_id in [&blocked_blob_id, &removable_blob_id] {
+      store
+        .persist_image(
+          blob_id,
+          crate::clipboard_store::ClipboardImagePayload {
+            image: b"full image",
+            preview: b"preview",
+          },
+        )
+        .unwrap();
+    }
+    let blocked_image_path = store_path
+      .with_extension("images")
+      .join(format!("{blocked_blob_id}.image.enc"));
+    std::fs::remove_file(&blocked_image_path).unwrap();
+    std::fs::create_dir(&blocked_image_path).unwrap();
+    let mut manager = ready_manager();
+    manager.persistence = ClipboardPersistence::Encrypted(store.clone());
+    manager.pending_image_blob_ids =
+      BTreeSet::from([blocked_blob_id.clone(), removable_blob_id.clone()]);
+
+    assert!(!manager.prune_expired(Utc::now()).unwrap());
+    assert_eq!(
+      manager.pending_image_blob_ids,
+      BTreeSet::from([blocked_blob_id.clone()])
+    );
+    assert_eq!(
+      store.load().unwrap().unwrap().pending_image_blob_ids,
+      BTreeSet::from([blocked_blob_id.clone()])
+    );
+    assert!(
+      store
+        .load_image(&removable_blob_id, b"full image".len())
+        .is_err()
+    );
+
+    std::fs::remove_dir(&blocked_image_path).unwrap();
     ClipboardStore::remove(&store_path).unwrap();
   }
 
