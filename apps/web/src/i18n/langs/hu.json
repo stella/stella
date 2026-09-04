@@ -2333,6 +2333,8 @@
       "pdfCopyCreating": "Anonimizált másolat létrehozása…",
       "pdfCopyDescription": "Különálló, csak képekből álló PDF-et hoz létre, feketével kitakarja az észlelt adatokat tartalmazó sorokat, és eltávolítja a beágyazott metaadatokat és aláírásokat. Megosztás előtt ellenőrizze az elkészült PDF-et; egyes személyes adatok észrevétlenek maradhatnak.",
       "pdfCopyFailed": "Az anonimizált másolat nem hozható létre",
+      "pdfDrawRegion": "Húzza végig a mutatót azon, amit el szeretne rejteni",
+      "pdfRemoveRegion": "Megjelölt terület eltávolítása",
       "restoreAction": "Visszaállítás ebben a dokumentumban",
       "termAddedToast": "A(z) „{value}” hozzáadva a munkaterület anonimizálási kifejezéseihez.",
       "termMatchCountAriaLabel": "{count} egyezés ebben a dokumentumban.",

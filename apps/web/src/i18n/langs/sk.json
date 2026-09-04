@@ -2333,6 +2333,8 @@
       "pdfCopyCreating": "Vytváranie anonymizovanej kópie…",
       "pdfCopyDescription": "Vytvorí samostatné PDF pozostávajúce iba z obrázkov, začierni riadky s nájdenými údajmi a odstráni vložené metadáta aj podpisy. Pred zdieľaním výsledné PDF skontrolujte; detekcia môže niektoré osobné údaje prehliadnuť.",
       "pdfCopyFailed": "Anonymizovanú kópiu sa nepodarilo vytvoriť",
+      "pdfDrawRegion": "Ťahaním označte čokoľvek, čo chcete skryť",
+      "pdfRemoveRegion": "Odstrániť označenú oblasť",
       "restoreAction": "Obnoviť v tomto dokumente",
       "termAddedToast": "Výraz „{value}“ bol pridaný medzi anonymizačné výrazy pracovného priestoru.",
       "termMatchCountAriaLabel": "Zhoda {count}-krát v tomto dokumente.",

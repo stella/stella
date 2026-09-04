@@ -2333,6 +2333,8 @@
       "pdfCopyCreating": "Kuriama anonimizuota kopija…",
       "pdfCopyDescription": "Sukuria atskirą tik iš vaizdų sudarytą PDF, užjuodina eilutes su aptiktais duomenimis ir pašalina įterptus metaduomenis bei parašus. Prieš dalydamiesi patikrinkite gautą PDF; kai kurie asmens duomenys gali likti neaptikti.",
       "pdfCopyFailed": "Nepavyko sukurti anonimizuotos kopijos",
+      "pdfDrawRegion": "Vilkite per tai, ką norite paslėpti",
+      "pdfRemoveRegion": "Pašalinti pažymėtą sritį",
       "restoreAction": "Atkurti šiame dokumente",
       "termAddedToast": "\"{value}\" pridėta prie darbo srities anonimizavimo terminų.",
       "termMatchCountAriaLabel": "Šiame dokumente rasta {count} kartų.",

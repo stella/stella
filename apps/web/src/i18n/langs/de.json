@@ -2333,6 +2333,8 @@
       "pdfCopyCreating": "Anonymisierte Kopie wird erstellt…",
       "pdfCopyDescription": "Erstellt eine separate PDF-Datei, die nur aus Bildern besteht, schwärzt Zeilen mit erkannten Daten und entfernt eingebettete Metadaten und Signaturen. Prüfen Sie die erstellte PDF-Datei vor der Weitergabe; personenbezogene Daten können bei der Erkennung übersehen werden.",
       "pdfCopyFailed": "Die anonymisierte Kopie konnte nicht erstellt werden",
+      "pdfDrawRegion": "Ziehen Sie über alles, was Sie ausblenden möchten",
+      "pdfRemoveRegion": "Markierten Bereich entfernen",
       "restoreAction": "In diesem Dokument wiederherstellen",
       "termAddedToast": "„{value}“ zu den Anonymisierungsbegriffen der Kanzlei hinzugefügt.",
       "termMatchCountAriaLabel": "{count}-mal in diesem Dokument gefunden.",

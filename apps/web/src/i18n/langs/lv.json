@@ -2333,6 +2333,8 @@
       "pdfCopyCreating": "Anonimizētās kopijas izveide…",
       "pdfCopyDescription": "Izveido atsevišķu PDF tikai no attēliem, aizkrāso melnā krāsā rindas ar atrastajiem datiem un noņem iegultos metadatus un parakstus. Pirms kopīgošanas pārbaudiet iegūto PDF; daži personas dati var palikt neatklāti.",
       "pdfCopyFailed": "Neizdevās izveidot anonimizēto kopiju",
+      "pdfDrawRegion": "Velciet pāri tam, ko vēlaties paslēpt",
+      "pdfRemoveRegion": "Noņemt atzīmēto apgabalu",
       "restoreAction": "Atjaunot šajā dokumentā",
       "termAddedToast": "\"{value}\" pievienots darba telpas anonimizācijas terminiem.",
       "termMatchCountAriaLabel": "Šajā dokumentā atrasts {count} reizes.",

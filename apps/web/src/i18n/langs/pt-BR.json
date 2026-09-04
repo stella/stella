@@ -2333,6 +2333,8 @@
       "pdfCopyCreating": "Criando cópia anonimizada…",
       "pdfCopyDescription": "Cria um PDF separado composto somente por imagens, cobre de preto as linhas com dados detectados e remove metadados e assinaturas incorporados. Confira o PDF resultante antes de compartilhá-lo; alguns dados pessoais podem não ser detectados.",
       "pdfCopyFailed": "Não foi possível criar a cópia anonimizada",
+      "pdfDrawRegion": "Arraste sobre o que você deseja ocultar",
+      "pdfRemoveRegion": "Remover área marcada",
       "restoreAction": "Restaurar neste documento",
       "termAddedToast": "“{value}” adicionado aos termos de anonimização do espaço de trabalho.",
       "termMatchCountAriaLabel": "Encontrado {count} vezes neste documento.",

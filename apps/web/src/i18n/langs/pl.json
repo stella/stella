@@ -2333,6 +2333,8 @@
       "pdfCopyCreating": "Tworzenie zanonimizowanej kopii…",
       "pdfCopyDescription": "Tworzy osobny plik PDF złożony wyłącznie z obrazów, zaczernia wiersze z wykrytymi danymi i usuwa osadzone metadane oraz podpisy. Sprawdź wynikowy PDF przed udostępnieniem; niektóre dane osobowe mogą pozostać niewykryte.",
       "pdfCopyFailed": "Nie udało się utworzyć zanonimizowanej kopii",
+      "pdfDrawRegion": "Przeciągnij po tym, co chcesz ukryć",
+      "pdfRemoveRegion": "Usuń zaznaczony obszar",
       "restoreAction": "Przywróć w tym dokumencie",
       "termAddedToast": "Dodano „{value}” do terminów anonimizacji obszaru roboczego.",
       "termMatchCountAriaLabel": "Dopasowano {count} razy w tym dokumencie.",
