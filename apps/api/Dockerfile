@@ -148,6 +148,10 @@ RUN mkdir -p /app/runtime-workers && \
       --target bun \
       --outfile /app/runtime-workers/ocr-local-worker.js \
       apps/api/src/lib/ocr-local/ocr-local-worker.ts && \
+    bun build \
+      --target bun \
+      --outdir /app/runtime-workers \
+      apps/api/src/lib/pdf-anonymization/pdf-anonymization-worker.ts && \
     cp node_modules/@silurus/ooxml/dist/xlsx_parser_bg.wasm \
       /app/runtime-workers/xlsx_parser_bg.wasm && \
     cp node_modules/@silurus/ooxml/dist/pptx_parser_bg.wasm \
