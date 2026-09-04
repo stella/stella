@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 
 import { KanbanCardShell } from "../card-shell";
@@ -46,6 +46,10 @@ const matrix = buildKanbanBoardMatrix({
 });
 
 const BoardChromeFixture = () => {
+  // The card a tap opened, the way a host tracks the one whose detail is on
+  // screen. It is what gives a finger its way to the hover-revealed actions.
+  const [activeCardId, setActiveCardId] = useState<string | null>(null);
+
   useEffect(() => {
     document.documentElement.dataset["kanbanBoardChromeReady"] = "true";
     return () => {
@@ -73,6 +77,10 @@ const BoardChromeFixture = () => {
                     </button>
                   }
                   actionsVisibility="hover"
+                  active={activeCardId === row.id}
+                  onOpen={() => {
+                    setActiveCardId(row.id);
+                  }}
                 >
                   <span className="text-xs">{row.id}</span>
                 </KanbanCardShell>
