@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { panic } from "better-result";
+import { strictEqual } from "node:assert";
 import {
   chmodSync,
   existsSync,
@@ -85,11 +85,11 @@ const runGit = (root: string, args: readonly string[]): string => {
     stderr: "pipe",
     stdout: "pipe",
   });
-  if (result.exitCode !== 0) {
-    return panic(
-      `git ${args.join(" ")} failed: ${result.stderr.toString()}`,
-    );
-  }
+  strictEqual(
+    result.exitCode,
+    0,
+    `git ${args.join(" ")} failed: ${result.stderr.toString()}`,
+  );
   return result.stdout.toString().trim();
 };
 
@@ -265,11 +265,7 @@ describe("Dependabot empty changeset decision", () => {
       { ...basePackage, peerDependencies: { react: ">=20" } },
       "peer-change",
     ],
-    [
-      "source changes",
-      basePackage,
-      "source-change",
-    ],
+    ["source changes", basePackage, "source-change"],
   ] as const)("refuses %s", (_label, head, reason) => {
     const changedFiles =
       reason === "source-change"
