@@ -70,6 +70,7 @@
     "check:resolutions": "bun scripts/check-resolution-ranges.ts",
     "check:dead-columns": "bun scripts/check-dead-columns.ts",
     "check:projection-totality": "bun scripts/check-projection-totality.ts",
+    "check:knip-exports": "bun scripts/knip-exports-ratchet.ts --check",
     "check:result-consumption": "bun packages/scripts/src/result-consumption.ts",
     "check:docs-sources": "bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings .claude/mcp/doc-sources.ts",
     "check:railway-template-draft": "bun scripts/check-railway-template-draft.ts",

@@ -228,6 +228,14 @@ run_knip() {
   done
 }
 
+run_knip_exports() {
+  # Unused exports/types across every workspace, budgeted per workspace: a rise
+  # fails, a fall just prompts `bun scripts/knip-exports-ratchet.ts --write`.
+  # The parser tests run first so a broken summary cannot pass silently.
+  bun test scripts/knip-exports-ratchet.test.ts || return 1
+  bun scripts/knip-exports-ratchet.ts --check
+}
+
 run_quarantine_exclude_guard() {
   bun test scripts/check-stll-quarantine-excludes.test.ts || return 1
   bun scripts/check-stll-quarantine-excludes.ts
@@ -292,6 +300,7 @@ run_step "MCP App bundle" run_mcp_app_bundle
 run_step "Capability catalog drift" run_capability_catalog
 run_step "Capability description ledger" run_capability_description_ledger
 run_step "Knip production deps" run_knip
+run_step "Knip dead-export budget" run_knip_exports
 run_step "Test" run_test
 run_step "Bridge-version guard self-test" bash scripts/check-bridge-version.test.sh
 run_step "Release-channel self-test" bash scripts/release-channel.test.sh
