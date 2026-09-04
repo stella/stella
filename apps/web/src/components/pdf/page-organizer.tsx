@@ -64,6 +64,7 @@ import {
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useAnalytics } from "@/lib/analytics/provider";
+import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { filesKeys, fileOptions } from "@/lib/files/queries";
 import { uploadEntityVersion } from "@/lib/files/upload-entity-version";
@@ -869,7 +870,12 @@ export const PDFPageOrganizer = ({
   if (isUnsupported) {
     return (
       <div className="bg-background flex h-full flex-col">
-        <header className="flex min-h-14 items-center justify-between border-b px-4">
+        <header
+          className={cn(
+            "flex items-center justify-between border-b px-4",
+            TOOLBAR_ROW_HEIGHT,
+          )}
+        >
           <h2 className="font-semibold">{tPageEditor("title")}</h2>
           <Button
             aria-label={tCommon("close")}
@@ -895,7 +901,12 @@ export const PDFPageOrganizer = ({
 
   return (
     <div className="bg-background flex h-full min-h-0 flex-col">
-      <header className="flex min-h-14 shrink-0 flex-wrap items-center gap-2 border-b px-3 py-2">
+      <header
+        className={cn(
+          "flex shrink-0 items-center gap-2 border-b px-3",
+          TOOLBAR_ROW_HEIGHT,
+        )}
+      >
         <div className="me-auto min-w-0">
           <h2 className="truncate font-semibold">{tPageEditor("title")}</h2>
           <p className="text-muted-foreground text-xs">
@@ -939,7 +950,12 @@ export const PDFPageOrganizer = ({
       </header>
 
       <div className="flex min-h-0 flex-1 flex-col">
-        <div className="flex min-h-14 shrink-0 flex-wrap items-center gap-1 border-b px-3 py-2">
+        <div
+          className={cn(
+            "flex shrink-0 items-center gap-1 border-b px-3",
+            TOOLBAR_ROW_HEIGHT,
+          )}
+        >
           <Button
             onClick={() => dispatch({ type: "selectAll" })}
             size="sm"
@@ -1087,7 +1103,12 @@ export const PDFPageOrganizer = ({
         </ScrollArea>
       </div>
 
-      <footer className="flex shrink-0 flex-wrap items-center gap-3 border-t px-4 py-3">
+      <footer
+        className={cn(
+          "flex shrink-0 items-center gap-3 border-t px-4",
+          TOOLBAR_ROW_HEIGHT,
+        )}
+      >
         <p className="text-muted-foreground me-auto flex max-w-2xl items-start gap-2 text-xs">
           <TriangleAlertIcon className="mt-0.5 size-3.5 shrink-0" />
           {tPageEditor("signatureWarning")}
