@@ -9,6 +9,13 @@ type ReadWorkspaceHandlerProps = {
   organizationId: SafeId<"organization">;
 };
 
+// The organization is part of the lookup, not a check after it. Callers reach
+// this handler through an access gate that already resolved `workspaceId`
+// inside the caller's organization, and `scopedDb` re-derives that
+// authorization in RLS — but this helper is exported, and a caller holding a
+// broader scope would otherwise read another tenant's row. Constraining the
+// query means a mismatch returns no row, which the not-found path below
+// already answers; there is no ownership decision left to make afterwards.
 export const readWorkspaceHandler = async ({
   scopedDb,
   workspaceId,
@@ -18,6 +25,7 @@ export const readWorkspaceHandler = async ({
     tx.query.workspaces.findFirst({
       where: {
         id: { eq: workspaceId },
+        organizationId: { eq: organizationId },
       },
       with: {
         client: {
@@ -34,10 +42,6 @@ export const readWorkspaceHandler = async ({
 
   if (!result) {
     return status(404);
-  }
-
-  if (result.organizationId !== organizationId) {
-    return status(403);
   }
 
   // The matter row and its client card, nothing else. This response used to
