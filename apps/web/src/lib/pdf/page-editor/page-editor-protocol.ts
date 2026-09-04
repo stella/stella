@@ -1,4 +1,4 @@
-export type PageRotation = 0 | 90 | 180 | 270;
+type PageRotation = 0 | 90 | 180 | 270;
 
 export type NormalizedCrop = {
   x: number;
