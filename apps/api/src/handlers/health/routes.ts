@@ -11,6 +11,10 @@ import {
   probeApiReadiness,
   type ReadinessOutcome,
 } from "@/api/lib/health/readiness";
+import {
+  createStartupGate,
+  STARTUP_STATE,
+} from "@/api/lib/health/startup-gate";
 import { APP_COMMIT_SHA, APP_VERSION } from "@/api/lib/version";
 
 const BUILD_METADATA = {
@@ -58,7 +62,14 @@ export const createHealthRoute = ({
     async () => await readinessOutcome(probeReadiness),
     { ttlMs: PROBE_CACHE_TTL_MS },
   );
-  const readinessResponse = async () => await probeCache.run();
+  const startupGate = createStartupGate();
+  const readinessResponse = async () => {
+    const outcome = await probeCache.run();
+    if (outcome.ok) {
+      startupGate.markStarted();
+    }
+    return outcome;
+  };
   const livenessHandler = () => ({
     status: "ok" as const,
     ...BUILD_METADATA,
@@ -76,9 +87,22 @@ export const createHealthRoute = ({
     return { status: "ok" as const, ...BUILD_METADATA };
   };
 
+  const startedHandler = async ({ set }: Pick<Context, "set">) => {
+    if (startupGate.startup() === STARTUP_STATE.started) {
+      return { status: STARTUP_STATE.started, ...BUILD_METADATA };
+    }
+    const outcome = await readinessResponse();
+    if (!outcome.ok) {
+      set.status = 503;
+      return { status: STARTUP_STATE.starting, ...BUILD_METADATA };
+    }
+    return { status: STARTUP_STATE.started, ...BUILD_METADATA };
+  };
+
   return new Elysia()
     .get("/live", livenessHandler)
     .get("/ready", readinessHandler)
+    .get("/started", startedHandler)
     .get("/health", livenessHandler);
 };
 

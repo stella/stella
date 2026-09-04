@@ -295,6 +295,10 @@ STELLA_API_HOST_PORT=8080 \
 - `/ready` checks Postgres, Redis/Valkey, object storage, authenticated
   Gotenberg health, and scheduled-job registration. It returns 503 if any
   required component is unavailable.
+- `/started` reports whether readiness has passed at least once since the
+  process started. It returns 503 until then and 200 afterwards for the life
+  of the process, so a rollout can tell a failed start apart from a later
+  dependency blip. Use it for a startup probe, never for readiness.
 - `/health` is a compatibility alias for `/live` and carries the same build
   metadata used by release verification. Do not use it as a readiness probe.
 
