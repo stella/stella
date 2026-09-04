@@ -47,6 +47,8 @@ const { publishWorkspaceEvent, SSEBroadcastError } =
   await import("@/api/lib/sse-broadcast");
 const { broadcast } = await import("@/api/lib/sse");
 const { resourceUpdatedRealtimeEvent } = await import("@stll/api-contract");
+const { getRootWorkflowRunStateStore } =
+  await import("@/api/lib/workflow/root-run-state-store");
 const { brandPersistedWorkspaceId, brandPersistedEntityId } =
   await import("@/api/lib/safe-id-boundaries");
 
@@ -257,6 +259,19 @@ describe("rate limiting during a Valkey outage", () => {
       guards.claimDedup({ key: "digest-1", ttlMs: 60_000 }),
     );
     expect(claim.status === "ok" ? claim.value : null).toBe(true);
+  });
+});
+
+describe("workflow run state during a Valkey outage", () => {
+  test("a run-state command fails on its own bound rather than being held", async () => {
+    const result = await settle(
+      getRootWorkflowRunStateStore().clear(WORKSPACE_ID),
+    );
+
+    // The store's client keeps reconnecting and queues what it is given while
+    // it does, so the bound is the only thing between a workflow step and the
+    // length of the outage. Failing lets the step's own retry decide.
+    expect(result.status).toBe("error");
   });
 });
 
