@@ -17,7 +17,7 @@
  */
 
 import type { ModelMessage } from "@tanstack/ai";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-config";
@@ -570,7 +570,8 @@ const perspectiveLine = (perspective: ReviewPerspective): string => {
     case "neutral":
       return NEUTRAL_PERSPECTIVE_LINE;
     default:
-      return perspective satisfies never;
+      perspective satisfies never;
+      return panic(`Unhandled perspective: ${String(perspective)}`);
   }
 };
 

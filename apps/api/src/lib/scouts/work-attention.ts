@@ -127,8 +127,8 @@ const openStatus = (status: WorkObligationStatus): OpenWorkObligationStatus => {
     case WORK_OBLIGATION_STATUS.CANCELLED:
       return panic(`work.attention page returned a ${status} obligation`);
     default: {
-      const exhaustive: never = status;
-      return exhaustive;
+      status satisfies never;
+      return panic(`Unhandled status: ${String(status)}`);
     }
   }
 };

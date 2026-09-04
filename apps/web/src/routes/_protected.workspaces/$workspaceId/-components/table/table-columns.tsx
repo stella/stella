@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 
+import { panic } from "better-result";
 import {
   CalendarIcon,
   CircleDotIcon,
@@ -241,8 +242,8 @@ const useColumnDefFactory = (
               }),
             };
           default: {
-            const exhaustive: never = render;
-            return exhaustive;
+            render satisfies never;
+            return panic(`Unhandled render: ${String(render)}`);
           }
         }
       },

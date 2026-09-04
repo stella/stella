@@ -9,7 +9,7 @@ import {
 import type { ComponentProps } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 import { v7 as uuidv7 } from "uuid";
 import * as v from "valibot";
@@ -220,7 +220,8 @@ const prepareCreateDocumentDraft = async (
     case "unavailable":
       return null;
     default:
-      return prepared satisfies never;
+      prepared satisfies never;
+      return panic(`Unhandled prepared: ${String(prepared)}`);
   }
 };
 

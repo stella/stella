@@ -33,8 +33,8 @@ const needsComputation = (status: PropertyStatus): boolean => {
     case "fresh":
       return false;
     default: {
-      const exhaustive: never = status;
-      return panic(`Unhandled property status: ${String(exhaustive)}`);
+      status satisfies never;
+      return panic(`Unhandled property status: ${String(status)}`);
     }
   }
 };

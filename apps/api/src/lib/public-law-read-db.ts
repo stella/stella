@@ -355,8 +355,11 @@ const ensureRoleValidated = async (
     case "validated":
       return;
     default: {
-      const unreachable: never = external.roleValidation;
-      panic("Unexpected public-law role validation state", unreachable);
+      external.roleValidation satisfies never;
+      panic(
+        "Unexpected public-law role validation state",
+        external.roleValidation,
+      );
     }
   }
 };

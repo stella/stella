@@ -2256,8 +2256,8 @@ const applyAssistantPersistencePlan = ({
         persistencePlan.insertMessage,
       ];
     default: {
-      const exhaustive: never = persistencePlan;
-      return exhaustive;
+      persistencePlan satisfies never;
+      return panic(`Unhandled persistence plan: ${String(persistencePlan)}`);
     }
   }
 };

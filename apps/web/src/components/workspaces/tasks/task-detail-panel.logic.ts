@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import type { TaskStatus } from "@stll/api-contract";
 
 import { toSafeId } from "@/lib/safe-id";
@@ -49,8 +51,8 @@ export const taskUpdateBody = (update: TaskUpdate) => {
     case "status":
       return update.value;
     default: {
-      const unreachable: never = update;
-      return unreachable;
+      update satisfies never;
+      return panic(`Unhandled update: ${String(update)}`);
     }
   }
 };
@@ -97,8 +99,8 @@ export const workflowUpdateBody = (update: WorkflowUpdate) => {
     case "workingTargetDate":
       return { workingTargetDate: update.value };
     default: {
-      const unreachable: never = update;
-      return unreachable;
+      update satisfies never;
+      return panic(`Unhandled update: ${String(update)}`);
     }
   }
 };

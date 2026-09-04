@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { scanMarkers } from "@stll/template-conditions";
@@ -71,7 +72,8 @@ export const DirectiveLabel = ({
       case "endeach":
         return t("directiveEndEach");
       default:
-        return kind satisfies never;
+        kind satisfies never;
+        return panic(`Unhandled kind: ${String(kind)}`);
     }
   })();
 

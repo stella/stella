@@ -72,8 +72,8 @@ const resolveTransport = (): EmailTransport => {
         "EMAIL_PROVIDER is required before sending transactional email",
       );
     default: {
-      const _exhaustive: never = env.EMAIL_PROVIDER;
-      return _exhaustive;
+      env.EMAIL_PROVIDER satisfies never;
+      return panic(`Unhandled email_provider: ${String(env.EMAIL_PROVIDER)}`);
     }
   }
 };

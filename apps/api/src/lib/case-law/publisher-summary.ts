@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
 
@@ -208,7 +209,8 @@ export const publisherSummaryOf = ({
         break;
       }
       default: {
-        return source satisfies never;
+        source satisfies never;
+        return panic(`Unhandled source: ${String(source)}`);
       }
     }
   }

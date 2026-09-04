@@ -1,5 +1,6 @@
 import { toolDefinition } from "@tanstack/ai";
 import type { AnyServerTool } from "@tanstack/ai";
+import { panic } from "better-result";
 import * as v from "valibot";
 
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
@@ -269,8 +270,8 @@ export const createWeeklyToolShapeDefinition = (
       };
     }
     default: {
-      const _exhaustive: never = shape;
-      return _exhaustive;
+      shape satisfies never;
+      return panic(`Unhandled shape: ${String(shape)}`);
     }
   }
 };

@@ -28,6 +28,7 @@
  *   bun apps/api/scripts/record-eu-ecj-fixtures.ts --seed-only
  */
 
+import { panic } from "better-result";
 import JSZip from "jszip";
 import path from "node:path";
 
@@ -305,7 +306,8 @@ const portalFailureReason = (
     case "no-document":
       return `the portal served no document (${failure.httpStatus})`;
     default:
-      return failure satisfies never;
+      failure satisfies never;
+      return panic(`Unhandled failure: ${String(failure)}`);
   }
 };
 

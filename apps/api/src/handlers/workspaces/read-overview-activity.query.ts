@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import {
   and,
   asc,
@@ -482,8 +482,8 @@ const legacyCategoryCondition = (category: ActivityCategory): SQL => {
     case "automation":
       return eq(auditLogs.resourceType, AUDIT_RESOURCE_TYPE.FLOW_RUN);
     default: {
-      const exhaustive: never = category;
-      return exhaustive;
+      category satisfies never;
+      return panic(`Unhandled category: ${String(category)}`);
     }
   }
 };
@@ -1211,8 +1211,8 @@ const targetForRow = ({
         name: null,
       });
     default: {
-      const exhaustive: never = source;
-      return exhaustive;
+      source satisfies never;
+      return panic(`Unhandled source: ${String(source)}`);
     }
   }
 };

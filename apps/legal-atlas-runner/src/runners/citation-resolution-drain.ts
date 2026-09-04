@@ -287,9 +287,9 @@ export const runCitationResolutionDrain = async ({
           break;
         }
         default: {
-          const unhandled: never = step;
+          step satisfies never;
           return panic(
-            `Unhandled citation resolution step: ${JSON.stringify(unhandled)}`,
+            `Unhandled citation resolution step: ${JSON.stringify(step)}`,
           );
         }
       }

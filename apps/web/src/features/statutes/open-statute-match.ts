@@ -1,5 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
 import type { useNavigate } from "@tanstack/react-router";
+import { panic } from "better-result";
 
 import {
   statutesInfiniteOptions,
@@ -51,8 +52,8 @@ export const createStatuteFilters = (
     case "text":
       return { ...scope, query: intent.text };
     default: {
-      const exhaustive: never = intent;
-      return exhaustive;
+      intent satisfies never;
+      return panic(`Unhandled intent: ${String(intent)}`);
     }
   }
 };

@@ -14,6 +14,8 @@
 // below one namespace makes it impossible for a future catalog domain to
 // recreate a parallel root command group beside the curated CLI.
 
+import { panic } from "better-result";
+
 import { RESERVED_FLAGS, RESERVED_TOP_LEVEL_NAMES } from "./annotations.js";
 import { DEFS_KEY, expandSchemaDefs } from "./expand-schema-defs.js";
 import { flagKey } from "./flag-name.js";
@@ -101,8 +103,8 @@ export const isTransportInvocable = (
     case "file-both":
       return false;
     default: {
-      const exhaustive: never = transport;
-      return exhaustive;
+      transport satisfies never;
+      return panic(`Unhandled transport: ${String(transport)}`);
     }
   }
 };

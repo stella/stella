@@ -1126,9 +1126,9 @@ const buildPlCourtsFromPayload = async (
         : { type: "built", decision };
     }
     default: {
-      const exhaustive: never = fetched;
+      fetched satisfies never;
       return panic(
-        `Unhandled pl-courts detail fetch: ${JSON.stringify(exhaustive)}`,
+        `Unhandled pl-courts detail fetch: ${JSON.stringify(fetched)}`,
       );
     }
   }

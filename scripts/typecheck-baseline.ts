@@ -27,6 +27,7 @@
 // for the local lint/pre-commit loop. Wired into .github/workflows/ci.yml as
 // its own typecheck-baseline job, parallel to the turbo typecheck job.
 
+import { panic } from "better-result";
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
@@ -624,8 +625,8 @@ const main = (args: readonly string[]): number => {
     case "check":
       return runCheck();
     default: {
-      const exhaustiveMode: never = parsed.mode;
-      return exhaustiveMode;
+      parsed.mode satisfies never;
+      return panic(`Unhandled mode: ${String(parsed.mode)}`);
     }
   }
 };

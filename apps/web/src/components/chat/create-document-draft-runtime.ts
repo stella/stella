@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import type { ChatThreadId } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
@@ -137,7 +137,8 @@ export const settleCreateDocumentDraftWithRetry = async ({
     case "failed":
       return result;
     default:
-      return result satisfies never;
+      result satisfies never;
+      return panic(`Unhandled result: ${String(result)}`);
   }
 };
 
@@ -265,7 +266,8 @@ export const prepareCreateDocumentDraft = async ({
         : { status: "ready", buffer: fallback };
     }
     default:
-      return saved satisfies never;
+      saved satisfies never;
+      return panic(`Unhandled saved: ${String(saved)}`);
   }
 };
 

@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import * as v from "valibot";
 
 import { stripDangerousChars } from "./text-sanitize.js";
@@ -117,8 +118,8 @@ export const normalizeStructuredDecisionIdentifier = (
     case DECISION_IDENTIFIER_TYPES.REPORTER_CITATION:
       return normalizeStructuredCitation(identifier.value);
     default: {
-      const exhaustive: never = identifier;
-      return exhaustive;
+      identifier satisfies never;
+      return panic(`Unhandled identifier: ${String(identifier)}`);
     }
   }
 };

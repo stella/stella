@@ -219,8 +219,8 @@ const connectedState = (
     case "readOnly":
       return { status: "readOnly", room };
     default: {
-      const exhaustive: never = status;
-      return exhaustive;
+      status satisfies never;
+      return panic(`Unhandled status: ${String(status)}`);
     }
   }
 };

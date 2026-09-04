@@ -827,8 +827,8 @@ export const normalizeDecisionIdentifier = (
     case DECISION_IDENTIFIER_TYPES.REPORTER_CITATION:
       return normalizeStructuredDecisionIdentifier(identifier);
     default: {
-      const unhandled: never = identifier;
-      return panic(`Unhandled decision identifier: ${String(unhandled)}`);
+      identifier satisfies never;
+      return panic(`Unhandled decision identifier: ${String(identifier)}`);
     }
   }
 };
@@ -847,8 +847,8 @@ export const normalizeDecisionIdentifierValue = (
     case DECISION_IDENTIFIER_TYPES.REPORTER_CITATION:
       return normalizeDecisionIdentifier({ type, value });
     default: {
-      const exhaustive: never = type;
-      return panic(`Unhandled decision identifier type: ${String(exhaustive)}`);
+      (type) satisfies never;
+      return panic(`Unhandled decision identifier type: ${String(type)}`);
     }
   }
 };

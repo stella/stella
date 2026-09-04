@@ -12,6 +12,8 @@
  * unfilled (handled like a null client).
  */
 
+import { panic } from "better-result";
+
 import type { ContactType } from "@stll/api-contract";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -142,8 +144,8 @@ const scanReferencedSources = (
         referenced.attorneyRefs.add(source.ref);
         break;
       default: {
-        const exhaustive: never = source;
-        referenced.client = exhaustive;
+        source satisfies never;
+        panic(`Unhandled source: ${String(source)}`);
       }
     }
   }

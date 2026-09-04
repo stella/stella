@@ -56,8 +56,8 @@ const contentForKind = (
         fallback: null,
       };
     default: {
-      const exhaustive: never = kind;
-      return panic(`Unhandled batch content kind: ${String(exhaustive)}`);
+      kind satisfies never;
+      return panic(`Unhandled batch content kind: ${String(kind)}`);
     }
   }
 };

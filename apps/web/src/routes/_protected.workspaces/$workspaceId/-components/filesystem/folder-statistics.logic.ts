@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import { getFirstFile } from "@/components/workspaces/entity-utils";
 import type { EntityId, WorkspaceEntity } from "@/lib/types";
 
@@ -97,7 +99,8 @@ export const calculateFolderStatistics = (
           statistics = EMPTY_STATISTICS;
           break;
         default:
-          return entity.kind satisfies never;
+          entity.kind satisfies never;
+          return panic(`Unhandled kind: ${String(entity.kind)}`);
       }
     }
 

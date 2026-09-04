@@ -258,8 +258,8 @@ const unboundedListingIdentityKey = (
     case "unidentifiable":
       return null;
     default: {
-      const exhaustive: never = identity;
-      return panic(`Unhandled listing identity: ${JSON.stringify(exhaustive)}`);
+      identity satisfies never;
+      return panic(`Unhandled listing identity: ${JSON.stringify(identity)}`);
     }
   }
 };

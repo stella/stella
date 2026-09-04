@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 import { t } from "elysia";
 
@@ -174,8 +174,8 @@ const transitionWorkObligation = createSafeHandler(
           }),
         );
       default: {
-        const exhaustive: never = result;
-        return exhaustive;
+        result satisfies never;
+        return panic(`Unhandled result: ${String(result)}`);
       }
     }
   },

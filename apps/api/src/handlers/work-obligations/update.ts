@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
@@ -557,8 +557,8 @@ const updateWorkObligation = createSafeHandler(
           }),
         );
       default: {
-        const exhaustive: never = result;
-        return exhaustive;
+        result satisfies never;
+        return panic(`Unhandled result: ${String(result)}`);
       }
     }
   },

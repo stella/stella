@@ -1,5 +1,7 @@
 import type { JSX } from "react";
 
+import { panic } from "better-result";
+
 import type { TableSchema } from "@stll/ui/data-table";
 
 import {
@@ -175,8 +177,8 @@ export const decisionGroupKey = (
     case "language":
       return normalizeCaseLawLanguageSegment(decision.language) ?? "";
     default: {
-      const exhaustive: never = groupBy;
-      return exhaustive;
+      groupBy satisfies never;
+      return panic(`Unhandled group by: ${String(groupBy)}`);
     }
   }
 };

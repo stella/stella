@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import { ClientOperationError } from "@/lib/errors/client";
 
 export type DroppedFileTreeFile = {
@@ -219,8 +221,8 @@ export const collectDroppedFileTree = async ({
         });
         break;
       default: {
-        const exhaustive: never = snapshot;
-        return exhaustive;
+        snapshot satisfies never;
+        return panic(`Unhandled snapshot: ${String(snapshot)}`);
       }
     }
   }

@@ -2,6 +2,8 @@
 // bilingual DOCX, rule-stamped dispositions, glossary candidates found by
 // pattern, and the consistency check applied to every translation.
 
+import { panic } from "better-result";
+
 import type { BilingualRow as FolioBilingualRow } from "@stll/folio-core/server";
 
 import {
@@ -91,8 +93,8 @@ export const flattenBilingualRows = (
           break;
         }
         default: {
-          const exhaustive: never = row;
-          return exhaustive;
+          row satisfies never;
+          return panic(`Unhandled row: ${String(row)}`);
         }
       }
       continue;

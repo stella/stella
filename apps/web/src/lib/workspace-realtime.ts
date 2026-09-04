@@ -1,4 +1,5 @@
 import { hashKey, type QueryKey } from "@tanstack/react-query";
+import { panic } from "better-result";
 
 import {
   parseWorkspaceRealtimeEvent,
@@ -224,7 +225,8 @@ const getResourceQueryScopeKeys = (
     case RESOURCE_QUERY_SCOPE.WORKSPACES:
       return [workspacesKeys.all];
     default:
-      return scope satisfies never;
+      scope satisfies never;
+      return panic(`Unhandled scope: ${String(scope)}`);
   }
 };
 
@@ -357,6 +359,7 @@ export const getWorkspaceRealtimeQueryActions = (
     case REALTIME_EVENT_TYPE.FLOW_RUN_UPDATE:
       return [];
     default:
-      return event satisfies never;
+      event satisfies never;
+      return panic(`Unhandled event: ${String(event)}`);
   }
 };

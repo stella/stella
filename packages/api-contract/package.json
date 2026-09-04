@@ -36,6 +36,7 @@
   "dependencies": {
     "@stll/anonymize-chat": "workspace:*",
     "@stll/template-conditions": "workspace:*",
+    "better-result": "catalog:",
     "valibot": "catalog:"
   },
   "devDependencies": {

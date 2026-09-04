@@ -63,6 +63,7 @@
   },
   "dependencies": {
     "@stll/text-normalize": "workspace:*",
+    "better-result": "catalog:",
     "valibot": "catalog:"
   },
   "devDependencies": {

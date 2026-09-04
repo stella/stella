@@ -413,7 +413,8 @@ const buildPreparedEntry = async (
           revision: material.lease.intentId,
         });
       default:
-        return material satisfies never;
+        material satisfies never;
+        return panic(`Unhandled material: ${String(material)}`);
     }
   });
   if (built.isErr()) {

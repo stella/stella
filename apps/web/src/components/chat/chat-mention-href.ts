@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import {
   CHAT_RESOURCE_HREF_PREFIX,
   parseChatResourceHref,
@@ -68,7 +70,8 @@ export const resolveMentionWorkspaceId = (
     case RESOURCE_TYPE.WORKSPACE:
       return renderContextWorkspaceId;
     default:
-      return target satisfies never;
+      target satisfies never;
+      return panic(`Unhandled target: ${String(target)}`);
   }
 };
 

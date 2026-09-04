@@ -1,6 +1,6 @@
 import { hasNonModifierKey, normalizeHotkey } from "@tanstack/react-hotkeys";
 import type { Hotkey } from "@tanstack/react-hotkeys";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import { SHORTCUT_GROUPS } from "@/lib/hotkeys";
 import type {
@@ -127,8 +127,8 @@ export const bindingKey = (binding: ShortcutBinding): string => {
     case "char":
       return `char:${binding.char}`;
     default: {
-      const _exhaustive: never = binding;
-      return _exhaustive;
+      binding satisfies never;
+      return panic(`Unhandled binding: ${String(binding)}`);
     }
   }
 };

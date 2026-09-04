@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, desc, eq } from "drizzle-orm";
 
 import {
@@ -165,8 +165,8 @@ const approvePlaybookDefinition = createSafeRootHandler(
       case "version-conflict":
         return Result.err(approved.error);
       default: {
-        const exhaustive: never = approved;
-        return exhaustive;
+        approved satisfies never;
+        return panic(`Unhandled approved: ${String(approved)}`);
       }
     }
   },

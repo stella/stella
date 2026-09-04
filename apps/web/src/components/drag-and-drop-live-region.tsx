@@ -5,6 +5,7 @@ import {
   cleanup,
 } from "@atlaskit/pragmatic-drag-and-drop-live-region";
 import { monitorForElements } from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -46,7 +47,8 @@ export const DragAndDropLiveRegion = () => {
         case "movedNear":
           return t("movedNear", values);
         default:
-          return messageKey satisfies never;
+          messageKey satisfies never;
+          return panic(`Unhandled message key: ${String(messageKey)}`);
       }
     };
     const stopMonitoring = registerDragAnnouncements(

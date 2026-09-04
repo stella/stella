@@ -100,8 +100,8 @@ const collectArgNames = (
       case TYPE.pound:
         break;
       default: {
-        const unsupported: never = element;
-        return unsupported;
+        element satisfies never;
+        return panic(`Unhandled element: ${String(element)}`);
       }
     }
   }

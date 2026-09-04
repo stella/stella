@@ -53,8 +53,8 @@ const report = ((): { exitCode: 0 | 1; message: string } => {
       };
     }
     default: {
-      const unhandled: never = outcome;
-      return panic(`Unhandled redaction outcome: ${String(unhandled)}`);
+      outcome satisfies never;
+      return panic(`Unhandled redaction outcome: ${String(outcome)}`);
     }
   }
 })();

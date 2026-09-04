@@ -503,6 +503,7 @@ const formatReleaseDate = (publishedAt: string) =>
       isStellaReleaseTag,
     } from "../lib/changelog-release";
     import { parseChangelogMarkdown } from "../lib/changelog-markdown";
+    import { panic } from "better-result";
 
     type GitHubRelease = {
       body: string | null;
@@ -1027,8 +1028,8 @@ const formatReleaseDate = (publishedAt: string) =>
             ? renderPatchRelease(entry.release)
             : renderFeatureRelease(entry.release);
         default: {
-          const unreachable: never = entry;
-          return unreachable;
+          entry satisfies never;
+          return panic(`Unhandled changelog entry: ${String(entry)}`);
         }
       }
     };

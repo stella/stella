@@ -508,6 +508,7 @@
       "dependencies": {
         "@stll/anonymize-chat": "workspace:*",
         "@stll/template-conditions": "workspace:*",
+        "better-result": "catalog:",
         "valibot": "catalog:",
       },
       "devDependencies": {
@@ -543,6 +544,7 @@
       "dependencies": {
         "@stll/country-codes": "workspace:*",
         "@stll/stdnum": "^2.3.2",
+        "better-result": "catalog:",
       },
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
@@ -554,6 +556,7 @@
       "version": "0.1.0",
       "dependencies": {
         "@stll/money": "workspace:^",
+        "better-result": "catalog:",
       },
       "devDependencies": {
         "@stll/property-testing": "workspace:*",
@@ -709,6 +712,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@stll/text-normalize": "workspace:*",
+        "better-result": "catalog:",
         "valibot": "catalog:",
       },
       "devDependencies": {
@@ -810,6 +814,9 @@
     "packages/ssr-kit": {
       "name": "@stll/ssr-kit",
       "version": "0.1.0",
+      "dependencies": {
+        "better-result": "catalog:",
+      },
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",

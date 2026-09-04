@@ -620,8 +620,8 @@ const runCreateDocumentStep = async ({
       case "file-upload":
         return { source: "file-upload", type: "system" };
       default: {
-        const exhaustive: never = run.triggerSource;
-        return exhaustive;
+        run.triggerSource satisfies never;
+        return panic(`Unhandled trigger source: ${String(run.triggerSource)}`);
       }
     }
   })();

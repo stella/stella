@@ -49,8 +49,8 @@ export const decisionQueryClass = (
         : DECISION_QUERY_CLASS.term;
     }
     default: {
-      const exhaustive: never = intent;
-      return panic(`Unhandled decision query intent: ${String(exhaustive)}`);
+      intent satisfies never;
+      return panic(`Unhandled decision query intent: ${String(intent)}`);
     }
   }
 };

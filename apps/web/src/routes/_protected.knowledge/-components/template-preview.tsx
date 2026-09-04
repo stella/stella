@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
+import { panic } from "better-result";
 import { AlertTriangleIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -105,8 +106,8 @@ const computeLayout = (
         break;
       }
       default: {
-        const exhaustive: never = layout;
-        return exhaustive;
+        layout satisfies never;
+        return panic(`Unhandled layout: ${String(layout)}`);
       }
     }
   }

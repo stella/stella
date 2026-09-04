@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import { envBase } from "@/api/env-base";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 
@@ -21,6 +23,7 @@ export const legacyOperationalCorpusGeneration = (
     case "legislation":
       return "legislation_v1";
     default:
-      return family satisfies never;
+      family satisfies never;
+      return panic(`Unhandled family: ${String(family)}`);
   }
 };

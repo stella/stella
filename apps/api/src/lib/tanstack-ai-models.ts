@@ -429,8 +429,8 @@ const resolveTanStackTextProvider = ({
         `Unsupported TanStack AI provider passed support assertion: ${provider}`,
       );
     default: {
-      const _exhaustive: never = provider;
-      return _exhaustive;
+      provider satisfies never;
+      return panic(`Unhandled provider: ${String(provider)}`);
     }
   }
 };
@@ -638,8 +638,10 @@ const createTanStackTextAdapterFactory = ({
       return (modelId) => createExtendedMistralAdapter(modelId, key);
     }
     default: {
-      const _exhaustive: never = supportedProvider;
-      return _exhaustive;
+      supportedProvider satisfies never;
+      return panic(
+        `Unhandled supported provider: ${String(supportedProvider)}`,
+      );
     }
   }
 };
@@ -672,8 +674,8 @@ const hasInstanceProviderCredentials = (provider: AIProvider): boolean => {
     case "azure_foundry":
       return false;
     default: {
-      const _exhaustive: never = provider;
-      return _exhaustive;
+      provider satisfies never;
+      return panic(`Unhandled provider: ${String(provider)}`);
     }
   }
 };
@@ -1035,9 +1037,9 @@ const byokCacheKey = (config: OrgAIProviderConfig): string => {
       hasher.update(providerRegion(config) ?? "global");
       break;
     default: {
-      const unsupported: never = config;
+      config satisfies never;
       return panic(
-        `Unsupported BYOK provider configuration: ${JSON.stringify(unsupported)}`,
+        `Unsupported BYOK provider configuration: ${JSON.stringify(config)}`,
       );
     }
   }
@@ -1383,8 +1385,8 @@ export function tanStackModelOptionsForRole(
         reasoningEffort: input.reasoningEffort,
       });
     default: {
-      const _exhaustive: never = provider;
-      return _exhaustive;
+      provider satisfies never;
+      return panic(`Unhandled provider: ${String(provider)}`);
     }
   }
 }
@@ -1545,8 +1547,8 @@ const buildResolvedTextModel = ({
         role,
       });
     default: {
-      const _exhaustive: never = provider;
-      return _exhaustive;
+      provider satisfies never;
+      return panic(`Unhandled provider: ${String(provider)}`);
     }
   }
 };

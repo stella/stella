@@ -9,6 +9,7 @@
 import { useCallback, useRef, useState } from "react";
 import type { RefObject } from "react";
 
+import { panic } from "better-result";
 import { Building2Icon, LockIcon, Trash2Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -282,8 +283,8 @@ export const MarginNotes = ({
             );
           }
           default: {
-            const unreachable: never = item;
-            return unreachable;
+            item satisfies never;
+            return panic(`Unhandled item: ${String(item)}`);
           }
         }
       })}

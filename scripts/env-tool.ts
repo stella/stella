@@ -408,8 +408,8 @@ export const formatWebBuildArgGap = (gap: WebBuildArgGap) => {
     case "unknown":
       return `${WEB_DOCKERFILE_LABEL}: ${gap.name} is exported to the web build but ${WEB_SCHEMA_LABEL} does not declare it.`;
     default: {
-      const exhaustive: never = gap;
-      return exhaustive;
+      gap satisfies never;
+      return panic(`Unhandled gap: ${String(gap)}`);
     }
   }
 };
@@ -1115,8 +1115,8 @@ const runDoctor = (app: EnvApp, mode: EnvMode | undefined) => {
       }
       return false;
     default: {
-      const exhaustive: never = validation;
-      return exhaustive;
+      validation satisfies never;
+      return panic(`Unhandled validation: ${String(validation)}`);
     }
   }
 };

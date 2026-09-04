@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import { SIGNAL_SEVERITIES, SIGNAL_SEVERITY } from "@stll/api-contract/signals";
 import type {
   SignalEvidence,
@@ -49,7 +51,8 @@ export const findingSeverity = (
     case null:
       return null;
     default:
-      return verdict satisfies never;
+      verdict satisfies never;
+      return panic(`Unhandled verdict: ${String(verdict)}`);
   }
 };
 
@@ -112,7 +115,8 @@ export const reviewSignalSeverity = (
     case "safe":
       return SIGNAL_SEVERITY.INFO;
     default:
-      return verdict satisfies never;
+      verdict satisfies never;
+      return panic(`Unhandled verdict: ${String(verdict)}`);
   }
 };
 

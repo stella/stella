@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
@@ -261,8 +262,8 @@ const hasPositiveTerm = (ast: SearchAst, negated = false): boolean => {
         hasPositiveTerm(ast.right, negated)
       );
     default: {
-      const exhaustive: never = ast;
-      return exhaustive;
+      ast satisfies never;
+      return panic(`Unhandled ast: ${String(ast)}`);
     }
   }
 };
@@ -293,8 +294,8 @@ const collectPositiveLocatorTerms = (
       collectPositiveLocatorTerms(ast.right, terms, negated);
       return;
     default: {
-      const exhaustive: never = ast;
-      return exhaustive;
+      ast satisfies never;
+      return panic(`Unhandled ast: ${String(ast)}`);
     }
   }
 };
@@ -386,8 +387,8 @@ const collectPositiveLocatorCandidates = (
       collectPositiveLocatorCandidates(ast.right, candidates, negated);
       return;
     default: {
-      const exhaustive: never = ast;
-      return exhaustive;
+      ast satisfies never;
+      return panic(`Unhandled ast: ${String(ast)}`);
     }
   }
 };
@@ -571,8 +572,8 @@ const astToTsQuery = (ast: SearchAst): string => {
     case "or":
       return `(${astToTsQuery(ast.left)}) | (${astToTsQuery(ast.right)})`;
     default: {
-      const exhaustive: never = ast;
-      return exhaustive;
+      ast satisfies never;
+      return panic(`Unhandled ast: ${String(ast)}`);
     }
   }
 };

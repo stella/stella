@@ -1,5 +1,5 @@
 import { CancelledError } from "@tanstack/react-query";
-import { isTaggedError } from "better-result";
+import { isTaggedError, panic } from "better-result";
 import { posthog } from "posthog-js";
 import type { CaptureResult, SupportedWebVitalsMetrics } from "posthog-js";
 
@@ -588,8 +588,8 @@ const devErrorContext = (
     case "recovery":
       return { error_reference: context.reference };
     default: {
-      const exhaustive: never = context;
-      return exhaustive;
+      context satisfies never;
+      return panic(`Unhandled context: ${String(context)}`);
     }
   }
 };
@@ -679,8 +679,8 @@ export const createPostHogAnalytics = ({
         case WEB_ANALYTICS_EVENTS.guideStepSkipped:
           return sanitizeSdkUrlContext(event, routeTemplateHistory, "resolved");
         default: {
-          const exhaustive: never = event.event;
-          return exhaustive;
+          event.event satisfies never;
+          return panic(`Unhandled event: ${String(event.event)}`);
         }
       }
     },

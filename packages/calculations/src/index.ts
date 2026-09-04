@@ -11,6 +11,8 @@
  * currencies silently add up to a number that means nothing.
  */
 
+import { panic } from "better-result";
+
 import { cents, MoneyTotals } from "@stll/money";
 import type { CentsAmount, MoneyTotalsEntry } from "@stll/money";
 
@@ -139,8 +141,8 @@ export const runCalculation = ({
         ? { type: "unsupported", kind, reason: "no-scope" }
         : percentOfTotal(kind, values, scopeValues);
     default: {
-      const exhaustive: never = kind;
-      return exhaustive;
+      kind satisfies never;
+      return panic(`Unhandled kind: ${String(kind)}`);
     }
   }
 };
@@ -166,8 +168,8 @@ const uniqueKey = (value: CalculationValue): string | null => {
     case "text":
       return `t:${value.value}`;
     default: {
-      const exhaustive: never = value;
-      return exhaustive;
+      value satisfies never;
+      return panic(`Unhandled value: ${String(value)}`);
     }
   }
 };
@@ -217,8 +219,8 @@ const classify = (values: readonly CalculationValue[]): NumericValues => {
         break;
       }
       default: {
-        const exhaustive: never = value;
-        return exhaustive;
+        value satisfies never;
+        return panic(`Unhandled value: ${String(value)}`);
       }
     }
   }
@@ -284,8 +286,8 @@ const reduceNumeric = (
       return { type: "money", kind, totals: totals.entries() };
     }
     default: {
-      const exhaustive: never = classified;
-      return exhaustive;
+      classified satisfies never;
+      return panic(`Unhandled classified: ${String(classified)}`);
     }
   }
 };
@@ -359,8 +361,8 @@ const singleTotal = (values: readonly CalculationValue[]): SingleTotal => {
       return { type: "total", value: REDUCERS.sum(amounts), unit: currency };
     }
     default: {
-      const exhaustive: never = classified;
-      return exhaustive;
+      classified satisfies never;
+      return panic(`Unhandled classified: ${String(classified)}`);
     }
   }
 };

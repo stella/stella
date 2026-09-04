@@ -18,7 +18,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { Result, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import {
   CheckCircle2Icon,
   EyeIcon,
@@ -2029,8 +2029,8 @@ const useDocxBrowserCollaboration = ({
       case "cancelled":
         return false;
       default: {
-        const exhaustive: never = requestState;
-        return exhaustive;
+        requestState satisfies never;
+        return panic(`Unhandled request state: ${String(requestState)}`);
       }
     }
   })();
@@ -2131,8 +2131,8 @@ const CollaborationStatusIndicator = ({
       case "synced":
         return t("folio.synced");
       default: {
-        const exhaustive: never = status;
-        return exhaustive;
+        status satisfies never;
+        return panic(`Unhandled status: ${String(status)}`);
       }
     }
   })();
@@ -2146,8 +2146,8 @@ const CollaborationStatusIndicator = ({
       case "reconnecting":
         return <RefreshCwIcon className="size-3.5 motion-safe:animate-spin" />;
       default: {
-        const exhaustive: never = status;
-        return exhaustive;
+        status satisfies never;
+        return panic(`Unhandled status: ${String(status)}`);
       }
     }
   })();
@@ -2450,8 +2450,8 @@ const editSessionErrorDescriptionKey = (
     case "unknown":
       return "folio.editOpenFailed";
     default: {
-      const exhaustive: never = reason;
-      return exhaustive;
+      reason satisfies never;
+      return panic(`Unhandled reason: ${String(reason)}`);
     }
   }
 };

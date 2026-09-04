@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import {
   availableField,
   toValidatedRegistryIdentifier,
@@ -24,8 +26,8 @@ const normalizeStatus = (status: KrsEntityStatus): EntityStatus => {
     case "restructuring":
       return { type: "inactive" };
     default: {
-      const unreachable: never = status;
-      return unreachable;
+      status satisfies never;
+      return panic(`Unhandled status: ${String(status)}`);
     }
   }
 };

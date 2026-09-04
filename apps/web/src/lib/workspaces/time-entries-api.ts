@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import { parseApiErrorValue } from "@stll/api-contract";
 import {
   parsePolishedTimeEntryNarrativeResponse,
@@ -225,8 +227,8 @@ export const sendTimeEntryMutation = async ({
       });
       return;
     default: {
-      const exhaustive: never = mutation;
-      return exhaustive;
+      mutation satisfies never;
+      return panic(`Unhandled mutation: ${String(mutation)}`);
     }
   }
 };

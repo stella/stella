@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { eq, lt } from "drizzle-orm";
 import { t } from "elysia";
 
@@ -298,8 +298,8 @@ export const createSharepointOAuthCallback = (
               return Result.ok(redirect({ status: "connected" }));
             }
             default: {
-              const exhaustive: never = connectResult.value;
-              return exhaustive;
+              connectResult.value satisfies never;
+              return panic(`Unhandled value: ${String(connectResult.value)}`);
             }
           }
         } catch (error) {

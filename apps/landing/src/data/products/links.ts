@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import type { Locale } from "../../i18n/config";
 import { localizePath, type TranslationKey } from "../../i18n/utils";
 import type { ProductSlug } from "./pillars";
@@ -61,8 +63,8 @@ export const resolveProductLink = (
         hreflang: "en",
       };
     default: {
-      const exhaustive: never = link;
-      return exhaustive;
+      link satisfies never;
+      return panic(`Unhandled link: ${String(link)}`);
     }
   }
 };

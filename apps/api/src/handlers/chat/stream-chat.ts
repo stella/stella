@@ -1464,7 +1464,8 @@ const awaitsCompleteInput = (interaction: AwaitingInteraction): boolean => {
     case "client-tool":
       return true;
     default:
-      return interaction satisfies never;
+      interaction satisfies never;
+      return panic(`Unhandled interaction: ${String(interaction)}`);
   }
 };
 

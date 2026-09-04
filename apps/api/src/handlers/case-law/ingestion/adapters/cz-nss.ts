@@ -1576,8 +1576,8 @@ const buildCzNssFromPayload = async (
       // would make the identity held while its document stayed unread.
       return { type: "detail-unavailable" };
     default: {
-      const exhaustive: never = built;
-      return panic(`Unhandled NSS build result: ${JSON.stringify(exhaustive)}`);
+      built satisfies never;
+      return panic(`Unhandled NSS build result: ${JSON.stringify(built)}`);
     }
   }
 };

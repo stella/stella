@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { CaseLawResearchYesNoValue } from "@stll/api-contract";
@@ -110,8 +111,8 @@ export const ResearchAnswerCell = ({
       );
     }
     default: {
-      const exhaustive: never = answer.state;
-      return exhaustive;
+      answer.state satisfies never;
+      return panic(`Unhandled state: ${String(answer.state)}`);
     }
   }
 };

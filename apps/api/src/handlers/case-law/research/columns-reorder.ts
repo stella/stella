@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, asc, eq, inArray } from "drizzle-orm";
 
 import { caseLawResearchColumns } from "@/api/db/schema";
@@ -137,8 +137,8 @@ const reorderResearchColumns = createSafeRootHandler(
           columns: outcome.columns.map(toResearchColumnResponse),
         });
       default: {
-        const exhaustive: never = outcome;
-        return exhaustive;
+        outcome satisfies never;
+        return panic(`Unhandled outcome: ${String(outcome)}`);
       }
     }
   },

@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
@@ -237,8 +238,8 @@ export const writeFileVersion = async ({
       break;
     }
     default: {
-      const exhaustive: never = writePolicy;
-      return exhaustive;
+      writePolicy satisfies never;
+      return panic(`Unhandled write policy: ${String(writePolicy)}`);
     }
   }
 

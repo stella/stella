@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import type { ReactNode, RefObject } from "react";
 import { createPortal } from "react-dom";
 
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import {
   Building2Icon,
   ChevronDownIcon,
@@ -176,8 +176,8 @@ const copyTextFor = (
       return `${citation}.`;
     }
     default: {
-      const unreachable: never = mode;
-      return unreachable;
+      mode satisfies never;
+      return panic(`Unhandled mode: ${String(mode)}`);
     }
   }
 };
@@ -753,8 +753,8 @@ const colorLabelKey = (color: AnnotationColor) => {
       return "caseLaw.annotations.colorRed" as const;
     }
     default: {
-      const unreachable: never = color;
-      return unreachable;
+      color satisfies never;
+      return panic(`Unhandled color: ${String(color)}`);
     }
   }
 };
@@ -774,8 +774,8 @@ const styleLabelKey = (style: AnnotationStyle) => {
       return "caseLaw.annotations.styleStrikethrough" as const;
     }
     default: {
-      const unreachable: never = style;
-      return unreachable;
+      style satisfies never;
+      return panic(`Unhandled style: ${String(style)}`);
     }
   }
 };

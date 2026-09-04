@@ -16,6 +16,8 @@
  * generic path is never looser than the route it stands in for.
  */
 
+import { panic } from "better-result";
+
 import {
   createFeedbackIntakeGuards,
   type FeedbackIntakeGuards,
@@ -167,6 +169,7 @@ export const consumeInvokeCapabilityRateLimit = async ({
       return { ok, retryAfterSeconds: Math.ceil(limit.windowMs / 1000) };
     }
     default:
-      return policy satisfies never;
+      policy satisfies never;
+      return panic(`Unhandled policy: ${String(policy)}`);
   }
 };

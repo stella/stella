@@ -416,6 +416,7 @@ export const readReservedCorpusProjectionMaterialsTx = async (
       );
     }
     default:
-      return family satisfies never;
+      family satisfies never;
+      return panic(`Unhandled family: ${String(family)}`);
   }
 };

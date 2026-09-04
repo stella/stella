@@ -8,6 +8,7 @@ import {
 } from "react";
 import type { ErrorInfo, ReactElement } from "react";
 
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import {
@@ -121,8 +122,8 @@ export const toRenderableMediaSource = (part: MediaChatPart): string | null => {
         : null;
     }
     default: {
-      const exhaustive: never = source;
-      return exhaustive;
+      source satisfies never;
+      return panic(`Unhandled source: ${String(source)}`);
     }
   }
 };
@@ -341,8 +342,8 @@ export const ChatRichMessagePart = ({ part }: { part: RichChatPart }) => {
     case "ui-resource":
       return <UiResource part={part} />;
     default: {
-      const exhaustive: never = part;
-      return exhaustive;
+      part satisfies never;
+      return panic(`Unhandled part: ${String(part)}`);
     }
   }
 };

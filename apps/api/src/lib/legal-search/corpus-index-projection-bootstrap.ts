@@ -581,6 +581,7 @@ export const bootstrapCorpusProjectionDesiredStateBatchTx = async (
         options.afterEntityId,
       );
     default:
-      return options satisfies never;
+      options satisfies never;
+      return panic(`Unhandled options: ${String(options)}`);
   }
 };

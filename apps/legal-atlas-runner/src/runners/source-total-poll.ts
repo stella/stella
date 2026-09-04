@@ -182,10 +182,8 @@ const recordProbedTotal = async ({
       }
     }
     default: {
-      const exhaustive: never = count;
-      return panic(
-        `unhandled source-total answer: ${JSON.stringify(exhaustive)}`,
-      );
+      count satisfies never;
+      return panic(`unhandled source-total answer: ${JSON.stringify(count)}`);
     }
   }
 };

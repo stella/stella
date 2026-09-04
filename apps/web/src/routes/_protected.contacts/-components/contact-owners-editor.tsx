@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import {
@@ -33,7 +34,8 @@ const contactOwnerPatch = (field: ContactOwnerField, value: string | null) => {
     case "responsibleAttorneyId":
       return { responsibleAttorneyId: ownerUserId };
     default:
-      return field satisfies never;
+      field satisfies never;
+      return panic(`Unhandled field: ${String(field)}`);
   }
 };
 

@@ -1455,8 +1455,8 @@ const createCanaryConfig = ({
         overrideModels: modelSelections(provider, rotatedModelId),
       };
     default: {
-      const _exhaustive: never = provider;
-      return _exhaustive;
+      provider satisfies never;
+      return panic(`Unhandled provider: ${String(provider)}`);
     }
   }
 };

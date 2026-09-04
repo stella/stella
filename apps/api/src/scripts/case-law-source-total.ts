@@ -255,8 +255,8 @@ const pollOne = async (adapterKey: string): Promise<PollResult> => {
     case "count":
       break;
     default: {
-      const exhaustive: never = count;
-      return panic(`Unhandled source total: ${JSON.stringify(exhaustive)}`);
+      count satisfies never;
+      return panic(`Unhandled source total: ${JSON.stringify(count)}`);
     }
   }
   // The writer owns what counts as a usable number, so its rules are not

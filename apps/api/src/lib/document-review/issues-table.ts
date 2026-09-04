@@ -5,6 +5,8 @@
  * and Word renderings cannot drift from each other.
  */
 
+import { panic } from "better-result";
+
 import {
   createDocx,
   createEmptyDocument,
@@ -138,7 +140,8 @@ const perspectiveLabel = (perspective: ReviewPerspective): string => {
     case "neutral":
       return NEUTRAL_PERSPECTIVE_LABEL;
     default:
-      return perspective satisfies never;
+      perspective satisfies never;
+      return panic(`Unhandled perspective: ${String(perspective)}`);
   }
 };
 

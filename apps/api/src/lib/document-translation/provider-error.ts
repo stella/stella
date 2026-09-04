@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import { classifyAIError } from "@/api/lib/ai-error";
 import { DeepLTimeoutError, DeepLUpstreamError } from "@/api/lib/deepl/errors";
 import type { DocumentTranslationRunErrorCode } from "@/api/lib/document-translation/contract";
@@ -33,8 +35,8 @@ export const documentTranslationProviderErrorCode = (
     case "unknown":
       return "translation_failed";
     default: {
-      const exhaustiveKind: never = kind;
-      return exhaustiveKind;
+      kind satisfies never;
+      return panic(`Unhandled kind: ${String(kind)}`);
     }
   }
 };

@@ -1,5 +1,6 @@
 import { parsePartialJSON } from "@tanstack/ai-client";
 import type { ChatClientState } from "@tanstack/ai-client";
+import { panic } from "better-result";
 import { v5 as uuidv5 } from "uuid";
 
 import type {
@@ -157,8 +158,8 @@ export const setCreateDocumentDraftChatThreadId = ({
         workspaceId: payload.workspaceId,
       };
     default: {
-      const exhaustiveStatus: never = payload;
-      return exhaustiveStatus;
+      payload satisfies never;
+      return panic(`Unhandled payload: ${String(payload)}`);
     }
   }
 };
@@ -217,8 +218,8 @@ export const bindCreateDocumentDraftChatThread = ({
         workspaceId: payload.workspaceId,
       };
     default: {
-      const exhaustiveStatus: never = payload;
-      return exhaustiveStatus;
+      payload satisfies never;
+      return panic(`Unhandled payload: ${String(payload)}`);
     }
   }
 };

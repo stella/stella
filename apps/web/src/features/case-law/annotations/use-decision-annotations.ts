@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { stellaToast } from "@stll/ui/toast";
@@ -139,8 +140,8 @@ const applyChange = (
       return { ...row, visibility: change.visibility };
     }
     default: {
-      const unreachable: never = change;
-      return unreachable;
+      change satisfies never;
+      return panic(`Unhandled change: ${String(change)}`);
     }
   }
 };

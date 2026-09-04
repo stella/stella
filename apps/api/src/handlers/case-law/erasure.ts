@@ -1,4 +1,4 @@
-import { Result, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { and, eq, isNotNull, isNull, or } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -125,8 +125,8 @@ export const eraseCorpusObjects = async ({
       };
     }
     default: {
-      const unhandled: never = outcome.value;
-      return unhandled;
+      outcome.value satisfies never;
+      return panic(`Unhandled value: ${String(outcome.value)}`);
     }
   }
 };

@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import * as v from "valibot";
 
 import {
@@ -245,8 +246,8 @@ const answerValueFor = (
       return text.length === 0 ? null : { type: "text", value: text };
     }
     default: {
-      const exhaustive: never = answerType;
-      return exhaustive;
+      answerType satisfies never;
+      return panic(`Unhandled answer type: ${String(answerType)}`);
     }
   }
 };

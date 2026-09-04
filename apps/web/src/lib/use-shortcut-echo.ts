@@ -1,4 +1,5 @@
 import { matchesKeyboardEvent } from "@tanstack/react-hotkeys";
+import { panic } from "better-result";
 import { create } from "zustand";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -74,8 +75,8 @@ const matchEchoCandidate = (
         break;
       }
       default: {
-        const _exhaustive: never = binding;
-        return _exhaustive;
+        binding satisfies never;
+        return panic(`Unhandled binding: ${String(binding)}`);
       }
     }
   }

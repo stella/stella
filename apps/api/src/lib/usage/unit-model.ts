@@ -272,8 +272,8 @@ export const normalizeProviderPromptTokens = ({
       };
     }
     default: {
-      const _exhaustive: never = accounting;
-      return _exhaustive;
+      accounting satisfies never;
+      return panic(`Unhandled accounting: ${String(accounting)}`);
     }
   }
 };

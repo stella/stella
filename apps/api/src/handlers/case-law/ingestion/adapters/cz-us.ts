@@ -709,8 +709,8 @@ const makeCursor = (state: CursorState): string => {
     case SWEEP_PHASE.RECENT:
       return `search:${state.phase}:${state.availableFrom}:${state.availableTo}:${state.pass}:${state.page}:${state.digest}:${state.expectedDigest ?? "-"}`;
     default: {
-      const unhandled: never = state;
-      return panic(`Unhandled cz-us cursor: ${String(unhandled)}`);
+      state satisfies never;
+      return panic(`Unhandled cz-us cursor: ${String(state)}`);
     }
   }
 };
@@ -732,8 +732,8 @@ const nextSlice = (state: CursorState, now: Date): CursorState => {
       return nextRecentWindow(state.availableTo, now);
     }
     default: {
-      const unhandled: never = state;
-      return panic(`Unhandled cz-us cursor: ${String(unhandled)}`);
+      state satisfies never;
+      return panic(`Unhandled cz-us cursor: ${String(state)}`);
     }
   }
 };
@@ -841,8 +841,8 @@ const searchFields = (state: CursorState): Record<string, string> => {
         ctl00$MainContent$razeni: "20",
       };
     default: {
-      const unhandled: never = state;
-      return panic(`Unhandled cz-us cursor: ${String(unhandled)}`);
+      state satisfies never;
+      return panic(`Unhandled cz-us cursor: ${String(state)}`);
     }
   }
 };
@@ -1495,10 +1495,8 @@ const buildCzUsFromPayload = async (
     case "detail-unavailable":
       return { type: "detail-unavailable" };
     default: {
-      const exhaustive: never = built;
-      return panic(
-        `Unhandled cz-us build result: ${JSON.stringify(exhaustive)}`,
-      );
+      built satisfies never;
+      return panic(`Unhandled cz-us build result: ${JSON.stringify(built)}`);
     }
   }
 };

@@ -375,8 +375,8 @@ const applyListItemTypeTransition = async ({
     case "none":
       return;
     default: {
-      const exhaustive: never = transition;
-      return exhaustive;
+      transition satisfies never;
+      return panic(`Unhandled transition: ${String(transition)}`);
     }
   }
 };
@@ -453,8 +453,8 @@ const assertWorkflowStatusPolicy = ({
     case WORK_OBLIGATION_TRANSITION_ACTION.REOPEN:
       return;
     default: {
-      const exhaustive: never = action;
-      return exhaustive;
+      action satisfies never;
+      return panic(`Unhandled action: ${String(action)}`);
     }
   }
 };

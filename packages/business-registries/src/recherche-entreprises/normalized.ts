@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import {
   availableField,
   toValidatedRegistryIdentifier,
@@ -30,8 +32,8 @@ const normalizeStatus = (
     case "ceased":
       return { type: "dissolved" };
     default: {
-      const unreachable: never = status;
-      return unreachable;
+      status satisfies never;
+      return panic(`Unhandled status: ${String(status)}`);
     }
   }
 };

@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import type { Transaction } from "@/api/db/root";
 import type {
   AUDIT_ACTIVITY_CATEGORIES,
@@ -129,8 +131,8 @@ const executionColumns = (
       case "system":
         return null;
       default: {
-        const exhaustive: never = trigger;
-        return exhaustive;
+        trigger satisfies never;
+        return panic(`Unhandled trigger: ${String(trigger)}`);
       }
     }
   })();
@@ -149,8 +151,8 @@ const executionColumns = (
       case "direct":
         return trigger.source ?? null;
       default: {
-        const exhaustive: never = trigger;
-        return exhaustive;
+        trigger satisfies never;
+        return panic(`Unhandled trigger: ${String(trigger)}`);
       }
     }
   })();

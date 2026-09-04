@@ -933,7 +933,8 @@ export const resolveChatAssistantTurnOutcome = (
     case "interrupted":
       return outcome;
     default:
-      return outcome satisfies never;
+      outcome satisfies never;
+      return panic(`Unhandled outcome: ${String(outcome)}`);
   }
 };
 
@@ -952,7 +953,8 @@ export const getChatAssistantTurnError = (
     case "legacy-completed":
       return undefined;
     default:
-      return outcome satisfies never;
+      outcome satisfies never;
+      return panic(`Unhandled outcome: ${String(outcome)}`);
   }
 };
 

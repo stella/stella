@@ -461,7 +461,8 @@ const persistedToolResultContentToChatContent = (
     case "text":
       return decoded.value;
     default:
-      return decoded satisfies never;
+      decoded satisfies never;
+      return panic(`Unhandled decoded: ${String(decoded)}`);
   }
 };
 
@@ -676,7 +677,8 @@ const getChatToolCallExtension = (
     case "metadata":
       return "metadata" in part ? part.metadata : undefined;
     default:
-      return property satisfies never;
+      property satisfies never;
+      return panic(`Unhandled property: ${String(property)}`);
   }
 };
 
@@ -719,7 +721,8 @@ const cancelPendingToolCallPart = (
     case "error":
       return part;
     default:
-      return part.state satisfies never;
+      part.state satisfies never;
+      return panic(`Unhandled state: ${String(part.state)}`);
   }
 };
 
@@ -1049,7 +1052,8 @@ const isStructuredOutputPart = (part: Record<string, unknown>): boolean => {
     case "error":
       return typeof part["errorMessage"] === "string";
     default:
-      return status satisfies never;
+      status satisfies never;
+      return panic(`Unhandled status: ${String(status)}`);
   }
 };
 
@@ -1201,8 +1205,8 @@ const normalizeMediaSource = (source: ContentPartSource): ContentPartSource => {
         ...(source.mimeType === undefined ? {} : { mimeType: source.mimeType }),
       };
     default: {
-      const exhaustive: never = source;
-      return exhaustive;
+      source satisfies never;
+      return panic(`Unhandled source: ${String(source)}`);
     }
   }
 };
@@ -1253,8 +1257,8 @@ const normalizeChatPartForPersistence = (part: ChatPart): ChatPart => {
     case "tool-result":
       return part;
     default: {
-      const exhaustive: never = part;
-      return exhaustive;
+      part satisfies never;
+      return panic(`Unhandled part: ${String(part)}`);
     }
   }
 };

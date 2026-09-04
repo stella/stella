@@ -20,7 +20,7 @@
  * allowed to add recall and is never allowed to remove it or to fail a search.
  */
 
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import { zstdDecompressToStringBounded } from "@/api/lib/compression";
 import { detached } from "@/api/lib/detached";
@@ -532,7 +532,8 @@ const corpusTermExpander = async (
       };
     }
     default: {
-      return dictionary satisfies never;
+      dictionary satisfies never;
+      return panic(`Unhandled dictionary: ${String(dictionary)}`);
     }
   }
 };
@@ -840,7 +841,8 @@ export const resolveExpandedCorpusQuery = async ({
       return unexpandedCorpusQuery(baseQuery);
     }
     default: {
-      return mode satisfies never;
+      mode satisfies never;
+      return panic(`Unhandled mode: ${String(mode)}`);
     }
   }
 };

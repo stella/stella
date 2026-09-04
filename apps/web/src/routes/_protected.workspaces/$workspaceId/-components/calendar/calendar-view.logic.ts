@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import type { CalendarTask } from "@/lib/workspaces/queries/calendar-tasks";
 import type { CalendarEntry } from "@/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-day-cell";
 import {
@@ -123,8 +125,8 @@ export const getCalendarQueryRange = (
         toUTCDateKey(input.viewDate),
       );
     default: {
-      const exhaustive: never = input;
-      return exhaustive;
+      input satisfies never;
+      return panic(`Unhandled input: ${String(input)}`);
     }
   }
 };

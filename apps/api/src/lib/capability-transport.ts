@@ -16,6 +16,8 @@
 // No module-level side effects: types plus pure predicates, so the exporter, the
 // handler configs, and the MCP layer can all import it.
 
+import { panic } from "better-result";
+
 /**
  * Where the same work can be done over a transport that is not this one. Stated
  * per file-shaped capability because "not available here" without a next step is
@@ -112,8 +114,8 @@ export const transportFileInput = (
     case "file-both":
       return transport.input;
     default: {
-      const exhaustive: never = transport;
-      return exhaustive;
+      transport satisfies never;
+      return panic(`Unhandled transport: ${String(transport)}`);
     }
   }
 };
@@ -130,8 +132,8 @@ export const transportFileResponse = (
     case "file-both":
       return transport.response;
     default: {
-      const exhaustive: never = transport;
-      return exhaustive;
+      transport satisfies never;
+      return panic(`Unhandled transport: ${String(transport)}`);
     }
   }
 };
@@ -148,8 +150,8 @@ export const transportAlternative = (
     case "file-both":
       return transport.alternative;
     default: {
-      const exhaustive: never = transport;
-      return exhaustive;
+      transport satisfies never;
+      return panic(`Unhandled transport: ${String(transport)}`);
     }
   }
 };
@@ -180,8 +182,8 @@ export const isTransportInvocable = (
     case "file-both":
       return false;
     default: {
-      const exhaustive: never = transport;
-      return exhaustive;
+      transport satisfies never;
+      return panic(`Unhandled transport: ${String(transport)}`);
     }
   }
 };
@@ -217,8 +219,8 @@ export const describeTransportAlternative = (
     case "partial":
       return `${alternative.via.join(" then ")} covers part of this: ${alternative.limitation}`;
     default: {
-      const exhaustive: never = alternative;
-      return exhaustive;
+      alternative satisfies never;
+      return panic(`Unhandled alternative: ${String(alternative)}`);
     }
   }
 };

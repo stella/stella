@@ -9,6 +9,7 @@
 // committed manifest and the result must equal the working tree byte for byte,
 // so no unrelated byte can ride along.
 
+import { panic } from "better-result";
 import path from "node:path";
 
 import { inspectManifestChange } from "./resolution-ranges";
@@ -96,8 +97,8 @@ export const runCheckResolutionsOnlyChange = async (
       );
       return 1;
     default: {
-      const unreachable: never = verdict;
-      return unreachable;
+      verdict satisfies never;
+      return panic(`Unhandled verdict: ${String(verdict)}`);
     }
   }
 };

@@ -13,6 +13,7 @@ import {
   type Scope as OxlintScope,
   type Variable,
 } from "@oxlint/plugins";
+import { panic } from "better-result";
 
 import {
   getImportedName,
@@ -765,8 +766,8 @@ const sqlLexStateAfter = (
         }
         break;
       default: {
-        const exhaustive: never = state;
-        return exhaustive;
+        state satisfies never;
+        return panic(`Unhandled state: ${String(state)}`);
       }
     }
   }
@@ -885,8 +886,8 @@ const sqlStructuralText = (text: string, initialState: SqlLexState): string => {
         }
         break;
       default: {
-        const exhaustive: never = state;
-        return exhaustive;
+        state satisfies never;
+        return panic(`Unhandled state: ${String(state)}`);
       }
     }
   }
@@ -1389,8 +1390,8 @@ const sqlScopeContextAfter = (
         context.clause = "non-filtering";
         break;
       default: {
-        const exhaustive: never = keyword;
-        return exhaustive;
+        keyword satisfies never;
+        return panic(`Unhandled keyword: ${String(keyword)}`);
       }
     }
   }

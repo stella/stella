@@ -412,9 +412,9 @@ const studioFieldToManifestField = (f: StudioField): ManifestField => {
     case "input":
       break;
     default: {
-      const unsupported: never = f.valueSource;
+      f.valueSource satisfies never;
       return panic(
-        `Unsupported template value source: ${JSON.stringify(unsupported)}`,
+        `Unsupported template value source: ${JSON.stringify(f.valueSource)}`,
       );
     }
   }

@@ -1068,8 +1068,8 @@ export const mergeGenerationOptions = ({
         ...openRouterServiceTierOptions(serviceTier),
       };
     default: {
-      const _exhaustive: never = model;
-      return _exhaustive;
+      model satisfies never;
+      return panic(`Unhandled model: ${String(model)}`);
     }
   }
 };

@@ -1123,7 +1123,8 @@ const backfillIncrementalCorpusIndex = async (
       case FENCED_BACKFILL_BATCH_STATUS.COMPLETE:
         return { indexed: 0, status: BACKFILL_STATUS.COMPLETE };
       default:
-        return result satisfies never;
+        result satisfies never;
+        return panic(`Unhandled result: ${String(result)}`);
     }
   } finally {
     await lease.release();
@@ -1998,8 +1999,10 @@ export const createCaseLawGenerationBackfill =
             case null:
               return panic("selected corpus projection has no pending action");
             default: {
-              const unhandled: never = row.generationPendingAction;
-              panic(`Unhandled corpus projection action: ${String(unhandled)}`);
+              row.generationPendingAction satisfies never;
+              panic(
+                `Unhandled corpus projection action: ${String(row.generationPendingAction)}`,
+              );
             }
           }
         }

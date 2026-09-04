@@ -225,6 +225,7 @@ export const buildCorpusProjectionDocuments = (
         revision: options.revision,
       });
     default:
-      return options satisfies never;
+      options satisfies never;
+      return panic(`Unhandled options: ${String(options)}`);
   }
 };

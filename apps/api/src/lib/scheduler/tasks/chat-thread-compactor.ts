@@ -104,8 +104,8 @@ export const compactChatThreads: SchedulerTask = async ({ logger, signal }) => {
         break;
       }
       default: {
-        const exhaustive: never = outcome.value;
-        return exhaustive;
+        outcome.value satisfies never;
+        return panic(`Unhandled value: ${String(outcome.value)}`);
       }
     }
 
@@ -177,8 +177,8 @@ export const settlementForOutcome = (
       return CHAT_COMPACTION_SETTLEMENT.DRAINED;
     }
     default: {
-      const exhaustive: never = outcome;
-      return exhaustive;
+      outcome satisfies never;
+      return panic(`Unhandled outcome: ${String(outcome)}`);
     }
   }
 };

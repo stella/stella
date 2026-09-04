@@ -116,8 +116,8 @@ const matchesRelease = (matcher: ReleaseMatcher, file: string): boolean => {
     case "tree":
       return file.startsWith(matcher.prefix);
     default: {
-      const unreachable: never = matcher;
-      return unreachable;
+      matcher satisfies never;
+      return panic(`Unhandled matcher: ${String(matcher)}`);
     }
   }
 };
@@ -188,8 +188,8 @@ export const report = (verdict: ChangesetVerdict): number => {
       );
       return 1;
     default: {
-      const unreachable: never = verdict;
-      return unreachable;
+      verdict satisfies never;
+      return panic(`Unhandled verdict: ${String(verdict)}`);
     }
   }
 };

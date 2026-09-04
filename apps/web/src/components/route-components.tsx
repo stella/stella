@@ -3,7 +3,7 @@ import { useState, useTransition } from "react";
 import { CancelledError, useQueryClient } from "@tanstack/react-query";
 import { Link, Navigate } from "@tanstack/react-router";
 import type { ErrorComponentProps } from "@tanstack/react-router";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { CopyIcon, MailIcon, RefreshCcwIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -250,8 +250,8 @@ const UnexpectedRouteError = ({
       description = t("routeError.descriptionNone");
       break;
     default: {
-      const exhaustive: never = support;
-      description = exhaustive;
+      support satisfies never;
+      description = panic(`Unhandled support: ${String(support)}`);
     }
   }
 

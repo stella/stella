@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
+import { panic } from "better-result";
 import {
   AlertTriangleIcon,
   ArrowLeftIcon,
@@ -1566,8 +1567,8 @@ const composeSource = (
     default: {
       // A new source kind must be handled explicitly rather than silently
       // persisting as a contact binding.
-      const exhaustive: never = source;
-      return exhaustive;
+      source satisfies never;
+      return panic(`Unhandled source: ${String(source)}`);
     }
   }
 };

@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import { corpusIndexClusterForGeneration } from "@/api/lib/legal-search/corpus-generation-contract";
 import {
@@ -92,7 +94,8 @@ export function corpusIndexReadContract(
         openingPassageQuery: `${manifest.projection.openingField}:true`,
       };
     default:
-      return manifest satisfies never;
+      manifest satisfies never;
+      return panic(`Unhandled manifest: ${String(manifest)}`);
   }
 }
 

@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, isNull } from "drizzle-orm";
 import { t } from "elysia";
 
@@ -144,8 +144,8 @@ export const updateVersionLabelHandler = async function* ({
       return Result.ok({ updated: true });
     }
     default: {
-      const exhaustive: never = outcome;
-      return exhaustive;
+      outcome satisfies never;
+      return panic(`Unhandled outcome: ${String(outcome)}`);
     }
   }
 };

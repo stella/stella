@@ -21,6 +21,8 @@
 // evaluateNumericExpression boundary and converted to undefined (internal
 // control flow, not a surfaced error).
 
+import { panic } from "better-result";
+
 import { resolvePath } from "./path.js";
 
 export const NUMERIC_FUNCTION_NAMES = Object.freeze([
@@ -128,7 +130,8 @@ const callFunction = (name: string, args: readonly number[]): number => {
       return Math.round(value * factor) / factor;
     }
     default:
-      return name satisfies never;
+      name satisfies never;
+      return panic(`Unhandled name: ${String(name)}`);
   }
 };
 

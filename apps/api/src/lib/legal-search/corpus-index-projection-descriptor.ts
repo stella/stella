@@ -180,6 +180,7 @@ export const deriveCorpusIndexProjectionDescriptor = (
         }),
       };
     default:
-      return input satisfies never;
+      input satisfies never;
+      return panic(`Unhandled input: ${String(input)}`);
   }
 };

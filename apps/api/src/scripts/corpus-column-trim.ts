@@ -375,8 +375,8 @@ const rangeFilter = ({ lower, upper }: ColumnTrimRange): SQL | undefined => {
           brandPersistedCaseLawDecisionId(lower.id),
         );
       default: {
-        const unhandled: never = lower;
-        return panic(`Unhandled column trim lower bound: ${String(unhandled)}`);
+        lower satisfies never;
+        return panic(`Unhandled column trim lower bound: ${String(lower)}`);
       }
     }
   })();

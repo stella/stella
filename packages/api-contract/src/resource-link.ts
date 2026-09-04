@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import {
   resourceRef,
   RESOURCE_TYPE,
@@ -175,7 +177,8 @@ export const toChatMentionResourceHref = (
     case RESOURCE_TYPE.WORKSPACE:
       return `${CHAT_RESOURCE_HREF_PREFIX.workspace}${encodeChatResourceId(target.resource.id)}`;
     default:
-      return target satisfies never;
+      target satisfies never;
+      return panic(`Unhandled target: ${String(target)}`);
   }
 };
 
@@ -189,7 +192,8 @@ export const toChatResourceHref = (
     case RESOURCE_TYPE.WORKSPACE:
       return toChatMentionResourceHref(target);
     default:
-      return target satisfies never;
+      target satisfies never;
+      return panic(`Unhandled target: ${String(target)}`);
   }
 };
 

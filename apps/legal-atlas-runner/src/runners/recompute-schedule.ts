@@ -12,6 +12,8 @@
  * exercised on its own.
  */
 
+import { panic } from "better-result";
+
 export const RECOMPUTE_OUTCOME = {
   /** A batch recomputed decisions. */
   ADVANCED: "advanced",
@@ -75,8 +77,8 @@ export const nextRecomputeDelayMs = ({
         idleDelayMs,
       );
     default: {
-      const unreachable: never = outcome;
-      return unreachable;
+      outcome satisfies never;
+      return panic(`Unhandled outcome: ${String(outcome)}`);
     }
   }
 };

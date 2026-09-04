@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 export const UPLOAD_ENTITY_ORIGIN = {
   GENERATED_DOCUMENT: "generated-document",
   USER: "user",
@@ -15,6 +17,7 @@ export const uploadTriggeredFlowPolicy = (
     case UPLOAD_ENTITY_ORIGIN.USER:
       return "start";
     default:
-      return origin satisfies never;
+      origin satisfies never;
+      return panic(`Unhandled origin: ${String(origin)}`);
   }
 };

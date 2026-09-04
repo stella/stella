@@ -13,6 +13,8 @@
  * what it emits. Neither layer is allowed to be the only one.
  */
 
+import { panic } from "better-result";
+
 import { foldToAscii } from "@stll/text-normalize";
 
 import type { MorphologyLanguage } from "@/api/lib/legal-search/morphology/stem";
@@ -136,7 +138,8 @@ export const serializeExpansionDictionaryIdentity = (
       return NO_EXPANSION_DICTIONARY;
     }
     default: {
-      return identity satisfies never;
+      identity satisfies never;
+      return panic(`Unhandled identity: ${String(identity)}`);
     }
   }
 };

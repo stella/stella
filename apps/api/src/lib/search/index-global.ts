@@ -639,8 +639,8 @@ export const searchGlobal = async (
       case "invalid":
         return panic("searchGlobal received an invalid cursor");
       default: {
-        const exhaustive: never = parsedCursor;
-        return exhaustive;
+        parsedCursor satisfies never;
+        return panic(`Unhandled parsed cursor: ${String(parsedCursor)}`);
       }
     }
   })();

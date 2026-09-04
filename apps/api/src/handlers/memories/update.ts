@@ -250,8 +250,8 @@ const updateMemory = createSafeRootHandler(
           }),
         );
       default: {
-        const exhaustive: never = outcome;
-        return exhaustive;
+        outcome satisfies never;
+        return panic(`Unhandled outcome: ${String(outcome)}`);
       }
     }
   },

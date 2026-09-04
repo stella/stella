@@ -766,8 +766,8 @@ const gradeAnswer = (
         : "wrong";
     }
     default: {
-      const exhaustive: never = expected;
-      return panic(`Unhandled expected-answer kind: ${String(exhaustive)}`);
+      expected satisfies never;
+      return panic(`Unhandled expected-answer kind: ${String(expected)}`);
     }
   }
 };
@@ -851,8 +851,8 @@ const summarizeFields = (fields: readonly FieldGrade[]): RunScore => {
         counts.schemaViolations += 1;
         break;
       default: {
-        const exhaustive: never = field.outcome;
-        panic(`Unhandled field outcome: ${String(exhaustive)}`);
+        field.outcome satisfies never;
+        panic(`Unhandled field outcome: ${String(field.outcome)}`);
       }
     }
   }

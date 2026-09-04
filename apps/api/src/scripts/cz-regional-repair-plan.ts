@@ -101,8 +101,8 @@ export const czRegionalListingKeys = (
       case "unidentifiable":
         break;
       default: {
-        const exhaustive: never = identity;
-        panic(`Unhandled listing identity: ${JSON.stringify(exhaustive)}`);
+        identity satisfies never;
+        panic(`Unhandled listing identity: ${JSON.stringify(identity)}`);
       }
     }
   }

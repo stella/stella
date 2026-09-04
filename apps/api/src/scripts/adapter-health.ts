@@ -221,8 +221,8 @@ const remoteTotalOf = (answer: SourceTotalCount): number | null => {
     case "probe-failed":
       return null;
     default: {
-      const exhaustive: never = answer;
-      return panic(`Unhandled source total: ${JSON.stringify(exhaustive)}`);
+      answer satisfies never;
+      return panic(`Unhandled source total: ${JSON.stringify(answer)}`);
     }
   }
 };

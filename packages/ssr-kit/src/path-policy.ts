@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 export type PathRule =
   | { readonly type: "exact"; readonly path: `/${string}` }
   | { readonly type: "subtree"; readonly path: `/${string}` };
@@ -25,8 +27,8 @@ const matchesRule = (pathname: string, rule: PathRule): boolean => {
       );
     }
     default: {
-      const exhaustive: never = rule;
-      return exhaustive;
+      rule satisfies never;
+      return panic(`Unhandled rule: ${String(rule)}`);
     }
   }
 };

@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import type { EntityKind } from "@stll/api-contract";
 
 import type { properties } from "@/api/db/schema";
@@ -27,7 +29,8 @@ export const propertyKindsForTool = (
     case "manual-input":
       return null;
     default:
-      return tool.type satisfies never;
+      tool.type satisfies never;
+      return panic(`Unhandled type: ${String(tool.type)}`);
   }
 };
 

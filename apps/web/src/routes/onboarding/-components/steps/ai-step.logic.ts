@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import type { ProviderRowStatus } from "@/components/ai-config-providers-editor";
 import {
   createDefaultRoleModels,
@@ -59,8 +61,8 @@ export const createProviderPreview = (
         }
         break;
       default: {
-        const unreachable: never = state;
-        return unreachable;
+        state satisfies never;
+        return panic(`Unhandled state: ${String(state)}`);
       }
     }
   }

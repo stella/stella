@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import { caseLawDecisionAnnotations } from "@/api/db/schema";
 import { wholeAnnotationSql } from "@/api/handlers/case-law/annotations/group";
@@ -44,8 +44,8 @@ const changesFor = (
       return { visibility: requireAnnotationVisibility(body.visibility) };
     }
     default: {
-      const unreachable: never = body;
-      return unreachable;
+      body satisfies never;
+      return panic(`Unhandled body: ${String(body)}`);
     }
   }
 };

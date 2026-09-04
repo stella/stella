@@ -10,7 +10,7 @@
  * bytes that leave do not.
  */
 import { PDF } from "@libpdf/core";
-import { TaggedError } from "better-result";
+import { panic, TaggedError } from "better-result";
 
 import {
   AUTHORED_DOCUMENT_PROPERTY_KEYS,
@@ -392,7 +392,8 @@ export const extractDocumentProperties = async ({
       case "pdf":
         return await readPdfProperties(bytes);
       default:
-        return format satisfies never;
+        format satisfies never;
+        return panic(`Unhandled format: ${String(format)}`);
     }
   } catch {
     return { status: "unreadable" };
@@ -1187,7 +1188,8 @@ export const scrubDocumentProperties = async ({
       case "pdf":
         return await scrubPdf(bytes, scrubbedAt);
       default:
-        return format satisfies never;
+        format satisfies never;
+        return panic(`Unhandled format: ${String(format)}`);
     }
   } catch {
     return { status: "unreadable" };

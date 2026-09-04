@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 /**
  * Stable, user-facing classification of AI provider errors.
  *
@@ -400,8 +402,8 @@ export const aiHandlerError = (
     case "unknown":
       return new HandlerError({ ...fallback, cause: error });
     default: {
-      const _exhaustive: never = kind;
-      return _exhaustive;
+      kind satisfies never;
+      return panic(`Unhandled kind: ${String(kind)}`);
     }
   }
 };

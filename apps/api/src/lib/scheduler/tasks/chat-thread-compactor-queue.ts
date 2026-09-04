@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * Claim/settle SQL for the chat-thread compaction queue.
  *
@@ -187,8 +188,8 @@ const scheduledAtForSettlement = (
       ))`;
     }
     default: {
-      const exhaustive: never = settlement;
-      return exhaustive;
+      settlement satisfies never;
+      return panic(`Unhandled settlement: ${String(settlement)}`);
     }
   }
 };

@@ -930,8 +930,8 @@ const buildSkUsFromPayload = async (
       // would make the identity held while its document stayed unread.
       return { type: "detail-unavailable" };
     default: {
-      const exhaustive: never = built;
-      return panic(`Unhandled SK ÚS build result: ${String(exhaustive)}`);
+      built satisfies never;
+      return panic(`Unhandled SK ÚS build result: ${String(built)}`);
     }
   }
 };
@@ -1041,8 +1041,8 @@ export const skUsAdapter = defineSourceAdapter({
                 decisions.push(built.decision);
                 break;
               default: {
-                const exhaustive: never = built;
-                panic(`Unhandled SK ÚS build result: ${String(exhaustive)}`);
+                built satisfies never;
+                panic(`Unhandled SK ÚS build result: ${String(built)}`);
               }
             }
           } catch (error) {

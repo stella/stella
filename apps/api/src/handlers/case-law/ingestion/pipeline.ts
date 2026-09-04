@@ -591,8 +591,8 @@ const planCorpusWrite = (mode: CorpusStorageMode): CorpusWritePlan => {
     case "canonical":
       return { type: "object-storage" };
     default: {
-      const unhandled: never = mode;
-      return panic(`Unhandled corpus storage mode: ${String(unhandled)}`);
+      mode satisfies never;
+      return panic(`Unhandled corpus storage mode: ${String(mode)}`);
     }
   }
 };
@@ -1519,8 +1519,8 @@ const processDecisionAttempt = async ({
           // what preserves them.
           return {};
         default: {
-          const unhandled: never = corpusPlan;
-          return panic(`Unhandled corpus write plan: ${String(unhandled)}`);
+          corpusPlan satisfies never;
+          return panic(`Unhandled corpus write plan: ${String(corpusPlan)}`);
         }
       }
     })();
@@ -2096,7 +2096,8 @@ const processDecisionAttempt = async ({
         searchVectorFailed: false,
       };
     default:
-      return writeStatus satisfies never;
+      writeStatus satisfies never;
+      return panic(`Unhandled write status: ${String(writeStatus)}`);
   }
 
   if (
@@ -2485,12 +2486,14 @@ export const runIngestionPipeline = async ({
                     "Concurrent decision reconciliation; cursor held for retry";
                   break;
                 default:
-                  return outcome.reason satisfies never;
+                  outcome.reason satisfies never;
+                  return panic(`Unhandled reason: ${String(outcome.reason)}`);
               }
               retryableDecision = true;
               break;
             default:
-              return outcome satisfies never;
+              outcome satisfies never;
+              return panic(`Unhandled outcome: ${String(outcome)}`);
           }
           if (retryableDecision) {
             break;

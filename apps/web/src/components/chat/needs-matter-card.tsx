@@ -1,5 +1,6 @@
 import { useDeferredValue, useMemo, useState } from "react";
 
+import { panic } from "better-result";
 import {
   ArrowRightIcon,
   CheckIcon,
@@ -81,7 +82,8 @@ const isCreateDocumentToolFailureState = (
     case "complete":
       return false;
     default:
-      return part.state satisfies never;
+      part.state satisfies never;
+      return panic(`Unhandled state: ${String(part.state)}`);
   }
 };
 

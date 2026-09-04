@@ -11,6 +11,7 @@ import {
   redirect,
   useNavigate,
 } from "@tanstack/react-router";
+import { panic } from "better-result";
 import {
   ActivityIcon,
   BookOpenIcon,
@@ -158,8 +159,8 @@ const wantsStatutes = (
     case "statutes":
       return true;
     default: {
-      const exhaustive: never = scope;
-      return exhaustive;
+      scope satisfies never;
+      return panic(`Unhandled scope: ${String(scope)}`);
     }
   }
 };

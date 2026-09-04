@@ -5,7 +5,7 @@
  * view export: a run holds at most a few dozen findings.
  */
 
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, asc, eq } from "drizzle-orm";
 import { t } from "elysia";
 
@@ -170,7 +170,8 @@ const exportDocumentReviewRun = createSafeHandler(
         });
         break;
       default:
-        return query.format satisfies never;
+        query.format satisfies never;
+        return panic(`Unhandled format: ${String(query.format)}`);
     }
 
     yield* Result.await(

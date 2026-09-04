@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 type ScheduleAfterPaint = () => Promise<void>;
 
 type HydrationBootBase = {
@@ -35,8 +37,8 @@ export const bootHydratedClient = async (
       await (options.scheduleAfterPaint ?? defaultScheduleAfterPaint)();
       return await options.initializeClientState();
     default: {
-      const exhaustive: never = options;
-      return exhaustive;
+      options satisfies never;
+      return panic(`Unhandled options: ${String(options)}`);
     }
   }
 };

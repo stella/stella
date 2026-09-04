@@ -219,8 +219,8 @@ const advanceStreaks = (
       // early left a source with work outstanding.
       return { quietCycles: 0, unproductiveCycles: streaks.unproductiveCycles };
     default: {
-      const unhandled: never = productivity;
-      return panic(`Unhandled cycle productivity: ${String(unhandled)}`);
+      productivity satisfies never;
+      return panic(`Unhandled cycle productivity: ${String(productivity)}`);
     }
   }
 };

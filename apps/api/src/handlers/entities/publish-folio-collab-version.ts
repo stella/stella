@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, asc, eq } from "drizzle-orm";
 import { t } from "elysia";
 
@@ -592,8 +592,8 @@ const publishFolioCollabVersion = createSafeHandler(
         case "workspace-not-active":
           return { status: "unavailable" } as const;
         default: {
-          const exhaustive: never = versionWrite;
-          return exhaustive;
+          versionWrite satisfies never;
+          return panic(`Unhandled version write: ${String(versionWrite)}`);
         }
       }
     });

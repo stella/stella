@@ -4,7 +4,7 @@
 // runtime registry-refresh path (tolerant: `null` falls back to the baked-in
 // tree), so both consume the identical projection of the catalog entries.
 
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { readFile } from "node:fs/promises";
 import * as v from "valibot";
 
@@ -80,8 +80,8 @@ const projectTransport = (
         },
       };
     default: {
-      const exhaustive: never = transport;
-      return exhaustive;
+      transport satisfies never;
+      return panic(`Unhandled transport: ${String(transport)}`);
     }
   }
 };

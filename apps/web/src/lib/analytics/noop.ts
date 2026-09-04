@@ -1,4 +1,5 @@
 import { CancelledError } from "@tanstack/react-query";
+import { panic } from "better-result";
 
 import type { Analytics, ErrorCaptureContext } from "@/lib/analytics/types";
 import { logDevError } from "@/lib/errors/utils";
@@ -21,8 +22,8 @@ const devErrorContext = (
     case "recovery":
       return { error_reference: context.reference };
     default: {
-      const exhaustive: never = context;
-      return exhaustive;
+      context satisfies never;
+      return panic(`Unhandled context: ${String(context)}`);
     }
   }
 };

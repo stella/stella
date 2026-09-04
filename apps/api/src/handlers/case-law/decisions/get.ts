@@ -155,8 +155,8 @@ const encodeCitationStreamCursor = (
     case CITATION_STREAM_CURSOR_STATUS.EXHAUSTED:
       return null;
     default: {
-      const exhaustive: never = cursor;
-      return exhaustive;
+      cursor satisfies never;
+      return panic(`Unhandled cursor: ${String(cursor)}`);
     }
   }
 };

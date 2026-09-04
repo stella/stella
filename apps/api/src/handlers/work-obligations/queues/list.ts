@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, asc, eq, gt, inArray, or, sql } from "drizzle-orm";
 import { t } from "elysia";
 
@@ -133,8 +133,8 @@ const myWork = createSafeRootHandler(
         );
         break;
       default: {
-        const exhaustive: never = queue;
-        return exhaustive;
+        queue satisfies never;
+        return panic(`Unhandled queue: ${String(queue)}`);
       }
     }
 

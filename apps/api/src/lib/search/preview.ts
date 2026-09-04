@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
@@ -504,8 +505,8 @@ export const buildSearchPreviewQuery = ({
         LIMIT 1
       `;
     default: {
-      const exhaustive: never = type;
-      return exhaustive;
+      (type) satisfies never;
+      return panic(`Unhandled type: ${String(type)}`);
     }
   }
 };

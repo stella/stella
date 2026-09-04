@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { Link } from "@tanstack/react-router";
+import { panic } from "better-result";
 import { GitBranchIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -73,8 +74,8 @@ export const ChatForkedFromBanner = ({
       );
     }
     default: {
-      const exhaustive: never = forkProvenance;
-      return exhaustive;
+      forkProvenance satisfies never;
+      return panic(`Unhandled fork provenance: ${String(forkProvenance)}`);
     }
   }
 };

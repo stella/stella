@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { ChevronRightIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -149,7 +149,8 @@ export const DocumentPropertiesSection = ({
           unitDisplay: "long",
         });
       default:
-        return value satisfies never;
+        value satisfies never;
+        return panic(`Unhandled value: ${String(value)}`);
     }
   };
 

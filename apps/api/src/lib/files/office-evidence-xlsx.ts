@@ -1,5 +1,5 @@
 import type { Cell, SharedString, Styles } from "@silurus/ooxml/xlsx";
-import { TaggedError } from "better-result";
+import { panic, TaggedError } from "better-result";
 import * as SSF from "ssf";
 
 class OfficeEvidenceXlsxError extends TaggedError("OfficeEvidenceXlsxError")<{
@@ -87,8 +87,8 @@ const cellValueText = (
     case "text":
       return cell.value.text;
     default: {
-      const exhaustive: never = cell.value;
-      return exhaustive;
+      cell.value satisfies never;
+      return panic(`Unhandled value: ${String(cell.value)}`);
     }
   }
 };

@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import {
   availableField,
   notLoadedField,
@@ -51,8 +53,8 @@ const normalizeStatus = (
     case "unknown":
       return { type: "unknown" };
     default: {
-      const unreachable: never = status;
-      return unreachable;
+      status satisfies never;
+      return panic(`Unhandled status: ${String(status)}`);
     }
   }
 };

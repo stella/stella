@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import type { SafeId } from "@/api/lib/branded-types";
 
 export const EXTRACTABLE_MEMORY_KINDS = [
@@ -80,6 +82,7 @@ export const resolveExtractedMemoryScope = ({
         sourceDataWorkspaceIds: [],
       };
     default:
-      return scope satisfies never;
+      scope satisfies never;
+      return panic(`Unhandled scope: ${String(scope)}`);
   }
 };
