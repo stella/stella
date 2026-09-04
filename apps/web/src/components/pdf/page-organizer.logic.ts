@@ -28,7 +28,7 @@ export type PageOrganizerUI = {
   anchorPageId: string | null;
 };
 
-export type PageOrganizerHistory = {
+type PageOrganizerHistory = {
   initial: PageOrganizerPlan;
   past: readonly PageOrganizerPlan[];
   present: PageOrganizerPlan;
