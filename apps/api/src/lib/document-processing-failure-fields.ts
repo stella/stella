@@ -4,7 +4,7 @@ import {
 } from "@/api/lib/errors/utils";
 
 /**
- * Log fields for a document-processing run that failed for good.
+ * Safe log fields for a failed document-processing attempt.
  *
  * `errorTag` alone names the class, and every extraction failure shares one
  * class, so the tag cannot tell a parser rejection from a timeout, a crash,

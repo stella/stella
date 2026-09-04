@@ -54,15 +54,15 @@ export const settleDocumentProcessingAttemptError = async ({
 }: {
   error: unknown;
   lifecycleSignal: AbortSignal;
-  markFailed: () => Promise<void>;
+  markFailed: () => Promise<"settled" | "unsettled">;
   returnToQueue: () => Promise<void>;
-}): Promise<"failed" | "interrupted"> => {
+}): Promise<"failed" | "interrupted" | "unsettled"> => {
   if (isLifecycleInterruptionError({ error, lifecycleSignal })) {
     await returnToQueue();
     return "interrupted";
   }
-  await markFailed();
-  return "failed";
+  const failureSettlement = await markFailed();
+  return failureSettlement === "settled" ? "failed" : "unsettled";
 };
 
 /**

@@ -1068,20 +1068,22 @@ export const processDocumentProcessingRun = async (
   heartbeat.stop();
 
   if (Result.isError(processingResult)) {
-    await settleDocumentProcessingAttemptError({
+    const settlement = await settleDocumentProcessingAttemptError({
       error: processingResult.error,
       lifecycleSignal,
-      markFailed: async () => {
-        await markRunFailed({
+      markFailed: async () =>
+        markRunFailed({
           claimToken,
           error: processingResult.error,
           run,
-        });
-      },
+        }),
       returnToQueue: async () => {
         await returnInterruptedRunToQueue({ claimToken, run });
       },
     });
+    if (settlement === "unsettled") {
+      throw processingResult.error;
+    }
     // Rethrown so BullMQ records the job as failed. The settle above has
     // already reported this attempt, so it goes back wrapped: the job-level
     // handler reports only what reaches it unsettled.
@@ -1118,7 +1120,7 @@ const markRunFailed = async ({
   claimToken: string;
   error: unknown;
   run: typeof documentProcessingRuns.$inferSelect;
-}): Promise<void> => {
+}): Promise<"settled" | "unsettled"> => {
   const failureCode = errorCode(error);
   const outcome = await rootDb.transaction(
     async (tx): Promise<MarkRunFailedOutcome | null> => {
@@ -1179,7 +1181,7 @@ const markRunFailed = async ({
     },
   );
   if (outcome === null) {
-    return;
+    return "unsettled";
   }
   // One exception per run, at its terminal transition. An attempt whose
   // failure schedules a retry is expected churn of the durable retry model
@@ -1187,12 +1189,12 @@ const markRunFailed = async ({
   // defect up to AUTOMATIC_OCR_MAX_ATTEMPTS times.
   if (outcome.retryScheduled) {
     logger.warn("document_processing.attempt_failed", {
-      "error.type": errorTag(error),
+      ...documentProcessingFailureFields(error),
       attempt: String(outcome.attemptCount),
       errorCode: failureCode,
       runId: run.id,
     });
-    return;
+    return "settled";
   }
   captureError(error, { runId: run.id });
   logger.error("document_processing.run_failed", {
@@ -1200,6 +1202,7 @@ const markRunFailed = async ({
     errorCode: failureCode,
     runId: run.id,
   });
+  return "settled";
 };
 
 const returnInterruptedRunToQueue = async ({

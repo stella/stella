@@ -1018,6 +1018,7 @@ describe("worker interruption lifecycle", () => {
       lifecycleSignal: lifecycle.signal,
       markFailed: async () => {
         calls.push("failed");
+        return "settled";
       },
       returnToQueue: async () => {
         calls.push("queued");
@@ -1036,6 +1037,7 @@ describe("worker interruption lifecycle", () => {
       lifecycleSignal: new AbortController().signal,
       markFailed: async () => {
         calls.push("failed");
+        return "settled";
       },
       returnToQueue: async () => {
         calls.push("queued");
@@ -1056,6 +1058,7 @@ describe("worker interruption lifecycle", () => {
       lifecycleSignal: lifecycle.signal,
       markFailed: async () => {
         calls.push("failed");
+        return "settled";
       },
       returnToQueue: async () => {
         calls.push("queued");
@@ -1076,6 +1079,7 @@ describe("worker interruption lifecycle", () => {
       lifecycleSignal: lifecycle.signal,
       markFailed: async () => {
         calls.push("failed");
+        return "settled";
       },
       returnToQueue: async () => {
         calls.push("queued");
@@ -1086,12 +1090,28 @@ describe("worker interruption lifecycle", () => {
     expect(calls).toEqual(["queued"]);
   });
 
+  test("leaves a lost claim available to the job-level reporter", async () => {
+    const outcome = await settleDocumentProcessingAttemptError({
+      error: new Error("processing failed after claim loss"),
+      lifecycleSignal: new AbortController().signal,
+      markFailed: async () => "unsettled",
+      returnToQueue: async () => undefined,
+    });
+
+    expect(outcome).toBe("unsettled");
+  });
+
   test("threads shutdown cancellation into OCR and still fails BullMQ delivery", () => {
     expect(queueSource).toContain("signal: lifecycleSignal");
     expect(queueSource).toContain(
       "throw new DocumentProcessingRunSettledError",
     );
     expect(queueSource).toContain("cause: processingResult.error");
+    expect(queueSource).toContain('if (settlement === "unsettled")');
+    expect(queueSource).toContain("throw processingResult.error");
+    expect(queueSource).toContain(
+      'logger.warn("document_processing.attempt_failed", {\n      ...documentProcessingFailureFields(error)',
+    );
   });
 
   test("leaves a settled attempt to the run-level path that already reported it", () => {
