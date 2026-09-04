@@ -571,6 +571,30 @@ const installSparqlMock = ({
   return { queries, documentFetches };
 };
 
+/**
+ * Serve one listed variant whose document response carries the given body and
+ * `Content-Type`, so a test can state what the publisher answered with.
+ */
+const installTypedDocumentMock = (body: string, contentType: string): void => {
+  globalThis.fetch = asFetchMock(
+    mock((input: string | URL | Request) => {
+      if (requestUrl(input).includes("sparql")) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ results: { bindings: [enBinding] } }), {
+            status: 200,
+          }),
+        );
+      }
+      return Promise.resolve(
+        new Response(body, {
+          status: 200,
+          headers: { "Content-Type": contentType },
+        }),
+      );
+    }),
+  );
+};
+
 describe("ecjListingIdentity", () => {
   test("keys a variant on its CELEX and the stored language tag", () => {
     expect(
@@ -1002,6 +1026,40 @@ describe("euEcjAdapter.reconciliation.buildDecision", () => {
     expect(accepts).toEqual(["application/xhtml+xml"]);
   });
 
+  test("reads the media type whole, not as a substring of the header", async () => {
+    // A parameter can carry an allowed type into a header that names something
+    // else. This is the exact response the media-type check exists to refuse,
+    // so a substring test would accept the one body it must not.
+    const rdfBody =
+      `<cdm:manifestation_type>xhtml</cdm:manifestation_type>`.repeat(20) +
+      `<cdm:work_date_document>2024-01-18</cdm:work_date_document>`.repeat(20);
+    installTypedDocumentMock(
+      `<?xml version="1.0"?><rdf:RDF>${rdfBody}</rdf:RDF>`,
+      'application/rdf+xml; profile="text/html"',
+    );
+
+    expect(
+      await reconciliation.buildDecision({
+        celex: "62021CJ0128",
+        language: "EN",
+      }),
+    ).toEqual({ type: "detail-unavailable" });
+  });
+
+  test("accepts the media type in any case the publisher spells it", async () => {
+    // The grammar is case-insensitive, so a variant spelling is the same type.
+    // Rejecting it would park and eventually retire a document Cellar serves,
+    // which is the failure this whole change removes.
+    installTypedDocumentMock(shortDocumentHtml, "Application/XHTML+XML");
+
+    const outcome = await reconciliation.buildDecision({
+      celex: "62021CJ0128",
+      language: "EN",
+    });
+
+    expect(outcome.type).toBe("built");
+  });
+
   test("does not read the manifestation's RDF description as the decision", async () => {
     // Unnegotiated, the manifestation URL answers its own RDF description.
     // It is far longer than the minimum document length, so size alone would
@@ -1013,27 +1071,7 @@ describe("euEcjAdapter.reconciliation.buildDecision", () => {
       `<cdm:manifestation_type>xhtml</cdm:manifestation_type>`.repeat(20) +
       `<cdm:work_date_document>2024-01-18</cdm:work_date_document>`.repeat(20);
     const rdf = `<?xml version="1.0"?><rdf:RDF>${rdfBody}</rdf:RDF>`;
-    globalThis.fetch = asFetchMock(
-      mock((input: string | URL | Request) => {
-        const url = requestUrl(input);
-        if (url.includes("sparql")) {
-          return Promise.resolve(
-            new Response(
-              JSON.stringify({ results: { bindings: [enBinding] } }),
-              {
-                status: 200,
-              },
-            ),
-          );
-        }
-        return Promise.resolve(
-          new Response(rdf, {
-            status: 200,
-            headers: { "Content-Type": "application/rdf+xml;charset=UTF-8" },
-          }),
-        );
-      }),
-    );
+    installTypedDocumentMock(rdf, "application/rdf+xml;charset=UTF-8");
 
     expect(rdf.length).toBeGreaterThan(100);
     expect(

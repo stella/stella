@@ -550,6 +550,21 @@ const MIN_DOCUMENT_LENGTH = 100;
 const XHTML_MEDIA_TYPE = "application/xhtml+xml";
 const DOCUMENT_MEDIA_TYPES = [XHTML_MEDIA_TYPE, "text/html"] as const;
 
+/**
+ * The media type a `Content-Type` names, without its parameters.
+ *
+ * Compared whole and case-insensitively rather than searched for. A parameter
+ * can carry an allowed type into a header that names something else
+ * (`application/rdf+xml; profile="text/html"`), which is the one response this
+ * check exists to refuse; and the grammar lets a publisher spell the type
+ * `Application/XHTML+XML`, which a substring test would reject and this
+ * adapter would then retire as unavailable. `pl-courts.ts` keys its listing
+ * answers by the same rule; worth extracting to the shared adapter utils once
+ * a third caller needs it.
+ */
+const mediaTypeOf = (contentType: string): string =>
+  (contentType.split(";").at(0) ?? "").trim().toLowerCase();
+
 const fetchManifestation = async ({
   contentUrl,
   celex,
@@ -581,8 +596,8 @@ const fetchManifestation = async ({
       return undefined;
     }
 
-    const mediaType = response.headers.get("content-type") ?? "";
-    if (!DOCUMENT_MEDIA_TYPES.some((type) => mediaType.includes(type))) {
+    const mediaType = mediaTypeOf(response.headers.get("content-type") ?? "");
+    if (!DOCUMENT_MEDIA_TYPES.some((type) => type === mediaType)) {
       logger.warn("case_law.ingestion.manifestation_not_a_document", {
         adapterKey: ADAPTER_KEYS.EU_ECJ,
         celex,
