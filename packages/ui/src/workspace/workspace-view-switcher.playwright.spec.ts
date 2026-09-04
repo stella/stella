@@ -102,13 +102,16 @@ for (const theme of ["light", "dark"]) {
       .poll(async () =>
         scrollbars.evaluateAll((elements) =>
           elements.map((element) => {
+            if (!(element instanceof HTMLElement)) {
+              throw new Error("Expected an HTML scroll container");
+            }
             const style = getComputedStyle(element);
             const track = getComputedStyle(
               element,
               "::-webkit-scrollbar-track",
             );
             return {
-              slot: element.getAttribute("data-slot"),
+              slot: element.dataset["slot"],
               overflowing: element.scrollHeight > element.clientHeight,
               track: track.backgroundColor,
               width: style.scrollbarWidth,
