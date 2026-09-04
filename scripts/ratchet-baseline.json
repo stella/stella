@@ -88,7 +88,7 @@
     "files": {}
   },
   "throw-outside-boundary": {
-    "count": 881,
+    "count": 878,
     "files": {
       "apps/api/src/handlers/case-law/corpus-index.ts": 12,
       "apps/api/src/handlers/case-law/decisions/latest.ts": 3,
@@ -206,7 +206,6 @@
       "apps/api/src/lib/entities/create-from-buffer.ts": 2,
       "apps/api/src/lib/entities/list-cursor.ts": 5,
       "apps/api/src/lib/entity-versions/create-entity-version-from-buffer.ts": 1,
-      "apps/api/src/lib/errors/tagged-errors.ts": 1,
       "apps/api/src/lib/files/document-properties.ts": 3,
       "apps/api/src/lib/files/email-attachment-token.ts": 1,
       "apps/api/src/lib/files/gotenberg.ts": 1,
@@ -215,7 +214,6 @@
       "apps/api/src/lib/flows/flow-executor.ts": 5,
       "apps/api/src/lib/folio-collab-rooms.ts": 2,
       "apps/api/src/lib/health/probe-document-converter.ts": 1,
-      "apps/api/src/lib/health/readiness.ts": 2,
       "apps/api/src/lib/hosted-usage-provider/client.ts": 6,
       "apps/api/src/lib/legal-search/case-law-corpus-upload-intents.ts": 5,
       "apps/api/src/lib/legal-search/case-law-source-ingestion-lease.ts": 1,
@@ -312,7 +310,7 @@
     }
   },
   "try-catch-outside-boundary": {
-    "count": 334,
+    "count": 329,
     "files": {
       "apps/api/src/handlers/ai-autocomplete/stream.ts": 1,
       "apps/api/src/handlers/api-keys/mint.ts": 1,
@@ -367,7 +365,6 @@
       "apps/api/src/handlers/skills/import-urls.logic.ts": 1,
       "apps/api/src/lib/ai-config-loader-core.ts": 1,
       "apps/api/src/lib/ai-provider-probe.ts": 1,
-      "apps/api/src/lib/analytics/tanstack-ai.ts": 4,
       "apps/api/src/lib/auth.ts": 2,
       "apps/api/src/lib/bilingual/formatting.ts": 1,
       "apps/api/src/lib/business-registries/dispatch.ts": 1,
@@ -477,7 +474,6 @@
       "packages/scripts/src/glossary-gen.ts": 1,
       "packages/scripts/src/i18n-check.ts": 1,
       "packages/scripts/src/i18n-lint.ts": 3,
-      "packages/scripts/src/model-catalog-upstream.ts": 1,
       "packages/scripts/src/workspace-app-boundaries.ts": 9,
       "packages/scripts/src/workspace-hygiene.ts": 4,
       "packages/skills/src/loader.ts": 1,
