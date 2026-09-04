@@ -29,6 +29,9 @@ const isGeneratedSource = (file: string): boolean =>
 export const isExcludedSource = (file: string): boolean =>
   isGeneratedSource(file) ||
   /\.test\./u.test(file) ||
+  // `*.type-test.ts` asserts on types at compile time. It is a test the type
+  // checker runs, and the hyphen keeps it out of the `.test.` pattern above.
+  /\.type-test\./u.test(file) ||
   /\.spec\./u.test(file) ||
   file.includes("/tests/") ||
   file.includes("/__tests__/");

@@ -78,6 +78,15 @@ test("scaffolds the package files and registers the knip workspace", () => {
     private: true,
     description: "matter date arithmetic shared by the API and the web client",
     exports: { ".": "./src/index.ts" },
+    scripts: {
+      test: "bun test src",
+      typecheck: "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
+      format: "bun ../../scripts/run-oxfmt.ts .",
+    },
+    devDependencies: {
+      "@stll/typescript-config": "workspace:*",
+      "bun-types": "catalog:",
+    },
   });
 
   expect(read(root, "packages/matter-dates/src/index.ts")).toContain(

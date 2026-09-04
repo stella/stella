@@ -106,6 +106,7 @@ const packageJsonTemplate = ({
       exports: { ".": "./src/index.ts" },
       scripts: {
         clean: "git clean -xdf .cache .turbo node_modules",
+        test: "bun test src",
         typecheck: "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
         lint: `cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware packages/${name}`,
         "lint:fix": `cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/${name}`,
@@ -185,9 +186,8 @@ const insertKnipWorkspace = (source: string, name: string): string => {
   const lines = source.split("\n");
 
   const packageStarts = lines.flatMap((line, index) => {
-    const match = WORKSPACE_KEY.exec(line);
-    const existing = match?.groups?.key;
-    return existing !== undefined && existing.startsWith(PACKAGE_PREFIX)
+    const existing = WORKSPACE_KEY.exec(line)?.groups?.["key"] ?? "";
+    return existing.startsWith(PACKAGE_PREFIX)
       ? [{ index, key: existing }]
       : [];
   });

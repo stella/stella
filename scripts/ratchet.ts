@@ -1466,7 +1466,7 @@ const countCrossWorkspaceDuplicateExportNames: RepoCounter = (root) => {
     }
     const content = readFileSync(path.join(root, rel), "utf-8");
     for (const match of content.matchAll(TOP_LEVEL_EXPORTED_BINDING)) {
-      const name = match.groups?.name ?? "";
+      const name = match.groups?.["name"] ?? "";
       if (name.length < MIN_DUPLICATE_EXPORT_NAME_LENGTH) {
         continue;
       }
@@ -2963,8 +2963,8 @@ const EXPECTED_CROSS_APP_LIB_PATH_COPIES = 2;
 const EXPECTED_CROSS_WORKSPACE_DUPLICATE_EXPORT_NAMES = 3;
 // apps/api/src/lib children: api-handlers.ts, result-catches.ts,
 // result-throws.ts, shared/ (from the earlier fixtures), plus alpha/, copied/,
-// api-only-helper.ts and shared-names.ts. The two `.test.ts` files and
-// __fixtures__/ are excluded.
+// api-only-helper.ts and shared-names.ts. The two `.test.ts` files, the
+// `.type-test.ts` file and __fixtures__/ are excluded.
 const EXPECTED_API_LIB_TOP_LEVEL_ENTRIES = 8;
 // apps/web/src/lib children: index.tsx (from the earlier fixtures), plus
 // beta/, copied/, mirrored-names.ts and second-definition.ts. The `.test.ts`
@@ -3059,6 +3059,89 @@ const resultConventionSelfTestFailures = (snapshot: Baseline): string[] => {
     if ("apps/api/src/lib/api-handlers.ts" in metric.files) {
       failures.push(`${id} did not exclude a RESULT_BOUNDARY_GLOBS file`);
     }
+  }
+  return failures;
+};
+
+// The repo-scope metrics assert on a layout rather than one file's text, so
+// each check names the count it expects plus the files that must and must not
+// appear in its per-file breakdown.
+const repoScopeSelfTestFailures = (snapshot: Baseline): string[] => {
+  const failures: string[] = [];
+  const repoScopeChecks = [
+    {
+      id: "cross-app-lib-path-copies",
+      expected: EXPECTED_CROSS_APP_LIB_PATH_COPIES,
+      present: [
+        "apps/api/src/lib/copied/duplicated-helper.ts",
+        "apps/web/src/lib/copied/duplicated-helper.ts",
+      ],
+      absent: [
+        "apps/api/src/lib/alpha/types.ts",
+        "apps/web/src/lib/beta/types.ts",
+        "apps/api/src/lib/api-only-helper.ts",
+        "apps/web/src/lib/duplicated-helper.test.ts",
+      ],
+    },
+    {
+      id: "cross-workspace-duplicate-export-names",
+      expected: EXPECTED_CROSS_WORKSPACE_DUPLICATE_EXPORT_NAMES,
+      // apps/api owns both names, so the extras land on the other two
+      // workspaces: two on apps/web's first defining file, one on the
+      // package.
+      present: [
+        "apps/web/src/lib/mirrored-names.ts",
+        "packages/example-package/src/index.ts",
+      ],
+      absent: [
+        "apps/api/src/lib/shared-names.ts",
+        "apps/web/src/lib/second-definition.ts",
+        "packages/generated-package/src/generated/transport.ts",
+      ],
+    },
+    {
+      id: "api-lib-top-level-entries",
+      expected: EXPECTED_API_LIB_TOP_LEVEL_ENTRIES,
+      present: ["apps/api/src/lib/copied", "apps/api/src/lib/shared-names.ts"],
+      absent: [
+        "apps/api/src/lib/lib-entry.test.ts",
+        "apps/api/src/lib/lib-entry.type-test.ts",
+        "apps/api/src/lib/__fixtures__",
+      ],
+    },
+    {
+      id: "web-lib-top-level-entries",
+      expected: EXPECTED_WEB_LIB_TOP_LEVEL_ENTRIES,
+      present: ["apps/web/src/lib/mirrored-names.ts"],
+      absent: ["apps/web/src/lib/duplicated-helper.test.ts"],
+    },
+  ] as const;
+  for (const { id, expected, present, absent } of repoScopeChecks) {
+    const metric = requireSnapshot(snapshot, id);
+    if (metric.count !== expected) {
+      failures.push(
+        `${id} counted ${metric.count}, expected ${expected} (files: ${Object.keys(metric.files).join(", ")})`,
+      );
+    }
+    for (const file of present) {
+      if (!(file in metric.files)) {
+        failures.push(`${id} did not count ${file}`);
+      }
+    }
+    for (const file of absent) {
+      if (file in metric.files) {
+        failures.push(`${id} counted ${file}, which it must exclude`);
+      }
+    }
+  }
+  const duplicateNames = requireSnapshot(
+    snapshot,
+    "cross-workspace-duplicate-export-names",
+  );
+  if (duplicateNames.files["apps/web/src/lib/mirrored-names.ts"] !== 2) {
+    failures.push(
+      "cross-workspace-duplicate-export-names did not charge both duplicated names to the web file that defines them",
+    );
   }
   return failures;
 };
@@ -3372,10 +3455,16 @@ const runSelfTest = (): number => {
       "packages/generated-package/src/generated/transport.ts",
       SELF_TEST_PACKAGE_SHARED_NAMES,
     );
-    // Excluded lib-bucket children: a test file and the fixtures directory.
+    // Excluded lib-bucket children: a test file, a compile-time type test, and
+    // the fixtures directory.
     writeFixture(
       root,
       "apps/api/src/lib/lib-entry.test.ts",
+      SELF_TEST_COPIED_HELPER,
+    );
+    writeFixture(
+      root,
+      "apps/api/src/lib/lib-entry.type-test.ts",
       SELF_TEST_COPIED_HELPER,
     );
     writeFixture(
@@ -3719,83 +3808,7 @@ const runSelfTest = (): number => {
       );
     }
 
-    const repoScopeChecks = [
-      {
-        id: "cross-app-lib-path-copies",
-        expected: EXPECTED_CROSS_APP_LIB_PATH_COPIES,
-        present: [
-          "apps/api/src/lib/copied/duplicated-helper.ts",
-          "apps/web/src/lib/copied/duplicated-helper.ts",
-        ],
-        absent: [
-          "apps/api/src/lib/alpha/types.ts",
-          "apps/web/src/lib/beta/types.ts",
-          "apps/api/src/lib/api-only-helper.ts",
-          "apps/web/src/lib/duplicated-helper.test.ts",
-        ],
-      },
-      {
-        id: "cross-workspace-duplicate-export-names",
-        expected: EXPECTED_CROSS_WORKSPACE_DUPLICATE_EXPORT_NAMES,
-        // apps/api owns both names, so the extras land on the other two
-        // workspaces: two on apps/web's first defining file, one on the
-        // package.
-        present: [
-          "apps/web/src/lib/mirrored-names.ts",
-          "packages/example-package/src/index.ts",
-        ],
-        absent: [
-          "apps/api/src/lib/shared-names.ts",
-          "apps/web/src/lib/second-definition.ts",
-          "packages/generated-package/src/generated/transport.ts",
-        ],
-      },
-      {
-        id: "api-lib-top-level-entries",
-        expected: EXPECTED_API_LIB_TOP_LEVEL_ENTRIES,
-        present: [
-          "apps/api/src/lib/copied",
-          "apps/api/src/lib/shared-names.ts",
-        ],
-        absent: [
-          "apps/api/src/lib/lib-entry.test.ts",
-          "apps/api/src/lib/__fixtures__",
-        ],
-      },
-      {
-        id: "web-lib-top-level-entries",
-        expected: EXPECTED_WEB_LIB_TOP_LEVEL_ENTRIES,
-        present: ["apps/web/src/lib/mirrored-names.ts"],
-        absent: ["apps/web/src/lib/duplicated-helper.test.ts"],
-      },
-    ] as const;
-    for (const { id, expected, present, absent } of repoScopeChecks) {
-      const metric = requireSnapshot(snapshot, id);
-      if (metric.count !== expected) {
-        failures.push(
-          `${id} counted ${metric.count}, expected ${expected} (files: ${Object.keys(metric.files).join(", ")})`,
-        );
-      }
-      for (const file of present) {
-        if (!(file in metric.files)) {
-          failures.push(`${id} did not count ${file}`);
-        }
-      }
-      for (const file of absent) {
-        if (file in metric.files) {
-          failures.push(`${id} counted ${file}, which it must exclude`);
-        }
-      }
-    }
-    const duplicateNames = requireSnapshot(
-      snapshot,
-      "cross-workspace-duplicate-export-names",
-    );
-    if (duplicateNames.files["apps/web/src/lib/mirrored-names.ts"] !== 2) {
-      failures.push(
-        "cross-workspace-duplicate-export-names did not charge both duplicated names to the web file that defines them",
-      );
-    }
+    failures.push(...repoScopeSelfTestFailures(snapshot));
 
     failures.push(...resultConventionSelfTestFailures(snapshot));
 

@@ -1423,7 +1423,7 @@
     }
   },
   "web-lib-top-level-entries": {
-    "count": 144,
+    "count": 143,
     "files": {
       "apps/web/src/lib/account": 1,
       "apps/web/src/lib/analytics": 1,
@@ -1503,7 +1503,6 @@
       "apps/web/src/lib/mcp-oauth-channel.ts": 1,
       "apps/web/src/lib/memory-api.ts": 1,
       "apps/web/src/lib/mutation-command.ts": 1,
-      "apps/web/src/lib/mutation-command.type-test.ts": 1,
       "apps/web/src/lib/notification-queries.ts": 1,
       "apps/web/src/lib/oauth-provider.ts": 1,
       "apps/web/src/lib/oauth-scopes.ts": 1,
