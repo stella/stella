@@ -40,8 +40,8 @@ const scrollTo = async (board: Locator, top: number) => {
 
 /**
  * One lane's own pinned controls. The board renders a lane per section, and a
- * lane carries a pinned action per open column and a caption per folded band,
- * so each control is read inside the lane it belongs to.
+ * lane carries its own row, a pinned action per open column, and a caption per
+ * folded band, so each control is read inside the lane it belongs to.
  */
 const laneControls = (page: Page, lane: number) => {
   const section = page.locator("section").nth(lane);
@@ -52,6 +52,7 @@ const laneControls = (page: Page, lane: number) => {
     action: actions.first(),
     caption: section.locator("[data-kanban-collapsed-band-caption]").first(),
     plainAction: actions.nth(1),
+    row: section.locator("[data-kanban-lane-row]"),
   };
 };
 
@@ -66,35 +67,40 @@ const expectOpaque = async (control: Locator) => {
   expect(background).not.toContain("/");
 };
 
-/** Resting on the header: the control's top edge is the header's bottom. */
-const expectRestingOnHeader = async (
-  control: Locator,
-  headerBottom: number,
-) => {
-  expect(Math.abs((await topOf(control)) - headerBottom)).toBeLessThanOrEqual(
+/** Resting on what is pinned above: the control's top edge is that bottom. */
+const expectRestingUnder = async (control: Locator, pinnedBottom: number) => {
+  expect(Math.abs((await topOf(control)) - pinnedBottom)).toBeLessThanOrEqual(
     TOLERANCE_PX,
   );
 };
 
 test.describe("sticky lane controls", () => {
-  test("holds a lane's action and folded caption under the board header", async ({
+  test("holds a lane's row on the header and its controls under that row", async ({
     page,
   }) => {
     const board = await openFixture(page);
     const header = page.locator("[data-kanban-board-header]");
-    const { action, caption, plainAction } = laneControls(page, 0);
+    const { action, caption, plainAction, row } = laneControls(page, 0);
 
-    // Unscrolled, both sit where the lane starts: below the header, not on it.
+    // Unscrolled, all of them sit where the lane starts: below the header,
+    // not on it.
+    expect(await topOf(row)).toBeGreaterThan(await bottomOf(header));
     expect(await topOf(action)).toBeGreaterThan(await bottomOf(header));
     expect(await topOf(caption)).toBeGreaterThan(await bottomOf(header));
 
     await scrollTo(board, 600);
 
-    const headerBottom = await bottomOf(header);
-    await expectRestingOnHeader(action, headerBottom);
-    await expectRestingOnHeader(caption, headerBottom);
-    await expectRestingOnHeader(plainAction, headerBottom);
-    // Both the accented cell and the one on the neutral resting surface.
+    // The lane's own row is what comes to rest on the board's header...
+    await expectRestingUnder(row, await bottomOf(header));
+    // ...and everything the lane pins comes to rest under that row, rather
+    // than behind it.
+    const rowBottom = await bottomOf(row);
+    await expectRestingUnder(action, rowBottom);
+    await expectRestingUnder(caption, rowBottom);
+    await expectRestingUnder(plainAction, rowBottom);
+    // The lane row and both cells: the accented one and the one on the
+    // neutral resting surface.
+    await expectOpaque(row);
     await expectOpaque(action);
     await expectOpaque(plainAction);
     // Over that base, the row repaints the cell's own accent wash.
@@ -103,6 +109,21 @@ test.describe("sticky lane controls", () => {
         .locator("> div")
         .evaluate((element) => getComputedStyle(element).backgroundColor),
     ).not.toBe("rgba(0, 0, 0, 0)");
+  });
+
+  test("keeps a lane's per-column summaries in its row while the lane is open", async ({
+    page,
+  }) => {
+    const board = await openFixture(page);
+    const { row } = laneControls(page, 0);
+    // The fixture keeps every lane open; the summaries used to appear only
+    // once a lane was collapsed, which is exactly when nobody needs them.
+    const summaries = row.locator("[data-kanban-lane-column-count]");
+
+    await scrollTo(board, 600);
+
+    expect(await summaries.count()).toBeGreaterThan(0);
+    await expect(summaries.first()).toBeVisible();
   });
 
   test("releases them where the lane ends and hands over to the next", async ({
@@ -120,11 +141,15 @@ test.describe("sticky lane controls", () => {
 
     const headerBottom = await bottomOf(header);
 
-    // The lane that ended took its controls with it...
+    // The lane that ended took its row and its controls with it...
+    expect(await topOf(scrolled.row)).toBeLessThan(headerBottom);
     expect(await topOf(scrolled.action)).toBeLessThan(headerBottom);
     expect(await topOf(scrolled.caption)).toBeLessThan(headerBottom);
     // ...and the lane now under the header holds its own.
-    await expectRestingOnHeader(next.action, headerBottom);
-    await expectRestingOnHeader(next.caption, headerBottom);
+    await expectRestingUnder(next.row, headerBottom);
+
+    const nextRowBottom = await bottomOf(next.row);
+    await expectRestingUnder(next.action, nextRowBottom);
+    await expectRestingUnder(next.caption, nextRowBottom);
   });
 });

@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "bun:test";
 
 import { KanbanCellAction } from "./cell-action";
+import { KANBAN_CHROME_ROW_HEIGHT } from "./layout-tokens";
 
 // Static markup carries no layout; these tests pin the structure and the
 // utilities that give every cell the same ending row.
@@ -20,15 +21,23 @@ const readButton = (markup: string) => {
 };
 
 describe("KanbanCellAction", () => {
-  test("renders one full-width ghost row on the card rhythm", () => {
+  test("renders one full-width row outlined as the card it adds", () => {
     const markup = renderToStaticMarkup(
       <KanbanCellAction>New card</KanbanCellAction>,
     );
     const classes = /class="([^"]*)"/u.exec(readButton(markup))?.[1] ?? "";
 
     expect(classes.split(" ")).toEqual(
-      expect.arrayContaining(["min-h-11", "w-full", "justify-start"]),
+      expect.arrayContaining([
+        KANBAN_CHROME_ROW_HEIGHT,
+        "border-dashed",
+        "w-full",
+        "justify-start",
+      ]),
     );
+    // The button's own size drops a step at `sm`, which would take the row
+    // off the board's chrome rhythm on every desktop width.
+    expect(classes.split(" ")).toContain(`sm:${KANBAN_CHROME_ROW_HEIGHT}`);
     expect(markup.indexOf("<svg")).toBeLessThan(markup.indexOf("New card"));
   });
 

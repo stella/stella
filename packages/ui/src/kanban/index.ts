@@ -31,6 +31,12 @@ export {
 } from "./column-bands";
 export type { KanbanColumnHeaderProps } from "./column-header";
 export { KanbanColumnHeader } from "./column-header";
+export {
+  KANBAN_BAND_CAPTION_ROW_HEIGHT,
+  KANBAN_BAND_CAPTION_ROW_HEIGHT_PX,
+  KANBAN_CHROME_ROW_HEIGHT,
+  KANBAN_CHROME_ROW_HEIGHT_PX,
+} from "./layout-tokens";
 export type {
   KanbanCardDragSurfaceProps,
   KanbanDragHandleProps,
@@ -128,6 +134,8 @@ export type {
   KanbanSubgroupCellContext,
   KanbanSubgroupCollapsedBandCellContext,
   KanbanSubgroupColumnHeaderContext,
+  KanbanSubgroupLaneColumnActionContext,
+  KanbanSubgroupLaneColumnSummaryContext,
   KanbanSubgroupLaneIdentityContext,
 } from "./subgroup-board";
 export {

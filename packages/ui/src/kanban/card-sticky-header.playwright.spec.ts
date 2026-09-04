@@ -102,6 +102,19 @@ test.describe("card sticky header", () => {
     await scrollTo(board, 300);
     await expectRestingOnAction(first, await bottomOf(action));
 
+    // Everything pinned above the card, in order: the board's header, then
+    // the lane's own row, then the cell's action, then this row. A card that
+    // counted only the action would park its row behind the lane row.
+    const header = page.locator("[data-kanban-board-header]");
+    const laneRow = page.locator("[data-kanban-lane-row]").first();
+
+    expect(
+      Math.abs((await topOf(laneRow)) - (await bottomOf(header))),
+    ).toBeLessThanOrEqual(TOLERANCE_PX);
+    expect(
+      Math.abs((await topOf(action)) - (await bottomOf(laneRow))),
+    ).toBeLessThanOrEqual(TOLERANCE_PX);
+
     // The card passes behind the row rather than reading through it.
     const background = await first.evaluate(
       (element) => getComputedStyle(element).backgroundColor,
