@@ -28,10 +28,10 @@ import {
   DESKTOP_TELEMETRY_WINDOWS,
   reportDesktopError,
 } from "../telemetry/desktop-telemetry";
-import { ClipboardImagePreview } from "./ClipboardImagePreview";
 import { CLIPBOARD_GROUP_ACCENTS } from "./clipboard-style";
 import { isClipboardEditorContext } from "./clipboard-types";
 import type { ClipboardEditorContext } from "./clipboard-types";
+import { ClipboardImagePreview } from "./ClipboardImagePreview";
 
 type SaveState =
   | { type: "idle" }

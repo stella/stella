@@ -101,9 +101,7 @@ describe("clipboard image items", () => {
   });
 
   test("requires the editor source visual field", () => {
-    expect(
-      isClipboardEditorContext({ groups: [], item: image }),
-    ).toBe(false);
+    expect(isClipboardEditorContext({ groups: [], item: image })).toBe(false);
     expect(
       isClipboardEditorContext({
         groups: [],
@@ -122,8 +120,8 @@ describe("clipboard image preview data URLs", () => {
     expect(isClipboardImagePreviewDataUrl("data:image/jpeg;base64,AA==")).toBe(
       false,
     );
-    expect(isClipboardImagePreviewDataUrl("data:image/png;base64,not valid")).toBe(
-      false,
-    );
+    expect(
+      isClipboardImagePreviewDataUrl("data:image/png;base64,not valid"),
+    ).toBe(false);
   });
 });

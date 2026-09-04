@@ -98,7 +98,10 @@ export const ClipboardImagePreview = ({
   return (
     <img
       alt={alt}
-      className={cn("size-full object-contain outline outline-black/6", className)}
+      className={cn(
+        "size-full object-contain outline outline-black/6",
+        className,
+      )}
       draggable={false}
       src={previewDataUrl}
     />
