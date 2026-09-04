@@ -534,7 +534,10 @@ const ClipboardCard = ({
           <Button
             aria-label={t("retryImagePreview")}
             className="size-11 shrink-0 rounded-full"
-            onClick={() => setImagePreviewRetryToken((token) => token + 1)}
+            onClick={() => {
+              setImagePreviewStatus("loading");
+              setImagePreviewRetryToken((token) => token + 1);
+            }}
             size="icon"
             title={t("retryImagePreview")}
             type="button"

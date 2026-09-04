@@ -49,9 +49,9 @@ type ClipboardImagePreviewProps = {
 export type ClipboardImagePreviewStatus = "error" | "loading" | "ready";
 
 type ClipboardImagePreviewState =
-  | { id: string; type: "error" }
-  | { id: string; type: "loading" }
-  | { dataUrl: string; id: string; type: "ready" };
+  | { requestKey: string; type: "error" }
+  | { requestKey: string; type: "loading" }
+  | { dataUrl: string; requestKey: string; type: "ready" };
 
 export const ClipboardImagePreview = ({
   alt,
@@ -64,15 +64,14 @@ export const ClipboardImagePreview = ({
 }: ClipboardImagePreviewProps) => {
   const t = useTranslations("clipboard");
   const [localRetryToken, setLocalRetryToken] = useState(0);
+  const requestKey = `${id}:${localRetryToken}:${retryToken}`;
   const [preview, setPreview] = useState<ClipboardImagePreviewState>({
-    id,
+    requestKey,
     type: "loading",
   });
 
   useEffect(() => {
     let disposed = false;
-    setPreview({ id, type: "loading" });
-    onStatusChange?.("loading");
     void invoke<unknown>("clipboard_get_image_preview", { id })
       .then((value) => {
         if (!isClipboardImagePreviewDataUrl(value)) {
@@ -81,13 +80,13 @@ export const ClipboardImagePreview = ({
             ...PREVIEW_TELEMETRY[surface],
           });
           if (!disposed) {
-            setPreview({ id, type: "error" });
+            setPreview({ requestKey, type: "error" });
             onStatusChange?.("error");
           }
           return undefined;
         }
         if (!disposed) {
-          setPreview({ dataUrl: value, id, type: "ready" });
+          setPreview({ dataUrl: value, requestKey, type: "ready" });
           onStatusChange?.("ready");
         }
         return undefined;
@@ -98,19 +97,20 @@ export const ClipboardImagePreview = ({
           ...PREVIEW_TELEMETRY[surface],
         });
         if (!disposed) {
-          setPreview({ id, type: "error" });
+          setPreview({ requestKey, type: "error" });
           onStatusChange?.("error");
         }
       });
     return () => {
       disposed = true;
     };
-  }, [id, localRetryToken, onStatusChange, retryToken, surface]);
+  }, [id, onStatusChange, requestKey, surface]);
   const loadingPreview = {
-    id,
+    requestKey,
     type: "loading",
   } as const satisfies ClipboardImagePreviewState;
-  const currentPreview = preview.id === id ? preview : loadingPreview;
+  const currentPreview =
+    preview.requestKey === requestKey ? preview : loadingPreview;
 
   if (currentPreview.type === "error") {
     return (
