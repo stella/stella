@@ -1939,7 +1939,7 @@ const ClipboardApp = () => {
         ) : (
           <div
             aria-label={t("timeline")}
-            className="scrollbar-none absolute inset-0 flex items-stretch gap-3 overflow-x-auto overscroll-x-none px-5 py-1"
+            className="absolute inset-0 flex scrollbar-none items-stretch gap-3 overflow-x-auto overscroll-x-none px-5 py-1"
             onPointerMove={handleRailPointerMove}
             ref={timelineRailRef}
             role="list"
@@ -2073,7 +2073,7 @@ const ClipboardApp = () => {
 
           <nav
             aria-label={t("groups")}
-            className="clipboard-groups-rail scrollbar-none flex min-w-0 flex-1 items-center gap-1 overflow-x-auto"
+            className="clipboard-groups-rail flex min-w-0 flex-1 scrollbar-none items-center gap-1 overflow-x-auto"
           >
             <Button
               aria-pressed={activeGroupId === null}
