@@ -176,7 +176,11 @@ const WORKSPACE_KEY = /^ {4}"(?<key>[^"]+)":\s*\{/u;
 const WORKSPACE_END = /^ {4}\},?$/u;
 const PACKAGE_PREFIX = "packages/";
 
-const insertKnipWorkspace = (source: string, name: string): string => {
+type KnipInsertion =
+  | { readonly status: "ok"; readonly text: string }
+  | { readonly status: "unsupported"; readonly message: string };
+
+const insertKnipWorkspace = (source: string, name: string): KnipInsertion => {
   const key = `${PACKAGE_PREFIX}${name}`;
   const block = [
     `    "${key}": {`,
@@ -191,9 +195,13 @@ const insertKnipWorkspace = (source: string, name: string): string => {
       ? [{ index, key: existing }]
       : [];
   });
-  const last =
-    packageStarts.at(-1) ??
-    panic(`${KNIP_REL} has no ${PACKAGE_PREFIX} workspace`);
+  const last = packageStarts.at(-1);
+  if (last === undefined) {
+    return {
+      status: "unsupported",
+      message: `${KNIP_REL} has no ${PACKAGE_PREFIX} workspace to sort against`,
+    };
+  }
 
   // Sorted position among the packages/* keys: before the first one that sorts
   // after the new key, otherwise after the last entry (whose closing brace may
@@ -201,18 +209,30 @@ const insertKnipWorkspace = (source: string, name: string): string => {
   const successor = packageStarts.find((entry) => entry.key > key);
   if (successor !== undefined) {
     lines.splice(successor.index, 0, ...block);
-    return lines.join("\n");
+    return { status: "ok", text: lines.join("\n") };
   }
 
-  const endIndex = lines.findIndex(
+  const endLine = lines.find(
     (line, index) => index > last.index && WORKSPACE_END.test(line),
   );
-  if (endIndex === -1) {
-    panic(`${KNIP_REL} workspace "${last.key}" is not terminated`);
+  if (endLine === undefined) {
+    return {
+      status: "unsupported",
+      message: `${KNIP_REL} workspace "${last.key}" is not terminated`,
+    };
   }
+  // The new entry inherits the last one's punctuation: it is the final
+  // workspace only when the entry it follows was, and a non-package workspace
+  // listed after it still needs the comma.
+  const endIndex = lines.indexOf(endLine, last.index + 1);
   lines[endIndex] = "    },";
-  lines.splice(endIndex + 1, 0, ...block.slice(0, -1), "    }");
-  return lines.join("\n");
+  lines.splice(
+    endIndex + 1,
+    0,
+    ...block.slice(0, -1),
+    endLine.trimEnd().endsWith(",") ? "    }," : "    }",
+  );
+  return { status: "ok", text: lines.join("\n") };
 };
 
 // --- Scaffolding -------------------------------------------------------------
@@ -247,6 +267,13 @@ export const scaffoldPackage = ({
     };
   }
 
+  // Compute the knip edit before touching the filesystem: an unsupported
+  // layout must leave no half-scaffolded package behind.
+  const insertion = insertKnipWorkspace(readFileSync(knipPath, "utf-8"), name);
+  if (insertion.status === "unsupported") {
+    return { status: "rejected", message: insertion.message };
+  }
+
   const files = [
     {
       rel: `${rel}/package.json`,
@@ -261,10 +288,7 @@ export const scaffoldPackage = ({
   for (const file of files) {
     writeFileSync(path.join(root, file.rel), file.content);
   }
-  writeFileSync(
-    knipPath,
-    insertKnipWorkspace(readFileSync(knipPath, "utf-8"), name),
-  );
+  writeFileSync(knipPath, insertion.text);
 
   return {
     status: "created",

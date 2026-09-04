@@ -1390,7 +1390,9 @@ const WORKSPACE_OWNED_GLOBS = [
 ] as const;
 const API_LIB_DIR = "apps/api/src/lib";
 const WEB_LIB_DIR = "apps/web/src/lib";
-const FIXTURES_DIR_NAME = "__fixtures__";
+// Direct children that hold test scaffolding rather than product code: the
+// bucket metric counts what a domain directory or a package would own.
+const NON_PRODUCT_LIB_ENTRIES = new Set(["__fixtures__", "__tests__", "tests"]);
 
 // `apps/web`, `packages/ui`: the workspace a file belongs to.
 const workspaceOf = (rel: string): string =>
@@ -1508,7 +1510,7 @@ const countLibTopLevelEntries =
     let count = 0;
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       const rel = `${libDir}/${entry.name}`;
-      if (entry.name === FIXTURES_DIR_NAME || isExcludedSource(rel)) {
+      if (NON_PRODUCT_LIB_ENTRIES.has(entry.name) || isExcludedSource(rel)) {
         continue;
       }
       files[rel] = 1;
@@ -2964,7 +2966,7 @@ const EXPECTED_CROSS_WORKSPACE_DUPLICATE_EXPORT_NAMES = 3;
 // apps/api/src/lib children: api-handlers.ts, result-catches.ts,
 // result-throws.ts, shared/ (from the earlier fixtures), plus alpha/, copied/,
 // api-only-helper.ts and shared-names.ts. The two `.test.ts` files, the
-// `.type-test.ts` file and __fixtures__/ are excluded.
+// `.type-test.ts` file, __fixtures__/, tests/ and __tests__/ are excluded.
 const EXPECTED_API_LIB_TOP_LEVEL_ENTRIES = 8;
 // apps/web/src/lib children: index.tsx (from the earlier fixtures), plus
 // beta/, copied/, mirrored-names.ts and second-definition.ts. The `.test.ts`
@@ -3107,6 +3109,8 @@ const repoScopeSelfTestFailures = (snapshot: Baseline): string[] => {
         "apps/api/src/lib/lib-entry.test.ts",
         "apps/api/src/lib/lib-entry.type-test.ts",
         "apps/api/src/lib/__fixtures__",
+        "apps/api/src/lib/tests",
+        "apps/api/src/lib/__tests__",
       ],
     },
     {
@@ -3456,7 +3460,7 @@ const runSelfTest = (): number => {
       SELF_TEST_PACKAGE_SHARED_NAMES,
     );
     // Excluded lib-bucket children: a test file, a compile-time type test, and
-    // the fixtures directory.
+    // the fixture and test directories.
     writeFixture(
       root,
       "apps/api/src/lib/lib-entry.test.ts",
@@ -3470,6 +3474,16 @@ const runSelfTest = (): number => {
     writeFixture(
       root,
       "apps/api/src/lib/__fixtures__/sample.ts",
+      SELF_TEST_COPIED_HELPER,
+    );
+    writeFixture(
+      root,
+      "apps/api/src/lib/tests/helper.ts",
+      SELF_TEST_COPIED_HELPER,
+    );
+    writeFixture(
+      root,
+      "apps/api/src/lib/__tests__/helper.ts",
       SELF_TEST_COPIED_HELPER,
     );
     // Excluded companions: these must NOT be counted.

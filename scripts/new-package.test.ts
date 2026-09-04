@@ -1,5 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -31,6 +32,23 @@ const KNIP_FIXTURE = `{
 }
 `;
 
+// The last `packages/*` key is not the last workspace: appending after it must
+// keep the comma its closing brace carries.
+const KNIP_TRAILING_FIXTURE = `{
+  "workspaces": {
+    "packages/alpha": {
+      "entry": ["src/index.ts"]
+    },
+    "packages/zulu": {
+      "entry": ["src/index.ts"]
+    },
+    "apps/web": {
+      "entry": ["src/client.tsx"]
+    }
+  }
+}
+`;
+
 const roots: string[] = [];
 
 afterEach(() => {
@@ -39,10 +57,10 @@ afterEach(() => {
   }
 });
 
-const createRoot = (): string => {
+const createRoot = (knip = KNIP_FIXTURE): string => {
   const root = mkdtempSync(path.join(tmpdir(), "stella-new-package-"));
   roots.push(root);
-  writeFileSync(path.join(root, "knip.json"), KNIP_FIXTURE);
+  writeFileSync(path.join(root, "knip.json"), knip);
   return root;
 };
 
@@ -136,6 +154,38 @@ test("appends after the last packages entry when the name sorts last", () => {
       "packages/zzz-last": { entry: ["src/index.ts", "src/**/*.test.ts"] },
     },
   });
+});
+
+test("keeps the trailing comma when a non-package workspace follows", () => {
+  const root = createRoot(KNIP_TRAILING_FIXTURE);
+
+  expect(
+    scaffoldPackage({ name: "zzz-last", description: "sorts last", root })
+      .status,
+  ).toBe("created");
+
+  const knip = read(root, "knip.json");
+  expect(JSON.parse(knip)).toMatchObject({
+    workspaces: {
+      "packages/zzz-last": { entry: ["src/index.ts", "src/**/*.test.ts"] },
+      "apps/web": { entry: ["src/client.tsx"] },
+    },
+  });
+});
+
+test("rejects a knip.json with no packages workspace and writes nothing", () => {
+  const root = createRoot(
+    '{\n  "workspaces": {\n    "apps/api": {\n      "entry": ["src/server.ts!"]\n    }\n  }\n}\n',
+  );
+
+  const result = scaffoldPackage({
+    name: "matter-dates",
+    description: "shared matter dates",
+    root,
+  });
+
+  expect(result.status).toBe("rejected");
+  expect(existsSync(path.join(root, "packages/matter-dates"))).toBe(false);
 });
 
 test("rejects a name that is not kebab-case", () => {
