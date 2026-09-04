@@ -1,6 +1,6 @@
 import { type CountryCode, isCountryCode } from "@stll/country-codes";
 
-import { compareByLocale } from "@/lib/collation";
+import { compareByLocale } from "@stll/collation";
 import { COUNTRY_CENTROIDS, COUNTRY_CODES } from "@/lib/country-centroids";
 
 export { COUNTRY_CODES };

@@ -15,7 +15,7 @@ import { eq, sql } from "drizzle-orm";
 
 import { apikey } from "@/api/db/auth-schema";
 import { createListMachineApiKeysHandler } from "@/api/handlers/api-keys/list";
-import { compareCodepoint } from "@/api/lib/collation";
+import { compareCodepoint } from "@stll/collation";
 import { MACHINE_API_KEY_CONFIG_ID } from "@/api/lib/machine-api-key-config";
 import { listOrganizationMachineApiKeys } from "@/api/lib/machine-api-key-queries";
 import { encodePaginationCursor } from "@/api/lib/pagination";

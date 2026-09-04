@@ -13,7 +13,7 @@ import { cn } from "@stll/ui/utils";
 
 import Tooltip from "@/components/tooltip";
 import { useFormatter, useLocale } from "@/i18n/formatting-context";
-import { compareByLocale } from "@/lib/collation";
+import { compareByLocale } from "@stll/collation";
 import { createCountryOptions, removeJurisdiction } from "@/lib/jurisdictions";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
 

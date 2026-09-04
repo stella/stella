@@ -22,7 +22,7 @@ import {
 
 import { matchesLanguageQuery } from "@/components/document-language-picker.logic";
 import { useLocale } from "@/i18n/formatting-context";
-import { compareByLocale } from "@/lib/collation";
+import { compareByLocale } from "@stll/collation";
 import {
   DEEPL_TARGET_LANGUAGES,
   type DeepLTargetLanguageCode,

@@ -28,6 +28,9 @@ class BoundedLruCache<TKey, TValue> {
   }
 }
 
+// One collator per active locale, with room for the handful an app really
+// uses; a per-locale cache that never evicts is a leak on a long-lived
+// server process handling many tenants.
 const COLLATOR_CACHE_LIMIT = 16;
 
 const collatorCache = new BoundedLruCache<string, Intl.Collator>(
@@ -79,3 +82,13 @@ export const compareByLocale = (
   const collator = getCollator(locale);
   return (a, b) => collator.compare(a, b);
 };
+
+/**
+ * Plain codepoint comparator for `.sort()` / `.toSorted()` on strings that
+ * are ids, paths, or other technical keys rather than user-facing text (lock
+ * ordering, archive entry order, search tiebreaks, ...). Unlike
+ * `.localeCompare()`, this is bit-identical across environments regardless
+ * of runtime/ICU locale.
+ */
+export const compareCodepoint = (a: string, b: string): number =>
+  a < b ? -1 : Number(a > b);

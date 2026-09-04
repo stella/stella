@@ -12,7 +12,7 @@ import type { SQL, Table } from "drizzle-orm";
 import * as v from "valibot";
 
 import { authSchema } from "@/api/db/auth-schema";
-import { compareCodepoint } from "@/api/lib/collation";
+import { compareCodepoint } from "@stll/collation";
 import { isRecord } from "@/api/lib/type-guards";
 
 export const BETTER_AUTH_AUDIT_MODES = {

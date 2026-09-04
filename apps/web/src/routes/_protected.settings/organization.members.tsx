@@ -50,7 +50,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { authClient } from "@/lib/auth";
 import type { Role } from "@/lib/auth";
 import { roleOptions } from "@/lib/auth-queries";
-import { compareByLocale } from "@/lib/collation";
+import { compareByLocale } from "@stll/collation";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { rolePriority, roleTranslationKeys } from "@/lib/organization/consts";

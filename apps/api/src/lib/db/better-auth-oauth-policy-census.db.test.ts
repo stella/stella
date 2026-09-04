@@ -6,7 +6,7 @@ import {
   oauthClientResource,
   oauthResource,
 } from "@/api/db/auth-schema";
-import { compareCodepoint } from "@/api/lib/collation";
+import { compareCodepoint } from "@stll/collation";
 import {
   assertBetterAuthOAuthPolicyCensus,
   BetterAuthOAuthPolicyCensusError,

@@ -21,7 +21,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { compareCodepoint } from "@/api/lib/collation";
+import { compareCodepoint } from "@stll/collation";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import {
   FetchBoundaryError,

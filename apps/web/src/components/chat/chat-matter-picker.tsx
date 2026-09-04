@@ -19,7 +19,7 @@ import { cn } from "@stll/ui/utils";
 import { MatterIcon } from "@/components/matter-icon";
 import { useFormatter, useLocale } from "@/i18n/formatting-context";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { compareByLocale } from "@/lib/collation";
+import { compareByLocale } from "@stll/collation";
 import { resolveMatterColor } from "@/lib/matter-colors";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 

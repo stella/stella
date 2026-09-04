@@ -20,7 +20,7 @@ import { conditionNodeSchema } from "@stll/conditions";
 import { isFieldPath } from "@stll/template-conditions";
 
 import { arrayOrEmpty } from "@/api/lib/array";
-import { compareCodepoint } from "@/api/lib/collation";
+import { compareCodepoint } from "@stll/collation";
 
 import { isElement } from "./ooxml";
 import type {

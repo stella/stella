@@ -15,7 +15,7 @@ import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decisionIdentifierProjection } from "@/api/lib/case-law/decision-identifiers";
 import { redistributableSourceJoin } from "@/api/lib/case-law/search-sql";
-import { compareCodepoint } from "@/api/lib/collation";
+import { compareCodepoint } from "@stll/collation";
 import { LIMITS } from "@/api/lib/limits";
 import {
   brandPersistedCaseLawDecisionId,

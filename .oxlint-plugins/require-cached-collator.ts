@@ -12,8 +12,7 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 //
 // Route through the shared collation helper instead, which caches one
 // `Intl.Collator` per locale:
-//   apps/web -> getCollator / compareByLocale from @/lib/collation
-//   apps/api -> getCollator / compareByLocale from @/api/lib/collation
+//   getCollator / compareByLocale from @stll/collation
 //
 // Not every `.localeCompare(` call sorts display text — comparing opaque
 // ids, file paths, or other non-linguistic keys for a deterministic (not

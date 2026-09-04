@@ -3659,21 +3659,19 @@ export default defineConfig({
     {
       // Bare localeCompare is locale-nondeterministic (runtime default) and
       // rebuilds ICU tailoring per call; route through the cached collation
-      // helper. Scoped to apps/web and apps/api; the helper files themselves
-      // own the one legitimate bare call.
+      // helper. Scoped to apps/web, apps/api and the helper's own package,
+      // where the one legitimate bare call lives.
       files: [
         "apps/web/src/**/*.{ts,tsx}",
         "apps/api/src/**/*.ts",
+        "packages/collation/src/**/*.ts",
         ".oxlint-plugins/__fixtures__/require-cached-collator.fixture.ts",
       ],
       rules: {
         "require-cached-collator/require-cached-collator": [
           "error",
           {
-            allowedFiles: [
-              "apps/web/src/lib/collation.ts",
-              "apps/api/src/lib/collation.ts",
-            ],
+            allowedFiles: ["packages/collation/src/collation.ts"],
           },
         ],
       },

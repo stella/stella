@@ -7,7 +7,7 @@
 import type { PracticeArea } from "@stll/catalogue";
 
 import type { TranslationKey } from "@/i18n/types";
-import { getCollator } from "@/lib/collation";
+import { getCollator } from "@stll/collation";
 
 export const PRACTICE_AREA_LABEL_KEY = {
   "banking-finance": "publicTools.practiceAreas.bankingFinance",

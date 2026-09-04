@@ -31,7 +31,7 @@ import type { PropertyContent, PropertyTool } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
 // eslint-disable-next-line no-restricted-imports -- brands field/entity ids returned by queryEntities (server-validated, workspace-scoped) to re-hydrate their justifications and review decisions
 import { toSafeId } from "@/api/lib/branded-types";
-import { compareByLocale } from "@/api/lib/collation";
+import { compareByLocale } from "@stll/collation";
 import type { DocumentReviewDecision } from "@/api/lib/document-review/run-contract";
 import type { QueryEntityResult } from "@/api/lib/entities/query-entities";
 import { queryEntities } from "@/api/lib/entities/query-entities";

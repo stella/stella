@@ -40,7 +40,7 @@ import {
 import { resolveOptionColor } from "@/components/workspaces/property-utils";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import type { OptionColor } from "@/lib/api-contract";
-import { compareByLocale } from "@/lib/collation";
+import { compareByLocale } from "@stll/collation";
 import type {
   WorkspaceEntity,
   WorkspaceProperty,

@@ -5,7 +5,7 @@ import fc from "fast-check";
 import type { ConditionNode } from "@stll/conditions";
 import { propertyConfig } from "@stll/property-testing";
 
-import { compareByLocale } from "@/api/lib/collation";
+import { compareByLocale } from "@stll/collation";
 
 import {
   applyFilters,

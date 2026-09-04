@@ -90,6 +90,7 @@
     "@stll/catalogue": "workspace:*",
     "@stll/chat-limits": "workspace:*",
     "@stll/cli": "workspace:*",
+    "@stll/collation": "workspace:*",
     "@stll/conditions": "workspace:*",
     "@stll/country-codes": "workspace:*",
     "@stll/docx-core": "catalog:",

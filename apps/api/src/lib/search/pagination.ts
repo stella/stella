@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
-import { compareCodepoint } from "@/api/lib/collation";
+import { compareCodepoint } from "@stll/collation";
 import { decodeCursor, encodeCursor } from "@/api/lib/search/cursor";
 
 export type GlobalSearchCursor = {

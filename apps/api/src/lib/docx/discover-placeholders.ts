@@ -12,7 +12,7 @@ import * as slimdom from "slimdom";
 
 import { placeholderPattern } from "@stll/template-conditions";
 
-import { compareCodepoint } from "@/api/lib/collation";
+import { compareCodepoint } from "@stll/collation";
 
 import { paragraphText, templateContentPartPaths, W_NS } from "./ooxml";
 import type { DiscoveredPlaceholder } from "./types";

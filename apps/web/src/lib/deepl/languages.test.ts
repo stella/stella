@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { compareByLocale } from "@/lib/collation";
+import { compareByLocale } from "@stll/collation";
 
 import { DEEPL_TARGET_LANGUAGES } from "./languages";
 

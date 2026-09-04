@@ -44,7 +44,7 @@ import {
   readPublicDecisionLanguageAlternatesQuery,
 } from "@/api/lib/case-law/language-alternates";
 import { readNonRedistributableCaseLawSourceIdsQuery } from "@/api/lib/case-law/non-redistributable-sources";
-import { getCollator } from "@/api/lib/collation";
+import { getCollator } from "@stll/collation";
 import { readServingCorpusIndexGenerationTx } from "@/api/lib/legal-search/corpus-index-generation-store";
 import { rehydrateCorpusIndexProviderCandidates } from "@/api/lib/legal-search/corpus-index-provider";
 import { readDocumentContextDecision } from "@/api/lib/legal-search/document-context";

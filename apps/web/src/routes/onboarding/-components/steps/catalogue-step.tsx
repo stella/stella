@@ -35,7 +35,7 @@ import {
 } from "@/components/catalogue/catalogue-row";
 import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
 import { useLocale } from "@/i18n/formatting-context";
-import { compareByLocale } from "@/lib/collation";
+import { compareByLocale } from "@stll/collation";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
 import { sanitizeHref } from "@/lib/sanitize-href";
 import { isCatalogueEntryAvailableDuringOnboarding } from "@/routes/onboarding/-components/onboarding-catalogue-setup.logic";

@@ -6,7 +6,7 @@ import { arrayOrEmpty } from "@/api/lib/array";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { compareCodepoint } from "@/api/lib/collation";
+import { compareCodepoint } from "@stll/collation";
 
 const CELL_METADATA_VERSION = 1;
 const VERIFIED_FLAG_ID = REVIEW_FLAG.VERIFIED;

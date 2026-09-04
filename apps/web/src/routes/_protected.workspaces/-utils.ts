@@ -1,4 +1,4 @@
-import { compareByLocale } from "@/lib/collation";
+import { compareByLocale } from "@stll/collation";
 import type {
   MattersSortKey,
   Workspace,
