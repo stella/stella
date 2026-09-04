@@ -1176,6 +1176,7 @@ type Messages = {
     "edit": "Edit";
     "editCategory": "Edit category";
     "edited": "Edited";
+    "editing": "Editing";
     "email": "Email";
     "empty": "Empty";
     "emptyScreen": {
