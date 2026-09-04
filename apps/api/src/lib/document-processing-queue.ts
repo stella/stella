@@ -59,6 +59,9 @@ import { documentProcessingFailureFields } from "@/api/lib/document-processing-f
 import { DocumentOcrError } from "@/api/lib/document-processing-ocr-result";
 import {
   automaticOcrRetryDelayMs,
+  DOCUMENT_PROCESSING_FAILURE_REPORT,
+  documentProcessingFailureReport,
+  DocumentProcessingRunSettledError,
   isRetryableAutomaticOcrFailure,
   isRetryableOcrDerivativeFailure,
   isRetryableSearchIndexFailure,
@@ -1079,7 +1082,16 @@ export const processDocumentProcessingRun = async (
         await returnInterruptedRunToQueue({ claimToken, run });
       },
     });
-    throw processingResult.error;
+    // Rethrown so BullMQ records the job as failed. The settle above has
+    // already reported this attempt, so it goes back wrapped: the job-level
+    // handler reports only what reaches it unsettled.
+    throw new DocumentProcessingRunSettledError({
+      cause: processingResult.error,
+      message:
+        processingResult.error instanceof Error
+          ? processingResult.error.message
+          : "Document processing run failed",
+    });
   }
 };
 
@@ -1184,7 +1196,7 @@ const markRunFailed = async ({
   }
   captureError(error, { runId: run.id });
   logger.error("document_processing.run_failed", {
-    "error.type": errorTag(error),
+    ...documentProcessingFailureFields(error),
     errorCode: failureCode,
     runId: run.id,
   });
@@ -2569,20 +2581,29 @@ const handleDocumentProcessingFailure = ({
   job: { data: DocumentProcessingJobData } | undefined;
 }): void => {
   // No capture here: run-scoped failures capture once at their terminal
-  // transition in `markRunFailed`, and a dropped Redis socket on the claim
-  // path heals on the job's own retry. Machinery failures stay visible
-  // through the ERROR log.
-  if (isTransientRedisConnectionError(error)) {
-    logger.warn("document_processing.job_disrupted", {
-      "error.type": errorTag(error),
-      runId: job?.data.runId ?? "",
-    });
-    return;
+  // transition in `markRunFailed`, which is also where they are logged, so a
+  // settled attempt is left alone. A dropped Redis socket on the claim path
+  // heals on the job's own retry. Only machinery that failed before a run was
+  // claimed has no other reporter, so only it stays on the ERROR log.
+  const report = documentProcessingFailureReport(error);
+  switch (report) {
+    case DOCUMENT_PROCESSING_FAILURE_REPORT.ALREADY_REPORTED:
+      return;
+    case DOCUMENT_PROCESSING_FAILURE_REPORT.TRANSIENT_CONNECTION:
+      logger.warn("document_processing.job_disrupted", {
+        "error.type": errorTag(error),
+        runId: job?.data.runId ?? "",
+      });
+      return;
+    case DOCUMENT_PROCESSING_FAILURE_REPORT.MACHINERY:
+      logger.error("document_processing.failed", {
+        ...documentProcessingFailureFields(error),
+        runId: job?.data.runId ?? "",
+      });
+      return;
+    default:
+      report satisfies never;
   }
-  logger.error("document_processing.failed", {
-    ...documentProcessingFailureFields(error),
-    runId: job?.data.runId ?? "",
-  });
 };
 
 const RECONCILIATION_PHASE = {
