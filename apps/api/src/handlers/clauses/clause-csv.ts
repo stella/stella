@@ -1,5 +1,6 @@
+import { slugify } from "@stll/text-normalize";
+
 import type { SafeId } from "@/api/lib/branded-types";
-import { slugifyAscii } from "@/api/lib/slug";
 
 const TAG_ESCAPE = "\\";
 const TAG_SEPARATOR = ",";
@@ -9,9 +10,11 @@ export const deriveClauseSlug = (
   clauseId: SafeId<"clause">,
   providedSlug: string,
 ): string =>
-  slugifyAscii(providedSlug || title, {
-    fallback: `clause-${clauseId}`,
+  slugify(providedSlug || title, {
+    charset: "ascii",
+    separator: "-",
     maxLength: 56,
+    fallback: `clause-${clauseId}`,
   });
 
 export const serializeClauseTags = (tags: readonly string[]): string =>
