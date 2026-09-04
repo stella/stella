@@ -1,9 +1,12 @@
+import { TaggedError } from "better-result";
+
 import type { documentProcessingRuns } from "@/api/db/schema";
 import {
   AUTOMATIC_OCR_MAX_ATTEMPTS,
   SEARCHABLE_PDF_FAILURE_CODE,
   SEARCH_INDEX_FAILURE_CODE,
 } from "@/api/lib/document-processing-queue-policy";
+import { isTransientRedisConnectionError } from "@/api/lib/redis-error-classification";
 
 const AUTOMATIC_OCR_RETRY_BASE_DELAY_MS = 30_000;
 const AUTOMATIC_OCR_RETRY_MAX_DELAY_MS = 30 * 60 * 1000;
@@ -51,15 +54,56 @@ export const settleDocumentProcessingAttemptError = async ({
 }: {
   error: unknown;
   lifecycleSignal: AbortSignal;
-  markFailed: () => Promise<void>;
+  markFailed: () => Promise<"settled" | "unsettled">;
   returnToQueue: () => Promise<void>;
-}): Promise<"failed" | "interrupted"> => {
+}): Promise<"failed" | "interrupted" | "unsettled"> => {
   if (isLifecycleInterruptionError({ error, lifecycleSignal })) {
     await returnToQueue();
     return "interrupted";
   }
-  await markFailed();
-  return "failed";
+  const failureSettlement = await markFailed();
+  return failureSettlement === "settled" ? "failed" : "unsettled";
+};
+
+/**
+ * Wraps a failure the run-level path has already recorded.
+ *
+ * `markRunFailed` logs every attempt at the severity its outcome earns: WARN
+ * while the durable retry model still has attempts left, ERROR with a capture
+ * once at the terminal transition. The run then rethrows so BullMQ records the
+ * job as failed, which hands the same error to the job-level handler. Without
+ * a marker that handler cannot tell a settled attempt from machinery that
+ * failed before any run was claimed, so it reports every attempt of a run that
+ * is retrying by design.
+ */
+export class DocumentProcessingRunSettledError extends TaggedError(
+  "DocumentProcessingRunSettledError",
+)<{
+  cause: unknown;
+  message: string;
+}> {}
+
+export const DOCUMENT_PROCESSING_FAILURE_REPORT = {
+  /** The run-level path already logged this attempt at its own severity. */
+  ALREADY_REPORTED: "already-reported",
+  /** Failed outside a claimed run, so this handler is its only reporter. */
+  MACHINERY: "machinery",
+  /** An expected Valkey transient that the job's own retry heals. */
+  TRANSIENT_CONNECTION: "transient-connection",
+} as const;
+
+/**
+ * A settled failure may wrap a connection error the run already reported, so
+ * the settled marker has to be read before the transient classification.
+ */
+export const documentProcessingFailureReport = (error: unknown) => {
+  if (error instanceof DocumentProcessingRunSettledError) {
+    return DOCUMENT_PROCESSING_FAILURE_REPORT.ALREADY_REPORTED;
+  }
+  if (isTransientRedisConnectionError(error)) {
+    return DOCUMENT_PROCESSING_FAILURE_REPORT.TRANSIENT_CONNECTION;
+  }
+  return DOCUMENT_PROCESSING_FAILURE_REPORT.MACHINERY;
 };
 
 export const automaticOcrRetryDelayMs = (attemptCount: number): number =>

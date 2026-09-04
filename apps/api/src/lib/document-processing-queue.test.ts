@@ -24,6 +24,9 @@ import {
 } from "@/api/lib/document-processing-queue";
 import {
   automaticOcrRetryDelayMs,
+  DOCUMENT_PROCESSING_FAILURE_REPORT,
+  documentProcessingFailureReport,
+  DocumentProcessingRunSettledError,
   isRetryableAutomaticOcrFailure,
   isRetryableOcrDerivativeFailure,
   isRetryableSearchIndexFailure,
@@ -1015,6 +1018,7 @@ describe("worker interruption lifecycle", () => {
       lifecycleSignal: lifecycle.signal,
       markFailed: async () => {
         calls.push("failed");
+        return "settled";
       },
       returnToQueue: async () => {
         calls.push("queued");
@@ -1033,6 +1037,7 @@ describe("worker interruption lifecycle", () => {
       lifecycleSignal: new AbortController().signal,
       markFailed: async () => {
         calls.push("failed");
+        return "settled";
       },
       returnToQueue: async () => {
         calls.push("queued");
@@ -1053,6 +1058,7 @@ describe("worker interruption lifecycle", () => {
       lifecycleSignal: lifecycle.signal,
       markFailed: async () => {
         calls.push("failed");
+        return "settled";
       },
       returnToQueue: async () => {
         calls.push("queued");
@@ -1073,6 +1079,7 @@ describe("worker interruption lifecycle", () => {
       lifecycleSignal: lifecycle.signal,
       markFailed: async () => {
         calls.push("failed");
+        return "settled";
       },
       returnToQueue: async () => {
         calls.push("queued");
@@ -1083,9 +1090,68 @@ describe("worker interruption lifecycle", () => {
     expect(calls).toEqual(["queued"]);
   });
 
+  test("leaves a lost claim available to the job-level reporter", async () => {
+    const outcome = await settleDocumentProcessingAttemptError({
+      error: new Error("processing failed after claim loss"),
+      lifecycleSignal: new AbortController().signal,
+      markFailed: async () => "unsettled",
+      returnToQueue: async () => undefined,
+    });
+
+    expect(outcome).toBe("unsettled");
+  });
+
   test("threads shutdown cancellation into OCR and still fails BullMQ delivery", () => {
     expect(queueSource).toContain("signal: lifecycleSignal");
+    expect(queueSource).toContain(
+      "throw new DocumentProcessingRunSettledError",
+    );
+    expect(queueSource).toContain("cause: processingResult.error");
+    expect(queueSource).toContain('if (settlement === "unsettled")');
     expect(queueSource).toContain("throw processingResult.error");
+    expect(queueSource).toContain(
+      'logger.warn("document_processing.attempt_failed", {\n      ...documentProcessingFailureFields(error)',
+    );
+  });
+
+  test("leaves a settled attempt to the run-level path that already reported it", () => {
+    expect(
+      documentProcessingFailureReport(
+        new DocumentProcessingRunSettledError({
+          cause: new Error("parser exited nonzero"),
+          message: "parser exited nonzero",
+        }),
+      ),
+    ).toBe(DOCUMENT_PROCESSING_FAILURE_REPORT.ALREADY_REPORTED);
+  });
+
+  test("keeps a settled attempt settled even when it wraps a transient drop", () => {
+    const dropped = new Error("Connection is closed");
+    Object.assign(dropped, { code: "ERR_REDIS_CONNECTION_CLOSED" });
+
+    expect(
+      documentProcessingFailureReport(
+        new DocumentProcessingRunSettledError({
+          cause: dropped,
+          message: dropped.message,
+        }),
+      ),
+    ).toBe(DOCUMENT_PROCESSING_FAILURE_REPORT.ALREADY_REPORTED);
+  });
+
+  test("reports a transient drop reaching the job unsettled as a disruption", () => {
+    const dropped = new Error("Connection is closed");
+    Object.assign(dropped, { code: "ERR_REDIS_CONNECTION_CLOSED" });
+
+    expect(documentProcessingFailureReport(dropped)).toBe(
+      DOCUMENT_PROCESSING_FAILURE_REPORT.TRANSIENT_CONNECTION,
+    );
+  });
+
+  test("reports a failure that never reached a claimed run as machinery", () => {
+    expect(documentProcessingFailureReport(new Error("claim failed"))).toBe(
+      DOCUMENT_PROCESSING_FAILURE_REPORT.MACHINERY,
+    );
   });
 
   test("uses one compare-and-set transition to restore the claimed attempt", () => {
