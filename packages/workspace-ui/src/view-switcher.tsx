@@ -93,6 +93,7 @@ export const WorkspaceViewSwitcher = <View extends WorkspaceViewSwitcherItem>({
   renderIcon,
 }: WorkspaceViewSwitcherProps<View>) => {
   const canReorder = reorder !== null;
+  const reserveActionSpace = renderActions !== undefined;
   const [instanceId] = useState(Symbol);
   const [stripContainer, setStripContainer] = useState<HTMLDivElement | null>(
     null,
@@ -138,8 +139,9 @@ export const WorkspaceViewSwitcher = <View extends WorkspaceViewSwitcherItem>({
       )}
       dir={direction}
     >
-      <div className="min-w-0 flex-1" ref={setStripContainer}>
+      <div className="h-full min-w-0 flex-1" ref={setStripContainer}>
         <Tabs
+          className="h-full gap-0"
           onValueChange={(value) => {
             if (typeof value === "string") {
               onViewChange(value);
@@ -147,11 +149,19 @@ export const WorkspaceViewSwitcher = <View extends WorkspaceViewSwitcherItem>({
           }}
           value={activeViewId}
         >
-          <TabsList aria-label={ariaLabel} variant="underline">
+          <TabsList
+            aria-label={ariaLabel}
+            className="h-full data-[orientation=horizontal]:py-0"
+            variant="underline"
+          >
             {views.map((view) => {
               if (editing?.viewId === view.id) {
                 return (
                   <TabsTab
+                    className={cn(
+                      "h-full sm:h-full",
+                      reserveActionSpace ? "pe-6.5" : undefined,
+                    )}
                     key={view.id}
                     nativeButton={false}
                     render={<div />}
@@ -177,6 +187,7 @@ export const WorkspaceViewSwitcher = <View extends WorkspaceViewSwitcherItem>({
                   onDoubleClick={onViewDoubleClick}
                   onReorder={handleReorder}
                   renderIcon={renderIcon}
+                  reserveActionSpace={reserveActionSpace}
                   view={view}
                 />
               );
@@ -209,6 +220,7 @@ type WorkspaceViewTabProps<View extends WorkspaceViewSwitcherItem> = {
     position: WorkspaceViewDropPosition,
   ) => void;
   renderIcon: (view: View) => React.ReactNode;
+  reserveActionSpace: boolean;
   view: View;
 };
 
@@ -224,6 +236,7 @@ const WorkspaceViewTab = <View extends WorkspaceViewSwitcherItem>({
   onDoubleClick,
   onReorder,
   renderIcon,
+  reserveActionSpace,
   view,
 }: WorkspaceViewTabProps<View>) => {
   const [tabContainer, setTabContainer] = useState<HTMLDivElement | null>(null);
@@ -305,7 +318,7 @@ const WorkspaceViewTab = <View extends WorkspaceViewSwitcherItem>({
   ]);
 
   return (
-    <div className="relative flex items-center" ref={setTabContainer}>
+    <div className="relative flex h-full items-center" ref={setTabContainer}>
       {dropPosition !== null && (
         <span
           aria-hidden="true"
@@ -316,9 +329,10 @@ const WorkspaceViewTab = <View extends WorkspaceViewSwitcherItem>({
         />
       )}
       <TabsTab
-        className={
-          actions === null || actions === undefined ? undefined : "pe-6.5"
-        }
+        className={cn(
+          "h-full sm:h-full",
+          reserveActionSpace ? "pe-6.5" : undefined,
+        )}
         onContextMenu={(event) => onContextMenu?.(view, event)}
         onDoubleClick={(event) => onDoubleClick?.(view, event)}
         value={view.id}

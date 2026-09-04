@@ -91,6 +91,15 @@ describe("row rhythm", () => {
 });
 
 describe("rail", () => {
+  test("uses the subtle scrollbar treatment for rail content", () => {
+    expect(
+      classesOf(
+        renderToStaticMarkup(<InspectorRailContent />),
+        "inspector-rail-content",
+      ),
+    ).toContain("scrollbar-subtle");
+  });
+
   test("a tab fills the rail width and boxes itself like a rail cell", () => {
     const classes = classesOf(
       renderToStaticMarkup(<InspectorRailTab active />),
@@ -278,6 +287,17 @@ describe("dock", () => {
 
     expect(markup).toContain('data-slot="inspector"');
     expect(markup.match(/width:512px/gu)?.length).toBe(2);
+  });
+});
+
+describe("content", () => {
+  test("uses the subtle scrollbar treatment for inspector content", () => {
+    expect(
+      classesOf(
+        renderToStaticMarkup(<InspectorContent />),
+        "inspector-content",
+      ),
+    ).toContain("scrollbar-subtle");
   });
 });
 

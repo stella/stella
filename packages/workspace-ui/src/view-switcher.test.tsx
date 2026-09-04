@@ -40,7 +40,11 @@ describe("WorkspaceViewSwitcher", () => {
     expect(markup).toContain(
       `class="flex min-w-0 flex-1 items-center gap-1 px-2 ${TOOLBAR_ROW_HEIGHT}"`,
     );
-    expect(markup).toContain('class="relative flex items-center"');
+    expect(markup).toContain('class="h-full min-w-0 flex-1"');
+    expect(markup).toContain("h-full gap-0");
+    expect(markup).toContain('data-slot="tabs-list"');
+    expect(markup.match(/pe-6\.5/gu)).toHaveLength(VIEWS.length);
+    expect(markup).toContain('class="relative flex h-full items-center"');
     expect(markup).toContain(
       'class="absolute inset-e-0 top-1/2 -translate-y-1/2"',
     );
@@ -83,5 +87,6 @@ describe("WorkspaceViewSwitcher", () => {
     expect(markup).toContain("Rename view");
     expect(markup).not.toContain("All matters");
     expect(markup).not.toContain("Actions");
+    expect(markup).toContain("pe-6.5");
   });
 });
