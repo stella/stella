@@ -902,6 +902,13 @@ pub fn load_persisted() -> (ClipboardLoad, ClipboardInitTimings) {
           .filter(|blob_id| uuid::Uuid::parse_str(blob_id).is_ok())
           .cloned(),
       );
+      if let Err(error) = queue_discovered_orphaned_image_blobs(
+        &mut state.pending_image_blob_ids,
+        &store,
+        &live_blob_ids,
+      ) {
+        tracing::warn!(error = %error, "clipboard image orphans could not be discovered");
+      }
       let pending_changed =
         state.pending_image_blob_ids != previous_pending_image_blob_ids;
       if (changed || images_changed || invalid_images_changed || pending_changed)
@@ -928,9 +935,6 @@ pub fn load_persisted() -> (ClipboardLoad, ClipboardInitTimings) {
           );
         }
       }
-      if let Err(error) = store.reconcile_images(&live_blob_ids) {
-        tracing::warn!(error = %error, "clipboard image history could not be reconciled");
-      }
       (
         ClipboardLoad::Encrypted {
           store,
@@ -940,10 +944,52 @@ pub fn load_persisted() -> (ClipboardLoad, ClipboardInitTimings) {
       )
     }
     Ok(None) => {
-      if let Err(error) = store.reconcile_images(&HashSet::new()) {
-        tracing::warn!(error = %error, "clipboard image history could not be reconciled");
+      let mut pending_image_blob_ids = BTreeSet::new();
+      if let Err(error) = queue_discovered_orphaned_image_blobs(
+        &mut pending_image_blob_ids,
+        &store,
+        &HashSet::new(),
+      ) {
+        tracing::warn!(error = %error, "clipboard image orphans could not be discovered");
       }
-      (ClipboardLoad::Encrypted { store, state: None }, timings)
+      if pending_image_blob_ids.is_empty() {
+        return (ClipboardLoad::Encrypted { store, state: None }, timings);
+      }
+      let mut state = PersistedClipboardState {
+        capture_status: ClipboardCaptureStatus::Active,
+        groups: Vec::new(),
+        items: Vec::new(),
+        pending_image_blob_ids,
+        retention: ClipboardRetention::default(),
+        source_app_visuals: Vec::new(),
+      };
+      if let Err(error) = store.persist(&state) {
+        tracing::warn!(error = %error, "orphaned clipboard images could not be journaled");
+        return (
+          ClipboardLoad::Encrypted {
+            store,
+            state: Some(state),
+          },
+          timings,
+        );
+      }
+      if remove_pending_image_blobs(&store, &state.pending_image_blob_ids) {
+        let pending_image_blob_ids = std::mem::take(&mut state.pending_image_blob_ids);
+        if let Err(error) = store.persist(&state) {
+          state.pending_image_blob_ids = pending_image_blob_ids;
+          tracing::warn!(
+            error = %error,
+            "completed clipboard image cleanup could not be checkpointed"
+          );
+        }
+      }
+      (
+        ClipboardLoad::Encrypted {
+          store,
+          state: Some(state),
+        },
+        timings,
+      )
     }
     Err(error) => {
       tracing::warn!(error = %error, "encrypted clipboard history is unavailable");
@@ -1007,8 +1053,14 @@ impl ClipboardManager {
   /// manager is `Initializing`, so nothing in memory can be overwritten here.
   pub fn install(&mut self, load: ClipboardLoad) {
     self.persistence = match load {
-      ClipboardLoad::MemoryOnly => ClipboardPersistence::MemoryOnly,
-      ClipboardLoad::DeletionOnly(path) => ClipboardPersistence::DeletionOnly(path),
+      ClipboardLoad::MemoryOnly => {
+        self.pending_image_blob_ids.clear();
+        ClipboardPersistence::MemoryOnly
+      }
+      ClipboardLoad::DeletionOnly(path) => {
+        self.pending_image_blob_ids.clear();
+        ClipboardPersistence::DeletionOnly(path)
+      }
       ClipboardLoad::Encrypted { store, state } => {
         if let Some(state) = state {
           self.capture_status = state.capture_status;
@@ -1030,6 +1082,8 @@ impl ClipboardManager {
             .collect();
           self.items = state.items;
           self.pending_image_blob_ids = state.pending_image_blob_ids;
+        } else {
+          self.pending_image_blob_ids.clear();
         }
         ClipboardPersistence::Encrypted(store)
       }
@@ -1584,11 +1638,13 @@ impl ClipboardManager {
 
   pub fn prune_expired(&mut self, now: DateTime<Utc>) -> Result<bool, String> {
     let checkpoint = self.checkpoint();
-    if !prune_items(&mut self.items, self.retention, now) {
+    let items_changed = prune_items(&mut self.items, self.retention, now);
+    let cleanup_was_pending = !self.pending_image_blob_ids.is_empty();
+    if !items_changed && !cleanup_was_pending {
       return Ok(false);
     }
     self.persist_or_restore(checkpoint)?;
-    Ok(true)
+    Ok(items_changed || self.pending_image_blob_ids.is_empty())
   }
 
   fn checkpoint(&self) -> ClipboardManagerCheckpoint {
@@ -1617,19 +1673,23 @@ impl ClipboardManager {
     &mut self,
     checkpoint: ClipboardManagerCheckpoint,
   ) -> Result<(), String> {
-    let previous_live_blob_ids = image_blob_ids(&checkpoint.items);
-    let live_blob_ids = image_blob_ids(&self.items);
-    // A shared blob enters the journal only after its final item reference is
-    // gone; the journal is committed atomically with the new item metadata.
-    self
-      .pending_image_blob_ids
-      .retain(|blob_id| !live_blob_ids.contains(blob_id));
-    self.pending_image_blob_ids.extend(
-      previous_live_blob_ids
-        .difference(&live_blob_ids)
-        .filter(|blob_id| uuid::Uuid::parse_str(blob_id).is_ok())
-        .cloned(),
-    );
+    if matches!(self.persistence, ClipboardPersistence::Encrypted(_)) {
+      let previous_live_blob_ids = image_blob_ids(&checkpoint.items);
+      let live_blob_ids = image_blob_ids(&self.items);
+      // A shared blob enters the journal only after its final item reference is
+      // gone; the journal is committed atomically with the new item metadata.
+      self
+        .pending_image_blob_ids
+        .retain(|blob_id| !live_blob_ids.contains(blob_id));
+      self.pending_image_blob_ids.extend(
+        previous_live_blob_ids
+          .difference(&live_blob_ids)
+          .filter(|blob_id| uuid::Uuid::parse_str(blob_id).is_ok())
+          .cloned(),
+      );
+    } else {
+      self.pending_image_blob_ids.clear();
+    }
     if let Err(error) = self.persist() {
       self.restore(checkpoint);
       return Err(error);
@@ -1658,6 +1718,7 @@ impl ClipboardManager {
       .retain(|key, _| referenced_keys.contains(key.as_str()));
     let ClipboardPersistence::Encrypted(store) = &self.persistence else {
       // MemoryOnly and DeletionOnly keep nothing on disk.
+      self.pending_image_blob_ids.clear();
       return Ok(());
     };
     let mut created_blob_ids = Vec::new();
@@ -1686,6 +1747,23 @@ impl ClipboardManager {
           return Err(error);
         }
       }
+    }
+    let live_blob_ids = image_blob_ids(&self.items);
+    if let Err(error) = queue_discovered_orphaned_image_blobs(
+      &mut self.pending_image_blob_ids,
+      store,
+      &live_blob_ids,
+    ) {
+      let mut cleanup_errors = Vec::new();
+      for created_blob_id in &created_blob_ids {
+        if let Err(cleanup_error) = store.remove_image(created_blob_id) {
+          cleanup_errors.push(cleanup_error);
+        }
+      }
+      if cleanup_errors.is_empty() {
+        return Err(error);
+      }
+      return Err(format!("{error}; {}", cleanup_errors.join("; ")));
     }
     let mut source_app_visuals: Vec<ClipboardSourceAppVisual> =
       self.source_app_visuals.values().cloned().collect();
@@ -1724,10 +1802,6 @@ impl ClipboardManager {
           "completed clipboard image cleanup could not be checkpointed"
         );
       }
-    }
-    let live_blob_ids = image_blob_ids(&self.items);
-    if let Err(error) = store.reconcile_images(&live_blob_ids) {
-      tracing::warn!(error = %error, "clipboard image history could not be reconciled");
     }
     for item in &mut self.items {
       item.clear_image_payload();
@@ -1768,6 +1842,15 @@ fn remove_pending_image_blobs(
     }
   }
   completed
+}
+
+fn queue_discovered_orphaned_image_blobs(
+  pending_blob_ids: &mut BTreeSet<String>,
+  store: &ClipboardStore,
+  live_blob_ids: &HashSet<String>,
+) -> Result<(), String> {
+  pending_blob_ids.extend(store.discover_orphaned_image_blob_ids(live_blob_ids)?);
+  Ok(())
 }
 
 fn image_blob_validation(
@@ -3204,7 +3287,13 @@ mod tests {
       ["text", "formatted", "valid", "valid-duplicate"]
     );
 
-    store.reconcile_images(&image_blob_ids(&items)).unwrap();
+    assert_eq!(
+      store
+        .discover_orphaned_image_blob_ids(&image_blob_ids(&items))
+        .unwrap(),
+      BTreeSet::from([invalid_blob_id.clone()])
+    );
+    store.remove_image(&invalid_blob_id).unwrap();
     assert_eq!(
       store.load_image(&valid_blob_id, valid_image.len()).unwrap(),
       valid_image
@@ -3343,6 +3432,95 @@ mod tests {
         .with_extension("images")
         .join(format!("{blob_id}.preview.enc"))
         .exists()
+    );
+    ClipboardStore::remove(&store_path).unwrap();
+  }
+
+  #[test]
+  fn pending_image_cleanup_is_not_tracked_outside_encrypted_persistence() {
+    for persistence in [
+      ClipboardPersistence::MemoryOnly,
+      ClipboardPersistence::DeletionOnly(unique_store_path()),
+    ] {
+      let mut manager = ready_manager();
+      manager.items.push(image_item(
+        "image",
+        &uuid::Uuid::new_v4().to_string(),
+        &"0".repeat(64),
+        4,
+      ));
+      manager.pending_image_blob_ids =
+        BTreeSet::from([uuid::Uuid::new_v4().to_string()]);
+      manager.persistence = persistence;
+
+      assert!(manager.delete_item("image").unwrap());
+      assert!(manager.pending_image_blob_ids.is_empty());
+    }
+  }
+
+  #[test]
+  fn hourly_pruning_retries_pending_image_cleanup_without_expiring_items() {
+    let store_path = unique_store_path();
+    let store = ClipboardStore::new([7; 32], store_path.clone());
+    let blob_id = uuid::Uuid::new_v4().to_string();
+    let image: &[u8] = b"full image";
+    store
+      .persist_image(
+        &blob_id,
+        crate::clipboard_store::ClipboardImagePayload {
+          image,
+          preview: b"preview",
+        },
+      )
+      .unwrap();
+    let image_path = store_path
+      .with_extension("images")
+      .join(format!("{blob_id}.image.enc"));
+    std::fs::remove_file(&image_path).unwrap();
+    std::fs::create_dir(&image_path).unwrap();
+    let mut manager = ready_manager();
+    manager.persistence = ClipboardPersistence::Encrypted(store.clone());
+    manager.pending_image_blob_ids = BTreeSet::from([blob_id.clone()]);
+
+    assert!(!manager.prune_expired(Utc::now()).unwrap());
+    assert_eq!(
+      manager.pending_image_blob_ids,
+      BTreeSet::from([blob_id.clone()])
+    );
+
+    std::fs::remove_dir(&image_path).unwrap();
+    assert!(manager.prune_expired(Utc::now()).unwrap());
+    assert!(manager.pending_image_blob_ids.is_empty());
+    ClipboardStore::remove(&store_path).unwrap();
+  }
+
+  #[test]
+  fn orphan_cleanup_failure_keeps_the_journal_durable_before_deletion() {
+    let store_path = unique_store_path();
+    let store = ClipboardStore::new([7; 32], store_path.clone());
+    let blob_id = uuid::Uuid::new_v4().to_string();
+    store
+      .persist_image(
+        &blob_id,
+        crate::clipboard_store::ClipboardImagePayload {
+          image: b"orphaned full image",
+          preview: b"preview",
+        },
+      )
+      .unwrap();
+    let image_path = store_path
+      .with_extension("images")
+      .join(format!("{blob_id}.image.enc"));
+    std::fs::remove_file(&image_path).unwrap();
+    std::fs::create_dir(&image_path).unwrap();
+
+    let mut manager = ready_manager();
+    manager.persistence = ClipboardPersistence::Encrypted(store.clone());
+    manager.persist().unwrap();
+
+    assert_eq!(
+      store.load().unwrap().unwrap().pending_image_blob_ids,
+      BTreeSet::from([blob_id])
     );
     ClipboardStore::remove(&store_path).unwrap();
   }

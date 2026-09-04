@@ -5,7 +5,7 @@ use aes_gcm::{
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
-  collections::HashSet,
+  collections::{BTreeSet, HashSet},
   fmt, fs,
   path::{Path, PathBuf},
 };
@@ -326,13 +326,6 @@ impl ClipboardStore {
         Err(error) => return Err(format!("clipboard image rollback failed: {error}")),
       }
     }
-    Ok(())
-  }
-
-  pub fn reconcile_images(
-    &self,
-    live_blob_ids: &HashSet<String>,
-  ) -> Result<(), String> {
     let directory = self.image_directory();
     let entries = match fs::read_dir(&directory) {
       Ok(entries) => entries,
@@ -341,6 +334,40 @@ impl ClipboardStore {
         return Err(format!("clipboard image directory read failed: {error}"));
       }
     };
+    let temporary_prefixes =
+      [format!("{blob_id}.image."), format!("{blob_id}.preview.")];
+    for entry in entries {
+      let entry =
+        entry.map_err(|error| format!("clipboard image entry read failed: {error}"))?;
+      let name = entry.file_name();
+      let name = name.to_string_lossy();
+      if name.ends_with(".tmp")
+        && temporary_prefixes
+          .iter()
+          .any(|prefix| name.starts_with(prefix))
+      {
+        fs::remove_file(entry.path())
+          .map_err(|error| format!("clipboard image rollback failed: {error}"))?;
+      }
+    }
+    Ok(())
+  }
+
+  pub fn discover_orphaned_image_blob_ids(
+    &self,
+    live_blob_ids: &HashSet<String>,
+  ) -> Result<BTreeSet<String>, String> {
+    let directory = self.image_directory();
+    let entries = match fs::read_dir(&directory) {
+      Ok(entries) => entries,
+      Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+        return Ok(BTreeSet::new());
+      }
+      Err(error) => {
+        return Err(format!("clipboard image directory read failed: {error}"));
+      }
+    };
+    let mut orphaned_blob_ids = BTreeSet::new();
     for entry in entries {
       let entry =
         entry.map_err(|error| format!("clipboard image entry read failed: {error}"))?;
@@ -348,15 +375,24 @@ impl ClipboardStore {
       let name = name.to_string_lossy();
       let blob_id = name
         .strip_suffix(IMAGE_BLOB_SUFFIX)
-        .or_else(|| name.strip_suffix(IMAGE_PREVIEW_SUFFIX));
-      let is_temporary = name.ends_with(".tmp");
-      if is_temporary || blob_id.is_some_and(|blob_id| !live_blob_ids.contains(blob_id))
-      {
-        fs::remove_file(entry.path())
-          .map_err(|error| format!("clipboard image removal failed: {error}"))?;
+        .or_else(|| name.strip_suffix(IMAGE_PREVIEW_SUFFIX))
+        .or_else(|| {
+          if !name.ends_with(".tmp") {
+            return None;
+          }
+          name
+            .split_once(".image.")
+            .or_else(|| name.split_once(".preview."))
+            .map(|(blob_id, _)| blob_id)
+        });
+      let Some(blob_id) = blob_id else {
+        continue;
+      };
+      if uuid::Uuid::parse_str(blob_id).is_ok() && !live_blob_ids.contains(blob_id) {
+        orphaned_blob_ids.insert(blob_id.to_string());
       }
     }
-    Ok(())
+    Ok(orphaned_blob_ids)
   }
 
   pub(crate) fn validate_image(
@@ -623,7 +659,7 @@ mod tests {
   }
 
   #[test]
-  fn image_reconciliation_removes_only_unreferenced_blobs() {
+  fn orphan_discovery_finds_only_unreferenced_blobs() {
     let path = unique_path();
     let store = ClipboardStore::new([7; 32], path.clone());
     let live_blob_id = uuid::Uuid::new_v4().to_string();
@@ -635,9 +671,12 @@ mod tests {
     store.persist_image(&live_blob_id, payload).unwrap();
     store.persist_image(&orphaned_blob_id, payload).unwrap();
 
-    store
-      .reconcile_images(&HashSet::from([live_blob_id.clone()]))
-      .unwrap();
+    assert_eq!(
+      store
+        .discover_orphaned_image_blob_ids(&HashSet::from([live_blob_id.clone()]))
+        .unwrap(),
+      BTreeSet::from([orphaned_blob_id.clone()])
+    );
 
     assert!(
       store
@@ -646,13 +685,13 @@ mod tests {
         .is_file()
     );
     assert!(
-      !store
+      store
         .image_path(&orphaned_blob_id, IMAGE_BLOB_SUFFIX)
         .unwrap()
         .exists()
     );
     assert!(
-      !store
+      store
         .image_path(&orphaned_blob_id, IMAGE_PREVIEW_SUFFIX)
         .unwrap()
         .exists()
@@ -661,20 +700,23 @@ mod tests {
   }
 
   #[test]
-  fn image_reconciliation_removes_interrupted_write_files() {
+  fn orphan_discovery_finds_interrupted_write_files_by_blob_id() {
     let path = unique_path();
     let store = ClipboardStore::new([7; 32], path.clone());
     let image_directory = store.image_directory();
     fs::create_dir_all(&image_directory).unwrap();
-    let temporary_path = image_directory.join(format!(
-      "{}.image.123.{}.tmp",
-      uuid::Uuid::new_v4(),
-      uuid::Uuid::new_v4()
-    ));
+    let blob_id = uuid::Uuid::new_v4().to_string();
+    let temporary_path =
+      image_directory.join(format!("{blob_id}.image.123.{}.tmp", uuid::Uuid::new_v4()));
     fs::write(&temporary_path, b"encrypted temporary data").unwrap();
 
-    store.reconcile_images(&HashSet::new()).unwrap();
-
+    assert_eq!(
+      store
+        .discover_orphaned_image_blob_ids(&HashSet::new())
+        .unwrap(),
+      BTreeSet::from([blob_id.clone()])
+    );
+    store.remove_image(&blob_id).unwrap();
     assert!(!temporary_path.exists());
     ClipboardStore::remove(&path).unwrap();
   }
