@@ -299,10 +299,10 @@
       "name": "@stll/web",
       "version": "0.0.0",
       "dependencies": {
-        "@atlaskit/pragmatic-drag-and-drop": "^3.0.0",
-        "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^3.1.0",
-        "@atlaskit/pragmatic-drag-and-drop-hitbox": "^2.1.0",
-        "@atlaskit/pragmatic-drag-and-drop-live-region": "^2.0.0",
+        "@atlaskit/pragmatic-drag-and-drop": "^3.1.0",
+        "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^3.2.0",
+        "@atlaskit/pragmatic-drag-and-drop-hitbox": "^2.2.0",
+        "@atlaskit/pragmatic-drag-and-drop-live-region": "^2.1.0",
         "@base-ui/react": "catalog:",
         "@better-auth/oauth-provider": "catalog:",
         "@fontsource-variable/source-serif-4": "^5.3.0",
@@ -862,8 +862,8 @@
         "tailwind-merge": "^3.6.0",
       },
       "devDependencies": {
-        "@atlaskit/pragmatic-drag-and-drop": "^3.0.0",
-        "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^3.1.0",
+        "@atlaskit/pragmatic-drag-and-drop": "^3.1.0",
+        "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^3.2.0",
         "@base-ui/react": "catalog:",
         "@dnd-kit/core": "^6.3.1",
         "@dnd-kit/sortable": "^10.0.0",
@@ -881,8 +881,8 @@
         "vite": "catalog:",
       },
       "peerDependencies": {
-        "@atlaskit/pragmatic-drag-and-drop": "^3.0.0",
-        "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^3.1.0",
+        "@atlaskit/pragmatic-drag-and-drop": "^3.1.0",
+        "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^3.2.0",
         "@base-ui/react": "^1.7.0",
         "@dnd-kit/core": "^6.3.1",
         "@dnd-kit/sortable": "^10.0.0",
@@ -918,8 +918,8 @@
         "use-intl": "catalog:",
       },
       "devDependencies": {
-        "@atlaskit/pragmatic-drag-and-drop": "^3.0.0",
-        "@atlaskit/pragmatic-drag-and-drop-hitbox": "^2.1.0",
+        "@atlaskit/pragmatic-drag-and-drop": "^3.1.0",
+        "@atlaskit/pragmatic-drag-and-drop-hitbox": "^2.2.0",
         "@base-ui/react": "catalog:",
         "@stll/property-testing": "workspace:*",
         "@stll/typescript-config": "workspace:*",
@@ -934,8 +934,8 @@
         "tsdown": "catalog:",
       },
       "peerDependencies": {
-        "@atlaskit/pragmatic-drag-and-drop": "^3.0.0",
-        "@atlaskit/pragmatic-drag-and-drop-hitbox": "^2.1.0",
+        "@atlaskit/pragmatic-drag-and-drop": "^3.1.0",
+        "@atlaskit/pragmatic-drag-and-drop-hitbox": "^2.2.0",
         "@base-ui/react": "^1.7.0",
         "@tanstack/react-table": "^9.1.2",
         "react": ">=19",
@@ -1110,11 +1110,11 @@
 
     "@atlaskit/pragmatic-drag-and-drop": ["@atlaskit/pragmatic-drag-and-drop@3.0.0", "", { "dependencies": { "@babel/runtime": "^7.0.0", "bind-event-listener": "^3.0.0", "raf-schd": "^4.0.3" } }, "sha512-EEKBELv757wrvhMHBAoFcXjfzGZ4Y2FJ2xnSsWovsOKywkN1Q4IWRH52hQpPmJnATLcmO9viVhoXWSXFBLKSLQ=="],
 
-    "@atlaskit/pragmatic-drag-and-drop-auto-scroll": ["@atlaskit/pragmatic-drag-and-drop-auto-scroll@3.1.0", "", { "dependencies": { "@atlaskit/pragmatic-drag-and-drop": "^3.0.0", "@babel/runtime": "^7.0.0" } }, "sha512-YfxLci5SA2MwdJKIVpnEZfbiOGWQIQnD1NvUgqFq96v33PGVWQy13k07KxeSkR/M8E6VBiYRoglelyCdRmyyBQ=="],
+    "@atlaskit/pragmatic-drag-and-drop-auto-scroll": ["@atlaskit/pragmatic-drag-and-drop-auto-scroll@3.2.0", "", { "dependencies": { "@atlaskit/pragmatic-drag-and-drop": "^3.1.0", "@babel/runtime": "^7.0.0" } }, "sha512-vuL+AJae6c6lkmFd63v7c/7J7seyi7ZA8uMLNe9GvvApySToun3Zlv8SfyZU0d+wcNG4+Ix6qpRb8jOobZgNNg=="],
 
-    "@atlaskit/pragmatic-drag-and-drop-hitbox": ["@atlaskit/pragmatic-drag-and-drop-hitbox@2.1.0", "", { "dependencies": { "@atlaskit/pragmatic-drag-and-drop": "^3.0.0", "@babel/runtime": "^7.0.0" } }, "sha512-88krJVd1OcPHy0EFcJx0CjT1AOTB/1AneVvDWOhU4FH6NYDgTNF69euj8GUE07r0KK3L+9V77MKQhaOtwq2mXA=="],
+    "@atlaskit/pragmatic-drag-and-drop-hitbox": ["@atlaskit/pragmatic-drag-and-drop-hitbox@2.2.0", "", { "dependencies": { "@atlaskit/pragmatic-drag-and-drop": "^3.1.0", "@babel/runtime": "^7.0.0" } }, "sha512-L0Wq4EKc9Yx+iywci3NLhwjsaru+hyZ9C/H7mz5pvrSh7vpp9q2YabRr85OnCLaY6equ5pxGVyI4PF3HP69ZMw=="],
 
-    "@atlaskit/pragmatic-drag-and-drop-live-region": ["@atlaskit/pragmatic-drag-and-drop-live-region@2.0.0", "", { "dependencies": { "@babel/runtime": "^7.0.0" } }, "sha512-GrlZdZQSw4yegSrU8EDcaO6IBDEAYbSMgv3tTTfkbdmOjpEnwXmNGHe7CiA3GR9LgUNiKpERR9tlfa+viXIGvA=="],
+    "@atlaskit/pragmatic-drag-and-drop-live-region": ["@atlaskit/pragmatic-drag-and-drop-live-region@2.1.0", "", { "dependencies": { "@babel/runtime": "^7.0.0" } }, "sha512-7THqnYhsSQnVqyVBCdMvdjWTjE3bUd5WKqs8g2SVv6UgJTIKunVmCH5lg6oySmqGGyVtHyOf7aXgpVpgUS9kbg=="],
 
     "@aws-crypto/sha256-js": ["@aws-crypto/sha256-js@5.2.0", "", { "dependencies": { "@aws-crypto/util": "^5.2.0", "@aws-sdk/types": "^3.222.0", "tslib": "^2.6.2" } }, "sha512-FFQQyu7edu4ufvIZ+OadFpHHOt+eSTBaYaki44c+akjg7qZg9oOQeLlk77F6tSYqjDAFClrHJk9tMf0HdVyOvA=="],
 

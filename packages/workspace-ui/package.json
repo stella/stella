@@ -72,8 +72,8 @@
     "use-intl": "catalog:"
   },
   "devDependencies": {
-    "@atlaskit/pragmatic-drag-and-drop": "^3.0.0",
-    "@atlaskit/pragmatic-drag-and-drop-hitbox": "^2.1.0",
+    "@atlaskit/pragmatic-drag-and-drop": "^3.1.0",
+    "@atlaskit/pragmatic-drag-and-drop-hitbox": "^2.2.0",
     "@base-ui/react": "catalog:",
     "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
@@ -88,8 +88,8 @@
     "tsdown": "catalog:"
   },
   "peerDependencies": {
-    "@atlaskit/pragmatic-drag-and-drop": "^3.0.0",
-    "@atlaskit/pragmatic-drag-and-drop-hitbox": "^2.1.0",
+    "@atlaskit/pragmatic-drag-and-drop": "^3.1.0",
+    "@atlaskit/pragmatic-drag-and-drop-hitbox": "^2.2.0",
     "@base-ui/react": "^1.7.0",
     "@tanstack/react-table": "^9.1.2",
     "react": ">=19",

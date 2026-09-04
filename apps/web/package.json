@@ -33,10 +33,10 @@
     "test:e2e:ui": "playwright test --config e2e/playwright.config.ts --ui"
   },
   "dependencies": {
-    "@atlaskit/pragmatic-drag-and-drop": "^3.0.0",
-    "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^3.1.0",
-    "@atlaskit/pragmatic-drag-and-drop-hitbox": "^2.1.0",
-    "@atlaskit/pragmatic-drag-and-drop-live-region": "^2.0.0",
+    "@atlaskit/pragmatic-drag-and-drop": "^3.1.0",
+    "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^3.2.0",
+    "@atlaskit/pragmatic-drag-and-drop-hitbox": "^2.2.0",
+    "@atlaskit/pragmatic-drag-and-drop-live-region": "^2.1.0",
     "@base-ui/react": "catalog:",
     "@better-auth/oauth-provider": "catalog:",
     "@fontsource-variable/source-serif-4": "^5.3.0",
