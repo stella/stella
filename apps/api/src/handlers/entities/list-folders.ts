@@ -7,6 +7,7 @@ import { entities } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
+import { tPaginationCursor } from "@/api/lib/custom-schema";
 import {
   decodeEntityListCursor,
   encodeEntityListCursor,
@@ -20,7 +21,7 @@ const listFoldersQuerySchema = t.Object({
   limit: t.Optional(
     t.Integer({ minimum: 1, maximum: LIMITS.entitiesWindowSizeMax }),
   ),
-  cursor: t.Optional(t.String({ maxLength: 512 })),
+  cursor: t.Optional(tPaginationCursor()),
 });
 type ListFoldersQuery = (typeof listFoldersQuerySchema)["static"];
 

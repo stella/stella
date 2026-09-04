@@ -11,7 +11,7 @@ import { expenses } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId, tUserId } from "@/api/lib/custom-schema";
+import { tPaginationCursor, tSafeId, tUserId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -27,7 +27,7 @@ const readExpensesQuerySchema = t.Object({
   limit: t.Optional(
     t.Integer({ minimum: 1, maximum: LIMITS.expensesPageSizeMax }),
   ),
-  cursor: t.Optional(t.String({ maxLength: 512 })),
+  cursor: t.Optional(tPaginationCursor()),
   userId: t.Optional(tUserId),
   matterId: t.Optional(tSafeId("entity")),
   dateFrom: t.Optional(t.String({ format: "date" })),

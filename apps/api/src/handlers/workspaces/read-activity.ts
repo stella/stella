@@ -16,6 +16,7 @@ import {
 } from "@/api/handlers/workspaces/activity-scope";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { tPaginationCursor } from "@/api/lib/custom-schema";
 import {
   parsePgTimestampCursorValue,
   pgTimestampCursorBoundary,
@@ -28,7 +29,7 @@ const config = {
   permissions: WORKSPACE_ACTIVITY_PERMISSIONS,
   mcp: { type: "internal", reason: "ui_navigation_state" },
   query: t.Object({
-    cursor: t.Optional(t.String({ maxLength: 512 })),
+    cursor: t.Optional(tPaginationCursor()),
     limit: t.Optional(
       t.Integer({
         minimum: 1,

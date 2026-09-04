@@ -3,7 +3,7 @@ import { t } from "elysia";
 import { readReportExportHistory } from "@/api/handlers/reports/export-history";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { workspaceParams } from "@/api/lib/custom-schema";
+import { tPaginationCursor, workspaceParams } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 
 const config = {
@@ -14,7 +14,7 @@ const config = {
   access: "read",
   params: workspaceParams({}),
   query: t.Object({
-    cursor: t.Optional(t.String({ maxLength: 512 })),
+    cursor: t.Optional(tPaginationCursor()),
     limit: t.Optional(
       t.Integer({
         minimum: 1,

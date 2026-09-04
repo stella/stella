@@ -14,10 +14,16 @@ describe("contact pagination cursor contract", () => {
 
     expect(cursor).toHaveLength(CONTACT_CURSOR_MAX_LENGTH);
     expect(
-      Value.Check(tPaginationCursor(CONTACT_CURSOR_MAX_LENGTH), cursor),
+      Value.Check(
+        tPaginationCursor({ maxChars: CONTACT_CURSOR_MAX_LENGTH }),
+        cursor,
+      ),
     ).toBe(true);
     expect(
-      Value.Check(tPaginationCursor(CONTACT_CURSOR_MAX_LENGTH), `${cursor}x`),
+      Value.Check(
+        tPaginationCursor({ maxChars: CONTACT_CURSOR_MAX_LENGTH }),
+        `${cursor}x`,
+      ),
     ).toBe(false);
   });
 });

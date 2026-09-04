@@ -9,7 +9,7 @@ import { templates } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { tPaginationCursor, tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -60,7 +60,7 @@ const listTemplatesQuerySchema = t.Object({
   categoryId: t.Optional(
     t.Union([tSafeId("templateCategory"), t.Literal(UNCATEGORIZED)]),
   ),
-  cursor: t.Optional(t.String({ maxLength: 512 })),
+  cursor: t.Optional(tPaginationCursor()),
   limit: t.Optional(
     t.Integer({ minimum: 1, maximum: LIMITS.templatesPageSizeMax }),
   ),

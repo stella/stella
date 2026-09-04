@@ -83,7 +83,7 @@
     "count": 0,
     "files": {}
   },
-  "unbounded-pagination-cursor-schema": {
+  "literal-pagination-cursor-schema": {
     "count": 0,
     "files": {}
   },

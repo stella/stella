@@ -65,11 +65,23 @@ export const tPaginationLimit = (maximum: number) =>
 
 export const PAGINATION_CURSOR_MAX_CHARS = 512;
 
-export const tPaginationCursor = (maxLength = PAGINATION_CURSOR_MAX_CHARS) =>
-  t.String({
-    maxLength,
-    description: "Opaque cursor from a previous page to fetch the next page",
-  });
+const PAGINATION_CURSOR_DESCRIPTION =
+  "Opaque cursor from a previous page to fetch the next page";
+
+type PaginationCursorOptions = {
+  // Endpoints whose cursor encodes more than a keyset (a window, a delegated
+  // upstream token) raise the cap; everything else takes the shared one.
+  readonly maxChars?: number;
+  // The prose an MCP client reads before calling the tool. Name the tool the
+  // cursor came from when the generic sentence would leave the caller guessing.
+  readonly description?: string;
+};
+
+export const tPaginationCursor = ({
+  maxChars = PAGINATION_CURSOR_MAX_CHARS,
+  description = PAGINATION_CURSOR_DESCRIPTION,
+}: PaginationCursorOptions = {}) =>
+  t.String({ maxLength: maxChars, description });
 
 export const workspaceParams = <T extends TProperties>(extra: T) =>
   t.Object({ workspaceId: tSafeId("workspace"), ...extra });

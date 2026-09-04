@@ -32,7 +32,9 @@ const readEntitiesWindowBodySchema = t.Object({
       maximum: LIMITS.entitiesWindowSizeMax,
     }),
   ),
-  cursor: t.Optional(tPaginationCursor(ENTITIES_WINDOW_CURSOR_MAX_LENGTH)),
+  cursor: t.Optional(
+    tPaginationCursor({ maxChars: ENTITIES_WINDOW_CURSOR_MAX_LENGTH }),
+  ),
   excludedKinds: t.Optional(
     t.Array(t.UnionEnum([...ENTITY_KINDS]), {
       maxItems: ENTITY_KINDS.length,

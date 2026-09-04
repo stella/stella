@@ -10,7 +10,7 @@ import type {
   SafeHandlerGenerator,
 } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { withDescription } from "@/api/lib/custom-schema";
+import { tPaginationCursor, withDescription } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import type { MemberRole } from "@/api/lib/member-roles";
@@ -36,7 +36,7 @@ const listTemplatePacksQuerySchema = t.Object({
   limit: t.Optional(
     t.Integer({ minimum: 1, maximum: LIMITS.templatePacksPageSizeMax }),
   ),
-  cursor: t.Optional(t.String({ maxLength: 128 })),
+  cursor: t.Optional(tPaginationCursor({ maxChars: 128 })),
   locale: t.Optional(
     withDescription(
       t.String({ minLength: 2, maxLength: 35 }),

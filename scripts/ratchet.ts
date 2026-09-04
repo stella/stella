@@ -674,18 +674,15 @@ const countRepeatedTimestampCursorBoundaries = (content: string): number => {
   return total;
 };
 
-const countUnboundedPaginationCursorSchema = (content: string): number => {
-  let count = 0;
-  const code = stripComments(content);
-  const cursorSchemas =
-    /\bcursor\s*:\s*t\.Optional\s*\(\s*t\.String\s*\((?<options>[^)]*)\)\s*\)/gu;
-  for (const match of code.matchAll(cursorSchemas)) {
-    if (!/\bmaxLength\s*:/u.test(match.groups?.["options"] ?? "")) {
-      count += 1;
-    }
-  }
-  return count;
-};
+// Every literal cursor field, bounded or not. A `maxLength` written at the call
+// site is still a second copy of the cap the owner already holds: the byte
+// budget belongs to `tPaginationCursor()`, and a literal that happens to agree
+// with it today is the one that silently disagrees tomorrow.
+const countLiteralPaginationCursorSchema = (content: string): number =>
+  countMatches(
+    stripComments(content),
+    /\bcursor\s*:\s*t\.Optional\s*\(\s*t\.String\s*\(/gu,
+  );
 
 /**
  * Regex literals whose worst case backtracks super-linearly in the length of
@@ -1697,11 +1694,14 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
   },
   {
     scope: "file",
-    id: "unbounded-pagination-cursor-schema",
-    description: "literal cursor: t.Optional(t.String()) schemas in API source",
+    id: "literal-pagination-cursor-schema",
+    description:
+      "literal `cursor: t.Optional(t.String(` fields in API source, bounded or not; cursor query fields come from `tPaginationCursor()` in apps/api/src/lib/custom-schema.ts, which owns the byte cap and the description. The upstream page token in legislation/boe-search.ts is excluded: it carries a syntax `pattern` and a 5-character cap, so it is not the opaque keyset cursor this owner serves",
     include: ["apps/api/src/**/*.{ts,tsx}"],
-    exclude: isExcludedSource,
-    count: countUnboundedPaginationCursorSchema,
+    exclude: (file) =>
+      isExcludedSource(file) ||
+      file === "apps/api/src/handlers/legislation/boe-search.ts",
+    count: countLiteralPaginationCursorSchema,
   },
   {
     scope: "file",
@@ -2443,6 +2443,7 @@ const SHARED_API_HELPER_FIXTURE_LINES = [
   "const first = { cursor: t.Optional(t.String()) };",
   "const second = { cursor: t.Optional(t.String({ minLength: 1 })) };",
   "const bounded = { cursor: t.Optional(t.String({ maxLength: 512 })) };",
+  "const capped = { cursor: t.Optional(t.String({ maxLength: 128 })) };",
   "const shared = { cursor: t.Optional(tPaginationCursor()) };",
   "// tx.insert(auditLogs) must not count.",
   '// YYYY-MM-DD"T"HH24:MI:SS.US must not count.',
@@ -2452,7 +2453,9 @@ const SHARED_API_HELPER_FIXTURE_LINES = [
 const SELF_TEST_SHARED_API_HELPERS = `${SHARED_API_HELPER_FIXTURE_LINES.join("\n")}\n`;
 const EXPECTED_DIRECT_AUDIT_LOG_INSERTS = 1;
 const EXPECTED_INLINE_TIMESTAMP_CURSOR_SQL = 2;
-const EXPECTED_UNBOUNDED_PAGINATION_CURSOR_SCHEMAS = 2;
+// The four literal fields (unbounded, minLength-only, and the two bounded
+// ones); the `tPaginationCursor()` call and the commented line do not count.
+const EXPECTED_LITERAL_PAGINATION_CURSOR_SCHEMAS = 4;
 
 const TIMESTAMP_BOUNDARY_FIXTURE_LINES = [
   'import { or as anyOf } from "drizzle-orm";',
@@ -3602,8 +3605,8 @@ const runSelfTest = (): number => {
         EXPECTED_REPEATED_TIMESTAMP_CURSOR_BOUNDARIES,
       ],
       [
-        "unbounded-pagination-cursor-schema",
-        EXPECTED_UNBOUNDED_PAGINATION_CURSOR_SCHEMAS,
+        "literal-pagination-cursor-schema",
+        EXPECTED_LITERAL_PAGINATION_CURSOR_SCHEMAS,
       ],
     ] as const;
     for (const [id, expected] of sharedHelperMetricExpectations) {

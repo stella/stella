@@ -4,6 +4,7 @@ import { t } from "elysia";
 import { toMachineApiKeySummary } from "@/api/handlers/api-keys/mint";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { MachineApiKeyScope } from "@/api/lib/machine-api-key-config";
 import {
@@ -19,7 +20,7 @@ const listMachineApiKeysQuerySchema = t.Object({
   limit: t.Optional(
     t.Integer({ minimum: 1, maximum: MACHINE_API_KEY_PAGE_SIZE_MAX }),
   ),
-  cursor: t.Optional(t.String({ maxLength: 512 })),
+  cursor: t.Optional(tPaginationCursor()),
 });
 
 const config = {
