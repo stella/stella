@@ -452,7 +452,7 @@
     },
     "packages/ai-catalog": {
       "name": "@stll/ai-catalog",
-      "version": "0.1.6",
+      "version": "0.1.7",
       "dependencies": {
         "valibot": "catalog:",
       },
@@ -791,7 +791,7 @@
     },
     "packages/ssr-kit": {
       "name": "@stll/ssr-kit",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
@@ -800,7 +800,7 @@
     },
     "packages/ssr-testkit": {
       "name": "@stll/ssr-testkit",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "dependencies": {
         "better-result": "catalog:",
       },
@@ -812,7 +812,7 @@
     },
     "packages/start-runtime": {
       "name": "@stll/start-runtime",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "dependencies": {
         "better-result": "catalog:",
       },

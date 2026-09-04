@@ -1,5 +1,11 @@
 # @stll/ai-catalog
 
+## 0.1.7
+
+### Patch Changes
+
+- [#2896](https://github.com/stella/stella/pull/2896) [`78ba470`](https://github.com/stella/stella/commit/78ba470fe151fa51d11a1a17ec917c7b190fae50) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Generate model rates from models.dev and meter its current cache-read, cache-write, and context-tier pricing.
+
 ## 0.1.6
 
 ### Patch Changes

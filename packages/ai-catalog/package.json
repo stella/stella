@@ -1,6 +1,6 @@
 {
   "name": "@stll/ai-catalog",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Provider-neutral AI model roles, capabilities, and curated model metadata.",
   "keywords": [
     "ai",
