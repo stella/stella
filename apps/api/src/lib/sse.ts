@@ -1,3 +1,5 @@
+import { Result } from "better-result";
+
 import type {
   DesktopEditSessionRealtimeEvent,
   OrganizationRealtimeEvent,
@@ -89,6 +91,44 @@ const formatSSE = (
 const formatKeepAlive = (): Uint8Array => encoder.encode(`:keep-alive\n\n`);
 
 /**
+ * Close one stream controller best-effort. `close()` throws for a controller
+ * that is already closed or errored, and every caller here is tearing that
+ * connection down anyway, so the failure carries no information.
+ */
+const closeControllerQuietly = (
+  controller: ReadableStreamDefaultController,
+): void =>
+  Result.try(() => {
+    controller.close();
+  }).unwrapOr(undefined);
+
+type StreamConnection = { controller: ReadableStreamDefaultController };
+
+type EnqueueOrDropOptions<TConnection extends StreamConnection> = {
+  chunk: Uint8Array;
+  connection: TConnection;
+  set: Set<TConnection>;
+};
+
+/**
+ * Push a chunk to one stream, dropping the connection when its controller is
+ * gone. `enqueue` fails for a closed or errored stream; that failure is this
+ * module's self-heal signal for a connection nothing reads any more.
+ */
+const enqueueOrDrop = <TConnection extends StreamConnection>({
+  chunk,
+  connection,
+  set,
+}: EnqueueOrDropOptions<TConnection>): void => {
+  const enqueued = Result.try(() => {
+    connection.controller.enqueue(chunk);
+  });
+  if (Result.isError(enqueued)) {
+    set.delete(connection);
+  }
+};
+
+/**
  * Register a new SSE connection for a workspace.
  * Returns a ReadableStream that stays open until the client disconnects.
  */
@@ -116,11 +156,7 @@ export const subscribe = ({
       // run). Treat it as an immediately-closed connection: close the
       // controller and never register.
       if (signal.aborted) {
-        try {
-          controller.close();
-        } catch {
-          // Already closed.
-        }
+        closeControllerQuietly(controller);
         return;
       }
 
@@ -138,11 +174,7 @@ export const subscribe = ({
         if (set.size === 0 && connections.get(workspaceId) === set) {
           connections.delete(workspaceId);
         }
-        try {
-          controller.close();
-        } catch {
-          // Already closed.
-        }
+        closeControllerQuietly(controller);
       };
 
       signal.addEventListener("abort", cleanup, { once: true });
@@ -174,11 +206,7 @@ export const subscribeUser = ({
       // runs, so the client may already be gone and an aborted signal never
       // fires a fresh "abort" event.
       if (signal.aborted) {
-        try {
-          controller.close();
-        } catch {
-          // Already closed.
-        }
+        closeControllerQuietly(controller);
         return;
       }
 
@@ -196,11 +224,7 @@ export const subscribeUser = ({
         if (set.size === 0 && userConnections.get(userId) === set) {
           userConnections.delete(userId);
         }
-        try {
-          controller.close();
-        } catch {
-          // Already closed.
-        }
+        closeControllerQuietly(controller);
       };
 
       signal.addEventListener("abort", cleanup, { once: true });
@@ -224,11 +248,7 @@ const closeLocalUserConnections = (
       continue;
     }
     set.delete(conn);
-    try {
-      conn.controller.close();
-    } catch {
-      // Already closed.
-    }
+    closeControllerQuietly(conn.controller);
   }
 
   if (set.size === 0 && userConnections.get(userId) === set) {
@@ -250,11 +270,7 @@ const closeLocalWorkspaceUserConnections = (
       continue;
     }
     set.delete(conn);
-    try {
-      conn.controller.close();
-    } catch {
-      // Already closed.
-    }
+    closeControllerQuietly(conn.controller);
   }
 
   if (set.size === 0 && connections.get(workspaceId) === set) {
@@ -269,11 +285,7 @@ const closeConnection = (
   conn: SSEConnection,
 ): void => {
   set.delete(conn);
-  try {
-    conn.controller.close();
-  } catch {
-    // Already closed.
-  }
+  closeControllerQuietly(conn.controller);
 };
 
 /** Reauthorize current access before pushing an event to local connections. */
@@ -300,10 +312,13 @@ const broadcastLocal = async (
   }
 
   const userIds = [...new Set(targets.map((connection) => connection.userId))];
-  let authorizedUserIds: ReadonlySet<SafeId<"user">>;
-  try {
-    authorizedUserIds = await authorizer({ userIds, workspaceId });
-  } catch (error: unknown) {
+  // The raw failure is what the log names, so it is carried through
+  // unwrapped; wrapping it would rename `error.type` in the sink.
+  const reauthorized = await Result.tryPromise({
+    try: async () => await authorizer({ userIds, workspaceId }),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(reauthorized)) {
     for (const conn of targets) {
       closeConnection(set, conn);
     }
@@ -311,10 +326,11 @@ const broadcastLocal = async (
       connections.delete(workspaceId);
     }
     logger.error("sse.workspace_reauthorization_failed", {
-      "error.type": errorTag(error),
+      "error.type": errorTag(reauthorized.error),
     });
     return;
   }
+  const authorizedUserIds = reauthorized.value;
 
   const chunk = formatSSE(event);
 
@@ -326,11 +342,7 @@ const broadcastLocal = async (
       closeConnection(set, conn);
       continue;
     }
-    try {
-      conn.controller.enqueue(chunk);
-    } catch {
-      set.delete(conn);
-    }
+    enqueueOrDrop({ chunk, connection: conn, set });
   }
 
   if (set.size === 0 && connections.get(workspaceId) === set) {
@@ -364,11 +376,7 @@ const broadcastLocalToUser = async (
   const closeTargets = () => {
     for (const conn of targets) {
       set.delete(conn);
-      try {
-        conn.controller.close();
-      } catch {
-        // Already closed.
-      }
+      closeControllerQuietly(conn.controller);
     }
     if (set.size === 0 && userConnections.get(userId) === set) {
       userConnections.delete(userId);
@@ -382,18 +390,19 @@ const broadcastLocalToUser = async (
     return;
   }
 
-  let authorized: boolean;
-  try {
-    authorized = await authorizer({ organizationId, userId });
-  } catch (error: unknown) {
+  const reauthorized = await Result.tryPromise({
+    try: async () => await authorizer({ organizationId, userId }),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(reauthorized)) {
     closeTargets();
     logger.error("sse.user_reauthorization_failed", {
-      "error.type": errorTag(error),
+      "error.type": errorTag(reauthorized.error),
     });
     return;
   }
 
-  if (!authorized) {
+  if (!reauthorized.value) {
     closeTargets();
     return;
   }
@@ -403,11 +412,7 @@ const broadcastLocalToUser = async (
     if (!set.has(conn)) {
       continue;
     }
-    try {
-      conn.controller.enqueue(chunk);
-    } catch {
-      set.delete(conn);
-    }
+    enqueueOrDrop({ chunk, connection: conn, set });
   }
 
   if (set.size === 0 && userConnections.get(userId) === set) {
@@ -424,11 +429,13 @@ const queueWorkspaceDelivery = (
 ): void => {
   const previous = workspaceDeliveryTails.get(workspaceId) ?? Promise.resolve();
   const current = previous.then(async () => {
-    try {
-      await operation();
-    } catch (error: unknown) {
+    const delivered = await Result.tryPromise({
+      try: async () => await operation(),
+      catch: (cause) => cause,
+    });
+    if (Result.isError(delivered)) {
       logger.error("sse.workspace_delivery_failed", {
-        "error.type": errorTag(error),
+        "error.type": errorTag(delivered.error),
       });
     }
     return undefined;
@@ -455,11 +462,13 @@ const queueUserDelivery = (
 ): void => {
   const previous = userDeliveryTails.get(userId) ?? Promise.resolve();
   const current = previous.then(async () => {
-    try {
-      await operation();
-    } catch (error: unknown) {
+    const delivered = await Result.tryPromise({
+      try: async () => await operation(),
+      catch: (cause) => cause,
+    });
+    if (Result.isError(delivered)) {
       logger.error("sse.user_delivery_failed", {
-        "error.type": errorTag(error),
+        "error.type": errorTag(delivered.error),
       });
     }
     return undefined;
@@ -491,11 +500,7 @@ const broadcastLocalToOrganization = (
       if (conn.organizationId !== organizationId) {
         continue;
       }
-      try {
-        conn.controller.enqueue(chunk);
-      } catch {
-        set.delete(conn);
-      }
+      enqueueOrDrop({ chunk, connection: conn, set });
     }
     if (set.size === 0 && connections.get(workspaceId) === set) {
       connections.delete(workspaceId);
@@ -525,70 +530,79 @@ const isOwnInlineDelivery = (payload: {
 }): boolean =>
   payload.deliveredInline === true && payload.originInstanceId === INSTANCE_ID;
 
+/**
+ * Route one already-received Redis payload. Parsing and ID branding both
+ * reject a malformed message by failing, so this runs under the
+ * `Result.try` in `handleMessage` rather than validating defensively here.
+ */
+const dispatchRedisMessage = (message: string): void => {
+  const parsed = parseRedisPayload(message);
+  if (!parsed) {
+    return;
+  }
+  if (parsed.scope === "user-access-revoked") {
+    const userId = brandPersistedUserId(parsed.id);
+    const organizationId = brandPersistedOrganizationId(parsed.organizationId);
+    queueUserDelivery(userId, () => {
+      closeLocalUserConnections(userId, organizationId);
+    });
+    return;
+  }
+  if (parsed.scope === "user") {
+    if (isOwnInlineDelivery(parsed)) {
+      return;
+    }
+    const userId = brandPersistedUserId(parsed.id);
+    const organizationId = brandPersistedOrganizationId(parsed.organizationId);
+    queueUserDelivery(userId, async () =>
+      broadcastLocalToUser(userId, organizationId, parsed.event),
+    );
+    return;
+  }
+  if (parsed.scope === "workspace-access-revoked") {
+    const workspaceId = brandPersistedWorkspaceId(parsed.id);
+    queueWorkspaceDelivery(workspaceId, () => {
+      closeLocalWorkspaceUserConnections(
+        workspaceId,
+        brandPersistedUserId(parsed.userId),
+      );
+    });
+    return;
+  }
+  if (parsed.scope === "workspace") {
+    if (isOwnInlineDelivery(parsed)) {
+      return;
+    }
+    const workspaceId = brandPersistedWorkspaceId(parsed.id);
+    queueWorkspaceDelivery(workspaceId, async () =>
+      broadcastLocal(workspaceId, parsed.event),
+    );
+  } else if (parsed.scope === "organization") {
+    if (isOwnInlineDelivery(parsed)) {
+      return;
+    }
+    broadcastLocalToOrganization(
+      brandPersistedOrganizationId(parsed.id),
+      parsed.event,
+    );
+  } else if (parsed.originInstanceId !== INSTANCE_ID) {
+    sessionDeliveryHandler?.(
+      brandPersistedDesktopEditSessionId(parsed.id),
+      parsed.event,
+    );
+  }
+};
+
 const handleMessage = (message: string): void => {
-  try {
-    const parsed = parseRedisPayload(message);
-    if (!parsed) {
-      return;
-    }
-    if (parsed.scope === "user-access-revoked") {
-      const userId = brandPersistedUserId(parsed.id);
-      const organizationId = brandPersistedOrganizationId(
-        parsed.organizationId,
-      );
-      queueUserDelivery(userId, () => {
-        closeLocalUserConnections(userId, organizationId);
-      });
-      return;
-    }
-    if (parsed.scope === "user") {
-      if (isOwnInlineDelivery(parsed)) {
-        return;
-      }
-      const userId = brandPersistedUserId(parsed.id);
-      const organizationId = brandPersistedOrganizationId(
-        parsed.organizationId,
-      );
-      queueUserDelivery(userId, async () =>
-        broadcastLocalToUser(userId, organizationId, parsed.event),
-      );
-      return;
-    }
-    if (parsed.scope === "workspace-access-revoked") {
-      const workspaceId = brandPersistedWorkspaceId(parsed.id);
-      queueWorkspaceDelivery(workspaceId, () => {
-        closeLocalWorkspaceUserConnections(
-          workspaceId,
-          brandPersistedUserId(parsed.userId),
-        );
-      });
-      return;
-    }
-    if (parsed.scope === "workspace") {
-      if (isOwnInlineDelivery(parsed)) {
-        return;
-      }
-      const workspaceId = brandPersistedWorkspaceId(parsed.id);
-      queueWorkspaceDelivery(workspaceId, async () =>
-        broadcastLocal(workspaceId, parsed.event),
-      );
-    } else if (parsed.scope === "organization") {
-      if (isOwnInlineDelivery(parsed)) {
-        return;
-      }
-      broadcastLocalToOrganization(
-        brandPersistedOrganizationId(parsed.id),
-        parsed.event,
-      );
-    } else if (parsed.originInstanceId !== INSTANCE_ID) {
-      sessionDeliveryHandler?.(
-        brandPersistedDesktopEditSessionId(parsed.id),
-        parsed.event,
-      );
-    }
-  } catch (error) {
+  const dispatched = Result.try({
+    try: () => {
+      dispatchRedisMessage(message);
+    },
+    catch: (cause) => cause,
+  });
+  if (Result.isError(dispatched)) {
     logger.warn("sse.invalid_redis_message", {
-      "error.type": errorTag(error),
+      "error.type": errorTag(dispatched.error),
       "payload.bytes": message.length,
     });
   }
@@ -792,11 +806,7 @@ const sendKeepAlive = () => {
 
   for (const [workspaceId, set] of connections) {
     for (const conn of set) {
-      try {
-        conn.controller.enqueue(chunk);
-      } catch {
-        set.delete(conn);
-      }
+      enqueueOrDrop({ chunk, connection: conn, set });
     }
     if (set.size === 0 && connections.get(workspaceId) === set) {
       connections.delete(workspaceId);
@@ -805,11 +815,7 @@ const sendKeepAlive = () => {
 
   for (const [userId, set] of userConnections) {
     for (const conn of set) {
-      try {
-        conn.controller.enqueue(chunk);
-      } catch {
-        set.delete(conn);
-      }
+      enqueueOrDrop({ chunk, connection: conn, set });
     }
     if (set.size === 0 && userConnections.get(userId) === set) {
       userConnections.delete(userId);
@@ -939,10 +945,16 @@ const SUBSCRIBER_ATTACH_STEADY_LOG_EVERY = 12;
  * would skip the retry scheduling and leave the instance permanently deaf.
  */
 const closeSubscriberQuietly = (client: SseRedisClient): void => {
-  try {
-    client.close();
-  } catch (error: unknown) {
-    logger.warn("sse.redis_close_failed", { "error.type": errorTag(error) });
+  const closed = Result.try({
+    try: () => {
+      client.close();
+    },
+    catch: (cause) => cause,
+  });
+  if (Result.isError(closed)) {
+    logger.warn("sse.redis_close_failed", {
+      "error.type": errorTag(closed.error),
+    });
   }
 };
 
@@ -962,63 +974,75 @@ const runAttachAttempt = async (
     return;
   }
 
-  // The client is constructed inside the try so a throwing constructor hits
-  // the fail-soft catch below instead of escaping as an unhandled rejection.
+  // The client is constructed inside the wrapper so a throwing constructor
+  // becomes a typed failure instead of escaping as an unhandled rejection.
+  // The candidate is tracked outside it because the failure path has to close
+  // whatever was already built.
   let subscriber: SseRedisClient | undefined;
-  try {
-    subscriber = lifecycle.createClient();
-    const attached = subscriber;
-    // Capture the generation this client is attaching under. The callback stays
-    // authorized to deliver only while the lifecycle's generation still matches;
-    // any later invalidation bumps it, structurally silencing a stale client
-    // even if its close() threw and left this callback live.
-    const attachGeneration = lifecycle.generation;
-    await attached.subscribe(REDIS_CHANNEL, (message) => {
-      if (
-        activeLifecycle === lifecycle &&
-        lifecycle.generation === attachGeneration
-      ) {
-        handleMessage(message);
-      }
-    });
-    if (activeLifecycle !== lifecycle) {
-      // stopSse (and possibly a subsequent startSse) ran while the connection
-      // was still being established; do not attach a stale subscriber to a
-      // lifecycle that is no longer the active one.
-      closeSubscriberQuietly(attached);
-      return;
-    }
-    lifecycle.subscriber = attached;
-    lifecycle.subscriptionLive = true;
-    // Bun auto-reconnects a dropped subscriber but does NOT re-issue SUBSCRIBE,
-    // and re-subscribing on the SAME client double-registers the callback (both
-    // verified against a mock RESP3 server), which would double-deliver every
-    // event locally. So on any reconnect, drop this now-deaf client and attach
-    // a fresh one, which subscribes exactly once on the new connection. Exactly-
-    // once local delivery holds because `subscriptionLive` is false for the
-    // whole deaf/reattach window, routing broadcasts to inline delivery until
-    // the replacement is subscribed. The initial connect fired before this
-    // handler was registered, so it runs only for genuine reconnects.
-    attached.onReconnect(() => {
-      if (activeLifecycle !== lifecycle || lifecycle.subscriber !== attached) {
+  // `connectionErrorFields` reports the failure's own code, errno and syscall,
+  // so the cause is carried through unwrapped rather than re-tagged.
+  const attempted = await Result.tryPromise({
+    try: async () => {
+      subscriber = lifecycle.createClient();
+      const attached = subscriber;
+      // Capture the generation this client is attaching under. The callback
+      // stays authorized to deliver only while the lifecycle's generation still
+      // matches; any later invalidation bumps it, structurally silencing a
+      // stale client even if its close() failed and left this callback live.
+      const attachGeneration = lifecycle.generation;
+      await attached.subscribe(REDIS_CHANNEL, (message) => {
+        if (
+          activeLifecycle === lifecycle &&
+          lifecycle.generation === attachGeneration
+        ) {
+          handleMessage(message);
+        }
+      });
+      if (activeLifecycle !== lifecycle) {
+        // stopSse (and possibly a subsequent startSse) ran while the connection
+        // was still being established; do not attach a stale subscriber to a
+        // lifecycle that is no longer the active one.
+        closeSubscriberQuietly(attached);
         return;
       }
-      lifecycle.subscriptionLive = false;
-      lifecycle.subscriber = null;
-      // Invalidate the deaf client's generation BEFORE closing it, so it stops
-      // delivering even if close() throws and leaves its callback live. The
-      // close itself is then only best-effort resource cleanup.
-      lifecycle.generation += 1;
-      closeSubscriberQuietly(attached);
-      logger.warn("sse.redis_subscriber_reconnected", {
-        channel: REDIS_CHANNEL,
+      lifecycle.subscriber = attached;
+      lifecycle.subscriptionLive = true;
+      // Bun auto-reconnects a dropped subscriber but does NOT re-issue
+      // SUBSCRIBE, and re-subscribing on the SAME client double-registers the
+      // callback (both verified against a mock RESP3 server), which would
+      // double-deliver every event locally. So on any reconnect, drop this
+      // now-deaf client and attach a fresh one, which subscribes exactly once
+      // on the new connection. Exactly-once local delivery holds because
+      // `subscriptionLive` is false for the whole deaf/reattach window, routing
+      // broadcasts to inline delivery until the replacement is subscribed. The
+      // initial connect fired before this handler was registered, so it runs
+      // only for genuine reconnects.
+      attached.onReconnect(() => {
+        if (
+          activeLifecycle !== lifecycle ||
+          lifecycle.subscriber !== attached
+        ) {
+          return;
+        }
+        lifecycle.subscriptionLive = false;
+        lifecycle.subscriber = null;
+        // Invalidate the deaf client's generation BEFORE closing it, so it
+        // stops delivering even if close() fails and leaves its callback live.
+        // The close itself is then only best-effort resource cleanup.
+        lifecycle.generation += 1;
+        closeSubscriberQuietly(attached);
+        logger.warn("sse.redis_subscriber_reconnected", {
+          channel: REDIS_CHANNEL,
+        });
+        launchAttachAttempt(lifecycle, 0);
       });
-      launchAttachAttempt(lifecycle, 0);
-    });
-    logger.info("sse.redis_connected", { channel: REDIS_CHANNEL });
-  } catch (error: unknown) {
+      logger.info("sse.redis_connected", { channel: REDIS_CHANNEL });
+    },
+    catch: (cause) => cause,
+  });
+  if (Result.isError(attempted)) {
     // Invalidate the failed candidate's generation BEFORE closing it, then
-    // close best-effort: a throwing close() must neither leave the candidate's
+    // close best-effort: a failing close() must neither leave the candidate's
     // callback able to deliver nor skip the retry scheduling below (which would
     // stop the instance retrying and leave it deaf until restart).
     if (subscriber) {
@@ -1030,6 +1054,7 @@ const runAttachAttempt = async (
       // attempt; abandon the retry chain quietly.
       return;
     }
+    const { error } = attempted;
     const rampDelay = SUBSCRIBER_ATTACH_RETRY_DELAYS_MS[attempt];
     const delayMs = rampDelay ?? SUBSCRIBER_ATTACH_STEADY_DELAY_MS;
     if (rampDelay !== undefined) {

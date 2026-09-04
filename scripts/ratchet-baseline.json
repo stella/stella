@@ -310,7 +310,7 @@
     }
   },
   "try-catch-outside-boundary": {
-    "count": 329,
+    "count": 310,
     "files": {
       "apps/api/src/handlers/ai-autocomplete/stream.ts": 1,
       "apps/api/src/handlers/api-keys/mint.ts": 1,
@@ -423,7 +423,6 @@
       "apps/api/src/lib/signals/scout.ts": 1,
       "apps/api/src/lib/skills/skill-package.ts": 8,
       "apps/api/src/lib/sse-broadcast.ts": 1,
-      "apps/api/src/lib/sse.ts": 19,
       "apps/api/src/lib/subprocess.ts": 2,
       "apps/api/src/lib/template-clause-links.ts": 1,
       "apps/api/src/lib/templates/suggest-template-fields.ts": 1,
