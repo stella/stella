@@ -8,6 +8,7 @@ import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
 import { emptyColor, resolveOptionColor } from "./colors";
+import { useFieldText } from "./field-text";
 import { getClipFieldValueLabel } from "./field-value-logic";
 import type { GenericProperty, WorkspaceFieldContent } from "./types";
 
@@ -19,6 +20,12 @@ type FieldValueProps = {
   content: WorkspaceFieldContent | undefined;
   property: GenericProperty;
   pendingPreview?: string | null | undefined;
+  /**
+   * Which column this value belongs to. Only used to look up the host's text
+   * decoration (see `field-text`), so hosts that decorate nothing can omit it;
+   * `GenericProperty` stays host-neutral and carries no identity of its own.
+   */
+  propertyId?: string | undefined;
   variant?: FieldValueVariant;
 };
 
@@ -26,6 +33,7 @@ export const FieldValue = ({
   content,
   property,
   pendingPreview,
+  propertyId,
   variant,
 }: FieldValueProps) => {
   const resolvedVariant = variant ?? "default";
@@ -55,11 +63,23 @@ export const FieldValue = ({
   }
 
   if (content.type === "file") {
-    return <FileFieldValue content={content} variant={resolvedVariant} />;
+    return (
+      <FileFieldValue
+        content={content}
+        propertyId={propertyId}
+        variant={resolvedVariant}
+      />
+    );
   }
 
   if (content.type === "text") {
-    return <TextFieldValue content={content} variant={resolvedVariant} />;
+    return (
+      <TextFieldValue
+        content={content}
+        propertyId={propertyId}
+        variant={resolvedVariant}
+      />
+    );
   }
 
   if (content.type === "date") {
@@ -81,13 +101,20 @@ export const FieldValue = ({
   }
 
   if (content.type === "person") {
-    return <PersonFieldValue content={content} variant={resolvedVariant} />;
+    return (
+      <PersonFieldValue
+        content={content}
+        propertyId={propertyId}
+        variant={resolvedVariant}
+      />
+    );
   }
 
   if (content.type === "single-select") {
     return (
       <SelectFieldValue
         property={property}
+        propertyId={propertyId}
         value={content.value}
         variant={resolvedVariant}
       />
@@ -98,6 +125,7 @@ export const FieldValue = ({
     return (
       <MultiSelectFieldValue
         property={property}
+        propertyId={propertyId}
         value={content.value}
         variant={resolvedVariant}
       />
@@ -161,11 +189,14 @@ export const MoneyFieldValue = ({
 
 export const PersonFieldValue = ({
   content,
+  propertyId,
   variant,
 }: {
   content: Extract<WorkspaceFieldContent, { type: "person" }>;
+  propertyId?: string | undefined;
   variant?: FieldValueVariant;
 }) => {
+  const renderText = useFieldText(propertyId);
   const resolvedVariant = variant ?? "default";
 
   return (
@@ -178,7 +209,7 @@ export const PersonFieldValue = ({
       )}
     >
       <PersonAvatar image={content.image} name={content.name} />
-      <span className="truncate">{content.name}</span>
+      <span className="truncate">{renderText(content.name)}</span>
     </span>
   );
 };
@@ -310,11 +341,15 @@ const UnsupportedFieldValue = ({ variant }: { variant: FieldValueVariant }) => {
 
 const FileFieldValue = ({
   content,
+  propertyId,
   variant,
 }: {
   content: Extract<WorkspaceFieldContent, { type: "file" }>;
+  propertyId: string | undefined;
   variant: FieldValueVariant;
 }) => {
+  const renderText = useFieldText(propertyId);
+
   if (variant === "kanban") {
     return null;
   }
@@ -324,18 +359,22 @@ const FileFieldValue = ({
       as="span"
       className={variant === "table" ? "truncate" : "text-sm"}
     >
-      {content.fileName}
+      {renderText(content.fileName)}
     </BidiText>
   );
 };
 
 const TextFieldValue = ({
   content,
+  propertyId,
   variant,
 }: {
   content: Extract<WorkspaceFieldContent, { type: "text" }>;
+  propertyId: string | undefined;
   variant: FieldValueVariant;
 }) => {
+  const renderText = useFieldText(propertyId);
+
   if (variant === "kanban") {
     if (!content.value.trim()) {
       return null;
@@ -346,7 +385,7 @@ const TextFieldValue = ({
         as="span"
         className="text-muted-foreground line-clamp-2 min-w-0 basis-full text-xs leading-4"
       >
-        {content.value}
+        {renderText(content.value)}
       </BidiText>
     );
   }
@@ -356,7 +395,7 @@ const TextFieldValue = ({
 
   return (
     <BidiText as="span" className={className}>
-      {content.value}
+      {renderText(content.value)}
     </BidiText>
   );
 };
@@ -376,7 +415,12 @@ const DateFieldValue = ({
   if (!date || Number.isNaN(date.getTime())) {
     if (variant === "table") {
       return (
-        <SelectFieldValue property={property} value={null} variant={variant} />
+        <SelectFieldValue
+          property={property}
+          propertyId={undefined}
+          value={null}
+          variant={variant}
+        />
       );
     }
     return <EmptyFieldValue variant={variant} />;
@@ -406,15 +450,21 @@ const DateFieldValue = ({
 
 const SelectFieldValue = ({
   property,
+  propertyId,
   value,
   variant,
 }: {
   property: GenericProperty;
+  propertyId: string | undefined;
   value: string | null;
   variant: FieldValueVariant;
 }) => {
   const t = useTranslations();
+  const renderText = useFieldText(propertyId);
   const color = getSelectPropertyColor(property, value);
+  // Only the stored option is decorated: the "empty" placeholder is this
+  // package's own word, not a value a find could have matched.
+  const label = value === null ? t("common.empty") : renderText(value);
 
   if (variant === "kanban") {
     return (
@@ -426,7 +476,7 @@ const SelectFieldValue = ({
           color: color?.foreground,
         }}
       >
-        {value ?? t("common.empty")}
+        {label}
       </BidiText>
     );
   }
@@ -445,7 +495,7 @@ const SelectFieldValue = ({
     >
       {variant === "table" && !value && <SquareMinusIcon className="size-4" />}
       <BidiText as="span" className="truncate">
-        {value ?? t("common.empty")}
+        {label}
       </BidiText>
     </span>
   );
@@ -453,17 +503,24 @@ const SelectFieldValue = ({
 
 const MultiSelectFieldValue = ({
   property,
+  propertyId,
   value,
   variant,
 }: {
   property: GenericProperty;
+  propertyId: string | undefined;
   value: string[];
   variant: FieldValueVariant;
 }) => {
   if (value.length === 0) {
     if (variant === "table") {
       return (
-        <SelectFieldValue property={property} value={null} variant={variant} />
+        <SelectFieldValue
+          property={property}
+          propertyId={propertyId}
+          value={null}
+          variant={variant}
+        />
       );
     }
     return <EmptyFieldValue variant={variant} />;
@@ -481,6 +538,7 @@ const MultiSelectFieldValue = ({
         <SelectFieldValue
           key={option}
           property={property}
+          propertyId={propertyId}
           value={option}
           variant={variant}
         />

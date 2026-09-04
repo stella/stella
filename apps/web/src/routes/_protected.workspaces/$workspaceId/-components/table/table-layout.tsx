@@ -13,6 +13,7 @@ import { VIEW_SORTS_MAX } from "@stll/api-contract";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import { toTableEntities } from "@/components/workspaces/entity-utils";
 import { useSyncJustificationChunks } from "@/components/workspaces/hooks/use-sync-justifications";
+import { FindHighlightScope } from "@/components/workspaces/table/find-highlight";
 import { workspaceTableFeatures } from "@/components/workspaces/table/table-features";
 import { useMountEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
@@ -209,16 +210,18 @@ const FlatTableLayout = ({ workspaceId, view }: TableLayoutProps) => {
 
   return (
     <MobileTableOrientationGate>
-      <WorkspaceTable
-        hasNextPage={hasNextPage}
-        isFetchingNextPage={isFetchingNextPage}
-        onLoadMore={() => {
-          detached(fetchNextPage(), "table-layout.fetch-next-page");
-        }}
-        table={table}
-        contentMode={tableState.contentMode}
-        workspaceId={workspaceId}
-      />
+      <FindHighlightScope highlight={find.highlight}>
+        <WorkspaceTable
+          hasNextPage={hasNextPage}
+          isFetchingNextPage={isFetchingNextPage}
+          onLoadMore={() => {
+            detached(fetchNextPage(), "table-layout.fetch-next-page");
+          }}
+          table={table}
+          contentMode={tableState.contentMode}
+          workspaceId={workspaceId}
+        />
+      </FindHighlightScope>
       {TableDevtoolsGate ? (
         <Suspense fallback={null}>
           <TableDevtoolsGate table={table} />

@@ -1,3 +1,4 @@
+import type { TableFindHighlight } from "@/components/workspaces/table/find-highlight";
 import type { WorkspaceProperty, WorkspaceView } from "@/lib/types";
 import type { EntitiesFindKey } from "@/lib/workspaces/queries/entities.logic";
 import { useWorkspaceTableSchema } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-columns";
@@ -7,17 +8,6 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-find.logic";
 import type { TableFindColumn } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-find.logic";
 import { useTableStore } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
-
-/**
- * What a cell, a name and a header mark up. `matchesName` follows the scope:
- * once the reader has narrowed to columns the search is about those cells, so
- * the name and the headers stop highlighting with the name half of the query.
- */
-export type TableFindHighlight = {
-  matchesName: boolean;
-  propertyIds: ReadonlySet<string>;
-  term: string;
-};
 
 type TableFindResult = {
   columns: TableFindColumn[];

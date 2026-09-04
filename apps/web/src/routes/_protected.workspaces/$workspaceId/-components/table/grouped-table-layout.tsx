@@ -25,6 +25,7 @@ import {
 } from "@/components/workspaces/entity-utils";
 import { useSyncJustificationChunks } from "@/components/workspaces/hooks/use-sync-justifications";
 import { SelectColorIcon } from "@/components/workspaces/properties/shared";
+import { FindHighlightScope } from "@/components/workspaces/table/find-highlight";
 import {
   buildDocTypeGateLabels,
   resolveDocumentTypeClassifier,
@@ -327,34 +328,36 @@ export const GroupedTableLayout = ({
     // so every section — populated, empty, and the add-row — stretches to the
     // full table width (their bands then run the whole scroll width).
     <MobileTableOrientationGate>
-      <div className="flex w-max min-w-full flex-col" ref={scrollRef}>
-        {groups.map((group) => (
-          <GroupSection
-            columns={columns}
-            count={
-              countsLoaded ? (countByValue.get(group.value) ?? 0) : undefined
-            }
-            eager={eagerGroupValues?.has(group.value) ?? false}
-            fieldIds={fieldIds}
-            find={find.request}
-            gateLabelsByColumnId={gateLabelsByColumnId}
-            group={group}
-            groupByPropertyId={groupByPropertyId}
-            key={groupKeyFor(group.value)}
-            optionValues={optionValues}
-            outerScrollRef={scrollRef}
-            reportGroupTreeData={reportGroupTreeData}
+      <FindHighlightScope highlight={find.highlight}>
+        <div className="flex w-max min-w-full flex-col" ref={scrollRef}>
+          {groups.map((group) => (
+            <GroupSection
+              columns={columns}
+              count={
+                countsLoaded ? (countByValue.get(group.value) ?? 0) : undefined
+              }
+              eager={eagerGroupValues?.has(group.value) ?? false}
+              fieldIds={fieldIds}
+              find={find.request}
+              gateLabelsByColumnId={gateLabelsByColumnId}
+              group={group}
+              groupByPropertyId={groupByPropertyId}
+              key={groupKeyFor(group.value)}
+              optionValues={optionValues}
+              outerScrollRef={scrollRef}
+              reportGroupTreeData={reportGroupTreeData}
+              tableState={tableState}
+              view={view}
+              workspaceId={workspaceId}
+            />
+          ))}
+          <GroupedAddRow
+            columns={addRowColumns}
             tableState={tableState}
-            view={view}
             workspaceId={workspaceId}
           />
-        ))}
-        <GroupedAddRow
-          columns={addRowColumns}
-          tableState={tableState}
-          workspaceId={workspaceId}
-        />
-      </div>
+        </div>
+      </FindHighlightScope>
     </MobileTableOrientationGate>
   );
 };

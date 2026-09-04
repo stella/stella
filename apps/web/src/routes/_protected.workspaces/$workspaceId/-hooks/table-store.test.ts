@@ -1,4 +1,5 @@
-import { describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
+import { enableMapSet } from "immer";
 import * as v from "valibot";
 
 const MAP_TAG = "__map";
@@ -149,5 +150,113 @@ describe("Map serialization roundtrip", () => {
         }),
       ),
     ).toBeNull();
+  });
+});
+
+// The store's `persist` middleware writes on every change, so it needs a
+// Storage before the module is evaluated; a Map is enough, and nothing here
+// asserts on what was written (the parsing tests above cover that).
+const stored = new Map<string, string>();
+globalThis.localStorage = {
+  clear: () => {
+    stored.clear();
+  },
+  getItem: (key: string) => stored.get(key) ?? null,
+  key: (index: number) => [...stored.keys()][index] ?? null,
+  get length() {
+    return stored.size;
+  },
+  removeItem: (key: string) => {
+    stored.delete(key);
+  },
+  setItem: (key: string, value: string) => {
+    stored.set(key, value);
+  },
+};
+
+// `columnSizing` is a Map, and immer only drafts one with this plugin on. The
+// app enables it in `router.tsx`, which a unit test does not load.
+enableMapSet();
+
+const { useTableStore } =
+  await import("@/routes/_protected.workspaces/$workspaceId/-hooks/table-store");
+
+describe("a view's find bar", () => {
+  beforeEach(() => {
+    useTableStore.setState({ find: {} });
+  });
+
+  test("opens unrestricted and empty", () => {
+    useTableStore.getState().openFind("v1");
+
+    expect(useTableStore.getState().find["v1"]).toEqual({
+      draft: "",
+      scope: { type: "all" },
+      term: "",
+    });
+  });
+
+  test("keeps what was typed when the shortcut fires again", () => {
+    const { openFind, setFindDraft, commitFind } = useTableStore.getState();
+    openFind("v1");
+    setFindDraft("v1", "lease");
+    commitFind("v1");
+
+    openFind("v1");
+
+    expect(useTableStore.getState().find["v1"]?.term).toBe("lease");
+  });
+
+  test("holds the draft back until it is committed", () => {
+    const { openFind, setFindDraft, commitFind } = useTableStore.getState();
+    openFind("v1");
+    setFindDraft("v1", "lea");
+
+    expect(useTableStore.getState().find["v1"]).toMatchObject({
+      draft: "lea",
+      term: "",
+    });
+
+    commitFind("v1");
+
+    expect(useTableStore.getState().find["v1"]?.term).toBe("lea");
+  });
+
+  test("closing resets it, so reopening starts clean", () => {
+    const { openFind, setFindDraft, commitFind, closeFind, setFindScope } =
+      useTableStore.getState();
+    openFind("v1");
+    setFindDraft("v1", "lease");
+    commitFind("v1");
+    setFindScope("v1", { propertyIds: ["p1"], type: "columns" });
+
+    closeFind("v1");
+    expect(useTableStore.getState().find["v1"]).toBeUndefined();
+
+    openFind("v1");
+    expect(useTableStore.getState().find["v1"]).toEqual({
+      draft: "",
+      scope: { type: "all" },
+      term: "",
+    });
+  });
+
+  test("edits nothing while the bar is closed", () => {
+    const { setFindDraft, commitFind, setFindScope } = useTableStore.getState();
+    setFindDraft("v1", "lease");
+    commitFind("v1");
+    setFindScope("v1", { propertyIds: ["p1"], type: "columns" });
+
+    expect(useTableStore.getState().find["v1"]).toBeUndefined();
+  });
+
+  test("a view that is gone loses its find with every other per-view record", () => {
+    const { openFind, pruneStaleViews } = useTableStore.getState();
+    openFind("v1");
+    openFind("v2");
+
+    pruneStaleViews(["v2"]);
+
+    expect(Object.keys(useTableStore.getState().find)).toEqual(["v2"]);
   });
 });

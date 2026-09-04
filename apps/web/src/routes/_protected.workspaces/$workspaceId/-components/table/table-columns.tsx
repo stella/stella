@@ -15,6 +15,7 @@ import type { LucideIcon } from "lucide-react";
 import { useFormatter, useTranslations } from "use-intl";
 
 import type { SortHint } from "@/components/workspaces/properties/sort-property";
+import { HighlightedText } from "@/components/workspaces/table/find-highlight";
 import type {
   TableCellContext,
   TableColumnDef,
@@ -155,7 +156,7 @@ const useColumnDefFactory = (
               header: metadataHeader(TextIcon, "text"),
               cell: ({ row }) => (
                 <span className="truncate font-medium" dir="auto">
-                  {row.original.name}
+                  <HighlightedText text={row.original.name ?? ""} />
                 </span>
               ),
             };
