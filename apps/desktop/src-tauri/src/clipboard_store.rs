@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
   collections::HashSet,
-  fs,
+  fmt, fs,
   path::{Path, PathBuf},
 };
 
@@ -35,6 +35,22 @@ pub enum ClipboardImagePersistStatus {
 pub struct ClipboardImageValidation {
   pub byte_size: usize,
   pub checksum: String,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum ClipboardImageValidationError {
+  Invalid(String),
+  Unavailable(String),
+}
+
+impl fmt::Display for ClipboardImageValidationError {
+  fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+    match self {
+      Self::Invalid(message) | Self::Unavailable(message) => {
+        formatter.write_str(message)
+      }
+    }
+  }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -235,20 +251,56 @@ impl ClipboardStore {
     kind: &str,
     max_plaintext_bytes: usize,
   ) -> Result<Vec<u8>, String> {
-    let path = self.image_path(blob_id, suffix)?;
+    self
+      .load_image_blob_for_validation(blob_id, suffix, kind, max_plaintext_bytes)
+      .map_err(|error| error.to_string())
+  }
+
+  fn load_image_blob_for_validation(
+    &self,
+    blob_id: &str,
+    suffix: &str,
+    kind: &str,
+    max_plaintext_bytes: usize,
+  ) -> Result<Vec<u8>, ClipboardImageValidationError> {
+    let path = self
+      .image_path(blob_id, suffix)
+      .map_err(ClipboardImageValidationError::Invalid)?;
     let max_encrypted_bytes = max_plaintext_bytes
       .checked_add(IMAGE_BLOB_HEADER_BYTES + 16)
-      .ok_or_else(|| "clipboard image size limit is invalid".to_string())?;
-    let metadata = fs::metadata(&path)
-      .map_err(|error| format!("clipboard image metadata read failed: {error}"))?;
+      .ok_or_else(|| {
+        ClipboardImageValidationError::Invalid(
+          "clipboard image size limit is invalid".to_string(),
+        )
+      })?;
+    let metadata = fs::metadata(&path).map_err(|error| {
+      let message = format!("clipboard image metadata read failed: {error}");
+      if error.kind() == std::io::ErrorKind::NotFound {
+        ClipboardImageValidationError::Invalid(message)
+      } else {
+        ClipboardImageValidationError::Unavailable(message)
+      }
+    })?;
     if metadata.len() > max_encrypted_bytes as u64 {
-      return Err("clipboard image blob is too large".to_string());
+      return Err(ClipboardImageValidationError::Invalid(
+        "clipboard image blob is too large".to_string(),
+      ));
     }
-    let blob = fs::read(path)
-      .map_err(|error| format!("clipboard image read failed: {error}"))?;
-    let plaintext = self.decrypt_blob(&blob, format!("{blob_id}:{kind}").as_bytes())?;
+    let blob = fs::read(path).map_err(|error| {
+      let message = format!("clipboard image read failed: {error}");
+      if error.kind() == std::io::ErrorKind::NotFound {
+        ClipboardImageValidationError::Invalid(message)
+      } else {
+        ClipboardImageValidationError::Unavailable(message)
+      }
+    })?;
+    let plaintext = self
+      .decrypt_blob(&blob, format!("{blob_id}:{kind}").as_bytes())
+      .map_err(ClipboardImageValidationError::Invalid)?;
     if plaintext.len() > max_plaintext_bytes {
-      return Err("clipboard image blob is too large".to_string());
+      return Err(ClipboardImageValidationError::Invalid(
+        "clipboard image blob is too large".to_string(),
+      ));
     }
     Ok(plaintext)
   }
@@ -307,21 +359,35 @@ impl ClipboardStore {
     Ok(())
   }
 
-  pub fn validate_image(
+  pub(crate) fn validate_image(
     &self,
     blob_id: &str,
     validation: &ClipboardImageValidation,
     max_preview_bytes: usize,
-  ) -> Result<(), String> {
-    let image = self.load_image(blob_id, validation.byte_size)?;
+  ) -> Result<(), ClipboardImageValidationError> {
+    let image = self.load_image_blob_for_validation(
+      blob_id,
+      IMAGE_BLOB_SUFFIX,
+      "image",
+      validation.byte_size,
+    )?;
     if image.len() != validation.byte_size
       || hex::encode(Sha256::digest(&image)) != validation.checksum
     {
-      return Err("clipboard image blob does not match its metadata".to_string());
+      return Err(ClipboardImageValidationError::Invalid(
+        "clipboard image blob does not match its metadata".to_string(),
+      ));
     }
-    let preview = self.load_image_preview(blob_id, max_preview_bytes)?;
+    let preview = self.load_image_blob_for_validation(
+      blob_id,
+      IMAGE_PREVIEW_SUFFIX,
+      "preview",
+      max_preview_bytes,
+    )?;
     if preview.is_empty() {
-      return Err("clipboard image preview is empty".to_string());
+      return Err(ClipboardImageValidationError::Invalid(
+        "clipboard image preview is empty".to_string(),
+      ));
     }
     Ok(())
   }
@@ -418,6 +484,7 @@ mod tests {
         retention_class: ClipboardItemRetentionClass::Kept,
         source_app: None,
       }],
+      pending_image_blob_ids: Default::default(),
       retention: ClipboardRetention::Month,
       source_app_visuals: Vec::new(),
     };
@@ -432,6 +499,20 @@ mod tests {
   }
 
   #[test]
+  fn legacy_state_without_an_image_cleanup_journal_defaults_empty() {
+    let state = serde_json::from_value::<PersistedClipboardState>(serde_json::json!({
+      "captureStatus": "active",
+      "groups": [],
+      "items": [],
+      "retention": "month",
+      "sourceAppVisuals": []
+    }))
+    .unwrap();
+
+    assert!(state.pending_image_blob_ids.is_empty());
+  }
+
+  #[test]
   fn wrong_key_cannot_decrypt_history() {
     let path = unique_path();
     let store = ClipboardStore::new([7; 32], path.clone());
@@ -440,6 +521,7 @@ mod tests {
         capture_status: ClipboardCaptureStatus::Active,
         groups: Vec::new(),
         items: Vec::new(),
+        pending_image_blob_ids: Default::default(),
         retention: ClipboardRetention::Month,
         source_app_visuals: Vec::new(),
       })
@@ -622,7 +704,40 @@ mod tests {
       byte_size: image.len(),
       checksum: "wrong-checksum".to_string(),
     };
-    assert!(store.validate_image(&blob_id, &invalid, 1024).is_err());
+    assert!(matches!(
+      store.validate_image(&blob_id, &invalid, 1024),
+      Err(ClipboardImageValidationError::Invalid(_))
+    ));
+    ClipboardStore::remove(&path).unwrap();
+  }
+
+  #[test]
+  fn image_validation_preserves_payloads_when_storage_is_unavailable() {
+    let path = unique_path();
+    let store = ClipboardStore::new([7; 32], path.clone());
+    let blob_id = uuid::Uuid::new_v4().to_string();
+    let image = b"private full image";
+    store
+      .persist_image(
+        &blob_id,
+        ClipboardImagePayload {
+          image,
+          preview: b"private preview",
+        },
+      )
+      .unwrap();
+    let image_path = store.image_path(&blob_id, IMAGE_BLOB_SUFFIX).unwrap();
+    fs::remove_file(&image_path).unwrap();
+    fs::create_dir(&image_path).unwrap();
+    let validation = ClipboardImageValidation {
+      byte_size: image.len(),
+      checksum: hex::encode(Sha256::digest(image)),
+    };
+
+    assert!(matches!(
+      store.validate_image(&blob_id, &validation, 1024),
+      Err(ClipboardImageValidationError::Unavailable(_))
+    ));
     ClipboardStore::remove(&path).unwrap();
   }
 

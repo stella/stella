@@ -747,6 +747,7 @@ const ClipboardEditor = () => {
               <ClipboardImagePreview
                 alt={item.name ?? t("image")}
                 id={item.id}
+                showRetry
                 surface="editor"
               />
             </div>

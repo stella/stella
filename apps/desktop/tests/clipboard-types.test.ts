@@ -13,7 +13,7 @@ const snapshotWithWelcomeStatus = (welcomeStatus: unknown) => ({
   captureStatus: "active",
   groups: [],
   items: [],
-  persistence: { status: "encrypted" },
+  persistence: { imageCleanup: "idle", status: "encrypted" },
   retention: "month",
   sourceAppVisuals: [],
   welcomeStatus,
@@ -54,6 +54,27 @@ describe("clipboard snapshot retention", () => {
         isClipboardSnapshot({
           ...snapshotWithWelcomeStatus("completed"),
           retention,
+        }),
+      ).toBe(false);
+    }
+  });
+});
+
+describe("clipboard image cleanup status", () => {
+  test("accepts native cleanup states and rejects missing or unknown states", () => {
+    for (const imageCleanup of ["idle", "pendingRetry"]) {
+      expect(
+        isClipboardSnapshot({
+          ...snapshotWithWelcomeStatus("completed"),
+          persistence: { imageCleanup, status: "encrypted" },
+        }),
+      ).toBe(true);
+    }
+    for (const imageCleanup of [undefined, "failed"]) {
+      expect(
+        isClipboardSnapshot({
+          ...snapshotWithWelcomeStatus("completed"),
+          persistence: { imageCleanup, status: "encrypted" },
         }),
       ).toBe(false);
     }

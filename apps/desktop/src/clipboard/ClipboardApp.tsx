@@ -37,6 +37,7 @@ import {
   PauseIcon,
   PencilIcon,
   PlayIcon,
+  RotateCcwIcon,
   SearchIcon,
   ShieldAlertIcon,
   TagsIcon,
@@ -131,6 +132,7 @@ import type {
   ClipboardSourceAppVisual,
 } from "./clipboard-types";
 import { ClipboardImagePreview } from "./ClipboardImagePreview";
+import type { ClipboardImagePreviewStatus } from "./ClipboardImagePreview";
 import { useRailViewport } from "./use-rail-viewport";
 
 const CLIPBOARD_GROUP_COLORS = [
@@ -289,6 +291,9 @@ const ClipboardCard = ({
   const format = useFormatter();
   const cancelNameEditRef = useRef(false);
   const [editingName, setEditingName] = useState(false);
+  const [imagePreviewStatus, setImagePreviewStatus] =
+    useState<ClipboardImagePreviewStatus>("loading");
+  const [imagePreviewRetryToken, setImagePreviewRetryToken] = useState(0);
   const [nameDraft, setNameDraft] = useState(item.name ?? "");
   const age = formatClipboardAge(item.copiedAt, ageReferenceTime);
   const formattedAge = new Intl.NumberFormat(undefined, {
@@ -327,6 +332,8 @@ const ClipboardCard = ({
         <ClipboardImagePreview
           alt={item.name ?? t("image")}
           id={item.id}
+          onStatusChange={setImagePreviewStatus}
+          retryToken={imagePreviewRetryToken}
           surface="timeline"
         />
       </div>
@@ -523,6 +530,19 @@ const ClipboardCard = ({
           <span aria-hidden="true">{relativeTime}</span>
           <span className="sr-only">{copiedAtLabel}</span>
         </time>
+        {item.type === "image" && imagePreviewStatus === "error" ? (
+          <Button
+            aria-label={t("retryImagePreview")}
+            className="size-11 shrink-0 rounded-full"
+            onClick={() => setImagePreviewRetryToken((token) => token + 1)}
+            size="icon"
+            title={t("retryImagePreview")}
+            type="button"
+            variant="ghost"
+          >
+            <RotateCcwIcon aria-hidden="true" className="size-4" />
+          </Button>
+        ) : null}
         {index < 9 ? (
           <kbd className="bg-muted text-muted-foreground shrink-0 rounded-md px-1.5 py-0.5 font-mono text-[10px] tabular-nums">
             {PRIMARY_MODIFIER_LABEL}
@@ -1867,6 +1887,12 @@ const ClipboardApp = () => {
   if (snapshot.persistence.status === "deletionOnly") {
     persistenceWarningLabel = t("errorReadHistory");
   }
+  const imageCleanupPending =
+    snapshot.persistence.status === "encrypted" &&
+    snapshot.persistence.imageCleanup === "pendingRetry";
+  if (imageCleanupPending) {
+    persistenceWarningLabel = t("imageCleanupPending");
+  }
   let feedback: ReactNode = null;
   if (appError) {
     feedback = (
@@ -2042,7 +2068,8 @@ const ClipboardApp = () => {
               <StellaMark className="size-5" />
             </a>
             {snapshot.persistence.status === "memoryOnly" ||
-            snapshot.persistence.status === "deletionOnly" ? (
+            snapshot.persistence.status === "deletionOnly" ||
+            imageCleanupPending ? (
               <span
                 aria-label={persistenceWarningLabel}
                 className="bg-warning/12 text-warning grid size-7 place-items-center rounded-full"

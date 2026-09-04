@@ -116,13 +116,16 @@ objc2 = "0.6"
 objc2-app-kit = { version = "0.3", default-features = false, features = [
   "NSApplication",
   "NSEvent",
+  "NSPasteboard",
   "NSRunningApplication",
   "NSScreen",
   "NSWorkspace",
   "libc",
 ] }
 objc2-foundation = { version = "0.3", default-features = false, features = [
+  "NSData",
   "NSGeometry",
+  "NSString",
   "NSURL",
 ] }
 plist = "1.10"

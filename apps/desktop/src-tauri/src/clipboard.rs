@@ -10,7 +10,7 @@ use image::{ImageReader, Limits as ImageLimits};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
-  collections::{HashMap, HashSet},
+  collections::{BTreeSet, HashMap, HashSet},
   io::Cursor,
   sync::{Arc, Mutex},
   time::Instant,
@@ -19,7 +19,8 @@ use tauri::{AppHandle, Emitter};
 
 use crate::{
   clipboard_store::{
-    ClipboardImagePersistStatus, ClipboardImageValidation, ClipboardStore,
+    ClipboardImagePersistStatus, ClipboardImageValidation,
+    ClipboardImageValidationError, ClipboardStore,
   },
   clipboard_welcome::{ClipboardWelcome, ClipboardWelcomeStatus},
   config::APP_DATA_DIR_NAME,
@@ -688,9 +689,19 @@ pub enum ClipboardGroupDeletionMode {
 #[serde(tag = "status", rename_all = "camelCase")]
 pub enum ClipboardPersistenceStatus {
   Initializing,
-  Encrypted,
+  Encrypted {
+    #[serde(rename = "imageCleanup")]
+    image_cleanup: ClipboardImageCleanupStatus,
+  },
   MemoryOnly,
   DeletionOnly,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ClipboardImageCleanupStatus {
+  Idle,
+  PendingRetry,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -719,6 +730,10 @@ pub struct PersistedClipboardState {
   #[serde(default)]
   pub groups: Vec<ClipboardGroup>,
   pub items: Vec<ClipboardItem>,
+  /// Blobs no longer referenced by items. Persisting this journal before
+  /// deletion makes cleanup replayable after I/O failures or a crash.
+  #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+  pub pending_image_blob_ids: BTreeSet<String>,
   #[serde(default)]
   pub retention: ClipboardRetention,
   #[serde(default)]
@@ -729,6 +744,7 @@ pub struct ClipboardManager {
   capture_status: ClipboardCaptureStatus,
   groups: Vec<ClipboardGroup>,
   items: Vec<ClipboardItem>,
+  pending_image_blob_ids: BTreeSet<String>,
   persistence: ClipboardPersistence,
   retention: ClipboardRetention,
   source_app_visuals: HashMap<String, ClipboardSourceAppVisual>,
@@ -770,10 +786,13 @@ impl ClipboardImageRead {
 }
 
 impl ClipboardPersistence {
-  fn status(&self) -> ClipboardPersistenceStatus {
+  fn status_with_image_cleanup(
+    &self,
+    image_cleanup: ClipboardImageCleanupStatus,
+  ) -> ClipboardPersistenceStatus {
     match self {
       Self::Initializing => ClipboardPersistenceStatus::Initializing,
-      Self::Encrypted(_) => ClipboardPersistenceStatus::Encrypted,
+      Self::Encrypted(_) => ClipboardPersistenceStatus::Encrypted { image_cleanup },
       Self::MemoryOnly => ClipboardPersistenceStatus::MemoryOnly,
       Self::DeletionOnly(_) => ClipboardPersistenceStatus::DeletionOnly,
     }
@@ -784,6 +803,7 @@ struct ClipboardManagerCheckpoint {
   capture_status: ClipboardCaptureStatus,
   groups: Vec<ClipboardGroup>,
   items: Vec<ClipboardItem>,
+  pending_image_blob_ids: BTreeSet<String>,
   retention: ClipboardRetention,
   source_app_visuals: HashMap<String, ClipboardSourceAppVisual>,
   suppressed_content: Option<ClipboardSuppression>,
@@ -864,11 +884,27 @@ pub fn load_persisted() -> (ClipboardLoad, ClipboardInitTimings) {
   match loaded {
     Ok(Some(mut state)) => {
       timings.loaded_items = Some(state.items.len());
+      let previous_live_blob_ids = image_blob_ids(&state.items);
+      let previous_pending_image_blob_ids = state.pending_image_blob_ids.clone();
+      state
+        .pending_image_blob_ids
+        .retain(|blob_id| uuid::Uuid::parse_str(blob_id).is_ok());
       let changed = prune_items(&mut state.items, state.retention, Utc::now());
       let images_changed = prune_image_history(&mut state.items);
       let invalid_images_changed = retain_valid_images(&mut state.items, &store);
       let live_blob_ids = image_blob_ids(&state.items);
-      if (changed || images_changed || invalid_images_changed)
+      state
+        .pending_image_blob_ids
+        .retain(|blob_id| !live_blob_ids.contains(blob_id));
+      state.pending_image_blob_ids.extend(
+        previous_live_blob_ids
+          .difference(&live_blob_ids)
+          .filter(|blob_id| uuid::Uuid::parse_str(blob_id).is_ok())
+          .cloned(),
+      );
+      let pending_changed =
+        state.pending_image_blob_ids != previous_pending_image_blob_ids;
+      if (changed || images_changed || invalid_images_changed || pending_changed)
         && let Err(error) = store.persist(&state)
       {
         tracing::warn!(error = %error, "recovered clipboard history could not be persisted");
@@ -879,6 +915,18 @@ pub fn load_persisted() -> (ClipboardLoad, ClipboardInitTimings) {
           },
           timings,
         );
+      }
+      if !state.pending_image_blob_ids.is_empty()
+        && remove_pending_image_blobs(&store, &state.pending_image_blob_ids)
+      {
+        let pending_image_blob_ids = std::mem::take(&mut state.pending_image_blob_ids);
+        if let Err(error) = store.persist(&state) {
+          state.pending_image_blob_ids = pending_image_blob_ids;
+          tracing::warn!(
+            error = %error,
+            "completed clipboard image cleanup could not be checkpointed"
+          );
+        }
       }
       if let Err(error) = store.reconcile_images(&live_blob_ids) {
         tracing::warn!(error = %error, "clipboard image history could not be reconciled");
@@ -946,6 +994,7 @@ impl ClipboardManager {
       capture_status: ClipboardCaptureStatus::Active,
       groups: Vec::new(),
       items: Vec::new(),
+      pending_image_blob_ids: BTreeSet::new(),
       persistence: ClipboardPersistence::Initializing,
       retention: ClipboardRetention::default(),
       source_app_visuals: HashMap::new(),
@@ -980,6 +1029,7 @@ impl ClipboardManager {
             .map(|visual| (visual.key.clone(), visual))
             .collect();
           self.items = state.items;
+          self.pending_image_blob_ids = state.pending_image_blob_ids;
         }
         ClipboardPersistence::Encrypted(store)
       }
@@ -997,7 +1047,13 @@ impl ClipboardManager {
       capture_status: self.capture_status,
       groups: self.groups.clone(),
       items: self.items.iter().map(ClipboardItem::for_webview).collect(),
-      persistence: self.persistence.status(),
+      persistence: self.persistence.status_with_image_cleanup(
+        if self.pending_image_blob_ids.is_empty() {
+          ClipboardImageCleanupStatus::Idle
+        } else {
+          ClipboardImageCleanupStatus::PendingRetry
+        },
+      ),
       retention: self.retention,
       source_app_visuals,
       welcome_status: self.welcome.status(),
@@ -1540,6 +1596,7 @@ impl ClipboardManager {
       capture_status: self.capture_status,
       groups: self.groups.clone(),
       items: self.items.clone(),
+      pending_image_blob_ids: self.pending_image_blob_ids.clone(),
       retention: self.retention,
       source_app_visuals: self.source_app_visuals.clone(),
       suppressed_content: self.suppressed_content.clone(),
@@ -1550,6 +1607,7 @@ impl ClipboardManager {
     self.capture_status = checkpoint.capture_status;
     self.groups = checkpoint.groups;
     self.items = checkpoint.items;
+    self.pending_image_blob_ids = checkpoint.pending_image_blob_ids;
     self.retention = checkpoint.retention;
     self.source_app_visuals = checkpoint.source_app_visuals;
     self.suppressed_content = checkpoint.suppressed_content;
@@ -1559,6 +1617,19 @@ impl ClipboardManager {
     &mut self,
     checkpoint: ClipboardManagerCheckpoint,
   ) -> Result<(), String> {
+    let previous_live_blob_ids = image_blob_ids(&checkpoint.items);
+    let live_blob_ids = image_blob_ids(&self.items);
+    // A shared blob enters the journal only after its final item reference is
+    // gone; the journal is committed atomically with the new item metadata.
+    self
+      .pending_image_blob_ids
+      .retain(|blob_id| !live_blob_ids.contains(blob_id));
+    self.pending_image_blob_ids.extend(
+      previous_live_blob_ids
+        .difference(&live_blob_ids)
+        .filter(|blob_id| uuid::Uuid::parse_str(blob_id).is_ok())
+        .cloned(),
+    );
     if let Err(error) = self.persist() {
       self.restore(checkpoint);
       return Err(error);
@@ -1623,6 +1694,7 @@ impl ClipboardManager {
       capture_status: self.capture_status,
       groups: self.groups.clone(),
       items: self.items.clone(),
+      pending_image_blob_ids: self.pending_image_blob_ids.clone(),
       retention: self.retention,
       source_app_visuals,
     };
@@ -1638,6 +1710,20 @@ impl ClipboardManager {
         return Err(format!("{error}; {}", cleanup_errors.join("; ")));
       }
       return Err(error);
+    }
+    if !self.pending_image_blob_ids.is_empty()
+      && remove_pending_image_blobs(store, &self.pending_image_blob_ids)
+    {
+      let pending_image_blob_ids = std::mem::take(&mut self.pending_image_blob_ids);
+      let mut completed_state = state.clone();
+      completed_state.pending_image_blob_ids.clear();
+      if let Err(error) = store.persist(&completed_state) {
+        self.pending_image_blob_ids = pending_image_blob_ids;
+        tracing::warn!(
+          error = %error,
+          "completed clipboard image cleanup could not be checkpointed"
+        );
+      }
     }
     let live_blob_ids = image_blob_ids(&self.items);
     if let Err(error) = store.reconcile_images(&live_blob_ids) {
@@ -1664,6 +1750,24 @@ fn image_blob_ids(items: &[ClipboardItem]) -> HashSet<String> {
     .filter_map(ClipboardItem::image_blob_id)
     .map(str::to_string)
     .collect()
+}
+
+fn remove_pending_image_blobs(
+  store: &ClipboardStore,
+  pending_blob_ids: &BTreeSet<String>,
+) -> bool {
+  let mut completed = true;
+  for blob_id in pending_blob_ids {
+    if let Err(error) = store.remove_image(blob_id) {
+      completed = false;
+      tracing::warn!(
+        error = %error,
+        blob_id,
+        "pending clipboard image cleanup will be retried"
+      );
+    }
+  }
+  completed
 }
 
 fn image_blob_validation(
@@ -1703,6 +1807,13 @@ fn image_blob_validation(
 }
 
 fn retain_valid_images(items: &mut Vec<ClipboardItem>, store: &ClipboardStore) -> bool {
+  #[derive(Clone, Copy)]
+  enum ValidationDisposition {
+    Invalid,
+    Unavailable,
+    Valid,
+  }
+
   let original_len = items.len();
   let mut validations = HashMap::new();
   items.retain(|item| {
@@ -1715,14 +1826,25 @@ fn retain_valid_images(items: &mut Vec<ClipboardItem>, store: &ClipboardStore) -
       }
     };
     let cache_key = (blob_id.to_string(), validation.clone());
-    *validations.entry(cache_key).or_insert_with(|| {
-      store
-        .validate_image(blob_id, &validation, MAX_ITEM_IMAGE_PREVIEW_BYTES)
-        .inspect_err(|error| {
+    match *validations.entry(cache_key).or_insert_with(|| {
+      match store.validate_image(blob_id, &validation, MAX_ITEM_IMAGE_PREVIEW_BYTES) {
+        Ok(()) => ValidationDisposition::Valid,
+        Err(ClipboardImageValidationError::Invalid(error)) => {
           tracing::warn!(error = %error, "invalid clipboard image payload was removed");
-        })
-        .is_ok()
-    })
+          ValidationDisposition::Invalid
+        }
+        Err(ClipboardImageValidationError::Unavailable(error)) => {
+          tracing::warn!(
+            error = %error,
+            "clipboard image validation is temporarily unavailable"
+          );
+          ValidationDisposition::Unavailable
+        }
+      }
+    }) {
+      ValidationDisposition::Invalid => false,
+      ValidationDisposition::Unavailable | ValidationDisposition::Valid => true,
+    }
   });
   items.len() != original_len
 }
@@ -2215,6 +2337,20 @@ struct HistoryClipboardHandler {
   telemetry: DesktopTelemetry,
 }
 
+enum ClipboardImageCaptureAttempt {
+  Capture(ClipboardImageCapture),
+  ContinueWithText { error: String },
+}
+
+fn resolve_clipboard_image_capture(
+  attempt: Result<ClipboardImageCapture, String>,
+) -> ClipboardImageCaptureAttempt {
+  match attempt {
+    Ok(capture) => ClipboardImageCaptureAttempt::Capture(capture),
+    Err(error) => ClipboardImageCaptureAttempt::ContinueWithText { error },
+  }
+}
+
 impl ClipboardHandler for HistoryClipboardHandler {
   fn on_clipboard_change(&mut self) {
     let formats = match self.clipboard.available_formats() {
@@ -2249,23 +2385,19 @@ impl ClipboardHandler for HistoryClipboardHandler {
       .map(|source| (Some(source.app), source.visual))
       .unwrap_or((None, None));
     if self.clipboard.has(ContentFormat::Image) {
-      let image = match bounded_clipboard_image(&self.clipboard, &formats) {
-        Ok(image) => image,
-        Err(error) => {
-          tracing::debug!(error = %error, "clipboard image could not be read");
+      match resolve_clipboard_image_capture(
+        bounded_clipboard_image(&self.clipboard, &formats).and_then(|image| {
+          normalized_image_capture(image, source_app.clone(), source_app_visual.clone())
+        }),
+      ) {
+        ClipboardImageCaptureAttempt::Capture(capture) => {
+          self.capture(ClipboardCapture::Image(capture));
           return;
         }
-      };
-      let capture = match normalized_image_capture(image, source_app, source_app_visual)
-      {
-        Ok(capture) => capture,
-        Err(error) => {
+        ClipboardImageCaptureAttempt::ContinueWithText { error } => {
           tracing::debug!(error = %error, "clipboard image could not be captured");
-          return;
         }
-      };
-      self.capture(ClipboardCapture::Image(capture));
-      return;
+      }
     }
     let plain_text = match self.clipboard.get_text() {
       Ok(text) if !text.trim().is_empty() && text.len() <= MAX_ITEM_TEXT_BYTES => text,
@@ -2347,9 +2479,7 @@ fn bounded_clipboard_image(
       .any(|format| format.eq_ignore_ascii_case(candidate))
   });
   if let Some(format) = format {
-    let encoded = clipboard
-      .get_buffer(format)
-      .map_err(|error| format!("clipboard image data could not be read: {error}"))?;
+    let encoded = bounded_registered_clipboard_image(clipboard, format)?;
     return decode_bounded_clipboard_image(encoded);
   }
   #[cfg(target_os = "windows")]
@@ -2360,10 +2490,50 @@ fn bounded_clipboard_image(
   Err("clipboard image format is unsupported".to_string())
 }
 
-fn decode_bounded_clipboard_image(encoded: Vec<u8>) -> Result<RustImageData, String> {
-  if encoded.is_empty() || encoded.len() > MAX_ITEM_IMAGE_SOURCE_BYTES {
-    return Err("clipboard image source is too large".to_string());
+#[cfg(target_os = "linux")]
+fn bounded_registered_clipboard_image(
+  _clipboard: &ClipboardContext,
+  _format: &str,
+) -> Result<Vec<u8>, String> {
+  // clipboard-rs exposes only an already allocated Vec for Linux image data.
+  // Reject it until the backend offers a bounded reader; text from the same
+  // clipboard change still falls through to the normal text capture path.
+  Err("clipboard image format has no bounded Linux reader".to_string())
+}
+
+#[cfg(target_os = "macos")]
+fn bounded_registered_clipboard_image(
+  _clipboard: &ClipboardContext,
+  format: &str,
+) -> Result<Vec<u8>, String> {
+  use objc2_app_kit::NSPasteboard;
+  use objc2_foundation::NSString;
+
+  match format {
+    "public.png" | "public.tiff" => {}
+    _ => return Err("clipboard image format is unsupported".to_string()),
   }
+  let pasteboard_type = NSString::from_str(format);
+  let pasteboard = NSPasteboard::generalPasteboard();
+  let data = pasteboard
+    .dataForType(&pasteboard_type)
+    .ok_or_else(|| "clipboard image data could not be read".to_string())?;
+  validate_clipboard_image_source_size(data.length())?;
+  Ok(data.to_vec())
+}
+
+#[cfg(target_os = "windows")]
+fn bounded_registered_clipboard_image(
+  _clipboard: &ClipboardContext,
+  format: &str,
+) -> Result<Vec<u8>, String> {
+  let format = clipboard_win::register_format(format)
+    .ok_or_else(|| "clipboard image format could not be registered".to_string())?;
+  bounded_windows_clipboard_bytes(format.get())
+}
+
+fn decode_bounded_clipboard_image(encoded: Vec<u8>) -> Result<RustImageData, String> {
+  validate_clipboard_image_source_size(encoded.len())?;
 
   let dimension_reader = ImageReader::new(Cursor::new(encoded.as_slice()))
     .with_guessed_format()
@@ -2390,7 +2560,7 @@ fn decode_bounded_clipboard_image(encoded: Vec<u8>) -> Result<RustImageData, Str
 
 #[cfg(target_os = "windows")]
 fn bounded_windows_clipboard_image() -> Result<RustImageData, String> {
-  use clipboard_win::{formats, get_clipboard, is_format_avail};
+  use clipboard_win::{formats, is_format_avail};
 
   let format = if is_format_avail(formats::CF_DIBV5) {
     formats::CF_DIBV5
@@ -2399,11 +2569,7 @@ fn bounded_windows_clipboard_image() -> Result<RustImageData, String> {
   } else {
     return Err("clipboard image format is unsupported".to_string());
   };
-  let encoded = get_clipboard(formats::RawData(format))
-    .map_err(|error| format!("clipboard bitmap data could not be read: {error}"))?;
-  if encoded.is_empty() || encoded.len() > MAX_ITEM_IMAGE_SOURCE_BYTES {
-    return Err("clipboard image source is too large".to_string());
-  }
+  let encoded = bounded_windows_clipboard_bytes(format)?;
   let mut decoder = BmpDecoder::new_without_file_header(Cursor::new(encoded))
     .map_err(|error| format!("clipboard bitmap is invalid: {error}"))?;
   let (width, height) = decoder.dimensions();
@@ -2418,6 +2584,29 @@ fn bounded_windows_clipboard_image() -> Result<RustImageData, String> {
   let image = DynamicImage::from_decoder(decoder)
     .map_err(|error| format!("clipboard bitmap decoding failed: {error}"))?;
   Ok(RustImageData::from_dynamic_image(image))
+}
+
+#[cfg(target_os = "windows")]
+fn bounded_windows_clipboard_bytes(format: u32) -> Result<Vec<u8>, String> {
+  let _clipboard = clipboard_win::Clipboard::new_attempts(10)
+    .map_err(|error| format!("clipboard image data could not be opened: {error}"))?;
+  let byte_size = clipboard_win::raw::size(format)
+    .map(std::num::NonZeroUsize::get)
+    .ok_or_else(|| "clipboard image data is empty".to_string())?;
+  validate_clipboard_image_source_size(byte_size)?;
+  let mut encoded = vec![0; byte_size];
+  let copied = clipboard_win::raw::get(format, &mut encoded)
+    .map_err(|error| format!("clipboard image data could not be read: {error}"))?;
+  encoded.truncate(copied);
+  validate_clipboard_image_source_size(encoded.len())?;
+  Ok(encoded)
+}
+
+fn validate_clipboard_image_source_size(byte_size: usize) -> Result<(), String> {
+  if byte_size == 0 || byte_size > MAX_ITEM_IMAGE_SOURCE_BYTES {
+    return Err("clipboard image source is too large".to_string());
+  }
+  Ok(())
 }
 
 fn validate_image_dimensions(width: u32, height: u32) -> Result<(), String> {
@@ -2866,6 +3055,38 @@ mod tests {
   }
 
   #[test]
+  fn clipboard_image_source_size_is_bounded_before_copying() {
+    assert!(validate_clipboard_image_source_size(0).is_err());
+    assert!(validate_clipboard_image_source_size(MAX_ITEM_IMAGE_SOURCE_BYTES).is_ok());
+    assert!(
+      validate_clipboard_image_source_size(MAX_ITEM_IMAGE_SOURCE_BYTES + 1).is_err()
+    );
+  }
+
+  #[test]
+  fn encrypted_persistence_status_serializes_image_cleanup_state() {
+    let status = ClipboardPersistenceStatus::Encrypted {
+      image_cleanup: ClipboardImageCleanupStatus::PendingRetry,
+    };
+
+    assert_eq!(
+      serde_json::to_value(status).unwrap(),
+      serde_json::json!({
+        "imageCleanup": "pendingRetry",
+        "status": "encrypted",
+      })
+    );
+  }
+
+  #[test]
+  fn failed_image_capture_explicitly_continues_with_text() {
+    assert!(matches!(
+      resolve_clipboard_image_capture(Err("malformed image".to_string())),
+      ClipboardImageCaptureAttempt::ContinueWithText { .. }
+    ));
+  }
+
+  #[test]
   fn encrypted_image_reads_outlive_the_manager_lock() {
     let store_path = unique_store_path();
     let store = ClipboardStore::new([7; 32], store_path.clone());
@@ -2992,6 +3213,181 @@ mod tests {
       store
         .load_image(&invalid_blob_id, invalid_image.len())
         .is_err()
+    );
+    ClipboardStore::remove(&store_path).unwrap();
+  }
+
+  #[test]
+  fn image_recovery_preserves_references_during_storage_failures() {
+    let store_path = unique_store_path();
+    let store = ClipboardStore::new([7; 32], store_path.clone());
+    let blob_id = uuid::Uuid::new_v4().to_string();
+    let image: &[u8] = b"valid full image";
+    store
+      .persist_image(
+        &blob_id,
+        crate::clipboard_store::ClipboardImagePayload {
+          image,
+          preview: b"preview",
+        },
+      )
+      .unwrap();
+    let image_path = store_path
+      .with_extension("images")
+      .join(format!("{blob_id}.image.enc"));
+    std::fs::remove_file(&image_path).unwrap();
+    std::fs::create_dir(&image_path).unwrap();
+    let mut items = vec![stored_image_item(
+      "image",
+      &blob_id,
+      &hex::encode(Sha256::digest(image)),
+      image.len(),
+    )];
+
+    assert!(!retain_valid_images(&mut items, &store));
+    assert_eq!(
+      items.iter().map(ClipboardItem::id).collect::<Vec<_>>(),
+      ["image"]
+    );
+    ClipboardStore::remove(&store_path).unwrap();
+  }
+
+  #[test]
+  fn image_recovery_removes_missing_blob_references() {
+    let store_path = unique_store_path();
+    let store = ClipboardStore::new([7; 32], store_path.clone());
+    let blob_id = uuid::Uuid::new_v4().to_string();
+    let image: &[u8] = b"missing full image";
+    let mut items = vec![stored_image_item(
+      "missing",
+      &blob_id,
+      &hex::encode(Sha256::digest(image)),
+      image.len(),
+    )];
+
+    assert!(retain_valid_images(&mut items, &store));
+    assert!(items.is_empty());
+    ClipboardStore::remove(&store_path).unwrap();
+  }
+
+  #[test]
+  fn image_deletion_journal_retries_failed_cleanup() {
+    let store_path = unique_store_path();
+    let store = ClipboardStore::new([7; 32], store_path.clone());
+    let blob_id = uuid::Uuid::new_v4().to_string();
+    let image: &[u8] = b"valid full image";
+    store
+      .persist_image(
+        &blob_id,
+        crate::clipboard_store::ClipboardImagePayload {
+          image,
+          preview: b"preview",
+        },
+      )
+      .unwrap();
+    let mut manager = ready_manager();
+    manager.items.push(stored_image_item(
+      "image",
+      &blob_id,
+      &hex::encode(Sha256::digest(image)),
+      image.len(),
+    ));
+    manager.persistence = ClipboardPersistence::Encrypted(store.clone());
+    manager.persist().unwrap();
+    let image_path = store_path
+      .with_extension("images")
+      .join(format!("{blob_id}.image.enc"));
+    std::fs::remove_file(&image_path).unwrap();
+    std::fs::create_dir(&image_path).unwrap();
+
+    assert!(manager.delete_item("image").unwrap());
+    let pending_state = store.load().unwrap().unwrap();
+    assert!(pending_state.items.is_empty());
+    assert_eq!(
+      pending_state.pending_image_blob_ids,
+      BTreeSet::from([blob_id.clone()])
+    );
+    assert_eq!(
+      manager.snapshot().persistence,
+      ClipboardPersistenceStatus::Encrypted {
+        image_cleanup: ClipboardImageCleanupStatus::PendingRetry,
+      }
+    );
+
+    std::fs::remove_dir(&image_path).unwrap();
+    let mut restarted = ClipboardManager::new();
+    restarted.install(ClipboardLoad::Encrypted {
+      store: store.clone(),
+      state: Some(pending_state),
+    });
+    restarted
+      .set_capture_status(ClipboardCaptureStatus::Paused)
+      .unwrap();
+
+    assert!(
+      store
+        .load()
+        .unwrap()
+        .unwrap()
+        .pending_image_blob_ids
+        .is_empty()
+    );
+    assert_eq!(
+      restarted.snapshot().persistence,
+      ClipboardPersistenceStatus::Encrypted {
+        image_cleanup: ClipboardImageCleanupStatus::Idle,
+      }
+    );
+    assert!(
+      !store_path
+        .with_extension("images")
+        .join(format!("{blob_id}.preview.enc"))
+        .exists()
+    );
+    ClipboardStore::remove(&store_path).unwrap();
+  }
+
+  #[test]
+  fn deleting_a_shared_image_reference_keeps_the_blob_out_of_the_journal() {
+    let store_path = unique_store_path();
+    let store = ClipboardStore::new([7; 32], store_path.clone());
+    let blob_id = uuid::Uuid::new_v4().to_string();
+    let image: &[u8] = b"shared full image";
+    store
+      .persist_image(
+        &blob_id,
+        crate::clipboard_store::ClipboardImagePayload {
+          image,
+          preview: b"preview",
+        },
+      )
+      .unwrap();
+    let checksum = hex::encode(Sha256::digest(image));
+    let mut manager = ready_manager();
+    manager.items = vec![
+      stored_image_item("first", &blob_id, &checksum, image.len()),
+      stored_image_item("second", &blob_id, &checksum, image.len()),
+    ];
+    manager.persistence = ClipboardPersistence::Encrypted(store.clone());
+    manager.persist().unwrap();
+
+    assert!(manager.delete_item("first").unwrap());
+    let persisted = store.load().unwrap().unwrap();
+    assert_eq!(
+      persisted
+        .items
+        .iter()
+        .map(ClipboardItem::id)
+        .collect::<Vec<_>>(),
+      ["second"]
+    );
+    assert!(persisted.pending_image_blob_ids.is_empty());
+    assert_eq!(store.load_image(&blob_id, image.len()).unwrap(), image);
+    assert_eq!(
+      store
+        .load_image_preview(&blob_id, b"preview".len())
+        .unwrap(),
+      b"preview"
     );
     ClipboardStore::remove(&store_path).unwrap();
   }
@@ -3363,7 +3759,9 @@ mod tests {
 
     assert!(!store_path.exists());
     assert_eq!(
-      manager.persistence.status(),
+      manager
+        .persistence
+        .status_with_image_cleanup(ClipboardImageCleanupStatus::Idle),
       ClipboardPersistenceStatus::MemoryOnly
     );
   }
@@ -3391,6 +3789,7 @@ mod tests {
         text_item(now - Duration::days(31), "expired"),
         text_item(now, "current"),
       ],
+      pending_image_blob_ids: BTreeSet::new(),
       retention: ClipboardRetention::Month,
       source_app_visuals: Vec::new(),
     };
@@ -3492,6 +3891,7 @@ mod tests {
         capture_status: ClipboardCaptureStatus::Active,
         groups: Vec::new(),
         items: Vec::new(),
+        pending_image_blob_ids: BTreeSet::new(),
         retention: ClipboardRetention::Month,
         source_app_visuals: vec![ClipboardSourceAppVisual {
           color: None,

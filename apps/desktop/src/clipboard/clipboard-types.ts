@@ -68,7 +68,7 @@ export type ClipboardGroup = {
 
 export type ClipboardPersistence =
   | { status: "initializing" }
-  | { status: "encrypted" }
+  | { imageCleanup: "idle" | "pendingRetry"; status: "encrypted" }
   | { status: "memoryOnly" }
   | { status: "deletionOnly" };
 
@@ -177,7 +177,9 @@ const isPersistence = (value: unknown): value is ClipboardPersistence => {
   }
   return (
     value["status"] === "initializing" ||
-    value["status"] === "encrypted" ||
+    (value["status"] === "encrypted" &&
+      (value["imageCleanup"] === "idle" ||
+        value["imageCleanup"] === "pendingRetry")) ||
     value["status"] === "memoryOnly" ||
     value["status"] === "deletionOnly"
   );
