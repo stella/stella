@@ -17,8 +17,8 @@ const executionProfile = resolveE2eExecutionProfile(
 export default defineConfig({
   testDir: "./specs",
   globalTeardown: "./global-teardown.ts",
-  // The production CI profile pairs two workers with four isolated route-smoke
-  // groups. Other CI checks stay single-worker; local runs retain four workers.
+  // Network measurements use one fixture-owning group before mutation specs.
+  // Broad production checks use two workers; local runs retain four workers.
   fullyParallel: true,
   workers: IS_CI ? executionProfile.workerCount : 4,
   // CI failures are almost always real (server logs, traces tell the story).

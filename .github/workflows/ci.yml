@@ -1770,8 +1770,27 @@ jobs:
           tail -200 /tmp/web-production.log || true
           exit 1
 
+      # Keep fixture cardinality equal to baseline generation and prevent other
+      # specs' workspace events from refetching queries during measurement.
+      - name: Check route network baseline
+        if: steps.e2e-stack.outputs.status == 'ready' && matrix.shard == 1
+        env:
+          E2E_EXECUTION_PROFILE: network-baseline
+          E2E_EXPECT_DEV_ROUTES: "false"
+          PLAYWRIGHT_BLOB_OUTPUT_NAME: report-network-baseline.zip
+        run: bun --filter @stll/web test:e2e -- route-smoke.spec.ts
+
+      # Playwright clears its report directory at the next invocation.
+      - name: Upload network baseline blob report
+        if: always() && steps.e2e-stack.outputs.status == 'ready' && matrix.shard == 1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-blob-network-baseline
+          path: apps/web/e2e/test-results/blob-report/
+          retention-days: 7
+
       - name: Run Playwright shard
-        if: steps.e2e-stack.outputs.status == 'ready'
+        if: ${{ !cancelled() && steps.e2e-stack.outputs.status == 'ready' }}
         env:
           E2E_EXECUTION_PROFILE: ci-production-parallel
           E2E_EXPECT_DEV_ROUTES: "false"
@@ -1779,6 +1798,7 @@ jobs:
         run: >-
           bun --filter @stll/web test:e2e --
           --shard=${{ matrix.shard }}/2
+          --grep-invert="route-smoke.spec.ts"
 
       - name: Upload Playwright blob report
         if: always() && steps.e2e-stack.outputs.status == 'ready'
