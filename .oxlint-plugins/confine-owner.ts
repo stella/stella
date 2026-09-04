@@ -173,7 +173,7 @@ const isOwnedMemberPath = (
       segment === undefined ||
       !isAstNode(current) ||
       current.type !== "MemberExpression" ||
-      current.computed === true ||
+      current.computed !== false ||
       !isIdentifier(current.property, segment)
     ) {
       return false;
