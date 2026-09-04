@@ -120,11 +120,15 @@ const clearIntervalSpy = spyOn(globalThis, "clearInterval");
 const { broadcast, revokeWorkspaceSseAccess, startSse, stopSse, subscribe } =
   await import("@/api/lib/sse");
 
-// Let the fire-and-forget subscribe promise inside startSse settle.
-const flushMicrotasks = async (): Promise<void> => {
-  await Promise.resolve();
-  await Promise.resolve();
-  await Promise.resolve();
+// Let the fire-and-forget subscribe promise inside startSse settle. A timer
+// turn drains the whole pending microtask queue, so this does not depend on
+// how many `await` points the module's attach path happens to have — counting
+// ticks silently under-drains the moment that chain grows. `Bun.sleep` is used
+// rather than `setTimeout` so the tests that stub the global timer still get a
+// real turn. The delay is 0, so a pending attach retry (200 ms at the shortest)
+// never fires inside it.
+const settlePendingWork = async (): Promise<void> => {
+  await Bun.sleep(0);
 };
 
 const workspaceId = toSafeId<"workspace">("ws_1");
@@ -217,7 +221,7 @@ describe("sse module import", () => {
       broadcastTestEvent(workspaceId, testEvent("before-start")),
     ).not.toThrow();
 
-    await flushMicrotasks();
+    await settlePendingWork();
   });
 });
 
@@ -230,13 +234,13 @@ describe("startSse / stopSse lifecycle", () => {
 
     expect(setIntervalSpy).toHaveBeenCalledTimes(1);
 
-    await flushMicrotasks();
+    await settlePendingWork();
 
     expect(createdClients).toHaveLength(1);
     expect(createdClients[0]?.subscribe).toHaveBeenCalledTimes(1);
 
     stopSse();
-    await flushMicrotasks();
+    await settlePendingWork();
   });
 
   test("startSse is idempotent: repeated calls create only one timer and one subscriber", async () => {
@@ -249,12 +253,12 @@ describe("startSse / stopSse lifecycle", () => {
 
     expect(setIntervalSpy).toHaveBeenCalledTimes(1);
 
-    await flushMicrotasks();
+    await settlePendingWork();
 
     expect(createdClients).toHaveLength(1);
 
     stopSse();
-    await flushMicrotasks();
+    await settlePendingWork();
   });
 
   test("stopSse clears the interval and closes the subscriber", async () => {
@@ -262,7 +266,7 @@ describe("startSse / stopSse lifecycle", () => {
     createdClients.length = 0;
 
     startTestSse();
-    await flushMicrotasks();
+    await settlePendingWork();
 
     const client = createdClients[0];
     expect(client).toBeDefined();
@@ -272,7 +276,7 @@ describe("startSse / stopSse lifecycle", () => {
     expect(clearIntervalSpy).toHaveBeenCalledTimes(1);
     expect(client?.close).toHaveBeenCalledTimes(1);
 
-    await flushMicrotasks();
+    await settlePendingWork();
   });
 
   test("stopSse is safe when startSse was never called", () => {
@@ -283,12 +287,12 @@ describe("startSse / stopSse lifecycle", () => {
     createdClients.length = 0;
 
     startTestSse();
-    await flushMicrotasks();
+    await settlePendingWork();
 
     stopSse();
     expect(() => stopSse()).not.toThrow();
 
-    await flushMicrotasks();
+    await settlePendingWork();
   });
 
   test("a Redis connection failure during startSse is logged and does not throw", async () => {
@@ -297,14 +301,14 @@ describe("startSse / stopSse lifecycle", () => {
 
     expect(() => startTestSse()).not.toThrow();
 
-    await flushMicrotasks();
+    await settlePendingWork();
 
     // The client created for the failed connection attempt is still
     // closed, so a repeated failure does not leak a raw client handle.
     expect(createdClients[0]?.close).toHaveBeenCalledTimes(1);
 
     stopSse();
-    await flushMicrotasks();
+    await settlePendingWork();
     subscribeBehavior = "resolve";
   });
 
@@ -315,7 +319,7 @@ describe("startSse / stopSse lifecycle", () => {
     // stopSse runs before the mocked subscribe() promise has settled.
     stopSse();
 
-    await flushMicrotasks();
+    await settlePendingWork();
 
     expect(createdClients[0]?.close).toHaveBeenCalledTimes(1);
   });
@@ -329,7 +333,7 @@ describe("startSse / stopSse lifecycle", () => {
     // promise has not settled) when a new lifecycle starts.
     startTestSse();
 
-    await flushMicrotasks();
+    await settlePendingWork();
 
     expect(createdClients).toHaveLength(2);
     const [oldClient, newClient] = createdClients;
@@ -344,7 +348,7 @@ describe("startSse / stopSse lifecycle", () => {
     stopSse();
     expect(newClient?.close).toHaveBeenCalledTimes(1);
 
-    await flushMicrotasks();
+    await settlePendingWork();
   });
 });
 
@@ -365,7 +369,7 @@ describe("subscribe: already-aborted signal", () => {
     // A subsequent broadcast must not resurrect or feed the dead stream:
     // nothing was registered, so there is nothing to enqueue into.
     broadcastTestEvent(workspaceId, testEvent("after-abort"));
-    await flushMicrotasks();
+    await settlePendingWork();
 
     const second = await reader.read();
     expect(second.done).toBe(true);
@@ -378,7 +382,7 @@ describe("broadcast: local delivery without an attached subscriber", () => {
     // Local clients must still get it.
     startTestSse();
     stopSse();
-    await flushMicrotasks();
+    await settlePendingWork();
 
     const controller = new AbortController();
     const stream = subscribeToWorkspace(controller.signal);
@@ -391,13 +395,13 @@ describe("broadcast: local delivery without an attached subscriber", () => {
     expect(text).toContain("local-only");
 
     controller.abort();
-    await flushMicrotasks();
+    await settlePendingWork();
   });
 
   test("preserves the resource carried by a semantic event", async () => {
     startTestSse();
     stopSse();
-    await flushMicrotasks();
+    await settlePendingWork();
 
     const controller = new AbortController();
     const stream = subscribeToWorkspace(controller.signal);
@@ -415,7 +419,7 @@ describe("broadcast: local delivery without an attached subscriber", () => {
     expect(text).toContain(`"resource":{"type":"entity","id":"${entityId}"}`);
 
     controller.abort();
-    await flushMicrotasks();
+    await settlePendingWork();
   });
 });
 
@@ -434,7 +438,7 @@ describe("workspace access revocation", () => {
       },
     );
     stopSse();
-    await flushMicrotasks();
+    await settlePendingWork();
 
     const removedController = new AbortController();
     const retainedController = new AbortController();
@@ -458,14 +462,14 @@ describe("workspace access revocation", () => {
     retainedController.abort();
     startTestSse();
     stopSse();
-    await flushMicrotasks();
+    await settlePendingWork();
   });
 
   test("closes only the removed member's streams before later events", async () => {
     stopSse();
-    await flushMicrotasks();
+    await settlePendingWork();
     startTestSse();
-    await flushMicrotasks();
+    await settlePendingWork();
 
     const removedController = new AbortController();
     const retainedController = new AbortController();
@@ -490,13 +494,13 @@ describe("workspace access revocation", () => {
     removedController.abort();
     retainedController.abort();
     stopSse();
-    await flushMicrotasks();
+    await settlePendingWork();
   });
 
   test("a revocation from another API replica closes the local stream", async () => {
     createdClients.length = 0;
     startTestSse();
-    await flushMicrotasks();
+    await settlePendingWork();
 
     const controller = new AbortController();
     const reader = subscribeToWorkspace(controller.signal).getReader();
@@ -513,7 +517,7 @@ describe("workspace access revocation", () => {
 
     controller.abort();
     stopSse();
-    await flushMicrotasks();
+    await settlePendingWork();
   });
 });
 
@@ -527,7 +531,7 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
     subscribeBehavior = "resolve";
 
     startTestSse();
-    await flushMicrotasks();
+    await settlePendingWork();
 
     const controller = new AbortController();
     const stream = subscribeToWorkspace(controller.signal);
@@ -545,7 +549,7 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
 
     controller.abort();
     stopSse();
-    await flushMicrotasks();
+    await settlePendingWork();
   });
 
   test("preserves event order while workspace authorization is pending", async () => {
@@ -570,14 +574,14 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
         publishWorkspace: publishWorkspaceEventMock,
       },
     );
-    await flushMicrotasks();
+    await settlePendingWork();
 
     const controller = new AbortController();
     const reader = subscribeToWorkspace(controller.signal).getReader();
 
     broadcastTestEvent(workspaceId, testEvent("ordered-a"));
     broadcastTestEvent(workspaceId, testEvent("ordered-b"));
-    await flushMicrotasks();
+    await settlePendingWork();
     expect(authorizationCalls).toBe(1);
 
     firstAuthorization.resolve(undefined);
@@ -587,7 +591,7 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
     controller.abort();
     startTestSse();
     stopSse();
-    await flushMicrotasks();
+    await settlePendingWork();
   });
 
   test("a transient drop+reconnect re-subscribes via a fresh client and resumes exactly-once loopback delivery", async () => {
@@ -596,7 +600,7 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
     subscribeBehavior = "resolve";
 
     startTestSse();
-    await flushMicrotasks();
+    await settlePendingWork();
     const original = createdClients.at(-1);
     expect(original).toBeDefined();
 
@@ -614,7 +618,7 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
     if (original) {
       simulateDeafReconnect(original);
     }
-    await flushMicrotasks();
+    await settlePendingWork();
 
     // The deaf client was closed and a distinct replacement subscribed.
     expect(original?.close).toHaveBeenCalledTimes(1);
@@ -634,7 +638,7 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
 
     controller.abort();
     stopSse();
-    await flushMicrotasks();
+    await settlePendingWork();
   });
 
   test("while the replacement subscriber has not yet attached, broadcasts fall back to inline delivery", async () => {
@@ -643,7 +647,7 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
     subscribeBehavior = "resolve";
 
     startTestSse();
-    await flushMicrotasks();
+    await settlePendingWork();
     const original = createdClients.at(-1);
     expect(original).toBeDefined();
 
@@ -658,7 +662,7 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
     if (original) {
       simulateDeafReconnect(original);
     }
-    await flushMicrotasks();
+    await settlePendingWork();
 
     broadcastTestEvent(workspaceId, testEvent("deaf-window"));
     expect(decode((await reader.read()).value)).toContain("deaf-window");
@@ -667,7 +671,7 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
     subscribeFailuresRemaining = 0;
     controller.abort();
     stopSse();
-    await flushMicrotasks();
+    await settlePendingWork();
   });
 
   test("an own event broadcast during the attach window is delivered exactly once (loopback copy dropped)", async () => {
@@ -676,7 +680,7 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
     subscribeBehavior = "resolve";
 
     startTestSse();
-    await flushMicrotasks();
+    await settlePendingWork();
     const original = createdClients.at(-1);
     expect(original).toBeDefined();
 
@@ -703,13 +707,13 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
     // broadcasting a steady event that rides loopback only; reading it second
     // proves the windowed event was not delivered twice.
     expect(decode((await reader.read()).value)).toContain("own-in-window");
-    await flushMicrotasks();
+    await settlePendingWork();
     broadcastTestEvent(workspaceId, testEvent("after-window"));
     expect(decode((await reader.read()).value)).toContain("after-window");
 
     controller.abort();
     stopSse();
-    await flushMicrotasks();
+    await settlePendingWork();
   });
 
   test("a remote event received during the attach window is delivered via loopback", async () => {
@@ -718,7 +722,7 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
     subscribeBehavior = "resolve";
 
     startTestSse();
-    await flushMicrotasks();
+    await settlePendingWork();
     const original = createdClients.at(-1);
 
     const controller = new AbortController();
@@ -747,7 +751,7 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
 
     controller.abort();
     stopSse();
-    await flushMicrotasks();
+    await settlePendingWork();
   });
 
   test("a stale subscriber whose close() threw cannot deliver after a replacement attaches", async () => {
@@ -757,7 +761,7 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
     closeFailuresRemaining = 0;
 
     startTestSse();
-    await flushMicrotasks();
+    await settlePendingWork();
     const original = createdClients.at(-1);
     expect(original?.subscribedLive).toBe(true);
 
@@ -773,7 +777,7 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
         handler();
       }
     }
-    await flushMicrotasks();
+    await settlePendingWork();
 
     const replacement = createdClients.at(-1);
     expect(replacement).not.toBe(original);
@@ -799,7 +803,7 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
     closeFailuresRemaining = 0;
     controller.abort();
     stopSse();
-    await flushMicrotasks();
+    await settlePendingWork();
   });
 });
 
@@ -810,7 +814,7 @@ describe("startSse: subscriber attach retry", () => {
     subscribeFailuresRemaining = 1;
 
     startTestSse();
-    await flushMicrotasks();
+    await settlePendingWork();
 
     // The first attempt created a client, failed, and closed it.
     expect(createdClients).toHaveLength(1);
@@ -818,7 +822,7 @@ describe("startSse: subscriber attach retry", () => {
 
     // Wait past the first backoff delay (200ms) so the retry can run.
     await Bun.sleep(300);
-    await flushMicrotasks();
+    await settlePendingWork();
 
     // A second client was created for the retry and stayed attached.
     expect(createdClients).toHaveLength(2);
@@ -830,7 +834,7 @@ describe("startSse: subscriber attach retry", () => {
     stopSse();
     expect(attached?.close).toHaveBeenCalledTimes(1);
 
-    await flushMicrotasks();
+    await settlePendingWork();
     subscribeFailuresRemaining = 0;
   });
 
@@ -883,7 +887,7 @@ describe("startSse: subscriber attach retry", () => {
     timeoutSpy.mockRestore();
     subscribeFailuresRemaining = 0;
     stopSse();
-    await flushMicrotasks();
+    await settlePendingWork();
   });
 
   test("a failed attach whose cleanup close() also throws still schedules the next attempt", async () => {
@@ -927,6 +931,6 @@ describe("startSse: subscriber attach retry", () => {
     subscribeFailuresRemaining = 0;
     closeFailuresRemaining = 0;
     stopSse();
-    await flushMicrotasks();
+    await settlePendingWork();
   });
 });
