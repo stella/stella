@@ -1,4 +1,4 @@
-import { TaggedError } from "better-result";
+import { panic, TaggedError } from "better-result";
 
 import type { PersistedAstDegradation } from "@stll/legal-ast/document-ast";
 
@@ -164,9 +164,7 @@ export class Unreachable extends TaggedError("Unreachable")<{
   message: string;
 }> {}
 
-export const unreachable = (message: string): never => {
-  throw new Unreachable({ message });
-};
+export const unreachable = (message: string): never => panic(message);
 
 export class ParseXmlError extends TaggedError("ParseXmlError")<{
   message: string;
@@ -334,6 +332,22 @@ export class ChatLoopDetectedError extends TaggedError(
 export type ChatTerminalError =
   | ChatEmptyCompletionError
   | ChatLoopDetectedError;
+
+/**
+ * A text generation ended because the abort signal its caller passed fired:
+ * a deadline that caller set, or a client that went away mid-request.
+ *
+ * Carried as the `cause` of the 502 the generation helper answers with, so
+ * the outcome stays identifiable after the status has been chosen. The status
+ * cannot carry it: a caller-requested cancellation is an outcome the AI stack
+ * models, but it is reported from 500 up, which is where a failure sink
+ * otherwise reads "a shape this code did not anticipate".
+ */
+export class AIGenerationCancelledError extends TaggedError(
+  "AIGenerationCancelledError",
+)<{
+  message: string;
+}> {}
 
 /** Sandbox execution failure: transpile, runtime, limit, or marshalling. */
 export class SandboxError extends TaggedError("SandboxError")<{

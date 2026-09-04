@@ -9,6 +9,7 @@
 import { AI_ERROR_KINDS, type AIErrorKind } from "@stll/api-contract";
 
 import {
+  AIGenerationCancelledError,
   ChatEmptyCompletionError,
   ChatLoopDetectedError,
   HandlerError,
@@ -280,6 +281,15 @@ const CHAT_TERMINAL_ERROR_GUARDS = {
 const isChatTerminalError = (error: unknown): boolean =>
   Object.values(CHAT_TERMINAL_ERROR_GUARDS).some((is) => is(error));
 
+// The generation helper reports a cancelled run as the 502 its callers answer
+// with and records the outcome on the cause, so the tag is read one level down
+// as well as at the top. The walk stops there: a cancellation is only this
+// helper's own, and reading the whole chain would also name a run that failed
+// on a provider error while a later cancellation was in flight.
+const isCancelledGeneration = (error: unknown): boolean =>
+  AIGenerationCancelledError.is(error) ||
+  (HandlerError.is(error) && AIGenerationCancelledError.is(error.cause));
+
 /**
  * Whether a failure is one this service anticipated, so a telemetry sink can
  * record it as an operational state rather than a defect.
@@ -302,6 +312,13 @@ const isChatTerminalError = (error: unknown): boolean =>
  *
  * The request layer already draws this line: `runSafeHandler` reports a
  * handler failure from 500 up and answers a 4xx as an ordinary response.
+ *
+ * A cancelled generation is the one self-raised outcome that line cannot
+ * place. The generation helper rejects a run whose caller-supplied abort
+ * signal fired, which is a deadline that caller set or a client that went
+ * away, but it answers 502, so the status test reads it as a defect. It is
+ * recognised by its cause instead, the tag the helper attaches for exactly
+ * this, so the 502 the caller receives stays unchanged.
  */
 export const isAnticipatedAIFailure = (
   error: unknown,
@@ -309,6 +326,7 @@ export const isAnticipatedAIFailure = (
 ): boolean =>
   kind !== "unknown" ||
   isChatTerminalError(error) ||
+  isCancelledGeneration(error) ||
   (HandlerError.is(error) && error.status < HTTP_SERVER_ERROR_MIN);
 
 type AIHandlerErrorFallback = {

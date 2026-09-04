@@ -17,7 +17,7 @@ import {
 } from "@stll/ai-catalog";
 
 import type { CachingDecision } from "@/api/lib/ai-config";
-import { classifyAIError } from "@/api/lib/ai-error";
+import { classifyAIError, isAnticipatedAIFailure } from "@/api/lib/ai-error";
 import { toSafeId } from "@/api/lib/branded-types";
 import { StructuredOutputBudgetError } from "@/api/lib/structured-output-budget";
 import {
@@ -824,6 +824,32 @@ describe("TanStack AI text generation", () => {
     );
 
     expect(caught).toMatchObject({ status: 502 });
+    // The 502 is what the caller answers with; the cause is what keeps a
+    // failure sink from grading a caller-requested cancellation as a defect.
+    expect(isAnticipatedAIFailure(caught, classifyAIError(caught))).toBe(true);
+  });
+
+  test("classifies an abort rejection from a cancelled run as anticipated", async () => {
+    capturedChatOptions.length = 0;
+    const controller = new AbortController();
+    nextChatResult = createAbortRejectedTextStream(controller);
+
+    const caught = await generateTextForTestModel({
+      abortSignal: controller.signal,
+      caching: noCaching,
+      organizationId: null,
+      orgAIConfig: null,
+      prompt: "Rewrite it.",
+      role: "chat",
+      serviceTier: "standard",
+      tenantWorkspaceIds: [],
+    }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+
+    expect(caught).toMatchObject({ status: 502 });
+    expect(isAnticipatedAIFailure(caught, classifyAIError(caught))).toBe(true);
   });
 
   test("keeps the output of a run that finished before the cancellation", async () => {
@@ -1120,6 +1146,13 @@ const createCancelledTextStream = async function* (
 ) {
   yield* createTextStream(deltas, finishReason);
   controller.abort();
+};
+
+const createAbortRejectedTextStream = async function* (
+  controller: AbortController,
+) {
+  controller.abort();
+  throw controller.signal.reason;
 };
 
 // `RUN_FINISHED` may carry no finish reason at all; the run still finished.

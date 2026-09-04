@@ -6,6 +6,7 @@ import {
   providerStatusFields,
 } from "@/api/lib/ai-error";
 import {
+  AIGenerationCancelledError,
   ChatEmptyCompletionError,
   ChatLoopDetectedError,
   HandlerError,
@@ -314,6 +315,39 @@ describe("isAnticipatedAIFailure", () => {
       expect(isAnticipatedAIFailure(error, "unknown")).toBe(true);
       expect(isAnticipatedAIFailure(error, classifyAIError(error))).toBe(true);
     }
+  });
+
+  test("anticipates a cancelled generation behind its 502", () => {
+    // The generation helper rejects a run whose caller-supplied abort signal
+    // fired (a deadline that caller set, or a client that went away) and
+    // answers 502, so the status test alone would read a routine cancellation
+    // as a defect. The classifier cannot name it either: an error this
+    // service constructed carries no provider status to classify by.
+    const cancelled = new HandlerError({
+      status: 502,
+      message: "AI generation was cancelled",
+      cause: new AIGenerationCancelledError({
+        message: "AI generation was cancelled",
+      }),
+    });
+
+    expect(classifyAIError(cancelled)).toBe("unknown");
+    expect(isAnticipatedAIFailure(cancelled, classifyAIError(cancelled))).toBe(
+      true,
+    );
+  });
+
+  test("does not anticipate an unnamed 502 carrying an unrelated cause", () => {
+    // Only the cancellation tag is forgiven at 502. A wrapped cause the
+    // classifier cannot name stays a defect, so the branch above cannot
+    // quietly absorb every wrapped server-side failure.
+    const error = new HandlerError({
+      status: 502,
+      message: "generation failed",
+      cause: new Error("stream ended before completion"),
+    });
+
+    expect(isAnticipatedAIFailure(error, classifyAIError(error))).toBe(false);
   });
 
   test("does not anticipate a shape the classifier cannot name", () => {
