@@ -10,6 +10,16 @@ const HELPER_TEST_URL = new URL(
   import.meta.url,
 );
 const CHANGESET_GUARD_URL = new URL("changeset-guard.ts", import.meta.url);
+const RESOLUTION_SCRIPTS = [
+  "scripts/check-resolution-ranges.ts",
+  "scripts/check-resolutions-only-change.ts",
+  "scripts/fix-resolution-ranges.ts",
+  "scripts/json-text-edit.ts",
+  "scripts/resolution-ranges.ts",
+] as const;
+const RESOLUTION_SOURCE_URLS = RESOLUTION_SCRIPTS.map(
+  (script) => new URL(script.replace("scripts/", ""), import.meta.url),
+);
 
 describe("Dependabot Bun autofix boundary", () => {
   test("keeps the runner read-only and hands off only verified autofixes", async () => {
@@ -49,7 +59,7 @@ describe("Dependabot Bun autofix boundary", () => {
       "bun --no-env-file dedupe --lockfile-only --ignore-scripts",
     );
     expect(workflow).toContain(
-      `git diff --name-only "$HEAD_SHA" -- . ':(exclude)bun.lock' ":(exclude)$EMPTY_CHANGESET_PATH"`,
+      `git diff --name-only "$HEAD_SHA" -- . ':(exclude)bun.lock' ':(exclude)package.json' ":(exclude)$EMPTY_CHANGESET_PATH"`,
     );
     expect(workflow).toContain(
       `git ls-files --others --exclude-standard -- . ":(exclude)$EMPTY_CHANGESET_PATH"`,
@@ -70,13 +80,7 @@ describe("Dependabot Bun autofix boundary", () => {
       "bun --no-install --no-env-file scripts/dependabot-empty-changeset.ts",
     );
 
-    const [helper, helperTest, changesetGuard] = await Promise.all([
-      Bun.file(HELPER_URL).text(),
-      Bun.file(HELPER_TEST_URL).text(),
-      Bun.file(CHANGESET_GUARD_URL).text(),
-    ]);
-    expect(helper).not.toContain('from "better-result"');
-    expect(changesetGuard).not.toContain('from "better-result"');
+    const helperTest = await Bun.file(HELPER_TEST_URL).text();
     const externalTestImports = [...helperTest.matchAll(/from "([^"]+)"/gu)]
       .flatMap((match) => {
         const specifier = match.at(1);
@@ -89,6 +93,59 @@ describe("Dependabot Bun autofix boundary", () => {
           !specifier.startsWith("."),
       );
     expect(externalTestImports).toEqual([]);
+
+    const sources = await Promise.all(
+      [HELPER_URL, CHANGESET_GUARD_URL, ...RESOLUTION_SOURCE_URLS].map(
+        async (url) => await Bun.file(url).text(),
+      ),
+    );
+    // The job never installs, so every script it runs must resolve without
+    // node_modules.
+    for (const source of sources) {
+      expect(source).not.toContain('from "better-result"');
+    }
+  });
+
+  test("repairs a resolution pin that a bump pushed below its dependents' floor", async () => {
+    const workflow = await Bun.file(WORKFLOW_URL).text();
+    const trustedSourcesStep = workflow.indexOf(
+      "- name: Verify trusted autofix sources",
+    );
+    const fixStep = workflow.indexOf(
+      "- name: Raise resolutions to their dependents' floors",
+    );
+    const guardStep = workflow.indexOf("- name: Resolution range guard");
+    const restrictionStep = workflow.indexOf(
+      "- name: Restrict generated changes",
+    );
+
+    // The fixer runs only after its own sources are verified against the base,
+    // so a Dependabot PR cannot smuggle in a modified fixer.
+    for (const script of RESOLUTION_SCRIPTS) {
+      expect(workflow.indexOf(script)).toBeGreaterThan(trustedSourcesStep);
+      expect(workflow.indexOf(script)).toBeLessThan(fixStep);
+    }
+    expect(fixStep).toBeGreaterThan(trustedSourcesStep);
+    expect(guardStep).toBeGreaterThan(fixStep);
+    expect(restrictionStep).toBeGreaterThan(guardStep);
+
+    expect(workflow).toContain(
+      "bun --no-install --no-env-file scripts/fix-resolution-ranges.ts",
+    );
+    expect(workflow).toContain("--max-passes 4");
+    // The lockfile refresh between passes lives in the fixer, which the
+    // trusted-sources step pins to the base revision.
+    const fixer = await Bun.file(
+      new URL("fix-resolution-ranges.ts", import.meta.url),
+    ).text();
+    expect(fixer).toContain(`"install", "--lockfile-only", "--ignore-scripts"`);
+    expect(workflow).toContain(
+      "bun --no-install --no-env-file scripts/check-resolution-ranges.ts",
+    );
+    expect(workflow).toContain(
+      `bun --no-install --no-env-file scripts/check-resolutions-only-change.ts --ref "$HEAD_SHA"`,
+    );
+    expect(workflow).toContain("git diff --check -- bun.lock package.json");
   });
 
   test("adds a deterministic empty changeset for published dev dependency updates", async () => {
