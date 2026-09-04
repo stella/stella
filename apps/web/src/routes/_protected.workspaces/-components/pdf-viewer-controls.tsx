@@ -9,21 +9,11 @@ import {
   ChevronUpIcon,
   DownloadIcon,
   FilePenLineIcon,
-  MonitorIcon,
-  MoonIcon,
   PrinterIcon,
-  SunIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import {
-  Menu,
-  MenuPopup,
-  MenuRadioGroup,
-  MenuRadioItem,
-  MenuTrigger,
-} from "@stll/ui/menu";
 import { Separator } from "@stll/ui/separator";
 import { stellaToast } from "@stll/ui/toast";
 
@@ -41,7 +31,7 @@ import { unwrapEden } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { fileMetadataOptions } from "@/lib/files/file-metadata-query";
-import { PDF_COLOR_MODES, type PDFColorMode } from "@/lib/pdf/pdf-color-mode";
+import type { PDFColorMode } from "@/lib/pdf/pdf-color-mode";
 import {
   getPDFScaleOffset,
   PDF_MAX_SCALE_OFFSET,
@@ -54,12 +44,6 @@ import { useWorkspaceStore } from "@/lib/workspaces/store";
 const routeApi = getRouteApi(
   "/_protected/workspaces/$workspaceId/$viewId/document",
 );
-
-const PDF_COLOR_MODE_ICONS = {
-  light: SunIcon,
-  dark: MoonIcon,
-  system: MonitorIcon,
-} as const satisfies Record<PDFColorMode, typeof SunIcon>;
 
 type PdfViewerControlsProps = {
   workspaceId: string;
@@ -108,7 +92,6 @@ export const PdfViewerControls = ({
   const navigate = useNavigate({
     from: "/workspaces/$workspaceId/$viewId/document",
   });
-  const PDFColorModeIcon = PDF_COLOR_MODE_ICONS[pdfColorMode];
   const canAdjustPDFColor =
     !isDocx &&
     fileMetadata !== undefined &&
@@ -228,6 +211,14 @@ export const PdfViewerControls = ({
                     getPDFScaleOffset(scaleOffset, -PDF_SCALE_OFFSET_STEP),
                   )
           }
+          pdfColorControl={
+            canAdjustPDFColor
+              ? {
+                  colorMode: pdfColorMode,
+                  onColorModeChange: setPDFColorMode,
+                }
+              : undefined
+          }
           scaleOffset={scaleOffset}
         />
       </div>
@@ -313,34 +304,6 @@ export const PdfViewerControls = ({
                 <FilePenLineIcon />
                 {t("workspaces.pdf.pageEditor.editPages")}
               </Button>
-            )}
-            {canAdjustPDFColor && (
-              <Menu>
-                <MenuTrigger
-                  aria-label={t("workspaces.pdf.adjustForDarkMode")}
-                  render={<Button size="icon-xs" variant="ghost" />}
-                  title={t("workspaces.pdf.adjustForDarkMode")}
-                >
-                  <PDFColorModeIcon className="size-3.5" />
-                </MenuTrigger>
-                <MenuPopup align="end">
-                  <MenuRadioGroup value={pdfColorMode}>
-                    {PDF_COLOR_MODES.map((colorMode) => {
-                      const ColorModeIcon = PDF_COLOR_MODE_ICONS[colorMode];
-                      return (
-                        <MenuRadioItem
-                          key={colorMode}
-                          onClick={() => setPDFColorMode(colorMode)}
-                          value={colorMode}
-                        >
-                          <ColorModeIcon />
-                          {t(`appearance.${colorMode}`)}
-                        </MenuRadioItem>
-                      );
-                    })}
-                  </MenuRadioGroup>
-                </MenuPopup>
-              </Menu>
             )}
             <Button
               disabled={!fileMetadata || isDownloading || fieldId.length === 0}

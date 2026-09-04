@@ -32,15 +32,14 @@ export type ChatContextUsage = {
 type ChatContextMeterProps = {
   /**
    * The next-send estimate, or `null` before the first message lands.
-   * A brand-new thread still renders the meter — an empty ring at 0% —
+   * A brand-new thread still renders the meter as an empty ring,
    * so the affordance is present from the start; only the breakdown
    * popover is withheld until there is a conversation to break down.
    */
   usage: ChatContextUsage | null;
 };
 
-// The percent label always shows before the ring; the tone escalates near the
-// trigger.
+// The ring's tone escalates near the trigger.
 const WARNING_THRESHOLD = 80;
 const DANGER_THRESHOLD = 95;
 
@@ -77,18 +76,15 @@ export const ChatContextMeter = ({ usage }: ChatContextMeterProps) => {
   const format = useFormatter();
 
   if (usage === null) {
-    // Zero-state for a brand-new/empty thread: the empty ring at 0% in the
+    // Zero-state for a brand-new/empty thread: the empty ring in the
     // muted tone, with no popover — there is no conversation to break down
     // yet, so the trigger is inert rather than opening an empty sheet.
     return (
       <span
         aria-label={t("triggerLabel", { percent: format.number(0) })}
-        className="text-muted-foreground inline-flex items-center gap-1 px-1.5 text-xs font-normal"
+        className="text-muted-foreground inline-flex size-6 items-center justify-center"
         role="status"
       >
-        <span aria-hidden="true" className="text-xs">
-          {t("percent", { percent: format.number(0) })}
-        </span>
         <ContextRing percent={0} />
       </span>
     );
@@ -112,15 +108,12 @@ export const ChatContextMeter = ({ usage }: ChatContextMeterProps) => {
             aria-label={t("triggerLabel", {
               percent: format.number(percent),
             })}
-            className={cn("font-normal", TONE_TEXT_CLASS[tone])}
-            size="xs"
+            className={cn(TONE_TEXT_CLASS[tone])}
+            size="icon-xs"
             variant="ghost"
           />
         }
       >
-        <span className="text-xs">
-          {t("percent", { percent: format.number(percent) })}
-        </span>
         <ContextRing percent={percent} />
       </PopoverTrigger>
       <PopoverPopup align="end" className="w-96" side="top">

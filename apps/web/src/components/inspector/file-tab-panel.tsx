@@ -91,6 +91,7 @@ import {
   DOCX_MIME,
   getNativeOfficeViewerFormat,
   MARKDOWN_MIME,
+  PDF_MIME,
   TOOLBAR_ROW_HEIGHT,
 } from "@/lib/consts";
 import { getDesktopEditFileType } from "@/lib/desktop-edit-formats";
@@ -98,6 +99,7 @@ import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { filesKeys, textFileOptions } from "@/lib/files/queries";
+import type { PDFColorMode } from "@/lib/pdf/pdf-color-mode";
 import { toSafeId } from "@/lib/safe-id";
 import { entitiesKeys, entityOptions } from "@/lib/workspaces/queries/entities";
 
@@ -189,6 +191,23 @@ const stripExtension = (name: string): string => {
     return name;
   }
   return name.slice(0, dotIndex);
+};
+
+type GetPeekPDFColorControlOptions = {
+  colorMode: PDFColorMode;
+  mimeType: string | null | undefined;
+  onColorModeChange: (colorMode: PDFColorMode) => void;
+};
+
+const getPeekPDFColorControl = ({
+  colorMode,
+  mimeType,
+  onColorModeChange,
+}: GetPeekPDFColorControlOptions) => {
+  if (mimeType !== PDF_MIME) {
+    return undefined;
+  }
+  return { colorMode, onColorModeChange };
 };
 
 const getFileTabDisplayState = ({
@@ -467,6 +486,12 @@ export const FileTabPanel = ({
   const analytics = useAnalytics();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [pdfColorMode, setPDFColorMode] = useState<PDFColorMode>("system");
+  const pdfColorControl = getPeekPDFColorControl({
+    colorMode: pdfColorMode,
+    mimeType: tab.mimeType,
+    onColorModeChange: setPDFColorMode,
+  });
   const openFile = useInspectorTabsStore((s) => s.openFile);
   const replaceFileFieldId = useInspectorTabsStore((s) => s.replaceFileFieldId);
   const setFileFacet = useInspectorTabsStore((s) => s.setFileFacet);
@@ -886,6 +911,7 @@ export const FileTabPanel = ({
         onResetZoom={() => handleResetZoom(tab.id)}
         onZoomIn={() => handleZoom(tab.id, "in")}
         onZoomOut={() => handleZoom(tab.id, "out")}
+        pdfColorControl={pdfColorControl}
         scaleOffset={scaleOffset}
       />
     </div>
@@ -1115,6 +1141,7 @@ export const FileTabPanel = ({
         errorFallback={viewerErrorFallback}
         fieldId={tab.id}
         filePurpose="display"
+        colorMode={pdfColorMode}
         mimeType={tab.mimeType ?? undefined}
         onDocxScrollTopChange={handleDocxScrollTopChange}
         onError={handleViewerError}
