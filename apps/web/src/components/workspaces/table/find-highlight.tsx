@@ -1,9 +1,6 @@
 import { createContext, use } from "react";
 import type { ReactNode } from "react";
 
-import { FieldTextProvider } from "@stll/workspace-ui/field-text";
-import type { FieldTextRenderer } from "@stll/workspace-ui/field-text";
-
 import { splitByMatch } from "@/components/workspaces/table/find-highlight.logic";
 
 /**
@@ -58,8 +55,8 @@ export const HighlightedText = ({
 
 /**
  * Publish a find to the rows under it. Always rendered, with `null` when no
- * find is running: mounting the providers only while a term is live would
- * remount the table underneath them.
+ * find is running: mounting the provider only while a term is live would
+ * remount the table underneath it.
  */
 export const FindHighlightScope = ({
   children,
@@ -67,11 +64,7 @@ export const FindHighlightScope = ({
 }: {
   children: ReactNode;
   highlight: TableFindHighlight | null;
-}) => (
-  <FindHighlightContext value={highlight}>
-    <FieldTextProvider value={findTextRenderer}>{children}</FieldTextProvider>
-  </FindHighlightContext>
-);
+}) => <FindHighlightContext value={highlight}>{children}</FindHighlightContext>;
 
 const isSearched = (
   highlight: TableFindHighlight,
@@ -80,10 +73,3 @@ const isSearched = (
   propertyId === undefined
     ? highlight.matchesName
     : highlight.propertyIds.has(propertyId);
-
-// The cell-text decoration handed to `@stll/workspace-ui`: one renderer per
-// column, so a cell draws its own marks without every field component having
-// to learn what a find is.
-const findTextRenderer =
-  (propertyId: string | undefined): FieldTextRenderer =>
-  (text) => <HighlightedText propertyId={propertyId} text={text} />;

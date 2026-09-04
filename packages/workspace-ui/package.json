@@ -34,7 +34,6 @@
     "./calculation-selection": "./src/calculation-selection.ts",
     "./colors": "./src/colors.ts",
     "./conditions": "./src/conditions/index.ts",
-    "./field-text": "./src/field-text.tsx",
     "./field-value": "./src/field-value.tsx",
     "./field-value-logic": "./src/field-value-logic.ts",
     "./kanban-grouping-picker": "./src/kanban-grouping-picker.tsx",

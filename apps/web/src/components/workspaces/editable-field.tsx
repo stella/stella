@@ -31,6 +31,7 @@ import {
 } from "@/components/workspaces/field-value";
 import { FieldValueSelect } from "@/components/workspaces/field-value-select";
 import { useStartWorkflow } from "@/components/workspaces/hooks/use-start-workflow";
+import { HighlightedText } from "@/components/workspaces/table/find-highlight";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
@@ -761,7 +762,7 @@ const TableFileField = ({
           mimeType={content.mimeType}
         />
         <BidiText as="span" className="min-w-0 truncate text-start">
-          {content.fileName}
+          <HighlightedText propertyId={propertyId} text={content.fileName} />
         </BidiText>
       </Tooltip>
     );
@@ -780,7 +781,7 @@ const TableFileField = ({
         mimeType={content.mimeType}
       />
       <BidiText as="span" className="min-w-0 truncate text-start">
-        {content.fileName}
+        <HighlightedText propertyId={propertyId} text={content.fileName} />
       </BidiText>
     </Tooltip>
   );
