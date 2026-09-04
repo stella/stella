@@ -8,6 +8,8 @@ import { useTranslations } from "use-intl";
 import { Skeleton } from "@stll/ui/skeleton";
 import { stellaToast } from "@stll/ui/toast";
 
+import { guideAnchor } from "@/features/guides/guide-anchor";
+import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { userErrorMessage } from "@/lib/errors/user-safe";
@@ -214,17 +216,22 @@ function RouteComponent() {
   }
 
   return (
-    <PlaybookList
-      loading={loadingMore}
-      nextCursor={currentNextCursor}
-      onLoadMore={() => {
-        detached(handleLoadMore(), "knowledge-playbooks.load-more");
-      }}
-      onNewPlaybook={() => setView({ kind: "editor", playbookId: null })}
-      onRefresh={handleRefresh}
-      onSelect={(playbookId) => setView({ kind: "editor", playbookId })}
-      organizationId={activeOrganizationId}
-      playbooks={playbooks}
-    />
+    <div
+      className="flex min-h-0 flex-1 flex-col"
+      {...guideAnchor(GUIDE_ANCHORS.playbooksOverview)}
+    >
+      <PlaybookList
+        loading={loadingMore}
+        nextCursor={currentNextCursor}
+        onLoadMore={() => {
+          detached(handleLoadMore(), "knowledge-playbooks.load-more");
+        }}
+        onNewPlaybook={() => setView({ kind: "editor", playbookId: null })}
+        onRefresh={handleRefresh}
+        onSelect={(playbookId) => setView({ kind: "editor", playbookId })}
+        organizationId={activeOrganizationId}
+        playbooks={playbooks}
+      />
+    </div>
   );
 }

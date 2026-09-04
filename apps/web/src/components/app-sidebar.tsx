@@ -28,6 +28,7 @@ import {
 } from "@tanstack/react-router";
 import {
   ChevronRightIcon,
+  CircleHelpIcon,
   EllipsisVerticalIcon,
   MessageSquareIcon,
   PanelLeftIcon,
@@ -116,7 +117,6 @@ import {
 } from "@/features/chat/queries";
 import { useChromeQuery, useHasMounted } from "@/hooks/use-chrome-query";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useGuidesPreviewEnabled } from "@/hooks/use-guides-preview";
 import { useHydrationSafeHotkeyPlatform } from "@/hooks/use-hydration-safe-hotkey-platform";
 import { useInboxPreviewEnabled } from "@/hooks/use-inbox-preview";
 import { useInlineRename } from "@/hooks/use-inline-rename";
@@ -151,12 +151,21 @@ import {
 const SCROLLABLE_GROUP_CONTENT =
   "overflow-x-hidden overflow-y-auto group-data-[collapsible=icon]:[scrollbar-width:none] group-data-[collapsible=icon]:[&::-webkit-scrollbar]:hidden";
 
-// Lazy so the guides feature (and its spotlight engine) stays out of the shell
-// bundle; it loads only when the preview flag renders the entry.
+// Lazy so the guides feature stays out of the shell bundle until the user
+// opens Help. The spotlight engine remains a second, runner-owned lazy chunk.
 const GuideHelpDrawer = lazy(async () => {
   const module = await import("@/features/guides/guide-help-drawer");
   return { default: module.GuideHelpDrawer };
 });
+
+const GUIDE_DRAWER_STATES = {
+  closed: "closed",
+  idle: "idle",
+  open: "open",
+} as const;
+
+type GuideDrawerState =
+  (typeof GUIDE_DRAWER_STATES)[keyof typeof GUIDE_DRAWER_STATES];
 
 export const AppSidebar = (props: AppSidebarProps) => {
   const t = useTranslations();
@@ -170,7 +179,6 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const isCollapsed = state === "collapsed" && !isMobile;
   const publicLawPreviewEnabled = usePublicLawPreviewEnabled();
   const workflowsPreviewEnabled = useWorkflowsPreviewEnabled();
-  const guidesPreviewEnabled = useGuidesPreviewEnabled();
   const inboxPreviewEnabled = useInboxPreviewEnabled();
   const primaryNavItems = getWorkspacePrimaryNavItems({
     includeInbox: inboxPreviewEnabled,
@@ -182,6 +190,9 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const user = useAuthenticatedUser();
 
   const [searchOpen, setSearchOpen] = useState(false);
+  const [guideDrawerState, setGuideDrawerState] = useState<GuideDrawerState>(
+    GUIDE_DRAWER_STATES.idle,
+  );
   const [pendingEntityDrop, setPendingEntityDrop] =
     useState<PendingEntityDrop | null>(null);
   const { pinnedOrder, pinnedIds, togglePin, reorderPinned } = usePinnedStore(
@@ -192,7 +203,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
       reorderPinned: s.reorder,
     })),
   );
-  const { data: workspacesData } = useChromeQuery(
+  const { data: workspacesData, isPending: workspacesPending } = useChromeQuery(
     workspacesNavigationOptions(user.activeOrganizationId),
   );
   const { data: inboxCount } = useChromeQuery({
@@ -749,11 +760,34 @@ export const AppSidebar = (props: AppSidebarProps) => {
       {/* User avatar at bottom */}
       <SidebarFooter>
         <SidebarMenu>
-          {guidesPreviewEnabled && (
-            <Suspense fallback={null}>
-              <GuideHelpDrawer />
-            </Suspense>
-          )}
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              aria-expanded={guideDrawerState === GUIDE_DRAWER_STATES.open}
+              aria-haspopup="dialog"
+              onClick={() => setGuideDrawerState(GUIDE_DRAWER_STATES.open)}
+              size="sm"
+              tooltip={t("guides.help.buttonLabel")}
+            >
+              <CircleHelpIcon className="size-4" />
+              <span>{t("guides.help.buttonLabel")}</span>
+            </SidebarMenuButton>
+            {guideDrawerState !== GUIDE_DRAWER_STATES.idle && (
+              <Suspense fallback={null}>
+                <GuideHelpDrawer
+                  onOpenChange={(open) =>
+                    setGuideDrawerState(
+                      open
+                        ? GUIDE_DRAWER_STATES.open
+                        : GUIDE_DRAWER_STATES.closed,
+                    )
+                  }
+                  open={guideDrawerState === GUIDE_DRAWER_STATES.open}
+                  workspaceId={activeWorkspaceId ?? workspaces?.at(0)?.id}
+                  workspaceSelectionPending={workspacesPending}
+                />
+              </Suspense>
+            )}
+          </SidebarMenuItem>
           <FeedbackDialog userEmail={user.email} />
           <SidebarUserMenu user={user} />
         </SidebarMenu>

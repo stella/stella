@@ -431,7 +431,6 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Show the Inbox and the notification bell for everyone, without the per-browser beta toggle.",
   VITE_FEATURE_LEGAL_LISTS:
     "Show first-class legal lists and list-item task controls.",
-  VITE_GUIDES_ENABLED: "Show the in-app interactive guides.",
   VITE_POSTHOG_KEY:
     'Public PostHog project key. The placeholder "phc_" disables local capture.',
   VITE_POSTHOG_LOCAL_DEBUG:

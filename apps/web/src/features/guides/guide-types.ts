@@ -2,10 +2,15 @@ import type { GuideAnchorId } from "@/features/guides/guide-anchors";
 import type { TranslationKey } from "@/i18n/types";
 import type { FileRouteTypes } from "@/routeTree.gen";
 
-// Only param-less routes are navigable by a guide step: a removed route drops
-// from this union and turns the referencing step into a typecheck error. Routes
-// with a `$param` segment are excluded because a step cannot supply params.
-export type GuideRoute = Exclude<FileRouteTypes["to"], `${string}$${string}`>;
+// Static guide destinations stay bound to the generated route tree. Matter
+// tours use a semantic view target instead of storing workspace/view ids in
+// the registry; the runner resolves those ids from the user's authorized
+// workspace data when the guide starts.
+type GuideStaticRoute = Exclude<FileRouteTypes["to"], `${string}$${string}`>;
+
+export type GuideRoute =
+  | { type: "static"; to: GuideStaticRoute }
+  | { type: "workspace-unfiltered-table" };
 
 // Guide copy lives under `guides.tours.*` and takes no ICU arguments, so these
 // keys are safe to pass to `t(key)` with a single argument. Narrowing to the
@@ -19,16 +24,19 @@ export type GuideSeed =
   | { kind: "fill-input"; anchor: GuideAnchorId; valueKey: GuideMessageKey }
   | { kind: "none" };
 
-// A step may reveal transient UI before explaining it, so a tour can teach a
-// menu's contents instead of only pointing at the control that opens it.
+// A step may reveal UI before explaining what is inside it. `open` is for a
+// transient disclosure surface; `transition` enters a reversible local editor
+// state without creating or changing persisted data.
 //
-// SAFETY: `open` may only ever target a non-destructive disclosure control —
-// a menu, submenu, or popover trigger. The runner clicks that anchor on the
-// user's behalf, so the click must have no effect beyond showing UI. Never put
-// it on a control that mutates data, sends, deletes, uploads, or navigates
-// away. Whatever a step opens is closed again when the tour ends, is
-// dismissed, or moves on to a step outside the revealed surface.
-export type GuideInteraction = { kind: "open" } | { kind: "none" };
+// SAFETY: the runner clicks interaction anchors on the user's behalf. Never
+// put either kind on a control that mutates data, sends, deletes, uploads, or
+// leaves the current route. `open` must only disclose a menu, popover, or
+// dialog. `transition` must only swap local view state and must name the real
+// control that reverses it so Back can restore the previous step.
+export type GuideInteraction =
+  | { kind: "open" }
+  | { kind: "transition"; reverseAnchor: GuideAnchorId }
+  | { kind: "none" };
 
 export type GuideStep = {
   anchor: GuideAnchorId;

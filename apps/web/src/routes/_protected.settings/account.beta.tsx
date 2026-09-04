@@ -26,8 +26,6 @@ function BetaFeaturesPage() {
   const setWorkflowsPreview = useDevStore((s) => s.setWorkflowsPreview);
   const timeBillingPreview = useDevStore((s) => s.timeBillingPreview);
   const setTimeBillingPreview = useDevStore((s) => s.setTimeBillingPreview);
-  const guidesPreview = useDevStore((s) => s.guidesPreview);
-  const setGuidesPreview = useDevStore((s) => s.setGuidesPreview);
   const inboxPreview = useDevStore((s) => s.inboxPreview);
   const setInboxPreview = useDevStore((s) => s.setInboxPreview);
 
@@ -121,27 +119,6 @@ function BetaFeaturesPage() {
                 }}
               />
               <FieldLabel>{t("settings.account.betaInbox")}</FieldLabel>
-            </Field>
-          </div>
-        </FramePanel>
-        <FramePanel>
-          <div className="flex flex-col gap-3 p-1">
-            <h2 className="text-sm font-medium">{t("guides.help.title")}</h2>
-            <p className="text-muted-foreground text-xs">
-              {t("guides.help.subtitle")}
-            </p>
-            <Field className="flex-row items-center gap-2">
-              <Checkbox
-                checked={guidesPreview}
-                onCheckedChange={(next) => {
-                  if (next === guidesPreview) {
-                    return;
-                  }
-
-                  setGuidesPreview(next);
-                }}
-              />
-              <FieldLabel>{t("guides.help.buttonLabel")}</FieldLabel>
             </Field>
           </div>
         </FramePanel>

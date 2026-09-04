@@ -2191,15 +2191,16 @@
         "title": "Klauskite su tinkamu kontekstu"
       },
       "documents": {
-        "description": "Įkelkite failą ir jį atidarykite",
+        "description": "Įtraukite dokumentą į bylą ir vėliau jį raskite",
         "steps": {
           "browse": {
-            "body": "Raskite ir atidarykite bet kurį pridėtą dokumentą.",
-            "title": "Naršyti dokumentus"
+            "body": "Ši lentelė yra bylos dokumentų sąrašas. Įkelti failai čia rodomi kaip eilutės. Norėdami grįžti vėliau, šoninėje juostoje atidarykite bylą, pasirinkite jos lentelės rodinį, tada pasirinkite dokumento eilutę.",
+            "title": "Vėl rasti dokumentą"
           },
           "upload": {
-            "body": "Pridėkite failą, kad įtrauktumėte jį į savo darbo sritį.",
-            "title": "Įkelti dokumentą"
+            "body": "Spustelėjus Įkelti atidaromas failų parinkiklis; failus taip pat galite nuvilkti į bylą. Kiekvienas failas tampa šios bylos dokumentu, kurį gali rasti jūsų komanda, o Stella gali naudoti peržiūroje.",
+            "title": "Įtraukti dokumentą į bylą",
+            "when": "Įkelkite čia, kai failas priklauso bylai ir turi likti pasiekiamas. Tiesiogiai pokalbyje jį pridėkite tik tada, kai tai yra laikinas vieno pokalbio kontekstas."
           }
         },
         "title": "Darbas su dokumentais"
@@ -2207,9 +2208,24 @@
       "playbooks": {
         "description": "Paverskite peržiūros patirtį pakartotinai naudojamu planu",
         "steps": {
+          "basics": {
+            "body": "Suteikite planui pavadinimą, kuris nurodo standartą, o ne dabartinį failą. Pridėkite trumpą aprašą, kad kitas peržiūrą atliekantis žmogus suprastų taikymo sritį; jei planas taikomas tik vieno tipo dokumentams, pasirinkite tą tipą čia.",
+            "title": "Pavadinti standartą ir nustatyti jo taikymo sritį",
+            "when": "Dokumento tipą apribokite tik tada, kai peržiūros taisyklės iš tiesų skiriasi pagal kategoriją. Palikite visus tipus, kai tie patys klausimai taikomi visoje byloje."
+          },
           "create": {
-            "body": "Pradėkite planą, kad užfiksuotumėte, kaip turėtų vykti peržiūra.",
-            "title": "Sukurti planą"
+            "body": "Pasirinkus Kurti atidaromas tuščias juodraštis, tačiau niekas neišsaugoma. Tolesniuose veiksmuose nustatoma jo taikymo sritis ir peržiūros pozicijos, dėl kurių planas tampa naudingas.",
+            "title": "Pradėti tuščią planą"
+          },
+          "overview": {
+            "body": "Planas paverčia peržiūros vertinimą bendru klausimų, numatomų atsakymų ir atsarginių pozicijų rinkiniu. Peržiūrą atliekantys žmonės gali taikyti tą patį standartą nekurdami instrukcijų iš naujo kiekvienam dokumentui.",
+            "title": "Pakartotinai naudoti peržiūros vertinimą",
+            "when": "Naudokite planą, kai tas pats peržiūros standartas kartojasi keliuose dokumentuose arba jį taiko keli žmonės. Vienkartinį klausimą užduokite tiesiogiai pokalbyje, jei atsakymo nereikia įtraukti į nuolat taikomą standartą."
+          },
+          "positions": {
+            "body": "Pozicijos yra plano peržiūros instrukcijos. Pridėkite įvertinamą poziciją, kai Stella turi palyginti formuluotę su priimtinais ir nepriimtinais rezultatais; pridėkite ištraukimo poziciją, kai iš dokumento reikia tik struktūrinio fakto.",
+            "title": "Pridėti peržiūros pozicijas",
+            "when": "Vertinkite formuluotę, kai atsakymui reikia teisinio vertinimo ar derybų gairių. Ištraukite duomenis, kai atsakymas yra faktinis ir jam nereikia išvados."
           }
         },
         "title": "Sudaryti planą"
@@ -2218,8 +2234,19 @@
         "description": "Išgaukite atsakymus iš daugelio failų vienu metu",
         "steps": {
           "addColumn": {
-            "body": "Pridėkite klausimą, į kurį bus atsakyta kiekvienoje eilutėje.",
-            "title": "Pridėti stulpelį"
+            "body": "Naujas stulpelis atidaro stulpelio rengyklę. Suteikite stulpeliui aiškų klausimo formos pavadinimą ir tiksliai nurodykite Stellai, ko ieškoti; ta pati instrukcija taikoma kiekvienai dokumento eilutei.",
+            "title": "Užduoti vieną klausimą apie kiekvieną dokumentą",
+            "when": "Kiekvienam atsakymui, kurį reikia palyginti, filtruoti, rikiuoti ar eksportuoti, sukurkite atskirą stulpelį. Susijusį kontekstą pateikite užklausoje, užuot jungę kelis atsakymus viename langelyje."
+          },
+          "answerType": {
+            "body": "Laukas Grąžina nustato kiekvieno atsakymo formatą. Kai rezultatas yra struktūrinis, pasirinkite skaičių, datą, vieną arba kelias parinktis; Stella išlaikys stulpelio nuoseklumą, užuot pateikusi bet kokį tekstą.",
+            "title": "Pasirinkti atsakymo tipą",
+            "when": "Fiksuotam rezultatų rinkiniui naudokite pasirinkimą, rikiavimui ir skaičiavimams – skaičių arba datą, o tekstą tik tada, kai atsakymui tikrai reikia išsamaus paaiškinimo."
+          },
+          "table": {
+            "body": "Kiekviena eilutė yra dokumentas, o kiekvienas pasirinktinis stulpelis – vienas klausimas, vienu metu užduodamas apie visus dokumentus. Taip failų aplankas paverčiamas palyginamais atsakymais neatidarant kiekvieno failo atskirai.",
+            "title": "Peržiūrėti visą rinkinį, o ne vieną failą",
+            "when": "Naudokite lentelę, kai reikia tų pačių faktų ar sprendimų iš kelių dokumentų. Atidarykite dokumentą tiesiogiai, kai išdėstymas, formuluotė ar aplinkinis kontekstas yra svarbesni už palyginimą."
           }
         },
         "title": "Peržiūra lentelėje"
@@ -2228,8 +2255,27 @@
         "description": "Sujunkite veiksmus į pakartojamą darbo eigą",
         "steps": {
           "create": {
-            "body": "Derinkite veiksmus, kurie pagal poreikį vykdomi kartu.",
-            "title": "Sukurti darbo eigą"
+            "body": "Pasirinkus Kurti atidaromas neišsaugotas darbo eigos juodraštis. Tolesniuose veiksmuose nustatoma, kada ji paleidžiama, ką ji atlieka ir kur žmogus turi nuspręsti, ar ji gali tęstis.",
+            "title": "Pradėti darbo eigos juodraštį"
+          },
+          "overview": {
+            "body": "Darbo eiga susieja paleidiklį su veiksmų seka, todėl įprastas procesas kiekvieną kartą vyksta vienodai. Ji gali automatiškai paruošti darbą ir prireikus palikti sprendimą peržiūrą atliekančiam žmogui.",
+            "title": "Automatizuoti pakartojamą procesą",
+            "when": "Automatizuokite darbą, kurio paleidiklis yra pastovus, veiksmai kartojami, o už išimtis atsakingas aiškiai nustatytas asmuo. Kintantį ar daug vertinimo reikalaujantį darbą atlikite rankiniu būdu, kol pats procesas nusistovės."
+          },
+          "reviewGate": {
+            "body": "Peržiūros patvirtinimas sustabdo vykdymą, kol žmogus jį patvirtina arba atmeta. Įterpkite patvirtinimą prieš pirmą veiksmą, kurio negalima atlikti remiantis vien automatiniu rezultatu.",
+            "title": "Palikti sprendimą peržiūrą atliekančiam žmogui",
+            "when": "Naudokite patvirtinimą prieš išsiųsdami, įtraukdami į bylą, perduodami spręsti toliau ar kitaip galutinai patvirtindami svarbių pasekmių turintį rezultatą. Praleiskite jį tik tada, kai kitą veiksmą galima saugiai atšaukti ir jam nereikia žmogaus vertinimo."
+          },
+          "steps": {
+            "body": "Veiksmai vykdomi šia tvarka ir perduoda darbo rezultatus toliau. Kiekvienam veiksmui priskirkite vieną aiškią užduotį, kad klaidos būtų suprantamos, o seką būtų lengva pakeisti.",
+            "title": "Sudaryti veiksmų seką"
+          },
+          "trigger": {
+            "body": "Paleidiklis nustato, kada pradedamas vykdymas: rankiniu būdu, pagal tvarkaraštį arba įkėlus atitinkančius failus. Susiaurinkite bylos ir failų sąlygas, kad nesusijęs darbas niekada nepaleistų darbo eigos.",
+            "title": "Pasirinkti, kas paleidžia darbo eigą",
+            "when": "Kol procesas naujas, naudokite rankinį paleidimą; pagal laiką vykdomoms įprastoms užduotims naudokite tvarkaraštį, o failo įkėlimą – tik tada, kai gautas dokumentas yra patikimas signalas pradėti."
           }
         },
         "title": "Automatizuoti darbo eigą"

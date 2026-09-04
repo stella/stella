@@ -2191,15 +2191,16 @@
         "title": "Poser la question avec le bon contexte"
       },
       "documents": {
-        "description": "Importez un fichier et ouvrez-le",
+        "description": "Classez un document, puis retrouvez-le facilement",
         "steps": {
           "browse": {
-            "body": "Trouvez et ouvrez tout document que vous avez ajouté.",
-            "title": "Parcourir vos documents"
+            "body": "Ce tableau répertorie les documents du dossier. Les fichiers importés y apparaissent sous forme de lignes. Pour y revenir plus tard, ouvrez le dossier depuis la barre latérale, choisissez sa vue en tableau, puis sélectionnez la ligne du document.",
+            "title": "Retrouver le document"
           },
           "upload": {
-            "body": "Ajoutez un fichier pour le placer dans votre espace de travail.",
-            "title": "Importer un document"
+            "body": "Le bouton « Importer » ouvre le sélecteur de fichiers ; vous pouvez également faire glisser des fichiers dans le dossier. Chaque fichier devient un document de ce dossier, que votre équipe peut retrouver et que Stella peut utiliser lors de la révision.",
+            "title": "Classer un document dans le dossier",
+            "when": "Importez le fichier ici s’il appartient au dossier et doit rester disponible. Joignez-le directement au chat uniquement s’il sert de contexte temporaire pour une seule conversation."
           }
         },
         "title": "Travailler avec des documents"
@@ -2207,9 +2208,24 @@
       "playbooks": {
         "description": "Transformez votre savoir-faire de révision en playbook réutilisable",
         "steps": {
+          "basics": {
+            "body": "Donnez au playbook un nom qui désigne la norme, et non le fichier actuel. Ajoutez une brève description pour qu’un autre réviseur en comprenne la portée ; s’il ne s’applique qu’à un seul type de document, sélectionnez ce type ici.",
+            "title": "Nommer la norme et définir sa portée",
+            "when": "Limitez le type de document uniquement lorsque les règles de révision diffèrent réellement selon la catégorie. Laissez tous les types sélectionnés lorsque les mêmes questions s’appliquent à l’ensemble du dossier."
+          },
           "create": {
-            "body": "Démarrez un playbook pour consigner le déroulement souhaité de la révision.",
-            "title": "Créer un playbook"
+            "body": "« Créer » ouvre un brouillon vierge sans rien enregistrer. Les étapes suivantes présentent sa portée et les critères de révision qui rendent le playbook utile.",
+            "title": "Commencer avec un playbook vierge"
+          },
+          "overview": {
+            "body": "Un playbook transforme le jugement porté lors d’une révision en un ensemble partagé de questions, de réponses attendues et de positions de repli. Les réviseurs peuvent ainsi appliquer la même norme sans recréer les instructions pour chaque document.",
+            "title": "Rendre le jugement de révision réutilisable",
+            "when": "Utilisez un playbook lorsque la même norme de révision s’applique à plusieurs documents ou réviseurs. Posez directement dans le chat toute question ponctuelle dont la réponse ne doit pas devenir une norme maintenue dans le temps."
+          },
+          "positions": {
+            "body": "Les critères constituent les instructions de révision du playbook. Ajoutez un critère évalué lorsque Stella doit comparer la formulation à des résultats acceptables et inacceptables ; ajoutez un critère d’extraction lorsque vous avez uniquement besoin d’une donnée structurée du document.",
+            "title": "Ajouter les critères de révision",
+            "when": "Évaluez la formulation lorsque la réponse exige un jugement juridique ou des conseils de négociation. Extrayez-la lorsque la réponse est factuelle et ne nécessite aucun verdict."
           }
         },
         "title": "Concevoir un playbook"
@@ -2218,8 +2234,19 @@
         "description": "Extrayez des réponses de nombreux fichiers en une seule fois",
         "steps": {
           "addColumn": {
-            "body": "Ajoutez une question à traiter sur chaque ligne.",
-            "title": "Ajouter une colonne"
+            "body": "« Nouvelle colonne » ouvre l’éditeur de colonne. Donnez à la colonne un nom clair formulé comme une question et indiquez précisément à Stella ce qu’elle doit rechercher ; la même instruction s’applique à chaque ligne de document.",
+            "title": "Poser la même question à chaque document",
+            "when": "Créez une colonne distincte pour chaque réponse à comparer, filtrer, trier ou exporter. Ajoutez le contexte associé dans l’instruction plutôt que de regrouper plusieurs réponses dans une seule cellule."
+          },
+          "answerType": {
+            "body": "L’option « Format » détermine la forme de chaque réponse. Choisissez un nombre, une date, une sélection unique ou une sélection multiple lorsque le résultat est structuré ; Stella préservera ainsi la cohérence de la colonne au lieu de renvoyer du texte libre arbitraire.",
+            "title": "Choisir le type de réponse",
+            "when": "Utilisez une sélection pour un ensemble fixe de résultats, un nombre ou une date pour le tri et les calculs, et du texte uniquement lorsque la réponse exige réellement une description détaillée."
+          },
+          "table": {
+            "body": "Chaque ligne représente un document et chaque colonne personnalisée, une question posée simultanément à tous les documents. Un dossier de fichiers devient ainsi un ensemble de réponses comparables, sans qu’il soit nécessaire de les ouvrir un par un.",
+            "title": "Réviser l’ensemble, pas un seul fichier",
+            "when": "Utilisez le tableau lorsque vous avez besoin des mêmes informations ou décisions dans plusieurs documents. Ouvrez directement un document lorsque la mise en page, la formulation ou le contexte importent davantage que la comparaison."
           }
         },
         "title": "Réviser dans un tableau"
@@ -2228,8 +2255,27 @@
         "description": "Enchaînez des étapes dans un flux de travail reproductible",
         "steps": {
           "create": {
-            "body": "Combinez des étapes qui se lancent ensemble à la demande.",
-            "title": "Créer un flux de travail"
+            "body": "« Créer » ouvre un brouillon de flux de travail non enregistré. Les étapes suivantes définissent quand il démarre, ce qu’il accomplit et à quel moment une personne doit décider s’il peut continuer.",
+            "title": "Commencer un brouillon de flux de travail"
+          },
+          "overview": {
+            "body": "Un flux de travail relie un déclencheur à une suite d’actions afin qu’un processus courant s’exécute toujours de la même manière. Il peut préparer le travail automatiquement tout en laissant les décisions à un réviseur lorsque cela s’impose.",
+            "title": "Automatiser un processus reproductible",
+            "when": "Automatisez les tâches qui disposent d’un déclencheur stable, d’étapes reproductibles et d’un responsable clairement désigné pour les exceptions. Gardez les tâches changeantes ou fortement tributaires du jugement manuelles tant que le processus lui-même n’est pas stabilisé."
+          },
+          "reviewGate": {
+            "body": "Un point de contrôle suspend l’exécution jusqu’à ce qu’une personne l’approuve ou la rejette. Placez-le avant la première action qui ne doit pas être effectuée sur la seule base d’un résultat automatisé.",
+            "title": "Laisser la décision à un réviseur",
+            "when": "Utilisez un point de contrôle avant l’envoi, le classement, la remontée ou toute autre validation d’un résultat lourd de conséquences. Ne l’omettez que si l’étape suivante peut être annulée sans risque et ne nécessite aucun jugement humain."
+          },
+          "steps": {
+            "body": "Les étapes s’exécutent dans cet ordre et transmettent leur travail aux suivantes. Confiez une seule action claire à chaque étape afin de comprendre facilement les échecs et de pouvoir modifier la séquence.",
+            "title": "Construire la séquence"
+          },
+          "trigger": {
+            "body": "Le déclencheur détermine quand une exécution commence : manuellement, selon un calendrier ou lorsque des fichiers correspondants sont importés. Délimitez précisément les conditions relatives au dossier et aux fichiers afin qu’aucune tâche sans rapport ne lance le flux de travail.",
+            "title": "Choisir ce qui déclenche le flux de travail",
+            "when": "Utilisez le déclenchement manuel tant que le processus est nouveau, un calendrier pour les routines liées au temps et l’importation de fichiers uniquement lorsque l’arrivée d’un document constitue un signal de départ fiable."
           }
         },
         "title": "Automatiser un flux de travail"
