@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { describe, expect, test } from "bun:test";
 
+import { SHELL_CHROME_LAYER_CLASS_NAME } from "../lib/overlay-layer";
 import { WorkspaceEndRail, WorkspaceShell } from "./workspace-shell";
 
 describe("WorkspaceShell", () => {
@@ -24,7 +25,14 @@ describe("WorkspaceShell", () => {
     );
     expect(markup).toContain("flex h-dvh min-h-0 w-full overflow-hidden");
     expect(markup).toContain('data-slot="workspace-shell-top-bar"');
-    expect(markup).toContain("sticky top-0 z-20 shrink-0");
+    // Above the sticky chrome a view pins inside the shell's own scroller: a
+    // board's header sits at z-20 and its lane rows at z-10, and when the
+    // shell's content column is the scroll container the two would otherwise
+    // tie and be settled by paint order.
+    expect(markup).toContain(
+      `sticky top-0 shrink-0 ${SHELL_CHROME_LAYER_CLASS_NAME}`,
+    );
+    expect(SHELL_CHROME_LAYER_CLASS_NAME).toBe("z-30");
     expect(markup).toContain('data-slot="workspace-shell-content"');
   });
 

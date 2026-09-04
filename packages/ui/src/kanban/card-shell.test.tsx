@@ -41,7 +41,7 @@ describe("KanbanCardShell sticky header", () => {
     expect(markup.indexOf("ACME-1")).toBeLessThan(markup.indexOf("body"));
   });
 
-  test("takes no stacking layer the actions overlay would have to outrank", () => {
+  test("takes the layer its own card's positioned controls have to share", () => {
     const markup = renderToStaticMarkup(
       <KanbanCardShell
         actions={<button type="button">More</button>}
@@ -51,11 +51,16 @@ describe("KanbanCardShell sticky header", () => {
       </KanbanCardShell>,
     );
 
-    // Callers anchor `actions` to the same corner with no layer of its own, so
-    // a layer here would paint the row over the trigger and swallow its clicks.
-    // Positioned already beats the card's flow content; tree order does the
-    // rest, and the row renders first.
-    expect(markup).not.toContain("z-[");
+    // Being positioned only beats the card's flow content: a control
+    // positioned later in the card's own body would paint over the row on
+    // tree order alone. An overlay that has to stay over the row shares the
+    // layer and wins on tree order, since the row renders first.
+    const row =
+      /<div class="(?<classes>[^"]*)" data-kanban-card-sticky-header=""/u
+        .exec(markup)
+        ?.groups?.["classes"]?.split(" ");
+
+    expect(row).toEqual(expect.arrayContaining(["sticky", "z-10"]));
     expect(markup.indexOf("ACME-1")).toBeLessThan(markup.indexOf("More"));
   });
 
@@ -197,8 +202,8 @@ describe("KanbanCardShell sticky header", () => {
       /<div[^>]*data-kanban-card-actions="hover"[^>]*>/u.exec(markup)?.[0] ??
       "";
 
-    // Positioned in the same corner as the row, and later in the tree, so
-    // only a layer of its own keeps the trigger clickable.
+    // Positioned in the same corner as the row, on the row's own layer, and
+    // later in the tree: that is what keeps the trigger clickable.
     expect(wrapper).toContain("absolute");
     expect(wrapper).toContain("end-1.5");
     expect(wrapper).toContain("z-10");

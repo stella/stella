@@ -173,22 +173,26 @@ const ACTIVE_CLASS = "ring-primary/30 ring-2";
  * gradient layer over the opaque page background instead, which is the card's
  * own surface at full opacity whatever the token turns out to be.
  *
- * No `z-index`: being positioned is already enough to paint over the card's
- * flow content, and taking a layer would put the row over the `actions`
- * overlay, which callers anchor to the same corner with no layer of its own.
- * Tree order settles the rest, and the row renders before `actions`.
+ * The row takes a layer of its own. Being positioned only beats the card's
+ * flow content: a card whose body carries positioned controls of its own (a
+ * band of selects at its foot, say) renders them after the row, and tree order
+ * alone paints them straight over the name of the card they belong to. An
+ * overlay meant to stay reachable over the row takes the same layer and wins
+ * on tree order, which is what the hover `actions` slot below does; a caller
+ * anchoring its own always-visible overlay to that corner does the same.
  */
 const STICKY_HEADER_CLASS =
-  "bg-background bg-[linear-gradient(var(--color-card),var(--color-card))] sticky mb-2 border-b pb-2";
+  "bg-background bg-[linear-gradient(var(--color-card),var(--color-card))] sticky z-10 mb-2 border-b pb-2";
 
 /**
  * Where the shell puts the actions it reveals on hover.
  *
  * The overlay takes a layer of its own here, unlike the always-visible slot:
  * it has to stay over the pinned identity row that leads the same corner, and
- * the row's own comment explains why the row cannot take one instead. An open
- * menu holds the actions on through its trigger's `aria-expanded`, or the
- * trigger would disappear from under the popup it just opened.
+ * the row now takes a layer too. Sharing it is enough, because the overlay is
+ * rendered after the row. An open menu holds the actions on through its
+ * trigger's `aria-expanded`, or the trigger would disappear from under the
+ * popup it just opened.
  *
  * The fade is decoration: a reader who asked for less motion still gets the
  * actions, they simply arrive at once.

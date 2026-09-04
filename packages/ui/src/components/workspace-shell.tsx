@@ -13,6 +13,7 @@ import {
   InspectorRailFooter,
   InspectorRailIconButton,
 } from "../inspector/chrome";
+import { SHELL_CHROME_LAYER_CLASS_NAME } from "../lib/overlay-layer";
 import { cn } from "../lib/utils";
 import { Sheet, SheetPopup, SheetTitle, SheetTrigger } from "./sheet";
 
@@ -114,7 +115,10 @@ export const WorkspaceShell = ({
         data-slot="workspace-shell-main"
       >
         <div
-          className="bg-background sticky top-0 z-20 shrink-0"
+          className={cn(
+            "bg-background sticky top-0 shrink-0",
+            SHELL_CHROME_LAYER_CLASS_NAME,
+          )}
           data-slot="workspace-shell-top-bar"
         >
           {topBar({ compactNavigationTrigger })}

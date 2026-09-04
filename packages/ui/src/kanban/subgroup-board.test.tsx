@@ -5,7 +5,10 @@ import { describe, expect, test } from "bun:test";
 import { KanbanColumnBandHeader } from "./column-band-header";
 import type { KanbanSchema } from "./grouping";
 import { resolveKanbanGrouping } from "./grouping";
-import { KANBAN_CHROME_ROW_HEIGHT } from "./layout-tokens";
+import {
+  KANBAN_BAND_CAPTION_ROW_HEIGHT,
+  KANBAN_CHROME_ROW_HEIGHT,
+} from "./layout-tokens";
 import { buildKanbanBoardMatrix } from "./matrix";
 import { KANBAN_STICKY_TOP_CLASS, KANBAN_STICKY_TOP_VAR } from "./sticky-lane";
 import { KanbanSubgroupBoard } from "./subgroup-board";
@@ -125,8 +128,15 @@ describe("KanbanSubgroupBoard", () => {
     // Opaque, or the cards it holds back read through it.
     expect(laneRow).toContain("bg-background");
     // The identity holds the visible inline edge, and has to size to its own
-    // content to have any room to travel there.
-    expect(markup).toContain("sticky start-0 flex w-fit");
+    // content to have any room to travel there. It is opaque and above the
+    // summaries under it, or they would read through it as it travels.
+    const identity =
+      /<div[^>]*data-kanban-lane-identity=""[^>]*>/u.exec(markup)?.[0] ?? "";
+
+    expect(identity).toContain("sticky start-0");
+    expect(identity).toContain("w-fit");
+    expect(identity).toContain("z-10");
+    expect(identity).toContain("bg-background");
     // The cells are told what the header *and* the lane row reach, or a
     // card's own pinned row would come to rest behind the lane's.
     expect(markup).toContain(`${KANBAN_STICKY_TOP_VAR}:72px`);
@@ -142,10 +152,12 @@ describe("KanbanSubgroupBoard", () => {
     expect(toggle).toContain(KANBAN_CHROME_ROW_HEIGHT);
     expect(toggle).toContain("relative");
     expect(toggle).toContain("pointer-coarse:after:absolute");
-    expect(toggle).toContain("pointer-coarse:after:min-h-11");
-    // Centred on the toggle: growing downwards alone would reach into the
-    // summaries row under it.
-    expect(toggle).toContain("pointer-coarse:after:-inset-y-1");
+    expect(toggle).toContain("pointer-coarse:after:h-11");
+    // Centred on the toggle, at a height of its own: an inset off the
+    // control's edges reaches into the summaries row under it by however
+    // much the control is short of 44px.
+    expect(toggle).toContain("pointer-coarse:after:top-1/2");
+    expect(toggle).toContain("pointer-coarse:after:-translate-y-1/2");
   });
 
   test("hands a lane's per-column cell to the caller's summary and action", () => {
@@ -365,12 +377,19 @@ describe("KanbanSubgroupBoard with column bands", () => {
       />,
     );
 
-    // The caption line is a fixed 28px row with a hairline, not a boxed panel.
+    // The caption line is a hairline over the columns, not a boxed panel, and
+    // it stands on the same row height as the columns it names.
     expect(open).toContain('data-slot="kanban-column-band-header"');
     expect(open).toMatch(
-      /class="[^"]*\bh-7\b[^"]*"[^>]*data-slot="kanban-column-band-header"/u,
+      new RegExp(
+        `class="[^"]*\\b${KANBAN_BAND_CAPTION_ROW_HEIGHT}\\b[^"]*"[^>]*data-slot="kanban-column-band-header"`,
+        "u",
+      ),
     );
     expect(open).not.toContain("rounded-lg border");
+    // The band's own name leads its columns: a step heavier than the column
+    // titles under it, not the smaller label it used to be.
+    expect(open).toContain("text-sm font-semibold");
     // Folded, the caption keeps only the toggle; the name sits vertically in
     // the default body slot with the count under it.
     const foldedHeader =
