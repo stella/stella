@@ -35,6 +35,8 @@ use icns::{IconFamily, PixelFormat};
 #[cfg(target_os = "macos")]
 use objc2_app_kit::NSWorkspace;
 #[cfg(target_os = "windows")]
+use image::{DynamicImage, ImageDecoder, codecs::bmp::BmpDecoder};
+#[cfg(target_os = "windows")]
 use std::path::Path;
 #[cfg(target_os = "macos")]
 use std::{
@@ -2305,11 +2307,22 @@ fn bounded_clipboard_image(
       formats
         .iter()
         .any(|format| format.eq_ignore_ascii_case(candidate))
-    })
-    .ok_or_else(|| "clipboard image format is unsupported".to_string())?;
-  let encoded = clipboard
-    .get_buffer(format)
-    .map_err(|error| format!("clipboard image data could not be read: {error}"))?;
+    });
+  if let Some(format) = format {
+    let encoded = clipboard
+      .get_buffer(format)
+      .map_err(|error| format!("clipboard image data could not be read: {error}"))?;
+    return decode_bounded_clipboard_image(encoded);
+  }
+  #[cfg(target_os = "windows")]
+  {
+    return bounded_windows_clipboard_image();
+  }
+  #[cfg(not(target_os = "windows"))]
+  Err("clipboard image format is unsupported".to_string())
+}
+
+fn decode_bounded_clipboard_image(encoded: Vec<u8>) -> Result<RustImageData, String> {
   if encoded.is_empty() || encoded.len() > MAX_ITEM_IMAGE_SOURCE_BYTES {
     return Err("clipboard image source is too large".to_string());
   }
@@ -2323,15 +2336,7 @@ fn bounded_clipboard_image(
   let (width, height) = dimension_reader
     .into_dimensions()
     .map_err(|error| format!("clipboard image dimensions could not be read: {error}"))?;
-  let pixels = u64::from(width) * u64::from(height);
-  if width == 0
-    || height == 0
-    || width > MAX_ITEM_IMAGE_DIMENSION
-    || height > MAX_ITEM_IMAGE_DIMENSION
-    || pixels > MAX_ITEM_IMAGE_PIXELS
-  {
-    return Err("clipboard image dimensions are invalid".to_string());
-  }
+  validate_image_dimensions(width, height)?;
 
   let mut reader = ImageReader::with_format(Cursor::new(encoded), image_format);
   let mut limits = ImageLimits::default();
@@ -2343,6 +2348,51 @@ fn bounded_clipboard_image(
     .decode()
     .map_err(|error| format!("clipboard image decoding failed: {error}"))?;
   Ok(RustImageData::from_dynamic_image(image))
+}
+
+#[cfg(target_os = "windows")]
+fn bounded_windows_clipboard_image() -> Result<RustImageData, String> {
+  use clipboard_win::{formats, get_clipboard, is_format_avail};
+
+  let format = if is_format_avail(formats::CF_DIBV5) {
+    formats::CF_DIBV5
+  } else if is_format_avail(formats::CF_DIB) {
+    formats::CF_DIB
+  } else {
+    return Err("clipboard image format is unsupported".to_string());
+  };
+  let encoded = get_clipboard(formats::RawData(format))
+    .map_err(|error| format!("clipboard bitmap data could not be read: {error}"))?;
+  if encoded.is_empty() || encoded.len() > MAX_ITEM_IMAGE_SOURCE_BYTES {
+    return Err("clipboard image source is too large".to_string());
+  }
+  let mut decoder = BmpDecoder::new_without_file_header(Cursor::new(encoded))
+    .map_err(|error| format!("clipboard bitmap is invalid: {error}"))?;
+  let (width, height) = decoder.dimensions();
+  validate_image_dimensions(width, height)?;
+  let mut limits = ImageLimits::default();
+  limits.max_image_width = Some(MAX_ITEM_IMAGE_DIMENSION);
+  limits.max_image_height = Some(MAX_ITEM_IMAGE_DIMENSION);
+  limits.max_alloc = Some(MAX_ITEM_IMAGE_DECODE_BYTES);
+  decoder
+    .set_limits(limits)
+    .map_err(|error| format!("clipboard bitmap limits could not be applied: {error}"))?;
+  let image = DynamicImage::from_decoder(decoder)
+    .map_err(|error| format!("clipboard bitmap decoding failed: {error}"))?;
+  Ok(RustImageData::from_dynamic_image(image))
+}
+
+fn validate_image_dimensions(width: u32, height: u32) -> Result<(), String> {
+  let pixels = u64::from(width) * u64::from(height);
+  if width == 0
+    || height == 0
+    || width > MAX_ITEM_IMAGE_DIMENSION
+    || height > MAX_ITEM_IMAGE_DIMENSION
+    || pixels > MAX_ITEM_IMAGE_PIXELS
+  {
+    return Err("clipboard image dimensions are invalid".to_string());
+  }
+  Ok(())
 }
 
 fn normalized_image_capture(
@@ -3448,6 +3498,36 @@ mod tests {
     assert!(!prune_image_history(&mut items));
     assert_eq!(items.len(), 2);
     assert!(items.iter().all(ClipboardItem::is_organised));
+  }
+
+  #[test]
+  fn image_capture_cannot_grow_history_past_organised_image_capacity() {
+    let mut manager = ready_manager();
+    let mut organised = image_item(
+      "organised",
+      "organised-blob",
+      "organised-checksum",
+      MAX_HISTORY_IMAGE_BYTES,
+    );
+    organised.set_group_id(Some("screenshots".to_string()));
+    manager.items.push(organised.clone());
+
+    let captured = manager
+      .capture(ClipboardCapture::Image(ClipboardImageCapture {
+        checksum: "new-checksum".to_string(),
+        copied_at: Utc::now(),
+        height: 1,
+        image: vec![1],
+        preview: vec![1],
+        source_app: None,
+        source_app_visual: None,
+        width: 1,
+      }))
+      .unwrap();
+
+    assert!(!captured);
+    assert_eq!(manager.items, vec![organised]);
+    assert_eq!(image_history_bytes(&manager.items), MAX_HISTORY_IMAGE_BYTES);
   }
 
   #[test]

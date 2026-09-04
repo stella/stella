@@ -127,6 +127,7 @@ plist = "1.10"
 stella-desktop-macos = { path = "crates/macos-park", version = "0.0.1" }
 
 [target.'cfg(target_os = "windows")'.dependencies]
+clipboard-win = "5.4.1"
 windows-icons = "0.4.0"
 windows-native-keyring-store = "1"
 winsafe = { version = "0.0.28", features = ["kernel", "user", "version"] }
