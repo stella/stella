@@ -222,7 +222,7 @@ describe("euEcjAdapter.fetchPage", () => {
       expect(first.decisionDate).toBe("2024-01-18");
       expect(first.decisionType).toBe("judgment");
       expect(first.documentUrl).toBe(
-        `https://publications.europa.eu/resource/cellar/${EN_MANIFESTATION_ID}/DOC_1`,
+        `https://publications.europa.eu/resource/cellar/${EN_MANIFESTATION_ID}`,
       );
       expect(first.sourceUrl).toBe(
         "https://eur-lex.europa.eu/legal-content/EN/ALL/?uri=CELEX:62021CJ0128",
@@ -434,7 +434,7 @@ describe("euEcjAdapter.fetchPage", () => {
     expect(d.language).toBe("en");
     expect(d.sourceUrl).toContain("/EN/");
     expect(d.documentUrl).toBe(
-      `https://publications.europa.eu/resource/cellar/${EN_MANIFESTATION_ID}/DOC_1`,
+      `https://publications.europa.eu/resource/cellar/${EN_MANIFESTATION_ID}`,
     );
   });
 
@@ -941,6 +941,107 @@ describe("euEcjAdapter.reconciliation.buildDecision", () => {
     // Not an error and not a written row: the loop parks it, widens its
     // schedule and eventually retires it, which is what settles the slice.
     expect(outcome).toEqual({ type: "detail-unavailable" });
+  });
+
+  test("addresses the manifestation itself, not a fixed item ordinal", async () => {
+    // `DOC_1` names the manifestation's first item, and the XHTML is not
+    // always first: works published before the current item layout expose it
+    // at a later ordinal and answer 404 at `DOC_1`. That 404 is indistinguish-
+    // able here from a variant the publisher never published, so the loop
+    // parked and then permanently retired documents Cellar does serve.
+    const { documentFetches } = installSparqlMock({
+      bindings: [enBinding],
+      served: [EN_MANIFESTATION_ID],
+    });
+
+    const outcome = await reconciliation.buildDecision({
+      celex: "62021CJ0128",
+      language: "EN",
+    });
+
+    if (outcome.type !== "built") {
+      throw new TypeError(`Expected built, got ${outcome.type}`);
+    }
+    expect(documentFetches).toEqual([
+      `https://publications.europa.eu/resource/cellar/${EN_MANIFESTATION_ID}`,
+    ]);
+  });
+
+  test("asks the content stream for XHTML", async () => {
+    // The item is chosen by content negotiation now that the URL no longer
+    // names one, so the Accept header is what selects the document.
+    const accepts: (string | undefined)[] = [];
+    globalThis.fetch = asFetchMock(
+      mock((input: string | URL | Request, init?: RequestInit) => {
+        const url = requestUrl(input);
+        if (url.includes("sparql")) {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({ results: { bindings: [enBinding] } }),
+              {
+                status: 200,
+              },
+            ),
+          );
+        }
+        accepts.push(new Headers(init?.headers).get("accept") ?? undefined);
+        return Promise.resolve(
+          new Response(shortDocumentHtml, {
+            status: 200,
+            headers: { "Content-Type": "application/xhtml+xml" },
+          }),
+        );
+      }),
+    );
+
+    await reconciliation.buildDecision({
+      celex: "62021CJ0128",
+      language: "EN",
+    });
+
+    expect(accepts).toEqual(["application/xhtml+xml"]);
+  });
+
+  test("does not read the manifestation's RDF description as the decision", async () => {
+    // Unnegotiated, the manifestation URL answers its own RDF description.
+    // It is far longer than the minimum document length, so size alone would
+    // accept it and store metadata as the decision's text.
+    // Cellar's description carries literals, so stripping its tags leaves
+    // prose-shaped text: length and tag-stripping both accept it, and only
+    // the declared media type says it is not the document.
+    const rdfBody =
+      `<cdm:manifestation_type>xhtml</cdm:manifestation_type>`.repeat(20) +
+      `<cdm:work_date_document>2024-01-18</cdm:work_date_document>`.repeat(20);
+    const rdf = `<?xml version="1.0"?><rdf:RDF>${rdfBody}</rdf:RDF>`;
+    globalThis.fetch = asFetchMock(
+      mock((input: string | URL | Request) => {
+        const url = requestUrl(input);
+        if (url.includes("sparql")) {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({ results: { bindings: [enBinding] } }),
+              {
+                status: 200,
+              },
+            ),
+          );
+        }
+        return Promise.resolve(
+          new Response(rdf, {
+            status: 200,
+            headers: { "Content-Type": "application/rdf+xml;charset=UTF-8" },
+          }),
+        );
+      }),
+    );
+
+    expect(rdf.length).toBeGreaterThan(100);
+    expect(
+      await reconciliation.buildDecision({
+        celex: "62021CJ0128",
+        language: "EN",
+      }),
+    ).toEqual({ type: "detail-unavailable" });
   });
 
   test("reports a language the publisher no longer lists", async () => {

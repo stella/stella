@@ -154,7 +154,11 @@ const toCellarContentUrl = (manifestationUri: string): string | undefined => {
     });
     return undefined;
   }
-  return `https://publications.europa.eu/resource/cellar/${manifestationId}/DOC_1`;
+  // Addressed as the manifestation itself, with the format asked for by
+  // content negotiation. `DOC_1` names the first item of the manifestation,
+  // and the XHTML is not always the first: older works expose it at a later
+  // ordinal, so a fixed item number 404s on documents Cellar does serve.
+  return `https://publications.europa.eu/resource/cellar/${manifestationId}`;
 };
 
 // -- SPARQL --
@@ -519,6 +523,11 @@ const distinctVariants = (
  * Fetch one language's XHTML manifestation from a validated Cellar
  * content stream. Returns the verbatim document, or undefined when the
  * translation is unavailable or the request fails.
+ *
+ * Both undefined cases reach the caller as "the publisher does not serve
+ * this variant", which the reconciliation loop eventually retires, so each
+ * one is logged: an unserved variant and a failed request are the same
+ * value here and must not be the same event.
  */
 type FetchManifestationOptions = {
   contentUrl: string;
@@ -530,6 +539,17 @@ type FetchManifestationOptions = {
 /** Shortest plausible decision; below this the response is not a document. */
 const MIN_DOCUMENT_LENGTH = 100;
 
+/**
+ * What the manifestation URL is asked for, and the only thing accepted back.
+ *
+ * Unnegotiated, the manifestation resource answers its own RDF description,
+ * which is long enough to pass the length check and would be stored as the
+ * decision's text. The response is therefore held to the format asked for
+ * rather than to its size.
+ */
+const XHTML_MEDIA_TYPE = "application/xhtml+xml";
+const DOCUMENT_MEDIA_TYPES = [XHTML_MEDIA_TYPE, "text/html"] as const;
+
 const fetchManifestation = async ({
   contentUrl,
   celex,
@@ -540,10 +560,36 @@ const fetchManifestation = async ({
     const response = await fetchWithTimeout(contentUrl, {
       signal,
       timeoutMs: ADAPTER_TIMEOUT.REQUEST,
-      headers: { "User-Agent": INGESTION_USER_AGENT },
+      headers: {
+        "User-Agent": INGESTION_USER_AGENT,
+        Accept: XHTML_MEDIA_TYPE,
+      },
     });
 
     if (!response.ok) {
+      // A variant the listing named and the content stream will not serve is
+      // reported unavailable, and the reconciliation loop retires it after
+      // its retry schedule. Saying so keeps a transport fault distinguishable
+      // from a translation the publisher never published.
+      logger.warn("case_law.ingestion.manifestation_unavailable", {
+        adapterKey: ADAPTER_KEYS.EU_ECJ,
+        celex,
+        language: lang,
+        httpStatus: response.status,
+        url: contentUrl,
+      });
+      return undefined;
+    }
+
+    const mediaType = response.headers.get("content-type") ?? "";
+    if (!DOCUMENT_MEDIA_TYPES.some((type) => mediaType.includes(type))) {
+      logger.warn("case_law.ingestion.manifestation_not_a_document", {
+        adapterKey: ADAPTER_KEYS.EU_ECJ,
+        celex,
+        language: lang,
+        mediaType,
+        url: contentUrl,
+      });
       return undefined;
     }
 
