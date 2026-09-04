@@ -31,11 +31,13 @@ import {
   FileTextIcon,
   FolderInputIcon,
   FolderPlusIcon,
+  ImageIcon,
   KeyboardIcon,
   LockKeyholeIcon,
   PauseIcon,
   PencilIcon,
   PlayIcon,
+  RotateCcwIcon,
   SearchIcon,
   ShieldAlertIcon,
   TagsIcon,
@@ -113,6 +115,7 @@ import {
   measureClipboardSnapshotRequest,
   observeClipboardReopens,
 } from "./clipboard-startup-timing";
+import { CLIPBOARD_GROUP_ACCENTS } from "./clipboard-style";
 import {
   CLIPBOARD_RETENTIONS,
   isClipboardCopyError,
@@ -128,6 +131,8 @@ import type {
   ClipboardSnapshot,
   ClipboardSourceAppVisual,
 } from "./clipboard-types";
+import { ClipboardImagePreview } from "./ClipboardImagePreview";
+import type { ClipboardImagePreviewStatus } from "./ClipboardImagePreview";
 import { useRailViewport } from "./use-rail-viewport";
 
 const CLIPBOARD_GROUP_COLORS = [
@@ -138,15 +143,6 @@ const CLIPBOARD_GROUP_COLORS = [
   "rose",
   "violet",
 ] as const satisfies readonly ClipboardGroupColor[];
-
-const CLIPBOARD_GROUP_ACCENTS = {
-  amber: "var(--color-amber-400)",
-  blue: "var(--color-blue-400)",
-  emerald: "var(--color-emerald-400)",
-  gray: "var(--color-neutral-400)",
-  rose: "var(--color-rose-400)",
-  violet: "var(--color-violet-400)",
-} as const satisfies Record<ClipboardGroupColor, string>;
 
 const STELLA_WEB_APP_URL = "https://my.stll.app";
 const MAX_GROUP_NAME_CHARACTERS = 64;
@@ -193,6 +189,8 @@ const PRIMARY_MODIFIER_LABEL = navigator.userAgent.includes("Mac")
 const CLIPBOARD_SHORTCUT_LABEL = navigator.userAgent.includes("Mac")
   ? "⌘⇧V"
   : "Ctrl+Shift+V";
+const IMAGE_CLIPBOARD_CAPTURE_SUPPORTED =
+  !navigator.userAgent.includes("Linux");
 
 const EMPTY_SNAPSHOT = {
   captureStatus: "active",
@@ -295,6 +293,9 @@ const ClipboardCard = ({
   const format = useFormatter();
   const cancelNameEditRef = useRef(false);
   const [editingName, setEditingName] = useState(false);
+  const [imagePreviewStatus, setImagePreviewStatus] =
+    useState<ClipboardImagePreviewStatus>("loading");
+  const [imagePreviewRetryToken, setImagePreviewRetryToken] = useState(0);
   const [nameDraft, setNameDraft] = useState(item.name ?? "");
   const age = formatClipboardAge(item.copiedAt, ageReferenceTime);
   const formattedAge = new Intl.NumberFormat(undefined, {
@@ -319,6 +320,7 @@ const ClipboardCard = ({
     ? { "--clipboard-source-accent": accent }
     : undefined;
   const rendersHtml = item.type === "formattedText" && !query;
+  const fallbackName = item.type === "image" ? t("image") : t("unnamedClip");
   const previewClassName = cn(
     "text-foreground line-clamp-[8] text-sm leading-5 text-pretty wrap-break-word",
     // HTML collapses its source whitespace; only plain text (and <pre>) keeps it.
@@ -326,51 +328,73 @@ const ClipboardCard = ({
       ? "[&_blockquote]:border-s-2 [&_blockquote]:ps-3 [&_code]:font-mono [&_li]:ms-4 [&_ol]:list-decimal [&_pre]:whitespace-pre-wrap [&_strong]:font-semibold [&_ul]:list-disc"
       : "whitespace-pre-wrap",
   );
-  let previewContent: ReactNode = (
-    <div className={previewClassName} dir="auto">
-      {item.plainText.slice(0, CLIPBOARD_CARD_PREVIEW_MAX_CHARACTERS)}
-    </div>
-  );
-  if (rendersHtml) {
+  let previewContent: ReactNode;
+  if (item.type === "image") {
     previewContent = (
-      <div
-        className={previewClassName}
-        dangerouslySetInnerHTML={{
-          // safe-html: Rust ammonia::Builder removes active content and permits only the semantic formatting tags declared in clipboard.rs before IPC.
-          __html: item.html,
-        }}
-        dir="auto"
-      />
-    );
-  }
-  if (query) {
-    const searchPreview = clipboardSearchPreviewText(item, query);
-    const highlightedText = highlightClipboardText(searchPreview.text, query);
-    previewContent = (
-      <div className={previewClassName} dir="auto">
-        {searchPreview.truncated ? (
-          <span aria-hidden="true" className="text-muted-foreground">
-            {"… "}
-          </span>
-        ) : null}
-        {highlightedText.map((segment, segmentIndex) =>
-          segment.match ? (
-            <mark
-              className="bg-foreground/16 text-foreground rounded-[3px] box-decoration-clone px-0.5"
-              key={`${segmentIndex}-${segment.text}`}
-            >
-              {segment.text}
-            </mark>
-          ) : (
-            <span key={`${segmentIndex}-${segment.text}`}>{segment.text}</span>
-          ),
-        )}
+      <div className="size-full" dir="auto">
+        <ClipboardImagePreview
+          alt={item.name ?? t("image")}
+          id={item.id}
+          onStatusChange={setImagePreviewStatus}
+          retryToken={imagePreviewRetryToken}
+          surface="timeline"
+        />
       </div>
     );
+  } else {
+    previewContent = (
+      <div className={previewClassName} dir="auto">
+        {item.plainText.slice(0, CLIPBOARD_CARD_PREVIEW_MAX_CHARACTERS)}
+      </div>
+    );
+    if (rendersHtml) {
+      previewContent = (
+        <div
+          className={previewClassName}
+          dangerouslySetInnerHTML={{
+            // safe-html: Rust ammonia::Builder removes active content and permits only the semantic formatting tags declared in clipboard.rs before IPC.
+            __html: item.html,
+          }}
+          dir="auto"
+        />
+      );
+    }
+    if (query) {
+      const searchPreview = clipboardSearchPreviewText(item, query);
+      const highlightedText = highlightClipboardText(searchPreview.text, query);
+      previewContent = (
+        <div className={previewClassName} dir="auto">
+          {searchPreview.truncated ? (
+            <span aria-hidden="true" className="text-muted-foreground">
+              {"… "}
+            </span>
+          ) : null}
+          {highlightedText.map((segment, segmentIndex) =>
+            segment.match ? (
+              <mark
+                className="bg-foreground/16 text-foreground rounded-[3px] box-decoration-clone px-0.5"
+                key={`${segmentIndex}-${segment.text}`}
+              >
+                {segment.text}
+              </mark>
+            ) : (
+              <span key={`${segmentIndex}-${segment.text}`}>
+                {segment.text}
+              </span>
+            ),
+          )}
+        </div>
+      );
+    }
   }
   let metadataIcon: ReactNode = (
     <FileTextIcon aria-hidden="true" className="text-muted-foreground size-6" />
   );
+  if (item.type === "image") {
+    metadataIcon = (
+      <ImageIcon aria-hidden="true" className="text-muted-foreground size-6" />
+    );
+  }
   if (groupName) {
     metadataIcon = (
       <TagsIcon aria-hidden="true" className="text-muted-foreground size-6" />
@@ -391,6 +415,13 @@ const ClipboardCard = ({
         className="clipboard-source-dot size-3 shrink-0 rounded-full"
       />
     );
+  }
+  let metadataTitle = t("plainText");
+  if (item.type === "formattedText") {
+    metadataTitle = t("formattedText");
+  }
+  if (item.type === "image") {
+    metadataTitle = t("image");
   }
 
   const beginNameEdit = () => {
@@ -429,7 +460,9 @@ const ClipboardCard = ({
       style={sourceStyle}
     >
       <button
-        aria-label={t("copyItem", { number: index + 1 })}
+        aria-label={t(item.type === "image" ? "copyImage" : "copyItem", {
+          number: index + 1,
+        })}
         className="flex min-h-0 flex-1 flex-col self-stretch text-start focus-visible:outline-none"
         data-clipboard-card-trigger=""
         onClick={() => onCopy(item)}
@@ -445,13 +478,7 @@ const ClipboardCard = ({
       <footer className="clipboard-card-footer flex h-12 shrink-0 items-center gap-2 px-4">
         <span
           className="relative flex shrink-0 items-center"
-          title={
-            sourceAppName ??
-            groupName ??
-            (item.type === "formattedText"
-              ? t("formattedText")
-              : t("plainText"))
-          }
+          title={sourceAppName ?? groupName ?? metadataTitle}
         >
           {metadataIcon}
         </span>
@@ -490,7 +517,7 @@ const ClipboardCard = ({
             type="button"
           >
             <span className="truncate" dir="auto">
-              {item.name ?? t("unnamedClip")}
+              {item.name ?? fallbackName}
             </span>
             <PencilIcon
               aria-hidden="true"
@@ -506,6 +533,22 @@ const ClipboardCard = ({
           <span aria-hidden="true">{relativeTime}</span>
           <span className="sr-only">{copiedAtLabel}</span>
         </time>
+        {item.type === "image" && imagePreviewStatus === "error" ? (
+          <Button
+            aria-label={t("retryImagePreview")}
+            className="size-11 shrink-0 rounded-full"
+            onClick={() => {
+              setImagePreviewStatus("loading");
+              setImagePreviewRetryToken((token) => token + 1);
+            }}
+            size="icon"
+            title={t("retryImagePreview")}
+            type="button"
+            variant="ghost"
+          >
+            <RotateCcwIcon aria-hidden="true" className="size-4" />
+          </Button>
+        ) : null}
         {index < 9 ? (
           <kbd className="bg-muted text-muted-foreground shrink-0 rounded-md px-1.5 py-0.5 font-mono text-[10px] tabular-nums">
             {PRIMARY_MODIFIER_LABEL}
@@ -999,7 +1042,11 @@ const ClipboardWelcomeDialog = ({ onClose }: ClipboardWelcomeDialogProps) => {
   });
   const features = [
     {
-      description: t("welcomeCaptureDescription"),
+      description: t(
+        IMAGE_CLIPBOARD_CAPTURE_SUPPORTED
+          ? "welcomeCaptureDescription"
+          : "welcomeCaptureDescriptionTextOnly",
+      ),
       icon: ClipboardIcon,
       title: t("welcomeCaptureTitle"),
     },
@@ -1850,6 +1897,12 @@ const ClipboardApp = () => {
   if (snapshot.persistence.status === "deletionOnly") {
     persistenceWarningLabel = t("errorReadHistory");
   }
+  const imageCleanupPending =
+    snapshot.persistence.status === "encrypted" &&
+    snapshot.persistence.imageCleanup === "pendingRetry";
+  if (imageCleanupPending) {
+    persistenceWarningLabel = t("imageCleanupPending");
+  }
   let feedback: ReactNode = null;
   if (appError) {
     feedback = (
@@ -1916,7 +1969,11 @@ const ClipboardApp = () => {
             <p className="text-foreground/82 max-w-sm text-sm font-medium text-balance">
               {filterQuery || activeGroupId
                 ? emptyStateTitle
-                : t("emptyDescription")}
+                : t(
+                    IMAGE_CLIPBOARD_CAPTURE_SUPPORTED
+                      ? "emptyDescription"
+                      : "emptyDescriptionTextOnly",
+                  )}
             </p>
           </div>
         ) : (
@@ -2025,7 +2082,8 @@ const ClipboardApp = () => {
               <StellaMark className="size-5" />
             </a>
             {snapshot.persistence.status === "memoryOnly" ||
-            snapshot.persistence.status === "deletionOnly" ? (
+            snapshot.persistence.status === "deletionOnly" ||
+            imageCleanupPending ? (
               <span
                 aria-label={persistenceWarningLabel}
                 className="bg-warning/12 text-warning grid size-7 place-items-center rounded-full"

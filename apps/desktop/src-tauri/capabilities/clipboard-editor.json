@@ -6,6 +6,8 @@
     "core:event:allow-listen",
     "core:event:allow-unlisten",
     "allow-clipboard-get-editor-context",
+    "allow-clipboard-get-image-preview",
+    "allow-clipboard-set-item-group",
     "allow-clipboard-save-editor-item",
     "allow-clipboard-close-editor",
     "allow-desktop-report-error"

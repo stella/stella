@@ -43,7 +43,19 @@ const FORMATTED_ITEM = {
   type: "formattedText",
 } satisfies ClipboardItem;
 
-const ITEMS = [TEXT_ITEM, FORMATTED_ITEM] satisfies ClipboardItem[];
+const IMAGE_ITEM = {
+  byteSize: 245_760,
+  copiedAt: "2026-08-23T10:02:00Z",
+  groupId: null,
+  height: 720,
+  id: "three",
+  name: "Hearing exhibit",
+  sourceApp: null,
+  type: "image",
+  width: 1280,
+} satisfies ClipboardItem;
+
+const ITEMS = [TEXT_ITEM, FORMATTED_ITEM, IMAGE_ITEM] satisfies ClipboardItem[];
 
 describe("clipboardDraggedItemId", () => {
   const itemIds = new Set(["one", "two"]);
@@ -231,6 +243,13 @@ describe("filterClipboardItems", () => {
     expect(filterClipboardItems(ITEMS, "acquisition draft")).toEqual([
       TEXT_ITEM,
     ]);
+  });
+
+  test("finds an image by name without treating it as text", () => {
+    expect(filterClipboardItems(ITEMS, "hearing exhibit")).toEqual([
+      IMAGE_ITEM,
+    ]);
+    expect(filterClipboardItems(ITEMS, "purchase")).not.toContain(IMAGE_ITEM);
   });
 
   test("preserves the source order for an empty query", () => {

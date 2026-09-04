@@ -80,7 +80,9 @@ aes-gcm = "0.11"
 ammonia = "4"
 base64 = "0.23"
 chrono = { version = "0.4", features = ["serde"] }
-clipboard-rs = { version = "0.3.5", default-features = false }
+clipboard-rs = { version = "0.3.5", default-features = false, features = [
+  "image",
+] }
 dirs = "6"
 futures-util = "0.3"
 hex = "0.4"
@@ -114,19 +116,23 @@ objc2 = "0.6"
 objc2-app-kit = { version = "0.3", default-features = false, features = [
   "NSApplication",
   "NSEvent",
+  "NSPasteboard",
   "NSRunningApplication",
   "NSScreen",
   "NSWorkspace",
   "libc",
 ] }
 objc2-foundation = { version = "0.3", default-features = false, features = [
+  "NSData",
   "NSGeometry",
+  "NSString",
   "NSURL",
 ] }
 plist = "1.10"
 stella-desktop-macos = { path = "crates/macos-park", version = "0.0.1" }
 
 [target.'cfg(target_os = "windows")'.dependencies]
+clipboard-win = "5.4.1"
 windows-icons = "0.4.0"
 windows-native-keyring-store = "1"
 winsafe = { version = "0.0.28", features = ["kernel", "user", "version"] }

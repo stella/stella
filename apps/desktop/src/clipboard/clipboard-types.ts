@@ -9,6 +9,15 @@ export type ClipboardSourceAppVisual = {
   key: string;
 };
 
+const MAX_CLIPBOARD_IMAGE_PREVIEW_DATA_URL_LENGTH = 1024 * 1024;
+
+export const isClipboardImagePreviewDataUrl = (
+  value: unknown,
+): value is string =>
+  typeof value === "string" &&
+  value.length <= MAX_CLIPBOARD_IMAGE_PREVIEW_DATA_URL_LENGTH &&
+  /^data:image\/png;base64,[A-Za-z\d+/]+={0,2}$/u.test(value);
+
 export type ClipboardItem =
   | {
       copiedAt: string;
@@ -28,6 +37,17 @@ export type ClipboardItem =
       plainText: string;
       sourceApp: ClipboardSourceApp | null;
       type: "formattedText";
+    }
+  | {
+      byteSize: number;
+      copiedAt: string;
+      groupId: string | null;
+      height: number;
+      id: string;
+      name: string | null;
+      sourceApp: ClipboardSourceApp | null;
+      type: "image";
+      width: number;
     };
 
 export type ClipboardCaptureStatus = "active" | "paused";
@@ -48,7 +68,7 @@ export type ClipboardGroup = {
 
 export type ClipboardPersistence =
   | { status: "initializing" }
-  | { status: "encrypted" }
+  | { imageCleanup: "idle" | "pendingRetry"; status: "encrypted" }
   | { status: "memoryOnly" }
   | { status: "deletionOnly" };
 
@@ -99,7 +119,6 @@ export const isClipboardItem = (value: unknown): value is ClipboardItem => {
     (value["groupId"] !== null && typeof value["groupId"] !== "string") ||
     typeof value["id"] !== "string" ||
     (value["name"] !== null && typeof value["name"] !== "string") ||
-    typeof value["plainText"] !== "string" ||
     (value["sourceApp"] !== null && !isClipboardSourceApp(value["sourceApp"]))
   ) {
     return false;
@@ -107,9 +126,32 @@ export const isClipboardItem = (value: unknown): value is ClipboardItem => {
 
   switch (value["type"]) {
     case "text":
-      return true;
+      return typeof value["plainText"] === "string";
     case "formattedText":
-      return typeof value["html"] === "string";
+      return (
+        typeof value["plainText"] === "string" &&
+        typeof value["html"] === "string"
+      );
+    case "image": {
+      const byteSize = value["byteSize"];
+      const height = value["height"];
+      const width = value["width"];
+      if (
+        typeof byteSize !== "number" ||
+        typeof height !== "number" ||
+        typeof width !== "number"
+      ) {
+        return false;
+      }
+      return (
+        Number.isSafeInteger(byteSize) &&
+        byteSize > 0 &&
+        Number.isSafeInteger(width) &&
+        width > 0 &&
+        Number.isSafeInteger(height) &&
+        height > 0
+      );
+    }
     default:
       return false;
   }
@@ -135,7 +177,9 @@ const isPersistence = (value: unknown): value is ClipboardPersistence => {
   }
   return (
     value["status"] === "initializing" ||
-    value["status"] === "encrypted" ||
+    (value["status"] === "encrypted" &&
+      (value["imageCleanup"] === "idle" ||
+        value["imageCleanup"] === "pendingRetry")) ||
     value["status"] === "memoryOnly" ||
     value["status"] === "deletionOnly"
   );
@@ -162,6 +206,7 @@ export const isClipboardCopyError = (
 export type ClipboardEditorContext = {
   groups: ClipboardGroup[];
   item: ClipboardItem;
+  sourceAppVisual: ClipboardSourceAppVisual | null;
 };
 
 export const isClipboardEditorContext = (
@@ -170,6 +215,8 @@ export const isClipboardEditorContext = (
   isRecord(value) &&
   Array.isArray(value["groups"]) &&
   value["groups"].every(isClipboardGroup) &&
+  (value["sourceAppVisual"] === null ||
+    isClipboardSourceAppVisual(value["sourceAppVisual"])) &&
   isClipboardItem(value["item"]);
 
 export const isClipboardSnapshot = (

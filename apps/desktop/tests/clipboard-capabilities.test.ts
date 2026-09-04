@@ -41,6 +41,14 @@ describe("clipboard Tauri capabilities", () => {
       "src/clipboard/ClipboardEditor.tsx",
       "src-tauri/capabilities/clipboard-editor.json",
     ],
+    [
+      "src/clipboard/ClipboardImagePreview.tsx",
+      "src-tauri/capabilities/clipboard.json",
+    ],
+    [
+      "src/clipboard/ClipboardImagePreview.tsx",
+      "src-tauri/capabilities/clipboard-editor.json",
+    ],
   ])(
     "grants every command invoked by %s",
     async (sourcePath, capabilityPath) => {

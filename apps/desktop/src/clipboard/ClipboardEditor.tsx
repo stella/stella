@@ -10,7 +10,7 @@ import {
   UnderlineIcon,
   XIcon,
 } from "lucide-react";
-import { useTranslations } from "use-intl";
+import { useFormatter, useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import {
@@ -28,8 +28,10 @@ import {
   DESKTOP_TELEMETRY_WINDOWS,
   reportDesktopError,
 } from "../telemetry/desktop-telemetry";
+import { CLIPBOARD_GROUP_ACCENTS } from "./clipboard-style";
 import { isClipboardEditorContext } from "./clipboard-types";
 import type { ClipboardEditorContext } from "./clipboard-types";
+import { ClipboardImagePreview } from "./ClipboardImagePreview";
 
 type SaveState =
   | { type: "idle" }
@@ -440,7 +442,7 @@ const editorPlainText = (editor: HTMLDivElement) => {
 };
 
 type RichTextAreaProps = {
-  item: ClipboardEditorContext["item"];
+  item: Exclude<ClipboardEditorContext["item"], { type: "image" }>;
   label: string;
   onInput: () => void;
 };
@@ -485,6 +487,7 @@ RichTextArea.displayName = "RichTextArea";
 
 const ClipboardEditor = () => {
   const t = useTranslations("clipboard");
+  const formatter = useFormatter();
   const editorRef = useRef<HTMLDivElement>(null);
   // Text and HTML are regenerated from the DOM on save and never round-trip
   // byte-for-byte, so an untouched editor submits the stored content instead:
@@ -561,11 +564,41 @@ const ClipboardEditor = () => {
   };
 
   const save = () => {
-    const editor = editorRef.current;
-    if (state.type !== "ready" || !editor) {
+    if (state.type !== "ready") {
       return;
     }
     const { item } = state.context;
+    if (item.type === "image") {
+      setState({
+        context: state.context,
+        groupId: state.groupId,
+        save: { type: "saving" },
+        type: "ready",
+      });
+      void invoke("clipboard_set_item_group", {
+        groupId: state.groupId,
+        id: item.id,
+      })
+        .then(closeEditor)
+        .catch(() => {
+          reportDesktopError({
+            code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+            operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardEditorSave,
+            window: DESKTOP_TELEMETRY_WINDOWS.clipboardEditor,
+          });
+          setState({
+            context: state.context,
+            groupId: state.groupId,
+            save: { message: t("errorUpdateHistory"), type: "error" },
+            type: "ready",
+          });
+        });
+      return;
+    }
+    const editor = editorRef.current;
+    if (!editor) {
+      return;
+    }
     const plainText = editedRef.current
       ? editorPlainText(editor)
       : item.plainText;
@@ -638,6 +671,7 @@ const ClipboardEditor = () => {
 
   const { item } = state.context;
   const sourceName = item.sourceApp?.name;
+  const sourceVisual = state.context.sourceAppVisual;
   const toolbarItems = [
     { command: "bold", icon: BoldIcon, label: t("bold") },
     { command: "italic", icon: ItalicIcon, label: t("italic") },
@@ -670,10 +704,27 @@ const ClipboardEditor = () => {
           </h1>
           {sourceName ? (
             <p
-              className="text-muted-foreground truncate text-xs"
+              className="text-muted-foreground flex min-w-0 items-center gap-1.5 truncate text-xs"
               data-tauri-drag-region
             >
-              {sourceName}
+              {sourceVisual?.iconDataUrl ? (
+                <img
+                  alt=""
+                  aria-hidden="true"
+                  className="size-4 shrink-0 rounded-[3px]"
+                  draggable={false}
+                  src={sourceVisual.iconDataUrl}
+                />
+              ) : (
+                <span
+                  aria-hidden="true"
+                  className="bg-muted-foreground/55 size-2 shrink-0 rounded-full"
+                  style={{ backgroundColor: sourceVisual?.color ?? undefined }}
+                />
+              )}
+              <span className="truncate" dir="auto">
+                {sourceName}
+              </span>
             </p>
           ) : null}
         </div>
@@ -690,33 +741,66 @@ const ClipboardEditor = () => {
       </header>
 
       <div className="flex min-h-0 flex-1 flex-col gap-3 p-5">
-        <div className="bg-muted/60 flex shrink-0 items-center gap-1 rounded-2xl p-1">
-          {toolbarItems.map(({ command, icon: Icon, label }) => (
-            <Button
-              aria-label={label}
-              className="size-11 rounded-xl"
-              key={command}
-              onClick={() => format(command)}
-              onMouseDown={(event) => event.preventDefault()}
-              size="icon"
-              title={label}
-              type="button"
-              variant="ghost"
-            >
-              <Icon aria-hidden="true" className="size-4" />
-            </Button>
-          ))}
-        </div>
+        {item.type === "image" ? (
+          <div className="bg-card ring-border flex min-h-0 flex-1 flex-col items-center justify-center gap-4 overflow-hidden rounded-[22px] p-5 ring-1 ring-inset">
+            <div className="min-h-0 min-w-0 flex-1 self-stretch">
+              <ClipboardImagePreview
+                alt={item.name ?? t("image")}
+                id={item.id}
+                showRetry
+                surface="editor"
+              />
+            </div>
+            <div className="text-muted-foreground flex shrink-0 items-center gap-3 text-xs tabular-nums">
+              <bdi dir="auto">
+                {t("imageDimensions", {
+                  height: formatter.number(item.height),
+                  width: formatter.number(item.width),
+                })}
+              </bdi>
+              <span aria-hidden="true">·</span>
+              <bdi dir="auto">
+                {t("imageSize", {
+                  size: formatter.number(item.byteSize, {
+                    style: "unit",
+                    unit: "byte",
+                    unitDisplay: "short",
+                  }),
+                })}
+              </bdi>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="bg-muted/60 flex shrink-0 items-center gap-1 rounded-2xl p-1">
+              {toolbarItems.map(({ command, icon: Icon, label }) => (
+                <Button
+                  aria-label={label}
+                  className="size-11 rounded-xl"
+                  key={command}
+                  onClick={() => format(command)}
+                  onMouseDown={(event) => event.preventDefault()}
+                  size="icon"
+                  title={label}
+                  type="button"
+                  variant="ghost"
+                >
+                  <Icon aria-hidden="true" className="size-4" />
+                </Button>
+              ))}
+            </div>
 
-        <RichTextArea
-          item={item}
-          key={item.id}
-          label={t("clipText")}
-          onInput={() => {
-            editedRef.current = true;
-          }}
-          ref={editorRef}
-        />
+            <RichTextArea
+              item={item}
+              key={item.id}
+              label={t("clipText")}
+              onInput={() => {
+                editedRef.current = true;
+              }}
+              ref={editorRef}
+            />
+          </>
+        )}
 
         <div className="flex shrink-0 items-center gap-3">
           <label className="flex min-w-0 flex-1 items-center gap-3">
@@ -746,7 +830,14 @@ const ClipboardEditor = () => {
                 <SelectItem value="">{t("noGroup")}</SelectItem>
                 {state.context.groups.map((group) => (
                   <SelectItem key={group.id} value={group.id}>
-                    {group.name}
+                    <span
+                      aria-hidden="true"
+                      className="size-2 shrink-0 rounded-full"
+                      style={{
+                        backgroundColor: CLIPBOARD_GROUP_ACCENTS[group.color],
+                      }}
+                    />
+                    <span dir="auto">{group.name}</span>
                   </SelectItem>
                 ))}
               </SelectPopup>
