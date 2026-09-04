@@ -30,6 +30,11 @@ const AGENT_SKILL_REVISIONS_MIGRATION_PATH = nodePath.join(
   "20260827080000_agent_skill_revisions",
   "migration.sql",
 );
+const AI_MEMORY_ACTIVE_USER_GUARD_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20260904100000_ai_memory_active_user_guard",
+  "migration.sql",
+);
 const CORPUS_PROJECTION_REVISION_MIGRATION_PATHS = [
   nodePath.join(
     DRIZZLE_DIR,
@@ -184,7 +189,7 @@ export const installPgliteWorkspaceAccessObjects = async (
 // only the trigger-function statements — mirroring how
 // arabicNormalizeFunctionSql above extracts one function statement rather
 // than replaying its migration.
-const AGENT_SKILL_REVISION_TRIGGER_STATEMENT_PREFIXES = [
+const PGLITE_TRIGGER_STATEMENT_PREFIXES = [
   "CREATE FUNCTION",
   "REVOKE ALL ON FUNCTION",
   "CREATE TRIGGER",
@@ -196,7 +201,24 @@ export const installPgliteAgentSkillRevisionTrigger = async (
   const statements = readMigrationStatements(
     AGENT_SKILL_REVISIONS_MIGRATION_PATH,
   ).filter((statement) =>
-    AGENT_SKILL_REVISION_TRIGGER_STATEMENT_PREFIXES.some((prefix) =>
+    PGLITE_TRIGGER_STATEMENT_PREFIXES.some((prefix) =>
+      executableSql(statement).startsWith(prefix),
+    ),
+  );
+  for (const statement of statements) {
+    // oxlint-disable-next-line no-await-in-loop -- function/trigger DDL must execute in source order
+    await db.execute(sql.raw(statement));
+  }
+};
+
+/** Install the memory/account-deletion fence omitted by declarative schema push. */
+export const installPgliteAiMemoryActiveUserGuard = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    AI_MEMORY_ACTIVE_USER_GUARD_MIGRATION_PATH,
+  ).filter((statement) =>
+    PGLITE_TRIGGER_STATEMENT_PREFIXES.some((prefix) =>
       executableSql(statement).startsWith(prefix),
     ),
   );

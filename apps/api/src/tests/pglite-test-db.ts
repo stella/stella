@@ -18,6 +18,7 @@ import {
 import {
   createSchemaPglite,
   installPgliteAgentSkillRevisionTrigger,
+  installPgliteAiMemoryActiveUserGuard,
   installPgliteCorpusProjectionRevisionFence,
   installPgliteSchemaPrerequisites,
   installPgliteWorkspaceAccessObjects,
@@ -350,6 +351,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   }
   await installPgliteWorkspaceAccessObjects(db);
   await installPgliteAgentSkillRevisionTrigger(db);
+  await installPgliteAiMemoryActiveUserGuard(db);
   await installPgliteCorpusProjectionRevisionFence(db);
 
   for (const statement of ROLE_GRANT_STATEMENTS) {
