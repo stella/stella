@@ -30,7 +30,7 @@ import { panic } from "better-result";
 
 import type { ReasoningEffort, TemperaturePolicy } from "@stll/ai-catalog";
 
-import type { CatalogEntry } from "./model-catalog-rates";
+export type CatalogEntry = { provider: string; modelId: string };
 
 const GEMINI_TEMPERATURE_OMISSION_CUTOFF = "2026-07-21";
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;

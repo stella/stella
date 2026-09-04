@@ -407,11 +407,12 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
     await Promise.all(deferred);
 
     expect(insertedRows).toHaveLength(1);
-    // (217 + 1204 write) uncached at 200_000/MTok = 285, 45_082 cached at
-    // 20_000/MTok = 902, 1538 output at 1_000_000/MTok = 1538.
+    // 217 uncached at 200_000/MTok = 44, 1204 cache-write at
+    // 250_000/MTok = 301, 45_082 cache-read at 20_000/MTok = 902, and
+    // 1538 output at 1_000_000/MTok = 1538.
     expect(insertedRows[0]).toMatchObject({
       isByok: true,
-      rawUsageMicroUnits: 285 + 902 + 1538,
+      rawUsageMicroUnits: 44 + 301 + 902 + 1538,
     });
   });
 

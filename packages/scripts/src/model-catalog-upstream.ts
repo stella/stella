@@ -1,3 +1,5 @@
+import { Result } from "better-result";
+
 /**
  * Nightly validation: every model ID stella offers must still exist —
  * and not be deprecated — upstream.
@@ -46,7 +48,6 @@ import {
   DEFAULT_MODELS,
   DOCUMENT_INPUT_OVERRIDES,
   FIRST_PARTY_MODEL_PROVIDERS,
-  MODEL_RATES,
   MODEL_REASONING_EFFORTS,
   MODEL_TEMPERATURE_POLICIES,
 } from "@stll/ai-catalog";
@@ -57,6 +58,7 @@ import {
   validateCapabilities,
 } from "./model-catalog-capabilities";
 import type {
+  CatalogEntry,
   CapabilityFailure,
   UpstreamCapabilities,
 } from "./model-catalog-capabilities";
@@ -65,12 +67,10 @@ import {
   isPickerRelevantUpstreamModel,
 } from "./model-catalog-discovery";
 import type { UpstreamDiscoveryModel } from "./model-catalog-discovery";
-import { parseUpstreamCost, validateRates } from "./model-catalog-rates";
-import type {
-  CatalogEntry,
-  RateFailure,
-  UpstreamCost,
-} from "./model-catalog-rates";
+import {
+  isModelRateSnapshotCurrent,
+  parseModelsDevRateRecords,
+} from "./model-catalog-rates-gen";
 
 const FETCH_TIMEOUT_MS = 15_000;
 
@@ -123,11 +123,10 @@ const CAPABILITY_CHECK_PROVIDERS: Record<string, string> = {
 };
 
 /**
- * Providers whose offered IDs are not checkable against the public
- * OpenRouter/models.dev lists used by this script. Azure/Hugging Face
- * IDs are customer deployment names; Bedrock IDs are AWS Bedrock model
- * IDs, but the existing keyless upstream check has no Bedrock catalog
- * source.
+ * Providers whose offered IDs are not checked for existence against the
+ * public OpenRouter/models.dev lists used by this script. Azure/Hugging Face
+ * IDs are customer deployment names. Bedrock rates and capabilities are
+ * checked separately against models.dev, including reviewed routing-ID aliases.
  */
 const CUSTOM_ID_PROVIDERS = new Set([
   "azure_foundry",
@@ -211,18 +210,24 @@ const asMessage = (error: unknown): string =>
 type FetchResult = { ok: true; body: unknown } | { ok: false; reason: string };
 
 const fetchJson = async (url: string): Promise<FetchResult> => {
-  try {
-    const response = await fetch(url, {
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-      headers: { accept: "application/json" },
-    });
-    if (!response.ok) {
-      return { ok: false, reason: `responded ${response.status}` };
-    }
-    return { ok: true, body: await response.json() };
-  } catch (error) {
-    return { ok: false, reason: asMessage(error) };
+  const fetched = await Result.tryPromise({
+    try: async (): Promise<FetchResult> => {
+      const response = await fetch(url, {
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+        headers: { accept: "application/json" },
+      });
+      if (!response.ok) {
+        return { ok: false, reason: `responded ${response.status}` };
+      }
+      const body: unknown = await response.json();
+      return { ok: true, body };
+    },
+    catch: (error) => error,
+  });
+  if (Result.isError(fetched)) {
+    return { ok: false, reason: asMessage(fetched.error) };
   }
+  return fetched.value;
 };
 
 type Upstream = {
@@ -236,8 +241,8 @@ type Upstream = {
   firstPartyPresent: Set<string>;
   /** `${provider}:${nativeId}` marked `status: "deprecated"` upstream. */
   firstPartyDeprecated: Set<string>;
-  /** `${provider}:${nativeId}` → upstream cost metadata, when published. */
-  firstPartyCost: Map<string, UpstreamCost>;
+  /** `${modelsDevProvider}:${nativeId}` → raw models.dev rate records. */
+  rateRecords: ReadonlyMap<string, unknown>;
   /**
    * `${provider}:${id}` → upstream reasoning metadata (first-party
    * catalogs plus the models.dev openrouter catalog).
@@ -257,7 +262,7 @@ const loadUpstream = async (): Promise<Upstream> => {
   const canonAll = new Set<string>();
   const firstPartyPresent = new Set<string>();
   const firstPartyDeprecated = new Set<string>();
-  const firstPartyCost = new Map<string, UpstreamCost>();
+  let rateRecords: ReadonlyMap<string, unknown> = new Map();
   const capabilityMeta = new Map<string, UpstreamCapabilities>();
   const discoveryModels: UpstreamDiscoveryModel[] = [];
   let openrouterReachable = false;
@@ -286,6 +291,7 @@ const loadUpstream = async (): Promise<Upstream> => {
   const modelsDev = await fetchJson("https://models.dev/api.json");
   if (modelsDev.ok && isObject(modelsDev.body)) {
     modelsDevReachable = true;
+    rateRecords = parseModelsDevRateRecords(modelsDev.body);
     let count = 0;
     for (const [providerKey, providerVal] of Object.entries(modelsDev.body)) {
       if (!isObject(providerVal) || !isObject(providerVal["models"])) {
@@ -343,10 +349,6 @@ const loadUpstream = async (): Promise<Upstream> => {
         if (isObject(modelVal) && modelVal["status"] === "deprecated") {
           firstPartyDeprecated.add(key);
         }
-        const cost = parseUpstreamCost(modelVal);
-        if (cost !== null) {
-          firstPartyCost.set(key, cost);
-        }
       }
     }
     console.log(`  models.dev: ${count} models`);
@@ -360,7 +362,7 @@ const loadUpstream = async (): Promise<Upstream> => {
     canonAll,
     firstPartyPresent,
     firstPartyDeprecated,
-    firstPartyCost,
+    rateRecords,
     capabilityMeta,
     discoveryModels,
     openrouterReachable,
@@ -465,32 +467,10 @@ const main = async (): Promise<void> => {
     failures.push({ entry, verdict });
   }
 
-  const rateFailures: RateFailure[] = [];
-  if (upstream.modelsDevReachable) {
-    const rateCheck = validateRates({
-      entries,
-      firstPartyProviders: MODELS_DEV_PROVIDER,
-      costs: upstream.firstPartyCost,
-      rates: MODEL_RATES,
-    });
-    for (const failure of rateCheck.failures) {
-      // ACKNOWLEDGED is intentionally empty by default — see the note
-      // on the existence loop above.
-
-      if (ACKNOWLEDGED.has(acknowledgementKey(failure.entry))) {
-        console.log(
-          `  · acknowledged ${failure.label.toLowerCase()} ${failure.entry.provider} / ${failure.entry.modelId}`,
-        );
-        continue;
-      }
-      rateFailures.push(failure);
-    }
-    for (const entry of rateCheck.skipped) {
-      console.warn(
-        `  ⚠ rate consistency unverifiable (no upstream cost metadata): ${entry.provider} / ${entry.modelId}`,
-      );
-    }
-  } else {
+  const rateSnapshotCurrent = upstream.modelsDevReachable
+    ? await isModelRateSnapshotCurrent(upstream.rateRecords)
+    : true;
+  if (!upstream.modelsDevReachable) {
     console.warn(
       "  ⚠ rate-table validation skipped: models.dev listing unreachable",
     );
@@ -498,7 +478,7 @@ const main = async (): Promise<void> => {
 
   const capabilityFailures: CapabilityFailure[] = [];
   if (upstream.modelsDevReachable) {
-    // Bedrock ids are excluded from the existence/rate entries
+    // Bedrock ids are excluded from the existence entries
     // (CUSTOM_ID_PROVIDERS) but their generated capability rows come
     // from the models.dev amazon-bedrock catalog, so include them in
     // the capability drift check; override-declared ids (absent
@@ -577,7 +557,7 @@ const main = async (): Promise<void> => {
   const failureCount =
     discoveryFailures.length +
     failures.length +
-    rateFailures.length +
+    (rateSnapshotCurrent ? 0 : 1) +
     capabilityFailures.length;
   if (failureCount > 0) {
     console.error(`\n✗ ${failureCount} model catalog issue(s) need attention:`);
@@ -593,10 +573,12 @@ const main = async (): Promise<void> => {
         `  ✗ [${label}] ${entry.provider} / ${entry.modelId}${detail}`,
       );
     }
-    for (const { entry, label, detail } of [
-      ...rateFailures,
-      ...capabilityFailures,
-    ]) {
+    if (!rateSnapshotCurrent) {
+      console.error(
+        "  ✗ [RATE SNAPSHOT DRIFT] regenerate model-rates.gen.ts from models.dev",
+      );
+    }
+    for (const { entry, label, detail } of capabilityFailures) {
       console.error(
         `  ✗ [${label}] ${entry.provider} / ${entry.modelId} — ${detail}`,
       );

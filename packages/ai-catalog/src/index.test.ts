@@ -266,12 +266,12 @@ describe("resolveWorkingBYOKModelForRole", () => {
 describe("MODEL_RATES economic ordering", () => {
   // `satisfies Record<..., ModelRate>` only proves the numeric fields
   // exist; it cannot prove their ordering. A transposed input/output, a
-  // dropped zero, or a cached rate above the fresh-input rate mis-meters
+  // dropped zero, or a cache-read rate above the fresh-input rate mis-meters
   // every call for that model — silently over/under-charging the ledger.
-  // The nightly upstream check validates against external catalogs, not
-  // these internal invariants, and runs after the merge window.
+  // The sourced-rate check validates against external catalogs, not these
+  // internal economic invariants.
   for (const [modelId, rate] of Object.entries(MODEL_RATES)) {
-    test(`${modelId}: input>0, output>=input, 0<cached<=input`, () => {
+    test(`${modelId}: prices preserve economic ordering`, () => {
       const amounts =
         rate.kind === "flat" ? [rate] : [rate.standard, rate.aboveThreshold];
       for (const amount of amounts) {
@@ -285,6 +285,11 @@ describe("MODEL_RATES economic ordering", () => {
           // becomes a price penalty (computeRawUsageMicroUnits assumes the
           // opposite).
           expect(amount.cachedInputPerMTok).toBeLessThanOrEqual(
+            amount.inputPerMTok,
+          );
+        }
+        if ("cachedWriteInputPerMTok" in amount) {
+          expect(amount.cachedWriteInputPerMTok).toBeGreaterThanOrEqual(
             amount.inputPerMTok,
           );
         }
@@ -322,21 +327,6 @@ describe("MODEL_RATES economic ordering", () => {
       expect(getModelReasoningEfforts(modelId)).toBeNull();
       expect(shouldEmitTemperature(modelId)).toBe(false);
     }
-  });
-
-  test("canonical model rates match expected amounts", () => {
-    expect(getModelRate("gemini-3.6-flash")).toEqual({
-      kind: "flat",
-      inputPerMTok: 75_000,
-      outputPerMTok: 375_000,
-      cachedInputPerMTok: 7500,
-    });
-    expect(getModelRate("gemini-3.8-flash")).toEqual({
-      kind: "flat",
-      inputPerMTok: 75_000,
-      outputPerMTok: 375_000,
-      cachedInputPerMTok: 7500,
-    });
   });
 });
 

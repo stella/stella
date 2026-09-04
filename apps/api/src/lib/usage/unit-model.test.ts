@@ -66,10 +66,35 @@ describe("computeRawUsageMicroUnits", () => {
     expect(withCache).toBeLessThan(noCache);
   });
 
+  test("cache writes use the sourced write premium end to end", () => {
+    const uncached = usageUnitsFromTokens({
+      modelId: "claude-sonnet-5",
+      uncachedInputTokens: 1000,
+      outputTokens: 0,
+      actionType: "chat",
+      serviceTier: "standard",
+      isByok: true,
+    });
+    const cacheWrite = usageUnitsFromTokens({
+      modelId: "claude-sonnet-5",
+      uncachedInputTokens: 0,
+      outputTokens: 0,
+      cacheWriteTokens: 1000,
+      actionType: "chat",
+      serviceTier: "standard",
+      isByok: true,
+    });
+
+    expect(cacheWrite.rawUsageMicroUnits).toBeGreaterThan(
+      uncached.rawUsageMicroUnits,
+    );
+  });
+
   // Every tiered schedule, pinned at and just past its threshold: exactly at
   // the threshold stays on the standard rate, one token past it reprices the
   // whole request.
   const TIER_BOUNDARY_UNITS = {
+    "gemini-2.5-pro": [200_000, 26_000, 51_501],
     "gemini-3.1-pro-preview": [200_000, 41_200, 81_801],
     "gpt-5.4": [272_000, 69_500, 138_251],
     "gpt-5.5": [272_000, 139_000, 276_501],
@@ -161,12 +186,14 @@ describe("computeRawUsageMicroUnits", () => {
       "uncachedInputTokens",
       "outputTokens",
       "cacheReadTokens",
+      "cacheWriteTokens",
     ] as const;
     const baseline = computeRawUsageMicroUnits({
       modelId: "gemini-2.5-flash",
       uncachedInputTokens: 100,
       outputTokens: 100,
       cacheReadTokens: 0,
+      cacheWriteTokens: 0,
     });
 
     for (const field of fields) {
@@ -176,6 +203,7 @@ describe("computeRawUsageMicroUnits", () => {
           uncachedInputTokens: 100,
           outputTokens: 100,
           cacheReadTokens: 0,
+          cacheWriteTokens: 0,
           [field]: invalidCount,
         });
         // The malformed field meters as 0; the others stay billed.
@@ -202,6 +230,7 @@ describe("computeRawUsageMicroUnits", () => {
         uncachedInputTokens: 100,
         outputTokens: 100,
         cacheReadTokens: 0,
+        cacheWriteTokens: 0,
         [field]: Number.POSITIVE_INFINITY,
       });
       expect(units).toBeGreaterThan(baseline);
@@ -278,21 +307,22 @@ describe("normalizeProviderPromptTokens", () => {
     });
 
     expect(normalized).toEqual({
-      // Cache writes are billable prompt tokens outside `input_tokens`.
-      uncachedInputTokens: 217 + 1204,
+      uncachedInputTokens: 217,
       cacheReadTokens: 45_082,
+      cacheWriteTokens: 1204,
     });
     expect(analytics.exceptions()).toEqual([]);
 
-    // End to end: 1421 uncached at 200_000/MTok (285) + 45_082 cached at
-    // 20_000/MTok (902) + 1538 output at 1_000_000/MTok (1538).
+    // End to end: 217 uncached at 200_000/MTok (44), 1204 cache-write at
+    // 250_000/MTok (301), 45_082 cache-read at 20_000/MTok (902), and 1538
+    // output at 1_000_000/MTok (1538).
     expect(
       computeRawUsageMicroUnits({
         modelId: "claude-sonnet-5",
         outputTokens: 1538,
         ...normalized,
       }),
-    ).toBe(285 + 902 + 1538);
+    ).toBe(44 + 301 + 902 + 1538);
   });
 
   test("OpenAI subset semantics: cached tokens split out of the prompt total", () => {
@@ -309,6 +339,7 @@ describe("normalizeProviderPromptTokens", () => {
     expect(normalized).toEqual({
       uncachedInputTokens: 768,
       cacheReadTokens: 31_744,
+      cacheWriteTokens: 0,
     });
     expect(analytics.exceptions()).toEqual([]);
 
@@ -336,18 +367,19 @@ describe("normalizeProviderPromptTokens", () => {
     });
 
     // Shape disagreement falls back to separate accounting: full prompt at
-    // the input rate AND the reported cache reads at the cache rate, so the
+    // the input rate AND the reported cache operations at their rates, so the
     // larger reported amount is never discarded (conservative direction).
     expect(normalized).toEqual({
       uncachedInputTokens: 1024,
       cacheReadTokens: 2048,
+      cacheWriteTokens: 0,
     });
     expect(
       analytics.exceptions().map((event) => event.properties),
     ).toMatchObject([
       {
         "error.class": "TelemetryError",
-        anomaly: "cache-read-exceeds-included-prompt",
+        anomaly: "cache-tokens-exceed-included-prompt",
         provider: "openai",
         source: "usage-unit-model",
       },
@@ -365,8 +397,9 @@ describe("normalizeProviderPromptTokens", () => {
 
     // NaN and negative meter as 0; fractional rounds up.
     expect(normalized).toEqual({
-      uncachedInputTokens: 97,
+      uncachedInputTokens: 0,
       cacheReadTokens: 0,
+      cacheWriteTokens: 97,
     });
     expect(
       analytics.exceptions().map((event) => event.properties),

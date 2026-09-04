@@ -35,6 +35,7 @@
     "clean": "git clean -xdf dist .cache .turbo node_modules",
     "build": "tsdown",
     "gen:capabilities": "bun ../scripts/src/model-catalog-capabilities-gen.ts",
+    "gen:rates": "bun ../scripts/src/model-catalog-rates-gen.ts",
     "pack:dry-run": "bun pm pack --dry-run",
     "test": "bun test src",
     "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",

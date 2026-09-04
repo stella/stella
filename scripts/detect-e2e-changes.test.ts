@@ -398,6 +398,44 @@ describe("detect-e2e-changes", () => {
     expect(result).toContain('$RELEASE_TYPECHECK_RESULT" == "cancelled"');
   });
 
+  test("checks the generated model rates only when their inputs change", () => {
+    const plan = workflowJob("ci-plan");
+    expect(plan).toContain(
+      `model_rates_drift_required: ${githubExpression("steps.changed-files.outputs.model_rates_drift_required")}`,
+    );
+    expect(plan).toContain('echo "model_rates_drift_required=true"');
+    expect(plan).toContain('echo "model_rates_drift_required=false"');
+
+    const selector =
+      /\n *([^\n)]+)\)\n *model_rates_drift_required=true\n/u.exec(plan)?.[1];
+    if (selector === undefined) {
+      throw new Error("ci-plan has no model-rate drift path selector");
+    }
+    expect(new Set(selector.split("|"))).toEqual(
+      new Set([
+        ".github/workflows/ci.yml",
+        "packages/ai-catalog/package.json",
+        "packages/ai-catalog/src/index.ts",
+        "packages/ai-catalog/src/model-rate-policy.ts",
+        "packages/ai-catalog/src/model-rate.ts",
+        "packages/ai-catalog/src/model-rates.gen.ts",
+        "packages/scripts/src/model-catalog-rates-gen.ts",
+      ]),
+    );
+
+    const driftGuard = workflowStep(
+      workflowJob("ci-checks"),
+      "Model rate snapshot drift guard",
+    );
+    expect(driftGuard).toContain(
+      "needs.ci-plan.outputs.model_rates_drift_required == 'true'",
+    );
+    expect(driftGuard).toContain(
+      "run: bun --filter @stll/ai-catalog gen:rates --check",
+    );
+    expect(driftGuard).not.toContain("package_checks_required");
+  });
+
   test("fails the pull request that invalidates a shipped product screenshot", () => {
     const plan = workflowJob("ci-plan");
     expect(plan).toContain(

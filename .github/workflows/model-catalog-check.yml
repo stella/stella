@@ -4,8 +4,8 @@ name: Model Catalog Upstream Check
 # nightly job compares stella's picker (@stll/ai-catalog) bidirectionally
 # with live, public, keyless listings (OpenRouter + models.dev). It fails
 # when an eligible new model has no reviewed disposition, an offered model is
-# deprecated or gone upstream, or request capabilities drift from live model
-# metadata.
+# deprecated or gone upstream, or committed rates and request capabilities
+# drift from live model metadata.
 
 on:
   schedule:
@@ -40,5 +40,5 @@ jobs:
           # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
 
-      - name: Discover new models and validate offered IDs
+      - name: Discover models and validate IDs, rates, and capabilities
         run: bun run check:model-catalog
