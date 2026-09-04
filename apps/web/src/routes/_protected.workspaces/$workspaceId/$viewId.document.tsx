@@ -635,7 +635,6 @@ function RouteComponentInner({
   const [, setDocxUnlocked] = useState(false);
   const [docxLatestVersionDialogOpen, setDocxLatestVersionDialogOpen] =
     useState(false);
-  const isPDFPageOrganizerOpen = pdfMode === "organize";
   const setIsPDFPageOrganizerOpen = (open: boolean) => {
     detached(
       navigate({
@@ -706,6 +705,8 @@ function RouteComponentInner({
     activeFileField?.content.type === "file" ? activeFileField.content : null;
   const activeMimeType =
     activeFileContent?.mimeType ?? resolvedVersionFile?.mimeType;
+  const isPDFPageOrganizerOpen =
+    pdfMode === "organize" && activeMimeType === PDF_MIME;
   const activePdfFileId = activeFileContent?.pdfFileId ?? null;
   const activeFileLabel =
     activeFileContent?.fileName ?? resolvedVersionFile?.fileName ?? fieldId;
