@@ -44,6 +44,8 @@ const ALLOW_INCREASE_FLAG = "--allow-increase";
 // it has to be named explicitly.
 const ISSUE_TYPES = ["exports", "types", "nsExports"] as const;
 
+type IssueType = (typeof ISSUE_TYPES)[number];
+
 const ROOT_WORKSPACE = ".";
 const WORKSPACE_ROOTS = ["apps", "packages"] as const;
 
@@ -67,16 +69,52 @@ const workspaceOf = (file: string): string => {
     : ROOT_WORKSPACE;
 };
 
-const issueCount = (entry: Record<string, unknown>): number => {
-  let count = 0;
-  for (const type of ISSUE_TYPES) {
-    const issues = entry[type];
-    if (issues !== undefined && !Array.isArray(issues)) {
-      panic(`knip json reporter returned a non-array ${type} entry`);
-    }
-    count += Array.isArray(issues) ? issues.length : 0;
+// One reported symbol, carrying the issue type it was reported under.
+type KnipIssue = {
+  readonly type: IssueType;
+  readonly name: string;
+};
+
+type KnipFileReport = {
+  readonly file: string;
+  readonly issues: readonly KnipIssue[];
+};
+
+const UNNAMED_SYMBOL = "<unnamed>";
+
+// Narrow the reporter's JSON into the rows both consumers read, once, so the
+// untyped shape stops at this function instead of leaking into the counting.
+const parseKnipReport = (report: unknown): readonly KnipFileReport[] => {
+  if (!isRecord(report) || !Array.isArray(report["issues"])) {
+    panic("knip json reporter output has no issues array");
   }
-  return count;
+
+  const rows: KnipFileReport[] = [];
+  for (const entry of report["issues"]) {
+    const file = isRecord(entry) ? entry["file"] : undefined;
+    if (!isRecord(entry) || typeof file !== "string") {
+      panic("knip json reporter returned an entry without a file path");
+    }
+    const issues: KnipIssue[] = [];
+    for (const type of ISSUE_TYPES) {
+      const reported = entry[type];
+      if (reported === undefined) {
+        continue;
+      }
+      if (!Array.isArray(reported)) {
+        panic(`knip json reporter returned a non-array ${type} entry`);
+      }
+      for (const issue of reported) {
+        const name = isRecord(issue) ? issue["name"] : undefined;
+        issues.push({
+          type,
+          name: typeof name === "string" ? name : UNNAMED_SYMBOL,
+        });
+      }
+    }
+    rows.push({ file, issues });
+  }
+  return rows;
 };
 
 const sortedSummary = (summary: Summary): Summary => {
@@ -96,26 +134,18 @@ const sortedSummary = (summary: Summary): Summary => {
 // The knip json reporter emits `{ issues: [{ file, exports, types, ... }] }`,
 // one entry per file, each issue type an array of symbols.
 export const summarizeKnipReport = (report: unknown): Summary => {
-  if (!isRecord(report) || !Array.isArray(report.issues)) {
-    panic("knip json reporter output has no issues array");
-  }
-
   const summary: Record<
     string,
     { count: number; files: Record<string, number> }
   > = {};
-  for (const entry of report.issues) {
-    if (!isRecord(entry) || typeof entry.file !== "string") {
-      panic("knip json reporter returned an entry without a file path");
-    }
-    const count = issueCount(entry);
-    if (count === 0) {
+  for (const { file, issues } of parseKnipReport(report)) {
+    if (issues.length === 0) {
       continue;
     }
-    const workspace = workspaceOf(entry.file);
+    const workspace = workspaceOf(file);
     const snapshot = summary[workspace] ?? { count: 0, files: {} };
-    snapshot.count += count;
-    snapshot.files[entry.file] = (snapshot.files[entry.file] ?? 0) + count;
+    snapshot.count += issues.length;
+    snapshot.files[file] = (snapshot.files[file] ?? 0) + issues.length;
     summary[workspace] = snapshot;
   }
   return sortedSummary(summary);
@@ -126,28 +156,12 @@ export const summarizeKnipReport = (report: unknown): Summary => {
 export const collectIssueSymbols = (
   report: unknown,
 ): Record<string, readonly string[]> => {
-  if (!isRecord(report) || !Array.isArray(report.issues)) {
-    panic("knip json reporter output has no issues array");
-  }
-
   const symbols: Record<string, string[]> = {};
-  for (const entry of report.issues) {
-    if (!isRecord(entry) || typeof entry.file !== "string") {
-      continue;
-    }
-    for (const type of ISSUE_TYPES) {
-      const issues = entry[type];
-      if (!Array.isArray(issues)) {
-        continue;
-      }
-      for (const issue of issues) {
-        const name = isRecord(issue) ? issue.name : undefined;
-        const named = symbols[entry.file] ?? [];
-        named.push(
-          `${typeof name === "string" ? name : "<unnamed>"} (${type})`,
-        );
-        symbols[entry.file] = named;
-      }
+  for (const { file, issues } of parseKnipReport(report)) {
+    for (const { type, name } of issues) {
+      const named = symbols[file] ?? [];
+      named.push(`${name} (${type})`);
+      symbols[file] = named;
     }
   }
   return symbols;
@@ -234,12 +248,13 @@ const readBaseline = (): Summary => {
 
   const baseline: Summary = {};
   for (const [workspace, snapshot] of Object.entries(parsed.value)) {
-    if (!isRecord(snapshot) || !isRecord(snapshot.files)) {
+    const reportedFiles = isRecord(snapshot) ? snapshot["files"] : undefined;
+    if (!isRecord(snapshot) || !isRecord(reportedFiles)) {
       panic(`${BASELINE_REL} entry ${workspace} must carry count and files`);
     }
     const files: Record<string, number> = {};
     let total = 0;
-    for (const [file, value] of Object.entries(snapshot.files)) {
+    for (const [file, value] of Object.entries(reportedFiles)) {
       if (
         typeof value !== "number" ||
         !Number.isSafeInteger(value) ||
@@ -252,7 +267,7 @@ const readBaseline = (): Summary => {
       files[file] = value;
       total += value;
     }
-    const declared = snapshot.count;
+    const declared = snapshot["count"];
     if (typeof declared !== "number" || declared !== total) {
       panic(
         `${BASELINE_REL} entry ${workspace} count ${String(declared)} does not equal its per-file total ${total}`,
