@@ -256,6 +256,8 @@ architecture and scale, auth and data access, files and external APIs, tests,
   `@stll/<directory>`.
 - Use scoped workspace filters in commands, for example
   `bun --filter @stll/web dev`.
+- Create a package with `bun run new-package <name> --description "…"`; copying a
+  helper between apps is not an option when a package can own it.
 
 ## Commands
 

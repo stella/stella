@@ -56,6 +56,10 @@ to explore the codebase.
   `@stll/<directory>`.
 - Use scoped workspace filters in commands, for example
   `bun --filter @stll/web dev`.
+- Scaffold a new package with
+  `bun run new-package <name> --description "one line"`: it writes the
+  manifest, tsconfig, entry point and README, and registers the knip
+  workspace.
 
 ## Development Workflow
 
