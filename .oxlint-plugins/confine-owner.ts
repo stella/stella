@@ -178,8 +178,12 @@ const isOwnedMemberPath = (
   memberPath: readonly string[],
 ): boolean => {
   let current: unknown = node;
-  for (let index = memberPath.length - 1; index >= 0; index -= 1) {
-    if (!isMemberStep(current, memberPath[index])) {
+  // Iterate the values, not the indices: an indexed read is `string |
+  // undefined` under the plugins project's strict index access and plain
+  // `string` under the lint's program, so either the guard or the compiler
+  // has to be wrong about it.
+  for (const segment of memberPath.toReversed()) {
+    if (!isMemberStep(current, segment)) {
       return false;
     }
     current = current.object;
