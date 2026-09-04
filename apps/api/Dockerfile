@@ -203,6 +203,7 @@ ENV FEATURE_TODOS=true
 ENV REQUIRE_PERSONAL_AI_KEY=true
 ENV STELLA_WORKER_DIR=/\$bunfs/root/workers
 ENV STELLA_OCR_PDF_FONT_PATH=/\$bunfs/root/fonts/CabinetGrotesk-Regular.otf
+ENV STELLA_YARA_RULES_DIR=/app/yara
 ENV DOCUMENT_OCR_MODEL_DIR=/app/ocr-models
 ENV TEMPLATE_PACKS_CONTENT_DIR=/app/template-packs-content
 RUN groupadd --system --gid 1001 stella && \
@@ -233,7 +234,7 @@ COPY --chown=stella:stella --from=builder /app/ocr-models /app/ocr-models
 COPY --chown=stella:stella --from=install-inputs \
     /app/apps/landing/public/fonts/CabinetGrotesk-Regular.otf \
     /\$bunfs/root/fonts/CabinetGrotesk-Regular.otf
-COPY --chown=stella:stella --from=builder /app/apps/api/src/lib/file-scan/yara /\$bunfs/root/yara
+COPY --chown=stella:stella --from=builder /app/apps/api/src/lib/file-scan/yara /app/yara
 # Bundled template packs: the manifest is compiled into the binary, the DOCX
 # bytes are read from TEMPLATE_PACKS_CONTENT_DIR when a pack is installed.
 # Copied from the unpruned context stage. A build whose context has no content

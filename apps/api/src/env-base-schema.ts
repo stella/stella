@@ -173,6 +173,7 @@ export const envBaseServerSchema = {
   STELLA_COMMIT_SHA: v.optional(v.string()),
   STELLA_WORKER_DIR: v.optional(v.string()),
   STELLA_OCR_PDF_FONT_PATH: v.optional(v.string()),
+  STELLA_YARA_RULES_DIR: v.optional(v.string()),
   SKIP_MIGRATION_CHECK: v.optional(v.pipe(v.string(), v.parseBoolean())),
   INGESTION_USER_AGENT: v.optional(v.string()),
   DATABASE_URL: v.pipe(v.string(), v.url()),
