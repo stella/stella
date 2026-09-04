@@ -9,11 +9,17 @@
 // counters: no AST, no oxlint, fast enough to keep the local loop honest.
 //
 // To add a metric: append an entry to RATCHET_METRICS with a stable `id`, a
-// human `description`, the `include` globs (repo-relative), an `exclude`
-// predicate, and a `count(content)` per-file counter (a lexical/regex scan;
-// keep it deterministic and cheap). Then run `bun scripts/ratchet.ts --write`
-// to seed its baseline, and commit both files. The counter must count exactly
-// what its description claims — the `--self-test` fixtures enforce that.
+// human `description`, and one of two `scope`s.
+//   scope: "file" — the `include` globs (repo-relative), an `exclude`
+//     predicate, and a `count(content)` per-file counter (a lexical/regex
+//     scan; keep it deterministic and cheap).
+//   scope: "repo" — a `count(root)` that walks the tree itself and returns
+//     `{ count, files }`, for a property no single file carries: the same
+//     helper copied into two apps, one name defined in two workspaces, the
+//     size of a flat bucket.
+// Then run `bun scripts/ratchet.ts --write` to seed its baseline, and commit
+// both files. The counter must count exactly what its description claims —
+// the `--self-test` fixtures enforce that.
 //
 // Lint-suppression budgets are the one generated family: one decrease-only
 // budget per rule in TRACKED_SUPPRESSION_RULES (scripts/lint-suppressions.ts)
@@ -33,8 +39,10 @@
 
 import { panic, Result } from "better-result";
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -1303,13 +1311,33 @@ const countLegacyManualMcpInputSchemas = (
 
 type FileCounter = (content: string, file: string) => number;
 
-type RatchetMetric = {
-  readonly id: string;
-  readonly description: string;
-  readonly include: readonly string[];
-  readonly exclude: (file: string) => boolean;
-  readonly count: FileCounter;
+// A repo metric answers a question no single file can — the same helper copied
+// into two apps, one name defined in two workspaces, the size of a flat
+// catch-all directory — so it walks the tree itself. It returns the same
+// per-file breakdown a file metric produces, which keeps the baseline shape,
+// the diff, and the regression report identical for both scopes.
+type RepoMetricResult = {
+  readonly count: number;
+  readonly files: Record<string, number>;
 };
+
+type RepoCounter = (root: string) => RepoMetricResult;
+
+type RatchetMetric =
+  | {
+      readonly scope: "file";
+      readonly id: string;
+      readonly description: string;
+      readonly include: readonly string[];
+      readonly exclude: (file: string) => boolean;
+      readonly count: FileCounter;
+    }
+  | {
+      readonly scope: "repo";
+      readonly id: string;
+      readonly description: string;
+      readonly count: RepoCounter;
+    };
 
 // One decrease-only budget per tracked rule, derived from the single
 // tracked-rule table rather than hand-listed here: a rule added to that table
@@ -1325,6 +1353,7 @@ type RatchetMetric = {
 // directive in a test is noise.
 const PER_RULE_SUPPRESSION_METRICS: readonly RatchetMetric[] =
   TRACKED_SUPPRESSION_RULES.map(({ rule, tier, guards }) => ({
+    scope: "file",
     id: suppressionMetricId(rule),
     description: `${rule} disable directives, repo-wide (${tier} tier: ${guards}). Bare directives count, because they silence this rule too.`,
     include: ALL_SOURCE_GLOBS,
@@ -1348,8 +1377,149 @@ const countInternalModuleMockLedgerEntries: FileCounter = (content) => {
   return parsed.length;
 };
 
+// --- Repo-scope counters ----------------------------------------------------
+// Duplication is invisible to a per-file counter: the second copy of a helper
+// is a perfectly ordinary file. These counters compare files against each
+// other, and measure the flat buckets a copy lands in when extracting a package
+// feels expensive.
+
+const APP_LIB_GLOB = "apps/*/src/lib/**/*.{ts,tsx}";
+const WORKSPACE_OWNED_GLOBS = [
+  APP_LIB_GLOB,
+  "packages/*/src/**/*.{ts,tsx}",
+] as const;
+const API_LIB_DIR = "apps/api/src/lib";
+const WEB_LIB_DIR = "apps/web/src/lib";
+const FIXTURES_DIR_NAME = "__fixtures__";
+
+// `apps/web`, `packages/ui`: the workspace a file belongs to.
+const workspaceOf = (rel: string): string =>
+  rel.split("/").slice(0, 2).join("/");
+
+const scanRepoFiles = (
+  root: string,
+  globs: readonly string[],
+): readonly string[] => {
+  const seen = new Set<string>();
+  for (const glob of globs) {
+    for (const rel of new Bun.Glob(glob).scanSync(root)) {
+      if (!isExcludedSource(rel)) {
+        seen.add(rel);
+      }
+    }
+  }
+  return [...seen].sort();
+};
+
+// Every file whose path below `src/lib` also exists under another app's
+// `src/lib`, both sides included: a copy is two files, and either one may be
+// the one deleted. The key is the path, not the basename: `lib/collation.ts` in
+// two apps is one helper twice, while `lib/knowledge/types.ts` and
+// `lib/chat/types.ts` are two domains sharing a convention name.
+const LIB_SEGMENT = "/src/lib/";
+
+const countCrossAppLibPathCopies: RepoCounter = (root) => {
+  const byLibPath = new Map<string, Map<string, string[]>>();
+  for (const rel of scanRepoFiles(root, [APP_LIB_GLOB])) {
+    const libPath = rel.slice(rel.indexOf(LIB_SEGMENT) + LIB_SEGMENT.length);
+    const app = workspaceOf(rel);
+    const byApp = byLibPath.get(libPath) ?? new Map<string, string[]>();
+    const copies = byApp.get(app) ?? [];
+    copies.push(rel);
+    byApp.set(app, copies);
+    byLibPath.set(libPath, byApp);
+  }
+
+  const files: Record<string, number> = {};
+  let count = 0;
+  for (const byApp of byLibPath.values()) {
+    if (byApp.size < 2) {
+      continue;
+    }
+    for (const copies of byApp.values()) {
+      for (const rel of copies) {
+        files[rel] = 1;
+        count += 1;
+      }
+    }
+  }
+  return { count, files };
+};
+
+// A top-level exported binding. Line-anchored, so a nested or re-exported
+// declaration is not a definition this metric owns. Known limit, in the spirit
+// of the counters above: an unindented `export const X` inside a block comment
+// or a template literal reads as a definition.
+const TOP_LEVEL_EXPORTED_BINDING =
+  /^export\s+(?:async\s+)?(?:const|function|class|type|interface)\s+(?<name>[A-Za-z_$][\w$]*)/gmu;
+// Short names (`id`, `Row`, `env`) collide by accident, not by duplication.
+const MIN_DUPLICATE_EXPORT_NAME_LENGTH = 4;
+
+// One name defined in N workspaces costs N-1: one workspace owns it, every
+// other definition is the copy that should have imported it instead.
+const countCrossWorkspaceDuplicateExportNames: RepoCounter = (root) => {
+  const definitions = new Map<string, Map<string, string>>();
+  for (const rel of scanRepoFiles(root, WORKSPACE_OWNED_GLOBS)) {
+    // A name emitted by a code generator is the generator's to deduplicate.
+    if (rel.includes("/generated/")) {
+      continue;
+    }
+    const content = readFileSync(path.join(root, rel), "utf-8");
+    for (const match of content.matchAll(TOP_LEVEL_EXPORTED_BINDING)) {
+      const name = match.groups?.name ?? "";
+      if (name.length < MIN_DUPLICATE_EXPORT_NAME_LENGTH) {
+        continue;
+      }
+      const byWorkspace = definitions.get(name) ?? new Map<string, string>();
+      // Files arrive sorted, so the first file a workspace defines the name in
+      // is the one the extra is attributed to.
+      if (!byWorkspace.has(workspaceOf(rel))) {
+        byWorkspace.set(workspaceOf(rel), rel);
+      }
+      definitions.set(name, byWorkspace);
+    }
+  }
+
+  const files: Record<string, number> = {};
+  let count = 0;
+  for (const byWorkspace of definitions.values()) {
+    const workspaces = [...byWorkspace.keys()].sort();
+    for (const workspace of workspaces.slice(1)) {
+      const rel =
+        byWorkspace.get(workspace) ??
+        panic(`ratchet lost the defining file for ${workspace}`);
+      files[rel] = (files[rel] ?? 0) + 1;
+      count += 1;
+    }
+  }
+  return { count, files };
+};
+
+// Direct children of a flat lib bucket, one per entry: the bucket's size is the
+// metric, so a new file and a new directory cost the same.
+const countLibTopLevelEntries =
+  (libDir: string): RepoCounter =>
+  (root) => {
+    const dir = path.join(root, libDir);
+    if (!existsSync(dir)) {
+      return { count: 0, files: {} };
+    }
+    const files: Record<string, number> = {};
+    let count = 0;
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const rel = `${libDir}/${entry.name}`;
+      if (entry.name === FIXTURES_DIR_NAME || isExcludedSource(rel)) {
+        continue;
+      }
+      files[rel] = 1;
+      count += 1;
+    }
+    return { count, files };
+  };
+
 const RATCHET_METRICS: readonly RatchetMetric[] = [
   {
+    scope: "file",
     id: "as-casts",
     description:
       "`as` type assertions in app source (excl. `as const`, import aliases, tests/gen/d.ts)",
@@ -1358,6 +1528,7 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     count: countAsCasts,
   },
   {
+    scope: "file",
     id: "super-linear-regexes",
     description:
       "regex literals with super-linear worst-case backtracking, repo-wide (one oversized input blocks the event loop); at 0 — keep it there",
@@ -1366,6 +1537,7 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     count: countSuperLinearRegexes,
   },
   {
+    scope: "file",
     id: "legacy-realtime-invalidation-producers",
     description:
       "legacy invalidate-query event producers and route activations in API source; at 0 — keep it there",
@@ -1374,6 +1546,7 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     count: countLegacyRealtimeInvalidationProducers,
   },
   {
+    scope: "file",
     id: "legacy-manual-mcp-input-schemas",
     description:
       "tools in MCP_LEGACY_MANUAL_INPUT_SCHEMA_TOOL_NAMES whose hand-authored JSON Schema mirrors a separate runtime validator; each Valibot source-of-truth conversion removes one entry",
@@ -1382,6 +1555,7 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     count: countLegacyManualMcpInputSchemas,
   },
   {
+    scope: "file",
     id: "nullish-array-fallback",
     description:
       "`?? []` fallbacks in app source (structural invariants should panic() instead)",
@@ -1390,6 +1564,7 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     count: countNullishArrayFallback,
   },
   {
+    scope: "file",
     id: "barrel-index-files",
     description:
       "index.ts/index.tsx barrel files under apps/{api,web}/src (packages entry points and TanStack route index files excluded)",
@@ -1404,6 +1579,7 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     count: countPresence,
   },
   {
+    scope: "file",
     id: "direct-error-message-display",
     description:
       "direct display of raw error.message/result.error.message in web source; prefer translated fallbacks and userError helpers",
@@ -1416,6 +1592,7 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     count: countDirectErrorMessageDisplay,
   },
   {
+    scope: "file",
     id: "module-level-mutable-collections",
     description:
       "module-scope `new Map(`/`new Set(` assignments in web source (per-thread/entity registries that never evict); WeakMap/WeakSet excluded (GC-safe by construction)",
@@ -1424,6 +1601,7 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     count: countModuleLevelMutableCollections,
   },
   {
+    scope: "file",
     id: "entity-kind-glyph-adhoc",
     description:
       "raw folder/task lucide glyph identifiers (Folder/FolderOpen/ListTodo, with or without the Icon suffix) in web source outside entity-kind-icon.tsx; every entity glyph belongs to <EntityKindIcon> (see no-direct-entity-glyph)",
@@ -1434,6 +1612,7 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     count: countEntityKindGlyphs,
   },
   {
+    scope: "file",
     id: "hand-rolled-user-identity",
     description:
       "<UserAvatar> JSX openings outside the shared user-avatar component (fuzzy superset; paired avatar+label shapes are banned by no-hand-rolled-user-identity)",
@@ -1444,6 +1623,7 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     count: countHandRolledUserIdentity,
   },
   {
+    scope: "file",
     id: "raw-user-avatar-primitive",
     description:
       "imports of @stll/ui/avatar outside the shared owner and explicit non-user exceptions",
@@ -1459,6 +1639,7 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     count: countRawUserAvatarPrimitive,
   },
   {
+    scope: "file",
     id: "shadowed-user-name-helpers",
     description:
       "module-like const/function declarations named getDisplayName or getInitials outside apps/web/src/lib",
@@ -1468,6 +1649,7 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     count: countShadowedUserNameHelpers,
   },
   {
+    scope: "file",
     id: "ad-hoc-relative-time-formatting",
     description:
       "native title={formatFullTimestamp(...)} plus date-and-time locale option objects outside the canonical formatter",
@@ -1477,6 +1659,7 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     count: countAdHocRelativeTimeFormatting,
   },
   {
+    scope: "file",
     id: "direct-audit-log-insert",
     description:
       "direct .insert(auditLogs) calls outside the audit-log recorder module",
@@ -1486,6 +1669,7 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     count: countDirectAuditLogInserts,
   },
   {
+    scope: "file",
     id: "inline-timestamp-cursor-sql",
     description:
       "Z-less PostgreSQL microsecond cursor formats and inline UTC timestamp re-anchors outside db-pagination and non-cursor date arithmetic",
@@ -1497,6 +1681,7 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     count: countInlineTimestampCursorSql,
   },
   {
+    scope: "file",
     id: "repeated-timestamp-cursor-boundary",
     description:
       "pgTimestampCursorBoundary calls beyond the first per API source file (fuzzy proxy for hand-built timestamp/id disjunctions; explicit heterogeneous/range owners excluded)",
@@ -1509,6 +1694,7 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     count: countRepeatedTimestampCursorBoundaries,
   },
   {
+    scope: "file",
     id: "unbounded-pagination-cursor-schema",
     description: "literal cursor: t.Optional(t.String()) schemas in API source",
     include: ["apps/api/src/**/*.{ts,tsx}"],
@@ -1516,6 +1702,7 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     count: countUnboundedPaginationCursorSchema,
   },
   {
+    scope: "file",
     id: "throw-outside-boundary",
     description:
       "non-identifier `throw` statements outside the `better-result` boundary (RESULT_BOUNDARY_GLOBS), excl. `throw panic(...)`; Oxlint owns precise enforcement for changed files",
@@ -1524,6 +1711,7 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     count: countThrowsOutsideBoundary,
   },
   {
+    scope: "file",
     id: "try-catch-outside-boundary",
     description:
       "`catch` clauses outside the `better-result` boundary (RESULT_BOUNDARY_GLOBS); excludes Result.tryPromise's `catch:` object key",
@@ -1533,6 +1721,7 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
   },
   ...PER_RULE_SUPPRESSION_METRICS,
   {
+    scope: "file",
     id: "lint-suppression-directives",
     description:
       "eslint-/oxlint-disable directives naming only rules with no dedicated budget, repo-wide (residual suppression pressure; the per-rule budgets above are subtracted, so no rule's burn-down can fund another rule's new waiver). Same scope as those budgets, so every directive in the tree is charged to exactly one of them",
@@ -1541,6 +1730,7 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     count: countResidualLintSuppressions,
   },
   {
+    scope: "file",
     id: "ts-suppression-directives",
     description:
       "@ts-expect-error/@ts-ignore/@ts-nocheck directives in app source (each hides a type error from the compiler)",
@@ -1549,6 +1739,7 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     count: countTsSuppressions,
   },
   {
+    scope: "file",
     id: "detached-promise-review-sites",
     description:
       "detached-work syntax requiring rejection review: `void` calls without a same-line `.catch(...)`, plus direct async JSX callbacks (lexical; not every site is a Promise or bug)",
@@ -1557,6 +1748,7 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     count: countUnhandledDetachedPromises,
   },
   {
+    scope: "file",
     id: "cross-handler-imports",
     description:
       "imports crossing API handler domains (handlers/<a> -> handlers/<b>/...); handler domains are vertical slices — shared code belongs in apps/api/src/lib",
@@ -1565,6 +1757,7 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     count: countCrossSliceImports(crossesHandlerDomain),
   },
   {
+    scope: "file",
     id: "ad-hoc-decision-subject-gates",
     description:
       "direct `isRedistributable(` calls in public case-law decision/provision handlers. The subject gate lives in `decisions/public-subject.ts` and reaches handlers as a branded subject; a handler re-checking it by hand is the pattern that let two endpoints ship ungated. Stays at 0",
@@ -1577,6 +1770,7 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     count: countDirectRedistributableCalls,
   },
   {
+    scope: "file",
     id: "lib-to-handler-imports",
     description:
       "imports from shared API lib code into handler slices; dependency direction must flow from handlers to lib",
@@ -1585,6 +1779,7 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     count: countCrossSliceImports(crossesLibToHandler),
   },
   {
+    scope: "file",
     id: "cross-route-private-imports",
     description:
       "imports reaching into another top-level route dir's `-`-private paths (TanStack route slices); move shared code to components/, lib/, or a feature dir",
@@ -1593,6 +1788,7 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     count: countCrossSliceImports(crossesRoutePrivate),
   },
   {
+    scope: "file",
     id: "capability-schemas-truncated",
     description:
       "capabilities carrying `inputSchemaTruncated`, the flag that used to mark a schema dropped for size. The exporter now $defs-compacts schemas and FAILS on one still over the byte cap, so this can only be reached by reintroducing the truncation pathway: it stays at 0",
@@ -1603,6 +1799,7 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     count: countTruncatedCapabilitySchemas,
   },
   {
+    scope: "file",
     id: "capability-file-transport-suppressed",
     description:
       "capabilities whose transport disposition suppresses them from the generic transport (a file response, or a REQUIRED file input): dropped from the CLI tree and refused by invoke_capability, so no agent surface can reach them. An OPTIONAL file input is not counted — its JSON modes stay invokable",
@@ -1613,6 +1810,7 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     count: countFileTransportSuppressed,
   },
   {
+    scope: "file",
     id: "read-capabilities-with-write-scope",
     description:
       "read capabilities whose required scope is a write-only grant (admin/billing/documents/knowledge/matters _write), unreachable by a read-only credential; the exporter's access-keyed scope resolver keeps this at 0",
@@ -1623,6 +1821,7 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     count: countReadCapabilitiesWithWriteScope,
   },
   {
+    scope: "file",
     id: "capability-domain-action-verbs",
     description:
       "reviewed non-canonical capability action verbs (DOMAIN_ACTION_VERBS); each is a public command verb outside list/get/create/update/delete",
@@ -1631,6 +1830,7 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     count: countDomainActionVerbs,
   },
   {
+    scope: "file",
     id: "cli-shadowed-namespaces",
     description:
       "namespaces where a curated command and a generated capability command share a top-level name, so callers cannot tell which mechanism they get",
@@ -1639,6 +1839,7 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     count: countShadowedNamespaces,
   },
   {
+    scope: "file",
     id: "cross-feature-imports",
     description:
       "imports crossing web feature slices (features/<a> -> features/<b>); features are independent end-to-end slices",
@@ -1647,6 +1848,7 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     count: countCrossSliceImports(crossesFeature),
   },
   {
+    scope: "file",
     id: "workspace-only-rls-on-org-tables",
     description:
       "drizzle tables declaring an organizationId column while authorizing rows with wsPolicies() (workspace pin only) instead of wsOrganizationPolicies(<table>) (workspace pin AND organization pin); at 0 — keep it there",
@@ -1655,12 +1857,41 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     count: countWorkspaceOnlyRlsOnOrgTables,
   },
   {
+    scope: "file",
     id: "internal-module-mock-ledger-entries",
     description:
       "grandfathered mock.module targets of workspace modules, one per <test file>::<module> pair in scripts/internal-module-mock-ledger.json (each replaces a real dependency with a fabrication the mocked module's contract changes cannot fail)",
     include: [INTERNAL_MODULE_MOCK_LEDGER_REL],
     exclude: () => false,
     count: countInternalModuleMockLedgerEntries,
+  },
+  {
+    scope: "repo",
+    id: "cross-app-lib-path-copies",
+    description:
+      'files under apps/*/src/lib whose path below src/lib also exists under another app\'s src/lib, both sides counted (the same helper living in two apps; a convention name such as types.ts under two different domain directories is not a copy). The fix is a package — `bun run new-package <name> --description "…"` and import it from both — never a copy',
+    count: countCrossAppLibPathCopies,
+  },
+  {
+    scope: "repo",
+    id: "cross-workspace-duplicate-export-names",
+    description:
+      "top-level exported binding names defined in two or more workspaces under apps/*/src/lib and packages/*/src, charged once per extra workspace (names under 4 characters, default exports and generated/ directories excluded); one workspace should own the name and the others import it, via `bun run new-package` when neither owns it yet",
+    count: countCrossWorkspaceDuplicateExportNames,
+  },
+  {
+    scope: "repo",
+    id: "api-lib-top-level-entries",
+    description:
+      "direct children of apps/api/src/lib, files and directories alike (tests and __fixtures__ excluded); the flat bucket only shrinks — new code goes into a domain directory or a package",
+    count: countLibTopLevelEntries(API_LIB_DIR),
+  },
+  {
+    scope: "repo",
+    id: "web-lib-top-level-entries",
+    description:
+      "direct children of apps/web/src/lib, files and directories alike (tests and __fixtures__ excluded); the flat bucket only shrinks — new code goes into a domain directory or a package",
+    count: countLibTopLevelEntries(WEB_LIB_DIR),
   },
 ];
 
@@ -1810,34 +2041,54 @@ const assertMetricRegistry = (): void => {
 const requireSnapshot = (baseline: Baseline, id: string): MetricSnapshot =>
   baseline[id] ?? panic(`ratchet metric ${id} is missing from the snapshot`);
 
-const scanMetric = (metric: RatchetMetric, root: string): MetricSnapshot => {
-  const seen = new Set<string>();
-  const perFile: Record<string, number> = {};
-  let count = 0;
+const sortedSnapshot = (result: RepoMetricResult): MetricSnapshot => {
+  const files: Record<string, number> = {};
+  for (const rel of Object.keys(result.files).sort()) {
+    files[rel] =
+      result.files[rel] ??
+      panic(`ratchet count for ${rel} disappeared during scan`);
+  }
+  return { count: result.count, files };
+};
 
-  for (const glob of metric.include) {
-    for (const rel of new Bun.Glob(glob).scanSync(root)) {
-      if (seen.has(rel)) {
-        continue;
+const scanMetric = (metric: RatchetMetric, root: string): MetricSnapshot => {
+  switch (metric.scope) {
+    case "repo":
+      return sortedSnapshot(metric.count(root));
+    case "file": {
+      const seen = new Set<string>();
+      const files: Record<string, number> = {};
+      let count = 0;
+
+      for (const glob of metric.include) {
+        for (const rel of new Bun.Glob(glob).scanSync(root)) {
+          if (seen.has(rel)) {
+            continue;
+          }
+          seen.add(rel);
+          if (metric.exclude(rel)) {
+            continue;
+          }
+          const n = metric.count(
+            readFileSync(path.join(root, rel), "utf-8"),
+            rel,
+          );
+          if (n > 0) {
+            files[rel] = n;
+            count += n;
+          }
+        }
       }
-      seen.add(rel);
-      if (metric.exclude(rel)) {
-        continue;
-      }
-      const n = metric.count(readFileSync(path.join(root, rel), "utf-8"), rel);
-      if (n > 0) {
-        perFile[rel] = n;
-        count += n;
-      }
+
+      return sortedSnapshot({ count, files });
+    }
+    default: {
+      const unreachable: never = metric;
+      return panic(
+        `ratchet metric has an unknown scope: ${String(unreachable)}`,
+      );
     }
   }
-
-  const files: Record<string, number> = {};
-  for (const rel of Object.keys(perFile).sort()) {
-    files[rel] =
-      perFile[rel] ?? panic(`ratchet count for ${rel} disappeared during scan`);
-  }
-  return { count, files };
 };
 
 const scanAll = (root: string): Baseline => {
@@ -2676,6 +2927,50 @@ const SELF_TEST_AD_HOC_SUBJECT_GATE = `${AD_HOC_SUBJECT_GATE_FIXTURE_LINES.join(
 // counting it would make the metric un-zeroable and the guard meaningless.
 const EXPECTED_AD_HOC_SUBJECT_GATES = 2;
 
+// Repo-scope fixtures. These metrics compare files against each other, so the
+// fixture is the layout, not one file's text: two apps holding the same path
+// below src/lib, one exported name defined in three workspaces, and the direct
+// children of the two lib buckets (including the ones that must not count).
+const SELF_TEST_COPIED_HELPER = "const helper = 1;\n";
+const API_SHARED_NAMES_FIXTURE_LINES = [
+  "export const formatCitation = (value: string): string => value;",
+  'export type CitationStyle = "bluebook";',
+  "export const fmt = 1;",
+];
+const SELF_TEST_API_SHARED_NAMES = `${API_SHARED_NAMES_FIXTURE_LINES.join("\n")}\n`;
+const WEB_MIRRORED_NAMES_FIXTURE_LINES = [
+  "export const formatCitation = (value: string): string => value;",
+  "export interface CitationStyle {",
+  "  readonly name: string;",
+  "}",
+  "export default formatCitation;",
+];
+const SELF_TEST_WEB_MIRRORED_NAMES = `${WEB_MIRRORED_NAMES_FIXTURE_LINES.join("\n")}\n`;
+const SELF_TEST_WEB_SECOND_DEFINITION =
+  "export const formatCitation = (value: string): string => value;\n";
+const SELF_TEST_PACKAGE_SHARED_NAMES =
+  "export function formatCitation(value: string): string {\n  return value;\n}\n";
+// The two `copied/duplicated-helper.ts` files, both sides counted. The
+// same-basename pair in different directories (`alpha/types.ts` vs
+// `beta/types.ts`), the unique `api-only-helper.ts`, and the `.test.ts` pair
+// sharing a path are all excluded.
+const EXPECTED_CROSS_APP_LIB_PATH_COPIES = 2;
+// `formatCitation` in three workspaces (2 extra) + `CitationStyle` in two
+// (1 extra) = 3. `fmt` is under the length floor, the default export carries
+// no name, apps/web's second definition of `formatCitation` is the same
+// workspace, and the generated package file is excluded outright, so none of
+// them adds anything.
+const EXPECTED_CROSS_WORKSPACE_DUPLICATE_EXPORT_NAMES = 3;
+// apps/api/src/lib children: api-handlers.ts, result-catches.ts,
+// result-throws.ts, shared/ (from the earlier fixtures), plus alpha/, copied/,
+// api-only-helper.ts and shared-names.ts. The two `.test.ts` files and
+// __fixtures__/ are excluded.
+const EXPECTED_API_LIB_TOP_LEVEL_ENTRIES = 8;
+// apps/web/src/lib children: index.tsx (from the earlier fixtures), plus
+// beta/, copied/, mirrored-names.ts and second-definition.ts. The `.test.ts`
+// companion is excluded.
+const EXPECTED_WEB_LIB_TOP_LEVEL_ENTRIES = 5;
+
 const writeFixture = (root: string, rel: string, content: string): void => {
   const full = path.join(root, rel);
   mkdirSync(path.dirname(full), { recursive: true });
@@ -3011,6 +3306,83 @@ const runSelfTest = (): number => {
     );
     writeFixture(root, "apps/api/src/db/index.ts", "export const x = 1;\n");
     writeFixture(root, "apps/web/src/lib/index.tsx", "export const y = 2;\n");
+    // Repo-scope layout fixtures.
+    writeFixture(
+      root,
+      "apps/api/src/lib/copied/duplicated-helper.ts",
+      SELF_TEST_COPIED_HELPER,
+    );
+    writeFixture(
+      root,
+      "apps/web/src/lib/copied/duplicated-helper.ts",
+      SELF_TEST_COPIED_HELPER,
+    );
+    // Same path below src/lib in both apps, but test files: excluded.
+    writeFixture(
+      root,
+      "apps/api/src/lib/duplicated-helper.test.ts",
+      SELF_TEST_COPIED_HELPER,
+    );
+    writeFixture(
+      root,
+      "apps/web/src/lib/duplicated-helper.test.ts",
+      SELF_TEST_COPIED_HELPER,
+    );
+    // Same basename under different domain directories: a convention, not a
+    // copy.
+    writeFixture(
+      root,
+      "apps/api/src/lib/alpha/types.ts",
+      SELF_TEST_COPIED_HELPER,
+    );
+    writeFixture(
+      root,
+      "apps/web/src/lib/beta/types.ts",
+      SELF_TEST_COPIED_HELPER,
+    );
+    writeFixture(
+      root,
+      "apps/api/src/lib/api-only-helper.ts",
+      SELF_TEST_COPIED_HELPER,
+    );
+    writeFixture(
+      root,
+      "apps/api/src/lib/shared-names.ts",
+      SELF_TEST_API_SHARED_NAMES,
+    );
+    writeFixture(
+      root,
+      "apps/web/src/lib/mirrored-names.ts",
+      SELF_TEST_WEB_MIRRORED_NAMES,
+    );
+    writeFixture(
+      root,
+      "apps/web/src/lib/second-definition.ts",
+      SELF_TEST_WEB_SECOND_DEFINITION,
+    );
+    writeFixture(
+      root,
+      "packages/example-package/src/index.ts",
+      SELF_TEST_PACKAGE_SHARED_NAMES,
+    );
+    // A fourth workspace defining the same name, in a generated directory:
+    // excluded, so it must not add an extra.
+    writeFixture(
+      root,
+      "packages/generated-package/src/generated/transport.ts",
+      SELF_TEST_PACKAGE_SHARED_NAMES,
+    );
+    // Excluded lib-bucket children: a test file and the fixtures directory.
+    writeFixture(
+      root,
+      "apps/api/src/lib/lib-entry.test.ts",
+      SELF_TEST_COPIED_HELPER,
+    );
+    writeFixture(
+      root,
+      "apps/api/src/lib/__fixtures__/sample.ts",
+      SELF_TEST_COPIED_HELPER,
+    );
     // Excluded companions: these must NOT be counted.
     writeFixture(
       root,
@@ -3344,6 +3716,84 @@ const runSelfTest = (): number => {
     if (workspaceOnlyRlsMetric.count !== EXPECTED_WORKSPACE_ONLY_RLS) {
       failures.push(
         `workspace-only-rls-on-org-tables counted ${workspaceOnlyRlsMetric.count}, expected ${EXPECTED_WORKSPACE_ONLY_RLS}`,
+      );
+    }
+
+    const repoScopeChecks = [
+      {
+        id: "cross-app-lib-path-copies",
+        expected: EXPECTED_CROSS_APP_LIB_PATH_COPIES,
+        present: [
+          "apps/api/src/lib/copied/duplicated-helper.ts",
+          "apps/web/src/lib/copied/duplicated-helper.ts",
+        ],
+        absent: [
+          "apps/api/src/lib/alpha/types.ts",
+          "apps/web/src/lib/beta/types.ts",
+          "apps/api/src/lib/api-only-helper.ts",
+          "apps/web/src/lib/duplicated-helper.test.ts",
+        ],
+      },
+      {
+        id: "cross-workspace-duplicate-export-names",
+        expected: EXPECTED_CROSS_WORKSPACE_DUPLICATE_EXPORT_NAMES,
+        // apps/api owns both names, so the extras land on the other two
+        // workspaces: two on apps/web's first defining file, one on the
+        // package.
+        present: [
+          "apps/web/src/lib/mirrored-names.ts",
+          "packages/example-package/src/index.ts",
+        ],
+        absent: [
+          "apps/api/src/lib/shared-names.ts",
+          "apps/web/src/lib/second-definition.ts",
+          "packages/generated-package/src/generated/transport.ts",
+        ],
+      },
+      {
+        id: "api-lib-top-level-entries",
+        expected: EXPECTED_API_LIB_TOP_LEVEL_ENTRIES,
+        present: [
+          "apps/api/src/lib/copied",
+          "apps/api/src/lib/shared-names.ts",
+        ],
+        absent: [
+          "apps/api/src/lib/lib-entry.test.ts",
+          "apps/api/src/lib/__fixtures__",
+        ],
+      },
+      {
+        id: "web-lib-top-level-entries",
+        expected: EXPECTED_WEB_LIB_TOP_LEVEL_ENTRIES,
+        present: ["apps/web/src/lib/mirrored-names.ts"],
+        absent: ["apps/web/src/lib/duplicated-helper.test.ts"],
+      },
+    ] as const;
+    for (const { id, expected, present, absent } of repoScopeChecks) {
+      const metric = requireSnapshot(snapshot, id);
+      if (metric.count !== expected) {
+        failures.push(
+          `${id} counted ${metric.count}, expected ${expected} (files: ${Object.keys(metric.files).join(", ")})`,
+        );
+      }
+      for (const file of present) {
+        if (!(file in metric.files)) {
+          failures.push(`${id} did not count ${file}`);
+        }
+      }
+      for (const file of absent) {
+        if (file in metric.files) {
+          failures.push(`${id} counted ${file}, which it must exclude`);
+        }
+      }
+    }
+    const duplicateNames = requireSnapshot(
+      snapshot,
+      "cross-workspace-duplicate-export-names",
+    );
+    if (duplicateNames.files["apps/web/src/lib/mirrored-names.ts"] !== 2) {
+      failures.push(
+        "cross-workspace-duplicate-export-names did not charge both duplicated names to the web file that defines them",
       );
     }
 
