@@ -2,10 +2,15 @@ import { panic } from "better-result";
 
 export const E2E_EXECUTION_PROFILE = {
   standard: "standard",
+  networkBaseline: "network-baseline",
   ciProductionParallel: "ci-production-parallel",
 } as const;
 
 const EXECUTION_PROFILES = {
+  [E2E_EXECUTION_PROFILE.networkBaseline]: {
+    routeSmokeGroupCount: 1,
+    workerCount: 1,
+  },
   [E2E_EXECUTION_PROFILE.standard]: {
     routeSmokeGroupCount: 2,
     workerCount: 1,
@@ -19,6 +24,8 @@ const EXECUTION_PROFILES = {
 export const resolveE2eExecutionProfile = (name: string | undefined) => {
   const resolvedName = name ?? E2E_EXECUTION_PROFILE.standard;
   switch (resolvedName) {
+    case E2E_EXECUTION_PROFILE.networkBaseline:
+      return EXECUTION_PROFILES[E2E_EXECUTION_PROFILE.networkBaseline];
     case E2E_EXECUTION_PROFILE.standard:
       return EXECUTION_PROFILES[E2E_EXECUTION_PROFILE.standard];
     case E2E_EXECUTION_PROFILE.ciProductionParallel:
