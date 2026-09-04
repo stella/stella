@@ -41,6 +41,10 @@ contracts without inventing files or symbols. Identify ownership boundaries,
 data contracts, invalid states, rollout risks, and generated artifacts
 explicitly.
 
+Before proposing a new helper, module, or schema, check
+`docs/module-ownership.md` and the existing packages for the capability. Name
+the owner the slice extends, or state why a second implementation is correct.
+
 ## 3. Create a Collision-Safe File
 
 Follow the repository's existing naming scheme when one exists and is safe for
