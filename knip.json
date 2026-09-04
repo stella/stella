@@ -95,6 +95,13 @@
     "packages/scripts": {
       "entry": ["src/i18n-check.ts", "src/i18n-typegen.ts"]
     },
+    // The three `exports` entry points are derived from package.json, so
+    // listing them here only earns a redundancy hint. These are the entries
+    // knip cannot infer: the manifest generators run from package scripts, and
+    // tests count as usage.
+    "packages/skills": {
+      "entry": ["scripts/*.ts", "src/**/*.test.ts"]
+    },
     "packages/template-conditions": {
       "entry": ["src/index.ts", "src/**/*.test.ts"]
     },
@@ -121,5 +128,7 @@
   "exclude": ["exports", "types"],
   "ignoreBinaries": ["docker", "oxfmt", "tsc", "bun", "tail"],
   "ignoreDependencies": ["@stll/typescript-config"],
-  "ignoreWorkspaces": ["packages/skills", "packages/typescript-config"]
+  // packages/typescript-config ships JSON compiler presets and no TypeScript
+  // source, so there is nothing for knip to analyse there.
+  "ignoreWorkspaces": ["packages/typescript-config"]
 }

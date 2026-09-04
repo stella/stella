@@ -1,7 +1,9 @@
 import { expect, test } from "bun:test";
 
 import {
+  collectIssueSymbols,
   diffSummaries,
+  increasedWorkspaces,
   summarizeKnipReport,
   type Summary,
 } from "./knip-exports-ratchet";
@@ -107,4 +109,31 @@ test("a workspace with no baseline entry regresses on its first issue", () => {
   expect(diff?.status).toBe("regressed");
   expect(diff?.baseline).toBe(0);
   expect(diff?.current).toBe(1);
+});
+
+test("labels each symbol with the issue type it was reported under", () => {
+  expect(collectIssueSymbols(REPORT)).toEqual({
+    "apps/web/src/lib/dates.ts": ["formatDay (exports)", "DayFormat (types)"],
+    "apps/web/src/lib/citations.ts": ["citationLabel (exports)"],
+    "packages/ui/src/components/badge.tsx": ["badgeTone (nsExports)"],
+    "scripts/product-media.ts": ["publishMedia (exports)"],
+  });
+});
+
+test("a write that would raise a workspace names it", () => {
+  const baseline: Summary = {
+    ...CURRENT,
+    "apps/web": {
+      count: 2,
+      files: {
+        "apps/web/src/lib/citations.ts": 1,
+        "apps/web/src/lib/dates.ts": 1,
+      },
+    },
+  };
+
+  expect(
+    increasedWorkspaces(CURRENT, baseline).map((d) => d.workspace),
+  ).toEqual(["apps/web"]);
+  expect(increasedWorkspaces(CURRENT, CURRENT)).toEqual([]);
 });

@@ -15,13 +15,20 @@
 // exclusion that the command line explicitly includes), which is what lets the
 // three issue types report here while staying off elsewhere.
 //
+// A budget that any run can raise is not a budget: `--write` refuses to record
+// a higher count unless `--allow-increase` says so deliberately, which turns
+// "the number went up" into a visible line in the diff and a justification in
+// the pull request. The same review rule governs `scripts/ratchet-baseline.json`.
+//
 // Modes:
 //   bun scripts/knip-exports-ratchet.ts           report current vs baseline
 //   bun scripts/knip-exports-ratchet.ts --check   CI gate (exit 1 on a rise)
 //   bun scripts/knip-exports-ratchet.ts --write   regenerate the baseline
+//   bun scripts/knip-exports-ratchet.ts --write --allow-increase
+//                                                 record a justified rise
 
 import { panic, Result } from "better-result";
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
@@ -31,6 +38,7 @@ const BASELINE_PATH = path.resolve(
 );
 const BASELINE_REL = "scripts/knip-exports-baseline.json";
 const WRITE_HINT = "bun scripts/knip-exports-ratchet.ts --write";
+const ALLOW_INCREASE_FLAG = "--allow-increase";
 
 // The issue types this budget owns. `nsExports` is off by default in knip, so
 // it has to be named explicitly.
@@ -202,6 +210,15 @@ export const diffSummaries = (
   });
 };
 
+// The workspaces `--write` may not record without an explicit flag.
+export const increasedWorkspaces = (
+  current: Summary,
+  baseline: Summary,
+): readonly WorkspaceDiff[] =>
+  diffSummaries(current, baseline).filter(
+    ({ status }) => status === "regressed",
+  );
+
 // --- Baseline ---------------------------------------------------------------
 
 const readBaseline = (): Summary => {
@@ -306,6 +323,27 @@ const runReport = (): number => {
 
 const runWrite = (): number => {
   const current = summarizeKnipReport(runKnip());
+  // A missing baseline is the first seed, not a rise.
+  const risen = increasedWorkspaces(
+    current,
+    existsSync(BASELINE_PATH) ? readBaseline() : {},
+  );
+  if (risen.length > 0 && !process.argv.includes(ALLOW_INCREASE_FLAG)) {
+    console.error(
+      `Refusing to raise ${BASELINE_REL}. These workspaces rose:\n`,
+    );
+    for (const diff of risen) {
+      console.error(
+        `  ${diff.workspace}: ${diff.baseline} -> ${diff.current} (+${diff.current - diff.baseline})`,
+      );
+    }
+    console.error(
+      `\nDelete the unused exports instead. If the increase is genuinely\n` +
+        `justified, rerun with \`${WRITE_HINT} ${ALLOW_INCREASE_FLAG}\` and say why\n` +
+        "in your pull request.",
+    );
+    return 1;
+  }
   writeFileSync(BASELINE_PATH, `${JSON.stringify(current, null, 2)}\n`);
   console.log(`Wrote ${BASELINE_REL}:`);
   for (const [workspace, snapshot] of Object.entries(current)) {
@@ -355,8 +393,9 @@ const runCheck = (): number => {
   }
   console.error(
     "\nDelete the unused export, or reference it from a real runtime or test\n" +
-      `path. If the increase is genuinely justified, run \`${WRITE_HINT}\` and\n` +
-      `commit ${BASELINE_REL} with a rationale in your PR.`,
+      `path. If the increase is genuinely justified, run\n` +
+      `\`${WRITE_HINT} ${ALLOW_INCREASE_FLAG}\` and commit ${BASELINE_REL} with a\n` +
+      "rationale in your pull request.",
   );
   return 1;
 };
