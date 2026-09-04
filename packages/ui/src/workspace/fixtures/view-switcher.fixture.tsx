@@ -7,16 +7,6 @@ import { EllipsisVertical } from "lucide-react";
 import { WorkspaceViewSwitcher } from "../../../../workspace-ui/src/view-switcher";
 import { InspectorContent, InspectorRailContent } from "../../inspector";
 
-const LTR_VIEWS = [
-  { id: "table", name: "All matters", kind: "table" },
-  { id: "calendar", name: "Deadlines", kind: "calendar" },
-];
-
-const RTL_VIEWS = [
-  { id: "table", name: "كل القضايا", kind: "table" },
-  { id: "calendar", name: "المواعيد النهائية", kind: "calendar" },
-];
-
 const WorkspaceViewSwitcherFixture = () => {
   const query = new URLSearchParams(window.location.search);
   const direction = query.has("rtl") ? "rtl" : "ltr";
@@ -82,6 +72,16 @@ const WorkspaceViewSwitcherFixture = () => {
     </DirectionProvider>
   );
 };
+
+const LTR_VIEWS = [
+  { id: "table", name: "All matters", kind: "table" },
+  { id: "calendar", name: "Deadlines", kind: "calendar" },
+];
+
+const RTL_VIEWS = [
+  { id: "table", name: "كل القضايا", kind: "table" },
+  { id: "calendar", name: "المواعيد النهائية", kind: "calendar" },
+];
 
 const root = document.querySelector("#root");
 
