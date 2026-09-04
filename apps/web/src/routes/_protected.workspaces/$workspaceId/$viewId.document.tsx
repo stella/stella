@@ -1052,7 +1052,7 @@ function RouteComponentInner({
 
               return (
                 <VersionDropZone
-                  disabled={false}
+                  disabled={isPDFPageOrganizerOpen}
                   entityId={entityId}
                   workspaceId={workspaceId}
                 >
