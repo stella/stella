@@ -16,7 +16,7 @@
     "i18n:sync": "bun ../scripts/src/i18n-check.ts i18n/langs --sync && bun ../scripts/src/i18n-typegen.ts i18n/langs",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware packages/transactional",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/transactional",
-    "format": "oxfmt ."
+    "format": "bun ../../scripts/run-oxfmt.ts ."
   },
   "dependencies": {
     "@react-email/components": "^1.0.12",

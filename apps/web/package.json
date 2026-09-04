@@ -14,7 +14,7 @@
     "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit && bun ../../packages/scripts/src/tsc-native.ts --noEmit -p e2e/tsconfig.json && bun ../../packages/scripts/src/tsc-native.ts --noEmit -p e2e/unit/tsconfig.json",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware apps/web",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix apps/web",
-    "format": "oxfmt -c ../../.oxfmtrc.json .",
+    "format": "bun ../../scripts/run-oxfmt.ts .",
     "i18n:check": "bun ../../packages/scripts/src/i18n-typegen.ts src/i18n/langs --check && bun ../../packages/scripts/src/i18n-check.ts src/i18n/langs && bun ../../packages/scripts/src/glossary-gen.ts src/i18n --check && bun ../../packages/scripts/src/i18n-lint.ts src/i18n/langs && bun scripts/sync-prepaint-locales.ts --check",
     "i18n:sync": "bun ../../packages/scripts/src/i18n-check.ts src/i18n/langs --sync && bun ../../packages/scripts/src/i18n-typegen.ts src/i18n/langs && bun ../../packages/scripts/src/glossary-gen.ts src/i18n && bun scripts/sync-prepaint-locales.ts",
     "test": "bun test --path-ignore-patterns='e2e/**' && bun test --parallel=2 e2e/unit",

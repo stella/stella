@@ -14,7 +14,7 @@
     "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware packages/api-client",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/api-client",
-    "format": "oxfmt ."
+    "format": "bun ../../scripts/run-oxfmt.ts ."
   },
   "dependencies": {
     "@elysia/eden": "^1.4.10"

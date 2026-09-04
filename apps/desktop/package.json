@@ -10,7 +10,7 @@
     "clean": "git clean -xdf .cache .turbo dist node_modules src-tauri/target",
     "dev": "tauri dev",
     "dev:view": "vite --host 127.0.0.1 --strictPort",
-    "format": "oxfmt -c ../../.oxfmtrc.json .",
+    "format": "bun ../../scripts/run-oxfmt.ts .",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware apps/desktop",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix apps/desktop",
     "rpc:check": "cargo test --manifest-path src-tauri/Cargo.toml --locked types::rpc_codegen_tests::generated_desktop_rpc_bindings_are_current -- --exact",

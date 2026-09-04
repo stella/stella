@@ -15,7 +15,7 @@
     "i18n:sync": "bun ../../packages/scripts/src/i18n-check.ts src/i18n/messages --sync && bun ../../packages/scripts/src/i18n-typegen.ts src/i18n/messages",
     "lint": "bun scripts/check-logical-properties.ts && cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware apps/landing/astro.config.mjs apps/landing/postcss.config.mjs apps/landing/scripts apps/landing/src",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix apps/landing/astro.config.mjs apps/landing/postcss.config.mjs apps/landing/scripts apps/landing/src",
-    "format": "oxfmt .",
+    "format": "bun ../../scripts/run-oxfmt.ts .",
     "test": "bun scripts/precompute-anonymize-demo-sample.ts --check && bun scripts/check-meta-budgets.ts && bun scripts/check-img-alt.ts && bun test --pass-with-no-tests"
   },
   "dependencies": {
