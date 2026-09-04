@@ -1,11 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 
-import {
-  EyeOffIcon,
-  Loader2Icon,
-  SparklesIcon,
-  UserRoundIcon,
-} from "lucide-react";
+import { EyeOffIcon, SparklesIcon, UserRoundIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
 
@@ -13,6 +8,7 @@ import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { InspectorRailIconButton } from "@stll/ui/inspector";
+import { Loader } from "@stll/ui/loader";
 import { OutlineRail } from "@stll/ui/outline-rail";
 import type { OutlineItem } from "@stll/ui/outline-rail";
 import { Skeleton } from "@stll/ui/skeleton";
@@ -612,7 +608,7 @@ const AnalysisLoader = () => {
   return (
     <div className="flex flex-col gap-4 px-2 pt-4">
       <div className="flex items-center gap-2">
-        <Loader2Icon className="text-foreground-muted size-3.5 animate-spin" />
+        <Loader label={t("caseLaw.analyzing")} size="sm" />
         <span className="text-foreground-strong-muted text-xs font-medium">
           {t("caseLaw.analyzing")}
         </span>
