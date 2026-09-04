@@ -17,6 +17,52 @@ export const FULL_DATE_LONG_TIME_FORMAT = {
   timeStyle: "long",
 } as const satisfies Intl.DateTimeFormatOptions;
 
+/** "5 Mar" — a day whose year the surrounding view already establishes. */
+export const DAY_AND_MONTH_FORMAT = {
+  month: "short",
+  day: "numeric",
+} as const satisfies Intl.DateTimeFormatOptions;
+
+/** "5 Mar 2026" — a day that has to carry its own year. */
+export const CALENDAR_DATE_FORMAT = {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+} as const satisfies Intl.DateTimeFormatOptions;
+
+/**
+ * A date-only value, read back in the timezone it was written in. Rendering a
+ * stored calendar day in the reader's own timezone moves it by a day for every
+ * reader west of UTC.
+ */
+export const UTC_CALENDAR_DATE_FORMAT = {
+  year: "numeric",
+  month: "short",
+  day: "numeric",
+  timeZone: "UTC",
+} as const satisfies Intl.DateTimeFormatOptions;
+
+/** The locale's medium date, for a timestamp that carries a real instant. */
+export const MEDIUM_DATE_FORMAT = {
+  dateStyle: "medium",
+} as const satisfies Intl.DateTimeFormatOptions;
+
+/** The medium date of a date-only value; see `UTC_CALENDAR_DATE_FORMAT`. */
+export const UTC_MEDIUM_DATE_FORMAT = {
+  dateStyle: "medium",
+  timeZone: "UTC",
+} as const satisfies Intl.DateTimeFormatOptions;
+
+/** "Monday" — a weekday named in running text. */
+export const WEEKDAY_NAME_FORMAT = {
+  weekday: "long",
+} as const satisfies Intl.DateTimeFormatOptions;
+
+/** "M" — a weekday heading a column that fits one glyph. */
+export const WEEKDAY_INITIAL_FORMAT = {
+  weekday: "narrow",
+} as const satisfies Intl.DateTimeFormatOptions;
+
 const relativeTimeFormatters = new Map<string, Intl.RelativeTimeFormat>();
 
 /** `Intl.RelativeTimeFormat` for `locale`, cached per locale so it isn't

@@ -51,6 +51,7 @@ import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { flowDetailOptions, knowledgeKeys } from "@/lib/knowledge/queries";
+import { WEEKDAY_NAME_FORMAT } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import {
@@ -680,7 +681,7 @@ const DAYS_OF_MONTH = Array.from({ length: 28 }, (_, index) => index + 1);
 const weekdayLabel = (dayIndex: number): string =>
   new Date(Date.UTC(2023, 0, 1 + dayIndex)).toLocaleDateString(
     getFormattingLocale(),
-    { weekday: "long" },
+    WEEKDAY_NAME_FORMAT,
   );
 
 const ScheduleConfig = ({

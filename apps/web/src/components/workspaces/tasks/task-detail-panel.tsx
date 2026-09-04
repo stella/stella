@@ -65,6 +65,7 @@ import { detached } from "@/lib/detached";
 import { APIError, toAPIError, unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { localISODate } from "@/lib/local-iso-date";
+import { DAY_AND_MONTH_FORMAT } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
 import { workspacesKeys } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
@@ -841,7 +842,7 @@ const TaskDetailPanelContent = ({
                     <time className="text-muted-foreground shrink-0">
                       {new Date(event.occurredAt).toLocaleDateString(
                         getFormattingLocale(),
-                        { day: "numeric", month: "short" },
+                        DAY_AND_MONTH_FORMAT,
                       )}
                     </time>
                   </div>

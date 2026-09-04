@@ -69,6 +69,10 @@ import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { getDisplayName } from "@/lib/get-display-name";
 import { routeQueryOptions } from "@/lib/react-query";
+import {
+  DAY_AND_MONTH_FORMAT,
+  WEEKDAY_INITIAL_FORMAT,
+} from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
 import { overviewOptions, workspacesKeys } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
@@ -114,7 +118,7 @@ const getLocaleDayLabel = (
   firstWeekday: number,
 ) => {
   const date = new Date(2026, 0, 4 + firstWeekday + dayIndex);
-  return date.toLocaleDateString(locale, { weekday: "narrow" }).toUpperCase();
+  return date.toLocaleDateString(locale, WEEKDAY_INITIAL_FORMAT).toUpperCase();
 };
 
 // Round to one decimal and render the locale's translated `hour` unit, so the
@@ -452,10 +456,10 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
             if (!date) {
               return "—";
             }
-            return new Date(date).toLocaleDateString(getFormattingLocale(), {
-              month: "short",
-              day: "numeric",
-            });
+            return new Date(date).toLocaleDateString(
+              getFormattingLocale(),
+              DAY_AND_MONTH_FORMAT,
+            );
           })()}
         />
         {timeBillingEnabled && (
@@ -586,10 +590,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                                 {task.assignedTo ? " · " : ""}
                                 {new Date(task.dueDate).toLocaleDateString(
                                   getFormattingLocale(),
-                                  {
-                                    month: "short",
-                                    day: "numeric",
-                                  },
+                                  DAY_AND_MONTH_FORMAT,
                                 )}
                               </>
                             )}

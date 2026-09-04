@@ -18,6 +18,7 @@ import { renderDragPreview } from "@/components/drag-preview";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLocale } from "@/i18n/formatting-context";
+import { UTC_MEDIUM_DATE_FORMAT } from "@/lib/relative-time";
 import { captureInvalidTaskOption } from "@/lib/task-option-telemetry";
 import { ENTITY_DRAG_TYPE } from "@/lib/workspaces/drag-constants";
 import type { CalendarTask } from "@/lib/workspaces/queries/calendar-tasks";
@@ -97,10 +98,10 @@ export const CalendarEntityChip = ({
     openTask({ taskId: entity.taskId, workspaceId, label: name });
   };
 
-  const createdLabel = new Date(entity.createdAt).toLocaleDateString(locale, {
-    dateStyle: "medium",
-    timeZone: "UTC",
-  });
+  const createdLabel = new Date(entity.createdAt).toLocaleDateString(
+    locale,
+    UTC_MEDIUM_DATE_FORMAT,
+  );
 
   const card = (
     <CalendarEntryButton

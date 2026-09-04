@@ -17,6 +17,7 @@ import {
   ensureRouteInfiniteQueryData,
   ensureRouteQueryData,
 } from "@/lib/react-query";
+import { MEDIUM_DATE_FORMAT } from "@/lib/relative-time";
 import {
   timeEntriesInfiniteOptions,
   timeEntrySummaryOptions,
@@ -125,9 +126,7 @@ function TimesheetsPage() {
             <DirectionalIcon className="size-4" icon={ChevronLeftIcon} />
           </Button>
           <span className="min-w-36 text-center text-sm">
-            {date.toLocaleDateString(locale, {
-              dateStyle: "medium",
-            })}
+            {date.toLocaleDateString(locale, MEDIUM_DATE_FORMAT)}
           </span>
           <Button
             aria-label={tCommon("next")}
