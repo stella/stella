@@ -45,6 +45,7 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -138,6 +139,8 @@ const MODULE_STMT_TERMINATOR = /\bfrom\b|\};?\s*$|;\s*$/u;
 // other known limitations called out in the self-test fixtures below.
 const BLANKED_LITERAL = " ";
 
+const QUOTE_CHARACTER = /['"`]/u;
+
 type LiteralScanState = { readonly inTemplate: boolean };
 
 const NO_OPEN_TEMPLATE: LiteralScanState = { inTemplate: false };
@@ -169,6 +172,13 @@ const stripStringLiterals = (
   raw: string,
   state: LiteralScanState,
 ): { code: string; state: LiteralScanState } => {
+  // Most lines in the tree hold no literal at all, and the scan below appends
+  // one character at a time. Returning those lines untouched is what keeps the
+  // whole-tree counters (duplicate-token-blocks above all) affordable.
+  if (!state.inTemplate && !QUOTE_CHARACTER.test(raw)) {
+    return { code: raw, state: NO_OPEN_TEMPLATE };
+  }
+
   let out = "";
   let i = 0;
 
@@ -222,6 +232,10 @@ const stripBlockComments = (
   code: string,
   inBlockComment: boolean,
 ): { code: string; inBlockComment: boolean } => {
+  if (!inBlockComment && !code.includes("/*")) {
+    return { code, inBlockComment: false };
+  }
+
   let output = "";
   let cursor = 0;
   let inside = inBlockComment;
@@ -1519,6 +1533,203 @@ const countLibTopLevelEntries =
     return { count, files };
   };
 
+// --- Duplicate token blocks -------------------------------------------------
+// A copy-paste detector, in-house because a stock one over this whole tree ran
+// for fifteen minutes without finishing. Stock detectors parse; this one is
+// lexical. Blank comments and literal CONTENTS, split what is left into
+// identifier and number tokens, and compare a rolling window of 60 tokens
+// against every window seen before it. Punctuation is discarded with the
+// structure: a run that differs only in brackets is still the same copy.
+//
+// Two windows match only when a primary AND a secondary rolling hash agree, so
+// a single 32-bit collision cannot invent a clone. Both sides are charged: the
+// earlier copy is as deletable as the later one, and which one survives is the
+// author's call.
+//
+// Known limits, in the spirit of the counters above: a window that spans a
+// literal matches on the code around it, and a clone shorter than 60 tokens is
+// below the floor on purpose — short repeated shapes are idiom, not debt.
+
+const CLONE_WINDOW_TOKENS = 60;
+// Past this size a file is vendored, packed, or a data blob: tokenising it
+// costs more than the copies it could reveal.
+const MAX_CLONE_SCAN_BYTES = 300 * 1024;
+const CLONE_TOKEN = /[A-Za-z_$][\w$]*|\d+/gu;
+// Two polynomial bases over the same token hashes, evaluated side by side.
+const CLONE_BASE_PRIMARY = 16_777_619;
+const CLONE_BASE_SECONDARY = 104_729;
+
+// A polynomial hash of the token's code points. `Math.imul` is the truncation:
+// it keeps every intermediate value a 32-bit integer, which is what makes the
+// rolling hashes below roll correctly.
+const hashCloneToken = (token: string): number => {
+  let hash = 0;
+  for (let index = 0; index < token.length; index += 1) {
+    hash =
+      Math.imul(hash, CLONE_BASE_PRIMARY) + (token.codePointAt(index) ?? 0);
+  }
+  // A zero token hash would read as the absence of a token in a window sum, so
+  // no token is allowed to produce one.
+  const truncated = Math.imul(hash, 1);
+  return truncated === 0 ? 1 : truncated;
+};
+
+const clonePower = (base: number, exponent: number): number => {
+  let result = 1;
+  for (let index = 0; index < exponent; index += 1) {
+    result = Math.imul(result, base);
+  }
+  return result;
+};
+
+// Comment- and literal-free tokens for one file, as 32-bit token hashes. The
+// same line-based strip the other counters use, so a `//` inside a string
+// cannot truncate real code.
+const cloneTokensOf = (
+  content: string,
+  cache: Map<string, number>,
+): readonly number[] => {
+  const strippedLines: string[] = [];
+  let literalState = NO_OPEN_TEMPLATE;
+  let inBlockComment = false;
+  for (const raw of content.split("\n")) {
+    const { code: lineCode, state } = stripLine(raw, literalState);
+    literalState = state;
+    const stripped = stripBlockComments(lineCode, inBlockComment);
+    inBlockComment = stripped.inBlockComment;
+    strippedLines.push(stripped.code);
+  }
+
+  const tokens: number[] = [];
+  for (const token of strippedLines.join("\n").match(CLONE_TOKEN) ?? []) {
+    const cached = cache.get(token);
+    if (cached !== undefined) {
+      tokens.push(cached);
+      continue;
+    }
+    const hash = hashCloneToken(token);
+    cache.set(token, hash);
+    tokens.push(hash);
+  }
+  return tokens;
+};
+
+// Consecutive window positions describe one clone region, so a run of them is
+// one block. A gap means a second, separate copy in the same file.
+const cloneBlockCount = (positions: number[]): number => {
+  positions.sort((left, right) => left - right);
+  let blocks = 0;
+  let previous = -2;
+  for (const position of positions) {
+    if (position > previous + 1) {
+      blocks += 1;
+    }
+    previous = position;
+  }
+  return blocks;
+};
+
+const countDuplicateTokenBlocks: RepoCounter = (root) => {
+  const scanned = scanRepoFiles(root, ALL_SOURCE_GLOBS).filter(
+    // A generated file's copies belong to its generator, not to this budget.
+    (rel) => !rel.includes("/generated/"),
+  );
+
+  const primaryPower = clonePower(CLONE_BASE_PRIMARY, CLONE_WINDOW_TOKENS - 1);
+  const secondaryPower = clonePower(
+    CLONE_BASE_SECONDARY,
+    CLONE_WINDOW_TOKENS - 1,
+  );
+  const tokenCache = new Map<string, number>();
+  // Bounded by design: one slot per DISTINCT window, holding only where it was
+  // first seen. A window that recurs a thousand times still costs one slot.
+  const firstSlotOf = new Map<number, number>();
+  const slotFile: number[] = [];
+  const slotPosition: number[] = [];
+  const slotSecondary: number[] = [];
+  const hitPositions = new Map<number, number[]>();
+
+  const recordHit = (fileIndex: number, position: number): void => {
+    const positions = hitPositions.get(fileIndex);
+    if (positions === undefined) {
+      hitPositions.set(fileIndex, [position]);
+      return;
+    }
+    positions.push(position);
+  };
+
+  for (const [fileIndex, rel] of scanned.entries()) {
+    const full = path.join(root, rel);
+    if (statSync(full).size > MAX_CLONE_SCAN_BYTES) {
+      continue;
+    }
+    const tokens = cloneTokensOf(readFileSync(full, "utf-8"), tokenCache);
+    if (tokens.length < CLONE_WINDOW_TOKENS) {
+      continue;
+    }
+
+    let primary = 0;
+    let secondary = 0;
+    for (let index = 0; index < CLONE_WINDOW_TOKENS; index += 1) {
+      const token = tokens[index] ?? 0;
+      primary = Math.imul(primary, CLONE_BASE_PRIMARY) + token;
+      secondary = Math.imul(secondary, CLONE_BASE_SECONDARY) + token;
+    }
+
+    const lastPosition = tokens.length - CLONE_WINDOW_TOKENS;
+    for (let position = 0; position <= lastPosition; position += 1) {
+      if (position > 0) {
+        const leaving = tokens[position - 1] ?? 0;
+        const entering = tokens[position + CLONE_WINDOW_TOKENS - 1] ?? 0;
+        primary =
+          Math.imul(
+            primary - Math.imul(leaving, primaryPower),
+            CLONE_BASE_PRIMARY,
+          ) + entering;
+        secondary =
+          Math.imul(
+            secondary - Math.imul(leaving, secondaryPower),
+            CLONE_BASE_SECONDARY,
+          ) + entering;
+      }
+
+      const slot = firstSlotOf.get(primary);
+      if (slot === undefined) {
+        firstSlotOf.set(primary, slotFile.length);
+        slotFile.push(fileIndex);
+        slotPosition.push(position);
+        slotSecondary.push(secondary);
+        continue;
+      }
+      if (slotSecondary[slot] !== secondary) {
+        continue;
+      }
+      const firstFile = slotFile[slot] ?? 0;
+      const firstPosition = slotPosition[slot] ?? 0;
+      // Inside one file, overlapping windows are the same text read twice.
+      if (
+        firstFile === fileIndex &&
+        position - firstPosition < CLONE_WINDOW_TOKENS
+      ) {
+        continue;
+      }
+      recordHit(fileIndex, position);
+      recordHit(firstFile, firstPosition);
+    }
+  }
+
+  const files: Record<string, number> = {};
+  let count = 0;
+  for (const [fileIndex, positions] of hitPositions) {
+    const rel =
+      scanned[fileIndex] ?? panic("ratchet lost a duplicate-block file index");
+    const blocks = cloneBlockCount(positions);
+    files[rel] = blocks;
+    count += blocks;
+  }
+  return { count, files };
+};
+
 const RATCHET_METRICS: readonly RatchetMetric[] = [
   {
     scope: "file",
@@ -1880,6 +2091,13 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     description:
       "top-level exported binding names defined in two or more workspaces under apps/*/src/lib and packages/*/src, charged once per extra workspace (names under 4 characters, default exports and generated/ directories excluded); one workspace should own the name and the others import it, via `bun run new-package` when neither owns it yet",
     count: countCrossWorkspaceDuplicateExportNames,
+  },
+  {
+    scope: "repo",
+    id: "duplicate-token-blocks",
+    description:
+      'blocks of 60+ consecutive tokens (comments and literal contents blanked) that also appear in another file, or at a non-overlapping position in the same one, counted once per block per file with both copies charged. Repo-wide over hand-written source, excluding tests, generated/ and .gen. files and anything over 300 KB. The fix is to extract the block into whichever module already owns the concern, or into a package (`bun run new-package <name> --description "…"`) when neither side owns it — never to leave both copies in place',
+    count: countDuplicateTokenBlocks,
   },
   {
     scope: "repo",
@@ -2973,6 +3191,28 @@ const EXPECTED_API_LIB_TOP_LEVEL_ENTRIES = 8;
 // companion is excluded.
 const EXPECTED_WEB_LIB_TOP_LEVEL_ENTRIES = 5;
 
+// Duplicate-token-block fixtures. Ten lines of seven tokens each: 70 tokens, so
+// the shared run clears the 60-token window with room to spare.
+const CLONE_BLOCK_LINES = Array.from(
+  { length: 10 },
+  (_, index) =>
+    `const step${String(index)} = compute(alpha, beta, gamma, delta);`,
+);
+const SELF_TEST_CLONE_BLOCK = `${CLONE_BLOCK_LINES.join("\n")}\n`;
+// The same shape with a different vocabulary, so it shares no window with the
+// block above: a long stretch of code is not by itself a copy.
+const SELF_TEST_UNIQUE_BLOCK = `${Array.from(
+  { length: 10 },
+  (_, index) =>
+    `const only${String(index)} = derive(epsilon, zeta, eta, theta);`,
+).join("\n")}\n`;
+// The shared block as the CONTENTS of a template literal. Blanking runs before
+// tokenising, so nothing here is a token and the file cannot match anything.
+const SELF_TEST_CLONE_IN_LITERAL = `const sql = \`\n${SELF_TEST_CLONE_BLOCK}\`;\n`;
+// One block in each of the two files that share it. The unique block, the
+// literal-only copy and the test-file copy add nothing.
+const EXPECTED_DUPLICATE_TOKEN_BLOCKS = 2;
+
 const writeFixture = (root: string, rel: string, content: string): void => {
   const full = path.join(root, rel);
   mkdirSync(path.dirname(full), { recursive: true });
@@ -3099,6 +3339,16 @@ const repoScopeSelfTestFailures = (snapshot: Baseline): string[] => {
         "apps/api/src/lib/shared-names.ts",
         "apps/web/src/lib/second-definition.ts",
         "packages/generated-package/src/generated/transport.ts",
+      ],
+    },
+    {
+      id: "duplicate-token-blocks",
+      expected: EXPECTED_DUPLICATE_TOKEN_BLOCKS,
+      present: ["apps/api/src/clone-origin.ts", "apps/web/src/clone-copy.ts"],
+      absent: [
+        "apps/api/src/clone-unique.ts",
+        "apps/api/src/clone-in-literal.ts",
+        "apps/api/src/clone-copy.test.ts",
       ],
     },
     {
@@ -3485,6 +3735,22 @@ const runSelfTest = (): number => {
       root,
       "apps/api/src/lib/__tests__/helper.ts",
       SELF_TEST_COPIED_HELPER,
+    );
+    // Duplicate-token-block layout: two files sharing a 70-token run, a file
+    // whose long run is its own, the same run reachable only inside a string
+    // literal, and a test-file copy the scan excludes outright.
+    writeFixture(root, "apps/api/src/clone-origin.ts", SELF_TEST_CLONE_BLOCK);
+    writeFixture(root, "apps/web/src/clone-copy.ts", SELF_TEST_CLONE_BLOCK);
+    writeFixture(root, "apps/api/src/clone-unique.ts", SELF_TEST_UNIQUE_BLOCK);
+    writeFixture(
+      root,
+      "apps/api/src/clone-in-literal.ts",
+      SELF_TEST_CLONE_IN_LITERAL,
+    );
+    writeFixture(
+      root,
+      "apps/api/src/clone-copy.test.ts",
+      SELF_TEST_CLONE_BLOCK,
     );
     // Excluded companions: these must NOT be counted.
     writeFixture(
