@@ -4387,7 +4387,10 @@ mod tests {
       store: ClipboardStore::new([9; 32], store_path.clone()),
       state: None,
     });
-    assert!(manager.capture(editor_capture()).unwrap());
+    assert_eq!(
+      manager.capture(editor_capture()).unwrap(),
+      ClipboardCaptureOutcome::Captured
+    );
 
     let store = ClipboardStore::new([9; 32], store_path.clone());
     let state = store.load().unwrap().unwrap();
@@ -4418,7 +4421,10 @@ mod tests {
       store: ClipboardStore::new([9; 32], store_path.clone()),
       state: None,
     });
-    assert!(manager.capture(editor_capture()).unwrap());
+    assert_eq!(
+      manager.capture(editor_capture()).unwrap(),
+      ClipboardCaptureOutcome::Captured
+    );
     let id = manager.items[0].id().to_string();
     assert!(manager.delete_item(&id).unwrap());
 
