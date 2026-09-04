@@ -22,7 +22,7 @@ minimumReleaseAgeExcludes = [
   # Keep Astro's framework and Markdown packages on one patch line while
   # verifying their Vite 8.2/Rolldown 1.2 compatibility. Remove these
   # exceptions once the normal quarantine admits them.
-  # bun-types 1.4.0 keeps the compiler contract aligned with Bun 1.4.0.
+  # bun-types 1.4.1 keeps the compiler contract aligned with Bun 1.4.1.
   # Remove this exception once the normal quarantine admits it.
   # TanStack AI 0.48.0 contains the upstream fixes that replace Stella's local
   # package patches. Keep the release family coherent across direct and
@@ -63,6 +63,7 @@ minimumReleaseAgeExcludes = [
   "@oxlint/binding-win32-x64-msvc", # quarantine-expires: 2026-09-06T15:22:06.857Z
   "@oxlint/plugins", # quarantine-expires: 2026-09-06T15:22:06.857Z
   "oxlint", # quarantine-expires: 2026-09-06T15:22:06.857Z
+  "bun-types", # quarantine-expires: 2026-09-09T08:36:48.390Z
   "@stll/oxlint-config", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
   "@stll/typescript-config", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
   "@stll/aho-corasick-wasm", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
