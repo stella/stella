@@ -4,6 +4,7 @@ import { ChevronDownIcon } from "lucide-react";
 
 import { DirectionalIcon } from "../components/directional-icon";
 import { cn } from "../lib/utils";
+import { KANBAN_BAND_CAPTION_ROW_HEIGHT } from "./layout-tokens";
 
 /**
  * How a band toggle was activated. A pointer activation leaves the pointer
@@ -38,8 +39,9 @@ export type KanbanColumnBandHeaderProps = {
 };
 
 /**
- * The band line above a run of columns: one 28px row of toggle, swatch, name,
- * and count, so a band costs the board a caption's height and nothing more.
+ * The band line above a run of columns: one `KANBAN_BAND_CAPTION_ROW_HEIGHT`
+ * row of toggle, swatch, name, and count, so a band costs the board a
+ * caption's height and nothing more.
  * Folded, only the toggle remains in this line; the band's name moves down
  * into the narrow column body, where the height is already there.
  */
@@ -55,7 +57,8 @@ export const KanbanColumnBandHeader = ({
 }: KanbanColumnBandHeaderProps) => (
   <div
     className={cn(
-      "flex h-7 items-center gap-1",
+      "flex items-center gap-1",
+      KANBAN_BAND_CAPTION_ROW_HEIGHT,
       compact ? "justify-center" : "pe-1",
     )}
     data-collapsed={collapsed ? "" : undefined}

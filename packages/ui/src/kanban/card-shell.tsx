@@ -9,10 +9,25 @@ export type KanbanCardShellProps = {
   /** Overlay slot pinned to the top-end corner (row actions). */
   actions?: ReactNode;
   /**
+   * Whether `actions` are drawn at all times or only once the card is under
+   * the pointer. `"hover"` also hands their placement to the shell, so the
+   * quiet actions of every board rest in the same corner and a caller passes
+   * bare icon buttons; `"always"` (the default) leaves a caller's own overlay
+   * exactly where it put it.
+   *
+   * A pointer that cannot hover would never reveal them, so a coarse pointer
+   * keeps them shown.
+   */
+  actionsVisibility?: "always" | "hover" | undefined;
+  /**
    * The card's identity row: whatever says which card this is, held at the top
    * of the card while the card scrolls past under it, and released where the
    * card ends. A card taller than the viewport otherwise loses its own name
    * halfway down. Omit it and the card renders exactly as it did before.
+   *
+   * The row runs the card's full width and the actions overlay leads the same
+   * corner over it, so leave the row's end side clear of anything the actions
+   * would cover.
    *
    * Booleans are excluded so `condition && <Row />` cannot reach the slot: a
    * `false` React renders as nothing would still leave the row's divider and
@@ -49,6 +64,7 @@ export type KanbanCardShellProps = {
 export const KanbanCardShell = ({
   children,
   actions,
+  actionsVisibility = "always",
   stickyHeader,
   active,
   onOpen,
@@ -67,7 +83,13 @@ export const KanbanCardShell = ({
         </div>
       )}
       {children}
-      {actions}
+      {actionsVisibility === "hover" && actions !== undefined ? (
+        <div className={HOVER_ACTIONS_CLASS} data-kanban-card-actions="hover">
+          {actions}
+        </div>
+      ) : (
+        actions
+      )}
     </>
   );
 
@@ -123,9 +145,31 @@ const ACTIVE_CLASS = "ring-primary/30 ring-2";
  * passes behind it instead of reading through it, ruled off with the card's own
  * border weight.
  *
+ * `bg-card` on its own is not enough: a consumer is free to define that token
+ * with an alpha channel, and a translucent pinned row lets the very cards it
+ * is holding back read through it. The card colour goes down as a flat
+ * gradient layer over the opaque page background instead, which is the card's
+ * own surface at full opacity whatever the token turns out to be.
+ *
  * No `z-index`: being positioned is already enough to paint over the card's
  * flow content, and taking a layer would put the row over the `actions`
  * overlay, which callers anchor to the same corner with no layer of its own.
  * Tree order settles the rest, and the row renders before `actions`.
  */
-const STICKY_HEADER_CLASS = "bg-card sticky mb-2 border-b pb-2";
+const STICKY_HEADER_CLASS =
+  "bg-background bg-[linear-gradient(var(--color-card),var(--color-card))] sticky mb-2 border-b pb-2";
+
+/**
+ * Where the shell puts the actions it reveals on hover.
+ *
+ * The overlay takes a layer of its own here, unlike the always-visible slot:
+ * it has to stay over the pinned identity row that leads the same corner, and
+ * the row's own comment explains why the row cannot take one instead. An open
+ * menu holds the actions on through its trigger's `aria-expanded`, or the
+ * trigger would disappear from under the popup it just opened.
+ *
+ * The fade is decoration: a reader who asked for less motion still gets the
+ * actions, they simply arrive at once.
+ */
+const HOVER_ACTIONS_CLASS =
+  "absolute end-1.5 top-1.5 z-10 flex items-center gap-0.5 opacity-0 transition-opacity group-hover/card:opacity-100 focus-within:opacity-100 has-[[aria-expanded=true]]:opacity-100 motion-reduce:transition-none [@media(hover:none)]:opacity-100";

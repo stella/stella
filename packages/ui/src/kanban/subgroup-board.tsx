@@ -19,16 +19,46 @@ import {
 import type { KanbanColumnBandSpan } from "./column-bands";
 import { KANBAN_CARD_DRAG_MIME } from "./drag-interactions";
 import type { KanbanColumnBand, KanbanGroup } from "./grouping";
+import {
+  KANBAN_CHROME_ROW_HEIGHT,
+  KANBAN_CHROME_ROW_HEIGHT_PX,
+} from "./layout-tokens";
 import type {
   KanbanBoardCell,
   KanbanBoardColumn,
   KanbanBoardMatrix,
 } from "./matrix";
 import {
+  KANBAN_STICKY_TOP_CLASS,
   KANBAN_STICKY_TOP_VAR,
   KanbanCollapsedBandCaption,
 } from "./sticky-lane";
 import type { KanbanStickyTopStyle } from "./sticky-lane";
+
+/**
+ * How far a lane's own pinned row reaches: its identity line over the line of
+ * per-column summaries, each fixed at the chrome row height.
+ *
+ * Stated rather than measured, because both lines are fixed by construction —
+ * a caller's summary or action renders inside a row that cannot grow — and the
+ * cells below have to know the offset before the first paint, or every card's
+ * pinned identity row spends that frame parked where the lane row is about
+ * to be.
+ */
+const LANE_ROW_HEIGHT_PX = KANBAN_CHROME_ROW_HEIGHT_PX * 2;
+
+/**
+ * A finger's 44px target on a toggle the chrome row keeps at 36px.
+ *
+ * The same pseudo-element the shared `Button` extends its own targets with:
+ * the visible control keeps the row's height, and only the touch surface
+ * grows. It grows evenly above and below rather than downwards, so the extra
+ * reach stops well short of the controls a caller renders in the summaries
+ * under it — those sit at the far end of their own column, not under the
+ * lane's name.
+ */
+const LANE_TOGGLE_COARSE_TARGET_CLASS =
+  "relative pointer-coarse:after:absolute pointer-coarse:after:inset-x-0 pointer-coarse:after:-inset-y-1 pointer-coarse:after:min-h-11";
 
 const groupValueKey = (value: string | null): string =>
   value === null ? "null" : `value:${value.length}:${value}`;
@@ -53,6 +83,19 @@ export type KanbanSubgroupColumnHeaderContext = {
 export type KanbanSubgroupLaneIdentityContext = {
   group: KanbanGroup;
   count: number;
+};
+
+/** One column's cell in a lane's own row, and what that cell stands for. */
+export type KanbanSubgroupLaneColumnSummaryContext = {
+  lane: KanbanGroup;
+  column: KanbanBoardColumn;
+  /** Rows in this lane/column intersection, including zero. */
+  count: number;
+};
+
+export type KanbanSubgroupLaneColumnActionContext = {
+  lane: KanbanGroup;
+  column: KanbanBoardColumn;
 };
 
 export type KanbanSubgroupCellContext<TRow> = {
@@ -120,6 +163,22 @@ export type KanbanSubgroupBoardProps<TRow> = {
   renderLaneIdentity: (context: KanbanSubgroupLaneIdentityContext) => ReactNode;
   renderCell: (context: KanbanSubgroupCellContext<TRow>) => ReactNode;
   /**
+   * What a lane's own row says about one column: its count by default. The
+   * row is pinned, so this is the one line about a column that survives a
+   * scroll down a lane hundreds of cards tall — a calculation belongs here
+   * rather than at the end of a cell nobody reaches.
+   */
+  renderLaneColumnSummary?:
+    | ((context: KanbanSubgroupLaneColumnSummaryContext) => ReactNode)
+    | undefined;
+  /**
+   * The control at the end of a lane's cell for one column, such as adding a
+   * card straight into that intersection. None by default.
+   */
+  renderLaneColumnAction?:
+    | ((context: KanbanSubgroupLaneColumnActionContext) => ReactNode)
+    | undefined;
+  /**
    * The line above a band's columns. Defaults to `KanbanColumnBandHeader`
    * with the band's label and count.
    */
@@ -177,6 +236,11 @@ export type KanbanSubgroupBoardProps<TRow> = {
 /**
  * Reusable swimlane layout over the canonical two-axis Kanban matrix.
  *
+ * Every lane leads with a row of its own, pinned on both axes: its name at the
+ * visible inline edge, and beside each column what that column holds in this
+ * lane, so a reader deep inside a lane still knows which lane it is and what
+ * is around them.
+ *
  * Columns that carry band metadata render under a one-line band caption and
  * can be collapsed as a run: the band folds into one narrow slot in every
  * row, whose cells stay reachable (a host renders its drop target in them),
@@ -191,6 +255,8 @@ export const KanbanSubgroupBoard = <TRow,>({
   renderColumnHeader,
   renderLaneIdentity,
   renderCell,
+  renderLaneColumnSummary,
+  renderLaneColumnAction,
   renderBandHeader,
   renderCollapsedBandCell,
   formatBandToggleLabel,
@@ -564,7 +630,10 @@ export const KanbanSubgroupBoard = <TRow,>({
     const count = rowsIn(cellsOf(span, cells));
     return (
       <div
-        className="flex justify-center"
+        className={cn(
+          "flex items-center justify-center",
+          KANBAN_CHROME_ROW_HEIGHT,
+        )}
         data-kanban-lane-column-count={count}
       >
         <span className="text-muted-foreground text-xs tabular-nums">
@@ -574,8 +643,42 @@ export const KanbanSubgroupBoard = <TRow,>({
     );
   };
 
+  /** One column's cell in a lane's row: what it holds, then what it offers. */
+  const laneColumnCell = (
+    group: KanbanGroup,
+    column: KanbanBoardColumn,
+    count: number,
+  ): Rendered => (
+    <div
+      className={cn("flex items-center gap-1 px-3", KANBAN_CHROME_ROW_HEIGHT)}
+      data-kanban-lane-column-count={count}
+    >
+      {renderLaneColumnSummary ? (
+        renderLaneColumnSummary({ column, count, lane: group })
+      ) : (
+        <span className="text-muted-foreground text-xs tabular-nums">
+          {formatCount(count)}
+        </span>
+      )}
+      {renderLaneColumnAction === undefined ? null : (
+        <span className="ms-auto flex items-center">
+          {renderLaneColumnAction({ column, lane: group })}
+        </span>
+      )}
+    </div>
+  );
+
   const stickyTopStyle: KanbanStickyTopStyle = {
     [KANBAN_STICKY_TOP_VAR]: `${String(headerHeight)}px`,
+  };
+  /**
+   * What a lane's cells find pinned above them: the board's header and the
+   * lane's own row. Restating the offset rather than adding to the inherited
+   * one, because a custom property that reads itself is a cycle and resolves
+   * to nothing at all.
+   */
+  const laneCellsStickyTopStyle: KanbanStickyTopStyle = {
+    [KANBAN_STICKY_TOP_VAR]: `${String(headerHeight + LANE_ROW_HEIGHT_PX)}px`,
   };
 
   return (
@@ -585,7 +688,7 @@ export const KanbanSubgroupBoard = <TRow,>({
     >
       <div className="min-w-max">
         <div
-          className="bg-background sticky top-0 z-20 pt-2 pb-2"
+          className="bg-background sticky top-0 z-20"
           data-kanban-board-header=""
           ref={headerRef}
         >
@@ -637,7 +740,19 @@ export const KanbanSubgroupBoard = <TRow,>({
                       }
                     }}
                   >
-                    {bandHeader(band, span)}
+                    {/* The caption travels the width of its own band: a board
+                     * scrolled sideways keeps it at the visible edge until
+                     * the band it names is gone, rather than letting the name
+                     * leave while the columns under it are still on screen.
+                     * It has to size to its content to have any room to
+                     * travel, and stops at the band's own width, which is as
+                     * far as a caption for that band means anything. */}
+                    <div
+                      className="bg-background sticky start-0 z-10 w-fit max-w-full"
+                      data-kanban-band-caption=""
+                    >
+                      {bandHeader(band, span)}
+                    </div>
                   </div>
                 );
               })}
@@ -701,70 +816,91 @@ export const KanbanSubgroupBoard = <TRow,>({
               className="border-border/60 border-b py-1 first:pt-0 last:border-b-0"
               key={groupValueKey(group.value)}
             >
-              <div className="bg-background/95 sticky start-0 z-10 flex min-h-11 items-center backdrop-blur-sm">
-                <button
-                  aria-expanded={!collapsed}
-                  className="hover:bg-muted/60 flex min-h-11 items-center gap-2 rounded-lg px-2 text-start transition-[background-color]"
-                  onClick={() => setLaneCollapsed(group, count, !collapsed)}
-                  type="button"
+              {/* The lane's own row, pinned on both axes: its name holds the
+               * visible inline edge of a board scrolled sideways, and the
+               * whole row comes to rest under the board's header so a reader
+               * halfway down a lane still has its name and what each of its
+               * columns holds. The summaries stand beside the cells rather
+               * than in place of them, which is why a lane shows them open as
+               * well as collapsed. */}
+              <div
+                className={cn(
+                  "bg-background sticky z-10",
+                  KANBAN_STICKY_TOP_CLASS,
+                )}
+                data-kanban-lane-row=""
+              >
+                <div
+                  className={cn(
+                    "sticky start-0 flex w-fit items-center",
+                    KANBAN_CHROME_ROW_HEIGHT,
+                  )}
                 >
-                  <DirectionalIcon
+                  <button
+                    aria-expanded={!collapsed}
                     className={cn(
-                      "text-muted-foreground size-4 shrink-0 transition-transform",
-                      collapsed && "-rotate-90",
+                      "hover:bg-muted/60 flex items-center gap-2 rounded-lg px-2 text-start transition-[background-color]",
+                      KANBAN_CHROME_ROW_HEIGHT,
+                      LANE_TOGGLE_COARSE_TARGET_CLASS,
                     )}
-                    flip={collapsed}
-                    icon={ChevronDownIcon}
-                  />
-                  {renderLaneIdentity({ group, count })}
-                  <span className="text-muted-foreground text-xs tabular-nums">
-                    {formatCount(count)}
-                  </span>
-                </button>
-              </div>
+                    onClick={() => setLaneCollapsed(group, count, !collapsed)}
+                    type="button"
+                  >
+                    <DirectionalIcon
+                      className={cn(
+                        "text-muted-foreground size-4 shrink-0 transition-transform",
+                        collapsed && "-rotate-90",
+                      )}
+                      flip={collapsed}
+                      icon={ChevronDownIcon}
+                    />
+                    {renderLaneIdentity({ group, count })}
+                    <span className="text-muted-foreground text-xs tabular-nums">
+                      {formatCount(count)}
+                    </span>
+                  </button>
+                </div>
 
-              {/* Per-column counts stand in for the cells only while the
-               * lane is collapsed. An open lane shows its cells, and a
-               * folded band's slot already carries its own count, so the
-               * extra row would only push the cards down. */}
-              {collapsed &&
-                renderRow({
-                  label: "Lane column counts",
-                  renderColumn: (column) => {
-                    const columnRows = cellFor(column)?.rows.length ?? 0;
-                    return (
-                      <div
-                        className="px-3"
-                        data-kanban-lane-column-count={columnRows}
-                      >
-                        <span className="text-muted-foreground text-xs tabular-nums">
-                          {formatCount(columnRows)}
-                        </span>
-                      </div>
-                    );
-                  },
+                {renderRow({
+                  label: "Lane column summaries",
+                  renderColumn: (column) =>
+                    laneColumnCell(
+                      group,
+                      column,
+                      cellFor(column)?.rows.length ?? 0,
+                    ),
+                  // A folded band stands for several columns at once, so its
+                  // slot can only carry the total; there is no room for the
+                  // per-column pair the open columns show.
                   renderFoldedBand: (_band, span) => foldedCount(span, cells),
                 })}
+              </div>
 
-              {!collapsed &&
-                renderRow({
-                  className: "pb-1",
-                  renderColumn: (column, band) => {
-                    const cell = cellFor(column);
-                    return cell === undefined ? null : (
-                      <>
-                        {renderCell({
-                          band,
-                          cell,
-                          count: cell.rows.length,
-                          laneValue: group.value,
-                        })}
-                      </>
-                    );
-                  },
-                  renderFoldedBand: (band, span) =>
-                    foldedCell(band, span, cells, group.value),
-                })}
+              {/* The cells find the lane's row pinned above them as well as
+               * the board's header, so they are told the total reach rather
+               * than the header's alone. */}
+              {!collapsed && (
+                <div style={laneCellsStickyTopStyle}>
+                  {renderRow({
+                    className: "pb-1",
+                    renderColumn: (column, band) => {
+                      const cell = cellFor(column);
+                      return cell === undefined ? null : (
+                        <>
+                          {renderCell({
+                            band,
+                            cell,
+                            count: cell.rows.length,
+                            laneValue: group.value,
+                          })}
+                        </>
+                      );
+                    },
+                    renderFoldedBand: (band, span) =>
+                      foldedCell(band, span, cells, group.value),
+                  })}
+                </div>
+              )}
             </section>
           );
         })}
