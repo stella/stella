@@ -33,8 +33,10 @@ convenience; the subpaths are the real surface, and in-repo code uses those.
 ## Workspace shell
 
 `WorkspaceShell` is the complete desktop and tablet application frame. It
-keeps navigation, sticky top chrome, the active route, and a required
-inline-end dock as sibling surfaces inside one dynamic viewport. Route content
+keeps navigation, sticky top chrome, the active route, and an optional
+inline-end dock as sibling surfaces inside one dynamic viewport. A host with
+nothing for the inline-end edge omits `endDock`, and the content column
+extends to the frame's edge instead of reserving width for an empty rail. Route content
 is the sole scroller, so a feature cannot accidentally render an app inside
 the app.
 

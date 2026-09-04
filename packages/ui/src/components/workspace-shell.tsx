@@ -52,8 +52,12 @@ type WorkspaceShellProps = {
   navigation: WorkspaceNavigation;
   /** Sticky route chrome; managed navigation exposes its compact trigger here. */
   topBar: (context: WorkspaceTopBarContext) => ReactElement;
-  /** Permanent inline-end rail or inspector dock. */
-  endDock: ReactElement;
+  /**
+   * Inline-end rail or inspector dock. Omit it and the shell mounts no end
+   * dock at all: no rail, none of its inline-end width reservation, and the
+   * content column extends to the frame's inline-end edge.
+   */
+  endDock?: ReactElement | undefined;
   /** Active route content. */
   children: ReactNode;
 };
@@ -62,6 +66,9 @@ type WorkspaceShellProps = {
  * Stella's complete authenticated workspace frame. It owns the dynamic
  * viewport, sibling rail geometry, sticky top chrome, and sole content
  * scroller so product routes cannot create an app inside the app.
+ *
+ * The end dock is optional: a host with nothing to put on the inline-end edge
+ * omits it rather than reserving width for an empty rail.
  */
 export const WorkspaceShell = ({
   children,

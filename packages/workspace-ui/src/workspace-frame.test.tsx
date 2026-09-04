@@ -10,6 +10,7 @@ import {
   ApplicationRailHeader,
   ApplicationRailMenu,
 } from "@stll/ui/application-rail";
+import { SIDE_RAIL_WIDTH } from "@stll/ui/inspector";
 
 import { WorkspaceFrame } from "./workspace-frame";
 
@@ -137,6 +138,92 @@ test("renders the same stella rail primitive when the inspector pane is absent",
   expect(rendered).toContain('data-slot="inspector-rail"');
   expect(rendered).not.toContain('data-slot="inspector-dock"');
   expect(rendered).toContain("w-12");
+});
+
+const countOccurrences = (markup: string, needle: string) =>
+  markup.split(needle).length - 1;
+
+const describedNavigation = {
+  compact: {
+    content: <div />,
+    label: "Navigation",
+    onOpenChange: () => undefined,
+    open: false,
+    trigger: null,
+  },
+  items: [],
+  label: "Navigation",
+} as const;
+
+test("mounts no end dock for a host with neither an inspector nor an end rail", () => {
+  const rendered = renderToStaticMarkup(
+    <WorkspaceFrame
+      composition="described"
+      navigation={describedNavigation}
+      topBar={{}}
+    >
+      <div />
+    </WorkspaceFrame>,
+  );
+
+  expect(rendered).toContain('data-slot="workspace-shell"');
+  expect(rendered).not.toContain('data-slot="inspector-rail"');
+  expect(rendered).not.toContain('data-slot="inspector-dock"');
+  // The application rail is the only 48px strip left: the frame reserves no
+  // second one on the inline-end edge.
+  expect(countOccurrences(rendered, SIDE_RAIL_WIDTH)).toBe(1);
+});
+
+test("keeps the end rail when a host describes one without an inspector", () => {
+  const rendered = renderToStaticMarkup(
+    <WorkspaceFrame
+      composition="described"
+      endRail={{
+        chatAction: {
+          label: "Chat",
+          reason: "Unavailable",
+          status: "unavailable",
+        },
+        label: "Inspector",
+        topAction: <span />,
+      }}
+      navigation={describedNavigation}
+      topBar={{}}
+    >
+      <div />
+    </WorkspaceFrame>,
+  );
+
+  expect(rendered).toContain('data-slot="inspector-rail"');
+  expect(rendered).not.toContain('data-slot="inspector-dock"');
+  expect(countOccurrences(rendered, SIDE_RAIL_WIDTH)).toBe(2);
+});
+
+test("keeps the inspector dock when a host has an inspector but no end rail", () => {
+  const rendered = renderToStaticMarkup(
+    <WorkspaceFrame
+      composition="described"
+      inspector={{
+        pane: <div data-testid="pane" />,
+        resizeHandleLabel: "Resize",
+        resizeHandleProps,
+        showPaneContent: false,
+        width: 512,
+      }}
+      navigation={describedNavigation}
+      topBar={{}}
+    >
+      <div />
+    </WorkspaceFrame>,
+  );
+
+  expect(rendered).toContain('data-slot="inspector-dock"');
+  expect(rendered).toContain('data-testid="pane"');
+  // Without a rail there is nothing to collapse to, so the dock keeps the
+  // described pane width rather than the 48px rail footprint.
+  expect(rendered).toContain("width:512px");
+  expect(rendered).not.toContain('data-slot="inspector-rail"');
+  expect(countOccurrences(rendered, SIDE_RAIL_WIDTH)).toBe(1);
 });
 
 const sidebarNavigation = (
