@@ -821,9 +821,14 @@ describe("detect-e2e-changes", () => {
   });
 
   test("uploads blob reports from the configured Playwright output directory", () => {
-    expect(
-      workflow.match(/path: apps\/web\/e2e\/test-results\/blob-report\//gu),
-    ).toHaveLength(2);
+    const uploads = workflow
+      .split(/^ {6}- /mu)
+      .filter((step) => /name: playwright-blob-/u.test(step));
+    expect(uploads.length).toBeGreaterThan(0);
+    for (const upload of uploads) {
+      expect(upload).toContain("uses: actions/upload-artifact@");
+      expect(upload).toContain("path: apps/web/e2e/test-results/blob-report/");
+    }
     expect(workflow).not.toContain("path: apps/web/test-results/blob-report/");
   });
 });
