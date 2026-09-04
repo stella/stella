@@ -4,6 +4,7 @@ import { expect, test } from "bun:test";
 
 import { inspectPdf } from "@stll/anonymize-pdf";
 
+import { buildOcrPage } from "@/api/lib/document-processing-ocr-result";
 import {
   decodePdfAnonymizationWorkerResponse,
   encodePdfAnonymizationWorkerRequest,
@@ -137,3 +138,52 @@ test("deep PDF rewrite removes source metadata and text, burns redactions into p
     library.destroy();
   }
 }, 30_000);
+
+test.each([0.2, 0.49, 0.51, 0.8])(
+  "rewrites fractional page geometry with rounded OCR dimensions (%s)",
+  async (fraction) => {
+    const source = PDF.create();
+    source.addPage({ width: 72 + fraction, height: 96 + fraction });
+    const document = await source.save();
+    const library = await PDFiumLibrary.init();
+    const loaded = await library.loadDocument(Buffer.from(document));
+    const { originalWidth, originalHeight } = loaded
+      .getPage(0)
+      .getOriginalSize();
+    loaded.destroy();
+    library.destroy();
+    const ocr = buildOcrPage({
+      lines: [],
+      pointWidth: originalWidth,
+      pointHeight: originalHeight,
+    });
+    expect(ocr.width).not.toBe(originalWidth);
+    const request = encodePdfAnonymizationWorkerRequest({
+      document,
+      pages: [{ ocr, detections: [] }],
+    });
+    if (request.isErr()) {
+      throw request.error;
+    }
+    const result = await spawnBinaryWorker({
+      workerPath: new URL("pdf-anonymization-worker.ts", import.meta.url)
+        .pathname,
+      stdin: new Blob([request.value.slice().buffer]),
+      timeoutMs: 30_000,
+      maxOutputBytes: 64 * 1024 * 1024,
+    });
+    if (result.isErr()) {
+      throw result.error;
+    }
+    const decoded = decodePdfAnonymizationWorkerResponse(result.value);
+    if (decoded.isErr()) {
+      throw decoded.error;
+    }
+    expect(decoded.value.certificate.structurePixelRewriteVerified).toBe(true);
+    const rewritten = await PDF.load(decoded.value.document);
+    const page = rewritten.getPages().at(0);
+    expect(page?.width).toBeCloseTo(originalWidth, 4);
+    expect(page?.height).toBeCloseTo(originalHeight, 4);
+  },
+  30_000,
+);

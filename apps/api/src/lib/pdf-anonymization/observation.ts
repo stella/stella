@@ -21,10 +21,10 @@ export const pdfAnonymizationObservation = ({
       start,
       end: text.length,
       bounds: {
-        left: line.box[0],
-        bottom: page.height - line.box[3],
-        right: line.box[2],
-        top: page.height - line.box[1],
+        left: Math.min(line.box[0], page.width),
+        bottom: Math.max(0, page.height - line.box[3]),
+        right: Math.min(line.box[2], page.width),
+        top: Math.max(0, page.height - line.box[1]),
       },
       source: "ocr",
     });
