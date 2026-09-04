@@ -281,6 +281,11 @@ impl ClipboardStore {
         ClipboardImageValidationError::Unavailable(message)
       }
     })?;
+    if !metadata.is_file() {
+      return Err(ClipboardImageValidationError::Unavailable(
+        "clipboard image blob is not a readable file".to_string(),
+      ));
+    }
     if metadata.len() > max_encrypted_bytes as u64 {
       return Err(ClipboardImageValidationError::Invalid(
         "clipboard image blob is too large".to_string(),
