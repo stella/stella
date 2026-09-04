@@ -9,9 +9,9 @@ const TOLERANCE_PX = 1;
 /** `KANBAN_COLUMN_WIDTH_PX`, the unit this suite scrolls the board by. */
 const COLUMN_WIDTH_PX = 300;
 
-// A hovering pointer, which the suite's default device does not have: with a
-// coarse pointer the hover-revealed actions are shown at all times, and the
-// test asserting they appear would pass without ever revealing anything.
+// A hovering pointer, which the suite's default device does not have: the
+// hover-revealed actions never appear without one, so every test below that
+// waits for them would sit there until it timed out.
 test.use({
   viewport: { width: 1280, height: 800 },
   isMobile: false,
@@ -154,5 +154,83 @@ test.describe("hover-revealed card actions", () => {
     await expect.poll(async () => await opacityOf(hovered)).toBe("1");
 
     expect(await opacityOf(other)).toBe("0");
+  });
+});
+
+test.describe("hover-revealed card actions on a touch device", () => {
+  // A finger, which has no hover at all: the case the overlay used to show
+  // itself for, and the one where an overlay that answers a press costs the
+  // card the gesture.
+  test.use({ hasTouch: true, isMobile: true });
+
+  /**
+   * What a finger finds at the dead centre of the overlay's own box — the
+   * corner a card is pressed and dragged from, and the corner the actions
+   * appear in. Reported as both memberships, because the overlay sits inside
+   * the card: "inside the card" alone would be true either way.
+   */
+  const whatIsAtTheCorner = async (actions: Locator) =>
+    await actions.evaluate((element) => {
+      const { left, top, width, height } = element.getBoundingClientRect();
+      const found = document.elementFromPoint(
+        left + width / 2,
+        top + height / 2,
+      );
+      const body = element.closest("[data-card]");
+
+      return {
+        insideActions: element.contains(found),
+        insideCard: body?.contains(found) ?? false,
+      };
+    });
+
+  test("gives the corner to the card at rest and to the actions once it opens", async ({
+    page,
+  }) => {
+    await openFixture(page);
+    const card = page.locator('[data-card="open-1"]');
+    const actions = card.locator('[data-kanban-card-actions="hover"]');
+
+    // At rest the corner belongs to the card, so a press there is the card's
+    // to act on rather than the hidden overlay's to swallow.
+    const atRest = await whatIsAtTheCorner(actions);
+
+    expect(atRest.insideActions).toBe(false);
+    expect(atRest.insideCard).toBe(true);
+
+    // A tap on that same corner therefore reaches the card and opens it...
+    const box = await actions.boundingBox();
+
+    expect(box).not.toBeNull();
+    await page.touchscreen.tap(
+      (box?.x ?? 0) + (box?.width ?? 0) / 2,
+      (box?.y ?? 0) + (box?.height ?? 0) / 2,
+    );
+
+    // ...and the open card is a finger's way to the actions: it has no hover
+    // to reveal them with and no tab key to focus them by.
+    await expect.poll(async () => await opacityOf(actions)).toBe("1");
+
+    const opened = await whatIsAtTheCorner(actions);
+
+    expect(opened.insideActions).toBe(true);
+  });
+
+  test("leaves the cards a tap did not open alone", async ({ page }) => {
+    await openFixture(page);
+    const opened = page
+      .locator('[data-card="open-1"] [data-kanban-card-actions="hover"]')
+      .first();
+    const other = page
+      .locator('[data-card="blocked-1"] [data-kanban-card-actions="hover"]')
+      .first();
+
+    await page.locator('[data-card="open-1"]').tap();
+    await expect.poll(async () => await opacityOf(opened)).toBe("1");
+
+    // Every card carries this overlay; only the open one may show it, or the
+    // board grows the dead corner back on all the others.
+    expect(await opacityOf(other)).toBe("0");
+    expect((await whatIsAtTheCorner(other)).insideActions).toBe(false);
   });
 });

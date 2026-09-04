@@ -88,7 +88,7 @@ describe("KanbanCardShell sticky header", () => {
     expect(markup).not.toContain("opacity-0");
   });
 
-  test("reveals hover actions on hover, focus, an open menu, and coarse pointers", () => {
+  test("reveals hover actions on hover, focus, and an open menu", () => {
     const markup = renderToStaticMarkup(
       <KanbanCardShell
         actions={<button type="button">More</button>}
@@ -105,15 +105,82 @@ describe("KanbanCardShell sticky header", () => {
     expect(wrapper).toContain("group-hover/card:opacity-100");
     // The hover group the wrapper answers to is on the shell's own wrapper.
     expect(markup).toContain("group/card");
-    // Focus keeps them reachable from the keyboard, an open menu keeps its
-    // own trigger from vanishing under the popup, and a pointer that cannot
-    // hover would otherwise never reveal them at all.
+    // Focus keeps them reachable from the keyboard, and an open menu keeps
+    // its own trigger from vanishing under the popup it just opened.
     expect(wrapper).toContain("focus-within:opacity-100");
     expect(wrapper).toContain("has-[[aria-expanded=true]]:opacity-100");
-    expect(wrapper).toContain("[@media(hover:none)]:opacity-100");
     // The fade is decoration; a reader who asked for less motion still gets
     // the actions, just without the transition.
     expect(wrapper).toContain("motion-reduce:transition-none");
+  });
+
+  test("keeps hidden hover actions out of the pointer's way", () => {
+    const markup = renderToStaticMarkup(
+      <KanbanCardShell
+        actions={<button type="button">More</button>}
+        actionsVisibility="hover"
+      >
+        <p>body</p>
+      </KanbanCardShell>,
+    );
+    const wrapper =
+      /<div[^>]*data-kanban-card-actions="hover"[^>]*>/u.exec(markup)?.[0] ??
+      "";
+    const classes = (/class="([^"]*)"/u.exec(wrapper)?.[1] ?? "").split(" ");
+
+    // Invisible is not out of the way: a transparent overlay is still the
+    // topmost hit, so at rest it must answer no pointer at all.
+    expect(classes).toContain("pointer-events-none");
+    // Every state that shows them hands them back, and nothing else does.
+    expect(classes).toContain("group-hover/card:pointer-events-auto");
+    expect(classes).toContain("focus-within:pointer-events-auto");
+    expect(classes).toContain("has-[[aria-expanded=true]]:pointer-events-auto");
+    expect(classes).toContain(
+      "group-data-[active=true]/card:pointer-events-auto",
+    );
+    // Shown on a pointer that cannot hover, they were a dead zone in the
+    // corner of every card: a long press there never reached the card, so it
+    // never started the card's drag.
+    expect(wrapper).not.toContain("hover:none");
+  });
+
+  test("reveals hover actions on the active card, the route a finger has", () => {
+    const markup = renderToStaticMarkup(
+      <KanbanCardShell
+        actions={<button type="button">More</button>}
+        actionsVisibility="hover"
+        active
+      >
+        <p>body</p>
+      </KanbanCardShell>,
+    );
+    const wrapper =
+      /<div[^>]*data-kanban-card-actions="hover"[^>]*>/u.exec(markup)?.[0] ??
+      "";
+
+    // A finger neither hovers nor tabs, so the card it opened is the one way
+    // in. The state is published on the group the overlay already answers.
+    expect(markup).toContain('class="group/card" data-active="true"');
+    expect(wrapper).toContain("group-data-[active=true]/card:opacity-100");
+    expect(wrapper).toContain(
+      "group-data-[active=true]/card:pointer-events-auto",
+    );
+  });
+
+  test("marks only an active card, so a resting card keeps its actions away", () => {
+    const markup = renderToStaticMarkup(
+      <KanbanCardShell
+        actions={<button type="button">More</button>}
+        actionsVisibility="hover"
+      >
+        <p>body</p>
+      </KanbanCardShell>,
+    );
+
+    // The flag is absent, not `data-active="false"`, so a resting card
+    // matches nothing: every card on a board carries this overlay, and the
+    // one the reader opened is meant to be the only one showing it.
+    expect(markup).not.toContain("data-active");
   });
 
   test("puts hover actions over the pinned identity row that leads the corner", () => {
