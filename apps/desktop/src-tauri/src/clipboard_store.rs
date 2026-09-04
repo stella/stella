@@ -96,7 +96,11 @@ impl ClipboardStore {
     Ok(self.image_directory().join(format!("{blob_id}{suffix}")))
   }
 
-  fn encrypt_blob(&self, plaintext: &[u8], associated_data: &[u8]) -> Result<Vec<u8>, String> {
+  fn encrypt_blob(
+    &self,
+    plaintext: &[u8],
+    associated_data: &[u8],
+  ) -> Result<Vec<u8>, String> {
     let cipher = Aes256Gcm::new_from_slice(&self.key)
       .map_err(|_| "clipboard encryption key is invalid".to_string())?;
     let nonce = Nonce::generate();
@@ -116,7 +120,11 @@ impl ClipboardStore {
     Ok(blob)
   }
 
-  fn decrypt_blob(&self, blob: &[u8], associated_data: &[u8]) -> Result<Vec<u8>, String> {
+  fn decrypt_blob(
+    &self,
+    blob: &[u8],
+    associated_data: &[u8],
+  ) -> Result<Vec<u8>, String> {
     if blob.len() <= IMAGE_BLOB_HEADER_BYTES || blob[0] != IMAGE_BLOB_VERSION {
       return Err("clipboard image blob is invalid".to_string());
     }
@@ -192,7 +200,9 @@ impl ClipboardStore {
         if existing_payload_matches {
           return Ok(ClipboardImagePersistStatus::Existing);
         }
-        return Err("clipboard image identifier conflicts with existing data".to_string());
+        return Err(
+          "clipboard image identifier conflicts with existing data".to_string(),
+        );
       }
       (false, false) => {}
       (true, false) | (false, true) => {
@@ -233,7 +243,8 @@ impl ClipboardStore {
     if metadata.len() > max_encrypted_bytes as u64 {
       return Err("clipboard image blob is too large".to_string());
     }
-    let blob = fs::read(path).map_err(|error| format!("clipboard image read failed: {error}"))?;
+    let blob = fs::read(path)
+      .map_err(|error| format!("clipboard image read failed: {error}"))?;
     let plaintext = self.decrypt_blob(&blob, format!("{blob_id}:{kind}").as_bytes())?;
     if plaintext.len() > max_plaintext_bytes {
       return Err("clipboard image blob is too large".to_string());
@@ -245,7 +256,11 @@ impl ClipboardStore {
     self.load_image_blob(blob_id, IMAGE_BLOB_SUFFIX, "image", max_bytes)
   }
 
-  pub fn load_image_preview(&self, blob_id: &str, max_bytes: usize) -> Result<Vec<u8>, String> {
+  pub fn load_image_preview(
+    &self,
+    blob_id: &str,
+    max_bytes: usize,
+  ) -> Result<Vec<u8>, String> {
     self.load_image_blob(blob_id, IMAGE_PREVIEW_SUFFIX, "preview", max_bytes)
   }
 
@@ -261,22 +276,29 @@ impl ClipboardStore {
     Ok(())
   }
 
-  pub fn reconcile_images(&self, live_blob_ids: &HashSet<String>) -> Result<(), String> {
+  pub fn reconcile_images(
+    &self,
+    live_blob_ids: &HashSet<String>,
+  ) -> Result<(), String> {
     let directory = self.image_directory();
     let entries = match fs::read_dir(&directory) {
       Ok(entries) => entries,
       Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
-      Err(error) => return Err(format!("clipboard image directory read failed: {error}")),
+      Err(error) => {
+        return Err(format!("clipboard image directory read failed: {error}"));
+      }
     };
     for entry in entries {
-      let entry = entry.map_err(|error| format!("clipboard image entry read failed: {error}"))?;
+      let entry =
+        entry.map_err(|error| format!("clipboard image entry read failed: {error}"))?;
       let name = entry.file_name();
       let name = name.to_string_lossy();
       let blob_id = name
         .strip_suffix(IMAGE_BLOB_SUFFIX)
         .or_else(|| name.strip_suffix(IMAGE_PREVIEW_SUFFIX));
       let is_temporary = name.ends_with(".tmp");
-      if is_temporary || blob_id.is_some_and(|blob_id| !live_blob_ids.contains(blob_id)) {
+      if is_temporary || blob_id.is_some_and(|blob_id| !live_blob_ids.contains(blob_id))
+      {
         fs::remove_file(entry.path())
           .map_err(|error| format!("clipboard image removal failed: {error}"))?;
       }
@@ -314,7 +336,9 @@ impl ClipboardStore {
     match fs::remove_dir_all(image_directory) {
       Ok(()) => {}
       Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-      Err(error) => return Err(format!("clipboard image store removal failed: {error}")),
+      Err(error) => {
+        return Err(format!("clipboard image store removal failed: {error}"));
+      }
     }
     Ok(())
   }
@@ -441,14 +465,20 @@ mod tests {
         .unwrap(),
       ClipboardImagePersistStatus::Created
     );
-    let raw_image = fs::read(store.image_path(&blob_id, IMAGE_BLOB_SUFFIX).unwrap()).unwrap();
-    let raw_preview = fs::read(store.image_path(&blob_id, IMAGE_PREVIEW_SUFFIX).unwrap()).unwrap();
-    assert!(!raw_image
-      .windows(image.len())
-      .any(|window| window == &image[..]));
-    assert!(!raw_preview
-      .windows(preview.len())
-      .any(|window| window == &preview[..]));
+    let raw_image =
+      fs::read(store.image_path(&blob_id, IMAGE_BLOB_SUFFIX).unwrap()).unwrap();
+    let raw_preview =
+      fs::read(store.image_path(&blob_id, IMAGE_PREVIEW_SUFFIX).unwrap()).unwrap();
+    assert!(
+      !raw_image
+        .windows(image.len())
+        .any(|window| window == &image[..])
+    );
+    assert!(
+      !raw_preview
+        .windows(preview.len())
+        .any(|window| window == &preview[..])
+    );
     assert_eq!(
       store.load_image(&blob_id, image.len()).unwrap(),
       image.to_vec()
@@ -463,15 +493,17 @@ mod tests {
         .unwrap(),
       ClipboardImagePersistStatus::Existing
     );
-    assert!(store
-      .persist_image(
-        &blob_id,
-        ClipboardImagePayload {
-          image: b"different image",
-          preview: b"different preview",
-        },
-      )
-      .is_err());
+    assert!(
+      store
+        .persist_image(
+          &blob_id,
+          ClipboardImagePayload {
+            image: b"different image",
+            preview: b"different preview",
+          },
+        )
+        .is_err()
+    );
     assert_eq!(store.load_image(&blob_id, image.len()).unwrap(), image);
     assert_eq!(
       store.load_image_preview(&blob_id, preview.len()).unwrap(),
@@ -479,9 +511,11 @@ mod tests {
     );
 
     fs::remove_file(store.image_path(&blob_id, IMAGE_PREVIEW_SUFFIX).unwrap()).unwrap();
-    assert!(store
-      .persist_image(&blob_id, ClipboardImagePayload { image, preview })
-      .is_err());
+    assert!(
+      store
+        .persist_image(&blob_id, ClipboardImagePayload { image, preview })
+        .is_err()
+    );
     assert_eq!(store.load_image(&blob_id, image.len()).unwrap(), image);
 
     let wrong_store = ClipboardStore::new([8; 32], path.clone());
@@ -493,15 +527,17 @@ mod tests {
   fn image_blob_ids_cannot_escape_the_store_directory() {
     let store = ClipboardStore::new([7; 32], unique_path());
 
-    assert!(store
-      .persist_image(
-        "../outside",
-        ClipboardImagePayload {
-          image: b"image",
-          preview: b"preview",
-        },
-      )
-      .is_err());
+    assert!(
+      store
+        .persist_image(
+          "../outside",
+          ClipboardImagePayload {
+            image: b"image",
+            preview: b"preview",
+          },
+        )
+        .is_err()
+    );
   }
 
   #[test]
@@ -521,18 +557,24 @@ mod tests {
       .reconcile_images(&HashSet::from([live_blob_id.clone()]))
       .unwrap();
 
-    assert!(store
-      .image_path(&live_blob_id, IMAGE_BLOB_SUFFIX)
-      .unwrap()
-      .is_file());
-    assert!(!store
-      .image_path(&orphaned_blob_id, IMAGE_BLOB_SUFFIX)
-      .unwrap()
-      .exists());
-    assert!(!store
-      .image_path(&orphaned_blob_id, IMAGE_PREVIEW_SUFFIX)
-      .unwrap()
-      .exists());
+    assert!(
+      store
+        .image_path(&live_blob_id, IMAGE_BLOB_SUFFIX)
+        .unwrap()
+        .is_file()
+    );
+    assert!(
+      !store
+        .image_path(&orphaned_blob_id, IMAGE_BLOB_SUFFIX)
+        .unwrap()
+        .exists()
+    );
+    assert!(
+      !store
+        .image_path(&orphaned_blob_id, IMAGE_PREVIEW_SUFFIX)
+        .unwrap()
+        .exists()
+    );
     ClipboardStore::remove(&path).unwrap();
   }
 

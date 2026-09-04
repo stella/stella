@@ -1,12 +1,12 @@
 use ammonia::Builder as HtmlSanitizer;
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use chrono::{DateTime, Duration, Utc};
+use clipboard_rs::common::RustImage;
 use clipboard_rs::{
   Clipboard, ClipboardContent, ClipboardContext, ClipboardHandler, ClipboardWatcher,
   ClipboardWatcherContext, ContentFormat, RustImageData,
 };
-use clipboard_rs::common::RustImage;
-use image::{ImageReader, io::Limits as ImageLimits};
+use image::{ImageReader, Limits as ImageLimits};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
@@ -33,10 +33,10 @@ use crate::{
 
 #[cfg(target_os = "macos")]
 use icns::{IconFamily, PixelFormat};
-#[cfg(target_os = "macos")]
-use objc2_app_kit::NSWorkspace;
 #[cfg(target_os = "windows")]
 use image::{DynamicImage, ImageDecoder, codecs::bmp::BmpDecoder};
+#[cfg(target_os = "macos")]
+use objc2_app_kit::NSWorkspace;
 #[cfg(target_os = "windows")]
 use std::path::Path;
 #[cfg(target_os = "macos")]
@@ -272,15 +272,15 @@ impl ClipboardItem {
     match self {
       Self::Text { copied_at, .. }
       | Self::FormattedText { copied_at, .. }
-      | Self::Image { copied_at, .. } => {
-        *copied_at
-      }
+      | Self::Image { copied_at, .. } => *copied_at,
     }
   }
 
   fn id(&self) -> &str {
     match self {
-      Self::Text { id, .. } | Self::FormattedText { id, .. } | Self::Image { id, .. } => id,
+      Self::Text { id, .. }
+      | Self::FormattedText { id, .. }
+      | Self::Image { id, .. } => id,
     }
   }
 
@@ -295,9 +295,9 @@ impl ClipboardItem {
 
   fn name(&self) -> Option<&str> {
     match self {
-      Self::Text { name, .. } | Self::FormattedText { name, .. } | Self::Image { name, .. } => {
-        name.as_deref()
-      }
+      Self::Text { name, .. }
+      | Self::FormattedText { name, .. }
+      | Self::Image { name, .. } => name.as_deref(),
     }
   }
 
@@ -387,9 +387,7 @@ impl ClipboardItem {
     match self {
       Self::Text { group_id, .. }
       | Self::FormattedText { group_id, .. }
-      | Self::Image { group_id, .. } => {
-        group_id.as_deref()
-      }
+      | Self::Image { group_id, .. } => group_id.as_deref(),
     }
   }
 
@@ -419,9 +417,7 @@ impl ClipboardItem {
     match self {
       Self::Text { source_app, .. }
       | Self::FormattedText { source_app, .. }
-      | Self::Image { source_app, .. } => {
-        source_app.as_ref()
-      }
+      | Self::Image { source_app, .. } => source_app.as_ref(),
     }
   }
 
@@ -472,7 +468,9 @@ impl ClipboardItem {
 
   fn set_name(&mut self, new_name: Option<String>) {
     match self {
-      Self::Text { name, .. } | Self::FormattedText { name, .. } | Self::Image { name, .. } => {
+      Self::Text { name, .. }
+      | Self::FormattedText { name, .. }
+      | Self::Image { name, .. } => {
         *name = new_name;
       }
     }
@@ -850,11 +848,15 @@ pub fn load_persisted() -> (ClipboardLoad, ClipboardInitTimings) {
         }
       };
       let live_blob_ids = live_images.keys().cloned().collect();
-      if let Err(error) = store.validate_images(&live_images, MAX_ITEM_IMAGE_PREVIEW_BYTES) {
+      if let Err(error) =
+        store.validate_images(&live_images, MAX_ITEM_IMAGE_PREVIEW_BYTES)
+      {
         tracing::warn!(error = %error, "encrypted clipboard image history is unavailable");
         return (ClipboardLoad::DeletionOnly(store_path), timings);
       }
-      if (changed || images_changed) && let Err(error) = store.persist(&state) {
+      if (changed || images_changed)
+        && let Err(error) = store.persist(&state)
+      {
         tracing::warn!(error = %error, "expired clipboard history could not be removed");
         return (ClipboardLoad::DeletionOnly(store_path), timings);
       }
@@ -884,7 +886,9 @@ pub fn load_persisted() -> (ClipboardLoad, ClipboardInitTimings) {
 
 #[derive(Clone)]
 enum ClipboardSuppression {
-  Image { checksum: String },
+  Image {
+    checksum: String,
+  },
   Text {
     html: Option<String>,
     plain_text: String,
@@ -1243,7 +1247,10 @@ impl ClipboardManager {
     &self.groups
   }
 
-  pub fn source_app_visual(&self, item: &ClipboardItem) -> Option<ClipboardSourceAppVisual> {
+  pub fn source_app_visual(
+    &self,
+    item: &ClipboardItem,
+  ) -> Option<ClipboardSourceAppVisual> {
     item
       .source_visual_key()
       .and_then(|key| self.source_app_visuals.get(key))
@@ -1256,12 +1263,7 @@ impl ClipboardManager {
       .iter()
       .find(|item| item.id() == id)
       .ok_or_else(|| "clipboard item no longer exists".to_string())?;
-    let ClipboardItem::Image {
-      blob_id,
-      image,
-      ..
-    } = item
-    else {
+    let ClipboardItem::Image { blob_id, image, .. } = item else {
       return Err("clipboard item is not an image".to_string());
     };
     if let Some(image) = image {
@@ -1280,9 +1282,7 @@ impl ClipboardManager {
       .find(|item| item.id() == id)
       .ok_or_else(|| "clipboard item no longer exists".to_string())?;
     let ClipboardItem::Image {
-      blob_id,
-      preview,
-      ..
+      blob_id, preview, ..
     } = item
     else {
       return Err("clipboard item is not an image".to_string());
@@ -1299,16 +1299,16 @@ impl ClipboardManager {
   pub fn suppress_next(&mut self, item: &ClipboardItem, plain_text_only: bool) {
     self.suppressed_content = match item {
       ClipboardItem::Text { plain_text, .. }
-      | ClipboardItem::FormattedText {
-        plain_text, ..
-      } => Some(ClipboardSuppression::Text {
-        html: if plain_text_only {
-          None
-        } else {
-          item.html().map(str::to_string)
-        },
-        plain_text: plain_text.clone(),
-      }),
+      | ClipboardItem::FormattedText { plain_text, .. } => {
+        Some(ClipboardSuppression::Text {
+          html: if plain_text_only {
+            None
+          } else {
+            item.html().map(str::to_string)
+          },
+          plain_text: plain_text.clone(),
+        })
+      }
       ClipboardItem::Image { checksum, .. } => Some(ClipboardSuppression::Image {
         checksum: checksum.clone(),
       }),
@@ -2218,7 +2218,8 @@ impl ClipboardHandler for HistoryClipboardHandler {
           return;
         }
       };
-      let capture = match normalized_image_capture(image, source_app, source_app_visual) {
+      let capture = match normalized_image_capture(image, source_app, source_app_visual)
+      {
         Ok(capture) => capture,
         Err(error) => {
           tracing::debug!(error = %error, "clipboard image could not be captured");
@@ -2268,7 +2269,7 @@ impl ClipboardHandler for HistoryClipboardHandler {
 }
 
 impl HistoryClipboardHandler {
-  fn capture(&mut self, capture: ClipboardCapture) {
+  fn capture(&self, capture: ClipboardCapture) {
     let changed = match self.manager.lock() {
       Ok(mut manager) => match manager.capture(capture) {
         Ok(changed) => changed,
@@ -2302,13 +2303,11 @@ fn bounded_clipboard_image(
   clipboard: &ClipboardContext,
   formats: &[String],
 ) -> Result<RustImageData, String> {
-  let format = CLIPBOARD_IMAGE_FORMATS
-    .iter()
-    .find(|candidate| {
-      formats
-        .iter()
-        .any(|format| format.eq_ignore_ascii_case(candidate))
-    });
+  let format = CLIPBOARD_IMAGE_FORMATS.iter().find(|candidate| {
+    formats
+      .iter()
+      .any(|format| format.eq_ignore_ascii_case(candidate))
+  });
   if let Some(format) = format {
     let encoded = clipboard
       .get_buffer(format)
@@ -2334,9 +2333,9 @@ fn decode_bounded_clipboard_image(encoded: Vec<u8>) -> Result<RustImageData, Str
   let image_format = dimension_reader
     .format()
     .ok_or_else(|| "clipboard image format is unsupported".to_string())?;
-  let (width, height) = dimension_reader
-    .into_dimensions()
-    .map_err(|error| format!("clipboard image dimensions could not be read: {error}"))?;
+  let (width, height) = dimension_reader.into_dimensions().map_err(|error| {
+    format!("clipboard image dimensions could not be read: {error}")
+  })?;
   validate_image_dimensions(width, height)?;
 
   let mut reader = ImageReader::with_format(Cursor::new(encoded), image_format);
@@ -2375,9 +2374,9 @@ fn bounded_windows_clipboard_image() -> Result<RustImageData, String> {
   limits.max_image_width = Some(MAX_ITEM_IMAGE_DIMENSION);
   limits.max_image_height = Some(MAX_ITEM_IMAGE_DIMENSION);
   limits.max_alloc = Some(MAX_ITEM_IMAGE_DECODE_BYTES);
-  decoder
-    .set_limits(limits)
-    .map_err(|error| format!("clipboard bitmap limits could not be applied: {error}"))?;
+  decoder.set_limits(limits).map_err(|error| {
+    format!("clipboard bitmap limits could not be applied: {error}")
+  })?;
   let image = DynamicImage::from_decoder(decoder)
     .map_err(|error| format!("clipboard bitmap decoding failed: {error}"))?;
   Ok(RustImageData::from_dynamic_image(image))
@@ -2574,14 +2573,15 @@ pub fn write_item(
     .map_err(|error| format!("clipboard is unavailable: {error}"))?;
   let mut contents = match item {
     ClipboardItem::Text { plain_text, .. }
-    | ClipboardItem::FormattedText {
-      plain_text, ..
-    } => vec![ClipboardContent::Text(plain_text.clone())],
+    | ClipboardItem::FormattedText { plain_text, .. } => {
+      vec![ClipboardContent::Text(plain_text.clone())]
+    }
     ClipboardItem::Image { .. } => {
       if plain_text_only {
         return Err("clipboard image cannot be copied as plain text".to_string());
       }
-      let image = image_bytes.ok_or_else(|| "clipboard image is unavailable".to_string())?;
+      let image =
+        image_bytes.ok_or_else(|| "clipboard image is unavailable".to_string())?;
       let image = RustImageData::from_bytes(image)
         .map_err(|error| format!("clipboard image is invalid: {error}"))?;
       vec![ClipboardContent::Image(image)]
@@ -2893,12 +2893,7 @@ mod tests {
 
   #[test]
   fn duplicating_an_image_shares_its_immutable_native_payload() {
-    let original = image_item(
-      "original",
-      "original-blob",
-      "original-checksum",
-      4,
-    );
+    let original = image_item("original", "original-blob", "original-checksum", 4);
     let mut manager = ready_manager();
     manager.items.push(original);
 
@@ -3034,7 +3029,11 @@ mod tests {
     prune_items(&mut items, ClipboardRetention::Month, now);
 
     assert_eq!(items.len(), MAX_HISTORY_ITEMS);
-    assert!(items.iter().all(|item| item.plain_text() != Some("expired")));
+    assert!(
+      items
+        .iter()
+        .all(|item| item.plain_text() != Some("expired"))
+    );
     assert!(
       items.iter().map(ClipboardItem::byte_len).sum::<usize>() <= MAX_HISTORY_BYTES
     );
@@ -3554,12 +3553,17 @@ mod tests {
     manager.items[0].set_name(Some("Pinned screenshot".to_string()));
     manager.items[0].set_group_id(Some("screenshots".to_string()));
 
-    assert!(manager
-      .capture(capture_image(copied_at + Duration::minutes(1)))
-      .unwrap());
+    assert!(
+      manager
+        .capture(capture_image(copied_at + Duration::minutes(1)))
+        .unwrap()
+    );
     assert_eq!(manager.items.len(), 1);
     assert_ne!(manager.items[0].id(), original_id);
-    assert_eq!(manager.items[0].image_blob_id(), Some(original_blob_id.as_str()));
+    assert_eq!(
+      manager.items[0].image_blob_id(),
+      Some(original_blob_id.as_str())
+    );
     assert_eq!(manager.items[0].name(), Some("Pinned screenshot"));
     assert_eq!(manager.items[0].group_id(), Some("screenshots"));
     assert!(manager.items[0].image_payload().is_some());

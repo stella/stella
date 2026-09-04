@@ -314,7 +314,10 @@ pub fn clipboard_get_image_preview(
 ) -> Result<String, String> {
   let manager = state.lock().map_err(|_| lock_error())?;
   let preview = manager.image_preview(&id)?;
-  Ok(format!("data:image/png;base64,{}", STANDARD.encode(preview)))
+  Ok(format!(
+    "data:image/png;base64,{}",
+    STANDARD.encode(preview)
+  ))
 }
 
 #[tauri::command]
