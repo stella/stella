@@ -433,8 +433,15 @@ const containPayloadUnavailable = async <TPayload>(
     outcome.error instanceof UnhandledException
       ? outcome.error.cause
       : outcome.error;
+  // Not the containable refusal. `readCorpusPayloadOrFallback` raises only
+  // `CorpusPayloadUnavailableError`, so anything else is the defect this
+  // helper's contract already names: it fails the read, carrying the original
+  // as its cause.
   if (!CorpusPayloadUnavailableError.is(raised)) {
-    throw raised;
+    return panic(
+      "Corpus read failed for a reason this read cannot contain",
+      raised,
+    );
   }
 
   captureError(raised, {

@@ -323,21 +323,23 @@ const configureExternalReadTransaction = async (
 const startRoleValidation = async (
   external: ExternalPublicLawDatabase,
 ): Promise<void> => {
-  const promise = external.database
-    .transaction(async (tx) => {
-      await configureExternalReadTransaction(tx);
-      await validateExternalPublicLawDatabase(tx);
-    })
-    .then(
-      () => {
-        external.roleValidation = { status: "validated" };
-        return undefined;
-      },
-      (error: unknown) => {
-        external.roleValidation = { status: "idle" };
-        throw error;
-      },
-    );
+  const validation = external.database.transaction(async (tx) => {
+    await configureExternalReadTransaction(tx);
+    await validateExternalPublicLawDatabase(tx);
+  });
+  const promise = validation.then(
+    () => {
+      external.roleValidation = { status: "validated" };
+      return undefined;
+    },
+    // Reset the cache so the next caller retries from `idle`, then hand back
+    // the rejected attempt itself. Every awaiter of the shared promise sees
+    // the original failure, unwrapped and unreclassified.
+    async () => {
+      external.roleValidation = { status: "idle" };
+      return await validation;
+    },
+  );
   external.roleValidation = { status: "pending", promise };
   await promise;
 };

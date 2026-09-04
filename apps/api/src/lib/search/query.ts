@@ -450,7 +450,10 @@ const expandArabicFoldTargetVariants = (text: string): string[] => {
       continue;
     }
 
-    for (const variant of [...variants]) {
+    // Snapshot: the loop body adds to `variants`, and only the variants that
+    // existed before this character was expanded may be expanded again.
+    const expandable = [...variants];
+    for (const variant of expandable) {
       for (const alternate of alternates) {
         variants.add(
           `${variant.slice(0, index)}${alternate}${variant.slice(index + char.length)}`,

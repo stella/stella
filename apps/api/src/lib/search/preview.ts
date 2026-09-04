@@ -599,7 +599,10 @@ export const readSearchPreview = async (
             ),
           ];
 
-    const messages: (SearchPreviewChatMessage & { position: number })[] = [];
+    // The position is the sort key, not part of the payload, so it rides
+    // beside each message rather than inside it.
+    const messages: { position: number; message: SearchPreviewChatMessage }[] =
+      [];
     const locatorCandidates = getSearchPreviewLocatorCandidates(input.query);
     let remainingCharacters = Math.max(
       0,
@@ -617,10 +620,8 @@ export const readSearchPreview = async (
           })
         : candidate.content.slice(0, remainingCharacters);
       messages.push({
-        content,
-        id: candidate.id,
         position: candidate.position,
-        role: candidate.role,
+        message: { content, id: candidate.id, role: candidate.role },
       });
       remainingCharacters -= content.length;
     }
@@ -629,7 +630,7 @@ export const readSearchPreview = async (
       type: "chat-messages",
       messages: messages
         .toSorted((first, second) => first.position - second.position)
-        .map(({ position: _, ...message }) => message),
+        .map((entry) => entry.message),
     };
   }
 
