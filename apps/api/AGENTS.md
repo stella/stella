@@ -90,3 +90,9 @@ Schema in `/apps/api/src/db/schema.ts`. Drizzle ORM for all access. Full convent
   database `CHECK` when an invalid value could compromise lifecycle, billing,
   authorization, audit, or workflow invariants. Reserve `.$type<T>()` for branded or
   structured types.
+
+## Validation Boundary
+
+- Inside a handler, trust the route schema's types: do not re-parse the body or
+  re-check ownership the access macro and RLS already guarantee. Valibot runs
+  where data enters from JSON columns, webhooks, model output, or storage.
