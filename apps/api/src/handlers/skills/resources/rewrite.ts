@@ -152,6 +152,7 @@ const rewriteSkillResource = createSafeRootHandler(
       try: async () =>
         await generateTanStackTextForRole({
           abortSignal: AbortSignal.timeout(REWRITE_TIMEOUT_MS),
+          finishPolicy: "require-complete",
           maxOutputTokens: REWRITE_MAX_OUTPUT_TOKENS,
           role: "fast",
           serviceTier: "standard",

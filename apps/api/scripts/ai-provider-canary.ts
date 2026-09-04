@@ -1034,6 +1034,7 @@ const capabilityProbes = [
       const output = await generateTanStackTextForRole({
         abortSignal: signal,
         caching: CANARY_CACHING,
+        finishPolicy: "require-complete",
         maxOutputTokens: modelRoleMaxOutputTokens({
           modelId: DEFAULT_MODELS[provider][CAPABILITY_ROLE],
           role: CAPABILITY_ROLE,
@@ -1106,6 +1107,7 @@ const runModelRoleProbe = async ({
   const output = await generateTanStackTextForRole({
     abortSignal: signal,
     caching: NO_CACHING,
+    finishPolicy: "require-complete",
     maxOutputTokens: modelRoleMaxOutputTokens({
       modelId: selection.modelId,
       role,
@@ -1167,6 +1169,7 @@ const runWeeklyModelRoleProbe = async ({
   const output = await generateTanStackTextForRole({
     abortSignal: signal,
     caching: NO_CACHING,
+    finishPolicy: "require-complete",
     maxOutputTokens: modelRoleMaxOutputTokens({
       modelId: rotation.modelId,
       role,
@@ -1771,6 +1774,7 @@ const runCatalogModelProbe = async ({
   const output = await generateTanStackTextForRole({
     abortSignal: signal,
     caching: NO_CACHING,
+    finishPolicy: "require-complete",
     maxOutputTokens: modelRoleMaxOutputTokens({
       modelId,
       role: CATALOG_PROBE_ROLE,

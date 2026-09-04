@@ -666,6 +666,7 @@ describe("TanStack AI model-ingress guard", () => {
 
     await generateTextForTestModel({
       caching: noCaching,
+      finishPolicy: "allow-incomplete",
       organizationId: null,
       orgAIConfig: null,
       prompt: `Summarize https://my.stll.app/workspaces/${tenantWorkspaceId}/matters and decision ${publicDecisionId}`,
@@ -697,6 +698,7 @@ describe("TanStack AI model-ingress guard", () => {
 
     await generateTextForTestModel({
       caching: noCaching,
+      finishPolicy: "allow-incomplete",
       organizationId: null,
       orgAIConfig: null,
       prompt: `Summarize decision ${publicDecisionId}`,
@@ -722,6 +724,7 @@ describe("TanStack AI model-ingress guard", () => {
 
     await generateTextForTestModel({
       caching: noCaching,
+      finishPolicy: "allow-incomplete",
       organizationId: null,
       orgAIConfig: null,
       prompt: "Draft it.",
@@ -752,6 +755,7 @@ describe("TanStack AI model-ingress guard", () => {
     nextChatResult = createTextStream(["ok"]);
     const serverBuiltFailure = await generateTextForTestModel({
       caching: noCaching,
+      finishPolicy: "allow-incomplete",
       organizationId: null,
       orgAIConfig: null,
       prompt: "Draft it.",
@@ -812,6 +816,7 @@ describe("TanStack AI text generation", () => {
     const caught = await generateTextForTestModel({
       abortSignal: controller.signal,
       caching: noCaching,
+      finishPolicy: "allow-incomplete",
       organizationId: null,
       orgAIConfig: null,
       prompt: "Rewrite it.",
@@ -837,6 +842,7 @@ describe("TanStack AI text generation", () => {
     const caught = await generateTextForTestModel({
       abortSignal: controller.signal,
       caching: noCaching,
+      finishPolicy: "allow-incomplete",
       organizationId: null,
       orgAIConfig: null,
       prompt: "Rewrite it.",
@@ -864,6 +870,7 @@ describe("TanStack AI text generation", () => {
     const output = await generateTextForTestModel({
       abortSignal: controller.signal,
       caching: noCaching,
+      finishPolicy: "allow-incomplete",
       organizationId: null,
       orgAIConfig: null,
       prompt: "Rewrite it.",
@@ -886,6 +893,7 @@ describe("TanStack AI text generation", () => {
     const output = await generateTextForTestModel({
       abortSignal: controller.signal,
       caching: noCaching,
+      finishPolicy: "allow-incomplete",
       organizationId: null,
       orgAIConfig: null,
       prompt: "Rewrite it.",
@@ -903,6 +911,7 @@ describe("TanStack AI text generation", () => {
 
     const output = await generateTextForTestModel({
       caching: noCaching,
+      finishPolicy: "allow-incomplete",
       organizationId: null,
       orgAIConfig: null,
       prompt: "Say hello.",
@@ -924,6 +933,7 @@ describe("TanStack AI text generation", () => {
 
     const caught = await generateTextForTestModel({
       caching: noCaching,
+      finishPolicy: "allow-incomplete",
       organizationId: null,
       orgAIConfig: null,
       prompt: "Say hello.",
@@ -951,6 +961,7 @@ describe("TanStack AI text generation", () => {
 
     const caught = await generateTextForTestModel({
       caching: noCaching,
+      finishPolicy: "allow-incomplete",
       organizationId: null,
       orgAIConfig: null,
       prompt: "Say hello.",

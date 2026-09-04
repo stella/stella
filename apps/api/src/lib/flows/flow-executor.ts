@@ -415,6 +415,7 @@ const runAiStep = async ({
     analytics,
     system: FLOW_AI_SYSTEM_PROMPT,
     prompt,
+    finishPolicy: "require-complete",
     // Enforced, not advisory: the initiator's estimate assumes this per
     // step, so the run cannot settle above what it was admitted for.
     maxOutputTokens: FLOW_AI_STEP_MAX_OUTPUT_TOKENS,

@@ -105,13 +105,15 @@ type GenerateTanStackBaseOptions = {
   temperature?: number | undefined;
 };
 
-type GenerateTanStackTextForRoleOptions = GenerateTanStackBaseOptions &
-  GenerateTanStackInputOptions & {
-    finishPolicy?: "allow-incomplete" | "require-complete" | undefined;
-  };
+type TanStackTextForRoleOptions = GenerateTanStackBaseOptions &
+  GenerateTanStackInputOptions;
+
+type GenerateTanStackTextForRoleOptions = TanStackTextForRoleOptions & {
+  finishPolicy: "allow-incomplete" | "require-complete";
+};
 
 type GenerateTanStackObjectForRoleOptions<TSchema extends v.GenericSchema> =
-  GenerateTanStackTextForRoleOptions & {
+  TanStackTextForRoleOptions & {
     outputSchema: TSchema;
   };
 
@@ -237,7 +239,7 @@ export const generateTanStackTextForRole = async (
 };
 
 export const streamTanStackTextForRole = (
-  options: GenerateTanStackTextForRoleOptions,
+  options: TanStackTextForRoleOptions,
 ): AsyncIterable<string> => {
   const model = (options.resolveTextModel ?? resolveTanStackTextModel)(options);
   const requestMessages = guardedMessagesFromInput(options);
@@ -863,7 +865,7 @@ const messagesFromInput = (
  * provider with unredacted tenant ids in its messages or system prompt.
  */
 const guardedMessagesFromInput = (
-  options: GenerateTanStackTextForRoleOptions,
+  options: TanStackTextForRoleOptions,
 ): GuardedModelMessages<ModelMessage[]> =>
   guardModelMessages({
     messages: messagesFromInput(options),

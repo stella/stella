@@ -243,6 +243,7 @@ const getSuggestedPrompts = createSafeRootHandler(
 
     try {
       const text = await generateTanStackTextForRole({
+        finishPolicy: "allow-incomplete",
         role: "fast",
         orgAIConfig,
         organizationId: session.activeOrganizationId,

@@ -135,7 +135,7 @@ const outputCeilingModel = {
   provider: "anthropic",
 } as ResolvedTanStackTextModel;
 
-type FinishPolicy = "allow-incomplete" | "require-complete" | undefined;
+type FinishPolicy = "allow-incomplete" | "require-complete";
 
 const generateAtOutputCeiling = async ({
   finishPolicy,
@@ -157,7 +157,7 @@ const generateAtOutputCeiling = async ({
       },
     },
     caching: noCaching,
-    ...(finishPolicy === undefined ? {} : { finishPolicy }),
+    finishPolicy,
     maxOutputTokens: TEST_OUTPUT_CEILING_TOKENS,
     organizationId: null,
     orgAIConfig: null,
@@ -184,6 +184,7 @@ const generateWithCancellation = async (cancelAt: CancellationPoint) => {
   return await generateTanStackTextForRole({
     abortSignal: controller.signal,
     caching: noCaching,
+    finishPolicy: "allow-incomplete",
     organizationId: null,
     orgAIConfig: null,
     prompt: "Rewrite it.",
@@ -217,7 +218,7 @@ describe("TanStack output-ceiling canary", () => {
 
     expect(
       await generateAtOutputCeiling({
-        finishPolicy: undefined,
+        finishPolicy: "allow-incomplete",
         terminalEvents,
       }),
     ).toBe("as far as it got");

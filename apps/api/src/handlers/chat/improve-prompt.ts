@@ -94,6 +94,7 @@ const improvePrompt = createSafeRootHandler(
               role: "fast",
               scopeKey: null,
             }),
+            finishPolicy: "require-complete",
             messages: modelInput.messages,
             maxOutputTokens: IMPROVE_PROMPT_MAX_OUTPUT_TOKENS,
             organizationId: session.activeOrganizationId,
