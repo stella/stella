@@ -99,7 +99,9 @@ const readLists = createSafeHandler(
 
     return Result.ok({
       ...page,
-      items: page.items.map(({ createdAtCursor: _, ...item }) => item),
+      items: page.items.map(
+        ({ createdAtCursor: _createdAtCursor, ...item }) => item,
+      ),
     });
   },
 );

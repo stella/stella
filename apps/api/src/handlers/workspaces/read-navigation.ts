@@ -128,7 +128,7 @@ const readWorkspaceNavigation = createSafeRootHandler(
       ({
         clientDisplayName,
         clientRecordId,
-        lastActivityAtCursor: _,
+        lastActivityAtCursor: _lastActivityAtCursor,
         ...row
       }) => ({
         ...row,
