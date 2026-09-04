@@ -46,8 +46,13 @@ describe("page transformation plans", () => {
 
     expect(bytes).toEqual(snapshot);
     expect(outputs).toHaveLength(2);
-    const first = await PDF.load(outputs[0]!);
-    const second = await PDF.load(outputs[1]!);
+    const firstOutput = outputs.at(0);
+    const secondOutput = outputs.at(1);
+    if (!firstOutput || !secondOutput) {
+      throw new Error("Expected two transformed outputs");
+    }
+    const first = await PDF.load(firstOutput);
+    const second = await PDF.load(secondOutput);
     expect(first.getPageCount()).toBe(3);
     expect(second.getPageCount()).toBe(1);
     expect(first.getPage(1)?.rotation).toBe(90);
@@ -68,7 +73,10 @@ describe("page transformation plans", () => {
       ],
       outputs: [["cropped"]],
     });
-    const pdf = await PDF.load(output!);
+    if (!output) {
+      throw new Error("Expected one transformed output");
+    }
+    const pdf = await PDF.load(output);
     const crop = pdf.getPage(0)?.getCropBox();
     expect(crop?.x).toBeCloseTo(20);
     expect(crop?.y).toBeCloseTo(60);
@@ -77,4 +85,37 @@ describe("page transformation plans", () => {
     expect((crop?.width ?? 0) - (crop?.x ?? 0)).toBeCloseTo(100);
     expect((crop?.height ?? 0) - (crop?.y ?? 0)).toBeCloseTo(180);
   });
+
+  test.each([
+    { rotation: 90 as const, x: 0.2, y: 0.1, width: 0.6, height: 0.7 },
+    { rotation: 180 as const, x: 0.2, y: 0.2, width: 0.7, height: 0.6 },
+    { rotation: 270 as const, x: 0.2, y: 0.2, width: 0.6, height: 0.7 },
+  ])(
+    "maps a visual left-edge crop through a $rotation-degree rotation",
+    async ({ height, rotation, width, x, y }) => {
+      const bytes = await sourceBytes();
+      const [output] = await transformPagePlan({
+        sources: [{ id: "source", bytes: toArrayBuffer(bytes) }],
+        pages: [
+          {
+            id: "cropped",
+            sourceId: "source",
+            sourcePageIndex: 0,
+            rotation,
+            crop: { x: 0.1, y: 0.2, width: 0.7, height: 0.6 },
+          },
+        ],
+        outputs: [["cropped"]],
+      });
+      if (!output) {
+        throw new Error("Expected one transformed output");
+      }
+      const pdf = await PDF.load(output);
+      const crop = pdf.getPage(0)?.getCropBox();
+      expect(crop?.x).toBeCloseTo(200 * x);
+      expect(crop?.y).toBeCloseTo(300 * y);
+      expect((crop?.width ?? 0) - (crop?.x ?? 0)).toBeCloseTo(200 * width);
+      expect((crop?.height ?? 0) - (crop?.y ?? 0)).toBeCloseTo(300 * height);
+    },
+  );
 });

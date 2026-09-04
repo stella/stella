@@ -27,6 +27,7 @@ export type PageOrganizerUI = {
 };
 
 export type PageOrganizerHistory = {
+  initial: PageOrganizerPlan;
   past: readonly PageOrganizerPlan[];
   present: PageOrganizerPlan;
   future: readonly PageOrganizerPlan[];
@@ -113,7 +114,7 @@ export const createPageOrganizerState = (
 ): PageOrganizerState => {
   const present = normalizePlan(plan);
   return {
-    history: { past: [], present, future: [] },
+    history: { initial: present, past: [], present, future: [] },
     ui: normalizeUI(ui ?? DEFAULT_UI, present),
   };
 };
@@ -123,6 +124,9 @@ const currentPlan = (state: PageOrganizerState): PageOrganizerPlan =>
 
 const samePlan = (a: PageOrganizerPlan, b: PageOrganizerPlan): boolean =>
   JSON.stringify(a) === JSON.stringify(b);
+
+export const isPageOrganizerDirty = (state: PageOrganizerState): boolean =>
+  !samePlan(state.history.initial, state.history.present);
 
 const commit = (
   state: PageOrganizerState,
@@ -135,6 +139,7 @@ const commit = (
   }
   return {
     history: {
+      initial: state.history.initial,
       past: [...state.history.past, currentPlan(state)].slice(
         -MAX_HISTORY_ENTRIES,
       ),
@@ -366,6 +371,7 @@ export const reducePageOrganizer = (
       }
       return {
         history: {
+          initial: state.history.initial,
           past: state.history.past.slice(0, -1),
           present: previous,
           future: [currentPlan(state), ...state.history.future],
@@ -380,6 +386,7 @@ export const reducePageOrganizer = (
       }
       return {
         history: {
+          initial: state.history.initial,
           past: [...state.history.past, currentPlan(state)].slice(
             -MAX_HISTORY_ENTRIES,
           ),

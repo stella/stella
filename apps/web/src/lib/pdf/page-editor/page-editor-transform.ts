@@ -12,7 +12,37 @@ import type {
 const applyCrop = (
   page: ReturnType<PDF["getPages"]>[number],
   crop: NormalizedCrop,
+  rotation: PagePlanEntry["rotation"],
 ) => {
+  const sourceCrop = (() => {
+    switch (rotation) {
+      case 0:
+        return crop;
+      case 90:
+        return {
+          x: 1 - crop.y - crop.height,
+          y: crop.x,
+          width: crop.height,
+          height: crop.width,
+        };
+      case 180:
+        return {
+          x: 1 - crop.x - crop.width,
+          y: 1 - crop.y - crop.height,
+          width: crop.width,
+          height: crop.height,
+        };
+      case 270:
+        return {
+          x: crop.y,
+          y: 1 - crop.x - crop.width,
+          width: crop.height,
+          height: crop.width,
+        };
+      default:
+        return rotation satisfies never;
+    }
+  })();
   const sourceBox = page.getCropBox();
   // LibPDF currently exposes the upper-right coordinates through Rectangle's
   // `width`/`height` fields. Subtract the lower-left origin so non-zero
@@ -20,10 +50,10 @@ const applyCrop = (
   // the source CropBox, matching the visible page the user adjusted.
   const sourceWidth = sourceBox.width - sourceBox.x;
   const sourceHeight = sourceBox.height - sourceBox.y;
-  const x = sourceBox.x + sourceWidth * crop.x;
-  const y = sourceBox.y + sourceHeight * crop.y;
-  const width = sourceWidth * crop.width;
-  const height = sourceHeight * crop.height;
+  const x = sourceBox.x + sourceWidth * sourceCrop.x;
+  const y = sourceBox.y + sourceHeight * sourceCrop.y;
+  const width = sourceWidth * sourceCrop.width;
+  const height = sourceHeight * sourceCrop.height;
   page.dict.set(
     PdfName.of("CropBox"),
     PdfArray.of(
@@ -81,7 +111,7 @@ const copyOutputPages = async (
   }
   page.setRotation(plan.rotation);
   if (plan.crop) {
-    applyCrop(page, plan.crop);
+    applyCrop(page, plan.crop, plan.rotation);
   }
   await copyOutputPages(output, outputPageIds, pageById, loaded, index + 1);
 };

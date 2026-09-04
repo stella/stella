@@ -1,8 +1,9 @@
 import { api } from "@/lib/api";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
-import { ClientOperationError } from "@/lib/errors/client";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { toSafeId } from "@/lib/safe-id";
+
+import { completeEntityVersionUpload } from "./upload-entity-version.logic";
 
 // Stall ceiling, not a target duration: a healthy slow upload of a large file
 // can legitimately take several minutes.
@@ -68,33 +69,24 @@ export const uploadEntityVersion = async ({
   );
   const { uploadId, url, headers } = unwrapEden(presign);
 
-  let putResponse: Response;
-  try {
-    putResponse = await fetchWithTimeout(url, {
-      method: "PUT",
-      headers,
-      body: file,
-      signal,
-      timeoutMs: UPLOAD_PUT_TIMEOUT_MS,
-    });
-  } catch (error) {
-    await abortUpload(workspaceId, uploadId);
-    throw error;
-  }
-
-  if (!putResponse.ok) {
-    await abortUpload(workspaceId, uploadId);
-    throw new ClientOperationError({
-      action: "upload-version-to-s3",
-      message: `S3 rejected upload (${putResponse.status})`,
-    });
-  }
-
-  const finalize = await wsClient({ uploadId }).finalize.post(
-    undefined,
-    signal ? { fetch: { signal } } : undefined,
-  );
-  if (finalize.error) {
-    throw toAPIError(finalize.error);
-  }
+  await completeEntityVersionUpload({
+    abort: async () => await abortUpload(workspaceId, uploadId),
+    finalize: async () => {
+      const response = await wsClient({ uploadId }).finalize.post(
+        undefined,
+        signal ? { fetch: { signal } } : undefined,
+      );
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+    },
+    put: async () =>
+      await fetchWithTimeout(url, {
+        method: "PUT",
+        headers,
+        body: file,
+        signal,
+        timeoutMs: UPLOAD_PUT_TIMEOUT_MS,
+      }),
+  });
 };

@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   createPageOrganizerState,
+  isPageOrganizerDirty,
   reducePageOrganizer,
   type OrganizerPage,
   type PageOrganizerState,
@@ -116,6 +117,7 @@ describe("page organizer state transitions", () => {
     state = reducePageOrganizer(state, { type: "undo" });
     state = reducePageOrganizer(state, { type: "undo" });
     expect(state.history.present).toEqual(original.history.present);
+    expect(isPageOrganizerDirty(state)).toBe(false);
     state = reducePageOrganizer(state, { type: "redo" });
     state = reducePageOrganizer(state, { type: "redo" });
     expect(state.history.present).toEqual(changed.history.present);
@@ -136,5 +138,26 @@ describe("page organizer state transitions", () => {
     }
     expect(state.history.past).toHaveLength(100);
     expectInvariant(state);
+  });
+
+  test("stays dirty after undoing every retained entry beyond the history cap", () => {
+    let state = stateWith();
+    state = reducePageOrganizer(state, {
+      type: "replaceSelection",
+      pageIds: ["page-1"],
+    });
+    for (let index = 0; index < 101; index += 1) {
+      state = reducePageOrganizer(state, {
+        type: "rotateSelected",
+        degrees: 90,
+      });
+    }
+    for (let index = 0; index < 100; index += 1) {
+      state = reducePageOrganizer(state, { type: "undo" });
+    }
+
+    expect(state.history.past).toHaveLength(0);
+    expect(state.history.present).not.toEqual(state.history.initial);
+    expect(isPageOrganizerDirty(state)).toBe(true);
   });
 });

@@ -61,12 +61,19 @@ import {
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useHydrationSafeHotkeyPlatform } from "@/hooks/use-hydration-safe-hotkey-platform";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
+import { useFormatter } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";
+import { api } from "@/lib/api";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
+import { unwrapEden } from "@/lib/errors/api";
 import { filesKeys, fileOptions } from "@/lib/files/queries";
 import { uploadEntityVersion } from "@/lib/files/upload-entity-version";
-import { MAX_PAGE_EDITOR_SOURCE_BYTES } from "@/lib/pdf/page-editor/page-editor-protocol";
+import {
+  MAX_PAGE_EDITOR_PAGES,
+  MAX_PAGE_EDITOR_SOURCE_BYTES,
+  MAX_PAGE_EDITOR_SOURCES,
+} from "@/lib/pdf/page-editor/page-editor-protocol";
 import { transformPDFInWorker } from "@/lib/pdf/page-editor/page-editor-worker-client";
 import { destroyPDFDocument } from "@/lib/pdf/pdf-cleanup";
 import { usePDFStore } from "@/lib/pdf/pdf-context";
@@ -79,6 +86,7 @@ import { entityVersionsKeys } from "@/lib/workspaces/queries/entity-versions";
 
 import {
   createPageOrganizerState,
+  isPageOrganizerDirty,
   reducePageOrganizer,
   type NormalizedCrop,
   type OrganizerPage,
@@ -218,18 +226,22 @@ const configureThumbnailCanvas = ({
 };
 
 type LoadAddedSourcesOptions = {
+  canAdd: (source: AddedSource) => boolean;
   files: readonly File[];
   index?: number | undefined;
   isMounted: () => boolean;
   onAdded: (source: AddedSource) => void;
+  onLimitExceeded: () => void;
   onUnsupported: () => void;
 };
 
 const loadAddedSources = async ({
+  canAdd,
   files,
   index = 0,
   isMounted,
   onAdded,
+  onLimitExceeded,
   onUnsupported,
 }: LoadAddedSourcesOptions): Promise<void> => {
   const file = files.at(index);
@@ -250,6 +262,9 @@ const loadAddedSources = async ({
   if (result.value.isXfa || result.value.attachmentLabels.size > 0) {
     await destroyPDFDocument(result.value);
     onUnsupported();
+  } else if (!canAdd({ id: sourceId, bytes, document: result.value })) {
+    await destroyPDFDocument(result.value);
+    onLimitExceeded();
   } else {
     onAdded({
       id: sourceId,
@@ -259,38 +274,43 @@ const loadAddedSources = async ({
   }
 
   await loadAddedSources({
+    canAdd,
     files,
     index: index + 1,
     isMounted,
     onAdded,
+    onLimitExceeded,
     onUnsupported,
   });
 };
 
-const downloadOutputs = async ({
+const downloadOutput = ({
   baseName,
-  outputs,
+  output,
 }: {
   baseName: string;
-  outputs: readonly ArrayBuffer[];
+  output: ArrayBuffer;
 }) => {
-  if (outputs.length === 1) {
-    const output = outputs.at(0);
-    if (output) {
-      downloadFile(
-        new Blob([output], { type: "application/pdf" }),
-        `${baseName}.pdf`,
-      );
-    }
-    return;
-  }
+  downloadFile(
+    new Blob([output], { type: "application/pdf" }),
+    `${baseName}.pdf`,
+  );
+};
 
-  const { default: JSZip } = await import("jszip");
-  const zip = new JSZip();
-  for (const [index, output] of outputs.entries()) {
-    zip.file(`${baseName} - ${index + 1}.pdf`, output);
-  }
-  downloadFile(await zip.generateAsync({ type: "blob" }), `${baseName}.zip`);
+type AuthorizePDFOrganizerExportOptions = {
+  fieldId: string;
+  workspaceId: string;
+};
+
+const authorizePDFOrganizerExport = async ({
+  fieldId,
+  workspaceId,
+}: AuthorizePDFOrganizerExportOptions): Promise<void> => {
+  const response = await api
+    .files({ workspaceId })
+    .url({ fieldId })
+    .get({ query: { purpose: "download" } });
+  unwrapEden(response);
 };
 
 type PageThumbnailProps = {
@@ -394,6 +414,7 @@ const PageThumbnail = ({ page, pageInfo }: PageThumbnailProps) => {
 
 type OrganizerPageCardProps = {
   index: number;
+  isBusy: boolean;
   isSelected: boolean;
   onMove: (draggedPageId: string, targetPageId: string) => void;
   onMoveStep: (pageId: string, direction: "backward" | "forward") => void;
@@ -404,6 +425,7 @@ type OrganizerPageCardProps = {
 
 const OrganizerPageCard = ({
   index,
+  isBusy,
   isSelected,
   onMove,
   onMoveStep,
@@ -412,13 +434,13 @@ const OrganizerPageCard = ({
   pageInfo,
 }: OrganizerPageCardProps) => {
   const tPageEditor = useTranslations("workspaces.pdf.pageEditor");
+  const format = useFormatter();
   const [card, setCard] = useState<HTMLElement | null>(null);
   const [handle, setHandle] = useState<HTMLButtonElement | null>(null);
   const [isDropTarget, setIsDropTarget] = useState(false);
   const handleMove = useLatestCallback(onMove);
-  const pageLabel = tPageEditor("pageNumber", {
-    number: String(index + 1),
-  });
+  const pageNumber = format.number(index + 1);
+  const pageLabel = tPageEditor("pageNumber", { number: pageNumber });
 
   useExternalSyncEffect(() => {
     if (!card || !handle) {
@@ -426,6 +448,7 @@ const OrganizerPageCard = ({
     }
     return combine(
       draggable({
+        canDrag: () => !isBusy,
         element: card,
         dragHandle: handle,
         getInitialData: () =>
@@ -454,6 +477,7 @@ const OrganizerPageCard = ({
       dropTargetForElements({
         element: card,
         canDrop: ({ source }) =>
+          !isBusy &&
           source.data["type"] === PAGE_DRAG_TYPE &&
           source.data["pageId"] !== page.id,
         getData: () =>
@@ -469,7 +493,7 @@ const OrganizerPageCard = ({
         },
       }),
     );
-  }, [card, handle, handleMove, page.id, pageLabel]);
+  }, [card, handle, handleMove, isBusy, page.id, pageLabel]);
 
   const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
     if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
@@ -500,7 +524,7 @@ const OrganizerPageCard = ({
           >
             <Checkbox
               aria-label={tPageEditor("selectPage", {
-                number: String(index + 1),
+                number: pageNumber,
               })}
               checked={isSelected}
               id={`pdf-page-select-${page.id}`}
@@ -509,9 +533,10 @@ const OrganizerPageCard = ({
           </label>
           <Button
             aria-label={tPageEditor("reorderPage", {
-              number: String(index + 1),
+              number: pageNumber,
             })}
             className="bg-background/90 text-foreground [:hover,[data-pressed]]:bg-background/90 size-11 cursor-grab"
+            disabled={isBusy}
             onKeyDown={handleKeyDown}
             ref={setHandle}
             size="icon"
@@ -533,7 +558,9 @@ const OrganizerPageCard = ({
         <div className="flex items-center justify-between gap-2 px-1 pt-2 text-xs">
           <span className="font-medium">{pageLabel}</span>
           {page.rotation !== 0 && (
-            <span className="text-muted-foreground">{page.rotation}°</span>
+            <span className="text-muted-foreground">
+              {format.number(page.rotation)}°
+            </span>
           )}
         </div>
       </article>
@@ -552,6 +579,7 @@ export const PDFPageOrganizer = ({
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
   const tPageEditor = useTranslations("workspaces.pdf.pageEditor");
+  const format = useFormatter();
   const hotkeyPlatform = useHydrationSafeHotkeyPlatform();
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
@@ -586,8 +614,12 @@ export const PDFPageOrganizer = ({
   const [cropMargins, setCropMargins] = useState(EMPTY_CROP_MARGINS);
   const plan = state.history.present;
   const selectedIds = new Set(state.ui.selectedPageIds);
-  const isDirty = state.history.past.length > 0;
+  const isDirty = isPageOrganizerDirty(state);
   const isBusy = operation.type !== "idle" || isAddingPDF;
+  const documentLimitMessage = tPageEditor("documentLimit", {
+    maxPages: format.number(MAX_PAGE_EDITOR_PAGES),
+    maxSources: format.number(MAX_PAGE_EDITOR_SOURCES),
+  });
   const pageInfoBySource = useMemo(() => {
     const bySource = new Map<string, readonly PageInfo[]>();
     bySource.set(ORIGINAL_SOURCE_ID, [...providerPages.values()]);
@@ -600,6 +632,7 @@ export const PDFPageOrganizer = ({
   const isUnsupported =
     providerDocument?.isXfa === true ||
     attachmentCount > 0 ||
+    providerPages.size > MAX_PAGE_EDITOR_PAGES ||
     originalFile.buffer.byteLength > MAX_PAGE_EDITOR_SOURCE_BYTES;
 
   useMountEffect(() => () => {
@@ -667,6 +700,13 @@ export const PDFPageOrganizer = ({
       return;
     }
     const files = Array.from(fileList);
+    if (1 + addedSources.length + files.length > MAX_PAGE_EDITOR_SOURCES) {
+      stellaToast.add({
+        title: documentLimitMessage,
+        type: "error",
+      });
+      return;
+    }
     const totalBytes =
       originalFile.buffer.byteLength +
       addedSources.reduce((sum, source) => sum + source.bytes.byteLength, 0) +
@@ -680,9 +720,20 @@ export const PDFPageOrganizer = ({
     }
 
     setIsAddingPDF(true);
+    let acceptedPageCount = plan.pages.length;
+    let limitToastShown = false;
     await withCleanup(
       async () =>
         loadAddedSources({
+          canAdd: (source) => {
+            const nextPageCount =
+              acceptedPageCount + source.document.pages.size;
+            if (nextPageCount > MAX_PAGE_EDITOR_PAGES) {
+              return false;
+            }
+            acceptedPageCount = nextPageCount;
+            return true;
+          },
           files,
           isMounted: () => isMountedRef.current,
           onAdded: (source) => {
@@ -697,6 +748,16 @@ export const PDFPageOrganizer = ({
                 sourcePageIndex,
                 rotation: normalizePDFRotation(pageInfo.proxy.rotate),
               })),
+            });
+          },
+          onLimitExceeded: () => {
+            if (limitToastShown) {
+              return;
+            }
+            limitToastShown = true;
+            stellaToast.add({
+              title: documentLimitMessage,
+              type: "error",
             });
           },
           onUnsupported: () => {
@@ -746,19 +807,21 @@ export const PDFPageOrganizer = ({
   };
 
   const handleDownload = async () => {
-    if (selectedIds.size > 0) {
-      const selected = plan.pages
-        .filter((page) => selectedIds.has(page.id))
-        .map((page) => page.id);
-      await downloadOutputs({
-        baseName: `${baseName} - selected pages`,
-        outputs: await transform([selected]),
-      });
+    const pageIds =
+      selectedIds.size > 0
+        ? plan.pages
+            .filter((page) => selectedIds.has(page.id))
+            .map((page) => page.id)
+        : plan.pages.map((page) => page.id);
+    const [output] = await transform([pageIds]);
+    if (!output) {
       return;
     }
-    await downloadOutputs({
-      baseName,
-      outputs: await transform([plan.pages.map((page) => page.id)]),
+    await authorizePDFOrganizerExport({ fieldId, workspaceId });
+    downloadOutput({
+      baseName:
+        selectedIds.size > 0 ? `${baseName} - selected pages` : baseName,
+      output,
     });
   };
 
@@ -874,6 +937,7 @@ export const PDFPageOrganizer = ({
           type="file"
         />
         <Button
+          disabled={isBusy}
           loading={isAddingPDF}
           onClick={() => inputRef.current?.click()}
           size="sm"
@@ -903,6 +967,7 @@ export const PDFPageOrganizer = ({
         >
           <Button
             className="-ms-2"
+            disabled={isBusy}
             onClick={() => dispatch({ type: "toggleSelectAll" })}
             size="sm"
             variant="ghost"
@@ -912,7 +977,7 @@ export const PDFPageOrganizer = ({
           <Separator className="mx-1 h-6" orientation="vertical" />
           <Button
             aria-label={tPageEditor("rotateLeft")}
-            disabled={selectedIds.size === 0}
+            disabled={selectedIds.size === 0 || isBusy}
             onClick={() => dispatch({ type: "rotateSelected", degrees: -90 })}
             size="icon-sm"
             tooltip={tPageEditor("rotateLeft")}
@@ -922,7 +987,7 @@ export const PDFPageOrganizer = ({
           </Button>
           <Button
             aria-label={tPageEditor("rotateRight")}
-            disabled={selectedIds.size === 0}
+            disabled={selectedIds.size === 0 || isBusy}
             onClick={() => dispatch({ type: "rotateSelected", degrees: 90 })}
             size="icon-sm"
             tooltip={tPageEditor("rotateRight")}
@@ -932,7 +997,7 @@ export const PDFPageOrganizer = ({
           </Button>
           <Button
             aria-label={tPageEditor("crop")}
-            disabled={selectedIds.size === 0}
+            disabled={selectedIds.size === 0 || isBusy}
             onClick={() => setIsCropOpen(true)}
             size="icon-sm"
             tooltip={tPageEditor("crop")}
@@ -942,7 +1007,7 @@ export const PDFPageOrganizer = ({
           </Button>
           <Button
             aria-label={tPageEditor("duplicate")}
-            disabled={selectedIds.size === 0}
+            disabled={selectedIds.size === 0 || isBusy}
             onClick={() =>
               dispatch({
                 type: "duplicateSelected",
@@ -960,7 +1025,9 @@ export const PDFPageOrganizer = ({
           <Button
             aria-label={tPageEditor("delete")}
             disabled={
-              selectedIds.size === 0 || selectedIds.size >= plan.pages.length
+              selectedIds.size === 0 ||
+              selectedIds.size >= plan.pages.length ||
+              isBusy
             }
             onClick={() => dispatch({ type: "deleteSelected" })}
             size="icon-sm"
@@ -972,7 +1039,7 @@ export const PDFPageOrganizer = ({
           <div className="ms-auto flex items-center gap-1">
             <Button
               aria-label={tPageEditor("undo")}
-              disabled={state.history.past.length === 0}
+              disabled={state.history.past.length === 0 || isBusy}
               onClick={() => dispatch({ type: "undo" })}
               size="icon-sm"
               tooltip={tPageEditor("undo")}
@@ -982,7 +1049,7 @@ export const PDFPageOrganizer = ({
             </Button>
             <Button
               aria-label={tPageEditor("redo")}
-              disabled={state.history.future.length === 0}
+              disabled={state.history.future.length === 0 || isBusy}
               onClick={() => dispatch({ type: "redo" })}
               size="icon-sm"
               tooltip={tPageEditor("redo")}
@@ -1007,6 +1074,7 @@ export const PDFPageOrganizer = ({
               return (
                 <OrganizerPageCard
                   index={index}
+                  isBusy={isBusy}
                   isSelected={selectedIds.has(page.id)}
                   key={page.id}
                   onMove={handleMove}
@@ -1089,7 +1157,7 @@ export const PDFPageOrganizer = ({
             <DialogTitle>{tPageEditor("cropTitle")}</DialogTitle>
             <DialogDescription>
               {tPageEditor("cropDescription", {
-                count: String(selectedIds.size),
+                count: selectedIds.size,
               })}
             </DialogDescription>
           </DialogHeader>
@@ -1118,6 +1186,7 @@ export const PDFPageOrganizer = ({
           </div>
           <DialogFooter>
             <Button
+              disabled={isBusy}
               onClick={() => {
                 dispatch({ type: "setCrop", crop: null });
                 setCropMargins(EMPTY_CROP_MARGINS);
@@ -1131,7 +1200,7 @@ export const PDFPageOrganizer = ({
               {tCommon("cancel")}
             </DialogClose>
             <Button
-              disabled={crop === null}
+              disabled={crop === null || isBusy}
               onClick={() => {
                 if (!crop) {
                   return;

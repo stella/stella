@@ -4867,7 +4867,7 @@ type Messages = {
         "applyCrop": "Apply crop";
         "crop": "Crop";
         "cropBottom": "Bottom";
-        "cropDescription": "Set the crop margins for the {count} selected pages.";
+        "cropDescription": "{count, plural, one {Set the crop margins for the selected page.} other {Set the crop margins for the # selected pages.}}";
         "cropLeft": "Left";
         "cropRight": "Right";
         "cropTitle": "Crop pages";
@@ -4877,6 +4877,7 @@ type Messages = {
         "discard": "Discard page edits";
         "discardDescription": "Your page edits will be lost.";
         "discardTitle": "Discard changes?";
+        "documentLimit": "The organizer supports up to {maxSources} PDFs or {maxPages} pages.";
         "downloadCopy": "Download copy";
         "downloadSelectedPages": "Download selected pages";
         "duplicate": "Make a copy";

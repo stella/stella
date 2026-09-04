@@ -29,8 +29,8 @@ export type PageTransformResponse =
   | { requestId: number; status: "error"; message: string };
 
 export const MAX_PAGE_EDITOR_SOURCE_BYTES = 100 * 1024 * 1024;
-const MAX_PAGE_EDITOR_SOURCES = 100;
-const MAX_PAGE_EDITOR_PAGES = 20_000;
+export const MAX_PAGE_EDITOR_SOURCES = 100;
+export const MAX_PAGE_EDITOR_PAGES = 20_000;
 const MAX_PAGE_EDITOR_OUTPUT_PAGE_REFS = 100_000;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
