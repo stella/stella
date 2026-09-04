@@ -11,7 +11,7 @@
 // repository check.
 
 import { panic } from "better-result";
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 
 import { isChangedLintPath } from "./lint-paths";
@@ -23,6 +23,49 @@ import {
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const DEFAULT_BASE = "origin/main";
 const WORKSPACE_PARENTS = ["apps", "packages"] as const;
+const RESULT_BOUNDARY_BASELINE_PATH = path.join(
+  REPO_ROOT,
+  "scripts/ratchet-baseline.json",
+);
+const RESULT_BOUNDARY_METRICS = [
+  "throw-outside-boundary",
+  "try-catch-outside-boundary",
+] as const;
+
+type JsonRecord = Record<string, unknown>;
+
+const isJsonRecord = (value: unknown): value is JsonRecord =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+/**
+ * Files already tracked by the result ratchet carry deliberate legacy debt.
+ * The ratchet rejects any increase; running the strict lint over those files
+ * rejects every existing violation as well, so a change unrelated to that
+ * debt cannot pass the affected-file gate. Keep the two guards monotone by
+ * linting only files with no baseline entry here.
+ */
+const readResultBoundaryBaselineFiles = (): ReadonlySet<string> => {
+  const parsed: unknown = JSON.parse(
+    readFileSync(RESULT_BOUNDARY_BASELINE_PATH, "utf-8"),
+  );
+  if (!isJsonRecord(parsed)) {
+    panic("result-boundary ratchet baseline must be an object");
+  }
+
+  const files = new Set<string>();
+  for (const metric of RESULT_BOUNDARY_METRICS) {
+    const snapshot = parsed[metric];
+    if (!isJsonRecord(snapshot) || !isJsonRecord(snapshot["files"])) {
+      panic(`result-boundary ratchet baseline is missing ${metric}.files`);
+    }
+    for (const file of Object.keys(snapshot["files"])) {
+      files.add(file);
+    }
+  }
+  return files;
+};
+
+const RESULT_BOUNDARY_BASELINE_FILES = readResultBoundaryBaselineFiles();
 
 export const DEPENDENCY_CACHE_INPUTS = [
   "$TURBO_ROOT$/.npmrc",
@@ -394,6 +437,7 @@ export const resultBoundaryLintCommand = (
   const paths = [...new Set(changedFiles)]
     .filter(isResultConventionSourceFile)
     .filter((file) => !isResultConventionExcludedFile(file))
+    .filter((file) => !RESULT_BOUNDARY_BASELINE_FILES.has(file))
     .sort();
   if (paths.length === 0) {
     return null;

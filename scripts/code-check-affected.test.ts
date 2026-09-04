@@ -40,12 +40,12 @@ const plan = (
   });
 
 describe("changed-file result boundary lint", () => {
-  test("enforces the exact Oxlint rules in legacy-debt directories", () => {
+  test("enforces the exact Oxlint rules for files without baseline debt", () => {
     expect(
       resultBoundaryLintCommand([
-        "apps/api/src/lib/deepl/client.ts",
-        "apps/api/src/lib/deepl/client.ts",
-        "packages/boe/src/client.ts",
+        "apps/api/src/lib/new-client.ts",
+        "apps/api/src/lib/new-client.ts",
+        "packages/boe/src/new-client.ts",
       ]),
     ).toEqual([
       "bun",
@@ -54,22 +54,32 @@ describe("changed-file result boundary lint", () => {
       "-c",
       "oxlint.result-boundary.config.ts",
       "--deny-warnings",
-      "apps/api/src/lib/deepl/client.ts",
-      "packages/boe/src/client.ts",
+      "apps/api/src/lib/new-client.ts",
+      "packages/boe/src/new-client.ts",
     ]);
   });
 
-  test("skips boundaries, generated output, tests, and unrelated source", () => {
+  test("skips baselined debt, boundaries, generated output, tests, and unrelated source", () => {
     expect(
       resultBoundaryLintCommand([
+        "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts",
         "apps/api/src/lib/document-processing-queue.ts",
         "apps/api/src/lib/document-processing-queue.test.ts",
         "apps/api/src/mcp/generated/capability-dispatch.ts",
         "apps/web/src/lib/example.ts",
         "packages/start-runtime/src/runtime.ts",
         "packages/ssr-testkit/src/assert-document.ts",
+        "apps/api/src/lib/new-client.ts",
       ]),
-    ).toBeNull();
+    ).toEqual([
+      "bun",
+      "--bun",
+      "oxlint",
+      "-c",
+      "oxlint.result-boundary.config.ts",
+      "--deny-warnings",
+      "apps/api/src/lib/new-client.ts",
+    ]);
   });
 });
 
