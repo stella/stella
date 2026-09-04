@@ -53,6 +53,18 @@ export const FLOW_STEP_OUTPUT_CONTEXT_CHAR_CAP = 20_000;
 /** Per input-document char cap when an AI step includes documents. */
 export const FLOW_DOCUMENT_CONTEXT_CHAR_CAP = 60_000;
 
+/**
+ * Scalar bounds on a flow definition's own text fields. The TypeBox route
+ * contract in `handlers/flows/schema.ts` and the valibot schema below are two
+ * layers over the same body, so both read these rather than restating the
+ * numbers: a bound raised in one layer and not the other silently becomes the
+ * lower of the two, with an error message from the wrong layer.
+ */
+export const FLOW_DEFINITION_NAME_MAX_CHARS = 256;
+export const FLOW_DEFINITION_DESCRIPTION_MAX_CHARS = 2000;
+export const FLOW_STEP_NAME_MAX_CHARS = 200;
+export const FLOW_STEP_DOCUMENT_TITLE_MAX_CHARS = 256;
+
 /** Char cap on a step's own instruction text (AI prompt, gate instructions). */
 export const FLOW_STEP_INSTRUCTION_CHAR_CAP = 10_000;
 
@@ -187,7 +199,7 @@ const flowStepNameSchema = v.pipe(
   v.string(),
   v.trim(),
   v.minLength(1),
-  v.maxLength(200),
+  v.maxLength(FLOW_STEP_NAME_MAX_CHARS),
 );
 
 const aiFlowStepSchema = v.strictObject({
@@ -215,7 +227,12 @@ const reviewGateFlowStepSchema = v.strictObject({
 const createDocumentFlowStepSchema = v.strictObject({
   kind: v.literal("create-document"),
   name: flowStepNameSchema,
-  documentTitle: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(256)),
+  documentTitle: v.pipe(
+    v.string(),
+    v.trim(),
+    v.minLength(1),
+    v.maxLength(FLOW_STEP_DOCUMENT_TITLE_MAX_CHARS),
+  ),
 });
 
 export const flowStepSchema = v.variant("kind", [
@@ -291,8 +308,19 @@ true satisfies [FlowTriggerSchemaOutput, FlowTrigger] extends [
  * server-side (it needs a DB read) and is NOT expressed here.
  */
 export const flowDefinitionInputSchema = v.strictObject({
-  name: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(256)),
-  description: v.nullable(v.pipe(v.string(), v.trim(), v.maxLength(2000))),
+  name: v.pipe(
+    v.string(),
+    v.trim(),
+    v.minLength(1),
+    v.maxLength(FLOW_DEFINITION_NAME_MAX_CHARS),
+  ),
+  description: v.nullable(
+    v.pipe(
+      v.string(),
+      v.trim(),
+      v.maxLength(FLOW_DEFINITION_DESCRIPTION_MAX_CHARS),
+    ),
+  ),
   steps: v.pipe(
     v.array(flowStepSchema),
     v.minLength(1),
