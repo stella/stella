@@ -135,6 +135,7 @@ const suggestPrompt = createSafeHandler(
     const generateResult = await Result.tryPromise({
       try: async () => {
         const result = await generateTanStackTextForRole({
+          finishPolicy: "require-complete",
           role: "fast",
           serviceTier: "standard",
           orgAIConfig,

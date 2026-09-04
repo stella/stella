@@ -23,6 +23,7 @@ import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { invalidateChatCompactionChain } from "@/api/handlers/chat/persistent-compaction";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -734,6 +735,42 @@ describe("chat thread compaction cursor backfill", () => {
 });
 
 describe("chat thread compaction retry semantics", () => {
+  test("an output-ceiling rejection leaves the checkpoint and delta untouched", async () => {
+    const threadId = await seedThread({ messageCount: 6 });
+    const outputCeilingError = new HandlerError({
+      message: "AI generation did not complete",
+      status: 502,
+    });
+
+    const result = await runChatThreadCompaction({
+      abortSignal: AbortSignal.timeout(60_000),
+      dataWorkspaceIds: [ids.wsA1],
+      extractionFeatureEnabled: true,
+      orgAIConfig: null,
+      organizationId: ids.orgA,
+      preserveTokens: 1,
+      safeDb: countedSafeDb(),
+      summarize: async () => {
+        throw outputCeilingError;
+      },
+      threadId,
+      triggerTokens: 1,
+    });
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isOk(result)) {
+      return;
+    }
+    expect(result.error.cause).toBe(outputCeilingError);
+    expect(await readChain(threadId)).toEqual([]);
+
+    const retried = await runCompaction({ threadId });
+    expect(retried.outcome.type).toBe("advanced");
+    expect(
+      transcriptMessageIds(retried.prompts.at(0)?.newMessages ?? ""),
+    ).not.toEqual([]);
+  });
+
   test("an empty model response is reported as a failed attempt, not completion", async () => {
     const threadId = await seedThread({ messageCount: 6 });
 

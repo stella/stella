@@ -252,6 +252,9 @@ const fixtureRuleOverrides = [
     "require-contained-handler/no-portal-under-interactive-ancestor",
     "require-contained-handler/require-contained-handler",
   ]),
+  fixtureRuleOverride("require-complete-compaction-generation.fixture.ts", [
+    "require-complete-compaction-generation/require-complete-compaction-generation",
+  ]),
   fixtureRuleOverride("require-safe-route-handlers.fixture.ts", [
     "require-safe-route-handlers/require-safe-route-handlers",
   ]),
@@ -665,6 +668,8 @@ export default defineConfig({
     "no-bare-error/no-bare-error": "error",
     "no-minted-auth-provider-id/no-minted-auth-provider-id": "error",
     "ai-output-strict-schema/ai-output-strict-schema": "error",
+    "require-complete-compaction-generation/require-complete-compaction-generation":
+      "error",
     "no-coerced-optional-union-enum/no-coerced-optional-union-enum": "error",
     "tagged-error-requires-message/tagged-error-requires-message": "error",
     "require-custom-jsonb-column/require-custom-jsonb-column": "error",
@@ -1008,6 +1013,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-bare-error.ts",
     "./.oxlint-plugins/no-minted-auth-provider-id.ts",
     "./.oxlint-plugins/ai-output-strict-schema.ts",
+    "./.oxlint-plugins/require-complete-compaction-generation.ts",
     "./.oxlint-plugins/require-audit-on-mutation.ts",
     "./.oxlint-plugins/require-transaction-abort.ts",
     "./.oxlint-plugins/no-direct-audit-log-insert.ts",

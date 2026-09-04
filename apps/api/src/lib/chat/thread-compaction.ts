@@ -52,8 +52,8 @@ import {
 } from "@/api/lib/chat/compaction-summary";
 import type { IncrementalSummaryPrompt } from "@/api/lib/chat/compaction-summary";
 import {
+  COMPACTION_GENERATION_POLICY,
   FILE_PART_ESTIMATED_TOKENS,
-  MAX_SUMMARY_OUTPUT_TOKENS,
   MAX_TEXT_PART_CHARS,
   MESSAGE_OVERHEAD_TOKENS,
   estimateTextTokens,
@@ -644,7 +644,7 @@ const createModelSummarizer =
         role: "chat",
         scopeKey: null,
       }),
-      maxOutputTokens: MAX_SUMMARY_OUTPUT_TOKENS,
+      ...COMPACTION_GENERATION_POLICY,
       modelId: options.modelId,
       organizationId: options.organizationId,
       orgAIConfig: options.orgAIConfig,

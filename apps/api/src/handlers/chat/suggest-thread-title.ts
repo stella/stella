@@ -180,6 +180,7 @@ export const createSuggestThreadTitle = ({
                 role: "fast",
                 scopeKey: threadId,
               }),
+              finishPolicy: "require-complete",
               maxOutputTokens: TITLE_MAX_OUTPUT_TOKENS,
               organizationId: session.activeOrganizationId,
               orgAIConfig,

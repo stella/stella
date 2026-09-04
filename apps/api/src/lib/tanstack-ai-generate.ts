@@ -5,6 +5,7 @@ import {
   parsePartialJSON,
 } from "@tanstack/ai";
 import type {
+  AnyTextAdapter,
   ModelMessage,
   RunErrorEvent,
   StreamChunk,
@@ -104,13 +105,15 @@ type GenerateTanStackBaseOptions = {
   temperature?: number | undefined;
 };
 
-type GenerateTanStackTextForRoleOptions = GenerateTanStackBaseOptions &
-  GenerateTanStackInputOptions & {
-    finishPolicy?: "allow-incomplete" | "require-complete" | undefined;
-  };
+type TanStackTextForRoleOptions = GenerateTanStackBaseOptions &
+  GenerateTanStackInputOptions;
+
+type GenerateTanStackTextForRoleOptions = TanStackTextForRoleOptions & {
+  finishPolicy: "allow-incomplete" | "require-complete";
+};
 
 type GenerateTanStackObjectForRoleOptions<TSchema extends v.GenericSchema> =
-  GenerateTanStackTextForRoleOptions & {
+  TanStackTextForRoleOptions & {
     outputSchema: TSchema;
   };
 
@@ -236,7 +239,7 @@ export const generateTanStackTextForRole = async (
 };
 
 export const streamTanStackTextForRole = (
-  options: GenerateTanStackTextForRoleOptions,
+  options: TanStackTextForRoleOptions,
 ): AsyncIterable<string> => {
   const model = (options.resolveTextModel ?? resolveTanStackTextModel)(options);
   const requestMessages = guardedMessagesFromInput(options);
@@ -256,6 +259,100 @@ export const streamTanStackTextForRole = (
     temperature: options.temperature,
   });
 };
+
+/**
+ * The provider code for a response the model stopped writing because it
+ * reached the output ceiling the request set.
+ *
+ * The Anthropic adapter reports that stop reason as a `RUN_ERROR`, where it
+ * reports every other one as a `RUN_FINISHED`. Normalize it before TanStack's
+ * chat engine sees the event: the engine, middleware, and caller must agree
+ * that the same run reached a `length` finish rather than recording a failure
+ * while returning its partial text.
+ */
+const TRUNCATED_AT_OUTPUT_CEILING_CODE = "max_tokens";
+// These upstream variants use string-literal discriminants rather than
+// EventType members. Named, checked literals keep Oxlint's exhaustiveness
+// analysis aligned with the SDK union.
+const CUSTOM_STREAM_CHUNK_TYPE = "CUSTOM" satisfies StreamChunk["type"];
+const TOOL_CALL_END_STREAM_CHUNK_TYPE =
+  "TOOL_CALL_END" satisfies StreamChunk["type"];
+const TOOL_CALL_START_STREAM_CHUNK_TYPE =
+  "TOOL_CALL_START" satisfies StreamChunk["type"];
+
+const readOutputCeilingStopAsLength = async function* (
+  chunks: AsyncIterable<StreamChunk>,
+): AsyncIterable<StreamChunk> {
+  let runIdentity: { runId: string; threadId: string } | undefined;
+
+  for await (const chunk of chunks) {
+    switch (chunk.type) {
+      case EventType.RUN_STARTED: {
+        runIdentity = { runId: chunk.runId, threadId: chunk.threadId };
+        break;
+      }
+      case EventType.RUN_ERROR: {
+        if (
+          chunk.code !== TRUNCATED_AT_OUTPUT_CEILING_CODE ||
+          runIdentity === undefined
+        ) {
+          break;
+        }
+        yield {
+          type: EventType.RUN_FINISHED,
+          finishReason: "length",
+          runId: runIdentity.runId,
+          threadId: runIdentity.threadId,
+          ...(chunk.metadata === undefined ? {} : { metadata: chunk.metadata }),
+          ...(chunk.model === undefined ? {} : { model: chunk.model }),
+          ...(chunk.timestamp === undefined
+            ? {}
+            : { timestamp: chunk.timestamp }),
+          ...(chunk.usage === undefined ? {} : { usage: chunk.usage }),
+        };
+        continue;
+      }
+      case EventType.RUN_FINISHED:
+      case EventType.TEXT_MESSAGE_START:
+      case EventType.TEXT_MESSAGE_CONTENT:
+      case EventType.TEXT_MESSAGE_END:
+      case TOOL_CALL_START_STREAM_CHUNK_TYPE:
+      case EventType.TOOL_CALL_ARGS:
+      case TOOL_CALL_END_STREAM_CHUNK_TYPE:
+      case EventType.TOOL_CALL_RESULT:
+      case EventType.STEP_STARTED:
+      case EventType.STEP_FINISHED:
+      case EventType.MESSAGES_SNAPSHOT:
+      case EventType.STATE_SNAPSHOT:
+      case EventType.STATE_DELTA:
+      case CUSTOM_STREAM_CHUNK_TYPE:
+      case EventType.REASONING_START:
+      case EventType.REASONING_MESSAGE_START:
+      case EventType.REASONING_MESSAGE_CONTENT:
+      case EventType.REASONING_MESSAGE_END:
+      case EventType.REASONING_END:
+      case EventType.REASONING_ENCRYPTED_VALUE: {
+        break;
+      }
+      default: {
+        chunk satisfies never;
+      }
+    }
+    yield chunk;
+  }
+};
+
+/**
+ * Text only: a truncated structured response is unusable however the caller
+ * grades completeness, so structured-output methods remain untouched.
+ */
+const normalizeAnthropicTextStops = (
+  adapter: AnyTextAdapter,
+): AnyTextAdapter => ({
+  ...adapter,
+  chatStream: (options) =>
+    readOutputCeilingStopAsLength(adapter.chatStream(options)),
+});
 
 const streamTanStackTextDeltas = async function* ({
   abortController,
@@ -285,7 +382,10 @@ const streamTanStackTextDeltas = async function* ({
     serviceTier,
     stream: (requestedServiceTier) =>
       chat({
-        adapter: model.adapter,
+        adapter:
+          model.provider === "anthropic"
+            ? normalizeAnthropicTextStops(model.adapter)
+            : model.adapter,
         messages,
         ...systemPromptsPatch({ caching, model, system }),
         modelOptions: mergeGenerationOptions({
@@ -765,7 +865,7 @@ const messagesFromInput = (
  * provider with unredacted tenant ids in its messages or system prompt.
  */
 const guardedMessagesFromInput = (
-  options: GenerateTanStackTextForRoleOptions,
+  options: TanStackTextForRoleOptions,
 ): GuardedModelMessages<ModelMessage[]> =>
   guardModelMessages({
     messages: messagesFromInput(options),

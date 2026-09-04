@@ -65,6 +65,7 @@ export const generateThreadTitle = async ({
   try {
     const text = await generateTanStackTextForRole({
       abortSignal: AbortSignal.timeout(TITLE_GENERATION_TIMEOUT_MS),
+      finishPolicy: "require-complete",
       maxOutputTokens: TITLE_MAX_OUTPUT_TOKENS,
       role: "fast",
       serviceTier: "batch",
