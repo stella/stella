@@ -3,6 +3,7 @@ import { and, asc, eq, inArray, isNull, ne, not, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import { isEntityKind } from "@stll/api-contract";
+import type { EntityFindScope } from "@stll/api-contract";
 import { compareByLocale } from "@stll/collation";
 import {
   type CompareNode,
@@ -394,15 +395,18 @@ const numericFieldValueExpr = (contentCol: typeof fields.content): SQL =>
 
 /**
  * Wraps a per-field predicate in an EXISTS subquery against the
- * entity's current version.
+ * entity's current version, for the fields whose property matches.
  */
-const propertyExists = (propertyId: string, opCondition: SQL): SQL =>
+const fieldsExist = (propertyMatch: SQL, opCondition: SQL): SQL =>
   sql`EXISTS (
     SELECT 1 FROM ${fields}
     WHERE ${fields.entityVersionId} = ${entities.currentVersionId}
-      AND ${fields.propertyId} = ${propertyId}
+      AND ${propertyMatch}
       AND ${opCondition}
   )`;
+
+const propertyExists = (propertyId: string, opCondition: SQL): SQL =>
+  fieldsExist(sql`${fields.propertyId} = ${propertyId}`, opCondition);
 
 const builtinColumn = (field: "status" | "priority") =>
   field === "status" ? entities.status : entities.priority;
@@ -525,8 +529,7 @@ const compileCompare = (node: CompareNode): SQL | null => {
  * multi-select arrays (the value matches if ANY element does) and scalar
  * values. `elemMatch` receives the per-element/per-scalar text expression.
  */
-const propertyValueMatches = (
-  propertyId: string,
+const fieldValueMatches = (
   arrayMatch: (valueExpr: SQL) => SQL,
   scalarMatch: (valueExpr: SQL) => SQL,
 ): SQL => {
@@ -535,14 +538,18 @@ const propertyValueMatches = (
     SELECT 1 FROM jsonb_array_elements_text(${content}->'value') AS elem
     WHERE ${arrayMatch(sql`elem`)}
   )`;
-  return propertyExists(
-    propertyId,
-    sql`CASE WHEN jsonb_typeof(${content}->'value') = 'array'
-      THEN ${anyElement}
-      ELSE ${scalarMatch(fieldValueExpr(content))}
-    END`,
-  );
+  return sql`CASE WHEN jsonb_typeof(${content}->'value') = 'array'
+    THEN ${anyElement}
+    ELSE ${scalarMatch(fieldValueExpr(content))}
+  END`;
 };
+
+const propertyValueMatches = (
+  propertyId: string,
+  arrayMatch: (valueExpr: SQL) => SQL,
+  scalarMatch: (valueExpr: SQL) => SQL,
+): SQL =>
+  propertyExists(propertyId, fieldValueMatches(arrayMatch, scalarMatch));
 
 const compilePropertyPredicate = (
   propertyId: string,
@@ -712,6 +719,112 @@ export const buildFilterConditions = (filters: ConditionNode[]): SQL[] => {
     }
   }
   return conditions;
+};
+
+// -- Find in table --
+
+/**
+ * The name a row renders. `entities.display_name` is maintained synchronously
+ * by trigger and has its own fallback chain (name, first file's name, first
+ * text value, an "Untitled ..." default); tasks render their own `name`.
+ * Shared so the find condition and the `_name` sort key stay one expression.
+ */
+export const displayedNameExpr = (): SQL =>
+  sql`CASE WHEN ${entities.kind} = 'task' THEN ${entities.name} ELSE ${entities.displayName} END`;
+
+/**
+ * A find term is literal text, not a pattern: a typed `%` or `_` has to match
+ * itself, or the server would return rows the client-side highlighter cannot
+ * mark. LIKE's default escape character is backslash, so escaping the three
+ * metacharacters needs no ESCAPE clause. `contains` filters keep their
+ * existing pass-through behaviour; find is the stricter operation.
+ */
+const escapeLikePattern = (term: string): string =>
+  term.replace(/[\\%_]/gu, (char) => `\\${char}`);
+
+/**
+ * Whether a cell can be found by substring, total over the stored field
+ * content types.
+ *
+ * The client only ever offers the searchable property types, but the gate is
+ * here rather than there: a cell whose stored scalar is not the string it
+ * renders must not match whatever ids arrive. A date is stored `2026-09-04` and
+ * rendered in the reader's locale, an int is stored `1234` and rendered
+ * digit-grouped, money is stored as `amountCents` (where `%1234%` would also
+ * match $12.34), and a clip renders its citation or URL, neither of which
+ * `fieldValueExpr` projects. Typing what you see would find nothing in all
+ * four, and typing the stored form could not be highlighted.
+ */
+export const FIELD_FIND_SUPPORT = {
+  file: "searchable",
+  text: "searchable",
+  "single-select": "searchable",
+  "multi-select": "searchable",
+  person: "searchable",
+  clip: "excluded",
+  date: "excluded",
+  int: "excluded",
+  money: "excluded",
+  error: "excluded",
+  pending: "excluded",
+  unsupported: "excluded",
+} as const satisfies Record<FieldContent["type"], "searchable" | "excluded">;
+
+const FINDABLE_FIELD_TYPES_SQL = typedPgArray(
+  Object.entries(FIELD_FIND_SUPPORT)
+    .filter(([, support]) => support === "searchable")
+    .map(([type]) => type),
+  "text",
+);
+
+type BuildFindConditionsArgs = {
+  find?: string | undefined;
+  findScope?: EntityFindScope | undefined;
+};
+
+/**
+ * The find-in-table predicate: one EXISTS over the searched columns, ORed with
+ * the displayed name when the scope is unrestricted. Every reader of a table
+ * view compiles it here — the row window, each group's window, and the group
+ * counts — because counts that disagree with rows is the failure this shares
+ * one expression to prevent.
+ *
+ * Property ids need no ownership check: like `fieldIds`, they are only used
+ * inside a subquery already scoped to an authorized workspace's current entity
+ * versions, so a foreign id is inert.
+ */
+export const buildFindConditions = ({
+  find,
+  findScope,
+}: BuildFindConditionsArgs): SQL[] => {
+  const term = find?.trim() ?? "";
+  if (term === "") {
+    return [];
+  }
+
+  const pattern = `%${escapeLikePattern(term)}%`;
+  const matchesPattern = (valueExpr: SQL) => sql`${valueExpr} ILIKE ${pattern}`;
+  const propertyIds = findScope?.propertyIds ?? [];
+  const columnsMatch =
+    propertyIds.length === 0
+      ? null
+      : fieldsExist(
+          sql`${fields.propertyId} = ANY(${typedPgArray(propertyIds, "uuid")})
+            AND ${fields.content}->>'type' = ANY(${FINDABLE_FIELD_TYPES_SQL})`,
+          fieldValueMatches(matchesPattern, matchesPattern),
+        );
+
+  // "columns" drops the name half, so a row whose name matches but whose chosen
+  // columns do not is absent. Narrowed to no columns at all, nothing can match;
+  // falling back to every row would read as the find having been ignored.
+  if (findScope?.type === "columns") {
+    return [columnsMatch ?? sql`false`];
+  }
+
+  const nameMatch = matchesPattern(displayedNameExpr());
+  return [
+    columnsMatch === null ? nameMatch : sql`(${nameMatch} OR ${columnsMatch})`,
+  ];
 };
 
 // Internal property sort expressions (metadata columns).

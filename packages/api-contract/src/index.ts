@@ -134,6 +134,17 @@ export type {
   DocumentPropertyKey,
   DocumentPropertyValue,
 } from "./document-properties";
+export {
+  ENTITY_FIND_SCOPE_TYPES,
+  isFindablePropertyType,
+  PROPERTY_CONTENT_TYPES,
+  PROPERTY_FIND_SUPPORT,
+} from "./entity-find";
+export type {
+  EntityFindScope,
+  EntityFindScopeType,
+  PropertyContentType,
+} from "./entity-find";
 export { ENTITY_KINDS, isEntityKind } from "./entity-kinds";
 export type { EntityKind } from "./entity-kinds";
 export {

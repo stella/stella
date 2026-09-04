@@ -3,6 +3,7 @@ import type { Static } from "elysia";
 
 import {
   ENTITY_KINDS,
+  PROPERTY_CONTENT_TYPES,
   REVIEW_FLAGS,
   REVIEW_FLAGS_MAX_ITEMS,
 } from "@stll/api-contract";
@@ -104,15 +105,10 @@ const currencyCode = currencyCodeSchema();
 export const entityKindSchema = t.UnionEnum(ENTITY_KINDS);
 export type { EntityKind } from "@stll/api-contract";
 
-export const propertyContentTypeSchema = t.Union([
-  fileType,
-  textType,
-  singleSelectType,
-  multiSelectType,
-  dateType,
-  intType,
-  moneyType,
-  personType,
+// Derived from the contract list rather than restated, so a new property type
+// has to be classified in `PROPERTY_FIND_SUPPORT` before this compiles.
+export const propertyContentTypeSchema = t.UnionEnum([
+  ...PROPERTY_CONTENT_TYPES,
 ]);
 
 export type PropertyContentType = Static<typeof propertyContentTypeSchema>;

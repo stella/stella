@@ -2,6 +2,10 @@ import { describe, expect, test } from "bun:test";
 import { PgDialect } from "drizzle-orm/pg-core";
 import fc from "fast-check";
 
+import {
+  PROPERTY_CONTENT_TYPES,
+  PROPERTY_FIND_SUPPORT,
+} from "@stll/api-contract";
 import { compareByLocale } from "@stll/collation";
 import type { ConditionNode } from "@stll/conditions";
 import { propertyConfig } from "@stll/property-testing";
@@ -11,6 +15,8 @@ import {
   applySorts,
   buildSortExpressions,
   buildFilterConditions,
+  buildFindConditions,
+  FIELD_FIND_SUPPORT,
 } from "./entity-filters";
 
 // -- buildFilterConditions (builtin filters) --
@@ -119,6 +125,134 @@ describe("buildFilterConditions (kind)", () => {
     const { sql, params } = dialect.sqlToQuery(cond);
     expect(sql).toContain('"kind"');
     expect(params).toContain("folder");
+  });
+});
+
+// -- buildFindConditions --
+
+const findSql = (args: Parameters<typeof buildFindConditions>[0]): string => {
+  const [condition] = buildFindConditions(args);
+  if (!condition) {
+    throw new Error("expected a find condition");
+  }
+  return new PgDialect().sqlToQuery(condition).sql;
+};
+
+const findParams = (
+  args: Parameters<typeof buildFindConditions>[0],
+): unknown[] => {
+  const [condition] = buildFindConditions(args);
+  if (!condition) {
+    throw new Error("expected a find condition");
+  }
+  return new PgDialect().sqlToQuery(condition).params;
+};
+
+describe("buildFindConditions", () => {
+  const propertyIds = ["p1", "p2"];
+
+  test("an empty or whitespace term produces no condition", () => {
+    expect(buildFindConditions({})).toHaveLength(0);
+    expect(buildFindConditions({ find: "" })).toHaveLength(0);
+    expect(
+      buildFindConditions({
+        find: "   ",
+        findScope: { type: "all", propertyIds },
+      }),
+    ).toHaveLength(0);
+  });
+
+  test("an unrestricted scope with no columns matches the name only", () => {
+    const sql = findSql({
+      find: "lease",
+      findScope: { type: "all", propertyIds: [] },
+    });
+    expect(sql).toContain("display_name");
+    expect(sql).not.toContain("EXISTS");
+  });
+
+  test("an unrestricted scope ORs the name with the searched columns", () => {
+    const sql = findSql({
+      find: "lease",
+      findScope: { type: "all", propertyIds },
+    });
+    expect(sql).toContain("display_name");
+    expect(sql).toContain(" OR ");
+    expect(sql).toContain("EXISTS");
+  });
+
+  test("a narrowed scope drops the name half", () => {
+    const sql = findSql({
+      find: "lease",
+      findScope: { type: "columns", propertyIds },
+    });
+    expect(sql).not.toContain("display_name");
+    expect(sql).toContain("EXISTS");
+  });
+
+  test("a narrowed scope with no columns matches nothing", () => {
+    expect(
+      findSql({
+        find: "lease",
+        findScope: { type: "columns", propertyIds: [] },
+      }),
+    ).toContain("false");
+  });
+
+  test("columns are reached with one ANY list, not a subquery each", () => {
+    const sql = findSql({
+      find: "lease",
+      findScope: { type: "all", propertyIds },
+    });
+    expect(sql).toContain("= ANY(");
+    expect(sql.match(/EXISTS/gu)).toHaveLength(2);
+  });
+
+  test("a multi-select array matches element-wise, a scalar by substring", () => {
+    const sql = findSql({
+      find: "lease",
+      findScope: { type: "columns", propertyIds },
+    });
+    expect(sql).toContain("jsonb_array_elements_text");
+    expect(sql).toContain("jsonb_typeof");
+    expect(sql).toContain("ILIKE");
+  });
+
+  test("the term is trimmed and bound as a literal substring", () => {
+    expect(
+      findParams({
+        find: "  lease  ",
+        findScope: { type: "all", propertyIds },
+      }),
+    ).toContain("%lease%");
+  });
+
+  test("only searchable cell types are reachable", () => {
+    const sql = findSql({
+      find: "lease",
+      findScope: { type: "columns", propertyIds },
+    });
+    expect(sql).toContain("->>'type' = ANY(");
+  });
+
+  test("the cell gate and the column picker classify a type the same way", () => {
+    // The picker offers columns by property type; the SQL gates cells by the
+    // stored field type. They are two maps, so bind them: a type the picker
+    // offers that the SQL refuses would return rows with nothing highlighted.
+    for (const type of PROPERTY_CONTENT_TYPES) {
+      expect(FIELD_FIND_SUPPORT[type]).toBe(PROPERTY_FIND_SUPPORT[type]);
+    }
+  });
+
+  test("LIKE metacharacters in the term match themselves", () => {
+    // The highlighter matches literal text, so a wildcard that widened the
+    // server's match would return rows with nothing to mark.
+    expect(
+      findParams({
+        find: "50%_off",
+        findScope: { type: "all", propertyIds: [] },
+      }),
+    ).toContain("%50\\%\\_off%");
   });
 });
 

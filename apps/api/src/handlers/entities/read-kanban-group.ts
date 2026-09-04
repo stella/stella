@@ -8,6 +8,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { tConditionNode } from "@/api/lib/conditions/contract";
 import { tPaginationCursor, tSafeId } from "@/api/lib/custom-schema";
+import { tFind, tFindScope } from "@/api/lib/entities/find-schema";
 import {
   buildKanbanGroupCondition,
   tGroupByPropertyId,
@@ -38,6 +39,8 @@ const readKanbanGroupBodySchema = t.Object({
   cursor: t.Optional(
     tPaginationCursor({ maxChars: ENTITIES_WINDOW_CURSOR_MAX_LENGTH }),
   ),
+  find: t.Optional(tFind),
+  findScope: t.Optional(tFindScope),
   fieldMode: t.Optional(t.Union([t.Literal("full"), t.Literal("visible")])),
   fieldIds: t.Optional(
     t.Array(tSafeId("property"), {
@@ -91,6 +94,8 @@ const readKanbanGroup = createSafeHandler(
         currentOrganizationId: session.activeOrganizationId,
         filters: arrayOrEmpty(body.filters),
         sorts: arrayOrEmpty(body.sorts),
+        ...(body.find !== undefined && { find: body.find }),
+        ...(body.findScope !== undefined && { findScope: body.findScope }),
         cursor: cursorResult.value,
         limit: limit + 1,
         fieldMode: body.fieldMode ?? "full",

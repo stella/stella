@@ -8,6 +8,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { tConditionNode } from "@/api/lib/conditions/contract";
 import { tPaginationCursor, tSafeId } from "@/api/lib/custom-schema";
+import { tFind, tFindScope } from "@/api/lib/entities/find-schema";
 import { queryEntities } from "@/api/lib/entities/query-entities";
 import {
   decodeEntitiesWindowCursor,
@@ -26,6 +27,8 @@ const readEntitiesWindowBodySchema = t.Object({
     t.Array(tViewSortSchema, { maxItems: LIMITS.viewSortsCount }),
   ),
   search: t.Optional(t.String({ maxLength: LIMITS.searchQueryMaxLength })),
+  find: t.Optional(tFind),
+  findScope: t.Optional(tFindScope),
   limit: t.Optional(
     t.Integer({
       minimum: 1,
@@ -82,6 +85,8 @@ const readEntitiesWindow = createSafeHandler(
         filters: arrayOrEmpty(body.filters),
         sorts: arrayOrEmpty(body.sorts),
         ...(body.search !== undefined && { search: body.search }),
+        ...(body.find !== undefined && { find: body.find }),
+        ...(body.findScope !== undefined && { findScope: body.findScope }),
         cursor: cursorResult.value,
         limit: limit + 1,
         fieldMode: body.fieldMode ?? "full",
