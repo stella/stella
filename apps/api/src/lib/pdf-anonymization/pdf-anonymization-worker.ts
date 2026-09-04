@@ -16,6 +16,7 @@ import {
   OCR_RENDER_MAX_SIDE_PIXELS,
   OCR_RENDER_TARGET_SCALE,
 } from "@/api/lib/document-processing-contract";
+import { buildOcrPage } from "@/api/lib/document-processing-ocr-result";
 import { rgbaToRgb } from "@/api/lib/ocr-local/rgb-image";
 import {
   PDF_ANONYMIZATION_OCR_LANGUAGE,
@@ -86,9 +87,10 @@ try {
     const page = document.getPage(pageIndex);
     const { originalHeight: pointHeight, originalWidth: pointWidth } =
       page.getOriginalSize();
+    const ocrGeometry = buildOcrPage({ lines: [], pointHeight, pointWidth });
     if (
-      pointWidth !== observed.ocr.width ||
-      pointHeight !== observed.ocr.height
+      ocrGeometry.width !== observed.ocr.width ||
+      ocrGeometry.height !== observed.ocr.height
     ) {
       die("OCR page geometry does not match the source PDF");
     }
@@ -98,7 +100,13 @@ try {
       Math.sqrt(pagePixelBudget / (pointWidth * pointHeight)) * 0.99,
     );
     // eslint-disable-next-line no-await-in-loop -- PDFium shares one document heap; rendering pages sequentially bounds peak memory.
-    const render = await page.render({ scale });
+    const render = await page.render({
+      // PDFium's scale option floors point dimensions before scaling. Explicit
+      // pixel sizes preserve the aspect ratio of fractional PDF page dimensions.
+      width: Math.round(pointWidth * scale),
+      height: Math.round(pointHeight * scale),
+      scale: 1,
+    });
     totalPixelBytes += render.width * render.height * 3;
     if (totalPixelBytes > PDF_RASTER_MAX_TOTAL_BYTES) {
       die("rendered pages exceed their aggregate limit");
@@ -112,7 +120,9 @@ try {
       pixels,
       page: {
         observation: pdfAnonymizationObservation({
-          page: observed.ocr,
+          // OCR stores rounded dimensions, but its boxes remain in PDF points.
+          // The rewrite must preserve the renderer's actual page geometry.
+          page: { ...observed.ocr, width: pointWidth, height: pointHeight },
           pageIndex,
         }),
         widthPixels: render.width,

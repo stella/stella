@@ -17,7 +17,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
-import { errorTag } from "@/api/lib/errors/utils";
+import { SubprocessError } from "@/api/lib/errors/tagged-errors";
+import { errorFingerprint, errorTag } from "@/api/lib/errors/utils";
 import { getScanWarnings, scanFile } from "@/api/lib/file-scan/scan";
 import { createFileKey } from "@/api/lib/files/utils";
 import { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval";
@@ -262,6 +263,27 @@ const executeRun = async (
     workspaceId: actor.workspaceId,
   });
   if (Result.isError(processed)) {
+    const { cause, code } = processed.error;
+    const context = {
+      ...errorFingerprint(processed.error),
+      runId: actor.runId,
+      workspaceId: actor.workspaceId,
+      errorCode: code,
+    };
+    if (cause instanceof SubprocessError) {
+      Object.assign(
+        context,
+        cause.termination === null
+          ? { exitCode: String(cause.exitCode) }
+          : {
+              terminationReason: cause.termination.reason,
+              signalCode: cause.termination.signalCode,
+            },
+      );
+    }
+    // Capture structural diagnostics without forwarding document-bearing causes
+    // to the dev sink, which otherwise serializes the full error chain.
+    captureError(new PdfAnonymizationProcessError(code), context);
     return processed.error.code;
   }
   if (processed.value.document.byteLength > PDF_RASTER_MAX_OUTPUT_BYTES) {
