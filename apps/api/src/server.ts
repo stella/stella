@@ -170,7 +170,7 @@ import { clearByokAdapterCache } from "@/api/lib/tanstack-ai-models";
 import { isUploadRateLimitedPath } from "@/api/lib/upload-rate-limit";
 import { initWorkflowWorkers } from "@/api/lib/workflow-queue";
 
-const HEALTH_PATHS = new Set(["/health", "/live", "/ready"]);
+const HEALTH_PATHS = new Set(["/health", "/live", "/ready", "/started"]);
 const DEFAULT_API_PORT = 3001;
 // Keep-alive idle timeout in seconds; see the `api.listen` call.
 const HTTP_IDLE_TIMEOUT_S = 75;
