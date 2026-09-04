@@ -22,6 +22,7 @@
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
+import type { AstNode } from "./utils.ts";
 import {
   filenameForContext,
   isAstNode,
@@ -157,6 +158,16 @@ const isGlobalObject = (node: unknown, object: string): boolean =>
   isIdentifier(node, object) ||
   GLOBAL_ROOTS.some((root) => isMemberAccess(node, root, object));
 
+// One step of a member chain: `<something>.<segment>`, spelled with a dot.
+const isMemberStep = (
+  node: unknown,
+  segment: string,
+): node is AstNode & { object: unknown } =>
+  isAstNode(node) &&
+  node.type === "MemberExpression" &&
+  node.computed === false &&
+  isIdentifier(node.property, segment);
+
 // Walk the member chain from its outermost property inwards: the node under
 // test must spell every listed segment, in order, over the global object.
 // Optional chaining changes only the `optional` flag, so the same walk covers
@@ -168,14 +179,7 @@ const isOwnedMemberPath = (
 ): boolean => {
   let current: unknown = node;
   for (let index = memberPath.length - 1; index >= 0; index -= 1) {
-    const segment = memberPath[index];
-    if (
-      segment === undefined ||
-      !isAstNode(current) ||
-      current.type !== "MemberExpression" ||
-      current.computed !== false ||
-      !isIdentifier(current.property, segment)
-    ) {
+    if (!isMemberStep(current, memberPath[index])) {
       return false;
     }
     current = current.object;
