@@ -1,6 +1,6 @@
 {
   "name": "@stll/ssr-kit",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Framework-neutral route policy and hydration ordering primitives for mixed SSR applications.",
   "keywords": [
     "hydration",

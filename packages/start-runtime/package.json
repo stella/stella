@@ -1,6 +1,6 @@
 {
   "name": "@stll/start-runtime",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Bun runtime primitives for serving TanStack Start applications with explicit asset, health, and startup checks.",
   "keywords": [
     "bun",

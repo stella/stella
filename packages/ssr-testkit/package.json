@@ -1,6 +1,6 @@
 {
   "name": "@stll/ssr-testkit",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Runtime-agnostic assertions for the observable HTML contract of server-rendered routes.",
   "keywords": [
     "server-rendering",
