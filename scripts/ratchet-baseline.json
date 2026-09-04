@@ -1126,7 +1126,7 @@
     }
   },
   "duplicate-token-blocks": {
-    "count": 135,
+    "count": 129,
     "files": {
       ".oxlint-plugins/no-ambient-nondeterminism.ts": 1,
       ".oxlint-plugins/no-auth-token-in-web-storage.ts": 1,
@@ -1216,7 +1216,7 @@
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx": 2,
       "apps/web/src/routes/law/$country/cases/$court/$language/$slug.tsx": 1,
       "apps/web/src/routes/law/$country/cases/$court/$slug.tsx": 1,
-      "packages/locales/src/languages.ts": 13,
+      "packages/locales/src/languages.ts": 7,
       "packages/ui/src/index.ts": 1,
       "packages/workspace-ui/src/field-value.tsx": 3
     }

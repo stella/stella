@@ -1541,10 +1541,13 @@ const countLibTopLevelEntries =
 // against every window seen before it. Punctuation is discarded with the
 // structure: a run that differs only in brackets is still the same copy.
 //
-// Two windows match only when a primary AND a secondary rolling hash agree, so
-// a single 32-bit collision cannot invent a clone. Both sides are charged: the
-// earlier copy is as deletable as the later one, and which one survives is the
-// author's call.
+// Two windows match only when both rolling hashes agree AND the token sequences
+// behind them are identical. The hashes narrow the search; they do not decide
+// it. They cannot: both roll over the same per-token hash, so one colliding
+// pair of identifiers (`contributorLastActivityMs` and `inspectedManifest`
+// hash alike) would defeat both at once. Both sides of a confirmed match are
+// charged: the earlier copy is as deletable as the later one, and which one
+// survives is the author's call.
 //
 // Known limits, in the spirit of the counters above: a window that spans a
 // literal matches on the code around it, and a clone shorter than 60 tokens is
@@ -1555,24 +1558,9 @@ const CLONE_WINDOW_TOKENS = 60;
 // costs more than the copies it could reveal.
 const MAX_CLONE_SCAN_BYTES = 300 * 1024;
 const CLONE_TOKEN = /[A-Za-z_$][\w$]*|\d+/gu;
-// Two polynomial bases over the same token hashes, evaluated side by side.
+// Two polynomial bases over the same token ids, evaluated side by side.
 const CLONE_BASE_PRIMARY = 16_777_619;
 const CLONE_BASE_SECONDARY = 104_729;
-
-// A polynomial hash of the token's code points. `Math.imul` is the truncation:
-// it keeps every intermediate value a 32-bit integer, which is what makes the
-// rolling hashes below roll correctly.
-const hashCloneToken = (token: string): number => {
-  let hash = 0;
-  for (let index = 0; index < token.length; index += 1) {
-    hash =
-      Math.imul(hash, CLONE_BASE_PRIMARY) + (token.codePointAt(index) ?? 0);
-  }
-  // A zero token hash would read as the absence of a token in a window sum, so
-  // no token is allowed to produce one.
-  const truncated = Math.imul(hash, 1);
-  return truncated === 0 ? 1 : truncated;
-};
 
 const clonePower = (base: number, exponent: number): number => {
   let result = 1;
@@ -1582,9 +1570,12 @@ const clonePower = (base: number, exponent: number): number => {
   return result;
 };
 
-// Comment- and literal-free tokens for one file, as 32-bit token hashes. The
-// same line-based strip the other counters use, so a `//` inside a string
-// cannot truncate real code.
+// Comment- and literal-free tokens for one file, as INTERNED ids: one id per
+// distinct token text, shared across the whole scan. Ids rather than hashes,
+// because equal ids then mean equal text — a token hash would let one collision
+// (`contributorLastActivityMs` and `inspectedManifest` hash alike) read as a
+// repeated identifier. The strip is the same line-based one the other counters
+// use, so a `//` inside a string cannot truncate real code.
 const cloneTokensOf = (
   content: string,
   cache: Map<string, number>,
@@ -1607,9 +1598,11 @@ const cloneTokensOf = (
       tokens.push(cached);
       continue;
     }
-    const hash = hashCloneToken(token);
-    cache.set(token, hash);
-    tokens.push(hash);
+    // Ids start at 1: zero is the value the bounds fallbacks below produce for
+    // a position past the end of a file, and no real token may look like that.
+    const id = cache.size + 1;
+    cache.set(token, id);
+    tokens.push(id);
   }
   return tokens;
 };
@@ -1635,18 +1628,51 @@ const countDuplicateTokenBlocks: RepoCounter = (root) => {
     (rel) => !rel.includes("/generated/"),
   );
 
+  // The whole tree's tokens in one flat array, with each file's slice recorded
+  // beside it. Keeping them is what lets a candidate match be verified against
+  // the sequence it claims to repeat; at four bytes a token the array is far
+  // smaller than the sources it came from.
+  const tokens: number[] = [];
+  const fileStart: number[] = [];
+  const fileLength: number[] = [];
+  const tokenCache = new Map<string, number>();
+  for (const rel of scanned) {
+    const full = path.join(root, rel);
+    fileStart.push(tokens.length);
+    if (statSync(full).size > MAX_CLONE_SCAN_BYTES) {
+      fileLength.push(0);
+      continue;
+    }
+    const fileTokens = cloneTokensOf(readFileSync(full, "utf-8"), tokenCache);
+    for (const token of fileTokens) {
+      tokens.push(token);
+    }
+    fileLength.push(fileTokens.length);
+  }
+
+  const sameSequence = (left: number, right: number): boolean => {
+    for (let offset = 0; offset < CLONE_WINDOW_TOKENS; offset += 1) {
+      if (tokens[left + offset] !== tokens[right + offset]) {
+        return false;
+      }
+    }
+    return true;
+  };
+
   const primaryPower = clonePower(CLONE_BASE_PRIMARY, CLONE_WINDOW_TOKENS - 1);
   const secondaryPower = clonePower(
     CLONE_BASE_SECONDARY,
     CLONE_WINDOW_TOKENS - 1,
   );
-  const tokenCache = new Map<string, number>();
-  // Bounded by design: one slot per DISTINCT window, holding only where it was
-  // first seen. A window that recurs a thousand times still costs one slot.
-  const firstSlotOf = new Map<number, number>();
-  const slotFile: number[] = [];
-  const slotPosition: number[] = [];
+  // Primary hash to the head of a chain of occurrences, one per DISTINCT token
+  // sequence that hashes there. A sequence that recurs a thousand times still
+  // costs one slot; a second sequence colliding on the primary hash gets its
+  // own slot instead of being dropped, which is what makes the index total.
+  const headSlotOf = new Map<number, number>();
   const slotSecondary: number[] = [];
+  const slotFile: number[] = [];
+  const slotStart: number[] = [];
+  const slotNext: number[] = [];
   const hitPositions = new Map<number, number[]>();
 
   const recordHit = (fileIndex: number, position: number): void => {
@@ -1658,29 +1684,27 @@ const countDuplicateTokenBlocks: RepoCounter = (root) => {
     positions.push(position);
   };
 
-  for (const [fileIndex, rel] of scanned.entries()) {
-    const full = path.join(root, rel);
-    if (statSync(full).size > MAX_CLONE_SCAN_BYTES) {
+  for (const [fileIndex] of scanned.entries()) {
+    const length = fileLength[fileIndex] ?? 0;
+    if (length < CLONE_WINDOW_TOKENS) {
       continue;
     }
-    const tokens = cloneTokensOf(readFileSync(full, "utf-8"), tokenCache);
-    if (tokens.length < CLONE_WINDOW_TOKENS) {
-      continue;
-    }
+    const start = fileStart[fileIndex] ?? 0;
 
     let primary = 0;
     let secondary = 0;
     for (let index = 0; index < CLONE_WINDOW_TOKENS; index += 1) {
-      const token = tokens[index] ?? 0;
+      const token = tokens[start + index] ?? 0;
       primary = Math.imul(primary, CLONE_BASE_PRIMARY) + token;
       secondary = Math.imul(secondary, CLONE_BASE_SECONDARY) + token;
     }
 
-    const lastPosition = tokens.length - CLONE_WINDOW_TOKENS;
+    const lastPosition = length - CLONE_WINDOW_TOKENS;
     for (let position = 0; position <= lastPosition; position += 1) {
       if (position > 0) {
-        const leaving = tokens[position - 1] ?? 0;
-        const entering = tokens[position + CLONE_WINDOW_TOKENS - 1] ?? 0;
+        const leaving = tokens[start + position - 1] ?? 0;
+        const entering =
+          tokens[start + position + CLONE_WINDOW_TOKENS - 1] ?? 0;
         primary =
           Math.imul(
             primary - Math.imul(leaving, primaryPower),
@@ -1693,19 +1717,32 @@ const countDuplicateTokenBlocks: RepoCounter = (root) => {
           ) + entering;
       }
 
-      const slot = firstSlotOf.get(primary);
-      if (slot === undefined) {
-        firstSlotOf.set(primary, slotFile.length);
-        slotFile.push(fileIndex);
-        slotPosition.push(position);
+      const windowStart = start + position;
+      let slot = headSlotOf.get(primary) ?? -1;
+      let matched = -1;
+      while (slot !== -1) {
+        if (
+          slotSecondary[slot] === secondary &&
+          sameSequence(slotStart[slot] ?? 0, windowStart)
+        ) {
+          matched = slot;
+          break;
+        }
+        slot = slotNext[slot] ?? -1;
+      }
+
+      if (matched === -1) {
         slotSecondary.push(secondary);
+        slotFile.push(fileIndex);
+        slotStart.push(windowStart);
+        slotNext.push(headSlotOf.get(primary) ?? -1);
+        headSlotOf.set(primary, slotSecondary.length - 1);
         continue;
       }
-      if (slotSecondary[slot] !== secondary) {
-        continue;
-      }
-      const firstFile = slotFile[slot] ?? 0;
-      const firstPosition = slotPosition[slot] ?? 0;
+
+      const firstFile = slotFile[matched] ?? 0;
+      const firstPosition =
+        (slotStart[matched] ?? 0) - (fileStart[firstFile] ?? 0);
       // Inside one file, overlapping windows are the same text read twice.
       if (
         firstFile === fileIndex &&
@@ -2096,7 +2133,7 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     scope: "repo",
     id: "duplicate-token-blocks",
     description:
-      'blocks of 60+ consecutive tokens (comments and literal contents blanked) that also appear in another file, or at a non-overlapping position in the same one, counted once per block per file with both copies charged. Repo-wide over hand-written source, excluding tests, generated/ and .gen. files and anything over 300 KB. The fix is to extract the block into whichever module already owns the concern, or into a package (`bun run new-package <name> --description "…"`) when neither side owns it — never to leave both copies in place',
+      'blocks of 60+ consecutive tokens (comments and literal contents blanked) whose exact token sequence also appears in another file, or at a non-overlapping position in the same one, counted once per block per file with both copies charged. Hand-written TypeScript only (Rust under apps/desktop/src-tauri and Astro under apps/landing/src are outside this scan), excluding tests, generated/ and .gen. files and anything over 300 KB. The fix is to extract the block into whichever module already owns the concern, or into a package (`bun run new-package <name> --description "…"`) when neither side owns it — never to leave both copies in place',
     count: countDuplicateTokenBlocks,
   },
   {
@@ -3209,8 +3246,24 @@ const SELF_TEST_UNIQUE_BLOCK = `${Array.from(
 // The shared block as the CONTENTS of a template literal. Blanking runs before
 // tokenising, so nothing here is a token and the file cannot match anything.
 const SELF_TEST_CLONE_IN_LITERAL = `const sql = \`\n${SELF_TEST_CLONE_BLOCK}\`;\n`;
+// Adversarial pair: `contributorLastActivityMs` and `inspectedManifest` have
+// the same 32-bit token hash, which both rolling hashes are built from, so
+// these two blocks agree on BOTH hashes at every window while reading
+// differently. Only the sequence check separates them.
+const collidingBlock = (identifier: string) =>
+  `${Array.from(
+    { length: 10 },
+    (_, index) =>
+      `const near${String(index)} = collide(${identifier}, iota, kappa);`,
+  ).join("\n")}\n`;
+const SELF_TEST_CLONE_HASH_COLLISION_LEFT = collidingBlock(
+  "contributorLastActivityMs",
+);
+const SELF_TEST_CLONE_HASH_COLLISION_RIGHT =
+  collidingBlock("inspectedManifest");
 // One block in each of the two files that share it. The unique block, the
-// literal-only copy and the test-file copy add nothing.
+// literal-only copy, the test-file copy and the hash-colliding pair all add
+// nothing.
 const EXPECTED_DUPLICATE_TOKEN_BLOCKS = 2;
 
 const writeFixture = (root: string, rel: string, content: string): void => {
@@ -3349,6 +3402,8 @@ const repoScopeSelfTestFailures = (snapshot: Baseline): string[] => {
         "apps/api/src/clone-unique.ts",
         "apps/api/src/clone-in-literal.ts",
         "apps/api/src/clone-copy.test.ts",
+        "apps/api/src/clone-collision-left.ts",
+        "apps/web/src/clone-collision-right.ts",
       ],
     },
     {
@@ -3751,6 +3806,16 @@ const runSelfTest = (): number => {
       root,
       "apps/api/src/clone-copy.test.ts",
       SELF_TEST_CLONE_BLOCK,
+    );
+    writeFixture(
+      root,
+      "apps/api/src/clone-collision-left.ts",
+      SELF_TEST_CLONE_HASH_COLLISION_LEFT,
+    );
+    writeFixture(
+      root,
+      "apps/web/src/clone-collision-right.ts",
+      SELF_TEST_CLONE_HASH_COLLISION_RIGHT,
     );
     // Excluded companions: these must NOT be counted.
     writeFixture(
