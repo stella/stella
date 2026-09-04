@@ -35,6 +35,8 @@ jobs:
     uses: ./.github/workflows/marketing-screenshots.yml
     permissions:
       contents: read
+      # The reusable check job's artifact-read permission must be declared even when update mode skips it.
+      actions: read
     with:
       mode: update
       ref: ${{ inputs.branch }}
