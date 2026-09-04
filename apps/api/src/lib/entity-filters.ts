@@ -3,6 +3,7 @@ import { and, asc, eq, inArray, isNull, ne, not, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import { isEntityKind } from "@stll/api-contract";
+import { compareByLocale } from "@stll/collation";
 import {
   type CompareNode,
   type ConditionNode,
@@ -21,7 +22,6 @@ import {
 import { user } from "@/api/db/auth-schema";
 import { entities, entityVersions, fields, properties } from "@/api/db/schema";
 import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
-import { compareByLocale } from "@stll/collation";
 import { typedPgArray } from "@/api/lib/search/sql";
 
 // -- Types --

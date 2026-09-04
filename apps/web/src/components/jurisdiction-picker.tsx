@@ -3,6 +3,7 @@ import { useState } from "react";
 import { CheckIcon, SearchIcon, StarIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { compareByLocale } from "@stll/collation";
 import type { CountryCode } from "@stll/country-codes";
 import {
   InputGroup,
@@ -13,7 +14,6 @@ import { cn } from "@stll/ui/utils";
 
 import Tooltip from "@/components/tooltip";
 import { useFormatter, useLocale } from "@/i18n/formatting-context";
-import { compareByLocale } from "@stll/collation";
 import { createCountryOptions, removeJurisdiction } from "@/lib/jurisdictions";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
 

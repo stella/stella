@@ -15,12 +15,12 @@ import JSZip from "jszip";
 import * as slimdom from "slimdom";
 import * as valibot from "valibot";
 
+import { compareCodepoint } from "@stll/collation";
 import type { ConditionNode } from "@stll/conditions";
 import { conditionNodeSchema } from "@stll/conditions";
 import { isFieldPath } from "@stll/template-conditions";
 
 import { arrayOrEmpty } from "@/api/lib/array";
-import { compareCodepoint } from "@stll/collation";
 
 import { isElement } from "./ooxml";
 import type {

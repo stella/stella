@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { compareByLocale } from "@stll/collation";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { DestructiveConfirmDialog } from "@stll/ui/destructive-confirm-dialog";
@@ -50,7 +51,6 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { authClient } from "@/lib/auth";
 import type { Role } from "@/lib/auth";
 import { roleOptions } from "@/lib/auth-queries";
-import { compareByLocale } from "@stll/collation";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { rolePriority, roleTranslationKeys } from "@/lib/organization/consts";

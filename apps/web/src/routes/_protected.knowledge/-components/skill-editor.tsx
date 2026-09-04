@@ -18,6 +18,7 @@ import {
 import { useTranslations } from "use-intl";
 
 import { SKILL_RESOURCE_PATH_PATTERN } from "@stll/api-contract";
+import { compareByLocale } from "@stll/collation";
 import { Button } from "@stll/ui/button";
 import { Input } from "@stll/ui/input";
 import {
@@ -44,7 +45,6 @@ import { MarkdownIcon } from "@/components/markdown-icon";
 import { useMountEffect } from "@/hooks/use-effect";
 import { useLocale } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
-import { compareByLocale } from "@stll/collation";
 import { MARKDOWN_MIME, isMarkdownFile } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { APIError, unwrapEden } from "@/lib/errors/api";

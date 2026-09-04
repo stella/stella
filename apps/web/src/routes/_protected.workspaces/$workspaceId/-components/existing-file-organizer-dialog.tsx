@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { compareByLocale } from "@stll/collation";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import {
@@ -47,7 +48,6 @@ import { useFormatter } from "@/i18n/formatting-context";
 import { useI18nStore } from "@/i18n/i18n-store";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { compareByLocale } from "@stll/collation";
 import { detached } from "@/lib/detached";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";

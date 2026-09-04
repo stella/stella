@@ -28,8 +28,9 @@
  * differ in wrapping without differing in content.
  */
 
-import { arrayOrEmpty } from "@/api/lib/array";
 import { stableStringify } from "@stll/stable-stringify";
+
+import { arrayOrEmpty } from "@/api/lib/array";
 import type { DocumentReviewFindingPayload } from "@/api/lib/document-review/run-contract";
 
 const WHITESPACE_RUN = /\s+/gu;

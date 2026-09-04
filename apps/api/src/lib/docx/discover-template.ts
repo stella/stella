@@ -12,9 +12,8 @@ import { panic } from "better-result";
 import JSZip from "jszip";
 import * as slimdom from "slimdom";
 
-import { parseCondition, type ConditionNode } from "@stll/template-conditions";
-
 import { compareCodepoint } from "@stll/collation";
+import { parseCondition, type ConditionNode } from "@stll/template-conditions";
 
 import { parseBlockTree, scanBlockDirectives } from "./block-directives";
 import { PLACEHOLDER_RE } from "./discover-placeholders";

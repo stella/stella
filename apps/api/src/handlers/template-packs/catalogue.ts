@@ -5,6 +5,7 @@
  * first. Pure over the catalogue so the list handler and its tests share it.
  */
 
+import { compareByLocale, compareCodepoint } from "@stll/collation";
 import type { CountryCode } from "@stll/country-codes";
 import {
   createBundledTemplatePackCatalogue,
@@ -16,7 +17,6 @@ import type {
 } from "@stll/template-packs/schema";
 
 import { env } from "@/api/env";
-import { compareByLocale, compareCodepoint } from "@stll/collation";
 import type { MemberRole } from "@/api/lib/member-roles";
 
 let catalogue: TemplatePackCatalogue | null = null;

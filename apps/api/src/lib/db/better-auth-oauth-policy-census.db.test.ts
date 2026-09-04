@@ -1,12 +1,13 @@
 import { afterAll, beforeAll, expect, setDefaultTimeout, test } from "bun:test";
 import { sql, TransactionRollbackError } from "drizzle-orm";
 
+import { compareCodepoint } from "@stll/collation";
+
 import {
   oauthClient,
   oauthClientResource,
   oauthResource,
 } from "@/api/db/auth-schema";
-import { compareCodepoint } from "@stll/collation";
 import {
   assertBetterAuthOAuthPolicyCensus,
   BetterAuthOAuthPolicyCensusError,

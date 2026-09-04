@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 
+import { compareByLocale } from "@stll/collation";
 import {
   buildCourtMapFromEntries,
   InfoSoudAPIError,
@@ -9,7 +10,6 @@ import {
 
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { compareByLocale } from "@stll/collation";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 import { getInfoSoudClient } from "./infosoud-common";

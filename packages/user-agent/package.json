@@ -1,8 +1,8 @@
 {
   "name": "@stll/user-agent",
   "version": "0.0.0",
-  "description": "browser and OS names parsed from a user-agent string for session and device lists",
   "private": true,
+  "description": "browser and OS names parsed from a user-agent string for session and device lists",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,

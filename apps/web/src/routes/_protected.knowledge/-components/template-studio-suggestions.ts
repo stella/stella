@@ -20,9 +20,8 @@ import type {
 } from "@stll/folio-core/ai-edits";
 import { buildPositionalText } from "@stll/folio-react";
 import type { AISuggestion } from "@stll/folio-react";
-import { isFieldPath } from "@stll/template-conditions";
-
 import { stableStringify } from "@stll/stable-stringify";
+import { isFieldPath } from "@stll/template-conditions";
 
 /** Chars of surrounding text recorded so suggestions survive document edits
  *  (the host re-anchors stale ranges via contextBefore/After). */

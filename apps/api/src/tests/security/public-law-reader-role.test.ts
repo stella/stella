@@ -3,6 +3,8 @@ import { eq, sql, TransactionRollbackError } from "drizzle-orm";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
 
+import { getCollator } from "@stll/collation";
+
 import {
   stella,
   stellaCaseLawReader,
@@ -44,7 +46,6 @@ import {
   readPublicDecisionLanguageAlternatesQuery,
 } from "@/api/lib/case-law/language-alternates";
 import { readNonRedistributableCaseLawSourceIdsQuery } from "@/api/lib/case-law/non-redistributable-sources";
-import { getCollator } from "@stll/collation";
 import { readServingCorpusIndexGenerationTx } from "@/api/lib/legal-search/corpus-index-generation-store";
 import { rehydrateCorpusIndexProviderCandidates } from "@/api/lib/legal-search/corpus-index-provider";
 import { readDocumentContextDecision } from "@/api/lib/legal-search/document-context";

@@ -1,11 +1,11 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
+import { addDays } from "@stll/time";
 import { cn } from "@stll/ui/utils";
 
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { normalizeOptionalArray } from "@/lib/arrays";
-import { addDays } from "@stll/time";
 import { timeEntriesOptions } from "@/lib/workspaces/queries/time-entries";
 import { formatCurrencyCompact } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-currency";
 import {
