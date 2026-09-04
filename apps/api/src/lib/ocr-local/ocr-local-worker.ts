@@ -25,6 +25,8 @@ import * as ort from "onnxruntime-node";
 import {
   OCR_LOCAL_MODEL_FILES,
   OCR_MAX_PAGES,
+  OCR_RENDER_MAX_SIDE_PIXELS,
+  OCR_RENDER_TARGET_SCALE,
   type DocumentOcrLine,
   type DocumentOcrPage,
 } from "@/api/lib/document-processing-contract";
@@ -44,9 +46,6 @@ import {
 } from "@/api/lib/ocr-local/ppocr-pipeline";
 import { resizeRgbRegion, rgbaToRgb } from "@/api/lib/ocr-local/rgb-image";
 
-/** Render at 300dpi, capped so an oversized page cannot balloon memory. */
-const RENDER_TARGET_SCALE = 300 / 72;
-const RENDER_MAX_SIDE_PIXELS = 3600;
 const MIN_LINE_CONFIDENCE = 0.05;
 
 const die = (message: string): never => {
@@ -257,8 +256,8 @@ try {
     const { originalHeight: pointHeight, originalWidth: pointWidth } =
       page.getOriginalSize();
     const scale = Math.min(
-      RENDER_TARGET_SCALE,
-      RENDER_MAX_SIDE_PIXELS / Math.max(pointWidth, pointHeight),
+      OCR_RENDER_TARGET_SCALE,
+      OCR_RENDER_MAX_SIDE_PIXELS / Math.max(pointWidth, pointHeight),
     );
     const render = await page.render({ scale });
     const rgb = rgbaToRgb({

@@ -68,6 +68,7 @@ minimumReleaseAgeExcludes = [
   "@stll/typescript-config", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
   "@stll/aho-corasick-wasm", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
   "@stll/anonymize", # quarantine-excluded-since: 2026-08-21T20:57:15.731Z
+  "@stll/anonymize-pdf", # quarantine-excluded-since: 2026-09-04T21:15:00.000Z
   "@stll/anonymize-darwin-arm64", # quarantine-excluded-since: 2026-08-21T20:53:13.734Z
   "@stll/anonymize-darwin-x64", # quarantine-excluded-since: 2026-08-21T20:53:18.289Z
   "@stll/anonymize-data", # quarantine-excluded-since: 2026-08-21T19:06:57.523Z

@@ -65,6 +65,7 @@ import { memoriesRoute } from "@/api/handlers/memories/routes";
 import { notificationsRoute } from "@/api/handlers/notifications/routes";
 import { operatorRoute } from "@/api/handlers/operator/routes";
 import { organizationSettingsRoute } from "@/api/handlers/organization-settings/routes";
+import { pdfAnonymizationRoute } from "@/api/handlers/pdf-anonymization/routes";
 import { playbooksRoute } from "@/api/handlers/playbooks/routes";
 import { playbookRunsRoute } from "@/api/handlers/playbooks/run-route";
 import { propertiesRoute } from "@/api/handlers/properties/routes";
@@ -152,6 +153,7 @@ import {
 import { emitRequestDurationMetric } from "@/api/lib/observability/request-metrics";
 import { runWithRequestScope } from "@/api/lib/observability/request-scope";
 import { resolveResponseStatus } from "@/api/lib/observability/response-status";
+import { initPdfAnonymizationRunWorker } from "@/api/lib/pdf-anonymization/run-queue";
 import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
 import { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
 import {
@@ -632,6 +634,7 @@ const api = new Elysia()
       .use(documentReviewsRoute)
       .use(documentReviewPassagesRoute)
       .use(documentTranslationsRoute)
+      .use(pdfAnonymizationRoute)
       .use(bilingualTranslationsRoute)
       .use(reportsRoute)
       .use(flowsRoute)
@@ -821,6 +824,9 @@ const startServer = async (): Promise<void> => {
   // BullMQ worker for unified document translation runs.
   const documentTranslationRunWorker = initDocumentTranslationRunWorker();
 
+  // BullMQ worker for destructive image-only PDF anonymization runs.
+  const pdfAnonymizationRunWorker = initPdfAnonymizationRunWorker();
+
   // BullMQ worker for durable post-processing deadline scouts.
   const documentDeadlineScoutWorker = initDocumentDeadlineScoutWorker();
 
@@ -884,6 +890,7 @@ const startServer = async (): Promise<void> => {
         reportExportWorker.close(),
         documentReviewRunWorker.close(),
         documentTranslationRunWorker.close(),
+        pdfAnonymizationRunWorker.close(),
         documentDeadlineScoutWorker.close(),
         bilingualRunWorker.close(),
       ]),

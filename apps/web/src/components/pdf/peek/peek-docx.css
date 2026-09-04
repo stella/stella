@@ -1,5 +1,6 @@
 .document-preview-surface,
 .folio-docx-preview {
+  --pdf-redaction-fill: var(--color-black);
   --document-preview-page: var(--background);
   --document-preview-surface: color-mix(
     in srgb,

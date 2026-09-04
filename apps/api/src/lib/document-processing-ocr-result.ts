@@ -41,6 +41,20 @@ export const isSupportedOcrPageCount = (pageCount: number): boolean =>
 export const validateOcrResult = (
   parsed: DocumentOcrResult,
 ): DocumentOcrResult => {
+  validateOcrPageObservationResult(parsed);
+  if (parsed.text.trim().length === 0) {
+    throw new DocumentOcrError({
+      code: "empty_result",
+      message: "OCR found no searchable text",
+    });
+  }
+  return parsed;
+};
+
+/** Validate complete page observations even when no text was recognized. */
+export const validateOcrPageObservationResult = (
+  parsed: DocumentOcrResult,
+): DocumentOcrResult => {
   if (!isSupportedOcrPageCount(parsed.pageCount)) {
     throw new DocumentOcrError({
       code: "page_limit_exceeded",
@@ -54,12 +68,6 @@ export const validateOcrResult = (
     throw new DocumentOcrError({
       code: "response_too_large",
       message: "OCR page geometry exceeded the allowed size",
-    });
-  }
-  if (parsed.text.trim().length === 0) {
-    throw new DocumentOcrError({
-      code: "empty_result",
-      message: "OCR found no searchable text",
     });
   }
   return parsed;

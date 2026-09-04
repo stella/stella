@@ -93,6 +93,10 @@ export const brandPersistedDocumentTranslationRunId = (
 ): SafeId<"documentTranslationRun"> =>
   toSafeId<"documentTranslationRun">(runId);
 
+export const brandPersistedPdfAnonymizationRunId = (
+  runId: string,
+): SafeId<"pdfAnonymizationRun"> => toSafeId<"pdfAnonymizationRun">(runId);
+
 export const brandPersistedLegalListId = (
   listId: string,
 ): SafeId<"legalList"> => toSafeId<"legalList">(listId);

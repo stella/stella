@@ -15,6 +15,7 @@ import {
   DocumentOcrError,
   OCR_TIMEOUT_MS,
   parseOcrPage,
+  validateOcrPageObservationResult,
   validateOcrResult,
   type DocumentOcrResult,
 } from "@/api/lib/document-processing-ocr-result";
@@ -59,19 +60,24 @@ const parseWorkerOutput = (raw: string): DocumentOcrPage[] => {
   return pages;
 };
 
-export const recognizePdfTextLocally = async ({
-  readSource = getS3ObjectWithSignal,
-  readSourceSize = getS3ObjectSizeWithSignal,
-  resolveModelDir = () => envDocumentProcessingWorker.DOCUMENT_OCR_MODEL_DIR,
-  signal,
-  sourceKey,
-}: {
+type LocalOcrOptions = {
   signal: AbortSignal;
   sourceKey: string;
   readSource?: (key: string, signal: AbortSignal) => Promise<ArrayBuffer>;
   readSourceSize?: (key: string, signal: AbortSignal) => Promise<number | null>;
   resolveModelDir?: () => string | undefined;
-}): Promise<Result<DocumentOcrResult, DocumentOcrError>> =>
+};
+
+const runLocalOcr = async (
+  {
+    readSource = getS3ObjectWithSignal,
+    readSourceSize = getS3ObjectSizeWithSignal,
+    resolveModelDir = () => envDocumentProcessingWorker.DOCUMENT_OCR_MODEL_DIR,
+    signal,
+    sourceKey,
+  }: LocalOcrOptions,
+  validate: (result: DocumentOcrResult) => DocumentOcrResult,
+): Promise<Result<DocumentOcrResult, DocumentOcrError>> =>
   await Result.tryPromise({
     try: async () => {
       const modelDir = resolveModelDir();
@@ -118,7 +124,7 @@ export const recognizePdfTextLocally = async ({
       }
       signal.throwIfAborted();
 
-      return validateOcrResult(
+      return validate(
         assembleDocumentOcrResult(parseWorkerOutput(output.value)),
       );
     },
@@ -131,6 +137,16 @@ export const recognizePdfTextLocally = async ({
             cause,
           }),
   });
+
+export const recognizePdfTextLocally = async (
+  options: LocalOcrOptions,
+): Promise<Result<DocumentOcrResult, DocumentOcrError>> =>
+  await runLocalOcr(options, validateOcrResult);
+
+export const observePdfPagesLocally = async (
+  options: LocalOcrOptions,
+): Promise<Result<DocumentOcrResult, DocumentOcrError>> =>
+  await runLocalOcr(options, validateOcrPageObservationResult);
 
 export const isLocalDocumentOcrConfigured = (): boolean =>
   envDocumentProcessingWorker.DOCUMENT_OCR_MODEL_DIR !== undefined;

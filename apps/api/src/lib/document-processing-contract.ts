@@ -8,6 +8,10 @@ export const DOCUMENT_OCR_PROCESSOR_VERSION = 3;
 /** Both OCR providers refuse documents beyond this page count. */
 export const OCR_MAX_PAGES = 500;
 
+/** Shared PDFium raster geometry for OCR and destructive PDF rewriting. */
+export const OCR_RENDER_TARGET_SCALE = 300 / 72;
+export const OCR_RENDER_MAX_SIDE_PIXELS = 3600;
+
 /**
  * File names the local OCR worker loads from the configured model
  * directory; `fetch-ocr-models.ts` downloads and pins them.

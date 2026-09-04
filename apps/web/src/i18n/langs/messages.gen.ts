@@ -2331,6 +2331,13 @@ type Messages = {
       "matchedWorkspaceTermsHeading": "Matching workspace terms ({count})";
       "noMatchesInDocument": "None of your workspace terms appear in this document.";
       "openFullViewHint": "Open the file in full view to see anonymization highlights and per-document match counts.";
+      "pdfCopyAction": "Create anonymized copy";
+      "pdfCopyCreated": "Anonymized copy created";
+      "pdfCopyCreating": "Creating anonymized copy…";
+      "pdfCopyDescription": "Creates a separate image-only PDF, blacks out detected lines, and removes embedded metadata and signatures. Check the resulting PDF before sharing; detection may miss personal data.";
+      "pdfCopyFailed": "The anonymized copy could not be created";
+      "pdfDrawRegion": "Drag over anything you want to hide";
+      "pdfRemoveRegion": "Remove marked area";
       "restoreAction": "Restore in this document";
       "termAddedToast": "Added \"{value}\" to workspace anonymization terms.";
       "termMatchCountAriaLabel": "Matched {count} times in this document.";

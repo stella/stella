@@ -17,6 +17,7 @@ export * from "./schema/extraction-runs";
 export * from "./schema/document-processing";
 export * from "./schema/bilingual";
 export * from "./schema/document-translations";
+export * from "./schema/pdf-anonymization";
 export * from "./schema/document-reviews";
 export * from "./schema/office-evidence";
 export * from "./schema/flows";

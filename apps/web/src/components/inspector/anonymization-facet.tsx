@@ -16,13 +16,14 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ChevronDown,
   ChevronRight,
   ExternalLinkIcon,
   EyeOff,
   RotateCcw,
+  ShieldCheck,
   Trash2,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -53,6 +54,11 @@ import {
   useAnonymizationMatchesReady,
   useInspectorAnonymizationStore,
 } from "@/components/inspector/inspector-anonymization-store";
+import {
+  invalidatePdfAnonymizationOutputQueries,
+  isPdfAnonymizationRunActive,
+  pdfAnonymizationRunOptions,
+} from "@/components/pdf-anonymization-queries";
 import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -61,8 +67,10 @@ import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { compareByLocale } from "@/lib/collation";
+import { PDF_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { ClientOperationError } from "@/lib/errors/client";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 import { anonymizationAllowlistOptions } from "@/lib/workspaces/queries/anonymization-allowlist";
@@ -172,6 +180,7 @@ type AnonymizationFacetProps = {
    * entries are visible.
    */
   entityId: string | null;
+  mimeType?: string | null | undefined;
   /**
    * True when this facet's tab is the currently visible inspector
    * tab. Inactive document tabs stay mounted (just hidden), so
@@ -195,6 +204,7 @@ export const AnonymizationFacet = ({
   workspaceId,
   activeFieldId,
   entityId,
+  mimeType = null,
   isVisible = true,
   onOpenFullView,
 }: AnonymizationFacetProps) => {
@@ -202,6 +212,7 @@ export const AnonymizationFacet = ({
   const format = useFormatter();
   const locale = useLocale();
   const analytics = useAnalytics();
+  const queryClient = useQueryClient();
   const formatLabel = (label: string): string =>
     isLabelTranslationKey(label) ? t(LABEL_TRANSLATION_KEYS[label]) : label;
   const termsQuery = useQuery(anonymizationTermsOptions(workspaceId));
@@ -258,6 +269,60 @@ export const AnonymizationFacet = ({
 
   const [pendingValue, setPendingValue] = useState("");
   const [pendingLabel, setPendingLabel] = useState<LabelOption>(DEFAULT_LABEL);
+  const [pdfAnonymizationRunId, setPdfAnonymizationRunId] = useState<
+    string | null
+  >(null);
+  const pdfRunQuery = useQuery({
+    ...pdfAnonymizationRunOptions({
+      workspaceId,
+      runId: pdfAnonymizationRunId ?? "pending",
+    }),
+    enabled: pdfAnonymizationRunId !== null,
+  });
+  const createPdfRunMutation = useMutation({
+    mutationFn: async () => {
+      if (activeFieldId === null || entityId === null) {
+        throw new ClientOperationError({
+          action: "createPdfAnonymizationRun",
+          message: "PDF anonymization requires an open document",
+        });
+      }
+      return unwrapEden(
+        await api
+          .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
+          ["pdf-anonymization"].runs.post({
+            entityId: toSafeId<"entity">(entityId),
+            fieldId: toSafeId<"field">(activeFieldId),
+          }),
+      );
+    },
+    onSuccess: ({ runId }) => setPdfAnonymizationRunId(runId),
+    onError: (error) => {
+      analytics.captureError(error);
+      stellaToast.error(t("inspector.anonymization.pdfCopyFailed"));
+    },
+  });
+  const handledPdfRunIdRef = useRef<string | null>(null);
+  useExternalSyncEffect(() => {
+    const run = pdfRunQuery.data?.run;
+    if (
+      run === undefined ||
+      handledPdfRunIdRef.current === run.id ||
+      isPdfAnonymizationRunActive(run.status)
+    ) {
+      return;
+    }
+    handledPdfRunIdRef.current = run.id;
+    if (run.status === "completed") {
+      stellaToast.success(t("inspector.anonymization.pdfCopyCreated"));
+      detached(
+        invalidatePdfAnonymizationOutputQueries(queryClient, workspaceId),
+        "pdf-anonymization.invalidate-output",
+      );
+      return;
+    }
+    stellaToast.error(t("inspector.anonymization.pdfCopyFailed"));
+  }, [pdfRunQuery.data?.run, queryClient, t, workspaceId]);
 
   // Tell the document editor to paint the in-document highlight
   // overlay while this facet is on screen; the overlay clears as
@@ -1007,6 +1072,30 @@ export const AnonymizationFacet = ({
               </div>
             );
           })}
+        </div>
+      )}
+      {activeFieldId !== null && entityId !== null && mimeType === PDF_MIME && (
+        <div className="mt-auto flex flex-col gap-3 border-t pt-4">
+          <p className="text-muted-foreground text-xs leading-relaxed">
+            {t("inspector.anonymization.pdfCopyDescription")}
+          </p>
+          <Button
+            className="w-full"
+            disabled={
+              createPdfRunMutation.isPending ||
+              (pdfRunQuery.data !== undefined &&
+                isPdfAnonymizationRunActive(pdfRunQuery.data.run.status))
+            }
+            onClick={() => createPdfRunMutation.mutate()}
+            type="button"
+          >
+            <ShieldCheck className="size-4" />
+            {createPdfRunMutation.isPending ||
+            (pdfRunQuery.data !== undefined &&
+              isPdfAnonymizationRunActive(pdfRunQuery.data.run.status))
+              ? t("inspector.anonymization.pdfCopyCreating")
+              : t("inspector.anonymization.pdfCopyAction")}
+          </Button>
         </div>
       )}
       <AnonymizationContextMenu
