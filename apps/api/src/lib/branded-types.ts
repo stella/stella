@@ -1,16 +1,10 @@
-import * as v from "valibot";
-
 import {
-  isSafeIdValue,
   type SafeId as PortableSafeId,
   type SafeIdType,
 } from "@stll/api-contract";
-
-const safeIdSchema = v.pipe(
-  v.string(),
-  v.check(isSafeIdValue, "Expected a non-empty identifier"),
-  v.brand("SafeId"),
-);
+// The brander stays behind its own entry point, which each app re-exports
+// once; this module is the API's one re-export.
+import { toSafeId as toPortableSafeId } from "@stll/api-contract/safe-id";
 
 export type { SafeIdType } from "@stll/api-contract";
 
@@ -35,8 +29,13 @@ export type AuthProviderIdType = (typeof AUTH_PROVIDER_ID_TYPES)[number];
 /** Id types this codebase mints itself, as UUIDv7. */
 export type MintedSafeIdType = Exclude<SafeIdType, AuthProviderIdType>;
 
-export const toSafeId = <T extends SafeIdType>(value: string): SafeId<T> =>
-  v.parse(safeIdSchema, value);
+/**
+ * The contract's brander, narrowed to the id types this codebase knows. The
+ * portable signature accepts any string as the type parameter, which would let
+ * a misspelled `toSafeId<"mater">` compile; inside the API the set is closed.
+ */
+export const toSafeId: <T extends SafeIdType>(value: string) => SafeId<T> =
+  toPortableSafeId;
 
 export const createSafeId = <T extends MintedSafeIdType>(): SafeId<T> =>
   toSafeId<T>(Bun.randomUUIDv7());
