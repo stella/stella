@@ -5,7 +5,7 @@ import {
   type PlaybookTrigger,
   type Position,
 } from "@/lib/knowledge/playbook-types";
-import { stableStringify } from "@/lib/stable-stringify";
+import { stableStringify } from "@stll/stable-stringify";
 
 type ResolvePlaybookScrollTopArgs = {
   containerScrollTop: number;

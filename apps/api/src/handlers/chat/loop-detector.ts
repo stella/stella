@@ -1,6 +1,6 @@
 import type { ModelMessage } from "@tanstack/ai";
 
-import { stableStringify } from "@/api/lib/chat/stable-stringify";
+import { stableStringify } from "@stll/stable-stringify";
 
 const codePointOf = (value: string): number => {
   const code = value.codePointAt(0);

@@ -74,6 +74,7 @@
     "@stll/permissions": "workspace:*",
     "@stll/skills": "workspace:*",
     "@stll/ssr-kit": "workspace:^",
+    "@stll/stable-stringify": "workspace:*",
     "@stll/start-runtime": "workspace:^",
     "@stll/template-conditions": "workspace:*",
     "@stll/text-normalize": "workspace:*",

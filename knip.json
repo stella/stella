@@ -105,6 +105,9 @@
     "packages/skills": {
       "entry": ["scripts/*.ts", "src/**/*.test.ts"]
     },
+    "packages/stable-stringify": {
+      "entry": ["src/index.ts", "src/**/*.test.ts"]
+    },
     "packages/template-conditions": {
       "entry": ["src/index.ts", "src/**/*.test.ts"]
     },

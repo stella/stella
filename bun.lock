@@ -100,6 +100,7 @@
         "@stll/money": "workspace:*",
         "@stll/permissions": "workspace:*",
         "@stll/skills": "workspace:*",
+        "@stll/stable-stringify": "workspace:*",
         "@stll/template-conditions": "workspace:*",
         "@stll/template-packs": "workspace:*",
         "@stll/text-normalize": "workspace:*",
@@ -343,6 +344,7 @@
         "@stll/permissions": "workspace:*",
         "@stll/skills": "workspace:*",
         "@stll/ssr-kit": "workspace:^",
+        "@stll/stable-stringify": "workspace:*",
         "@stll/start-runtime": "workspace:^",
         "@stll/template-conditions": "workspace:*",
         "@stll/text-normalize": "workspace:*",
@@ -824,6 +826,14 @@
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
         "tsdown": "catalog:",
+      },
+    },
+    "packages/stable-stringify": {
+      "name": "@stll/stable-stringify",
+      "version": "0.0.0",
+      "devDependencies": {
+        "@stll/typescript-config": "workspace:*",
+        "bun-types": "catalog:",
       },
     },
     "packages/start-runtime": {
@@ -2556,6 +2566,8 @@
     "@stll/ssr-kit": ["@stll/ssr-kit@workspace:packages/ssr-kit"],
 
     "@stll/ssr-testkit": ["@stll/ssr-testkit@workspace:packages/ssr-testkit"],
+
+    "@stll/stable-stringify": ["@stll/stable-stringify@workspace:packages/stable-stringify"],
 
     "@stll/start-runtime": ["@stll/start-runtime@workspace:packages/start-runtime"],
 

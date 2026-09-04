@@ -2,8 +2,19 @@
  * Deterministic serialization for hashing/keying arbitrary values: canonical
  * key order via plain codepoint comparison (not localeCompare), so the output
  * is bit-identical across environments regardless of runtime/ICU locale.
- * Shared by the chat loop detector's tool-call signatures and the tool defect
- * memo's tool+args keys, which must agree on what "the same call" means.
+ * Callers compare fingerprints — the chat loop detector's tool-call
+ * signatures, a review finding's identity, an editor's dirty check — so two
+ * structurally equal values must stringify identically no matter which order
+ * their keys were assembled in.
+ *
+ * Values JSON has no form for are given one rather than dropped: `undefined`
+ * (including an explicitly-undefined key, so it stays distinguishable from an
+ * absent one), `bigint`, `symbol`, and functions. A cycle serializes as
+ * `[circular]` instead of throwing, because a fingerprint of a malformed
+ * value is still more useful than a crash on the path that computes it. The
+ * visited set is never unwound, so a value that merely appears twice reads as
+ * circular as well: callers fingerprint payloads they built, not shared object
+ * graphs.
  */
 export const stableStringify = (
   value: unknown,

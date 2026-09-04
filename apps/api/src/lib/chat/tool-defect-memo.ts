@@ -1,4 +1,4 @@
-import { stableStringify } from "./stable-stringify";
+import { stableStringify } from "@stll/stable-stringify";
 
 /**
  * Per-turn memo of tool calls that failed with a `server-defect`

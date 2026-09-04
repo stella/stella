@@ -105,6 +105,7 @@
     "@stll/money": "workspace:*",
     "@stll/permissions": "workspace:*",
     "@stll/skills": "workspace:*",
+    "@stll/stable-stringify": "workspace:*",
     "@stll/template-conditions": "workspace:*",
     "@stll/template-packs": "workspace:*",
     "@stll/text-normalize": "workspace:*",
