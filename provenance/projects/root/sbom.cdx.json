@@ -2128,6 +2128,9 @@
             "location": "packages/ui/src/kanban/column-header.tsx#1"
           },
           {
+            "location": "packages/ui/src/kanban/fixtures/board-chrome.fixture.tsx#1"
+          },
+          {
             "location": "packages/ui/src/kanban/fixtures/card-sticky-header.fixture.tsx#1"
           },
           {
@@ -2361,7 +2364,7 @@
           "name": "Atlassian Pty Ltd"
         }
       ],
-      "bom-ref": "pkg:npm/@atlaskit/pragmatic-drag-and-drop-auto-scroll@3.1.0",
+      "bom-ref": "pkg:npm/@atlaskit/pragmatic-drag-and-drop-auto-scroll@3.2.0",
       "description": "An optional Pragmatic drag and drop package that enables automatic scrolling during a drag operation",
       "evidence": {
         "identity": [
@@ -2420,10 +2423,10 @@
           "value": "apps/web/node_modules/@atlaskit/pragmatic-drag-and-drop-auto-scroll/package.json"
         }
       ],
-      "purl": "pkg:npm/%40atlaskit/pragmatic-drag-and-drop-auto-scroll@3.1.0",
+      "purl": "pkg:npm/%40atlaskit/pragmatic-drag-and-drop-auto-scroll@3.2.0",
       "scope": "required",
       "type": "library",
-      "version": "3.1.0"
+      "version": "3.2.0"
     },
     {
       "authors": [
@@ -2431,7 +2434,7 @@
           "name": "Atlassian Pty Ltd"
         }
       ],
-      "bom-ref": "pkg:npm/@atlaskit/pragmatic-drag-and-drop-hitbox@2.1.0",
+      "bom-ref": "pkg:npm/@atlaskit/pragmatic-drag-and-drop-hitbox@2.2.0",
       "description": "An optional package for Pragmatic drag and drop that enables the attaching of interaction information to a drop target",
       "evidence": {
         "identity": [
@@ -2514,10 +2517,10 @@
           "value": "apps/web/node_modules/@atlaskit/pragmatic-drag-and-drop-hitbox/package.json"
         }
       ],
-      "purl": "pkg:npm/%40atlaskit/pragmatic-drag-and-drop-hitbox@2.1.0",
+      "purl": "pkg:npm/%40atlaskit/pragmatic-drag-and-drop-hitbox@2.2.0",
       "scope": "required",
       "type": "library",
-      "version": "2.1.0"
+      "version": "2.2.0"
     },
     {
       "authors": [
@@ -2525,7 +2528,7 @@
           "name": "Atlassian Pty Ltd"
         }
       ],
-      "bom-ref": "pkg:npm/@atlaskit/pragmatic-drag-and-drop-live-region@2.0.0",
+      "bom-ref": "pkg:npm/@atlaskit/pragmatic-drag-and-drop-live-region@2.1.0",
       "description": "An optional package for Pragmatic drag and drop that enables screen reader messaging for alternative flows",
       "evidence": {
         "identity": [
@@ -2574,10 +2577,10 @@
           "value": "apps/web/node_modules/@atlaskit/pragmatic-drag-and-drop-live-region/package.json"
         }
       ],
-      "purl": "pkg:npm/%40atlaskit/pragmatic-drag-and-drop-live-region@2.0.0",
+      "purl": "pkg:npm/%40atlaskit/pragmatic-drag-and-drop-live-region@2.1.0",
       "scope": "required",
       "type": "library",
-      "version": "2.0.0"
+      "version": "2.1.0"
     },
     {
       "authors": [
@@ -2585,7 +2588,7 @@
           "name": "Atlassian Pty Ltd"
         }
       ],
-      "bom-ref": "pkg:npm/@atlaskit/pragmatic-drag-and-drop@3.0.0",
+      "bom-ref": "pkg:npm/@atlaskit/pragmatic-drag-and-drop@3.1.0",
       "description": "The core package for Pragmatic drag and drop - enabling fast drag and drop for any experience on any tech stack",
       "evidence": {
         "identity": [
@@ -2784,10 +2787,10 @@
           "value": "apps/desktop/node_modules/@atlaskit/pragmatic-drag-and-drop/package.json"
         }
       ],
-      "purl": "pkg:npm/%40atlaskit/pragmatic-drag-and-drop@3.0.0",
+      "purl": "pkg:npm/%40atlaskit/pragmatic-drag-and-drop@3.1.0",
       "scope": "required",
       "type": "library",
-      "version": "3.0.0"
+      "version": "3.1.0"
     },
     {
       "authors": [
@@ -5194,6 +5197,9 @@
             "location": "packages/ui/src/kanban/column-header.tsx#1"
           },
           {
+            "location": "packages/ui/src/kanban/fixtures/board-chrome.fixture.tsx#1"
+          },
+          {
             "location": "packages/ui/src/kanban/fixtures/card-sticky-header.fixture.tsx#1"
           },
           {
@@ -5849,6 +5855,9 @@
             "location": "packages/ui/src/components/fixtures/popover-resize.fixture.tsx#2"
           },
           {
+            "location": "packages/ui/src/kanban/fixtures/board-chrome.fixture.tsx#2"
+          },
+          {
             "location": "packages/ui/src/kanban/fixtures/card-sticky-header.fixture.tsx#2"
           },
           {
@@ -5883,6 +5892,9 @@
           },
           {
             "location": "packages/ui/src/components/fixtures/popover-resize.fixture.tsx#2"
+          },
+          {
+            "location": "packages/ui/src/kanban/fixtures/board-chrome.fixture.tsx#2"
           },
           {
             "location": "packages/ui/src/kanban/fixtures/card-sticky-header.fixture.tsx#2"
@@ -9126,6 +9138,9 @@
           },
           {
             "location": "packages/ui/src/kanban/column-header.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/kanban/fixtures/board-chrome.fixture.tsx#1"
           },
           {
             "location": "packages/ui/src/kanban/fixtures/card-sticky-header.fixture.tsx#1"
@@ -17152,6 +17167,9 @@
           },
           {
             "location": "packages/ui/src/kanban/column-header.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/kanban/fixtures/board-chrome.fixture.tsx#1"
           },
           {
             "location": "packages/ui/src/kanban/fixtures/card-sticky-header.fixture.tsx#1"
@@ -29291,7 +29309,7 @@
       "version": "0.145.0"
     },
     {
-      "bom-ref": "pkg:npm/pdfjs-dist@6.2.108",
+      "bom-ref": "pkg:npm/pdfjs-dist@6.3.289",
       "description": "Generic build of Mozilla's PDF.js library.",
       "evidence": {
         "identity": [
@@ -29360,10 +29378,10 @@
           "value": "apps/web/node_modules/pdfjs-dist/package.json"
         }
       ],
-      "purl": "pkg:npm/pdfjs-dist@6.2.108",
+      "purl": "pkg:npm/pdfjs-dist@6.3.289",
       "scope": "required",
       "type": "library",
-      "version": "6.2.108"
+      "version": "6.3.289"
     },
     {
       "authors": [
@@ -30251,6 +30269,9 @@
             "location": "packages/ui/src/components/fixtures/popover-resize.fixture.tsx#2"
           },
           {
+            "location": "packages/ui/src/kanban/fixtures/board-chrome.fixture.tsx#2"
+          },
+          {
             "location": "packages/ui/src/kanban/fixtures/card-sticky-header.fixture.tsx#2"
           },
           {
@@ -30285,6 +30306,9 @@
           },
           {
             "location": "packages/ui/src/components/fixtures/popover-resize.fixture.tsx#2"
+          },
+          {
+            "location": "packages/ui/src/kanban/fixtures/board-chrome.fixture.tsx#2"
           },
           {
             "location": "packages/ui/src/kanban/fixtures/card-sticky-header.fixture.tsx#2"
@@ -32565,6 +32589,9 @@
           },
           {
             "location": "packages/ui/src/kanban/column-header.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/kanban/fixtures/board-chrome.fixture.tsx#1"
           },
           {
             "location": "packages/ui/src/kanban/fixtures/card-sticky-header.fixture.tsx#1"
