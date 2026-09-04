@@ -5,7 +5,7 @@ import {
   useSuspenseQuery,
 } from "@tanstack/react-query";
 import { useTable } from "@tanstack/react-table";
-import { TableIcon } from "lucide-react";
+import { SearchXIcon, TableIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { VIEW_SORTS_MAX } from "@stll/api-contract";
@@ -37,6 +37,7 @@ import {
 import { WorkspaceTable } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table";
 import { includesListItems } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
 import { useSyncSelectedEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-selected-entities";
+import { useTableFind } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-table-find";
 import { useTableState } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-table-state";
 import { useUpdateView } from "@/routes/_protected.workspaces/$workspaceId/-mutations/views";
 
@@ -104,6 +105,7 @@ const FlatTableLayout = ({ workspaceId, view }: TableLayoutProps) => {
 
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
   const columns = useTableColumns({ properties, view });
+  const find = useTableFind({ properties, view });
   const fieldIds = useMemo(
     () =>
       visibleEntityFieldIds({
@@ -123,6 +125,7 @@ const FlatTableLayout = ({ workspaceId, view }: TableLayoutProps) => {
         excludedKinds,
         fieldMode: "visible",
         fieldIds,
+        ...find.request,
       }),
     );
 
@@ -170,6 +173,19 @@ const FlatTableLayout = ({ workspaceId, view }: TableLayoutProps) => {
   });
 
   if (table.getRowModel().rows.length === 0) {
+    // Ahead of the filter and upload states: with a find running, "upload your
+    // first document" answers a question nobody asked.
+    if (find.highlight) {
+      return (
+        <EmptyState
+          hint={t("workspaces.views.noFindResultsHint")}
+          icon={SearchXIcon}
+          message={t("workspaces.views.noFindResults", {
+            term: find.highlight.term,
+          })}
+        />
+      );
+    }
     if (view.layout.filters.length > 0) {
       return (
         <FilteredEmptyState

@@ -90,7 +90,7 @@ import {
   propertiesOptions,
 } from "@/lib/workspaces/queries/properties";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
-import { mergeLayout } from "@/lib/workspaces/view-layout";
+import { isTableView, mergeLayout } from "@/lib/workspaces/view-layout";
 import { BulkAddColumns } from "@/routes/_protected.workspaces/$workspaceId/-components/bulk-add-columns";
 import { ExistingFileOrganizerDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog";
 import { ExtractionRunProgress } from "@/routes/_protected.workspaces/$workspaceId/-components/extraction-run-progress";
@@ -99,6 +99,7 @@ import { RowActions } from "@/routes/_protected.workspaces/$workspaceId/-compone
 import { ExportReportControl } from "@/routes/_protected.workspaces/$workspaceId/-components/view/export-report-dialog";
 import { admitsOnlyTaskKind } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
 import { FilterChips } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-filters";
+import { ViewToolbarSearch } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-search";
 import { SortChips } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-sorts";
 import type { TableContentMode } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
 import { useTableStore } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
@@ -142,6 +143,10 @@ export const ViewToolbar = ({ view, workspaceId }: ViewToolbarProps) => {
           />
           <span className="bg-border mx-1 h-4 w-px" />
         </>
+      )}
+
+      {isTableView(view) && (
+        <ViewToolbarSearch properties={properties} view={view} />
       )}
 
       <FilterChips

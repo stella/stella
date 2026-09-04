@@ -5151,6 +5151,11 @@ type Messages = {
       "filter": "Filter";
       "filterByPlaceholder": "Filter by…";
       "filtersWithCount": "{count, plural, one {# filter} other {# filters}}";
+      "findAllColumns": "All columns";
+      "findColumnNotSearchable": "Filter this column instead of searching it";
+      "findColumns": "Columns to search";
+      "findInTable": "Find in table";
+      "findPlaceholder": "Find in rows…";
       "group": "Group";
       "groupBy": "Group by:";
       "groupItemCount": "{count, plural, one {# item} other {# items}}";
@@ -5167,6 +5172,8 @@ type Messages = {
       "newView": "{layoutType, select, other {New {layout}}}";
       "noFilterResults": "No items match these filters";
       "noFilterResultsHint": "They would show up here if you removed some filters.";
+      "noFindResults": "Nothing matches “{term}”";
+      "noFindResultsHint": "Try a shorter term, or search in more columns.";
       "removeAdvancedFilter": "Remove advanced filter";
       "reportExport": {
         "action": "Export report…";

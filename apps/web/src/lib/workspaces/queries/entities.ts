@@ -25,10 +25,12 @@ import {
   DEFAULT_ENTITY_VIEW_PAGE_SIZE,
   DEFAULT_ENTITY_WINDOW_SIZE,
   entitiesKeys,
+  normalizeFind,
   normalizeVisibleFieldIds,
   visibleEntityFieldIds,
 } from "@/lib/workspaces/queries/entities.logic";
 import type {
+  EntitiesFindKey,
   EntitiesPageKey,
   EntitiesWindowKey,
   FilesystemEntitiesKey,
@@ -43,6 +45,26 @@ export type EntitiesWindowOptionsInput = QueryOptionsInput<EntitiesWindowKey>;
 type FilesystemEntitiesOptionsInput = QueryOptionsInput<FilesystemEntitiesKey>;
 export type KanbanGroupOptionsInput = QueryOptionsInput<KanbanGroupKey>;
 export type GroupCountsOptionsInput = QueryOptionsInput<GroupCountsKey>;
+
+/**
+ * The find fields a request body carries, branded. Absent when the term is
+ * blank, so a bar that is open but empty sends nothing.
+ */
+const findRequestFields = (key: EntitiesFindKey) => {
+  const normalized = normalizeFind(key);
+  if (!normalized) {
+    return {};
+  }
+  return {
+    find: normalized.find,
+    findScope: {
+      propertyIds: normalized.findScope.propertyIds.map((propertyId) =>
+        toSafeId<"property">(propertyId),
+      ),
+      type: normalized.findScope.type,
+    },
+  };
+};
 
 type RawWorkspaceEntity = Omit<
   WorkspaceEntity,
@@ -184,6 +206,7 @@ export const entitiesWindowOptions = (key: EntitiesWindowOptionsInput) =>
             filters: key.filters,
             sorts: key.sorts,
             ...(key.search?.trim() && { search: key.search.trim() }),
+            ...findRequestFields(key),
             limit: key.limit ?? DEFAULT_ENTITY_WINDOW_SIZE,
             excludedKinds: normalizeOptionalArray(key.excludedKinds),
             fieldMode,
@@ -261,6 +284,7 @@ export const kanbanGroupOptions = (key: KanbanGroupOptionsInput) =>
           {
             filters: key.filters,
             sorts: key.sorts,
+            ...findRequestFields(key),
             limit: key.limit ?? DEFAULT_ENTITY_WINDOW_SIZE,
             fieldMode,
             fieldIds:
@@ -309,6 +333,7 @@ export const groupCountsOptions = (key: GroupCountsOptionsInput) =>
         ["group-counts"].post(
           {
             filters: key.filters,
+            ...findRequestFields(key),
             groupByPropertyId:
               key.groupByPropertyId === "_status" ||
               key.groupByPropertyId === "_kind"

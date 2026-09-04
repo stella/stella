@@ -17,15 +17,12 @@ import {
 } from "@/lib/workspaces/queries/entities";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
+import { isTableView } from "@/lib/workspaces/view-layout";
 import { CalendarView } from "@/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view";
 import { FilesystemView } from "@/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view";
 import { KanbanView } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view";
 import { OverviewView } from "@/routes/_protected.workspaces/$workspaceId/-components/overview-view";
 import { TableLayout } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-layout";
-
-type TableWorkspaceView = WorkspaceView & {
-  layout: Extract<ViewLayout, { type: "table" }>;
-};
 
 type FilesystemWorkspaceView = WorkspaceView & {
   layout: Extract<ViewLayout, { type: "filesystem" }>;
@@ -34,9 +31,6 @@ type FilesystemWorkspaceView = WorkspaceView & {
 type CalendarWorkspaceView = WorkspaceView & {
   layout: Extract<ViewLayout, { type: "calendar" }>;
 };
-
-const isTableView = (view: WorkspaceView): view is TableWorkspaceView =>
-  view.layout.type === "table";
 
 const isFilesystemView = (
   view: WorkspaceView,

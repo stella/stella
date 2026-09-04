@@ -1,4 +1,42 @@
+import type { EntityFindScope } from "@stll/api-contract";
+
 import type { ConditionNode, EntityKind, WorkspaceProperty } from "@/lib/types";
+
+/**
+ * Find-in-table, as it travels to the server. Separate from `search`: that one
+ * ranks an asynchronous index for the mention picker, this one filters the rows
+ * the grid renders. The scope's property list is always explicit, because
+ * group-counts takes no field selection and so cannot derive a default that
+ * would agree with the rows.
+ */
+export type EntitiesFindKey = {
+  find?: string | undefined;
+  findScope?: EntityFindScope | undefined;
+};
+
+type NormalizedFind = { find: string; findScope: EntityFindScope };
+
+/**
+ * A blank term drops the scope with it, so an open-but-empty find bar costs
+ * neither a cache entry nor a server condition. Property ids sort, so the same
+ * selection reached two ways is one cache key.
+ */
+export const normalizeFind = ({
+  find,
+  findScope,
+}: EntitiesFindKey): NormalizedFind | null => {
+  const term = find?.trim() ?? "";
+  if (term === "" || !findScope) {
+    return null;
+  }
+  return {
+    find: term,
+    findScope: {
+      propertyIds: [...findScope.propertyIds].toSorted(),
+      type: findScope.type,
+    },
+  };
+};
 
 export type ViewSort = {
   propertyId: string;
@@ -19,13 +57,14 @@ export type EntitiesPageKey = {
   previewableForAi?: boolean;
 };
 
-export type EntitiesWindowKey = Omit<EntitiesPageKey, "page" | "pageSize"> & {
-  limit?: number;
-  // Off by default: the assignees join is extra work every other window
-  // caller skips. Only the kanban assignee sub-group's window request
-  // sets this.
-  includeAssignees?: boolean;
-};
+export type EntitiesWindowKey = Omit<EntitiesPageKey, "page" | "pageSize"> &
+  EntitiesFindKey & {
+    limit?: number;
+    // Off by default: the assignees join is extra work every other window
+    // caller skips. Only the kanban assignee sub-group's window request
+    // sets this.
+    includeAssignees?: boolean;
+  };
 
 export type FilesystemEntitiesKey = Omit<
   EntitiesPageKey,
@@ -40,7 +79,7 @@ export type KanbanGroupKey = EntitiesWindowKey & {
   optionValues?: string[];
 };
 
-export type GroupCountsKey = {
+export type GroupCountsKey = EntitiesFindKey & {
   workspaceId: string;
   filters: ConditionNode[];
   groupByPropertyId: string;
@@ -108,8 +147,11 @@ export const entitiesKeys = {
     excludedKinds,
     previewableForAi,
     includeAssignees,
+    find,
+    findScope,
   }: EntitiesWindowKey) => {
     const normalizedFieldMode = fieldMode ?? "full";
+    const normalizedFind = normalizeFind({ find, findScope });
     return [
       ...entitiesKeys.all(workspaceId),
       "window",
@@ -117,6 +159,10 @@ export const entitiesKeys = {
         filters,
         sorts,
         ...(search?.trim() && { search: search.trim() }),
+        ...(normalizedFind && {
+          find: normalizedFind.find,
+          findScope: normalizedFind.findScope,
+        }),
         limit: limit ?? DEFAULT_ENTITY_WINDOW_SIZE,
         fieldMode: normalizedFieldMode,
         fieldIds:
@@ -164,14 +210,21 @@ export const entitiesKeys = {
     groupByPropertyId,
     groupValue,
     optionValues,
+    find,
+    findScope,
   }: KanbanGroupKey) => {
     const normalizedFieldMode = fieldMode ?? "full";
+    const normalizedFind = normalizeFind({ find, findScope });
     return [
       ...entitiesKeys.all(workspaceId),
       "kanban-group",
       {
         filters,
         sorts,
+        ...(normalizedFind && {
+          find: normalizedFind.find,
+          findScope: normalizedFind.findScope,
+        }),
         limit: limit ?? DEFAULT_ENTITY_WINDOW_SIZE,
         fieldMode: normalizedFieldMode,
         fieldIds:
@@ -190,11 +243,24 @@ export const entitiesKeys = {
     filters,
     groupByPropertyId,
     optionValues,
-  }: GroupCountsKey) => [
-    ...entitiesKeys.all(workspaceId),
-    "group-counts",
-    { filters, groupByPropertyId, optionValues: optionValues?.toSorted() },
-  ],
+    find,
+    findScope,
+  }: GroupCountsKey) => {
+    const normalizedFind = normalizeFind({ find, findScope });
+    return [
+      ...entitiesKeys.all(workspaceId),
+      "group-counts",
+      {
+        filters,
+        groupByPropertyId,
+        optionValues: optionValues?.toSorted(),
+        ...(normalizedFind && {
+          find: normalizedFind.find,
+          findScope: normalizedFind.findScope,
+        }),
+      },
+    ];
+  },
   summaries: (workspaceId: string) => [
     ...entitiesKeys.all(workspaceId),
     "summaries",

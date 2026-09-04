@@ -17,6 +17,38 @@ const TABLE_CONTENT_MODES = ["tight", "fit-content"] as const;
 
 export type TableContentMode = (typeof TABLE_CONTENT_MODES)[number];
 
+/**
+ * How wide an open find bar reaches. `all` is the state the bar opens in: no
+ * column chosen, so the row's name counts too. Narrowing to columns is a
+ * different question, not a shorter list, which is why it is a branch rather
+ * than an empty array.
+ */
+export type TableFindSelection =
+  | { type: "all" }
+  | { propertyIds: string[]; type: "columns" };
+
+/**
+ * An open find bar. Absent from the record means the bar is closed.
+ *
+ * `draft` is what the input holds; `term` is what the readers have been asked
+ * for. They are separate because the bar debounces: keeping only one would
+ * either lag the input by a quarter second or refetch on every keystroke, and
+ * "flush the pending debounce" (Enter) needs something to flush into.
+ */
+export type TableFind = {
+  draft: string;
+  scope: TableFindSelection;
+  term: string;
+};
+
+const pruneByViewId = <T>(
+  record: Record<string, T>,
+  activeViewIds: ReadonlySet<string>,
+): Record<string, T> =>
+  Object.fromEntries(
+    Object.entries(record).filter(([viewId]) => activeViewIds.has(viewId)),
+  );
+
 const selectedEntitiesEqual = (
   prev: readonly WorkspaceEntity[] | undefined,
   next: readonly WorkspaceEntity[],
@@ -128,6 +160,18 @@ type TableStore = {
    */
   preservableRowIds: Record<string, string[]>;
   setPreservableRowIds: (viewId: string, rowIds: string[]) => void;
+  /**
+   * The open find bar per view. Never persisted: a find is a question about
+   * the rows in front of you, not a saved view setting, so it does not
+   * survive a reload the way column widths do.
+   */
+  find: Record<string, TableFind>;
+  openFind: (viewId: string) => void;
+  closeFind: (viewId: string) => void;
+  setFindDraft: (viewId: string, draft: string) => void;
+  /** Promote the draft to the term the readers query with. */
+  commitFind: (viewId: string) => void;
+  setFindScope: (viewId: string, scope: TableFindSelection) => void;
   pruneStaleViews: (activeViewIds: string[]) => void;
 };
 
@@ -139,6 +183,7 @@ export const useTableStore = create<TableStore>()(
       rowSelection: {},
       selectedEntities: {},
       preservableRowIds: {},
+      find: {},
 
       setContentMode: (viewId, mode) => {
         set((state) => {
@@ -178,6 +223,53 @@ export const useTableStore = create<TableStore>()(
         });
       },
 
+      openFind: (viewId) => {
+        set((state) => {
+          // Re-opening an open bar keeps the term: the shortcut focuses the
+          // input, it does not start over.
+          state.find[viewId] ??= {
+            draft: "",
+            scope: { type: "all" },
+            term: "",
+          };
+        });
+      },
+
+      closeFind: (viewId) => {
+        set((state) => {
+          state.find = Object.fromEntries(
+            Object.entries(state.find).filter(([id]) => id !== viewId),
+          );
+        });
+      },
+
+      setFindDraft: (viewId, draft) => {
+        set((state) => {
+          const current = state.find[viewId];
+          if (current) {
+            current.draft = draft;
+          }
+        });
+      },
+
+      commitFind: (viewId) => {
+        set((state) => {
+          const current = state.find[viewId];
+          if (current) {
+            current.term = current.draft;
+          }
+        });
+      },
+
+      setFindScope: (viewId, scope) => {
+        set((state) => {
+          const current = state.find[viewId];
+          if (current) {
+            current.scope = scope;
+          }
+        });
+      },
+
       pruneStaleViews: (activeViewIds) => {
         set((state) => {
           const active = new Set(activeViewIds);
@@ -186,36 +278,17 @@ export const useTableStore = create<TableStore>()(
               state.columnSizing.delete(viewId);
             }
           }
-          const prunedContentMode: Record<string, TableContentMode> = {};
-          for (const [vid, mode] of Object.entries(state.contentMode)) {
-            if (active.has(vid)) {
-              prunedContentMode[vid] = mode;
-            }
-          }
-          state.contentMode = prunedContentMode;
-          const pruned: Record<string, RowSelectionState> = {};
-          for (const [vid, sel] of Object.entries(state.rowSelection)) {
-            if (active.has(vid)) {
-              pruned[vid] = sel;
-            }
-          }
-          state.rowSelection = pruned;
-          const prunedSelectedEntities: Record<string, WorkspaceEntity[]> = {};
-          for (const [vid, entities] of Object.entries(
+          state.contentMode = pruneByViewId(state.contentMode, active);
+          state.rowSelection = pruneByViewId(state.rowSelection, active);
+          state.selectedEntities = pruneByViewId(
             state.selectedEntities,
-          )) {
-            if (active.has(vid)) {
-              prunedSelectedEntities[vid] = entities;
-            }
-          }
-          state.selectedEntities = prunedSelectedEntities;
-          const prunedPreservableRowIds: Record<string, string[]> = {};
-          for (const [vid, rowIds] of Object.entries(state.preservableRowIds)) {
-            if (active.has(vid)) {
-              prunedPreservableRowIds[vid] = rowIds;
-            }
-          }
-          state.preservableRowIds = prunedPreservableRowIds;
+            active,
+          );
+          state.preservableRowIds = pruneByViewId(
+            state.preservableRowIds,
+            active,
+          );
+          state.find = pruneByViewId(state.find, active);
         });
       },
     })),
