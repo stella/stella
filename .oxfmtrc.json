@@ -51,6 +51,7 @@
     "newlinesBetween": true
   },
   "sortTailwindcss": {
-    "functions": ["cn", "cva"]
+    "functions": ["cn", "cva"],
+    "stylesheet": "node_modules/tailwindcss/theme.css"
   }
 }
