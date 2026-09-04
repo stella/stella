@@ -40,6 +40,22 @@ export const returnedSatisfies = (kind: Kind): string => {
   }
 };
 
+// MUST flag: the assertion proves nothing at runtime, so returning the same
+// binding after it still hands the unhandled value back.
+export const assertedThenReturned = (kind: Kind): string => {
+  switch (kind.type) {
+    case "a":
+      return "a";
+    case "b":
+      return "b";
+    default: {
+      kind satisfies never;
+      // oxlint-disable-next-line require-exhaustive-panic/require-exhaustive-panic -- fixture proves returning the asserted binding is rejected
+      return kind;
+    }
+  }
+};
+
 // Accepted: the assertion evaluates to nothing and the miss panics.
 export const assertsThenPanics = (kind: Kind): string => {
   switch (kind.type) {

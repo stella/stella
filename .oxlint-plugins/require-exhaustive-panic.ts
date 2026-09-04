@@ -13,6 +13,9 @@
 //
 //   return kind satisfies never;      // returns it directly
 //
+//   kind satisfies never;             // asserts, then returns the same
+//   return kind;                      //  ... binding anyway
+//
 // Allowed:
 //   kind satisfies never;             // asserts, evaluates to nothing
 //   return panic(`Unhandled kind: ${String(kind)}`);
@@ -25,7 +28,7 @@
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
-import { isAstNode } from "./utils.ts";
+import { isAstNode, isIdentifier } from "./utils.ts";
 
 const isNeverKeyword = (node: unknown): boolean =>
   isAstNode(node) && node.type === "TSNeverKeyword";
@@ -38,7 +41,8 @@ const hasNeverAnnotation = (id: unknown): boolean => {
   }
   const annotation = id.typeAnnotation;
   return (
-    isAstNode(annotation) && isNeverKeyword(Reflect.get(annotation, "typeAnnotation"))
+    isAstNode(annotation) &&
+    isNeverKeyword(Reflect.get(annotation, "typeAnnotation"))
   );
 };
 
@@ -46,6 +50,25 @@ const isSatisfiesNever = (node: unknown): boolean =>
   isAstNode(node) &&
   node.type === "TSSatisfiesExpression" &&
   isNeverKeyword(node.typeAnnotation);
+
+// `<identifier> satisfies never;` as a statement: the name it asserts on, or
+// null when the statement is anything else.
+const assertedIdentifier = (statement: unknown): string | null => {
+  if (!isAstNode(statement) || statement.type !== "ExpressionStatement") {
+    return null;
+  }
+  const expression = statement.expression;
+  if (!isSatisfiesNever(expression) || !isAstNode(expression)) {
+    return null;
+  }
+  const asserted = expression.expression;
+  return isIdentifier(asserted) ? asserted.name : null;
+};
+
+const returnsIdentifier = (statement: unknown, name: string): boolean =>
+  isAstNode(statement) &&
+  statement.type === "ReturnStatement" &&
+  isIdentifier(statement.argument, name);
 
 export default eslintCompatPlugin({
   meta: { name: "require-exhaustive-panic" },
@@ -60,9 +83,37 @@ export default eslintCompatPlugin({
           returnedSatisfies:
             "`return <value> satisfies never` returns the unhandled value at runtime. " +
             "Write `<value> satisfies never;` on its own line and follow it with `return panic(...)`.",
+          assertedThenReturned:
+            "`{{name}}` is asserted unreachable and then returned, so the unhandled value still reaches the caller. " +
+            "Replace the return with `return panic(...)`; a fallback that returns something else stays valid.",
         },
       },
       createOnce(context) {
+        // A `satisfies never` assertion followed by `return <same name>` in the
+        // same statement list: the assertion proves nothing at runtime, so the
+        // return hands the value back exactly as the bound-and-returned form
+        // does. Only an adjacent, identical identifier is matched.
+        const checkStatements = (statements: unknown) => {
+          if (!Array.isArray(statements)) {
+            return;
+          }
+          for (const [index, statement] of statements.entries()) {
+            const name = assertedIdentifier(statement);
+            if (name === null) {
+              continue;
+            }
+            const next = statements[index + 1];
+            if (!returnsIdentifier(next, name)) {
+              continue;
+            }
+            context.report({
+              node: next,
+              messageId: "assertedThenReturned",
+              data: { name },
+            });
+          }
+        };
+
         return {
           VariableDeclarator(node) {
             if (!hasNeverAnnotation(node.id)) {
@@ -75,6 +126,18 @@ export default eslintCompatPlugin({
               return;
             }
             context.report({ node, messageId: "returnedSatisfies" });
+          },
+          BlockStatement(node) {
+            checkStatements(node.body);
+          },
+          Program(node) {
+            checkStatements(node.body);
+          },
+          SwitchCase(node) {
+            checkStatements(node.consequent);
+          },
+          StaticBlock(node) {
+            checkStatements(node.body);
           },
         };
       },

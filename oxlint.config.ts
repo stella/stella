@@ -1719,9 +1719,17 @@ export default defineConfig({
       // had been handled. The assertion belongs on its own line, with
       // `panic(...)` after it. Tests are exempt: a fixture may bind the value
       // to prove a helper rejects it.
+      // Scope mirrors ALL_SOURCE_GLOBS in scripts/source-globs.ts, plus the
+      // `evals` and `e2e` trees it leaves out: a widened union returned from a
+      // backfill script or an eval harness is the same defect as one returned
+      // from a handler.
       files: [
         "apps/*/src/**/*.{ts,tsx}",
+        "apps/*/scripts/**/*.{ts,tsx}",
+        "apps/*/evals/**/*.{ts,tsx}",
+        "apps/*/e2e/**/*.{ts,tsx}",
         "packages/*/src/**/*.{ts,tsx}",
+        "packages/*/scripts/**/*.{ts,tsx}",
         "scripts/**/*.{ts,tsx}",
         ".oxlint-plugins/**/*.{ts,tsx}",
       ],
