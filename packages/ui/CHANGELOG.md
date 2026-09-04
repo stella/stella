@@ -1,5 +1,18 @@
 # @stll/ui
 
+## 0.24.0
+
+### Minor Changes
+
+- [#2915](https://github.com/stella/stella/pull/2915) [`45b6897`](https://github.com/stella/stella/commit/45b68970d4973ec35676b6c3b4e7ed5e41ff48d7) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Kanban board chrome now reads as one tight stack of rows: the column headers
+  and every lane's own row share an exported height, and a lane's row is pinned
+  on both axes, so its name and what each of its columns holds stay readable all
+  the way down the lane. Bands keep their caption at the visible edge while the
+  board scrolls sideways, cards can reveal their actions on hover, and the "add a
+  card" row is drawn as the card it adds.
+
+- [#2918](https://github.com/stella/stella/pull/2918) [`abe4ff7`](https://github.com/stella/stella/commit/abe4ff770b4efcf1d193e960e5b4d5575bfc11fe) Thanks [@jan-kubica](https://github.com/jan-kubica)! - A workspace frame that describes neither an end rail nor an inspector now mounts no end dock at all, so its content area runs to the inline-end edge instead of reserving an empty 48px rail.
+
 ## 0.23.1
 
 ### Patch Changes

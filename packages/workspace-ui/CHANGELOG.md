@@ -1,5 +1,16 @@
 # @stll/workspace-ui
 
+## 0.9.0
+
+### Minor Changes
+
+- [#2918](https://github.com/stella/stella/pull/2918) [`abe4ff7`](https://github.com/stella/stella/commit/abe4ff770b4efcf1d193e960e5b4d5575bfc11fe) Thanks [@jan-kubica](https://github.com/jan-kubica)! - A workspace frame that describes neither an end rail nor an inspector now mounts no end dock at all, so its content area runs to the inline-end edge instead of reserving an empty 48px rail.
+
+### Patch Changes
+
+- Updated dependencies [[`45b6897`](https://github.com/stella/stella/commit/45b68970d4973ec35676b6c3b4e7ed5e41ff48d7), [`abe4ff7`](https://github.com/stella/stella/commit/abe4ff770b4efcf1d193e960e5b4d5575bfc11fe)]:
+  - @stll/ui@0.24.0
+
 ## 0.8.3
 
 ### Patch Changes
