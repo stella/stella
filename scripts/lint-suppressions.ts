@@ -202,6 +202,12 @@ export const TRACKED_SUPPRESSION_RULES = [
       "detached-promise labels that cannot correlate a captured rejection to a call site",
   },
   {
+    rule: "require-exhaustive-panic/require-exhaustive-panic",
+    tier: "observability",
+    guards:
+      "exhaustiveness checks that return the value they failed to handle, so a widened union flows on with nothing logged",
+  },
+  {
     rule: "no-vacuous-throw-assertion/no-vacuous-throw-assertion",
     tier: "test-integrity",
     guards:
