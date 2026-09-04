@@ -126,7 +126,12 @@
     },
     "format": {
       "dependsOn": ["transit"],
-      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/.oxfmtrc.json"]
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/.oxfmtrc.json",
+        "$TURBO_ROOT$/scripts/check-format-environment.ts",
+        "$TURBO_ROOT$/scripts/run-oxfmt.ts"
+      ]
     },
     "i18n:check": {
       "dependsOn": ["transit"],

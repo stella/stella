@@ -11,7 +11,7 @@
     "clean": "git clean -xdf .cache .expo .turbo dist node_modules",
     "dev": "expo start",
     "doctor": "bun scripts/expo-doctor.ts .",
-    "format": "oxfmt -c ../../.oxfmtrc.json .",
+    "format": "bun ../../scripts/run-oxfmt.ts .",
     "ios": "expo start --ios",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware apps/mobile",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix apps/mobile",

@@ -18,6 +18,6 @@
   },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",
-    "format": "oxfmt ."
+    "format": "bun ../../scripts/run-oxfmt.ts ."
   }
 }
