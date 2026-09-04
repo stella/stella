@@ -3,8 +3,9 @@ use base64::{Engine as _, engine::general_purpose::STANDARD};
 use chrono::{DateTime, Duration, Utc};
 use clipboard_rs::{
   Clipboard, ClipboardContent, ClipboardContext, ClipboardHandler, ClipboardWatcher,
-  ClipboardWatcherContext, ContentFormat, RustImage, RustImageData,
+  ClipboardWatcherContext, ContentFormat, RustImageData,
 };
+use clipboard_rs::common::RustImage;
 use image::{ImageReader, io::Limits as ImageLimits};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
