@@ -66,6 +66,8 @@ describe("changed-file result boundary lint", () => {
         "apps/api/src/lib/document-processing-queue.test.ts",
         "apps/api/src/mcp/generated/capability-dispatch.ts",
         "apps/web/src/lib/example.ts",
+        "packages/start-runtime/src/runtime.ts",
+        "packages/ssr-testkit/src/assert-document.ts",
       ]),
     ).toBeNull();
   });

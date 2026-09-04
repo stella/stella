@@ -704,18 +704,10 @@ describe("public law sitemap", () => {
     // Public SSR paths hydrate first (against the server's English) and
     // load the persisted locale after first paint; app paths keep the
     // resolve-locale-then-hydrate boot model.
-    expect(source).toContain("isPublicSsrPath(window.location.pathname)");
-    expect(source).toContain(
-      'detached(initializeI18n().finally(hydrate), "client.i18n");',
+    expect(source).toContain('from "@stll/ssr-kit/hydration"');
+    expect(source).toMatch(
+      /detached\(\s*bootHydratedClient\(\{\s*type:\s*isPublicSsrPath\(window\.location\.pathname\)\s*\?\s*"server-rendered"\s*:\s*"client-rendered",\s*hydrate,\s*initializeClientState:\s*initializeI18n,\s*\}\),\s*"client\.i18n",\s*\);/u,
     );
-    const ssrBranchIndex = source.indexOf(
-      "isPublicSsrPath(window.location.pathname)",
-    );
-    const appBranchIndex = source.indexOf(
-      'detached(initializeI18n().finally(hydrate), "client.i18n");',
-    );
-    expect(ssrBranchIndex).toBeGreaterThan(-1);
-    expect(appBranchIndex).toBeGreaterThan(ssrBranchIndex);
   });
 
   test("app provider preserves browser time zones for app timestamps", async () => {

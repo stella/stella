@@ -1,0 +1,51 @@
+{
+  "name": "@stll/ssr-kit",
+  "version": "0.0.0",
+  "description": "Framework-neutral route policy and hydration ordering primitives for mixed SSR applications.",
+  "keywords": [
+    "hydration",
+    "server-rendering",
+    "ssr",
+    "typescript"
+  ],
+  "homepage": "https://github.com/stella/stella/tree/main/packages/ssr-kit",
+  "bugs": {
+    "url": "https://github.com/stella/stella/issues"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/stella/stella.git",
+    "directory": "packages/ssr-kit"
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/path-policy.ts",
+    "./hydration": "./src/hydration.ts"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "clean": "git clean -xdf dist .cache .turbo node_modules",
+    "build": "tsdown",
+    "pack:dry-run": "bun pm pack --dry-run",
+    "test": "bun test src",
+    "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware packages/ssr-kit",
+    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/ssr-kit",
+    "format": "oxfmt .",
+    "prepack": "bun run build"
+  },
+  "devDependencies": {
+    "@stll/typescript-config": "workspace:*",
+    "bun-types": "catalog:",
+    "tsdown": "catalog:"
+  }
+}

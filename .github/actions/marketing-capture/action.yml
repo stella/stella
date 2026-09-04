@@ -168,7 +168,7 @@ runs:
       shell: bash
       run: |
         cd apps/web
-        NODE_ENV=production PORT=3000 nohup bun start-runtime.js > /tmp/web.log 2>&1 &
+        NODE_ENV=production PORT=3000 nohup bun dist/runtime.js > /tmp/web.log 2>&1 &
         echo $! > /tmp/web.pid
 
     - name: Wait for production web server

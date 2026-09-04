@@ -25,9 +25,9 @@ if [[ -n "$(git status --porcelain)" ]]; then
 fi
 
 # First publication needs an npm token; trusted publishing can only be configured
-# after each package exists. `anonymize-chat` depends on the already-published
-# `anonymize-wasm` package.
-packages=(auth-model ai-catalog anonymize-chat)
+# after each package exists. Keep this list limited to unpublished placeholder
+# packages so an already-released package cannot block their bootstrap.
+packages=(start-runtime ssr-kit ssr-testkit)
 manifests=()
 integrities=()
 publish_modes=()

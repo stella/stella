@@ -78,12 +78,13 @@ The build writes both server and client artifacts:
 
 - `apps/web/dist/server/server.js`: the SSR fetch handler.
 - `apps/web/dist/client/`: client assets served by the web runtime.
+- `apps/web/dist/runtime.js`: the Bun runtime entry point.
 
 Do not upload `apps/web/dist` to a static host. Run the web runtime instead:
 
 ```bash
 cd apps/web
-HOST=0.0.0.0 PORT=3002 bun start-runtime.js
+HOST=0.0.0.0 PORT=3002 bun dist/runtime.js
 ```
 
 `HOST` defaults to `0.0.0.0`, `PORT` defaults to `3002`, and `/health` returns
@@ -238,7 +239,7 @@ docker pull ghcr.io/stella/stella-api@sha256:<digest-from-release-manifest>
 The published web image is built for the release workflow's selected hosted
 target environment, so its public URLs are not portable. Self-hosted operators
 must build `apps/web/Dockerfile` with their own public URLs, or run
-`apps/web/start-runtime.js` from a source checkout after building the web app.
+`apps/web/dist/runtime.js` from a source checkout after building the web app.
 
 ## Run With Docker Compose
 

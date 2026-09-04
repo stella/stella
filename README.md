@@ -85,7 +85,7 @@ the guide covers Postgres, RustFS object storage, Gotenberg, and the supported
 Redis-compatible services. The frontend is a TanStack Start SSR app: build and
 run `apps/web/Dockerfile`, or run
 `bun --filter @stll/web build` followed by
-`HOST=0.0.0.0 PORT=3002 bun apps/web/start-runtime.js`.
+`HOST=0.0.0.0 PORT=3002 bun apps/web/dist/runtime.js`.
 Railway-specific service configuration is documented in
 [docs/railway.md](docs/railway.md).
 

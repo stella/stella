@@ -191,9 +191,8 @@ COPY --from=deps-prod /app/ .
 # manifest tree so the runner never ships or resolves TypeScript source.
 COPY --chown=stella:stella --from=pruner /app/out/json/ .
 COPY --chown=stella:stella --from=builder /app/web-runtime-stage/ .
-COPY --chown=stella:stella --from=builder /app/apps/web/start-runtime.js ./apps/web/start-runtime.js
 COPY --chown=stella:stella --from=builder /app/apps/web/dist ./apps/web/dist
 WORKDIR /app/apps/web
 USER stella
 EXPOSE 3002
-CMD ["bun", "start-runtime.js"]
+CMD ["bun", "dist/runtime.js"]

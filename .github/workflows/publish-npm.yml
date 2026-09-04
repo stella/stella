@@ -31,6 +31,9 @@ on:
       - packages/calculations/CHANGELOG.md
       - packages/template-conditions/CHANGELOG.md
       - packages/docx-utils/CHANGELOG.md
+      - packages/ssr-kit/CHANGELOG.md
+      - packages/ssr-testkit/CHANGELOG.md
+      - packages/start-runtime/CHANGELOG.md
       - packages/ui/CHANGELOG.md
       - packages/workspace-model/CHANGELOG.md
       - packages/workspace-ui/CHANGELOG.md
@@ -55,6 +58,9 @@ on:
           - calculations
           - template-conditions
           - docx-utils
+          - ssr-kit
+          - ssr-testkit
+          - start-runtime
           - ui
           - workspace-model
           - workspace-ui
@@ -439,6 +445,33 @@ jobs:
         with:
           name: npm-tarball-docx-utils
           path: release-artifacts/docx-utils/
+          retention-days: 1
+          if-no-files-found: error
+
+      - name: Upload ssr-kit tarball
+        if: contains(fromJSON(steps.pack.outputs.packages), 'ssr-kit')
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: npm-tarball-ssr-kit
+          path: release-artifacts/ssr-kit/
+          retention-days: 1
+          if-no-files-found: error
+
+      - name: Upload ssr-testkit tarball
+        if: contains(fromJSON(steps.pack.outputs.packages), 'ssr-testkit')
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: npm-tarball-ssr-testkit
+          path: release-artifacts/ssr-testkit/
+          retention-days: 1
+          if-no-files-found: error
+
+      - name: Upload start-runtime tarball
+        if: contains(fromJSON(steps.pack.outputs.packages), 'start-runtime')
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: npm-tarball-start-runtime
+          path: release-artifacts/start-runtime/
           retention-days: 1
           if-no-files-found: error
 

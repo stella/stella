@@ -244,7 +244,7 @@ jobs:
             # ordinary app-source changes are covered by web-build's cheaper
             # in-checkout boot smoke instead of a full image build.
             case "$file" in
-              apps/web/Dockerfile|apps/web/start-runtime.js|apps/web/vite.config.ts|packages/*/package.json|scripts/stage-web-runtime.ts|scripts/publish-manifest.ts|scripts/web-runtime-closure.ts|bun.lock|.dockerignore|.github/workflows/ci.yml)
+              apps/web/Dockerfile|apps/web/src/runtime.ts|apps/web/vite.config.ts|packages/start-runtime/**|packages/*/package.json|scripts/stage-web-runtime.ts|scripts/publish-manifest.ts|scripts/web-runtime-closure.ts|bun.lock|.dockerignore|.github/workflows/ci.yml)
                 web_image_smoke_required=true
                 ;;
             esac
@@ -967,6 +967,9 @@ jobs:
           bun scripts/check-published-exports.ts packages/ai-catalog
           bun scripts/check-published-exports.ts packages/anonymize-chat
           bun scripts/check-published-exports.ts packages/chat
+          bun scripts/check-published-exports.ts packages/ssr-kit
+          bun scripts/check-published-exports.ts packages/ssr-testkit
+          bun scripts/check-published-exports.ts packages/start-runtime
           bun scripts/check-published-exports.ts packages/ui
           bun scripts/check-published-exports.ts packages/money
           bun scripts/check-published-exports.ts packages/calculations
@@ -1490,9 +1493,9 @@ jobs:
 
       - name: Prod-deps web boot smoke
         # apps/web/Dockerfile's runner installs --production (deps-prod stage).
-        # Reproduce that clean production tree and boot start-runtime.js: a
+        # Reproduce that clean production tree and boot dist/runtime.js: a
         # devDependency reached by the SSR server bundle (dist/server/server.js)
-        # fails to resolve here rather than at deploy time. start-runtime.js
+        # fails to resolve here rather than at deploy time. dist/runtime.js
         # imports the full server module graph before serving, so a reachable
         # /health proves every chunk's dependencies resolve — but only against
         # this checkout's filesystem; the web-image-smoke job covers the
@@ -1510,7 +1513,7 @@ jobs:
           rm -rf node_modules
           bun install --filter @stll/web --production --frozen-lockfile --ignore-scripts
           cd apps/web
-          PORT=3199 HOST=127.0.0.1 bun start-runtime.js &
+          PORT=3199 HOST=127.0.0.1 bun dist/runtime.js &
           server_pid=$!
           ready=
           for _ in $(seq 1 30); do
@@ -1530,7 +1533,7 @@ jobs:
   # workspace sources exist and can mask the runner image's filesystem
   # boundary. Build the real runner
   # image: the Dockerfile stages the runtime workspace closure and proves the
-  # full server module graph resolves (`start-runtime.js --smoke`) against
+  # full server module graph resolves (`dist/runtime.js --smoke`) against
   # the exact tree that ships, then boot the container across that boundary.
   web-image-smoke:
     needs: ci-plan
@@ -1729,7 +1732,7 @@ jobs:
         if: steps.e2e-stack.outputs.status == 'ready'
         run: |
           cd apps/web
-          NODE_ENV=production PORT=3000 nohup bun start-runtime.js > /tmp/web-production.log 2>&1 &
+          NODE_ENV=production PORT=3000 nohup bun dist/runtime.js > /tmp/web-production.log 2>&1 &
           echo $! > /tmp/web-production.pid
 
       - name: Wait for production web server
