@@ -81,6 +81,7 @@ import { detached } from "@/lib/detached";
 import { APIError, toAPIError } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { documentPropertiesOptions, fileOptions } from "@/lib/files/queries";
+import { PDF_COLOR_MODES } from "@/lib/pdf/pdf-color-mode";
 import {
   PDFProvider,
   usePDFStore,
@@ -124,9 +125,8 @@ const OfficeFileViewer = lazy(async () => {
 });
 
 const PDFPageOrganizer = lazy(async () => {
-  const m =
-    await import("@/routes/_protected.workspaces/$workspaceId/-components/pdf-page-organizer-container");
-  return { default: m.PDFPageOrganizerContainer };
+  const m = await import("@/components/pdf/page-organizer");
+  return { default: m.PDFPageOrganizer };
 });
 
 export const Route = createFileRoute(
@@ -143,6 +143,8 @@ export const Route = createFileRoute(
       v.pipe(v.number(), v.integer(), v.minValue(1)),
     ),
     pdfPage: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1))),
+    pdfMode: v.optional(v.picklist(["organize"])),
+    pdfColorMode: v.optional(v.picklist(PDF_COLOR_MODES)),
     // Folio block to land on in a DOCX (report citation links). Consumed once
     // on mount through the inspector's pending block scroll.
     block: v.optional(v.string()),
@@ -554,6 +556,7 @@ function RouteComponentInner({
     select: (s) => s.editing ?? false,
   });
   const pageNumber = Route.useSearch({ select: (s) => s.pdfPage ?? 1 });
+  const pdfMode = Route.useSearch({ select: (s) => s.pdfMode });
   const initialBlockId = Route.useSearch({ select: (s) => s.block });
   const pane = Route.useSearch({
     select: (s) => s.pane ?? DOCUMENT_PANE.document,
@@ -632,7 +635,19 @@ function RouteComponentInner({
   const [, setDocxUnlocked] = useState(false);
   const [docxLatestVersionDialogOpen, setDocxLatestVersionDialogOpen] =
     useState(false);
-  const [isPDFPageOrganizerOpen, setIsPDFPageOrganizerOpen] = useState(false);
+  const isPDFPageOrganizerOpen = pdfMode === "organize";
+  const setIsPDFPageOrganizerOpen = (open: boolean) => {
+    detached(
+      navigate({
+        replace: true,
+        search: (previous) => ({
+          ...previous,
+          pdfMode: open ? "organize" : undefined,
+        }),
+      }),
+      "document.navigate",
+    );
+  };
 
   // Reset the docx-unlocked flag when fieldId changes, using React's
   // adjust-state-during-render pattern instead of a reset effect. setDocxUnlocked
@@ -643,7 +658,6 @@ function RouteComponentInner({
   if (fieldId !== prevFieldId) {
     setPrevFieldId(fieldId);
     setDocxUnlocked(false);
-    setIsPDFPageOrganizerOpen(false);
   }
 
   // Find the active file field to determine mimeType and propertyId
@@ -1059,7 +1073,6 @@ function RouteComponentInner({
                     {isPDFPageOrganizerOpen ? (
                       <Suspense fallback={<PDFSuspenseFallback />}>
                         <PDFPageOrganizer
-                          canCreateDocument={canCreateEntity}
                           canSaveVersion={canUpdateEntity}
                           entityId={entityId}
                           fieldId={fieldId}

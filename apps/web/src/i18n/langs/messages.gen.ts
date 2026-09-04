@@ -4865,7 +4865,6 @@ type Messages = {
       "pageEditor": {
         "addPDF": "Add PDF";
         "applyCrop": "Apply crop";
-        "createDocuments": "Create {count, plural, one {# document} other {# documents}}";
         "crop": "Crop";
         "cropBottom": "Bottom";
         "cropDescription": "Set the crop margins for the {count} selected pages.";
@@ -4874,14 +4873,15 @@ type Messages = {
         "cropTitle": "Crop pages";
         "cropTop": "Top";
         "delete": "Remove page";
+        "deselectAll": "Deselect all";
         "discard": "Discard page edits";
         "discardDescription": "Your page edits will be lost.";
         "discardTitle": "Discard changes?";
         "downloadCopy": "Download copy";
-        "downloadZIP": "Download ZIP";
+        "downloadSelectedPages": "Download selected pages";
         "duplicate": "Make a copy";
         "editPages": "Edit pages";
-        "extract": "Extract";
+        "multiSelectHint": "Hold {modifier} to select more";
         "pageCount": "{count, plural, one {# page} other {# pages}}";
         "pageNumber": "Page {number}";
         "pages": "PDF pages";
@@ -4895,7 +4895,6 @@ type Messages = {
         "selectPage": "Select page {number}";
         "signatureWarning": "Digital signatures will be invalidated when you edit this PDF.";
         "sourceLimit": "The combined size of the PDFs cannot exceed 100 MB.";
-        "splitBefore": "Split before this page";
         "title": "Edit pages";
         "undo": "Undo page edit";
         "unsupportedDescription": "This PDF cannot be edited in the browser.";

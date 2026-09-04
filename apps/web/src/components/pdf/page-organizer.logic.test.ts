@@ -16,7 +16,7 @@ const pages = (count: number): OrganizerPage[] =>
   }));
 
 const stateWith = (count = 4): PageOrganizerState =>
-  createPageOrganizerState({ pages: pages(count), splitBeforePageIds: [] });
+  createPageOrganizerState({ pages: pages(count) });
 
 const ids = (state: PageOrganizerState) =>
   state.history.present.pages.map((page) => page.id);
@@ -28,10 +28,6 @@ const expectInvariant = (state: PageOrganizerState) => {
   expect(state.ui.selectedPageIds.every((id) => pageIds.includes(id))).toBe(
     true,
   );
-  expect(plan.splitBeforePageIds.every((id) => pageIds.includes(id))).toBe(
-    true,
-  );
-  expect(plan.splitBeforePageIds).not.toContain(pageIds.at(0));
 };
 
 describe("page organizer state transitions", () => {
@@ -96,16 +92,14 @@ describe("page organizer state transitions", () => {
     expectInvariant(state);
   });
 
-  test("refuses deleting every page and normalizes split markers", () => {
+  test("refuses deleting every page and toggles all-page selection", () => {
     let state = stateWith(2);
-    state = reducePageOrganizer(state, { type: "selectAll" });
+    state = reducePageOrganizer(state, { type: "toggleSelectAll" });
+    expect(state.ui.selectedPageIds).toEqual(["page-1", "page-2"]);
     const unchanged = reducePageOrganizer(state, { type: "deleteSelected" });
     expect(ids(unchanged)).toEqual(["page-1", "page-2"]);
-    state = reducePageOrganizer(state, {
-      type: "toggleSplit",
-      pageId: "page-1",
-    });
-    expect(state.history.present.splitBeforePageIds).toEqual([]);
+    state = reducePageOrganizer(state, { type: "toggleSelectAll" });
+    expect(state.ui.selectedPageIds).toEqual([]);
     expectInvariant(state);
   });
 
@@ -117,10 +111,7 @@ describe("page organizer state transitions", () => {
     });
     const original = state;
     state = reducePageOrganizer(state, { type: "rotateSelected", degrees: 90 });
-    state = reducePageOrganizer(state, {
-      type: "toggleSplit",
-      pageId: "page-2",
-    });
+    state = reducePageOrganizer(state, { type: "rotateSelected", degrees: 90 });
     const changed = state;
     state = reducePageOrganizer(state, { type: "undo" });
     state = reducePageOrganizer(state, { type: "undo" });

@@ -85,6 +85,16 @@ export type TranslationChoice =
  */
 export const DEFAULT_TRANSLATION_CHOICE: TranslationChoice = "translated:ai";
 
+type CanTranslateDocumentOptions = {
+  canUseDeepL: boolean;
+  isDocx: boolean;
+};
+
+export const canTranslateDocument = ({
+  canUseDeepL,
+  isDocx,
+}: CanTranslateDocumentOptions): boolean => isDocx || canUseDeepL;
+
 type ActiveTranslationChoiceOptions = {
   selected: TranslationChoice;
   canUseDeepL: boolean;

@@ -9,6 +9,7 @@ import { DOCUMENT_TRANSLATION_TARGET_CODES } from "./document-language-picker.lo
 import {
   activeTranslationChoice,
   canStartDocumentTranslation,
+  canTranslateDocument,
   commentPolicyStateForSource,
   DEFAULT_TRANSLATION_CHOICE,
   defaultDocumentTranslationTarget,
@@ -17,6 +18,26 @@ import {
   parseLastTranslationTarget,
   resolvedDocumentTranslationSource,
 } from "./translate-document-dialog.logic";
+
+describe("document translation availability", () => {
+  test("offers stella AI for DOCX without DeepL", () => {
+    expect(
+      canTranslateDocument({ canUseDeepL: false, isDocx: true }),
+    ).toBeTrue();
+  });
+
+  test("offers DeepL for a PDF when configured", () => {
+    expect(
+      canTranslateDocument({ canUseDeepL: true, isDocx: false }),
+    ).toBeTrue();
+  });
+
+  test("offers nothing for a PDF without DeepL", () => {
+    expect(
+      canTranslateDocument({ canUseDeepL: false, isDocx: false }),
+    ).toBeFalse();
+  });
+});
 
 describe("document translation start availability", () => {
   test("blocks a repeat submission while the created run is loading", () => {

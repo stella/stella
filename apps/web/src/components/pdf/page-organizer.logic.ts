@@ -19,7 +19,6 @@ export type OrganizerPage = {
 
 export type PageOrganizerPlan = {
   pages: readonly OrganizerPage[];
-  splitBeforePageIds: readonly string[];
 };
 
 export type PageOrganizerUI = {
@@ -42,14 +41,13 @@ export type PageOrganizerAction =
   | { type: "replaceSelection"; pageIds: readonly string[] }
   | { type: "toggleSelection"; pageId: string }
   | { type: "selectRange"; pageId: string }
-  | { type: "selectAll" }
+  | { type: "toggleSelectAll" }
   | { type: "moveSelectedBefore"; targetPageId: string }
   | { type: "moveSelectedStep"; direction: "backward" | "forward" }
   | { type: "rotateSelected"; degrees: 90 | -90 }
   | { type: "duplicateSelected"; newPageIds: readonly string[] }
   | { type: "deleteSelected" }
   | { type: "appendSourcePages"; pages: readonly OrganizerPage[] }
-  | { type: "toggleSplit"; pageId: string }
   | { type: "setCrop"; crop: NormalizedCrop | null }
   | { type: "undo" }
   | { type: "redo" };
@@ -85,15 +83,8 @@ const pageIds = (pages: readonly OrganizerPage[]): Set<string> => {
 };
 
 const normalizePlan = (plan: PageOrganizerPlan): PageOrganizerPlan => {
-  const ids = pageIds(plan.pages);
-  const firstId = plan.pages.at(0)?.id;
-  const splitBeforePageIds: string[] = [];
-  for (const id of plan.splitBeforePageIds) {
-    if (id !== firstId && ids.has(id) && !splitBeforePageIds.includes(id)) {
-      splitBeforePageIds.push(id);
-    }
-  }
-  return { pages: [...plan.pages], splitBeforePageIds };
+  pageIds(plan.pages);
+  return { pages: [...plan.pages] };
 };
 
 const normalizeUI = (
@@ -256,10 +247,12 @@ export const reducePageOrganizer = (
         anchor,
       );
     }
-    case "selectAll":
+    case "toggleSelectAll":
       return withSelection(
         state,
-        plan.pages.map((page) => page.id),
+        state.ui.selectedPageIds.length === plan.pages.length
+          ? []
+          : plan.pages.map((page) => page.id),
         state.ui.anchorPageId,
       );
     case "moveSelectedBefore": {
@@ -351,21 +344,6 @@ export const reducePageOrganizer = (
         ...plan,
         pages: [...plan.pages, ...action.pages],
       });
-    }
-    case "toggleSplit": {
-      const pageIndex = plan.pages.findIndex(
-        (page) => page.id === action.pageId,
-      );
-      if (pageIndex <= 0) {
-        return state;
-      }
-      const markers = new Set(plan.splitBeforePageIds);
-      if (markers.has(action.pageId)) {
-        markers.delete(action.pageId);
-      } else {
-        markers.add(action.pageId);
-      }
-      return commit(state, { ...plan, splitBeforePageIds: [...markers] });
     }
     case "setCrop": {
       const selected = new Set(state.ui.selectedPageIds);

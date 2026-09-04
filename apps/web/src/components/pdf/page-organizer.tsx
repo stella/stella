@@ -14,15 +14,12 @@ import {
   CopyIcon,
   CropIcon,
   DownloadIcon,
-  FilesIcon,
   GripVerticalIcon,
-  PanelTopCloseIcon,
   PlusIcon,
   Redo2Icon,
   RotateCcwIcon,
   RotateCwIcon,
   SaveIcon,
-  ScissorsIcon,
   Trash2Icon,
   TriangleAlertIcon,
   Undo2Icon,
@@ -62,6 +59,7 @@ import {
   withDropAnnouncementData,
 } from "@/components/drag-and-drop-live-region.logic";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
+import { useHydrationSafeHotkeyPlatform } from "@/hooks/use-hydration-safe-hotkey-platform";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
@@ -84,7 +82,6 @@ import {
   reducePageOrganizer,
   type NormalizedCrop,
   type OrganizerPage,
-  type PageOrganizerPlan,
   type PageOrganizerState,
   type PageRotation,
 } from "./page-organizer.logic";
@@ -113,8 +110,6 @@ type PDFPageOrganizerProps = {
   entityId: string;
   fieldId: string;
   fileName: string;
-  isCreatingDocuments: boolean;
-  onCreateDocuments?: ((files: File[]) => void) | undefined;
   onClose: () => void;
   workspaceId: string;
 };
@@ -167,23 +162,6 @@ const safePDFBaseName = (fileName: string): string => {
   }
   safe = safe.trim();
   return safe.length > 0 ? safe : "document";
-};
-
-const splitOutputs = (plan: PageOrganizerPlan): string[][] => {
-  const splitBefore = new Set(plan.splitBeforePageIds);
-  const outputs: string[][] = [];
-  let current: string[] = [];
-  for (const page of plan.pages) {
-    if (splitBefore.has(page.id) && current.length > 0) {
-      outputs.push(current);
-      current = [];
-    }
-    current.push(page.id);
-  }
-  if (current.length > 0) {
-    outputs.push(current);
-  }
-  return outputs;
 };
 
 const cropFromMargins = ({
@@ -417,11 +395,9 @@ const PageThumbnail = ({ page, pageInfo }: PageThumbnailProps) => {
 type OrganizerPageCardProps = {
   index: number;
   isSelected: boolean;
-  isSplit: boolean;
   onMove: (draggedPageId: string, targetPageId: string) => void;
   onMoveStep: (pageId: string, direction: "backward" | "forward") => void;
   onSelect: (pageId: string, range: boolean, toggle: boolean) => void;
-  onToggleSplit: (pageId: string) => void;
   page: OrganizerPage;
   pageInfo: PageInfo;
 };
@@ -429,11 +405,9 @@ type OrganizerPageCardProps = {
 const OrganizerPageCard = ({
   index,
   isSelected,
-  isSplit,
   onMove,
   onMoveStep,
   onSelect,
-  onToggleSplit,
   page,
   pageInfo,
 }: OrganizerPageCardProps) => {
@@ -509,33 +483,7 @@ const OrganizerPageCard = ({
   };
 
   return (
-    <li className="relative min-w-0 pt-6" ref={setCard}>
-      {index > 0 && (
-        <button
-          aria-pressed={isSplit}
-          className={cn(
-            "focus-visible:ring-ring absolute inset-x-0 top-0 flex h-11 items-center justify-center outline-none focus-visible:ring-2",
-            isSplit ? "text-destructive" : "text-muted-foreground/55",
-          )}
-          onClick={() => onToggleSplit(page.id)}
-          title={tPageEditor("splitBefore")}
-          type="button"
-        >
-          <span
-            className={cn(
-              "h-px flex-1 border-t border-dashed",
-              isSplit && "border-destructive border-solid",
-            )}
-          />
-          <ScissorsIcon className="mx-2 size-4" />
-          <span
-            className={cn(
-              "h-px flex-1 border-t border-dashed",
-              isSplit && "border-destructive border-solid",
-            )}
-          />
-        </button>
-      )}
+    <li className="relative min-w-0" ref={setCard}>
       <article
         aria-label={pageLabel}
         className={cn(
@@ -563,7 +511,7 @@ const OrganizerPageCard = ({
             aria-label={tPageEditor("reorderPage", {
               number: String(index + 1),
             })}
-            className="bg-background/90 text-foreground hover:bg-accent size-11 cursor-grab"
+            className="bg-background/90 text-foreground [:hover,[data-pressed]]:bg-background/90 size-11 cursor-grab"
             onKeyDown={handleKeyDown}
             ref={setHandle}
             size="icon"
@@ -598,14 +546,13 @@ export const PDFPageOrganizer = ({
   entityId,
   fieldId,
   fileName,
-  isCreatingDocuments,
-  onCreateDocuments,
   onClose,
   workspaceId,
 }: PDFPageOrganizerProps) => {
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
   const tPageEditor = useTranslations("workspaces.pdf.pageEditor");
+  const hotkeyPlatform = useHydrationSafeHotkeyPlatform();
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -630,7 +577,6 @@ export const PDFPageOrganizer = ({
     );
     return createPageOrganizerState({
       pages: initialPages,
-      splitBeforePageIds: [],
     });
   });
   const [operation, setOperation] = useState<EditorOperation>({ type: "idle" });
@@ -641,9 +587,7 @@ export const PDFPageOrganizer = ({
   const plan = state.history.present;
   const selectedIds = new Set(state.ui.selectedPageIds);
   const isDirty = state.history.past.length > 0;
-  const isBusy =
-    operation.type !== "idle" || isCreatingDocuments || isAddingPDF;
-  const outputs = useMemo(() => splitOutputs(plan), [plan]);
+  const isBusy = operation.type !== "idle" || isAddingPDF;
   const pageInfoBySource = useMemo(() => {
     const bySource = new Map<string, readonly PageInfo[]>();
     bySource.set(ORIGINAL_SOURCE_ID, [...providerPages.values()]);
@@ -801,26 +745,20 @@ export const PDFPageOrganizer = ({
     );
   };
 
-  const handleCreateSplitDocuments = async () => {
-    const transformed = await transform(outputs);
-    onCreateDocuments?.(
-      transformed.map((bytes, index) =>
-        makeFile(bytes, `${baseName} - ${index + 1}.pdf`),
-      ),
-    );
-  };
-
   const handleDownload = async () => {
-    await downloadOutputs({ baseName, outputs: await transform(outputs) });
-  };
-
-  const handleExtract = async () => {
-    const selected = plan.pages
-      .filter((page) => selectedIds.has(page.id))
-      .map((page) => page.id);
+    if (selectedIds.size > 0) {
+      const selected = plan.pages
+        .filter((page) => selectedIds.has(page.id))
+        .map((page) => page.id);
+      await downloadOutputs({
+        baseName: `${baseName} - selected pages`,
+        outputs: await transform([selected]),
+      });
+      return;
+    }
     await downloadOutputs({
-      baseName: `${baseName} - extract`,
-      outputs: await transform([selected]),
+      baseName,
+      outputs: await transform([plan.pages.map((page) => page.id)]),
     });
   };
 
@@ -866,6 +804,11 @@ export const PDFPageOrganizer = ({
   };
 
   const crop = cropFromMargins(cropMargins);
+  const downloadLabel = tPageEditor(
+    selectedIds.size > 0 ? "downloadSelectedPages" : "downloadCopy",
+  );
+  const allPagesSelected = selectedIds.size === plan.pages.length;
+  const multiSelectModifier = hotkeyPlatform === "mac" ? "Cmd" : "Ctrl";
 
   if (isUnsupported) {
     return (
@@ -876,11 +819,11 @@ export const PDFPageOrganizer = ({
             TOOLBAR_ROW_HEIGHT,
           )}
         >
-          <h2 className="font-semibold">{tPageEditor("title")}</h2>
+          <h2 className="text-sm font-medium">{tPageEditor("title")}</h2>
           <Button
             aria-label={tCommon("close")}
             onClick={onClose}
-            size="icon"
+            size="icon-sm"
             variant="ghost"
           >
             <XIcon />
@@ -907,9 +850,11 @@ export const PDFPageOrganizer = ({
           TOOLBAR_ROW_HEIGHT,
         )}
       >
-        <div className="me-auto min-w-0">
-          <h2 className="truncate font-semibold">{tPageEditor("title")}</h2>
-          <p className="text-muted-foreground text-xs">
+        <div className="me-auto flex min-w-0 items-baseline gap-2">
+          <h2 className="truncate text-sm font-medium">
+            {tPageEditor("title")}
+          </h2>
+          <p className="text-muted-foreground shrink-0 text-xs tabular-nums">
             {tPageEditor("pageCount", {
               count: plan.pages.length,
             })}
@@ -942,7 +887,7 @@ export const PDFPageOrganizer = ({
           aria-label={tCommon("close")}
           disabled={isBusy}
           onClick={requestClose}
-          size="icon"
+          size="icon-sm"
           variant="ghost"
         >
           <XIcon />
@@ -957,18 +902,19 @@ export const PDFPageOrganizer = ({
           )}
         >
           <Button
-            onClick={() => dispatch({ type: "selectAll" })}
+            className="-ms-2"
+            onClick={() => dispatch({ type: "toggleSelectAll" })}
             size="sm"
             variant="ghost"
           >
-            {tPageEditor("selectAll")}
+            {tPageEditor(allPagesSelected ? "deselectAll" : "selectAll")}
           </Button>
           <Separator className="mx-1 h-6" orientation="vertical" />
           <Button
             aria-label={tPageEditor("rotateLeft")}
             disabled={selectedIds.size === 0}
             onClick={() => dispatch({ type: "rotateSelected", degrees: -90 })}
-            size="icon"
+            size="icon-sm"
             tooltip={tPageEditor("rotateLeft")}
             variant="ghost"
           >
@@ -978,7 +924,7 @@ export const PDFPageOrganizer = ({
             aria-label={tPageEditor("rotateRight")}
             disabled={selectedIds.size === 0}
             onClick={() => dispatch({ type: "rotateSelected", degrees: 90 })}
-            size="icon"
+            size="icon-sm"
             tooltip={tPageEditor("rotateRight")}
             variant="ghost"
           >
@@ -988,7 +934,7 @@ export const PDFPageOrganizer = ({
             aria-label={tPageEditor("crop")}
             disabled={selectedIds.size === 0}
             onClick={() => setIsCropOpen(true)}
-            size="icon"
+            size="icon-sm"
             tooltip={tPageEditor("crop")}
             variant="ghost"
           >
@@ -1005,7 +951,7 @@ export const PDFPageOrganizer = ({
                 ),
               })
             }
-            size="icon"
+            size="icon-sm"
             tooltip={tPageEditor("duplicate")}
             variant="ghost"
           >
@@ -1017,32 +963,18 @@ export const PDFPageOrganizer = ({
               selectedIds.size === 0 || selectedIds.size >= plan.pages.length
             }
             onClick={() => dispatch({ type: "deleteSelected" })}
-            size="icon"
+            size="icon-sm"
             tooltip={tPageEditor("delete")}
             variant="ghost"
           >
             <Trash2Icon />
-          </Button>
-          <Button
-            disabled={selectedIds.size === 0}
-            onClick={() => {
-              detached(
-                runOperation(handleExtract),
-                "pdf-page-organizer.extract",
-              );
-            }}
-            size="sm"
-            variant="ghost"
-          >
-            <PanelTopCloseIcon />
-            {tPageEditor("extract")}
           </Button>
           <div className="ms-auto flex items-center gap-1">
             <Button
               aria-label={tPageEditor("undo")}
               disabled={state.history.past.length === 0}
               onClick={() => dispatch({ type: "undo" })}
-              size="icon"
+              size="icon-sm"
               tooltip={tPageEditor("undo")}
               variant="ghost"
             >
@@ -1052,7 +984,7 @@ export const PDFPageOrganizer = ({
               aria-label={tPageEditor("redo")}
               disabled={state.history.future.length === 0}
               onClick={() => dispatch({ type: "redo" })}
-              size="icon"
+              size="icon-sm"
               tooltip={tPageEditor("redo")}
               variant="ghost"
             >
@@ -1076,7 +1008,6 @@ export const PDFPageOrganizer = ({
                 <OrganizerPageCard
                   index={index}
                   isSelected={selectedIds.has(page.id)}
-                  isSplit={plan.splitBeforePageIds.includes(page.id)}
                   key={page.id}
                   onMove={handleMove}
                   onMoveStep={handleMoveStep}
@@ -1085,15 +1016,24 @@ export const PDFPageOrganizer = ({
                       dispatch({ type: "selectRange", pageId });
                       return;
                     }
+                    if (
+                      !toggle &&
+                      selectedIds.size > 0 &&
+                      !selectedIds.has(pageId)
+                    ) {
+                      stellaToast.add({
+                        title: tPageEditor("multiSelectHint", {
+                          modifier: multiSelectModifier,
+                        }),
+                        type: "info",
+                      });
+                    }
                     dispatch(
                       toggle
                         ? { type: "toggleSelection", pageId }
                         : { type: "replaceSelection", pageIds: [pageId] },
                     );
                   }}
-                  onToggleSplit={(pageId) =>
-                    dispatch({ type: "toggleSplit", pageId })
-                  }
                   page={page}
                   pageInfo={pageInfo}
                 />
@@ -1125,43 +1065,22 @@ export const PDFPageOrganizer = ({
           variant="outline"
         >
           <DownloadIcon />
-          {outputs.length > 1
-            ? tPageEditor("downloadZIP")
-            : tPageEditor("downloadCopy")}
+          {downloadLabel}
         </Button>
-        {outputs.length > 1 ? (
-          <Button
-            disabled={!onCreateDocuments || isBusy}
-            loading={isCreatingDocuments || operation.type === "transforming"}
-            onClick={() => {
-              detached(
-                runOperation(handleCreateSplitDocuments),
-                "pdf-page-organizer.create-split-documents",
-              );
-            }}
-            size="sm"
-          >
-            <FilesIcon />
-            {tPageEditor("createDocuments", {
-              count: outputs.length,
-            })}
-          </Button>
-        ) : (
-          <Button
-            disabled={!canSaveVersion || !isDirty || isBusy}
-            loading={operation.type !== "idle"}
-            onClick={() => {
-              detached(
-                runOperation(handleSaveVersion),
-                "pdf-page-organizer.save-version",
-              );
-            }}
-            size="sm"
-          >
-            <SaveIcon />
-            {tPageEditor("saveVersion")}
-          </Button>
-        )}
+        <Button
+          disabled={!canSaveVersion || !isDirty || isBusy}
+          loading={operation.type !== "idle"}
+          onClick={() => {
+            detached(
+              runOperation(handleSaveVersion),
+              "pdf-page-organizer.save-version",
+            );
+          }}
+          size="sm"
+        >
+          <SaveIcon />
+          {tPageEditor("saveVersion")}
+        </Button>
       </footer>
 
       <Dialog onOpenChange={setIsCropOpen} open={isCropOpen}>

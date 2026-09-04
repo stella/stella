@@ -2,18 +2,28 @@ import { useState } from "react";
 import type { ReactNode } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
+import { getRouteApi, useNavigate } from "@tanstack/react-router";
 import { produce } from "immer";
 import {
   ChevronDownIcon,
   ChevronUpIcon,
   DownloadIcon,
   FilePenLineIcon,
+  MonitorIcon,
+  MoonIcon,
   PrinterIcon,
+  SunIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import {
+  Menu,
+  MenuPopup,
+  MenuRadioGroup,
+  MenuRadioItem,
+  MenuTrigger,
+} from "@stll/ui/menu";
 import { Separator } from "@stll/ui/separator";
 import { stellaToast } from "@stll/ui/toast";
 
@@ -31,6 +41,7 @@ import { unwrapEden } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { fileMetadataOptions } from "@/lib/files/file-metadata-query";
+import { PDF_COLOR_MODES, type PDFColorMode } from "@/lib/pdf/pdf-color-mode";
 import {
   getPDFScaleOffset,
   PDF_MAX_SCALE_OFFSET,
@@ -39,6 +50,16 @@ import {
 } from "@/lib/pdf/pdf-zoom.logic";
 import { downloadFile } from "@/lib/utils";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
+
+const routeApi = getRouteApi(
+  "/_protected/workspaces/$workspaceId/$viewId/document",
+);
+
+const PDF_COLOR_MODE_ICONS = {
+  light: SunIcon,
+  dark: MoonIcon,
+  system: MonitorIcon,
+} as const satisfies Record<PDFColorMode, typeof SunIcon>;
 
 type PdfViewerControlsProps = {
   workspaceId: string;
@@ -81,9 +102,17 @@ export const PdfViewerControls = ({
   const isDocx =
     fileMetadata?.originalMimeType === DOCX_MIME ||
     fileMetadata?.mimeType === DOCX_MIME;
+  const pdfColorMode = routeApi.useSearch({
+    select: (search) => search.pdfColorMode ?? "system",
+  });
   const navigate = useNavigate({
     from: "/workspaces/$workspaceId/$viewId/document",
   });
+  const PDFColorModeIcon = PDF_COLOR_MODE_ICONS[pdfColorMode];
+  const canAdjustPDFColor =
+    !isDocx &&
+    fileMetadata !== undefined &&
+    !fileMetadata.originalMimeType.startsWith("image/");
 
   const navigateToScale = (offset: number) => {
     setPdfScaleOffset(Math.round(offset * 10) / 10);
@@ -96,6 +125,20 @@ export const PdfViewerControls = ({
         search: (prev) =>
           produce(prev, (s) => {
             s.pdfPage = pageNumber;
+          }),
+      }),
+      "pdf-viewer-controls.navigate",
+    );
+  };
+
+  const setPDFColorMode = (colorMode: PDFColorMode) => {
+    detached(
+      navigate({
+        replace: true,
+        search: (previous) =>
+          produce(previous, (search) => {
+            search.pdfColorMode =
+              colorMode === "system" ? undefined : colorMode;
           }),
       }),
       "pdf-viewer-controls.navigate",
@@ -270,6 +313,34 @@ export const PdfViewerControls = ({
                 <FilePenLineIcon />
                 {t("workspaces.pdf.pageEditor.editPages")}
               </Button>
+            )}
+            {canAdjustPDFColor && (
+              <Menu>
+                <MenuTrigger
+                  aria-label={t("workspaces.pdf.adjustForDarkMode")}
+                  render={<Button size="icon-xs" variant="ghost" />}
+                  title={t("workspaces.pdf.adjustForDarkMode")}
+                >
+                  <PDFColorModeIcon className="size-3.5" />
+                </MenuTrigger>
+                <MenuPopup align="end">
+                  <MenuRadioGroup value={pdfColorMode}>
+                    {PDF_COLOR_MODES.map((colorMode) => {
+                      const ColorModeIcon = PDF_COLOR_MODE_ICONS[colorMode];
+                      return (
+                        <MenuRadioItem
+                          key={colorMode}
+                          onClick={() => setPDFColorMode(colorMode)}
+                          value={colorMode}
+                        >
+                          <ColorModeIcon />
+                          {t(`appearance.${colorMode}`)}
+                        </MenuRadioItem>
+                      );
+                    })}
+                  </MenuRadioGroup>
+                </MenuPopup>
+              </Menu>
             )}
             <Button
               disabled={!fileMetadata || isDownloading || fieldId.length === 0}
