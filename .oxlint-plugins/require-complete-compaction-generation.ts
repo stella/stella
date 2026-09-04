@@ -18,6 +18,7 @@ import {
   filenameForContext,
   getImportLocalName,
   getImportedName,
+  getPropertyName,
   isAstNode,
   isIdentifier,
   isStringLiteral,
@@ -28,6 +29,8 @@ const GENERATE_TEXT_EXPORT = "generateTanStackTextForRole";
 const GENERATE_TEXT_MODULE = "@/api/lib/tanstack-ai-generate";
 const POLICY_EXPORT = "COMPACTION_GENERATION_POLICY";
 const POLICY_MODULE = "@/api/lib/chat/compaction-tokens";
+const POLICY_KEYS = ["finishPolicy", "maxOutputTokens"] as const;
+const POLICY_KEY_SET = new Set<string>(POLICY_KEYS);
 const FIXTURE_SUFFIX =
   ".oxlint-plugins/__fixtures__/require-complete-compaction-generation.fixture.ts";
 const COMPACTION_MODULE = /(?:^|\/)[^/]*compaction[^/]*\.ts$/u;
@@ -39,6 +42,61 @@ const isTargetFile = (filename: string): boolean =>
     !filename.endsWith(".test.ts") &&
     !filename.endsWith(".integration.test.ts"));
 
+const isPolicySpread = (
+  property: unknown,
+  policyBindings: ReadonlySet<string>,
+): boolean =>
+  isAstNode(property) &&
+  property.type === "SpreadElement" &&
+  isIdentifier(property.argument) &&
+  policyBindings.has(property.argument.name);
+
+// An inline object can prove that it does not contain either policy key. An
+// opaque expression or nested unknown spread may contain one, so reject it.
+const spreadCanOverridePolicy = (
+  property: unknown,
+  policyBindings: ReadonlySet<string>,
+): boolean => {
+  if (!isAstNode(property)) {
+    return true;
+  }
+  if (property.type !== "SpreadElement") {
+    if (property.type !== "Property") {
+      return true;
+    }
+    return (
+      property.computed === true ||
+      POLICY_KEY_SET.has(getPropertyName(property.key) ?? "")
+    );
+  }
+
+  const argument = unwrapExpression(property.argument);
+  if (isIdentifier(argument) && policyBindings.has(argument.name)) {
+    return false;
+  }
+  if (argument?.type !== "ObjectExpression") {
+    return true;
+  }
+  const nestedProperties = Array.isArray(argument.properties)
+    ? argument.properties
+    : [];
+  return nestedProperties.some((nestedProperty) => {
+    if (!isAstNode(nestedProperty)) {
+      return true;
+    }
+    if (nestedProperty.type === "SpreadElement") {
+      return !isPolicySpread(nestedProperty, policyBindings);
+    }
+    if (nestedProperty.type !== "Property") {
+      return true;
+    }
+    return (
+      nestedProperty.computed === true ||
+      POLICY_KEY_SET.has(getPropertyName(nestedProperty.key) ?? "")
+    );
+  });
+};
+
 export default eslintCompatPlugin({
   meta: { name: "require-complete-compaction-generation" },
   rules: {
@@ -48,6 +106,8 @@ export default eslintCompatPlugin({
         messages: {
           missingPolicy:
             "Spread COMPACTION_GENERATION_POLICY into every compaction generateTanStackTextForRole call; a truncated summary must not advance a durable checkpoint.",
+          policyOverride:
+            "Do not override COMPACTION_GENERATION_POLICY after spreading it; the complete-output policy must remain effective for the compaction call.",
         },
         schema: [],
       },
@@ -98,15 +158,24 @@ export default eslintCompatPlugin({
               Array.isArray(firstArgument.properties)
                 ? firstArgument.properties
                 : [];
-            const hasPolicy = properties.some(
-              (property) =>
-                isAstNode(property) &&
-                property.type === "SpreadElement" &&
-                isIdentifier(property.argument) &&
-                policyBindings.has(property.argument.name),
+            const hasPolicy = properties.some((property) =>
+              isPolicySpread(property, policyBindings),
             );
             if (!hasPolicy) {
               context.report({ node, messageId: "missingPolicy" });
+              return;
+            }
+
+            const policyIndex = properties.findIndex((property) =>
+              isPolicySpread(property, policyBindings),
+            );
+            const hasPolicyOverride = properties
+              .slice(policyIndex + 1)
+              .some((property) =>
+                spreadCanOverridePolicy(property, policyBindings),
+              );
+            if (hasPolicyOverride) {
+              context.report({ node, messageId: "policyOverride" });
             }
           },
         };

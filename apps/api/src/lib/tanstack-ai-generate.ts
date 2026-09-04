@@ -269,6 +269,14 @@ export const streamTanStackTextForRole = (
  * while returning its partial text.
  */
 const TRUNCATED_AT_OUTPUT_CEILING_CODE = "max_tokens";
+// These upstream variants use string-literal discriminants rather than
+// EventType members. Named, checked literals keep Oxlint's exhaustiveness
+// analysis aligned with the SDK union.
+const CUSTOM_STREAM_CHUNK_TYPE = "CUSTOM" satisfies StreamChunk["type"];
+const TOOL_CALL_END_STREAM_CHUNK_TYPE =
+  "TOOL_CALL_END" satisfies StreamChunk["type"];
+const TOOL_CALL_START_STREAM_CHUNK_TYPE =
+  "TOOL_CALL_START" satisfies StreamChunk["type"];
 
 const readOutputCeilingStopAsLength = async function* (
   chunks: AsyncIterable<StreamChunk>,
@@ -276,30 +284,57 @@ const readOutputCeilingStopAsLength = async function* (
   let runIdentity: { runId: string; threadId: string } | undefined;
 
   for await (const chunk of chunks) {
-    if (chunk.type === EventType.RUN_STARTED) {
-      runIdentity = { runId: chunk.runId, threadId: chunk.threadId };
-      yield chunk;
-      continue;
-    }
-
-    if (
-      chunk.type === EventType.RUN_ERROR &&
-      chunk.code === TRUNCATED_AT_OUTPUT_CEILING_CODE &&
-      runIdentity !== undefined
-    ) {
-      yield {
-        type: EventType.RUN_FINISHED,
-        finishReason: "length",
-        runId: runIdentity.runId,
-        threadId: runIdentity.threadId,
-        ...(chunk.metadata === undefined ? {} : { metadata: chunk.metadata }),
-        ...(chunk.model === undefined ? {} : { model: chunk.model }),
-        ...(chunk.timestamp === undefined
-          ? {}
-          : { timestamp: chunk.timestamp }),
-        ...(chunk.usage === undefined ? {} : { usage: chunk.usage }),
-      };
-      continue;
+    switch (chunk.type) {
+      case EventType.RUN_STARTED: {
+        runIdentity = { runId: chunk.runId, threadId: chunk.threadId };
+        break;
+      }
+      case EventType.RUN_ERROR: {
+        if (
+          chunk.code !== TRUNCATED_AT_OUTPUT_CEILING_CODE ||
+          runIdentity === undefined
+        ) {
+          break;
+        }
+        yield {
+          type: EventType.RUN_FINISHED,
+          finishReason: "length",
+          runId: runIdentity.runId,
+          threadId: runIdentity.threadId,
+          ...(chunk.metadata === undefined ? {} : { metadata: chunk.metadata }),
+          ...(chunk.model === undefined ? {} : { model: chunk.model }),
+          ...(chunk.timestamp === undefined
+            ? {}
+            : { timestamp: chunk.timestamp }),
+          ...(chunk.usage === undefined ? {} : { usage: chunk.usage }),
+        };
+        continue;
+      }
+      case EventType.RUN_FINISHED:
+      case EventType.TEXT_MESSAGE_START:
+      case EventType.TEXT_MESSAGE_CONTENT:
+      case EventType.TEXT_MESSAGE_END:
+      case TOOL_CALL_START_STREAM_CHUNK_TYPE:
+      case EventType.TOOL_CALL_ARGS:
+      case TOOL_CALL_END_STREAM_CHUNK_TYPE:
+      case EventType.TOOL_CALL_RESULT:
+      case EventType.STEP_STARTED:
+      case EventType.STEP_FINISHED:
+      case EventType.MESSAGES_SNAPSHOT:
+      case EventType.STATE_SNAPSHOT:
+      case EventType.STATE_DELTA:
+      case CUSTOM_STREAM_CHUNK_TYPE:
+      case EventType.REASONING_START:
+      case EventType.REASONING_MESSAGE_START:
+      case EventType.REASONING_MESSAGE_CONTENT:
+      case EventType.REASONING_MESSAGE_END:
+      case EventType.REASONING_END:
+      case EventType.REASONING_ENCRYPTED_VALUE: {
+        break;
+      }
+      default: {
+        chunk satisfies never;
+      }
     }
     yield chunk;
   }
