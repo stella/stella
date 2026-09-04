@@ -227,14 +227,15 @@ export const useGuideRunner = ({
               await navigate({ to: route.to });
             },
           });
-        case "workspace-view": {
+        case "workspace-unfiltered-table": {
           if (!workspaceId) {
             return false;
           }
-          const views = await queryClient.ensureQueryData(
-            viewsOptions(workspaceId),
-          );
-          const viewId = resolveGuideWorkspaceViewId(views, route.target);
+          const views = await queryClient.query({
+            ...viewsOptions(workspaceId),
+            staleTime: "static",
+          });
+          const viewId = resolveGuideWorkspaceViewId(views);
           if (!viewId) {
             return false;
           }
@@ -432,6 +433,8 @@ export const useGuideRunner = ({
     // click starts a new walk, and each walk moves the run strictly one way,
     // two unresolvable steps can never bounce the run back and forth between
     // them.
+    let entryIndex = 0;
+
     const resolveFrom = async (
       from: number,
       direction: GuideDirection,
@@ -440,7 +443,11 @@ export const useGuideRunner = ({
       // code-split route can legitimately show its pending component for
       // longer than an anchor should take to mount once that route commits.
       let deadline = Date.now() + STEP_POLL_TIMEOUT_MS;
-      for (let index = from; index >= 0 && index < total; index += direction) {
+      for (
+        let index = from;
+        index >= entryIndex && index < total;
+        index += direction
+      ) {
         if (isRunAborted() || Date.now() >= deadline) {
           return null;
         }
@@ -570,31 +577,18 @@ export const useGuideRunner = ({
         document.querySelector(guideAnchorSelector(step.anchor)),
       );
       const mountedStep =
-        mountedStepIndex < 0 ? null : await resolveFrom(mountedStepIndex, 1);
+        mountedStepIndex === -1 ? null : await resolveFrom(mountedStepIndex, 1);
       const first = mountedStep ?? (await resolveFrom(0, 1));
       if (!first) {
         return isRunAborted() ? { type: "cancelled" } : { type: "tour-empty" };
       }
       let current = first;
-      // The earliest step this run has shown. Tracked so the back control is
-      // disabled where there is provably nothing behind it.
-      let firstIndex =
-        first.index > 0 &&
-        tour.steps.slice(0, first.index).some((step) => {
-          if (step.interaction?.kind !== "transition") {
-            return false;
-          }
-          return (
-            document.querySelector(
-              guideAnchorSelector(step.interaction.reverseAnchor),
-            ) !== null
-          );
-        })
-          ? 0
-          : first.index;
+      // Steps before entry belong to the user's existing UI state. Back must
+      // never cross this boundary and reverse an editor this run did not open.
+      const firstIndex = first.index;
+      entryIndex = firstIndex;
 
       for (;;) {
-        firstIndex = Math.min(firstIndex, current.index);
         // eslint-disable-next-line no-await-in-loop -- sequential by design: block on the user acting on this step before resolving the next
         const outcome = await showStep(engine, current, firstIndex);
 
@@ -604,6 +598,9 @@ export const useGuideRunner = ({
           case "leave":
             return { type: "left" };
           case "back": {
+            if (current.index <= firstIndex) {
+              break;
+            }
             // eslint-disable-next-line no-await-in-loop -- sequential by design: one step is resolved and shown at a time
             const previous = await resolveFrom(current.index - 1, -1);
             // Nothing earlier resolves: stay on this step rather than dropping

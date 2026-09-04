@@ -192,81 +192,75 @@ describe("guide tours", () => {
 
   test("matter tours select an unfiltered table instead of the first table", () => {
     expect(
-      resolveGuideWorkspaceViewId(
-        [
-          {
-            id: "filtered-table-view",
-            name: "Filtered",
-            position: 0,
+      resolveGuideWorkspaceViewId([
+        {
+          id: "filtered-table-view",
+          name: "Filtered",
+          position: 0,
+          version: 1,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          layout: {
+            calculations: [],
+            columnOrder: [],
+            columnPinning: [],
+            hiddenProperties: [],
+            sorts: [],
+            type: "table",
             version: 1,
-            createdAt: "2026-01-01T00:00:00.000Z",
-            layout: {
-              calculations: [],
-              columnOrder: [],
-              columnPinning: [],
-              hiddenProperties: [],
-              sorts: [],
-              type: "table",
-              version: 1,
-              filters: [
-                {
-                  operand: { type: "kind" },
-                  op: "is_not_empty",
-                  type: "predicate",
-                },
-              ],
-            },
+            filters: [
+              {
+                operand: { type: "kind" },
+                op: "is_not_empty",
+                type: "predicate",
+              },
+            ],
           },
-          {
-            id: "unfiltered-table-view",
-            name: "All documents",
-            position: 1,
+        },
+        {
+          id: "unfiltered-table-view",
+          name: "All documents",
+          position: 1,
+          version: 1,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          layout: {
+            calculations: [],
+            columnOrder: [],
+            columnPinning: [],
+            filters: [],
+            hiddenProperties: [],
+            sorts: [],
+            type: "table",
             version: 1,
-            createdAt: "2026-01-01T00:00:00.000Z",
-            layout: {
-              calculations: [],
-              columnOrder: [],
-              columnPinning: [],
-              filters: [],
-              hiddenProperties: [],
-              sorts: [],
-              type: "table",
-              version: 1,
-            },
           },
-        ],
-        "unfiltered-table",
-      ),
+        },
+      ]),
     ).toBe("unfiltered-table-view");
     expect(
-      resolveGuideWorkspaceViewId(
-        [
-          {
-            id: "filtered-table-view",
-            name: "Filtered",
-            position: 0,
+      resolveGuideWorkspaceViewId([
+        {
+          id: "filtered-table-view",
+          name: "Filtered",
+          position: 0,
+          version: 1,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          layout: {
+            calculations: [],
+            columnOrder: [],
+            columnPinning: [],
+            hiddenProperties: [],
+            sorts: [],
+            type: "table",
             version: 1,
-            createdAt: "2026-01-01T00:00:00.000Z",
-            layout: {
-              calculations: [],
-              columnOrder: [],
-              columnPinning: [],
-              hiddenProperties: [],
-              sorts: [],
-              type: "table",
-              version: 1,
-              filters: [
-                {
-                  operand: { type: "kind" },
-                  op: "is_not_empty",
-                  type: "predicate",
-                },
-              ],
-            },
+            filters: [
+              {
+                operand: { type: "kind" },
+                op: "is_not_empty",
+                type: "predicate",
+              },
+            ],
           },
-        ],
-        "unfiltered-table",
-      ),
+        },
+      ]),
     ).toBeNull();
   });
 
@@ -277,7 +271,6 @@ describe("guide tours", () => {
       canCreateProperty: false,
       documentsAvailable: false,
       tabularReviewAvailable: false,
-      playbooksAvailable: false,
       workflowsAvailable: false,
       canCreatePlaybook: false,
       canCreateWorkflow: false,
@@ -325,12 +318,6 @@ describe("guide tours", () => {
       false,
     );
     expect(
-      isGuideTourAvailable(GUIDE_TOUR_IDS.playbooks, {
-        ...unavailable,
-        playbooksAvailable: true,
-      }),
-    ).toBe(false);
-    expect(
       isGuideTourAvailable(GUIDE_TOUR_IDS.workflows, {
         ...unavailable,
         workflowsAvailable: true,
@@ -339,7 +326,6 @@ describe("guide tours", () => {
     expect(
       isGuideTourAvailable(GUIDE_TOUR_IDS.playbooks, {
         ...unavailable,
-        playbooksAvailable: true,
         canCreatePlaybook: true,
       }),
     ).toBe(true);
