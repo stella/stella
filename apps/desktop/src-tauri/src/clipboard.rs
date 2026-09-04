@@ -2316,7 +2316,7 @@ fn bounded_clipboard_image(
   }
   #[cfg(target_os = "windows")]
   {
-    return bounded_windows_clipboard_image();
+    bounded_windows_clipboard_image()
   }
   #[cfg(not(target_os = "windows"))]
   Err("clipboard image format is unsupported".to_string())
