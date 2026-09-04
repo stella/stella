@@ -50,7 +50,7 @@ describe("WorkspaceViewSwitcher", () => {
     );
   });
 
-  test.each([null, undefined, false])(
+  test.each([null, undefined, false, true])(
     "does not reserve menu space when every action is %s",
     (actions) => {
       const markup = renderToStaticMarkup(
