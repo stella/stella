@@ -2943,8 +2943,17 @@ mod tests {
       panic!("image fixture must remain an image");
     };
     *width = 0;
+    let text = ClipboardItem::Text {
+      copied_at: Utc::now(),
+      group_id: None,
+      id: "text".to_string(),
+      name: None,
+      plain_text: "text".to_string(),
+      retention_class: ClipboardItemRetentionClass::History,
+      source_app: None,
+    };
     let mut items = vec![
-      text_item(Utc::now(), "text"),
+      text,
       formatted,
       stored_image_item("valid", &valid_blob_id, &valid_checksum, valid_image.len()),
       stored_image_item(
