@@ -93,7 +93,14 @@ export const WorkspaceViewSwitcher = <View extends WorkspaceViewSwitcherItem>({
   renderIcon,
 }: WorkspaceViewSwitcherProps<View>) => {
   const canReorder = reorder !== null;
-  const reserveActionSpace = renderActions !== undefined;
+  const viewTabs = views.map((view) => ({
+    view,
+    actions: renderActions?.(view),
+  }));
+  const reserveActionSpace = viewTabs.some(
+    ({ actions }) =>
+      actions !== null && actions !== undefined && actions !== false,
+  );
   const [instanceId] = useState(Symbol);
   const [stripContainer, setStripContainer] = useState<HTMLDivElement | null>(
     null,
@@ -154,7 +161,7 @@ export const WorkspaceViewSwitcher = <View extends WorkspaceViewSwitcherItem>({
             className="h-full data-[orientation=horizontal]:py-0"
             variant="underline"
           >
-            {views.map((view) => {
+            {viewTabs.map(({ view, actions }) => {
               if (editing?.viewId === view.id) {
                 return (
                   <TabsTab
@@ -175,7 +182,7 @@ export const WorkspaceViewSwitcher = <View extends WorkspaceViewSwitcherItem>({
 
               return (
                 <WorkspaceViewTab
-                  actions={renderActions?.(view)}
+                  actions={actions}
                   canReorder={canReorder}
                   direction={direction}
                   getDragData={reorder?.getDragData}

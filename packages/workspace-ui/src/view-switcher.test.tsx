@@ -50,6 +50,27 @@ describe("WorkspaceViewSwitcher", () => {
     );
   });
 
+  test.each([null, undefined, false])(
+    "does not reserve menu space when every action is %s",
+    (actions) => {
+      const markup = renderToStaticMarkup(
+        <WorkspaceViewSwitcher
+          activeViewId="table"
+          ariaLabel="Saved views"
+          direction="ltr"
+          onViewChange={() => undefined}
+          reorder={null}
+          renderActions={() => actions}
+          renderIcon={() => null}
+          views={VIEWS}
+        />,
+      );
+
+      expect(markup).toContain("All matters");
+      expect(markup).not.toContain("pe-6.5");
+    },
+  );
+
   test("applies the drop direction to the rendered switcher", () => {
     const markup = renderToStaticMarkup(
       <WorkspaceViewSwitcher

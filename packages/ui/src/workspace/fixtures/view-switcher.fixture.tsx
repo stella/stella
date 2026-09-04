@@ -10,19 +10,19 @@ import { InspectorContent, InspectorRailContent } from "../../inspector";
 const LTR_VIEWS = [
   { id: "table", name: "All matters", kind: "table" },
   { id: "calendar", name: "Deadlines", kind: "calendar" },
-] as const;
+];
 
 const RTL_VIEWS = [
   { id: "table", name: "كل القضايا", kind: "table" },
   { id: "calendar", name: "المواعيد النهائية", kind: "calendar" },
-] as const;
+];
 
 const WorkspaceViewSwitcherFixture = () => {
   const query = new URLSearchParams(window.location.search);
   const direction = query.has("rtl") ? "rtl" : "ltr";
   const dark = query.has("dark");
   const views = direction === "rtl" ? RTL_VIEWS : LTR_VIEWS;
-  const [activeViewId, setActiveViewId] = useState(views[0].id);
+  const [activeViewId, setActiveViewId] = useState("table");
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
