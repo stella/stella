@@ -172,8 +172,21 @@ impl ClipboardStore {
       std::process::id(),
       uuid::Uuid::new_v4()
     ));
-    fs::write(&temp_path, encrypted)
-      .map_err(|error| format!("clipboard image write failed: {error}"))?;
+    if let Err(error) = fs::write(&temp_path, encrypted) {
+      let cleanup_error = match fs::remove_file(&temp_path) {
+        Ok(()) => None,
+        Err(cleanup_error) if cleanup_error.kind() == std::io::ErrorKind::NotFound => {
+          None
+        }
+        Err(cleanup_error) => Some(cleanup_error),
+      };
+      return match cleanup_error {
+        Some(cleanup_error) => Err(format!(
+          "clipboard image write failed: {error}; temporary image cleanup failed: {cleanup_error}"
+        )),
+        None => Err(format!("clipboard image write failed: {error}")),
+      };
+    }
     #[cfg(unix)]
     {
       use std::os::unix::fs::PermissionsExt;
@@ -434,11 +447,6 @@ impl ClipboardStore {
   }
 
   pub fn remove(path: &Path) -> Result<(), String> {
-    match fs::remove_file(path) {
-      Ok(()) => Ok(()),
-      Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-      Err(error) => Err(format!("clipboard store removal failed: {error}")),
-    }?;
     let image_directory = path.with_extension("images");
     match fs::remove_dir_all(image_directory) {
       Ok(()) => {}
@@ -447,7 +455,11 @@ impl ClipboardStore {
         return Err(format!("clipboard image store removal failed: {error}"));
       }
     }
-    Ok(())
+    match fs::remove_file(path) {
+      Ok(()) => Ok(()),
+      Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+      Err(error) => Err(format!("clipboard store removal failed: {error}")),
+    }
   }
 
   pub fn persist(&self, state: &PersistedClipboardState) -> Result<(), String> {
@@ -796,6 +808,21 @@ mod tests {
     ClipboardStore::remove(&path).unwrap();
     ClipboardStore::remove(&path).unwrap();
 
+    assert!(!path.exists());
+  }
+
+  #[test]
+  fn partial_store_removal_keeps_metadata_for_a_later_retry() {
+    let path = unique_path();
+    fs::write(&path, b"encrypted history").unwrap();
+    let image_directory = path.with_extension("images");
+    fs::write(&image_directory, b"temporarily undeletable image storage").unwrap();
+
+    assert!(ClipboardStore::remove(&path).is_err());
+    assert!(path.is_file());
+
+    fs::remove_file(&image_directory).unwrap();
+    ClipboardStore::remove(&path).unwrap();
     assert!(!path.exists());
   }
 }

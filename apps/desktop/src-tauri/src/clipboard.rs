@@ -1789,6 +1789,9 @@ impl ClipboardManager {
         }
         Ok(ClipboardImagePersistStatus::Existing) => {}
         Err(error) => {
+          // A failed blob write may have left an interrupted-write artifact;
+          // keep scheduled discovery active even when immediate cleanup fails.
+          self.image_discovery_status = ClipboardImageCleanupStatus::PendingRetry;
           let cleanup_errors = remove_created_image_blobs(
             store,
             &created_blob_ids,
@@ -2020,7 +2023,13 @@ fn image_history_bytes(items: &[ClipboardItem]) -> usize {
     .iter()
     .filter_map(|item| {
       let blob_id = item.image_blob_id()?;
-      seen.insert(blob_id).then(|| item.image_byte_size())
+      // Preview size is deliberately not persisted as metadata. Charging its
+      // enforced maximum keeps the total blob-store budget bounded.
+      seen.insert(blob_id).then(|| {
+        item
+          .image_byte_size()
+          .saturating_add(MAX_ITEM_IMAGE_PREVIEW_BYTES)
+      })
     })
     .fold(0, usize::saturating_add)
 }
@@ -4457,14 +4466,17 @@ mod tests {
   }
 
   #[test]
-  fn image_history_bytes_counts_each_blob_once() {
+  fn image_history_bytes_counts_each_blob_and_its_preview_once() {
     let items = vec![
       image_item("first", "shared-blob", "first-checksum", 12),
       image_item("second", "shared-blob", "second-checksum", 12),
       image_item("other", "other-blob", "other-checksum", 5),
     ];
 
-    assert_eq!(image_history_bytes(&items), 17);
+    assert_eq!(
+      image_history_bytes(&items),
+      17 + 2 * MAX_ITEM_IMAGE_PREVIEW_BYTES
+    );
   }
 
   #[test]
@@ -4473,7 +4485,7 @@ mod tests {
       "organised",
       "organised-blob",
       "organised-checksum",
-      MAX_HISTORY_IMAGE_BYTES - 1,
+      MAX_HISTORY_IMAGE_BYTES - 2 * MAX_ITEM_IMAGE_PREVIEW_BYTES - 2,
     );
     organised.set_group_id(Some("screenshots".to_string()));
     let newest = image_item("newest", "newest-blob", "newest-checksum", 1);
@@ -4516,7 +4528,7 @@ mod tests {
       "organised",
       "organised-blob",
       "organised-checksum",
-      MAX_HISTORY_IMAGE_BYTES,
+      MAX_HISTORY_IMAGE_BYTES - MAX_ITEM_IMAGE_PREVIEW_BYTES,
     );
     organised.set_group_id(Some("screenshots".to_string()));
     manager.items.push(organised.clone());
