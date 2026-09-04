@@ -284,6 +284,35 @@ describe("TanStack AI structured output generation", () => {
       ),
     );
 
+  test("rejects a structured stream truncated at the output ceiling", async () => {
+    capturedChatOptions.length = 0;
+    nextChatResult = createTruncatedTextStream(['{"answer":"ok']);
+
+    const drain = async () => {
+      for await (const _event of streamObjectForTestModel({
+        caching: noCaching,
+        organizationId: null,
+        orgAIConfig: null,
+        outputSchema: v.strictObject({ answer: v.string() }),
+        prompt: "Extract the answer.",
+        role: "pdf",
+        serviceTier: "standard",
+        tenantWorkspaceIds: [],
+      })) {
+        continue;
+      }
+    };
+
+    const failure = await drain().then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+
+    // Half an object is unusable however the caller grades completeness, so the
+    // truncation stays the run error it arrived as.
+    expect(failure).toMatchObject({ code: "max_tokens", status: 502 });
+  });
+
   test("refuses an over-budget structured-output schema before it reaches the provider", async () => {
     capturedChatOptions.length = 0;
 
@@ -804,6 +833,44 @@ describe("TanStack AI text generation", () => {
     expect(caught).toMatchObject({ status: 502 });
   });
 
+  test("returns the text a run truncated at the output ceiling produced", async () => {
+    capturedChatOptions.length = 0;
+    nextChatResult = createTruncatedTextStream(["as far as it ", "got"]);
+
+    const text = await generateTextForTestModel({
+      caching: noCaching,
+      organizationId: null,
+      orgAIConfig: null,
+      prompt: "Rewrite it.",
+      role: "chat",
+      serviceTier: "standard",
+      tenantWorkspaceIds: [],
+    });
+
+    expect(text).toBe("as far as it got");
+  });
+
+  test("rejects a run truncated at the output ceiling when complete generation is required", async () => {
+    capturedChatOptions.length = 0;
+    nextChatResult = createTruncatedTextStream(["as far as it got"]);
+
+    const caught = await generateTextForTestModel({
+      caching: noCaching,
+      finishPolicy: "require-complete",
+      organizationId: null,
+      orgAIConfig: null,
+      prompt: "Rewrite it.",
+      role: "chat",
+      serviceTier: "standard",
+      tenantWorkspaceIds: [],
+    }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+
+    expect(caught).toMatchObject({ status: 502 });
+  });
+
   test("rejects a cancelled run instead of returning its truncated text", async () => {
     capturedChatOptions.length = 0;
     const controller = new AbortController();
@@ -1163,6 +1230,18 @@ const createCancelledUnreasonedFinishStream = async function* (
   yield* createTextStream(deltas);
   yield { type: realTanStackAI.EventType.RUN_FINISHED };
   controller.abort();
+};
+
+// Anthropic's shape for a response that stopped at the output ceiling: the
+// content it did write, then the stop reason reported as a run error rather
+// than as the `RUN_FINISHED` every other stop reason arrives as.
+const createTruncatedTextStream = async function* (deltas: string[]) {
+  yield* createTextStream(deltas);
+  yield* createRunErrorStream({
+    code: "max_tokens",
+    message:
+      "The response was cut off because the maximum token limit was reached.",
+  });
 };
 
 const createRunErrorStream = async function* ({

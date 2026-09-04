@@ -257,6 +257,42 @@ export const streamTanStackTextForRole = (
   });
 };
 
+/**
+ * The provider code for a response the model stopped writing because it
+ * reached the output ceiling the request set.
+ *
+ * The Anthropic adapter reports that stop reason as a `RUN_ERROR`, where it
+ * reports every other one as a `RUN_FINISHED`. The content deltas before it
+ * stand, so reading it as a failure discards a truncated answer and takes the
+ * decision this module models in `finishPolicy` away from the caller: an
+ * `allow-incomplete` caller can never receive the incomplete output it asked
+ * to be given.
+ */
+const TRUNCATED_AT_OUTPUT_CEILING_CODE = "max_tokens";
+
+// Ends the stream on a truncation reported as a run error, reporting it as the
+// `length` finish it is, so the caller's `finishPolicy` decides what a
+// truncated answer is worth. Every other run error passes through to
+// `throwIfTanStackRunError` and still rejects the run.
+//
+// Text only: a truncated structured response is unusable however the caller
+// grades completeness, so the object stream keeps rejecting the same event.
+const endTextStreamOnTruncation = async function* (
+  chunks: AsyncIterable<StreamChunk>,
+  onFinishReason: ((reason: TanStackTextFinishReason) => void) | undefined,
+): AsyncIterable<StreamChunk> {
+  for await (const chunk of chunks) {
+    if (
+      chunk.type === EventType.RUN_ERROR &&
+      chunk.code === TRUNCATED_AT_OUTPUT_CEILING_CODE
+    ) {
+      onFinishReason?.("length");
+      return;
+    }
+    yield chunk;
+  }
+};
+
 const streamTanStackTextDeltas = async function* ({
   abortController,
   analytics,
@@ -284,20 +320,23 @@ const streamTanStackTextDeltas = async function* ({
     model,
     serviceTier,
     stream: (requestedServiceTier) =>
-      chat({
-        adapter: model.adapter,
-        messages,
-        ...systemPromptsPatch({ caching, model, system }),
-        modelOptions: mergeGenerationOptions({
-          caching,
-          model,
-          maxOutputTokens,
-          serviceTier: requestedServiceTier,
-          temperature,
+      endTextStreamOnTruncation(
+        chat({
+          adapter: model.adapter,
+          messages,
+          ...systemPromptsPatch({ caching, model, system }),
+          modelOptions: mergeGenerationOptions({
+            caching,
+            model,
+            maxOutputTokens,
+            serviceTier: requestedServiceTier,
+            temperature,
+          }),
+          ...(analytics ? { middleware: [analytics.middleware] } : {}),
+          ...(abortController ? { abortController } : {}),
         }),
-        ...(analytics ? { middleware: [analytics.middleware] } : {}),
-        ...(abortController ? { abortController } : {}),
-      }),
+        onFinishReason,
+      ),
     onChunk: (chunk) => {
       if (chunk.type === EventType.RUN_FINISHED) {
         onFinishReason?.(chunk.finishReason ?? null);
