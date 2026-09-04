@@ -47,11 +47,13 @@ export const ClipboardImagePreview = ({
   id,
   surface,
 }: ClipboardImagePreviewProps) => {
-  const [previewDataUrl, setPreviewDataUrl] = useState<string | null>(null);
+  const [preview, setPreview] = useState<{
+    dataUrl: string;
+    id: string;
+  } | null>(null);
 
   useEffect(() => {
     let disposed = false;
-    setPreviewDataUrl(null);
     void invoke<unknown>("clipboard_get_image_preview", { id })
       .then((value) => {
         if (!isClipboardImagePreviewDataUrl(value)) {
@@ -59,11 +61,12 @@ export const ClipboardImagePreview = ({
             code: DESKTOP_TELEMETRY_ERROR_CODES.invalidResponse,
             ...PREVIEW_TELEMETRY[surface],
           });
-          return;
+          return undefined;
         }
         if (!disposed) {
-          setPreviewDataUrl(value);
+          setPreview({ dataUrl: value, id });
         }
+        return undefined;
       })
       .catch(() => {
         reportDesktopError({
@@ -75,6 +78,7 @@ export const ClipboardImagePreview = ({
       disposed = true;
     };
   }, [id, surface]);
+  const previewDataUrl = preview?.id === id ? preview.dataUrl : null;
 
   if (!previewDataUrl) {
     return (

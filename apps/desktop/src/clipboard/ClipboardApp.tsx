@@ -404,6 +404,13 @@ const ClipboardCard = ({
       />
     );
   }
+  let metadataTitle = t("plainText");
+  if (item.type === "formattedText") {
+    metadataTitle = t("formattedText");
+  }
+  if (item.type === "image") {
+    metadataTitle = t("image");
+  }
 
   const beginNameEdit = () => {
     cancelNameEditRef.current = false;
@@ -459,15 +466,7 @@ const ClipboardCard = ({
       <footer className="clipboard-card-footer flex h-12 shrink-0 items-center gap-2 px-4">
         <span
           className="relative flex shrink-0 items-center"
-          title={
-            sourceAppName ??
-            groupName ??
-            (item.type === "formattedText"
-              ? t("formattedText")
-              : item.type === "image"
-                ? t("image")
-                : t("plainText"))
-          }
+          title={sourceAppName ?? groupName ?? metadataTitle}
         >
           {metadataIcon}
         </span>
