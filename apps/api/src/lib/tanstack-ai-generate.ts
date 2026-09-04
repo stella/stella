@@ -311,42 +311,11 @@ const readOutputCeilingStopAsLength = async function* (
  */
 const normalizeAnthropicTextStops = (
   adapter: AnyTextAdapter,
-  modelId: string,
-): AnyTextAdapter => {
-  const structuredOutputStream = adapter.structuredOutputStream;
-  const supportsCombinedToolsAndSchema = adapter.supportsCombinedToolsAndSchema;
-  const combinedStructuredOutputSource = adapter.combinedStructuredOutputSource;
-
-  return {
-    kind: adapter.kind,
-    name: adapter.name,
-    model: modelId,
-    "~types": adapter["~types"],
-    ...(adapter.requires === undefined ? {} : { requires: adapter.requires }),
-    chatStream: (options) =>
-      readOutputCeilingStopAsLength(adapter.chatStream(options)),
-    structuredOutput: async (options) =>
-      await adapter.structuredOutput(options),
-    ...(structuredOutputStream === undefined
-      ? {}
-      : {
-          structuredOutputStream: (options) =>
-            structuredOutputStream.call(adapter, options),
-        }),
-    ...(supportsCombinedToolsAndSchema === undefined
-      ? {}
-      : {
-          supportsCombinedToolsAndSchema: (options) =>
-            supportsCombinedToolsAndSchema.call(adapter, options),
-        }),
-    ...(combinedStructuredOutputSource === undefined
-      ? {}
-      : {
-          combinedStructuredOutputSource: (options) =>
-            combinedStructuredOutputSource.call(adapter, options),
-        }),
-  };
-};
+): AnyTextAdapter => ({
+  ...adapter,
+  chatStream: (options) =>
+    readOutputCeilingStopAsLength(adapter.chatStream(options)),
+});
 
 const streamTanStackTextDeltas = async function* ({
   abortController,
@@ -378,7 +347,7 @@ const streamTanStackTextDeltas = async function* ({
       chat({
         adapter:
           model.provider === "anthropic"
-            ? normalizeAnthropicTextStops(model.adapter, model.modelId)
+            ? normalizeAnthropicTextStops(model.adapter)
             : model.adapter,
         messages,
         ...systemPromptsPatch({ caching, model, system }),
