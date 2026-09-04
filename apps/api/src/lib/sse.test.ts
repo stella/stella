@@ -18,6 +18,7 @@ type MessageHandler = (message: string) => void;
 // `subscribedLive` (Bun does not re-issue SUBSCRIBE); `publish` fans a message
 // out only to clients that are `subscribedLive`.
 type FakeRedisClient = {
+  connect: ReturnType<typeof mock>;
   subscribe: ReturnType<typeof mock>;
   publish: ReturnType<typeof mock>;
   close: ReturnType<typeof mock>;
@@ -38,10 +39,27 @@ let subscribeFailuresRemaining = 0;
 // that fails (e.g. the socket is already gone), which must not abort the
 // attach-retry scheduling.
 let closeFailuresRemaining = 0;
+// Number of connect() calls to fail before succeeding, modelling a broker that
+// is not reachable yet at boot.
+let connectFailuresRemaining = 0;
 
 const makeFakeRedisClient = (): FakeRedisClient => {
   const client: FakeRedisClient = {
+    connect: mock(async () => {
+      if (connectFailuresRemaining > 0) {
+        connectFailuresRemaining -= 1;
+        throw new Error("redis unavailable");
+      }
+      client.connected = true;
+    }),
     subscribe: mock(async (_channel: string, handler: MessageHandler) => {
+      // These clients disable the offline queue, so a command issued before
+      // the socket is up is rejected outright rather than buffered until it
+      // is. Modelling that here is what keeps the attach path honest: a
+      // subscriber that never connects can never attach.
+      if (!client.connected) {
+        throw new Error("Connection is closed and offline queue is disabled");
+      }
       if (subscribeFailuresRemaining > 0) {
         subscribeFailuresRemaining -= 1;
         throw new Error("redis unavailable");
@@ -52,7 +70,6 @@ const makeFakeRedisClient = (): FakeRedisClient => {
       // A confirmed subscribe: the server now delivers to this connection.
       client.messageHandler = handler;
       client.subscribedLive = true;
-      client.connected = true;
     }),
     // Redis fans a published message out to every connection with a live
     // subscription. A reconnected-but-not-resubscribed client is absent here,
@@ -106,6 +123,29 @@ const simulateDeafReconnect = (client: FakeRedisClient): void => {
   for (const handler of [...client.reconnectHandlers]) {
     handler();
   }
+};
+
+/**
+ * Advance to the attach window that follows a deaf reconnect: the replacement
+ * client's SUBSCRIBE has been accepted by the server (`subscribedLive`), but
+ * sse.ts has not yet recorded it as attached, so broadcasts still take the
+ * inline path. The replacement has to connect before it subscribes, which puts
+ * the window a few microtasks past the reconnect callback rather than at it.
+ * Stops on the first tick that observes the accepted SUBSCRIBE, so it lands
+ * inside the window instead of past it.
+ */
+const advanceToAttachWindow = async (
+  previous: FakeRedisClient | undefined,
+): Promise<FakeRedisClient | undefined> => {
+  for (let tick = 0; tick < 20; tick += 1) {
+    const replacement = createdClients.at(-1);
+    if (replacement !== previous && replacement?.subscribedLive === true) {
+      return replacement;
+    }
+    // oxlint-disable-next-line no-await-in-loop -- each tick must observe whether the replacement subscribed before deciding to wait again
+    await Promise.resolve();
+  }
+  return createdClients.at(-1);
 };
 
 const createRedisClientMock = mock(() => makeFakeRedisClient());
@@ -686,11 +726,12 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
 
     // Enter the attach window: the replacement client's SUBSCRIBE is accepted
     // (subscribedLive), so the server loops events back, but sse.ts has not yet
-    // set subscriptionLive, so hasAttachedSubscriber() is false. Do NOT flush.
+    // set subscriptionLive, so hasAttachedSubscriber() is false. Advance only
+    // as far as that window, never past it.
     if (original) {
       simulateDeafReconnect(original);
     }
-    const replacement = createdClients.at(-1);
+    const replacement = await advanceToAttachWindow(original);
     expect(replacement).not.toBe(original);
     expect(replacement?.subscribedLive).toBe(true);
 
@@ -728,7 +769,7 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
     if (original) {
       simulateDeafReconnect(original);
     }
-    const replacement = createdClients.at(-1);
+    const replacement = await advanceToAttachWindow(original);
     expect(replacement?.messageHandler).toBeTruthy();
 
     // Another instance's event arrives on our subscription during the window.
@@ -773,9 +814,9 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
         handler();
       }
     }
+    const replacement = await advanceToAttachWindow(original);
     await flushMicrotasks();
 
-    const replacement = createdClients.at(-1);
     expect(replacement).not.toBe(original);
     expect(replacement?.subscribedLive).toBe(true);
     // The old client's callback is still live (its close threw and left it).
@@ -804,6 +845,52 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
 });
 
 describe("startSse: subscriber attach retry", () => {
+  test("each attempt connects its client before subscribing", async () => {
+    createdClients.length = 0;
+
+    startTestSse();
+    await flushMicrotasks();
+
+    // The socket has to be raised explicitly: with the offline queue disabled
+    // a SUBSCRIBE on an unconnected client is rejected rather than buffered,
+    // and since a failed attempt discards its client, an attach that leaned on
+    // the subscribe to raise the connection would retry a fresh unconnected
+    // client forever instead of ever attaching.
+    const attached = createdClients[0];
+    expect(attached?.connect).toHaveBeenCalledTimes(1);
+    expect(attached?.subscribe).toHaveBeenCalledTimes(1);
+    expect(attached?.connected).toBe(true);
+
+    stopSse();
+    await flushMicrotasks();
+  });
+
+  test("a connect failure is retried and the subscriber attaches", async () => {
+    createdClients.length = 0;
+    // The broker is unreachable for the first attempt only.
+    connectFailuresRemaining = 1;
+
+    startTestSse();
+    await flushMicrotasks();
+
+    // The failed attempt never reached SUBSCRIBE, and its client was closed.
+    expect(createdClients).toHaveLength(1);
+    expect(createdClients[0]?.subscribe).not.toHaveBeenCalled();
+    expect(createdClients[0]?.close).toHaveBeenCalledTimes(1);
+
+    // Wait past the first backoff delay (200ms) so the retry can run.
+    await Bun.sleep(300);
+    await flushMicrotasks();
+
+    const attached = createdClients[1];
+    expect(attached?.subscribe).toHaveBeenCalledTimes(1);
+    expect(attached?.close).not.toHaveBeenCalled();
+
+    stopSse();
+    await flushMicrotasks();
+    connectFailuresRemaining = 0;
+  });
+
   test("a transient attach failure is retried and the subscriber attaches", async () => {
     createdClients.length = 0;
     // First attach attempt fails; the bounded backoff retry must attach.

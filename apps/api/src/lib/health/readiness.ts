@@ -39,7 +39,14 @@ const probeRedis = async (signal: AbortSignal): Promise<void> => {
   };
   signal.addEventListener("abort", close, { once: true });
   const result = await Result.tryPromise({
-    try: async (): Promise<unknown> => await client.send("PING", []),
+    try: async (): Promise<unknown> => {
+      // The client is built with the offline queue disabled, so the PING has
+      // to wait for the socket rather than be buffered behind it: on a client
+      // that has not connected yet the command is rejected outright, which
+      // would report the dependency down whatever its actual state.
+      await client.connect();
+      return await client.send("PING", []);
+    },
     catch: (cause) => cause,
   }).finally(() => {
     signal.removeEventListener("abort", close);

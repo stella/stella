@@ -837,7 +837,7 @@ const sendKeepAlive = () => {
  */
 type SseRedisClient = Pick<
   ReturnType<typeof createRedisClient>,
-  "close" | "connected" | "onReconnect" | "subscribe"
+  "close" | "connect" | "connected" | "onReconnect" | "subscribe"
 >;
 type CreateSseRedisClient = () => SseRedisClient;
 /**
@@ -968,6 +968,15 @@ const runAttachAttempt = async (
   try {
     subscriber = lifecycle.createClient();
     const attached = subscriber;
+    // Connect before subscribing. These clients are built with the offline
+    // queue disabled, so a SUBSCRIBE issued on a client that has not finished
+    // connecting is rejected outright rather than buffered until the socket is
+    // up. Because a failed attempt discards its client, relying on that first
+    // command to raise the connection would retry a brand-new unconnected
+    // client every time and could never attach. Awaiting the connect is also
+    // what makes the retry ramp below measure the connection instead of the
+    // race against it; on an already-connected client it resolves immediately.
+    await attached.connect();
     // Capture the generation this client is attaching under. The callback stays
     // authorized to deliver only while the lifecycle's generation still matches;
     // any later invalidation bumps it, structurally silencing a stale client
