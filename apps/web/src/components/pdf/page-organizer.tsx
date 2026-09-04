@@ -13,6 +13,7 @@ import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
 import { preserveOffsetOnSource } from "@atlaskit/pragmatic-drag-and-drop/utils/preserve-offset-on-source";
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/utils/set-custom-native-drag-preview";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import { useBlocker } from "@tanstack/react-router";
 import { Result } from "better-result";
 import {
   CopyIcon,
@@ -27,7 +28,6 @@ import {
   Trash2Icon,
   TriangleAlertIcon,
   Undo2Icon,
-  XIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -721,6 +721,7 @@ const LoadedPDFPageOrganizer = ({
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
+  const savedRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
   const isMountedRef = useRef(true);
   const addedSourceDocumentsRef = useRef(new Set<PDFDocument>());
@@ -740,13 +741,17 @@ const LoadedPDFPageOrganizer = ({
   });
   const [operation, setOperation] = useState<EditorOperation>({ type: "idle" });
   const [isAddingPDF, setIsAddingPDF] = useState(false);
-  const [isCloseConfirmationOpen, setIsCloseConfirmationOpen] = useState(false);
   const [isCropOpen, setIsCropOpen] = useState(false);
   const [cropMargins, setCropMargins] = useState(EMPTY_CROP_MARGINS);
   const plan = state.history.present;
   const selectedIds = new Set(state.ui.selectedPageIds);
   const isDirty = isPageOrganizerDirty(state);
   const isBusy = operation.type !== "idle" || isAddingPDF;
+  const navigationBlocker = useBlocker({
+    shouldBlockFn: () => !savedRef.current && (isDirty || isBusy),
+    enableBeforeUnload: isDirty || isBusy,
+    withResolver: true,
+  });
   const documentLimitMessage = tPageEditor("documentLimit", {
     maxPages: format.number(MAX_PAGE_EDITOR_PAGES),
     maxSources: format.number(MAX_PAGE_EDITOR_SOURCES),
@@ -928,6 +933,7 @@ const LoadedPDFPageOrganizer = ({
           title: tPageEditor("versionSaved"),
           type: "success",
         });
+        savedRef.current = true;
         onClose();
       },
       () => {
@@ -994,14 +1000,6 @@ const LoadedPDFPageOrganizer = ({
     });
   };
 
-  const requestClose = () => {
-    if (isDirty) {
-      setIsCloseConfirmationOpen(true);
-      return;
-    }
-    onClose();
-  };
-
   const crop = cropFromMargins(cropMargins);
   const downloadLabel = tPageEditor(
     selectedIds.size > 0 ? "downloadSelectedPages" : "downloadCopy",
@@ -1015,23 +1013,6 @@ const LoadedPDFPageOrganizer = ({
   if (isUnsupported) {
     return (
       <div className="bg-background flex h-full flex-col">
-        <header
-          className={cn(
-            "flex items-center justify-between border-b px-4",
-            TOOLBAR_ROW_HEIGHT,
-          )}
-          style={chromeStyle}
-        >
-          <h2 className="text-sm font-medium">{tPageEditor("title")}</h2>
-          <Button
-            aria-label={tCommon("close")}
-            onClick={onClose}
-            size="icon-sm"
-            variant="ghost"
-          >
-            <XIcon />
-          </Button>
-        </header>
         <div className="flex flex-1 items-center justify-center p-6 text-center">
           <div className="max-w-md space-y-2">
             <TriangleAlertIcon className="text-muted-foreground mx-auto size-8" />
@@ -1047,57 +1028,19 @@ const LoadedPDFPageOrganizer = ({
 
   return (
     <div className="bg-background flex h-full min-h-0 flex-col">
-      <header
-        className={cn(
-          "flex shrink-0 items-center gap-2 border-b px-3",
-          TOOLBAR_ROW_HEIGHT,
-        )}
-        style={chromeStyle}
-      >
-        <div className="me-auto flex min-w-0 items-baseline gap-2">
-          <h2 className="truncate text-sm font-medium">
-            {tPageEditor("title")}
-          </h2>
-          <p className="text-muted-foreground shrink-0 text-xs tabular-nums">
-            {tPageEditor("pageCount", {
-              count: plan.pages.length,
-            })}
-          </p>
-        </div>
-        <input
-          accept="application/pdf,.pdf"
-          className="sr-only"
-          multiple
-          onChange={(event) => {
-            detached(
-              runOperation(async () => await handleAddPDFs(event)),
-              "pdf-page-organizer.add-pdfs",
-            );
-          }}
-          ref={inputRef}
-          type="file"
-        />
-        <Button
-          disabled={isBusy}
-          loading={isAddingPDF}
-          onClick={() => inputRef.current?.click()}
-          size="sm"
-          variant="outline"
-        >
-          <PlusIcon />
-          {tPageEditor("addPDF")}
-        </Button>
-        <Separator className="mx-1 h-6" orientation="vertical" />
-        <Button
-          aria-label={tCommon("close")}
-          disabled={isBusy}
-          onClick={requestClose}
-          size="icon-sm"
-          variant="ghost"
-        >
-          <XIcon />
-        </Button>
-      </header>
+      <input
+        accept="application/pdf,.pdf"
+        className="sr-only"
+        multiple
+        onChange={(event) => {
+          detached(
+            runOperation(async () => await handleAddPDFs(event)),
+            "pdf-page-organizer.add-pdfs",
+          );
+        }}
+        ref={inputRef}
+        type="file"
+      />
 
       <div className="flex min-h-0 flex-1 flex-col">
         <div
@@ -1179,6 +1122,17 @@ const LoadedPDFPageOrganizer = ({
             <Trash2Icon />
           </Button>
           <div className="ms-auto flex items-center gap-1">
+            <Button
+              disabled={isBusy}
+              loading={isAddingPDF}
+              onClick={() => inputRef.current?.click()}
+              size="sm"
+              variant="outline"
+            >
+              <PlusIcon />
+              {tPageEditor("addPDF")}
+            </Button>
+            <Separator className="mx-1 h-6" orientation="vertical" />
             <Button
               aria-label={tPageEditor("undo")}
               disabled={state.history.past.length === 0 || isBusy}
@@ -1366,8 +1320,12 @@ const LoadedPDFPageOrganizer = ({
       </Dialog>
 
       <AlertDialog
-        onOpenChange={setIsCloseConfirmationOpen}
-        open={isCloseConfirmationOpen}
+        onOpenChange={(open) => {
+          if (!open && navigationBlocker.status === "blocked") {
+            navigationBlocker.reset();
+          }
+        }}
+        open={navigationBlocker.status === "blocked"}
       >
         <AlertDialogPopup>
           <AlertDialogHeader>
@@ -1380,7 +1338,15 @@ const LoadedPDFPageOrganizer = ({
             <AlertDialogClose render={<Button variant="ghost" />}>
               {tCommon("cancel")}
             </AlertDialogClose>
-            <Button onClick={onClose} variant="destructive">
+            <Button
+              disabled={isBusy}
+              onClick={() => {
+                if (navigationBlocker.status === "blocked") {
+                  navigationBlocker.proceed();
+                }
+              }}
+              variant="destructive"
+            >
               {tPageEditor("discard")}
             </Button>
           </AlertDialogFooter>
