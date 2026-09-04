@@ -5,6 +5,7 @@ import {
   parsePartialJSON,
 } from "@tanstack/ai";
 import type {
+  AnyTextAdapter,
   ModelMessage,
   RunErrorEvent,
   StreamChunk,
@@ -262,35 +263,89 @@ export const streamTanStackTextForRole = (
  * reached the output ceiling the request set.
  *
  * The Anthropic adapter reports that stop reason as a `RUN_ERROR`, where it
- * reports every other one as a `RUN_FINISHED`. The content deltas before it
- * stand, so reading it as a failure discards a truncated answer and takes the
- * decision this module models in `finishPolicy` away from the caller: an
- * `allow-incomplete` caller can never receive the incomplete output it asked
- * to be given.
+ * reports every other one as a `RUN_FINISHED`. Normalize it before TanStack's
+ * chat engine sees the event: the engine, middleware, and caller must agree
+ * that the same run reached a `length` finish rather than recording a failure
+ * while returning its partial text.
  */
 const TRUNCATED_AT_OUTPUT_CEILING_CODE = "max_tokens";
 
-// Ends the stream on a truncation reported as a run error, reporting it as the
-// `length` finish it is, so the caller's `finishPolicy` decides what a
-// truncated answer is worth. Every other run error passes through to
-// `throwIfTanStackRunError` and still rejects the run.
-//
-// Text only: a truncated structured response is unusable however the caller
-// grades completeness, so the object stream keeps rejecting the same event.
-const endTextStreamOnTruncation = async function* (
+const readOutputCeilingStopAsLength = async function* (
   chunks: AsyncIterable<StreamChunk>,
-  onFinishReason: ((reason: TanStackTextFinishReason) => void) | undefined,
 ): AsyncIterable<StreamChunk> {
+  let runIdentity: { runId: string; threadId: string } | undefined;
+
   for await (const chunk of chunks) {
+    if (chunk.type === EventType.RUN_STARTED) {
+      runIdentity = { runId: chunk.runId, threadId: chunk.threadId };
+      yield chunk;
+      continue;
+    }
+
     if (
       chunk.type === EventType.RUN_ERROR &&
-      chunk.code === TRUNCATED_AT_OUTPUT_CEILING_CODE
+      chunk.code === TRUNCATED_AT_OUTPUT_CEILING_CODE &&
+      runIdentity !== undefined
     ) {
-      onFinishReason?.("length");
-      return;
+      yield {
+        type: EventType.RUN_FINISHED,
+        finishReason: "length",
+        runId: runIdentity.runId,
+        threadId: runIdentity.threadId,
+        ...(chunk.metadata === undefined ? {} : { metadata: chunk.metadata }),
+        ...(chunk.model === undefined ? {} : { model: chunk.model }),
+        ...(chunk.timestamp === undefined
+          ? {}
+          : { timestamp: chunk.timestamp }),
+        ...(chunk.usage === undefined ? {} : { usage: chunk.usage }),
+      };
+      continue;
     }
     yield chunk;
   }
+};
+
+/**
+ * Text only: a truncated structured response is unusable however the caller
+ * grades completeness, so structured-output methods remain untouched.
+ */
+const normalizeAnthropicTextStops = (
+  adapter: AnyTextAdapter,
+  modelId: string,
+): AnyTextAdapter => {
+  const structuredOutputStream = adapter.structuredOutputStream;
+  const supportsCombinedToolsAndSchema = adapter.supportsCombinedToolsAndSchema;
+  const combinedStructuredOutputSource = adapter.combinedStructuredOutputSource;
+
+  return {
+    kind: adapter.kind,
+    name: adapter.name,
+    model: modelId,
+    "~types": adapter["~types"],
+    ...(adapter.requires === undefined ? {} : { requires: adapter.requires }),
+    chatStream: (options) =>
+      readOutputCeilingStopAsLength(adapter.chatStream(options)),
+    structuredOutput: async (options) =>
+      await adapter.structuredOutput(options),
+    ...(structuredOutputStream === undefined
+      ? {}
+      : {
+          structuredOutputStream: (options) =>
+            structuredOutputStream.call(adapter, options),
+        }),
+    ...(supportsCombinedToolsAndSchema === undefined
+      ? {}
+      : {
+          supportsCombinedToolsAndSchema: (options) =>
+            supportsCombinedToolsAndSchema.call(adapter, options),
+        }),
+    ...(combinedStructuredOutputSource === undefined
+      ? {}
+      : {
+          combinedStructuredOutputSource: (options) =>
+            combinedStructuredOutputSource.call(adapter, options),
+        }),
+  };
 };
 
 const streamTanStackTextDeltas = async function* ({
@@ -320,23 +375,23 @@ const streamTanStackTextDeltas = async function* ({
     model,
     serviceTier,
     stream: (requestedServiceTier) =>
-      endTextStreamOnTruncation(
-        chat({
-          adapter: model.adapter,
-          messages,
-          ...systemPromptsPatch({ caching, model, system }),
-          modelOptions: mergeGenerationOptions({
-            caching,
-            model,
-            maxOutputTokens,
-            serviceTier: requestedServiceTier,
-            temperature,
-          }),
-          ...(analytics ? { middleware: [analytics.middleware] } : {}),
-          ...(abortController ? { abortController } : {}),
+      chat({
+        adapter:
+          model.provider === "anthropic"
+            ? normalizeAnthropicTextStops(model.adapter, model.modelId)
+            : model.adapter,
+        messages,
+        ...systemPromptsPatch({ caching, model, system }),
+        modelOptions: mergeGenerationOptions({
+          caching,
+          model,
+          maxOutputTokens,
+          serviceTier: requestedServiceTier,
+          temperature,
         }),
-        onFinishReason,
-      ),
+        ...(analytics ? { middleware: [analytics.middleware] } : {}),
+        ...(abortController ? { abortController } : {}),
+      }),
     onChunk: (chunk) => {
       if (chunk.type === EventType.RUN_FINISHED) {
         onFinishReason?.(chunk.finishReason ?? null);
