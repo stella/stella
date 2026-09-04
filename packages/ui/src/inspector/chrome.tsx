@@ -82,7 +82,7 @@ export const InspectorRailContent = ({
 }: React.ComponentProps<"div">) => (
   <div
     className={cn(
-      "flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-contain",
+      "scrollbar-subtle flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-contain",
       className,
     )}
     data-slot="inspector-rail-content"
@@ -232,7 +232,7 @@ export const InspectorContent = ({
 }: React.ComponentProps<"div">) => (
   <div
     className={cn(
-      "flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-contain",
+      "scrollbar-subtle flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-contain",
       className,
     )}
     data-slot="inspector-content"
