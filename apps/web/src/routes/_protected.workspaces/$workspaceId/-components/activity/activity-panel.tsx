@@ -59,6 +59,7 @@ import {
   SheetPopup,
   SheetTitle,
 } from "@stll/ui/sheet";
+import { Skeleton } from "@stll/ui/skeleton";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
@@ -868,23 +869,19 @@ const ActivityTimelineSkeleton = () => (
       <div className="flex min-w-max px-5 pt-4 pb-5">
         {ACTIVITY_SKELETON_WIDTHS.map((width, index) => (
           <div className="w-64 shrink-0" key={width}>
-            <div
-              className={cn(
-                index === 0
-                  ? "bg-muted h-3 w-24 animate-pulse rounded-sm"
-                  : "h-3",
-              )}
-            />
-            <div className="bg-muted mt-2 h-2 w-12 animate-pulse rounded-sm" />
+            {index === 0 ? (
+              <Skeleton className="h-3 w-24" />
+            ) : (
+              <div className="h-3" />
+            )}
+            <Skeleton className="mt-2 h-2 w-12" />
             <div className="relative mt-3 h-3">
               <span className="bg-border absolute start-0 end-0 top-1/2 h-px" />
               <span className="bg-foreground-disabled absolute start-0 top-0 h-3 w-px" />
             </div>
             <div className="mt-3 pe-8">
-              <div
-                className={cn("bg-muted h-3 animate-pulse rounded-sm", width)}
-              />
-              <div className="bg-muted mt-3 h-3 w-40 animate-pulse rounded-sm" />
+              <Skeleton className={cn("h-3", width)} />
+              <Skeleton className="mt-3 h-3 w-40" />
             </div>
           </div>
         ))}
@@ -896,19 +893,14 @@ const ActivityTimelineSkeleton = () => (
           className="grid min-h-16 grid-cols-[5.5rem_1.5rem_minmax(0,1fr)]"
           key={width}
         >
-          <span className="bg-muted ms-auto me-1 mt-3 h-2 w-12 animate-pulse rounded-sm" />
+          <Skeleton className="ms-auto me-1 mt-3 h-2 w-12" />
           <span className="relative flex justify-center">
             <span className="bg-border absolute inset-y-0 start-1/2 w-px" />
           </span>
-          <span className="py-3 ps-3 pe-4">
-            <span
-              className={cn(
-                "bg-muted block h-3 animate-pulse rounded-sm",
-                width,
-              )}
-            />
-            <span className="bg-muted mt-3 block h-3 w-40 animate-pulse rounded-sm" />
-          </span>
+          <div className="py-3 ps-3 pe-4">
+            <Skeleton className={cn("h-3", width)} />
+            <Skeleton className="mt-3 h-3 w-40" />
+          </div>
         </div>
       ))}
     </div>

@@ -53,6 +53,7 @@ import {
   MenuSeparator,
   MenuTrigger,
 } from "@stll/ui/menu";
+import { Skeleton } from "@stll/ui/skeleton";
 import { stellaToast } from "@stll/ui/toast";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
@@ -1507,8 +1508,8 @@ const MatterActivityList = ({
         {[0, 1, 2].map((index) => (
           <SidebarMenuSubItem key={index}>
             <div className="flex h-7 items-center gap-2 px-2">
-              <span className="bg-muted size-3.5 animate-pulse rounded" />
-              <span className="bg-muted h-3 flex-1 animate-pulse rounded" />
+              <Skeleton className="size-3.5" />
+              <Skeleton className="h-3 flex-1" />
             </div>
           </SidebarMenuSubItem>
         ))}

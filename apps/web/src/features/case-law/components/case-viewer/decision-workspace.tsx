@@ -15,6 +15,7 @@ import { Button } from "@stll/ui/button";
 import { InspectorRailIconButton } from "@stll/ui/inspector";
 import { OutlineRail } from "@stll/ui/outline-rail";
 import type { OutlineItem } from "@stll/ui/outline-rail";
+import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
 import { MatterIcon } from "@/components/matter-icon";
@@ -619,16 +620,16 @@ const AnalysisLoader = () => {
       {[0.6, 0.8, 0.5, 0.7, 0.45, 0.65].map((width, index) => (
         // eslint-disable-next-line react/no-array-index-key -- static skeleton-loader placeholder widths, never reorders
         <div className="flex flex-col gap-1.5" key={index}>
-          <div
-            className="bg-muted/60 h-2.5 animate-pulse rounded"
+          <Skeleton
+            className="h-2.5"
             style={{
               width: `${width * 100}%`,
               animationDelay: `${index * 150}ms`,
             }}
           />
           {index % 2 === 0 && (
-            <div
-              className="bg-muted/30 ms-3 h-2 animate-pulse rounded"
+            <Skeleton
+              className="ms-3 h-2"
               style={{
                 width: `${width * 70}%`,
                 animationDelay: `${index * 150 + 75}ms`,
