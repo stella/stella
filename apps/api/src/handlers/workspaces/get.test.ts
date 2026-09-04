@@ -36,9 +36,28 @@ const workspaceRow = {
   },
 } satisfies ReadWorkspaceSuccess;
 
-const readWorkspace = async (row: unknown) => {
+// The mock stands in for the database by applying the handler's own `where`,
+// so a row the handler did not ask for is not one it can be handed. That is
+// what makes the foreign-organization case below a real assertion rather than
+// a restatement of the mock.
+type WorkspaceQuery = {
+  where: {
+    id: { eq: string };
+    organizationId: { eq: string };
+  };
+};
+
+const readWorkspace = async (row: ReadWorkspaceSuccess | undefined) => {
   const { scopedDb } = createScopedDbMock({
-    query: { workspaces: { findFirst: async () => row } },
+    query: {
+      workspaces: {
+        findFirst: async ({ where }: WorkspaceQuery) =>
+          row?.id === where.id.eq &&
+          row.organizationId === where.organizationId.eq
+            ? row
+            : undefined,
+      },
+    },
   });
   return await readWorkspaceHandler({
     scopedDb,
@@ -67,12 +86,15 @@ describe("readWorkspaceHandler", () => {
     expect(await readWorkspace(undefined)).toMatchObject({ code: 404 });
   });
 
-  test("returns 403 for a matter owned by another organization", async () => {
+  // The organization is part of the lookup, not a check after it, so a matter
+  // owned by another tenant is not among the rows the query can return and the
+  // not-found path answers it.
+  test("does not return a matter owned by another organization", async () => {
     const foreignRow = {
       ...workspaceRow,
       organizationId: toSafeId<"organization">("org_other456"),
     };
 
-    expect(await readWorkspace(foreignRow)).toMatchObject({ code: 403 });
+    expect(await readWorkspace(foreignRow)).toMatchObject({ code: 404 });
   });
 });

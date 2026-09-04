@@ -1,15 +1,15 @@
 import { t } from "elysia";
 
+import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import {
-  tDefaultVarchar,
-  tSafeId,
-  workspaceParams,
-} from "@/api/lib/custom-schema";
-import {
+  FLOW_DEFINITION_DESCRIPTION_MAX_CHARS,
+  FLOW_DEFINITION_NAME_MAX_CHARS,
   FLOW_REVIEW_DECISIONS,
   FLOW_RUN_STATUSES,
   FLOW_SCHEDULE_FREQUENCIES,
+  FLOW_STEP_DOCUMENT_TITLE_MAX_CHARS,
   FLOW_STEP_INSTRUCTION_CHAR_CAP,
+  FLOW_STEP_NAME_MAX_CHARS,
   MAX_FLOW_STEPS,
 } from "@/api/lib/flows/flow-types";
 import { LIMITS } from "@/api/lib/limits";
@@ -18,8 +18,16 @@ import { LIMITS } from "@/api/lib/limits";
 // validation). The handler additionally parses the body through the shared
 // valibot `flowDefinitionInputSchema` to normalize (trim) and enforce the
 // deeper invariants in one authoritative place.
+//
+// The two layers describe the same body, so every scalar bound here comes from
+// the constants `flow-types.ts` exports rather than a literal restated per
+// layer; only the shapes TypeBox and valibot express differently are written
+// twice.
 
-const tStepName = t.String({ minLength: 1, maxLength: 200 });
+const tStepName = t.String({
+  minLength: 1,
+  maxLength: FLOW_STEP_NAME_MAX_CHARS,
+});
 
 const tFlowStep = t.Union([
   t.Object({
@@ -39,7 +47,10 @@ const tFlowStep = t.Union([
   t.Object({
     kind: t.Literal("create-document"),
     name: tStepName,
-    documentTitle: t.String({ minLength: 1, maxLength: 256 }),
+    documentTitle: t.String({
+      minLength: 1,
+      maxLength: FLOW_STEP_DOCUMENT_TITLE_MAX_CHARS,
+    }),
   }),
 ]);
 
@@ -72,8 +83,11 @@ const tFlowTrigger = t.Union([
 ]);
 
 export const flowDefinitionBodySchema = t.Object({
-  name: tDefaultVarchar,
-  description: t.Union([t.String({ maxLength: 2000 }), t.Null()]),
+  name: t.String({ minLength: 1, maxLength: FLOW_DEFINITION_NAME_MAX_CHARS }),
+  description: t.Union([
+    t.String({ maxLength: FLOW_DEFINITION_DESCRIPTION_MAX_CHARS }),
+    t.Null(),
+  ]),
   steps: t.Array(tFlowStep, { minItems: 1, maxItems: MAX_FLOW_STEPS }),
   trigger: tFlowTrigger,
   enabled: t.Boolean(),

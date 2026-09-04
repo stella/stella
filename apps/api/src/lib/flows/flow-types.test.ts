@@ -1,7 +1,10 @@
+import { Value } from "@sinclair/typebox/value";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { flowDefinitionBodySchema } from "@/api/handlers/flows/schema";
 import {
+  FLOW_DEFINITION_NAME_MAX_CHARS,
   flowDefinitionInputSchema,
   MAX_FLOW_STEPS,
 } from "@/api/lib/flows/flow-types";
@@ -127,5 +130,31 @@ describe("flowDefinitionInputSchema normalization", () => {
     if (result.success) {
       expect(result.output.name).toBe("Spaced");
     }
+  });
+});
+
+// The route contract (TypeBox) and the authoritative parse (valibot) are two
+// layers over the same body. They agree only because both read the bounds from
+// `flow-types.ts`; a literal restated in either layer would make the effective
+// bound the lower of the two, reported by whichever layer runs first.
+describe("flow definition bounds are shared across both layers", () => {
+  const nameOf = (length: number) => "a".repeat(length);
+
+  test("both layers accept a name at the cap", () => {
+    const definition = baseDefinition({
+      name: nameOf(FLOW_DEFINITION_NAME_MAX_CHARS),
+    });
+
+    expect(Value.Check(flowDefinitionBodySchema, definition)).toBe(true);
+    expect(parse(definition).success).toBe(true);
+  });
+
+  test("both layers reject a name one character over it", () => {
+    const definition = baseDefinition({
+      name: nameOf(FLOW_DEFINITION_NAME_MAX_CHARS + 1),
+    });
+
+    expect(Value.Check(flowDefinitionBodySchema, definition)).toBe(false);
+    expect(parse(definition).success).toBe(false);
   });
 });
