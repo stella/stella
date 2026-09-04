@@ -654,6 +654,7 @@ jobs:
         env:
           AFFECTED_FLAG: ${{ steps.affected.outputs.flag }}
         run: |
+          bun run format:guard
           args=()
           [[ -z "$AFFECTED_FLAG" ]] || args+=("$AFFECTED_FLAG")
           bun --bun turbo run format "${args[@]}" -- --check

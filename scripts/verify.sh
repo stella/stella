@@ -74,6 +74,7 @@ run_step() {
 run_format() {
   # Call turbo directly: the package `format` scripts take `--check`
   # after `--`, so the affected flag must land before it.
+  bun run format:guard || return 1
   if [[ -n "$affected_flag" ]]; then
     bun --bun turbo run format "$affected_flag" -- --check
   else
