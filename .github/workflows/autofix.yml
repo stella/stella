@@ -57,6 +57,26 @@ jobs:
           scripts/dependabot-empty-changeset.ts
           scripts/changeset-guard.ts
           scripts/changeset-policy.json
+          scripts/check-resolution-ranges.ts
+          scripts/check-resolutions-only-change.ts
+          scripts/fix-resolution-ranges.ts
+          scripts/json-text-edit.ts
+          scripts/resolution-ranges.ts
+
+      # A bump can move a dependent's declared floor above a root `resolutions`
+      # pin. bun applies the pin anyway, so the graph installs and only breaks
+      # at build/runtime; the resolution-range guard fails the PR for it. The
+      # fixer raises each pin to the lowest version every dependent accepts,
+      # re-resolving bun.lock between passes so a floor that only the refreshed
+      # lockfile exposes is repaired too, and fails (non-zero) on a conflict no
+      # version satisfies or a cascade still unresolved at the pass cap.
+      - name: Raise resolutions to their dependents' floors
+        run: >-
+          bun --no-install --no-env-file scripts/fix-resolution-ranges.ts
+          --max-passes 4
+
+      - name: Resolution range guard
+        run: bun --no-install --no-env-file scripts/check-resolution-ranges.ts
 
       - name: Add missing empty dev dependency changeset
         env:
@@ -78,10 +98,10 @@ jobs:
             exit 1
           fi
 
-          unexpected_tracked="$(git diff --name-only "$HEAD_SHA" -- . ':(exclude)bun.lock' ":(exclude)$EMPTY_CHANGESET_PATH")"
+          unexpected_tracked="$(git diff --name-only "$HEAD_SHA" -- . ':(exclude)bun.lock' ':(exclude)package.json' ":(exclude)$EMPTY_CHANGESET_PATH")"
           unexpected_untracked="$(git ls-files --others --exclude-standard -- . ":(exclude)$EMPTY_CHANGESET_PATH")"
           if [[ -n "${unexpected_tracked}${unexpected_untracked}" ]]; then
-            echo "::error::Autofix changed files outside bun.lock and $EMPTY_CHANGESET_PATH."
+            echo "::error::Autofix changed files outside bun.lock, package.json and $EMPTY_CHANGESET_PATH."
             git status --short
             exit 1
           fi
@@ -92,7 +112,9 @@ jobs:
             exit 1
           fi
 
-          git diff --check -- bun.lock
+          bun --no-install --no-env-file scripts/check-resolutions-only-change.ts --ref "$HEAD_SHA"
+
+          git diff --check -- bun.lock package.json
 
       - name: Push autofixes
         uses: autofix-ci/action@c5b2d67aa2274e7b5a18224e8171550871fc7e4a # v1.3.4
