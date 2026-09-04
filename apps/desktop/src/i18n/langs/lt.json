@@ -119,6 +119,7 @@
     "duplicateItem": "Dubliuoti iškarpą",
     "editItem": "Redaguoti iškarpą",
     "emptyDescription": "Nukopijuokite tekstą arba paveikslėlį bet kurioje programoje ir jis pasirodys čia.",
+    "emptyDescriptionTextOnly": "Nukopijuokite tekstą bet kurioje programoje ir jis pasirodys čia.",
     "emptyTitle": "Iškarpinė paruošta",
     "encryptedHistory": "Istorija šiame įrenginyje užšifruota",
     "errorPaste": "Šio elemento nukopijuoti nepavyko.",

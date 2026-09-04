@@ -119,6 +119,7 @@
     "duplicateItem": "Clip duplizieren",
     "editItem": "Clip bearbeiten",
     "emptyDescription": "Kopieren Sie Text oder ein Bild in einer beliebigen App. Der Inhalt erscheint dann hier.",
+    "emptyDescriptionTextOnly": "Kopieren Sie Text in einer beliebigen App. Der Inhalt erscheint dann hier.",
     "emptyTitle": "Ihre Zwischenablage ist bereit",
     "encryptedHistory": "Der Verlauf ist auf diesem Gerät verschlüsselt",
     "errorPaste": "Dieser Eintrag konnte nicht kopiert werden.",

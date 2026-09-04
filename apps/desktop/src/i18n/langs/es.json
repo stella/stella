@@ -119,6 +119,7 @@
     "duplicateItem": "Duplicar recorte",
     "editItem": "Editar clip",
     "emptyDescription": "Copia texto o una imagen en cualquier aplicación y aparecerá aquí.",
+    "emptyDescriptionTextOnly": "Copia texto en cualquier aplicación y aparecerá aquí.",
     "emptyTitle": "Tu portapapeles está listo",
     "encryptedHistory": "El historial está cifrado en este dispositivo",
     "errorPaste": "No se pudo copiar este elemento.",

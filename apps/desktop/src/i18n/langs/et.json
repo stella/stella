@@ -119,6 +119,7 @@
     "duplicateItem": "Dubleeri väljalõige",
     "editItem": "Muuda lõiget",
     "emptyDescription": "Kopeeri tekst või pilt mis tahes rakenduses ja see ilmub siia.",
+    "emptyDescriptionTextOnly": "Kopeeri tekst mis tahes rakenduses ja see ilmub siia.",
     "emptyTitle": "Lõikelaud on valmis",
     "encryptedHistory": "Ajalugu on selles seadmes krüpteeritud",
     "errorPaste": "Seda kirjet ei saanud kopeerida.",

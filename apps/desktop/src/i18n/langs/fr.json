@@ -119,6 +119,7 @@
     "duplicateItem": "Dupliquer l’extrait",
     "editItem": "Modifier l’extrait",
     "emptyDescription": "Copiez du texte ou une image dans n’importe quelle application. Le contenu apparaîtra ici.",
+    "emptyDescriptionTextOnly": "Copiez du texte dans n’importe quelle application. Le contenu apparaîtra ici.",
     "emptyTitle": "Votre presse-papiers est prêt",
     "encryptedHistory": "L’historique est chiffré sur cet appareil",
     "errorPaste": "Cet élément n’a pas pu être copié.",

@@ -119,6 +119,7 @@
     "duplicateItem": "Duplikuj wycinek",
     "editItem": "Edytuj wycinek",
     "emptyDescription": "Skopiuj tekst lub obraz w dowolnej aplikacji, a pojawi się tutaj.",
+    "emptyDescriptionTextOnly": "Skopiuj tekst w dowolnej aplikacji, a pojawi się tutaj.",
     "emptyTitle": "Schowek jest gotowy",
     "encryptedHistory": "Historia jest zaszyfrowana na tym urządzeniu",
     "errorPaste": "Nie udało się skopiować tego elementu.",

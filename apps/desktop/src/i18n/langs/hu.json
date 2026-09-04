@@ -119,6 +119,7 @@
     "duplicateItem": "Kivágat másolata",
     "editItem": "Elem szerkesztése",
     "emptyDescription": "Másoljon szöveget vagy képet bármely alkalmazásban, és az itt fog megjelenni.",
+    "emptyDescriptionTextOnly": "Másoljon szöveget bármely alkalmazásban, és az itt fog megjelenni.",
     "emptyTitle": "A vágólap készen áll",
     "encryptedHistory": "Az előzmények titkosítva vannak ezen az eszközön",
     "errorPaste": "Ezt az elemet nem sikerült másolni.",

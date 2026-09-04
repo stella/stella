@@ -189,6 +189,8 @@ const PRIMARY_MODIFIER_LABEL = navigator.userAgent.includes("Mac")
 const CLIPBOARD_SHORTCUT_LABEL = navigator.userAgent.includes("Mac")
   ? "⌘⇧V"
   : "Ctrl+Shift+V";
+const IMAGE_CLIPBOARD_CAPTURE_SUPPORTED =
+  !navigator.userAgent.includes("Linux");
 
 const EMPTY_SNAPSHOT = {
   captureStatus: "active",
@@ -318,6 +320,7 @@ const ClipboardCard = ({
     ? { "--clipboard-source-accent": accent }
     : undefined;
   const rendersHtml = item.type === "formattedText" && !query;
+  const fallbackName = item.type === "image" ? t("image") : t("unnamedClip");
   const previewClassName = cn(
     "text-foreground line-clamp-[8] text-sm leading-5 text-pretty wrap-break-word",
     // HTML collapses its source whitespace; only plain text (and <pre>) keeps it.
@@ -514,7 +517,7 @@ const ClipboardCard = ({
             type="button"
           >
             <span className="truncate" dir="auto">
-              {item.name ?? t("unnamedClip")}
+              {item.name ?? fallbackName}
             </span>
             <PencilIcon
               aria-hidden="true"
@@ -1962,7 +1965,11 @@ const ClipboardApp = () => {
             <p className="text-foreground/82 max-w-sm text-sm font-medium text-balance">
               {filterQuery || activeGroupId
                 ? emptyStateTitle
-                : t("emptyDescription")}
+                : t(
+                    IMAGE_CLIPBOARD_CAPTURE_SUPPORTED
+                      ? "emptyDescription"
+                      : "emptyDescriptionTextOnly",
+                  )}
             </p>
           </div>
         ) : (

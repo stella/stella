@@ -119,6 +119,7 @@
     "duplicateItem": "Duplikovať výstrižok",
     "editItem": "Upraviť klip",
     "emptyDescription": "Skopírujte text alebo obrázok v ľubovoľnej aplikácii a zobrazí sa tu.",
+    "emptyDescriptionTextOnly": "Skopírujte text v ľubovoľnej aplikácii a zobrazí sa tu.",
     "emptyTitle": "Schránka je pripravená",
     "encryptedHistory": "História je v tomto zariadení šifrovaná",
     "errorPaste": "Túto položku sa nepodarilo skopírovať.",

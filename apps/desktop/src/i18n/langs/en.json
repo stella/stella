@@ -121,6 +121,7 @@
     "duplicateItem": "Duplicate clip",
     "editItem": "Edit clip",
     "emptyDescription": "Copy text or an image in any app and it will appear here.",
+    "emptyDescriptionTextOnly": "Copy text in any app and it will appear here.",
     "emptyTitle": "Your clipboard is ready",
     "encryptedHistory": "History is encrypted on this device",
     "errorPaste": "This item could not be copied.",
