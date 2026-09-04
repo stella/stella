@@ -5411,6 +5411,8 @@ export const generatedRouteMap: RouteNode = {
                         },
                         cursor: {
                           maxLength: 512,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
                           type: "string",
                         },
                         type: {
@@ -6357,6 +6359,8 @@ export const generatedRouteMap: RouteNode = {
                       properties: {
                         cursor: {
                           maxLength: 512,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
                           type: "string",
                         },
                         search: {
@@ -12068,6 +12072,8 @@ export const generatedRouteMap: RouteNode = {
                         },
                         cursor: {
                           maxLength: 512,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
                           type: "string",
                         },
                       },
@@ -12124,6 +12130,8 @@ export const generatedRouteMap: RouteNode = {
                         },
                         cursor: {
                           maxLength: 512,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
                           type: "string",
                         },
                       },
@@ -14889,6 +14897,8 @@ export const generatedRouteMap: RouteNode = {
                         },
                         cursor: {
                           maxLength: 512,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
                           type: "string",
                         },
                         userId: {
@@ -17076,6 +17086,8 @@ export const generatedRouteMap: RouteNode = {
                         },
                         cursor: {
                           maxLength: 512,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
                           type: "string",
                         },
                       },
@@ -17256,6 +17268,8 @@ export const generatedRouteMap: RouteNode = {
                         },
                         cursor: {
                           maxLength: 512,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
                           type: "string",
                         },
                         status: {
@@ -19905,6 +19919,8 @@ export const generatedRouteMap: RouteNode = {
                         },
                         cursor: {
                           maxLength: 512,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
                           type: "string",
                         },
                       },
@@ -20176,6 +20192,8 @@ export const generatedRouteMap: RouteNode = {
                         },
                         cursor: {
                           maxLength: 512,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
                           type: "string",
                         },
                       },
@@ -20320,6 +20338,8 @@ export const generatedRouteMap: RouteNode = {
                         },
                         cursor: {
                           maxLength: 512,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
                           type: "string",
                         },
                       },
@@ -20484,6 +20504,8 @@ export const generatedRouteMap: RouteNode = {
                         },
                         cursor: {
                           maxLength: 512,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
                           type: "string",
                         },
                       },
@@ -20865,6 +20887,8 @@ export const generatedRouteMap: RouteNode = {
                         },
                         cursor: {
                           maxLength: 512,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
                           type: "string",
                         },
                       },
@@ -21179,6 +21203,8 @@ export const generatedRouteMap: RouteNode = {
                         },
                         cursor: {
                           maxLength: 512,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
                           type: "string",
                         },
                         status: {
@@ -27801,6 +27827,8 @@ export const generatedRouteMap: RouteNode = {
                         },
                         cursor: {
                           maxLength: 512,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
                           type: "string",
                         },
                       },
@@ -27987,6 +28015,8 @@ export const generatedRouteMap: RouteNode = {
                         },
                         cursor: {
                           maxLength: 512,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
                           type: "string",
                         },
                       },
@@ -28427,6 +28457,8 @@ export const generatedRouteMap: RouteNode = {
                       properties: {
                         cursor: {
                           maxLength: 512,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
                           type: "string",
                         },
                         limit: {
@@ -30050,6 +30082,8 @@ export const generatedRouteMap: RouteNode = {
                         },
                         cursor: {
                           maxLength: 512,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
                           type: "string",
                         },
                       },
@@ -31670,6 +31704,8 @@ export const generatedRouteMap: RouteNode = {
                         },
                         cursor: {
                           maxLength: 512,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
                           type: "string",
                         },
                       },
@@ -34676,6 +34712,8 @@ export const generatedRouteMap: RouteNode = {
                         },
                         cursor: {
                           maxLength: 128,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
                           type: "string",
                         },
                         locale: {
@@ -36149,6 +36187,8 @@ export const generatedRouteMap: RouteNode = {
                         },
                         cursor: {
                           maxLength: 512,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
                           type: "string",
                         },
                         limit: {
@@ -37706,6 +37746,8 @@ export const generatedRouteMap: RouteNode = {
                         },
                         cursor: {
                           maxLength: 512,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
                           type: "string",
                         },
                         userId: {
@@ -42385,6 +42427,8 @@ export const generatedRouteMap: RouteNode = {
                         },
                         cursor: {
                           maxLength: 512,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
                           type: "string",
                         },
                       },
