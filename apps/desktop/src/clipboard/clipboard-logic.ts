@@ -150,7 +150,10 @@ export const CLIPBOARD_CARD_PREVIEW_MAX_CHARACTERS = 1000;
 
 export type ClipboardSearchPreview = { text: string; truncated: boolean };
 
-type ClipboardSearchPreviewSource = Pick<ClipboardItem, "plainText">;
+type ClipboardSearchPreviewSource = {
+  name?: string | null;
+  plainText?: string;
+};
 
 /**
  * Folding a 64 KiB clip character by character is the expensive step of the
@@ -168,7 +171,7 @@ const foldedPlainText = (item: ClipboardSearchPreviewSource) => {
   if (cached) {
     return cached;
   }
-  const folded = foldSearchMatchTextWithOffsets(item.plainText);
+  const folded = foldSearchMatchTextWithOffsets(item.plainText ?? "");
   foldedPlainTextCache.set(item, folded);
   return folded;
 };
@@ -182,7 +185,7 @@ export const clipboardSearchPreviewText = (
   item: ClipboardSearchPreviewSource,
   query: string,
 ): ClipboardSearchPreview => {
-  const { plainText: text } = item;
+  const text = item.plainText ?? "";
   const cap = (value: string) =>
     value.slice(0, CLIPBOARD_CARD_PREVIEW_MAX_CHARACTERS);
   const terms = clipboardQueryTerms(query);
@@ -317,7 +320,7 @@ const clipboardSearchableText = (item: ClipboardItem) => {
     return cached;
   }
   const searchableText = foldSearchMatchText(
-    `${item.name ?? ""}\n${item.plainText}`,
+    `${item.name ?? ""}\n${item.type === "image" ? "" : item.plainText}`,
   );
   searchableTextCache.set(item, searchableText);
   return searchableText;

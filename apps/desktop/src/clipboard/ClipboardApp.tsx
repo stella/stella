@@ -31,6 +31,7 @@ import {
   FileTextIcon,
   FolderInputIcon,
   FolderPlusIcon,
+  ImageIcon,
   KeyboardIcon,
   LockKeyholeIcon,
   PauseIcon,
@@ -113,6 +114,7 @@ import {
   measureClipboardSnapshotRequest,
   observeClipboardReopens,
 } from "./clipboard-startup-timing";
+import { CLIPBOARD_GROUP_ACCENTS } from "./clipboard-style";
 import {
   CLIPBOARD_RETENTIONS,
   isClipboardCopyError,
@@ -128,6 +130,7 @@ import type {
   ClipboardSnapshot,
   ClipboardSourceAppVisual,
 } from "./clipboard-types";
+import { ClipboardImagePreview } from "./ClipboardImagePreview";
 import { useRailViewport } from "./use-rail-viewport";
 
 const CLIPBOARD_GROUP_COLORS = [
@@ -138,15 +141,6 @@ const CLIPBOARD_GROUP_COLORS = [
   "rose",
   "violet",
 ] as const satisfies readonly ClipboardGroupColor[];
-
-const CLIPBOARD_GROUP_ACCENTS = {
-  amber: "var(--color-amber-400)",
-  blue: "var(--color-blue-400)",
-  emerald: "var(--color-emerald-400)",
-  gray: "var(--color-neutral-400)",
-  rose: "var(--color-rose-400)",
-  violet: "var(--color-violet-400)",
-} as const satisfies Record<ClipboardGroupColor, string>;
 
 const STELLA_WEB_APP_URL = "https://my.stll.app";
 const MAX_GROUP_NAME_CHARACTERS = 64;
@@ -326,51 +320,69 @@ const ClipboardCard = ({
       ? "[&_blockquote]:border-s-2 [&_blockquote]:ps-3 [&_code]:font-mono [&_li]:ms-4 [&_ol]:list-decimal [&_pre]:whitespace-pre-wrap [&_strong]:font-semibold [&_ul]:list-disc"
       : "whitespace-pre-wrap",
   );
-  let previewContent: ReactNode = (
-    <div className={previewClassName} dir="auto">
-      {item.plainText.slice(0, CLIPBOARD_CARD_PREVIEW_MAX_CHARACTERS)}
-    </div>
-  );
-  if (rendersHtml) {
+  let previewContent: ReactNode;
+  if (item.type === "image") {
     previewContent = (
-      <div
-        className={previewClassName}
-        dangerouslySetInnerHTML={{
-          // safe-html: Rust ammonia::Builder removes active content and permits only the semantic formatting tags declared in clipboard.rs before IPC.
-          __html: item.html,
-        }}
-        dir="auto"
-      />
-    );
-  }
-  if (query) {
-    const searchPreview = clipboardSearchPreviewText(item, query);
-    const highlightedText = highlightClipboardText(searchPreview.text, query);
-    previewContent = (
-      <div className={previewClassName} dir="auto">
-        {searchPreview.truncated ? (
-          <span aria-hidden="true" className="text-muted-foreground">
-            {"… "}
-          </span>
-        ) : null}
-        {highlightedText.map((segment, segmentIndex) =>
-          segment.match ? (
-            <mark
-              className="bg-foreground/16 text-foreground rounded-[3px] box-decoration-clone px-0.5"
-              key={`${segmentIndex}-${segment.text}`}
-            >
-              {segment.text}
-            </mark>
-          ) : (
-            <span key={`${segmentIndex}-${segment.text}`}>{segment.text}</span>
-          ),
-        )}
+      <div className="size-full" dir="auto">
+        <ClipboardImagePreview
+          alt={item.name ?? t("image")}
+          id={item.id}
+          surface="timeline"
+        />
       </div>
     );
+  } else {
+    previewContent = (
+      <div className={previewClassName} dir="auto">
+        {item.plainText.slice(0, CLIPBOARD_CARD_PREVIEW_MAX_CHARACTERS)}
+      </div>
+    );
+    if (rendersHtml) {
+      previewContent = (
+        <div
+          className={previewClassName}
+          dangerouslySetInnerHTML={{
+            // safe-html: Rust ammonia::Builder removes active content and permits only the semantic formatting tags declared in clipboard.rs before IPC.
+            __html: item.html,
+          }}
+          dir="auto"
+        />
+      );
+    }
+    if (query) {
+      const searchPreview = clipboardSearchPreviewText(item, query);
+      const highlightedText = highlightClipboardText(searchPreview.text, query);
+      previewContent = (
+        <div className={previewClassName} dir="auto">
+          {searchPreview.truncated ? (
+            <span aria-hidden="true" className="text-muted-foreground">
+              {"… "}
+            </span>
+          ) : null}
+          {highlightedText.map((segment, segmentIndex) =>
+            segment.match ? (
+              <mark
+                className="bg-foreground/16 text-foreground rounded-[3px] box-decoration-clone px-0.5"
+                key={`${segmentIndex}-${segment.text}`}
+              >
+                {segment.text}
+              </mark>
+            ) : (
+              <span key={`${segmentIndex}-${segment.text}`}>{segment.text}</span>
+            ),
+          )}
+        </div>
+      );
+    }
   }
   let metadataIcon: ReactNode = (
     <FileTextIcon aria-hidden="true" className="text-muted-foreground size-6" />
   );
+  if (item.type === "image") {
+    metadataIcon = (
+      <ImageIcon aria-hidden="true" className="text-muted-foreground size-6" />
+    );
+  }
   if (groupName) {
     metadataIcon = (
       <TagsIcon aria-hidden="true" className="text-muted-foreground size-6" />
@@ -429,7 +441,9 @@ const ClipboardCard = ({
       style={sourceStyle}
     >
       <button
-        aria-label={t("copyItem", { number: index + 1 })}
+        aria-label={t(item.type === "image" ? "copyImage" : "copyItem", {
+          number: index + 1,
+        })}
         className="flex min-h-0 flex-1 flex-col self-stretch text-start focus-visible:outline-none"
         data-clipboard-card-trigger=""
         onClick={() => onCopy(item)}
@@ -450,7 +464,9 @@ const ClipboardCard = ({
             groupName ??
             (item.type === "formattedText"
               ? t("formattedText")
-              : t("plainText"))
+              : item.type === "image"
+                ? t("image")
+                : t("plainText"))
           }
         >
           {metadataIcon}

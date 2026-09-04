@@ -1,3 +1,4 @@
+use base64::{Engine as _, engine::general_purpose::STANDARD};
 use serde::Serialize;
 use std::{
   sync::{Arc, Mutex},
@@ -9,7 +10,7 @@ use crate::{
   clipboard::{
     ClipboardAppState, ClipboardCaptureStatus, ClipboardGroup, ClipboardGroupColor,
     ClipboardGroupDeletionMode, ClipboardItem, ClipboardRetention, ClipboardSnapshot,
-    write_item,
+    ClipboardSourceAppVisual, write_item,
   },
   clipboard_window::{self, ClipboardStartupTrace},
   desktop_telemetry::{
@@ -29,6 +30,7 @@ pub type ClipboardEditorState = Arc<Mutex<Option<String>>>;
 pub struct ClipboardEditorContext {
   groups: Vec<ClipboardGroup>,
   item: ClipboardItem,
+  source_app_visual: Option<ClipboardSourceAppVisual>,
 }
 
 fn lock_error() -> String {
@@ -295,12 +297,24 @@ pub fn clipboard_get_editor_context(
   let mut manager = state.lock().map_err(|_| lock_error())?;
   manager.prune_expired(chrono::Utc::now())?;
   let item = manager
-    .item(&id)
+    .item_for_webview(&id)
     .ok_or_else(|| ITEM_NOT_FOUND_ERROR.to_string())?;
+  let source_app_visual = manager.source_app_visual(&item);
   Ok(ClipboardEditorContext {
-    groups: manager.snapshot().groups,
-    item: item.for_webview(),
+    groups: manager.groups().to_vec(),
+    item,
+    source_app_visual,
   })
+}
+
+#[tauri::command]
+pub fn clipboard_get_image_preview(
+  id: String,
+  state: State<'_, ClipboardAppState>,
+) -> Result<String, String> {
+  let manager = state.lock().map_err(|_| lock_error())?;
+  let preview = manager.image_preview(&id)?;
+  Ok(format!("data:image/png;base64,{}", STANDARD.encode(preview)))
 }
 
 #[tauri::command]
@@ -349,15 +363,19 @@ fn write_history_item(
   id: &str,
 ) -> Result<(), ClipboardCopyError> {
   let copy_error = |message: String| ClipboardCopyError::Copy { message };
-  let item = {
+  let (image, item) = {
     let mut manager = state.lock().map_err(|_| copy_error(lock_error()))?;
     let item = manager
       .item(id)
       .ok_or_else(|| copy_error(ITEM_NOT_FOUND_ERROR.to_string()))?;
+    let image = matches!(&item, ClipboardItem::Image { .. })
+      .then(|| manager.image(id))
+      .transpose()
+      .map_err(copy_error)?;
     manager.suppress_next(&item, false);
-    item
+    (image, item)
   };
-  if let Err(error) = write_item(&item, false) {
+  if let Err(error) = write_item(&item, image.as_deref(), false) {
     if let Ok(mut manager) = state.lock() {
       manager.clear_suppression();
     }

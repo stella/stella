@@ -32,6 +32,7 @@ macro_rules! with_stella_commands {
       clipboard_commands::clipboard_set_item_name => "clipboard_set_item_name",
       clipboard_commands::clipboard_open_editor => "clipboard_open_editor",
       clipboard_commands::clipboard_get_editor_context => "clipboard_get_editor_context",
+      clipboard_commands::clipboard_get_image_preview => "clipboard_get_image_preview",
       clipboard_commands::clipboard_save_editor_item => "clipboard_save_editor_item",
       clipboard_commands::clipboard_close_editor => "clipboard_close_editor",
       clipboard_commands::clipboard_copy_item => "clipboard_copy_item",

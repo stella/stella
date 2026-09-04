@@ -8,6 +8,7 @@
     "allow-is-autostart-enabled",
     "allow-set-autostart",
     "allow-clipboard-get-snapshot",
+    "allow-clipboard-get-image-preview",
     "allow-clipboard-complete-welcome",
     "allow-clipboard-set-capture-status",
     "allow-clipboard-set-retention",
