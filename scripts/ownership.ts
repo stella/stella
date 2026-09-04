@@ -34,7 +34,10 @@ export type OwnershipEnforcement =
   | {
       readonly kind: "global-member";
       readonly object: string;
-      readonly property: string;
+      // The member chain below `object`, e.g. `["clipboard", "writeText"]`
+      // for `navigator.clipboard.writeText`. A sibling member of the same
+      // object is a different capability and is not matched.
+      readonly path: readonly string[];
       readonly allowed: readonly AllowedFile[];
     };
 
@@ -188,17 +191,19 @@ export const OWNERSHIP = [
   },
   {
     id: "clipboard-write",
-    capability: "Writing text to the system clipboard from the browser",
+    capability: "Writing text to the system clipboard in the web client",
     owner: ["apps/web/src/lib/copy-to-clipboard.ts"],
     summary:
       "`navigator.clipboard.writeText` rejects on a denied permission or an " +
       "insecure context, and every call site owes the user that outcome. The " +
       "owner wraps it in a `Result`, so callers branch on the failure instead " +
-      "of each growing its own try/catch.",
+      "of each growing its own try/catch. `apps/landing` is outside the rule's " +
+      "reach, because oxlint does not scan `.astro` files, so its inline " +
+      "scripts keep their own clipboard writes.",
     enforcement: {
       kind: "global-member",
       object: "navigator",
-      property: "clipboard",
+      path: ["clipboard", "writeText"],
       allowed: [],
     },
   },
@@ -327,8 +332,8 @@ Before adding a helper, module, or schema, look for the capability below and in
 implementation is correct.
 
 Rows whose enforcement is not \`none\` are also read by the
-\`confine-owner/confine-owner\` lint rule, which reports any file outside the
-owner and its \`allowed\` list. Add a bypass by adding an \`allowed\` entry with a
+\`confine-owner/confine-owner\` lint rule, which reports any linted file outside
+the owner and its \`allowed\` list. Add a bypass by adding an \`allowed\` entry with a
 reason, in the same table.
 `;
 
@@ -344,7 +349,7 @@ const enforcementCell = (enforcement: OwnershipEnforcement): string => {
       return `import \`${enforcement.specifiers.join("`, `")}\``;
     }
     case "global-member": {
-      return `global \`${enforcement.object}.${enforcement.property}\``;
+      return `global \`${[enforcement.object, ...enforcement.path].join(".")}\``;
     }
     default: {
       const unhandled: never = enforcement;

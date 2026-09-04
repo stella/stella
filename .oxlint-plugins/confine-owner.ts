@@ -14,8 +14,10 @@
 // Detection boundary: syntax only. An `import` row matches an import source
 // equal to a listed specifier or ending in its final segment (the `@/`, deep
 // relative, and `.ts` spellings of one module). A `global-member` row matches
-// `<object>.<property>` on the global, including the optional-chained form and
-// the `window.` / `globalThis.` / `self.` prefixes. A value reached through an
+// the full member chain `<object>.<path...>` on the global, including the
+// optional-chained form and the `window.` / `globalThis.` / `self.` prefixes,
+// so a sibling member of the same object (`navigator.clipboard.readText` next
+// to `navigator.clipboard.writeText`) is untouched. A value reached through an
 // alias, a re-export, or a computed member access is out of scope.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
@@ -42,7 +44,7 @@ type GlobalMemberEntry = {
   owner: string;
   paths: readonly string[];
   object: string;
-  property: string;
+  memberPath: readonly string[];
 };
 
 const stringsFrom = (value: unknown): readonly string[] =>
@@ -111,11 +113,11 @@ const configuredEntries = (context: {
     }
     if (kind === "global-member") {
       const object = Reflect.get(enforcement, "object");
-      const property = Reflect.get(enforcement, "property");
-      if (typeof object !== "string" || typeof property !== "string") {
+      const memberPath = stringsFrom(Reflect.get(enforcement, "path"));
+      if (typeof object !== "string" || memberPath.length === 0) {
         continue;
       }
-      globalMemberEntries.push({ id, owner, paths, object, property });
+      globalMemberEntries.push({ id, owner, paths, object, memberPath });
     }
   }
 
@@ -154,6 +156,32 @@ const isOwnedSpecifier = (
 const isGlobalObject = (node: unknown, object: string): boolean =>
   isIdentifier(node, object) ||
   GLOBAL_ROOTS.some((root) => isMemberAccess(node, root, object));
+
+// Walk the member chain from its outermost property inwards: the node under
+// test must spell every listed segment, in order, over the global object.
+// Optional chaining changes only the `optional` flag, so the same walk covers
+// `navigator?.clipboard?.writeText`.
+const isOwnedMemberPath = (
+  node: unknown,
+  object: string,
+  memberPath: readonly string[],
+): boolean => {
+  let current: unknown = node;
+  for (let index = memberPath.length - 1; index >= 0; index -= 1) {
+    const segment = memberPath[index];
+    if (
+      segment === undefined ||
+      !isAstNode(current) ||
+      current.type !== "MemberExpression" ||
+      current.computed === true ||
+      !isIdentifier(current.property, segment)
+    ) {
+      return false;
+    }
+    current = current.object;
+  }
+  return isGlobalObject(current, object);
+};
 
 export default eslintCompatPlugin({
   meta: { name: "confine-owner" },
@@ -224,10 +252,7 @@ export default eslintCompatPlugin({
               return;
             }
             for (const entry of activeGlobalMembers) {
-              if (
-                isIdentifier(node.property, entry.property) &&
-                isGlobalObject(node.object, entry.object)
-              ) {
+              if (isOwnedMemberPath(node, entry.object, entry.memberPath)) {
                 context.report({
                   node,
                   messageId: "unownedUse",

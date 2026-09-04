@@ -11,7 +11,10 @@ import { createRedisClient } from "@/api/lib/redis-client";
 import type { createBullMqConnection } from "@/api/lib/redis-client";
 
 declare const navigator: {
-  clipboard: { writeText: (text: string) => Promise<void> };
+  clipboard: {
+    readText: () => Promise<string>;
+    writeText: (text: string) => Promise<void>;
+  };
 };
 declare const window: {
   navigator: { clipboard: { writeText: (text: string) => Promise<void> } };
@@ -30,6 +33,10 @@ export const copyThroughWindow = async (text: string) => {
   // oxlint-disable-next-line confine-owner/confine-owner -- fixture proves the `window.` spelling of the global is rejected
   await window.navigator.clipboard.writeText(text);
 };
+
+// Accepted: reading the clipboard is a different capability, so the sibling
+// member of the same object carries no directive and must not be reported.
+export const pasteDirectly = async () => await navigator.clipboard.readText();
 
 // Accepted: an unrelated member access that shares neither half of the pair.
 export const readTitle = (page: { clipboard: string }) => page.clipboard;

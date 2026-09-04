@@ -6,7 +6,7 @@ import {
   useQueryClient,
   useSuspenseQuery,
 } from "@tanstack/react-query";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { renderSVG } from "uqr";
 import { useTranslations } from "use-intl";
 

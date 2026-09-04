@@ -26,6 +26,21 @@ describe("renderOwnershipDocument", () => {
     );
   });
 
+  test("renders a global-member row as its full member chain", () => {
+    expect(
+      renderOwnershipDocument([
+        entry({
+          enforcement: {
+            kind: "global-member",
+            object: "navigator",
+            path: ["clipboard", "writeText"],
+            allowed: [],
+          },
+        }),
+      ]),
+    ).toContain("global `navigator.clipboard.writeText`");
+  });
+
   test("renders one row per entry, keyed by id", () => {
     const rendered = renderOwnershipDocument(OWNERSHIP);
     for (const { id } of OWNERSHIP) {
