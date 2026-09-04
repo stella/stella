@@ -312,8 +312,11 @@ pub fn clipboard_get_image_preview(
   id: String,
   state: State<'_, ClipboardAppState>,
 ) -> Result<String, String> {
-  let manager = state.lock().map_err(|_| lock_error())?;
-  let preview = manager.image_preview(&id)?;
+  let preview = {
+    let manager = state.lock().map_err(|_| lock_error())?;
+    manager.image_preview(&id)?
+  }
+  .load()?;
   Ok(format!(
     "data:image/png;base64,{}",
     STANDARD.encode(preview)
@@ -367,7 +370,7 @@ fn write_history_item(
 ) -> Result<(), ClipboardCopyError> {
   let copy_error = |message: String| ClipboardCopyError::Copy { message };
   let (image, item) = {
-    let mut manager = state.lock().map_err(|_| copy_error(lock_error()))?;
+    let manager = state.lock().map_err(|_| copy_error(lock_error()))?;
     let item = manager
       .item(id)
       .ok_or_else(|| copy_error(ITEM_NOT_FOUND_ERROR.to_string()))?;
@@ -375,9 +378,16 @@ fn write_history_item(
       .then(|| manager.image(id))
       .transpose()
       .map_err(copy_error)?;
-    manager.suppress_next(&item, false);
     (image, item)
   };
+  let image = image
+    .map(|image| image.load())
+    .transpose()
+    .map_err(copy_error)?;
+  state
+    .lock()
+    .map_err(|_| copy_error(lock_error()))?
+    .suppress_next(&item, false);
   if let Err(error) = write_item(&item, image.as_deref(), false) {
     if let Ok(mut manager) = state.lock() {
       manager.clear_suppression();

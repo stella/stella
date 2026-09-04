@@ -5,7 +5,7 @@ use aes_gcm::{
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
-  collections::{HashMap, HashSet},
+  collections::HashSet,
   fs,
   path::{Path, PathBuf},
 };
@@ -31,7 +31,7 @@ pub enum ClipboardImagePersistStatus {
   Existing,
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct ClipboardImageValidation {
   pub byte_size: usize,
   pub checksum: String,
@@ -45,6 +45,7 @@ struct EncryptedClipboardEnvelope {
   version: u8,
 }
 
+#[derive(Clone)]
 pub struct ClipboardStore {
   key: [u8; 32],
   path: PathBuf,
@@ -306,22 +307,21 @@ impl ClipboardStore {
     Ok(())
   }
 
-  pub fn validate_images(
+  pub fn validate_image(
     &self,
-    images: &HashMap<String, ClipboardImageValidation>,
+    blob_id: &str,
+    validation: &ClipboardImageValidation,
     max_preview_bytes: usize,
   ) -> Result<(), String> {
-    for (blob_id, validation) in images {
-      let image = self.load_image(blob_id, validation.byte_size)?;
-      if image.len() != validation.byte_size
-        || hex::encode(Sha256::digest(&image)) != validation.checksum
-      {
-        return Err("clipboard image blob does not match its metadata".to_string());
-      }
-      let preview = self.load_image_preview(blob_id, max_preview_bytes)?;
-      if preview.is_empty() {
-        return Err("clipboard image preview is empty".to_string());
-      }
+    let image = self.load_image(blob_id, validation.byte_size)?;
+    if image.len() != validation.byte_size
+      || hex::encode(Sha256::digest(&image)) != validation.checksum
+    {
+      return Err("clipboard image blob does not match its metadata".to_string());
+    }
+    let preview = self.load_image_preview(blob_id, max_preview_bytes)?;
+    if preview.is_empty() {
+      return Err("clipboard image preview is empty".to_string());
     }
     Ok(())
   }
@@ -612,23 +612,17 @@ mod tests {
         },
       )
       .unwrap();
-    let valid = HashMap::from([(
-      blob_id.clone(),
-      ClipboardImageValidation {
-        byte_size: image.len(),
-        checksum: hex::encode(Sha256::digest(image)),
-      },
-    )]);
+    let valid = ClipboardImageValidation {
+      byte_size: image.len(),
+      checksum: hex::encode(Sha256::digest(image)),
+    };
 
-    assert!(store.validate_images(&valid, 1024).is_ok());
-    let invalid = HashMap::from([(
-      blob_id,
-      ClipboardImageValidation {
-        byte_size: image.len(),
-        checksum: "wrong-checksum".to_string(),
-      },
-    )]);
-    assert!(store.validate_images(&invalid, 1024).is_err());
+    assert!(store.validate_image(&blob_id, &valid, 1024).is_ok());
+    let invalid = ClipboardImageValidation {
+      byte_size: image.len(),
+      checksum: "wrong-checksum".to_string(),
+    };
+    assert!(store.validate_image(&blob_id, &invalid, 1024).is_err());
     ClipboardStore::remove(&path).unwrap();
   }
 

@@ -743,6 +743,32 @@ enum ClipboardPersistence {
   DeletionOnly(std::path::PathBuf),
 }
 
+pub(crate) enum ClipboardImageRead {
+  Cached(Arc<[u8]>),
+  EncryptedImage {
+    blob_id: String,
+    store: ClipboardStore,
+  },
+  EncryptedPreview {
+    blob_id: String,
+    store: ClipboardStore,
+  },
+}
+
+impl ClipboardImageRead {
+  pub(crate) fn load(self) -> Result<Vec<u8>, String> {
+    match self {
+      Self::Cached(bytes) => Ok(bytes.to_vec()),
+      Self::EncryptedImage { blob_id, store } => {
+        store.load_image(&blob_id, MAX_ITEM_IMAGE_BYTES)
+      }
+      Self::EncryptedPreview { blob_id, store } => {
+        store.load_image_preview(&blob_id, MAX_ITEM_IMAGE_PREVIEW_BYTES)
+      }
+    }
+  }
+}
+
 impl ClipboardPersistence {
   fn status(&self) -> ClipboardPersistenceStatus {
     match self {
@@ -840,25 +866,19 @@ pub fn load_persisted() -> (ClipboardLoad, ClipboardInitTimings) {
       timings.loaded_items = Some(state.items.len());
       let changed = prune_items(&mut state.items, state.retention, Utc::now());
       let images_changed = prune_image_history(&mut state.items);
-      let live_images = match image_blob_validations(&state.items) {
-        Ok(images) => images,
-        Err(error) => {
-          tracing::warn!(error = %error, "encrypted clipboard image history is invalid");
-          return (ClipboardLoad::DeletionOnly(store_path), timings);
-        }
-      };
-      let live_blob_ids = live_images.keys().cloned().collect();
-      if let Err(error) =
-        store.validate_images(&live_images, MAX_ITEM_IMAGE_PREVIEW_BYTES)
-      {
-        tracing::warn!(error = %error, "encrypted clipboard image history is unavailable");
-        return (ClipboardLoad::DeletionOnly(store_path), timings);
-      }
-      if (changed || images_changed)
+      let invalid_images_changed = retain_valid_images(&mut state.items, &store);
+      let live_blob_ids = image_blob_ids(&state.items);
+      if (changed || images_changed || invalid_images_changed)
         && let Err(error) = store.persist(&state)
       {
-        tracing::warn!(error = %error, "expired clipboard history could not be removed");
-        return (ClipboardLoad::DeletionOnly(store_path), timings);
+        tracing::warn!(error = %error, "recovered clipboard history could not be persisted");
+        return (
+          ClipboardLoad::Encrypted {
+            store,
+            state: Some(state),
+          },
+          timings,
+        );
       }
       if let Err(error) = store.reconcile_images(&live_blob_ids) {
         tracing::warn!(error = %error, "clipboard image history could not be reconciled");
@@ -1257,7 +1277,7 @@ impl ClipboardManager {
       .cloned()
   }
 
-  pub fn image(&self, id: &str) -> Result<Vec<u8>, String> {
+  pub(crate) fn image(&self, id: &str) -> Result<ClipboardImageRead, String> {
     let item = self
       .items
       .iter()
@@ -1267,15 +1287,18 @@ impl ClipboardManager {
       return Err("clipboard item is not an image".to_string());
     };
     if let Some(image) = image {
-      return Ok(image.to_vec());
+      return Ok(ClipboardImageRead::Cached(Arc::clone(image)));
     }
     let ClipboardPersistence::Encrypted(store) = &self.persistence else {
       return Err("clipboard image is unavailable".to_string());
     };
-    store.load_image(blob_id, MAX_ITEM_IMAGE_BYTES)
+    Ok(ClipboardImageRead::EncryptedImage {
+      blob_id: blob_id.clone(),
+      store: store.clone(),
+    })
   }
 
-  pub fn image_preview(&self, id: &str) -> Result<Vec<u8>, String> {
+  pub(crate) fn image_preview(&self, id: &str) -> Result<ClipboardImageRead, String> {
     let item = self
       .items
       .iter()
@@ -1288,12 +1311,15 @@ impl ClipboardManager {
       return Err("clipboard item is not an image".to_string());
     };
     if let Some(preview) = preview {
-      return Ok(preview.to_vec());
+      return Ok(ClipboardImageRead::Cached(Arc::clone(preview)));
     }
     let ClipboardPersistence::Encrypted(store) = &self.persistence else {
       return Err("clipboard image preview is unavailable".to_string());
     };
-    store.load_image_preview(blob_id, MAX_ITEM_IMAGE_PREVIEW_BYTES)
+    Ok(ClipboardImageRead::EncryptedPreview {
+      blob_id: blob_id.clone(),
+      store: store.clone(),
+    })
   }
 
   pub fn suppress_next(&mut self, item: &ClipboardItem, plain_text_only: bool) {
@@ -1640,53 +1666,65 @@ fn image_blob_ids(items: &[ClipboardItem]) -> HashSet<String> {
     .collect()
 }
 
-fn image_blob_validations(
-  items: &[ClipboardItem],
-) -> Result<HashMap<String, ClipboardImageValidation>, String> {
-  let mut validations = HashMap::new();
-  for item in items {
-    let validation = match item {
-      ClipboardItem::Image {
-        blob_id,
-        byte_size,
-        checksum,
-        height,
-        width,
-        ..
-      } => {
-        let pixels = u64::from(*width) * u64::from(*height);
-        if *byte_size == 0
-          || *byte_size > MAX_ITEM_IMAGE_BYTES
-          || checksum.len() != 64
-          || !checksum.bytes().all(|byte| byte.is_ascii_hexdigit())
-          || *width == 0
-          || *height == 0
-          || *width > MAX_ITEM_IMAGE_DIMENSION
-          || *height > MAX_ITEM_IMAGE_DIMENSION
-          || pixels > MAX_ITEM_IMAGE_PIXELS
-        {
-          return Err("clipboard image metadata is invalid".to_string());
-        }
-        Some((
-          blob_id,
-          ClipboardImageValidation {
-            byte_size: *byte_size,
-            checksum: checksum.clone(),
-          },
-        ))
-      }
-      ClipboardItem::Text { .. } | ClipboardItem::FormattedText { .. } => None,
-    };
-    let Some((blob_id, validation)) = validation else {
-      continue;
-    };
-    if let Some(existing) = validations.insert(blob_id.clone(), validation)
-      && existing != validations[blob_id]
-    {
-      return Err("clipboard image metadata conflicts for a shared blob".to_string());
-    }
+fn image_blob_validation(
+  item: &ClipboardItem,
+) -> Result<Option<(&str, ClipboardImageValidation)>, String> {
+  let ClipboardItem::Image {
+    blob_id,
+    byte_size,
+    checksum,
+    height,
+    width,
+    ..
+  } = item
+  else {
+    return Ok(None);
+  };
+  let pixels = u64::from(*width) * u64::from(*height);
+  if *byte_size == 0
+    || *byte_size > MAX_ITEM_IMAGE_BYTES
+    || checksum.len() != 64
+    || !checksum.bytes().all(|byte| byte.is_ascii_hexdigit())
+    || *width == 0
+    || *height == 0
+    || *width > MAX_ITEM_IMAGE_DIMENSION
+    || *height > MAX_ITEM_IMAGE_DIMENSION
+    || pixels > MAX_ITEM_IMAGE_PIXELS
+  {
+    return Err("clipboard image metadata is invalid".to_string());
   }
-  Ok(validations)
+  Ok(Some((
+    blob_id,
+    ClipboardImageValidation {
+      byte_size: *byte_size,
+      checksum: checksum.clone(),
+    },
+  )))
+}
+
+fn retain_valid_images(items: &mut Vec<ClipboardItem>, store: &ClipboardStore) -> bool {
+  let original_len = items.len();
+  let mut validations = HashMap::new();
+  items.retain(|item| {
+    let (blob_id, validation) = match image_blob_validation(item) {
+      Ok(Some(validation)) => validation,
+      Ok(None) => return true,
+      Err(error) => {
+        tracing::warn!(error = %error, "invalid clipboard image metadata was removed");
+        return false;
+      }
+    };
+    let cache_key = (blob_id.to_string(), validation.clone());
+    *validations.entry(cache_key).or_insert_with(|| {
+      store
+        .validate_image(blob_id, &validation, MAX_ITEM_IMAGE_PREVIEW_BYTES)
+        .inspect_err(|error| {
+          tracing::warn!(error = %error, "invalid clipboard image payload was removed");
+        })
+        .is_ok()
+    })
+  });
+  items.len() != original_len
 }
 
 fn prune_image_history(items: &mut Vec<ClipboardItem>) -> bool {
@@ -2650,6 +2688,21 @@ mod tests {
     }
   }
 
+  fn stored_image_item(
+    id: &str,
+    blob_id: &str,
+    checksum: &str,
+    byte_size: usize,
+  ) -> ClipboardItem {
+    let mut item = image_item(id, blob_id, checksum, byte_size);
+    let ClipboardItem::Image { image, preview, .. } = &mut item else {
+      panic!("image fixture must remain an image");
+    };
+    *image = None;
+    *preview = None;
+    item
+  }
+
   fn unique_store_path() -> std::path::PathBuf {
     std::env::temp_dir().join(format!(
       "stella-clipboard-manager-{}.json.enc",
@@ -2810,6 +2863,128 @@ mod tests {
     assert!(capture.preview.starts_with(&[0x89, b'P', b'N', b'G']));
     assert!(capture.preview.len() <= MAX_ITEM_IMAGE_PREVIEW_BYTES);
     assert_eq!(capture.checksum.len(), 64);
+  }
+
+  #[test]
+  fn encrypted_image_reads_outlive_the_manager_lock() {
+    let store_path = unique_store_path();
+    let store = ClipboardStore::new([7; 32], store_path.clone());
+    let blob_id = uuid::Uuid::new_v4().to_string();
+    let image: &[u8] = b"full image";
+    let preview: &[u8] = b"image preview";
+    store
+      .persist_image(
+        &blob_id,
+        crate::clipboard_store::ClipboardImagePayload { image, preview },
+      )
+      .unwrap();
+    let item = stored_image_item(
+      "image",
+      &blob_id,
+      &hex::encode(Sha256::digest(image)),
+      image.len(),
+    );
+    let mut manager = ready_manager();
+    manager.items.push(item);
+    manager.persistence = ClipboardPersistence::Encrypted(store);
+    let state = Arc::new(Mutex::new(manager));
+
+    let read = {
+      let manager = state.lock().unwrap();
+      manager.image_preview("image").unwrap()
+    };
+
+    assert!(state.try_lock().is_ok());
+    assert_eq!(read.load().unwrap(), preview);
+    ClipboardStore::remove(&store_path).unwrap();
+  }
+
+  #[test]
+  fn image_recovery_isolates_invalid_shared_blob_references() {
+    let store_path = unique_store_path();
+    let store = ClipboardStore::new([7; 32], store_path.clone());
+    let valid_blob_id = uuid::Uuid::new_v4().to_string();
+    let invalid_blob_id = uuid::Uuid::new_v4().to_string();
+    let valid_image: &[u8] = b"valid full image";
+    let invalid_image: &[u8] = b"invalid full image";
+    for (blob_id, image) in [
+      (&valid_blob_id, valid_image),
+      (&invalid_blob_id, invalid_image),
+    ] {
+      store
+        .persist_image(
+          blob_id,
+          crate::clipboard_store::ClipboardImagePayload {
+            image,
+            preview: b"preview",
+          },
+        )
+        .unwrap();
+    }
+    let valid_checksum = hex::encode(Sha256::digest(valid_image));
+    let formatted = ClipboardItem::FormattedText {
+      copied_at: Utc::now(),
+      group_id: None,
+      html: "<strong>Clause</strong>".to_string(),
+      id: "formatted".to_string(),
+      name: None,
+      plain_text: "Clause".to_string(),
+      retention_class: ClipboardItemRetentionClass::History,
+      rtf: None,
+      source_app: None,
+    };
+    let mut malformed = stored_image_item(
+      "malformed",
+      &uuid::Uuid::new_v4().to_string(),
+      &valid_checksum,
+      valid_image.len(),
+    );
+    let ClipboardItem::Image { width, .. } = &mut malformed else {
+      panic!("image fixture must remain an image");
+    };
+    *width = 0;
+    let mut items = vec![
+      text_item(Utc::now(), "text"),
+      formatted,
+      stored_image_item("valid", &valid_blob_id, &valid_checksum, valid_image.len()),
+      stored_image_item(
+        "valid-duplicate",
+        &valid_blob_id,
+        &valid_checksum,
+        valid_image.len(),
+      ),
+      stored_image_item(
+        "conflicting",
+        &valid_blob_id,
+        &"0".repeat(64),
+        valid_image.len(),
+      ),
+      stored_image_item(
+        "invalid",
+        &invalid_blob_id,
+        &"0".repeat(64),
+        invalid_image.len(),
+      ),
+      malformed,
+    ];
+
+    assert!(retain_valid_images(&mut items, &store));
+    assert_eq!(
+      items.iter().map(ClipboardItem::id).collect::<Vec<_>>(),
+      ["text", "formatted", "valid", "valid-duplicate"]
+    );
+
+    store.reconcile_images(&image_blob_ids(&items)).unwrap();
+    assert_eq!(
+      store.load_image(&valid_blob_id, valid_image.len()).unwrap(),
+      valid_image
+    );
+    assert!(
+      store
+        .load_image(&invalid_blob_id, invalid_image.len())
+        .is_err()
+    );
+    ClipboardStore::remove(&store_path).unwrap();
   }
 
   #[test]
