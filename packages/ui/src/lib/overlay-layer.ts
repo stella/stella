@@ -9,6 +9,20 @@
 // composer painted on top of a dimmed template-check dialog.
 export const BOARD_DRAG_OVERLAY_Z_INDEX = 75;
 
+/**
+ * The shell's own sticky chrome: its top bar, and anything else the shell pins
+ * around a view.
+ *
+ * Not part of the ladder below, which is for portalled surfaces: this one
+ * stays in flow, so it only ever competes with the sticky chrome a view paints
+ * inside the shell's scroller. A kanban board pins its header at z-20 and a
+ * lane's row at z-10, and when the shell's content column (not the board) is
+ * the scroll container the two tie and paint order decides which one wins.
+ * Stated one step above that, and far below every portalled surface here,
+ * which must still cover the shell.
+ */
+export const SHELL_CHROME_LAYER_CLASS_NAME = "z-30";
+
 export const OVERLAY_LAYER_CLASS_NAMES = {
   /** Docked composer, suggestion chips, and other in-pane floating chrome. */
   chrome: "z-[80]",

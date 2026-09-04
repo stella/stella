@@ -22,6 +22,7 @@ import type { KanbanColumnBand, KanbanGroup } from "./grouping";
 import {
   KANBAN_CHROME_ROW_HEIGHT,
   KANBAN_CHROME_ROW_HEIGHT_PX,
+  KANBAN_CHROME_TOGGLE_COARSE_TARGET_CLASS,
 } from "./layout-tokens";
 import type {
   KanbanBoardCell,
@@ -46,19 +47,6 @@ import type { KanbanStickyTopStyle } from "./sticky-lane";
  * to be.
  */
 const LANE_ROW_HEIGHT_PX = KANBAN_CHROME_ROW_HEIGHT_PX * 2;
-
-/**
- * A finger's 44px target on a toggle the chrome row keeps at 36px.
- *
- * The same pseudo-element the shared `Button` extends its own targets with:
- * the visible control keeps the row's height, and only the touch surface
- * grows. It grows evenly above and below rather than downwards, so the extra
- * reach stops well short of the controls a caller renders in the summaries
- * under it — those sit at the far end of their own column, not under the
- * lane's name.
- */
-const LANE_TOGGLE_COARSE_TARGET_CLASS =
-  "relative pointer-coarse:after:absolute pointer-coarse:after:inset-x-0 pointer-coarse:after:-inset-y-1 pointer-coarse:after:min-h-11";
 
 const groupValueKey = (value: string | null): string =>
   value === null ? "null" : `value:${value.length}:${value}`;
@@ -830,18 +818,23 @@ export const KanbanSubgroupBoard = <TRow,>({
                 )}
                 data-kanban-lane-row=""
               >
+                {/* Opaque and above the summaries under it: the identity
+                 * holds the visible inline edge while the row's own cells
+                 * slide past, and a transparent name would be read through
+                 * by whatever passes beneath it. */}
                 <div
                   className={cn(
-                    "sticky start-0 flex w-fit items-center",
+                    "bg-background sticky start-0 z-10 flex w-fit items-center",
                     KANBAN_CHROME_ROW_HEIGHT,
                   )}
+                  data-kanban-lane-identity=""
                 >
                   <button
                     aria-expanded={!collapsed}
                     className={cn(
                       "hover:bg-muted/60 flex items-center gap-2 rounded-lg px-2 text-start transition-[background-color]",
                       KANBAN_CHROME_ROW_HEIGHT,
-                      LANE_TOGGLE_COARSE_TARGET_CLASS,
+                      KANBAN_CHROME_TOGGLE_COARSE_TARGET_CLASS,
                     )}
                     onClick={() => setLaneCollapsed(group, count, !collapsed)}
                     type="button"

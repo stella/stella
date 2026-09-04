@@ -56,6 +56,15 @@ const expectRestingOnAction = async (header: Locator, actionBottom: number) => {
   );
 };
 
+/** Whether the element is what a pointer finds at the middle of its own box. */
+const coversItsOwnCentre = async (locator: Locator) =>
+  await locator.evaluate((element) => {
+    const { left, top, width, height } = element.getBoundingClientRect();
+    return element.contains(
+      document.elementFromPoint(left + width / 2, top + height / 2),
+    );
+  });
+
 /** How far the row was told to pin, out of `calc(var(...) + Npx)`. */
 const pinnedAboveOf = (offset: string) => {
   const match = /\+\s*(?<pixels>\d+(?:\.\d+)?)px/u.exec(offset);
@@ -151,17 +160,33 @@ test.describe("card sticky header", () => {
     await openFixture(page);
     const actions = page.locator('[data-card-actions="card-1"]');
 
-    // At rest the row leads the very corner the overlay is anchored to, so a
-    // stacking layer on the row would paint over the trigger and take its
-    // clicks.
-    const hit = await actions.evaluate((element) => {
-      const { left, top, width, height } = element.getBoundingClientRect();
-      return element.contains(
-        document.elementFromPoint(left + width / 2, top + height / 2),
-      );
-    });
+    // The row leads the very corner the overlay is anchored to. Both take the
+    // same layer, so the overlay stays reachable on tree order alone: it is
+    // rendered after the row.
+    expect(await coversItsOwnCentre(actions)).toBe(true);
+  });
 
-    expect(hit).toBe(true);
+  test("holds the row over the controls its own card carries below", async ({
+    page,
+  }) => {
+    const board = await openFixture(page);
+    const header = headerOf(page, "card-1");
+    const control = page.locator('[data-card-control="card-1"]');
+
+    // Far enough into the card for its row to be pinned, then far enough
+    // again for the control at the card's foot to reach that row.
+    await scrollTo(board, 300);
+    const travel = (await topOf(control)) - (await topOf(header));
+    await scrollTo(board, 300 + travel + 8);
+
+    // The two really are on top of each other, or the check below passes on
+    // a card that never overlapped its own row.
+    expect(await topOf(control)).toBeLessThan(await bottomOf(header));
+    expect(await bottomOf(control)).toBeGreaterThan(await topOf(header));
+    // And the row is what the reader sees there: a positioned control later
+    // in the card would otherwise paint straight over the name of the card
+    // it belongs to.
+    expect(await coversItsOwnCentre(header)).toBe(true);
   });
 
   test("keeps the row with its card while the card is the drag source", async ({

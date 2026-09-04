@@ -9,6 +9,9 @@ const TOLERANCE_PX = 1;
 /** `KANBAN_COLUMN_WIDTH_PX`, the unit this suite scrolls the board by. */
 const COLUMN_WIDTH_PX = 300;
 
+/** The header row's own inline padding (`px-3`), which the title starts at. */
+const COLUMN_TITLE_INSET_PX = 12;
+
 // A hovering pointer, which the suite's default device does not have: the
 // hover-revealed actions never appear without one, so every test below that
 // waits for them would sit there until it timed out.
@@ -67,6 +70,20 @@ const scrollInlineTo = async (board: Locator, left: number) => {
 
 const opacityOf = async (locator: Locator) =>
   await locator.evaluate((element) => getComputedStyle(element).opacity);
+
+const backgroundOf = async (locator: Locator) =>
+  await locator.evaluate(
+    (element) => getComputedStyle(element).backgroundColor,
+  );
+
+/** Whether the element is what a pointer finds at the middle of its own box. */
+const coversItsOwnCentre = async (locator: Locator) =>
+  await locator.evaluate((element) => {
+    const { left, top, width, height } = element.getBoundingClientRect();
+    return element.contains(
+      document.elementFromPoint(left + width / 2, top + height / 2),
+    );
+  });
 
 test.describe("band caption on a board scrolled sideways", () => {
   test("holds the visible edge until the band it names is gone", async ({
@@ -232,5 +249,86 @@ test.describe("hover-revealed card actions on a touch device", () => {
     // board grows the dead corner back on all the others.
     expect(await opacityOf(other)).toBe("0");
     expect((await whatIsAtTheCorner(other)).insideActions).toBe(false);
+  });
+});
+
+test.describe("column title on a board scrolled sideways", () => {
+  test("holds the visible edge until its own column is gone", async ({
+    page,
+  }) => {
+    const board = await openFixture(page);
+    const header = page.locator('[data-column-header="open"]');
+    const title = header.locator("[data-kanban-column-title]");
+
+    const contentLeft = await contentLeftOf(board);
+
+    // Unscrolled, the title leads its own column, inside the row's padding.
+    expect(
+      Math.abs(
+        (await leftOf(title)) - (await leftOf(header)) - COLUMN_TITLE_INSET_PX,
+      ),
+    ).toBeLessThanOrEqual(TOLERANCE_PX);
+
+    // Half a column past its start, with the rest of it still on screen.
+    await scrollInlineTo(board, COLUMN_WIDTH_PX * 0.5);
+
+    expect(await leftOf(header)).toBeLessThan(contentLeft);
+    expect(await rightOf(header)).toBeGreaterThan(contentLeft);
+    // The cards under it are still being read, so the name is still shown.
+    expect(Math.abs((await leftOf(title)) - contentLeft)).toBeLessThanOrEqual(
+      TOLERANCE_PX,
+    );
+
+    // Once the column itself is behind us, its title leaves with it rather
+    // than naming whatever column is under the edge now.
+    await scrollInlineTo(board, COLUMN_WIDTH_PX * 1.5);
+
+    expect(await rightOf(header)).toBeLessThan(contentLeft);
+    expect(await rightOf(title)).toBeLessThanOrEqual(contentLeft);
+  });
+
+  test("never covers the row's own controls, and lets the accent through", async ({
+    page,
+  }) => {
+    const board = await openFixture(page);
+    const header = page.locator('[data-column-header="open"]');
+    const title = header.locator("[data-kanban-column-title]");
+    const actions = header.locator('[data-column-actions="open"]');
+
+    // The header cell carries the wash; the travelling title takes no surface
+    // of its own, so the accent goes on painting under it.
+    expect(await backgroundOf(header)).not.toBe("rgba(0, 0, 0, 0)");
+    expect(await backgroundOf(title)).toBe("rgba(0, 0, 0, 0)");
+    expect(await coversItsOwnCentre(title)).toBe(true);
+
+    // As far as the title can travel: it stops where the row's own controls
+    // begin rather than sliding over them.
+    await scrollInlineTo(board, COLUMN_WIDTH_PX * 0.9);
+
+    expect(await rightOf(title)).toBeLessThanOrEqual(await leftOf(actions));
+    expect(await coversItsOwnCentre(actions)).toBe(true);
+  });
+});
+
+test.describe("pinned chrome on a board scrolled sideways", () => {
+  test("keeps the band caption and the lane identity over what slides beneath", async ({
+    page,
+  }) => {
+    const board = await openFixture(page);
+    const caption = page.locator("[data-kanban-band-caption]").first();
+    const identity = page.locator("[data-kanban-lane-identity]").first();
+
+    await scrollInlineTo(board, COLUMN_WIDTH_PX * 0.5);
+
+    // Both hold the visible edge while their own columns slide past, so both
+    // have to be what the reader actually finds there.
+    expect(await coversItsOwnCentre(caption)).toBe(true);
+    expect(await coversItsOwnCentre(identity)).toBe(true);
+
+    // And opaque: a serialized alpha channel would let the cells they hold
+    // back read through them.
+    const identityBackground = await backgroundOf(identity);
+    expect(identityBackground).not.toBe("rgba(0, 0, 0, 0)");
+    expect(identityBackground).not.toContain("/");
   });
 });

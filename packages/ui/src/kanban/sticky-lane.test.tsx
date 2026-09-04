@@ -64,6 +64,9 @@ describe("KanbanCollapsedBandCaption", () => {
     expect(markup).toContain(">7<");
     expect(markup).toContain("[writing-mode:vertical-rl]");
     expect(markup).toContain('data-kanban-collapsed-band-caption=""');
+    // The weight the open caption sets a band's name in, kept through the
+    // fold so a narrow slot still reads as the name of a group of columns.
+    expect(markup).toContain("font-semibold");
   });
 
   test("sticks under the board's header without stretching in its slot", () => {

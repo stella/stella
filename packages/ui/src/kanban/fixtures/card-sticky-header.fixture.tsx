@@ -106,7 +106,10 @@ const CardStickyHeaderFixture = () => {
                   // The overlay slot callers anchor to the same corner the
                   // identity row leads: it has to stay on top of the row.
                   actions={
-                    <div className="absolute end-1.5 top-1.5">
+                    // Anchored to the corner the pinned row leads, with a
+                    // layer of its own: the row takes one now, so an overlay
+                    // that wants to stay reachable has to take one too.
+                    <div className="absolute end-1.5 top-1.5 z-10">
                       <button data-card-actions={row.id} type="button">
                         More
                       </button>
@@ -125,6 +128,20 @@ const CardStickyHeaderFixture = () => {
                   <p className="text-muted-foreground text-xs">
                     A card far taller than the board it scrolls through.
                   </p>
+                  {/* A control low in the card's own body, the way a card
+                   * with a band of selects at its foot carries one:
+                   * positioned, and later in the tree than the pinned row,
+                   * so it passes over that row unless the row takes a
+                   * layer. */}
+                  <div className="absolute inset-x-3 top-[420px]">
+                    <button
+                      className="w-full rounded-md border px-2 py-1 text-xs"
+                      data-card-control={row.id}
+                      type="button"
+                    >
+                      Status
+                    </button>
+                  </div>
                   {row.id === "card-1" ? <FirstLayoutProbe /> : null}
                 </KanbanCardShell>
               </div>

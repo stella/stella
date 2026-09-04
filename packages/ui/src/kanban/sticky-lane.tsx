@@ -101,7 +101,9 @@ export const KanbanCollapsedBandCaption = ({
     )}
     data-kanban-collapsed-band-caption=""
   >
-    <span className="max-h-40 truncate font-medium [writing-mode:vertical-rl]">
+    {/* The band's own name, at the weight the open caption sets it in: a
+        folded band still names the columns it stands for. */}
+    <span className="max-h-40 truncate font-semibold [writing-mode:vertical-rl]">
       {label}
     </span>
     <span className="tabular-nums">{meta}</span>

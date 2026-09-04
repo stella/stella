@@ -33,9 +33,11 @@ describe("kanban chrome row heights", () => {
     );
   });
 
-  test("keep a band's caption line shorter than the rows of chrome", () => {
-    expect(KANBAN_BAND_CAPTION_ROW_HEIGHT_PX).toBeLessThan(
-      KANBAN_CHROME_ROW_HEIGHT_PX,
-    );
+  // A band names the columns under it, so its caption sits on their row
+  // rather than on a shorter one of its own: a smaller caption read as a note
+  // about the header row instead of the group the columns belong to.
+  test("put a band's caption on the row its columns are on", () => {
+    expect(KANBAN_BAND_CAPTION_ROW_HEIGHT).toBe(KANBAN_CHROME_ROW_HEIGHT);
+    expect(KANBAN_BAND_CAPTION_ROW_HEIGHT_PX).toBe(KANBAN_CHROME_ROW_HEIGHT_PX);
   });
 });

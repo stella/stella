@@ -88,11 +88,39 @@ const BoardChromeFixture = () => {
             ))}
           </div>
         )}
-        renderColumnHeader={({ column }) => (
-          <KanbanColumnHeader
-            title={column.type === "group" ? column.group.label : "Other"}
-          />
-        )}
+        renderColumnHeader={({ column }) => {
+          const value = column.type === "group" ? column.group.value : null;
+          const label = column.type === "group" ? column.group.label : "Other";
+          return (
+            // A header cell the way a host dresses one: the rounding and the
+            // accent wash sit on the container around the header row, so a
+            // title pinned inside that row has to let them paint through.
+            <div
+              className="w-full rounded-lg"
+              data-column-header={value ?? "other"}
+              style={
+                value === "open"
+                  ? {
+                      backgroundColor:
+                        "color-mix(in srgb, var(--option-blue) 50%, transparent)",
+                    }
+                  : undefined
+              }
+            >
+              <KanbanColumnHeader
+                actions={
+                  <button data-column-actions={value ?? "other"} type="button">
+                    More
+                  </button>
+                }
+                meta="1"
+                title={
+                  <span className="truncate text-sm font-medium">{label}</span>
+                }
+              />
+            </div>
+          );
+        }}
         renderLaneIdentity={({ group }) => (
           <span data-lane={group.value}>{group.label}</span>
         )}
