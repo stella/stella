@@ -32,7 +32,13 @@ const S3_READINESS_CONTENT_TYPE = "application/octet-stream";
 const S3_READINESS_BYTES = new Uint8Array();
 let scheduledJobsReady = false;
 
-const probeRedis = async (signal: AbortSignal): Promise<void> => {
+/**
+ * Exported for the suite that drives it against a real Bun client: the probe
+ * sends its command on a client it has just built, so whether it passes is
+ * decided by the client's own behaviour before the connection is up, which no
+ * stand-in can stand in for.
+ */
+export const probeRedis = async (signal: AbortSignal): Promise<void> => {
   const client = createRedisClient();
   const close = () => {
     client.close();
@@ -40,17 +46,26 @@ const probeRedis = async (signal: AbortSignal): Promise<void> => {
   signal.addEventListener("abort", close, { once: true });
   const result = await Result.tryPromise({
     try: async (): Promise<unknown> => await client.send("PING", []),
-    catch: (cause) => cause,
+    // The connection failure is carried as the cause, so the Bun error code
+    // that says which failure it was survives the wrap.
+    catch: (cause) =>
+      new HealthCheckError({ message: "Redis PING failed", cause }),
   }).finally(() => {
     signal.removeEventListener("abort", close);
     client.close();
   });
-  if (Result.isError(result)) {
-    throw result.error;
+  if (Result.isOk(result) && result.value === "PONG") {
+    return;
   }
-  if (result.value !== "PONG") {
-    throw new HealthCheckError({ message: "Redis returned an invalid PING" });
-  }
+  // A probe reports its dependency through the promise it returns, so a
+  // failure is a rejection rather than an `Err` value: `runReadinessProbes`
+  // is the boundary that turns one into the failed-dependency list, the same
+  // shape `probeScheduledJobs` below reports through.
+  await Promise.reject(
+    Result.isError(result)
+      ? result.error
+      : new HealthCheckError({ message: "Redis returned an invalid PING" }),
+  );
 };
 
 type ObjectStorageReadinessProbe = {

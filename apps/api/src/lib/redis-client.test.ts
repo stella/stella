@@ -69,18 +69,22 @@ describe("the reconnect policy", () => {
     expect(options.enableOfflineQueue).toBe(false);
   });
 
-  test("a reconnecting client does not buffer commands for the whole outage", () => {
-    // The two policies are a pair: an unbounded ladder plus Bun's default
-    // offline queue would buffer every command issued during an outage, so a
-    // caller blocks for its whole length instead of failing and retrying, and
-    // the backlog is replayed against a server that has since moved on.
-    expect(redisClientOptions(REDIS_URL).enableOfflineQueue).toBe(false);
-    // A caller whose framework owns buffering across a reconnect (the BullMQ
-    // adapter) can still opt back in; `maxRetries` above cannot.
+  test("a fresh client queues its first command until the connection is up", () => {
+    // A fresh client connects on its first command. Setting the option here
+    // at all would decide for every call site that such a command must be
+    // rejected outright, which is how a "create then send" caller (the
+    // readiness probe, the SSE subscriber) fails for the length of a
+    // handshake it never got to wait for. Leaving it unset keeps Bun's
+    // queue-until-connected default.
+    expect(redisClientOptions(REDIS_URL)).not.toHaveProperty(
+      "enableOfflineQueue",
+    );
+    // Fail-fast during an outage stays available to the call sites that pair
+    // it with a bounded command; `maxRetries` above cannot be overridden.
     expect(
-      redisClientOptions(REDIS_URL, { enableOfflineQueue: true })
+      redisClientOptions(REDIS_URL, { enableOfflineQueue: false })
         .enableOfflineQueue,
-    ).toBe(true);
+    ).toBe(false);
   });
 
   test("assigning onclose reaches Bun's setter", () => {

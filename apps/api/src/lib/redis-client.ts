@@ -47,16 +47,14 @@ export const redisClientOptions = (
   url: string,
   overrides?: RedisClientOverrides,
 ): RedisOptions => ({
-  // An unbounded reconnect ladder and an unbounded offline queue do not
-  // belong on the same client: a client that keeps reconnecting for the whole
-  // outage would also keep buffering every command issued during it, so
-  // callers block instead of failing and the backlog is replayed against a
-  // server that has since forgotten the state they were written for. Fail the
-  // command instead and let the caller decide — a periodic loop records the
-  // failure and retries on its next tick, a request path degrades. Every
-  // request-path client here already opts out explicitly; this makes that the
-  // default rather than something each new call site has to remember.
-  enableOfflineQueue: false,
+  // `enableOfflineQueue` is deliberately absent, so Bun's default (queue until
+  // the connection is up) applies. A fresh client connects on its first
+  // command, so disabling the queue here rejects that command outright — a
+  // "create then send" caller such as the readiness probe would fail for the
+  // length of the handshake it never got to wait for. A caller that wants
+  // fail-fast semantics during an outage says so explicitly and bounds its own
+  // commands, which is also what keeps the unbounded reconnect ladder above
+  // from turning a queue into an outage-long backlog.
   ...redisConnectionOptions(url),
   ...overrides,
   maxRetries: RECONNECT_ATTEMPT_LIMIT,
@@ -326,9 +324,10 @@ export const createBullMqConnection = (
   overrides?: RedisClientOverrides,
 ): ReturnType<typeof createBunRedisClient> => {
   // BullMQ's adapter owns command buffering across a reconnect (it schedules
-  // its own and replays what it holds), so the connection keeps the offline
-  // queue the factory otherwise defaults off. A queue that wants its enqueues
-  // to fail fast still says so through `overrides`.
+  // its own and replays what it holds), so the connection states the offline
+  // queue it needs rather than inheriting whatever the factory leaves unset. A
+  // queue that wants its enqueues to fail fast still says so through
+  // `overrides`.
   const raw = createRedisClient({ enableOfflineQueue: true, ...overrides });
   const connection = createBunRedisClient(raw, {
     // Railway's Redis proxy can trigger Bun's eager adapter read path before

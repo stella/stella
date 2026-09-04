@@ -1,13 +1,50 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 
-import {
+import type {
+  ReadinessDependency,
+  ReadinessProbes,
+} from "@/api/lib/health/readiness";
+
+/** The commands the fake server below has been asked to answer. */
+const receivedCommands: string[] = [];
+
+// A RESP3 server that answers the handshake and PING and nothing else. The
+// Redis probe only means something when a real Bun client runs it (see
+// `probeRedis`), and a real client needs a real socket to speak to.
+const fakeRedis = Bun.listen({
+  hostname: "127.0.0.1",
+  port: 0,
+  socket: {
+    data: (socket, data) => {
+      // Every command here is argument-free, so each bulk string in the frame
+      // is a command name.
+      for (const line of data.toString().split("\r\n")) {
+        if (line === "HELLO") {
+          receivedCommands.push(line);
+          socket.write("%1\r\n$6\r\nserver\r\n$4\r\nfake\r\n");
+        } else if (line === "PING") {
+          receivedCommands.push(line);
+          socket.write("+PONG\r\n");
+        }
+      }
+    },
+  },
+});
+
+// Read at import by the connection module the probe builds its client through.
+process.env["REDIS_URL"] = `redis://127.0.0.1:${fakeRedis.port}`;
+
+const {
   API_READINESS_DEPENDENCIES,
   READINESS_DEPENDENCY,
-  type ReadinessDependency,
-  type ReadinessProbes,
   probeObjectStorageReadiness,
+  probeRedis,
   runReadinessProbes,
-} from "@/api/lib/health/readiness";
+} = await import("@/api/lib/health/readiness");
+
+afterAll(() => {
+  fakeRedis.stop(true);
+});
 
 const successfulProbes = (calls: ReadinessDependency[]): ReadinessProbes => ({
   [READINESS_DEPENDENCY.database]: async () => {
@@ -25,6 +62,19 @@ const successfulProbes = (calls: ReadinessDependency[]): ReadinessProbes => ({
   [READINESS_DEPENDENCY.scheduledJobs]: async () => {
     calls.push(READINESS_DEPENDENCY.scheduledJobs);
   },
+});
+
+describe("the Redis readiness probe", () => {
+  test("sends its command on the connection it has just opened", async () => {
+    // The probe builds a client and sends PING at once, with no connect() in
+    // between: the command is issued while the socket and the RESP handshake
+    // are still in flight. That is the shape of every "create then send" call
+    // site, and a client that rejects such a command reports the dependency
+    // as unavailable for as long as the process runs.
+    await probeRedis(new AbortController().signal);
+
+    expect(receivedCommands).toContain("PING");
+  });
 });
 
 describe("API dependency readiness", () => {
