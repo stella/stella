@@ -90,35 +90,45 @@ test.describe("workspace view switcher chrome", () => {
   });
 });
 
-test("uses thin scrollbars with transparent tracks for inspector content", async ({
-  page,
-}) => {
-  for (const dark of [false, true]) {
-    await openFixture(page, { direction: "ltr", dark });
-
-    for (const slot of ["inspector-rail-content", "inspector-content"]) {
-      const scrollbar = page.locator(`[data-slot="${slot}"]`);
-      await expect
-        .poll(
-          async () =>
-            await scrollbar.evaluate((element) => {
-              const style = getComputedStyle(element);
-              const track = getComputedStyle(
-                element,
-                "::-webkit-scrollbar-track",
-              );
-              return {
-                overflowing: element.scrollHeight > element.clientHeight,
-                track: track.backgroundColor,
-                width: style.scrollbarWidth,
-              };
-            }),
-        )
-        .toEqual({
+for (const theme of ["light", "dark"]) {
+  test(`uses thin scrollbars with transparent tracks in ${theme} mode`, async ({
+    page,
+  }) => {
+    await openFixture(page, { direction: "ltr", dark: theme === "dark" });
+    const scrollbars = page.locator(
+      '[data-slot="inspector-rail-content"], [data-slot="inspector-content"]',
+    );
+    await expect
+      .poll(async () =>
+        scrollbars.evaluateAll((elements) =>
+          elements.map((element) => {
+            const style = getComputedStyle(element);
+            const track = getComputedStyle(
+              element,
+              "::-webkit-scrollbar-track",
+            );
+            return {
+              slot: element.getAttribute("data-slot"),
+              overflowing: element.scrollHeight > element.clientHeight,
+              track: track.backgroundColor,
+              width: style.scrollbarWidth,
+            };
+          }),
+        ),
+      )
+      .toEqual([
+        {
+          slot: "inspector-rail-content",
           overflowing: true,
           track: "rgba(0, 0, 0, 0)",
           width: "thin",
-        });
-    }
-  }
-});
+        },
+        {
+          slot: "inspector-content",
+          overflowing: true,
+          track: "rgba(0, 0, 0, 0)",
+          width: "thin",
+        },
+      ]);
+  });
+}
