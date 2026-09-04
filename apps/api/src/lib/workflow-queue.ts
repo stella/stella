@@ -41,6 +41,7 @@ import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import {
   createBullMqConnection,
   isRecoverableRedisPollError,
+  isTransientRedisConnectionError,
 } from "@/api/lib/redis-client";
 import { broadcastWorkspaceResourceSetUpdated } from "@/api/lib/resource-realtime";
 import { createRootSafeDb, createRootScopedDb } from "@/api/lib/root-scoped-db";
@@ -1129,6 +1130,53 @@ const createWorkflowWorker = ({
   return worker;
 };
 
+/**
+ * Grade one reconcile tick's failure.
+ *
+ * The tick opens on a Redis scan, which rejects with a closed-connection code
+ * when the socket dropped while idle. The client reconnects without an attempt
+ * cap and its holder replaces a client that closed anyway, so the next tick
+ * runs against a live connection and that rejection is an expected operational
+ * transient rather than a defect. Anything else is a fault the tick could not
+ * recover from and stays a captured exception. Same split the
+ * document-processing reconcile applies to its own tick.
+ *
+ * Exported for the test that pins the split.
+ */
+export const handleWorkflowReconcileFailure = (error: unknown): void => {
+  if (isTransientRedisConnectionError(error)) {
+    logger.warn("workflow.reconcile_disrupted", {
+      "error.type": errorTag(error),
+    });
+    return;
+  }
+  captureError(error);
+  logger.error("workflow.reconcile_failed", errorSystemFields(error));
+};
+
+/**
+ * Drive the reconcile cadence.
+ *
+ * The thorough pass — the unbounded DB sweep for pending cells whose lock has
+ * already lapsed — is owed once per process, and only a completed tick
+ * discharges it. A tick that rejects, including on the transient graded above,
+ * leaves it owed so the next tick repeats the sweep rather than deferring it to
+ * the next restart; later ticks look for pending cells only under a held Redis
+ * lock, so the sweep has no equivalent.
+ */
+export const createWorkflowReconcileRunner = (
+  reconcile: (options: ReconcileOrphanedWorkflowsOptions) => Promise<void>,
+) => {
+  let pendingCellSweepOwed = true;
+  const runTick = async (): Promise<void> => {
+    await reconcile({ scanPendingCells: pendingCellSweepOwed });
+    pendingCellSweepOwed = false;
+  };
+  return (): void => {
+    runTick().catch(handleWorkflowReconcileFailure);
+  };
+};
+
 /** Initialize every workflow worker. Call once at API startup. */
 export const initWorkflowWorkers = () => {
   const workers = WORKFLOW_WORKER_SPECS.map(createWorkflowWorker);
@@ -1138,17 +1186,11 @@ export const initWorkflowWorkers = () => {
   // already lapsed); the interval then catches orphans that form at
   // runtime — e.g. a job exhausts its retries while the lock is held —
   // without waiting for a restart.
-  const runReconcile = (scanPendingCells: boolean): void => {
-    reconcileOrphanedWorkflows({ scanPendingCells }).catch((error: unknown) => {
-      captureError(error);
-      logger.error("workflow.reconcile_failed", errorSystemFields(error));
-    });
-  };
-  runReconcile(true);
-  const reconcileTimer = setInterval(
-    () => runReconcile(false),
-    RECONCILE_INTERVAL_MS,
+  const runReconcile = createWorkflowReconcileRunner(
+    reconcileOrphanedWorkflows,
   );
+  runReconcile();
+  const reconcileTimer = setInterval(runReconcile, RECONCILE_INTERVAL_MS);
   // The reconcile cadence must not keep the process alive at shutdown.
   reconcileTimer.unref();
 
