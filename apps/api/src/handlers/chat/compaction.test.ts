@@ -11,6 +11,7 @@ import {
   parseChatCompactionSummary,
 } from "@/api/lib/chat/compaction-summary";
 import {
+  COMPACTION_GENERATION_POLICY,
   resolveCompactionTriggerTokens,
   resolvePreserveTokensForTrigger,
 } from "@/api/lib/chat/compaction-tokens";
@@ -50,6 +51,13 @@ const textMessage = ({
 });
 
 describe("chat history compaction", () => {
+  test("never checkpoints an output-ceiling prefix", () => {
+    expect(COMPACTION_GENERATION_POLICY).toEqual({
+      finishPolicy: "require-complete",
+      maxOutputTokens: 1800,
+    });
+  });
+
   test("keeps full history below the token trigger", () => {
     const messages = [
       textMessage({ id: "msg_1", role: "user", text: "hello" }),

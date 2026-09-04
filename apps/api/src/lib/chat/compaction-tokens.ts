@@ -21,7 +21,15 @@ export const DEFAULT_PRESERVE_TOKENS = 38_000;
 const MAX_TRIGGER_TOKENS = 200_000;
 export const MAX_TEXT_PART_CHARS = 8000;
 export const MAX_STRUCTURED_PART_CHARS = 4000;
-export const MAX_SUMMARY_OUTPUT_TOKENS = 1800;
+/**
+ * A summary that reaches its output ceiling cannot replace its source window:
+ * doing so would advance the checkpoint past content absent from the summary.
+ * Keep the ceiling and completion policy inseparable at every compaction call.
+ */
+export const COMPACTION_GENERATION_POLICY = {
+  finishPolicy: "require-complete",
+  maxOutputTokens: 1800,
+} as const;
 
 /**
  * Canonical chars/4 token estimate. Shared with the prompt builders so the
