@@ -104,6 +104,7 @@
         "@stll/text-normalize": "workspace:*",
         "@stll/time": "workspace:*",
         "@stll/transactional": "workspace:*",
+        "@stll/user-agent": "workspace:*",
         "@t3-oss/env-core": "catalog:",
         "@tanstack/ai": "catalog:",
         "@tanstack/ai-anthropic": "catalog:",
@@ -345,6 +346,7 @@
         "@stll/text-normalize": "workspace:*",
         "@stll/time": "workspace:*",
         "@stll/ui": "workspace:*",
+        "@stll/user-agent": "workspace:*",
         "@stll/workspace-ui": "workspace:*",
         "@streamdown/cjk": "^1.0.2",
         "@streamdown/math": "^1.0.2",
@@ -930,6 +932,14 @@
         "react": ">=19",
         "react-dom": ">=19",
         "tailwindcss": "^4.3.0",
+      },
+    },
+    "packages/user-agent": {
+      "name": "@stll/user-agent",
+      "version": "0.0.0",
+      "devDependencies": {
+        "@stll/typescript-config": "workspace:*",
+        "bun-types": "catalog:",
       },
     },
     "packages/workspace-model": {
@@ -2564,6 +2574,8 @@
     "@stll/typescript-config": ["@stll/typescript-config@workspace:packages/typescript-config"],
 
     "@stll/ui": ["@stll/ui@workspace:packages/ui"],
+
+    "@stll/user-agent": ["@stll/user-agent@workspace:packages/user-agent"],
 
     "@stll/web": ["@stll/web@workspace:apps/web"],
 

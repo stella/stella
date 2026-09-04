@@ -109,6 +109,7 @@
     "@stll/text-normalize": "workspace:*",
     "@stll/time": "workspace:*",
     "@stll/transactional": "workspace:*",
+    "@stll/user-agent": "workspace:*",
     "@t3-oss/env-core": "catalog:",
     "@tanstack/ai": "catalog:",
     "@tanstack/ai-anthropic": "catalog:",

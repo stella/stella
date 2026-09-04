@@ -78,6 +78,7 @@
     "@stll/text-normalize": "workspace:*",
     "@stll/time": "workspace:*",
     "@stll/ui": "workspace:*",
+    "@stll/user-agent": "workspace:*",
     "@stll/workspace-ui": "workspace:*",
     "@streamdown/cjk": "^1.0.2",
     "@streamdown/math": "^1.0.2",

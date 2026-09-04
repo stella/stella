@@ -100,7 +100,7 @@ import {
   completeOrganizationDeletion,
   OrganizationStorageTeardownBoundError,
 } from "@/api/lib/organization-storage-teardown";
-import { parseUserAgent } from "@/api/lib/parse-user-agent";
+import { parseUserAgent } from "@stll/user-agent";
 import {
   hasMemberPermission,
   readAuthorizedMemberRole,

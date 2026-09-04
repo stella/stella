@@ -119,6 +119,9 @@
         "src/styles/theme.css",
         "tsdown.config.ts"
       ]
+    },
+    "packages/user-agent": {
+      "entry": ["src/index.ts", "src/**/*.test.ts"]
     }
   },
   "ignore": [".oxlint-plugins/**", ".claude/**"],

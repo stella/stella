@@ -1,4 +1,4 @@
-type ParsedUserAgent = {
+export type ParsedUserAgent = {
   browser: string | null;
   os: string | null;
 };
