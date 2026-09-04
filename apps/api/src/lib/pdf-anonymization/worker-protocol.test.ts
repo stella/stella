@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -5,6 +6,7 @@ import {
   decodePdfAnonymizationWorkerResponse,
   encodePdfAnonymizationWorkerRequest,
   encodePdfAnonymizationWorkerResponse,
+  PdfAnonymizationWorkerProtocolError,
 } from "@/api/lib/pdf-anonymization/worker-protocol";
 import type { PdfAnonymizationObservedPage } from "@/api/lib/pdf-anonymization/worker-protocol";
 
@@ -43,26 +45,41 @@ describe("PDF anonymization worker framing", () => {
       },
     ];
 
-    expect(
-      decodePdfAnonymizationWorkerRequest(
-        encodePdfAnonymizationWorkerRequest({ document, pages }),
-      ),
-    ).toEqual({ document, pages });
-    expect(
-      decodePdfAnonymizationWorkerResponse(
-        encodePdfAnonymizationWorkerResponse({ certificate, document }),
-      ),
-    ).toEqual({ certificate, document });
+    const request = Result.gen(function* () {
+      const frame = yield* encodePdfAnonymizationWorkerRequest({
+        document,
+        pages,
+      });
+      return decodePdfAnonymizationWorkerRequest(frame);
+    });
+    expect(request).toEqual(Result.ok({ document, pages }));
+    const response = Result.gen(function* () {
+      const frame = yield* encodePdfAnonymizationWorkerResponse({
+        certificate,
+        document,
+      });
+      return decodePdfAnonymizationWorkerResponse(frame);
+    });
+    expect(response).toEqual(Result.ok({ certificate, document }));
   });
 
   test("rejects truncated and malformed frames", () => {
-    expect(() =>
-      decodePdfAnonymizationWorkerRequest(new Uint8Array([0, 0, 0])),
-    ).toThrow("frame is truncated");
-
-    const malformed = new Uint8Array([0, 0, 0, 2, 123, 125, 1]);
-    expect(() => decodePdfAnonymizationWorkerRequest(malformed)).toThrow(
-      "request is invalid",
-    );
+    const cases = [
+      { bytes: [0, 0, 0], message: "frame is truncated" },
+      { bytes: [0, 0, 0, 3, 123, 125], message: "frame header is invalid" },
+      { bytes: [0, 0, 0, 1, 255], message: "frame header is invalid" },
+      { bytes: [0, 0, 0, 1, 123], message: "frame header is invalid" },
+      { bytes: [0, 0, 0, 2, 123, 125, 1], message: "request is invalid" },
+    ];
+    for (const { bytes, message } of cases) {
+      const result = decodePdfAnonymizationWorkerRequest(new Uint8Array(bytes));
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error).toBeInstanceOf(
+          PdfAnonymizationWorkerProtocolError,
+        );
+        expect(result.error.message).toContain(message);
+      }
+    }
   });
 });

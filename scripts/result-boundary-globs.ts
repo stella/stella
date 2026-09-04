@@ -27,6 +27,8 @@ export const RESULT_BOUNDARY_GLOBS = [
   "apps/api/src/lib/entity-deletion-cleanup-queue.ts",
   "apps/api/src/lib/file-derivative-queue.ts",
   "apps/api/src/lib/flows/flow-run-worker.ts",
+  // Converts parser/rendering failures into the subprocess exit protocol.
+  "apps/api/src/lib/pdf-anonymization/pdf-anonymization-worker.ts",
   "apps/api/src/lib/document-deadline-scout-worker.ts",
   "apps/api/src/lib/style-set-package-cleanup-queue.ts",
   "apps/api/src/lib/tanstack-ai-generate.ts",

@@ -1,3 +1,5 @@
+import { Result, TaggedError } from "better-result";
+
 import type {
   PdfRasterDetection,
   PdfRasterRewriteCertificate,
@@ -10,6 +12,10 @@ import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 const LENGTH_PREFIX_BYTES = 4;
 const MAX_HEADER_BYTES = 64 * 1024 * 1024;
 const SHA256_PATTERN = /^[0-9a-f]{64}$/u;
+
+export class PdfAnonymizationWorkerProtocolError extends TaggedError(
+  "PdfAnonymizationWorkerProtocolError",
+)<{ message: string; cause?: unknown }> {}
 
 export type PdfAnonymizationObservedPage = {
   detections: readonly PdfRasterDetection[];
@@ -25,48 +31,89 @@ export type PdfAnonymizationWorkerResponse = {
   document: Uint8Array;
 };
 
-const encodeFrame = (header: unknown, payload: Uint8Array): Uint8Array => {
-  const encodedHeader = new TextEncoder().encode(JSON.stringify(header));
-  if (encodedHeader.byteLength > MAX_HEADER_BYTES) {
-    throw new RangeError("PDF anonymization worker header exceeded its limit");
-  }
-  const output = new Uint8Array(
-    LENGTH_PREFIX_BYTES + encodedHeader.byteLength + payload.byteLength,
-  );
-  new DataView(output.buffer).setUint32(0, encodedHeader.byteLength, false);
-  output.set(encodedHeader, LENGTH_PREFIX_BYTES);
-  output.set(payload, LENGTH_PREFIX_BYTES + encodedHeader.byteLength);
-  return output;
-};
+const encodeFrame = (header: unknown, payload: Uint8Array) =>
+  Result.gen(function* () {
+    const encodedHeader = yield* Result.try({
+      try: () => new TextEncoder().encode(JSON.stringify(header)),
+      catch: (cause) =>
+        new PdfAnonymizationWorkerProtocolError({
+          message: "PDF anonymization worker header could not be encoded",
+          cause,
+        }),
+    });
+    if (encodedHeader.byteLength > MAX_HEADER_BYTES) {
+      return Result.err(
+        new PdfAnonymizationWorkerProtocolError({
+          message: "PDF anonymization worker header exceeded its limit",
+        }),
+      );
+    }
+    return Result.try({
+      try: () => {
+        const output = new Uint8Array(
+          LENGTH_PREFIX_BYTES + encodedHeader.byteLength + payload.byteLength,
+        );
+        new DataView(output.buffer).setUint32(
+          0,
+          encodedHeader.byteLength,
+          false,
+        );
+        output.set(encodedHeader, LENGTH_PREFIX_BYTES);
+        output.set(payload, LENGTH_PREFIX_BYTES + encodedHeader.byteLength);
+        return output;
+      },
+      catch: (cause) =>
+        new PdfAnonymizationWorkerProtocolError({
+          message: "PDF anonymization worker frame could not be encoded",
+          cause,
+        }),
+    });
+  });
 
-const decodeFrame = (
-  input: Uint8Array,
-): { header: unknown; payload: Uint8Array } => {
-  if (input.byteLength < LENGTH_PREFIX_BYTES) {
-    throw new TypeError("PDF anonymization worker frame is truncated");
-  }
-  const headerLength = new DataView(
-    input.buffer,
-    input.byteOffset,
-    LENGTH_PREFIX_BYTES,
-  ).getUint32(0, false);
-  if (
-    headerLength > MAX_HEADER_BYTES ||
-    headerLength > input.byteLength - LENGTH_PREFIX_BYTES
-  ) {
-    throw new TypeError("PDF anonymization worker frame header is invalid");
-  }
-  const headerBytes = input.subarray(
-    LENGTH_PREFIX_BYTES,
-    LENGTH_PREFIX_BYTES + headerLength,
-  );
-  const text = new TextDecoder("utf-8", { fatal: true }).decode(headerBytes);
-  const header: unknown = JSON.parse(text);
-  return {
-    header,
-    payload: input.subarray(LENGTH_PREFIX_BYTES + headerLength),
-  };
-};
+const decodeFrame = (input: Uint8Array) =>
+  Result.gen(function* () {
+    if (input.byteLength < LENGTH_PREFIX_BYTES) {
+      return Result.err(
+        new PdfAnonymizationWorkerProtocolError({
+          message: "PDF anonymization worker frame is truncated",
+        }),
+      );
+    }
+    const headerLength = new DataView(
+      input.buffer,
+      input.byteOffset,
+      LENGTH_PREFIX_BYTES,
+    ).getUint32(0, false);
+    if (
+      headerLength > MAX_HEADER_BYTES ||
+      headerLength > input.byteLength - LENGTH_PREFIX_BYTES
+    ) {
+      return Result.err(
+        new PdfAnonymizationWorkerProtocolError({
+          message: "PDF anonymization worker frame header is invalid",
+        }),
+      );
+    }
+    const headerBytes = input.subarray(
+      LENGTH_PREFIX_BYTES,
+      LENGTH_PREFIX_BYTES + headerLength,
+    );
+    const header = yield* Result.try({
+      try: (): unknown =>
+        JSON.parse(
+          new TextDecoder("utf-8", { fatal: true }).decode(headerBytes),
+        ),
+      catch: (cause) =>
+        new PdfAnonymizationWorkerProtocolError({
+          message: "PDF anonymization worker frame header is invalid",
+          cause,
+        }),
+    });
+    return Result.ok({
+      header,
+      payload: input.subarray(LENGTH_PREFIX_BYTES + headerLength),
+    });
+  });
 
 const parseDetections = (
   value: unknown,
@@ -98,39 +145,50 @@ const parseDetections = (
 export const encodePdfAnonymizationWorkerRequest = ({
   document,
   pages,
-}: PdfAnonymizationWorkerRequest & { document: Uint8Array }): Uint8Array =>
+}: PdfAnonymizationWorkerRequest & { document: Uint8Array }) =>
   encodeFrame({ pages }, document);
 
-export const decodePdfAnonymizationWorkerRequest = (
-  input: Uint8Array,
-): PdfAnonymizationWorkerRequest & { document: Uint8Array } => {
-  const { header, payload } = decodeFrame(input);
-  if (
-    !isRecord(header) ||
-    Object.keys(header).length !== 1 ||
-    !isUnknownArray(header["pages"])
-  ) {
-    throw new TypeError("PDF anonymization worker request is invalid");
-  }
-  const pages: PdfAnonymizationObservedPage[] = [];
-  for (const value of header["pages"]) {
+export const decodePdfAnonymizationWorkerRequest = (input: Uint8Array) =>
+  Result.gen(function* () {
+    const { header, payload } = yield* decodeFrame(input);
     if (
-      !isRecord(value) ||
-      Object.keys(value).length !== 2 ||
-      !("ocr" in value) ||
-      !("detections" in value)
+      !isRecord(header) ||
+      Object.keys(header).length !== 1 ||
+      !isUnknownArray(header["pages"])
     ) {
-      throw new TypeError("PDF anonymization worker page is invalid");
+      return Result.err(
+        new PdfAnonymizationWorkerProtocolError({
+          message: "PDF anonymization worker request is invalid",
+        }),
+      );
     }
-    const ocr = parseOcrPage(value["ocr"]);
-    const detections = parseDetections(value["detections"]);
-    if (ocr === null || detections === null) {
-      throw new TypeError("PDF anonymization worker page is invalid");
+    const pages: PdfAnonymizationObservedPage[] = [];
+    for (const value of header["pages"]) {
+      if (
+        !isRecord(value) ||
+        Object.keys(value).length !== 2 ||
+        !("ocr" in value) ||
+        !("detections" in value)
+      ) {
+        return Result.err(
+          new PdfAnonymizationWorkerProtocolError({
+            message: "PDF anonymization worker page is invalid",
+          }),
+        );
+      }
+      const ocr = parseOcrPage(value["ocr"]);
+      const detections = parseDetections(value["detections"]);
+      if (ocr === null || detections === null) {
+        return Result.err(
+          new PdfAnonymizationWorkerProtocolError({
+            message: "PDF anonymization worker page is invalid",
+          }),
+        );
+      }
+      pages.push({ detections, ocr });
     }
-    pages.push({ detections, ocr });
-  }
-  return { document: payload, pages };
-};
+    return Result.ok({ document: payload, pages });
+  });
 
 const PROVIDER_FIELDS = {
   providerId: true,
@@ -197,19 +255,21 @@ const isCertificate = (value: unknown): value is PdfRasterRewriteCertificate =>
 export const encodePdfAnonymizationWorkerResponse = ({
   certificate,
   document,
-}: PdfAnonymizationWorkerResponse): Uint8Array =>
-  encodeFrame({ certificate }, document);
+}: PdfAnonymizationWorkerResponse) => encodeFrame({ certificate }, document);
 
-export const decodePdfAnonymizationWorkerResponse = (
-  input: Uint8Array,
-): PdfAnonymizationWorkerResponse => {
-  const { header, payload } = decodeFrame(input);
-  if (
-    !isRecord(header) ||
-    Object.keys(header).length !== 1 ||
-    !isCertificate(header["certificate"])
-  ) {
-    throw new TypeError("PDF anonymization worker response is invalid");
-  }
-  return { certificate: header["certificate"], document: payload };
-};
+export const decodePdfAnonymizationWorkerResponse = (input: Uint8Array) =>
+  Result.gen(function* () {
+    const { header, payload } = yield* decodeFrame(input);
+    if (
+      !isRecord(header) ||
+      Object.keys(header).length !== 1 ||
+      !isCertificate(header["certificate"])
+    ) {
+      return Result.err(
+        new PdfAnonymizationWorkerProtocolError({
+          message: "PDF anonymization worker response is invalid",
+        }),
+      );
+    }
+    return Result.ok({ certificate: header["certificate"], document: payload });
+  });

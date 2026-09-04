@@ -42,9 +42,13 @@ const die = (message: string): never => {
 };
 
 try {
-  const input = decodePdfAnonymizationWorkerRequest(
+  const decoded = decodePdfAnonymizationWorkerRequest(
     new Uint8Array(await Bun.stdin.arrayBuffer()),
   );
+  if (decoded.isErr()) {
+    throw decoded.error;
+  }
+  const input = decoded.value;
   if (
     input.document.byteLength === 0 ||
     input.pages.length < 1 ||
@@ -140,12 +144,14 @@ try {
   if (rewritten.document.byteLength > PDF_RASTER_MAX_OUTPUT_BYTES) {
     die("output exceeds its limit");
   }
-  process.stdout.write(
-    encodePdfAnonymizationWorkerResponse({
-      certificate: rewritten.certificate,
-      document: rewritten.document,
-    }),
-  );
+  const encoded = encodePdfAnonymizationWorkerResponse({
+    certificate: rewritten.certificate,
+    document: rewritten.document,
+  });
+  if (encoded.isErr()) {
+    throw encoded.error;
+  }
+  process.stdout.write(encoded.value);
   process.exit(0);
 } catch (error) {
   const type = error instanceof Error ? error.constructor.name : "UnknownError";
