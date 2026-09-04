@@ -1,7 +1,9 @@
-import type { Page } from "@playwright/test";
+import type { APIRequestContext, Page } from "@playwright/test";
+import { array, looseObject, parse, string } from "valibot";
 
 import { getStorageKey } from "../../src/consts";
 import { GUIDE_ANCHORS } from "../../src/features/guides/guide-anchors";
+import { apiGet } from "../helpers/api";
 import { expect, test } from "../helpers/test";
 import {
   type TestWorkspace,
@@ -39,6 +41,38 @@ const enableGuidesTestFeatures = async (page: Page) => {
       i18nStorageKey: getStorageKey("i18n"),
     },
   );
+};
+
+type GuideWorkspaceOptions = {
+  page: Page;
+  request: APIRequestContext;
+  workspaceId: string;
+};
+
+const selectGuideWorkspace = async ({
+  page,
+  request,
+  workspaceId,
+}: GuideWorkspaceOptions) => {
+  const navigation = parse(
+    looseObject({ workspaces: array(looseObject({ id: string() })) }),
+    await apiGet(request, "/workspaces/navigation?statusScope=active"),
+  );
+  const workspaces = navigation.workspaces.filter(
+    ({ id }) => id === workspaceId,
+  );
+  expect(workspaces).toHaveLength(1);
+  // Keep the outside-matter entry point deterministic while parallel tests
+  // create and delete their own matters in the same organization.
+  await page.route(/\/v1\/workspaces\/navigation(?:\?|$)/u, async (route) => {
+    await route.fulfill({
+      json: {
+        ...navigation,
+        items: workspaces,
+        workspaces,
+      },
+    });
+  });
 };
 
 const guidePopover = (page: Page) => page.locator(GUIDE_POPOVER_SELECTOR);
@@ -109,6 +143,7 @@ test("Guide checklist stays stable until matter availability resolves", async ({
   let workspace: TestWorkspace | null = null;
   try {
     workspace = await createTestWorkspace(request, "guides-loading");
+    await selectGuideWorkspace({ page, request, workspaceId: workspace.id });
     await enableGuidesTestFeatures(page);
 
     // The first drawer open waits for its permission-and-limit policy instead
@@ -119,7 +154,7 @@ test("Guide checklist stays stable until matter availability resolves", async ({
         await new Promise<void>((resolve) => {
           setTimeout(resolve, 750);
         });
-        await route.continue();
+        await route.fallback();
       },
     );
     await page.goto("/chat", {
@@ -170,33 +205,40 @@ test("Documents guide spotlights one actionable upload target", async ({
 
 test("Tabular guide closes the column composer after its final step", async ({
   page,
+  request,
 }) => {
-  await enableGuidesTestFeatures(page);
-  await page.goto("/chat", {
-    timeout: GUIDE_NAVIGATION_TIMEOUT_MS,
-    waitUntil: "commit",
-  });
+  const workspace = await createTestWorkspace(request, "guides-table");
+  try {
+    await selectGuideWorkspace({ page, request, workspaceId: workspace.id });
+    await enableGuidesTestFeatures(page);
+    await page.goto("/chat", {
+      timeout: GUIDE_NAVIGATION_TIMEOUT_MS,
+      waitUntil: "commit",
+    });
 
-  // Start outside a matter to exercise the guide's dynamic table-route
-  // resolver against the seeded user's first authorized matter.
-  await startGuide(page, "Review in a table");
-  await expectGuideStep(page, GUIDE_ANCHORS.tabularReviewTable, "1 of 3");
-  await advanceToGuideStep(
-    page,
-    GUIDE_ANCHORS.tabularReviewAddColumn,
-    "2 of 3",
-  );
-  await advanceToGuideStep(
-    page,
-    GUIDE_ANCHORS.tabularReviewAnswerType,
-    "3 of 3",
-  );
-  await finishGuide(page);
-  await expect(
-    page.locator(
-      `[data-guide-anchor="${GUIDE_ANCHORS.tabularReviewAnswerType}"]`,
-    ),
-  ).toHaveCount(0);
+    // Start outside a matter to exercise the guide's dynamic table-route
+    // resolver against this test's authorized matter.
+    await startGuide(page, "Review in a table");
+    await expectGuideStep(page, GUIDE_ANCHORS.tabularReviewTable, "1 of 3");
+    await advanceToGuideStep(
+      page,
+      GUIDE_ANCHORS.tabularReviewAddColumn,
+      "2 of 3",
+    );
+    await advanceToGuideStep(
+      page,
+      GUIDE_ANCHORS.tabularReviewAnswerType,
+      "3 of 3",
+    );
+    await finishGuide(page);
+    await expect(
+      page.locator(
+        `[data-guide-anchor="${GUIDE_ANCHORS.tabularReviewAnswerType}"]`,
+      ),
+    ).toHaveCount(0);
+  } finally {
+    await deleteTestWorkspace(request, workspace.id);
+  }
 });
 
 test("Playbooks guide reverses and replays its local editor transition", async ({
@@ -299,36 +341,43 @@ for (const availability of [
 ]) {
   test(`Guide availability recovers after a failed ${availability.name} query`, async ({
     page,
+    request,
     browserErrors,
   }) => {
-    await enableGuidesTestFeatures(page);
-    await page.goto("/chat", {
-      timeout: GUIDE_NAVIGATION_TIMEOUT_MS,
-      waitUntil: "commit",
-    });
-    await expect(
-      page.getByRole("button", { name: HELP_BUTTON_NAME }),
-    ).toBeVisible({ timeout: 30_000 });
-    browserErrors.expectCaptured(/Failed to load resource:.*503/u);
-    await page.route(availability.path, async (route) => {
-      await route.fulfill({
-        status: 503,
-        json: { message: "Guide availability test failure" },
+    const workspace = await createTestWorkspace(request, "guides-recovery");
+    try {
+      await selectGuideWorkspace({ page, request, workspaceId: workspace.id });
+      await enableGuidesTestFeatures(page);
+      await page.goto("/chat", {
+        timeout: GUIDE_NAVIGATION_TIMEOUT_MS,
+        waitUntil: "commit",
       });
-    });
-    await page.getByRole("button", { name: HELP_BUTTON_NAME }).click();
-    const drawer = page.getByRole("dialog", { name: HELP_BUTTON_NAME });
-    await expect(drawer.getByRole("alert")).toContainText("Action failed", {
-      timeout: 30_000,
-    });
-    await expect(
-      drawer.locator("li").filter({ hasText: availability.title }),
-    ).toHaveCount(0);
-    await page.unroute(availability.path);
-    await drawer.getByRole("button", { name: "Retry", exact: true }).click();
-    await expect(drawer.getByRole("alert")).toHaveCount(0);
-    await expect(
-      drawer.locator("li").filter({ hasText: availability.title }),
-    ).toBeVisible();
+      await expect(
+        page.getByRole("button", { name: HELP_BUTTON_NAME }),
+      ).toBeVisible({ timeout: 30_000 });
+      browserErrors.expectCaptured(/Failed to load resource:.*503/u);
+      await page.route(availability.path, async (route) => {
+        await route.fulfill({
+          status: 503,
+          json: { message: "Guide availability test failure" },
+        });
+      });
+      await page.getByRole("button", { name: HELP_BUTTON_NAME }).click();
+      const drawer = page.getByRole("dialog", { name: HELP_BUTTON_NAME });
+      await expect(drawer.getByRole("alert")).toContainText("Action failed", {
+        timeout: 30_000,
+      });
+      await expect(
+        drawer.locator("li").filter({ hasText: availability.title }),
+      ).toHaveCount(0);
+      await page.unroute(availability.path);
+      await drawer.getByRole("button", { name: "Retry", exact: true }).click();
+      await expect(drawer.getByRole("alert")).toHaveCount(0);
+      await expect(
+        drawer.locator("li").filter({ hasText: availability.title }),
+      ).toBeVisible();
+    } finally {
+      await deleteTestWorkspace(request, workspace.id);
+    }
   });
 }
