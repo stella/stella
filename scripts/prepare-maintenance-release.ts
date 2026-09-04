@@ -21,6 +21,9 @@ const REASON_FLAG = "--reason";
 // this standing attestation instead of stopping the release. Pass
 // CONFIRMATION_FLAG with REASON_FLAG to record a specific review instead.
 const DEFAULT_REVIEW_REASON = "Patch release, UX diff negligible";
+const GITHUB_API_ROOT = "https://api.github.com/repos/stella/stella";
+const RELEASE_PAGE_SIZE = 100;
+const RELEASE_PAGE_LIMIT = 20;
 const STABLE_VERSION_PATTERN = /^(\d+)\.(\d+)\.(\d+)$/u;
 const MAINTENANCE_CHANGELOG =
   "# Maintenance release\n\nStella includes reliability and maintenance improvements.\n";
@@ -228,11 +231,11 @@ export const prepareMaintenanceReleaseFiles = ({
   rootDir,
   writeFile = atomicWriteFile,
 }: {
-  publishedAt: string;
+  publishedAt: string | null;
   rootDir: string;
   writeFile?: ReleaseFileWriter;
 }): PreparedMaintenanceRelease => {
-  if (Number.isNaN(Date.parse(publishedAt))) {
+  if (publishedAt !== null && Number.isNaN(Date.parse(publishedAt))) {
     throw new MaintenanceReleaseError(
       `Previous release has an invalid publication timestamp: ${publishedAt}`,
     );
@@ -302,7 +305,7 @@ const assertCleanWorktree = () => {
   }
 };
 
-const fetchPublishedAt = async (tag: string): Promise<string> => {
+const requestGitHub = async (path: string): Promise<Response> => {
   const headers: Record<string, string> = {
     Accept: "application/vnd.github+json",
     "User-Agent": "stella-maintenance-release",
@@ -312,26 +315,105 @@ const fetchPublishedAt = async (tag: string): Promise<string> => {
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
   }
-  const response = await fetch(
-    `https://api.github.com/repos/stella/stella/releases/tags/${encodeURIComponent(tag)}`,
-    { headers },
-  );
-  if (!response.ok) {
+  return fetch(`${GITHUB_API_ROOT}${path}`, { headers });
+};
+
+const readPublishedAt = (tag: string, payload: unknown): string | null => {
+  if (!isRecord(payload)) {
     throw new MaintenanceReleaseError(
-      `Could not read ${tag} from GitHub Releases (HTTP ${String(response.status)})`,
+      `GitHub release ${tag} has no valid published_at timestamp`,
     );
   }
-  const payload: unknown = await response.json();
+  const publishedAt = payload["published_at"];
+  if (publishedAt === null || publishedAt === undefined) {
+    return null;
+  }
   if (
-    !isRecord(payload) ||
-    typeof payload["published_at"] !== "string" ||
-    Number.isNaN(Date.parse(payload["published_at"]))
+    typeof publishedAt !== "string" ||
+    Number.isNaN(Date.parse(publishedAt))
   ) {
     throw new MaintenanceReleaseError(
       `GitHub release ${tag} has no valid published_at timestamp`,
     );
   }
-  return payload["published_at"];
+  return publishedAt;
+};
+
+const assertTagExists = async (tag: string) => {
+  const response = await requestGitHub(
+    `/git/ref/tags/${encodeURIComponent(tag)}`,
+  );
+  if (response.status === 404) {
+    throw new MaintenanceReleaseError(
+      `Previous tag ${tag} does not exist; wait for the release workflow to build it`,
+    );
+  }
+  if (!response.ok) {
+    throw new MaintenanceReleaseError(
+      `Could not read tag ${tag} from GitHub (HTTP ${String(response.status)})`,
+    );
+  }
+};
+
+// The by-tag endpoint hides drafts, so its 404 is ambiguous. The full listing
+// includes drafts for an authenticated caller and separates the two cases: a
+// draft release is abandoned, no release object at all is unfinished.
+const findUnpromotedRelease = async (
+  tag: string,
+  page: number,
+): Promise<string | null> => {
+  if (page > RELEASE_PAGE_LIMIT) {
+    throw new MaintenanceReleaseError(
+      `Could not find ${tag} in the ${String(RELEASE_PAGE_LIMIT * RELEASE_PAGE_SIZE)} most recent GitHub Releases`,
+    );
+  }
+  const response = await requestGitHub(
+    `/releases?per_page=${String(RELEASE_PAGE_SIZE)}&page=${String(page)}`,
+  );
+  if (!response.ok) {
+    throw new MaintenanceReleaseError(
+      `Could not list GitHub Releases (HTTP ${String(response.status)})`,
+    );
+  }
+  const payload: unknown = await response.json();
+  if (!Array.isArray(payload)) {
+    throw new MaintenanceReleaseError(
+      "GitHub Releases returned an unexpected payload",
+    );
+  }
+  const entries: unknown[] = payload;
+  const release = entries.find(
+    (entry) => isRecord(entry) && entry["tag_name"] === tag,
+  );
+  if (isRecord(release)) {
+    return release["draft"] === true ? null : readPublishedAt(tag, release);
+  }
+  if (entries.length < RELEASE_PAGE_SIZE) {
+    throw new MaintenanceReleaseError(
+      `Previous tag ${tag} has no GitHub release yet; wait for the release workflow to publish one`,
+    );
+  }
+  return findUnpromotedRelease(tag, page + 1);
+};
+
+// `null` means the tag was built but never promoted: the release is a draft, or
+// it exists without a publication date. A tag whose release was never created
+// is unfinished rather than abandoned, and fails the cut instead: a `null`
+// written for it would never be replaced.
+export const fetchPublishedAt = async (tag: string): Promise<string | null> => {
+  const response = await requestGitHub(
+    `/releases/tags/${encodeURIComponent(tag)}`,
+  );
+  if (response.ok) {
+    return readPublishedAt(tag, await response.json());
+  }
+  if (response.status !== 404) {
+    throw new MaintenanceReleaseError(
+      `Could not read ${tag} from GitHub Releases (HTTP ${String(response.status)})`,
+    );
+  }
+  await assertTagExists(tag);
+  return findUnpromotedRelease(tag, 1);
 };
 
 const staleCaptureIds = (): string[] => [
@@ -406,7 +488,7 @@ const main = async () => {
       `maintenance-release: prepared ${prepared.version}`,
       `  VERSION`,
       `  ${prepared.changelogPath}`,
-      `  ${RELEASE_DATES_PATH} (${prepared.previousTag})`,
+      `  ${RELEASE_DATES_PATH} (${prepared.previousTag}${publishedAt === null ? ": never promoted" : ""})`,
       "Review the diff, commit it, and open the release PR.",
       "",
     ].join("\n"),
