@@ -4,8 +4,9 @@ const WORKFLOW_URL = new URL(
   "../.github/workflows/autofix.yml",
   import.meta.url,
 );
-const HELPER_URL = new URL(
-  "dependabot-empty-changeset.ts",
+const HELPER_URL = new URL("dependabot-empty-changeset.ts", import.meta.url);
+const HELPER_TEST_URL = new URL(
+  "dependabot-empty-changeset.test.ts",
   import.meta.url,
 );
 const CHANGESET_GUARD_URL = new URL("changeset-guard.ts", import.meta.url);
@@ -61,9 +62,7 @@ describe("Dependabot Bun autofix boundary", () => {
       "autofix-ci/action@c5b2d67aa2274e7b5a18224e8171550871fc7e4a # v1.3.4",
     );
     expect(workflow).toContain("- name: Verify trusted autofix sources");
-    expect(workflow).toContain(
-      `git diff --quiet "$BASE_SHA" "$HEAD_SHA" --`,
-    );
+    expect(workflow).toContain(`git diff --quiet "$BASE_SHA" "$HEAD_SHA" --`);
     expect(workflow).toContain(
       `if [[ "$(git rev-parse HEAD)" != "$HEAD_SHA" ]]; then`,
     );
@@ -71,12 +70,25 @@ describe("Dependabot Bun autofix boundary", () => {
       "bun --no-install --no-env-file scripts/dependabot-empty-changeset.ts",
     );
 
-    const [helper, changesetGuard] = await Promise.all([
+    const [helper, helperTest, changesetGuard] = await Promise.all([
       Bun.file(HELPER_URL).text(),
+      Bun.file(HELPER_TEST_URL).text(),
       Bun.file(CHANGESET_GUARD_URL).text(),
     ]);
     expect(helper).not.toContain('from "better-result"');
     expect(changesetGuard).not.toContain('from "better-result"');
+    const externalTestImports = [...helperTest.matchAll(/from "([^"]+)"/gu)]
+      .flatMap((match) => {
+        const specifier = match.at(1);
+        return specifier === undefined ? [] : [specifier];
+      })
+      .filter(
+        (specifier) =>
+          specifier !== "bun:test" &&
+          !specifier.startsWith("node:") &&
+          !specifier.startsWith("."),
+      );
+    expect(externalTestImports).toEqual([]);
   });
 
   test("adds a deterministic empty changeset for published dev dependency updates", async () => {
