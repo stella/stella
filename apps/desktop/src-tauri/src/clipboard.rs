@@ -1047,6 +1047,13 @@ enum ClipboardCapture {
   Text(ClipboardTextCapture),
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ClipboardCaptureOutcome {
+  Captured,
+  Ignored,
+  Rejected,
+}
+
 struct ClipboardImageCapture {
   checksum: String,
   copied_at: DateTime<Utc>,
@@ -1498,13 +1505,22 @@ impl ClipboardManager {
     self.suppressed_content = None;
   }
 
-  fn capture(&mut self, capture: ClipboardCapture) -> Result<bool, String> {
+  fn capture(
+    &mut self,
+    capture: ClipboardCapture,
+  ) -> Result<ClipboardCaptureOutcome, String> {
     if self.capture_status == ClipboardCaptureStatus::Paused {
-      return Ok(false);
+      return Ok(ClipboardCaptureOutcome::Ignored);
     }
     match capture {
       ClipboardCapture::Image(capture) => self.capture_image(capture),
-      ClipboardCapture::Text(capture) => self.capture_text(capture),
+      ClipboardCapture::Text(capture) => self.capture_text(capture).map(|captured| {
+        if captured {
+          ClipboardCaptureOutcome::Captured
+        } else {
+          ClipboardCaptureOutcome::Ignored
+        }
+      }),
     }
   }
 
@@ -1584,7 +1600,10 @@ impl ClipboardManager {
     Ok(true)
   }
 
-  fn capture_image(&mut self, capture: ClipboardImageCapture) -> Result<bool, String> {
+  fn capture_image(
+    &mut self,
+    capture: ClipboardImageCapture,
+  ) -> Result<ClipboardCaptureOutcome, String> {
     let ClipboardImageCapture {
       checksum,
       copied_at,
@@ -1600,7 +1619,7 @@ impl ClipboardManager {
       Some(ClipboardSuppression::Image { checksum: suppressed }) if suppressed == &checksum
     ) {
       self.suppressed_content = None;
-      return Ok(false);
+      return Ok(ClipboardCaptureOutcome::Ignored);
     }
     let checkpoint = self.checkpoint();
     self.suppressed_content = None;
@@ -1673,10 +1692,10 @@ impl ClipboardManager {
     prune_image_history(&mut self.items);
     if !self.items.iter().any(|item| item.id() == id) {
       self.restore(checkpoint);
-      return Ok(false);
+      return Ok(ClipboardCaptureOutcome::Rejected);
     }
     self.persist_or_restore(checkpoint)?;
-    Ok(true)
+    Ok(ClipboardCaptureOutcome::Captured)
   }
 
   pub fn prune_expired(&mut self, now: DateTime<Utc>) -> Result<bool, String> {
@@ -2561,8 +2580,14 @@ impl ClipboardHandler for HistoryClipboardHandler {
         }),
       ) {
         ClipboardImageCaptureAttempt::Capture(capture) => {
-          self.capture(ClipboardCapture::Image(capture));
-          return;
+          match self.capture(ClipboardCapture::Image(capture)) {
+            ClipboardCaptureOutcome::Captured | ClipboardCaptureOutcome::Ignored => {
+              return;
+            }
+            ClipboardCaptureOutcome::Rejected => {
+              tracing::debug!("clipboard image was not recorded; falling back to text");
+            }
+          }
         }
         ClipboardImageCaptureAttempt::ContinueWithText { error } => {
           tracing::debug!(error = %error, "clipboard image could not be captured");
@@ -2609,10 +2634,10 @@ impl ClipboardHandler for HistoryClipboardHandler {
 }
 
 impl HistoryClipboardHandler {
-  fn capture(&self, capture: ClipboardCapture) {
-    let changed = match self.manager.lock() {
+  fn capture(&self, capture: ClipboardCapture) -> ClipboardCaptureOutcome {
+    let outcome = match self.manager.lock() {
       Ok(mut manager) => match manager.capture(capture) {
-        Ok(changed) => changed,
+        Ok(outcome) => outcome,
         Err(error) => {
           tracing::error!(error = %error, "clipboard capture could not be persisted");
           self.telemetry.capture(DesktopErrorReport {
@@ -2620,7 +2645,7 @@ impl HistoryClipboardHandler {
             operation: DesktopTelemetryOperation::ClipboardWatcherRead,
             code: DesktopTelemetryErrorCode::PersistenceFailed,
           });
-          return;
+          return ClipboardCaptureOutcome::Rejected;
         }
       },
       Err(_) => {
@@ -2630,12 +2655,13 @@ impl HistoryClipboardHandler {
           operation: DesktopTelemetryOperation::ClipboardWatcherRead,
           code: DesktopTelemetryErrorCode::LockPoisoned,
         });
-        return;
+        return ClipboardCaptureOutcome::Ignored;
       }
     };
-    if changed {
+    if outcome == ClipboardCaptureOutcome::Captured {
       let _ = self.app.emit(HISTORY_EVENT, ());
     }
+    outcome
   }
 }
 
@@ -3141,31 +3167,37 @@ mod tests {
     html: Option<&str>,
     copied_at: DateTime<Utc>,
   ) -> bool {
-    manager
-      .capture(ClipboardCapture::Text(ClipboardTextCapture {
-        copied_at,
-        html: html.map(str::to_string),
-        plain_text: plain_text.to_string(),
-        rtf: None,
-        source_app: None,
-        source_app_visual: None,
-      }))
-      .unwrap()
+    matches!(
+      manager
+        .capture(ClipboardCapture::Text(ClipboardTextCapture {
+          copied_at,
+          html: html.map(str::to_string),
+          plain_text: plain_text.to_string(),
+          rtf: None,
+          source_app: None,
+          source_app_visual: None,
+        }))
+        .unwrap(),
+      ClipboardCaptureOutcome::Captured
+    )
   }
 
   const WORD_RTF: &str = r"{\rtf1\ansi{\b Clause}}";
 
   fn capture_with_rtf(manager: &mut ClipboardManager, html: Option<&str>) -> bool {
-    manager
-      .capture(ClipboardCapture::Text(ClipboardTextCapture {
-        copied_at: Utc::now(),
-        html: html.map(str::to_string),
-        plain_text: "Clause".to_string(),
-        rtf: Some(WORD_RTF.to_string()),
-        source_app: None,
-        source_app_visual: None,
-      }))
-      .unwrap()
+    matches!(
+      manager
+        .capture(ClipboardCapture::Text(ClipboardTextCapture {
+          copied_at: Utc::now(),
+          html: html.map(str::to_string),
+          plain_text: "Clause".to_string(),
+          rtf: Some(WORD_RTF.to_string()),
+          source_app: None,
+          source_app_visual: None,
+        }))
+        .unwrap(),
+      ClipboardCaptureOutcome::Captured
+    )
   }
 
   #[test]
@@ -4620,7 +4652,7 @@ mod tests {
     organised.set_group_id(Some("screenshots".to_string()));
     manager.items.push(organised.clone());
 
-    let captured = manager
+    let outcome = manager
       .capture(ClipboardCapture::Image(ClipboardImageCapture {
         checksum: "new-checksum".to_string(),
         copied_at: Utc::now(),
@@ -4633,7 +4665,7 @@ mod tests {
       }))
       .unwrap();
 
-    assert!(!captured);
+    assert_eq!(outcome, ClipboardCaptureOutcome::Rejected);
     assert_eq!(manager.items, vec![organised]);
     assert_eq!(image_history_bytes(&manager.items), MAX_HISTORY_IMAGE_BYTES);
   }
@@ -4655,16 +4687,20 @@ mod tests {
       })
     };
 
-    assert!(manager.capture(capture_image(copied_at)).unwrap());
+    assert_eq!(
+      manager.capture(capture_image(copied_at)).unwrap(),
+      ClipboardCaptureOutcome::Captured
+    );
     let original_id = manager.items[0].id().to_string();
     let original_blob_id = manager.items[0].image_blob_id().unwrap().to_string();
     manager.items[0].set_name(Some("Pinned screenshot".to_string()));
     manager.items[0].set_group_id(Some("screenshots".to_string()));
 
-    assert!(
+    assert_eq!(
       manager
         .capture(capture_image(copied_at + Duration::minutes(1)))
-        .unwrap()
+        .unwrap(),
+      ClipboardCaptureOutcome::Captured
     );
     assert_eq!(manager.items.len(), 1);
     assert_ne!(manager.items[0].id(), original_id);
