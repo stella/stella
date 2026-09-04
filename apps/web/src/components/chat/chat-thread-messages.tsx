@@ -1,6 +1,7 @@
 import { Fragment, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ComponentProps, ReactNode, RefObject } from "react";
 
+import { Result } from "better-result";
 import {
   ChevronRightIcon,
   ClockIcon,
@@ -85,6 +86,7 @@ import { useMaybeStickToBottomContext } from "@/hooks/use-stick-to-bottom";
 import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics } from "@/lib/analytics/provider";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
+import { copyToClipboard } from "@/lib/copy-to-clipboard";
 import { dedupeById } from "@/lib/dedupe-by-id";
 import { detached } from "@/lib/detached";
 import { sanitizeHref } from "@/lib/sanitize-href";
@@ -1053,13 +1055,13 @@ const AssistantMessageActions = ({
   }
 
   const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(text);
-      stellaToast.add({ title: t("common.copied"), type: "success" });
-    } catch (error) {
-      getAnalytics().captureError(error);
+    const copied = await copyToClipboard(text);
+    if (Result.isError(copied)) {
+      getAnalytics().captureError(copied.error);
       stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+      return;
     }
+    stellaToast.add({ title: t("common.copied"), type: "success" });
   };
 
   return (

@@ -3,6 +3,7 @@ import { useState, useTransition } from "react";
 import { CancelledError, useQueryClient } from "@tanstack/react-query";
 import { Link, Navigate } from "@tanstack/react-router";
 import type { ErrorComponentProps } from "@tanstack/react-router";
+import { Result } from "better-result";
 import { CopyIcon, MailIcon, RefreshCcwIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -28,6 +29,7 @@ import { createErrorReference } from "@/lib/analytics/error-reference";
 import type { ErrorReference } from "@/lib/analytics/error-reference";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { useRouteErrorLifecycle } from "@/lib/analytics/route-error-lifecycle-context";
+import { copyToClipboard } from "@/lib/copy-to-clipboard";
 import { detached } from "@/lib/detached";
 import { isMemberError, isUnauthorizedError } from "@/lib/errors/auth";
 import { sanitizeHref } from "@/lib/sanitize-href";
@@ -272,13 +274,13 @@ const UnexpectedRouteError = ({
     if (errorReference === null) {
       return;
     }
-    try {
-      await navigator.clipboard.writeText(errorReference);
-      stellaToast.add({ title: t("common.copied"), type: "success" });
-    } catch (error) {
-      analytics.captureError(error);
+    const copied = await copyToClipboard(errorReference);
+    if (Result.isError(copied)) {
+      analytics.captureError(copied.error);
       stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+      return;
     }
+    stellaToast.add({ title: t("common.copied"), type: "success" });
   };
 
   const reportHref =

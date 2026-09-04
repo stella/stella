@@ -10,6 +10,7 @@
 import { useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Result } from "better-result";
 import {
   ArchiveRestoreIcon,
   ClipboardCopyIcon,
@@ -55,6 +56,7 @@ import { stellaToast } from "@stll/ui/toast";
 import { UserIdentity } from "@/components/user-avatar";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { copyToClipboard } from "@/lib/copy-to-clipboard";
 import { detached } from "@/lib/detached";
 import { resolveMatterColor } from "@/lib/matter-colors";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
@@ -239,13 +241,13 @@ export const useMatterActions = (
 
   const handleCopyLink = async () => {
     const url = `${window.location.origin}/workspaces/${target.id}`;
-    try {
-      await navigator.clipboard.writeText(url);
-      stellaToast.add({ title: t("common.copied"), type: "success" });
-    } catch (error) {
-      getAnalytics().captureError(error);
+    const copied = await copyToClipboard(url);
+    if (Result.isError(copied)) {
+      getAnalytics().captureError(copied.error);
       stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+      return;
     }
+    stellaToast.add({ title: t("common.copied"), type: "success" });
   };
 
   const handleDelete = async () => {
