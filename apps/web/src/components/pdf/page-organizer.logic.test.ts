@@ -32,6 +32,12 @@ const expectInvariant = (state: PageOrganizerState) => {
 };
 
 describe("page organizer state transitions", () => {
+  test("rejects an empty document before creating editable state", () => {
+    expect(() => createPageOrganizerState({ pages: [] })).toThrow(
+      "A PDF page organizer requires at least one page",
+    );
+  });
+
   test("preserves invariants and range selection follows the current order", () => {
     let state = stateWith();
     state = reducePageOrganizer(state, {

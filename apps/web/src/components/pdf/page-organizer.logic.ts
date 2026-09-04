@@ -112,6 +112,9 @@ export const createPageOrganizerState = (
   plan: PageOrganizerPlan,
   ui?: PageOrganizerUI,
 ): PageOrganizerState => {
+  if (plan.pages.length === 0) {
+    return panic("A PDF page organizer requires at least one page");
+  }
   const present = normalizePlan(plan);
   return {
     history: { initial: present, past: [], present, future: [] },

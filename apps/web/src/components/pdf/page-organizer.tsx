@@ -69,6 +69,7 @@ import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { filesKeys, fileOptions } from "@/lib/files/queries";
 import { uploadEntityVersion } from "@/lib/files/upload-entity-version";
+import { usePDFDocument } from "@/lib/pdf/hooks/use-pdf-document";
 import {
   MAX_PAGE_EDITOR_PAGES,
   MAX_PAGE_EDITOR_SOURCE_BYTES,
@@ -78,6 +79,7 @@ import { transformPDFInWorker } from "@/lib/pdf/page-editor/page-editor-worker-c
 import { destroyPDFDocument } from "@/lib/pdf/pdf-cleanup";
 import { usePDFStore } from "@/lib/pdf/pdf-context";
 import type { PageInfo } from "@/lib/pdf/pdf-context";
+import type { PDFViewerError } from "@/lib/pdf/pdf-errors";
 import { loadPDF } from "@/lib/pdf/pdf-loader";
 import type { PDFDocument } from "@/lib/pdf/pdf-loader";
 import { getCanvasSize, getCanvasTransform } from "@/lib/pdf/utils";
@@ -120,6 +122,29 @@ type PDFPageOrganizerProps = {
   fileName: string;
   onClose: () => void;
   workspaceId: string;
+};
+
+type LoadedPDFPageOrganizerProps = PDFPageOrganizerProps & {
+  originalBytes: ArrayBuffer;
+  sourceDocument: PDFDocument;
+};
+
+type ResolveOrganizerSourceDocumentOptions = {
+  providerDocument: PDFDocument | null;
+  sourceDocumentResult: Result<PDFDocument, PDFViewerError>;
+};
+
+const resolveOrganizerSourceDocument = ({
+  providerDocument,
+  sourceDocumentResult,
+}: ResolveOrganizerSourceDocumentOptions): PDFDocument => {
+  if (Result.isOk(sourceDocumentResult)) {
+    return sourceDocumentResult.value;
+  }
+  if (providerDocument !== null) {
+    return providerDocument;
+  }
+  throw sourceDocumentResult.error;
 };
 
 type CropMargins = {
@@ -568,14 +593,16 @@ const OrganizerPageCard = ({
   );
 };
 
-export const PDFPageOrganizer = ({
+const LoadedPDFPageOrganizer = ({
   canSaveVersion,
   entityId,
   fieldId,
   fileName,
   onClose,
+  originalBytes,
+  sourceDocument,
   workspaceId,
-}: PDFPageOrganizerProps) => {
+}: LoadedPDFPageOrganizerProps) => {
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
   const tPageEditor = useTranslations("workspaces.pdf.pageEditor");
@@ -587,15 +614,9 @@ export const PDFPageOrganizer = ({
   const abortRef = useRef<AbortController | null>(null);
   const isMountedRef = useRef(true);
   const addedSourceDocumentsRef = useRef(new Set<PDFDocument>());
-  const providerPages = usePDFStore((s) => s.pages);
-  const providerDocument = usePDFStore((s) => s.document);
-  const attachmentCount = usePDFStore((s) => s.attachmentLabels.size);
-  const { data: originalFile } = useSuspenseQuery(
-    fileOptions({ workspaceId, fieldId }),
-  );
   const [addedSources, setAddedSources] = useState<AddedSource[]>([]);
   const [state, setState] = useState<PageOrganizerState>(() => {
-    const initialPages = [...providerPages.entries()].map(
+    const initialPages = [...sourceDocument.pages.entries()].map(
       ([id, pageInfo], sourcePageIndex) => ({
         id,
         sourceId: ORIGINAL_SOURCE_ID,
@@ -622,18 +643,18 @@ export const PDFPageOrganizer = ({
   });
   const pageInfoBySource = useMemo(() => {
     const bySource = new Map<string, readonly PageInfo[]>();
-    bySource.set(ORIGINAL_SOURCE_ID, [...providerPages.values()]);
+    bySource.set(ORIGINAL_SOURCE_ID, [...sourceDocument.pages.values()]);
     for (const source of addedSources) {
       bySource.set(source.id, [...source.document.pages.values()]);
     }
     return bySource;
-  }, [addedSources, providerPages]);
+  }, [addedSources, sourceDocument]);
   const baseName = safePDFBaseName(fileName);
   const isUnsupported =
-    providerDocument?.isXfa === true ||
-    attachmentCount > 0 ||
-    providerPages.size > MAX_PAGE_EDITOR_PAGES ||
-    originalFile.buffer.byteLength > MAX_PAGE_EDITOR_SOURCE_BYTES;
+    sourceDocument.isXfa ||
+    sourceDocument.attachmentLabels.size > 0 ||
+    sourceDocument.pages.size > MAX_PAGE_EDITOR_PAGES ||
+    originalBytes.byteLength > MAX_PAGE_EDITOR_SOURCE_BYTES;
 
   useMountEffect(() => () => {
     isMountedRef.current = false;
@@ -661,7 +682,7 @@ export const PDFPageOrganizer = ({
       async () =>
         transformPDFInWorker({
           sources: [
-            { id: ORIGINAL_SOURCE_ID, bytes: originalFile.buffer },
+            { id: ORIGINAL_SOURCE_ID, bytes: originalBytes },
             ...addedSources.map((source) => ({
               id: source.id,
               bytes: source.bytes,
@@ -708,7 +729,7 @@ export const PDFPageOrganizer = ({
       return;
     }
     const totalBytes =
-      originalFile.buffer.byteLength +
+      originalBytes.byteLength +
       addedSources.reduce((sum, source) => sum + source.bytes.byteLength, 0) +
       files.reduce((sum, file) => sum + file.size, 0);
     if (totalBytes > MAX_PAGE_EDITOR_SOURCE_BYTES) {
@@ -1237,5 +1258,40 @@ export const PDFPageOrganizer = ({
         </AlertDialogPopup>
       </AlertDialog>
     </div>
+  );
+};
+
+export const PDFPageOrganizer = ({
+  canSaveVersion,
+  entityId,
+  fieldId,
+  fileName,
+  onClose,
+  workspaceId,
+}: PDFPageOrganizerProps) => {
+  const providerDocument = usePDFStore((state) => state.document);
+  const { data: originalFile } = useSuspenseQuery(
+    fileOptions({ workspaceId, fieldId }),
+  );
+  const { data: sourceDocumentResult } = usePDFDocument({
+    key: { fileId: fieldId },
+    context: { buffer: originalFile.buffer },
+  });
+  const sourceDocument = resolveOrganizerSourceDocument({
+    providerDocument,
+    sourceDocumentResult,
+  });
+
+  return (
+    <LoadedPDFPageOrganizer
+      canSaveVersion={canSaveVersion}
+      entityId={entityId}
+      fieldId={fieldId}
+      fileName={fileName}
+      onClose={onClose}
+      originalBytes={originalFile.buffer}
+      sourceDocument={sourceDocument}
+      workspaceId={workspaceId}
+    />
   );
 };
