@@ -150,6 +150,26 @@ type ResolveTextModelOptions = Pick<
 
 const CANCELLED_GENERATION_MESSAGE = "AI generation was cancelled";
 
+const cancelledGenerationError = (): HandlerError =>
+  new HandlerError({
+    status: 502,
+    message: CANCELLED_GENERATION_MESSAGE,
+    cause: new AIGenerationCancelledError({
+      message: CANCELLED_GENERATION_MESSAGE,
+    }),
+  });
+
+const isAbortRejection = ({
+  error,
+  signal,
+}: {
+  error: unknown;
+  signal: AbortSignal | undefined;
+}): boolean =>
+  signal?.aborted === true &&
+  (error === signal.reason ||
+    (error instanceof Error && error.name === "AbortError"));
+
 export const generateTanStackTextForRole = async (
   options: GenerateTanStackTextForRoleOptions,
 ): Promise<string> => {
@@ -166,22 +186,30 @@ export const generateTanStackTextForRole = async (
   };
   let output = "";
 
-  for await (const delta of streamTanStackTextDeltas({
-    abortController,
-    analytics: options.analytics,
-    caching: options.caching,
-    maxOutputTokens: options.maxOutputTokens,
-    messages: requestMessages,
-    model,
-    serviceTier: options.serviceTier,
-    system: guardedSystemPrompt(options),
-    temperature: options.temperature,
-    onFinishReason: (value) => {
-      state.finished = true;
-      state.finishReason = value;
-    },
-  })) {
-    output += delta;
+  try {
+    for await (const delta of streamTanStackTextDeltas({
+      abortController,
+      analytics: options.analytics,
+      caching: options.caching,
+      maxOutputTokens: options.maxOutputTokens,
+      messages: requestMessages,
+      model,
+      serviceTier: options.serviceTier,
+      system: guardedSystemPrompt(options),
+      temperature: options.temperature,
+      onFinishReason: (value) => {
+        state.finished = true;
+        state.finishReason = value;
+      },
+    })) {
+      output += delta;
+    }
+  } catch (error) {
+    if (isAbortRejection({ error, signal: options.abortSignal })) {
+      throw cancelledGenerationError();
+    }
+
+    throw error;
   }
 
   // A cancelled run leaves the chat loop through a plain `break` on the next
@@ -191,13 +219,7 @@ export const generateTanStackTextForRole = async (
   // answer the caller cannot tell from a whole one. A reported finish
   // separates the two: that run completed before the signal fired.
   if (!state.finished && options.abortSignal?.aborted === true) {
-    throw new HandlerError({
-      status: 502,
-      message: CANCELLED_GENERATION_MESSAGE,
-      cause: new AIGenerationCancelledError({
-        message: CANCELLED_GENERATION_MESSAGE,
-      }),
-    });
+    throw cancelledGenerationError();
   }
 
   if (

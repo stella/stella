@@ -1,4 +1,4 @@
-import { TaggedError } from "better-result";
+import { panic, TaggedError } from "better-result";
 
 import type { PersistedAstDegradation } from "@stll/legal-ast/document-ast";
 
@@ -164,9 +164,7 @@ export class Unreachable extends TaggedError("Unreachable")<{
   message: string;
 }> {}
 
-export const unreachable = (message: string): never => {
-  throw new Unreachable({ message });
-};
+export const unreachable = (message: string): never => panic(message);
 
 export class ParseXmlError extends TaggedError("ParseXmlError")<{
   message: string;
