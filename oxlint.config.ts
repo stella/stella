@@ -2057,8 +2057,8 @@ export default defineConfig({
     {
       // Date/timezone footguns: date-only `new Date("...")` (UTC-midnight
       // shift), `Date.parse` (engine-dependent), and raw day-length ms
-      // arithmetic (DST-unsafe). Use parseIsoDateLocal/addDays from
-      // lib/dates.ts and DAY_IN_MS from `@stll/time`.
+      // arithmetic (DST-unsafe). Use parseIsoDateLocal/addDays and DAY_IN_MS
+      // from `@stll/time`.
       files: [
         "apps/api/src/**/*.{ts,tsx}",
         "apps/web/src/**/*.{ts,tsx}",
@@ -2072,9 +2072,9 @@ export default defineConfig({
     {
       // Tests construct fixture instants from literals deterministically and
       // deliberately demonstrate the footguns (e.g. the dates.test.ts DST
-      // assertions), so the date-parsing rule stays out of them. The day-length
-      // literal's one home now lives in the `@stll/time` package, which this
-      // rule (scoped to the app source trees above) does not cover.
+      // assertions), so the date-parsing rule stays out of them. The helpers
+      // and the day-length literal live in the `@stll/time` package, which
+      // this rule (scoped to the app source trees above) does not cover.
       files: [
         "apps/api/src/**/*.{test,spec}.{ts,tsx}",
         "apps/web/src/**/*.{test,spec}.{ts,tsx}",

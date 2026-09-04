@@ -8,7 +8,7 @@ import type { ESTree } from "@oxlint/plugins";
 //    timezone west of UTC it shows the PREVIOUS calendar day. In a legal
 //    workspace, a deadline or hearing date shifted by a day is a
 //    top-severity bug. A date-only string must go through
-//    `parseIsoDateLocal` from `apps/{web,api}/src/lib/dates.ts`.
+//    `parseIsoDateLocal` from `@stll/time`.
 //
 // 2. `Date.parse(...)` of a non-ISO string is engine-dependent
 //    (unspecified by the spec), and for ISO strings it is exactly
@@ -17,7 +17,7 @@ import type { ESTree } from "@oxlint/plugins";
 // 3. Day-length millisecond arithmetic (`24 * 60 * 60 * 1000`,
 //    `86_400_000`) used as calendar math breaks across a DST transition:
 //    the clocks-change day is 23 or 25 hours, not 24. Calendar math must
-//    use `addDays` from `lib/dates.ts`; a genuine 24-hour DURATION (TTL,
+//    use `addDays` from `@stll/time`; a genuine 24-hour DURATION (TTL,
 //    staleness window, polling interval) must use the named `DAY_IN_MS`
 //    from the `@stll/time` package (its one home, which sits outside the
 //    app source trees this rule is scoped to in oxlint.config.ts).
@@ -127,14 +127,14 @@ export default eslintCompatPlugin({
           dateOnlyString:
             "new Date() on a date-only string parses as UTC midnight and " +
             "renders as the previous day west of UTC. Use " +
-            "parseIsoDateLocal() from lib/dates.ts.",
+            "parseIsoDateLocal() from @stll/time.",
           dateParse:
             "Date.parse() is engine-dependent for non-ISO strings. Use " +
-            "parseIsoDateLocal() from lib/dates.ts for calendar dates, or " +
+            "parseIsoDateLocal() from @stll/time for calendar dates, or " +
             "new Date(fullIsoTimestamp).getTime() for timestamps.",
           dayMsArithmetic:
             "Raw day-length ms arithmetic breaks across DST (a calendar " +
-            "day is 23-25 hours). Use addDays() from lib/dates.ts for " +
+            "day is 23-25 hours). Use addDays() from @stll/time for " +
             "calendar math, or DAY_IN_MS from `@stll/time` for a plain " +
             "24-hour duration.",
         },

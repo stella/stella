@@ -8,7 +8,7 @@ import { member, user } from "@/api/db/auth-schema";
 import { timeEntries, workspaceMembers } from "@/api/db/schema";
 import { canApproveTimeEntries } from "@/api/handlers/time-entries/authorization";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import { addDays, parseIsoDateLocal } from "@/api/lib/dates";
+import { addDays, parseIsoDateLocal } from "@stll/time";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 

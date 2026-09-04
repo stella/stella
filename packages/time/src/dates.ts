@@ -1,8 +1,8 @@
-// Small, dependency-free guards against the two most common date footguns:
-// UTC/local-midnight drift when parsing a bare calendar-date string, and
-// DST-unsafe day arithmetic via millisecond math. See the mirrored
-// `apps/api/src/lib/dates.ts` for the backend-side copy — there is no
-// shared cross-app package for this yet, so the two stay independent.
+// Guards against the two most common date footguns: UTC/local-midnight drift
+// when parsing a bare calendar-date string, and DST-unsafe day arithmetic via
+// millisecond math. Both apps parsed and stepped calendar dates with their own
+// copy of this; the copies agreed, which is exactly why one of them could have
+// drifted unnoticed.
 
 const ISO_DATE_PATTERN = /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})$/u;
 
@@ -26,18 +26,39 @@ export const isIsoDateString = (value: string): boolean =>
  * Returns `null` for a malformed string or a day/month that does not exist
  * on the calendar, instead of silently rolling over (e.g. "2024-02-30").
  */
-export const parseIsoDateLocal = (value: string): Date | null => {
-  const match = ISO_DATE_PATTERN.exec(value);
-  const yearStr = match?.groups?.["year"];
-  const monthStr = match?.groups?.["month"];
-  const dayStr = match?.groups?.["day"];
+export type IsoDateParts = {
+  year: number;
+  month: number;
+  day: number;
+};
+
+/**
+ * Numeric parts of a `YYYY-MM-DD` string, or `null` when it does not have
+ * that shape. Says nothing about whether the parts name a real calendar day;
+ * the two callers below check that in the calendar each of them means.
+ */
+export const isoDateParts = (value: string): IsoDateParts | null => {
+  const groups = ISO_DATE_PATTERN.exec(value)?.groups;
+  const yearStr = groups?.["year"];
+  const monthStr = groups?.["month"];
+  const dayStr = groups?.["day"];
   if (!yearStr || !monthStr || !dayStr) {
     return null;
   }
+  return {
+    year: Number(yearStr),
+    month: Number(monthStr),
+    day: Number(dayStr),
+  };
+};
 
-  const year = Number(yearStr);
-  const month = Number(monthStr);
-  const day = Number(dayStr);
+export const parseIsoDateLocal = (value: string): Date | null => {
+  const parts = isoDateParts(value);
+  if (parts === null) {
+    return null;
+  }
+
+  const { year, month, day } = parts;
   const date = new Date(year, month - 1, day);
 
   // `Date` rolls over out-of-range parts (e.g. Feb 30 -> Mar 2) instead of
