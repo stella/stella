@@ -43,7 +43,7 @@ test("deep PDF rewrite removes source metadata and text, burns redactions into p
     0,
   );
 
-  const frame = encodePdfAnonymizationWorkerRequest({
+  const encoded = encodePdfAnonymizationWorkerRequest({
     document: sourceBytes,
     pages: source.getPages().map((page, index) => ({
       ocr: {
@@ -63,17 +63,24 @@ test("deep PDF rewrite removes source metadata and text, burns redactions into p
       detections: index === 0 ? [{ start: 0, end: 20 }] : [],
     })),
   });
+  if (encoded.isErr()) {
+    throw encoded.error;
+  }
   const result = await spawnBinaryWorker({
     workerPath: new URL("pdf-anonymization-worker.ts", import.meta.url)
       .pathname,
-    stdin: new Blob([frame.slice().buffer]),
+    stdin: new Blob([encoded.value.slice().buffer]),
     timeoutMs: 30_000,
     maxOutputBytes: 64 * 1024 * 1024,
   });
   if (result.isErr()) {
     throw result.error;
   }
-  const output = decodePdfAnonymizationWorkerResponse(result.value);
+  const decoded = decodePdfAnonymizationWorkerResponse(result.value);
+  if (decoded.isErr()) {
+    throw decoded.error;
+  }
+  const output = decoded.value;
   expect(sourceBytes).toEqual(sourceSnapshot);
   expect(output.certificate).toMatchObject({
     sourceSha256: new Bun.CryptoHasher("sha256")

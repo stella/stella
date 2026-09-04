@@ -182,15 +182,16 @@ describe("PDF anonymization run tenant isolation", () => {
     async ({ scope }) => {
       const values = runValues();
       const { workspaces, organization } = scope();
-      await expectRlsDenied(() =>
-        scopedQuery(
-          workspaces,
-          organization,
-          async (tx) => {
-            await tx.insert(pdfAnonymizationRuns).values(values);
-          },
-          ids.userA1,
-        ),
+      await expectRlsDenied(
+        async () =>
+          await scopedQuery(
+            workspaces,
+            organization,
+            async (tx) => {
+              await tx.insert(pdfAnonymizationRuns).values(values);
+            },
+            ids.userA1,
+          ),
       );
       expect(
         await testDb.$count(
@@ -203,25 +204,26 @@ describe("PDF anonymization run tenant isolation", () => {
   test("an authorized run cannot be moved into a foreign tenant", async () => {
     const values = runValues();
     await testDb.insert(pdfAnonymizationRuns).values(values);
-    await expectRlsDenied(() =>
-      scopedQuery(
-        [ids.wsA1],
-        ids.orgA,
-        async (tx) => {
-          await tx
-            .update(pdfAnonymizationRuns)
-            .set({
-              organizationId: ids.orgB,
-              workspaceId: ids.wsB1,
-              entityId: ids.entityB1,
-              entityVersionId: ids.entityVersionB1,
-              fileFieldId: ids.fileFieldB1,
-              sourceFileId: toSafeId<"userFile">(ids.fileObjectB1),
-            })
-            .where(eq(pdfAnonymizationRuns.id, values.id));
-        },
-        ids.userA1,
-      ),
+    await expectRlsDenied(
+      async () =>
+        await scopedQuery(
+          [ids.wsA1],
+          ids.orgA,
+          async (tx) => {
+            await tx
+              .update(pdfAnonymizationRuns)
+              .set({
+                organizationId: ids.orgB,
+                workspaceId: ids.wsB1,
+                entityId: ids.entityB1,
+                entityVersionId: ids.entityVersionB1,
+                fileFieldId: ids.fileFieldB1,
+                sourceFileId: toSafeId<"userFile">(ids.fileObjectB1),
+              })
+              .where(eq(pdfAnonymizationRuns.id, values.id));
+          },
+          ids.userA1,
+        ),
     );
     const retained = await testDb
       .select()

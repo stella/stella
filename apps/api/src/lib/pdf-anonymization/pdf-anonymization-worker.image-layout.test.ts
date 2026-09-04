@@ -67,11 +67,14 @@ test("the PDF rewrite bundle runs with only shipped native assets and no install
       document: sourceBytes,
       pages: [{ ocr: { width: 72, height: 72, lines: [] }, detections: [] }],
     });
+    if (request.isErr()) {
+      throw request.error;
+    }
     const worker = Bun.spawn(
       ["bun", "run", path.join(workersDir, "pdf-anonymization-worker.js")],
       {
         cwd: root,
-        stdin: new Blob([request.slice().buffer]),
+        stdin: new Blob([request.value.slice().buffer]),
         stdout: "pipe",
         stderr: "pipe",
         timeout: 30_000,
@@ -85,7 +88,11 @@ test("the PDF rewrite bundle runs with only shipped native assets and no install
       worker.exited,
     ]);
     expect(exitCode, stderr).toBe(0);
-    const output = decodePdfAnonymizationWorkerResponse(stdout);
+    const decoded = decodePdfAnonymizationWorkerResponse(stdout);
+    if (decoded.isErr()) {
+      throw decoded.error;
+    }
+    const output = decoded.value;
     expect(output.certificate).toMatchObject({
       sourceSha256: new Bun.CryptoHasher("sha256")
         .update(sourceBytes)
