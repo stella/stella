@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react";
+import { create } from "zustand";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 
@@ -15,43 +15,38 @@ export const FIND_OWNERS = ["inspector", "table"] as const;
 
 export type FindOwner = (typeof FIND_OWNERS)[number];
 
-const claims = new Set<FindOwner>();
-const listeners = new Set<() => void>();
-let owner: FindOwner | null = null;
+// Counted rather than a flag per surface: a claim is released by an effect
+// cleanup, and React runs a mount/cleanup/mount cycle in development, so a
+// boolean would leave the surface unclaimed between the two mounts.
+type FindClaims = Record<FindOwner, number>;
 
-const republish = () => {
-  const next = FIND_OWNERS.find((candidate) => claims.has(candidate)) ?? null;
-  if (next === owner) {
-    return;
-  }
-  owner = next;
-  for (const listener of listeners) {
-    listener();
-  }
+const NO_CLAIMS: FindClaims = { inspector: 0, table: 0 };
+
+type FindOwnerStore = {
+  claims: FindClaims;
+  claim: (owner: FindOwner) => void;
+  release: (owner: FindOwner) => void;
 };
 
-const claimFind = (candidate: FindOwner): (() => void) => {
-  claims.add(candidate);
-  republish();
-  return () => {
-    claims.delete(candidate);
-    republish();
-  };
-};
+const useFindOwnerStore = create<FindOwnerStore>()((set) => ({
+  claims: NO_CLAIMS,
+  claim: (owner) => {
+    set((state) => ({
+      claims: { ...state.claims, [owner]: state.claims[owner] + 1 },
+    }));
+  },
+  release: (owner) => {
+    set((state) => ({
+      claims: {
+        ...state.claims,
+        [owner]: Math.max(state.claims[owner] - 1, 0),
+      },
+    }));
+  },
+}));
 
-const subscribe = (listener: () => void): (() => void) => {
-  listeners.add(listener);
-  return () => {
-    listeners.delete(listener);
-  };
-};
-
-const getSnapshot = (): FindOwner | null => owner;
-
-// Nothing claims the shortcut during SSR: there is no keyboard yet, and a
-// server snapshot that disagreed with the first client render would hydrate
-// mismatched.
-const getServerSnapshot = (): FindOwner | null => null;
+const ownerOf = (claims: FindClaims): FindOwner | null =>
+  FIND_OWNERS.find((owner) => claims[owner] > 0) ?? null;
 
 /**
  * Claim Cmd/Ctrl+F for this surface while `enabled`, and report whether the
@@ -63,12 +58,18 @@ export const useOwnsFind = (
   candidate: FindOwner,
   enabled: boolean,
 ): boolean => {
-  useExternalSyncEffect(
-    () => (enabled ? claimFind(candidate) : undefined),
-    [candidate, enabled],
-  );
-  return (
-    useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot) ===
-    candidate
-  );
+  const claim = useFindOwnerStore((state) => state.claim);
+  const release = useFindOwnerStore((state) => state.release);
+
+  useExternalSyncEffect(() => {
+    if (!enabled) {
+      return undefined;
+    }
+    claim(candidate);
+    return () => {
+      release(candidate);
+    };
+  }, [candidate, claim, enabled, release]);
+
+  return useFindOwnerStore((state) => ownerOf(state.claims)) === candidate;
 };

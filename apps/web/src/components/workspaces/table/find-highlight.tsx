@@ -42,12 +42,11 @@ export const HighlightedText = ({
     return text;
   }
 
-  return splitByMatch(text, highlight.term).map((segment, index) =>
+  return splitByMatch(text, highlight.term).map((segment) =>
     segment.matched ? (
       <mark
         className="bg-highlight text-highlight-foreground rounded-xs"
-        // eslint-disable-next-line react/no-array-index-key -- segments are runs of one string with no identity of their own, and the list is rebuilt whenever the text or the term changes, so index-keyed reuse never mismatches rendered content.
-        key={index}
+        key={segment.start}
       >
         {segment.text}
       </mark>

@@ -13998,6 +13998,15 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "search",
                   },
                   {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--find",
+                    prop: "find",
+                    required: false,
+                    part: "body",
+                    partPath: "find",
+                  },
+                  {
                     kind: "enum-array",
                     enum: ["document", "folder", "task", "message", "link"],
                     repeatable: true,
@@ -14035,7 +14044,12 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "includeAssignees",
                   },
                 ],
-                inputOnly: ["body.filters", "body.sorts", "body.fieldMode"],
+                inputOnly: [
+                  "body.filters",
+                  "body.sorts",
+                  "body.findScope",
+                  "body.fieldMode",
+                ],
                 paginated: true,
                 paginationPart: "body",
                 itemsKey: "items",
@@ -14368,6 +14382,32 @@ export const generatedRouteMap: RouteNode = {
                         search: {
                           maxLength: 500,
                           type: "string",
+                        },
+                        find: {
+                          maxLength: 500,
+                          type: "string",
+                        },
+                        findScope: {
+                          type: "object",
+                          required: ["propertyIds", "type"],
+                          properties: {
+                            propertyIds: {
+                              maxItems: 300,
+                              type: "array",
+                              items: {
+                                minLength: 36,
+                                maxLength: 36,
+                                pattern:
+                                  "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                                type: "string",
+                              },
+                            },
+                            type: {
+                              default: "all",
+                              type: "string",
+                              enum: ["all", "columns"],
+                            },
+                          },
                         },
                         limit: {
                           minimum: 1,

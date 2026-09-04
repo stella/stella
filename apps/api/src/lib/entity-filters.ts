@@ -804,7 +804,14 @@ export const buildFindConditions = ({
 
   const pattern = `%${escapeLikePattern(term)}%`;
   const matchesPattern = (valueExpr: SQL) => sql`${valueExpr} ILIKE ${pattern}`;
-  const propertyIds = findScope?.propertyIds ?? [];
+  if (!findScope) {
+    // A term with no scope reaches the name and nothing else; the scope is
+    // what names the columns, and there is no server-side default that
+    // group-counts (which takes no field selection) could agree with.
+    return [matchesPattern(displayedNameExpr())];
+  }
+
+  const { propertyIds } = findScope;
   const columnsMatch =
     propertyIds.length === 0
       ? null
@@ -817,7 +824,7 @@ export const buildFindConditions = ({
   // "columns" drops the name half, so a row whose name matches but whose chosen
   // columns do not is absent. Narrowed to no columns at all, nothing can match;
   // falling back to every row would read as the find having been ignored.
-  if (findScope?.type === "columns") {
+  if (findScope.type === "columns") {
     return [columnsMatch ?? sql`false`];
   }
 

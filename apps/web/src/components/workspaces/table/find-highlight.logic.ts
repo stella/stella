@@ -4,6 +4,8 @@
 /** A run of the rendered text, with whether the find term produced it. */
 export type TextSegment = {
   matched: boolean;
+  /** Where the run starts in the input, which is the run's only identity. */
+  start: number;
   text: string;
 };
 
@@ -21,7 +23,7 @@ export type TextSegment = {
  */
 export const splitByMatch = (text: string, term: string): TextSegment[] => {
   if (term === "" || text === "") {
-    return text === "" ? [] : [{ matched: false, text }];
+    return text === "" ? [] : [{ matched: false, start: 0, text }];
   }
 
   const haystack = text.toLocaleLowerCase();
@@ -29,7 +31,7 @@ export const splitByMatch = (text: string, term: string): TextSegment[] => {
   // A term that folds to nothing (or grows) would make the offsets below index
   // the wrong string; leave the text alone rather than mark it wrongly.
   if (haystack.length !== text.length || needle.length === 0) {
-    return [{ matched: false, text }];
+    return [{ matched: false, start: 0, text }];
   }
 
   const segments: TextSegment[] = [];
@@ -40,13 +42,21 @@ export const splitByMatch = (text: string, term: string): TextSegment[] => {
     at = haystack.indexOf(needle, cursor)
   ) {
     if (at > cursor) {
-      segments.push({ matched: false, text: text.slice(cursor, at) });
+      segments.push({
+        matched: false,
+        start: cursor,
+        text: text.slice(cursor, at),
+      });
     }
-    segments.push({ matched: true, text: text.slice(at, at + needle.length) });
+    segments.push({
+      matched: true,
+      start: at,
+      text: text.slice(at, at + needle.length),
+    });
     cursor = at + needle.length;
   }
   if (cursor < text.length) {
-    segments.push({ matched: false, text: text.slice(cursor) });
+    segments.push({ matched: false, start: cursor, text: text.slice(cursor) });
   }
   return segments;
 };

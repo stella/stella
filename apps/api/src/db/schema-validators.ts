@@ -3,7 +3,6 @@ import type { Static } from "elysia";
 
 import {
   ENTITY_KINDS,
-  PROPERTY_CONTENT_TYPES,
   REVIEW_FLAGS,
   REVIEW_FLAGS_MAX_ITEMS,
 } from "@stll/api-contract";
@@ -105,10 +104,20 @@ const currencyCode = currencyCodeSchema();
 export const entityKindSchema = t.UnionEnum(ENTITY_KINDS);
 export type { EntityKind } from "@stll/api-contract";
 
-// Derived from the contract list rather than restated, so a new property type
-// has to be classified in `PROPERTY_FIND_SUPPORT` before this compiles.
-export const propertyContentTypeSchema = t.UnionEnum([
-  ...PROPERTY_CONTENT_TYPES,
+// Deliberately a union of literals, not `t.UnionEnum`: Elysia gives a
+// UnionEnum a default of its first member, which would turn a request that
+// omits this required field into a silent "file" instead of a 400.
+// `schema-validators.test.ts` binds the members to `PROPERTY_CONTENT_TYPES`,
+// so a new property type still has to be classified for find.
+export const propertyContentTypeSchema = t.Union([
+  fileType,
+  textType,
+  singleSelectType,
+  multiSelectType,
+  dateType,
+  intType,
+  moneyType,
+  personType,
 ]);
 
 export type PropertyContentType = Static<typeof propertyContentTypeSchema>;
