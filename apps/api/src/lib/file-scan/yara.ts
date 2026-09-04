@@ -4,9 +4,11 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import type { Match, Scanner } from "@/api/lib/file-scan/scanner";
+import { runtimeYaraRulesDir } from "@/api/lib/runtime-worker-path";
 import { isRecord } from "@/api/lib/type-guards";
 
-const YARA_DIR = path.join(import.meta.dir, "yara");
+// Compiled Bun binaries cannot enumerate external directories under /$bunfs.
+const YARA_DIR = runtimeYaraRulesDir() || path.join(import.meta.dir, "yara");
 
 const ruleFiles = [...new Bun.Glob("*.yar").scanSync(YARA_DIR)];
 

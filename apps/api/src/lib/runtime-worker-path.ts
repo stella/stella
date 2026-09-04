@@ -2,6 +2,7 @@ import path from "node:path";
 
 const WORKER_DIR_ENV = "STELLA_WORKER_DIR";
 const OCR_PDF_FONT_PATH_ENV = "STELLA_OCR_PDF_FONT_PATH";
+const YARA_RULES_DIR_ENV = "STELLA_YARA_RULES_DIR";
 
 // Bundled worker entrypoints the API spawns at runtime. In the container
 // image they live in STELLA_WORKER_DIR (built by apps/api/Dockerfile); in dev
@@ -65,6 +66,9 @@ export const runtimeWorkerDir = (): string | undefined =>
 
 export const runtimeOcrPdfFontPath = (): string | undefined =>
   process.env[OCR_PDF_FONT_PATH_ENV];
+
+export const runtimeYaraRulesDir = (): string | undefined =>
+  process.env[YARA_RULES_DIR_ENV];
 
 export const resolveRuntimeWorkerPath = ({
   outputFile,
