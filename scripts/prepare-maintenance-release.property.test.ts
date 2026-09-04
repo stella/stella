@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import fc from "fast-check";
 import {
   existsSync,
@@ -14,6 +14,7 @@ import nodePath from "node:path";
 import { propertyConfig } from "@stll/property-testing";
 
 import {
+  fetchPublishedAt,
   MaintenanceReleaseError,
   nextPatchVersion,
   parseMaintenanceReleaseOptions,
@@ -23,10 +24,64 @@ import {
 } from "./prepare-maintenance-release";
 
 const roots: string[] = [];
+const restores: (() => void)[] = [];
+
+// Responses are consumed in request order: the release by tag, then, once that
+// answers 404, the tag ref and the pages of the release listing. An unexpected
+// extra request reads as HTTP 599 rather than reaching GitHub.
+const respondWith = (...responses: readonly Response[]) => {
+  const spy = spyOn(globalThis, "fetch");
+  for (const response of responses) {
+    spy.mockResolvedValueOnce(response);
+  }
+  spy.mockResolvedValue(new Response(null, { status: 599 }));
+  restores.push(() => {
+    spy.mockRestore();
+  });
+};
+
+const missing = () => new Response(null, { status: 404 });
+const tagRef = () => Response.json({ ref: "refs/tags/v1.2.3" });
+const draftRelease = { draft: true, published_at: null, tag_name: "v1.2.3" };
+
+const failureMessage = async (tag: string): Promise<string> => {
+  let publishedAt: string | null;
+  try {
+    publishedAt = await fetchPublishedAt(tag);
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+  throw new Error(`Expected a failure; read ${String(publishedAt)}`);
+};
+
+const releaseFixture = (root: string, releaseDates: string) => {
+  mkdirSync(nodePath.join(root, "docs/changelog"), { recursive: true });
+  mkdirSync(nodePath.join(root, "apps/landing/src/data"), { recursive: true });
+  writeFileSync(nodePath.join(root, "VERSION"), "1.2.3\n");
+  writeFileSync(
+    nodePath.join(root, "docs/changelog/v1.2.3.md"),
+    "# Previous release\n",
+  );
+  writeFileSync(
+    nodePath.join(root, "apps/landing/src/data/changelog-release-dates.json"),
+    releaseDates,
+  );
+};
+
+const readReleaseDates = (root: string): unknown =>
+  JSON.parse(
+    readFileSync(
+      nodePath.join(root, "apps/landing/src/data/changelog-release-dates.json"),
+      "utf-8",
+    ),
+  );
 
 afterEach(() => {
   for (const root of roots.splice(0)) {
     rmSync(root, { force: true, recursive: true });
+  }
+  for (const restore of restores.splice(0)) {
+    restore();
   }
 });
 
@@ -123,6 +178,92 @@ describe("maintenance release preparation", () => {
       "v1.2.2": "2026-01-01T00:00:00Z",
       "v1.2.3": "2026-02-03T04:05:06Z",
     });
+  });
+
+  test("records a previous tag that was never promoted", () => {
+    const root = mkdtempSync(nodePath.join(tmpdir(), "stella-release-"));
+    roots.push(root);
+    releaseFixture(
+      root,
+      `${JSON.stringify({ "v1.2.2": "2026-01-01T00:00:00Z" }, null, 2)}\n`,
+    );
+
+    expect(
+      prepareMaintenanceReleaseFiles({ publishedAt: null, rootDir: root }),
+    ).toMatchObject({ previousTag: "v1.2.3", version: "1.2.4" });
+    expect(readReleaseDates(root)).toEqual({
+      "v1.2.2": "2026-01-01T00:00:00Z",
+      "v1.2.3": null,
+    });
+  });
+
+  test("keeps a previous tag already recorded as never promoted", () => {
+    const root = mkdtempSync(nodePath.join(tmpdir(), "stella-release-"));
+    roots.push(root);
+    releaseFixture(root, `${JSON.stringify({ "v1.2.3": null }, null, 2)}\n`);
+
+    prepareMaintenanceReleaseFiles({
+      publishedAt: "2026-02-03T04:05:06Z",
+      rootDir: root,
+    });
+    expect(readReleaseDates(root)).toEqual({ "v1.2.3": null });
+  });
+
+  test("reads the publication date of a published release", async () => {
+    respondWith(Response.json({ published_at: "2026-02-03T04:05:06Z" }));
+    expect(await fetchPublishedAt("v1.2.3")).toBe("2026-02-03T04:05:06Z");
+  });
+
+  test("reads a drafted release as never promoted", async () => {
+    respondWith(missing(), tagRef(), Response.json([draftRelease]));
+    expect(await fetchPublishedAt("v1.2.3")).toBeNull();
+  });
+
+  test("reads a release without a publication date as never promoted", async () => {
+    respondWith(Response.json({ published_at: null }));
+    expect(await fetchPublishedAt("v1.2.3")).toBeNull();
+  });
+
+  test("reads a release omitting the publication date as never promoted", async () => {
+    respondWith(Response.json({ tag_name: "v1.2.3" }));
+    expect(await fetchPublishedAt("v1.2.3")).toBeNull();
+  });
+
+  test("pages through the release listing to find the drafted release", async () => {
+    const filler = Array.from({ length: 100 }, (_unused, index) => ({
+      draft: false,
+      published_at: "2026-01-01T00:00:00Z",
+      tag_name: `v0.0.${String(index)}`,
+    }));
+    respondWith(
+      missing(),
+      tagRef(),
+      Response.json(filler),
+      Response.json([draftRelease]),
+    );
+    expect(await fetchPublishedAt("v1.2.3")).toBeNull();
+  });
+
+  test("fails when the previous tag has no release yet", async () => {
+    respondWith(missing(), tagRef(), Response.json([{ tag_name: "v1.2.2" }]));
+    expect(await failureMessage("v1.2.3")).toContain("has no GitHub release");
+  });
+
+  test("fails when the previous tag does not exist", async () => {
+    respondWith(missing(), missing());
+    expect(await failureMessage("v1.2.3")).toContain("does not exist");
+  });
+
+  test("fails on a GitHub error", async () => {
+    respondWith(new Response(null, { status: 500 }));
+    expect(await failureMessage("v1.2.3")).toContain("HTTP 500");
+  });
+
+  test("fails on an unreadable publication timestamp", async () => {
+    respondWith(Response.json({ published_at: "not a timestamp" }));
+    expect(await failureMessage("v1.2.3")).toContain(
+      "no valid published_at timestamp",
+    );
   });
 
   test("refuses to overwrite an already prepared release", () => {
