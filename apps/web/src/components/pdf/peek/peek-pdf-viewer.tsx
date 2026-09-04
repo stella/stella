@@ -14,8 +14,11 @@ import {
   AlertTriangleIcon,
   FoldHorizontalIcon,
   MinusIcon,
+  MonitorIcon,
+  MoonIcon,
   PlusIcon,
   PrinterIcon,
+  SunIcon,
   UnfoldHorizontalIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -23,7 +26,15 @@ import { useTranslations } from "use-intl";
 import { resolveFindMatchRange } from "@stll/folio-core/prosemirror/findReplaceSelection";
 import type { DocxEditorRef } from "@stll/folio-react";
 import { Button } from "@stll/ui/button";
+import {
+  Menu,
+  MenuPopup,
+  MenuRadioGroup,
+  MenuRadioItem,
+  MenuTrigger,
+} from "@stll/ui/menu";
 import type { OverlayLayer } from "@stll/ui/overlay-layer";
+import { Separator } from "@stll/ui/separator";
 import "@stll/folio-react/editor.css";
 
 import "./peek-docx.css";
@@ -53,6 +64,11 @@ import { detached } from "@/lib/detached";
 import { findDocumentSearchResult } from "@/lib/document-search";
 import type { DocumentSearchResult } from "@/lib/document-search";
 import { fileOptions } from "@/lib/files/queries";
+import {
+  PDF_COLOR_MODES,
+  resolvePDFInvertColors,
+  type PDFColorMode,
+} from "@/lib/pdf/pdf-color-mode";
 import { usePDFStore } from "@/lib/pdf/pdf-context";
 import { PDFPage } from "@/lib/pdf/pdf-page";
 import { PDFViewport } from "@/lib/pdf/pdf-viewport";
@@ -128,6 +144,7 @@ type PeekPdfViewerProps = {
   docxFitMode?: "text-area" | "page" | undefined;
   errorFallback?: ((props: { reset: () => void }) => ReactNode) | undefined;
   onError?: ((error: Error) => void) | undefined;
+  colorMode?: PDFColorMode | undefined;
 };
 
 export const PeekPdfViewer = (props: PeekPdfViewerProps) => {
@@ -173,6 +190,7 @@ const PeekPdfViewerContent = ({
   onDocxScrollTopChange,
   onWheelZoom,
   docxFitMode = "text-area",
+  colorMode = "system",
 }: PeekPdfViewerProps) => {
   const isImageOrigin = mimeType?.startsWith("image/") ?? false;
   const pendingPdfPageScroll = useInspectorCommandStore(
@@ -242,7 +260,10 @@ const PeekPdfViewerContent = ({
         className="document-preview-surface h-full"
         contentClassName="relative space-y-2 px-2 pt-2"
         fileId={fieldId}
-        invertColors={isImageOrigin ? false : undefined}
+        invertColors={resolvePDFInvertColors({
+          colorMode,
+          isImageOrigin,
+        })}
         scaleOffset={scaleOffset}
         activeSearchMatchIndex={activeSearchMatchIndex}
         onSearchMatchSummaryChange={onSearchMatchSummaryChange}
@@ -327,21 +348,75 @@ const PeekViewerErrorFallback = ({ onRetry }: { onRetry: () => void }) => {
   );
 };
 
+const PDF_COLOR_MODE_ICONS = {
+  light: SunIcon,
+  dark: MoonIcon,
+  system: MonitorIcon,
+} as const satisfies Record<PDFColorMode, typeof SunIcon>;
+
+type PeekPdfColorControl = {
+  colorMode: PDFColorMode;
+  onColorModeChange: (colorMode: PDFColorMode) => void;
+};
+
+type PeekPdfControlsProps = {
+  canResetZoom: boolean;
+  onZoomIn?: (() => void) | undefined;
+  onZoomOut?: (() => void) | undefined;
+  onResetZoom?: (() => void) | undefined;
+  pdfColorControl?: PeekPdfColorControl | undefined;
+  scaleOffset: number;
+  tooltipLayer?: OverlayLayer | undefined;
+};
+
+const PDFColorModeControl = ({
+  colorMode,
+  onColorModeChange,
+}: PeekPdfColorControl) => {
+  const t = useTranslations();
+  const PDFColorModeIcon = PDF_COLOR_MODE_ICONS[colorMode];
+
+  return (
+    <Menu>
+      <MenuTrigger
+        aria-label={t("workspaces.pdf.adjustForDarkMode")}
+        render={<Button size="icon-xs" variant="ghost" />}
+        title={t("workspaces.pdf.adjustForDarkMode")}
+      >
+        <PDFColorModeIcon className="size-3.5" />
+      </MenuTrigger>
+      <MenuPopup className="w-auto" align="end">
+        <MenuRadioGroup className="flex" value={colorMode}>
+          {PDF_COLOR_MODES.map((mode) => {
+            const ColorModeIcon = PDF_COLOR_MODE_ICONS[mode];
+            return (
+              <MenuRadioItem
+                className="data-checked:bg-accent data-checked:text-accent-foreground"
+                indicator="none"
+                key={mode}
+                onClick={() => onColorModeChange(mode)}
+                value={mode}
+              >
+                <ColorModeIcon />
+                {t(`appearance.${mode}`)}
+              </MenuRadioItem>
+            );
+          })}
+        </MenuRadioGroup>
+      </MenuPopup>
+    </Menu>
+  );
+};
+
 export const PeekPdfControls = ({
   canResetZoom,
   onZoomIn,
   onZoomOut,
   onResetZoom,
+  pdfColorControl,
   scaleOffset,
   tooltipLayer,
-}: {
-  canResetZoom: boolean;
-  onZoomIn?: (() => void) | undefined;
-  onZoomOut?: (() => void) | undefined;
-  onResetZoom?: (() => void) | undefined;
-  scaleOffset: number;
-  tooltipLayer?: OverlayLayer | undefined;
-}) => {
+}: PeekPdfControlsProps) => {
   const t = useTranslations();
 
   return (
@@ -380,6 +455,12 @@ export const PeekPdfControls = ({
           <UnfoldHorizontalIcon className="size-3" />
         )}
       </Button>
+      {pdfColorControl && (
+        <>
+          <Separator className="mx-0.5 h-4" orientation="vertical" />
+          <PDFColorModeControl {...pdfColorControl} />
+        </>
+      )}
     </>
   );
 };

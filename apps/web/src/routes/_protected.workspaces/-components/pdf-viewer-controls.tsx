@@ -2,12 +2,13 @@ import { useState } from "react";
 import type { ReactNode } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
+import { getRouteApi, useNavigate } from "@tanstack/react-router";
 import { produce } from "immer";
 import {
   ChevronDownIcon,
   ChevronUpIcon,
   DownloadIcon,
+  FilePenLineIcon,
   PrinterIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -30,6 +31,7 @@ import { unwrapEden } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { fileMetadataOptions } from "@/lib/files/file-metadata-query";
+import type { PDFColorMode } from "@/lib/pdf/pdf-color-mode";
 import {
   getPDFScaleOffset,
   PDF_MAX_SCALE_OFFSET,
@@ -39,6 +41,10 @@ import {
 import { downloadFile } from "@/lib/utils";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
 
+const routeApi = getRouteApi(
+  "/_protected/workspaces/$workspaceId/$viewId/document",
+);
+
 type PdfViewerControlsProps = {
   workspaceId: string;
   fieldId: string;
@@ -47,6 +53,7 @@ type PdfViewerControlsProps = {
   showFileActions?: boolean | undefined;
   onPrint?: (() => void) | undefined;
   printDisabled?: boolean | undefined;
+  onEditPages?: (() => void) | undefined;
   extraControls?: ReactNode | undefined;
 };
 
@@ -58,6 +65,7 @@ export const PdfViewerControls = ({
   showFileActions = true,
   onPrint,
   printDisabled = false,
+  onEditPages,
   extraControls,
 }: PdfViewerControlsProps) => {
   const t = useTranslations();
@@ -78,9 +86,16 @@ export const PdfViewerControls = ({
   const isDocx =
     fileMetadata?.originalMimeType === DOCX_MIME ||
     fileMetadata?.mimeType === DOCX_MIME;
+  const pdfColorMode = routeApi.useSearch({
+    select: (search) => search.pdfColorMode ?? "system",
+  });
   const navigate = useNavigate({
     from: "/workspaces/$workspaceId/$viewId/document",
   });
+  const canAdjustPDFColor =
+    !isDocx &&
+    fileMetadata !== undefined &&
+    !fileMetadata.originalMimeType.startsWith("image/");
 
   const navigateToScale = (offset: number) => {
     setPdfScaleOffset(Math.round(offset * 10) / 10);
@@ -93,6 +108,20 @@ export const PdfViewerControls = ({
         search: (prev) =>
           produce(prev, (s) => {
             s.pdfPage = pageNumber;
+          }),
+      }),
+      "pdf-viewer-controls.navigate",
+    );
+  };
+
+  const setPDFColorMode = (colorMode: PDFColorMode) => {
+    detached(
+      navigate({
+        replace: true,
+        search: (previous) =>
+          produce(previous, (search) => {
+            search.pdfColorMode =
+              colorMode === "system" ? undefined : colorMode;
           }),
       }),
       "pdf-viewer-controls.navigate",
@@ -182,6 +211,14 @@ export const PdfViewerControls = ({
                     getPDFScaleOffset(scaleOffset, -PDF_SCALE_OFFSET_STEP),
                   )
           }
+          pdfColorControl={
+            canAdjustPDFColor
+              ? {
+                  colorMode: pdfColorMode,
+                  onColorModeChange: setPDFColorMode,
+                }
+              : undefined
+          }
           scaleOffset={scaleOffset}
         />
       </div>
@@ -257,6 +294,17 @@ export const PdfViewerControls = ({
       <div className="flex items-center">
         {showFileActions && (
           <>
+            {onEditPages && !isDocx && (
+              <Button
+                disabled={totalPages === 0}
+                onClick={onEditPages}
+                size="sm"
+                variant="ghost"
+              >
+                <FilePenLineIcon />
+                {t("workspaces.pdf.pageEditor.editPages")}
+              </Button>
+            )}
             <Button
               disabled={!fileMetadata || isDownloading || fieldId.length === 0}
               onClick={() => {

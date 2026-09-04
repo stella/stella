@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMatch, useNavigate } from "@tanstack/react-router";
+import { useMatch, useNavigate, useRouteContext } from "@tanstack/react-router";
 import { Result } from "better-result";
 import {
   ArchiveIcon,
@@ -10,6 +10,7 @@ import {
   EllipsisVerticalIcon,
   EraserIcon,
   EyeIcon,
+  FilePenLineIcon,
   FileOutputIcon,
   FileTextIcon,
   FolderPlusIcon,
@@ -57,6 +58,7 @@ import { useRequestChatAbout } from "@/components/chat/use-request-chat-about";
 import { openInspectorSelection } from "@/components/inspector/inspector-actions";
 import Tooltip from "@/components/tooltip";
 import { TranslateDocumentDialog } from "@/components/translate-document-dialog";
+import { canTranslateDocument } from "@/components/translate-document-dialog.logic";
 import { CopyToMatterDialog } from "@/components/workspaces/copy-to-matter-dialog";
 import {
   buildSelectionParentLookup,
@@ -77,6 +79,7 @@ import { externalApiOrigin } from "@/lib/api-origins";
 import { apiUrl } from "@/lib/api-url";
 import { getFreshLinkedAccount } from "@/lib/auth-session";
 import { DOCX_MIME } from "@/lib/consts";
+import { deepLAvailabilityOptions } from "@/lib/deepl/queries";
 import {
   DesktopBridgeIncompatibleError,
   openFileInDesktop,
@@ -167,6 +170,13 @@ type TranslationTarget = {
   mimeType: string;
 };
 
+type GetRowFileTargetOptions = {
+  cellMetadataTarget: RowActionsProps["cellMetadataTarget"];
+  entity: WorkspaceEntity;
+  file: ReturnType<typeof getFirstFile>;
+  isBulk: boolean;
+};
+
 type TranslationDialogState =
   | { type: "closed" }
   | { target: TranslationTarget; type: "open" };
@@ -178,17 +188,12 @@ type DeleteRequest = {
   name: string;
 };
 
-const getTranslationTarget = ({
+const getRowFileTarget = ({
   cellMetadataTarget,
   entity,
   file,
   isBulk,
-}: {
-  cellMetadataTarget: RowActionsProps["cellMetadataTarget"];
-  entity: WorkspaceEntity;
-  file: ReturnType<typeof getFirstFile>;
-  isBulk: boolean;
-}): TranslationTarget | null => {
+}: GetRowFileTargetOptions): TranslationTarget | null => {
   if (isBulk) {
     return null;
   }
@@ -208,9 +213,77 @@ const getTranslationTarget = ({
       mimeType: contextField.content.mimeType,
     };
   })();
+  return target;
+};
+
+const getTranslationTarget = (
+  options: GetRowFileTargetOptions,
+): TranslationTarget | null => {
+  const target = getRowFileTarget(options);
   return target !== null && isDocumentTranslationSourceEligible(target)
     ? target
     : null;
+};
+
+const getPDFPageEditorTarget = (
+  options: GetRowFileTargetOptions,
+): TranslationTarget | null => {
+  const target = getRowFileTarget(options);
+  return target?.mimeType === PDF_MIME_TYPE ? target : null;
+};
+
+const useAvailableTranslationTarget = (
+  target: TranslationTarget | null,
+): TranslationTarget | null => {
+  const activeOrganizationId = useRouteContext({
+    from: "/_protected",
+    select: (context) => context.user.activeOrganizationId,
+  });
+  const { data: deepLAvailability } = useQuery({
+    ...deepLAvailabilityOptions({ organizationId: activeOrganizationId }),
+    enabled: target !== null && target.mimeType !== DOCX_MIME,
+  });
+  if (
+    target === null ||
+    !canTranslateDocument({
+      canUseDeepL: deepLAvailability?.configured === true,
+      isDocx: target.mimeType === DOCX_MIME,
+    })
+  ) {
+    return null;
+  }
+  return target;
+};
+
+type UseOpenPDFPageEditorOptions = {
+  entityId: string;
+  target: TranslationTarget | null;
+  workspaceId: string;
+};
+
+const useOpenPDFPageEditor = ({
+  entityId,
+  target,
+  workspaceId,
+}: UseOpenPDFPageEditorOptions): (() => void) | undefined => {
+  const navigate = useNavigate();
+  if (target === null) {
+    return undefined;
+  }
+  return () => {
+    detached(
+      navigate({
+        to: "/workspaces/$workspaceId/$viewId/document",
+        params: { workspaceId, viewId: "all" },
+        search: {
+          entity: entityId,
+          field: target.fieldId,
+          pdfMode: "organize",
+        },
+      }),
+      "row-actions.navigate",
+    );
+  };
 };
 
 const OcrExportMenuItems = ({
@@ -288,11 +361,23 @@ export const RowActions = ({
   const bulkTargets = isBulk ? selectedEntities : [entity];
   const isCellContext =
     !isBulk && cellMetadataTarget !== null && cellMetadataTarget !== undefined;
-  const translationTarget = getTranslationTarget({
+  const rawTranslationTarget = getTranslationTarget({
     cellMetadataTarget,
     entity,
     file,
     isBulk,
+  });
+  const translationTarget = useAvailableTranslationTarget(rawTranslationTarget);
+  const pdfPageEditorTarget = getPDFPageEditorTarget({
+    cellMetadataTarget,
+    entity,
+    file,
+    isBulk,
+  });
+  const openPDFPageEditor = useOpenPDFPageEditor({
+    entityId: entity.entityId,
+    target: pdfPageEditorTarget,
+    workspaceId,
   });
   const openTranslationDialog = () => {
     if (translationTarget === null) {
@@ -375,7 +460,6 @@ export const RowActions = ({
         );
       }
     : undefined;
-
   // Preview opens every selected entity the inspector can render and focuses
   // the row the menu was opened on, not the first of the selection: the tab
   // that takes focus is the row the user acted on, on every surface.
@@ -940,6 +1024,7 @@ export const RowActions = ({
           isFolder={isFolder}
           onChatAbout={handleChatAbout}
           onOpenVersionHistory={openVersionHistory}
+          onEditPages={openPDFPageEditor}
           onTranslate={openTranslationDialog}
           translationTarget={translationTarget}
         />
@@ -1222,6 +1307,7 @@ const RowFeatureMenuActions = ({
   isBulk,
   isFolder,
   onChatAbout,
+  onEditPages,
   onOpenVersionHistory,
   onTranslate,
   translationTarget,
@@ -1232,6 +1318,7 @@ const RowFeatureMenuActions = ({
   isBulk: boolean;
   isFolder: boolean;
   onChatAbout: () => void;
+  onEditPages: (() => void) | undefined;
   onOpenVersionHistory: (() => void) | undefined;
   onTranslate: () => void;
   translationTarget: TranslationTarget | null;
@@ -1249,6 +1336,12 @@ const RowFeatureMenuActions = ({
             {t("workspaces.pdf.fullView")}
           </MenuItem>
         )}
+      {onEditPages !== undefined && (
+        <MenuItem onClick={onEditPages}>
+          <FilePenLineIcon />
+          {t("workspaces.pdf.pageEditor.editPages")}
+        </MenuItem>
+      )}
       <MenuItem onClick={onChatAbout}>
         <MessageSquareIcon />
         {t("chat.chatAbout")}

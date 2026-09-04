@@ -651,7 +651,7 @@
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 736,
+    "count": 735,
     "files": {
       "apps/api/scripts/ai-provider-canary.ts": 5,
       "apps/api/scripts/backfill-image-thumbnails.ts": 9,
@@ -883,7 +883,6 @@
       "apps/web/src/components/inspector/versions-facet.tsx": 1,
       "apps/web/src/components/legal-reader/document-ast-text.tsx": 1,
       "apps/web/src/components/pdf/page-citation.tsx": 1,
-      "apps/web/src/components/pdf/versions-sidebar.tsx": 1,
       "apps/web/src/components/templates/template-form.tsx": 3,
       "apps/web/src/components/workspaces/copy-to-matter-dialog.tsx": 1,
       "apps/web/src/components/workspaces/hooks/use-create-b-boxes.ts": 1,

@@ -10,6 +10,7 @@ import { StellaMark } from "@/components/stella-mark";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
 import { fileOptions } from "@/lib/files/queries";
+import { resolvePDFInvertColors } from "@/lib/pdf/pdf-color-mode";
 import { usePDFStore } from "@/lib/pdf/pdf-context";
 import { PDFPage } from "@/lib/pdf/pdf-page";
 import { PDFViewport } from "@/lib/pdf/pdf-viewport";
@@ -29,6 +30,9 @@ const FullscreenPdfViewer = () => {
   const fieldId = usePDFStore((s) => s.fieldId);
   const entityId = routeApi.useSearch({ select: (s) => s.entity ?? "" });
   const pageNumber = routeApi.useSearch({ select: (s) => s.pdfPage ?? 1 });
+  const pdfColorMode = routeApi.useSearch({
+    select: (s) => s.pdfColorMode ?? "system",
+  });
   const setPdfPageCount = useWorkspaceStore((s) => s.setPdfPageCount);
   const setPdfScaleOffset = useWorkspaceStore((s) => s.setPdfScaleOffset);
   const scaleOffset = useWorkspaceStore((s) => s.pdfViewer.scaleOffset);
@@ -107,7 +111,10 @@ const FullscreenPdfViewer = () => {
         className="document-preview-surface h-full"
         contentClassName="relative mt-2 space-y-2 px-2"
         fileId={fieldId}
-        invertColors={isImageOrigin ? false : undefined}
+        invertColors={resolvePDFInvertColors({
+          colorMode: pdfColorMode,
+          isImageOrigin,
+        })}
         onPageChanged={handlePageChanged}
         onWheelZoom={handleWheelZoom}
         page={pageNumber}

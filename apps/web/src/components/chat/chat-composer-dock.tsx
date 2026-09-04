@@ -56,7 +56,7 @@ type ChatComposerDockProps = {
    * controls so callers never reopen a free-form status row.
    */
   endExtras?: ReactNode | undefined;
-  /** Model picker rendered beside the context percentage. */
+  /** Model picker rendered beside the context meter. */
   models?: ComposerModelsMenuProps | undefined;
   /** Row positioning override, forwarded to `ComposerStatusRow`. */
   className?: string | undefined;
@@ -108,7 +108,7 @@ export const ChatComposerDock = ({
             />
           )}
           {models && <ChatModelSelector models={models} />}
-          {/* The meter renders on every surface: it shows an empty 0% ring
+          {/* The meter renders on every surface: it shows an empty ring
               for a brand-new thread (context null) and fills in once an
               estimate lands. */}
           <ChatContextMeter usage={data.context} />
@@ -118,7 +118,7 @@ export const ChatComposerDock = ({
         // `icon-xs` toggles keep the whole row visually subordinate to
         // the composer input above it: the status row is quiet chrome
         // (muted text-xs, borderless controls), never a second toolbar.
-        <div className="flex min-w-0 items-center gap-1">
+        <div className="flex min-w-0 flex-1 items-center gap-1">
           {leadingContext}
           {data.webSearchAvailable && (
             <ChatWebSearchToggle

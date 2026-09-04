@@ -46,6 +46,7 @@ import {
 } from "@/components/document-translation-queries";
 import {
   activeTranslationChoice,
+  canTranslateDocument,
   canStartDocumentTranslation,
   commentPolicyStateForSource,
   DEFAULT_TRANSLATION_CHOICE,
@@ -463,6 +464,10 @@ export const TranslateDocumentDialog = (
     requiresCommentPolicy: commentsFound,
     sameLanguage,
   });
+
+  if (!canTranslateDocument({ canUseDeepL, isDocx })) {
+    return null;
+  }
 
   return (
     <Dialog
