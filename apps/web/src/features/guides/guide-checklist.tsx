@@ -81,6 +81,7 @@ export const GuideChecklist = ({
         <Button
           render={
             <a
+              aria-label={t("guides.community.linkLabel")}
               href={sanitizeHref(COMMUNITY_FORUM_URL)}
               rel="noreferrer noopener"
               target="_blank"

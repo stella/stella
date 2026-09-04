@@ -16,12 +16,8 @@ const GUIDE_PREVIOUS_BUTTON_SELECTOR = ".driver-popover-prev-btn";
 const GUIDE_TEST_TIMEOUT_MS = 90_000;
 const GUIDE_NAVIGATION_TIMEOUT_MS = 45_000;
 
-test.beforeEach((_fixtures, testInfo) => {
-  // A cold dev server compiles the lazy guide engine plus whichever product
-  // surface the tour enters. Production E2E uses prebuilt chunks, but local
-  // runs need enough headroom to validate the same browser state machine.
-  testInfo.setTimeout(GUIDE_TEST_TIMEOUT_MS);
-});
+// Cold dev routes need time to compile the guide engine and product surface.
+test.describe.configure({ timeout: GUIDE_TEST_TIMEOUT_MS });
 
 const enableGuidesTestFeatures = async (page: Page) => {
   await page.addInitScript(
@@ -29,7 +25,7 @@ const enableGuidesTestFeatures = async (page: Page) => {
       localStorage.setItem(
         devStorageKey,
         JSON.stringify({
-          state: { playbooksPreview: true, workflowsPreview: true },
+          state: { workflowsPreview: true },
           version: 0,
         }),
       );
@@ -225,13 +221,12 @@ test("Playbooks guide reverses and replays its local editor transition", async (
 
   // Finishing leaves the reversible local editor visible. Replaying from that
   // pathname starts at its first visible editor step without discarding work;
-  // Back then follows the real reversible transition to the beginning.
+  // Back cannot reverse a transition owned by an earlier run.
   await startGuide(page, "Build a playbook");
   await expectGuideStep(page, GUIDE_ANCHORS.playbooksBasics, "3 of 4");
-  await guidePopover(page).locator(GUIDE_PREVIOUS_BUTTON_SELECTOR).click();
-  await expectGuideStep(page, GUIDE_ANCHORS.playbooksCreate, "2 of 4");
-  await guidePopover(page).locator(GUIDE_PREVIOUS_BUTTON_SELECTOR).click();
-  await expectGuideStep(page, GUIDE_ANCHORS.playbooksOverview, "1 of 4");
+  await expect(
+    guidePopover(page).locator(GUIDE_PREVIOUS_BUTTON_SELECTOR),
+  ).toBeDisabled();
 });
 
 test("Workflows guide reaches trigger, chained steps, and review gate", async ({
@@ -251,3 +246,89 @@ test("Workflows guide reaches trigger, chained steps, and review gate", async ({
   await advanceToGuideStep(page, GUIDE_ANCHORS.workflowsReviewGate, "5 of 5");
   await finishGuide(page);
 });
+
+test("Replaying a workflow guide preserves the existing draft", async ({
+  page,
+}) => {
+  await enableGuidesTestFeatures(page);
+  await page.goto("/knowledge/workflows", {
+    timeout: GUIDE_NAVIGATION_TIMEOUT_MS,
+    waitUntil: "commit",
+  });
+  await page
+    .locator(`[data-guide-anchor="${GUIDE_ANCHORS.workflowsCreate}"]`)
+    .click();
+  const name = page.locator("#flow-name");
+  const description = page.locator("#flow-description");
+  await name.fill("Review supplier agreement");
+  await description.fill("Check termination and renewal provisions");
+
+  await startGuide(page, "Automate a workflow");
+  await expectGuideStep(page, GUIDE_ANCHORS.workflowsTrigger, "3 of 5");
+  await expect(
+    guidePopover(page).locator(GUIDE_PREVIOUS_BUTTON_SELECTOR),
+  ).toBeDisabled();
+  await advanceToGuideStep(page, GUIDE_ANCHORS.workflowsSteps, "4 of 5");
+  await guidePopover(page).locator(GUIDE_PREVIOUS_BUTTON_SELECTOR).click();
+  await expectGuideStep(page, GUIDE_ANCHORS.workflowsTrigger, "3 of 5");
+  await expect(
+    guidePopover(page).locator(GUIDE_PREVIOUS_BUTTON_SELECTOR),
+  ).toBeDisabled();
+  await expect(name).toHaveValue("Review supplier agreement");
+  await expect(description).toHaveValue(
+    "Check termination and renewal provisions",
+  );
+});
+
+for (const availability of [
+  {
+    path: /\/v1\/entities\/[^/]+\/summaries\/count(?:\?|$)/u,
+    title: "Work with documents",
+    name: "document count",
+  },
+  {
+    path: /\/v1\/properties\/[^/?]+(?:\?|$)/u,
+    title: "Review in a table",
+    name: "property count",
+  },
+  {
+    path: /\/v1\/views\/[^/?]+(?:\?|$)/u,
+    title: "Work with documents",
+    name: "matter views",
+  },
+]) {
+  test(`Guide availability recovers after a failed ${availability.name} query`, async ({
+    page,
+    browserErrors,
+  }) => {
+    await enableGuidesTestFeatures(page);
+    await page.goto("/chat", {
+      timeout: GUIDE_NAVIGATION_TIMEOUT_MS,
+      waitUntil: "commit",
+    });
+    await expect(
+      page.getByRole("button", { name: HELP_BUTTON_NAME }),
+    ).toBeVisible({ timeout: 30_000 });
+    browserErrors.expectCaptured(/Failed to load resource:.*503/u);
+    await page.route(availability.path, async (route) => {
+      await route.fulfill({
+        status: 503,
+        json: { message: "Guide availability test failure" },
+      });
+    });
+    await page.getByRole("button", { name: HELP_BUTTON_NAME }).click();
+    const drawer = page.getByRole("dialog", { name: HELP_BUTTON_NAME });
+    await expect(drawer.getByRole("alert")).toContainText("Action failed", {
+      timeout: 30_000,
+    });
+    await expect(
+      drawer.locator("li").filter({ hasText: availability.title }),
+    ).toHaveCount(0);
+    await page.unroute(availability.path);
+    await drawer.getByRole("button", { name: "Retry", exact: true }).click();
+    await expect(drawer.getByRole("alert")).toHaveCount(0);
+    await expect(
+      drawer.locator("li").filter({ hasText: availability.title }),
+    ).toBeVisible();
+  });
+}

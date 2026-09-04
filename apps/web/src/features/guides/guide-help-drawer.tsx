@@ -2,6 +2,10 @@ import { useQuery } from "@tanstack/react-query";
 import { ExternalLinkIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import {
+  ENTITIES_PER_WORKSPACE_MAX,
+  PROPERTIES_PER_WORKSPACE_MAX,
+} from "@stll/api-contract";
 import { DiscordLogoIcon } from "@stll/ui/brand-icons";
 import { Button } from "@stll/ui/button";
 import {
@@ -28,11 +32,10 @@ import {
 import { useGuideRunner } from "@/features/guides/use-guide-runner";
 import { useOnboardingProgress } from "@/features/guides/use-onboarding-progress";
 import { usePermissions } from "@/hooks/use-permissions";
-import { usePlaybooksPreviewEnabled } from "@/hooks/use-playbooks-preview";
 import { useWorkflowsPreviewEnabled } from "@/hooks/use-workflows-preview";
 import { COMMUNITY_FORUM_URL, CONTACT_EMAIL } from "@/lib/consts";
+import { detached } from "@/lib/detached";
 import { sanitizeHref } from "@/lib/sanitize-href";
-import { workspaceOptions } from "@/lib/workspaces/queries";
 import { entitySummariesCountOptions } from "@/lib/workspaces/queries/entities";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
@@ -56,7 +59,6 @@ export const GuideHelpDrawer = ({
   workspaceId,
 }: GuideHelpDrawerProps) => {
   const t = useTranslations();
-  const playbooksEnabled = usePlaybooksPreviewEnabled();
   const workflowsEnabled = useWorkflowsPreviewEnabled();
   const canUseChat = usePermissions({ chat: ["create"] });
   const canCreateDocument = usePermissions({ entity: ["create"] });
@@ -65,11 +67,6 @@ export const GuideHelpDrawer = ({
   const canCreateWorkflow = usePermissions({ flow: ["create"] });
   const availabilityWorkspaceId = workspaceId ?? "";
   const matterToursPermitted = canCreateDocument || canCreateProperty;
-  const limitsQuery = useQuery({
-    ...workspaceOptions(availabilityWorkspaceId),
-    enabled: open && workspaceId !== undefined && matterToursPermitted,
-    select: (workspace) => workspace.limits,
-  });
   const entitiesCountQuery = useQuery({
     ...entitySummariesCountOptions(availabilityWorkspaceId),
     enabled: open && workspaceId !== undefined && canCreateDocument,
@@ -83,23 +80,25 @@ export const GuideHelpDrawer = ({
     ...viewsOptions(availabilityWorkspaceId),
     enabled: open && workspaceId !== undefined && matterToursPermitted,
   });
-  const limits = limitsQuery.data;
   const entitiesCount = entitiesCountQuery.data;
   const propertiesCount = propertiesCountQuery.data;
   const viewsAvailable =
     viewsQuery.data !== undefined && hasGuideWorkspaceView(viewsQuery.data);
+  const availabilityQueries = [
+    entitiesCountQuery,
+    propertiesCountQuery,
+    viewsQuery,
+  ].filter((query) => query.isEnabled);
   const availabilityPending =
     open &&
     (workspaceSelectionPending ||
-      (workspaceId !== undefined &&
-        ((canCreateDocument &&
-          (limitsQuery.isPending ||
-            entitiesCountQuery.isPending ||
-            viewsQuery.isPending)) ||
-          (canCreateProperty &&
-            (limitsQuery.isPending ||
-              propertiesCountQuery.isPending ||
-              viewsQuery.isPending)))));
+      availabilityQueries.some((query) => query.isPending));
+  const failedAvailabilityQueries = availabilityQueries.filter(
+    (query) => query.isError,
+  );
+  const availabilityRetrying = failedAvailabilityQueries.some(
+    (query) => query.isFetching,
+  );
   const tours = GUIDE_TOURS.filter((tour) =>
     isGuideTourAvailable(tour.id, {
       canUseChat,
@@ -107,15 +106,12 @@ export const GuideHelpDrawer = ({
       canCreateProperty,
       documentsAvailable:
         entitiesCount !== undefined &&
-        limits !== undefined &&
         viewsAvailable &&
-        entitiesCount < limits.entitiesCount,
+        entitiesCount < ENTITIES_PER_WORKSPACE_MAX,
       tabularReviewAvailable:
         propertiesCount !== undefined &&
-        limits !== undefined &&
         viewsAvailable &&
-        propertiesCount < limits.propertiesCount,
-      playbooksAvailable: playbooksEnabled,
+        propertiesCount < PROPERTIES_PER_WORKSPACE_MAX,
       workflowsAvailable: workflowsEnabled,
       canCreatePlaybook,
       canCreateWorkflow,
@@ -129,16 +125,13 @@ export const GuideHelpDrawer = ({
       documentsAvailable:
         canCreateDocument &&
         (viewsQuery.data === undefined || viewsAvailable) &&
-        (limits === undefined ||
-          entitiesCount === undefined ||
-          entitiesCount < limits.entitiesCount),
+        (entitiesCount === undefined ||
+          entitiesCount < ENTITIES_PER_WORKSPACE_MAX),
       tabularReviewAvailable:
         canCreateProperty &&
         (viewsQuery.data === undefined || viewsAvailable) &&
-        (limits === undefined ||
-          propertiesCount === undefined ||
-          propertiesCount < limits.propertiesCount),
-      playbooksAvailable: playbooksEnabled,
+        (propertiesCount === undefined ||
+          propertiesCount < PROPERTIES_PER_WORKSPACE_MAX),
       workflowsAvailable: workflowsEnabled,
       canCreatePlaybook,
       canCreateWorkflow,
@@ -174,6 +167,33 @@ export const GuideHelpDrawer = ({
               </TabsTab>
             </TabsList>
             <TabsPanel className="pt-2" value={HELP_TABS.guides}>
+              {failedAvailabilityQueries.length > 0 && (
+                <div
+                  className="mb-3 flex flex-col items-start gap-1"
+                  role="alert"
+                >
+                  <p className="text-muted-foreground text-sm">
+                    {t("errors.actionFailed")}
+                  </p>
+                  <Button
+                    disabled={availabilityRetrying}
+                    onClick={() => {
+                      detached(
+                        Promise.all(
+                          failedAvailabilityQueries.map(async (query) =>
+                            query.refetch(),
+                          ),
+                        ),
+                        "guides.availability-retry",
+                      );
+                    }}
+                    size="sm"
+                    variant="ghost"
+                  >
+                    {t("common.retry")}
+                  </Button>
+                </div>
+              )}
               {availabilityPending ? (
                 <GuideChecklistSkeleton tourCount={expectedTours.length} />
               ) : (

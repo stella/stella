@@ -98,7 +98,7 @@ export const GUIDE_TOURS = [
     steps: [
       {
         anchor: GUIDE_ANCHORS.documentsUpload,
-        route: { type: "workspace-view", target: "unfiltered-table" },
+        route: { type: "workspace-unfiltered-table" },
         titleKey: "guides.tours.documents.steps.upload.title",
         bodyKey: "guides.tours.documents.steps.upload.body",
         whenKey: "guides.tours.documents.steps.upload.when",
@@ -206,7 +206,7 @@ export const GUIDE_TOURS = [
     steps: [
       {
         anchor: GUIDE_ANCHORS.tabularReviewTable,
-        route: { type: "workspace-view", target: "unfiltered-table" },
+        route: { type: "workspace-unfiltered-table" },
         titleKey: "guides.tours.tabularReview.steps.table.title",
         bodyKey: "guides.tours.tabularReview.steps.table.body",
         whenKey: "guides.tours.tabularReview.steps.table.when",

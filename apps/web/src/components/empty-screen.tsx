@@ -232,8 +232,6 @@ const EmptyScreenActionButton = ({ action }: EmptyScreenActionButtonProps) => {
   );
 
   if (action.href) {
-    const href = sanitizeHref(action.href);
-
     return (
       <a
         aria-disabled={action.disabled}
@@ -241,7 +239,7 @@ const EmptyScreenActionButton = ({ action }: EmptyScreenActionButtonProps) => {
           buttonVariants(),
           action.disabled && "pointer-events-none opacity-64",
         )}
-        href={href}
+        href={sanitizeHref(action.href)}
         data-guide-anchor={guideAnchorId}
         onClick={(event) => {
           if (action.disabled) {

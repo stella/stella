@@ -10,7 +10,7 @@ type GuideStaticRoute = Exclude<FileRouteTypes["to"], `${string}$${string}`>;
 
 export type GuideRoute =
   | { type: "static"; to: GuideStaticRoute }
-  | { type: "workspace-view"; target: "unfiltered-table" };
+  | { type: "workspace-unfiltered-table" };
 
 // Guide copy lives under `guides.tours.*` and takes no ICU arguments, so these
 // keys are safe to pass to `t(key)` with a single argument. Narrowing to the

@@ -9,7 +9,6 @@ type GuideAvailability = {
   canCreateProperty: boolean;
   documentsAvailable: boolean;
   tabularReviewAvailable: boolean;
-  playbooksAvailable: boolean;
   workflowsAvailable: boolean;
   canCreatePlaybook: boolean;
   canCreateWorkflow: boolean;
@@ -29,7 +28,7 @@ export const isGuideTourAvailable = (
         availability.canCreateProperty && availability.tabularReviewAvailable
       );
     case GUIDE_TOUR_IDS.playbooks:
-      return availability.playbooksAvailable && availability.canCreatePlaybook;
+      return availability.canCreatePlaybook;
     case GUIDE_TOUR_IDS.workflows:
       return availability.workflowsAvailable && availability.canCreateWorkflow;
     default:
