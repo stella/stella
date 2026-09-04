@@ -109,7 +109,7 @@ if (!databaseUrl || !runPostgresTests) {
         status: "active",
         pinned: false,
         createdBy: null,
-      } as const;
+      } satisfies typeof aiMemories.$inferInsert;
       const auditEvents: AuditEvent[] = [];
       const recordAuditEvent: AuditRecorder = async (_tx, event) => {
         auditEvents.push(...(Array.isArray(event) ? event : [event]));
@@ -186,7 +186,7 @@ if (!databaseUrl || !runPostgresTests) {
             ),
           );
 
-        expect(result).toEqual({ id: stored.at(0)?.id, type: "created" });
+        expect(result.type).toBe("created");
         expect(result.id).not.toBe(original.id);
         expect(stored).toEqual([
           { id: result.id, content: "Keep the procedural history concise" },

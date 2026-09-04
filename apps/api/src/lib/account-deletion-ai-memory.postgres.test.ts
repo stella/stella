@@ -11,7 +11,7 @@ import {
   finalizeDeletedUserRecord,
   lockUserRowForDeletion,
 } from "@/api/lib/account-deletion-steps";
-import { createSafeId } from "@/api/lib/branded-types";
+import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import { isPgConstraintError } from "@/api/lib/pg-error";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -41,8 +41,10 @@ if (!databaseUrl || !runPostgresTests) {
         client: writerClient,
         relations: databaseRelations,
       });
-      const organizationId = createSafeId<"organization">();
-      const userId = createSafeId<"user">();
+      const organizationId = toSafeId<"organization">(
+        `org_${Bun.randomUUIDv7()}`,
+      );
+      const userId = toSafeId<"user">(`user_${Bun.randomUUIDv7()}`);
       const sharedMemoryId = createSafeId<"aiMemory">();
       const personalMemoryId = createSafeId<"aiMemory">();
       const deletionLocked = Promise.withResolvers<undefined>();
@@ -169,8 +171,10 @@ if (!databaseUrl || !runPostgresTests) {
         client: deletionClient,
         relations: databaseRelations,
       });
-      const organizationId = createSafeId<"organization">();
-      const userId = createSafeId<"user">();
+      const organizationId = toSafeId<"organization">(
+        `org_${Bun.randomUUIDv7()}`,
+      );
+      const userId = toSafeId<"user">(`user_${Bun.randomUUIDv7()}`);
       const personalMemoryId = createSafeId<"aiMemory">();
       const suggestionId = createSafeId<"aiMemory">();
       const acceptedSharedId = createSafeId<"aiMemory">();
