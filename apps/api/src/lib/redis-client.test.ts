@@ -170,12 +170,16 @@ describe("isTransientRedisConnectionError", () => {
 
   // The classifier gates whether a periodic loop logs a Redis failure as an
   // expected transient or captures it as an exception; a drifted code string
-  // would silently disable it, so the exact Bun error code is pinned.
-  test("classifies a closed-connection rejection as transient", () => {
-    expect(
-      isTransientRedisConnectionError(withCode("ERR_REDIS_CONNECTION_CLOSED")),
-    ).toBe(true);
-  });
+  // would silently disable it, so the exact Bun error codes are pinned. Both
+  // mean the command met a connection that was not up: the closed socket the
+  // client had already observed, and the connect attempt that had not landed
+  // before `connectionTimeout`.
+  test.each(["ERR_REDIS_CONNECTION_CLOSED", "ERR_REDIS_CONNECTION_TIMEOUT"])(
+    "classifies a %s rejection as transient",
+    (code) => {
+      expect(isTransientRedisConnectionError(withCode(code))).toBe(true);
+    },
+  );
 
   test("leaves other failures and the poll blip unclassified", () => {
     expect(isTransientRedisConnectionError(withCode("ECONNREFUSED"))).toBe(

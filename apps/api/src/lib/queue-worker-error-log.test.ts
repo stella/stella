@@ -15,6 +15,7 @@ const withCode = (code: string): Error =>
   Object.assign(new Error("Connection closed"), { code });
 
 const TRANSIENT = "ERR_REDIS_CONNECTION_CLOSED";
+const CONNECT_TIMEOUT = "ERR_REDIS_CONNECTION_TIMEOUT";
 const POLL_BLIP = "ERR_REDIS_INVALID_RESPONSE";
 const START = new Date("2026-08-27T17:54:00.000Z");
 
@@ -47,7 +48,7 @@ describe("createQueueWorkerErrorLogger", () => {
     ).toBeUndefined();
   });
 
-  test.each([TRANSIENT, POLL_BLIP])(
+  test.each([TRANSIENT, CONNECT_TIMEOUT, POLL_BLIP])(
     "reports %s once per interval and counts the rest",
     (code) => {
       const log = createQueueWorkerErrorLogger("file_derivative.worker_error");

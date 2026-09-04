@@ -13,8 +13,8 @@ import {
  * needs to read it, and make the error-rate metric report the retry rate
  * rather than the number of faults.
  *
- * Both codes suppressed here are ones this codebase already classifies as
- * expected operational transients rather than defects (`redis-client.ts`), so
+ * Every code suppressed here is one this codebase already classifies as an
+ * expected operational transient rather than a defect (`redis-client.ts`), so
  * the tally, not the occurrence, is the signal. Severity stays ERROR: a real
  * outage must still cross the error-rate alarm; only its volume is bounded.
  */
