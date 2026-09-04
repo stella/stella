@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   createPageOrganizerState,
+  getPageMoveDestination,
   isPageOrganizerDirty,
   reducePageOrganizer,
   type OrganizerPage,
@@ -45,8 +46,9 @@ describe("page organizer state transitions", () => {
       pageIds: ["page-2"],
     });
     state = reducePageOrganizer(state, {
-      type: "moveSelectedBefore",
+      type: "moveSelected",
       targetPageId: "page-4",
+      edge: "before",
     });
     state = reducePageOrganizer(state, {
       type: "selectRange",
@@ -56,6 +58,43 @@ describe("page organizer state transitions", () => {
     expect(ids(state)).toEqual(["page-1", "page-3", "page-2", "page-4"]);
     expect(state.ui.selectedPageIds).toEqual(["page-3", "page-2"]);
     expectInvariant(state);
+  });
+
+  test("moves after a target through the final insertion point", () => {
+    let state = stateWith();
+    state = reducePageOrganizer(state, {
+      type: "replaceSelection",
+      pageIds: ["page-1"],
+    });
+    state = reducePageOrganizer(state, {
+      type: "moveSelected",
+      targetPageId: "page-4",
+      edge: "after",
+    });
+
+    expect(ids(state)).toEqual(["page-2", "page-3", "page-4", "page-1"]);
+    expectInvariant(state);
+  });
+
+  test("reports the exact destination after removing the dragged selection", () => {
+    expect(
+      getPageMoveDestination({
+        draggedPageId: "page-1",
+        edge: "before",
+        pages: pages(5),
+        selectedPageIds: ["page-1", "page-2"],
+        targetPageId: "page-5",
+      }),
+    ).toBe(3);
+    expect(
+      getPageMoveDestination({
+        draggedPageId: "page-1",
+        edge: "after",
+        pages: pages(5),
+        selectedPageIds: ["page-1", "page-2"],
+        targetPageId: "page-5",
+      }),
+    ).toBe(4);
   });
 
   test("moves a multi-page selection one step without changing its internal order", () => {

@@ -2,6 +2,10 @@ import { useMemo, useRef, useState } from "react";
 import type { ChangeEvent, KeyboardEvent } from "react";
 
 import {
+  attachClosestEdge,
+  extractClosestEdge,
+} from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge";
+import {
   draggable,
   dropTargetForElements,
 } from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
@@ -69,6 +73,7 @@ import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { filesKeys, fileOptions } from "@/lib/files/queries";
 import { uploadEntityVersion } from "@/lib/files/upload-entity-version";
+import { resolveMatterColor } from "@/lib/matter-colors";
 import { usePDFDocument } from "@/lib/pdf/hooks/use-pdf-document";
 import {
   MAX_PAGE_EDITOR_PAGES,
@@ -84,14 +89,17 @@ import { loadPDF } from "@/lib/pdf/pdf-loader";
 import type { PDFDocument } from "@/lib/pdf/pdf-loader";
 import { getCanvasSize, getCanvasTransform } from "@/lib/pdf/utils";
 import { downloadFile } from "@/lib/utils";
+import { workspaceOptions } from "@/lib/workspaces/queries";
 import { entityVersionsKeys } from "@/lib/workspaces/queries/entity-versions";
 
 import {
   createPageOrganizerState,
+  getPageMoveDestination,
   isPageOrganizerDirty,
   reducePageOrganizer,
   type NormalizedCrop,
   type OrganizerPage,
+  type PageDropEdge,
   type PageOrganizerState,
   type PageRotation,
 } from "./page-organizer.logic";
@@ -125,6 +133,7 @@ type PDFPageOrganizerProps = {
 };
 
 type LoadedPDFPageOrganizerProps = PDFPageOrganizerProps & {
+  matterColor: string;
   originalBytes: ArrayBuffer;
   sourceDocument: PDFDocument;
 };
@@ -437,18 +446,27 @@ const PageThumbnail = ({ page, pageInfo }: PageThumbnailProps) => {
   );
 };
 
+type PageMoveOptions = {
+  draggedPageId: string;
+  edge: PageDropEdge;
+  targetPageId: string;
+};
+
 type OrganizerPageCardProps = {
+  getDropDestination: (options: PageMoveOptions) => number | null;
   index: number;
   isBusy: boolean;
   isSelected: boolean;
-  onMove: (draggedPageId: string, targetPageId: string) => void;
+  onMove: (options: PageMoveOptions) => void;
   onMoveStep: (pageId: string, direction: "backward" | "forward") => void;
   onSelect: (pageId: string, range: boolean, toggle: boolean) => void;
   page: OrganizerPage;
   pageInfo: PageInfo;
+  selectedPageIds: readonly string[];
 };
 
 const OrganizerPageCard = ({
+  getDropDestination,
   index,
   isBusy,
   isSelected,
@@ -457,13 +475,18 @@ const OrganizerPageCard = ({
   onSelect,
   page,
   pageInfo,
+  selectedPageIds,
 }: OrganizerPageCardProps) => {
   const tPageEditor = useTranslations("workspaces.pdf.pageEditor");
   const format = useFormatter();
   const [card, setCard] = useState<HTMLElement | null>(null);
   const [handle, setHandle] = useState<HTMLButtonElement | null>(null);
-  const [isDropTarget, setIsDropTarget] = useState(false);
+  const [dropIndicator, setDropIndicator] = useState<{
+    edge: PageDropEdge;
+    pageNumber: number;
+  } | null>(null);
   const handleMove = useLatestCallback(onMove);
+  const getDestination = useLatestCallback(getDropDestination);
   const pageNumber = format.number(index + 1);
   const pageLabel = tPageEditor("pageNumber", { number: pageNumber });
 
@@ -478,7 +501,11 @@ const OrganizerPageCard = ({
         dragHandle: handle,
         getInitialData: () =>
           withDragAnnouncementData(
-            { type: PAGE_DRAG_TYPE, pageId: page.id },
+            {
+              type: PAGE_DRAG_TYPE,
+              pageId: page.id,
+              movingPageIds: isSelected ? selectedPageIds : [page.id],
+            },
             pageLabel,
           ),
         onGenerateDragPreview: ({ location, nativeSetDragImage }) => {
@@ -501,24 +528,93 @@ const OrganizerPageCard = ({
       }),
       dropTargetForElements({
         element: card,
-        canDrop: ({ source }) =>
-          !isBusy &&
-          source.data["type"] === PAGE_DRAG_TYPE &&
-          source.data["pageId"] !== page.id,
-        getData: () =>
-          withDropAnnouncementData({}, { type: "reorder", name: pageLabel }),
-        onDragEnter: () => setIsDropTarget(true),
-        onDragLeave: () => setIsDropTarget(false),
-        onDrop: ({ source }) => {
-          setIsDropTarget(false);
+        canDrop: ({ source }) => {
+          const movingPageIds = source.data["movingPageIds"];
+          return (
+            !isBusy &&
+            source.data["type"] === PAGE_DRAG_TYPE &&
+            Array.isArray(movingPageIds) &&
+            !movingPageIds.includes(page.id)
+          );
+        },
+        getData: ({ input, element }) =>
+          attachClosestEdge(
+            withDropAnnouncementData({}, { type: "reorder", name: pageLabel }),
+            { input, element, allowedEdges: ["left", "right"] },
+          ),
+        onDragEnter: ({ self, source }) => {
           const draggedPageId = source.data["pageId"];
-          if (typeof draggedPageId === "string") {
-            handleMove(draggedPageId, page.id);
+          const closestEdge = extractClosestEdge(self.data);
+          if (
+            typeof draggedPageId !== "string" ||
+            (closestEdge !== "left" && closestEdge !== "right")
+          ) {
+            return;
+          }
+          const edge = closestEdge === "left" ? "before" : "after";
+          const destination = getDestination({
+            draggedPageId,
+            edge,
+            targetPageId: page.id,
+          });
+          setDropIndicator(
+            destination === null ? null : { edge, pageNumber: destination },
+          );
+        },
+        onDrag: ({ self, source }) => {
+          const draggedPageId = source.data["pageId"];
+          const closestEdge = extractClosestEdge(self.data);
+          if (
+            typeof draggedPageId !== "string" ||
+            (closestEdge !== "left" && closestEdge !== "right")
+          ) {
+            return;
+          }
+          const edge = closestEdge === "left" ? "before" : "after";
+          const destination = getDestination({
+            draggedPageId,
+            edge,
+            targetPageId: page.id,
+          });
+          setDropIndicator((current) => {
+            if (destination === null) {
+              return null;
+            }
+            if (current?.edge === edge && current.pageNumber === destination) {
+              return current;
+            }
+            return { edge, pageNumber: destination };
+          });
+        },
+        onDragLeave: () => setDropIndicator(null),
+        onDrop: ({ self, source }) => {
+          setDropIndicator(null);
+          const draggedPageId = source.data["pageId"];
+          const closestEdge = extractClosestEdge(self.data);
+          if (
+            typeof draggedPageId === "string" &&
+            (closestEdge === "left" || closestEdge === "right")
+          ) {
+            handleMove({
+              draggedPageId,
+              edge: closestEdge === "left" ? "before" : "after",
+              targetPageId: page.id,
+            });
           }
         },
       }),
     );
-  }, [card, handle, handleMove, isBusy, page.id, pageLabel]);
+  }, [
+    card,
+    getDestination,
+    handle,
+    handleMove,
+    isBusy,
+    isSelected,
+    page.id,
+    pageLabel,
+    selectedPageIds,
+  ]);
 
   const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
     if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
@@ -533,12 +629,25 @@ const OrganizerPageCard = ({
 
   return (
     <li className="relative min-w-0" ref={setCard}>
+      {dropIndicator && (
+        <div
+          className={cn(
+            "bg-primary pointer-events-none absolute inset-y-0 z-30 w-0.5 rounded-full",
+            dropIndicator.edge === "before" ? "-start-2" : "-end-2",
+          )}
+        >
+          <span className="bg-primary text-primary-foreground absolute start-1/2 top-2 -translate-x-1/2 rounded-full px-1.5 py-0.5 text-[10px] leading-none font-medium whitespace-nowrap shadow-sm">
+            {tPageEditor("pageNumber", {
+              number: format.number(dropIndicator.pageNumber),
+            })}
+          </span>
+        </div>
+      )}
       <article
         aria-label={pageLabel}
         className={cn(
           "bg-card group relative overflow-hidden rounded-lg border p-2 shadow-xs transition",
           isSelected && "border-primary ring-primary/30 ring-2",
-          isDropTarget && "ring-primary ring-2",
         )}
         dir="ltr"
       >
@@ -598,6 +707,7 @@ const LoadedPDFPageOrganizer = ({
   entityId,
   fieldId,
   fileName,
+  matterColor,
   onClose,
   originalBytes,
   sourceDocument,
@@ -846,7 +956,11 @@ const LoadedPDFPageOrganizer = ({
     });
   };
 
-  const handleMove = (draggedPageId: string, targetPageId: string) => {
+  const handleMove = ({
+    draggedPageId,
+    edge,
+    targetPageId,
+  }: PageMoveOptions) => {
     setState((current) => {
       const withSelection = current.ui.selectedPageIds.includes(draggedPageId)
         ? current
@@ -855,7 +969,8 @@ const LoadedPDFPageOrganizer = ({
             pageIds: [draggedPageId],
           });
       return reducePageOrganizer(withSelection, {
-        type: "moveSelectedBefore",
+        type: "moveSelected",
+        edge,
         targetPageId,
       });
     });
@@ -893,6 +1008,9 @@ const LoadedPDFPageOrganizer = ({
   );
   const allPagesSelected = selectedIds.size === plan.pages.length;
   const multiSelectModifier = hotkeyPlatform === "mac" ? "Cmd" : "Ctrl";
+  const chromeStyle = {
+    backgroundColor: `color-mix(in srgb, ${matterColor} 2%, transparent)`,
+  };
 
   if (isUnsupported) {
     return (
@@ -902,6 +1020,7 @@ const LoadedPDFPageOrganizer = ({
             "flex items-center justify-between border-b px-4",
             TOOLBAR_ROW_HEIGHT,
           )}
+          style={chromeStyle}
         >
           <h2 className="text-sm font-medium">{tPageEditor("title")}</h2>
           <Button
@@ -933,6 +1052,7 @@ const LoadedPDFPageOrganizer = ({
           "flex shrink-0 items-center gap-2 border-b px-3",
           TOOLBAR_ROW_HEIGHT,
         )}
+        style={chromeStyle}
       >
         <div className="me-auto flex min-w-0 items-baseline gap-2">
           <h2 className="truncate text-sm font-medium">
@@ -985,6 +1105,7 @@ const LoadedPDFPageOrganizer = ({
             "flex shrink-0 items-center gap-1 border-b px-3",
             TOOLBAR_ROW_HEIGHT,
           )}
+          style={chromeStyle}
         >
           <Button
             className="-ms-2"
@@ -1094,6 +1215,13 @@ const LoadedPDFPageOrganizer = ({
               }
               return (
                 <OrganizerPageCard
+                  getDropDestination={(options) =>
+                    getPageMoveDestination({
+                      ...options,
+                      pages: plan.pages,
+                      selectedPageIds: state.ui.selectedPageIds,
+                    })
+                  }
                   index={index}
                   isBusy={isBusy}
                   isSelected={selectedIds.has(page.id)}
@@ -1125,6 +1253,7 @@ const LoadedPDFPageOrganizer = ({
                   }}
                   page={page}
                   pageInfo={pageInfo}
+                  selectedPageIds={state.ui.selectedPageIds}
                 />
               );
             })}
@@ -1273,6 +1402,7 @@ export const PDFPageOrganizer = ({
   const { data: originalFile } = useSuspenseQuery(
     fileOptions({ workspaceId, fieldId }),
   );
+  const { data: workspace } = useSuspenseQuery(workspaceOptions(workspaceId));
   const { data: sourceDocumentResult } = usePDFDocument({
     key: { fileId: fieldId },
     context: { buffer: originalFile.buffer },
@@ -1288,6 +1418,7 @@ export const PDFPageOrganizer = ({
       entityId={entityId}
       fieldId={fieldId}
       fileName={fileName}
+      matterColor={resolveMatterColor(workspaceId, workspace.color ?? null)}
       onClose={onClose}
       originalBytes={originalFile.buffer}
       sourceDocument={sourceDocument}

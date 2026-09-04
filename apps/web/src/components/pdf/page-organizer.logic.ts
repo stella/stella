@@ -2,6 +2,8 @@ import { panic } from "better-result";
 
 export type PageRotation = 0 | 90 | 180 | 270;
 
+export type PageDropEdge = "before" | "after";
+
 export type NormalizedCrop = {
   x: number;
   y: number;
@@ -43,7 +45,11 @@ export type PageOrganizerAction =
   | { type: "toggleSelection"; pageId: string }
   | { type: "selectRange"; pageId: string }
   | { type: "toggleSelectAll" }
-  | { type: "moveSelectedBefore"; targetPageId: string }
+  | {
+      type: "moveSelected";
+      targetPageId: string;
+      edge: PageDropEdge;
+    }
   | { type: "moveSelectedStep"; direction: "backward" | "forward" }
   | { type: "rotateSelected"; degrees: 90 | -90 }
   | { type: "duplicateSelected"; newPageIds: readonly string[] }
@@ -167,11 +173,19 @@ const selectedInOrder = (state: PageOrganizerState): OrganizerPage[] => {
   return currentPlan(state).pages.filter((page) => selected.has(page.id));
 };
 
-const movePages = (
-  pages: readonly OrganizerPage[],
-  selectedIds: ReadonlySet<string>,
-  targetPageId: string,
-): OrganizerPage[] => {
+type MovePagesOptions = {
+  edge: PageDropEdge;
+  pages: readonly OrganizerPage[];
+  selectedIds: ReadonlySet<string>;
+  targetPageId: string;
+};
+
+const movePages = ({
+  edge,
+  pages,
+  selectedIds,
+  targetPageId,
+}: MovePagesOptions): OrganizerPage[] => {
   if (selectedIds.has(targetPageId)) {
     return [...pages];
   }
@@ -184,8 +198,38 @@ const movePages = (
   if (targetIndex === -1) {
     return [...pages];
   }
-  remaining.splice(targetIndex, 0, ...selected);
+  const insertionIndex = edge === "before" ? targetIndex : targetIndex + 1;
+  remaining.splice(insertionIndex, 0, ...selected);
   return remaining;
+};
+
+type GetPageMoveDestinationOptions = {
+  draggedPageId: string;
+  edge: PageDropEdge;
+  pages: readonly OrganizerPage[];
+  selectedPageIds: readonly string[];
+  targetPageId: string;
+};
+
+export const getPageMoveDestination = ({
+  draggedPageId,
+  edge,
+  pages,
+  selectedPageIds,
+  targetPageId,
+}: GetPageMoveDestinationOptions): number | null => {
+  const movedIds = new Set(
+    selectedPageIds.includes(draggedPageId) ? selectedPageIds : [draggedPageId],
+  );
+  if (movedIds.has(targetPageId)) {
+    return null;
+  }
+  const remaining = pages.filter((page) => !movedIds.has(page.id));
+  const targetIndex = remaining.findIndex((page) => page.id === targetPageId);
+  if (targetIndex === -1) {
+    return null;
+  }
+  return (edge === "before" ? targetIndex : targetIndex + 1) + 1;
 };
 
 const moveOneStep = (
@@ -263,12 +307,13 @@ export const reducePageOrganizer = (
           : plan.pages.map((page) => page.id),
         state.ui.anchorPageId,
       );
-    case "moveSelectedBefore": {
-      const pages = movePages(
-        plan.pages,
-        new Set(state.ui.selectedPageIds),
-        action.targetPageId,
-      );
+    case "moveSelected": {
+      const pages = movePages({
+        edge: action.edge,
+        pages: plan.pages,
+        selectedIds: new Set(state.ui.selectedPageIds),
+        targetPageId: action.targetPageId,
+      });
       return commit(state, { ...plan, pages });
     }
     case "moveSelectedStep": {
