@@ -10,6 +10,7 @@ import {
   stellaLowercasePluginSpecifier,
 } from "@stll/oxlint-config";
 
+import { OWNERSHIP } from "./scripts/ownership.ts";
 import { RESULT_CONVENTION_EXCLUDE_GLOBS } from "./scripts/result-boundary-globs.ts";
 
 // All workspaces run oxlint from the repo root via:
@@ -20,6 +21,12 @@ const fixtureRuleOverride = (file: string, rules: readonly string[]) => ({
   files: [`.oxlint-plugins/__fixtures__/${file}`],
   rules: Object.fromEntries(rules.map((rule) => [rule, "error"] as const)),
 });
+
+// Only the rows that declare an enforcement kind reach the lint rule; the rest
+// document an owner that no rule can yet prove.
+const enforcedOwnershipEntries = OWNERSHIP.filter(
+  (entry) => entry.enforcement.kind !== "none",
+);
 
 const PUBLIC_SSR_AMBIENT_STATE_MESSAGE =
   "Public SSR modules must use a hydration-safe adapter with a deterministic server snapshot.";
@@ -1073,7 +1080,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-swallowed-rejection.ts",
     "./.oxlint-plugins/require-detached-label-shape.ts",
     "./.oxlint-plugins/no-awaited-builder-union.ts",
-    "./.oxlint-plugins/confine-redis-client.ts",
+    "./.oxlint-plugins/confine-owner.ts",
     "./.oxlint-plugins/queue-worker-error-sink.ts",
     "./.oxlint-plugins/require-coordination-key.ts",
     "./.oxlint-plugins/no-async-context-enter-with.ts",
@@ -3103,65 +3110,26 @@ export default defineConfig({
       },
     },
     {
-      // Valkey usage doctrine (/conventions-scale): Valkey holds only
-      // ephemeral coordination, and every consumer owes a degraded path for
-      // an outage. Both stay reviewable only while the set of modules that
-      // can open a connection is named here. A new entry is a decision about
-      // what may live in Valkey, so each one carries its reason.
+      // Ownership as data: `scripts/ownership.ts` names the module that owns
+      // each capability, and this rule confines the enforced rows to it. The
+      // same table renders `docs/module-ownership.md`, so the enforced
+      // boundary and the documented one cannot drift apart. A bypass is an
+      // `allowed` entry with a reason in that file, which is also the review
+      // record for what may now reach the capability.
       files: [
         "apps/api/src/**/*.ts",
-        ".oxlint-plugins/__fixtures__/confine-redis-client.fixture.ts",
+        "apps/web/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/confine-owner.fixture.ts",
       ],
-      excludeFiles: ["apps/api/src/**/*.test.ts", "apps/api/src/tests/**/*.ts"],
+      excludeFiles: [
+        "apps/api/src/**/*.test.ts",
+        "apps/api/src/tests/**/*.ts",
+        "apps/web/src/**/*.test.{ts,tsx}",
+      ],
       rules: {
-        "confine-redis-client/confine-redis-client": [
+        "confine-owner/confine-owner": [
           "error",
-          {
-            allowedFiles: [
-              // Queue transport. The shared facade owns lazy producer
-              // connections; worker modules own their dedicated blocking
-              // connections. BullMQ owns the key layout under its own prefix
-              // (see redis-client.ts for the cluster cutover).
-              "apps/api/src/lib/bullmq-queue.ts",
-              "apps/api/src/lib/document-deadline-scout-worker.ts",
-              "apps/api/src/lib/document-processing-queue.ts",
-              "apps/api/src/lib/workflow-queue.ts",
-              "apps/api/src/lib/file-derivative-queue.ts",
-              "apps/api/src/lib/entity-deletion-cleanup-queue.ts",
-              "apps/api/src/lib/account-deletion-cleanup-queue.ts",
-              "apps/api/src/lib/style-set-package-cleanup-queue.ts",
-              "apps/api/src/lib/document-review/run-queue.ts",
-              "apps/api/src/lib/bilingual/run-queue.ts",
-              "apps/api/src/lib/document-translation/run-queue.ts",
-              "apps/api/src/lib/flows/flow-run-worker.ts",
-              "apps/api/src/lib/scheduler/bullmq.ts",
-              "apps/api/src/handlers/reports/report-export-queue.ts",
-              // Cross-instance SSE fan-out: publisher and subscriber. Lost
-              // messages degrade to inline local delivery.
-              "apps/api/src/lib/sse-broadcast.ts",
-              "apps/api/src/lib/sse.ts",
-              // TTL'd rate-limit counters. Each degrades to a per-process
-              // fallback map when Valkey is unreachable.
-              "apps/api/src/lib/rate-limit/redis-context.ts",
-              "apps/api/src/lib/rate-limit/auth-storage.ts",
-              "apps/api/src/mcp/gateway/rate-limit.ts",
-              "apps/api/src/handlers/feedback/intake-guards.ts",
-              // TTL'd alert deduplication; an outage emits the alert rather
-              // than suppressing it.
-              "apps/api/src/lib/security-canary.ts",
-              // TTL'd OCR worker readiness lease; absence reads as unready.
-              "apps/api/src/lib/document-processing-readiness.ts",
-              // Workflow run locks and progress counters, rebuilt from the
-              // durable orphan reconciler when they are lost.
-              "apps/api/src/lib/workflow/root-run-state-store.ts",
-              // Liveness probe: PINGs the connection it is reporting on.
-              "apps/api/src/lib/health/readiness.ts",
-              // Publisher pacing: uses an expiring shared reservation,
-              // fails closed on a deployed outage to protect the publisher,
-              // and uses a process-local gate outside deployed environments.
-              "apps/api/src/handlers/case-law/ingestion/adapters/publisher-request-gate.ts",
-            ],
-          },
+          { entries: enforcedOwnershipEntries },
         ],
       },
     },

@@ -286,6 +286,7 @@ run_step "React Compiler bailout guard" bun scripts/rc-bailouts.ts --check
 run_step "Oxlint override union guard" bun test \
   scripts/oxlint-override-union.test.ts
 run_step "Ratchet guard" run_ratchet_guard
+run_step "Module ownership" bun run check:module-ownership
 run_step "Dead columns" run_dead_columns_guard
 run_step "Projection totality" run_projection_totality_guard
 run_step "Module-mock ledger membership" run_module_mock_ledger_guard
