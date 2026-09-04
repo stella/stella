@@ -120,7 +120,14 @@ export type WorkspaceFrameProps = {
       composition: "described";
       navigation: WorkspaceFrameNavigation;
       topBar: WorkspaceFrameTopBar;
-      endRail: WorkspaceFrameEndRail;
+      /**
+       * The permanent inline-end rail. Omitting it alongside `inspector`
+       * mounts no end dock at all: no rail, none of its 48px inline-end
+       * reservation, and the content area extends to the frame's edge. With
+       * an `inspector` but no rail, the dock keeps the full pane width and
+       * has no rail to collapse to.
+       */
+      endRail?: WorkspaceFrameEndRail;
       inspector?: WorkspaceFrameInspector;
     }
   | {
@@ -145,7 +152,9 @@ type DescribedWorkspaceFrameProps = Extract<
 /**
  * Stella's complete workspace frame. Hosts provide route descriptors and
  * actions; this component owns the shell, application rail, end rail, and
- * desktop inspector footprint.
+ * desktop inspector footprint. A `described` host with nothing for the
+ * inline-end edge omits both `endRail` and `inspector`, and the frame mounts
+ * no end dock at all.
  *
  * The two compositions mount different navigation primitives. `described`
  * renders `navigation.items` through the narrower `ApplicationRail` from
@@ -192,10 +201,14 @@ const DescribedWorkspaceFrame = ({
       <DescribedSidebar navigation={navigation} sidebar={navigation.sidebar} />
     );
 
+  const rail =
+    endRail === undefined ? undefined : <WorkspaceEndRail {...endRail} />;
+  // No inspector and no rail: no end dock either, so the content area runs to
+  // the frame's inline-end edge instead of reserving a dead rail strip.
   const endDock =
     inspector && inspectorPresentation === "desktop" ? (
       <InspectorDock
-        rail={<WorkspaceEndRail {...endRail} />}
+        rail={rail}
         resizeHandleLabel={inspector.resizeHandleLabel}
         resizeHandleProps={inspector.resizeHandleProps}
         showPaneContent={inspector.showPaneContent}
@@ -205,7 +218,7 @@ const DescribedWorkspaceFrame = ({
         {inspector.pane}
       </InspectorDock>
     ) : (
-      <WorkspaceEndRail {...endRail} />
+      rail
     );
 
   const shell = (

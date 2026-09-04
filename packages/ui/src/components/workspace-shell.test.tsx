@@ -85,6 +85,27 @@ describe("WorkspaceShell", () => {
     expect(markup).toContain("Header");
     expect(markup).not.toContain('aria-label="Open navigation"');
   });
+
+  test("ends at the content column when the host has no end dock", () => {
+    const markup = renderToStaticMarkup(
+      <WorkspaceShell
+        navigation={{
+          content: <nav data-test="navigation">Navigation</nav>,
+          mode: "responsive",
+        }}
+        topBar={() => <header data-test="top-bar">Header</header>}
+      >
+        <article data-test="content">Content</article>
+      </WorkspaceShell>,
+    );
+
+    // Nothing follows the content column: no rail element, and no width
+    // reserved beside it.
+    expect(markup).toMatch(
+      /<article data-test="content">Content<\/article><\/div><\/main><\/div>$/su,
+    );
+    expect(markup).not.toContain('data-slot="inspector-rail"');
+  });
 });
 
 describe("WorkspaceEndRail", () => {
