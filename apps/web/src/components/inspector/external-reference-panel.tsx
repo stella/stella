@@ -50,6 +50,7 @@ import { createChatThreadId, toChatThreadId } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 import { APIError, toAPIError } from "@/lib/errors/api";
 import { fetchWithTimeout } from "@/lib/fetch";
+import { useOwnsFind } from "@/lib/find-owner";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { PDFPage } from "@/lib/pdf/pdf-page";
@@ -153,9 +154,15 @@ const useInspectorFind = ({
   const matchCount = findState.open ? findState.matchCount : 0;
   const activeIndex = findState.open ? findState.activeIndex : 0;
 
+  // A table view binds Cmd/Ctrl+F too. This listener captures and always
+  // prevents the default, so without an owner both bars could open and which
+  // one did was mount-order luck; the inspector wins while it is showing a
+  // document, and stands down otherwise.
+  const ownsFind = useOwnsFind("inspector", enabled);
+
   useExternalSyncEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (!enabled) {
+      if (!ownsFind) {
         return;
       }
 
@@ -175,7 +182,7 @@ const useInspectorFind = ({
     return () => {
       document.removeEventListener("keydown", handleKeyDown, { capture: true });
     };
-  }, [enabled, findOpen]);
+  }, [findOpen, ownsFind]);
 
   useLayoutEffect(() => {
     // eslint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
