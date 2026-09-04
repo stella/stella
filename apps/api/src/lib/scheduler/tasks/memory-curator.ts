@@ -3,7 +3,6 @@ import { and, asc, eq, inArray, lt } from "drizzle-orm";
 import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
 import { aiMemories } from "@/api/db/schema";
-import { env } from "@/api/env";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
@@ -40,10 +39,6 @@ const MEMORY_CURATOR_AUDIT_ACTOR = "system:memory-curator";
  * maintenance pass that never reads tenant content.
  */
 export const curateAiMemories: SchedulerTask = async ({ logger, signal }) => {
-  if (!env.FEATURE_AI_MEMORY) {
-    return;
-  }
-
   const now = Date.now();
   const staleCutoff = new Date(
     now - STALE_AFTER_DAYS * MEMORY_LIFECYCLE_DAY_MS,

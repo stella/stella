@@ -20,7 +20,6 @@ import { useTranslations } from "use-intl";
 
 import { cn } from "@stll/ui/utils";
 
-import { env } from "@/env";
 import type { TranslationKey } from "@/i18n/types";
 import { authClient } from "@/lib/auth";
 import { roleOptions } from "@/lib/auth-queries";
@@ -153,7 +152,6 @@ function SettingsLayout() {
   const showOrganization = role !== undefined && managementRoles.includes(role);
   const openShortcuts = useKeyboardShortcutsDialogStore((store) => store.open);
   const canUseMemory =
-    env.VITE_FEATURE_AI_MEMORY &&
     role !== undefined &&
     authClient.organization.checkRolePermission({
       role,

@@ -30,6 +30,7 @@ import {
   accountDeletionEffectChunks,
   accountDeletionRequests,
   agentSkills,
+  aiMemories,
   chatThreads,
   desktopEditHandoffs,
   desktopEditSessions,
@@ -1011,13 +1012,41 @@ export const deleteChatThreadsAndFileLinks = async (
   await tx.delete(chatThreads).where(eq(chatThreads.userId, currentUserId));
 };
 
+export const DELETE_PERSONAL_AI_MEMORIES_TABLES = [
+  aiMemories,
+] as const satisfies readonly PgTable[];
+
+/**
+ * 11. Personal AI memories and unaccepted suggestions.
+ */
+export const deletePersonalAiMemories = async (
+  tx: Transaction,
+  currentUserId: string,
+): Promise<void> => {
+  const safeUserId = brandPersistedUserId(currentUserId);
+
+  await tx.delete(aiMemories).where(eq(aiMemories.userId, safeUserId));
+  await tx
+    .delete(aiMemories)
+    .where(
+      and(
+        eq(aiMemories.createdBy, safeUserId),
+        eq(aiMemories.status, "suggested"),
+      ),
+    );
+  await tx
+    .update(aiMemories)
+    .set({ createdBy: null })
+    .where(eq(aiMemories.createdBy, safeUserId));
+};
+
 export const DELETE_WORKSPACE_VIEW_TEMPLATES_TABLES = [
   workspaceViewTemplates,
   agentSkills,
 ] as const satisfies readonly PgTable[];
 
 /**
- * 11. Personal workspace view templates and agent skills.
+ * 12. Personal workspace view templates and agent skills.
  */
 export const deletePersonalWorkspaceViewTemplatesAndAgentSkills = async (
   tx: Transaction,
@@ -1034,7 +1063,7 @@ export const DELETE_BILLING_RATES_TABLES = [
 ] as const satisfies readonly PgTable[];
 
 /**
- * 12. Personal billing rates.
+ * 13. Personal billing rates.
  */
 export const deletePersonalBillingRates = async (
   tx: Transaction,
@@ -1103,7 +1132,7 @@ export const recordAccountDeletionRequest = async ({
 };
 
 /**
- * 13. Mark the account deleted and release private contact/login fields.
+ * 14. Mark the account deleted and release private contact/login fields.
  */
 export const finalizeDeletedUserRecord = async (
   tx: Transaction,
@@ -1144,6 +1173,7 @@ export const ACCOUNT_DELETION_MANUAL_TABLES = [
   ...DELETE_PENDING_UPLOADS_TABLES,
   ...DELETE_USER_FILES_TABLES,
   ...DELETE_CHAT_THREADS_TABLES,
+  ...DELETE_PERSONAL_AI_MEMORIES_TABLES,
   ...DELETE_WORKSPACE_VIEW_TEMPLATES_TABLES,
   ...DELETE_BILLING_RATES_TABLES,
 ] as const satisfies readonly PgTable[];

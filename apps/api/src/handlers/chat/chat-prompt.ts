@@ -33,7 +33,6 @@ import type {
   CaseLawAnnotationVisibility,
   PracticeJurisdiction,
 } from "@/api/db/schema";
-import { env } from "@/api/env";
 import { CHAT_EDIT_APPLY_MODE } from "@/api/handlers/chat/chat-schema";
 import type {
   ChatEditApplyMode,
@@ -698,7 +697,7 @@ export const buildChatSystemPromptParts = async ({
     // session (e.g. anonymous prompt-preview builders) there is no
     // memory to inject.
     const memorySection =
-      env.FEATURE_AI_MEMORY && organizationId && userId
+      organizationId && userId
         ? yield* Result.await(
             buildMemoryPromptParts({
               contextMatterIds,

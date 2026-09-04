@@ -3010,6 +3010,9 @@
     "archivedEmpty": "Nėra archyvuotų įrašų.",
     "archivedToast": "Atmintis suarchyvuota",
     "createdToast": "Įrašyta į atmintį",
+    "deleteDescription": "Šis veiksmas visam laikui ištrins šią atmintį. Jo anuliuoti negalima.",
+    "deleteTitle": "Ištrinti atmintį?",
+    "deletedToast": "Atmintis ištrinta",
     "empty": "Atmintyje kol kas nieko nėra.",
     "kinds": {
       "decision": "Sprendimas",

@@ -3010,6 +3010,9 @@
     "archivedEmpty": "Nav arhivētu atmiņu.",
     "archivedToast": "Atmiņa arhivēta",
     "createdToast": "Saglabāts atmiņā",
+    "deleteDescription": "Šī atmiņa tiks neatgriezeniski dzēsta. Šo darbību nevar atsaukt.",
+    "deleteTitle": "Dzēst atmiņu?",
+    "deletedToast": "Atmiņa dzēsta",
     "empty": "Atmiņā vēl nekā nav.",
     "kinds": {
       "decision": "Lēmums",

@@ -6,16 +6,30 @@ import {
   ArchiveRestoreIcon,
   PencilIcon,
   PinIcon,
+  Trash2Icon,
 } from "lucide-react";
 import { useFormatter, useTranslations } from "use-intl";
 
+import {
+  AlertDialog,
+  AlertDialogClose,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogPopup,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@stll/ui/alert-dialog";
 import { Button } from "@stll/ui/button";
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import { useAnalytics } from "@/lib/analytics/provider";
-import { updateMemory as updateMemoryRequest } from "@/lib/memory-api";
+import {
+  deleteMemory as deleteMemoryRequest,
+  updateMemory as updateMemoryRequest,
+} from "@/lib/memory-api";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { invalidateMemories } from "@/routes/_protected.settings/-queries/memories";
 import type { MemoryListItem } from "@/routes/_protected.settings/-queries/memories";
@@ -76,6 +90,17 @@ export const MemoryRow = ({
       stellaToast.add({ title: tErrors("actionFailed"), type: "error" });
     },
   });
+  const deleteMemory = useMutation({
+    mutationFn: async () => await deleteMemoryRequest(memory.id),
+    onSuccess: async () => {
+      await invalidateMemories(queryClient, activeOrganizationId);
+      stellaToast.add({ title: t("deletedToast"), type: "success" });
+    },
+    onError: (error: unknown) => {
+      analytics.captureError(error);
+      stellaToast.add({ title: tErrors("actionFailed"), type: "error" });
+    },
+  });
 
   const saveEdit = () => {
     const trimmed = draft.trim();
@@ -96,9 +121,10 @@ export const MemoryRow = ({
         </span>
         <MemoryActions
           canManage={canManage}
-          isPending={updateMemory.isPending}
+          isPending={updateMemory.isPending || deleteMemory.isPending}
           memory={memory}
           onArchive={() => updateMemory.mutate({ status: "archived" })}
+          onDelete={() => deleteMemory.mutate()}
           onEdit={() => {
             setDraft(memory.content);
             setIsEditing((prev) => !prev);
@@ -157,6 +183,7 @@ type MemoryActionsProps = {
   isPending: boolean;
   memory: MemoryListItem;
   onArchive: () => void;
+  onDelete: () => void;
   onEdit: () => void;
   onPin: () => void;
   onRestore: () => void;
@@ -167,6 +194,7 @@ const MemoryActions = ({
   isPending,
   memory,
   onArchive,
+  onDelete,
   onEdit,
   onPin,
   onRestore,
@@ -178,15 +206,18 @@ const MemoryActions = ({
   }
   if (memory.status === "archived" || memory.status === "stale") {
     return (
-      <Button
-        disabled={isPending}
-        onClick={onRestore}
-        size="sm"
-        variant="ghost"
-      >
-        <ArchiveRestoreIcon className="size-4" />
-        {commonT("restore")}
-      </Button>
+      <div className="flex shrink-0 items-center gap-0.5">
+        <Button
+          disabled={isPending}
+          onClick={onRestore}
+          size="sm"
+          variant="ghost"
+        >
+          <ArchiveRestoreIcon className="size-4" />
+          {commonT("restore")}
+        </Button>
+        <DeleteMemoryAction disabled={isPending} onDelete={onDelete} />
+      </div>
     );
   }
 
@@ -220,6 +251,56 @@ const MemoryActions = ({
       >
         <ArchiveIcon className="size-4" />
       </Button>
+      <DeleteMemoryAction disabled={isPending} onDelete={onDelete} />
     </div>
+  );
+};
+
+type DeleteMemoryActionProps = {
+  disabled: boolean;
+  onDelete: () => void;
+};
+
+const DeleteMemoryAction = ({
+  disabled,
+  onDelete,
+}: DeleteMemoryActionProps) => {
+  const commonT = useTranslations("common");
+  const t = useTranslations("memory");
+
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger
+        render={
+          <Button
+            aria-label={commonT("delete")}
+            disabled={disabled}
+            size="icon-sm"
+            variant="ghost"
+          />
+        }
+      >
+        <Trash2Icon className="size-4" />
+      </AlertDialogTrigger>
+      <AlertDialogPopup>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{t("deleteTitle")}</AlertDialogTitle>
+          <AlertDialogDescription>
+            {t("deleteDescription")}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogClose
+            disabled={disabled}
+            render={<Button disabled={disabled} variant="ghost" />}
+          >
+            {commonT("cancel")}
+          </AlertDialogClose>
+          <Button disabled={disabled} onClick={onDelete} variant="destructive">
+            {commonT("delete")}
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogPopup>
+    </AlertDialog>
   );
 };

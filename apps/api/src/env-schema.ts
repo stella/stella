@@ -266,8 +266,6 @@ export const envApiServerSchema = {
   FEATURE_MCP: featureFlagSchema,
   FEATURE_DESKTOP_EDITING: featureFlagSchema,
   FEATURE_TIME_BILLING: featureFlagSchema,
-  /** Dark-launch tenant-scoped AI memory until product and performance review. */
-  FEATURE_AI_MEMORY: featureFlagSchema,
   /** Dark-launch first-class legal lists until the end-to-end workflow is complete. */
   FEATURE_LEGAL_LISTS: featureFlagSchema,
   /** Dark-launch governed work obligations and compatibility task behavior. */

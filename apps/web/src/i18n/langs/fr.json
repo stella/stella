@@ -3010,6 +3010,9 @@
     "archivedEmpty": "Aucune mémoire archivée.",
     "archivedToast": "Mémoire archivée",
     "createdToast": "Enregistré dans la mémoire",
+    "deleteDescription": "Cette mémoire sera supprimée définitivement. Cette action est irréversible.",
+    "deleteTitle": "Supprimer la mémoire ?",
+    "deletedToast": "Mémoire supprimée",
     "empty": "Encore rien en mémoire.",
     "kinds": {
       "decision": "Décision",

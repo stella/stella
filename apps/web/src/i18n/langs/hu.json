@@ -3010,6 +3010,9 @@
     "archivedEmpty": "Nincs archivált emlék.",
     "archivedToast": "Emlék archiválva",
     "createdToast": "Elmentve a memóriába",
+    "deleteDescription": "Ez véglegesen törli ezt az emléket. A művelet nem vonható vissza.",
+    "deleteTitle": "Törli az emléket?",
+    "deletedToast": "Emlék törölve",
     "empty": "Még nincs semmi a memóriában.",
     "kinds": {
       "decision": "Döntés",

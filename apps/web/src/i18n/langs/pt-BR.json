@@ -3010,6 +3010,9 @@
     "archivedEmpty": "Nenhuma memória arquivada.",
     "archivedToast": "Memória arquivada",
     "createdToast": "Salvo na memória",
+    "deleteDescription": "Isso remove esta memória permanentemente. Esta ação não pode ser desfeita.",
+    "deleteTitle": "Excluir memória?",
+    "deletedToast": "Memória excluída",
     "empty": "Ainda não há nada na memória.",
     "kinds": {
       "decision": "Decisão",
