@@ -727,6 +727,9 @@
     "packages/money": {
       "name": "@stll/money",
       "version": "0.1.0",
+      "dependencies": {
+        "better-result": "catalog:",
+      },
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",

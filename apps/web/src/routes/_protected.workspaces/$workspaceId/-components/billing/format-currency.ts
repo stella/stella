@@ -1,26 +1,26 @@
-import { getFormatter } from "@/i18n/i18n-store";
+import { formatHundredths } from "@stll/money";
 
-// NOTE: cents / 100 assumes a 2-decimal minor unit, which is wrong for
+import { getFormattingLocale } from "@/i18n/i18n-store";
+
+// The rendering lives in `@stll/money`, which owns the amounts; this module
+// binds the reader's formatting locale to it and names the two presets billing
+// uses.
+//
+// NOTE: `formatHundredths` assumes a 2-decimal minor unit, which is wrong for
 // currencies with a different exponent (KWD has 3, JPY has 0). Fixing that is
-// a billing money-model change tracked separately; this module only makes the
-// formatting locale-aware.
+// a billing money-model change tracked separately.
 
 /**
  * Formats a monetary amount given in cents into a localized
  * currency string.
  */
-export const formatCurrencyAmount = (
-  cents: number,
-  currency: string,
-): string => {
-  const amount = cents / 100;
-  return formatCurrency({
-    amount,
+export const formatCurrencyAmount = (cents: number, currency: string): string =>
+  formatHundredths({
+    amountCents: cents,
     currency,
-    minimumFractionDigits: 2,
-    fallback: `${amount.toFixed(2)} ${currency}`,
+    locale: getFormattingLocale(),
+    fractionDigits: 2,
   });
-};
 
 /**
  * Same as formatCurrencyAmount but with no decimal places.
@@ -29,42 +29,13 @@ export const formatCurrencyAmount = (
 export const formatCurrencyCompact = (
   cents: number,
   currency: string,
-): string => {
-  const amount = cents / 100;
-  return formatCurrency({
-    amount,
+): string =>
+  formatHundredths({
+    amountCents: cents,
     currency,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-    fallback: `${Math.round(amount)} ${currency}`,
+    locale: getFormattingLocale(),
+    fractionDigits: 0,
   });
-};
 
 /** Fallback currency when no entries exist. */
 export const DEFAULT_CURRENCY = "USD";
-
-const formatCurrency = ({
-  amount,
-  currency,
-  minimumFractionDigits,
-  maximumFractionDigits,
-  fallback,
-}: {
-  amount: number;
-  currency: string;
-  minimumFractionDigits: number;
-  maximumFractionDigits?: number;
-  fallback: string;
-}): string => {
-  try {
-    return getFormatter().number(amount, {
-      style: "currency",
-      currency,
-      minimumFractionDigits,
-      ...(maximumFractionDigits === undefined ? {} : { maximumFractionDigits }),
-    });
-  } catch {
-    // Persisted billing currency codes are only length-validated today.
-    return fallback;
-  }
-};
