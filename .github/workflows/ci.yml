@@ -1044,6 +1044,10 @@ jobs:
           scripts/autofix-workflow.test.ts
           scripts/dependabot-empty-changeset.test.ts
 
+      - name: Test package scaffolder
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        run: bun test scripts/new-package.test.ts
+
       - name: Test affected code-check planner
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: bun test scripts/code-check-affected.test.ts
