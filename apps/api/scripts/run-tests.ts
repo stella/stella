@@ -10,6 +10,7 @@ import {
   type ModuleMockTest,
 } from "../src/tests/module-mock-batching";
 import { API_TEST_TIMEOUT_MS } from "../src/tests/test-timeouts";
+import { buildApiTestCommand } from "./api-test-command";
 import { maxRssBytesToMb } from "./resource-usage";
 import {
   classifyTestBatch,
@@ -290,17 +291,17 @@ const runTests = async ({
 
   // Each batch loads many graph-heavy API modules. Prefer more frequent garbage
   // collection so it stays within the hosted runner's memory budget.
-  const command = [
-    process.execPath,
-    "--smol",
-    "test",
-    "--preload",
-    preloadPath,
-  ];
+  const testArguments = ["--preload", preloadPath];
   if (isolate) {
-    command.push("--isolate");
+    testArguments.push("--isolate");
   }
-  command.push(...bunArguments, ...testFiles);
+  testArguments.push(...bunArguments);
+  const command = buildApiTestCommand({
+    bunExecutable: process.execPath,
+    bunRuntimeArguments: ["--smol"],
+    testArguments,
+    testFiles,
+  });
 
   const child = Bun.spawn({
     cmd: command,
