@@ -106,11 +106,12 @@ let laneHeld = false;
 const connection = await client.reserve();
 try {
   await connection.unsafe(bootstrapRoleSql);
-  for (const statement of CORPUS_SCHEMA_LANE_LOCK_STATEMENTS) {
-    // oxlint-disable-next-line no-await-in-loop -- the timeout is lifted, the lane taken and the timeout restored in order on one session
-    await connection.unsafe(statement);
-  }
+  const [liftTimeout, takeLane, restoreTimeout] =
+    CORPUS_SCHEMA_LANE_LOCK_STATEMENTS;
+  await connection.unsafe(liftTimeout);
+  await connection.unsafe(takeLane);
   laneHeld = true;
+  await connection.unsafe(restoreTimeout);
   const database = drizzle({ client: connection });
   await migrate(database, { migrationsFolder });
   await assertMigrationHistory({
