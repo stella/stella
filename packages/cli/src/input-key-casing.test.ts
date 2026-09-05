@@ -7,7 +7,7 @@ const schema = {
   properties: {
     matter_id: { type: "string" },
     reference: { type: "string" },
-    workspace_id: { type: "string" },
+    entity_id: { type: "string" },
   },
 };
 
@@ -54,7 +54,7 @@ describe("normalizeInputKeyCasing", () => {
   });
 
   test("snakeCase", () => {
-    expect(snakeCase("workspaceId")).toBe("workspace_id");
+    expect(snakeCase("matterId")).toBe("matter_id");
     expect(snakeCase("compareWithVersionId")).toBe("compare_with_version_id");
     expect(snakeCase("reference")).toBe("reference");
   });

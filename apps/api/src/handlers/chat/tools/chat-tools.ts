@@ -739,11 +739,11 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   //   - `entity: ["update"]` permission -- this tool overwrites the active
   //     document's content, the same grant `docx-suggestions/create.ts`,
   //     `resolve.ts`, and `upload-version.ts` require for DOCX edits.
-  //     `create_workspace_document` checks `entity: ["create"]` instead
+  //     `create_matter_document` checks `entity: ["create"]` instead
   //     because it creates a new document; this tool edits an existing
   //     one, so it checks the "update" action, not "create".
   //   - Active (non-archived) matter status, from the same
-  //     `workspaceStatusById` map `create_workspace_document` reads, so an
+  //     `workspaceStatusById` map `create_matter_document` reads, so an
   //     archived matter stays read-only through this tool too.
   //   - `recordAuditEvent` present, since `createEntityVersionFromBuffer`
   //     always writes an audit event.
@@ -882,7 +882,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   // model can see and call it from any chat surface.
   const createDocumentTools = createCreateDocumentTools();
 
-  // create_workspace_document is server-executed (immediate, no client
+  // create_matter_document is server-executed (immediate, no client
   // matter-pick round trip like `create-document`), so its destination
   // workspace must come from server-validated context rather than model
   // input or a client-side picker. `requestWorkspaceId` is that context: the

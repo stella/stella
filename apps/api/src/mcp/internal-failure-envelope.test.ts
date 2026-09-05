@@ -124,12 +124,12 @@ const REPRESENTATIVE_DB_FAILURES: {
   {
     file: "billing-tools.ts",
     handler: BILLING_TOOL_HANDLERS.resolve_rate,
-    args: { workspace_id: "ws_1", user_id: "user_2", date: "2024-01-01" },
+    args: { matter_id: "ws_1", user_id: "user_2", date: "2024-01-01" },
   },
   {
     file: "document-tools.ts",
     handler: DOCUMENT_TOOL_HANDLERS.save_document,
-    args: { workspace_id: "ws_1", kind: "document", name: "Doc" },
+    args: { matter_id: "ws_1", kind: "document", name: "Doc" },
   },
   {
     file: "knowledge-tools.ts",
@@ -142,7 +142,7 @@ const REPRESENTATIVE_DB_FAILURES: {
   {
     file: "research-admin-tools.ts",
     handler: RESEARCH_ADMIN_TOOL_HANDLERS.manage_organization,
-    args: { action: "add_member", workspace_id: "ws_1", user_id: "user_2" },
+    args: { action: "add_member", matter_id: "ws_1", user_id: "user_2" },
   },
 ];
 
@@ -279,7 +279,7 @@ describe("internalFailureResult preserves expected handler errors", () => {
 // 5xx must not.
 describe("save_time_entry threads backing handler errors correctly", () => {
   const TIME_ENTRY_CREATE_ARGS = {
-    workspace_id: "ws_1",
+    matter_id: "ws_1",
     entity_id: "00000000-0000-4000-8000-0000000e0001",
     date_worked: "2024-01-01",
     timezone_id: "Europe/Prague",

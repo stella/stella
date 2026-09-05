@@ -521,7 +521,7 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
   {
     description:
       "Fill a registered template and persist the generated DOCX directly in " +
-      "a workspace, without requiring the client to upload bytes. Use " +
+      "a matter, without requiring the client to upload bytes. Use " +
       "action='create_document' to create a new document (optionally inside " +
       "parent_id), or action='create_version' with entity_id to append a " +
       "version to an existing document. Call list_templates first to learn " +
@@ -538,9 +538,7 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
           "create_version",
         ]),
         template_id: stringProp("Template id, as returned by list_templates"),
-        workspace_id: stringProp(
-          "Workspace receiving the filled DOCX. Deprecated input alias: matter_id.",
-        ),
+        matter_id: stringProp("Matter receiving the filled DOCX."),
         entity_id: stringProp(
           "Existing document entity id; required only for create_version",
         ),
@@ -564,7 +562,7 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
       required: [
         "action",
         "template_id",
-        "workspace_id",
+        "matter_id",
         "idempotency_key",
         "values",
       ],
@@ -1004,7 +1002,7 @@ const handleFillTemplateTool: McpToolHandler = async ({ args, context }) => {
 const saveFilledTemplateArgsSchema = v.strictObject({
   action: v.picklist(["create_document", "create_version"]),
   template_id: v.pipe(v.string(), v.uuid()),
-  workspace_id: v.pipe(v.string(), v.minLength(1)),
+  matter_id: v.pipe(v.string(), v.minLength(1)),
   entity_id: v.optional(v.pipe(v.string(), v.uuid())),
   parent_id: v.optional(v.pipe(v.string(), v.uuid())),
   name: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(255))),
@@ -1060,7 +1058,7 @@ const validateFilledTemplateDestination = async ({
         columns: { kind: true },
       });
       if (!parent) {
-        return "Parent entity not found in this workspace";
+        return "Parent entity not found in this matter";
       }
       return parent.kind === "folder" ? null : "Parent entity must be a folder";
     });
@@ -1162,7 +1160,7 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
 
   const workspaceId = ensureWorkspaceAccess({
     context,
-    workspaceId: input.workspace_id,
+    workspaceId: input.matter_id,
   });
   if (workspaceId === null) {
     return notFoundResult("Matter not found or not accessible");
@@ -1244,7 +1242,7 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
 
   const activeWorkspaceId = ensureActiveWorkspace({
     context,
-    workspaceId: input.workspace_id,
+    workspaceId: input.matter_id,
   });
   if (typeof activeWorkspaceId !== "string") {
     await releaseClaim();

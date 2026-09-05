@@ -39,6 +39,7 @@ import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import type { McpErrorCode, McpValidationIssue } from "@/api/mcp/error-codes";
 import { CAPABILITY_DISPATCH } from "@/api/mcp/generated/capability-dispatch";
 import type { CapabilityDispatchEntry } from "@/api/mcp/generated/capability-dispatch";
+import { INTERNAL_FIELD_NAME } from "@/api/mcp/public-field-names";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import type {
   InternalToolErrorResult,
@@ -102,7 +103,7 @@ type CatalogEntry = {
   additionalScopes?: readonly string[];
   /**
    * When true, this capability's REST route resolves workspace access through
-   * `validateWorkspaceAccessIncludingArchived` (e.g. `workspaces.unarchive`), so
+   * `validateWorkspaceAccessIncludingArchived` (e.g. `matters.unarchive`), so
    * the generic write gate must let it run against an archived workspace.
    */
   allowsArchivedWorkspace?: boolean;
@@ -1050,6 +1051,52 @@ const invokeArgIssues = (
   return issues;
 };
 
+/**
+ * Rename the public input field names back to the internal ones a handler
+ * declares, for one part of an invoke input.
+ *
+ * The container is a `matterId` to every agent and a `workspaceId` in the DB,
+ * the handler config and the REST route. This is the inbound half of that
+ * split, and the only place it happens: after it the raw input, the
+ * config-schema validation and the workspace resolution all speak the internal
+ * name, exactly as a REST call does. The outbound half is `withPublicFieldNames`
+ * (apps/api/scripts/export-capability-catalog.ts), which advertises `matterId`.
+ *
+ * `declaresInternal` is what keeps the rename from stealing a field a handler
+ * genuinely owns: `expenses.*` and `signals.*` declare their own `matterId`,
+ * which must reach them untouched. A path param is always the container (the
+ * route macro supplies it, so no handler config declares it), so params passes
+ * `true` unconditionally.
+ *
+ * Both directions come from `INTERNAL_FIELD_NAME`'s one table.
+ */
+const withInternalFieldNames = ({
+  declaresInternal,
+  part,
+}: {
+  declaresInternal: boolean;
+  part: unknown;
+}): unknown => {
+  if (!declaresInternal || !isRecord(part)) {
+    return part;
+  }
+  return Object.fromEntries(
+    Object.entries(part).map(([name, value]) => [
+      INTERNAL_FIELD_NAME[name] ?? name,
+      value,
+    ]),
+  );
+};
+
+/** Whether a part's schema declares any of the internal field names. */
+const declaresInternalField = (schema: unknown): boolean => {
+  const properties = isRecord(schema) ? schema["properties"] : undefined;
+  return (
+    isRecord(properties) &&
+    Object.values(INTERNAL_FIELD_NAME).some((name) => name in properties)
+  );
+};
+
 /** Split the (already shape-validated) `input` arg into its three parts. */
 const readInvokeInput = (raw: unknown): InvokeInput => {
   if (!isRecord(raw)) {
@@ -1062,7 +1109,7 @@ const readInvokeInput = (raw: unknown): InvokeInput => {
   };
 };
 
-/** Resolve the workspace id for a workspace-kind capability from `input.params.workspaceId`. */
+/** Resolve the workspace id for a workspace-kind capability from `input.params.matterId`. */
 const resolveCapabilityWorkspace = ({
   context,
   entry,
@@ -1081,11 +1128,11 @@ const resolveCapabilityWorkspace = ({
       result: structuredErrorResult({
         code: "validation_error",
         message:
-          "This capability is workspace-scoped and requires input.params.workspaceId",
+          "This capability is matter-scoped and requires input.params.matterId",
         issues: [
           {
-            path: "params.workspaceId",
-            message: "Provide the target workspace id as a non-empty string",
+            path: "params.matterId",
+            message: "Provide the target matter id as a non-empty string",
           },
         ],
       }),
@@ -1097,7 +1144,7 @@ const resolveCapabilityWorkspace = ({
   if (!branded) {
     return {
       ok: false,
-      result: notFoundResult("Workspace not found or not accessible"),
+      result: notFoundResult("Matter not found or not accessible"),
     };
   }
   // Mirror `validateWorkspaceAccess` exactly (lib/auth.ts): the REST macro
@@ -1114,14 +1161,14 @@ const resolveCapabilityWorkspace = ({
     return {
       ok: false,
       result: notFoundResult(
-        "Workspace is archived; unarchive it before invoking capabilities against it",
+        "Matter is archived; unarchive it before invoking capabilities against it",
       ),
     };
   }
   if (context.pinServerValidatedWorkspaceId?.(branded) === false) {
     return {
       ok: false,
-      result: notFoundResult("Workspace not found or not accessible"),
+      result: notFoundResult("Matter not found or not accessible"),
     };
   }
   return { ok: true, workspaceId: branded };
@@ -1305,7 +1352,7 @@ const executeInvoke = async ({
   context,
   entry,
   id,
-  input,
+  input: publicInput,
   validateOnly,
 }: {
   context: McpRequestContext;
@@ -1325,12 +1372,11 @@ const executeInvoke = async ({
   // (same `advertisedSchemas` projection of the live endpoint config, so a
   // bound an agent read is a bound this gate enforces), run Default -> Convert
   // -> Clean -> Check to mirror the Elysia boundary; see validatePart. A
-  // workspace-scoped capability takes its workspace as
-  // `input.params.workspaceId`; at REST that param belongs to the route macro's
-  // schema, not the handler config's, so it is resolved from the RAW params
-  // below (Clean would strip it from configs that do not declare it) and
-  // re-merged into the params the handler receives, exactly like the macro's
-  // merged schema.
+  // matter-scoped capability takes its matter as `input.params.matterId`; at
+  // REST that param belongs to the route macro's schema, not the handler
+  // config's, so it is resolved from the RAW params below (Clean would strip it
+  // from configs that do not declare it) and re-merged into the params the
+  // handler receives, exactly like the macro's merged schema.
   // In fileless mode the withheld file field does not exist for this call, so
   // it is removed from the schema before validation rather than merely left
   // unset. `t.File()` carries `default: "File"`, and the Default step would
@@ -1338,6 +1384,22 @@ const executeInvoke = async ({
   // then fail Check on it — a capability that is reachable in principle,
   // un-callable in practice.
   const advertised = advertisedSchemas(endpoint.config);
+  // The public field names go back to the internal ones here, before anything
+  // reads the input, so the rest of this function is the REST boundary verbatim.
+  const input: InvokeInput = {
+    body: withInternalFieldNames({
+      declaresInternal: declaresInternalField(advertised.body),
+      part: publicInput.body,
+    }),
+    params: withInternalFieldNames({
+      declaresInternal: true,
+      part: publicInput.params,
+    }),
+    query: withInternalFieldNames({
+      declaresInternal: declaresInternalField(advertised.query),
+      part: publicInput.query,
+    }),
+  };
   const bodySchema = schemaWithoutField(
     advertised.body,
     filelessOnlyField(entry.transport),
@@ -1641,8 +1703,8 @@ const CAPABILITY_TOOL_DEFINITIONS = [
     description:
       "Invoke one capability by id (from list_capabilities/describe_capability). " +
       "Pass its input under input: { body, params, query } (no other top-level " +
-      "argument is accepted); workspace-scoped capabilities take the target " +
-      "workspace as input.params.workspaceId. Real authority is enforced per " +
+      "argument is accepted); matter-scoped capabilities take the target " +
+      "matter as input.params.matterId. Real authority is enforced per " +
       "capability: the session must hold the capability's scope and your member " +
       "role its permissions. Set validate_only: true to check input without " +
       "running it; destructive capabilities require confirm: true after human " +
@@ -1667,7 +1729,7 @@ const CAPABILITY_TOOL_DEFINITIONS = [
             params: {
               type: "object",
               description:
-                "Path parameters; workspace-scoped capabilities require workspaceId here.",
+                "Path parameters; matter-scoped capabilities require matterId here.",
               additionalProperties: true,
             },
             query: {

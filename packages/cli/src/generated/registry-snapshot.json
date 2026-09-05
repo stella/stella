@@ -81,7 +81,7 @@
         "matter_id": {
           "type": "string",
           "minLength": 1,
-          "description": "Matter/workspace ID to return a single matter's overview; omit to list matters"
+          "description": "Matter ID to return a single matter's overview; omit to list matters"
         },
         "status": {
           "enum": ["active", "all"],
@@ -686,7 +686,7 @@
             "command": "new-document",
             "include": [
               "template_id",
-              "workspace_id",
+              "matter_id",
               "idempotency_key",
               "parent_id",
               "name",
@@ -694,7 +694,7 @@
             ],
             "required": [
               "template_id",
-              "workspace_id",
+              "matter_id",
               "idempotency_key",
               "values"
             ]
@@ -703,7 +703,7 @@
             "command": "new-version",
             "include": [
               "template_id",
-              "workspace_id",
+              "matter_id",
               "idempotency_key",
               "entity_id",
               "name",
@@ -711,7 +711,7 @@
             ],
             "required": [
               "template_id",
-              "workspace_id",
+              "matter_id",
               "entity_id",
               "idempotency_key",
               "values"
@@ -721,7 +721,7 @@
       }
     },
     "name": "save_filled_template",
-    "description": "Fill a registered template and persist the generated DOCX directly in a workspace, without requiring the client to upload bytes. Use action='create_document' to create a new document (optionally inside parent_id), or action='create_version' with entity_id to append a version to an existing document. Call list_templates first to learn the field paths and which are required. A required field that is not AI-fillable must be provided, or the fill fails with the exact list of missing fields; ask the user for those values instead of guessing. Returns the entity and version identifiers plus any unmatched placeholders or unused values.",
+    "description": "Fill a registered template and persist the generated DOCX directly in a matter, without requiring the client to upload bytes. Use action='create_document' to create a new document (optionally inside parent_id), or action='create_version' with entity_id to append a version to an existing document. Call list_templates first to learn the field paths and which are required. A required field that is not AI-fillable must be provided, or the fill fails with the exact list of missing fields; ask the user for those values instead of guessing. Returns the entity and version identifiers plus any unmatched placeholders or unused values.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -734,9 +734,9 @@
           "type": "string",
           "description": "Template id, as returned by list_templates"
         },
-        "workspace_id": {
+        "matter_id": {
           "type": "string",
-          "description": "Workspace receiving the filled DOCX. Deprecated input alias: matter_id."
+          "description": "Matter receiving the filled DOCX."
         },
         "entity_id": {
           "type": "string",
@@ -765,7 +765,7 @@
       "required": [
         "action",
         "template_id",
-        "workspace_id",
+        "matter_id",
         "idempotency_key",
         "values"
       ],
@@ -1165,21 +1165,21 @@
       "itemsKey": "documents"
     },
     "name": "list_documents",
-    "description": "List the documents and folders in a workspace. Use 'flat' mode to enumerate every document and folder in the workspace, or 'children' mode to walk the folder tree one level at a time (pass parent_id to list a folder's direct children, or omit it for the workspace root). Returns each entity's id, name, kind (document or folder), and parentId. Read a document's metadata, fields, or versions with read_document.",
+    "description": "List the documents and folders in a matter. Use 'flat' mode to enumerate every document and folder in the matter, or 'children' mode to walk the folder tree one level at a time (pass parent_id to list a folder's direct children, or omit it for the matter root). Returns each entity's id, name, kind (document or folder), and parentId. Read a document's metadata, fields, or versions with read_document.",
     "inputSchema": {
       "type": "object",
-      "required": ["workspace_id"],
+      "required": ["matter_id"],
       "additionalProperties": false,
       "properties": {
-        "workspace_id": {
+        "matter_id": {
           "type": "string",
           "minLength": 1,
-          "description": "Workspace ID to list documents in. Deprecated input alias: matter_id."
+          "description": "Matter ID to list documents in."
         },
         "mode": {
           "enum": ["flat", "children"],
           "type": "string",
-          "description": "'flat' lists every document and folder in the workspace; 'children' lists only the direct children of parent_id (or the workspace root when parent_id is omitted). Defaults to 'flat', or 'children' when parent_id is provided. Passing parent_id with mode 'flat' is rejected."
+          "description": "'flat' lists every document and folder in the matter; 'children' lists only the direct children of parent_id (or the matter root when parent_id is omitted). Defaults to 'flat', or 'children' when parent_id is provided. Passing parent_id with mode 'flat' is rejected."
         },
         "parent_id": {
           "type": "string",
@@ -1255,7 +1255,7 @@
       "scope": "documents_write"
     },
     "name": "save_document",
-    "description": "Create a document or folder, or update an existing one. Omit entity_id to create: pass workspace_id and name, optionally a parent_id folder and kind ('document' by default, or 'folder'). Creating makes an empty named entity; uploading file content is a separate step. Pass entity_id to update: set name to rename; parent_id to move it into a folder or move_to_root to move it to the workspace root; version_id with label and/or description to annotate a version. An update needs at least one change. Returns the entity ID.",
+    "description": "Create a document or folder, or update an existing one. Omit entity_id to create: pass matter_id and name, optionally a parent_id folder and kind ('document' by default, or 'folder'). Creating makes an empty named entity; uploading file content is a separate step. Pass entity_id to update: set name to rename; parent_id to move it into a folder or move_to_root to move it to the matter root; version_id with label and/or description to annotate a version. An update needs at least one change. Returns the entity ID.",
     "inputSchema": {
       "type": "object",
       "required": [],
@@ -1266,10 +1266,10 @@
           "minLength": 1,
           "description": "Document entity ID to update; omit to create"
         },
-        "workspace_id": {
+        "matter_id": {
           "type": "string",
           "minLength": 1,
-          "description": "Workspace ID to create the entity in; required when creating. Deprecated input alias: matter_id."
+          "description": "Matter ID to create the entity in; required when creating."
         },
         "name": {
           "type": "string",
@@ -1452,13 +1452,13 @@
     "description": "List the property (column) definitions of a matter. Returns each property's id, name, value type (text, single-select, multi-select, date, int, or file), status, and writeMethod. Use set_field_value for scalar properties. Arbitrary file-property cells are not writable; document upload/version tools replace only a document's primary file.",
     "inputSchema": {
       "type": "object",
-      "required": ["workspace_id"],
+      "required": ["matter_id"],
       "additionalProperties": false,
       "properties": {
-        "workspace_id": {
+        "matter_id": {
           "type": "string",
           "minLength": 1,
-          "description": "Workspace ID to list properties for. Deprecated input alias: matter_id."
+          "description": "Matter ID to list properties for."
         },
         "limit": {
           "type": "integer",
@@ -1641,7 +1641,7 @@
         "matter_id": {
           "type": "string",
           "minLength": 1,
-          "description": "Matter/workspace ID to update; omit to create a new matter"
+          "description": "Matter ID to update; omit to create a new matter"
         },
         "name": {
           "type": "string",
@@ -1700,7 +1700,7 @@
         "matter_id": {
           "type": "string",
           "minLength": 1,
-          "description": "Matter/workspace ID to delete"
+          "description": "Matter ID to delete"
         },
         "confirm": {
           "type": "boolean",
@@ -1920,16 +1920,16 @@
       "singleReadWhen": "task_id"
     },
     "name": "list_tasks",
-    "description": "List tasks in a workspace, or read one task in detail. Pass task_id to get a single task's fields, assignees, and linked entities. Otherwise pass workspace_id to list the workspace's tasks, optionally filtered by a due-date range (date_from/date_to, ISO YYYY-MM-DD) and status. Returns each item's id, name, item type, status, priority, and due date.",
+    "description": "List tasks in a matter, or read one task in detail. Pass task_id to get a single task's fields, assignees, and linked entities. Otherwise pass matter_id to list the matter's tasks, optionally filtered by a due-date range (date_from/date_to, ISO YYYY-MM-DD) and status. Returns each item's id, name, item type, status, priority, and due date.",
     "inputSchema": {
       "type": "object",
       "required": [],
       "additionalProperties": false,
       "properties": {
-        "workspace_id": {
+        "matter_id": {
           "type": "string",
           "minLength": 1,
-          "description": "Workspace ID to list tasks in; required unless task_id is given. Deprecated input alias: matter_id."
+          "description": "Matter ID to list tasks in; required unless task_id is given."
         },
         "task_id": {
           "type": "string",
@@ -1979,7 +1979,7 @@
       "scope": "matters_write"
     },
     "name": "save_task",
-    "description": "Create or update a task, and manage its assignees and entity links. Omit task_id to create a task (workspace_id and name required). Pass task_id to update: set name, item_type, status, priority, or due_date (ISO YYYY-MM-DD, null to clear); add or remove one assignee (add_assignee_user_id / remove_assignee_user_id); link the task to another entity (link_entity_id) or remove a link (unlink_link_id). Returns the task ID.",
+    "description": "Create or update a task, and manage its assignees and entity links. Omit task_id to create a task (matter_id and name required). Pass task_id to update: set name, item_type, status, priority, or due_date (ISO YYYY-MM-DD, null to clear); add or remove one assignee (add_assignee_user_id / remove_assignee_user_id); link the task to another entity (link_entity_id) or remove a link (unlink_link_id). Returns the task ID.",
     "inputSchema": {
       "type": "object",
       "required": [],
@@ -1990,10 +1990,10 @@
           "minLength": 1,
           "description": "Task entity ID to update; omit to create"
         },
-        "workspace_id": {
+        "matter_id": {
           "type": "string",
           "minLength": 1,
-          "description": "Workspace ID to create the task in; required when creating. Deprecated input alias: matter_id."
+          "description": "Matter ID to create the task in; required when creating."
         },
         "name": {
           "type": "string",
@@ -2060,7 +2060,7 @@
         "add_assignee_user_id": {
           "type": "string",
           "minLength": 1,
-          "description": "User ID to assign to the task (must be a workspace member)"
+          "description": "User ID to assign to the task (must be a matter member)"
         },
         "remove_assignee_user_id": {
           "type": "string",
@@ -2121,7 +2121,7 @@
       "scope": "matters_write"
     },
     "name": "link_matter_contact",
-    "description": "Link a contact to a matter in a party role (opposing party/counsel, co-counsel, witness, expert witness, third party, judge, mediator, or other), or remove such a link. Pass contact_id with role to link. To unlink, pass workspace_contact_id (precise, from list_matters) or contact_id alone; contact_id alone is rejected when the contact holds several roles on the matter.",
+    "description": "Link a contact to a matter in a party role (opposing party/counsel, co-counsel, witness, expert witness, third party, judge, mediator, or other), or remove such a link. Pass contact_id with role to link. To unlink, pass matter_contact_id (precise, from list_matters) or contact_id alone; contact_id alone is rejected when the contact holds several roles on the matter.",
     "inputSchema": {
       "type": "object",
       "required": ["matter_id"],
@@ -2130,7 +2130,7 @@
         "matter_id": {
           "type": "string",
           "minLength": 1,
-          "description": "Matter/workspace ID"
+          "description": "Matter ID"
         },
         "contact_id": {
           "type": "string",
@@ -2152,7 +2152,7 @@
           "type": "string",
           "description": "Party role for the linked contact; provide it only when linking"
         },
-        "workspace_contact_id": {
+        "matter_contact_id": {
           "type": "string",
           "minLength": 1,
           "description": "Existing matter-contact link ID to remove, from list_matters"
@@ -2461,16 +2461,16 @@
       "scope": "knowledge_write"
     },
     "name": "run_playbook",
-    "description": "Run a review playbook over a workspace's documents. Materializes the playbook's extraction and verdict columns onto the workspace's table and starts the AI review; findings populate asynchronously. Pass workspace_id and playbook_id. Returns the number of columns queued for review.",
+    "description": "Run a review playbook over a matter's documents. Materializes the playbook's extraction and verdict columns onto the matter's table and starts the AI review; findings populate asynchronously. Pass matter_id and playbook_id. Returns the number of columns queued for review.",
     "inputSchema": {
       "type": "object",
-      "required": ["workspace_id", "playbook_id"],
+      "required": ["matter_id", "playbook_id"],
       "additionalProperties": false,
       "properties": {
-        "workspace_id": {
+        "matter_id": {
           "type": "string",
           "minLength": 1,
-          "description": "Workspace id to run the playbook over. Deprecated input alias: matter_id."
+          "description": "Matter ID to run the playbook over."
         },
         "playbook_id": {
           "type": "string",
@@ -2493,16 +2493,16 @@
       "singleReadWhen": "time_entry_id"
     },
     "name": "list_time_entries",
-    "description": "List time entries in a workspace, or read one entry in detail. Pass time_entry_id to get a single entry. Otherwise pass workspace_id to list the workspace's entries, optionally filtered by entity_id (the item the time was logged against), user_id, a date-worked range (date_from/date_to, ISO YYYY-MM-DD), and status. Returns each entry's id, entity, user, date, minutes, rate (minor currency units), currency, narrative, and status. The response includes visibility: all_entries for billing reviewers, or own_entries when the caller can see only their own time; own_entries is not a matter total.",
+    "description": "List time entries in a matter, or read one entry in detail. Pass time_entry_id to get a single entry. Otherwise pass matter_id to list the matter's entries, optionally filtered by entity_id (the item the time was logged against), user_id, a date-worked range (date_from/date_to, ISO YYYY-MM-DD), and status. Returns each entry's id, entity, user, date, minutes, rate (minor currency units), currency, narrative, and status. The response includes visibility: all_entries for billing reviewers, or own_entries when the caller can see only their own time; own_entries is not a matter total.",
     "inputSchema": {
       "type": "object",
       "required": [],
       "additionalProperties": false,
       "properties": {
-        "workspace_id": {
+        "matter_id": {
           "type": "string",
           "minLength": 1,
-          "description": "Workspace ID to list time entries in; required unless time_entry_id is given. Deprecated input alias: matter_id."
+          "description": "Matter ID to list time entries in; required unless time_entry_id is given."
         },
         "time_entry_id": {
           "type": "string",
@@ -2561,7 +2561,7 @@
       "scope": "billing_write"
     },
     "name": "save_time_entry",
-    "description": "Create or update a time entry. Omit time_entry_id to create (workspace_id, date_worked, timezone_id, duration_minutes, and narrative required; entity_id is optional context). Pass time_entry_id to update: set date_worked (with timezone_id), duration_minutes, narrative, invoice_narrative, billable, no_charge, entity_id (move the entry), task_code, and/or activity_code. The timekeeper's effective rate is resolved server-side. Durations are whole minutes. Returns the time entry ID.",
+    "description": "Create or update a time entry. Omit time_entry_id to create (matter_id, date_worked, timezone_id, duration_minutes, and narrative required; entity_id is optional context). Pass time_entry_id to update: set date_worked (with timezone_id), duration_minutes, narrative, invoice_narrative, billable, no_charge, entity_id (move the entry), task_code, and/or activity_code. The timekeeper's effective rate is resolved server-side. Durations are whole minutes. Returns the time entry ID.",
     "inputSchema": {
       "type": "object",
       "required": [],
@@ -2572,10 +2572,10 @@
           "minLength": 1,
           "description": "Time entry ID to update; omit to create"
         },
-        "workspace_id": {
+        "matter_id": {
           "type": "string",
           "minLength": 1,
-          "description": "Workspace ID to create the entry in; required when creating. Deprecated input alias: matter_id."
+          "description": "Matter ID to create the entry in; required when creating."
         },
         "entity_id": {
           "anyOf": [
@@ -2700,16 +2700,16 @@
       "scope": "read"
     },
     "name": "resolve_rate",
-    "description": "Resolve the effective hourly rate for a user on a given date in a workspace, using its default rate table (user-specific rate first, then the table default). Returns the hourly rate in integer minor currency units (e.g. cents) and the currency, or nulls when no rate applies.",
+    "description": "Resolve the effective hourly rate for a user on a given date in a matter, using its default rate table (user-specific rate first, then the table default). Returns the hourly rate in integer minor currency units (e.g. cents) and the currency, or nulls when no rate applies.",
     "inputSchema": {
       "type": "object",
-      "required": ["workspace_id", "user_id", "date"],
+      "required": ["matter_id", "user_id", "date"],
       "additionalProperties": false,
       "properties": {
-        "workspace_id": {
+        "matter_id": {
           "type": "string",
           "minLength": 1,
-          "description": "Workspace ID to resolve the rate in. Deprecated input alias: matter_id."
+          "description": "Matter ID to resolve the rate in."
         },
         "user_id": {
           "type": "string",
@@ -2738,16 +2738,16 @@
       "singleReadWhen": "invoice_id"
     },
     "name": "list_invoices",
-    "description": "List invoices in a workspace, or read one invoice in detail. Pass invoice_id to get a single invoice with its line items (time entries and expenses). Otherwise pass workspace_id to list the workspace's invoices. Returns each invoice's id, number, reference, status, dates, currency, and total (integer minor currency units).",
+    "description": "List invoices in a matter, or read one invoice in detail. Pass invoice_id to get a single invoice with its line items (time entries and expenses). Otherwise pass matter_id to list the matter's invoices. Returns each invoice's id, number, reference, status, dates, currency, and total (integer minor currency units).",
     "inputSchema": {
       "type": "object",
       "required": [],
       "additionalProperties": false,
       "properties": {
-        "workspace_id": {
+        "matter_id": {
           "type": "string",
           "minLength": 1,
-          "description": "Workspace ID to list invoices in; required unless invoice_id is given. Deprecated input alias: matter_id."
+          "description": "Matter ID to list invoices in; required unless invoice_id is given."
         },
         "invoice_id": {
           "type": "string",
@@ -2890,16 +2890,16 @@
       "itemsKey": "items"
     },
     "name": "list_audit_log",
-    "description": "Read the organization's audit trail (compliance view). Returns audit entries newest first, each with its action, resource type and id, actor user id, workspace, timestamp, and change detail. Filter by workspace_id, action, resource_type (with optional resource_id), user_id, and a created-at range (from/to, ISO date-time). Paginate with limit and cursor. Requires organization audit-log access.",
+    "description": "Read the organization's audit trail (compliance view). Returns audit entries newest first, each with its action, resource type and id, actor user id, matter, timestamp, and change detail. Filter by matter_id, action, resource_type (with optional resource_id), user_id, and a created-at range (from/to, ISO date-time). Paginate with limit and cursor. Requires organization audit-log access.",
     "inputSchema": {
       "type": "object",
       "required": [],
       "additionalProperties": false,
       "properties": {
-        "workspace_id": {
+        "matter_id": {
           "type": "string",
           "minLength": 1,
-          "description": "Only entries scoped to this workspace. Deprecated input alias: matter_id."
+          "description": "Only entries scoped to this matter."
         },
         "action": {
           "type": "string",
@@ -2960,13 +2960,13 @@
         "subcommands": {
           "add_member": {
             "command": "add-member",
-            "include": ["workspace_id", "user_id"],
-            "required": ["workspace_id", "user_id"]
+            "include": ["matter_id", "user_id"],
+            "required": ["matter_id", "user_id"]
           },
           "remove_member": {
             "command": "remove-member",
-            "include": ["workspace_id", "user_id"],
-            "required": ["workspace_id", "user_id"],
+            "include": ["matter_id", "user_id"],
+            "required": ["matter_id", "user_id"],
             "destructive": true
           },
           "update_org_settings": {
@@ -2982,7 +2982,7 @@
       }
     },
     "name": "manage_organization",
-    "description": "Manage organization members and non-secret settings. Member actions require workspace_id and user_id. update_org_settings controls matter numbering, prompt caching, and document processing. Manage provider secrets in the dashboard.",
+    "description": "Manage organization members and non-secret settings. Member actions require matter_id and user_id. update_org_settings controls matter numbering, prompt caching, and document processing. Manage provider secrets in the dashboard.",
     "inputSchema": {
       "type": "object",
       "required": ["action"],
@@ -2993,10 +2993,10 @@
           "type": "string",
           "description": "Administrative action to perform"
         },
-        "workspace_id": {
+        "matter_id": {
           "type": "string",
           "minLength": 1,
-          "description": "Workspace id for add_member and remove_member. Deprecated input alias: matter_id."
+          "description": "Matter ID for add_member and remove_member."
         },
         "user_id": {
           "type": "string",
@@ -3149,7 +3149,7 @@
       "confirmPassthrough": true
     },
     "name": "invoke_capability",
-    "description": "Invoke one capability by id (from list_capabilities/describe_capability). Pass its input under input: { body, params, query } (no other top-level argument is accepted); workspace-scoped capabilities take the target workspace as input.params.workspaceId. Real authority is enforced per capability: the session must hold the capability's scope and your member role its permissions. Set validate_only: true to check input without running it; destructive capabilities require confirm: true after human approval.",
+    "description": "Invoke one capability by id (from list_capabilities/describe_capability). Pass its input under input: { body, params, query } (no other top-level argument is accepted); matter-scoped capabilities take the target matter as input.params.matterId. Real authority is enforced per capability: the session must hold the capability's scope and your member role its permissions. Set validate_only: true to check input without running it; destructive capabilities require confirm: true after human approval.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -3168,7 +3168,7 @@
             },
             "params": {
               "type": "object",
-              "description": "Path parameters; workspace-scoped capabilities require workspaceId here.",
+              "description": "Path parameters; matter-scoped capabilities require matterId here.",
               "additionalProperties": true
             },
             "query": {

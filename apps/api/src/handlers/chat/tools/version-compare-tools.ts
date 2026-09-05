@@ -101,7 +101,7 @@ const resolveActiveFilePropertyId = async (
   if (!activeField.value) {
     throw new ChatToolError({
       kind: "not-found",
-      message: "The active file field was not found in your workspaces.",
+      message: "The active file field was not found in your matters.",
     });
   }
   const activeEntityVersion = activeField.value.entityVersion;

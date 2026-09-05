@@ -246,7 +246,7 @@ describe("static tools reject explicit null on plain optional fields", () => {
     { tool: "save_matter", args: { name: null }, path: "name" },
     {
       tool: "list_documents",
-      args: { workspace_id: "ws_1", mode: null },
+      args: { matter_id: "ws_1", mode: null },
       path: "mode",
     },
   ];

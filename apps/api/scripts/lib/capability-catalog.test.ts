@@ -60,6 +60,29 @@ describe("deriveCapabilityId", () => {
     ).toBe("contacts.business-registries-lookup");
   });
 
+  test("maps internal words onto the public vocabulary", () => {
+    // The handler tree calls the client-engagement container a workspace; the
+    // public id calls it a matter, domain segment and action verb alike.
+    expect(
+      deriveCapabilityId({
+        file: "apps/api/src/handlers/workspaces/archive.ts",
+        exportName: undefined,
+      }),
+    ).toBe("matters.archive");
+    expect(
+      deriveCapabilityId({
+        file: "apps/api/src/handlers/workspaces/workspace-members-add.ts",
+        exportName: undefined,
+      }),
+    ).toBe("matters.matter-members-add");
+    expect(
+      deriveCapabilityId({
+        file: "apps/api/src/handlers/entities/copy-to-workspace.ts",
+        exportName: undefined,
+      }),
+    ).toBe("entities.copy-to-matter");
+  });
+
   test("throws for a path outside the handler tree", () => {
     expect(() =>
       deriveCapabilityId({
@@ -73,9 +96,9 @@ describe("deriveCapabilityId", () => {
 describe("isWellFormedCapabilityId", () => {
   test("accepts dotted lowercase kebab-case ids", () => {
     expect(isWellFormedCapabilityId("time-entries.create")).toBe(true);
-    expect(
-      isWellFormedCapabilityId("workspaces.anonymization-terms.delete"),
-    ).toBe(true);
+    expect(isWellFormedCapabilityId("matters.anonymization-terms.delete")).toBe(
+      true,
+    );
     expect(isWellFormedCapabilityId("entities.read-summaries-count")).toBe(
       true,
     );
@@ -84,7 +107,7 @@ describe("isWellFormedCapabilityId", () => {
   test("rejects a camelCase segment: the shape a named export's identifier produces", () => {
     expect(
       isWellFormedCapabilityId(
-        "workspaces.anonymization-terms.deleteWorkspaceAnonymizationTerm",
+        "matters.anonymization-terms.deleteWorkspaceAnonymizationTerm",
       ),
     ).toBe(false);
     expect(
@@ -132,7 +155,7 @@ describe("findMalformedCapabilityIds", () => {
       findMalformedCapabilityIds([
         "time-entries.create",
         "entities.read-summaries.readEntitySummariesCount",
-        "workspaces.anonymization-terms.delete",
+        "matters.anonymization-terms.delete",
         "billing_codes.create",
       ]),
     ).toEqual([
@@ -153,7 +176,7 @@ describe("deriveDomain", () => {
   });
 
   test("handles a named-export id", () => {
-    expect(deriveDomain("workspaces.read.named")).toBe("workspaces");
+    expect(deriveDomain("matters.read.named")).toBe("matters");
   });
 });
 
@@ -189,7 +212,7 @@ describe("classifyVerbs", () => {
 
 describe("finalIdSegment", () => {
   test("is the last dot-separated segment", () => {
-    expect(finalIdSegment("workspaces.read-active")).toBe("read-active");
+    expect(finalIdSegment("matters.read-active")).toBe("read-active");
     expect(finalIdSegment("a.b.c")).toBe("c");
   });
 });
@@ -322,15 +345,13 @@ describe("isDestructiveName", () => {
       // A named-export id shape: no longer possible for a CATALOG id (see
       // isWellFormedCapabilityId), but the route-hook scan still derives ids
       // this way for named-export handlers, so the tokenizer must handle it.
-      isDestructiveName("workspaces.legacy-terms.deleteWorkspaceLegacyTerm"),
+      isDestructiveName("matters.legacy-terms.deleteWorkspaceLegacyTerm"),
     ).toBe(true);
   });
 
   test("matches delete/remove-suffixed final segments", () => {
-    expect(isDestructiveName("workspaces.workspace-members-remove")).toBe(true);
-    expect(isDestructiveName("workspaces.workspace-contacts-delete")).toBe(
-      true,
-    );
+    expect(isDestructiveName("matters.matter-members-remove")).toBe(true);
+    expect(isDestructiveName("matters.matter-contacts-delete")).toBe(true);
     expect(isDestructiveName("tasks.entity-links-delete")).toBe(true);
     expect(isDestructiveName("tasks.assignees-remove")).toBe(true);
   });
@@ -346,7 +367,7 @@ describe("isDestructiveName", () => {
   });
 
   test("does not match soft operations or delete elsewhere in the id", () => {
-    expect(isDestructiveName("workspaces.archive")).toBe(false);
+    expect(isDestructiveName("matters.archive")).toBe(false);
     expect(isDestructiveName("entities.restore-version")).toBe(false);
     expect(isDestructiveName("entities.delete.read-status")).toBe(false);
   });
@@ -356,7 +377,7 @@ describe("resolveAccess destructive-name escalation", () => {
   test("escalates a suffix-named delete authorized via update", () => {
     expect(
       resolveAccess({
-        id: "workspaces.workspace-members-remove",
+        id: "matters.matter-members-remove",
         verbs: ["update"],
         hasPermissions: true,
         overrides: {},
@@ -1544,7 +1565,7 @@ describe("serializeCoverageDoc", () => {
       mcp: { type: "capability" as const, reason: "template_authoring_ui" },
     },
     {
-      id: "templates.fill-to-workspace",
+      id: "templates.fill-to-matter",
       access: "write" as const,
       destructive: false,
       scope: "stella:documents_write",
@@ -1605,7 +1626,7 @@ describe("serializeCoverageDoc", () => {
       "| `time-entries.delete` | write, destructive | stella:billing_write | FEATURE_TIME_BILLING | covered by `save_time_entry` |",
     );
     expect(doc).toContain(
-      "| `templates.fill-to-workspace` | write | stella:documents_write, stella:templates | — | covered by `save_filled_template` |",
+      "| `templates.fill-to-matter` | write | stella:documents_write, stella:templates | — | covered by `save_filled_template` |",
     );
   });
 

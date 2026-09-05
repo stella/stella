@@ -18,7 +18,6 @@ import {
   MCP_OAUTH_PROTOCOL_SCOPES,
   STELLA_API_CONTRACT,
 } from "@/api/mcp/constants";
-import { DEPRECATED_MCP_INPUT_ALIASES } from "@/api/mcp/deprecated-input-aliases";
 import { MCP_ERROR_CODES } from "@/api/mcp/error-codes";
 import { listMcpResources } from "@/api/mcp/resources";
 import { DEFAULT_MCP_CLI_ANNOTATIONS } from "@/api/mcp/static-cli-metadata";
@@ -162,8 +161,6 @@ export const MCP_ERROR_CODES = ${JSON.stringify(MCP_ERROR_CODES, null, 2)} as co
 export type McpErrorCode = (typeof MCP_ERROR_CODES)[number];
 export const MCP_CLI_TOOL_SCOPES = ${JSON.stringify(MCP_CLI_TOOL_SCOPES, null, 2)} as const;
 export type McpCliToolScope = (typeof MCP_CLI_TOOL_SCOPES)[number];
-/** Deprecated tool-input names the server still accepts, keyed to their replacement. */
-export const MCP_DEPRECATED_INPUT_ALIASES = ${JSON.stringify(DEPRECATED_MCP_INPUT_ALIASES, null, 2)} as const;
 `,
 );
 process.stderr.write(`Wrote ${mcpContractOutputPath.pathname}\n`);

@@ -296,7 +296,7 @@ describe("one-command document upload", () => {
     const result = await runCli({
       args: [
         "upload",
-        "--workspace-id",
+        "--matter-id",
         "workspace-1",
         "--file",
         filePath,
@@ -331,7 +331,7 @@ describe("one-command document upload", () => {
         size: Buffer.byteLength("agreement body"),
         sha256Hex: createHash("sha256").update("agreement body").digest("hex"),
       },
-      params: { workspaceId: "workspace-1" },
+      params: { matterId: "workspace-1" },
     });
   });
 
@@ -346,7 +346,7 @@ describe("one-command document upload", () => {
 
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("--file");
-    expect(result.stdout).toContain("--workspace-id");
+    expect(result.stdout).toContain("--matter-id");
     expect(result.stdout).toContain("--json");
     expect(result.stdout).toContain("computes its SHA-256 checksum");
     expect(server.requests).toHaveLength(0);
@@ -379,7 +379,7 @@ describe("one-command document upload", () => {
     const result = await runCli({
       args: [
         "upload",
-        "--workspace-id",
+        "--matter-id",
         "workspace-1",
         "--file",
         filePath,
@@ -392,7 +392,7 @@ describe("one-command document upload", () => {
     server.stop();
 
     expect(result.stderr).toContain(
-      "stella capability uploads update --workspace-id workspace-1 --upload-id upload-1",
+      "stella capability uploads update --matter-id workspace-1 --upload-id upload-1",
     );
     expect(result.stderr).not.toContain("stella uploads update");
   });
@@ -926,7 +926,7 @@ describe("help surfaces --input for inputOnly tools", () => {
     expect(result.stdout).toContain('purpose = "entity_version"');
     expect(result.stdout).toContain('purpose = "agent_skill"');
     expect(result.stdout).toContain("body.sha256Hex  string  required");
-    expect(result.stdout).toContain('"params":{"workspaceId":"xxxxx"}');
+    expect(result.stdout).toContain('"params":{"matterId":"xxxxx"}');
   });
 
   test("template save --help documents the --input-only fields", async () => {
@@ -1082,7 +1082,7 @@ describe("template persistence discriminator split", () => {
         "new-version",
         "--template-id",
         "template_1",
-        "--workspace-id",
+        "--matter-id",
         "workspace_1",
         "--entity-id",
         "entity_1",
@@ -1115,7 +1115,7 @@ describe("template persistence discriminator split", () => {
         "new-version",
         "--template-id",
         "template_1",
-        "--workspace-id",
+        "--matter-id",
         "workspace_1",
         "--entity-id",
         "entity_1",
@@ -1134,7 +1134,7 @@ describe("template persistence discriminator split", () => {
     expect(server.requests.at(0)?.params.arguments).toEqual({
       action: "create_version",
       template_id: "template_1",
-      workspace_id: "workspace_1",
+      matter_id: "workspace_1",
       entity_id: "entity_1",
       idempotency_key: "retry_1",
       values: { "tenant.name": "ACME" },
@@ -1149,7 +1149,7 @@ describe("organization discriminator split (S2/Phase 4)", () => {
       args: [
         "organization",
         "add-member",
-        "--workspace-id",
+        "--matter-id",
         "w1",
         "--user-id",
         "u1",
@@ -1162,7 +1162,7 @@ describe("organization discriminator split (S2/Phase 4)", () => {
     expect(server.requests.at(0)?.params.name).toBe("manage_organization");
     expect(server.requests.at(0)?.params.arguments).toEqual({
       action: "add_member",
-      workspace_id: "w1",
+      matter_id: "w1",
       user_id: "u1",
     });
   });
@@ -1173,7 +1173,7 @@ describe("organization discriminator split (S2/Phase 4)", () => {
       args: [
         "organization",
         "remove-member",
-        "--workspace-id",
+        "--matter-id",
         "w1",
         "--user-id",
         "u1",
@@ -1420,7 +1420,7 @@ describe("destructive confirm injection (S4)", () => {
       args: [
         "organization",
         "remove-member",
-        "--workspace-id",
+        "--matter-id",
         "w1",
         "--user-id",
         "u1",
@@ -1434,7 +1434,7 @@ describe("destructive confirm injection (S4)", () => {
     expect(server.requests.at(0)?.params.name).toBe("manage_organization");
     expect(server.requests.at(0)?.params.arguments).toEqual({
       action: "remove_member",
-      workspace_id: "w1",
+      matter_id: "w1",
       user_id: "u1",
       confirm: true,
     });

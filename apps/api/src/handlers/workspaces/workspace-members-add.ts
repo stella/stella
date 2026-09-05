@@ -24,7 +24,7 @@ const config = {
     "Add one member of the organization to a matter, granting them access to " +
     "it. A user who is already a member is a 409, and the call is refused " +
     "once the matter holds its maximum number of members. Revoke access with " +
-    "workspaces.workspace-members-remove.",
+    "matters.matter-members-remove.",
   permissions: { workspace: ["update"] },
   mcp: { type: "tool", name: "manage_organization" },
   body: addWorkspaceMemberBodySchema,

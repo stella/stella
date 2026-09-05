@@ -23,16 +23,19 @@ export type DocumentVersionUploadFileMetadata = {
   size: number;
 };
 
+// These build the input for `invoke_capability`, whose params speak the public
+// vocabulary: the container a caller holds as a `workspaceId` goes on the wire
+// as `matterId`. Callers pass the id they have; the rename happens here, once.
 export type DocumentVersionUploadReservationInput = {
   body: DocumentVersionUploadFileMetadata & {
     entityId: string;
     purpose: typeof DOCUMENT_VERSION_UPLOAD_TRANSPORT.purpose;
   };
-  params: { workspaceId: string };
+  params: { matterId: string };
 };
 
 export type UploadLifecycleInput = {
-  params: { uploadId: string; workspaceId: string };
+  params: { uploadId: string; matterId: string };
 };
 
 export const buildDocumentVersionUploadReservationInput = ({
@@ -52,7 +55,7 @@ export const buildDocumentVersionUploadReservationInput = ({
     size: file.size,
     sha256Hex: file.sha256Hex,
   },
-  params: { workspaceId },
+  params: { matterId: workspaceId },
 });
 
 export const buildUploadAbortInput = ({
@@ -61,7 +64,7 @@ export const buildUploadAbortInput = ({
 }: {
   uploadId: string;
   workspaceId: string;
-}): UploadLifecycleInput => ({ params: { uploadId, workspaceId } });
+}): UploadLifecycleInput => ({ params: { uploadId, matterId: workspaceId } });
 
 export const buildUploadFinalizeInput: typeof buildUploadAbortInput =
   buildUploadAbortInput;

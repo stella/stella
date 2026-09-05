@@ -173,7 +173,7 @@ export const READ_TOOL_REF_FIELD_MAP = {
   list_documents: {
     chatProjectable: true,
     inputRefs: [
-      { kind: "matter", param: "workspace_id" },
+      { kind: "matter", param: "matter_id" },
       { kind: "entity", param: "parent_id" },
     ],
     projection: LIST_DOCUMENTS_PROJECTION,
@@ -185,7 +185,7 @@ export const READ_TOOL_REF_FIELD_MAP = {
   },
   list_properties: {
     chatProjectable: true,
-    inputRefs: [{ kind: "matter", param: "workspace_id" }],
+    inputRefs: [{ kind: "matter", param: "matter_id" }],
     projection: LIST_PROPERTIES_PROJECTION,
   },
 
@@ -193,7 +193,7 @@ export const READ_TOOL_REF_FIELD_MAP = {
   list_tasks: {
     chatProjectable: true,
     inputRefs: [
-      { kind: "matter", param: "workspace_id" },
+      { kind: "matter", param: "matter_id" },
       { kind: "entity", param: "task_id" },
     ],
     projection: LIST_TASKS_PROJECTION,
@@ -217,7 +217,7 @@ export const READ_TOOL_REF_FIELD_MAP = {
   list_time_entries: {
     chatProjectable: true,
     inputRefs: [
-      { kind: "matter", param: "workspace_id" },
+      { kind: "matter", param: "matter_id" },
       { kind: "entity", param: "entity_id" },
     ],
     projection: LIST_TIME_ENTRIES_PROJECTION,
@@ -230,7 +230,7 @@ export const READ_TOOL_REF_FIELD_MAP = {
   },
   list_invoices: {
     chatProjectable: true,
-    inputRefs: [{ kind: "matter", param: "workspace_id" }],
+    inputRefs: [{ kind: "matter", param: "matter_id" }],
     projection: LIST_INVOICES_PROJECTION,
   },
   get_usage: {
@@ -321,13 +321,13 @@ export const WRITE_TOOL_REF_FIELD_MAP = {
   },
   save_task: {
     chatProjectable: true,
-    // `task_id` and `link_entity_id` are entity refs; `workspace_id` a matter ref.
+    // `task_id` and `link_entity_id` are entity refs; `matter_id` a matter ref.
     // `add_assignee_user_id`/`remove_assignee_user_id` are user handles and
     // `unlink_link_id` is an entity-link handle: none carry a chat ref kind, so
     // they pass through as-is.
     inputRefs: [
       { kind: "entity", param: "task_id" },
-      { kind: "matter", param: "workspace_id" },
+      { kind: "matter", param: "matter_id" },
       { kind: "entity", param: "link_entity_id" },
     ],
     projection: SAVE_TASK_PROJECTION,
@@ -346,11 +346,11 @@ export const WRITE_TOOL_REF_FIELD_MAP = {
   // --- Documents / properties -----------------------------------------------
   save_document: {
     chatProjectable: true,
-    // `entity_id` and `parent_id` are entity refs; `workspace_id` a matter ref.
+    // `entity_id` and `parent_id` are entity refs; `matter_id` a matter ref.
     // `version_id` is an entity-version handle, not a chat ref: passes through.
     inputRefs: [
       { kind: "entity", param: "entity_id" },
-      { kind: "matter", param: "workspace_id" },
+      { kind: "matter", param: "matter_id" },
       { kind: "entity", param: "parent_id" },
     ],
     projection: SAVE_DOCUMENT_PROJECTION,
@@ -389,7 +389,7 @@ export const WRITE_TOOL_REF_FIELD_MAP = {
     // `time_entry_id` is a billing handle (passes through); `timezone_id` is an
     // IANA tz string, not an id.
     inputRefs: [
-      { kind: "matter", param: "workspace_id" },
+      { kind: "matter", param: "matter_id" },
       { kind: "entity", param: "entity_id" },
     ],
     projection: SAVE_TIME_ENTRY_PROJECTION,
@@ -416,7 +416,7 @@ export const WRITE_TOOL_REF_FIELD_MAP = {
   run_playbook: {
     chatProjectable: true,
     // `playbook_id` is an org-scoped library handle: passes through.
-    inputRefs: [{ kind: "matter", param: "workspace_id" }],
+    inputRefs: [{ kind: "matter", param: "matter_id" }],
     projection: RUN_PLAYBOOK_PROJECTION,
   },
 
@@ -424,9 +424,9 @@ export const WRITE_TOOL_REF_FIELD_MAP = {
   manage_organization: {
     chatProjectable: true,
     // `user_id` is a workspace-member (user) handle, not a chat ref: passes
-    // through. `workspace_id` is a matter ref (used by the add/remove member
+    // through. `matter_id` is a matter ref (used by the add/remove member
     // actions that scope to a matter).
-    inputRefs: [{ kind: "matter", param: "workspace_id" }],
+    inputRefs: [{ kind: "matter", param: "matter_id" }],
     projection: MANAGE_ORGANIZATION_PROJECTION,
   },
 

@@ -2,7 +2,7 @@ import type { OutputRefField } from "@/api/lib/chat/projection-schema";
 
 import {
   CREATE_DOCUMENT_TOOL_NAME,
-  CREATE_WORKSPACE_DOCUMENT_TOOL_NAME,
+  CREATE_MATTER_DOCUMENT_TOOL_NAME,
   UPDATE_ENTITY_FIELDS_TOOL_NAME,
 } from "../native-chat-tool-names";
 import type { InputRefParam } from "./ref-field-map";
@@ -14,7 +14,7 @@ type NativeChatRefPolicy = {
 
 type NativeChatRefToolName =
   | typeof CREATE_DOCUMENT_TOOL_NAME
-  | typeof CREATE_WORKSPACE_DOCUMENT_TOOL_NAME
+  | typeof CREATE_MATTER_DOCUMENT_TOOL_NAME
   | typeof UPDATE_ENTITY_FIELDS_TOOL_NAME;
 
 export const NATIVE_CHAT_REF_POLICY = {
@@ -29,7 +29,7 @@ export const NATIVE_CHAT_REF_POLICY = {
       { kind: "matter", path: "matterRef" },
     ],
   },
-  [CREATE_WORKSPACE_DOCUMENT_TOOL_NAME]: {
+  [CREATE_MATTER_DOCUMENT_TOOL_NAME]: {
     inputRefs: [],
     outputRefs: [
       {

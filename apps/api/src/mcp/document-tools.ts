@@ -611,19 +611,17 @@ const decodeEntityPageCursor = (
 
 const listDocumentsArgsSchema = v.pipe(
   v.strictObject({
-    workspace_id: v.pipe(
+    matter_id: v.pipe(
       v.string(),
       v.minLength(1),
-      v.description(
-        "Workspace ID to list documents in. Deprecated input alias: matter_id.",
-      ),
+      v.description("Matter ID to list documents in."),
     ),
     mode: v.optional(
       v.pipe(
         v.picklist(["flat", "children"]),
         v.description(
-          "'flat' lists every document and folder in the workspace; 'children' " +
-            "lists only the direct children of parent_id (or the workspace " +
+          "'flat' lists every document and folder in the matter; 'children' " +
+            "lists only the direct children of parent_id (or the matter " +
             "root when parent_id is omitted). Defaults to 'flat', or 'children' when " +
             "parent_id is provided. Passing parent_id with mode 'flat' is " +
             "rejected.",
@@ -709,7 +707,7 @@ const handleListDocumentsTool: TypedMcpToolHandler<
 
   const workspaceId = ensureWorkspaceAccess({
     context,
-    workspaceId: parsed.output.workspace_id,
+    workspaceId: parsed.output.matter_id,
   });
   if (!workspaceId) {
     return notFoundResult("Matter not found or not accessible");
@@ -1597,13 +1595,12 @@ const saveDocumentArgsSchema = v.pipe(
         v.description("Document entity ID to update; omit to create"),
       ),
     ),
-    workspace_id: v.optional(
+    matter_id: v.optional(
       v.pipe(
         v.string(),
         v.minLength(1),
         v.description(
-          "Workspace ID to create the entity in; required when creating. " +
-            "Deprecated input alias: matter_id.",
+          "Matter ID to create the entity in; required when creating.",
         ),
       ),
     ),
@@ -1669,15 +1666,15 @@ const saveDocumentArgsSchema = v.pipe(
       ),
     ),
   }),
-  // Creating (no entity_id) requires workspace_id and name.
+  // Creating (no entity_id) requires matter_id and name.
   v.forward(
     v.partialCheck(
-      [["entity_id"], ["workspace_id"]],
-      ({ entity_id, workspace_id }) =>
-        entity_id !== undefined || workspace_id !== undefined,
-      "workspace_id is required to create a document",
+      [["entity_id"], ["matter_id"]],
+      ({ entity_id, matter_id }) =>
+        entity_id !== undefined || matter_id !== undefined,
+      "matter_id is required to create a document",
     ),
-    ["workspace_id"],
+    ["matter_id"],
   ),
   v.forward(
     v.partialCheck(
@@ -1687,16 +1684,16 @@ const saveDocumentArgsSchema = v.pipe(
     ),
     ["name"],
   ),
-  // workspace_id and kind describe the entity to create; neither applies to an
+  // matter_id and kind describe the entity to create; neither applies to an
   // update.
   v.forward(
     v.partialCheck(
-      [["entity_id"], ["workspace_id"]],
-      ({ entity_id, workspace_id }) =>
-        entity_id === undefined || workspace_id === undefined,
-      "workspace_id applies only when creating; omit it when updating a document",
+      [["entity_id"], ["matter_id"]],
+      ({ entity_id, matter_id }) =>
+        entity_id === undefined || matter_id === undefined,
+      "matter_id applies only when creating; omit it when updating a document",
     ),
-    ["workspace_id"],
+    ["matter_id"],
   ),
   v.forward(
     v.partialCheck(
@@ -1792,7 +1789,7 @@ const createDocumentEntity = async ({
 
   const workspaceId = ensureActiveWorkspace({
     context,
-    workspaceId: input.workspace_id ?? "",
+    workspaceId: input.matter_id ?? "",
   });
   if (typeof workspaceId !== "string") {
     return workspaceId;
@@ -2236,12 +2233,10 @@ const handleDeleteDocumentTool: TypedMcpToolHandler<
 };
 
 const listPropertiesArgsSchema = v.strictObject({
-  workspace_id: v.pipe(
+  matter_id: v.pipe(
     v.string(),
     v.minLength(1),
-    v.description(
-      "Workspace ID to list properties for. Deprecated input alias: matter_id.",
-    ),
+    v.description("Matter ID to list properties for."),
   ),
   limit: v.optional(
     v.pipe(
@@ -2285,7 +2280,7 @@ const handleListPropertiesTool: TypedMcpToolHandler<
 
   const workspaceId = ensureWorkspaceAccess({
     context,
-    workspaceId: parsed.output.workspace_id,
+    workspaceId: parsed.output.matter_id,
   });
   if (!workspaceId) {
     return notFoundResult("Matter not found or not accessible");
@@ -2542,10 +2537,10 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "List the documents and folders in a workspace. Use 'flat' mode to " +
-      "enumerate every document and folder in the workspace, or 'children' " +
+      "List the documents and folders in a matter. Use 'flat' mode to " +
+      "enumerate every document and folder in the matter, or 'children' " +
       "mode to walk the folder tree one level at a time (pass parent_id to " +
-      "list a folder's direct children, or omit it for the workspace root). " +
+      "list a folder's direct children, or omit it for the matter root). " +
       "Returns each entity's id, name, kind (document or folder), and " +
       "parentId. Read a " +
       "document's metadata, fields, or versions with read_document.",
@@ -2596,11 +2591,11 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
     description:
       "Create a document or folder, or update an existing one. Omit entity_id " +
-      "to create: pass workspace_id and name, optionally a parent_id folder " +
+      "to create: pass matter_id and name, optionally a parent_id folder " +
       "and kind ('document' by default, or 'folder'). Creating makes an empty named " +
       "entity; uploading file content is a separate step. Pass entity_id to " +
       "update: set name to rename; parent_id to move it into a folder or " +
-      "move_to_root to move it to the workspace root; version_id with label " +
+      "move_to_root to move it to the matter root; version_id with label " +
       "and/or description to annotate a version. An update needs at least one change. " +
       "Returns the entity ID.",
     inputSchema: saveDocumentArgsSchema,

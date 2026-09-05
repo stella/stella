@@ -958,7 +958,7 @@ describe("MCP template tools", () => {
       args: {
         action: "create_document",
         template_id: TEMPLATE_ID,
-        workspace_id: "ws_1",
+        matter_id: "ws_1",
         idempotency_key: "create-document-1",
         parent_id: FOLDER_ID,
         name: "Example Lease",
@@ -1028,7 +1028,7 @@ describe("MCP template tools", () => {
       args: {
         action: "create_document",
         template_id: TEMPLATE_ID,
-        workspace_id: "ws_1",
+        matter_id: "ws_1",
         idempotency_key: "create-document-missing-required",
         values: { "tenant.name": "ACME" },
       },
@@ -1066,7 +1066,7 @@ describe("MCP template tools", () => {
       args: {
         action: "create_document",
         template_id: TEMPLATE_ID,
-        workspace_id: "ws_1",
+        matter_id: "ws_1",
         idempotency_key: "disconnect-1",
         values: { "tenant.name": "ACME" },
       },
@@ -1107,7 +1107,7 @@ describe("MCP template tools", () => {
       args: {
         action: "create_document",
         template_id: TEMPLATE_ID,
-        workspace_id: "ws_1",
+        matter_id: "ws_1",
         idempotency_key: "create-document-retry",
         values: { "tenant.name": "ACME" },
       },
@@ -1136,7 +1136,7 @@ describe("MCP template tools", () => {
       args: {
         action: "create_document",
         template_id: TEMPLATE_ID,
-        workspace_id: "ws_1",
+        matter_id: "ws_1",
         idempotency_key: "concurrent-retry",
         values: { "tenant.name": "ACME" },
       },
@@ -1164,7 +1164,7 @@ describe("MCP template tools", () => {
       args: {
         action: "create_document",
         template_id: TEMPLATE_ID,
-        workspace_id: "ws_1",
+        matter_id: "ws_1",
         idempotency_key: "reused-key",
         values: { "tenant.name": "Different" },
       },
@@ -1210,7 +1210,7 @@ describe("MCP template tools", () => {
       args: {
         action: "create_version",
         template_id: TEMPLATE_ID,
-        workspace_id: "ws_1",
+        matter_id: "ws_1",
         idempotency_key: "create-version-1",
         entity_id: ENTITY_ID,
         values: { "tenant.name": "ACME" },
@@ -1259,7 +1259,7 @@ describe("MCP template tools", () => {
       args: {
         action: "create_version",
         template_id: TEMPLATE_ID,
-        workspace_id: "ws_1",
+        matter_id: "ws_1",
         idempotency_key: "missing-entity-1",
         values: {},
       },
@@ -1270,7 +1270,7 @@ describe("MCP template tools", () => {
       args: {
         action: "create_document",
         template_id: TEMPLATE_ID,
-        workspace_id: "ws_1",
+        matter_id: "ws_1",
         idempotency_key: "archived-1",
         values: {},
       },
@@ -1281,7 +1281,7 @@ describe("MCP template tools", () => {
       args: {
         action: "create_document",
         template_id: TEMPLATE_ID,
-        workspace_id: "ws_1",
+        matter_id: "ws_1",
         idempotency_key: "forbidden-1",
         values: {},
       },
@@ -1292,7 +1292,7 @@ describe("MCP template tools", () => {
       args: {
         action: "create_document",
         template_id: "not-a-uuid",
-        workspace_id: "ws_1",
+        matter_id: "ws_1",
         idempotency_key: "malformed-template-1",
         values: {},
       },
@@ -1303,7 +1303,7 @@ describe("MCP template tools", () => {
       args: {
         action: "create_document",
         template_id: TEMPLATE_ID,
-        workspace_id: "ws_1",
+        matter_id: "ws_1",
         idempotency_key: "malformed-parent-1",
         parent_id: "not-a-uuid",
         values: {},
@@ -1315,7 +1315,7 @@ describe("MCP template tools", () => {
       args: {
         action: "create_version",
         template_id: TEMPLATE_ID,
-        workspace_id: "ws_1",
+        matter_id: "ws_1",
         idempotency_key: "malformed-entity-1",
         entity_id: "not-a-uuid",
         values: {},
@@ -1372,7 +1372,7 @@ describe("MCP template tools", () => {
       args: {
         action: "create_document",
         template_id: TEMPLATE_ID,
-        workspace_id: "ws_1",
+        matter_id: "ws_1",
         idempotency_key: "missing-parent-1",
         parent_id: MISSING_FOLDER_ID,
         values: {},
@@ -1384,7 +1384,7 @@ describe("MCP template tools", () => {
       args: {
         action: "create_document",
         template_id: TEMPLATE_ID,
-        workspace_id: "ws_1",
+        matter_id: "ws_1",
         idempotency_key: "non-folder-1",
         parent_id: NON_FOLDER_ID,
         values: {},
@@ -1396,7 +1396,7 @@ describe("MCP template tools", () => {
       args: {
         action: "create_version",
         template_id: TEMPLATE_ID,
-        workspace_id: "ws_1",
+        matter_id: "ws_1",
         idempotency_key: "missing-version-1",
         entity_id: MISSING_VERSION_ID,
         values: {},
@@ -1408,7 +1408,7 @@ describe("MCP template tools", () => {
       args: {
         action: "create_version",
         template_id: TEMPLATE_ID,
-        workspace_id: "ws_1",
+        matter_id: "ws_1",
         idempotency_key: "read-only-1",
         entity_id: READ_ONLY_VERSION_ID,
         values: {},
@@ -1420,7 +1420,7 @@ describe("MCP template tools", () => {
       args: {
         action: "create_version",
         template_id: TEMPLATE_ID,
-        workspace_id: "ws_1",
+        matter_id: "ws_1",
         idempotency_key: "non-file-1",
         entity_id: NON_FILE_VERSION_ID,
         values: {},
@@ -1430,7 +1430,7 @@ describe("MCP template tools", () => {
     });
 
     expect(missingParent.content.at(0)).toMatchObject({
-      text: "Parent entity not found in this workspace",
+      text: "Parent entity not found in this matter",
     });
     expect(nonFolderParent.content.at(0)).toMatchObject({
       text: "Parent entity must be a folder",
@@ -1454,7 +1454,7 @@ describe("MCP template tools", () => {
       args: {
         action: "create_document",
         template_id: TEMPLATE_ID,
-        workspace_id: "ws_1",
+        matter_id: "ws_1",
         idempotency_key: "full-workspace-1",
         values: {},
       },

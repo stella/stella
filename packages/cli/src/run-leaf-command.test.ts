@@ -474,72 +474,6 @@ describe("--input composes with flags before schema validation (S5.5)", () => {
   });
 });
 
-describe("--input honors a deprecated tool-input alias", () => {
-  // The schema names the replacement, and no flag is generated for the old
-  // name, so `--input` is the only way the alias reaches the CLI. Local
-  // validation runs before the request, so the rewrite has to happen here too.
-  const RENAMED_SPEC: LeafCommandSpec = {
-    commandPath: ["document", "list"],
-    toolName: "list_documents",
-    flags: [
-      {
-        flag: "--workspace-id",
-        prop: "workspace_id",
-        kind: "string",
-        required: true,
-        repeatable: false,
-      },
-    ],
-    inputOnly: [],
-    paginated: false,
-    windowedText: false,
-    destructive: false,
-    inputSchema: {
-      type: "object",
-      properties: { workspace_id: { type: "string" } },
-      required: ["workspace_id"],
-      additionalProperties: false,
-    },
-  };
-
-  test("the deprecated name is rewritten onto the canonical field", async () => {
-    const server = startConfirmGateServer();
-    const tty = makeTtyContext({
-      serverUrl: server.url,
-      stdinData: "",
-      isTTY: false,
-    });
-    await runLeafCommand({
-      context: tty.context,
-      flags: { input: '{"matter_id":"m1"}' },
-      spec: RENAMED_SPEC,
-    });
-    server.stop();
-    // The request is made at all (no local "missing required flag" or schema
-    // rejection) and carries the canonical name.
-    expect(server.calls[0]?.args).toEqual({ workspace_id: "m1" });
-  });
-
-  test("both names with different values fail locally", async () => {
-    const server = startConfirmGateServer();
-    const tty = makeTtyContext({
-      serverUrl: server.url,
-      stdinData: "",
-      isTTY: false,
-    });
-    await runLeafCommand({
-      context: tty.context,
-      flags: { input: '{"matter_id":"m1","workspace_id":"m2"}' },
-      spec: RENAMED_SPEC,
-    });
-    server.stop();
-    expect(tty.stderrText()).toContain(
-      "--input invalid at matter_id: deprecated alias for workspace_id",
-    );
-    expect(server.calls).toHaveLength(0);
-  });
-});
-
 describe("confirm passthrough (capability invoke)", () => {
   test("--yes injects confirm: true upfront (single call)", async () => {
     const server = startConfirmGateServer();
@@ -736,27 +670,27 @@ describe("scopePreflightFailure: the hint must survive a re-parse", () => {
 });
 
 describe("toolErrorLines", () => {
-  const FLAGS = new Set(["workspace_id", "entity_id"]);
+  const FLAGS = new Set(["matter_id", "entity_id"]);
 
   test("a lone issue repeating the summary folds into one line naming the flag", () => {
     expect(
       toolErrorLines(
         {
           message:
-            "Provide workspace_id to list tasks, or task_id to read one task",
+            "Provide matter_id to list tasks, or task_id to read one task",
           hint: undefined,
           issues: [
             {
-              path: "workspace_id",
+              path: "matter_id",
               message:
-                "Provide workspace_id to list tasks, or task_id to read one task",
+                "Provide matter_id to list tasks, or task_id to read one task",
             },
           ],
         },
         FLAGS,
       ),
     ).toEqual([
-      "error: Provide workspace_id to list tasks, or task_id to read one task (--workspace-id)",
+      "error: Provide matter_id to list tasks, or task_id to read one task (--matter-id)",
     ]);
   });
 

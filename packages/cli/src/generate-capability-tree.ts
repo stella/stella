@@ -334,7 +334,7 @@ type BuiltFlags = {
 
 /**
  * Resolve candidate flags across parts into `CapabilityFlagSpec`s. A flag name
- * that is reserved, taken (the synthetic `--workspace`), or shared by more than
+ * that is reserved, taken (the synthetic `--matter-id`), or shared by more than
  * one candidate is part-prefixed on every offending candidate
  * (`--query-version`), and its `prop` (the stricli flag identity) is
  * part-qualified so the identity stays unique too. Uniqueness is then enforced
@@ -351,7 +351,7 @@ const resolveFlags = ({
 }: {
   capabilityId: string;
   candidates: readonly Candidate[];
-  /** Names owned outside the candidates (the synthetic `--workspace`). */
+  /** Names owned outside the candidates (the synthetic `--matter-id`). */
   takenNames: ReadonlySet<string>;
 }): BuiltFlags => {
   const reservedParserKeys = new Set([...RESERVED_FLAGS].map(parserKeyForFlag));
@@ -453,28 +453,28 @@ const withoutFilelessField = (body: JsonSchema, field: string): JsonSchema => {
 
 /**
  * The synthesized `{ body?, params?, query? }` wrapper schema `--input` is
- * validated against. `workspaceId` is injected into `params` when the
- * capability gets a synthetic `--workspace` flag, so `--input` accepts the same
- * shape the flag produces.
+ * validated against. `matterId` is injected into `params` when the capability
+ * gets a synthetic `--matter-id` flag, so `--input` accepts the same shape the
+ * flag produces.
  *
  * `body` and `query` stay in their `$defs`-compacted form and the entry's
  * `$defs` block rides along at the wrapper root, which is what `#/$defs/...`
  * already points at. Baking the expanded schemas instead would put the same
  * recursive condition subschema into the generated route map a dozen times per
  * capability, for no gain: `--input` validation expands on demand. `params` is
- * taken expanded, because injecting `workspaceId` has to merge into its
+ * taken expanded, because injecting `matterId` has to merge into its
  * properties, which a ref node does not carry.
  */
 const buildWrapperSchema = ({
   compacted,
   expanded,
   filelessField,
-  injectWorkspace,
+  injectMatter,
 }: {
   compacted: CapabilityCatalogEntry["inputSchema"];
   expanded: ExpandedInputSchema;
   filelessField: string | undefined;
-  injectWorkspace: boolean;
+  injectMatter: boolean;
 }): JsonSchema => {
   const properties: Record<string, JsonSchema> = {};
   if (compacted.body !== undefined) {
@@ -486,8 +486,8 @@ const buildWrapperSchema = ({
         ? compacted.body
         : withoutFilelessField(compacted.body, filelessField);
   }
-  const params = injectWorkspace ? expanded.params : compacted.params;
-  if (injectWorkspace) {
+  const params = injectMatter ? expanded.params : compacted.params;
+  if (injectMatter) {
     const base = isRecord(params) ? params : { type: "object" };
     const baseProps = isRecord(base["properties"]) ? base["properties"] : {};
     const baseRequired: readonly unknown[] = Array.isArray(base["required"])
@@ -496,8 +496,8 @@ const buildWrapperSchema = ({
     properties["params"] = {
       ...base,
       type: "object",
-      properties: { ...baseProps, workspaceId: { type: "string" } },
-      required: [...baseRequired, "workspaceId"],
+      properties: { ...baseProps, matterId: { type: "string" } },
+      required: [...baseRequired, "matterId"],
     };
   } else if (params !== undefined) {
     properties["params"] = params;
@@ -523,7 +523,7 @@ export const deriveCapabilityLeaf = (
     const mapped = toolScopeOf(candidate);
     return mapped === undefined ? [] : [mapped];
   });
-  // Flags, pagination, and the workspace injection all read PROPERTY NAMES, so
+  // Flags, pagination, and the matter injection all read PROPERTY NAMES, so
   // they need the schema with its `$defs` refs inlined. A catalog whose refs do
   // not resolve is a corrupt artifact, not a schema to guess at.
   const expanded = expandSchemaDefs(entry.inputSchema);
@@ -538,8 +538,8 @@ export const deriveCapabilityLeaf = (
   const inputOnly: string[] = [];
   const candidates: Candidate[] = [];
   const paramsProps = propertyMap(expandedInputSchema.params);
-  const injectWorkspace =
-    entry.handlerKind === "workspace" && !("workspaceId" in paramsProps);
+  const injectMatter =
+    entry.handlerKind === "workspace" && !("matterId" in paramsProps);
   const filelessField = filelessOnlyField(entry.transport);
   for (const part of CAPABILITY_PARTS) {
     const skip = new Set<string>();
@@ -566,21 +566,21 @@ export const deriveCapabilityLeaf = (
   const { flags: resolvedFlags, flagCollisions } = resolveFlags({
     capabilityId: entry.id,
     candidates,
-    takenNames: injectWorkspace ? new Set(["--workspace-id"]) : new Set(),
+    takenNames: injectMatter ? new Set(["--matter-id"]) : new Set(),
   });
-  const flags: CapabilityFlagSpec[] = injectWorkspace
+  const flags: CapabilityFlagSpec[] = injectMatter
     ? [
-        // Named like the flag a capability declaring params.workspaceId
-        // itself derives, so every workspace-scoped command takes the same
-        // --workspace-id whichever way its schema arrived.
+        // Named like the flag a capability declaring params.matterId itself
+        // derives, so every matter-scoped command takes the same --matter-id
+        // whichever way its schema arrived.
         {
-          flag: "--workspace-id",
-          prop: "workspace",
+          flag: "--matter-id",
+          prop: "matterId",
           kind: "string",
           required: true,
           repeatable: false,
           part: "params",
-          partPath: "workspaceId",
+          partPath: "matterId",
         },
         ...resolvedFlags,
       ]
@@ -608,7 +608,7 @@ export const deriveCapabilityLeaf = (
         compacted: entry.inputSchema,
         expanded: expandedInputSchema,
         filelessField,
-        injectWorkspace,
+        injectMatter,
       }),
       ...(filelessField === undefined ? {} : { filelessField }),
     },

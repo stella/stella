@@ -253,7 +253,7 @@ const resolveFilePropertyId = async ({
   workspaceId: string;
 }): Promise<Result<string, UploadFailure>> => {
   const listed = await dependencies.invoke(UPLOAD_CAPABILITIES.listProperties, {
-    params: { workspaceId },
+    params: { matterId: workspaceId },
   });
   if (listed.status !== "ok") {
     return Result.err(invocationFailure(listed));
@@ -337,7 +337,7 @@ const abortUpload = async ({
   );
   return aborted.status === "ok"
     ? undefined
-    : `Cleanup failed for reserved upload ${uploadId}; run '${formatCapabilityCommand(UPLOAD_CAPABILITIES.abort)} --workspace-id ${workspaceId} --upload-id ${uploadId} --yes'`;
+    : `Cleanup failed for reserved upload ${uploadId}; run '${formatCapabilityCommand(UPLOAD_CAPABILITIES.abort)} --matter-id ${workspaceId} --upload-id ${uploadId} --yes'`;
 };
 
 /**
@@ -360,7 +360,7 @@ export const uploadDocument = async ({
 
   let reservationInput: {
     body: Record<string, unknown>;
-    params: { workspaceId: string };
+    params: { matterId: string };
   };
   if (input.target === "new_version") {
     reservationInput = buildDocumentVersionUploadReservationInput({
@@ -398,7 +398,7 @@ export const uploadDocument = async ({
     }
     reservationInput = {
       body,
-      params: { workspaceId: input.workspaceId },
+      params: { matterId: input.workspaceId },
     };
   }
 

@@ -33,7 +33,7 @@ const auditLogCursor = createTimestampIdCursorCodec({
 export const readAuditLogsQuerySchema = t.Object({
   workspaceId: t.Optional(
     tSafeId("workspace", {
-      description: "Only entries scoped to this matter/workspace",
+      description: "Only entries scoped to this matter",
     }),
   ),
   // The shared validator below checks these strings against the domain

@@ -361,7 +361,7 @@ describe("MCP knowledge tools", () => {
     startWorkflowMock.mockResolvedValue({ status: "started" });
 
     const result = await handleMcpToolCall({
-      args: { workspace_id: "ws_1", playbook_id: "pb_1" },
+      args: { matter_id: "ws_1", playbook_id: "pb_1" },
       context: createContext({
         scopedDb: createPlaybookScopedDb({
           id: PLAYBOOK_ID,
@@ -427,7 +427,7 @@ describe("MCP knowledge tools", () => {
     startWorkflowMock.mockResolvedValue({ status: "failed" });
 
     const result = await handleMcpToolCall({
-      args: { workspace_id: "ws_1", playbook_id: "pb_1" },
+      args: { matter_id: "ws_1", playbook_id: "pb_1" },
       context: createContext({
         scopedDb: createPlaybookScopedDb({
           id: PLAYBOOK_ID,

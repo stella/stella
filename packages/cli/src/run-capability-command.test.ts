@@ -192,7 +192,7 @@ describe("runCapabilityCommand: flag -> invoke_capability payload", () => {
       capabilityId: "billing-codes.create",
       commandPath: ["billing-codes", "create"],
       flags: [
-        stringFlag("--workspace-id", "params", "workspaceId", true),
+        stringFlag("--matter-id", "params", "matterId", true),
         stringFlag("--code", "body", "code", true),
       ],
     });
@@ -203,7 +203,7 @@ describe("runCapabilityCommand: flag -> invoke_capability payload", () => {
     });
     await runCapabilityCommand({
       context: tty.context,
-      flags: { workspaceId: "ws-1", code: "A1" },
+      flags: { matterId: "ws-1", code: "A1" },
       spec,
     });
     server.stop();
@@ -211,7 +211,7 @@ describe("runCapabilityCommand: flag -> invoke_capability payload", () => {
     expect(call?.name).toBe("invoke_capability");
     expect(call?.args).toEqual({
       capability: "billing-codes.create",
-      input: { params: { workspaceId: "ws-1" }, body: { code: "A1" } },
+      input: { params: { matterId: "ws-1" }, body: { code: "A1" } },
     });
     expect(tty.exitCode()).toBeUndefined();
   });
@@ -317,7 +317,7 @@ describe("runCapabilityCommand: flag -> invoke_capability payload", () => {
     const server = startServer({ kind: "echo" });
     const spec = capSpec({
       capabilityId: "uploads.create",
-      flags: [stringFlag("--workspace-id", "params", "workspaceId", true)],
+      flags: [stringFlag("--matter-id", "params", "matterId", true)],
       inputSchema: {
         type: "object",
         additionalProperties: false,
@@ -330,7 +330,7 @@ describe("runCapabilityCommand: flag -> invoke_capability payload", () => {
           params: {
             type: "object",
             additionalProperties: false,
-            properties: { workspaceId: { type: "string" } },
+            properties: { matterId: { type: "string" } },
           },
         },
       },
@@ -340,14 +340,14 @@ describe("runCapabilityCommand: flag -> invoke_capability payload", () => {
       stdinData: "",
       isTTY: false,
     });
-    // The body rides --input; the required --workspace-id flag overlays
-    // params.workspaceId (and overrides the stale id present in the JSON).
+    // The body rides --input; the required --matter-id flag overlays
+    // params.matterId (and overrides the stale id present in the JSON).
     await runCapabilityCommand({
       context: tty.context,
       flags: {
         input:
-          '{"body":{"purpose":"agent_skill"},"params":{"workspaceId":"stale"}}',
-        workspaceId: "ws-1",
+          '{"body":{"purpose":"agent_skill"},"params":{"matterId":"stale"}}',
+        matterId: "ws-1",
       },
       spec,
     });
@@ -355,7 +355,7 @@ describe("runCapabilityCommand: flag -> invoke_capability payload", () => {
     expect(tty.exitCode()).toBeUndefined();
     expect(lastInvoke(server.calls)["input"]).toEqual({
       body: { purpose: "agent_skill" },
-      params: { workspaceId: "ws-1" },
+      params: { matterId: "ws-1" },
     });
   });
 
@@ -363,7 +363,7 @@ describe("runCapabilityCommand: flag -> invoke_capability payload", () => {
     const server = startServer({ kind: "echo" });
     const spec = capSpec({
       capabilityId: "uploads.create",
-      flags: [stringFlag("--workspace-id", "params", "workspaceId", true)],
+      flags: [stringFlag("--matter-id", "params", "matterId", true)],
       inputSchema: {
         type: "object",
         additionalProperties: false,
@@ -371,7 +371,7 @@ describe("runCapabilityCommand: flag -> invoke_capability payload", () => {
           params: {
             type: "object",
             additionalProperties: false,
-            properties: { workspaceId: { type: "string" } },
+            properties: { matterId: { type: "string" } },
           },
         },
       },
@@ -383,24 +383,24 @@ describe("runCapabilityCommand: flag -> invoke_capability payload", () => {
     });
     await runCapabilityCommand({
       context: tty.context,
-      flags: { input: '{"params":{"workspaceId":"ws-9"}}' },
+      flags: { input: '{"params":{"matterId":"ws-9"}}' },
       spec,
     });
     server.stop();
     expect(tty.exitCode()).toBeUndefined();
     expect(lastInvoke(server.calls)["input"]).toEqual({
-      params: { workspaceId: "ws-9" },
+      params: { matterId: "ws-9" },
     });
   });
 
   test("a required schema path absent from --input but supplied by its flag is accepted (validation runs after overlay)", async () => {
     const server = startServer({ kind: "echo" });
-    // A synthetic-required workspaceId plus a body-borne required field: the
+    // A synthetic-required matterId plus a body-borne required field: the
     // exact shape (e.g. view-templates.delete) where validating the RAW --input
-    // would reject params.workspaceId before --workspace-id overlays it.
+    // would reject params.matterId before --matter-id overlays it.
     const spec = capSpec({
       capabilityId: "view-templates.delete",
-      flags: [stringFlag("--workspace-id", "params", "workspaceId", true)],
+      flags: [stringFlag("--matter-id", "params", "matterId", true)],
       inputSchema: {
         type: "object",
         additionalProperties: false,
@@ -408,9 +408,9 @@ describe("runCapabilityCommand: flag -> invoke_capability payload", () => {
           params: {
             type: "object",
             additionalProperties: false,
-            required: ["workspaceId", "templateId"],
+            required: ["matterId", "templateId"],
             properties: {
-              workspaceId: { type: "string" },
+              matterId: { type: "string" },
               templateId: { type: "string" },
             },
           },
@@ -424,13 +424,13 @@ describe("runCapabilityCommand: flag -> invoke_capability payload", () => {
     });
     await runCapabilityCommand({
       context: tty.context,
-      flags: { input: '{"params":{"templateId":"t1"}}', workspaceId: "ws-1" },
+      flags: { input: '{"params":{"templateId":"t1"}}', matterId: "ws-1" },
       spec,
     });
     server.stop();
     expect(tty.exitCode()).toBeUndefined();
     expect(lastInvoke(server.calls)["input"]).toEqual({
-      params: { workspaceId: "ws-1", templateId: "t1" },
+      params: { matterId: "ws-1", templateId: "t1" },
     });
   });
 
@@ -438,7 +438,7 @@ describe("runCapabilityCommand: flag -> invoke_capability payload", () => {
     const server = startServer({ kind: "echo" });
     const spec = capSpec({
       capabilityId: "uploads.create",
-      flags: [stringFlag("--workspace-id", "params", "workspaceId", true)],
+      flags: [stringFlag("--matter-id", "params", "matterId", true)],
     });
     const tty = makeTtyContext({
       serverUrl: server.url,
@@ -453,7 +453,7 @@ describe("runCapabilityCommand: flag -> invoke_capability payload", () => {
     server.stop();
     expect(tty.exitCode()).toBe(EXIT_CODES.validation);
     expect(server.calls).toHaveLength(0);
-    expect(tty.stderrText()).toContain("--workspace");
+    expect(tty.stderrText()).toContain("--matter-id");
   });
 });
 
@@ -470,7 +470,7 @@ describe("runCapabilityCommand: compound scope preflight", () => {
       context: tty.context,
       flags: {},
       spec: capSpec({
-        capabilityId: "templates.fill-to-workspace",
+        capabilityId: "templates.fill-to-matter",
         scope: "documents_write",
         additionalScopes: ["templates"],
       }),

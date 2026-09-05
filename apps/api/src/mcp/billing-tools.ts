@@ -369,13 +369,13 @@ const loadUserNames = async ({
 
 const listTimeEntriesArgsSchema = v.pipe(
   v.strictObject({
-    workspace_id: v.optional(
+    matter_id: v.optional(
       v.pipe(
         v.string(),
         v.minLength(1),
         v.description(
-          "Workspace ID to list time entries in; required unless " +
-            "time_entry_id is given. Deprecated input alias: matter_id.",
+          "Matter ID to list time entries in; required unless " +
+            "time_entry_id is given.",
         ),
       ),
     ),
@@ -450,12 +450,12 @@ const listTimeEntriesArgsSchema = v.pipe(
   // alone.
   v.forward(
     v.partialCheck(
-      [["workspace_id"], ["time_entry_id"]],
-      ({ workspace_id, time_entry_id }) =>
-        time_entry_id !== undefined || workspace_id !== undefined,
-      "Provide workspace_id to list entries, or time_entry_id to read one entry",
+      [["matter_id"], ["time_entry_id"]],
+      ({ matter_id, time_entry_id }) =>
+        time_entry_id !== undefined || matter_id !== undefined,
+      "Provide matter_id to list entries, or time_entry_id to read one entry",
     ),
-    ["workspace_id"],
+    ["matter_id"],
   ),
 );
 
@@ -514,13 +514,10 @@ const handleListTimeEntriesTool: TypedMcpToolHandler<
     if (!workspaceId) {
       return notFoundResult("Time entry not found or not accessible");
     }
-    // A supplied workspace_id must name the entry's own matter; otherwise an entry
+    // A supplied matter_id must name the entry's own matter; otherwise an entry
     // from a different accessible matter would be returned.
-    if (
-      input.workspace_id !== undefined &&
-      input.workspace_id !== workspaceId
-    ) {
-      return errorResult("time_entry_id does not belong to workspace_id");
+    if (input.matter_id !== undefined && input.matter_id !== workspaceId) {
+      return errorResult("time_entry_id does not belong to matter_id");
     }
     const row = await context.scopedDb((tx) =>
       tx
@@ -550,7 +547,7 @@ const handleListTimeEntriesTool: TypedMcpToolHandler<
     });
     const entry = {
       ...entryRow,
-      // Detail mode may be reached by time_entry_id alone (no workspace_id), so
+      // Detail mode may be reached by time_entry_id alone (no matter_id), so
       // carry the resolved owning workspace on the row itself; the chat
       // ref-mediation layer reads it to mint the entity's ref instead of
       // relying on an input arg that can be absent.
@@ -580,8 +577,8 @@ const handleListTimeEntriesTool: TypedMcpToolHandler<
     };
   }
 
-  // List mode. workspace_id is guaranteed present by the schema.
-  const requestedWorkspaceId = input.workspace_id ?? "";
+  // List mode. matter_id is guaranteed present by the schema.
+  const requestedWorkspaceId = input.matter_id ?? "";
   const workspaceId = ensureWorkspaceAccess({
     context,
     workspaceId: requestedWorkspaceId,
@@ -713,13 +710,12 @@ const saveTimeEntryArgsSchema = v.pipe(
         v.description("Time entry ID to update; omit to create"),
       ),
     ),
-    workspace_id: v.optional(
+    matter_id: v.optional(
       v.pipe(
         v.string(),
         v.minLength(1),
         v.description(
-          "Workspace ID to create the entry in; required when creating. " +
-            "Deprecated input alias: matter_id.",
+          "Matter ID to create the entry in; required when creating.",
         ),
       ),
     ),
@@ -810,7 +806,7 @@ const saveTimeEntryArgsSchema = v.pipe(
   v.partialCheck(
     [
       ["time_entry_id"],
-      ["workspace_id"],
+      ["matter_id"],
       ["date_worked"],
       ["timezone_id"],
       ["duration_minutes"],
@@ -818,22 +814,22 @@ const saveTimeEntryArgsSchema = v.pipe(
     ],
     (i) =>
       i.time_entry_id !== undefined ||
-      (i.workspace_id !== undefined &&
+      (i.matter_id !== undefined &&
         i.date_worked !== undefined &&
         i.timezone_id !== undefined &&
         i.duration_minutes !== undefined &&
         i.narrative !== undefined),
-    "Creating a time entry requires workspace_id, date_worked, timezone_id, duration_minutes, and narrative",
+    "Creating a time entry requires matter_id, date_worked, timezone_id, duration_minutes, and narrative",
   ),
-  // workspace_id names the workspace to create in; it cannot change on update.
+  // matter_id names the workspace to create in; it cannot change on update.
   v.forward(
     v.partialCheck(
-      [["time_entry_id"], ["workspace_id"]],
-      ({ time_entry_id, workspace_id }) =>
-        time_entry_id === undefined || workspace_id === undefined,
-      "workspace_id applies only when creating; omit it when updating a time entry",
+      [["time_entry_id"], ["matter_id"]],
+      ({ time_entry_id, matter_id }) =>
+        time_entry_id === undefined || matter_id === undefined,
+      "matter_id applies only when creating; omit it when updating a time entry",
     ),
-    ["workspace_id"],
+    ["matter_id"],
   ),
   // invoice_narrative and no_charge are update-only in the backing
   // handler, so reject them on a create.
@@ -889,7 +885,7 @@ const handleSaveTimeEntryTool: TypedMcpToolHandler<
     }
     const workspaceId = ensureActiveWorkspace({
       context,
-      workspaceId: input.workspace_id ?? "",
+      workspaceId: input.matter_id ?? "",
     });
     if (typeof workspaceId !== "string") {
       return workspaceId;
@@ -1073,12 +1069,10 @@ const handleDeleteTimeEntryTool: TypedMcpToolHandler<
 // --- resolve_rate -------------------------------------------------------
 
 const resolveRateArgsSchema = v.strictObject({
-  workspace_id: v.pipe(
+  matter_id: v.pipe(
     v.string(),
     v.minLength(1),
-    v.description(
-      "Workspace ID to resolve the rate in. Deprecated input alias: matter_id.",
-    ),
+    v.description("Matter ID to resolve the rate in."),
   ),
   user_id: v.pipe(
     v.string(),
@@ -1104,7 +1098,7 @@ const handleResolveRateTool: McpToolHandler = async ({ args, context }) => {
 
   const workspaceId = ensureWorkspaceAccess({
     context,
-    workspaceId: parsed.output.workspace_id,
+    workspaceId: parsed.output.matter_id,
   });
   if (!workspaceId) {
     return notFoundResult("Matter not found or not accessible");
@@ -1153,13 +1147,13 @@ const handleResolveRateTool: McpToolHandler = async ({ args, context }) => {
 
 const listInvoicesArgsSchema = v.pipe(
   v.strictObject({
-    workspace_id: v.optional(
+    matter_id: v.optional(
       v.pipe(
         v.string(),
         v.minLength(1),
         v.description(
-          "Workspace ID to list invoices in; required unless invoice_id is " +
-            "given. Deprecated input alias: matter_id.",
+          "Matter ID to list invoices in; required unless invoice_id is " +
+            "given.",
         ),
       ),
     ),
@@ -1191,12 +1185,12 @@ const listInvoicesArgsSchema = v.pipe(
   }),
   v.forward(
     v.partialCheck(
-      [["workspace_id"], ["invoice_id"]],
-      ({ workspace_id, invoice_id }) =>
-        invoice_id !== undefined || workspace_id !== undefined,
-      "Provide workspace_id to list invoices, or invoice_id to read one invoice",
+      [["matter_id"], ["invoice_id"]],
+      ({ matter_id, invoice_id }) =>
+        invoice_id !== undefined || matter_id !== undefined,
+      "Provide matter_id to list invoices, or invoice_id to read one invoice",
     ),
-    ["workspace_id"],
+    ["matter_id"],
   ),
 );
 
@@ -1271,11 +1265,8 @@ const handleListInvoicesTool: TypedMcpToolHandler<
     if (!workspaceId) {
       return notFoundResult("Invoice not found or not accessible");
     }
-    if (
-      input.workspace_id !== undefined &&
-      input.workspace_id !== workspaceId
-    ) {
-      return errorResult("invoice_id does not belong to workspace_id");
+    if (input.matter_id !== undefined && input.matter_id !== workspaceId) {
+      return errorResult("invoice_id does not belong to matter_id");
     }
     const invoiceRow = await readInvoiceDetail({
       context,
@@ -1288,7 +1279,7 @@ const handleListInvoicesTool: TypedMcpToolHandler<
 
     const invoice = {
       id: invoiceRow.id,
-      // Detail mode may be reached by invoice_id alone (no workspace_id), so carry
+      // Detail mode may be reached by invoice_id alone (no matter_id), so carry
       // the resolved owning workspace on the invoice; the chat ref-mediation
       // layer reads it to mint the line items' entity refs.
       workspaceId,
@@ -1351,8 +1342,8 @@ const handleListInvoicesTool: TypedMcpToolHandler<
     };
   }
 
-  // List mode. workspace_id is guaranteed present by the schema.
-  const requestedWorkspaceId = input.workspace_id ?? "";
+  // List mode. matter_id is guaranteed present by the schema.
+  const requestedWorkspaceId = input.matter_id ?? "";
   const workspaceId = ensureWorkspaceAccess({
     context,
     workspaceId: requestedWorkspaceId,
@@ -1470,9 +1461,9 @@ export const BILLING_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "List time entries in a workspace, or read one entry in detail. Pass " +
-      "time_entry_id to get a single entry. Otherwise pass workspace_id to " +
-      "list the workspace's entries, optionally filtered by entity_id (the " +
+      "List time entries in a matter, or read one entry in detail. Pass " +
+      "time_entry_id to get a single entry. Otherwise pass matter_id to " +
+      "list the matter's entries, optionally filtered by entity_id (the " +
       "item the time was logged against), user_id, a date-worked range (date_from/" +
       "date_to, ISO YYYY-MM-DD), and status. Returns each entry's id, entity, " +
       "user, date, minutes, rate (minor currency units), currency, narrative, " +
@@ -1483,7 +1474,7 @@ export const BILLING_TOOL_DEFINITIONS = [
     jsonSchemaProjectionWaiver: {
       ignoreActions: ["partial_check"],
       reason:
-        "The workspace_id/time_entry_id cross-field requirement stays authoritative in the runtime schema.",
+        "The matter_id/time_entry_id cross-field requirement stays authoritative in the runtime schema.",
     },
     access: "read",
     anonymized: {
@@ -1501,7 +1492,7 @@ export const BILLING_TOOL_DEFINITIONS = [
   }),
   defineValibotMcpTool({
     description:
-      "Create or update a time entry. Omit time_entry_id to create (workspace_id, " +
+      "Create or update a time entry. Omit time_entry_id to create (matter_id, " +
       "date_worked, timezone_id, duration_minutes, and narrative required; " +
       "entity_id is optional context). Pass time_entry_id to update: " +
       "set date_worked (with timezone_id), duration_minutes, narrative, " +
@@ -1558,7 +1549,7 @@ export const BILLING_TOOL_DEFINITIONS = [
     },
     description:
       "Resolve the effective hourly rate for a user on a given date in a " +
-      "workspace, using its default rate table (user-specific rate first, " +
+      "matter, using its default rate table (user-specific rate first, " +
       "then the table default). Returns the hourly rate in integer " +
       "minor currency units (e.g. cents) and the currency, or nulls when no " +
       "rate applies.",
@@ -1578,16 +1569,16 @@ export const BILLING_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "List invoices in a workspace, or read one invoice in detail. Pass " +
+      "List invoices in a matter, or read one invoice in detail. Pass " +
       "invoice_id to get a single invoice with its line items (time entries " +
-      "and expenses). Otherwise pass workspace_id to list the workspace's " +
+      "and expenses). Otherwise pass matter_id to list the matter's " +
       "invoices. Returns each invoice's id, number, reference, status, dates, currency, " +
       "and total (integer minor currency units).",
     inputSchema: listInvoicesArgsSchema,
     jsonSchemaProjectionWaiver: {
       ignoreActions: ["partial_check"],
       reason:
-        "The workspace_id/invoice_id cross-field requirement stays authoritative in the runtime schema.",
+        "The matter_id/invoice_id cross-field requirement stays authoritative in the runtime schema.",
     },
     access: "read",
     anonymized: {

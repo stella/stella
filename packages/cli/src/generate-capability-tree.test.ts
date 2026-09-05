@@ -297,24 +297,19 @@ describe("deriveCapabilityLeaf: flags", () => {
     expect(flagCollisions).toEqual(["--body-user-id", "--query-user-id"]);
   });
 
-  test("a prop colliding with the synthetic --workspace-id is part-prefixed", () => {
+  test("a prop colliding with the synthetic --matter-id is part-prefixed", () => {
     const { spec } = deriveCapabilityLeaf(
       entry({
         id: "a.b",
         handlerKind: "workspace",
-        inputSchema: {
-          body: objectSchema({ workspaceId: { type: "string" } }),
-        },
+        inputSchema: { body: objectSchema({ matterId: { type: "string" } }) },
       }),
     );
-    const workspaceFlags = spec.flags.filter(
-      (f) => f.flag === "--workspace-id",
-    );
-    expect(workspaceFlags).toHaveLength(1);
-    expect(workspaceFlags[0]?.part).toBe("params");
-    expect(flagByCli(spec, "--body-workspace-id")?.partPath).toBe(
-      "workspaceId",
-    );
+    const matterFlags = spec.flags.filter((f) => f.flag === "--matter-id");
+    expect(matterFlags).toHaveLength(1);
+    expect(matterFlags[0]?.part).toBe("params");
+    expect(matterFlags[0]?.partPath).toBe("matterId");
+    expect(flagByCli(spec, "--body-matter-id")?.partPath).toBe("matterId");
   });
 
   test("an irresolvable duplicate fails generation naming the capability", () => {
@@ -338,8 +333,8 @@ describe("deriveCapabilityLeaf: flags", () => {
   });
 });
 
-describe("deriveCapabilityLeaf: workspace flag", () => {
-  test("a workspace entry missing params.workspaceId gets a required --workspace-id", () => {
+describe("deriveCapabilityLeaf: matter flag", () => {
+  test("a matter entry missing params.matterId gets a required --matter-id", () => {
     const { spec } = deriveCapabilityLeaf(
       entry({
         id: "billing-codes.create",
@@ -347,30 +342,28 @@ describe("deriveCapabilityLeaf: workspace flag", () => {
         inputSchema: { body: objectSchema({ code: { type: "string" } }) },
       }),
     );
-    const workspace = flagByCli(spec, "--workspace-id");
-    expect(workspace?.required).toBe(true);
-    expect(workspace?.part).toBe("params");
-    expect(workspace?.partPath).toBe("workspaceId");
-    // The synthesized schema accepts params.workspaceId for the --input path.
-    expect(JSON.stringify(spec.inputSchema)).toContain("workspaceId");
+    const matter = flagByCli(spec, "--matter-id");
+    expect(matter?.required).toBe(true);
+    expect(matter?.part).toBe("params");
+    expect(matter?.partPath).toBe("matterId");
+    // The synthesized schema accepts params.matterId for the --input path.
+    expect(JSON.stringify(spec.inputSchema)).toContain("matterId");
   });
 
-  test("a workspace entry already declaring workspaceId gets no synthetic flag", () => {
+  test("a matter entry already declaring matterId gets no synthetic flag", () => {
     const { spec } = deriveCapabilityLeaf(
       entry({
         id: "entities.rename",
         handlerKind: "workspace",
         inputSchema: {
-          params: objectSchema({ workspaceId: { type: "string" } }, [
-            "workspaceId",
-          ]),
+          params: objectSchema({ matterId: { type: "string" } }, ["matterId"]),
         },
       }),
     );
-    expect(flagByCli(spec, "--workspace-id")?.partPath).toBe("workspaceId");
-    expect(spec.flags.filter((f) => f.flag === "--workspace-id")).toHaveLength(
-      1,
-    );
+    expect(
+      spec.flags.filter((flag) => flag.flag === "--matter-id"),
+    ).toHaveLength(1);
+    expect(flagByCli(spec, "--matter-id")?.partPath).toBe("matterId");
   });
 });
 
@@ -467,7 +460,7 @@ describe("deriveCapabilityLeaf: pagination + suppression + truncation", () => {
   test("maps compound catalog scopes into the capability preflight", () => {
     const { spec } = deriveCapabilityLeaf(
       entry({
-        id: "templates.fill-to-workspace",
+        id: "templates.fill-to-matter",
         scope: "stella:documents_write",
         additionalScopes: ["stella:templates"],
       }),
