@@ -5,6 +5,11 @@ import { useQuery } from "@tanstack/react-query";
 import { useSelector } from "@tanstack/react-store";
 import { useTranslations } from "use-intl";
 
+import {
+  currencyMinorUnitDigits,
+  toMajorUnits,
+  toMinorUnits,
+} from "@stll/money";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { Input } from "@stll/ui/input";
@@ -25,9 +30,21 @@ import { detached } from "@/lib/detached";
 import { billingCodesOptions } from "@/lib/workspaces/queries/billing-codes";
 import { resolvedRateOptions } from "@/lib/workspaces/queries/rates";
 import { DurationInput } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/duration-input";
-import { formatCurrencyAmount } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-currency";
+import {
+  DEFAULT_CURRENCY,
+  formatCurrencyAmount,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-currency";
 import { MatterCombobox } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/matter-combobox";
 import { TimeEntryNarrativeField } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-narrative-field";
+
+/**
+ * The stored amount as the decimal string the rate input edits, at the number
+ * of places the currency counts: a yen rate shows none, a dinar rate three.
+ */
+const majorUnitInput = (amountCents: number, currency: string): string =>
+  toMajorUnits({ amountCents, currency }).toFixed(
+    currencyMinorUnitDigits(currency),
+  );
 
 export type TimeEntryFormValues = {
   matterId: string;
@@ -65,7 +82,10 @@ export const TimeEntryForm = ({
   );
   const [rateInputValue, setRateInputValue] = useState(() =>
     (defaultValues?.rateAtEntry ?? 0) > 0
-      ? ((defaultValues?.rateAtEntry ?? 0) / 100).toFixed(2)
+      ? majorUnitInput(
+          defaultValues?.rateAtEntry ?? 0,
+          defaultValues?.currency ?? DEFAULT_CURRENCY,
+        )
       : "",
   );
 
@@ -95,7 +115,7 @@ export const TimeEntryForm = ({
       taskCode: defaultValues?.taskCode ?? "",
       activityCode: defaultValues?.activityCode ?? "",
       rateAtEntry: defaultValues?.rateAtEntry ?? 0,
-      currency: defaultValues?.currency ?? "USD",
+      currency: defaultValues?.currency ?? DEFAULT_CURRENCY,
     },
     onSubmit: async ({ value }) => {
       if (!value.matterId) {
@@ -207,13 +227,18 @@ export const TimeEntryForm = ({
                   dir="ltr"
                   inputMode="decimal"
                   onBlur={() => {
-                    const cents = Math.round(
-                      Number.parseFloat(rateInputValue) * 100,
-                    );
-                    if (!Number.isNaN(cents)) {
-                      field.handleChange(cents);
-                      setRateInputValue((cents / 100).toFixed(2));
+                    const typed = Number.parseFloat(rateInputValue);
+                    if (Number.isNaN(typed)) {
+                      return;
                     }
+                    // The currency input sits beside this one, so the rate is
+                    // rescaled on every blur against whatever it holds now.
+                    const rate = toMinorUnits({
+                      amount: typed,
+                      currency: currentCurrency,
+                    });
+                    field.handleChange(rate);
+                    setRateInputValue(majorUnitInput(rate, currentCurrency));
                   }}
                   onChange={(e) => setRateInputValue(e.currentTarget.value)}
                   placeholder="350.00"

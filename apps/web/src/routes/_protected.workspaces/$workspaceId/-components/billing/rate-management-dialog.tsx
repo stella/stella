@@ -5,6 +5,7 @@ import { useMutation, useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { ArrowLeftIcon, PlusIcon, StarIcon, TrashIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { toMinorUnits } from "@stll/money";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { Dialog, DialogPopup } from "@stll/ui/dialog";
@@ -647,15 +648,15 @@ const CreateRateEntryForm = ({
       effectiveTo: "",
     },
     onSubmit: ({ value }) => {
-      const rateNum = Math.round(Number.parseFloat(value.hourlyRate) * 100);
+      const typed = Number.parseFloat(value.hourlyRate);
 
-      if (Number.isNaN(rateNum) || rateNum < 0) {
+      if (Number.isNaN(typed) || typed < 0) {
         return;
       }
 
       onSubmit({
         userId: value.userId || null,
-        hourlyRate: rateNum,
+        hourlyRate: toMinorUnits({ amount: typed, currency }),
         effectiveFrom: value.effectiveFrom,
         effectiveTo: value.effectiveTo || null,
       });
