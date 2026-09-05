@@ -23,12 +23,11 @@
 
 import path from "node:path";
 
+import { BASELINE_PATHS } from "./baseline-paths";
+
 const SCRIPTS_DIR = import.meta.dir;
 const REPO_ROOT = path.resolve(SCRIPTS_DIR, "..");
-const BASELINE_PATH = path.resolve(
-  SCRIPTS_DIR,
-  "dependency-audit-baseline.json",
-);
+const BASELINE_PATH = path.resolve(REPO_ROOT, BASELINE_PATHS.dependencyAudit);
 const GATED_SEVERITIES = new Set(["high", "critical"]);
 
 type Advisory = {

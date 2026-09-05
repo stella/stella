@@ -7,6 +7,7 @@ import { panic, Result } from "better-result";
 import { CopyIcon, MailIcon, RefreshCcwIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { copyToClipboard } from "@stll/clipboard";
 import { Button } from "@stll/ui/button";
 import { Loader } from "@stll/ui/loader";
 import { stellaToast } from "@stll/ui/toast";
@@ -29,7 +30,6 @@ import { createErrorReference } from "@/lib/analytics/error-reference";
 import type { ErrorReference } from "@/lib/analytics/error-reference";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { useRouteErrorLifecycle } from "@/lib/analytics/route-error-lifecycle-context";
-import { copyToClipboard } from "@/lib/copy-to-clipboard";
 import { detached } from "@/lib/detached";
 import { isMemberError, isUnauthorizedError } from "@/lib/errors/auth";
 import { sanitizeHref } from "@/lib/sanitize-href";

@@ -11,6 +11,7 @@
   "common": {
     "copied": "Másolva",
     "copy": "Másolás",
+    "copyFailed": "A másolás nem sikerült",
     "getCli": "Töltse le a CLI-t",
     "startFree": "Kezdje el ingyen"
   },

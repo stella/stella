@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { copyToClipboard } from "@stll/clipboard";
 import { FetchBoundaryError } from "@stll/errors";
 import { Button } from "@stll/ui/button";
 import {
@@ -45,7 +46,6 @@ import { apiUrl } from "@/lib/api-url";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { BoundedSet } from "@/lib/bounded-set";
 import { createChatThreadId, toChatThreadId } from "@/lib/chat-thread-ref";
-import { copyToClipboard } from "@/lib/copy-to-clipboard";
 import { detached } from "@/lib/detached";
 import { APIError, toAPIError } from "@/lib/errors/api";
 import { fetchWithTimeout } from "@/lib/fetch";

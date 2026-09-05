@@ -112,7 +112,9 @@ const gradients = [
                 <rect x="9" y="9" width="13" height="13" rx="2" />
                 <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
               </svg>
-              <span class="copy-label">Copy</span>
+              <!-- Text on load, so a screen reader treats the outcome swap
+                below as an update rather than new content. -->
+              <span class="copy-label" aria-live="polite">Copy</span>
             </button>
           </div>
           <div
@@ -279,7 +281,7 @@ const gradients = [
                     style="color: var(--muted-foreground)"
                   >
                     <span>{s.hex}</span>
-                    <span class="copy-hex-feedback opacity-0 transition-opacity">copied</span>
+                    <span class="copy-hex-feedback opacity-0 transition-opacity" aria-live="polite">copied</span>
                   </button>
                   <p class="mt-1 text-xs leading-snug" style="color: var(--muted-foreground)">{s.description}</p>
                 </div>
@@ -360,6 +362,10 @@ const gradients = [
   </div>
 
   <script>
+    import { Result } from "better-result";
+
+    import { copyToClipboard } from "@stll/clipboard";
+
     document.addEventListener("astro:page-load", () => {
       // Copy boilerplate paragraph
       for (const btn of document.querySelectorAll<HTMLElement>(".copy-btn")) {
@@ -376,13 +382,16 @@ const gradients = [
           if (!el?.textContent) {
             return;
           }
-          await navigator.clipboard.writeText(el.textContent.trim());
+          const copied = Result.isOk(
+            await copyToClipboard(el.textContent.trim()),
+          );
           const label = btn.querySelector(".copy-label");
           if (!label) {
             return;
           }
+          // A refused clipboard reports where the confirmation would have gone.
           const original = label.textContent;
-          label.textContent = "Copied";
+          label.textContent = copied ? "Copied" : "Copy failed";
           setTimeout(() => {
             label.textContent = original;
           }, 1500);
@@ -400,11 +409,12 @@ const gradients = [
           if (!hex) {
             return;
           }
-          await navigator.clipboard.writeText(hex);
+          const copied = Result.isOk(await copyToClipboard(hex));
           const fb = btn.querySelector(".copy-hex-feedback");
           if (!fb) {
             return;
           }
+          fb.textContent = copied ? "copied" : "copy failed";
           fb.classList.remove("opacity-0");
           fb.classList.add("opacity-100");
           setTimeout(() => {

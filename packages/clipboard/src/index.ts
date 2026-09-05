@@ -5,6 +5,10 @@ import { Result } from "better-result";
  * `navigator.clipboard.writeText` in a Result so callers handle the
  * rejection path (denied permission, insecure context) without a bespoke
  * try/catch. Returns a `Result<void>`; inspect it with `Result.isError`.
+ *
+ * One implementation for every browser surface: `apps/web` reports the failure
+ * with a toast and error capture, the `apps/landing` inline scripts leave the
+ * copy button in its idle state, and neither reimplements the call.
  */
 export const copyToClipboard = async (text: string) =>
   await Result.tryPromise(

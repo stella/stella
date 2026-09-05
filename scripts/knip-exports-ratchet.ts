@@ -31,12 +31,11 @@ import { panic, Result } from "better-result";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
+import { BASELINE_PATHS } from "./baseline-paths";
+
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
-const BASELINE_PATH = path.resolve(
-  import.meta.dir,
-  "knip-exports-baseline.json",
-);
-const BASELINE_REL = "scripts/knip-exports-baseline.json";
+const BASELINE_REL = BASELINE_PATHS.knipExports;
+const BASELINE_PATH = path.resolve(REPO_ROOT, BASELINE_REL);
 const WRITE_HINT = "bun scripts/knip-exports-ratchet.ts --write";
 const ALLOW_INCREASE_FLAG = "--allow-increase";
 

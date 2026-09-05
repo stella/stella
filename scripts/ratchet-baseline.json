@@ -75,6 +75,10 @@
     "count": 0,
     "files": {}
   },
+  "landing-inline-clipboard-writes": {
+    "count": 0,
+    "files": {}
+  },
   "inline-timestamp-cursor-sql": {
     "count": 0,
     "files": {}
@@ -306,7 +310,7 @@
     }
   },
   "try-catch-outside-boundary": {
-    "count": 310,
+    "count": 309,
     "files": {
       "apps/api/src/handlers/ai-autocomplete/stream.ts": 1,
       "apps/api/src/handlers/api-keys/mint.ts": 1,
@@ -319,7 +323,7 @@
       "apps/api/src/handlers/case-law/ingestion/adapters/cz-nss.ts": 3,
       "apps/api/src/handlers/case-law/ingestion/adapters/cz-regional.ts": 3,
       "apps/api/src/handlers/case-law/ingestion/adapters/cz-us.ts": 5,
-      "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts": 3,
+      "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts": 2,
       "apps/api/src/handlers/case-law/ingestion/adapters/health-check.ts": 2,
       "apps/api/src/handlers/case-law/ingestion/adapters/pagination.ts": 3,
       "apps/api/src/handlers/case-law/ingestion/adapters/pl-courts.ts": 4,
@@ -1504,7 +1508,7 @@
     }
   },
   "web-lib-top-level-entries": {
-    "count": 139,
+    "count": 138,
     "files": {
       "apps/web/src/lib/account": 1,
       "apps/web/src/lib/analytics": 1,
@@ -1541,7 +1545,6 @@
       "apps/web/src/lib/cited-decision-label.ts": 1,
       "apps/web/src/lib/consts.ts": 1,
       "apps/web/src/lib/contacts": 1,
-      "apps/web/src/lib/copy-to-clipboard.ts": 1,
       "apps/web/src/lib/country-centroids.ts": 1,
       "apps/web/src/lib/decision-date.ts": 1,
       "apps/web/src/lib/dedupe-by-id.ts": 1,

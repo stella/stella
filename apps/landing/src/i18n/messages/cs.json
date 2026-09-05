@@ -11,6 +11,7 @@
   "common": {
     "copied": "Zkopírováno",
     "copy": "Kopírovat",
+    "copyFailed": "Kopírování se nezdařilo",
     "getCli": "Získat CLI",
     "startFree": "Začít zdarma"
   },

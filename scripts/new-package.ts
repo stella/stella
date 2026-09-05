@@ -90,6 +90,11 @@ export const parseArgs = (argv: readonly string[]): ParsedArgs => {
 
 // --- Templates ---------------------------------------------------------------
 
+// Key order is oxfmt's package.json order, and the arrays below are the ones it
+// keeps on one line: a scaffold that needs reformatting turns the first
+// `bun run format` into an unrelated diff. `new-package.test.ts` holds the
+// templates to what the formatter actually produces.
+
 const packageJsonTemplate = ({
   name,
   description,
@@ -98,8 +103,8 @@ const packageJsonTemplate = ({
     {
       name: `@stll/${name}`,
       version: "0.0.0",
-      description,
       private: true,
+      description,
       license: "Apache-2.0",
       type: "module",
       sideEffects: false,
@@ -121,20 +126,19 @@ const packageJsonTemplate = ({
     2,
   )}\n`;
 
-const TSCONFIG_TEMPLATE = `${JSON.stringify(
-  {
-    extends: "@stll/typescript-config/base.json",
-    compilerOptions: {
-      lib: ["ESNext"],
-      module: "ESNext",
-      types: ["bun-types"],
-    },
-    include: ["."],
-    exclude: ["node_modules"],
+// Written out rather than stringified: `JSON.stringify` breaks every array
+// across lines, and oxfmt keeps these on one.
+const TSCONFIG_TEMPLATE = `{
+  "extends": "@stll/typescript-config/base.json",
+  "compilerOptions": {
+    "lib": ["ESNext"],
+    "module": "ESNext",
+    "types": ["bun-types"]
   },
-  null,
-  2,
-)}\n`;
+  "include": ["."],
+  "exclude": ["node_modules"]
+}
+`;
 
 const INDEX_TEMPLATE =
   "// Entry point; the change that extracts the shared code fills it in.\nexport {};\n";

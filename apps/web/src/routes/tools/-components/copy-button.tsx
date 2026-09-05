@@ -4,11 +4,11 @@ import { Result } from "better-result";
 import { CheckIcon, CopyIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { copyToClipboard } from "@stll/clipboard";
 import { Button } from "@stll/ui/button";
 import { stellaToast } from "@stll/ui/toast";
 
 import { getAnalytics } from "@/lib/analytics/provider";
-import { copyToClipboard } from "@/lib/copy-to-clipboard";
 
 // Client-only: reads `navigator.clipboard`. Lazy-loaded by the detail
 // page so it never runs during SSR.

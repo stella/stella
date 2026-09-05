@@ -11,6 +11,7 @@
   "common": {
     "copied": "Nokopēts",
     "copy": "Kopēt",
+    "copyFailed": "Neizdevās nokopēt",
     "getCli": "Iegūt CLI",
     "startFree": "Sākt bez maksas"
   },

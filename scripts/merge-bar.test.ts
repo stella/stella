@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { isSeededBaselineFile } from "./baseline-paths";
 import {
   evaluateMergeBar,
   mergeBarMigrationDirectory,
@@ -22,8 +23,11 @@ const passingSnapshot = (
     state: "OPEN",
     isDraft: false,
     mergeable: "MERGEABLE",
+    mergeStateStatus: "CLEAN",
     headSha: HEAD_SHA,
   },
+  changedFiles: ["apps/api/src/budget/resolve.ts"],
+  mergeStateBaseSha: BASE_SHA,
   checkRunsHeadSha: HEAD_SHA,
   checkRuns: [
     { name: "ci-result", status: "completed", conclusion: "success" },
@@ -169,6 +173,138 @@ describe("merge bar", () => {
         }),
       ),
     ).toEqual({ decision: "abort", reasons: ["MERGEABLE_UNKNOWN"] });
+  });
+
+  // Failure class (d): a budget measured on a head that is not above the base.
+  test("a baseline seeded off the base aborts", () => {
+    expect(
+      failedGate(
+        passingSnapshot({
+          pullRequest: {
+            ...passingSnapshot().pullRequest,
+            mergeStateStatus: "BEHIND",
+          },
+          changedFiles: ["scripts/knip-exports-baseline.json"],
+        }),
+      ),
+    ).toEqual({ decision: "abort", reasons: ["BASELINE_SEEDED_OFF_BASE"] });
+  });
+
+  // BLOCKED, DIRTY and UNKNOWN all mask BEHIND, so only the states that
+  // positively rule it out may vouch for a baseline.
+  test("a merge state that masks BEHIND cannot vouch for a baseline", () => {
+    expect(
+      failedGate(
+        passingSnapshot({
+          pullRequest: {
+            ...passingSnapshot().pullRequest,
+            mergeStateStatus: "BLOCKED",
+          },
+          changedFiles: ["scripts/ratchet-baseline.json"],
+        }),
+      ),
+    ).toEqual({ decision: "abort", reasons: ["BASELINE_SEEDED_OFF_BASE"] });
+  });
+
+  test("a baseline on a head current with the base merges", () => {
+    expect(
+      evaluateMergeBar(
+        passingSnapshot({
+          changedFiles: [
+            "scripts/react-compiler-bailouts.json",
+            "apps/web/src/lib/copy-to-clipboard.ts",
+          ],
+        }),
+      ).decision,
+    ).toBe("merge");
+  });
+
+  // The merge state describes the base commit it was read against; the gates
+  // after it take seconds, and a merge landing in that window is exactly the
+  // stale budget the state check ruled out a moment earlier.
+  test("a base that moves after the merge state is read aborts a baseline", () => {
+    expect(
+      failedGate(
+        passingSnapshot({
+          changedFiles: ["scripts/typecheck-baseline.json"],
+          migrations: {
+            baseDirectories: ["20260816200000_landed_meanwhile"],
+            addedDirectories: [],
+            baseSha: OTHER_BASE_SHA,
+          },
+          baseShaBeforeMerge: OTHER_BASE_SHA,
+        }),
+      ),
+    ).toEqual({ decision: "abort", reasons: ["BASE_MOVED_UNDER_BASELINE"] });
+  });
+
+  test("a base that moves under a pull request carrying no baseline is not this gate's business", () => {
+    expect(
+      evaluateMergeBar(
+        passingSnapshot({
+          migrations: {
+            baseDirectories: ["20260816200000_landed_meanwhile"],
+            addedDirectories: [],
+            baseSha: OTHER_BASE_SHA,
+          },
+          baseShaBeforeMerge: OTHER_BASE_SHA,
+        }),
+      ).decision,
+    ).toBe("merge");
+  });
+
+  // A rule proves something about the tree it ran on: a pull request that adds
+  // one and a pull request that adds the shape it rejects are each green alone.
+  test("a pull request that changes a lint guard is held to the base", () => {
+    for (const guard of [
+      ".oxlint-plugins/no-bare-error.ts",
+      "oxlint.config.ts",
+      "scripts/lint-suppressions.ts",
+    ]) {
+      expect(
+        failedGate(
+          passingSnapshot({
+            pullRequest: {
+              ...passingSnapshot().pullRequest,
+              mergeStateStatus: "BEHIND",
+            },
+            changedFiles: [guard],
+          }),
+        ),
+      ).toEqual({ decision: "abort", reasons: ["BASELINE_SEEDED_OFF_BASE"] });
+    }
+  });
+
+  test("a pull request carrying no baseline is not held to the base", () => {
+    expect(
+      evaluateMergeBar(
+        passingSnapshot({
+          pullRequest: {
+            ...passingSnapshot().pullRequest,
+            mergeStateStatus: "BEHIND",
+          },
+        }),
+      ).decision,
+    ).toBe("merge");
+  });
+
+  // The producer-owned baselines are not all under `scripts/`, which is why
+  // the gate reads the enumerated list rather than a path shape.
+  test("a baseline an app owns is gated like the ones under scripts/", () => {
+    expect(
+      failedGate(
+        passingSnapshot({
+          pullRequest: {
+            ...passingSnapshot().pullRequest,
+            mergeStateStatus: "BEHIND",
+          },
+          changedFiles: ["apps/api/mcp-coverage-baseline.json"],
+        }),
+      ),
+    ).toEqual({ decision: "abort", reasons: ["BASELINE_SEEDED_OFF_BASE"] });
+    expect(isSeededBaselineFile("apps/web/e2e/network-baseline.json")).toBe(
+      true,
+    );
   });
 
   test("a closed pull request is refused", () => {
@@ -355,6 +491,7 @@ describe("merge bar", () => {
 
     expect(gates.toSorted()).toEqual([
       "base-stability",
+      "baseline-freshness",
       "head-stability",
       "mergeable",
       "migration-order",

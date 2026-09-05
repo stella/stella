@@ -24,8 +24,9 @@ import { transformSync, type OxcError } from "oxc-transform-react";
 import ts from "typescript";
 
 import { REACT_COMPILER_OPTIONS } from "../apps/web/react-compiler-options.ts";
+import { BASELINE_PATHS } from "./baseline-paths";
 
-const BASELINE_PATH = "scripts/react-compiler-bailouts.json";
+const BASELINE_PATH = BASELINE_PATHS.reactCompilerBailouts;
 /** Cap the stale list so a large prune stays readable in CI logs. */
 const STALE_PREVIEW = 10;
 const MEMO_HOOK = /\buseMemo\(|\buseCallback\(/gu;

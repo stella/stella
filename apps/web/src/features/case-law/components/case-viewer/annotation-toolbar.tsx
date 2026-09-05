@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { copyToClipboard } from "@stll/clipboard";
 import { Button } from "@stll/ui/button";
 import { MenuPreviewLayout, PreviewPane } from "@stll/ui/preview-pane";
 import { stellaToast } from "@stll/ui/toast";
@@ -42,7 +43,6 @@ import type {
 import { formatDecisionCitation } from "@/features/case-law/citation-format";
 import type { DecisionAnnotation } from "@/features/case-law/queries/annotations";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
-import { copyToClipboard } from "@/lib/copy-to-clipboard";
 import { detached } from "@/lib/detached";
 
 /** Room above the words for the bar, so it never covers what was selected. */

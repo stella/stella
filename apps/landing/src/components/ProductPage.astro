@@ -48,6 +48,7 @@ const sections = copy.sections.map((section) => {
 // stable client ID.
 const copyLabel = t("common.copy");
 const copiedLabel = t("common.copied");
+const copyFailedLabel = t("common.copyFailed");
 const setupData = product.setup;
 const setup = setupData
   ? (() => {
@@ -354,6 +355,7 @@ const faqJsonLd = {
               <SetupSnippet
                 class="mt-4"
                 copiedLabel={copiedLabel}
+                copyFailedLabel={copyFailedLabel}
                 copyLabel={copyLabel}
                 text={setup.endpoint}
               />
@@ -373,6 +375,7 @@ const faqJsonLd = {
                       <SetupSnippet
                         class="mt-3"
                         copiedLabel={copiedLabel}
+                        copyFailedLabel={copyFailedLabel}
                         copyLabel={copyLabel}
                         text={client.snippet}
                       />
@@ -389,6 +392,7 @@ const faqJsonLd = {
                   <SetupSnippet
                     class="mt-3"
                     copiedLabel={copiedLabel}
+                    copyFailedLabel={copyFailedLabel}
                     copyLabel={copyLabel}
                     text={setup.outroSnippet}
                   />

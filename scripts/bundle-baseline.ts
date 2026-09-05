@@ -25,10 +25,12 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
+import { BASELINE_PATHS } from "./baseline-paths";
+
 const SCRIPTS_DIR = import.meta.dir;
 const REPO_ROOT = path.resolve(SCRIPTS_DIR, "..");
-const BASELINE_PATH = path.resolve(SCRIPTS_DIR, "bundle-baseline.json");
-const BASELINE_REL = "scripts/bundle-baseline.json";
+const BASELINE_REL = BASELINE_PATHS.bundle;
+const BASELINE_PATH = path.resolve(REPO_ROOT, BASELINE_REL);
 const ASSETS_REL = "apps/web/dist/client/assets";
 const ASSETS_DIR = path.resolve(REPO_ROOT, ASSETS_REL);
 const WRITE_HINT = "bun scripts/bundle-baseline.ts --write-baseline";

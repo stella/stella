@@ -32,6 +32,12 @@
 //     rewrites the commit message. The body is read and inlined here at
 //     startup; the merge call never receives a path.
 //
+// (d) Budgets measured off the base. A committed baseline records counts for
+//     the head that seeded it. Merging one seeded below the base branch turns
+//     the default branch red after the write: the check reads a budget for a
+//     tree that never existed. Such a pull request must be current with its
+//     base, which is a property of the merge state, not of its own CI run.
+//
 // Known boundary. `--match-head-commit` binds the pull request head and
 // nothing else, and `--admin` merges past branch protection by definition, so
 // the review-thread and base-branch gates are client-side assertions with no
@@ -56,6 +62,7 @@
 import { panic } from "better-result";
 import { readFileSync } from "node:fs";
 
+import { isSeededBaselineFile } from "./baseline-paths";
 import { findMigrationOrderViolation } from "./check-migration-order";
 
 const DEFAULT_REPO = "stella/stella";
@@ -89,6 +96,7 @@ export const mergeBarMigrationDirectory = (repo: string): string | null =>
 const GATE_IDS = [
   "pull-request-state",
   "mergeable",
+  "baseline-freshness",
   "required-check",
   "review-threads",
   "migration-order",
@@ -107,6 +115,8 @@ const MERGE_BAR_REASONS = {
   requiredCheckMissing: "REQUIRED_CHECK_MISSING",
   requiredCheckIncomplete: "REQUIRED_CHECK_INCOMPLETE",
   requiredCheckNotSuccessful: "REQUIRED_CHECK_NOT_SUCCESSFUL",
+  baselineNotCurrent: "BASELINE_SEEDED_OFF_BASE",
+  baselineBaseMoved: "BASE_MOVED_UNDER_BASELINE",
   unresolvedReviewThreads: "UNRESOLVED_REVIEW_THREADS",
   migrationOrder: "MIGRATION_ORDER_VIOLATION",
   baseMoved: "BASE_MOVED_UNDER_ADDED_MIGRATIONS",
@@ -117,6 +127,17 @@ type MergeBarReason =
 
 const PULL_REQUEST_STATES = ["OPEN", "CLOSED", "MERGED"] as const;
 const MERGEABLE_STATES = ["MERGEABLE", "CONFLICTING", "UNKNOWN"] as const;
+const MERGE_STATE_STATUSES = [
+  "BEHIND",
+  "BLOCKED",
+  "CLEAN",
+  "DIRTY",
+  "DRAFT",
+  "HAS_HOOKS",
+  "UNKNOWN",
+  "UNSTABLE",
+] as const;
+type MergeStateStatus = (typeof MERGE_STATE_STATUSES)[number];
 
 type PullRequestSnapshot = {
   number: number;
@@ -125,6 +146,9 @@ type PullRequestSnapshot = {
   state: (typeof PULL_REQUEST_STATES)[number];
   isDraft: boolean;
   mergeable: (typeof MERGEABLE_STATES)[number];
+  // Coarser than `mergeable`: this is where GitHub reports that the head is
+  // behind the base branch.
+  mergeStateStatus: MergeStateStatus;
   headSha: string;
 };
 
@@ -153,6 +177,11 @@ export type MergeBarSnapshot = {
   // as a read against the current one.
   checkRunsHeadSha: string;
   checkRuns: readonly CheckRunSnapshot[];
+  // Every path this pull request touches, whatever the change status.
+  changedFiles: readonly string[];
+  // The base-branch tip as it stood when `mergeStateStatus` was read. The
+  // merge state describes that commit and no later one.
+  mergeStateBaseSha: string;
   reviewThreads: readonly ReviewThreadSnapshot[];
   migrations: MigrationSnapshot;
   // Both re-read immediately before the merge call.
@@ -213,6 +242,99 @@ const evaluateMergeable = (pullRequest: PullRequestSnapshot): GateVerdict => {
     };
   }
   return { gate: "mergeable", status: "pass", detail: "MERGEABLE" };
+};
+
+// GitHub reports one merge state, and several of them mask BEHIND: a pull
+// request held by branch protection reads BLOCKED whether or not its head is
+// current. So this map records which states positively place the head above
+// the base, rather than treating "not BEHIND" as current.
+const MERGE_STATE_PROVES_CURRENT_WITH_BASE = {
+  BEHIND: false,
+  BLOCKED: false,
+  CLEAN: true,
+  DIRTY: false,
+  DRAFT: false,
+  HAS_HOOKS: true,
+  UNKNOWN: false,
+  UNSTABLE: true,
+} as const satisfies Record<MergeStateStatus, boolean>;
+
+// A guard definition: a lint rule, the config that enables it, or the table of
+// budgeted suppressions. A rule proves something about the tree it ran on, so a
+// pull request that adds or tightens one is measured off its own head exactly
+// as a baseline is: land it beside a pull request that adds the shape it
+// rejects and both are green alone and red together on the default branch.
+const GUARD_DEFINITION_PATHS = [
+  ".oxlint-plugins/",
+  "oxlint.config.ts",
+  "scripts/lint-suppressions.ts",
+] as const;
+
+const isGuardDefinitionFile = (file: string): boolean =>
+  GUARD_DEFINITION_PATHS.some(
+    (guard) => file === guard || file.startsWith(guard),
+  );
+
+// A baseline is measured against the head that seeded it. Merging one that was
+// seeded below the base branch publishes a budget for a tree that never
+// existed: whatever landed in between is unaccounted for, and the check that
+// reads the budget goes red on the default branch after the merge, not before.
+// A guard definition carries the same property from the other direction, so
+// both are held to the same currency requirement.
+const evaluateBaselineFreshness = ({
+  baseShaBeforeMerge,
+  changedFiles,
+  mergeStateBaseSha,
+  mergeStateStatus,
+}: {
+  baseShaBeforeMerge: string;
+  changedFiles: readonly string[];
+  mergeStateBaseSha: string;
+  mergeStateStatus: MergeStateStatus;
+}): GateVerdict => {
+  const measured = changedFiles.filter(
+    (file) => isSeededBaselineFile(file) || isGuardDefinitionFile(file),
+  );
+  if (measured.length === 0) {
+    return {
+      gate: "baseline-freshness",
+      status: "pass",
+      detail: "no baseline or guard definition in this pull request",
+    };
+  }
+  if (!MERGE_STATE_PROVES_CURRENT_WITH_BASE[mergeStateStatus]) {
+    return {
+      gate: "baseline-freshness",
+      status: "fail",
+      reason: MERGE_BAR_REASONS.baselineNotCurrent,
+      detail:
+        `merge state ${mergeStateStatus} does not place this head above the ` +
+        `base, and ${measured.join(", ")} only holds for the head it was ` +
+        "measured on; rebase onto the base branch, reseed any baseline, and " +
+        "let CI re-run",
+    };
+  }
+  // The merge state describes the base commit it was read against. The gates
+  // below it take seconds, and a merge landing in that window puts the base
+  // above the tree the baseline was measured on, which is the same stale
+  // budget the state check just ruled out.
+  if (mergeStateBaseSha !== baseShaBeforeMerge) {
+    return {
+      gate: "baseline-freshness",
+      status: "fail",
+      reason: MERGE_BAR_REASONS.baselineBaseMoved,
+      detail:
+        `default branch moved ${mergeStateBaseSha} -> ${baseShaBeforeMerge} ` +
+        `after the merge state was read, and ${measured.join(", ")} was ` +
+        "measured below it; rebase onto the base branch, reseed any baseline, " +
+        "and let CI re-run",
+    };
+  }
+  return {
+    gate: "baseline-freshness",
+    status: "pass",
+    detail: `${measured.length} measured file(s) on a head current with ${baseShaBeforeMerge}`,
+  };
 };
 
 const evaluateRequiredCheck = ({
@@ -404,6 +526,12 @@ export const evaluateMergeBar = (
   const gates = [
     evaluatePullRequestState(snapshot.pullRequest),
     evaluateMergeable(snapshot.pullRequest),
+    evaluateBaselineFreshness({
+      baseShaBeforeMerge: snapshot.baseShaBeforeMerge,
+      changedFiles: snapshot.changedFiles,
+      mergeStateBaseSha: snapshot.mergeStateBaseSha,
+      mergeStateStatus: snapshot.pullRequest.mergeStateStatus,
+    }),
     evaluateRequiredCheck({
       checkRuns: snapshot.checkRuns,
       checkRunsHeadSha: snapshot.checkRunsHeadSha,
@@ -438,6 +566,7 @@ type GitHubGateway = {
   // Tip of the branch this pull request merges into.
   readBaseSha: () => string;
   readCheckRuns: (headSha: string) => readonly CheckRunSnapshot[];
+  readChangedFiles: () => readonly string[];
   readReviewThreads: () => readonly ReviewThreadSnapshot[];
   readMigrationDirectories: () => MigrationSnapshot;
   merge: (input: {
@@ -529,6 +658,29 @@ const createGhGateway = ({
   }
   const prArgs = [String(pullNumber), "--repo", repo];
 
+  // One paginated listing serves both the baseline gate and the migration read.
+  type PullRequestFile = { filename: string; status: string };
+  let files: readonly PullRequestFile[] | null = null;
+  const readFiles = (): readonly PullRequestFile[] => {
+    files ??= runGh([
+      "api",
+      "--paginate",
+      `repos/${repo}/pulls/${pullNumber}/files`,
+      "--jq",
+      ".[] | [.status, .filename] | @tsv",
+    ])
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => {
+        const [status, filename] = line.split("\t");
+        if (status === undefined || filename === undefined) {
+          panic(`Malformed changed-file row from gh: ${line}`);
+        }
+        return { filename, status };
+      });
+    return files;
+  };
+
   return {
     readHeadSha: () =>
       readString(
@@ -571,7 +723,7 @@ const createGhGateway = ({
           "view",
           ...prArgs,
           "--json",
-          "number,title,body,state,isDraft,mergeable,headRefOid",
+          "number,title,body,state,isDraft,mergeable,mergeStateStatus,headRefOid",
         ]),
         "pr view",
       );
@@ -593,6 +745,11 @@ const createGhGateway = ({
           MERGEABLE_STATES,
           readString(raw, "mergeable"),
           "mergeable",
+        ),
+        mergeStateStatus: readMember(
+          MERGE_STATE_STATUSES,
+          readString(raw, "mergeStateStatus"),
+          "mergeStateStatus",
         ),
         headSha: readString(raw, "headRefOid"),
       };
@@ -626,6 +783,8 @@ const createGhGateway = ({
       }
       return runs;
     },
+
+    readChangedFiles: () => readFiles().map(({ filename }) => filename),
 
     readReviewThreads: () => {
       const threads: ReviewThreadSnapshot[] = [];
@@ -724,20 +883,14 @@ const createGhGateway = ({
         );
       }
 
-      const addedDirectories = runGh([
-        "api",
-        "--paginate",
-        `repos/${repo}/pulls/${pullNumber}/files`,
-        "--jq",
-        '.[] | select(.status == "added") | .filename',
-      ])
-        .split("\n")
+      const addedDirectories = readFiles()
         .filter(
-          (file) =>
-            file.startsWith(`${migrationDirectory}/`) &&
-            file.endsWith("/migration.sql"),
+          ({ filename, status }) =>
+            status === "added" &&
+            filename.startsWith(`${migrationDirectory}/`) &&
+            filename.endsWith("/migration.sql"),
         )
-        .map((file) => file.slice(0, file.lastIndexOf("/")));
+        .map(({ filename }) => filename.slice(0, filename.lastIndexOf("/")));
 
       return { baseDirectories, addedDirectories, baseSha };
     },
@@ -897,9 +1050,14 @@ if (import.meta.main) {
   // shrinks that window to those two calls; it does not remove it.
   const snapshot: MergeBarSnapshot = {
     pullRequest,
+    // First read after the pull request, so the merge state above and this
+    // base commit describe the same instant; the pre-merge base read then
+    // proves nothing landed in between.
+    mergeStateBaseSha: gateway.readBaseSha(),
     requiredCheckRuns: mergeBarRequiredCheckRuns(options.repo),
     checkRunsHeadSha: pullRequest.headSha,
     checkRuns: gateway.readCheckRuns(pullRequest.headSha),
+    changedFiles: gateway.readChangedFiles(),
     migrations: gateway.readMigrationDirectories(),
     reviewThreads: gateway.readReviewThreads(),
     baseShaBeforeMerge: gateway.readBaseSha(),
