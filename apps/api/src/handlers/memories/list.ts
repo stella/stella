@@ -6,7 +6,7 @@ import { t } from "elysia";
 import { aiMemories } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { tPaginationCursor, tSafeId } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { Page } from "@/api/lib/pagination";
@@ -37,7 +37,7 @@ const config = {
       ]),
     ),
     workspaceId: t.Optional(tSafeId("workspace")),
-    cursor: t.Optional(t.String({ maxLength: 512 })),
+    cursor: t.Optional(tPaginationCursor()),
     limit: t.Optional(t.Integer({ minimum: 1, maximum: 100 })),
   }),
 } satisfies HandlerConfig;

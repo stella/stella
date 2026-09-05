@@ -3,6 +3,7 @@ import { t } from "elysia";
 
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 
 import {
@@ -16,7 +17,7 @@ const config = {
   mcp: { type: "internal", reason: "ui_navigation_state" },
   query: t.Object({
     ...matterActivityFilterQueryProperties,
-    cursor: t.Optional(t.String({ maxLength: 512 })),
+    cursor: t.Optional(tPaginationCursor()),
     limit: t.Optional(
       t.Integer({
         minimum: 1,

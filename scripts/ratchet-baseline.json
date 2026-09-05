@@ -83,10 +83,6 @@
     "count": 0,
     "files": {}
   },
-  "unbounded-pagination-cursor-schema": {
-    "count": 0,
-    "files": {}
-  },
   "throw-outside-boundary": {
     "count": 878,
     "files": {

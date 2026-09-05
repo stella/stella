@@ -21,7 +21,12 @@ import { timeEntries } from "@/api/db/schema";
 import { canApproveTimeEntries } from "@/api/handlers/time-entries/authorization";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId, tUserId, withDescription } from "@/api/lib/custom-schema";
+import {
+  tPaginationCursor,
+  tSafeId,
+  tUserId,
+  withDescription,
+} from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -45,7 +50,7 @@ const readTimeEntriesQuerySchema = t.Object({
       description: "Max entries to return",
     }),
   ),
-  cursor: t.Optional(t.String({ maxLength: 512 })),
+  cursor: t.Optional(tPaginationCursor()),
   userId: t.Optional(
     withDescription(tUserId, "List only entries recorded by this user"),
   ),

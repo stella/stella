@@ -17,7 +17,7 @@ import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 const DEFAULT_PAGE_SIZE = 50;
 
 const requestQuery = t.Object({
-  cursor: t.Optional(tPaginationCursor(4096)),
+  cursor: t.Optional(tPaginationCursor({ maxChars: 4096 })),
   limit: t.Optional(t.Integer({ minimum: 1, maximum: 100 })),
 });
 

@@ -5,7 +5,7 @@ import { t } from "elysia";
 import { legalListGenerationRuns } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { tPaginationCursor, tSafeId } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -20,7 +20,7 @@ const querySchema = t.Object({
       maximum: LIMITS.legalListGenerationRunsPageSizeMax,
     }),
   ),
-  cursor: t.Optional(t.String({ maxLength: 512 })),
+  cursor: t.Optional(tPaginationCursor()),
 });
 const config = {
   description:

@@ -698,8 +698,16 @@ export default defineConfig({
       "error",
     "require-buffer-cleanup-intent-status/require-buffer-cleanup-intent-status":
       "error",
-    "require-pagination-cursor-schema/require-pagination-cursor-schema":
+    // Cursor query fields come from `tPaginationCursor()`, which owns the byte
+    // cap and the description an MCP client reads. The BOE search cursor is
+    // not that: it is an upstream page number, validated by its own syntax
+    // pattern and capped at five characters.
+    "require-pagination-cursor-schema/require-pagination-cursor-schema": [
       "error",
+      {
+        allowedFiles: ["apps/api/src/handlers/legislation/boe-search.ts"],
+      },
+    ],
     // Anchored on the timestamp column, so the operand is always required
     // to carry the safe form; helpers that emit their own cast are named in
     // `allowedOperandCalls` rather than inferred from shape.

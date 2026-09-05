@@ -1,6 +1,10 @@
 import { t } from "elysia";
 
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import {
+  tPaginationCursor,
+  tSafeId,
+  workspaceParams,
+} from "@/api/lib/custom-schema";
 import {
   FLOW_DEFINITION_DESCRIPTION_MAX_CHARS,
   FLOW_DEFINITION_NAME_MAX_CHARS,
@@ -101,7 +105,7 @@ export const listFlowDefinitionsQuerySchema = t.Object({
   limit: t.Optional(
     t.Integer({ minimum: 1, maximum: LIMITS.flowDefinitionsPageSizeMax }),
   ),
-  cursor: t.Optional(t.String({ maxLength: 512 })),
+  cursor: t.Optional(tPaginationCursor()),
 });
 
 // -- Runs (workspace-scoped) --
@@ -116,7 +120,7 @@ export const listFlowRunsQuerySchema = t.Object({
   limit: t.Optional(
     t.Integer({ minimum: 1, maximum: LIMITS.flowRunsPageSizeMax }),
   ),
-  cursor: t.Optional(t.String({ maxLength: 512 })),
+  cursor: t.Optional(tPaginationCursor()),
   status: t.Optional(t.Union(FLOW_RUN_STATUSES.map((s) => t.Literal(s)))),
 });
 

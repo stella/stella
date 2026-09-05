@@ -5,6 +5,7 @@ import { t } from "elysia";
 import type { SafeDb } from "@/api/db/safe-db";
 import { playbookDefinitions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -91,8 +92,7 @@ export const listPlaybookDefinitionsQuerySchema = t.Object({
     }),
   ),
   cursor: t.Optional(
-    t.String({
-      maxLength: 512,
+    tPaginationCursor({
       description:
         "Opaque cursor from a previous list_playbooks call to fetch the next page",
     }),

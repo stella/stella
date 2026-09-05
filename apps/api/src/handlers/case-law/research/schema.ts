@@ -14,7 +14,7 @@ import type {
   caseLawResearchColumns,
   caseLawResearchTables,
 } from "@/api/db/schema";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { tPaginationCursor, tSafeId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 
 /** Route-level mirror of `caseLawResearchSavedQuerySchema`; the handler re-parses. */
@@ -48,7 +48,7 @@ export const researchTableDecisionParamsSchema = t.Object({
 });
 
 export const researchTableListQuerySchema = t.Object({
-  cursor: t.Optional(t.String({ maxLength: 512 })),
+  cursor: t.Optional(tPaginationCursor()),
   limit: t.Optional(
     t.Integer({
       minimum: 1,

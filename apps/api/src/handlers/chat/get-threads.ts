@@ -19,6 +19,7 @@ import {
 } from "@/api/handlers/chat/thread-list-pagination";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
@@ -34,7 +35,7 @@ const config = {
   access: "read",
   mcp: { type: "capability", reason: "assistant_chat" },
   query: t.Object({
-    cursor: t.Optional(t.String({ maxLength: 512 })),
+    cursor: t.Optional(tPaginationCursor()),
     search: t.Optional(t.String({ maxLength: LIMITS.searchQueryMaxLength })),
     limit: t.Optional(
       t.Integer({

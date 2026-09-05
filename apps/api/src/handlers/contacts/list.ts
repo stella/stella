@@ -12,7 +12,9 @@ import { LIMITS } from "@/api/lib/limits";
 
 const readContactsQuerySchema = t.Object({
   limit: t.Optional(tPaginationLimit(LIMITS.contactsPageSizeMax)),
-  cursor: t.Optional(tPaginationCursor(CONTACT_CURSOR_MAX_LENGTH)),
+  cursor: t.Optional(
+    tPaginationCursor({ maxChars: CONTACT_CURSOR_MAX_LENGTH }),
+  ),
   type: t.Optional(contactTypeSchema),
   q: t.Optional(t.String()),
 });

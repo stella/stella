@@ -25,7 +25,9 @@ const readEntitiesBodySchema = t.Object({
   sorts: t.Optional(
     t.Array(tViewSortSchema, { maxItems: LIMITS.viewSortsCount }),
   ),
-  cursor: t.Optional(tPaginationCursor(ENTITIES_WINDOW_CURSOR_MAX_LENGTH)),
+  cursor: t.Optional(
+    tPaginationCursor({ maxChars: ENTITIES_WINDOW_CURSOR_MAX_LENGTH }),
+  ),
   search: t.Optional(t.String({ maxLength: LIMITS.searchQueryMaxLength })),
   limit: t.Optional(
     t.Integer({

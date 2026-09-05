@@ -93,7 +93,7 @@ runtime validation, or integration tests.
 - [`require-custom-jsonb-column`](./require-custom-jsonb-column.ts) (`require-custom-jsonb-column`): requires Drizzle JSONB columns to carry their domain type through `$type`.
 - [`require-derived-check-enum`](./require-derived-check-enum.ts) (`require-derived-check-enum`): binds database check-enum values to the canonical TypeScript value set instead of duplicating string literals.
 - [`require-escape-like`](./require-escape-like.ts) (`require-escape-like`): requires user-controlled SQL `LIKE` input to pass through the shared wildcard escaper.
-- [`require-pagination-cursor-schema`](./require-pagination-cursor-schema.ts) (`require-pagination-cursor-schema`): requires list inputs and outputs to use the standard cursor schema and `Page<T>` contract.
+- [`require-pagination-cursor-schema`](./require-pagination-cursor-schema.ts) (`require-pagination-cursor-schema`): a `cursor` property in an API schema must come from `tPaginationCursor()`; any inline `t.String(...)`, bounded or not, is reported. Files that accept a foreign page token are named in `allowedFiles` in `oxlint.config.ts`.
 - [`require-query-limit`](./require-query-limit.ts) (`require-query-limit`): rejects potentially unbounded list queries without an explicit limit.
 - [`require-search-scope`](./require-search-scope.ts) (`require-search-scope`): requires search queries to carry their workspace or public-data scope.
 - [`require-timestamp-id-cursor-codec`](./require-timestamp-id-cursor-codec.ts) (`require-timestamp-id-cursor-codec`): requires the shared lossless codec for timestamp-and-ID cursors.

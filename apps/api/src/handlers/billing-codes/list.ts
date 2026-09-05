@@ -6,6 +6,7 @@ import { billingCodes } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
+import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -20,7 +21,7 @@ const readBillingCodesQuerySchema = t.Object({
   limit: t.Optional(
     t.Integer({ minimum: 1, maximum: LIMITS.billingCodesPageSizeMax }),
   ),
-  cursor: t.Optional(t.String({ maxLength: 512 })),
+  cursor: t.Optional(tPaginationCursor()),
   type: t.Optional(t.Union([t.Literal("task"), t.Literal("activity")])),
   active: t.Optional(t.BooleanString()),
 });

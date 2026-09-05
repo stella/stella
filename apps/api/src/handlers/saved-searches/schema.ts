@@ -2,7 +2,7 @@ import { t } from "elysia";
 
 import { ENTITY_KINDS } from "@/api/db/schema";
 import { entityKindSchema } from "@/api/db/schema-validators";
-import { tSafeId, tUserId } from "@/api/lib/custom-schema";
+import { tPaginationCursor, tSafeId, tUserId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 import {
   SAVED_SEARCH_CRITERIA_VERSION,
@@ -54,7 +54,7 @@ export const savedSearchParamsSchema = t.Object({
 });
 
 export const savedSearchListQuerySchema = t.Object({
-  cursor: t.Optional(t.String({ maxLength: 512 })),
+  cursor: t.Optional(tPaginationCursor()),
   limit: t.Optional(
     t.Integer({ minimum: 1, maximum: LIMITS.savedSearchesPageSizeMax }),
   ),

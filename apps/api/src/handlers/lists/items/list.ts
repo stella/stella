@@ -11,7 +11,7 @@ import {
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { tPaginationCursor, tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -27,7 +27,7 @@ const querySchema = t.Object({
   limit: t.Optional(
     t.Integer({ minimum: 1, maximum: LIMITS.legalListItemsPageSizeMax }),
   ),
-  cursor: t.Optional(t.String({ maxLength: 512 })),
+  cursor: t.Optional(tPaginationCursor()),
 });
 
 const config = {

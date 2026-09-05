@@ -4,6 +4,7 @@ import { t } from "elysia";
 
 import { invoices } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
+import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -19,8 +20,7 @@ const readInvoicesQuerySchema = t.Object({
     }),
   ),
   cursor: t.Optional(
-    t.String({
-      maxLength: 512,
+    tPaginationCursor({
       description:
         "Opaque cursor from a previous list_invoices call to fetch the next page",
     }),
