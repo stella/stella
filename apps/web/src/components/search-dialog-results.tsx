@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import type { UseMutationResult } from "@tanstack/react-query";
+import { panic } from "better-result";
 import {
   FileTextIcon,
   HistoryIcon,
@@ -108,10 +109,9 @@ export const CommandActionItem = ({
           {content}
         </Button>
       );
-    default: {
-      const exhaustive: never = navigation;
-      return exhaustive;
-    }
+    default:
+      navigation satisfies never;
+      return panic("Unhandled command action navigation type");
   }
 };
 
