@@ -4536,6 +4536,7 @@
       "downloadScrubbed": "Pobierz bez metadanych",
       "downloadScrubbedHint": "Usuwa autora, firmę i historię edycji zapisane w pliku. Kopia w sprawie je zachowuje.",
       "downloadSearchablePdf": "Przeszukiwalny PDF",
+      "itemLimitReached": "Ta sprawa osiągnęła limit elementów.",
       "maxEntitiesReached": "Osiągnięto maksymalną liczbę elementów",
       "ocrAlreadyProcessed": "Rozpoznawanie tekstu zostało już ukończone",
       "ocrQueueFailed": "Nie udało się dodać rozpoznawania tekstu do kolejki",

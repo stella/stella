@@ -4536,6 +4536,7 @@
       "downloadScrubbed": "Download without metadata",
       "downloadScrubbedHint": "Removes the author, company and drafting history the file carries. The copy in the matter keeps them.",
       "downloadSearchablePdf": "Searchable PDF",
+      "itemLimitReached": "This matter has reached its item limit.",
       "maxEntitiesReached": "Maximum number of items reached",
       "ocrAlreadyProcessed": "Text recognition has already completed",
       "ocrQueueFailed": "Couldn't queue text recognition",

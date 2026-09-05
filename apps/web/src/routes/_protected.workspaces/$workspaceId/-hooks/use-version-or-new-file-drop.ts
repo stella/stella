@@ -4,7 +4,7 @@ import { useState } from "react";
 import { getFirstFile } from "@/components/workspaces/entity-utils";
 import type { TableTreeNode } from "@/components/workspaces/table/types";
 import { useExternalFileDrop } from "@/hooks/use-external-file-drop";
-import { useCreateFileEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities";
+import { useCreateFileEntities } from "@/lib/workspaces/mutations/use-create-file-entities";
 import { useUploadVersion } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-upload-version";
 
 type UseVersionOrNewFileDropOptions = {

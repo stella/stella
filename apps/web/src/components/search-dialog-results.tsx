@@ -27,9 +27,12 @@ import {
 import Tooltip from "@/components/tooltip";
 import { UserIdentity } from "@/components/user-avatar";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
+import type { ResolvedCommandAction } from "@/features/command-palette/hooks/use-command-actions";
+import { useHydrationSafeHotkeyPlatform } from "@/hooks/use-hydration-safe-hotkey-platform";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { api } from "@/lib/api";
 import type { GlobalSearchHit } from "@/lib/api-contract";
+import { formatHotkeyForPlatform } from "@/lib/hotkeys";
 import type { SearchAISummaryParams } from "@/lib/search";
 import type { RecentFile, RecentSearch } from "@/lib/search-recents";
 
@@ -47,6 +50,69 @@ type SearchSummaryItemProps = {
   onClick: () => void;
   onOpenChat: () => void;
   onCitationClick: (citationId: string) => void;
+};
+
+export type CommandActionEntry = {
+  type: "command-action";
+  title: string;
+  action: ResolvedCommandAction;
+};
+
+type CommandActionItemProps = {
+  entry: CommandActionEntry;
+  navigation: { type: "button" } | { type: "command"; index: number };
+  onSelect: (actionId: string) => void;
+};
+
+export const CommandActionItem = ({
+  entry,
+  navigation,
+  onSelect,
+}: CommandActionItemProps) => {
+  const { action } = entry;
+  const Icon = action.icon;
+  const hotkeyPlatform = useHydrationSafeHotkeyPlatform();
+  const content = (
+    <>
+      <Icon className="text-muted-foreground size-4 shrink-0" />
+      <span className="min-w-0 flex-1 truncate">{action.title}</span>
+      {action.hotkey && (
+        <kbd className="bg-muted text-muted-foreground pointer-events-none inline-flex h-5 shrink-0 items-center gap-1 rounded border px-1.5 text-[10px] font-medium select-none">
+          {formatHotkeyForPlatform(action.hotkey, hotkeyPlatform)}
+        </kbd>
+      )}
+    </>
+  );
+  switch (navigation.type) {
+    case "command":
+      return (
+        <CommandItem
+          className="min-h-11 w-full gap-2 px-2 py-2 text-start text-sm"
+          data-command-action-id={action.id}
+          data-command-action-index={navigation.index}
+          index={navigation.index}
+          onClick={() => onSelect(action.id)}
+          value={entry}
+        >
+          {content}
+        </CommandItem>
+      );
+    case "button":
+      return (
+        <Button
+          className="h-auto min-h-11 w-full justify-start gap-2 px-2 py-2 text-start text-sm"
+          data-command-action-id={action.id}
+          data-search-empty-row=""
+          onClick={() => onSelect(action.id)}
+          variant="ghost"
+        >
+          {content}
+        </Button>
+      );
+    default:
+      navigation satisfies never;
+      return panic("Unhandled command action navigation type");
+  }
 };
 
 export const SearchSummaryItem = ({

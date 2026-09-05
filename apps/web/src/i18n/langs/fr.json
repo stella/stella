@@ -4536,6 +4536,7 @@
       "downloadScrubbed": "Télécharger sans métadonnées",
       "downloadScrubbedHint": "Supprime l’auteur, la société et l’historique de rédaction contenus dans le fichier. La copie du dossier les conserve.",
       "downloadSearchablePdf": "PDF avec texte recherchable",
+      "itemLimitReached": "Ce dossier a atteint sa limite d’éléments.",
       "maxEntitiesReached": "Nombre maximal d’éléments atteint",
       "ocrAlreadyProcessed": "La reconnaissance de texte est déjà terminée",
       "ocrQueueFailed": "Impossible de mettre la reconnaissance de texte en file d’attente",

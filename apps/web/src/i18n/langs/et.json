@@ -4536,6 +4536,7 @@
       "downloadScrubbed": "Laadi alla ilma metaandmeteta",
       "downloadScrubbedHint": "Eemaldab failis oleva autori, ettevõtte ja muutmisajaloo. Toimikus olev koopia säilitab need.",
       "downloadSearchablePdf": "Otsitav PDF",
+      "itemLimitReached": "See toimik on jõudnud üksuste piirini.",
       "maxEntitiesReached": "Kirjete piirarv on täis",
       "ocrAlreadyProcessed": "Tekstituvastus on juba lõpetatud",
       "ocrQueueFailed": "Tekstituvastust ei õnnestunud järjekorda lisada",

@@ -4536,6 +4536,7 @@
       "downloadScrubbed": "Baixar sem metadados",
       "downloadScrubbedHint": "Remove o autor, a empresa e o histórico de edição contidos no arquivo. A cópia no caso os mantém.",
       "downloadSearchablePdf": "PDF pesquisável",
+      "itemLimitReached": "Este assunto atingiu o limite de itens.",
       "maxEntitiesReached": "Número máximo de itens atingido",
       "ocrAlreadyProcessed": "O reconhecimento de texto já foi concluído",
       "ocrQueueFailed": "Não foi possível colocar o reconhecimento de texto na fila",

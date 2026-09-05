@@ -4536,6 +4536,7 @@
       "downloadScrubbed": "تنزيل بدون بيانات وصفية",
       "downloadScrubbedHint": "يزيل المؤلف والشركة وسجل التحرير التي يحملها الملف. تحتفظ بها النسخة الموجودة في الملف القانوني.",
       "downloadSearchablePdf": "ملف PDF قابل للبحث",
+      "itemLimitReached": "بلغ هذا الملف القانوني حد العناصر.",
       "maxEntitiesReached": "تم بلوغ الحد الأقصى لعدد العناصر",
       "ocrAlreadyProcessed": "اكتمل التعرّف على النص بالفعل",
       "ocrQueueFailed": "تعذّرت جدولة التعرّف على النص",

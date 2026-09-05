@@ -28,14 +28,14 @@ import type { StyleSelection } from "@/features/style-sets/style-set-picker-dial
 import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
 import { DOCX_MIME } from "@/lib/consts";
-import { detached } from "@/lib/detached";
 import { toSafeId } from "@/lib/safe-id";
 import { useCreateEntities } from "@/lib/workspaces/mutations/entities";
+import { useCreateTask } from "@/lib/workspaces/mutations/tasks";
+import { useCreateFileEntities } from "@/lib/workspaces/mutations/use-create-file-entities";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 import { useIsWorkflowRunning } from "@/lib/workspaces/queries/workspace";
 import { NewDocumentFromTemplateDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/new-document-from-template-dialog";
-import { useCreateFileEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities";
 
 type VirtualAnchor = {
   getBoundingClientRect: () => DOMRect;
@@ -91,6 +91,7 @@ export const AddEntityMenu = ({
     select: (data) => data.some((p) => p.content.type === "file"),
   });
   const createEntities = useCreateEntities();
+  const createTask = useCreateTask();
   const canUseTemplate = usePermissions({ template: ["use"] });
   const canCreateStyledDocument = usePermissions({
     entity: ["create"],
@@ -103,7 +104,8 @@ export const AddEntityMenu = ({
   }
 
   const isUploadDisabled = isWorkflowRunning || isUploadPending;
-  const isCreationDisabled = isWorkflowRunning || createEntities.isPending;
+  const isCreationDisabled =
+    isWorkflowRunning || createEntities.isPending || createTask.isPending;
 
   const handleCreateFolder = () => {
     createEntities.mutate(
@@ -130,31 +132,6 @@ export const AddEntityMenu = ({
         },
       },
     );
-  };
-
-  const handleCreateTask = async () => {
-    const { data: taskData, error: taskError } = await api
-      .tasks({ workspaceId })
-      .put({
-        name: t("tasks.untitled"),
-      });
-
-    const entityId = taskData?.entityId;
-    if (taskError || !entityId) {
-      stellaToast.add({
-        title: t("errors.actionFailed"),
-        type: "error",
-      });
-      return;
-    }
-
-    stellaToast.add({
-      title: t("success.taskCreated"),
-      type: "success",
-    });
-    useInspectorTabsStore
-      .getState()
-      .openTask({ taskId: entityId, workspaceId, isNew: true });
   };
 
   const handleUploadClick = () => {
@@ -284,7 +261,7 @@ export const AddEntityMenu = ({
             <MenuItem
               disabled={isCreationDisabled}
               onClick={() => {
-                detached(handleCreateTask(), "add-entity-menu.create-task");
+                createTask.mutate(workspaceId);
               }}
             >
               <SquareCheckIcon />

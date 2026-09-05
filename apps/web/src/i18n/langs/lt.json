@@ -4536,6 +4536,7 @@
       "downloadScrubbed": "Atsisiųsti be metaduomenų",
       "downloadScrubbedHint": "Pašalina faile esantį autorių, įmonę ir redagavimo istoriją. Byloje esanti kopija juos išsaugo.",
       "downloadSearchablePdf": "PDF su paieškos tekstu",
+      "itemLimitReached": "Šioje byloje pasiektas elementų limitas.",
       "maxEntitiesReached": "Pasiektas didžiausias įrašų skaičius",
       "ocrAlreadyProcessed": "Teksto atpažinimas jau baigtas",
       "ocrQueueFailed": "Nepavyko įtraukti teksto atpažinimo į eilę",

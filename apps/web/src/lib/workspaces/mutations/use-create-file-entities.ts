@@ -19,15 +19,15 @@ import { ClientOperationError } from "@/lib/errors/client";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { toSafeId } from "@/lib/safe-id";
 import { UploadQueue } from "@/lib/upload-queue";
-import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 import {
   buildDroppedFolderUploadPlan,
   type DroppedFolderUploadPlan,
-} from "@/routes/_protected.workspaces/$workspaceId/-hooks/create-file-tree-upload.logic";
+} from "@/lib/workspaces/mutations/create-file-tree-upload.logic";
 import {
   buildEntityCreatePresignPayload,
   entityCreateLocalInvalidationKeys,
-} from "@/routes/_protected.workspaces/$workspaceId/-hooks/create-file-upload-payload.logic";
+} from "@/lib/workspaces/mutations/create-file-upload-payload.logic";
+import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 
 const MAX_DISPLAYED_FAILURES = 5;
 // Matches the versions-sidebar PUT-to-S3 upload budget (same flow, uploaded
