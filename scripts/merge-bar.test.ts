@@ -23,11 +23,10 @@ const passingSnapshot = (
     state: "OPEN",
     isDraft: false,
     mergeable: "MERGEABLE",
-    mergeStateStatus: "CLEAN",
     headSha: HEAD_SHA,
   },
   changedFiles: ["apps/api/src/budget/resolve.ts"],
-  mergeStateBaseSha: BASE_SHA,
+  baseAncestry: { baseSha: BASE_SHA, behindBy: 0 },
   checkRunsHeadSha: HEAD_SHA,
   checkRuns: [
     { name: "ci-result", status: "completed", conclusion: "success" },
@@ -180,27 +179,8 @@ describe("merge bar", () => {
     expect(
       failedGate(
         passingSnapshot({
-          pullRequest: {
-            ...passingSnapshot().pullRequest,
-            mergeStateStatus: "BEHIND",
-          },
+          baseAncestry: { baseSha: BASE_SHA, behindBy: 1 },
           changedFiles: ["scripts/knip-exports-baseline.json"],
-        }),
-      ),
-    ).toEqual({ decision: "abort", reasons: ["BASELINE_SEEDED_OFF_BASE"] });
-  });
-
-  // BLOCKED, DIRTY and UNKNOWN all mask BEHIND, so only the states that
-  // positively rule it out may vouch for a baseline.
-  test("a merge state that masks BEHIND cannot vouch for a baseline", () => {
-    expect(
-      failedGate(
-        passingSnapshot({
-          pullRequest: {
-            ...passingSnapshot().pullRequest,
-            mergeStateStatus: "BLOCKED",
-          },
-          changedFiles: ["scripts/ratchet-baseline.json"],
         }),
       ),
     ).toEqual({ decision: "abort", reasons: ["BASELINE_SEEDED_OFF_BASE"] });
@@ -219,10 +199,10 @@ describe("merge bar", () => {
     ).toBe("merge");
   });
 
-  // The merge state describes the base commit it was read against; the gates
+  // The ancestry describes the base commit it was read against; the gates
   // after it take seconds, and a merge landing in that window is exactly the
-  // stale budget the state check ruled out a moment earlier.
-  test("a base that moves after the merge state is read aborts a baseline", () => {
+  // stale budget the ancestry check ruled out a moment earlier.
+  test("a base that moves after the ancestry is read aborts a baseline", () => {
     expect(
       failedGate(
         passingSnapshot({
@@ -259,15 +239,13 @@ describe("merge bar", () => {
     for (const guard of [
       ".oxlint-plugins/no-bare-error.ts",
       "oxlint.config.ts",
+      "oxlint.result-boundary.config.ts",
       "scripts/lint-suppressions.ts",
     ]) {
       expect(
         failedGate(
           passingSnapshot({
-            pullRequest: {
-              ...passingSnapshot().pullRequest,
-              mergeStateStatus: "BEHIND",
-            },
+            baseAncestry: { baseSha: BASE_SHA, behindBy: 1 },
             changedFiles: [guard],
           }),
         ),
@@ -279,10 +257,7 @@ describe("merge bar", () => {
     expect(
       evaluateMergeBar(
         passingSnapshot({
-          pullRequest: {
-            ...passingSnapshot().pullRequest,
-            mergeStateStatus: "BEHIND",
-          },
+          baseAncestry: { baseSha: BASE_SHA, behindBy: 1 },
         }),
       ).decision,
     ).toBe("merge");
@@ -294,10 +269,7 @@ describe("merge bar", () => {
     expect(
       failedGate(
         passingSnapshot({
-          pullRequest: {
-            ...passingSnapshot().pullRequest,
-            mergeStateStatus: "BEHIND",
-          },
+          baseAncestry: { baseSha: BASE_SHA, behindBy: 1 },
           changedFiles: ["apps/api/mcp-coverage-baseline.json"],
         }),
       ),
