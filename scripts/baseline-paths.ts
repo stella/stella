@@ -7,7 +7,8 @@
 // cannot infer the set — two of them live under `apps/`, and one carries no
 // `-baseline` suffix at all — so the paths are enumerated here, each producer
 // reads its own from this map, and `baseline-paths.test.ts` fails when a
-// tracked baseline file is missing from it.
+// tracked baseline file is missing from it, or when an entry names a producer
+// that is not in the tree: a budget nothing writes is not a budget.
 
 export const BASELINE_PATHS = {
   /** scripts/bundle-baseline.ts */
@@ -37,11 +38,6 @@ export const BASELINE_PATHS = {
   landingI18nCheck: "apps/landing/src/i18n/i18n-check-baseline.json",
   /** packages/scripts/src/i18n-lint.ts, apps/landing */
   landingI18nLint: "apps/landing/src/i18n/i18n-lint-baseline.json",
-  // Not produced by any script in the tree: a stale copy of the root ratchet
-  // baseline. Listed so the merge bar still holds a pull request that touches
-  // it, and so the test below does not read its absence from this map as a
-  // missing producer.
-  staleWebRatchet: "apps/web/scripts/ratchet-baseline.json",
 } as const satisfies Record<string, string>;
 
 export const isSeededBaselineFile = (file: string): boolean =>

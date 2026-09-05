@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { BASELINE_PATHS, isSeededBaselineFile } from "./baseline-paths";
@@ -31,6 +31,30 @@ test("every committed baseline file is enumerated", () => {
 
   expect(committed.length).toBeGreaterThan(0);
   expect(committed.filter((file) => !isSeededBaselineFile(file))).toEqual([]);
+});
+
+// A listed path whose producer is gone is a budget nothing writes: it can only
+// go stale, while the merge bar keeps holding pull requests that touch it.
+// Every entry documents its producer, and every documented producer must be a
+// file in the tree.
+const PRODUCER_DOC = /\/\*\* (?<doc>[^*]+) \*\//gu;
+
+test("every enumerated baseline names a producer that exists", () => {
+  const source = readFileSync(
+    path.join(import.meta.dir, "baseline-paths.ts"),
+    "utf-8",
+  );
+  const documented = [...source.matchAll(PRODUCER_DOC)];
+
+  expect(documented.length).toBe(Object.keys(BASELINE_PATHS).length);
+  expect(
+    documented.flatMap((match) =>
+      (match.groups?.["doc"] ?? "")
+        .split(", ")
+        .filter((token) => token.endsWith(".ts"))
+        .filter((producer) => !existsSync(path.join(REPO_ROOT, producer))),
+    ),
+  ).toEqual([]);
 });
 
 test("every enumerated baseline still exists", () => {
