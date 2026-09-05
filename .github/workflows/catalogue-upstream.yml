@@ -80,12 +80,12 @@ jobs:
           # green and only failing at a user's install click.
           bun run --filter @stll/catalogue check-pinned
 
-      - name: Open or update pull request
+      - name: Describe the bumps
         if: steps.check.outputs.update_count != '0'
-        env:
-          GH_TOKEN: ${{ github.token }}
+        id: body
         run: |
           {
+            echo "pr-body<<EOF"
             echo "Automated bump of \`rev\` for github-sourced catalogue skills whose pinned upstream advanced on its default branch."
             echo
             echo "A maintainer must review each upstream diff before merging. The pinned commit SHA is what a \"recommended\" badge endorses, so open the linked compare view and confirm there are no unexpected or unsafe changes before accepting this PR."
@@ -93,23 +93,22 @@ jobs:
             echo "| Skill | Repo | Change |"
             echo "| --- | --- | --- |"
             jq -r '.updates[] | "| \(.slug) | \(.repo) | [\(.currentRev[0:7])...\(.latestRev[0:7])](\(.compareUrl)) |"' upstream.json
-          } > pr-body.md
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          gh auth setup-git
-          git switch -C catalogue/upstream-revs
-          git add packages/catalogue
-          git commit -m "chore: bump github-sourced catalogue skill revisions"
-          git push --force origin catalogue/upstream-revs
-
-          title="chore: bump github-sourced catalogue skill revisions"
-          number=$(gh pr list --head catalogue/upstream-revs --state open --json number --jq '.[0].number // empty')
-          if [ -n "$number" ]; then
-            gh pr edit "$number" --title "$title" --body-file pr-body.md
-          else
-            gh pr create --title "$title" --body-file pr-body.md --head catalogue/upstream-revs --base main
-          fi
+      # The commit is created through the API so GitHub signs it.
+      - name: Open or update pull request
+        if: steps.check.outputs.update_count != '0'
+        uses: stella/.github/.github/actions/signed-commit@d2be63db3536d391c8a38e35d786b15884b253f3
+        with:
+          token: ${{ github.token }}
+          mode: refresh-pr
+          branch: catalogue/upstream-revs
+          base: main
+          paths: packages/catalogue
+          commit-message: "chore: bump github-sourced catalogue skill revisions"
+          pr-title: "chore: bump github-sourced catalogue skill revisions"
+          pr-body: ${{ steps.body.outputs.pr-body }}
 
       - name: Surface upstream check failures
         if: steps.check.outputs.failure_count != '0'

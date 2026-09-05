@@ -73,48 +73,27 @@ jobs:
           permission-contents: write
           permission-pull-requests: write
 
+      # The commit is created through the API so GitHub signs it. The branch
+      # name is reserved for this job alone: re-running replaces its own
+      # proposal with one computed from current main.
       - name: Open or update the removal PR
         if: steps.prune.outputs.changed == 'true'
-        env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
-        run: |
-          set -euo pipefail
+        uses: stella/.github/.github/actions/signed-commit@d2be63db3536d391c8a38e35d786b15884b253f3
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          mode: refresh-pr
+          branch: ${{ env.PRUNE_BRANCH }}
+          base: main
+          paths: bunfig.toml
+          commit-message: |
+            chore(deps): remove expired quarantine excludes
 
-          bot_id="$(gh api "users/${APP_SLUG}[bot]" --jq '.id')"
-          git config user.name "${APP_SLUG}[bot]"
-          git config user.email "${bot_id}+${APP_SLUG}[bot]@users.noreply.github.com"
+            The release-age gate admits these packages on its own now, and an
+            entry left behind would let their next version skip it.
+          pr-title: "chore(deps): remove expired quarantine excludes"
+          pr-body: |
+            These temporary `minimumReleaseAgeExcludes` entries have passed their annotated expiry, so the release-age gate admits the packages without them.
 
-          git checkout -b "$PRUNE_BRANCH"
-          git add bunfig.toml
-          git commit -m "chore(deps): remove expired quarantine excludes
+            Leaving an expired entry in place is not neutral: it would let the next version of that package publish straight past the gate. Merging this restores that check.
 
-          The release-age gate admits these packages on its own now, and an
-          entry left behind would let their next version skip it."
-
-          # Force-with-lease is unsafe against a branch this job does not own,
-          # so the branch name is reserved for this job alone. Re-running
-          # replaces its own proposal with one computed from current main.
-          remote="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          git push --force "$remote" "HEAD:refs/heads/${PRUNE_BRANCH}"
-
-          if [[ -n "$(gh pr list --head "$PRUNE_BRANCH" --state open --json number --jq '.[0].number // ""')" ]]; then
-            echo "Updated the open removal PR." >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-
-          body_file="$RUNNER_TEMP/prune-pr-body.md"
-          # shellcheck disable=SC2016 # backticks are markdown, not substitution
-          printf '%s\n' \
-            'These temporary `minimumReleaseAgeExcludes` entries have passed their annotated expiry, so the release-age gate admits the packages without them.' \
-            '' \
-            'Leaving an expired entry in place is not neutral: it would let the next version of that package publish straight past the gate. Merging this restores that check.' \
-            '' \
-            'Opened automatically. The removal is what `bun scripts/check-stll-quarantine-excludes.ts --prune` produces.' \
-            > "$body_file"
-
-          gh pr create \
-            --base main \
-            --head "$PRUNE_BRANCH" \
-            --title "chore(deps): remove expired quarantine excludes" \
-            --body-file "$body_file" >> "$GITHUB_STEP_SUMMARY"
+            Opened automatically. The removal is what `bun scripts/check-stll-quarantine-excludes.ts --prune` produces.

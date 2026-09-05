@@ -197,33 +197,17 @@ jobs:
             echo "The push below only reaches a branch of this repository. A pull request from a fork downloads that artifact and commits the PNGs itself."
           } >> "$GITHUB_STEP_SUMMARY"
 
+      # The commit is created through the API so GitHub signs it; the branch
+      # belongs to a person, and a signed-commits rule would otherwise block
+      # their pull request on this one commit.
       - name: Push regenerated baselines
-        env:
-          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
-          BRANCH: ${{ inputs.ref || github.ref_name }}
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
-        run: |
-          set -euo pipefail
-
-          changed="$(git status --porcelain -- 'apps/landing/public/media/products/*.png')"
-          if [[ -z "$changed" ]]; then
-            echo "Baselines already match this branch; nothing to push." >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-
-          {
-            echo "### Regenerated marketing screenshots"
-            echo
-            echo "$changed" | cut -c4- | sed 's/^/- /'
-          } >> "$GITHUB_STEP_SUMMARY"
-
-          bot_id="$(gh api "users/${APP_SLUG}[bot]" --jq '.id')"
-          git config user.name "${APP_SLUG}[bot]"
-          git config user.email "${bot_id}+${APP_SLUG}[bot]@users.noreply.github.com"
-
-          git add -- 'apps/landing/public/media/products/*.png'
-          git commit -m "chore(landing): regenerate marketing screenshots"
-          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:refs/heads/${BRANCH}"
+        uses: stella/.github/.github/actions/signed-commit@d2be63db3536d391c8a38e35d786b15884b253f3
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          mode: append
+          branch: ${{ inputs.ref }}
+          paths: apps/landing/public/media/products/*.png
+          commit-message: "chore(landing): regenerate marketing screenshots"
 
       - name: Upload failure diagnostics
         if: failure()
