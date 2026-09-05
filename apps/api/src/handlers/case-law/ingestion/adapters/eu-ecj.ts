@@ -830,8 +830,8 @@ const fetchManifestation = async ({
       });
       return Result.ok(undefined);
     default: {
-      const exhaustive: never = lookup;
-      return exhaustive;
+      lookup satisfies never;
+      return panic(`Unhandled lookup: ${String(lookup)}`);
     }
   }
 };
