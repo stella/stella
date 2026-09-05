@@ -10,6 +10,7 @@ import { loadRecapMessageWindow } from "@/api/handlers/chat/thread-recap-window"
 import {
   buildThreadTitlePrompt,
   cleanGeneratedTitle,
+  TITLE_FINISH_POLICY,
   TITLE_MAX_OUTPUT_TOKENS,
 } from "@/api/handlers/chat/thread-title-prompt";
 import { resolveCaching } from "@/api/lib/ai-config";
@@ -180,7 +181,7 @@ export const createSuggestThreadTitle = ({
                 role: "fast",
                 scopeKey: threadId,
               }),
-              finishPolicy: "require-complete",
+              finishPolicy: TITLE_FINISH_POLICY,
               maxOutputTokens: TITLE_MAX_OUTPUT_TOKENS,
               organizationId: session.activeOrganizationId,
               orgAIConfig,

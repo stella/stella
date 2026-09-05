@@ -7,6 +7,7 @@ import { aiTitlingMayReplace } from "@/api/handlers/chat/thread-title";
 import {
   buildThreadTitlePrompt,
   cleanGeneratedTitle,
+  TITLE_FINISH_POLICY,
   TITLE_MAX_OUTPUT_TOKENS,
 } from "@/api/handlers/chat/thread-title-prompt";
 import type { ChatMessage } from "@/api/handlers/chat/types";
@@ -65,7 +66,7 @@ export const generateThreadTitle = async ({
   try {
     const text = await generateTanStackTextForRole({
       abortSignal: AbortSignal.timeout(TITLE_GENERATION_TIMEOUT_MS),
-      finishPolicy: "require-complete",
+      finishPolicy: TITLE_FINISH_POLICY,
       maxOutputTokens: TITLE_MAX_OUTPUT_TOKENS,
       role: "fast",
       serviceTier: "batch",

@@ -1,8 +1,18 @@
 import type { ChatMessage } from "@/api/handlers/chat/types";
+import type { TanStackTextFinishPolicy } from "@/api/lib/tanstack-ai-generate";
 
 export const TITLE_MAX_LENGTH = 60;
 export const TITLE_CONTEXT_MAX_LENGTH = 500;
 export const TITLE_MAX_OUTPUT_TOKENS = 32;
+
+// A title is a label, not content: `cleanGeneratedTitle` bounds it to
+// TITLE_MAX_LENGTH anyway, and the 32-token ceiling above is what a verbose
+// model spends before the run reports a `length` finish. A title cut at that
+// ceiling still names the thread, so grading it as a failure would turn a
+// wordy model into a 502 and leave the thread on its placeholder. A moderated,
+// tool-bearing, or unfinished run stays a failure.
+export const TITLE_FINISH_POLICY =
+  "allow-output-ceiling" satisfies TanStackTextFinishPolicy;
 
 export type TitleContextMessage = Pick<ChatMessage, "parts" | "role">;
 
