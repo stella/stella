@@ -81,9 +81,18 @@ export const replacePublishedPackageBlock = ({
 }): string => {
   const start = contents.indexOf(START_MARKER);
   const end = contents.indexOf(END_MARKER);
-  if (start === -1 || end === -1 || end < start) {
+  // Exactly one region: a second one would be rendered by neither `--write`
+  // nor `--check`, so it could go stale silently — the failure this script
+  // exists to prevent.
+  if (
+    start === -1 ||
+    end === -1 ||
+    end < start ||
+    contents.includes(START_MARKER, start + START_MARKER.length) ||
+    contents.includes(END_MARKER, end + END_MARKER.length)
+  ) {
     throw new PublishedPackageListError(
-      `${file}: expected one ${START_MARKER} ... ${END_MARKER} region`,
+      `${file}: expected exactly one ${START_MARKER} ... ${END_MARKER} region`,
     );
   }
   return (

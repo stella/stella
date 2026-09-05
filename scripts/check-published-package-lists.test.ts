@@ -66,7 +66,18 @@ describe("published package lists", () => {
         contents: "no markers here\n",
         file: "CONTRIBUTING.md",
       }),
-    ).toThrow("expected one");
+    ).toThrow("expected exactly one");
+  });
+
+  test("a duplicated region fails rather than leaving the second stale", () => {
+    expect(() =>
+      replacePublishedPackageBlock({
+        block: renderPublishedPackageBlock(RELEASE_PATHS),
+        contents:
+          "<!-- published-packages:start -->\nfirst\n<!-- published-packages:end -->\n\n<!-- published-packages:start -->\nsecond\n<!-- published-packages:end -->\n",
+        file: "CONTRIBUTING.md",
+      }),
+    ).toThrow("expected exactly one");
   });
 
   test("an empty policy fails instead of emptying both files", () => {

@@ -104,6 +104,16 @@ describe("Node load failure attribution", () => {
     ).toBe(false);
   });
 
+  test("a sibling directory that merely starts with `dist` is not", () => {
+    expect(
+      isOwnDistLoadFailure({
+        distDir,
+        reason:
+          "ERR_MODULE_NOT_FOUND: Cannot find module '/repo/packages/example/dist-cache/thing' imported from /repo/packages/example/dist/index.js",
+      }),
+    ).toBe(false);
+  });
+
   test("a Bun-targeted package importing `bun` from its own dist is not", () => {
     expect(
       isOwnDistLoadFailure({
