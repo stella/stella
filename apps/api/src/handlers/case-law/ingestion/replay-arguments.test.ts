@@ -4,12 +4,11 @@ import { describe, expect, test } from "bun:test";
 import {
   DEFAULT_LEASE_WAIT_MINUTES,
   DEFAULT_LIMIT,
-  parseReplayCaseLawSourceArgs,
+  parseReplayArguments,
   REPLAY_USAGE,
-} from "@/api/scripts/replay-case-law-source-args";
+} from "@/api/handlers/case-law/ingestion/replay-arguments";
 
-const parse = (...argv: readonly string[]) =>
-  parseReplayCaseLawSourceArgs(argv);
+const parse = (...argv: readonly string[]) => parseReplayArguments(argv);
 
 const parsed = (...argv: readonly string[]) => {
   const result = parse(...argv);

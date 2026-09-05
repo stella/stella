@@ -48,6 +48,7 @@ import {
   replayCaseLawSource,
 } from "@/api/handlers/case-law/ingestion/replay";
 import type { StoredRawReader } from "@/api/handlers/case-law/ingestion/replay";
+import { parseReplayArguments } from "@/api/handlers/case-law/ingestion/replay-arguments";
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import {
@@ -55,7 +56,6 @@ import {
   refreshCorpusS3,
   refreshS3,
 } from "@/api/lib/s3";
-import { parseReplayCaseLawSourceArgs } from "@/api/scripts/replay-case-law-source-args";
 
 // Hold the maintenance lane before the first statement: operator passes over
 // the case-law tables serialize here instead of deadlocking on row locks.
@@ -65,7 +65,7 @@ const MINUTE_MS = 60_000;
 /** A stored payload is one document; nothing here should take longer. */
 const STORED_RAW_READ_TIMEOUT_MS = 30_000;
 
-const parsed = parseReplayCaseLawSourceArgs(process.argv.slice(2));
+const parsed = parseReplayArguments(process.argv.slice(2));
 if (Result.isError(parsed)) {
   console.error(parsed.error.message);
   process.exit(1);

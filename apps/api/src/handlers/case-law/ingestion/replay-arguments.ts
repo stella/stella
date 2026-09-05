@@ -1,9 +1,13 @@
 /**
  * Command line of `replay-case-law-source.ts`, parsed on its own.
  *
- * The script holds the case-law maintenance lane before its first statement,
- * so importing it to ask what a flag means would open a database connection.
- * Everything here is a pure reading of the arguments.
+ * Parsed outside the script because the script holds the case-law
+ * maintenance lane before its first statement: importing it to ask what a
+ * flag means would open a database connection. It sits beside the run it
+ * configures rather than under `scripts/`, since what it produces is the
+ * replay's own vocabulary (its visit bound, scope and rejection policy) and
+ * every module in `scripts/` that can reach the case-law tables is expected
+ * to hold the lane. This one issues no statement at all.
  */
 import { Result, TaggedError } from "better-result";
 
@@ -51,7 +55,7 @@ export class ReplayArgumentsError extends TaggedError("ReplayArgumentsError")<{
   message: string;
 }> {}
 
-export type ReplayCaseLawSourceArgs = {
+export type ReplayArguments = {
   adapterKey: string;
   after: SafeId<"caseLawDecision"> | null;
   apply: boolean;
@@ -198,9 +202,9 @@ const readScope = (
   return Result.ok(CASE_LAW_REPLAY_SCOPE.SOURCE);
 };
 
-export const parseReplayCaseLawSourceArgs = (
+export const parseReplayArguments = (
   argv: readonly string[],
-): Result<ReplayCaseLawSourceArgs, ReplayArgumentsError> => {
+): Result<ReplayArguments, ReplayArgumentsError> => {
   const adapterKey = readValue(argv, "adapter");
   if (Result.isError(adapterKey)) {
     return adapterKey;
