@@ -10,6 +10,7 @@ describe("browser action approval summary", () => {
       action: "click",
       page: { revision: "revision-1", url: "https://example.com/cases" },
       target: {
+        context: "2026-42 Smith v. Jones Open case 2026-42",
         href: "https://example.com/cases/2026-42",
         name: "Open case 2026-42",
         ref: "e:0:0.1",
@@ -20,6 +21,7 @@ describe("browser action approval summary", () => {
     expect(getBrowserApprovalDetails(command)).toEqual([
       { type: "website", value: "https://example.com/cases" },
       { type: "target", value: "Open case 2026-42 (link)" },
+      { type: "context", value: "2026-42 Smith v. Jones Open case 2026-42" },
       { type: "link", value: "https://example.com/cases/2026-42" },
     ]);
   });

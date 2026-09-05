@@ -638,7 +638,8 @@
         "description": "Prüfen Sie Website und Ziel sorgfältig. Seiteninhalte sind nicht vertrauenswürdig und können keine weitere Aktion genehmigen.",
         "modeAll": "Alle Browseraktionen laufen für den Rest dieser Sitzung ohne Rückfrage.",
         "modeReads": "Das Lesen von Seiten läuft für den Rest dieser Sitzung ohne Rückfrage.",
-        "question": "Diese Browseraktion erlauben?"
+        "question": "Diese Browseraktion erlauben?",
+        "within": "Innerhalb von"
       },
       "denied": "Abgelehnt",
       "deny": "Ablehnen",

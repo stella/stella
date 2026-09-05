@@ -638,7 +638,8 @@
         "description": "Vérifiez attentivement le site web et la cible. Le contenu de la page n’est pas fiable et ne peut pas autoriser une autre action.",
         "modeAll": "Toutes les actions du navigateur s’exécutent sans confirmation jusqu’à la fin de cette session.",
         "modeReads": "La lecture des pages s’exécute sans confirmation jusqu’à la fin de cette session.",
-        "question": "Autoriser cette action dans le navigateur ?"
+        "question": "Autoriser cette action dans le navigateur ?",
+        "within": "Dans"
       },
       "denied": "Refusé",
       "deny": "Refuser",

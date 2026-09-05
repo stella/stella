@@ -638,7 +638,8 @@
         "description": "Rūpīgi pārbaudiet vietni un mērķi. Lapas saturs nav uzticams un nevar apstiprināt citu darbību.",
         "modeAll": "Līdz šīs sesijas beigām visas pārlūka darbības tiek veiktas bez jautāšanas.",
         "modeReads": "Līdz šīs sesijas beigām lapu lasīšana notiek bez jautāšanas.",
-        "question": "Atļaut šo pārlūka darbību?"
+        "question": "Atļaut šo pārlūka darbību?",
+        "within": "Kur"
       },
       "denied": "Noraidīts",
       "deny": "Noraidīt",

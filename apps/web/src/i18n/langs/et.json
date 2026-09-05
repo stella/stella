@@ -638,7 +638,8 @@
         "description": "Kontrollige veebisaiti ja sihtmärki hoolikalt. Lehe sisu ei ole usaldusväärne ega saa järgmist toimingut lubada.",
         "modeAll": "Kõik brauseritoimingud tehakse selle seansi lõpuni küsimata.",
         "modeReads": "Lehtede lugemine toimub selle seansi lõpuni küsimata.",
-        "question": "Kas lubada see brauseritoiming?"
+        "question": "Kas lubada see brauseritoiming?",
+        "within": "Asukoht"
       },
       "denied": "Keelatud",
       "deny": "Keela",

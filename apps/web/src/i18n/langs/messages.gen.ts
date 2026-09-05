@@ -642,6 +642,7 @@ type Messages = {
         "modeAll": "All browser actions run without asking for the rest of this session.";
         "modeReads": "Page reads run without asking for the rest of this session.";
         "question": "Allow this browser action?";
+        "within": "Within";
       };
       "denied": "Denied";
       "deny": "Deny";

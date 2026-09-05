@@ -27,6 +27,7 @@ const COMMAND_EXAMPLES = {
     action: "click",
     page: PAGE,
     target: {
+      context: "Case 12 C 345/2024 Next",
       href: "https://example.com/next",
       name: "Next",
       ref: "e:0:1.s.0.2",

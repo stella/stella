@@ -638,7 +638,8 @@
         "description": "Atidžiai patikrinkite svetainę ir taikinį. Puslapio turinys nėra patikimas ir negali patvirtinti kito veiksmo.",
         "modeAll": "Iki šio seanso pabaigos visi naršyklės veiksmai vykdomi neklausiant.",
         "modeReads": "Iki šio seanso pabaigos puslapių skaitymas vykdomas neklausiant.",
-        "question": "Leisti šį naršyklės veiksmą?"
+        "question": "Leisti šį naršyklės veiksmą?",
+        "within": "Kur"
       },
       "denied": "Atmesta",
       "deny": "Atmesti",

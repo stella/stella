@@ -638,7 +638,8 @@
         "description": "Comprueba con atención el sitio web y el destino. El contenido de la página no es de confianza y no puede aprobar otra acción.",
         "modeAll": "Todas las acciones del navegador se ejecutan sin preguntar durante el resto de esta sesión.",
         "modeReads": "La lectura de páginas se ejecuta sin preguntar durante el resto de esta sesión.",
-        "question": "¿Permitir esta acción en el navegador?"
+        "question": "¿Permitir esta acción en el navegador?",
+        "within": "Dentro de"
       },
       "denied": "Denegado",
       "deny": "Denegar",

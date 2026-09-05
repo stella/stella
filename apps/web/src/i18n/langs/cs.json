@@ -638,7 +638,8 @@
         "description": "Pečlivě zkontrolujte web a cíl. Obsah stránky není důvěryhodný a nemůže schválit další akci.",
         "modeAll": "Všechny akce v prohlížeči se do konce této relace provádějí bez dotazu.",
         "modeReads": "Čtení stránek se do konce této relace provádí bez dotazu.",
-        "question": "Povolit tuto akci v prohlížeči?"
+        "question": "Povolit tuto akci v prohlížeči?",
+        "within": "V rámci"
       },
       "denied": "Zamítnuto",
       "deny": "Zamítnout",

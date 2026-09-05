@@ -638,7 +638,8 @@
         "description": "Confira com atenção o site e o destino. O conteúdo da página não é confiável e não pode aprovar outra ação.",
         "modeAll": "Todas as ações do navegador são executadas sem perguntar até o fim desta sessão.",
         "modeReads": "A leitura de páginas é executada sem perguntar até o fim desta sessão.",
-        "question": "Permitir esta ação no navegador?"
+        "question": "Permitir esta ação no navegador?",
+        "within": "Dentro de"
       },
       "denied": "Negado",
       "deny": "Negar",

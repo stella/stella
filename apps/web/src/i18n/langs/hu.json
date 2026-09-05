@@ -638,7 +638,8 @@
         "description": "Gondosan ellenőrizze a webhelyet és a célt. Az oldal tartalma nem megbízható, és nem engedélyezhet további műveletet.",
         "modeAll": "A munkamenet végéig minden böngészőművelet rákérdezés nélkül fut.",
         "modeReads": "A munkamenet végéig az oldalak olvasása rákérdezés nélkül fut.",
-        "question": "Engedélyezi ezt a böngészőműveletet?"
+        "question": "Engedélyezi ezt a böngészőműveletet?",
+        "within": "Ezen belül"
       },
       "denied": "Elutasítva",
       "deny": "Elutasítás",

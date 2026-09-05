@@ -638,7 +638,8 @@
         "description": "Dokładnie sprawdź witrynę i cel. Zawartość strony jest niezaufana i nie może zatwierdzić kolejnego działania.",
         "modeAll": "Do końca tej sesji wszystkie działania w przeglądarce wykonują się bez pytania.",
         "modeReads": "Do końca tej sesji odczyt stron wykonuje się bez pytania.",
-        "question": "Zezwolić na to działanie w przeglądarce?"
+        "question": "Zezwolić na to działanie w przeglądarce?",
+        "within": "W obrębie"
       },
       "denied": "Odrzucono",
       "deny": "Odmów",
