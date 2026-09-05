@@ -12,9 +12,11 @@ import nodePath from "node:path";
  * billing tables as they were and runs the migration file itself, which is the
  * only way to prove what the deployment will do to existing rows.
  *
- * Only the columns the migration reads are declared; the rest of each table is
- * irrelevant to the arithmetic and would only couple this test to unrelated
- * schema churn.
+ * Only the columns the migration touches are declared; the rest of each table
+ * is irrelevant to the arithmetic and would only couple this test to unrelated
+ * schema churn. `contacts` is here because its rate column is declared with the
+ * same `centsColumn` helper and therefore widens with the rest, even though it
+ * never carried the hundredths rule and is not rescaled.
  */
 
 const MIGRATION_SQL = nodePath.resolve(
@@ -43,6 +45,11 @@ CREATE TABLE rate_entries (
   id text PRIMARY KEY,
   rate_table_id text NOT NULL REFERENCES rate_tables(id),
   hourly_rate integer NOT NULL
+);
+CREATE TABLE contacts (
+  id text PRIMARY KEY,
+  default_hourly_rate integer,
+  currency varchar(3)
 );
 CREATE TABLE expenses (
   id text PRIMARY KEY,
@@ -178,6 +185,30 @@ test("a lower-case code rescales and is normalized to upper case", async () => {
     "SELECT currency FROM time_entries WHERE id = 'te_lower'",
   );
   expect(codes.rows.at(0)?.currency).toBe("JPY");
+});
+
+test("the money columns are widened past the integer ceiling", async () => {
+  // A four-decimal currency (CLF) puts a plausible amount past 2^31-1 once it
+  // is scaled, so the column has to hold more than `integer` can.
+  const types = await database.query<{ table_name: string; data_type: string }>(
+    `SELECT table_name, data_type
+       FROM information_schema.columns
+      WHERE (table_name, column_name) IN (
+              ('time_entries', 'rate_at_entry'),
+              ('rate_entries', 'hourly_rate'),
+              ('expenses', 'amount'),
+              ('invoices', 'total_amount'),
+              ('contacts', 'default_hourly_rate')
+            )
+      ORDER BY table_name`,
+  );
+  expect(types.rows.map((row) => row.data_type)).toEqual([
+    "bigint",
+    "bigint",
+    "bigint",
+    "bigint",
+    "bigint",
+  ]);
 });
 
 test("an invoice with no attached lines recomputes to zero", async () => {

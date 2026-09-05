@@ -5,14 +5,18 @@ import { t } from "elysia";
 import { rateEntries } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import {
+  tMinorUnitAmount,
+  tSafeId,
+  workspaceParams,
+} from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { cents } from "@/api/lib/money";
 import { pickDefined } from "@/api/lib/pick-defined";
 
 const updateRateEntryBodySchema = t.Object({
   id: tSafeId("rateEntry"),
-  hourlyRate: t.Optional(t.Integer({ minimum: 0 })),
+  hourlyRate: t.Optional(tMinorUnitAmount(0)),
   effectiveFrom: t.Optional(t.String({ format: "date" })),
   effectiveTo: t.Optional(t.Nullable(t.String({ format: "date" }))),
 });

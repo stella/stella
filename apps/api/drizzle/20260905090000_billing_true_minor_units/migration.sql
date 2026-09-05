@@ -23,6 +23,32 @@ SET statement_timeout = '30s';--> statement-breakpoint
 -- on the currency column, so this touches only the rows that are wrong. None
 -- of these tables is registered in high-volume-tables.ts.
 
+-- `integer` cannot hold what this migration writes. CLF has four decimal
+-- places, so a stored amount above 21,474,836 hundredths becomes more than
+-- 2^31-1 once it is multiplied by a hundred, and the rescale would abort the
+-- deployment on overflow rather than silently truncate. `bigint` removes the
+-- ceiling from the column; `bigint({ mode: "number" })` keeps the TypeScript
+-- type `number`, and the write boundaries cap the value at
+-- Number.MAX_SAFE_INTEGER, which is the real limit either way.
+--
+-- Every money column declared with `centsColumn` moves together, including
+-- `contacts.default_hourly_rate`, so the helper stays one declaration and
+-- `db:push --explain` reports no drift.
+--
+-- These tables scale with workspaces, not with the corpus: none is registered
+-- in apps/api/src/db/high-volume-tables.ts, and the rewrite is bounded by the
+-- statement timeout above.
+-- stella-migration-safety: reviewed alter-column-type - int4 to int8 is a widening on small, workspace-scoped billing tables; no value loses precision and no read path narrows.
+ALTER TABLE "time_entries" ALTER COLUMN "rate_at_entry" TYPE bigint;--> statement-breakpoint
+-- stella-migration-safety: reviewed alter-column-type - int4 to int8 is a widening on small, workspace-scoped billing tables; no value loses precision and no read path narrows.
+ALTER TABLE "rate_entries" ALTER COLUMN "hourly_rate" TYPE bigint;--> statement-breakpoint
+-- stella-migration-safety: reviewed alter-column-type - int4 to int8 is a widening on small, workspace-scoped billing tables; no value loses precision and no read path narrows.
+ALTER TABLE "expenses" ALTER COLUMN "amount" TYPE bigint;--> statement-breakpoint
+-- stella-migration-safety: reviewed alter-column-type - int4 to int8 is a widening on small, workspace-scoped billing tables; no value loses precision and no read path narrows.
+ALTER TABLE "invoices" ALTER COLUMN "total_amount" TYPE bigint;--> statement-breakpoint
+-- stella-migration-safety: reviewed alter-column-type - int4 to int8 is a widening on small, workspace-scoped billing tables; no value loses precision and no read path narrows.
+ALTER TABLE "contacts" ALTER COLUMN "default_hourly_rate" TYPE bigint;--> statement-breakpoint
+
 -- The code is stored beside the amount and everything that groups or joins on
 -- it -- this migration, `MoneyTotals`, the invoice single-currency checks --
 -- compares the raw string, so a stored "jpy" and a stored "JPY" were two
@@ -41,7 +67,7 @@ UPDATE "invoices" SET "currency" = UPPER("currency")
 
 UPDATE "time_entries" AS entry
    SET "rate_at_entry" =
-       ROUND(entry."rate_at_entry" * power(10::numeric, exponent.digits - 2))::integer
+       ROUND(entry."rate_at_entry" * power(10::numeric, exponent.digits - 2))::bigint
   FROM (VALUES
   ('BHD', 3),
   ('BIF', 0),
@@ -75,7 +101,7 @@ UPDATE "time_entries" AS entry
 -- A rate entry carries no currency of its own; its rate table names one.
 UPDATE "rate_entries" AS rate
    SET "hourly_rate" =
-       ROUND(rate."hourly_rate" * power(10::numeric, exponent.digits - 2))::integer
+       ROUND(rate."hourly_rate" * power(10::numeric, exponent.digits - 2))::bigint
   FROM "rate_tables" AS rate_table, (VALUES
   ('BHD', 3),
   ('BIF', 0),
@@ -115,7 +141,7 @@ UPDATE "rate_entries" AS rate
 UPDATE "expenses" AS expense
    SET "amount" = GREATEST(
        1,
-       ROUND(expense."amount" * power(10::numeric, exponent.digits - 2))::integer
+       ROUND(expense."amount" * power(10::numeric, exponent.digits - 2))::bigint
        )
   FROM (VALUES
   ('BHD', 3),
@@ -180,7 +206,7 @@ UPDATE "invoices" AS invoice
            FROM "expenses" AS expense
           WHERE expense."invoice_id" = invoice."id"
        ), 0)
-       )::integer
+       )::bigint
   FROM (VALUES
   ('BHD', 3),
   ('BIF', 0),

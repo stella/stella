@@ -7,7 +7,11 @@ import { expenses } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { tCurrencyCode, tSafeId } from "@/api/lib/custom-schema";
+import {
+  tCurrencyCode,
+  tMinorUnitAmount,
+  tSafeId,
+} from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
@@ -17,7 +21,7 @@ const createExpenseBodySchema = t.Object({
   matterId: tSafeId("entity"),
   dateIncurred: t.String({ format: "date" }),
   timezoneId: t.String({ minLength: 1, maxLength: 64 }),
-  amount: t.Integer({ minimum: 1 }),
+  amount: tMinorUnitAmount(1),
   currency: tCurrencyCode,
   category: expenseCategorySchema,
   description: t.String({ minLength: 1, maxLength: 10_000 }),

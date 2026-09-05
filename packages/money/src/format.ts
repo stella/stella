@@ -59,7 +59,7 @@ export type ToMinorUnitsParams = {
  *
  * Rounding is the point: a decimal input carries more places than the currency
  * has, and the stored value must be an exact integer. A non-finite `amount`
- * throws through `cents()`, so a form parses and rejects its own input before
+ * panics through `cents()`, so a form parses and rejects its own input before
  * asking for a value to store.
  */
 export const toMinorUnits = ({

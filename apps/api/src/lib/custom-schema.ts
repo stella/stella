@@ -83,6 +83,18 @@ export const tCurrencyCode = t.String({
 export const tPaginationLimit = (maximum: number) =>
   t.Integer({ minimum: 1, maximum });
 
+/**
+ * A monetary amount in the currency's minor units.
+ *
+ * The column is `bigint`, so the database would take far more; the ceiling is
+ * JavaScript's. The value crosses this boundary as a JSON number and
+ * `bigint({ mode: "number" })` reads it back as one, so past
+ * `Number.MAX_SAFE_INTEGER` the amount stored is no longer the amount sent --
+ * silently, which is the whole reason money carries a brand here.
+ */
+export const tMinorUnitAmount = (minimum: number) =>
+  t.Integer({ minimum, maximum: Number.MAX_SAFE_INTEGER });
+
 export const PAGINATION_CURSOR_MAX_CHARS = 512;
 
 const PAGINATION_CURSOR_DESCRIPTION =
