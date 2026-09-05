@@ -208,7 +208,7 @@ export const decideDependabotEmptyChangeset = ({
     }
     default: {
       gate satisfies never;
-      return panic(`Unhandled gate: ${String(gate)}`);
+      throw new DependabotChangesetError(`Unhandled gate: ${String(gate)}`);
     }
   }
 };
@@ -386,7 +386,9 @@ export const runDependabotEmptyChangeset = (
     }
     default: {
       decision satisfies never;
-      return panic(`Unhandled decision: ${String(decision)}`);
+      throw new DependabotChangesetError(
+        `Unhandled decision: ${String(decision)}`,
+      );
     }
   }
 };

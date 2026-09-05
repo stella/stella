@@ -117,7 +117,7 @@ const matchesRelease = (matcher: ReleaseMatcher, file: string): boolean => {
       return file.startsWith(matcher.prefix);
     default: {
       matcher satisfies never;
-      return panic(`Unhandled matcher: ${String(matcher)}`);
+      throw new ChangesetPolicyError(`Unhandled matcher: ${String(matcher)}`);
     }
   }
 };
@@ -189,7 +189,7 @@ export const report = (verdict: ChangesetVerdict): number => {
       return 1;
     default: {
       verdict satisfies never;
-      return panic(`Unhandled verdict: ${String(verdict)}`);
+      throw new ChangesetPolicyError(`Unhandled verdict: ${String(verdict)}`);
     }
   }
 };
