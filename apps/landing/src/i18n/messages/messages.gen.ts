@@ -14,6 +14,7 @@ type Messages = {
   "common": {
     "copied": "Copied";
     "copy": "Copy";
+    "copyFailed": "Copy failed";
     "getCli": "Get the CLI";
     "startFree": "Start free";
   };

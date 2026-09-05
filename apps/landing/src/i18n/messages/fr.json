@@ -11,6 +11,7 @@
   "common": {
     "copied": "Copié",
     "copy": "Copier",
+    "copyFailed": "Échec de la copie",
     "getCli": "Obtenir la CLI",
     "startFree": "Commencer gratuitement"
   },

@@ -11,6 +11,7 @@
   "common": {
     "copied": "Nukopijuota",
     "copy": "Kopijuoti",
+    "copyFailed": "Nepavyko nukopijuoti",
     "getCli": "Atsisiųskite CLI",
     "startFree": "Pradėkite nemokamai"
   },

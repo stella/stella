@@ -15,6 +15,7 @@ const t = getTranslations(locale);
   class="flex flex-col items-center gap-3"
   data-ask-ai
   data-copied-label={t("common.copied")}
+  data-copy-failed-label={t("common.copyFailed")}
   data-copy-label-default={t("askAi.copy")}
 >
   <span
@@ -34,7 +35,10 @@ const t = getTranslations(locale);
         ><rect x="9" y="9" width="13" height="13" rx="2"></rect><path
           d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg
       >
-      <span data-copy-label>{t("askAi.copy")}</span>
+      <!-- The label is the pill's only feedback channel, so it announces both
+        outcomes; it carries text on load, which is what lets a screen reader
+        treat the swap as an update. -->
+      <span aria-live="polite" data-copy-label>{t("askAi.copy")}</span>
     </button>
     <span class="mx-0.5 h-5 w-px" style="background: var(--border)" aria-hidden="true"></span>
     <a class="ask-pill" target="_blank" rel="noopener noreferrer" data-llm="chatgpt"
@@ -82,6 +86,14 @@ const t = getTranslations(locale);
     border-color: color-mix(in srgb, var(--primary) 55%, transparent);
     color: var(--primary);
   }
+  .ask-pill.is-copy-failed {
+    border-color: color-mix(
+      in srgb,
+      var(--destructive, #dc2626) 55%,
+      transparent
+    );
+    color: var(--destructive, #dc2626);
+  }
   .ask-ext {
     opacity: 0.5;
     font-size: 0.75rem;
@@ -126,19 +138,20 @@ const t = getTranslations(locale);
       const copyBtn = root.querySelector<HTMLButtonElement>("[data-copy]");
       const copyLabel = root.querySelector<HTMLElement>("[data-copy-label]");
       copyBtn?.addEventListener("click", async () => {
-        // The copy failed: leave the pill on its default label.
-        if (Result.isError(await copyToClipboard(PROMPT))) {
-          return;
-        }
+        const copied = Result.isOk(await copyToClipboard(PROMPT));
         const copiedLabel = root.dataset.copiedLabel;
+        const failedLabel = root.dataset.copyFailedLabel;
         const defaultLabel = root.dataset.copyLabelDefault;
-        if (!(copyLabel && copiedLabel && defaultLabel)) {
+        if (!(copyLabel && copiedLabel && failedLabel && defaultLabel)) {
           return;
         }
-        copyBtn.classList.add("is-copied");
-        copyLabel.textContent = copiedLabel;
+        // A refused clipboard (denied permission, insecure context) reports in
+        // the same place the confirmation does.
+        const outcome = copied ? "is-copied" : "is-copy-failed";
+        copyBtn.classList.add(outcome);
+        copyLabel.textContent = copied ? copiedLabel : failedLabel;
         setTimeout(() => {
-          copyBtn.classList.remove("is-copied");
+          copyBtn.classList.remove(outcome);
           copyLabel.textContent = defaultLabel;
         }, 1400);
       });

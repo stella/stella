@@ -11,6 +11,7 @@
   "common": {
     "copied": "Kopeeritud",
     "copy": "Kopeeri",
+    "copyFailed": "Kopeerimine ebaõnnestus",
     "getCli": "Laadi CLI alla",
     "startFree": "Alusta tasuta"
   },

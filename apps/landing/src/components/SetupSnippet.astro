@@ -5,15 +5,31 @@
 type Props = {
   class?: string;
   copiedLabel: string;
+  copyFailedLabel: string;
   copyLabel: string;
   text: string;
 };
 
-const { class: className, copiedLabel, copyLabel, text } = Astro.props;
+const {
+  class: className,
+  copiedLabel,
+  copyFailedLabel,
+  copyLabel,
+  text,
+} = Astro.props;
 ---
 
 <div class:list={["product-setup-snippet relative", className]} dir="ltr">
   <pre class="overflow-x-auto whitespace-pre pe-10"><code>{text}</code></pre>
+  <!-- Empty on load so the browser treats later text as a live update, and
+    the only place a failed copy is reported: the icon swap says "copied" and
+    has nothing to say about a clipboard that refused. -->
+  <span
+    class="setup-copy-status absolute end-10 top-1.5 text-xs leading-7"
+    role="status"
+    aria-live="polite"
+    data-copy-status
+  ></span>
   <button
     type="button"
     class="setup-copy absolute end-1.5 top-1.5 inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors"
@@ -22,6 +38,7 @@ const { class: className, copiedLabel, copyLabel, text } = Astro.props;
     data-copy-snippet={text}
     data-copy-label={copyLabel}
     data-copied-label={copiedLabel}
+    data-copy-failed-label={copyFailedLabel}
   >
     <svg
       class="setup-copy-icon h-3.5 w-3.5"
@@ -73,6 +90,10 @@ const { class: className, copiedLabel, copyLabel, text } = Astro.props;
     display: none;
   }
 
+  .setup-copy-status {
+    color: var(--destructive, #dc2626);
+  }
+
   .setup-copy.is-copied .setup-copy-icon {
     display: none;
   }
@@ -96,9 +117,17 @@ const { class: className, copiedLabel, copyLabel, text } = Astro.props;
       if (!text) {
         return;
       }
-      // The copy failed: leave the button idle rather than claiming a copy.
+      const status = button.parentElement?.querySelector("[data-copy-status]");
       if (Result.isError(await copyToClipboard(text))) {
+        // The clipboard refused (denied permission, insecure context). Say so
+        // where the confirmation would have gone, rather than going quiet.
+        if (status) {
+          status.textContent = button.dataset["copyFailedLabel"] ?? "";
+        }
         return;
+      }
+      if (status) {
+        status.textContent = "";
       }
       button.classList.add("is-copied");
       const copied = button.dataset["copiedLabel"];
