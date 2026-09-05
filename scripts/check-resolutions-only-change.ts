@@ -9,7 +9,6 @@
 // committed manifest and the result must equal the working tree byte for byte,
 // so no unrelated byte can ride along.
 
-import { panic } from "better-result";
 import path from "node:path";
 
 import { inspectManifestChange } from "./resolution-ranges";
@@ -97,8 +96,12 @@ export const runCheckResolutionsOnlyChange = async (
       );
       return 1;
     default: {
+      // The Dependabot autofix job runs this script without an install, so
+      // the miss throws the local error instead of better-result's panic.
       verdict satisfies never;
-      return panic(`Unhandled verdict: ${String(verdict)}`);
+      throw new ResolutionChangeCheckError(
+        `Unhandled verdict: ${String(verdict)}`,
+      );
     }
   }
 };
