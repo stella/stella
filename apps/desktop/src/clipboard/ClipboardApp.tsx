@@ -502,7 +502,9 @@ const ClipboardCard = ({
           <Input
             aria-label={t("editItem")}
             autoFocus
-            className="h-8 min-w-0 flex-1 rounded-lg px-2 text-sm font-semibold"
+            // The negative start margin keeps the typed text where the label
+            // sat, so entering edit mode does not shift it right by the padding.
+            className="-ms-2 h-8 min-w-0 flex-1 rounded-lg px-2 text-sm font-semibold"
             data-clipboard-name-input=""
             maxLength={MAX_ITEM_NAME_CHARACTERS}
             onBlur={finishNameEdit}
