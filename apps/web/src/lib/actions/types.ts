@@ -13,7 +13,7 @@ export type CommandActionId =
 
 export type CommandActionContext = {
   navigate: (opts: { to: string }) => void;
-  workspaceId?: string;
+  workspaceId?: string | undefined;
 };
 
 export type CommandAction = {
