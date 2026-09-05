@@ -205,7 +205,8 @@ const finishAccepted = (
     case "require-complete":
       return finishReason === "stop";
     default:
-      return finishPolicy satisfies never;
+      finishPolicy satisfies never;
+      return panic(`Unhandled finish policy: ${String(finishPolicy)}`);
   }
 };
 
