@@ -167,27 +167,33 @@ const testPaths = [
   }),
 ].sort();
 
-// Hidden directories are tool caches; `node_modules` is third-party code.
+// Hidden directories are tool caches; `node_modules` is third-party code. A
+// test file colocated with a package-root module (`drizzle.config.test.ts`
+// beside `drizzle.config.ts`) is outside every root too, so files are scanned
+// alongside directories.
+const TEST_FILE_PATTERN = /\.test\.tsx?$/u;
 const strayTestPaths = readdirSync(apiRoot, { withFileTypes: true })
   .filter(
-    (entry) =>
-      entry.isDirectory() &&
-      !entry.name.startsWith(".") &&
-      entry.name !== "node_modules" &&
-      !TEST_ROOT_SET.has(entry.name),
+    (entry) => !entry.name.startsWith(".") && entry.name !== "node_modules",
   )
-  .flatMap((entry) =>
-    [
+  .flatMap((entry) => {
+    if (entry.isFile()) {
+      return TEST_FILE_PATTERN.test(entry.name) ? [entry.name] : [];
+    }
+    if (!entry.isDirectory() || TEST_ROOT_SET.has(entry.name)) {
+      return [];
+    }
+    return [
       ...new Bun.Glob(STRAY_TEST_FILE_GLOB).scanSync({
         cwd: path.join(apiRoot, entry.name),
         onlyFiles: true,
       }),
-    ].map((testPath) => `${entry.name}/${testPath}`),
-  )
+    ].map((testPath) => `${entry.name}/${testPath}`);
+  })
   .sort();
 if (strayTestPaths.length > 0) {
   console.error(
-    `Test files outside the runner roots (${TEST_ROOTS.join(", ")}) never run:\n  ${strayTestPaths.join("\n  ")}\nAdd the directory to TEST_ROOTS in apps/api/scripts/run-tests.ts.`,
+    `Test files outside the runner roots (${TEST_ROOTS.join(", ")}) never run:\n  ${strayTestPaths.join("\n  ")}\nMove the file under a root, or add its directory to TEST_ROOTS in apps/api/scripts/run-tests.ts.`,
   );
   process.exit(1);
 }
