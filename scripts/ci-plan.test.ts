@@ -60,11 +60,16 @@ test("API image construction and smoke orchestration changes require the final i
   for (const file of [
     "apps/api/Dockerfile",
     "scripts/smoke-api-image.sh",
+    ".dockerignore",
     ".github/workflows/ci.yml",
     ".github/workflows/release.yml",
   ]) {
     expect(imageSmokePlan([file]).at(0), file).toBe("true");
   }
+});
+
+test("Docker context changes require both final image smokes", () => {
+  expect(imageSmokePlan([".dockerignore"])).toEqual(["true", "true"]);
 });
 
 test("unrelated paths do not schedule final image smokes", () => {
