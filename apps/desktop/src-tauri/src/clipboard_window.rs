@@ -13,12 +13,15 @@ use crate::desktop_telemetry::{
   DesktopTelemetryOperation, DesktopTelemetrySpan, DesktopTelemetryWindow,
   DesktopTimingReport,
 };
+use crate::window_placement::{self, WorkArea};
 
 const CLIPBOARD_WINDOW_LABEL: &str = "clipboard";
 const CLIPBOARD_EDITOR_WINDOW_LABEL: &str = "clipboard-editor";
 const CLIPBOARD_WINDOW_HEIGHT: f64 = 326.0;
 const CLIPBOARD_WINDOW_INSET: f64 = 18.0;
 const CLIPBOARD_WINDOW_RADIUS: f64 = 28.0;
+const CLIPBOARD_EDITOR_WIDTH: f64 = 700.0;
+const CLIPBOARD_EDITOR_HEIGHT: f64 = 520.0;
 
 /// Whether the clipboard window is parked. Parking keeps the window on screen
 /// fully transparent and click-through instead of ordering it out: WebKit
@@ -120,23 +123,20 @@ fn capture_window_error(
   }
 }
 
-/// Docked frame in Tauri logical coordinates (origin top-left of the primary
-/// screen, y down) from a Cocoa work area (origin bottom-left, y up).
-#[cfg(target_os = "macos")]
-fn docked_frame(primary_height: f64, work_area: DockedRect) -> DockedRect {
+/// The rail's frame docked to the bottom of a work area, inset on all sides
+/// and shortened when the area is too low for the full height.
+fn docked_frame(work_area: WorkArea) -> DockedRect {
   let width = (work_area.width - (CLIPBOARD_WINDOW_INSET * 2.0)).max(1.0);
   let available_height = (work_area.height - (CLIPBOARD_WINDOW_INSET * 2.0)).max(1.0);
   let height = CLIPBOARD_WINDOW_HEIGHT.min(available_height);
-  let bottom = work_area.y + CLIPBOARD_WINDOW_INSET;
   DockedRect {
     x: work_area.x + CLIPBOARD_WINDOW_INSET,
-    y: primary_height - (bottom + height),
+    y: work_area.y + work_area.height - height - CLIPBOARD_WINDOW_INSET,
     width,
     height,
   }
 }
 
-#[cfg(target_os = "macos")]
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct DockedRect {
   x: f64,
@@ -145,88 +145,15 @@ struct DockedRect {
   height: f64,
 }
 
-#[cfg(target_os = "macos")]
-impl From<objc2_foundation::NSRect> for DockedRect {
-  fn from(rect: objc2_foundation::NSRect) -> Self {
-    Self {
-      x: rect.origin.x,
-      y: rect.origin.y,
-      width: rect.size.width,
-      height: rect.size.height,
-    }
-  }
-}
-
-// AppKit is queried directly: tao's `cursor_position` returns primary-scaled
-// physical pixels while its `monitor_from_point` compares against display
-// bounds in points, so on mixed-DPI setups the lookup misses and falls back
-// to the primary display. Screen frames and the mouse location share one
-// coordinate space here, so containment is exact.
-#[cfg(target_os = "macos")]
-fn position_window(_app: &AppHandle, window: &WebviewWindow) {
-  use objc2::MainThreadMarker;
-  use objc2_app_kit::{NSEvent, NSScreen};
-
-  let Some(main_thread) = MainThreadMarker::new() else {
-    let handle = window.app_handle().clone();
-    let window = window.clone();
-    let _ = handle.run_on_main_thread(move || {
-      position_window(window.app_handle(), &window);
-    });
+/// Docks the rail to the bottom of the target screen. With no screen known the
+/// window keeps its last frame.
+fn position_window(app: &AppHandle, window: &WebviewWindow) {
+  let Some(work_area) = window_placement::target_work_area(app) else {
     return;
   };
-
-  let screens = NSScreen::screens(main_thread);
-  let Some(primary) = screens.iter().next() else {
-    let _ = window.center();
-    return;
-  };
-  let primary_height = primary.frame().size.height;
-  let cursor = NSEvent::mouseLocation();
-  let under_cursor = screens.iter().find(|screen| {
-    let frame = screen.frame();
-    cursor.x >= frame.origin.x
-      && cursor.x < frame.origin.x + frame.size.width
-      && cursor.y >= frame.origin.y
-      && cursor.y < frame.origin.y + frame.size.height
-  });
-  let focused = NSScreen::mainScreen(main_thread);
-  let screen = under_cursor.or(focused).unwrap_or(primary);
-
-  let frame = docked_frame(primary_height, screen.visibleFrame().into());
+  let frame = docked_frame(work_area);
   let _ = window.set_size(LogicalSize::new(frame.width, frame.height));
   let _ = window.set_position(LogicalPosition::new(frame.x, frame.y));
-}
-
-#[cfg(not(target_os = "macos"))]
-fn position_window(app: &AppHandle, window: &WebviewWindow) {
-  let monitor = app
-    .cursor_position()
-    .ok()
-    .and_then(|position| {
-      app
-        .monitor_from_point(position.x, position.y)
-        .ok()
-        .flatten()
-    })
-    .or_else(|| app.primary_monitor().ok().flatten());
-  let Some(monitor) = monitor else {
-    let _ = window.center();
-    return;
-  };
-
-  let scale_factor = monitor.scale_factor();
-  let work_area = monitor.work_area();
-  let work_position = work_area.position.to_logical::<f64>(scale_factor);
-  let work_size = work_area.size.to_logical::<f64>(scale_factor);
-  let available_width = (work_size.width - (CLIPBOARD_WINDOW_INSET * 2.0)).max(1.0);
-  let available_height = (work_size.height - (CLIPBOARD_WINDOW_INSET * 2.0)).max(1.0);
-  let height = CLIPBOARD_WINDOW_HEIGHT.min(available_height);
-  let x = work_position.x + CLIPBOARD_WINDOW_INSET;
-  let y = work_position.y + work_size.height - height - CLIPBOARD_WINDOW_INSET;
-
-  let _ = window.set_size(LogicalSize::new(available_width, height));
-  let _ = window.set_position(LogicalPosition::new(x, y));
 }
 
 /// Runs `f` on the main thread and waits for its result; `default` when the
@@ -237,25 +164,8 @@ fn on_main_thread<T: Send + 'static>(
   default: T,
   f: impl FnOnce(&WebviewWindow) -> T + Send + 'static,
 ) -> T {
-  use objc2::MainThreadMarker;
-
-  if MainThreadMarker::new().is_some() {
-    return f(window);
-  }
-  let (sender, receiver) = std::sync::mpsc::sync_channel(1);
   let cloned = window.clone();
-  if window
-    .app_handle()
-    .run_on_main_thread(move || {
-      let _ = sender.send(f(&cloned));
-    })
-    .is_err()
-  {
-    return default;
-  }
-  receiver
-    .recv_timeout(Duration::from_secs(1))
-    .unwrap_or(default)
+  window_placement::on_main_thread(window.app_handle(), default, move || f(&cloned))
 }
 
 /// Shows the window as the key window without activating the app: the app the
@@ -509,14 +419,18 @@ pub fn show_editor(app: &AppHandle) -> Result<(), String> {
     tauri::WebviewUrl::App("index.html".into()),
   )
   .title("Stella")
-  .inner_size(700.0, 520.0)
+  .inner_size(CLIPBOARD_EDITOR_WIDTH, CLIPBOARD_EDITOR_HEIGHT)
   .min_inner_size(560.0, 420.0)
   .always_on_top(true)
   .content_protected(content_protected)
   .resizable(true)
-  .center()
-  .visible(false)
-  .on_page_load(|window, payload| {
+  .visible(false);
+  let builder = window_placement::centered_on_target_screen(
+    app,
+    builder,
+    LogicalSize::new(CLIPBOARD_EDITOR_WIDTH, CLIPBOARD_EDITOR_HEIGHT),
+  );
+  let builder = builder.on_page_load(|window, payload| {
     if payload.event() != PageLoadEvent::Finished {
       return;
     }
@@ -544,23 +458,21 @@ pub fn show_editor(app: &AppHandle) -> Result<(), String> {
   })
 }
 
-#[cfg(all(test, target_os = "macos"))]
+#[cfg(test)]
 mod tests {
   use super::*;
 
   #[test]
   fn docks_to_the_bottom_of_a_secondary_screen_above_the_primary() {
     // External 2560x1440 display arranged above a 1728x1117 laptop screen,
-    // with a 25pt menu bar and no dock.
-    let frame = docked_frame(
-      1117.0,
-      DockedRect {
-        x: -416.0,
-        y: 1117.0,
-        width: 2560.0,
-        height: 1415.0,
-      },
-    );
+    // with a 25pt menu bar and no dock: its work area sits entirely above the
+    // primary origin in logical coordinates.
+    let frame = docked_frame(WorkArea {
+      x: -416.0,
+      y: -1415.0,
+      width: 2560.0,
+      height: 1415.0,
+    });
 
     assert_eq!(
       frame,
@@ -575,15 +487,13 @@ mod tests {
 
   #[test]
   fn docks_to_the_bottom_of_the_primary_screen_above_the_dock() {
-    let frame = docked_frame(
-      1117.0,
-      DockedRect {
-        x: 0.0,
-        y: 70.0,
-        width: 1728.0,
-        height: 1022.0,
-      },
-    );
+    // 1117pt screen, 25pt menu bar, 70pt dock.
+    let frame = docked_frame(WorkArea {
+      x: 0.0,
+      y: 25.0,
+      width: 1728.0,
+      height: 1022.0,
+    });
 
     assert_eq!(frame.x, 18.0);
     assert_eq!(frame.height, CLIPBOARD_WINDOW_HEIGHT);
@@ -592,15 +502,12 @@ mod tests {
 
   #[test]
   fn shrinks_on_a_short_work_area() {
-    let frame = docked_frame(
-      200.0,
-      DockedRect {
-        x: 0.0,
-        y: 0.0,
-        width: 400.0,
-        height: 200.0,
-      },
-    );
+    let frame = docked_frame(WorkArea {
+      x: 0.0,
+      y: 0.0,
+      width: 400.0,
+      height: 200.0,
+    });
 
     assert_eq!(frame.height, 200.0 - 36.0);
     assert_eq!(frame.y, 18.0);
