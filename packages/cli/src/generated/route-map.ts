@@ -609,7 +609,7 @@ export const generatedRouteMap: RouteNode = {
               properties: {
                 entity_id: {
                   type: "string",
-                  minLength: 1,
+                  format: "uuid",
                   description: "Entity ID",
                 },
                 cursor: {
@@ -749,7 +749,7 @@ export const generatedRouteMap: RouteNode = {
                 kind: "string",
                 repeatable: false,
                 description:
-                  "Opaque cursor from a previous call to fetch the next page of version history",
+                  "Cursor from a previous call for the next page of version history",
                 required: false,
               },
             ],
@@ -765,7 +765,7 @@ export const generatedRouteMap: RouteNode = {
               properties: {
                 entity_id: {
                   type: "string",
-                  minLength: 1,
+                  format: "uuid",
                   description: "Document entity ID",
                 },
                 version_id: {
@@ -788,7 +788,7 @@ export const generatedRouteMap: RouteNode = {
                   type: "string",
                   maxLength: 512,
                   description:
-                    "Opaque cursor from a previous call to fetch the next page of version history",
+                    "Cursor from a previous call for the next page of version history",
                 },
               },
             },
@@ -1001,7 +1001,7 @@ export const generatedRouteMap: RouteNode = {
               properties: {
                 entity_id: {
                   type: "string",
-                  minLength: 1,
+                  format: "uuid",
                   description: "Document entity ID to delete",
                 },
                 version_id: {
@@ -1111,7 +1111,7 @@ export const generatedRouteMap: RouteNode = {
                   properties: {
                     entity_id: {
                       type: "string",
-                      minLength: 1,
+                      format: "uuid",
                       description: "Document entity ID whose cell to set",
                     },
                     property_id: {
@@ -3107,17 +3107,19 @@ export const generatedRouteMap: RouteNode = {
               {
                 flag: "--status",
                 prop: "status",
-                kind: "string",
+                kind: "enum",
+                enum: ["open", "in_progress", "in_review", "done", "cancelled"],
                 repeatable: false,
-                description: "Task status (e.g. open, in_progress, done)",
+                description: "Task status",
                 required: false,
               },
               {
                 flag: "--priority",
                 prop: "priority",
-                kind: "string",
+                kind: "enum",
+                enum: ["none", "urgent", "high", "medium", "low"],
                 repeatable: false,
-                description: "Task priority (e.g. none, low, medium, high)",
+                description: "Task priority",
                 required: false,
               },
               {
@@ -3233,16 +3235,20 @@ export const generatedRouteMap: RouteNode = {
                   description: "Task name; required when creating",
                 },
                 status: {
+                  enum: [
+                    "open",
+                    "in_progress",
+                    "in_review",
+                    "done",
+                    "cancelled",
+                  ],
                   type: "string",
-                  minLength: 1,
-                  maxLength: 32,
-                  description: "Task status (e.g. open, in_progress, done)",
+                  description: "Task status",
                 },
                 priority: {
+                  enum: ["none", "urgent", "high", "medium", "low"],
                   type: "string",
-                  minLength: 1,
-                  maxLength: 16,
-                  description: "Task priority (e.g. none, low, medium, high)",
+                  description: "Task priority",
                 },
                 item_type: {
                   enum: ["task", "fact", "issue", "requirement", "event"],
@@ -3911,7 +3917,7 @@ export const generatedRouteMap: RouteNode = {
                 },
                 entity_id: {
                   type: "string",
-                  minLength: 1,
+                  format: "uuid",
                   description:
                     "List only entries logged against this entity (document, folder, or task the time is billed to)",
                 },
@@ -4091,7 +4097,7 @@ export const generatedRouteMap: RouteNode = {
                   anyOf: [
                     {
                       type: "string",
-                      minLength: 1,
+                      format: "uuid",
                     },
                     {
                       type: "null",
@@ -4647,7 +4653,7 @@ export const generatedRouteMap: RouteNode = {
                 kind: "string",
                 repeatable: false,
                 description:
-                  "Only entries created on or after this ISO date-time",
+                  "Only entries created on or after this ISO date-time, or from the start of this YYYY-MM-DD date (UTC)",
                 required: false,
               },
               {
@@ -4656,7 +4662,7 @@ export const generatedRouteMap: RouteNode = {
                 kind: "string",
                 repeatable: false,
                 description:
-                  "Only entries created on or before this ISO date-time",
+                  "Only entries created on or before this ISO date-time, or up to the end of this YYYY-MM-DD date (UTC)",
                 required: false,
               },
             ],
@@ -4702,13 +4708,13 @@ export const generatedRouteMap: RouteNode = {
                   type: "string",
                   maxLength: 40,
                   description:
-                    "Only entries created on or after this ISO date-time",
+                    "Only entries created on or after this ISO date-time, or from the start of this YYYY-MM-DD date (UTC)",
                 },
                 to: {
                   type: "string",
                   maxLength: 40,
                   description:
-                    "Only entries created on or before this ISO date-time",
+                    "Only entries created on or before this ISO date-time, or up to the end of this YYYY-MM-DD date (UTC)",
                 },
                 limit: {
                   type: "integer",
