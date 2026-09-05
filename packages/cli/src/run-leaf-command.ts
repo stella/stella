@@ -38,6 +38,7 @@ import {
   selectFormat,
   type OutputFormat,
   type Writers,
+  terminalWidth,
 } from "./output.js";
 import { RESERVED_FLAG_KEYS } from "./reserved-flag-keys.js";
 import type { FlagSpec, LeafCommandSpec } from "./route-types.js";
@@ -938,7 +939,13 @@ export const streamOrRenderAllPages = async ({
       singleReadActive: false,
       columns: undefined,
     });
-    renderResult({ plan, format, writers, allActive: true });
+    renderResult({
+      plan,
+      format,
+      writers,
+      allActive: true,
+      width: terminalWidth(context),
+    });
   }
   if (outcome.value.truncated) {
     writers.stderr(
@@ -1026,7 +1033,13 @@ export const renderCommandResult = ({
     singleReadActive: false,
     columns: undefined,
   });
-  renderResult({ plan, format, writers, allActive: false });
+  renderResult({
+    plan,
+    format,
+    writers,
+    allActive: false,
+    width: terminalWidth(context),
+  });
 
   // Generic two-phase handshake affordance (driven by the response fields, not
   // any tool name): a phase-1 `approval_required` response carries a

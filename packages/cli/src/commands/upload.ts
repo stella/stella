@@ -6,7 +6,7 @@ import type { Context } from "../context.js";
 import { formatCapabilityCommand } from "../generate-capability-tree.js";
 import { EXIT_CODES } from "../mcp-constants.js";
 import { buildCommonFlags, type CommonFlagValues } from "../output-flags.js";
-import { buildRenderPlan, renderResult } from "../output.js";
+import { buildRenderPlan, renderResult, terminalWidth } from "../output.js";
 import {
   mapClientErrorExit,
   readOutputFormat,
@@ -212,6 +212,7 @@ export const uploadCommand: Command<Context> = buildCommand<
     });
     if (Result.isOk(uploaded)) {
       renderResult({
+        width: terminalWidth(this),
         plan: buildRenderPlan({
           payload: uploaded.value,
           itemsKey: undefined,
