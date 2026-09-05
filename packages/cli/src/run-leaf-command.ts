@@ -15,6 +15,7 @@ import { RESOURCE_SCOPE_PREFIX } from "./auth/scopes.js";
 import type { Context } from "./context.js";
 import { applyDeprecatedInputAliases } from "./deprecated-input-aliases.js";
 import { flagKey } from "./flag-name.js";
+import { kebabCase } from "./generate-route-map.js";
 import { validateAgainstSchema } from "./json-schema-validate.js";
 import {
   callTool,
@@ -955,6 +956,58 @@ export const streamOrRenderAllPages = async ({
 };
 
 /**
+ * A wire field the active leaf exposes as a flag (`workspace_id`) is what the
+ * caller typed (`--workspace-id`), so an issue names the flag. A field that
+ * only travels inside `--input` (input-only or nested) stays a path.
+ */
+const issueLocation = (
+  path: string,
+  flagPaths: ReadonlySet<string> | undefined,
+): string => (flagPaths?.has(path) ? `--${kebabCase(path)}` : path);
+
+/** The input paths a leaf's generated flags write to. */
+const leafFlagPaths = (
+  spec: Pick<LeafCommandSpec, "flags">,
+): ReadonlySet<string> => new Set(spec.flags.map((flag) => flag.prop));
+
+/**
+ * The stderr lines for a structured tool error: the summary, then one line per
+ * field issue, then the hint. A lone issue that only repeats the summary is
+ * folded into it (`error: <message> (--flag)`) instead of printing twice.
+ */
+export const toolErrorLines = (
+  envelope: {
+    message: string;
+    hint: string | undefined;
+    issues: readonly { path: string; message: string }[];
+  },
+  flagPaths?: ReadonlySet<string>,
+): string[] => {
+  const lines: string[] = [];
+  const [only] = envelope.issues;
+  if (envelope.issues.length === 1 && only?.message === envelope.message) {
+    lines.push(
+      only.path === ""
+        ? `error: ${envelope.message}`
+        : `error: ${envelope.message} (${issueLocation(only.path, flagPaths)})`,
+    );
+  } else {
+    lines.push(`error: ${envelope.message}`);
+    for (const issue of envelope.issues) {
+      lines.push(
+        issue.path === ""
+          ? `  ${issue.message}`
+          : `  ${issueLocation(issue.path, flagPaths)}: ${issue.message}`,
+      );
+    }
+  }
+  if (envelope.hint !== undefined) {
+    lines.push(`hint: ${envelope.hint}`);
+  }
+  return lines;
+};
+
+/**
  * Render a tool `isError` result (spec S4). Shared by curated and capability
  * leaves: results never touch stdout on an error path. A structured envelope
  * renders as agent-readable `error:` / issue / `hint:` lines on stderr; a legacy
@@ -965,27 +1018,18 @@ export const renderToolError = ({
   context,
   result,
   writers,
+  flagPaths,
 }: {
   context: Context;
   result: CallToolResult;
   writers: Writers;
+  flagPaths?: ReadonlySet<string> | undefined;
 }): void => {
   const errorPayload = parsePayload(result);
   const envelope = errorEnvelope(errorPayload);
   if (envelope !== null) {
-    writers.stderr(`error: ${envelope.message}\n`);
-    // Field-level validation issues follow the summary, one indented line each,
-    // so an agent can map a failure back to the offending field. A root issue
-    // (empty path) renders its message without a bare `: ` prefix.
-    for (const issue of envelope.issues) {
-      writers.stderr(
-        issue.path === ""
-          ? `  ${issue.message}\n`
-          : `  ${issue.path}: ${issue.message}\n`,
-      );
-    }
-    if (envelope.hint !== undefined) {
-      writers.stderr(`hint: ${envelope.hint}\n`);
+    for (const line of toolErrorLines(envelope, flagPaths)) {
+      writers.stderr(`${line}\n`);
     }
     if (envelope.requestId !== undefined) {
       writers.stderr(
@@ -1006,6 +1050,8 @@ type RenderCommandResultOptions = {
   windowedText: boolean;
   writers: Writers;
   writeReceipt: boolean;
+  /** Input paths the leaf exposes as flags, so an issue can name the flag. */
+  flagPaths?: ReadonlySet<string> | undefined;
 };
 
 export const renderCommandResult = ({
@@ -1016,9 +1062,10 @@ export const renderCommandResult = ({
   windowedText,
   writers,
   writeReceipt,
+  flagPaths,
 }: RenderCommandResultOptions): void => {
   if (result.isError) {
-    renderToolError({ context, result, writers });
+    renderToolError({ context, result, writers, flagPaths });
     return;
   }
   const payload = parsePayload(result);
@@ -1192,6 +1239,7 @@ export const runLeafCommand = async ({
       windowedText: spec.windowedText,
       writers,
       writeReceipt: false,
+      flagPaths: leafFlagPaths(spec),
     });
   };
   const allActive = spec.paginated && flags[RESERVED_FLAG_KEYS.all] === true;

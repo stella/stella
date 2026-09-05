@@ -888,9 +888,9 @@ describe("error tiers -> exit codes (S4)", () => {
     server.stop();
     expect(result.exitCode).toBe(2);
     expect(result.stderr).toContain("error: Invalid input");
-    // A field issue renders as `  <path>: <message>`; a root issue (empty path)
+    // A field issue renders as `  <flag>: <message>`; a root issue (empty path)
     // renders its message without a bare `: ` prefix.
-    expect(result.stderr).toContain("  matter_id: Required");
+    expect(result.stderr).toContain("  --matter-id: Required");
     expect(result.stderr).toContain("  at least one filter is required");
   });
 });
