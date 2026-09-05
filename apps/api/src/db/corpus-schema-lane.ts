@@ -77,6 +77,20 @@ export const CORPUS_SCHEMA_LANE_LOCK_SQL = `SELECT pg_advisory_lock(${KEY_SQL})`
 
 export const CORPUS_SCHEMA_LANE_UNLOCK_SQL = `SELECT pg_advisory_unlock(${KEY_SQL})`;
 
+/**
+ * The exclusive wait is a long wait by design: it drains every shared holder,
+ * and one corpus batch may run for minutes. A server statement timeout would
+ * cancel the wait before the longest batch ends and fail the upgrade without
+ * touching a table, so the lock statement runs with the timeout off, and the
+ * session default is restored once the lane is held so the upgrade's own
+ * statements keep it. Run in order on the one reserved connection.
+ */
+export const CORPUS_SCHEMA_LANE_LOCK_STATEMENTS = [
+  "SET statement_timeout = '0'",
+  CORPUS_SCHEMA_LANE_LOCK_SQL,
+  "RESET statement_timeout",
+] as const;
+
 /** Whether a try-lock result (either driver shape) reports the lane granted. */
 export const isCorpusSchemaLaneGranted = (result: unknown): boolean => {
   let rows: unknown[] = [];

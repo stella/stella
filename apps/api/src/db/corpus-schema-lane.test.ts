@@ -5,6 +5,7 @@ import { CASE_LAW_MAINTENANCE_LANE } from "@/api/lib/case-law/maintenance-lane";
 import {
   CORPUS_SCHEMA_LANE,
   CORPUS_SCHEMA_LANE_LOCK_SQL,
+  CORPUS_SCHEMA_LANE_LOCK_STATEMENTS,
   CORPUS_SCHEMA_LANE_RETRY_MS,
   CORPUS_SCHEMA_LANE_TRY_SHARED_XACT_SQL,
   CORPUS_SCHEMA_LANE_UNLOCK_SQL,
@@ -146,4 +147,11 @@ test("a budget that is not a multiple of the retry pause is honoured exactly", a
   );
   expect(rejection).toMatchObject({ waitedMs: 300 });
   expect(refused.attempts.filter((step) => step === "begin")).toHaveLength(3);
+});
+
+test("the exclusive wait runs with the statement timeout off and restores it once held", () => {
+  const [lift, lock, restore] = CORPUS_SCHEMA_LANE_LOCK_STATEMENTS;
+  expect(lift).toBe("SET statement_timeout = '0'");
+  expect(lock).toBe(CORPUS_SCHEMA_LANE_LOCK_SQL);
+  expect(restore).toBe("RESET statement_timeout");
 });
