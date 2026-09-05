@@ -20,44 +20,25 @@ const CLIPBOARD_WINDOW_HEIGHT: f64 = 326.0;
 const CLIPBOARD_WINDOW_INSET: f64 = 18.0;
 const CLIPBOARD_WINDOW_RADIUS: f64 = 28.0;
 
-/// Whether the clipboard window is parked and which app held focus before the
-/// window last took it. Parking keeps the window on screen fully transparent
-/// and click-through instead of ordering it out: WebKit reclaims a hidden
-/// page's graphics caches within seconds and its compiled JS within minutes,
-/// which made the next open after an idle spell paint its content 200-600ms
-/// late. A parked page stays warm, so reopening paints immediately.
+/// Whether the clipboard window is parked. Parking keeps the window on screen
+/// fully transparent and click-through instead of ordering it out: WebKit
+/// reclaims a hidden page's graphics caches within seconds and its compiled JS
+/// within minutes, which made the next open after an idle spell paint its
+/// content 200-600ms late. A parked page stays warm, so reopening paints
+/// immediately.
 #[derive(Default)]
-pub struct ClipboardWindowPark(Mutex<ParkState>);
-
-#[derive(Default)]
-struct ParkState {
-  parked: bool,
-  #[cfg(target_os = "macos")]
-  previous_app_pid: Option<i32>,
-}
+pub struct ClipboardWindowPark(Mutex<bool>);
 
 impl ClipboardWindowPark {
   fn is_parked(&self) -> bool {
-    self.0.lock().map(|state| state.parked).unwrap_or(false)
+    self.0.lock().map(|parked| *parked).unwrap_or(false)
   }
 
   #[cfg(target_os = "macos")]
   fn set_parked(&self, parked: bool) {
     if let Ok(mut state) = self.0.lock() {
-      state.parked = parked;
+      *state = parked;
     }
-  }
-
-  #[cfg(target_os = "macos")]
-  fn remember_previous_app(&self, pid: i32) {
-    if let Ok(mut state) = self.0.lock() {
-      state.previous_app_pid = Some(pid);
-    }
-  }
-
-  #[cfg(target_os = "macos")]
-  fn previous_app_pid(&self) -> Option<i32> {
-    self.0.lock().ok().and_then(|state| state.previous_app_pid)
   }
 }
 
@@ -248,115 +229,78 @@ fn position_window(app: &AppHandle, window: &WebviewWindow) {
   let _ = window.set_position(LogicalPosition::new(x, y));
 }
 
+/// Runs `f` on the main thread and waits for its result; `default` when the
+/// event loop is gone or does not answer in time.
 #[cfg(target_os = "macos")]
-fn remember_previous_app(app: &AppHandle) {
-  use objc2::MainThreadMarker;
-  use objc2_app_kit::NSWorkspace;
-
-  if MainThreadMarker::new().is_none() {
-    let handle = app.clone();
-    let _ = app.run_on_main_thread(move || remember_previous_app(&handle));
-    return;
-  }
-  let Some(park) = app.try_state::<ClipboardWindowPark>() else {
-    return;
-  };
-  let Some(frontmost) = NSWorkspace::sharedWorkspace().frontmostApplication() else {
-    return;
-  };
-  let pid = frontmost.processIdentifier();
-  // Reopening while the window already holds focus keeps the earlier target.
-  if pid != std::process::id() as i32 {
-    park.remember_previous_app(pid);
-  }
-}
-
-#[cfg(target_os = "macos")]
-enum ParkFocusHandoff {
-  /// The window holds focus (Escape, copy): hand it back to the app that had
-  /// it before the window opened, or fall back to a real hide.
-  PreviousApp,
-  /// Focus already moved elsewhere (hide on blur): leave activation alone.
-  None,
-}
-
-/// Parks the window instead of hiding it. Returns false when parking is not
-/// possible (no main thread, no window handle, no app to hand focus to); the
-/// caller then falls back to ordering the window out.
-#[cfg(target_os = "macos")]
-fn park_window(window: &WebviewWindow, handoff: ParkFocusHandoff) -> bool {
+fn on_main_thread<T: Send + 'static>(
+  window: &WebviewWindow,
+  default: T,
+  f: impl FnOnce(&WebviewWindow) -> T + Send + 'static,
+) -> T {
   use objc2::MainThreadMarker;
 
   if MainThreadMarker::new().is_some() {
-    return park_window_on_main(window, handoff);
+    return f(window);
   }
   let (sender, receiver) = std::sync::mpsc::sync_channel(1);
   let cloned = window.clone();
   if window
     .app_handle()
     .run_on_main_thread(move || {
-      let _ = sender.send(park_window_on_main(&cloned, handoff));
+      let _ = sender.send(f(&cloned));
     })
     .is_err()
   {
-    return false;
+    return default;
   }
   receiver
     .recv_timeout(Duration::from_secs(1))
-    .unwrap_or(false)
+    .unwrap_or(default)
 }
 
-// `ActivateIgnoringOtherApps` is a no-op on macOS 14+ (activation from the
-// active app is already cooperative there) but required before it.
-#[allow(deprecated)]
+/// Shows the window as the key window without activating the app: the app the
+/// user was working in stays frontmost and gets its caret back on dismissal.
+/// Falls back to an activating show when the panel cannot be presented.
 #[cfg(target_os = "macos")]
-fn park_window_on_main(window: &WebviewWindow, handoff: ParkFocusHandoff) -> bool {
-  use objc2_app_kit::{NSApplicationActivationOptions, NSRunningApplication};
-
-  let app = window.app_handle();
-  let Some(park) = app.try_state::<ClipboardWindowPark>() else {
-    return false;
-  };
-  if park.is_parked() {
-    return true;
+fn present(window: &WebviewWindow) -> tauri::Result<()> {
+  let presented = on_main_thread(window, false, |window| {
+    let presented = stella_desktop_macos::present_key_panel(window);
+    if presented
+      && let Some(park) = window.app_handle().try_state::<ClipboardWindowPark>()
+    {
+      park.set_parked(false);
+    }
+    presented
+  });
+  if presented {
+    return Ok(());
   }
-  if let ParkFocusHandoff::PreviousApp = handoff {
-    let activated = park
-      .previous_app_pid()
-      .and_then(NSRunningApplication::runningApplicationWithProcessIdentifier)
-      .is_some_and(|previous| {
-        previous.activateWithOptions(
-          NSApplicationActivationOptions::ActivateIgnoringOtherApps,
-        )
-      });
-    if !activated {
+  window.show().and_then(|()| window.set_focus())
+}
+
+#[cfg(not(target_os = "macos"))]
+fn present(window: &WebviewWindow) -> tauri::Result<()> {
+  window.show().and_then(|()| window.set_focus())
+}
+
+/// Parks the window instead of hiding it. Returns false when parking is not
+/// possible (no main thread, no window handle); the caller then falls back to
+/// ordering the window out.
+#[cfg(target_os = "macos")]
+fn park(window: &WebviewWindow) -> bool {
+  on_main_thread(window, false, |window| {
+    let Some(park) = window.app_handle().try_state::<ClipboardWindowPark>() else {
+      return false;
+    };
+    if park.is_parked() {
+      return true;
+    }
+    if !stella_desktop_macos::park_window(window) {
       return false;
     }
-  }
-  if !stella_desktop_macos::set_window_parked(window, true) {
-    return false;
-  }
-  park.set_parked(true);
-  true
-}
-
-#[cfg(target_os = "macos")]
-fn unpark_window(window: &WebviewWindow) {
-  use objc2::MainThreadMarker;
-
-  if MainThreadMarker::new().is_none() {
-    let cloned = window.clone();
-    let _ = window
-      .app_handle()
-      .run_on_main_thread(move || unpark_window(&cloned));
-    return;
-  }
-  if !stella_desktop_macos::set_window_parked(window, false) {
-    return;
-  }
-  if let Some(park) = window.app_handle().try_state::<ClipboardWindowPark>() {
-    park.set_parked(false);
-  }
+    park.set_parked(true);
+    true
+  })
 }
 
 pub fn show(app: &AppHandle) {
@@ -371,17 +315,10 @@ pub fn show_on_launch(app: &AppHandle) {
 /// existing window is always a reopen.
 fn show_as(app: &AppHandle, created_kind: ClipboardOpenKind) {
   let requested = Instant::now();
-  #[cfg(target_os = "macos")]
-  {
-    let _ = app.show();
-    remember_previous_app(app);
-  }
 
   if let Some(window) = app.get_webview_window(CLIPBOARD_WINDOW_LABEL) {
     position_window(app, &window);
-    #[cfg(target_os = "macos")]
-    unpark_window(&window);
-    if window.show().and_then(|()| window.set_focus()).is_err() {
+    if present(&window).is_err() {
       capture_window_error(
         app,
         DesktopTelemetryOperation::ClipboardWindowOpen,
@@ -442,7 +379,7 @@ fn show_as(app: &AppHandle, created_kind: ClipboardOpenKind) {
     }
     let app = window.app_handle();
     position_window(app, &window);
-    if window.show().and_then(|()| window.set_focus()).is_err() {
+    if present(&window).is_err() {
       capture_window_error(
         app,
         DesktopTelemetryOperation::ClipboardWindowOpen,
@@ -479,7 +416,7 @@ fn show_as(app: &AppHandle, created_kind: ClipboardOpenKind) {
       let window_to_hide = window.clone();
       window.on_window_event(move |event| {
         if matches!(event, tauri::WindowEvent::Focused(false))
-          && hide_on_blur(&window_to_hide).is_err()
+          && hide(&window_to_hide).is_err()
         {
           capture_window_error(
             window_to_hide.app_handle(),
@@ -488,7 +425,6 @@ fn show_as(app: &AppHandle, created_kind: ClipboardOpenKind) {
           );
         }
       });
-      let _ = window.set_focus();
     }
     Err(error) => {
       tracing::error!(error = %error, "clipboard window could not be created");
@@ -521,21 +457,13 @@ pub fn toggle(app: &AppHandle) {
   show(app);
 }
 
-/// Dismissal while the window holds focus: park it and hand focus back to the
-/// previously focused app, or order it out when that is not possible.
+/// Parks the window, which also gives key status back to the app underneath,
+/// or orders it out when parking is not possible. Serves both an explicit
+/// dismissal (Escape, copy) and the hide on blur: whatever the user focused
+/// instead keeps it either way.
 pub fn hide(window: &WebviewWindow) -> Result<(), String> {
   #[cfg(target_os = "macos")]
-  if park_window(window, ParkFocusHandoff::PreviousApp) {
-    return Ok(());
-  }
-  order_out(window)
-}
-
-/// Hide after the window lost focus on its own: whatever the user focused
-/// keeps it, so parking must not re-activate the previously focused app.
-fn hide_on_blur(window: &WebviewWindow) -> Result<(), String> {
-  #[cfg(target_os = "macos")]
-  if park_window(window, ParkFocusHandoff::None) {
+  if park(window) {
     return Ok(());
   }
   order_out(window)
