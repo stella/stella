@@ -25,7 +25,7 @@ pre-commit:
       run: bun run i18n:sync
       stage_fixed: true
     ai-skills:
-      glob: "{.agents/skills,.ai/local-skills,.ai/shared/skills,.claude/commands}/**"
+      glob: "{.agents/skills,.ai/local-skills,.ai/shared/skills,.claude/skills}/**"
       run: bash scripts/check-ai-skill-sources.sh
 
 pre-push:

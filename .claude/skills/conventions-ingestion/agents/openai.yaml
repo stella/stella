@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ingestion Conventions"
+  short_description: "Design replay-safe ingestion and checkpoint workflows"
+  default_prompt: "Apply stella replay-safe ingestion conventions to this ingestion workflow."

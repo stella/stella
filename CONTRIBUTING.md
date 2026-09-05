@@ -87,18 +87,18 @@ Stella uses a layered AI command setup:
 ```text
 .ai/shared/              # shared AI repo submodule
 .ai/local-skills/        # Stella-specific Codex-style skill source
-.claude/commands/        # generated flat command files
+.claude/skills/          # generated Claude Code skills
 .agents/skills/          # generated Codex-style skills
 ```
 
-Do not hand-edit `.claude/commands/` or `.agents/skills/`;
+Do not hand-edit `.claude/skills/` or `.agents/skills/`;
 they are generated from the shared and local sources.
 
 The sync layout is:
 
 ```text
 .ai/local-skills/<skill>/SKILL.md
-.claude/commands/<skill>.md
+.claude/skills/<skill>/SKILL.md
 .agents/skills/<skill>/SKILL.md
 ```
 
