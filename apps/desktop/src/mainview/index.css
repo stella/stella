@@ -258,7 +258,7 @@ body:has(.clipboard-editor-window) .font-sans {
 
 .clipboard-html td,
 .clipboard-html th {
-  padding: 0 0.25em 0 0;
+  padding-inline-end: 0.25em;
   vertical-align: top;
 }
 

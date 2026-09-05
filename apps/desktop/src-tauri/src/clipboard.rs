@@ -2221,6 +2221,7 @@ const MAX_TABLE_SPAN: u32 = 20;
 /// Rules thicker than this are decoration, not a signature line.
 const MAX_RULE_WIDTH_PT: f32 = 6.0;
 const MAX_CELL_WIDTH_PT: f32 = 800.0;
+const HIGHLIGHT_BACKGROUND: &str = "var(--highlight, #fef08a)";
 
 fn sanitized_html(raw_html: &str) -> Option<String> {
   if raw_html.len() > MAX_ITEM_HTML_BYTES {
@@ -2326,13 +2327,13 @@ fn without_table_gaps(html: &str) -> String {
 /// Attribute values are re-emitted from parsed tokens, never passed through, so
 /// the webview only ever sees the vocabulary below.
 fn sanitized_attribute<'value>(
-  _element: &str,
+  element: &str,
   attribute: &str,
   value: &'value str,
 ) -> Option<Cow<'value, str>> {
   let value = value.trim();
   match attribute {
-    "style" => sanitized_style(value).map(Cow::Owned),
+    "style" => sanitized_style(element, value).map(Cow::Owned),
     "colspan" | "rowspan" => value
       .parse::<u32>()
       .ok()
@@ -2355,7 +2356,7 @@ fn sanitized_attribute<'value>(
 /// widths, rules, highlight) and drops typography, spacing and everything
 /// application-specific, so cards keep the app's type and theme. Colours are
 /// replaced by theme tokens rather than copied.
-fn sanitized_style(style: &str) -> Option<String> {
+fn sanitized_style(element: &str, style: &str) -> Option<String> {
   let mut declarations = Vec::new();
   for declaration in style.split(';') {
     let Some((property, value)) = declaration.split_once(':') else {
@@ -2373,19 +2374,20 @@ fn sanitized_style(style: &str) -> Option<String> {
         matches!(value.as_str(), "top" | "middle" | "bottom" | "baseline")
           .then(|| format!("vertical-align: {value}"))
       }
-      "white-space" => matches!(
-        value.as_str(),
-        "normal" | "nowrap" | "pre" | "pre-wrap" | "pre-line"
-      )
-      .then(|| format!("white-space: {value}")),
       "border-top" | "border-bottom" => {
         sanitized_rule(&value).map(|(width, line_style)| {
           format!("{property}: {width}pt {line_style} currentColor")
         })
       }
-      "width" => sanitized_width(&value).map(|width| format!("width: {width}")),
+      // Only cells keep a width: a table width would override the full-width
+      // layout and clip columns in the card.
+      "width" if matches!(element, "td" | "th") => {
+        sanitized_width(&value).map(|width| format!("width: {width}"))
+      }
+      // The theme token styles cards; the fallback keeps the highlight when
+      // the HTML is pasted into another application.
       "background" | "background-color" => {
-        is_plain_color(&value).then(|| "background: var(--highlight)".to_string())
+        is_plain_color(&value).then(|| format!("background: {HIGHLIGHT_BACKGROUND}"))
       }
       _ => None,
     };
@@ -3938,7 +3940,7 @@ mod tests {
       "{html}"
     );
     assert!(
-      html.contains(r#"<p align="right" style="text-align: right"><b><span style="background: var(--highlight)">Název strany A</span></b></p>"#),
+      html.contains(r#"<p align="right" style="text-align: right"><b><span style="background: var(--highlight, #fef08a)">Název strany A</span></b></p>"#),
       "{html}"
     );
     assert!(
@@ -3964,20 +3966,21 @@ mod tests {
   #[test]
   fn sanitizer_re_emits_styles_from_an_allow_list_only() {
     let html = sanitized_html(
-      r#"<table><tr><td colspan="9999" rowspan="abc" style="background:url(javascript:alert(1));text-align:RIGHT;position:fixed;width:120%;border-bottom:solid red 40pt;white-space:nowrap">x</td></tr></table>"#,
+      r#"<table style="width:800pt"><tr><td colspan="9999" rowspan="abc" style="background:url(javascript:alert(1));text-align:RIGHT;position:fixed;width:120%;border-bottom:solid red 40pt;white-space:nowrap">x</td></tr></table>"#,
     )
     .unwrap();
 
     assert_eq!(
       html,
-      r#"<table><tbody><tr><td style="text-align: right; border-bottom: 6pt solid currentColor; white-space: nowrap">x</td></tr></tbody></table>"#
+      r#"<table><tbody><tr><td style="text-align: right; border-bottom: 6pt solid currentColor">x</td></tr></tbody></table>"#
     );
-    assert_eq!(sanitized_style("color:red;font-family:Aptos"), None);
+    assert_eq!(sanitized_style("span", "color:red;font-family:Aptos"), None);
     assert_eq!(
-      sanitized_style("width:98.3pt;background:#FFFF00").as_deref(),
-      Some("width: 98.3pt; background: var(--highlight)")
+      sanitized_style("td", "width:98.3pt;background:#FFFF00").as_deref(),
+      Some("width: 98.3pt; background: var(--highlight, #fef08a)")
     );
-    assert_eq!(sanitized_style("border-bottom:none;width:-5pt"), None);
+    assert_eq!(sanitized_style("p", "width:98.3pt"), None);
+    assert_eq!(sanitized_style("td", "border-bottom:none;width:-5pt"), None);
     // Alignment alone is worth keeping as formatting.
     assert!(sanitized_html(r#"<p align="center">centred</p>"#).is_some());
     assert!(sanitized_html(r#"<p style="text-align:right">right</p>"#).is_some());

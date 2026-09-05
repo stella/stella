@@ -90,13 +90,14 @@ const EDITOR_BLOCK_TAGS = new Set([
   "PRE",
   "TABLE",
   "TBODY",
-  "TD",
   "TFOOT",
-  "TH",
   "THEAD",
   "TR",
   "UL",
 ]);
+
+/** Cells sit side by side: plain text separates them with a tab, rows with a newline. */
+const EDITOR_CELL_TAGS = new Set(["TD", "TH"]);
 
 const listItemsFromSelection = (fragment: DocumentFragment) => {
   const items: HTMLLIElement[] = [];
@@ -417,6 +418,27 @@ const editorPlainText = (editor: HTMLDivElement) => {
   };
   const isBlock = (node: Node) =>
     node instanceof HTMLElement && EDITOR_BLOCK_TAGS.has(node.tagName);
+  const isCell = (node: Node) =>
+    node instanceof HTMLElement && EDITOR_CELL_TAGS.has(node.tagName);
+  const appendSeparator = (child: Node, nextChild: Node | undefined) => {
+    if (!nextChild) {
+      return;
+    }
+    if (isCell(child) && isCell(nextChild)) {
+      parts.push("\t");
+      return;
+    }
+    if (isBlock(child) || isBlock(nextChild)) {
+      appendLineBreak();
+    }
+  };
+  const appendChildren = (node: Node) => {
+    const children = Array.from(node.childNodes);
+    for (const [index, child] of children.entries()) {
+      appendNode(child);
+      appendSeparator(child, children.at(index + 1));
+    }
+  };
   const appendNode = (node: Node) => {
     if (node instanceof Text) {
       parts.push(node.data);
@@ -429,24 +451,10 @@ const editorPlainText = (editor: HTMLDivElement) => {
       parts.push("\n");
       return;
     }
-    const children = Array.from(node.childNodes);
-    for (const [index, child] of children.entries()) {
-      appendNode(child);
-      const nextChild = children.at(index + 1);
-      if (nextChild && (isBlock(child) || isBlock(nextChild))) {
-        appendLineBreak();
-      }
-    }
+    appendChildren(node);
   };
 
-  const children = Array.from(editor.childNodes);
-  for (const [index, child] of children.entries()) {
-    appendNode(child);
-    const nextChild = children.at(index + 1);
-    if (nextChild && (isBlock(child) || isBlock(nextChild))) {
-      appendLineBreak();
-    }
-  }
+  appendChildren(editor);
   return parts.join("");
 };
 
