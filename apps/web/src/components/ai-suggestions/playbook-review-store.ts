@@ -12,7 +12,7 @@
  * starting from the launcher.
  */
 
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { create } from "zustand";
 
 import { REVIEW_START_MODE } from "@/components/ai-suggestions/document-review-basis.logic";
@@ -480,7 +480,7 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => {
                   return false;
                 default:
                   event satisfies never;
-                  return true;
+                  return panic(`Unhandled event: ${String(event)}`);
               }
             },
           }),

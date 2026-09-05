@@ -9,6 +9,7 @@
 
 import type { CSSProperties } from "react";
 
+import { panic } from "better-result";
 import { ArrowRightIcon } from "lucide-react";
 
 import { diffWordSegments } from "@stll/folio-react";
@@ -244,7 +245,7 @@ export const RedlinePreview = ({
     }
     default:
       preview satisfies never;
-      return null;
+      return panic(`Unhandled preview: ${String(preview)}`);
   }
 };
 

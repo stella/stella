@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import type { TranslationKey } from "@/i18n/types";
 
 // Narrowed to the specific keys in use (still validated against the catalog via
@@ -46,7 +48,7 @@ const isReservedChatCommandOffered = (
       return context.hasPersistedThread;
     default:
       id satisfies never;
-      return false;
+      return panic(`Unhandled id: ${String(id)}`);
   }
 };
 

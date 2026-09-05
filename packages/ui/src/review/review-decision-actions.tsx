@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { panic } from "better-result";
 import { CheckIcon, RotateCcwIcon, XIcon } from "lucide-react";
 
 import { Button } from "../components/button";
@@ -172,6 +173,6 @@ const renderControls = ({
       );
     default:
       state satisfies never;
-      return null;
+      return panic(`Unhandled state: ${String(state)}`);
   }
 };

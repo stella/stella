@@ -251,7 +251,7 @@ const UnexpectedRouteError = ({
       break;
     default: {
       support satisfies never;
-      description = panic(`Unhandled support: ${String(support)}`);
+      panic(`Unhandled support: ${String(support)}`);
     }
   }
 

@@ -8,6 +8,7 @@
  */
 
 import { queryOptions } from "@tanstack/react-query";
+import { panic } from "better-result";
 
 import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
@@ -147,7 +148,7 @@ const runPollInterval = (status: BilingualRunStatus): number | false => {
       return false;
     default:
       status satisfies never;
-      return false;
+      return panic(`Unhandled status: ${String(status)}`);
   }
 };
 
@@ -168,7 +169,7 @@ export const bilingualRunView = (
       return "stopped";
     default:
       status satisfies never;
-      return "stopped";
+      return panic(`Unhandled status: ${String(status)}`);
   }
 };
 
@@ -221,7 +222,7 @@ export const annotatedOriginLabelKey = (
       return null;
     default:
       origin satisfies never;
-      return null;
+      return panic(`Unhandled origin: ${String(origin)}`);
   }
 };
 

@@ -2705,6 +2705,7 @@ export const useFillToMatterSaveTarget = (
           return;
         default:
           created satisfies never;
+          panic(`Unhandled created: ${String(created)}`);
       }
     },
   };

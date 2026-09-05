@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import type { Node as ProseMirrorNode } from "prosemirror-model";
 
 import {
@@ -22,7 +23,7 @@ const severityForFolio = (
       return "substantive";
     default:
       severity satisfies never;
-      return "style";
+      return panic(`Unhandled severity: ${String(severity)}`);
   }
 };
 
@@ -192,7 +193,7 @@ const resolveTextualSuggestion = (
       return null;
     default:
       operation satisfies never;
-      return null;
+      return panic(`Unhandled operation: ${String(operation)}`);
   }
 };
 

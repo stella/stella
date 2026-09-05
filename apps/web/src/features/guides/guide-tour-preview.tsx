@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import {
   ArrowUpIcon,
   CheckIcon,
@@ -49,7 +50,7 @@ const GuideTourCanvas = ({ tourId }: { tourId: GuideTourId }) => {
       return <TabularReviewPreview />;
     default:
       tourId satisfies never;
-      return null;
+      return panic(`Unhandled tour id: ${String(tourId)}`);
   }
 };
 

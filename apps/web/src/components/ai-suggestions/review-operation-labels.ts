@@ -16,6 +16,8 @@
  * stops. No branch here may put an id into a sentence.
  */
 
+import { panic } from "better-result";
+
 import type { FolioAIEditOperation } from "@stll/folio-react";
 
 import type { TranslationKey } from "@/i18n/types";
@@ -164,7 +166,7 @@ export const describeOperationSummary = (
       return { key: SUMMARY_KEYS.formatSelection, values: {} };
     default:
       operation satisfies never;
-      return { key: SUMMARY_KEYS.replaceParagraph, values: { label } };
+      return panic(`Unhandled operation: ${String(operation)}`);
   }
 };
 
@@ -229,6 +231,6 @@ export const describeSuggestionChange = (
       return null;
     default:
       operation satisfies never;
-      return null;
+      return panic(`Unhandled operation: ${String(operation)}`);
   }
 };

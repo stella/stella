@@ -18,6 +18,7 @@ import { useHotkey } from "@tanstack/react-hotkeys";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { panic } from "better-result";
 import { ArrowDownIcon, ArrowUpIcon, EyeOffIcon, FileIcon } from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
@@ -1700,7 +1701,7 @@ const FilesystemRow = ({
               return;
             default:
               intent satisfies never;
-              return;
+              panic(`Unhandled intent: ${String(intent)}`);
           }
         }
 

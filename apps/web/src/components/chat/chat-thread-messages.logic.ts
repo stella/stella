@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import type {
   ChatAnonRestoration,
@@ -228,6 +228,7 @@ const stripMarkdownLinkDestinations = (markdown: string): string => {
       }
       default: {
         state satisfies never;
+        panic(`Unhandled state: ${String(state)}`);
       }
     }
   }

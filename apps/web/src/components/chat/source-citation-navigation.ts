@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import type { ChatSourceCitationTarget } from "@stll/api-contract";
 
 type SourceCitationNavigationDeps = {
@@ -65,5 +67,6 @@ export const activateSourceCitation = async ({
       break;
     default:
       target satisfies never;
+      panic(`Unhandled target: ${String(target)}`);
   }
 };

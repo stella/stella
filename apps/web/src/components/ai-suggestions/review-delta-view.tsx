@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import { ReviewAlignedPair } from "@/components/ai-suggestions/review-aligned-pair";
 import type {
   DeltaCitation,
@@ -89,6 +91,6 @@ export const ReviewDeltaView = ({
       return pair;
     default:
       delta satisfies never;
-      return null;
+      return panic(`Unhandled delta: ${String(delta)}`);
   }
 };

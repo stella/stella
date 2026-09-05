@@ -1,4 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
+import { panic } from "better-result";
 
 import type { WorkspaceRealtimeEvent } from "@stll/api-contract";
 
@@ -76,6 +77,7 @@ export const useWorkspaceSSE = (
             break;
           default:
             action satisfies never;
+            panic(`Unhandled action: ${String(action)}`);
         }
       }
     },

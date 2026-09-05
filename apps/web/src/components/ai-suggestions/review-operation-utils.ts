@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import type { FolioAIBlock, FolioAIEditOperation } from "@stll/folio-react";
 
 export type ReviewOperationSnapshotBlock = Pick<
@@ -42,6 +44,6 @@ export const isNoopReviewOperation = (
       return false;
     default:
       operation satisfies never;
-      return false;
+      return panic(`Unhandled operation: ${String(operation)}`);
   }
 };

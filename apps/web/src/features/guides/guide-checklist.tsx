@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { CheckIcon, ClockIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -96,7 +97,7 @@ const GuideStatusBadge = ({ status }: { status: GuideTourStatus }) => {
       );
     default:
       status satisfies never;
-      return null;
+      return panic(`Unhandled status: ${String(status)}`);
   }
 };
 
@@ -146,7 +147,7 @@ const GuideTourCard = ({
         );
       default:
         status satisfies never;
-        return null;
+        return panic(`Unhandled status: ${String(status)}`);
     }
   })();
 

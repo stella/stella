@@ -646,6 +646,7 @@ export const selectTerminalCreateDocumentDraftIds = (
           break;
         default:
           part satisfies never;
+          panic(`Unhandled part: ${String(part)}`);
       }
     }
   }

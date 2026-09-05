@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import { AGENT_SKILLS_CHAT_METADATA_MAX } from "@stll/api-contract";
 
 import type {
@@ -200,7 +202,7 @@ const scopePriority = (scope: SlashSkillScope): number => {
       return 2;
     default:
       scope satisfies never;
-      return 2;
+      return panic(`Unhandled scope: ${String(scope)}`);
   }
 };
 
