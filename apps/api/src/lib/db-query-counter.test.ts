@@ -13,7 +13,6 @@ import { runWithRequestScope } from "@/api/lib/observability/request-scope";
 // increments; this is what would break a shared (non-ALS) counter.
 const logQueriesInterleaved = async (queries: number): Promise<void> => {
   for (let index = 0; index < queries; index += 1) {
-    // eslint-disable-next-line no-await-in-loop -- sequential yields are the point: each hop of the microtask queue lets the other context increment in between, which is exactly what a shared (non-ALS) counter would get wrong
     await Promise.resolve();
     queryCountLogger.logQuery("SELECT 1", []);
   }
@@ -93,7 +92,6 @@ const buildCountingApp = () =>
       // and only an I/O wait leaves the gap in which the background loop below
       // used to resume inside this request's async context frame.
       for (let index = 0; index < Number(params.count); index += 1) {
-        // eslint-disable-next-line no-await-in-loop -- sequential queries are the shape being counted
         await Bun.sleep(QUERY_WAIT_MS);
         queryCountLogger.logQuery("SELECT request", []);
       }
@@ -105,7 +103,6 @@ const buildCountingApp = () =>
 const runBackgroundQueries = (signal: { done: boolean }) => {
   const loop = async () => {
     while (!signal.done) {
-      // eslint-disable-next-line no-await-in-loop -- a background loop is sequential by nature; that is what lets it interleave with requests
       await Bun.sleep(BACKGROUND_QUERY_WAIT_MS);
       queryCountLogger.logQuery("SELECT background", []);
     }
@@ -122,7 +119,6 @@ describe("db query counter HTTP header", () => {
 
     const counts: (string | null)[] = [];
     for (let round = 0; round < REQUEST_ROUNDS; round += 1) {
-      // eslint-disable-next-line no-await-in-loop -- each round must overlap the background loop in real time
       const response = await fetch(`${origin}/queries/4`);
       counts.push(response.headers.get(DB_QUERY_COUNT_HEADER));
     }

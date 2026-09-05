@@ -203,7 +203,6 @@ const readInput = async (args: Args): Promise<string> => {
 
     try {
       while (true) {
-        // oxlint-disable-next-line no-await-in-loop -- sequential stream reads: each chunk depends on the previous read advancing the stdin reader
         const { done, value } = await reader.read();
         if (done) {
           break;

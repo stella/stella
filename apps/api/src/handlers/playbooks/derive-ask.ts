@@ -242,7 +242,6 @@ export const deriveAutoAsks = async (
     cursor += DERIVE_ASK_CONCURRENCY
   ) {
     const chunk = pending.slice(cursor, cursor + DERIVE_ASK_CONCURRENCY);
-    // oxlint-disable-next-line no-await-in-loop -- sequential chunk drain bounds the per-save derive-ask fan-out
     const derived = await Promise.all(
       chunk.map(async ({ index, position, hash }) => ({
         index,

@@ -160,7 +160,6 @@ export const connectWithColdStartRetries = async (
   for (const delayMs of COLD_START_CONNECT_RETRY_DELAYS_MS) {
     // catch returns the raw cause unchanged so the warning below reports the
     // original error identity (code, syscall, class).
-    // oxlint-disable-next-line no-await-in-loop -- each retry must observe whether the connection came up before deciding to wait and try again
     const result = await Result.tryPromise({
       try: connectOnce,
       catch: (cause: unknown) => cause,
@@ -172,7 +171,6 @@ export const connectWithColdStartRetries = async (
       "redis.cold_start_reconnect",
       connectionErrorFields(result.error),
     );
-    // oxlint-disable-next-line no-await-in-loop -- retries are intentionally sequential backoff, not parallel work
     await sleep(delayMs);
   }
   // One attempt per delay, then a final unguarded one: its rejection is the

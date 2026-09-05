@@ -295,7 +295,6 @@ export const runSourceTotalPoll = async ({
   const askedAt = new Map<string, number>();
 
   while (!isDraining()) {
-    // oxlint-disable-next-line no-await-in-loop -- one sweep per wake; the interval only starts once this sweep has settled
     const summary = await sweepSourceTotals({
       adapters,
       askedAt,
@@ -314,7 +313,6 @@ export const runSourceTotalPoll = async ({
     let remainingMs = timing.wakeIntervalMs;
     while (remainingMs > 0 && !isDraining()) {
       const sliceMs = Math.min(remainingMs, DRAIN_CHECK_SLICE_MS);
-      // oxlint-disable-next-line no-await-in-loop -- sequential wait, sliced only to re-check the drain flag
       await sleep(sliceMs);
       remainingMs -= sliceMs;
     }

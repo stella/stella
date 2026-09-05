@@ -328,7 +328,6 @@ const portalPairFor = (stem: string): PortalPair | undefined =>
  */
 const recordParserFixtures = async (): Promise<void> => {
   for (const { celex, languages } of PARSER_CORPUS) {
-    // oxlint-disable-next-line no-await-in-loop -- sequential by design: Cellar is rate-limited and this is a recorder, not a hot path
     const decisions = await fetchDecisionsByCelex({
       celexNumbers: [celex],
       languages,
@@ -359,7 +358,6 @@ const recordParserFixtures = async (): Promise<void> => {
         },
       ];
 
-      // oxlint-disable-next-line no-await-in-loop -- sequential Cellar lookup per variant
       const formex = await fetchFormex(celex, languageUriOf(decision));
       if (formex === undefined) {
         log(`  ${stem}: no Formex published`);
@@ -379,7 +377,6 @@ const recordParserFixtures = async (): Promise<void> => {
           log(`  ${stem}: no portal URL, pair left as recorded`);
           continue;
         }
-        // oxlint-disable-next-line no-await-in-loop -- one portal request per declared pair
         const portal = await fetchPortalPage(decision);
         if (portal.outcome !== "served") {
           log(
@@ -399,7 +396,6 @@ const recordParserFixtures = async (): Promise<void> => {
         // The sidecar pins the bytes written beside it; fixture-provenance
         // rechecks the hash on every test run, so a recording and its
         // provenance can never be committed apart.
-        // oxlint-disable-next-line no-await-in-loop -- one fixture (bytes + sidecar) per iteration
         await Promise.all([
           Bun.write(new URL(name, PARSER_FIXTURES_DIR), bytes),
           Bun.write(
@@ -450,7 +446,6 @@ const recordSeedFixture = async (): Promise<void> => {
   const rows: ReturnType<typeof toSeedRow>[] = [];
 
   for (const { celex, languages } of SEED_CORPUS) {
-    // oxlint-disable-next-line no-await-in-loop -- sequential by design: Cellar is rate-limited
     const decisions = await fetchDecisionsByCelex({
       celexNumbers: [celex],
       languages,

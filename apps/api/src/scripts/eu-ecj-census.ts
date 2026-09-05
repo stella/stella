@@ -153,7 +153,6 @@ const selectCensusPage = async (
 const rows: CensusRow[] = [];
 let after: SafeId<"caseLawDecision"> | null = null;
 for (;;) {
-  // oxlint-disable-next-line no-await-in-loop -- keyset pagination is inherently sequential
   const page = await selectCensusPage(after);
   rows.push(...page);
   const last = page.at(-1);
@@ -177,7 +176,6 @@ const listedVariants = new Set<string>();
 const listedCelex = new Set<string>();
 for (let index = 0; index < distinctCelex.length; index += sparqlChunk) {
   const chunk = distinctCelex.slice(index, index + sparqlChunk);
-  // oxlint-disable-next-line no-await-in-loop -- rate-limited external queries stay sequential
   const variants = await listCelexVariants({
     celexNumbers: chunk,
     signal: AbortSignal.timeout(ECJ_LISTING_TIMEOUT_MS),
@@ -189,7 +187,6 @@ for (let index = 0; index < distinctCelex.length; index += sparqlChunk) {
   console.error(
     `queried ${Math.min(index + sparqlChunk, distinctCelex.length)} of ${distinctCelex.length} CELEX…`,
   );
-  // oxlint-disable-next-line no-await-in-loop -- politeness pause between bulk queries
   await Bun.sleep(SPARQL_DELAY_MS);
 }
 

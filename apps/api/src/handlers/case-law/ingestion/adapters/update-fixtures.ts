@@ -127,7 +127,6 @@ if (import.meta.main) {
   let failures = 0;
   for (const [i, key] of keysToUpdate.entries()) {
     process.stdout.write(`  ${key}... `);
-    // oxlint-disable-next-line no-await-in-loop -- sequential per-adapter recording with rate-limit delay between adapters
     const result = await updateAdapter(key);
 
     if ("error" in result) {
@@ -139,7 +138,6 @@ if (import.meta.main) {
 
     // Rate limit between adapters
     if (i < keysToUpdate.length - 1) {
-      // oxlint-disable-next-line no-await-in-loop -- polite rate-limit delay between adapter fixture recordings
       await Bun.sleep(2000);
     }
   }

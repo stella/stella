@@ -102,7 +102,6 @@ test("the SQL function, the query fragment, and corpusIndexId derive the same id
   for (const generation of GENERATIONS) {
     // The generation is a bound parameter and the country a column, the
     // shapes the query layer feeds the fragment.
-    // oxlint-disable-next-line no-await-in-loop -- one round trip per generation on a single test DB
     const result = await db.execute(sql`
       SELECT c.country AS "country",
              case_law_corpus_index_id(${generation}, c.country) AS "fn",

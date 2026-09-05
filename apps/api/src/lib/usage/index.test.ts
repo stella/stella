@@ -357,7 +357,6 @@ describe("usage ledger — allocation + usage math", () => {
       // micro-units and are settled by the per-user lane counters, so the
       // org's purchased units must not move for them.
       for (const lane of ["allowance", "fallback"] as const) {
-        // oxlint-disable-next-line no-await-in-loop -- two ordered ledger writes against one balance
         await recordUsageEvent({
           ...laneEvent,
           lane,
@@ -397,7 +396,6 @@ describe("usage ledger — allocation + usage math", () => {
         ["evt_large_allocation_a", 1_500_000_000],
         ["evt_large_allocation_b", 1_500_000_000],
       ] as const) {
-        // oxlint-disable-next-line no-await-in-loop -- two ordered ledger writes build one aggregate fixture
         await allocateUsage({
           tx,
           organizationId: fx.organizationId,
@@ -422,7 +420,6 @@ describe("usage ledger — allocation + usage math", () => {
     await withRolledBackTx(async (tx) => {
       const fx = await setupFixture(tx);
       for (const actionType of ["doc_review", "chat"] as const) {
-        // oxlint-disable-next-line no-await-in-loop -- two ordered ledger writes build one aggregate fixture
         await recordUsageEvent({
           tx,
           organizationId: fx.organizationId,

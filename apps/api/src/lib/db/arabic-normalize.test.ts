@@ -62,7 +62,6 @@ beforeAll(async () => {
       if (trimmed.length === 0 || !isPortableFunctionStatement(trimmed)) {
         continue;
       }
-      // oxlint-disable-next-line no-await-in-loop -- ordered DDL on one connection
       await testDb.execute(sql.raw(trimmed));
     }
   }
@@ -75,7 +74,6 @@ afterAll(async () => {
 describe("arabic_normalize SQL function", () => {
   test("matches arabicNormalize for every vector", async () => {
     for (const input of VECTORS) {
-      // oxlint-disable-next-line no-await-in-loop -- sequential queries on one PGlite connection
       const result = await testDb.execute<{ out: string | null }>(
         sql`SELECT arabic_normalize(${input}) AS out`,
       );

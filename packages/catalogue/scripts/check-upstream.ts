@@ -268,7 +268,6 @@ export const runUpstreamCheck = async (): Promise<UpstreamCheckResult> => {
 
   for (const target of collectGithubSkillTargets()) {
     try {
-      // oxlint-disable-next-line no-await-in-loop -- sequential sweep keeps the GitHub API request rate low
       const state = await inspectUpstreamTarget(target);
       switch (state.status) {
         case "current":

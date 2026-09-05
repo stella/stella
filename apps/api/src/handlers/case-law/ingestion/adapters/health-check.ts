@@ -222,7 +222,6 @@ export const checkAllAdapters = async (
       continue;
     }
 
-    // oxlint-disable-next-line no-await-in-loop -- sequential by design: sequential health probes avoid hammering multiple court servers concurrently
     const result = await checkAdapterHealth(entry.adapter, timeoutMs);
     results.push(result);
   }

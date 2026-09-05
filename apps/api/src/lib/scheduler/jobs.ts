@@ -361,7 +361,6 @@ export const ensureDefaultSchedulerJobs = async (): Promise<void> => {
     // issuing all of them at once puts more concurrent statements in flight
     // than the root pool holds, and registration is on no latency path.
     // Bounded by the declared list.
-    // oxlint-disable-next-line no-await-in-loop -- one upsert per declared job, sequential to stay inside the root pool
     await (mode === "oneShot"
       ? ensureOneShotSchedulerJob(definition)
       : ensureSchedulerJob(definition));

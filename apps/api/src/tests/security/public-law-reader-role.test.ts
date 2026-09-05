@@ -125,7 +125,6 @@ const revokeOtherDatabaseConnectFromPublic = async (
       AND datname <> current_database()
   `);
   for (const { name } of result.rows) {
-    // oxlint-disable-next-line no-await-in-loop -- database privileges are separate statements and the test transaction rolls them back together
     await tx.execute(
       sql.raw(`REVOKE CONNECT ON DATABASE ${quoted(name)} FROM PUBLIC`),
     );
@@ -430,7 +429,6 @@ describe("public-law reader role", () => {
         for (const [relation, columns] of Object.entries(
           PUBLIC_LAW_COLUMNS_BY_RELATION,
         )) {
-          // oxlint-disable-next-line no-await-in-loop -- each statement gives the probe the exact direct projection while role inheritance stays disabled
           await tx.execute(
             sql.raw(
               `GRANT SELECT (${columns.map(quoted).join(", ")}) ON TABLE ${quoted(relation)} TO reader_attestation_admin`,
@@ -465,7 +463,6 @@ describe("public-law reader role", () => {
       for (const [relation, columns] of Object.entries(
         PUBLIC_LAW_COLUMNS_BY_RELATION,
       )) {
-        // oxlint-disable-next-line no-await-in-loop -- each statement proves the active role can resolve and read one exact relation projection
         await tx.execute(
           sql.raw(
             `SELECT ${columns.map(quoted).join(", ")} FROM ${quoted(relation)} LIMIT 0`,
@@ -709,7 +706,6 @@ describe("public-law reader role", () => {
         sql.raw(`SET LOCAL ROLE ${quoted(ROLLOUT_READER_ROLE)}`),
       );
       for (const relation of ROLLOUT_CASE_LAW_WHOLE_RELATIONS) {
-        // oxlint-disable-next-line no-await-in-loop -- each statement proves the previous reader contract still resolves after the additive migration
         await tx.execute(sql.raw(`SELECT * FROM ${quoted(relation)} LIMIT 0`));
       }
       await tx.execute(

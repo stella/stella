@@ -1246,7 +1246,6 @@ const main = async (): Promise<void> => {
               `run ${run}/${options.runs} with ` +
               `${model ?? "org default model"} ...`,
           );
-          // oxlint-disable-next-line no-await-in-loop -- benchmark turns run sequentially by design
           const result = await runBenchTask({
             client,
             fixture,

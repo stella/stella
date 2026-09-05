@@ -1320,7 +1320,6 @@ const fetchListedDecisions = async (
       // The crawl keeps a listing-only row for a record NALUS serves no text
       // for: its cursor moves past that record either way, so the observation
       // is worth more than nothing. Only the reconciliation refuses it.
-      // oxlint-disable-next-line no-await-in-loop -- bounded batches pace the court while preserving result order
       ...(await Promise.all(
         batch.map(
           async (item) => (await fetchListedDecision(item, signal)).decision,
@@ -1328,7 +1327,6 @@ const fetchListedDecisions = async (
       )),
     );
     if (start + DOCUMENT_CONCURRENCY < listed.length) {
-      // oxlint-disable-next-line no-await-in-loop -- deliberate pacing between bounded request batches
       await Bun.sleep(100);
     }
   }

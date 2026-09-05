@@ -305,7 +305,6 @@ const forEachChunk = async <T>(
   visit: (chunk: T[]) => Promise<void>,
 ): Promise<void> => {
   for (let index = 0; index < values.length; index += HELD_LOOKUP_CHUNK) {
-    // oxlint-disable-next-line no-await-in-loop -- bounded lookups stay sequential rather than fanning out across the connection pool
     await visit(values.slice(index, index + HELD_LOOKUP_CHUNK));
   }
 };
@@ -447,7 +446,6 @@ const selectHeldIdentityKeys = async (
   });
 
   for (const [language, caseNumbers] of caseNumbersByLanguage) {
-    // oxlint-disable-next-line no-await-in-loop -- one language's dockets at a time; the fallback identity is language-scoped and the chunks inside are already sequential
     await forEachChunk([...caseNumbers], async (chunk) => {
       for (const caseNumber of await selectHeldCaseNumbers(scopedDb, {
         sourceId,
@@ -890,10 +888,8 @@ const walkSlice = async ({
   const keyed = new Map<string, KeyedListingItem>();
   for (let page = 0; ; page += 1) {
     if (page > 0) {
-      // oxlint-disable-next-line no-await-in-loop -- politeness pause between listing requests, matching the adapters' minimum request interval
       await sleep(LIST_DELAY_MS);
     }
-    // oxlint-disable-next-line no-await-in-loop -- rate-limited publisher traffic stays sequential
     const listed = await reconciliation.listSlicePage({
       slice,
       page,
@@ -964,7 +960,6 @@ const walkSlice = async ({
   summary.deferred = untracked.length - fillable.length;
   for (const [index, item] of fillable.entries()) {
     if (index > 0) {
-      // oxlint-disable-next-line no-await-in-loop -- politeness pause between decisions, matching the crawl
       await sleep(fetchDelayMs);
     }
     // After the pause, not before it: the pause can itself carry the unit past
@@ -976,7 +971,6 @@ const walkSlice = async ({
       summary.deferred += fillable.length - index;
       break;
     }
-    // oxlint-disable-next-line no-await-in-loop -- rate-limited publisher traffic and one pipeline write per decision stay sequential
     await ingestListedItem({
       adapterKey,
       item,
@@ -1085,7 +1079,6 @@ const retryParkedItems = async ({
   let fetched = 0;
   for (const [index, item] of unheld.entries()) {
     if (fetched > 0) {
-      // oxlint-disable-next-line no-await-in-loop -- politeness pause between decisions, matching the crawl
       await sleep(fetchDelayMs);
     }
     // After the pause, for the reason given in `walkSlice`. Their backoff
@@ -1096,7 +1089,6 @@ const retryParkedItems = async ({
       break;
     }
     fetched += 1;
-    // oxlint-disable-next-line no-await-in-loop -- rate-limited publisher traffic and one pipeline write per decision stay sequential
     await ingestListedItem({
       adapterKey,
       item,
@@ -1215,7 +1207,6 @@ export const runReconciliationWorkUnit = async ({
   // whatever is genuinely owed in the same iteration. Outside the lease, like
   // the crawl's own ledger writes.
   for (const { slice } of settled) {
-    // oxlint-disable-next-line no-await-in-loop -- bounded by the candidate window; sequential updates on one scoped connection rather than a fan-out
     await touchSliceCoverage(scopedDb, { sourceId, slice });
   }
 

@@ -129,13 +129,13 @@ export const getIngestionStatus = async (
     );
 
     for (const source of sources) {
-      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential by design: single scoped-db transaction client, must not be parallelized
+      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- sequential by design: single scoped-db transaction client, must not be parallelized
       const [totalRow] = await db
         .select({ total: count() })
         .from(caseLawDecisions)
         .where(sql`${caseLawDecisions.sourceId} = ${source.id}`);
 
-      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential per-source aggregation reads on a single scoped connection
+      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- sequential per-source aggregation reads on a single scoped connection
       const [hourRow] = await db
         .select({
           inserted: sql<number>`coalesce(sum(${caseLawIngestionEvents.inserted}), 0)::int`,
@@ -146,7 +146,7 @@ export const getIngestionStatus = async (
             AND ${caseLawIngestionEvents.finishedAt} >= ${oneHourAgo}`,
         );
 
-      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential per-source aggregation reads on a single scoped connection
+      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- sequential per-source aggregation reads on a single scoped connection
       const [dayRow] = await db
         .select({
           inserted: sql<number>`coalesce(sum(${caseLawIngestionEvents.inserted}), 0)::int`,
@@ -157,7 +157,7 @@ export const getIngestionStatus = async (
             AND ${caseLawIngestionEvents.finishedAt} >= ${oneDayAgo}`,
         );
 
-      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential per-source aggregation reads on a single scoped connection
+      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- sequential per-source aggregation reads on a single scoped connection
       const [failRow] = await db
         .select({ total: count() })
         .from(caseLawIngestionFailures)
@@ -166,7 +166,7 @@ export const getIngestionStatus = async (
             AND ${caseLawIngestionFailures.createdAt} >= ${oneDayAgo}`,
         );
 
-      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential per-source aggregation reads on a single scoped connection
+      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- sequential per-source aggregation reads on a single scoped connection
       const [lastEvent] = await db
         .select({
           status: caseLawIngestionEvents.status,
@@ -181,7 +181,7 @@ export const getIngestionStatus = async (
         .orderBy(desc(caseLawIngestionEvents.finishedAt))
         .limit(1);
 
-      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential per-source aggregation reads on a single scoped connection
+      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- sequential per-source aggregation reads on a single scoped connection
       const topFailures = await db
         .select({
           errorType: caseLawIngestionFailures.errorType,
@@ -196,7 +196,7 @@ export const getIngestionStatus = async (
         .orderBy(desc(count()))
         .limit(3);
 
-      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential per-source aggregation reads on a single scoped connection
+      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- sequential per-source aggregation reads on a single scoped connection
       const [sliceRow] = await db
         .select({
           // Surveyed means listed at least once; a row that only ever failed
@@ -209,7 +209,7 @@ export const getIngestionStatus = async (
         .from(caseLawCoverageSlices)
         .where(sql`${caseLawCoverageSlices.sourceId} = ${source.id}`);
 
-      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential per-source aggregation reads on a single scoped connection
+      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- sequential per-source aggregation reads on a single scoped connection
       const [itemRow] = await db
         .select({
           parked: sql<number>`coalesce(sum(case when ${caseLawReconciliationItems.status} = ${RECONCILIATION_ITEM_STATUS.PARKED} then 1 else 0 end), 0)::int`,

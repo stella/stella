@@ -851,8 +851,6 @@ const main = async () => {
     for (const task of tasks) {
       for (let repeat = 1; repeat <= options.runs; repeat += 1) {
         process.stderr.write(`${id} · ${task.id} · run ${String(repeat)}\n`);
-        // One model turn at a time keeps provider rate limits and the report order.
-        // eslint-disable-next-line no-await-in-loop
         runs.push(await runTask({ model, modelId: id, task, repeat }));
       }
     }

@@ -283,7 +283,6 @@ const parsePageItems = async ({
       break;
     }
     const chunk = items.slice(i, i + chunkSize);
-    // oxlint-disable-next-line no-await-in-loop -- sequential chunk processing: abort/rewind bookkeeping depends on prior chunk completing
     const results = await Promise.allSettled(
       chunk.map(async (item) => await parseItem(item, signal)),
     );

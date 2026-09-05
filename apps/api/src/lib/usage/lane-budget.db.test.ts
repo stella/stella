@@ -194,7 +194,6 @@ describe("lane counters — increment and read", () => {
       const fx = await setupFixture(tx);
 
       for (const microUnits of [0, -40]) {
-        // oxlint-disable-next-line no-await-in-loop -- ordered writes against one counter fixture
         await incrementLaneCounter({
           tx,
           ...fx,

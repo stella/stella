@@ -248,7 +248,6 @@ const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
           model,
           timestamp,
         } satisfies StreamChunk;
-        // oxlint-disable-next-line no-await-in-loop -- sequential stream simulation: each chunk must land before the next delay starts, so an e2e spec sees a real streaming window
         await Bun.sleep(SLOW_STREAM_CHUNK_DELAY_MS);
       }
     } else {

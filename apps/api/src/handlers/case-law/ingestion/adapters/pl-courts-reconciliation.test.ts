@@ -334,7 +334,6 @@ describe("pl-courts listSlicePage", () => {
       JSON.stringify({ info: { totalResults: 283 } }),
     ]) {
       mockFetchWithBodies([{ pattern: SEARCH_PATTERN, body }]);
-      // oxlint-disable-next-line no-await-in-loop -- one mocked response at a time; the mock is process-global
       expect(await sliceRejection(SLICE)).toBeInstanceOf(AdapterFetchError);
     }
   });
@@ -403,7 +402,6 @@ describe("pl-courts listSlicePage", () => {
           contentType,
         },
       ]);
-      // oxlint-disable-next-line no-await-in-loop -- one mocked response at a time; the mock is process-global
       expect(await sliceRejection(SLICE)).toBeInstanceOf(AdapterFetchError);
     }
   });

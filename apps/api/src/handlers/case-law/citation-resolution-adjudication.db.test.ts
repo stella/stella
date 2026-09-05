@@ -474,7 +474,6 @@ test("re-adjudication reopens settled ambiguous rows and is idempotent", async (
     const totals = { scanned: 0, resolved: 0, oneFileMerits: 0, ambiguous: 0 };
     let after: CitationResolutionCursor | null = null;
     for (let turn = 0; turn < 20; turn += 1) {
-      // oxlint-disable-next-line no-await-in-loop -- keyset walk: each batch's cursor comes from the previous one
       const batch = await readjudicateAmbiguousCitations(scopedDb, {
         limit: 2,
         after,

@@ -757,7 +757,6 @@ const analyzeHeadersAndFooters = async (
       continue;
     }
 
-    // oxlint-disable-next-line no-await-in-loop -- sequential to keep running paragraph offsets correct across parts
     const xml = await entry.async("string");
     const doc = slimdom.parseXmlDocument(xml);
 

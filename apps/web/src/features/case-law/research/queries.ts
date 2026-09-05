@@ -220,7 +220,6 @@ export const runResearchAnswers = async (
             force: true,
           };
     const table = researchTableApi(input.tableId);
-    // oxlint-disable-next-line no-await-in-loop -- batches are submitted in order so the server queues them in table order
     const response = await table.answers.run.post(body);
     queued += unwrapEden(response).queued;
   }

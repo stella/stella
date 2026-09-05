@@ -64,12 +64,10 @@ const waitFor = async (
   const startedAt = Date.now();
 
   while (Date.now() - startedAt < timeoutMs) {
-    // oxlint-disable-next-line no-await-in-loop -- polling predicates may perform an asynchronous readiness probe
     if (await predicate()) {
       return;
     }
 
-    // oxlint-disable-next-line no-await-in-loop -- polling delay between predicate checks until the condition is met
     await Bun.sleep(10);
   }
 
@@ -405,7 +403,6 @@ const spawnRedisBackedCollabProcess = async ({
     const decoder = new TextDecoder();
     const reader = subprocess.stdout.getReader();
     while (true) {
-      // oxlint-disable-next-line no-await-in-loop -- stream chunks must be consumed in order until the child exits
       const chunk = await reader.read();
       if (chunk.done) {
         return;

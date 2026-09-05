@@ -124,8 +124,6 @@ class StreamQueue {
       if (this.done) {
         return;
       }
-      // Sequential by nature: block until the next push/close resolves.
-      // eslint-disable-next-line no-await-in-loop
       const result = await new Promise<IteratorResult<string>>((resolve) => {
         this.resolvers.push(resolve);
       });

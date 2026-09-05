@@ -81,7 +81,6 @@ describe("insertAutomatedFlowRunWithinCap", () => {
     createdAt: Date,
   ): Promise<void> => {
     for (let index = 0; index < count; index += 1) {
-      // oxlint-disable-next-line no-await-in-loop -- small fixed seed, ordering irrelevant
       await seedRun(definitionId, FILE_UPLOAD_SOURCE, createdAt);
     }
   };
@@ -204,13 +203,11 @@ describe("insertAutomatedFlowRunWithinCap", () => {
     // Enough manual-today and automated-yesterday rows to blow the cap if they
     // were (wrongly) counted; neither should gate today's automated run.
     for (let index = 0; index < CAP; index += 1) {
-      // oxlint-disable-next-line no-await-in-loop -- small fixed seed, ordering irrelevant
       await seedRun(
         definitionId,
         { type: "manual", userId: "manual-actor" },
         new Date(),
       );
-      // oxlint-disable-next-line no-await-in-loop -- small fixed seed, ordering irrelevant
       await seedRun(definitionId, FILE_UPLOAD_SOURCE, yesterday);
     }
 

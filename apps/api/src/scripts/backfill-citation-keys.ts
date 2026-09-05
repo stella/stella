@@ -53,7 +53,6 @@ const backfillTable = async (
   let after: string | null = null;
 
   while (true) {
-    // oxlint-disable-next-line no-await-in-loop -- keyset walk: each batch's cursor comes from the previous one
     const result: unknown = await rootDb.execute(
       sql`SELECT id, ${sql.raw(sourceColumn)} AS text
             FROM ${sql.raw(table)}
@@ -90,7 +89,6 @@ const backfillTable = async (
       //
       // Only for decisions. A citation gaining a key was `pending` all along —
       // it was excluded from the walk by having no key, and now it is not.
-      // oxlint-disable-next-line no-await-in-loop -- one bounded write per batch; the next batch only starts once this one is durable
       await rootDb.transaction(async (tx) => {
         await tx.execute(
           sql`WITH v(id, key) AS (VALUES ${values})

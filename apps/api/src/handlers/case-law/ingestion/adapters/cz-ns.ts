@@ -853,7 +853,6 @@ export const czNsAdapter = defineSourceAdapter({
           const caseNumber = entryField(entry, "znacka") ?? "";
 
           try {
-            // oxlint-disable-next-line no-await-in-loop -- polite sequential crawl of one court detail page per entry, rate-limited via Bun.sleep below
             const built = await buildCzNsDecision({ caseNumber, unid }, signal);
 
             switch (built.type) {
@@ -909,7 +908,6 @@ export const czNsAdapter = defineSourceAdapter({
 
           // Rate limit between detail fetches (skip for last entry)
           if (i < entries.length - 1) {
-            // oxlint-disable-next-line no-await-in-loop -- deliberate crawl delay between sequential court detail fetches
             await Bun.sleep(50);
           }
         }

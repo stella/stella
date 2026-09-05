@@ -345,7 +345,6 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   const { pushSchema } = await import("drizzle-kit/api-postgres");
   const { sqlStatements } = await pushSchema(allSchema, pushSchemaDb);
   for (const statement of sqlStatements) {
-    // oxlint-disable-next-line no-await-in-loop -- ordered DDL statements run sequentially on one test DB connection
     await db.execute(sql.raw(statement));
   }
   await installPgliteWorkspaceAccessObjects(db);
@@ -353,7 +352,6 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteCorpusProjectionRevisionFence(db);
 
   for (const statement of ROLE_GRANT_STATEMENTS) {
-    // oxlint-disable-next-line no-await-in-loop -- grants run sequentially on one test DB connection
     await db.execute(sql.raw(statement));
   }
 

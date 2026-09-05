@@ -392,7 +392,6 @@ export const runWorkAttentionScout = async ({
       userId,
       workspaceIds: batch.workspaceIds,
     });
-    // oxlint-disable-next-line no-await-in-loop -- one short emitting transaction per organization, sequential to stay inside the root pool
     const result = await runScout({
       db: scopedDb,
       organizationId: batch.organizationId,

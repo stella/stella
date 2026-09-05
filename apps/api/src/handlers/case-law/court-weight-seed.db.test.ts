@@ -30,7 +30,6 @@ test("the seed migration applies, brings a stale row to the declared rank, and i
     weight: 1,
   });
   for (const statement of statements) {
-    // oxlint-disable-next-line no-await-in-loop -- statements apply in order
     await db.execute(sql.raw(statement));
   }
   const first = await db.select().from(caseLawCourtWeights);
@@ -41,7 +40,6 @@ test("the seed migration applies, brings a stale row to the declared rank, and i
     ),
   ).toMatchObject({ tier: 3, tierLabel: "supreme", weight: 8 });
   for (const statement of statements) {
-    // oxlint-disable-next-line no-await-in-loop -- statements apply in order
     await db.execute(sql.raw(statement));
   }
   const second = await db.select().from(caseLawCourtWeights);

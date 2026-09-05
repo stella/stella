@@ -2845,6 +2845,7 @@ const EXPECTED_NAMED_FIXTURE_SUPPRESSIONS = {
   "require-buffer-cleanup-intent-status/require-buffer-cleanup-intent-status": 0,
   "require-query-limit/require-query-limit": 6,
   "no-db-await-in-loop/no-db-await-in-loop": 0,
+  "no-network-await-in-loop/no-network-await-in-loop": 0,
   "no-raw-use-effect/no-raw-use-effect": 2,
   "no-swallowed-rejection/no-swallowed-rejection": 0,
   "require-toast-error-capture/require-toast-error-capture": 0,

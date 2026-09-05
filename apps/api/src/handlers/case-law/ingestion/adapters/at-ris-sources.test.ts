@@ -201,7 +201,6 @@ describe("Austrian official RIS court sources", () => {
         sleep: async () => {},
       });
 
-      // oxlint-disable-next-line no-await-in-loop -- the invariant exercises each independent source definition
       const result = await adapter.fetchPage(null, {});
       expect(result.isOk()).toBe(true);
       const decision = result.unwrap().decisions.at(0);

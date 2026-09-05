@@ -130,7 +130,6 @@ const readBoundedLocalFile = async (
       const bytes = Buffer.allocUnsafe(stats.size);
       let offset = 0;
       while (offset < bytes.length) {
-        // oxlint-disable-next-line no-await-in-loop -- each read advances one bounded file handle offset
         const chunk = await handle.read(
           bytes,
           offset,

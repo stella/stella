@@ -51,14 +51,12 @@ describe("encryptSharepointSecret / decryptSharepointSecret", () => {
     });
 
     for (const payload of payloads) {
-      // oxlint-disable-next-line no-await-in-loop -- sequential deterministic roundtrip check
       const { ciphertext, iv } = await encryptSharepointSecret({
         organizationId,
         purpose: "sharepoint_refresh_token",
         secret: payload,
         userId,
       });
-      // oxlint-disable-next-line no-await-in-loop -- pairs with the encrypt above
       const decrypted = await decryptSharepointSecret({
         ciphertext,
         iv,

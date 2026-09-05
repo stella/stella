@@ -691,7 +691,7 @@ const processDecisionAttempt = async ({
     for (const identity of sourceIdentityCandidates) {
       // SAFETY: candidates are hard-capped at eight above; sorted sequential
       // acquisition prevents deadlocks between overlapping identity sets.
-      // eslint-disable-next-line no-await-in-loop, no-db-await-in-loop/no-db-await-in-loop -- bounded identity lock set must be sequential
+      // eslint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- bounded identity lock set must be sequential
       await tx.execute(
         sql`SELECT pg_advisory_xact_lock(hashtext('case_law_source_identity'), hashtext(${`${sourceId}:${identity}`}))`,
       );
@@ -2027,7 +2027,6 @@ const processDecisionAttempt = async ({
       identity: slugIdentity,
       attempt,
     });
-    // oxlint-disable-next-line no-await-in-loop -- a failed unique-index insert aborts its transaction; each deterministic candidate needs a fresh transaction
     rowWrite = await Result.tryPromise({
       try: async () => await writeDecisionRow(slug),
       catch: (cause: unknown) => cause,
@@ -2392,7 +2391,6 @@ export const runIngestionPipeline = async ({
   };
 
   while (pagesProcessed < maxPages) {
-    // oxlint-disable-next-line no-await-in-loop -- sequential paginated crawl (each page's cursor depends on the previous page)
     const observedPage = await fetchNextObservedPage();
     if (observedPage.type === "halt") {
       haltReason = observedPage.reason;
@@ -2422,7 +2420,6 @@ export const runIngestionPipeline = async ({
     let pageHoldsDbSlot = false;
     if (dbSlot && page.decisions.length > 0) {
       try {
-        // oxlint-disable-next-line no-await-in-loop -- sequential per-page DB-slot acquisition bounds concurrent DB pressure
         await dbSlot.acquire(signal);
         pageHoldsDbSlot = true;
       } catch (error) {
@@ -2447,7 +2444,6 @@ export const runIngestionPipeline = async ({
           break;
         }
         try {
-          // oxlint-disable-next-line no-await-in-loop -- sequential decision inserts: consecutive-failure halting and per-page counters depend on ordering
           const outcome = await processDecision({
             input: result,
             sourceId: source.id,
@@ -2529,7 +2525,6 @@ export const runIngestionPipeline = async ({
 
           // Persist failure for later analysis
           try {
-            // oxlint-disable-next-line no-await-in-loop -- failure logged inline within the sequential decision loop
             await logIngestionFailure(scopedDb, {
               sourceId: source.id,
               caseNumber: result.caseNumber,
@@ -2610,7 +2605,6 @@ export const runIngestionPipeline = async ({
     }
 
     if (adapter.minRequestIntervalMs > 0) {
-      // oxlint-disable-next-line no-await-in-loop -- polite crawl delay between page fetches
       await Bun.sleep(adapter.minRequestIntervalMs);
     }
   }

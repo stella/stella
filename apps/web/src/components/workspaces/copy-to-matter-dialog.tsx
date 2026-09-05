@@ -116,8 +116,8 @@ export const CopyToMatterDialog = ({
     let failedCount = 0;
     let firstErrorMessage: string | null = null;
     for (const { entityId } of transferEntities) {
-      // oxlint-disable-next-line no-await-in-loop -- sequential by design: sequential copy/move mutations share query-key cache invalidation and move semantics (deleteSource); concurrent mutations would race and risk rate limits
       const result = await Result.tryPromise(async () => {
+        // oxlint-disable-next-line no-network-await-in-loop/no-network-await-in-loop -- sequential bulk copy/move: a partial failure leaves a deterministic prefix transferred, and the run continues to report the first error and the count
         const { data, error } = await api
           .entities({ workspaceId: toSafeId<"workspace">(sourceWorkspaceId) })
           ["copy-to-workspace"].post({

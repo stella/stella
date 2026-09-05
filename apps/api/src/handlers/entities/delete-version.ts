@@ -97,7 +97,6 @@ export const deleteEntityVersionHandler = async function* ({
         .orderBy(asc(fields.propertyId))
         .limit(LIMITS.propertiesCount);
       for (const { propertyId } of targetProperties) {
-        // oxlint-disable-next-line no-await-in-loop -- advisory locks must be acquired sequentially in the stable property order above
         await lockDocxEditTarget({
           entityId: params.entityId,
           propertyId,

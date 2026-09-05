@@ -1307,7 +1307,6 @@ describe("cz-nss buildDecision", () => {
       { caseNumber: 4, documentId: "784237" },
       { caseNumber: "1 Az 4/2026", documentId: 784_237 },
     ]) {
-      // oxlint-disable-next-line no-await-in-loop -- one assertion per shape; nothing here does I/O
       expect((await reconciliation.buildDecision(payload)).type).toBe(
         "unkeyable",
       );

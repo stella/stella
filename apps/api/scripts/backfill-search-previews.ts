@@ -27,7 +27,6 @@ const main = async (): Promise<void> => {
 
   for (;;) {
     const organizationRows: Iterable<OrganizationRow> =
-      // oxlint-disable-next-line no-await-in-loop -- sequential keyset pagination: the next organization page depends on this batch's final id
       await rootDb.execute<OrganizationRow>(sql`
         SELECT id
         FROM organization
@@ -41,7 +40,6 @@ const main = async (): Promise<void> => {
     }
 
     for (const { id } of organizations) {
-      // oxlint-disable-next-line no-await-in-loop -- bounded per-tenant rebuild prevents one tenant's derived projection writes from interleaving with another's
       await rebuildSupplementalSearchIndex(toSafeId<"organization">(id));
       processedOrganizations += 1;
       console.log(

@@ -221,21 +221,18 @@ describe("agent skill history RLS", () => {
       agentSkillProposals,
       agentSkillComments,
     ] as const) {
-      // oxlint-disable-next-line no-await-in-loop -- PGlite's single WASM connection cannot run concurrent transactions
       const countA1 = await scopedQuery(
         [ids.wsA1],
         ids.orgA,
         (tx) => tx.$count(table, eq(table.skillId, skillId)),
         ids.userA1,
       );
-      // oxlint-disable-next-line no-await-in-loop -- PGlite's single WASM connection cannot run concurrent transactions
       const countA2 = await scopedQuery(
         [ids.wsA1],
         ids.orgA,
         (tx) => tx.$count(table, eq(table.skillId, skillId)),
         ids.userA2,
       );
-      // oxlint-disable-next-line no-await-in-loop -- PGlite's single WASM connection cannot run concurrent transactions
       const countB1 = await scopedQuery(
         [ids.wsB1],
         ids.orgB,
@@ -268,14 +265,12 @@ describe("agent skill history RLS", () => {
       agentSkillProposals,
       agentSkillComments,
     ] as const) {
-      // oxlint-disable-next-line no-await-in-loop -- PGlite's single WASM connection cannot run concurrent transactions
       const ownerCount = await scopedQuery(
         [ids.wsA1],
         ids.orgA,
         (tx) => tx.$count(table, eq(table.skillId, skillId)),
         ids.userA1,
       );
-      // oxlint-disable-next-line no-await-in-loop -- PGlite's single WASM connection cannot run concurrent transactions
       const otherUserCount = await scopedQuery(
         [ids.wsA1],
         ids.orgA,

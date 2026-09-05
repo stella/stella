@@ -110,7 +110,6 @@ const migrationStatements = async (): Promise<string[]> =>
 
 const applyMigration = async (db: ReturnType<typeof drizzle>) => {
   for (const statement of await migrationStatements()) {
-    // oxlint-disable-next-line no-await-in-loop -- statements apply in order
     await db.execute(sql.raw(statement));
   }
 };

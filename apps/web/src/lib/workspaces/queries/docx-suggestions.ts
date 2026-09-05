@@ -56,7 +56,6 @@ export const docxSuggestionsOptions = ({
         let nextCursor = firstData.nextCursor;
 
         while (nextCursor !== null && items.length < max) {
-          // oxlint-disable-next-line no-await-in-loop -- sequential keyset pagination: each page's `nextCursor` is required to request the next
           const page = await endpoint.get({
             query: {
               status,

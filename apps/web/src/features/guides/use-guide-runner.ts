@@ -71,7 +71,6 @@ const waitForAnchor = async (
     if (Date.now() >= deadline) {
       return null;
     }
-    // eslint-disable-next-line no-await-in-loop -- sequential by design: poll the DOM until the anchor mounts or the bounded deadline passes
     const elapsedNormally = await delay(STEP_POLL_INTERVAL_MS, signal);
     if (!elapsedNormally) {
       return null;
@@ -304,13 +303,11 @@ export const useGuideRunner = ({
           continue;
         }
         if (step.route) {
-          // eslint-disable-next-line no-await-in-loop -- sequential by design: each candidate navigates then waits before the next is tried
           await navigate({ to: step.route });
           if (isRunAborted()) {
             return null;
           }
         }
-        // eslint-disable-next-line no-await-in-loop -- sequential by design: resolve this candidate's anchor before trying the next
         const element = await resolveStepElement(index, step.anchor, deadline);
         if (isRunAborted()) {
           return null;
@@ -399,7 +396,6 @@ export const useGuideRunner = ({
 
       for (;;) {
         firstIndex = Math.min(firstIndex, current.index);
-        // eslint-disable-next-line no-await-in-loop -- sequential by design: block on the user acting on this step before resolving the next
         const outcome = await showStep(engine, current, firstIndex);
 
         switch (outcome) {
@@ -408,16 +404,13 @@ export const useGuideRunner = ({
           case "leave":
             return { type: "left" };
           case "back": {
-            // eslint-disable-next-line no-await-in-loop -- sequential by design: one step is resolved and shown at a time
             const previous = await resolveFrom(current.index - 1, -1);
             // Nothing earlier resolves: stay on this step rather than dropping
             // the user out of the tour on a back press. Re-resolving forwards
             // from the same index refreshes the element, which the backwards
             // probe may have navigated away from, and cannot re-enter the
             // backwards walk without another click.
-            const restored =
-              // eslint-disable-next-line no-await-in-loop -- sequential by design: one step is resolved and shown at a time
-              previous ?? (await resolveFrom(current.index, 1));
+            const restored = previous ?? (await resolveFrom(current.index, 1));
             if (!restored) {
               return isRunAborted()
                 ? { type: "cancelled" }
@@ -430,7 +423,6 @@ export const useGuideRunner = ({
             if (current.index === total - 1) {
               return { type: "completed" };
             }
-            // eslint-disable-next-line no-await-in-loop -- sequential by design: one step is resolved and shown at a time
             const next = await resolveFrom(current.index + 1, 1);
             if (!next) {
               return isRunAborted()

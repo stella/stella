@@ -265,13 +265,11 @@ describe("multipart body string fields", () => {
         }
         // Baseline: the probe request itself must be valid with plain strings,
         // otherwise a failure below would say nothing about JSON parsing.
-        // oxlint-disable-next-line no-await-in-loop -- sequential probes keep offender ordering deterministic
         const baseline = await postForm(body, buildForm(body, PLAIN_VALUE));
         expect(`${file}: baseline ${baseline.status} ${baseline.detail}`).toBe(
           `${file}: baseline 200 `,
         );
 
-        // oxlint-disable-next-line no-await-in-loop -- sequential probes keep offender ordering deterministic
         const probe = await postForm(body, buildForm(body, JSON_SHAPED_VALUE));
         if (probe.status !== 200) {
           offenders.push(

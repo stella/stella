@@ -150,9 +150,6 @@ export async function* demuxExecStream(
   const reader = body.getReader();
   try {
     for (;;) {
-      // Streaming reads are inherently sequential — each frame arrives after the
-      // previous chunk is consumed; there is nothing to parallelize.
-      // eslint-disable-next-line no-await-in-loop
       const { done, value } = await reader.read();
       if (value) {
         append(value);

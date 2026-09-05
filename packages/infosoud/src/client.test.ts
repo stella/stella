@@ -108,7 +108,6 @@ const waitForCondition = async ({
     if (Date.now() > deadline) {
       throw new Error("Condition was not met before timeout.");
     }
-    // oxlint-disable-next-line no-await-in-loop -- polling loop: each tick must wait before re-checking the condition
     await new Promise<void>((resolve) => {
       setTimeout(resolve, 1);
     });
@@ -885,7 +884,6 @@ describe("InfoSoudClient", () => {
     );
 
     for (let index = 0; index < callCount; index += 1) {
-      // oxlint-disable-next-line no-await-in-loop -- sequential calls are required to actually exercise the politeness wait (and its listener) on each pass
       await client.searchCase({
         courtCode: "OSSCEDC",
         signal: abortController.signal,

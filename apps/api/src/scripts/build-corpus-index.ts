@@ -60,9 +60,7 @@ console.log(`=== BUILD CORPUS INDEX: generation ${generation} ===`);
 
 let total = 0;
 while (true) {
-  // oxlint-disable-next-line no-await-in-loop -- pacing gate between sequential batches
   await pacer.beforeBatch();
-  // oxlint-disable-next-line no-await-in-loop -- drives backfill to completion one batch at a time until none remain
   const result = await backfillCorpusIndexGenerationPage(
     ingestionDb,
     LIMITS.corpusIndexBatchSize,

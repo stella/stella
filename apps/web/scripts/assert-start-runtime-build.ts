@@ -124,7 +124,6 @@ const discoverSourceWorkerEntries = async (): Promise<Set<string>> => {
     const sourceUrl = new URL(sourcePath, WEB_ROOT_URL);
     const source = await Bun.file(sourceUrl).text();
     for (const specifier of workerSourceSpecifiers(source)) {
-      // oxlint-disable-next-line no-await-in-loop -- ordered source discovery resolves extensionless Vite imports against the filesystem
       const entry = await resolveSourceWorkerEntry(specifier, sourceUrl);
       if (entry !== undefined) {
         entries.add(entry);

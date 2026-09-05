@@ -265,7 +265,6 @@ export const awaitSandboxAdmissionIdle = async ({
     }
 
     if (sandboxHostWorkInFlight.size > 0) {
-      // oxlint-disable-next-line no-await-in-loop -- drain loop: race the current in-flight snapshot against the remaining budget, then re-check for work registered while we waited
       await raceHostWorkAgainstDeadline(
         Array.from(sandboxHostWorkInFlight),
         deadline,
@@ -273,7 +272,6 @@ export const awaitSandboxAdmissionIdle = async ({
       continue;
     }
 
-    // oxlint-disable-next-line no-await-in-loop -- yield a macrotask so a just-released slot's queue flush can settle before re-checking
     await new Promise<void>((resolve) => {
       setTimeout(resolve, 0);
     });
@@ -1141,7 +1139,6 @@ const driveVmUntilSettled = async ({
 
     if (state.pendingHostWork.size > 0) {
       idlePasses = 0;
-      // oxlint-disable-next-line no-await-in-loop -- VM event loop: must wait for host progress before pumping the next VM step
       const waitResult = await waitForHostProgress({
         pendingHostWork: state.pendingHostWork,
         deadline,
@@ -1168,7 +1165,6 @@ const driveVmUntilSettled = async ({
       }
     }
 
-    // oxlint-disable-next-line no-await-in-loop -- VM event loop: a microtask yield between steps while the VM drains jobs, a macrotask yield while it is idle so host timers and I/O stay live
     await (drained.value > 0 ? Promise.resolve() : Bun.sleep(0));
   }
 };

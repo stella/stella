@@ -39,7 +39,6 @@ export const expireDesktopEditSessions: SchedulerTask = async ({
   let expired = 0;
 
   while (!signal.aborted) {
-    // oxlint-disable-next-line no-await-in-loop -- sequential sweep: each bounded batch is processed before fetching the next
     const unnotifiedExpiredSessions = await rootDb
       .select({
         id: desktopEditSessions.id,
@@ -55,7 +54,6 @@ export const expireDesktopEditSessions: SchedulerTask = async ({
       .orderBy(asc(desktopEditSessions.closedAt))
       .limit(EXPIRE_SWEEP_BATCH_SIZE);
 
-    // oxlint-disable-next-line no-await-in-loop -- sequential sweep: notify this batch before continuing the drain
     await publishAndMarkExpiryNotifications(unnotifiedExpiredSessions);
 
     if (unnotifiedExpiredSessions.length === EXPIRE_SWEEP_BATCH_SIZE) {
@@ -65,7 +63,6 @@ export const expireDesktopEditSessions: SchedulerTask = async ({
     // Mirror authorizeDesktopEditSession's liveness check: a session past
     // tokenExpiresAt has no connected desktop stream refreshing it.
     const now = new Date();
-    // oxlint-disable-next-line no-await-in-loop -- sequential sweep: each bounded batch is processed before fetching the next
     const batch = await rootDb
       .select({
         id: desktopEditSessions.id,
@@ -90,7 +87,6 @@ export const expireDesktopEditSessions: SchedulerTask = async ({
 
     const batchIds = batch.map((session) => session.id);
 
-    // oxlint-disable-next-line no-await-in-loop -- per-batch transition transaction; each batch commits before the next iteration
     const expiredSessions = await rootDb.transaction(async (tx) => {
       const transitioned = await tx
         .update(desktopEditSessions)
@@ -147,7 +143,6 @@ export const expireDesktopEditSessions: SchedulerTask = async ({
           workspaceId: null,
           userId: firstEvent.userId,
         });
-        // oxlint-disable-next-line no-await-in-loop -- one bounded insert per organization/accountable-user group in the expiry batch
         await recordAuditEvent(
           tx,
           actorEvents.map(({ event }) => event),
@@ -158,7 +153,6 @@ export const expireDesktopEditSessions: SchedulerTask = async ({
     });
 
     expired += expiredSessions.length;
-    // oxlint-disable-next-line no-await-in-loop -- sequential by design: this publish marks expiryNotificationPublishedAt, which the unnotified-sessions query at the top of the loop filters on; deferring it past the batch-size check would let the next sweep re-fetch and re-notify the same batch
     await publishAndMarkExpiryNotifications(expiredSessions);
 
     if (batch.length < EXPIRE_SWEEP_BATCH_SIZE) {

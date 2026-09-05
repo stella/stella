@@ -108,7 +108,6 @@ describe("projectToolMapForSubagent", () => {
       if (!tool || !getChatToolPolicy(tool).needsApproval) {
         continue;
       }
-      // eslint-disable-next-line no-await-in-loop -- test executes wrappers to assert they perform no side effect
       await tool.execute?.({}, undefined);
     }
 

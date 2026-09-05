@@ -452,7 +452,6 @@ export const resolveLookupFields = async ({
       );
       if (mapped) {
         for (const { row, subPath } of rows) {
-          // oxlint-disable-next-line no-await-in-loop -- sequential: rate-limited external registry lookup that appends to the shared `errors` accumulator
           await resolveLookupValue({
             lookup,
             aiAdapt: field.aiAdapt,
@@ -474,7 +473,6 @@ export const resolveLookupFields = async ({
       continue;
     }
 
-    // oxlint-disable-next-line no-await-in-loop -- sequential: rate-limited external registry lookup that appends to the shared `errors`/`resolved` accumulators
     await resolveLookupValue({
       lookup,
       aiAdapt: field.aiAdapt,

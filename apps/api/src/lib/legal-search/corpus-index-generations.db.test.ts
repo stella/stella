@@ -47,7 +47,6 @@ beforeAll(
       ) {
         continue;
       }
-      // oxlint-disable-next-line no-await-in-loop -- the trigger depends on the function created immediately before it
       await db.execute(sql.raw(ddl));
     }
   },

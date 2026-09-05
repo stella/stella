@@ -315,7 +315,6 @@ test("the declared phase edges are the edges the phases actually produce", async
       .map((consumer) => ({ consumer, fixture })),
   );
   for (const { consumer, fixture } of pairs) {
-    // oxlint-disable-next-line no-await-in-loop -- every pair needs the database to itself
     const pair = await observePair({
       consumer,
       producer: fixture.producer,

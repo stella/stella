@@ -954,7 +954,6 @@ export const fetchDecisionsByCelex = async ({
     if (completedVariants.has(variantKey)) {
       continue;
     }
-    // oxlint-disable-next-line no-await-in-loop -- rate-limited external calls stay sequential instead of fanning out across every manifestation
     const decision = await buildDecision(binding, signal);
     if (!decision) {
       continue;
@@ -1611,12 +1610,10 @@ WHERE {
           }
 
           if (previousCelex !== undefined && previousCelex !== celex) {
-            // oxlint-disable-next-line no-await-in-loop -- deliberate crawl delay between decisions; language variants within one decision remain contiguous and unslept
             await Bun.sleep(CRAWL_DELAY_MS);
           }
           previousCelex = celex;
 
-          // oxlint-disable-next-line no-await-in-loop -- rate-limited external calls stay sequential instead of fanning out across every language manifestation
           const decision = await buildDecision(binding, abortSignal);
           if (!decision) {
             continue;

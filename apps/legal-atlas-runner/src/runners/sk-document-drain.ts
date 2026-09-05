@@ -159,7 +159,6 @@ export const runSkDocumentDrain = async ({
     let delayMs = timing.fetchDelayMs;
 
     try {
-      // oxlint-disable-next-line no-await-in-loop -- continuous walk: one document at a time is the point, so the next queue read only happens after this one is paced
       const queued = await queue.next();
 
       if (queued === undefined) {
@@ -168,7 +167,6 @@ export const runSkDocumentDrain = async ({
       } else {
         idleMs = timing.idleSleepMs;
         summary.attempted += 1;
-        // oxlint-disable-next-line no-await-in-loop -- one paced fetch at a time; the loop must not start the next download before this one settles
         const outcome = await fetchDocument(queued.decision);
         summary[outcome.status] += 1;
       }
@@ -194,7 +192,6 @@ export const runSkDocumentDrain = async ({
     let remainingMs = delayMs;
     while (remainingMs > 0 && !isDraining()) {
       const sliceMs = Math.min(remainingMs, DRAIN_CHECK_SLICE_MS);
-      // oxlint-disable-next-line no-await-in-loop -- sequential pacing wait, sliced only to re-check the drain flag
       await sleep(sliceMs);
       remainingMs -= sliceMs;
     }

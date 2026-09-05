@@ -865,7 +865,6 @@ export const createCorpusIndexer = <
     const readFailures: LoadedBatch<TBrand, TRow>["readFailures"] = [];
     for (let i = 0; i < rows.length; i += stride) {
       const slice = rows.slice(i, i + stride);
-      // oxlint-disable-next-line no-await-in-loop -- bounded concurrency: drain one INDEX_CONCURRENCY chunk before loading the next so S3 reads stay capped
       const loaded = await Promise.all(
         slice.map(async (row) => {
           try {
@@ -935,7 +934,6 @@ export const createCorpusIndexer = <
       }
     }
     for (const [indexId, jobs] of failuresByIndex) {
-      // oxlint-disable-next-line no-await-in-loop -- sequential per-index audit writes preserve job ordering
       await adapter.recordJobs(scopedDb, jobs, indexId);
     }
   };
@@ -1362,7 +1360,6 @@ export const createCorpusIndexer = <
       // keying.
       const groupFailures: CorpusJobInput<TBrand>[] = [];
       try {
-        // oxlint-disable-next-line no-await-in-loop -- each jurisdiction reserves and ensures its durable target immediately before sequential remote writes
         const reservation = await reserveAndEnsureGroup(indexId, group);
         const { ensured, reservedGroup, reservedTargets } = reservation;
         // A row the reservation dropped was moved by a concurrent refresh
@@ -1448,7 +1445,6 @@ export const createCorpusIndexer = <
         const removeStartedAt = performance.now();
         for (const unit of deleteUnits) {
           timing.engineRequests += 1;
-          // oxlint-disable-next-line no-await-in-loop -- one task per (index, chunk): bounded by the batch's distinct indexes, not by its rows; sequential so the first failure stops before the ingest below
           const removed = await removeManyWithOptions({
             ...(options.type === "incremental"
               ? {}
@@ -1488,7 +1484,6 @@ export const createCorpusIndexer = <
           LIMITS.corpusIndexIngestMaxBytes,
         )) {
           const ingestStartedAt = performance.now();
-          // oxlint-disable-next-line no-await-in-loop -- sequential ingest paces NDJSON pushes to the search backend
           const ingest = await ingestBatchWithGuard({
             // Both incremental shapes are the steady state: their whole
             // job is to make a newly written row searchable, and the
@@ -1530,7 +1525,6 @@ export const createCorpusIndexer = <
 
           const casMissed = new Set<SafeId<TBrand>>();
           const markStartedAt = performance.now();
-          // oxlint-disable-next-line no-await-in-loop -- one CAS transaction per ingest request; sequential to keep index writes and audit rows consistent
           await scopedDb(async (tx) => {
             // audit: skip — search index maintenance; rebuilds derived state
             if (options.type !== "incremental") {
@@ -1590,7 +1584,6 @@ export const createCorpusIndexer = <
           // re-indexed by a later cycle.
           const missedStartedAt = performance.now();
           for (const missedId of casMissed) {
-            // oxlint-disable-next-line no-await-in-loop -- sequential cleanup deletes of the unrecorded copies; matches this file's established sequential-vs-search-backend design (see ensureIndex/ingestBatch above)
             const removed = await removeWithOptions({
               ...(options.type === "incremental"
                 ? {}
@@ -1623,7 +1616,6 @@ export const createCorpusIndexer = <
         // place; a row that is neither indexed nor recorded failed is
         // invisible.
         if (groupFailures.length > 0) {
-          // oxlint-disable-next-line no-await-in-loop -- sequential per-group audit write preserves job ordering
           await adapter.recordJobs(scopedDb, groupFailures, indexId);
         }
       }

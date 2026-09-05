@@ -70,7 +70,6 @@ beforeAll(async () => {
   sourceId = source.id;
 
   for (const [index, requestedAt] of REQUESTED_AT.entries()) {
-    // oxlint-disable-next-line no-await-in-loop -- ordered inserts on one test DB connection
     const [row] = await testDb
       .insert(caseLawDecisions)
       .values({
@@ -89,7 +88,6 @@ beforeAll(async () => {
     created.push(row.id);
     // The microsecond digits are the point of the fixture, so the column is
     // written as a literal rather than bound from a `Date`.
-    // oxlint-disable-next-line no-await-in-loop -- ordered updates on one test DB connection
     await testDb.execute(sql`
       UPDATE case_law_decisions
       SET document_fetch_requested_at = ${requestedAt}::timestamptz
@@ -113,7 +111,6 @@ const walk = async (
   const visited: SafeId<"caseLawDecision">[] = [];
   let after = startAfter;
   for (let page = 0; page < MAX_PAGES; page += 1) {
-    // oxlint-disable-next-line no-await-in-loop -- sequential keyset pagination
     const rows = await loadRequestedDocuments(
       after === undefined
         ? { scopedDb, sourceId, limit: PAGE_LIMIT }
@@ -194,7 +191,6 @@ test("INVARIANT: resuming after any decision yields exactly the ones that follow
   const expected = await walk();
 
   for (const [index, boundary] of expected.entries()) {
-    // oxlint-disable-next-line no-await-in-loop -- sequential keyset pagination
     const remainder = await walk(boundary);
     expect(remainder).toEqual(expected.slice(index + 1));
   }

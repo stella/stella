@@ -170,12 +170,10 @@ test("the table refuses exactly the dates the guard refuses, and takes NULL", as
   const outcomes: { date: string; stored: boolean }[] = [];
   for (const [index, date] of BOUNDARY_DATES.entries()) {
     if (acceptedByGuard(date)) {
-      // oxlint-disable-next-line no-await-in-loop -- one insert per fixture on a single test DB connection
       await insertWithDate(date, index + 1);
       outcomes.push({ date, stored: true });
       continue;
     }
-    // oxlint-disable-next-line no-await-in-loop -- one insert per fixture on a single test DB connection
     const rejection = await rejectionOf(insertWithDate(date, index + 1));
     // Refused by this constraint, not by some other check on the row.
     expect(rejection).toContain(CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT);

@@ -188,7 +188,6 @@ describe("new-account OTP abuse policy", () => {
         index < NEW_ACCOUNT_OTP_RATE_LIMITS.email.max;
         index += 1
       ) {
-        // oxlint-disable-next-line no-await-in-loop -- sequential increments exercise one fixed-window counter
         const result = await consumeSignupOtpRateLimit({
           context,
           identity: "new-user@example.com",
@@ -228,7 +227,6 @@ describe("new-account OTP abuse policy", () => {
         index < NEW_ACCOUNT_OTP_RATE_LIMITS.ip.max;
         index += 1
       ) {
-        // oxlint-disable-next-line no-await-in-loop -- sequential increments exercise one fixed-window counter
         const result = await consumeSignupOtpRateLimit({
           context,
           identity: "192.0.2.1",
@@ -272,7 +270,6 @@ describe("new-account OTP abuse policy", () => {
           index < NEW_ACCOUNT_OTP_RATE_LIMITS.email.max;
           index += 1
         ) {
-          // oxlint-disable-next-line no-await-in-loop -- sequential requests exercise one fixed-window counter
           await evaluateNewAccountOtpPolicy({
             accountExists: async () => false,
             clientIp: null,
@@ -331,7 +328,6 @@ describe("new-account OTP abuse policy", () => {
           index < NEW_ACCOUNT_OTP_RATE_LIMITS.ip.max;
           index += 1
         ) {
-          // oxlint-disable-next-line no-await-in-loop -- sequential requests exercise one fixed-window counter
           await evaluateAttempt(index);
         }
         return await evaluateAttempt(NEW_ACCOUNT_OTP_RATE_LIMITS.ip.max);

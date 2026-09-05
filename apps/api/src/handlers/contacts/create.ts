@@ -209,7 +209,6 @@ export const createContactHandler = async function* ({
       if (attorneyIds.length > 0) {
         const uniqueAttorneyIds = [...new Set(attorneyIds)];
         for (const attorneyId of uniqueAttorneyIds) {
-          // oxlint-disable-next-line no-await-in-loop -- early-exits on first invalid attorney; at most two ids
           const validAttorneyId = await validateOrgUserId(
             tx,
             brandPersistedUserId(attorneyId),

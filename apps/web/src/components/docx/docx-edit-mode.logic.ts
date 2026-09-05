@@ -81,9 +81,6 @@ export const createTrailingSingleFlight = ({
         const settlers = nextRunSettlers;
         nextRunSettlers = [];
         try {
-          // Sequential by design: the trailing run must not start
-          // until the in-flight run settles (single-flight).
-          // eslint-disable-next-line no-await-in-loop
           await run();
         } catch (error) {
           try {

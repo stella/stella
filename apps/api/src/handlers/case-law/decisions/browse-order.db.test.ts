@@ -144,7 +144,6 @@ const walk = async (limit: number) => {
   const items = [];
   let cursor: string | undefined;
   for (let page = 0; page < 20; page += 1) {
-    // oxlint-disable-next-line no-await-in-loop -- each page depends on the previous cursor
     const result = await listDecisionsHandler(
       { country: "CZE", limit, ...(cursor === undefined ? {} : { cursor }) },
       caseLawDb,

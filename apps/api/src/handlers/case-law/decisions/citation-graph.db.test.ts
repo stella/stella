@@ -234,7 +234,6 @@ const collect = async (direction: CitationDirection) => {
   let pages = 0;
 
   for (let request = 0; request < 4; request += 1) {
-    // oxlint-disable-next-line no-await-in-loop -- cursor pages are sequential
     const page = await readCitationPage(direction, cursor);
     if (!("items" in page)) {
       throw new Error("expected a citation page");

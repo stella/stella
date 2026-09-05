@@ -1287,7 +1287,6 @@ describe("ingest commit mode", () => {
     // caller states which it is.
     for (const commit of Object.values(CORPUS_INDEX_COMMIT)) {
       const modes = recordCommitModes();
-      // oxlint-disable-next-line no-await-in-loop -- one walk per mode; the recorder is per-stub
       await makeIndexer().backfillRows(scopedDb, [row], GENERATION, {
         ...fencedGuards,
         commit,

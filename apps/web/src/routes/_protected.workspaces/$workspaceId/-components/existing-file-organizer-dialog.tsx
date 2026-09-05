@@ -428,7 +428,7 @@ export const ExistingFileOrganizerDialog = ({
         );
 
         if (row.parentId !== targetParentId) {
-          // oxlint-disable-next-line no-await-in-loop -- sequential by design: sequential entity moves share the same query-key cache invalidation and report progress on one toast; concurrent mutations would race and risk rate limits
+          // oxlint-disable-next-line no-network-await-in-loop/no-network-await-in-loop -- ordered writes: the move must land before this row's rename, and the first failure stops the run with the remaining rows untouched
           const moveResponse = await api
             .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
             .move.patch({
@@ -445,7 +445,7 @@ export const ExistingFileOrganizerDialog = ({
         }
 
         if (targetName !== row.originalName) {
-          // oxlint-disable-next-line no-await-in-loop -- sequential entity renames share the same query-key cache invalidation and report progress on one toast; concurrent mutations would race and risk rate limits
+          // oxlint-disable-next-line no-network-await-in-loop/no-network-await-in-loop -- ordered writes: the rename follows this row's move; see above
           const renameResponse = await api
             .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
             .rename.patch({
@@ -1554,7 +1554,7 @@ const ensureFolders = async ({
 
       const parentSafeId =
         currentParentId === null ? null : toSafeId<"entity">(currentParentId);
-      // oxlint-disable-next-line no-await-in-loop -- each created folder's id becomes the next segment's parentId, so nested-path creation is strictly order-dependent
+      // oxlint-disable-next-line no-network-await-in-loop/no-network-await-in-loop -- each folder is created under the id the previous iteration returned
       const response = await api
         .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .put({

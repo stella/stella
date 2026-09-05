@@ -355,7 +355,6 @@ const heldIdentitiesChunked = async (
   const documentIds = new Set<string>();
   const caseNumbers = new Set<string>();
   for (let index = 0; index < items.length; index += HELD_LOOKUP_CHUNK) {
-    // oxlint-disable-next-line no-await-in-loop -- bounded lookups stay sequential rather than fanning out across the connection pool
     const held = await heldIdentities(
       items.slice(index, index + HELD_LOOKUP_CHUNK),
     );
@@ -555,13 +554,11 @@ try {
       let dayComplete = true;
       for (let page = 0; ; page += 1) {
         if (listedAnyPage) {
-          // oxlint-disable-next-line no-await-in-loop -- politeness pause between listing requests, matching the adapter's minimum request interval
           await Bun.sleep(LIST_DELAY_MS);
         }
         listedAnyPage = true;
         let listed: CzRegionalDayPage;
         try {
-          // oxlint-disable-next-line no-await-in-loop -- rate-limited publisher traffic stays sequential
           listed = await listCzRegionalDayPage({
             date,
             page,
@@ -576,7 +573,6 @@ try {
           dayComplete = false;
           break;
         }
-        // oxlint-disable-next-line no-await-in-loop -- one bounded lookup per listing page, sequential with the page it describes
         const held = await heldIdentities(listed.items);
         const diff = diffCzRegionalListing({ items: listed.items, held });
         day.listed += listed.items.length;
@@ -596,9 +592,7 @@ try {
               dayComplete = false;
               break;
             }
-            // oxlint-disable-next-line no-await-in-loop -- rate-limited publisher traffic and one pipeline write per decision stay sequential
             recordOutcome(item, await ingestItem(item, sourceLease));
-            // oxlint-disable-next-line no-await-in-loop -- politeness pause between decisions, matching the crawl
             await Bun.sleep(delayMs);
           }
         }
@@ -642,9 +636,7 @@ try {
       if (halt !== null) {
         break;
       }
-      // oxlint-disable-next-line no-await-in-loop -- rate-limited publisher traffic and one pipeline write per decision stay sequential
       recordOutcome(item, await ingestItem(item, sourceLease));
-      // oxlint-disable-next-line no-await-in-loop -- politeness pause between decisions, matching the crawl
       await Bun.sleep(delayMs);
     }
   }

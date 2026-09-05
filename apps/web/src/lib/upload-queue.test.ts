@@ -1,7 +1,3 @@
-/* eslint-disable no-await-in-loop -- These tests drive the queue by hand:
-   each step must settle an upload and flush microtasks before the next, so
-   the awaits are sequential by design (Promise.all would break the ordering
-   the scheduling invariants depend on). */
 import { describe, expect, jest, test } from "bun:test";
 
 import { UploadQueue } from "@/lib/upload-queue";

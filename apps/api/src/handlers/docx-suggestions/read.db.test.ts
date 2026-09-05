@@ -90,7 +90,6 @@ const seedSuggestions = async ({
     // The microsecond digits are the whole point of the fixture, so
     // `created_at` is written as a literal instead of being bound from a
     // `Date` (which cannot carry them).
-    // oxlint-disable-next-line no-await-in-loop -- ordered inserts on one test DB connection
     await testDb.execute(sql`
       INSERT INTO docx_suggestions
         (id, workspace_id, entity_id, op_payload, severity, area, status, created_at)
@@ -178,7 +177,6 @@ const walk = async (
   const visited: SafeId<"docxSuggestion">[] = [];
   let cursor = startCursor;
   for (let page = 0; page < MAX_PAGES; page += 1) {
-    // oxlint-disable-next-line no-await-in-loop -- sequential keyset pagination: each page needs the previous page's cursor
     const result = expectPage(await listPage(entityId, cursor));
     for (const item of result.items) {
       visited.push(item.id);
@@ -245,14 +243,12 @@ describe("docx suggestion list keyset", () => {
     let cursor: string | undefined;
     let consumed = 0;
     for (let page = 0; page < MAX_PAGES; page += 1) {
-      // oxlint-disable-next-line no-await-in-loop -- sequential keyset pagination
       const result = expectPage(await listPage(distinctEntityId, cursor));
       if (result.nextCursor === null) {
         expect(consumed + result.items.length).toBe(DISTINCT_COUNT);
         return;
       }
       consumed += result.items.length;
-      // oxlint-disable-next-line no-await-in-loop -- sequential keyset pagination
       const remainder = await walk(distinctEntityId, result.nextCursor);
       expect(remainder).toEqual(expected.slice(consumed));
       cursor = result.nextCursor;

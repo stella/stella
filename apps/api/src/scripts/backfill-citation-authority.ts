@@ -86,7 +86,6 @@ let recomputed = 0;
 let cited = 0;
 
 while (true) {
-  // oxlint-disable-next-line no-await-in-loop -- one bounded batch at a time; the next only starts once this one is durable
   const batch = await rootDb.transaction(
     async (tx) =>
       await recomputeCitationAuthorityBatch(tx, {

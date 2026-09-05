@@ -573,6 +573,12 @@ export default defineConfig({
   rules: {
     ...libraryRules,
     // Override ultracite defaults for Stella
+    // The generic rule fires on every sequential await, including the ones a
+    // stream, a cursor, a rate limit, or an ordered write requires; it was
+    // waived far more often than it was obeyed. The cost it exists to catch
+    // is per-iteration I/O, which `no-db-await-in-loop` and
+    // `no-network-await-in-loop` flag with the owner in hand.
+    "no-await-in-loop": "off",
     "no-console": "error",
     "no-shadow": "error",
     "no-unused-vars": [
@@ -1075,6 +1081,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-path-prefix-containment.ts",
     "./.oxlint-plugins/no-eager-singleton.ts",
     "./.oxlint-plugins/no-db-await-in-loop.ts",
+    "./.oxlint-plugins/no-network-await-in-loop.ts",
     "./.oxlint-plugins/require-cached-collator.ts",
     "./.oxlint-plugins/require-query-signal.ts",
     "./.oxlint-plugins/require-stable-snapshot.ts",
@@ -2413,6 +2420,14 @@ export default defineConfig({
       },
     },
     {
+      files: [
+        ".oxlint-plugins/__fixtures__/no-network-await-in-loop.fixture.ts",
+      ],
+      rules: {
+        "no-network-await-in-loop/no-network-await-in-loop": "error",
+      },
+    },
+    {
       // The locale-injecting wrapper around the UI date picker: the one web
       // module that has to import the primitive it wraps. Every other
       // apps/web import restriction still applies, so they are restated here.
@@ -2919,15 +2934,46 @@ export default defineConfig({
     {
       // no-db-await-in-loop flags an `await db...` / `await tx...` /
       // `await safeDb(...)` or `yield* Result.await(safeDb(...))` lexically
-      // inside a loop body, plus a
+      // inside a loop position that re-runs per iteration, plus a
       // `Promise.all(items.map(...))` fan-out — the N+1 antipattern. Scoped
-      // to backend source, where `db`/`tx`/`safeDb` are Drizzle handles;
-      // test files intentionally exercise unbatched loops in fixtures/mocks
-      // and are excluded.
-      files: ["apps/api/src/**/*.ts"],
-      excludeFiles: ["apps/api/src/**/*.test.ts", "apps/api/src/tests/**/*.ts"],
+      // to backend source and the workspace scripts, where `db`/`tx`/`safeDb`
+      // are Drizzle handles; test files intentionally exercise unbatched
+      // loops in fixtures/mocks and are excluded.
+      files: [
+        "apps/api/src/**/*.ts",
+        "apps/*/scripts/**/*.ts",
+        "packages/*/scripts/**/*.ts",
+      ],
+      excludeFiles: [
+        "apps/api/src/**/*.test.ts",
+        "apps/api/src/tests/**/*.ts",
+        "**/*.test.{ts,tsx}",
+        "**/*.spec.{ts,tsx}",
+      ],
       rules: {
         "no-db-await-in-loop/no-db-await-in-loop": "error",
+      },
+    },
+    {
+      // no-network-await-in-loop flags an awaited HTTP request, AWS SDK
+      // command dispatch, or API-client method lexically inside a loop body:
+      // one round-trip per iteration, growing with the input. Scoped to
+      // product source and the repo scripts; tests drive upstreams by hand
+      // and their sequencing is the assertion.
+      files: [
+        "apps/*/src/**/*.{ts,tsx}",
+        "packages/*/src/**/*.{ts,tsx}",
+        "apps/*/scripts/**/*.ts",
+        "packages/*/scripts/**/*.ts",
+        "scripts/**/*.ts",
+      ],
+      excludeFiles: [
+        "**/*.test.{ts,tsx}",
+        "**/*.spec.{ts,tsx}",
+        "**/tests/**/*.{ts,tsx}",
+      ],
+      rules: {
+        "no-network-await-in-loop/no-network-await-in-loop": "error",
       },
     },
     {

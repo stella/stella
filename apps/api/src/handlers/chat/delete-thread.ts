@@ -120,7 +120,6 @@ const deleteThread = createSafeRootHandler(
             ]
           : [file.s3Key],
       );
-      // eslint-disable-next-line no-await-in-loop -- sequential keyset pagination; each page depends on the prior cursor
       const deleteResult = await deleteS3Keys(s3Keys);
       if (Result.isError(deleteResult)) {
         yield* Result.err(

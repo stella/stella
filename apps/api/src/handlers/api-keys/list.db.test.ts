@@ -79,7 +79,6 @@ beforeAll(async () => {
   for (const [index, createdAt] of timestamps.entries()) {
     // `created_at` is written as a literal: binding a `Date` would erase
     // exactly the digits this fixture exists to carry.
-    // oxlint-disable-next-line no-await-in-loop -- ordered inserts on one test DB connection
     await testDb.execute(sql`
       INSERT INTO apikey (
         id, config_id, name, start, prefix, key, reference_id,
@@ -125,7 +124,6 @@ const walk = async (startCursor?: string): Promise<string[]> => {
   const visited: string[] = [];
   let cursor = startCursor;
   for (let page = 0; page < MAX_PAGES; page += 1) {
-    // oxlint-disable-next-line no-await-in-loop -- sequential keyset pagination
     const result = expectPage(await listPage(cursor));
     for (const item of result.items) {
       visited.push(item.id);
@@ -191,14 +189,12 @@ test("INVARIANT: resuming from any page boundary yields exactly the tail", async
   let cursor: string | undefined;
   let consumed = 0;
   for (let page = 0; page < MAX_PAGES; page += 1) {
-    // oxlint-disable-next-line no-await-in-loop -- sequential keyset pagination
     const result = expectPage(await listPage(cursor));
     if (result.nextCursor === null) {
       expect(consumed + result.items.length).toBe(expected.length);
       return;
     }
     consumed += result.items.length;
-    // oxlint-disable-next-line no-await-in-loop -- sequential keyset pagination
     const remainder = await walk(result.nextCursor);
     expect(remainder).toEqual(expected.slice(consumed));
     cursor = result.nextCursor;

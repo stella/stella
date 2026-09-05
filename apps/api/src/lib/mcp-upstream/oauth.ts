@@ -166,7 +166,6 @@ export const discoverOAuthMetadata = async (
 
   let protectedResource: ProtectedResourceMetadata | null = null;
   for (const metadataUrl of mcpWellKnownProtectedResourceUrls(parsedUrl)) {
-    // oxlint-disable-next-line no-await-in-loop -- ordered metadata discovery: probe well-known URLs in priority order, stop at first hit
     const result = await fetchJson({
       schema: protectedResourceMetadataSchema,
       url: metadataUrl,
@@ -193,13 +192,11 @@ export const discoverOAuthMetadata = async (
   for (const metadataUrl of authorizationServerMetadataUrls(
     authorizationServerUrl,
   )) {
-    // oxlint-disable-next-line no-await-in-loop -- ordered metadata discovery: probe well-known URLs in priority order, stop at first hit
     const result = await fetchJson({
       schema: authorizationServerMetadataSchema,
       url: metadataUrl,
     });
     if (Result.isOk(result)) {
-      // oxlint-disable-next-line no-await-in-loop -- runs only on the first successful probe before breaking out of the discovery loop
       const safeMetadata = await validateAuthorizationServerMetadata(
         result.value,
       );
@@ -510,13 +507,11 @@ const discoverAuthorizationServer = async (
   for (const metadataUrl of authorizationServerMetadataUrls(
     new URL(authorizationServerUrl),
   )) {
-    // oxlint-disable-next-line no-await-in-loop -- ordered metadata discovery: probe well-known URLs in priority order, stop at first hit
     const result = await fetchJson({
       schema: authorizationServerMetadataSchema,
       url: metadataUrl,
     });
     if (Result.isOk(result)) {
-      // oxlint-disable-next-line no-await-in-loop -- runs only on the first successful probe before returning out of the discovery loop
       const safeMetadata = await validateAuthorizationServerMetadata(
         result.value,
       );
@@ -545,15 +540,19 @@ const validateAuthorizationServerMetadata = async (
     metadata.registration_endpoint,
   ].filter((url) => url !== undefined);
 
-  for (const url of urls) {
-    // oxlint-disable-next-line no-await-in-loop -- sequential SSRF safety check: bail on the first unsafe metadata URL
-    const safe = await validateOutboundFetchTarget(url);
-    if (Result.isError(safe)) {
+  // At most four endpoints, each validated independently: resolve them in one
+  // round instead of paying a DNS round-trip per URL. The first unsafe URL
+  // still decides the result.
+  const validations = await Promise.all(
+    urls.map(async (url) => await validateOutboundFetchTarget(url)),
+  );
+  for (const validation of validations) {
+    if (Result.isError(validation)) {
       return Result.err(
         new HandlerError({
           status: 502,
           message: "MCP authorization server metadata contains an unsafe URL",
-          cause: safe.error,
+          cause: validation.error,
         }),
       );
     }

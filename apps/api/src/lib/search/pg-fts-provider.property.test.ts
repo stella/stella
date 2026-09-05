@@ -108,7 +108,6 @@ const ADVERSARIAL_QUERIES: readonly string[] = [
 describe("pg-fts tsquery robustness", () => {
   test("adversarial queries never raise a tsquery syntax error", async () => {
     for (const query of ADVERSARIAL_QUERIES) {
-      // oxlint-disable-next-line no-await-in-loop -- sequential queries on one PGlite connection
       await runQuery(query);
     }
   });

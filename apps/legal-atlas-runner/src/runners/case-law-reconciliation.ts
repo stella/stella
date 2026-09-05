@@ -262,7 +262,6 @@ export const runCaseLawReconciliationLoop = async ({
       delayMs = 0;
     } else {
       try {
-        // oxlint-disable-next-line no-await-in-loop -- one bounded unit at a time is the point; the next turn only starts after this one is paced
         const result = await (source?.runWorkUnit() ??
           Promise.resolve({ turn: RECONCILIATION_TURN.IDLE }));
         switch (result.turn) {
@@ -349,7 +348,6 @@ export const runCaseLawReconciliationLoop = async ({
     let remainingMs = delayMs;
     while (remainingMs > 0 && !isDraining()) {
       const sliceMs = Math.min(remainingMs, RECONCILIATION_CHECK_SLICE_MS);
-      // oxlint-disable-next-line no-await-in-loop -- sequential pacing wait, sliced only to re-check the drain flag
       await sleep(sliceMs);
       remainingMs -= sliceMs;
     }

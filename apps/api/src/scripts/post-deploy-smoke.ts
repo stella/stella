@@ -442,7 +442,6 @@ const waitForApiRevision = async (baseUrl: string): Promise<void> => {
   while (Date.now() < deadline) {
     let check: EvaluatedCheck;
     try {
-      // oxlint-disable-next-line no-await-in-loop -- readiness must be sampled sequentially to build a stable streak
       check = await readHealth(baseUrl);
     } catch (error) {
       check = {
@@ -469,7 +468,6 @@ const waitForApiRevision = async (baseUrl: string): Promise<void> => {
       return;
     }
 
-    // oxlint-disable-next-line no-await-in-loop -- sequential poll backoff: wait between readiness samples
     await sleep(REVISION_READINESS_INTERVAL_MS);
   }
 
@@ -545,7 +543,6 @@ export const readStreamPrefix = async (
   const reader = response.body.getReader();
   try {
     while (buffered.length < maxBytes) {
-      // oxlint-disable-next-line no-await-in-loop -- sequential prefix read: each chunk extends the buffer we then scan
       const { done, value } = await readWithDeadline(reader, deadline);
       if (done) {
         break;

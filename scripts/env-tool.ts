@@ -771,7 +771,6 @@ const auditEnvironment = async () => {
   const files = new Set<string>();
   for (const pattern of AUDIT_GLOBS) {
     const glob = new Bun.Glob(pattern);
-    // eslint-disable-next-line no-await-in-loop -- each glob is a lazy async iterator
     for await (const file of glob.scan({ cwd: REPO_ROOT, onlyFiles: true })) {
       if (!isIgnoredAuditPath(file) && !AUDIT_IGNORE_FILES.has(file)) {
         files.add(file);

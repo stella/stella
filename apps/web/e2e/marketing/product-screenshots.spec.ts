@@ -171,13 +171,11 @@ test("capture landing product screenshots", async ({
   let clockPinned = false;
 
   for (const theme of ["light", "dark"] as const) {
-    // eslint-disable-next-line no-await-in-loop -- captures reuse one authenticated page, so each theme switch and capture must be prepared and shot in order
     await page.emulateMedia({ colorScheme: theme });
     // Pin the stored theme as well as the media preference. localStorage is
     // origin-scoped, so this survives the navigations below; both inputs must
     // agree because prepaint-init.js reads the stored value first and only
     // falls back to the media query.
-    // eslint-disable-next-line no-await-in-loop -- see above
     await page.evaluate(
       ([storageKey, nextTheme]) => {
         localStorage.setItem(storageKey, nextTheme);
@@ -207,34 +205,27 @@ test("capture landing product screenshots", async ({
       // previous capture actually pinned it, so the eight captures that never
       // show a timestamp keep an untouched Date/timer implementation.
       if ("versionAnchor" in capture) {
-        // eslint-disable-next-line no-await-in-loop -- see above
         const versionCreatedAt = await resolveCurrentVersionCreatedAt(
           page.request,
           capture.versionAnchor,
         );
-        // eslint-disable-next-line no-await-in-loop -- see above
         await page.clock.setFixedTime(
           versionCreatedAt.getTime() + VERSION_CAPTION_OFFSET_MS,
         );
         clockPinned = true;
       } else if (clockPinned) {
-        // eslint-disable-next-line no-await-in-loop -- see above
         await page.clock.setSystemTime(Date.now());
         clockPinned = false;
       }
-      // eslint-disable-next-line no-await-in-loop -- see above
       await page.goto(capturePath, { waitUntil: "domcontentloaded" });
-      // eslint-disable-next-line no-await-in-loop -- see above
       await expect(page).not.toHaveURL(/\/sign-in(?:\/|\?|$)/u);
       // Each capture is the first visit to its route, so its chunk compiles on
       // demand here too; the config's 15s expect timeout is not enough for that
       // on a CI runner.
-      // eslint-disable-next-line no-await-in-loop -- see above
       await expect(page.getByText(capture.readyText).first()).toBeVisible({
         timeout: COLD_COMPILE_TIMEOUT,
       });
       if ("readySelector" in capture) {
-        // eslint-disable-next-line no-await-in-loop -- see above
         await expect(page.locator(capture.readySelector).first()).toBeVisible({
           timeout: COLD_COMPILE_TIMEOUT,
         });
@@ -242,7 +233,6 @@ test("capture landing product screenshots", async ({
       if ("readyControl" in capture) {
         // A control that only exists in the target mode, so readiness asserts
         // the mode itself rather than the route that requested it.
-        // eslint-disable-next-line no-await-in-loop -- see above
         await expect(
           page
             .getByRole(capture.readyControl.role, {
@@ -254,33 +244,27 @@ test("capture landing product screenshots", async ({
       if ("prepare" in capture && capture.prepare === "open-decision") {
         // Film a specific national decision deterministically, rather than
         // whatever happens to be newest in the seeded corpus.
-        // eslint-disable-next-line no-await-in-loop -- see above
         await page
           .locator('main a[href*="/cases/"]')
           .filter({ hasText: capture.decisionText })
           .click();
-        // eslint-disable-next-line no-await-in-loop -- see above
         await expect(page).toHaveURL(/\/law\/[a-z-]+\/cases\//u);
         // The case detail is its own code-split chunk, so this click is the
         // first load of another route: same cold-compile allowance as the
         // navigations above, not the config's 15s default.
-        // eslint-disable-next-line no-await-in-loop -- see above
         await expect(page.locator("article").first()).toBeVisible({
           timeout: COLD_COMPILE_TIMEOUT,
         });
         // The reader briefly renders the logged-out workspace while the
         // client-side session query settles, then swaps in the authenticated
         // workspace. Wait for that swap before checking its generated outline.
-        // eslint-disable-next-line no-await-in-loop -- see above
         await page.waitForLoadState("networkidle");
         // The authenticated inspector is mounted beside this public route.
         // Catch route-context crashes at their boundary instead of timing out
         // later on whichever product control the error screen replaced.
-        // eslint-disable-next-line no-await-in-loop -- see above
         await expect(page.locator("#route-error-title")).toHaveCount(0);
         // These decisions have analysis cached server-side. Wait for the
         // automatic fetch so the capture never lands on the loading margin.
-        // eslint-disable-next-line no-await-in-loop -- see above
         await expect(
           page.getByRole("group", { name: "Outline" }),
         ).toBeVisible();
@@ -292,42 +276,33 @@ test("capture landing product screenshots", async ({
         const inspectorChat = page.locator(
           '[data-slot="inspector-chat-panel"]:visible',
         );
-        // eslint-disable-next-line no-await-in-loop -- see above
         await expect(inspectorChat).toHaveCount(1, {
           timeout: COLD_COMPILE_TIMEOUT,
         });
         // This component only exists when at least one prompt card rendered.
-        // eslint-disable-next-line no-await-in-loop -- see above
         await expect(
           inspectorChat.locator('[data-slot="prompt-suggestions"]'),
         ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT });
         // The first margin annotation may sit below a long headnote (e.g. a
         // Constitutional Court "legal sentence" summary); scroll it into view
         // so the capture shows the structure margin, not just headnote text.
-        // eslint-disable-next-line no-await-in-loop -- see above
         await page.locator("aside button").first().scrollIntoViewIfNeeded();
         // `scrollIntoViewIfNeeded` positions the nested reader correctly, but
         // can also move the document viewport. Restore only the outer viewport
         // so the breadcrumb remains in frame without undoing the reader scroll.
-        // eslint-disable-next-line no-await-in-loop -- see above
         await page.evaluate(() => window.scrollTo({ left: 0, top: 0 }));
       }
       if ("prepare" in capture && capture.prepare === "open-files") {
-        // eslint-disable-next-line no-await-in-loop -- see above
         await page.getByRole("tab", { name: "Files" }).click();
-        // eslint-disable-next-line no-await-in-loop -- see above
         await expect(page).toHaveURL(
           new RegExp(`/workspaces/${AKVIZICE_WORKSPACE_ID}/[^/?]+`, "u"),
         );
-        // eslint-disable-next-line no-await-in-loop -- see above
         await expect(
           page.getByText("Internal_SAFE_Agreement.docx").first(),
         ).toBeVisible();
       }
       if ("prepare" in capture && capture.prepare === "open-table") {
-        // eslint-disable-next-line no-await-in-loop -- see above
         await page.getByRole("tab", { name: "Table" }).click();
-        // eslint-disable-next-line no-await-in-loop -- see above
         await expect(page.getByRole("grid")).toBeVisible();
       }
       if ("prepare" in capture && capture.prepare === "open-agent-thread") {
@@ -335,22 +310,16 @@ test("capture landing product screenshots", async ({
         // it and one of its source chips so the shot never lands on a
         // pre-render/loading state (the empty /chat/new composer this
         // replaces had neither).
-        // eslint-disable-next-line no-await-in-loop -- see above
         await expect(
           page.getByText(/assignment or a material service change/u).first(),
         ).toBeVisible();
-        // eslint-disable-next-line no-await-in-loop -- see above
         await expect(
           page.getByText(/Aurora_Retail_Shareholder_Register_2018/u).first(),
         ).toBeVisible();
       }
-      // eslint-disable-next-line no-await-in-loop -- see above
       await page.locator("body").waitFor({ state: "visible" });
-      // eslint-disable-next-line no-await-in-loop -- see above
       await page.evaluate(async () => document.fonts.ready);
-      // eslint-disable-next-line no-await-in-loop -- see above
       await page.waitForTimeout(300);
-      // eslint-disable-next-line no-await-in-loop -- see above
       await page.addStyleTag({
         content: `
           *, *::before, *::after {
@@ -367,7 +336,6 @@ test("capture landing product screenshots", async ({
       // Soft, so one run reports every drifted capture; a hard assertion
       // aborts the loop at the first mismatch and hides the rest until the
       // next run.
-      // eslint-disable-next-line no-await-in-loop -- see above
       await expect
         .soft(page)
         .toHaveScreenshot(`${capture.name}${themeSuffix}.png`, {

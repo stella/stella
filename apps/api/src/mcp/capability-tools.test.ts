@@ -552,7 +552,6 @@ describe("discriminated-union input validation names the field", () => {
       { purpose: "entity_version", entityId: 5 },
     ];
     for (const body of bodies) {
-      // eslint-disable-next-line no-await-in-loop -- sequential invoke calls keep assertions ordered
       const issues = await uploadIssues(body);
       expect(issues.length).toBeGreaterThan(0);
       for (const issue of issues) {

@@ -94,7 +94,6 @@ export const runResearchAnswers = async (
       if (decisionId === undefined) {
         return;
       }
-      // oxlint-disable-next-line no-await-in-loop -- one worker of a bounded pool drains its share sequentially
       const failure = await answerDecision(decisionId, input, deps).then(
         () => null,
         (error: unknown) => error ?? new Error("research answer run failed"),
@@ -108,7 +107,6 @@ export const runResearchAnswers = async (
       });
       // Whatever this decision still had pending is not coming: say so rather
       // than leave the cells to age out.
-      // oxlint-disable-next-line no-await-in-loop -- follows the failure it reports, for the same decision
       await writeOutcomes(
         deps.safeDb,
         input,
@@ -580,7 +578,7 @@ const writeOutcomes = async (
       // SAFETY: bounded by LIMITS.caseLawResearchColumnsPerTable, inside one
       // transaction; each cell is its own row so a batch would be a VALUES join
       // of the same size.
-      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- bounded by the column cap
+      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- bounded by the column cap
       await tx
         .update(caseLawResearchAnswers)
         .set({ ...values, updatedAt: now })

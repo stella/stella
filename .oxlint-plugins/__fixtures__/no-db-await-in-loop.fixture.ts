@@ -8,9 +8,7 @@
 // or not). If the rule regresses, the matching disable goes unused and
 // `--report-unused-disable-directives-severity=error` fails CI. The cases
 // WITHOUT a `no-db-await-in-loop` disable must NOT be flagged by it; a false
-// positive there fails the same run. (Some flagged cases also carry an
-// unrelated `no-await-in-loop` disable — the generic built-in rule already
-// fires on any await-in-loop; that is expected and out of scope here.)
+// positive there fails the same run.
 
 declare const db: {
   select: (columns?: unknown) => {
@@ -27,7 +25,11 @@ declare const tx: {
 declare const safeDb: <T>(fn: (tx: unknown) => Promise<T>) => Promise<T>;
 declare const Result: {
   await: <T>(promise: Promise<T>) => AsyncGenerator<never, T, unknown>;
+  tryPromise: <T>(
+    source: (() => Promise<T>) | { try: () => Promise<T>; catch: unknown },
+  ) => Promise<T>;
 };
+declare const tables: Record<string, unknown>;
 declare const items: { id: string }[];
 declare const itemsTable: unknown;
 declare const idColumn: unknown;
@@ -39,7 +41,7 @@ declare function doInMemoryWorkAsync(item: unknown): Promise<void>;
 
 export const forOfLoopAwaitInsert = async () => {
   for (const item of items) {
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- fixture: intentionally unbatched to exercise the rule
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- fixture: intentionally unbatched to exercise the rule
     await tx.insert(itemsTable).values(item);
   }
 };
@@ -49,7 +51,7 @@ export const whileLoopAwaitSafeDb = async () => {
   const results: unknown[] = [];
   while (index < items.length) {
     const currentItem = items[index];
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- fixture: intentionally unbatched to exercise the rule
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- fixture: intentionally unbatched to exercise the rule
     const result = await safeDb(async (scopedTx: typeof tx) => {
       const inserted = await scopedTx.insert(itemsTable).values(currentItem);
       return inserted;
@@ -148,6 +150,36 @@ export const singleResultAwaitOutsideLoop = async function* () {
   );
 };
 
+// A `while` test re-runs every iteration, so a query there is as
+// per-iteration as one in the body.
+export const whileTestQuery = async () => {
+  let remaining = 0;
+  // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- fixture: the loop test runs one query per iteration
+  while ((await tx.select().from(itemsTable).where(remaining)) !== null) {
+    remaining += 1;
+  }
+};
+
+// `Result.tryPromise` runs its callback where it stands, so the query inside
+// it belongs to the loop rather than to a deferred call site.
+export const resultTryPromiseInLoop = async () => {
+  for (const item of items) {
+    await Result.tryPromise({
+      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- fixture: the tryPromise callback is part of the loop body
+      try: async () => await tx.insert(itemsTable).values(item),
+      catch: (cause: unknown) => cause,
+    });
+  }
+};
+
+// A table reached through computed access still resolves to the `tx` root.
+export const computedTableQuery = async () => {
+  for (const item of items) {
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- fixture: computed access resolves to the DB root
+    await tx.insert(tables["case-law"]).values(item);
+  }
+};
+
 // Batched: one query for the whole loop's ids, built with `inArray` after
 // an in-memory (non-awaiting) loop. The DB await itself is not inside a
 // loop.
@@ -167,7 +199,7 @@ export const boundedConstantLoop = async () => {
   for (const status of fixedStatuses) {
     // SAFETY: fixedStatuses is a 2-element compile-time constant, not
     // tenant-scaled input, so this cannot become an N+1.
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop
     await tx.select().from(itemsTable).where(status);
   }
 };

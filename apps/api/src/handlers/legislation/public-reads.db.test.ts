@@ -810,7 +810,6 @@ describe("public statute list", () => {
       // Cursor pagination is sequential by construction: each request needs
       // the cursor the previous one returned.
       const page: StatutePage = expectPage(
-        // eslint-disable-next-line eslint/no-await-in-loop -- keyset walk
         await listStatutesHandler(
           {
             country: "CZE",
@@ -844,7 +843,6 @@ describe("public statute list", () => {
 
     for (let request = 0; request < 10; request += 1) {
       const page: StatutePage = expectPage(
-        // eslint-disable-next-line eslint/no-await-in-loop -- keyset walk
         await listStatutesHandler(
           {
             country: "CZE",
@@ -926,7 +924,6 @@ describe("public statute list", () => {
       labourCode,
     ]);
     for (const cursor of ["not-a-cursor", forgedDate]) {
-      // eslint-disable-next-line eslint/no-await-in-loop -- each cursor is its own request
       const result = await listStatutesHandler(
         { country: "CZE", cursor },
         legislationDb,
@@ -990,7 +987,6 @@ describe("public statute versions", () => {
 
     for (let request = 0; request < 6; request += 1) {
       const page: StatutePage = expectPage(
-        // eslint-disable-next-line eslint/no-await-in-loop -- keyset walk
         await listStatuteVersionsHandler({
           documentId: civilCodeSuperseded,
           query: { limit: 1, ...(cursor === null ? {} : { cursor }) },
@@ -1250,7 +1246,6 @@ describe("provision history", () => {
 
     for (let request = 0; request < 6; request += 1) {
       const page: ProvisionHistoryPage = expectHistoryPage(
-        // eslint-disable-next-line eslint/no-await-in-loop -- keyset walk
         await readProvisionHistoryHandler({
           documentId: civilCodeCurrent,
           anchor: DELIVERY_ANCHOR,

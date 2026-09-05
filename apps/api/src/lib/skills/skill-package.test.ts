@@ -259,7 +259,6 @@ Instructions.`,
       ["version", `1.0.0${String.fromCodePoint(8297)}override`],
       ["license", `MIT${String.fromCodePoint(8238)}override`],
     ] as const) {
-      // oxlint-disable-next-line no-await-in-loop -- each frontmatter field must independently exercise package validation
       const result = await parseUploadedSkillPackage(
         new File(
           [
@@ -363,10 +362,8 @@ Instructions.`,
     ];
 
     for (const url of unsafeUrls) {
-      // oxlint-disable-next-line no-await-in-loop -- sequential test assertions over a fixed input list
       const result = await fetchSkillPackageFromUrl(url);
       expect(Result.isError(result)).toBe(true);
-      // oxlint-disable-next-line no-await-in-loop -- discovery must enforce the same URL boundary as direct import
       const discovery = await discoverSkillPackagesFromUrl(url);
       expect(Result.isError(discovery)).toBe(true);
     }
@@ -379,7 +376,6 @@ Instructions.`,
     ];
 
     for (const url of malformedUrls) {
-      // oxlint-disable-next-line no-await-in-loop -- fixed security-boundary cases must each fail before outbound fetch
       const result = await discoverSkillPackagesFromUrl(url);
       expect(Result.isError(result)).toBe(true);
     }

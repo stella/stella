@@ -19,8 +19,11 @@
 //     with that shape are treated as DB awaits too.
 //   - "Inside a loop" is found by walking up `parent` links from the
 //     await/yield node. The walk stops as soon as it reaches either:
-//       1. A `for` / `for-of` / `for-in` / `while` / `do-while` node whose
-//          `body` is (an ancestor of) the await -> flag.
+//       1. A `for` / `for-of` / `for-in` / `while` / `do-while` node in a
+//          position that re-runs every iteration — its `body`, a `while` /
+//          `do` test, or a `for` test or update -> flag. The one-time
+//          positions (a `for` initializer, a `for-of` / `for-in` right-hand
+//          side) are not per-iteration work.
 //       2. A function boundary (function declaration/expression/arrow) ->
 //          flag only if that function is the direct callback argument of a
 //          `.map` / `.forEach` / `.flatMap` call which is itself an argument
@@ -29,7 +32,9 @@
 //          inside any other nested function (a helper defined inside a loop
 //          but invoked elsewhere, an unrelated callback) is out of scope —
 //          flag the call site instead, if that call site is itself in a
-//          loop or a fan-out (see below).
+//          loop or a fan-out (see below). A `Result.tryPromise` callback is
+//          not a boundary: it runs where it stands, so the walk continues
+//          through it into the enclosing loop.
 //
 //   - A second, independent check runs on every `AwaitExpression` whose
 //     argument does *not* match the rule above: is it `Promise.all(...)` /
@@ -95,15 +100,16 @@
 
 import { eslintCompatPlugin, type ESTree } from "@oxlint/plugins";
 
-import { getPropertyName, isIdentifier, unwrapExpression } from "./utils.ts";
-
-const LOOP_TYPES = new Set([
-  "ForStatement",
-  "ForOfStatement",
-  "ForInStatement",
-  "WhileStatement",
-  "DoWhileStatement",
-]);
+import {
+  getPropertyName,
+  isAstNode,
+  isIdentifier,
+  isPerIterationLoopPosition,
+  isResultTryPromiseCallback,
+  LOOP_NODE_TYPES,
+  resolveChainRootName,
+  unwrapExpression,
+} from "./utils.ts";
 
 const FUNCTION_TYPES = new Set([
   "FunctionDeclaration",
@@ -123,19 +129,14 @@ const AWAIT_UNWRAP_TYPES = new Set([
   "ChainExpression",
 ]);
 
-const getType = (node: unknown): string | null => {
-  if (typeof node !== "object" || node === null || !("type" in node)) {
-    return null;
-  }
-  const { type } = node as { type: unknown };
-  return typeof type === "string" ? type : null;
-};
+const getType = (node: unknown): string | null =>
+  isAstNode(node) ? node.type : null;
 
 const getField = (node: unknown, field: string): unknown => {
   if (typeof node !== "object" || node === null || !(field in node)) {
     return null;
   }
-  return (node as Record<string, unknown>)[field];
+  return Reflect.get(node, field);
 };
 
 const isComputed = (node: unknown): boolean =>
@@ -144,25 +145,6 @@ const isComputed = (node: unknown): boolean =>
 const isFunctionNode = (node: unknown): boolean => {
   const type = getType(node);
   return type !== null && FUNCTION_TYPES.has(type);
-};
-
-// Resolve the leftmost identifier of a member/call chain, descending
-// through both `CallExpression.callee` and `MemberExpression.object` so
-// `db.insert(t).values(v)` and `tx.query.foo.findMany()` both resolve to
-// their root (`db` / `tx`), not the last method name.
-const getChainRootName = (node: unknown): string | null => {
-  const current = unwrapExpression(node);
-  const type = getType(current);
-  if (type === "CallExpression") {
-    return getChainRootName(getField(current, "callee"));
-  }
-  if (type === "MemberExpression" && !isComputed(current)) {
-    return getChainRootName(getField(current, "object"));
-  }
-  if (isIdentifier(current)) {
-    return current.name;
-  }
-  return null;
 };
 
 // `safeDb(cb)` (bare, destructured from handler context) or `ctx.safeDb(cb)`
@@ -186,7 +168,7 @@ const isDbAwaitCall = (node: unknown): boolean => {
   if (isSafeDbCallee(getField(node, "callee"))) {
     return true;
   }
-  const root = getChainRootName(node);
+  const root = resolveChainRootName(node);
   return root !== null && DB_ROOT_NAMES.has(root);
 };
 
@@ -267,7 +249,6 @@ const isChainRoot = (node: unknown): boolean => {
   const parent = getField(node, "parent");
   return !(
     getType(parent) === "MemberExpression" &&
-    !isComputed(parent) &&
     getField(parent, "object") === node
   );
 };
@@ -396,13 +377,13 @@ const containsDbRootedCall = (
     }
   }
 
-  for (const key of Object.keys(node as Record<string, unknown>)) {
+  for (const key of Object.keys(node)) {
     if (key === "parent") {
       continue;
     }
     if (
       containsDbRootedCall(
-        (node as Record<string, unknown>)[key],
+        Reflect.get(node, key),
         canResolveFurther,
         viaResolution,
       )
@@ -463,13 +444,18 @@ const findLoopOrMapContext = (
   while (current !== null && current !== undefined) {
     const type = getType(current);
 
-    if (type !== null && LOOP_TYPES.has(type)) {
-      if (getField(current, "body") === child) {
+    if (type !== null && LOOP_NODE_TYPES.has(type)) {
+      if (isPerIterationLoopPosition(current, child)) {
         return "loop";
       }
-      // Await sits in the loop's init/test/update, not its body — keep
-      // climbing past this loop node as an ordinary ancestor.
-    } else if (type !== null && FUNCTION_TYPES.has(type)) {
+      // Await sits in a position the loop evaluates once (a `for`
+      // initializer, a `for-of` right-hand side) — keep climbing past this
+      // loop node as an ordinary ancestor.
+    } else if (
+      type !== null &&
+      FUNCTION_TYPES.has(type) &&
+      !isResultTryPromiseCallback(current)
+    ) {
       return isPromiseAllMapCallback(current) ? "promise-all-map" : null;
     }
 

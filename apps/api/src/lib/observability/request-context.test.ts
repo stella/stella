@@ -91,7 +91,6 @@ describe("x-request-id response header", () => {
     const backgroundIds: (string | undefined)[] = [];
     const backgroundLoop = async () => {
       while (!signal.done) {
-        // eslint-disable-next-line no-await-in-loop -- a background loop is sequential by nature; that is what lets it interleave with requests
         await Bun.sleep(BACKGROUND_WAIT_MS);
         backgroundIds.push(getCurrentRequestId());
       }
@@ -102,9 +101,7 @@ describe("x-request-id response header", () => {
     const origin = `http://localhost:${app.server?.port}`;
     const mismatches: string[] = [];
     for (let round = 0; round < REQUEST_ROUNDS; round += 1) {
-      // eslint-disable-next-line no-await-in-loop -- each round must overlap the background loop in real time
       const response = await fetch(`${origin}/ping`);
-      // eslint-disable-next-line no-await-in-loop -- see above
       const ambient = await response.text();
       const header = response.headers.get(REQUEST_ID_HEADER);
       if (ambient !== header) {

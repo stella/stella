@@ -415,7 +415,6 @@ describe("createTaskHandler validation", () => {
     for (const taskStatus of validStatuses) {
       const scopedDb = resolvingScopedDb();
 
-      // oxlint-disable-next-line no-await-in-loop -- sequential test setup: each iteration asserts on its own mock
       await createTaskHandler(
         createHandlerContext({
           body: { name: "Test task", status: taskStatus },
@@ -434,7 +433,6 @@ describe("createTaskHandler validation", () => {
     for (const priority of validPriorities) {
       const scopedDb = resolvingScopedDb();
 
-      // oxlint-disable-next-line no-await-in-loop -- sequential test setup: each iteration asserts on its own mock
       await createTaskHandler(
         createHandlerContext({
           body: { name: "Test task", priority },
@@ -453,7 +451,6 @@ describe("createTaskHandler validation", () => {
     for (const listItemType of itemTypes) {
       const scopedDb = resolvingScopedDb();
 
-      // oxlint-disable-next-line no-await-in-loop -- sequential test setup: each iteration asserts on its own mock
       await createTaskHandler(
         createHandlerContext({
           body: { name: "Test item", listItemType },

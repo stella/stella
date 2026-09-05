@@ -179,7 +179,6 @@ describe("MCP transport rate limit", () => {
     const app = createLimitedApp({ max: 3 });
 
     for (let attempt = 0; attempt < 3; attempt += 1) {
-      // oxlint-disable-next-line no-await-in-loop -- the limiter counts requests, so they must be sequential
       const response = await app.handle(transportRequest({ token: TOKEN }));
       expect(response.status).toBe(200);
     }
@@ -204,7 +203,6 @@ describe("MCP transport rate limit", () => {
 
     const responses: number[] = [];
     for (let attempt = 0; attempt < 3; attempt += 1) {
-      // oxlint-disable-next-line no-await-in-loop -- the limiter counts requests, so they must be sequential
       const response = await app.handle(
         transportRequest({ token: `stella_at_invented_${attempt}` }),
       );
@@ -231,13 +229,11 @@ describe("MCP transport rate limit", () => {
     const app = createLimitedApp({ max: 1 });
 
     for (let attempt = 0; attempt < 3; attempt += 1) {
-      // oxlint-disable-next-line no-await-in-loop -- the limiter counts requests, so they must be sequential
       const discovery = await app.handle(
         new Request(`http://localhost${MCP_DISCOVERY_PATH}`),
       );
       expect(discovery.status).toBe(200);
 
-      // oxlint-disable-next-line no-await-in-loop -- the limiter counts requests, so they must be sequential
       const preflight = await app.handle(
         new Request(`http://localhost${MCP_HTTP_PATH}`, {
           headers: { authorization: `Bearer ${TOKEN}` },

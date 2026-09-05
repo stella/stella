@@ -557,9 +557,7 @@ const scenes = [
       // download/layout caches are what let the in-cut opens meet the
       // paint budget enforced in the replay.
       for (const marker of [FIRST_SOURCE_PREVIEW, SECOND_SOURCE_PREVIEW]) {
-        // eslint-disable-next-line no-await-in-loop -- the two pre-warm opens share one inspector pane, so they are inherently sequential
         await page.getByText(new RegExp(marker.label, "u")).first().click();
-        // eslint-disable-next-line no-await-in-loop -- see above
         await waitForInspectorPreview(
           page,
           marker,
@@ -760,9 +758,7 @@ const warmSceneRoutes = async ({
   const page = await context.newPage();
   configurePage(page);
   for (const route of new Set(captures.map((capture) => capture.path(views)))) {
-    // eslint-disable-next-line no-await-in-loop -- one page walks the routes in turn; the point is to compile and fetch each before recording starts
     await page.goto(route, { waitUntil: "domcontentloaded" });
-    // eslint-disable-next-line no-await-in-loop -- lets the route's own queries settle, which is the cost being paid up front
     await page.waitForLoadState("networkidle").catch(() => undefined);
   }
   await context.close();
@@ -808,7 +804,6 @@ const main = async () => {
       // settling), which would otherwise throw away an entire 28-file run.
       // The retry is announced so a scene that always needs it stays visible
       // instead of hiding behind a green run.
-      // eslint-disable-next-line no-await-in-loop -- recordings are captured one scene at a time; a shared browser cannot record overlapping scenes
       await recordCapture({ browser, capture, cookies, theme, views }).catch(
         async (error: unknown) => {
           process.stdout.write(
@@ -1684,12 +1679,10 @@ const moveCursorTo = async (page: Page, target: PointerPoint) => {
   let elapsedMs = 0;
   while (elapsedMs < durationMs) {
     const eased = easeInOutCubic(elapsedMs / durationMs);
-    // eslint-disable-next-line no-await-in-loop -- the interpolated steps of one cursor glide are inherently sequential
     await page.mouse.move(
       from.x + (target.x - from.x) * eased,
       from.y + (target.y - from.y) * eased,
     );
-    // eslint-disable-next-line no-await-in-loop -- paces the glide at ~60 steps/s
     await page.waitForTimeout(CURSOR_STEP_MS);
     elapsedMs = Date.now() - startedAt;
   }
@@ -1756,7 +1749,6 @@ const MAX_INSPECTOR_TABS_TO_CLOSE = 4;
 
 const closeAllInspectorTabs = async (page: Page) => {
   for (let closed = 0; closed < MAX_INSPECTOR_TABS_TO_CLOSE; closed++) {
-    // eslint-disable-next-line no-await-in-loop -- tabs share one pane and must be closed one at a time
     const closedOne = await closeInspectorIfOpen(page);
     if (!closedOne) {
       return;

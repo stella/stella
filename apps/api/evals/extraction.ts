@@ -1042,9 +1042,6 @@ const main = async () => {
           });
           continue;
         }
-        // One model call at a time: keeps provider rate limits and the
-        // report order, and a failure points at the run that caused it.
-        // eslint-disable-next-line no-await-in-loop
         const run = await runTask({
           modelId: target.id,
           orgAIConfig: target.orgAIConfig,

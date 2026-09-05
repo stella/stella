@@ -158,7 +158,6 @@ const pollForCaretRect = async (
 ): Promise<DOMRect | null> => {
   for (let attempt = 0; attempt < SLASH_MENU_CARET_POLL_FRAMES; attempt += 1) {
     // One animation frame per iteration, not I/O.
-    // eslint-disable-next-line no-await-in-loop -- frame-gated layout polling
     await nextFrame();
     const rect = read();
     if (rect !== null) {

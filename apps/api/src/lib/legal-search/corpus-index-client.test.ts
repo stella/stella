@@ -755,7 +755,6 @@ test("ingest sends the commit mode the caller asked for", async () => {
   responseBody = { num_docs_for_processing: 1 };
 
   for (const commit of Object.values(CORPUS_INDEX_COMMIT)) {
-    // oxlint-disable-next-line no-await-in-loop -- one request per mode; the recorder is order-sensitive
     await getCorpusIndexClient("q08").ingestBatch(
       "legal_corpus_v1_cze",
       '{"document_id":"a"}',
@@ -826,7 +825,6 @@ test("final-generation ingest rejects missing or partial V2 counters", async () 
     },
   ]) {
     responseBody = receipt;
-    // oxlint-disable-next-line no-await-in-loop -- each malformed receipt is observed independently by the request recorder
     const result = await getCorpusIndexClient("q08").ingestCommittedBatch(
       "case_law_v5_cs_sk",
       '{"document_id":"a"}\n{"document_id":"b"}',

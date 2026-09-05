@@ -709,8 +709,7 @@ if (import.meta.main) {
       const target =
         locale === "en"
           ? source
-          : // oxlint-disable-next-line no-await-in-loop -- locales reported in sorted order
-            flatten(await readJson(path.resolve(langsDir, file)));
+          : flatten(await readJson(path.resolve(langsDir, file)));
       const violations = findViolations(source, target, locale, rules);
 
       const reported: string[] = [];

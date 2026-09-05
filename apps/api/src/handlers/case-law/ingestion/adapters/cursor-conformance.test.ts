@@ -373,7 +373,6 @@ const walkExhausted = async (
     firstSeenAt.set(key, steps.length);
 
     const probe = installExhaustedSource(respond);
-    // oxlint-disable-next-line no-await-in-loop -- each step's cursor is the previous step's output; that dependency is the thing under test
     const result = await adapter.fetchPage(cursor, {});
     probe.restore();
 

@@ -183,7 +183,6 @@ export const reconcileOrphanedFlowRuns = async (
     if (signal?.aborted === true) {
       break;
     }
-    // oxlint-disable-next-line no-await-in-loop -- keyset pages are inherently sequential: each query needs the previous batch's last id as its cursor
     const batch = await database
       .select({
         id: flowRuns.id,
@@ -212,7 +211,6 @@ export const reconcileOrphanedFlowRuns = async (
     }
 
     for (const row of batch) {
-      // oxlint-disable-next-line no-await-in-loop -- sequential re-enqueue bounds concurrent queue writes; the batch is capped at batchSize
       await enqueueStep({ runId: row.id, stepIndex: row.currentStepIndex });
     }
 

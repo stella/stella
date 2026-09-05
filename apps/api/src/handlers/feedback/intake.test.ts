@@ -201,7 +201,6 @@ describe("public feedback intake", () => {
     const ip = "203.0.113.8";
 
     for (let i = 0; i < 5; i += 1) {
-      // oxlint-disable-next-line no-await-in-loop -- sequential rate-limit probe: each submission must increment the per-IP counter before the next so the 6th trips the limit
       const ok = await receivePublicFeedbackForTest({
         // Unique content each time so dedup never fires before the rate limit.
         rawBody: raw({ title: `report ${i}`, body: `distinct body ${i}` }),

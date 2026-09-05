@@ -377,7 +377,6 @@ describe("MCP upstream connection lifecycle", () => {
     const row = oauthRow();
 
     for (let attempt = 0; attempt < 3; attempt += 1) {
-      // oxlint-disable-next-line no-await-in-loop -- sequential: pin per-attempt behavior
       await createMcpClientForConnection({
         organizationId,
         row,

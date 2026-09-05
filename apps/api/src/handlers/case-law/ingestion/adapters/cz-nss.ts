@@ -1747,7 +1747,6 @@ export const czNssAdapter = defineSourceAdapter({
         const decisions: IngestionResult[] = [];
 
         for (const row of rows) {
-          // oxlint-disable-next-line no-await-in-loop -- sequential per-row crawl against one court session, paced by minRequestIntervalMs
           const built = await buildCzNssDecision({
             row,
             session,

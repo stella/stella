@@ -299,7 +299,6 @@ describe("parseEcjDecisionHtml", () => {
   test("keeps every document kind in the corpus", async () => {
     const kinds = new Set<string>();
     for (const stem of fixtureStems) {
-      // oxlint-disable-next-line no-await-in-loop -- one fixture read per corpus entry, released before the next
       const formex = await readFixture(`${stem}.fmx.xml.gz`);
       if (formex !== undefined) {
         kinds.add(parseFormex(formex).kind);
@@ -314,7 +313,6 @@ describe("parseEcjDecisionHtml", () => {
   test("keeps both converter spellings in the corpus", async () => {
     const spellings = new Set<string>();
     for (const stem of fixtureStems) {
-      // oxlint-disable-next-line no-await-in-loop -- one fixture read per corpus entry, released before the next
       const html = await readFixture(`${stem}.html.gz`);
       if (html === undefined) {
         continue;

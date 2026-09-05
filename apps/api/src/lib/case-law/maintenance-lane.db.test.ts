@@ -63,7 +63,6 @@ if (!databaseUrl || !runPostgresTests) {
               ),
           ),
       ]) {
-        // oxlint-disable-next-line no-await-in-loop -- two independent doors, checked in turn
         await run().then(
           () => codes.push(undefined),
           (error: unknown) => codes.push(getPgErrorCode(error)),

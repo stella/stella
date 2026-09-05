@@ -301,7 +301,6 @@ export const checkPortAvailabilityOnHosts = async (
   checkPort = canListenOnHost,
 ) => {
   for (const host of hosts) {
-    // oxlint-disable-next-line no-await-in-loop -- early return on first unavailable host; probes must run sequentially to short-circuit
     if (!(await checkPort(port, host))) {
       return false;
     }
@@ -665,7 +664,6 @@ const waitForSharedDockerServices = async ({
       return;
     }
     lastFailure = failure;
-    // oxlint-disable-next-line no-await-in-loop -- sequential poll: sleep between status reads until services are ready or timeout
     await Bun.sleep(DOCKER_SERVICES_POLL_INTERVAL_MS);
   }
 
@@ -772,7 +770,6 @@ export const findFirstAvailableOffset = async ({
     offset++
   ) {
     const ports = portsForOffset(offset);
-    // oxlint-disable-next-line no-await-in-loop -- sequential offset search: must check offsets in order and return the first free one
     const availability = await Promise.all(
       requiredPortsForMode(mode, ports).map(
         async (port) => await checkPortAvailability(port),
@@ -780,9 +777,7 @@ export const findFirstAvailableOffset = async ({
     );
     if (availability.every(Boolean)) {
       if (mode === "dev:web") {
-        // oxlint-disable-next-line no-await-in-loop -- only reached for the first free offset; continues the offset search if the api port is taken
         const apiPortIsFree = await checkPortAvailability(ports.api);
-        // oxlint-disable-next-line no-await-in-loop -- short-circuits to continue the sequential offset search when the api port cannot be reused
         if (!apiPortIsFree && !(await checkReusableApiPort(ports.api))) {
           continue;
         }
@@ -1202,14 +1197,12 @@ const waitForHttpReadiness = async ({
 
     while (Date.now() - startedAt < timeoutMs) {
       try {
-        // oxlint-disable-next-line no-await-in-loop -- sequential readiness poll: probe the URL once per retry until it responds or timeout
+        // oxlint-disable-next-line no-network-await-in-loop/no-network-await-in-loop -- readiness poll: each probe observes the service after the previous backoff
         const response = await fetch(url, {
           method: "GET",
           signal: AbortSignal.timeout(DEFAULT_HTTP_PROBE_TIMEOUT_MS),
         });
-        // oxlint-disable-next-line no-await-in-loop -- reads the body of this poll's response before validating it
         const bodyText = await response.text();
-        // oxlint-disable-next-line no-await-in-loop -- validates this poll's response and returns early once it passes
         const validationFailure = await validate(response, bodyText);
 
         if (!validationFailure) {
@@ -1221,7 +1214,6 @@ const waitForHttpReadiness = async ({
         lastFailure = error instanceof Error ? error.message : String(error);
       }
 
-      // oxlint-disable-next-line no-await-in-loop -- sequential poll: back off between readiness probes until the service is up or timeout
       await Bun.sleep(300);
     }
 
@@ -1281,7 +1273,6 @@ const waitForReadinessChecks = async (
       panic(
         `No running process found for readiness check "${readinessCheck.label}".`,
       );
-    // oxlint-disable-next-line no-await-in-loop -- ordered startup: each service in this group must be ready before the next is awaited
     await waitForHttpReadiness({ ...readinessCheck, child: runningStep.child });
   }
 };

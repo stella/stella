@@ -300,7 +300,6 @@ describe("MCP template tools", () => {
     expect(names).not.toContain("template_marker_reference");
 
     for (const name of ["list_templates", "fill_template", "save_template"]) {
-      // oxlint-disable-next-line no-await-in-loop -- sequential per-tool assertion; keeps the failing tool name obvious in test output
       expect((await getMcpToolDefinition(name, createContext()))?.scope).toBe(
         "stella:templates",
       );
@@ -391,7 +390,6 @@ describe("MCP template tools", () => {
       "save_filled_template",
       "save_template",
     ]) {
-      // oxlint-disable-next-line no-await-in-loop -- sequential per-tool assertion; keeps the failing tool name obvious in test output
       const tool = await getMcpToolDefinition(name, createContext());
       collectOpenObjectPaths(tool?.inputSchema, name, openPaths);
     }

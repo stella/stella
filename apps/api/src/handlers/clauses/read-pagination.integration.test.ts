@@ -112,7 +112,6 @@ describe("clause cursor ordering", () => {
       );
 
     for (let pageNumber = 0; pageNumber < 12; pageNumber++) {
-      // oxlint-disable-next-line no-await-in-loop -- each cursor comes from the preceding page
       const result = await readPage(cursor);
       if (Result.isError(result)) {
         throw result.error;

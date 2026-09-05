@@ -368,7 +368,6 @@ test("a settled slice is touched out of the window so the one behind it is reach
   // arm is what the unit actually exercises.
   const staleAt = addUtcDays(NOW, -30);
   for (const offset of [0, -1]) {
-    // oxlint-disable-next-line no-await-in-loop -- fixture seeding, sequential on one pglite handle
     await seedSlice({
       sourceId,
       slice: day(offset),
@@ -381,7 +380,6 @@ test("a settled slice is touched out of the window so the one behind it is reach
   // A full candidate window of slices that are short on paper and settled in
   // fact, every one checked longer ago than the slice that still owes work.
   for (const slice of SETTLED_SLICES) {
-    // oxlint-disable-next-line no-await-in-loop -- fixture seeding, sequential on one pglite handle
     await seedSlice({
       sourceId,
       slice,
@@ -389,7 +387,6 @@ test("a settled slice is touched out of the window so the one behind it is reach
       collected: 1,
       checkedAt: staleAt,
     });
-    // oxlint-disable-next-line no-await-in-loop -- fixture seeding, sequential on one pglite handle
     await seedTerminalItem(sourceId, slice);
   }
 
@@ -462,7 +459,6 @@ test("a walk ingests no more than the unit's slice budget and defers the rest", 
     checkedAt: addUtcDays(NOW, -2),
   });
   for (const offset of [0, -1]) {
-    // oxlint-disable-next-line no-await-in-loop -- fixture seeding, sequential on one pglite handle
     await seedSlice({
       sourceId,
       slice: day(offset),
@@ -511,7 +507,6 @@ test("a walk out of clock defers the rest of its budget rather than overrunning"
     checkedAt: addUtcDays(NOW, -2),
   });
   for (const offset of [0, -1]) {
-    // oxlint-disable-next-line no-await-in-loop -- fixture seeding, sequential on one pglite handle
     await seedSlice({
       sourceId,
       slice: day(offset),
@@ -559,7 +554,6 @@ test("the politeness pause cannot carry a fetch past the budget", async () => {
     checkedAt: addUtcDays(NOW, -2),
   });
   for (const offset of [0, -1]) {
-    // oxlint-disable-next-line no-await-in-loop -- fixture seeding, sequential on one pglite handle
     await seedSlice({
       sourceId,
       slice: day(offset),
@@ -606,7 +600,6 @@ test("a slow multi-page listing still completes instead of restarting forever", 
     checkedAt: addUtcDays(NOW, -2),
   });
   for (const offset of [0, -1]) {
-    // oxlint-disable-next-line no-await-in-loop -- fixture seeding, sequential on one pglite handle
     await seedSlice({
       sourceId,
       slice: day(offset),
@@ -659,7 +652,6 @@ test("a slice budget outside 1..MAX is refused before any work", async () => {
   for (const sliceIngestBudget of [0, MAX_SLICE_INGEST_BUDGET + 1, 1.5]) {
     // Bun's matcher type declares `.rejects.toThrow` as void; capture the
     // rejection explicitly so type-aware lint and the runtime agree.
-    // oxlint-disable-next-line no-await-in-loop -- each refusal is asserted in turn
     const rejection: unknown = await runUnitWith({
       sourceId,
       sliceIngestBudget,
@@ -688,7 +680,6 @@ test("a slice the publisher will not serve parks its items rather than storing t
     checkedAt: addUtcDays(NOW, -2),
   });
   for (const offset of [0, -1]) {
-    // oxlint-disable-next-line no-await-in-loop -- fixture seeding, sequential on one pglite handle
     await seedSlice({
       sourceId,
       slice: day(offset),
@@ -742,7 +733,6 @@ const seedFreshTip = async (
   sourceId: SafeId<"caseLawSource">,
 ): Promise<void> => {
   for (const offset of [0, -1]) {
-    // oxlint-disable-next-line no-await-in-loop -- fixture seeding, sequential on one pglite handle
     await seedSlice({
       sourceId,
       slice: day(offset),
@@ -950,7 +940,6 @@ test("a slice the publisher will not serve does not hold the ones behind it", as
     [OWED_SLICE, addUtcDays(NOW, -3)],
     [reachable, addUtcDays(NOW, -2)],
   ] as const) {
-    // oxlint-disable-next-line no-await-in-loop -- fixture seeding, sequential on one pglite handle
     await seedSlice({ sourceId, slice, reported: 2, collected: 0, checkedAt });
   }
 
@@ -1122,7 +1111,6 @@ test("held slices are excluded from the backlog window, not filtered after it", 
   const sliceRetries: SliceRetrySchedule = new Map();
   for (const [index, slice] of SETTLED_SLICES.entries()) {
     sliceRetries.set(slice, NOW.getTime() + DAY_IN_MS);
-    // oxlint-disable-next-line no-await-in-loop -- fixture seeding, sequential on one pglite handle
     await seedSlice({
       sourceId,
       slice,
@@ -1345,7 +1333,6 @@ const seedDocumentIdentityRows = async (
   sourceId: SafeId<"caseLawSource">,
 ): Promise<void> => {
   for (const [index, item] of LISTING_ITEMS.entries()) {
-    // oxlint-disable-next-line no-await-in-loop -- fixture seeding, sequential on one pglite handle
     await seedDecision({
       sourceId,
       caseNumber: FIXTURE_CASE_NUMBERS[index] ?? "",
@@ -1400,7 +1387,6 @@ test("the docket half of the identity index applies the same filter", async () =
   const sourceId = await seedSource();
   await seedWalkableSlice(sourceId);
   for (const [index, caseNumber] of FIXTURE_CASE_NUMBERS.entries()) {
-    // oxlint-disable-next-line no-await-in-loop -- fixture seeding, sequential on one pglite handle
     await seedDecision({
       sourceId,
       caseNumber,

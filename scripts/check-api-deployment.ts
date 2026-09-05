@@ -118,7 +118,6 @@ const main = async () => {
   let consecutiveMatches = 0;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
-      // eslint-disable-next-line no-await-in-loop -- each probe must observe the deployed commit before deciding whether to retry.
       lastObservedCommit = await readDeployedCommit(apiUrl, probePath);
       const stability = advanceDeploymentStability({
         consecutiveMatches,
@@ -150,7 +149,6 @@ const main = async () => {
       );
     }
     if (attempt < attempts) {
-      // eslint-disable-next-line no-await-in-loop -- deployment probes are intentionally sequential and bounded.
       await sleep(delayMs);
     }
   }

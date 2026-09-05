@@ -67,7 +67,6 @@ beforeAll(async () => {
   for (const [index, createdAt] of RUN_TIMESTAMPS.entries()) {
     // `created_at` is written as a literal: binding it from a `Date` would
     // erase exactly the digits this fixture exists to carry.
-    // oxlint-disable-next-line no-await-in-loop -- ordered inserts on one test DB connection
     await testDb.execute(sql`
       INSERT INTO document_processing_runs (
         id, organization_id, workspace_id, entity_id, entity_version_id,
@@ -108,7 +107,6 @@ const walk = async (
   const visited: SafeId<"documentProcessingRun">[] = [];
   let cursor = startCursor;
   for (let page = 0; page < MAX_PAGES; page += 1) {
-    // oxlint-disable-next-line no-await-in-loop -- sequential keyset pagination
     const rows = await readPage(cursor, PAGE_LIMIT);
     for (const row of rows) {
       visited.push(row.id);
@@ -188,7 +186,6 @@ test("INVARIANT: resuming from any run yields exactly the runs that follow it", 
   const expected = await walk();
 
   for (const [index, boundary] of expected.entries()) {
-    // oxlint-disable-next-line no-await-in-loop -- sequential keyset pagination
     const remainder = await walk(boundary);
     expect(remainder).toEqual(expected.slice(index + 1));
   }

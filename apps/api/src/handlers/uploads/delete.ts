@@ -153,7 +153,6 @@ const abortUpload = createSafeHandler(
       uploadId,
       workspaceId,
     })) {
-      // oxlint-disable-next-line no-await-in-loop -- sequential by design: S3 cleanup loop, not parallelized per rate-limit guidance
       await getS3()
         .delete(key)
         .catch((error: unknown) =>
