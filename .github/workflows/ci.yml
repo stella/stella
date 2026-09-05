@@ -704,6 +704,15 @@ jobs:
           bun scripts/ratchet.ts --self-test
           bun scripts/ratchet.ts --check
 
+      - name: Module ownership
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # scripts/ownership.ts holds one row per owned capability. The
+        # confine-owner lint rule reads the enforced rows, and
+        # docs/module-ownership.md is rendered from the same table, so this
+        # check fails when the doc is stale, an id repeats, or a path a row
+        # names has moved. Regenerate: `bun scripts/ownership.ts --write`.
+        run: bun run check:module-ownership
+
       - name: Suppression waiver ledger
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         # The ratchet budgets cap how many suppressions each lint rule carries.

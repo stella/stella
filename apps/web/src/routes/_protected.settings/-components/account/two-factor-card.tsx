@@ -6,7 +6,7 @@ import {
   useQueryClient,
   useSuspenseQuery,
 } from "@tanstack/react-query";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { renderSVG } from "uqr";
 import { useTranslations } from "use-intl";
 
@@ -41,6 +41,7 @@ import {
 } from "@/lib/auth";
 import { authCapabilitiesOptions } from "@/lib/auth-capabilities";
 import { sessionOptions } from "@/lib/auth-queries";
+import { copyToClipboard } from "@/lib/copy-to-clipboard";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
@@ -265,13 +266,13 @@ const BackupCodesList = ({ codes }: { codes: readonly string[] }) => {
   const t = useTranslations();
 
   const handleCopyAll = async () => {
-    try {
-      await navigator.clipboard.writeText(codes.join("\n"));
-      stellaToast.add({ title: t("common.copied"), type: "success" });
-    } catch (error) {
-      getAnalytics().captureError(error);
+    const copied = await copyToClipboard(codes.join("\n"));
+    if (Result.isError(copied)) {
+      getAnalytics().captureError(copied.error);
       stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+      return;
     }
+    stellaToast.add({ title: t("common.copied"), type: "success" });
   };
 
   return (

@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { CopyIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -10,6 +11,7 @@ import {
 import { stellaToast } from "@stll/ui/toast";
 
 import { getAnalytics } from "@/lib/analytics/provider";
+import { copyToClipboard } from "@/lib/copy-to-clipboard";
 import { detached } from "@/lib/detached";
 
 type CopyFieldProps = {
@@ -24,13 +26,13 @@ export const CopyField = ({ label, value }: CopyFieldProps) => {
   const t = useTranslations();
 
   const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(value);
-      stellaToast.add({ title: t("common.copied"), type: "success" });
-    } catch (error) {
-      getAnalytics().captureError(error);
+    const copied = await copyToClipboard(value);
+    if (Result.isError(copied)) {
+      getAnalytics().captureError(copied.error);
       stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+      return;
     }
+    stellaToast.add({ title: t("common.copied"), type: "success" });
   };
 
   return (

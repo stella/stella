@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 
+import { Result } from "better-result";
 import { CopyIcon } from "lucide-react";
 import { Prism, useTokenize } from "prism-react-renderer";
 import type { PrismTheme, Token } from "prism-react-renderer";
@@ -9,6 +10,7 @@ import { Button } from "@stll/ui/button";
 import { stellaToast } from "@stll/ui/toast";
 
 import { getAnalytics } from "@/lib/analytics/provider";
+import { copyToClipboard } from "@/lib/copy-to-clipboard";
 import { detached } from "@/lib/detached";
 
 const TOOL_CODE_THEME = {
@@ -63,13 +65,13 @@ export const ToolCallCodeBlock = ({
   const keyedLines = addStableKeys(tokens);
 
   const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(code);
-      stellaToast.add({ title: t("common.copied"), type: "success" });
-    } catch (error) {
-      getAnalytics().captureError(error);
+    const copied = await copyToClipboard(code);
+    if (Result.isError(copied)) {
+      getAnalytics().captureError(copied.error);
       stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+      return;
     }
+    stellaToast.add({ title: t("common.copied"), type: "success" });
   };
 
   return (

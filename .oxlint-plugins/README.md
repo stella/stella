@@ -73,7 +73,6 @@ runtime validation, or integration tests.
 
 ### Database, ingestion, pagination, and data shape
 
-- [`confine-redis-client`](./confine-redis-client.ts) (`confine-redis-client`): confines direct Redis client construction and imports to the owned infrastructure module.
 - [`no-bare-jsonb-cast`](./no-bare-jsonb-cast.ts) (`no-bare-jsonb-cast`): rejects bare PostgreSQL JSONB casts that bypass the typed JSONB expression helper.
 - [`no-hand-rolled-sql-case`](./no-hand-rolled-sql-case.ts) (`no-hand-rolled-sql-case`): rejects a SQL `CASE` whose branch list is generated in the interpolation, where an empty list renders a branchless `CASE`; the shared renderers return the fallback instead.
 - [`no-db-await-in-loop`](./no-db-await-in-loop.ts) (`no-db-await-in-loop`): catches database calls awaited serially in loops and unbounded `Promise.all` query fan-out.
@@ -174,6 +173,7 @@ runtime validation, or integration tests.
 
 - [`ai-output-strict-schema`](./ai-output-strict-schema.ts) (`ai-output-strict-schema`): requires AI structured-output schemas to reject unknown properties instead of silently accepting model drift.
 - [`require-complete-compaction-generation`](./require-complete-compaction-generation.ts) (`require-complete-compaction-generation`): requires every compaction-owned text generation call to apply the shared complete-output policy before its durable checkpoint can advance.
+- [`confine-owner`](./confine-owner.ts) (`confine-owner`): confines each capability in `scripts/ownership.ts` to the module that owns it; the same table renders `docs/module-ownership.md`, and a bypass is an `allowed` entry with a reason rather than a new rule.
 - [`docs-source-policy`](./docs-source-policy.ts) (`docs-source-policy`): requires every direct external dependency to be covered by one exact llms.txt source or an explained no-source quarantine that expires within 31 days.
 - [`forbid-dev-runner-config-reads`](./forbid-dev-runner-config-reads.ts) (`forbid-dev-runner-config-reads`): prevents application code from importing or reading development-runner configuration.
 - [`forbid-process-env-outside-env-ts`](./forbid-process-env-outside-env-ts.ts) (`forbid-process-env-outside-env-ts`): confines unvalidated environment reads to explicit env, config, test, and script boundaries.

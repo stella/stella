@@ -2,6 +2,7 @@ import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { RefObject } from "react";
 
 import { useQuery } from "@tanstack/react-query";
+import { Result } from "better-result";
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -44,6 +45,7 @@ import { apiUrl } from "@/lib/api-url";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { BoundedSet } from "@/lib/bounded-set";
 import { createChatThreadId, toChatThreadId } from "@/lib/chat-thread-ref";
+import { copyToClipboard } from "@/lib/copy-to-clipboard";
 import { detached } from "@/lib/detached";
 import { APIError, toAPIError } from "@/lib/errors/api";
 import { fetchWithTimeout } from "@/lib/fetch";
@@ -717,13 +719,13 @@ export const ExternalReferencePanel = ({
       return;
     }
 
-    try {
-      await navigator.clipboard.writeText(confirmHref);
-      stellaToast.success(t("common.copied"));
-    } catch (error) {
-      getAnalytics().captureError(error);
+    const copied = await copyToClipboard(confirmHref);
+    if (Result.isError(copied)) {
+      getAnalytics().captureError(copied.error);
       stellaToast.error(t("common.error"));
+      return;
     }
+    stellaToast.success(t("common.copied"));
   }, [confirmHref, t]);
 
   useExternalSyncEffect(() => {

@@ -1,0 +1,455 @@
+// Ownership as data: one table naming the module that owns each capability.
+//
+// Three consumers read this table, so a row is a single decision rather than
+// three synchronized edits:
+//   - `.oxlint-plugins/confine-owner.ts` enforces the rows that carry an
+//     `enforcement` kind, through the options `oxlint.config.ts` builds here.
+//   - `docs/module-ownership.md` is rendered from it, so authors and agents
+//     have one grep target before they write a second implementation.
+//   - `--check` fails when the doc is stale, an id repeats, or a path a row
+//     names has moved.
+//
+// Adding a row: name the capability, point `owner` at the paths that provide
+// it, and say in `summary` why one owner and what callers get. Start at
+// `kind: "none"`; move to an enforced kind once the bypass sites are gone.
+
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+// A file the rule accepts besides the owner itself. `path` is a
+// repo-relative file path, or a directory prefix ending in "/".
+export type AllowedFile = {
+  readonly path: string;
+  readonly reason: string;
+};
+
+export type OwnershipEnforcement =
+  | { readonly kind: "none" }
+  | {
+      readonly kind: "import";
+      readonly specifiers: readonly string[];
+      readonly allowed: readonly AllowedFile[];
+    }
+  | {
+      readonly kind: "global-member";
+      readonly object: string;
+      // The member chain below `object`, e.g. `["clipboard", "writeText"]`
+      // for `navigator.clipboard.writeText`. A sibling member of the same
+      // object is a different capability and is not matched.
+      readonly path: readonly string[];
+      readonly allowed: readonly AllowedFile[];
+    };
+
+export type OwnershipEntry = {
+  readonly id: string;
+  readonly capability: string;
+  readonly owner: readonly string[];
+  readonly summary: string;
+  readonly enforcement: OwnershipEnforcement;
+};
+
+export const OWNERSHIP = [
+  {
+    id: "redis-client",
+    capability: "Valkey/Redis connections for ephemeral coordination",
+    owner: ["apps/api/src/lib/redis-client.ts"],
+    summary:
+      "One module builds every Valkey client, so the uncapped reconnect ladder, " +
+      "the error classification, and the connection options hold for all of them. " +
+      "Valkey may carry only ephemeral coordination, and each allowed consumer " +
+      "states the degraded path it takes during an outage.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/redis-client"],
+      allowed: [
+        {
+          path: "apps/api/src/lib/bullmq-queue.ts",
+          reason:
+            "Queue transport. The shared facade owns lazy producer connections; BullMQ owns the key layout under its own prefix.",
+        },
+        {
+          path: "apps/api/src/lib/document-deadline-scout-worker.ts",
+          reason:
+            "Queue transport: worker owns its dedicated blocking connection.",
+        },
+        {
+          path: "apps/api/src/lib/document-processing-queue.ts",
+          reason:
+            "Queue transport: worker owns its dedicated blocking connection.",
+        },
+        {
+          path: "apps/api/src/lib/workflow-queue.ts",
+          reason:
+            "Queue transport: worker owns its dedicated blocking connection.",
+        },
+        {
+          path: "apps/api/src/lib/file-derivative-queue.ts",
+          reason:
+            "Queue transport: worker owns its dedicated blocking connection.",
+        },
+        {
+          path: "apps/api/src/lib/entity-deletion-cleanup-queue.ts",
+          reason:
+            "Queue transport: worker owns its dedicated blocking connection.",
+        },
+        {
+          path: "apps/api/src/lib/account-deletion-cleanup-queue.ts",
+          reason:
+            "Queue transport: worker owns its dedicated blocking connection.",
+        },
+        {
+          path: "apps/api/src/lib/style-set-package-cleanup-queue.ts",
+          reason:
+            "Queue transport: worker owns its dedicated blocking connection.",
+        },
+        {
+          path: "apps/api/src/lib/document-review/run-queue.ts",
+          reason:
+            "Queue transport: worker owns its dedicated blocking connection.",
+        },
+        {
+          path: "apps/api/src/lib/bilingual/run-queue.ts",
+          reason:
+            "Queue transport: worker owns its dedicated blocking connection.",
+        },
+        {
+          path: "apps/api/src/lib/document-translation/run-queue.ts",
+          reason:
+            "Queue transport: worker owns its dedicated blocking connection.",
+        },
+        {
+          path: "apps/api/src/lib/flows/flow-run-worker.ts",
+          reason:
+            "Queue transport: worker owns its dedicated blocking connection.",
+        },
+        {
+          path: "apps/api/src/lib/scheduler/bullmq.ts",
+          reason:
+            "Queue transport: worker owns its dedicated blocking connection.",
+        },
+        {
+          path: "apps/api/src/handlers/reports/report-export-queue.ts",
+          reason:
+            "Queue transport: worker owns its dedicated blocking connection.",
+        },
+        {
+          path: "apps/api/src/lib/sse-broadcast.ts",
+          reason:
+            "Cross-instance SSE fan-out publisher. Lost messages degrade to inline local delivery.",
+        },
+        {
+          path: "apps/api/src/lib/sse.ts",
+          reason:
+            "Cross-instance SSE fan-out subscriber. Lost messages degrade to inline local delivery.",
+        },
+        {
+          path: "apps/api/src/lib/rate-limit/redis-context.ts",
+          reason:
+            "TTL'd rate-limit counters; degrades to a per-process fallback map when Valkey is unreachable.",
+        },
+        {
+          path: "apps/api/src/lib/rate-limit/auth-storage.ts",
+          reason:
+            "TTL'd rate-limit counters; degrades to a per-process fallback map when Valkey is unreachable.",
+        },
+        {
+          path: "apps/api/src/mcp/gateway/rate-limit.ts",
+          reason:
+            "TTL'd rate-limit counters; degrades to a per-process fallback map when Valkey is unreachable.",
+        },
+        {
+          path: "apps/api/src/handlers/feedback/intake-guards.ts",
+          reason:
+            "TTL'd rate-limit counters; degrades to a per-process fallback map when Valkey is unreachable.",
+        },
+        {
+          path: "apps/api/src/lib/security-canary.ts",
+          reason:
+            "TTL'd alert deduplication; an outage emits the alert rather than suppressing it.",
+        },
+        {
+          path: "apps/api/src/lib/document-processing-readiness.ts",
+          reason: "TTL'd OCR worker readiness lease; absence reads as unready.",
+        },
+        {
+          path: "apps/api/src/lib/workflow/root-run-state-store.ts",
+          reason:
+            "Workflow run locks and progress counters, rebuilt from the durable orphan reconciler when they are lost.",
+        },
+        {
+          path: "apps/api/src/lib/health/readiness.ts",
+          reason: "Liveness probe: PINGs the connection it is reporting on.",
+        },
+        {
+          path: "apps/api/src/handlers/case-law/ingestion/adapters/publisher-request-gate.ts",
+          reason:
+            "Publisher pacing: uses an expiring shared reservation, fails closed on a deployed outage to protect the publisher, and uses a process-local gate outside deployed environments.",
+        },
+      ],
+    },
+  },
+  {
+    id: "clipboard-write",
+    capability: "Writing text to the system clipboard in the web client",
+    owner: ["apps/web/src/lib/copy-to-clipboard.ts"],
+    summary:
+      "`navigator.clipboard.writeText` rejects on a denied permission or an " +
+      "insecure context, and every call site owes the user that outcome. The " +
+      "owner wraps it in a `Result`, so callers branch on the failure instead " +
+      "of each growing its own try/catch. `apps/landing` is outside the rule's " +
+      "reach, because oxlint does not scan `.astro` files, so its inline " +
+      "scripts keep their own clipboard writes.",
+    enforcement: {
+      kind: "global-member",
+      object: "navigator",
+      path: ["clipboard", "writeText"],
+      allowed: [],
+    },
+  },
+  {
+    id: "pagination-cursor-schema",
+    capability: "Cursor query fields on list endpoints",
+    owner: ["apps/api/src/lib/custom-schema.ts"],
+    summary:
+      "Cursor query fields come from `tPaginationCursor`, so the byte cap is " +
+      "one named constant rather than a literal repeated per route.",
+    enforcement: { kind: "none" },
+  },
+  {
+    id: "object-storage",
+    capability: "Object storage reads, writes, and presigned uploads",
+    owner: ["apps/api/src/lib/s3.ts", "apps/api/src/lib/s3-presign.ts"],
+    summary:
+      "`s3.ts` owns the cancellable transport, credential resolution, and " +
+      "response validation; `s3-presign.ts` owns the presigned PUT flow, which " +
+      "signs size and checksum headers Bun's client cannot. The " +
+      "`no-native-s3-object-read` and `no-native-s3-object-write` rules already " +
+      "enforce this boundary.",
+    enforcement: { kind: "none" },
+  },
+  {
+    id: "transactional-email",
+    capability: "Transactional email templates and delivery",
+    owner: ["apps/api/src/lib/email/smtp.ts", "packages/transactional"],
+    summary:
+      "`smtp.ts` owns the transport, including the TLS requirement and the " +
+      "credential-pair validation. `@stll/transactional` owns the templates and " +
+      "their translations, so recipient-facing copy stays localized in one place.",
+    enforcement: { kind: "none" },
+  },
+  {
+    id: "pdf-rendering",
+    capability: "Rendering an uploaded file to a PDF derivative",
+    owner: ["apps/api/src/lib/files/gotenberg.ts"],
+    summary:
+      "One module talks to the conversion service, so the timeout, the " +
+      "spreadsheet fit-to-page pre-processing, and the derivative policy that " +
+      "decides which MIME types convert stay together.",
+    enforcement: { kind: "none" },
+  },
+  {
+    id: "docx-model-compile",
+    capability: "Compiling a document model into DOCX bytes",
+    owner: [
+      "apps/api/src/handlers/entities/create-from-legal-source.ts",
+      "apps/api/src/handlers/chat/export/create-chat-export-docx.ts",
+      "apps/web/src/components/chat/create-document-compiler.ts",
+    ],
+    summary:
+      "The compiler itself is an external package; these are the in-repo entry " +
+      "points that drive it. Model compile serves drafts and exports: it builds " +
+      "a document from a model the caller already holds and never patches an " +
+      "existing template.",
+    enforcement: { kind: "none" },
+  },
+  {
+    id: "docx-template-patch",
+    capability: "Rewriting OOXML parts inside an uploaded DOCX template",
+    owner: ["apps/api/src/lib/docx/", "packages/docx-utils/"],
+    summary:
+      "Template patching edits the parts of a file a user supplied, preserving " +
+      "everything it does not touch. It shares only the zip and namespace " +
+      "helpers with the model compiler. A third DOCX writer is not to be started.",
+    enforcement: { kind: "none" },
+  },
+  {
+    id: "relative-time",
+    capability: "Relative and absolute time formatting in the web client",
+    owner: ["apps/web/src/lib/relative-time.ts"],
+    summary:
+      "Relative-time output and the shared date/time format presets come from " +
+      "one module bound to the active formatting locale, so a rendered instant " +
+      "reads the same wherever it appears. The `require-relative-time-helpers` " +
+      "rule enforces it.",
+    enforcement: { kind: "none" },
+  },
+  {
+    id: "money-arithmetic",
+    capability: "Monetary amounts and minor-unit arithmetic",
+    owner: ["packages/money/"],
+    summary:
+      "Amounts are stored and computed in minor units behind a `CentsAmount` " +
+      "brand, so a major-unit value cannot be mixed into minor-unit math. The " +
+      "brand threads from the Drizzle column through the API boundary into the " +
+      "browser only while every producer mints it here.",
+    enforcement: { kind: "none" },
+  },
+  {
+    id: "text-folding",
+    capability: "Diacritic and ASCII folding for search and slugs",
+    owner: ["packages/text-normalize/"],
+    summary:
+      "Folding decides which strings compare equal, so search, highlighting, " +
+      "and slugs have to agree on it. Build slug helpers on the folds exported " +
+      "here rather than on a local regex.",
+    enforcement: { kind: "none" },
+  },
+  {
+    id: "collation",
+    capability: "Locale-aware sorting of human-readable text",
+    owner: ["apps/api/src/lib/collation.ts", "apps/web/src/lib/collation.ts"],
+    summary:
+      "Constructing an `Intl.Collator` per comparison is a documented hot-path " +
+      "cost, so both sides cache them; `require-cached-collator` enforces that. " +
+      "The two modules are deliberate mirrors and are meant to converge into a " +
+      "shared package.",
+    enforcement: { kind: "none" },
+  },
+] as const satisfies readonly OwnershipEntry[];
+
+const REPO_ROOT = fileURLToPath(new URL("..", import.meta.url));
+const DOC_PATH = "docs/module-ownership.md";
+
+const DOC_INTRO = `# Module ownership
+
+One capability, one owning module. This file is generated from
+\`scripts/ownership.ts\`; edit the table there, not here, then run
+\`bun scripts/ownership.ts --write\`.
+
+Before adding a helper, module, or schema, look for the capability below and in
+\`packages/*\`. Extend the owner, or say in the pull request why a second
+implementation is correct.
+
+Rows whose enforcement is not \`none\` are also read by the
+\`confine-owner/confine-owner\` lint rule, which reports any linted file outside
+the owner and its \`allowed\` list. Add a bypass by adding an \`allowed\` entry with a
+reason, in the same table.
+`;
+
+const ownerPathExists = (repoRoot: string, entryPath: string): boolean =>
+  existsSync(path.join(repoRoot, entryPath));
+
+const enforcementCell = (enforcement: OwnershipEnforcement): string => {
+  switch (enforcement.kind) {
+    case "none": {
+      return "none";
+    }
+    case "import": {
+      return `import \`${enforcement.specifiers.join("`, `")}\``;
+    }
+    case "global-member": {
+      return `global \`${[enforcement.object, ...enforcement.path].join(".")}\``;
+    }
+    default: {
+      const unhandled: never = enforcement;
+      return unhandled;
+    }
+  }
+};
+
+const allowedFiles = (
+  enforcement: OwnershipEnforcement,
+): readonly AllowedFile[] =>
+  enforcement.kind === "none" ? [] : enforcement.allowed;
+
+const allowedCell = (enforcement: OwnershipEnforcement): string => {
+  const allowed = allowedFiles(enforcement);
+  if (allowed.length === 0) {
+    return "";
+  }
+  return ` (plus ${allowed.length} allowed ${allowed.length === 1 ? "file" : "files"})`;
+};
+
+export const renderOwnershipDocument = (
+  entries: readonly OwnershipEntry[],
+): string => {
+  const rows = entries.map(
+    ({ id, capability, owner, summary, enforcement }) =>
+      `| \`${id}\` — ${capability} | ${owner.map((entryPath) => `\`${entryPath}\``).join(", ")} | ${enforcementCell(enforcement)}${allowedCell(enforcement)} | ${summary} |`,
+  );
+  return `${DOC_INTRO}
+| Capability | Owner | Enforcement | Summary |
+| --- | --- | --- | --- |
+${rows.join("\n")}
+`;
+};
+
+export const validateOwnership = (
+  entries: readonly OwnershipEntry[],
+  repoRoot: string,
+): readonly string[] => {
+  const problems: string[] = [];
+  const seen = new Set<string>();
+
+  for (const entry of entries) {
+    if (seen.has(entry.id)) {
+      problems.push(`duplicate ownership id: ${entry.id}`);
+    }
+    seen.add(entry.id);
+
+    for (const entryPath of entry.owner) {
+      if (!ownerPathExists(repoRoot, entryPath)) {
+        problems.push(`${entry.id}: owner path does not exist: ${entryPath}`);
+      }
+    }
+    for (const allowed of allowedFiles(entry.enforcement)) {
+      if (!ownerPathExists(repoRoot, allowed.path)) {
+        problems.push(
+          `${entry.id}: allowed path does not exist: ${allowed.path}`,
+        );
+      }
+    }
+  }
+
+  return problems;
+};
+
+const main = (argv: readonly string[]): number => {
+  const rendered = renderOwnershipDocument(OWNERSHIP);
+  const docFile = path.join(REPO_ROOT, DOC_PATH);
+
+  if (argv.includes("--write")) {
+    writeFileSync(docFile, rendered);
+    console.log(`ownership: wrote ${DOC_PATH} (${OWNERSHIP.length} rows).`);
+    return 0;
+  }
+
+  if (!argv.includes("--check")) {
+    console.error("Usage: bun scripts/ownership.ts --check | --write");
+    return 1;
+  }
+
+  const problems = [...validateOwnership(OWNERSHIP, REPO_ROOT)];
+  const committed = existsSync(docFile) ? readFileSync(docFile, "utf-8") : "";
+  if (committed !== rendered) {
+    problems.push(
+      `${DOC_PATH} is stale; regenerate with \`bun scripts/ownership.ts --write\``,
+    );
+  }
+
+  if (problems.length > 0) {
+    console.error("Module ownership check failed:");
+    for (const problem of problems) {
+      console.error(`- ${problem}`);
+    }
+    return 1;
+  }
+
+  console.log(`ownership: OK (${OWNERSHIP.length} rows, ${DOC_PATH} current).`);
+  return 0;
+};
+
+if (import.meta.main) {
+  process.exit(main(process.argv.slice(2)));
+}

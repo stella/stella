@@ -233,6 +233,9 @@ architecture and scale, auth and data access, files and external APIs, tests,
 - Comments explain a non-obvious invariant, trade-off, safety constraint, or why
   the code exists. Do not narrate the next statement, add empty documentation
   blocks, or label closing braces.
+- Search before you write. Before adding a helper, module, schema, or validation
+  step, check `docs/module-ownership.md` and `packages/*` for the capability.
+  Extend the owner; if a second implementation is right, say why in the PR.
 - Make abstractions earn their keep. Avoid pass-through wrappers, single-use
   helpers, and interfaces with one implementation unless they establish a real
   ownership boundary, contract, or test seam.

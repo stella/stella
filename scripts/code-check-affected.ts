@@ -93,6 +93,10 @@ const OXLINT_CONFIGURATION_CACHE_INPUTS = [
   "$TURBO_ROOT$/oxlint.config.ts",
   "$TURBO_ROOT$/oxlint.result-boundary.config.ts",
   "$TURBO_ROOT$/.oxlint-plugins/**",
+  // The ownership table is rule configuration: `oxlint.config.ts` builds
+  // `confine-owner`'s options from it, so a row edited here changes what every
+  // workspace lint reports.
+  "$TURBO_ROOT$/scripts/ownership.ts",
 ] as const;
 export const LINT_ONLY_CACHE_INPUTS = [
   ...OXLINT_CONFIGURATION_CACHE_INPUTS,
