@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
+import { toMajorUnits, toMinorUnits } from "@stll/money";
+
 import { expenseCategorySchema } from "@/api/db/billing-validators";
 import { BILLING_STATUS, expenses } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
@@ -110,6 +112,37 @@ const updateExpense = createSafeHandler(
       }
     }
 
+    // The stored integer means nothing without its currency: 1250 is 12.50 USD
+    // and 1250 JPY. A currency change that leaves the amount alone would
+    // therefore silently restate the expense's value, so restate it here
+    // instead, in the transaction that changes the code. An amount sent
+    // alongside the currency is already in the new currency's units and wins
+    // as given.
+    const restatesAmount =
+      body.amount === undefined &&
+      body.currency !== undefined &&
+      body.currency !== existing.currency;
+    const restatedAmount = restatesAmount
+      ? toMinorUnits({
+          amount: toMajorUnits({
+            amountCents: existing.amount,
+            currency: existing.currency,
+          }),
+          currency: body.currency,
+        })
+      : null;
+
+    if (restatedAmount !== null && restatedAmount < 1) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message:
+            "This expense is smaller than the new currency's smallest unit; " +
+            "send the amount in that currency instead",
+        }),
+      );
+    }
+
     const updates = {
       ...pickDefined(body, [
         "dateIncurred",
@@ -122,6 +155,7 @@ const updateExpense = createSafeHandler(
         "matterId",
         "status",
       ]),
+      ...(restatedAmount === null ? {} : { amount: restatedAmount }),
       ...(body.amount !== undefined ? { amount: cents(body.amount) } : {}),
       updatedAt: new Date(),
     };

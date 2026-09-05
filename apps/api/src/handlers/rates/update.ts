@@ -1,8 +1,10 @@
 import { Result } from "better-result";
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 import { t } from "elysia";
 
-import { rateTables } from "@/api/db/schema";
+import { toMajorUnits, toMinorUnits } from "@stll/money";
+
+import { rateEntries, rateTables } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import {
@@ -12,6 +14,7 @@ import {
 } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { pickDefined } from "@/api/lib/pick-defined";
+import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 
 const updateRateTableBodySchema = t.Object({
   id: tSafeId("rateTable"),
@@ -113,6 +116,54 @@ const updateRateTable = createSafeHandler(
               eq(rateTables.workspaceId, workspaceId),
             ),
           );
+
+        // A rate table's currency is the currency of every rate under it, and
+        // a rate is stored in that currency's minor units. Changing the code
+        // alone would restate every rate's value (10000 is 100.00 USD and
+        // 10000 JPY), so the rates move with it, in this transaction. Rates
+        // already copied onto time entries are not rewritten; those entries
+        // carry the currency they were billed in.
+        const nextCurrency = changedFields.currency;
+        if (nextCurrency !== undefined && nextCurrency !== existing.currency) {
+          const entries = await tx
+            .select({
+              id: rateEntries.id,
+              hourlyRate: rateEntries.hourlyRate,
+            })
+            .from(rateEntries)
+            .where(
+              and(
+                eq(rateEntries.rateTableId, body.id),
+                eq(rateEntries.workspaceId, workspaceId),
+              ),
+            );
+
+          await tx
+            .update(rateEntries)
+            .set({
+              hourlyRate: sqlCaseFragment({
+                branches: entries.map(
+                  (entry) =>
+                    sql`WHEN ${rateEntries.id} = ${entry.id} THEN ${toMinorUnits(
+                      {
+                        amount: toMajorUnits({
+                          amountCents: entry.hourlyRate,
+                          currency: existing.currency,
+                        }),
+                        currency: nextCurrency,
+                      },
+                    )}`,
+                ),
+                fallback: sql`${rateEntries.hourlyRate}`,
+              }),
+            })
+            .where(
+              and(
+                eq(rateEntries.rateTableId, body.id),
+                eq(rateEntries.workspaceId, workspaceId),
+              ),
+            );
+        }
 
         const changes: Record<string, { old: unknown; new: unknown }> = {};
         for (const field of ["name", "currency", "isDefault"] as const) {
