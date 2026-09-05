@@ -247,18 +247,14 @@ export const VersionsSidebar = ({
     const switchTarget =
       remaining.find((v) => v.id === currentVersionId) ?? remaining.at(0);
 
-    try {
-      const response = await api
-        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .entity({ entityId: toSafeId<"entity">(entityId) })
-        .versions({ versionId: toSafeId<"entityVersion">(versionId) })
-        .delete({});
+    const response = await api
+      .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+      .entity({ entityId: toSafeId<"entity">(entityId) })
+      .versions({ versionId: toSafeId<"entityVersion">(versionId) })
+      .delete({});
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-    } catch (error) {
-      getAnalytics().captureError(error);
+    if (response.error) {
+      getAnalytics().captureError(toAPIError(response.error));
       stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
       await invalidateVersions();
       return;
@@ -276,43 +272,35 @@ export const VersionsSidebar = ({
   };
 
   const handleSetLabel = async (versionId: string, label: string | null) => {
-    try {
-      const response = await api
-        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .entity({ entityId: toSafeId<"entity">(entityId) })
-        .versions({ versionId: toSafeId<"entityVersion">(versionId) })
-        .label.patch({
-          label,
-        });
+    const response = await api
+      .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+      .entity({ entityId: toSafeId<"entity">(entityId) })
+      .versions({ versionId: toSafeId<"entityVersion">(versionId) })
+      .label.patch({
+        label,
+      });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-    } catch (error) {
-      getAnalytics().captureError(error);
+    if (response.error) {
+      getAnalytics().captureError(toAPIError(response.error));
       stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
-    } finally {
-      await invalidateVersions();
     }
+
+    await invalidateVersions();
   };
 
   const handleRestore = async (versionId: string) => {
-    try {
-      const response = await api
-        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .entity({ entityId: toSafeId<"entity">(entityId) })
-        .versions({ versionId: toSafeId<"entityVersion">(versionId) })
-        .restore.post({});
+    const response = await api
+      .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+      .entity({ entityId: toSafeId<"entity">(entityId) })
+      .versions({ versionId: toSafeId<"entityVersion">(versionId) })
+      .restore.post({});
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-    } catch (error) {
-      getAnalytics().captureError(error);
+    if (response.error) {
+      getAnalytics().captureError(toAPIError(response.error));
       stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
-    } finally {
-      await invalidateVersions();
     }
+
+    await invalidateVersions();
   };
 
   const handleDownload = async (fieldId: string) => {

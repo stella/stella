@@ -32,7 +32,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { toAPIError } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import {
   notificationsOptions,
@@ -104,27 +104,25 @@ export const NotificationBell = () => {
     if (notification.readAt !== null) {
       return;
     }
-    try {
-      unwrapEden(
-        await api
-          .notifications({
-            notificationId: toSafeId<"notification">(notification.id),
-          })
-          .read.patch(),
-      );
-      await refetchFirstNotificationsPage({ organizationId, queryClient });
-    } catch (error) {
-      reportFailure(error);
+    const response = await api
+      .notifications({
+        notificationId: toSafeId<"notification">(notification.id),
+      })
+      .read.patch();
+    if (response.error) {
+      reportFailure(toAPIError(response.error));
+      return;
     }
+    await refetchFirstNotificationsPage({ organizationId, queryClient });
   };
 
   const markAllRead = async () => {
-    try {
-      unwrapEden(await api.notifications["read-all"].post());
-      await refetchFirstNotificationsPage({ organizationId, queryClient });
-    } catch (error) {
-      reportFailure(error);
+    const response = await api.notifications["read-all"].post();
+    if (response.error) {
+      reportFailure(toAPIError(response.error));
+      return;
     }
+    await refetchFirstNotificationsPage({ organizationId, queryClient });
   };
 
   return (

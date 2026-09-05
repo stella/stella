@@ -681,31 +681,31 @@ export const RowActions = ({
     }
 
     if (desktopEditLockState === "locked-by-me") {
-      try {
-        const response = await api
-          .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-          ["desktop-edit-sessions"].release.post({
-            entityId: toSafeId<"entity">(file.entityId),
-            propertyId: toSafeId<"property">(file.propertyId),
-          });
-
-        if (response.error) {
-          throw toAPIError(response.error);
-        }
-
-        await queryClient.invalidateQueries({
-          queryKey: entitiesKeys.all(workspaceId),
+      const response = await api
+        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        ["desktop-edit-sessions"].release.post({
+          entityId: toSafeId<"entity">(file.entityId),
+          propertyId: toSafeId<"property">(file.propertyId),
         });
-        return;
-      } catch (error) {
-        analytics.captureError(error);
+
+      if (response.error) {
+        const releaseError = toAPIError(response.error);
+        analytics.captureError(releaseError);
         stellaToast.add({
-          description: userErrorFromThrown(error, t("common.unexpectedError")),
+          description: userErrorFromThrown(
+            releaseError,
+            t("common.unexpectedError"),
+          ),
           title: t("errors.actionFailed"),
           type: "error",
         });
         return;
       }
+
+      await queryClient.invalidateQueries({
+        queryKey: entitiesKeys.all(workspaceId),
+      });
+      return;
     }
 
     const lockedByName = entity.activeEditBy?.name ?? "";

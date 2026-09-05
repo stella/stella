@@ -435,57 +435,47 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
     if (datePropertyId === TASK_DATE_IDS[0] && kind === "task") {
       detached(
         (async () => {
-          try {
-            const response = await api
-              .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
-              .patch({
-                taskId: toSafeId<"entity">(entityId),
-                dueDate: date,
-              });
-            if (response.error) {
-              throw toAPIError(response.error);
-            }
-          } catch (error) {
-            getAnalytics().captureError(error);
+          const response = await api
+            .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
+            .patch({
+              taskId: toSafeId<"entity">(entityId),
+              dueDate: date,
+            });
+          if (response.error) {
+            getAnalytics().captureError(toAPIError(response.error));
             stellaToast.add({
               title: t("errors.actionFailed"),
               type: "error",
             });
-          } finally {
-            detached(
-              invalidateCalendarTasks(),
-              "calendar-view.invalidate-calendar-tasks",
-            );
           }
+          detached(
+            invalidateCalendarTasks(),
+            "calendar-view.invalidate-calendar-tasks",
+          );
         })(),
         "calendar-view.patch",
       );
     } else if (datePropertyId === TASK_DATE_IDS[1] && kind === "task") {
       detached(
         (async () => {
-          try {
-            const response = await api
-              .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
-              .patch({
-                taskId: toSafeId<"entity">(entityId),
-                allDay: true,
-                startAt: toAllDayAgendaDateTime(date),
-              });
-            if (response.error) {
-              throw toAPIError(response.error);
-            }
-          } catch (error) {
-            getAnalytics().captureError(error);
+          const response = await api
+            .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
+            .patch({
+              taskId: toSafeId<"entity">(entityId),
+              allDay: true,
+              startAt: toAllDayAgendaDateTime(date),
+            });
+          if (response.error) {
+            getAnalytics().captureError(toAPIError(response.error));
             stellaToast.add({
               title: t("errors.actionFailed"),
               type: "error",
             });
-          } finally {
-            detached(
-              invalidateCalendarTasks(),
-              "calendar-view.invalidate-calendar-tasks",
-            );
           }
+          detached(
+            invalidateCalendarTasks(),
+            "calendar-view.invalidate-calendar-tasks",
+          );
         })(),
         "calendar-view.patch",
       );

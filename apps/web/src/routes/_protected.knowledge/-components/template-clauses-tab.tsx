@@ -40,7 +40,6 @@ import type {
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { knowledgeKeys, templateClausesOptions } from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
@@ -398,15 +397,15 @@ export const OutdatedChanges = ({
       return;
     }
     setDiff({ status: "loading" });
-    try {
-      const response = await api
-        .clauses({ clauseId: toSafeId<"clause">(clauseId) })
-        .versions({ versionId: toSafeId<"clauseVersion">(versionId) })
-        .diff.get();
-      setDiff({ status: "ready", value: unwrapEden(response).segments });
-    } catch {
+    const response = await api
+      .clauses({ clauseId: toSafeId<"clause">(clauseId) })
+      .versions({ versionId: toSafeId<"clauseVersion">(versionId) })
+      .diff.get();
+    if (response.error) {
       setDiff({ status: "error" });
+      return;
     }
+    setDiff({ status: "ready", value: response.data.segments });
   };
 
   const handleSummarize = async () => {
@@ -414,15 +413,15 @@ export const OutdatedChanges = ({
       return;
     }
     setSummary({ status: "loading" });
-    try {
-      const response = await api
-        .clauses({ clauseId: toSafeId<"clause">(clauseId) })
-        .versions({ versionId: toSafeId<"clauseVersion">(versionId) })
-        .summarize.post();
-      setSummary({ status: "ready", value: unwrapEden(response).summary });
-    } catch {
+    const response = await api
+      .clauses({ clauseId: toSafeId<"clause">(clauseId) })
+      .versions({ versionId: toSafeId<"clauseVersion">(versionId) })
+      .summarize.post();
+    if (response.error) {
       setSummary({ status: "error" });
+      return;
     }
+    setSummary({ status: "ready", value: response.data.summary });
   };
 
   return (
