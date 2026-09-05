@@ -19,9 +19,13 @@ import nodePath from "node:path";
  * never carried the hundredths rule and is not rescaled.
  */
 
-const MIGRATION_SQL = nodePath.resolve(
-  import.meta.dir,
-  "../../drizzle/20260905090000_billing_true_minor_units/migration.sql",
+// Applied in order: the widening has to land before the rescale writes values
+// `integer` cannot hold.
+const MIGRATION_FILES = [
+  "20260905090000_billing_money_columns_bigint",
+  "20260905091000_billing_true_minor_units",
+].map((directory) =>
+  nodePath.resolve(import.meta.dir, `../../drizzle/${directory}/migration.sql`),
 );
 
 const PRE_MIGRATION_SCHEMA = `
@@ -96,9 +100,9 @@ beforeAll(async () => {
   await database.exec(PRE_MIGRATION_SCHEMA);
   await database.exec(PRE_MIGRATION_ROWS);
 
-  const statements = readFileSync(MIGRATION_SQL, "utf-8")
-    .split("--> statement-breakpoint")
-    .filter((statement) => statement.trim().length > 0);
+  const statements = MIGRATION_FILES.flatMap((file) =>
+    readFileSync(file, "utf-8").split("--> statement-breakpoint"),
+  ).filter((statement) => statement.trim().length > 0);
   for (const statement of statements) {
     // Sequential on purpose: a migration's statements are ordered, and the
     // rescales have to land before the invoice recompute reads them.

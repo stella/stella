@@ -14,7 +14,7 @@ import { renderCurrencyExponentValues } from "@/api/db/currency-exponents";
 
 const MIGRATION_SQL = nodePath.resolve(
   import.meta.dir,
-  "../../drizzle/20260905090000_billing_true_minor_units/migration.sql",
+  "../../drizzle/20260905091000_billing_true_minor_units/migration.sql",
 );
 
 // Every `(VALUES … ) AS exponent(currency, digits)` block in the file.

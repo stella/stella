@@ -2,7 +2,7 @@
  * The currencies whose minor-unit exponent is not two, as SQL VALUES rows.
  *
  * A migration cannot call `currencyMinorUnitDigits`, so the answer has to
- * travel as data: `20260905090000_billing_true_minor_units` inlines this
+ * travel as data: `20260905091000_billing_true_minor_units` inlines this
  * output to decide which stored amounts move. That copy is only right while it
  * matches what `Intl` answers, and an ICU update can move a currency's
  * exponent, so `currency-exponents.test.ts` compares the two and fails the
