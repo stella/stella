@@ -283,9 +283,38 @@ const commonAncestor = (nodes: readonly Element[]): Element | undefined => {
  */
 export type EcjDocumentRoot =
   | { boundary: "converter"; root: cheerio.Cheerio<AnyNode> }
-  | { boundary: "document"; root: cheerio.Cheerio<AnyNode> };
+  | { boundary: "document"; root: cheerio.Cheerio<AnyNode> }
+  | { boundary: "page-chrome"; root: cheerio.Cheerio<AnyNode> };
 
 export type EcjDocumentBoundary = EcjDocumentRoot["boundary"];
+
+/**
+ * Class prefix of the Europa Component Library, the design system every
+ * europa.eu site is built from.
+ *
+ * It is the publisher's own annotation for its own furniture — header,
+ * language selector, cookie banner, contact block, footer — and it is
+ * spelled the same in all 24 languages, which a phrase list could never
+ * be. A converter manifestation carries none of it: the converter emits
+ * the document and nothing around it.
+ */
+const CHROME_CLASS_PREFIX = "ecl-";
+
+/**
+ * Whether the page is built out of the publisher's component library.
+ *
+ * Read off class tokens rather than off any text, and confirmed token by
+ * token: an attribute substring match would also accept a class that
+ * merely contains the prefix.
+ */
+export const ecjPageCarriesChrome = ($: cheerio.CheerioAPI): boolean =>
+  $(`[class*="${CHROME_CLASS_PREFIX}"]`)
+    .toArray()
+    .some((element) =>
+      ($(element).attr("class") ?? "")
+        .split(/\s+/u)
+        .some((token) => token.startsWith(CHROME_CLASS_PREFIX)),
+    );
 
 /**
  * The subtree holding the decision.
@@ -302,9 +331,14 @@ export type EcjDocumentBoundary = EcjDocumentRoot["boundary"];
  * Reading the boundary off the converter's vocabulary keeps this
  * working in all 24 languages, where a wording-based rule would hold in
  * one. Where no marker is found the whole body is the document, so an
- * unrecognised layout still contributes all of its text — reported as
- * such, because the same fallback also catches a page that carries no
- * decision at all.
+ * unrecognised layout still contributes all of its text.
+ *
+ * A missing marker on its own says only that: unmatched. It becomes
+ * `page-chrome` — a page served where a decision would be — when the
+ * body is additionally built out of the publisher's component library,
+ * which converter output never is. Both signals are the publisher's own
+ * annotations, and a caller storing text needs the pair: one selector
+ * that stopped matching must not turn a decision into a page.
  */
 export const ecjDocumentRoot = ($: cheerio.CheerioAPI): EcjDocumentRoot => {
   const $body = $("body");
@@ -331,7 +365,9 @@ export const ecjDocumentRoot = ($: cheerio.CheerioAPI): EcjDocumentRoot => {
     }
     return { boundary: "converter", root: $(ancestor) };
   }
-  return { boundary: "document", root: $body };
+  return ecjPageCarriesChrome($)
+    ? { boundary: "page-chrome", root: $body }
+    : { boundary: "document", root: $body };
 };
 
 /**

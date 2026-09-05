@@ -31,6 +31,7 @@ import type { Block, Inline } from "@/api/handlers/case-law/document-ast";
 import {
   ecjDocumentHtml,
   ecjDocumentRoot,
+  ecjPageCarriesChrome,
   parseEcjDecisionHtml,
 } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj";
 import {
@@ -444,22 +445,55 @@ describe("parseEcjDecisionHtml", () => {
    * which is what tells the adapter it is holding a page rather than a
    * layout it failed to recognise.
    */
-  test("reports the fallback boundary for a page holding no decision", async () => {
-    const [shell, decision] = await Promise.all([
+  test("tells a page served instead of a decision from an unmatched one", async () => {
+    const [shell, decision, page] = await Promise.all([
       readFixture(`${SHELL_STEM}.html.gz`),
       readFixture(
         `${manifestationStem({ celex: "62013TO0488", language: "CS" })}.html.gz`,
       ),
+      readFixture(
+        `${portalStem({ celex: "62022CJ0128", language: "EN" })}.html.gz`,
+      ),
     ]);
-    if (shell === undefined || decision === undefined) {
+    if (shell === undefined || decision === undefined || page === undefined) {
       throw new Error(`Missing the ${SHELL_STEM} recording or its decision`);
     }
 
-    expect(ecjDocumentRoot(cheerio.load(shell)).boundary).toBe("document");
+    // Two of the publisher's own annotations, and the refusal needs both.
+    // The shell has the site's component library and no converter output.
+    expect(ecjDocumentRoot(cheerio.load(shell)).boundary).toBe("page-chrome");
     // The same decision, in the language the Court did publish it in:
     // without this the assertion above would hold of a parser that had
     // simply stopped finding markers anywhere.
     expect(ecjDocumentRoot(cheerio.load(decision)).boundary).toBe("converter");
+    expect(ecjPageCarriesChrome(cheerio.load(decision))).toBe(false);
+    // The portal page carries both, and the converter's markers decide:
+    // there is a decision inside it, so it is bounded, not refused.
+    expect(ecjPageCarriesChrome(cheerio.load(page))).toBe(true);
+    expect(ecjDocumentRoot(cheerio.load(page)).boundary).toBe("converter");
+    // A layout this parser does not recognise is unmatched, not a page.
+    // It keeps the whole body, which is what rule 10 requires of it.
+    expect(
+      ecjDocumentRoot(cheerio.load("<html><body><p>Rozsudok</p></body></html>"))
+        .boundary,
+    ).toBe("document");
+  });
+
+  test("no recording of a decision carries the publisher's chrome", async () => {
+    // The chrome half of the pair, over the whole corpus: a bare
+    // manifestation is converter output and nothing else, in every layout,
+    // including the pre-v9 spelling that carries no `coj-` class at all.
+    for (const stem of decisionStems) {
+      // oxlint-disable-next-line no-await-in-loop -- one fixture read per corpus entry, released before the next
+      const html = await readFixture(`${stem}.html.gz`);
+      if (html === undefined || stem.endsWith(PORTAL_STEM_SUFFIX)) {
+        continue;
+      }
+      expect({
+        stem,
+        chrome: ecjPageCarriesChrome(cheerio.load(html)),
+      }).toEqual({ stem, chrome: false });
+    }
   });
 
   test("holds one declared shell recording", () => {

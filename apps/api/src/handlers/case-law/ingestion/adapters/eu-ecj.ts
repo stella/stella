@@ -867,8 +867,12 @@ const parseManifestation = (
     const lostContent = parsed.validationIssues.some(
       (code) => code === "CONTENT_LOSS" || code === "MISSING_WORDS",
     );
+    // An unmatched layout is not a page: the whole body is the document
+    // and its text is the Court's, so rule 10 keeps it exactly as before.
+    // Only a page built out of the publisher's chrome is refused, and
+    // only in the fallback below.
     if (
-      parsed.boundary === "converter" &&
+      parsed.boundary !== "page-chrome" &&
       parsed.documentAst.blocks.length > 0 &&
       !lostContent
     ) {
@@ -894,14 +898,18 @@ const parseManifestation = (
   const source = ecjDocumentHtml(input.html);
 
   // Rule 10 keeps text a parser could not classify, because that text is
-  // still the decision's. A response holding none of the converter's
-  // vocabulary is not a decision at all — it is the site's own shell,
-  // which the portal serves under a success status for a language
-  // variant the Court has not published. Storing it would file the
-  // publisher's navigation and contact block under a case number, so it
-  // is reported as no document instead, exactly as an unserved variant
-  // is.
-  if (source.boundary === "document") {
+  // still the decision's — a layout whose markers this parser does not
+  // recognise reaches the stripped-text path below, unchanged.
+  //
+  // A response built out of the publisher's component library and
+  // carrying no converter output at all is a different thing: the site's
+  // own shell, served under a success status for a language variant the
+  // Court has not published. Storing it would file the publisher's
+  // navigation and contact block under a case number, so it is reported
+  // as no document, exactly as an unserved variant is. Both of the
+  // publisher's own signals have to agree before that happens, so one
+  // selector that stopped matching cannot retire a real decision.
+  if (source.boundary === "page-chrome") {
     logger.warn("case_law.ingestion.manifestation_not_a_decision", {
       adapterKey: ADAPTER_KEYS.EU_ECJ,
       celex: input.celex,
