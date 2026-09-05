@@ -12,6 +12,10 @@ import { CORPUS_LICENSES } from "@/api/lib/legal-search/corpus-source";
 
 const caseLawCorpusIndexSource = new URL("corpus-index.ts", import.meta.url);
 const caseLawErasureSource = new URL("erasure.ts", import.meta.url);
+const caseLawWithdrawalSource = new URL(
+  "withdraw-document.ts",
+  import.meta.url,
+);
 const caseLawSchemaSource = new URL(
   "../../db/schema/case-law.ts",
   import.meta.url,
@@ -185,6 +189,35 @@ test("a restore racing erasure is durably requeued", async () => {
   expect(source).toContain(
     "eq(\n                        caseLawCorpusIndexProjections.pendingRevision,\n                        projection.pendingRevision,",
   );
+});
+
+test("withdrawal clears pointers only once the objects are gone", async () => {
+  // The same ordering the redaction holds to, for the same reason: a
+  // pointer cleared before its object is deleted leaves an object nothing
+  // names and no way to retry the delete. Kept in its own module so this
+  // and the redaction guards each read one function.
+  const source = await Bun.file(caseLawWithdrawalSource).text();
+  const rowFence = source.indexOf('.for("update")');
+  const intentFence = source.indexOf(
+    "cancelCaseLawCorpusUploadIntents",
+    rowFence,
+  );
+  const erasure = source.indexOf("corpusErasure = await eraseCorpusObjects({");
+  const incompleteReturn = source.indexOf(
+    'return { type: "corpus-objects-remain", error: corpusErasure.error };',
+  );
+  const pointerClear = source.indexOf(
+    ".set({ textS3Key: null, normalizedS3Key: null, astS3Key: null })",
+  );
+
+  expect(rowFence).toBeGreaterThan(-1);
+  expect(intentFence).toBeGreaterThan(rowFence);
+  expect(erasure).toBeGreaterThan(intentFence);
+  expect(incompleteReturn).toBeGreaterThan(erasure);
+  expect(pointerClear).toBeGreaterThan(incompleteReturn);
+  // A withdrawal is not a takedown: the row must keep its tombstone column
+  // clear, or the decision could never be replayed into a document again.
+  expect(source).not.toContain("redactedAt");
 });
 
 test("redaction fences uploads before inspecting or deleting object keys", async () => {

@@ -22,6 +22,12 @@ import {
   processDecision,
 } from "@/api/handlers/case-law/ingestion/pipeline";
 import { shouldSkipRefresh } from "@/api/handlers/case-law/ingestion/refresh-policy";
+import {
+  corpusCarriesDocument,
+  payloadCarriesDocument,
+} from "@/api/handlers/case-law/stored-payload";
+import { withdrawCaseLawDecisionDocument } from "@/api/handlers/case-law/withdraw-document";
+import type { WithdrawCaseLawDecisionDocumentOutcome } from "@/api/handlers/case-law/withdraw-document";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { corpusContentHash } from "@/api/lib/legal-search/corpus-storage";
@@ -63,6 +69,13 @@ import type { CorpusPayload } from "@/api/lib/legal-search/corpus-storage";
  * lets the pipeline advance the observation watermark alone. Where a write
  * does run, the corpus writer compares the derived keys against the ones
  * the row records and skips re-uploading a payload the row already holds.
+ *
+ * One outcome is outside that path. A row whose payload re-parses to no
+ * document produces no result for the pipeline to write, so what is stored
+ * stands however wrong a later parser says it was. Under
+ * `REPLAY_REJECTION_POLICY.WITHDRAW_NO_DOCUMENT` such a row has its document
+ * taken back instead — the row, its metadata and its stored payload are
+ * kept, so a parser fix can still replay it into a document later.
  */
 
 export const REPLAY_ROW_OUTCOME = {
@@ -78,6 +91,10 @@ export const REPLAY_ROW_OUTCOME = {
   MISSING_PAYLOAD: "missing-payload",
   /** The pipeline reported a retryable failure; the walk holds here. */
   RETRYABLE: "retryable",
+  /** The row held a document the re-parse says is not one; it is gone. */
+  WITHDRAWN: "withdrawn",
+  /** Dry run: the row holds a document the re-parse says is not one. */
+  WOULD_WITHDRAW: "would-withdraw",
 } as const;
 
 export type ReplayRowOutcome =
@@ -110,6 +127,37 @@ export type ReplayDecisionRow = {
   sourceRawContentType: string | null;
   corpusMirrorStatus: (typeof CASE_LAW_CORPUS_MIRROR_STATUS)[keyof typeof CASE_LAW_CORPUS_MIRROR_STATUS];
 };
+
+/**
+ * What a run does with a row whose re-parse yields no document.
+ *
+ * Reporting is the default because a re-parse that finds nothing is
+ * usually the adapter, not the row: a payload it cannot read today may
+ * replay cleanly after the next parser fix. Withdrawing is the opposite
+ * claim — the stored text was never a document — and is opted into per
+ * run, since it is the one replay outcome that removes text.
+ */
+export const REPLAY_REJECTION_POLICY = {
+  /** Count it, name it in the report, leave the row alone. */
+  REPORT: "report",
+  /** Take back the stored document of a row that re-parses to none. */
+  WITHDRAW_NO_DOCUMENT: "withdraw-no-document",
+} as const;
+
+export type ReplayRejectionPolicy =
+  (typeof REPLAY_REJECTION_POLICY)[keyof typeof REPLAY_REJECTION_POLICY];
+
+/**
+ * The withdrawal a run performs, as a seam.
+ *
+ * Structural rather than the imported function's own type, so a test can
+ * stand in for it without reaching object storage, and so the module
+ * depends on the shape it calls rather than on that function's options.
+ */
+type WithdrawDocument = (options: {
+  decisionId: SafeId<"caseLawDecision">;
+  scopedDb: ScopedDb;
+}) => Promise<WithdrawCaseLawDecisionDocumentOutcome>;
 
 export const CASE_LAW_REPLAY_SCOPE = {
   SOURCE: { type: "source" },
@@ -311,6 +359,8 @@ const emptyOutcomeCounts = (): Record<ReplayRowOutcome, number> => ({
   [REPLAY_ROW_OUTCOME.REJECTED]: 0,
   [REPLAY_ROW_OUTCOME.MISSING_PAYLOAD]: 0,
   [REPLAY_ROW_OUTCOME.RETRYABLE]: 0,
+  [REPLAY_ROW_OUTCOME.WITHDRAWN]: 0,
+  [REPLAY_ROW_OUTCOME.WOULD_WITHDRAW]: 0,
 });
 
 const emptyRejectionCounts = (): Record<StoredRawReparseRejection, number> => ({
@@ -328,6 +378,10 @@ const REPLAY_OUTCOME_DISPOSITION = {
   [REPLAY_ROW_OUTCOME.REJECTED]: "problem",
   [REPLAY_ROW_OUTCOME.MISSING_PAYLOAD]: "problem",
   [REPLAY_ROW_OUTCOME.RETRYABLE]: "problem",
+  // A withdrawal is intended, and still a row that lost its text: it is
+  // listed so the operator sees which decisions the run emptied.
+  [REPLAY_ROW_OUTCOME.WITHDRAWN]: "problem",
+  [REPLAY_ROW_OUTCOME.WOULD_WITHDRAW]: "problem",
 } as const satisfies Record<ReplayRowOutcome, "ok" | "problem">;
 
 const storedInputFor = (
@@ -357,6 +411,118 @@ type ReplayRowOptions = {
   sourceId: SafeId<"caseLawSource">;
   /** Present only when the run writes; a dry run holds no lease. */
   sourceLease: CaseLawSourceIngestionLease | null;
+  rejectionPolicy: ReplayRejectionPolicy;
+  /** Test seam, threaded to the withdrawal's corpus-object delete. */
+  withdraw: WithdrawDocument;
+};
+
+/**
+ * Whether the row still holds a document to withdraw.
+ *
+ * Asked the same two ways `storedPayloadMatches` asks its question, and
+ * for the same reason: the payload lives either in object storage, where
+ * the content hash names it, or in the row's own columns.
+ */
+const rowHoldsDocument = async ({
+  row,
+  scopedDb,
+}: {
+  row: ReplayDecisionRow;
+  scopedDb: ScopedDb;
+}): Promise<boolean> => {
+  if (row.contentHash !== null) {
+    return corpusCarriesDocument(row.contentHash);
+  }
+  const stored = await scopedDb((tx) =>
+    tx
+      .select({
+        documentAst: caseLawDecisions.documentAst,
+        fulltext: caseLawDecisions.fulltext,
+        sections: caseLawDecisions.sections,
+      })
+      .from(caseLawDecisions)
+      .where(eq(caseLawDecisions.id, row.id))
+      .limit(1),
+  );
+  const columns = stored.at(0);
+  return payloadCarriesDocument({
+    ast: columns?.documentAst ?? null,
+    sections: columns?.sections ?? null,
+    text: columns?.fulltext ?? null,
+  });
+};
+
+/**
+ * Take back the document of a row whose payload re-parses to none.
+ *
+ * A rejection is reported and nothing else, unless this run opted into
+ * withdrawing and the adapter's reason is that the payload holds no
+ * document at all: every other rejection says the replay could not read
+ * the row, which is not a statement about what the row holds. A row that
+ * holds no document already is reported as the rejection it is, so a
+ * second run over the same rows withdraws nothing.
+ */
+const withdrawRejectedRow = async ({
+  row,
+  rejection,
+  detail,
+  rejectionPolicy,
+  scopedDb,
+  sourceLease,
+  withdraw,
+}: {
+  row: ReplayDecisionRow;
+  rejection: StoredRawReparseRejection;
+  detail: string;
+  rejectionPolicy: ReplayRejectionPolicy;
+  scopedDb: ScopedDb;
+  sourceLease: CaseLawSourceIngestionLease | null;
+  withdraw: WithdrawDocument;
+}): Promise<ReplayRowReport> => {
+  const rejected: ReplayRowReport = {
+    id: row.id,
+    caseNumber: row.caseNumber,
+    language: row.language,
+    outcome: REPLAY_ROW_OUTCOME.REJECTED,
+    rejection,
+    detail,
+  };
+
+  if (
+    rejectionPolicy !== REPLAY_REJECTION_POLICY.WITHDRAW_NO_DOCUMENT ||
+    rejection !== STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT ||
+    !(await rowHoldsDocument({ row, scopedDb }))
+  ) {
+    return rejected;
+  }
+
+  if (sourceLease === null) {
+    return { ...rejected, outcome: REPLAY_ROW_OUTCOME.WOULD_WITHDRAW };
+  }
+
+  await sourceLease.beforeDatabaseMark();
+  const withdrawn = await withdraw({ decisionId: row.id, scopedDb });
+  switch (withdrawn.type) {
+    case "withdrawn":
+      return { ...rejected, outcome: REPLAY_ROW_OUTCOME.WITHDRAWN };
+    case "corpus-objects-remain":
+      // The row and every reader already hold no document; what is left
+      // is an object the delete did not confirm, kept as a retry target.
+      return {
+        ...rejected,
+        outcome: REPLAY_ROW_OUTCOME.WITHDRAWN,
+        detail: `${detail}; corpus objects retained for retry`,
+      };
+    case "not-found":
+      return {
+        ...rejected,
+        detail: `${detail}; the row was gone before it could be withdrawn`,
+      };
+    default: {
+      withdrawn satisfies never;
+      return panic(`Unhandled withdrawal outcome: ${String(withdrawn)}`);
+    }
+  }
 };
 
 /**
@@ -463,9 +629,11 @@ const replayRow = async ({
   row,
   raw,
   reparsed,
+  rejectionPolicy,
   scopedDb,
   sourceId,
   sourceLease,
+  withdraw,
 }: ReplayRowOptions): Promise<ReplayRowReport> => {
   const base = {
     id: row.id,
@@ -474,12 +642,15 @@ const replayRow = async ({
   };
 
   if (reparsed.type === "rejected") {
-    return {
-      ...base,
-      outcome: REPLAY_ROW_OUTCOME.REJECTED,
+    return await withdrawRejectedRow({
+      row,
       rejection: reparsed.rejection,
       detail: reparsed.detail,
-    };
+      rejectionPolicy,
+      scopedDb,
+      sourceLease,
+      withdraw,
+    });
   }
 
   const regeneratedIdentity = {
@@ -571,9 +742,11 @@ type ReplayOneRowOptions = {
   capability: Extract<ReplayCapability, { type: "supported" }>;
   readStoredRaw: StoredRawReader;
   row: ReplayDecisionRow;
+  rejectionPolicy: ReplayRejectionPolicy;
   scopedDb: ScopedDb;
   sourceId: SafeId<"caseLawSource">;
   sourceLease: CaseLawSourceIngestionLease | null;
+  withdraw: WithdrawDocument;
 };
 
 /**
@@ -589,9 +762,11 @@ const replayOneRow = async ({
   capability,
   readStoredRaw,
   row,
+  rejectionPolicy,
   scopedDb,
   sourceId,
   sourceLease,
+  withdraw,
 }: ReplayOneRowOptions): Promise<ReplayRowReport> => {
   const raw = await readStoredRaw(row.sourceRawS3Key);
   if (raw === null) {
@@ -607,9 +782,11 @@ const replayOneRow = async ({
     row,
     raw,
     reparsed: await capability.reparse(storedInputFor(row, raw)),
+    rejectionPolicy,
     scopedDb,
     sourceId,
     sourceLease,
+    withdraw,
   });
 };
 
@@ -634,6 +811,10 @@ export type ReplayCaseLawSourceOptions = {
   pageSize: number;
   after?: SafeId<"caseLawDecision"> | null;
   scope: CaseLawReplayScope;
+  /** Defaults to reporting; withdrawing is opted into per run. */
+  rejectionPolicy?: ReplayRejectionPolicy;
+  /** Test seam; production withdraws through the canonical stores. */
+  withdraw?: WithdrawDocument;
 };
 
 export type ReplayRun =
@@ -703,6 +884,8 @@ export const replayCaseLawSource = async ({
   pageSize,
   after = null,
   scope,
+  rejectionPolicy = REPLAY_REJECTION_POLICY.REPORT,
+  withdraw = withdrawCaseLawDecisionDocument,
 }: ReplayCaseLawSourceOptions): Promise<ReplayRun> => {
   const capability = replayCapability(adapter);
   if (capability.type === "unsupported") {
@@ -756,9 +939,11 @@ export const replayCaseLawSource = async ({
           capability,
           readStoredRaw,
           row,
+          rejectionPolicy,
           scopedDb,
           sourceId,
           sourceLease,
+          withdraw,
         }),
       catch: (cause) => cause,
     });
