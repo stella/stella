@@ -1,4 +1,4 @@
-import { chat, EventType, maxIterations, StreamProcessor } from "@tanstack/ai";
+import { EventType, maxIterations, StreamProcessor } from "@tanstack/ai";
 import type { TokenUsage, UIMessage } from "@tanstack/ai";
 import { Result } from "better-result";
 
@@ -28,6 +28,7 @@ import {
   redactModelSystemPrompt,
 } from "@/api/lib/chat/model-ingress-guard";
 import { projectChatToolSchemasForProvider } from "@/api/lib/chat/provider-tool-projection";
+import { streamChatChunks } from "@/api/lib/chat/tanstack-chat-runtime";
 import { ChatEmptyCompletionError } from "@/api/lib/errors/tagged-errors";
 import {
   abortControllerFromSignal,
@@ -200,7 +201,7 @@ export const runSubagent = async (
     workspaceIds: options.tenantWorkspaceIds,
   });
 
-  const stream = chat({
+  const stream = streamChatChunks({
     adapter: model.adapter,
     messages: guardedMessages,
     tools: projectedTools,

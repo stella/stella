@@ -1,5 +1,4 @@
 import {
-  chat,
   EventType,
   maxIterations,
   StreamProcessor,
@@ -128,6 +127,13 @@ import type {
 } from "@/api/lib/chat/model-ingress-guard";
 import { projectChatToolSchemasForProvider } from "@/api/lib/chat/provider-tool-projection";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import {
+  streamChatChunks,
+  toolCallEndInputOf,
+  toolCallEndOutputOf,
+  toolCallNameOf,
+} from "@/api/lib/chat/tanstack-chat-runtime";
+import type { PublicStreamChunk } from "@/api/lib/chat/tanstack-chat-runtime";
 import {
   ChatEmptyCompletionError,
   ChatLoopDetectedError,
@@ -890,7 +896,7 @@ const runChatAttempts = async function* ({
   threadId,
   userId,
   workspaceId,
-}: RunChatAttemptsProps): AsyncIterable<StreamChunk> {
+}: RunChatAttemptsProps): AsyncIterable<PublicStreamChunk> {
   const primaryState = createChatAttemptState();
   // The caller resolves an explicit agent sandbox before persisting the
   // incoming message. A normal chat never carries a plan, even when the engine
@@ -1036,7 +1042,7 @@ const runChatAttempt = async function* ({
   threadId,
   userId,
   workspaceId,
-}: RunChatAttemptProps): AsyncIterable<StreamChunk> {
+}: RunChatAttemptProps): AsyncIterable<PublicStreamChunk> {
   // The one place the guard's brands are widened back to the plain types the
   // provider SDK takes: everything below this line is dispatch.
   const {
@@ -1100,7 +1106,7 @@ const runChatAttempt = async function* ({
     // `baseSystem` stays wired below for loop-recovery parity.
     const { adapter, middleware: sandboxMiddleware } =
       resolveStellaSandboxRun(sandboxRun);
-    yield* chat({
+    yield* streamChatChunks({
       adapter,
       messages: preparedMessages,
       agentLoopStrategy: maxIterations(MAX_TOOL_STEPS),
@@ -1131,7 +1137,7 @@ const runChatAttempt = async function* ({
     return;
   }
 
-  const stream = chat({
+  const stream = streamChatChunks({
     adapter: model.adapter,
     messages: preparedMessages,
     tools: projectChatToolSchemasForProvider({
@@ -1351,16 +1357,16 @@ const createChatRuntimeMiddleware = ({
 type ProcessServerChatStreamProps = {
   abortSignal: AbortSignal;
   existingMessageIds?: ReadonlySet<string> | undefined;
-  flushPendingSource?: (() => StreamChunk[]) | undefined;
+  flushPendingSource?: (() => PublicStreamChunk[]) | undefined;
   getResponseMessage: () => ChatMessage | null;
   mapMessageId: MessageIdMapper;
   onFinish: (event: StreamChatFinishEvent) => Promise<void> | void;
   preservedTerminalMessageId?: SafeId<"chatMessage"> | undefined;
   processor: StreamProcessor;
-  source: AsyncIterable<StreamChunk>;
+  source: AsyncIterable<PublicStreamChunk>;
 };
 
-type RunErrorChunk = Extract<StreamChunk, { type: EventType.RUN_ERROR }>;
+type RunErrorChunk = Extract<PublicStreamChunk, { type: EventType.RUN_ERROR }>;
 
 const runErrorMessage = (chunk: RunErrorChunk): string =>
   chunk.message || "AI stream error";
@@ -1470,7 +1476,7 @@ const awaitsCompleteInput = (interaction: AwaitingInteraction): boolean => {
 };
 
 const trackIncompleteToolCallInput = (
-  chunk: StreamChunk,
+  chunk: PublicStreamChunk,
   rawArgumentsByToolCallId: Map<string, string>,
 ): void => {
   if (chunk.type === EventType.TOOL_CALL_START) {
@@ -1536,8 +1542,8 @@ export const processServerChatStream = async function* ({
   preservedTerminalMessageId,
   processor,
   source,
-}: ProcessServerChatStreamProps): AsyncIterable<StreamChunk> {
-  const deferredRunFinishedChunks: StreamChunk[] = [];
+}: ProcessServerChatStreamProps): AsyncIterable<PublicStreamChunk> {
+  const deferredRunFinishedChunks: PublicStreamChunk[] = [];
   const rawArgumentsByIncompleteToolCallId = new Map<string, string>();
   const toolCallsWithCompleteInput = new Set<string>();
   let usage: TokenUsage | undefined;
@@ -1836,7 +1842,7 @@ type TransformOutgoingStreamProps = {
   resolveAssistantValueRefs?: AssistantValueRefResolver | undefined;
   registerPendingFlush?: (flushPending: () => StreamChunk[]) => void;
   restorationPairs: ChatAnonRestoration[];
-  source: AsyncIterable<StreamChunk>;
+  source: AsyncIterable<PublicStreamChunk>;
 };
 
 export const transformOutgoingStream = async function* ({
@@ -1968,35 +1974,6 @@ const createOutgoingChunkTransformer = ({
     }
   }
 
-  // `chat()` emits public chunks in AG-UI spec shape. `toolName`, `input`,
-  // and `output` are not spec keys on TOOL_CALL_END, so the engine moves them
-  // into `metadata.tanstack`; an adapter that parses the whole input on END
-  // (Anthropic) delivers the canonical arguments there and nowhere else. A
-  // chunk that never went through the engine (a fixture, a synthetic event)
-  // still carries them at the top level. Read both, top level first: that is
-  // the precedence the SDK's own persistence processor applies.
-  const readToolCallEndField = (chunk: object, key: string): unknown => {
-    if (key in chunk) {
-      const topLevel: unknown = Reflect.get(chunk, key);
-      if (topLevel !== undefined) {
-        return topLevel;
-      }
-    }
-    const metadata: unknown = "metadata" in chunk ? chunk.metadata : undefined;
-    const tanstack: unknown = isRecord(metadata)
-      ? metadata["tanstack"]
-      : undefined;
-    return isRecord(tanstack) ? tanstack[key] : undefined;
-  };
-
-  const readToolCallName = (chunk: object): string | undefined => {
-    if ("toolCallName" in chunk && typeof chunk.toolCallName === "string") {
-      return chunk.toolCallName;
-    }
-    const toolName = readToolCallEndField(chunk, "toolName");
-    return typeof toolName === "string" ? toolName : undefined;
-  };
-
   const emitRestorationDelta = (
     placeholders: ReadonlySet<string>,
   ): StreamChunk[] => {
@@ -2114,9 +2091,9 @@ const createOutgoingChunkTransformer = ({
     ];
   };
 
-  const transform = (chunk: StreamChunk): StreamChunk[] => {
+  const transform = (chunk: PublicStreamChunk): StreamChunk[] => {
     if (chunk.type === EventType.TOOL_CALL_START) {
-      const toolName = readToolCallName(chunk);
+      const toolName = toolCallNameOf(chunk);
       if (toolName !== undefined) {
         toolNamesByCallId.set(chunk.toolCallId, toolName);
       }
@@ -2234,7 +2211,7 @@ const createOutgoingChunkTransformer = ({
       const pending = buffers.get(key) ?? "";
       buffers.delete(key);
       const toolName =
-        readToolCallName(chunk) ?? toolNamesByCallId.get(chunk.toolCallId);
+        toolCallNameOf(chunk) ?? toolNamesByCallId.get(chunk.toolCallId);
       if (toolName !== undefined) {
         toolNamesByCallId.set(chunk.toolCallId, toolName);
       }
@@ -2242,7 +2219,7 @@ const createOutgoingChunkTransformer = ({
       // processor reads that before the metadata copy, and the wire encoder
       // merges a top-level value over the metadata copy when it re-normalizes
       // the chunk for the client.
-      const rawInput = readToolCallEndField(chunk, "input");
+      const rawInput = toolCallEndInputOf(chunk);
       let input: unknown;
       if (rawInput !== undefined) {
         input = transformToolCallInput({
@@ -2253,7 +2230,7 @@ const createOutgoingChunkTransformer = ({
           toolName,
         });
       }
-      const rawOutput = readToolCallEndField(chunk, "output");
+      const rawOutput = toolCallEndOutputOf(chunk);
       let output: unknown;
       if (rawOutput !== undefined) {
         output = transformToolCallOutput({

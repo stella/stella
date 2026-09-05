@@ -1,5 +1,4 @@
 import { EventType } from "@tanstack/ai";
-import type { StreamChunk } from "@tanstack/ai";
 
 import { toPersistableChatMessage } from "@/api/handlers/chat/chat-message-parts";
 import type {
@@ -8,6 +7,7 @@ import type {
 } from "@/api/handlers/chat/types";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { PublicStreamChunk } from "@/api/lib/chat/tanstack-chat-runtime";
 import { isRecord } from "@/api/lib/type-guards";
 
 export type MessageIdMapper = (messageId: string) => SafeId<"chatMessage">;
@@ -43,14 +43,14 @@ export const normalizeFinalAssistantMessageId = ({
 type RemapOutgoingMessageIdsProps = {
   existingMessageIds?: ReadonlySet<string> | undefined;
   mapMessageId: MessageIdMapper;
-  source: AsyncIterable<StreamChunk>;
+  source: AsyncIterable<PublicStreamChunk>;
 };
 
 export const remapOutgoingMessageIds = async function* ({
   existingMessageIds = new Set(),
   mapMessageId,
   source,
-}: RemapOutgoingMessageIdsProps): AsyncIterable<StreamChunk> {
+}: RemapOutgoingMessageIdsProps): AsyncIterable<PublicStreamChunk> {
   const snapshotMessageIds = new Map<string, SafeId<"chatMessage">>();
   for await (const chunk of source) {
     yield remapChunkMessageId({
@@ -64,13 +64,13 @@ export const remapOutgoingMessageIds = async function* ({
 
 type EnsureAssistantMessageStartProps = {
   getOrCreateMessageId: () => SafeId<"chatMessage">;
-  source: AsyncIterable<StreamChunk>;
+  source: AsyncIterable<PublicStreamChunk>;
 };
 
 export const ensureAssistantMessageStart = async function* ({
   getOrCreateMessageId,
   source,
-}: EnsureAssistantMessageStartProps): AsyncIterable<StreamChunk> {
+}: EnsureAssistantMessageStartProps): AsyncIterable<PublicStreamChunk> {
   let hasAssistantMessageStart = false;
 
   for await (const chunk of source) {
@@ -104,7 +104,7 @@ const getAssistantStartMessageId = ({
   chunk,
   getOrCreateMessageId,
 }: {
-  chunk: StreamChunk;
+  chunk: PublicStreamChunk;
   getOrCreateMessageId: () => SafeId<"chatMessage">;
 }): string | null => {
   if (hasMessageId(chunk)) {
@@ -124,13 +124,15 @@ const getAssistantStartMessageId = ({
   return null;
 };
 
-type StreamChunkWithMessageId = StreamChunk & { messageId: string };
+type StreamChunkWithMessageId = PublicStreamChunk & { messageId: string };
 
-const hasMessageId = (chunk: StreamChunk): chunk is StreamChunkWithMessageId =>
+const hasMessageId = (
+  chunk: PublicStreamChunk,
+): chunk is StreamChunkWithMessageId =>
   "messageId" in chunk && typeof chunk.messageId === "string";
 
 type SnapshotMessage = Extract<
-  StreamChunk,
+  PublicStreamChunk,
   { type: EventType.MESSAGES_SNAPSHOT }
 >["messages"][number];
 
@@ -202,11 +204,11 @@ const remapChunkMessageId = ({
   mapMessageId,
   snapshotMessageIds,
 }: {
-  chunk: StreamChunk;
+  chunk: PublicStreamChunk;
   existingMessageIds: ReadonlySet<string>;
   mapMessageId: MessageIdMapper;
   snapshotMessageIds: Map<string, SafeId<"chatMessage">>;
-}): StreamChunk => {
+}): PublicStreamChunk => {
   if (chunk.type === EventType.MESSAGES_SNAPSHOT) {
     return {
       ...chunk,

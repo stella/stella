@@ -9,7 +9,7 @@
  * so callers leave AI fields unfilled rather than erroring.
  */
 
-import { chat, maxIterations } from "@tanstack/ai";
+import { maxIterations } from "@tanstack/ai";
 import type { ModelMessage } from "@tanstack/ai";
 import * as v from "valibot";
 
@@ -29,6 +29,10 @@ import type {
   GuardedModelMessages,
   GuardedSystemPrompt,
 } from "@/api/lib/chat/model-ingress-guard";
+import {
+  generateChatObject,
+  generateChatText,
+} from "@/api/lib/chat/tanstack-chat-runtime";
 import type { AiOccurrenceAdapter } from "@/api/lib/docx/adapt-ai-fields";
 import {
   maybeSkillTools,
@@ -136,10 +140,9 @@ const resolveFieldChat = ({
 const generateFieldText = async (input: FieldChatInput): Promise<string> => {
   const { abortController, caching, messages, model, system } =
     resolveFieldChat(input);
-  return await chat({
+  return await generateChatText({
     adapter: model.adapter,
     messages,
-    stream: false,
     abortController,
     ...systemPromptsPatch({ caching, model, system }),
     modelOptions: mergeGenerationOptions({
@@ -166,7 +169,7 @@ const generateFieldObject = async <TSchema extends v.GenericSchema>(
 ): Promise<v.InferOutput<TSchema>> => {
   const { abortController, caching, messages, model, system } =
     resolveFieldChat(input);
-  const output = await chat({
+  const output = await generateChatObject({
     adapter: model.adapter,
     messages,
     outputSchema: toTanStackValibotSchema(input.outputSchema),

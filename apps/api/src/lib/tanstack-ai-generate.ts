@@ -1,6 +1,5 @@
 import {
   EventType,
-  chat,
   convertSchemaToJsonSchema,
   parsePartialJSON,
 } from "@tanstack/ai";
@@ -8,7 +7,6 @@ import type {
   AnyTextAdapter,
   ModelMessage,
   RunErrorEvent,
-  RunFinishedEvent,
   StreamChunk,
   StructuredOutputPart,
   SystemPrompt,
@@ -39,6 +37,16 @@ import type {
   GuardedModelMessages,
   GuardedSystemPrompt,
 } from "@/api/lib/chat/model-ingress-guard";
+import {
+  finishReasonOf,
+  generateChatObject,
+  streamChatChunks,
+  streamChatObject,
+} from "@/api/lib/chat/tanstack-chat-runtime";
+import type {
+  PublicStreamChunk,
+  TanStackTextFinishReason,
+} from "@/api/lib/chat/tanstack-chat-runtime";
 import {
   AIGenerationCancelledError,
   HandlerError,
@@ -151,20 +159,6 @@ export type TanStackStructuredOutputEvent<TOutput> =
       reasoning?: string | undefined;
       type: "complete";
     };
-
-type TanStackTextFinishReason = Exclude<
-  RunFinishedEvent["finishReason"],
-  undefined
->;
-
-// `chat()` emits its public chunks in AG-UI spec shape, and `finishReason` is
-// not a spec key on `RUN_FINISHED`: the engine moves it into
-// `metadata.tanstack` before the chunk reaches a consumer. A chunk that never
-// went through the engine (a custom server, a fixture) still carries it at the
-// top level. Reading only the top level reports every finished run as
-// reason-less, which a complete-output caller then rejects.
-const runFinishReason = (chunk: RunFinishedEvent): TanStackTextFinishReason =>
-  chunk.finishReason ?? chunk.metadata?.tanstack?.finishReason ?? null;
 
 type ResolveTextModelOptions = Pick<
   GenerateTanStackBaseOptions,
@@ -426,7 +420,7 @@ const streamTanStackTextDeltas = async function* ({
     model,
     serviceTier,
     stream: (requestedServiceTier) =>
-      chat({
+      streamChatChunks({
         adapter:
           model.provider === "anthropic"
             ? normalizeAnthropicTextStops(model.adapter)
@@ -445,7 +439,7 @@ const streamTanStackTextDeltas = async function* ({
       }),
     onChunk: (chunk) => {
       if (chunk.type === EventType.RUN_FINISHED) {
-        onFinishReason?.(runFinishReason(chunk));
+        onFinishReason?.(finishReasonOf(chunk));
         return undefined;
       }
       if (
@@ -482,7 +476,7 @@ const withStandardServiceTierFallback = async <TResult>({
 };
 
 type StandardServiceTierStreamFallbackOptions<
-  TChunk extends StreamChunk,
+  TChunk extends PublicStreamChunk,
   TResult,
 > = {
   model: ResolvedTanStackTextModel;
@@ -492,7 +486,7 @@ type StandardServiceTierStreamFallbackOptions<
 };
 
 const iterateWithStandardServiceTierFallback = async function* <
-  TChunk extends StreamChunk,
+  TChunk extends PublicStreamChunk,
   TResult,
 >({
   model,
@@ -534,7 +528,7 @@ const iterateWithStandardServiceTierFallback = async function* <
   }
 };
 
-const throwIfTanStackRunError = (chunk: StreamChunk): void => {
+const throwIfTanStackRunError = (chunk: PublicStreamChunk): void => {
   if (chunk.type !== EventType.RUN_ERROR) {
     return;
   }
@@ -708,7 +702,7 @@ export const generateTanStackObjectForRole = async <
     model,
     serviceTier: options.serviceTier,
     run: async (serviceTier) =>
-      await chat({
+      await generateChatObject({
         adapter: model.adapter,
         messages: requestMessages,
         outputSchema: tanStackOutputSchema,
@@ -797,11 +791,10 @@ const streamTanStackStructuredOutput = async function* <
     model,
     serviceTier,
     stream: (requestedServiceTier) =>
-      chat({
+      streamChatObject({
         adapter: model.adapter,
         messages,
         outputSchema: tanStackOutputSchema,
-        stream: true,
         ...systemPromptsPatch({
           caching,
           model,

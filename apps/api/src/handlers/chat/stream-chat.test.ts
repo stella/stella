@@ -45,6 +45,7 @@ import {
   guardModelToolSchemas,
 } from "@/api/lib/chat/model-ingress-guard";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import type { PublicStreamChunk } from "@/api/lib/chat/tanstack-chat-runtime";
 import {
   ChatEmptyCompletionError,
   ChatLoopDetectedError,
@@ -972,7 +973,9 @@ describe("outgoing chat stream message ids", () => {
       },
       {
         type: EventType.RUN_FINISHED,
-        finishReason: "stop",
+        // The engine moves `finishReason` off the top level, so the pipeline
+        // forwards it where a spec consumer reads it.
+        metadata: { tanstack: { finishReason: "stop" } },
         runId: "run-1",
         threadId,
       },
@@ -2291,10 +2294,16 @@ const createBoundary = (
   type: "anonymized",
 });
 
+// The pipeline under test consumes what `chat()` emits, so a hand-written
+// fixture goes through the engine's own normalizer first: a non-spec key an
+// adapter sets (`finishReason`, `input`) ends up where production finds it,
+// rather than at the top level where only a synthetic chunk carries it.
 const streamChunks = async function* (
   chunks: readonly StreamChunk[],
-): AsyncIterable<StreamChunk> {
-  yield* chunks;
+): AsyncIterable<PublicStreamChunk> {
+  for (const chunk of chunks) {
+    yield* normalizeStreamChunk(chunk);
+  }
 };
 
 const streamChunksThenAbort = async function* ({
@@ -2303,8 +2312,8 @@ const streamChunksThenAbort = async function* ({
 }: {
   abortController: AbortController;
   chunks: readonly StreamChunk[];
-}): AsyncIterable<StreamChunk> {
-  yield* chunks;
+}): AsyncIterable<PublicStreamChunk> {
+  yield* streamChunks(chunks);
   const error = new Error("Stream aborted");
   abortController.abort(error);
   throw error;
