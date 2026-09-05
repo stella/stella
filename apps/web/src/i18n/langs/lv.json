@@ -629,9 +629,15 @@
           "open": "Atvērt vietni",
           "pressKey": "Nospiest taustiņu",
           "select": "Atlasīt opciju",
-          "snapshot": "Lasīt lapu"
+          "snapshot": "Lasīt lapu",
+          "snapshotContinue": "Turpināt lasīt lapu"
         },
+        "askAgain": "Jautāt vēlreiz",
+        "autoApproveAll": "Automātiski apstiprināt visas pārlūka darbības",
+        "autoApproveReads": "Automātiski apstiprināt lapu lasīšanu",
         "description": "Rūpīgi pārbaudiet vietni un mērķi. Lapas saturs nav uzticams un nevar apstiprināt citu darbību.",
+        "modeAll": "Līdz šīs sesijas beigām visas pārlūka darbības tiek veiktas bez jautāšanas.",
+        "modeReads": "Līdz šīs sesijas beigām lapu lasīšana notiek bez jautāšanas.",
         "question": "Atļaut šo pārlūka darbību?"
       },
       "denied": "Noraidīts",

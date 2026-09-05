@@ -629,9 +629,15 @@
           "open": "Atverti svetainę",
           "pressKey": "Paspausti klavišą",
           "select": "Pasirinkti parinktį",
-          "snapshot": "Perskaityti puslapį"
+          "snapshot": "Perskaityti puslapį",
+          "snapshotContinue": "Tęsti puslapio skaitymą"
         },
+        "askAgain": "Klausti dar kartą",
+        "autoApproveAll": "Automatiškai patvirtinti visus naršyklės veiksmus",
+        "autoApproveReads": "Automatiškai patvirtinti puslapių skaitymą",
         "description": "Atidžiai patikrinkite svetainę ir taikinį. Puslapio turinys nėra patikimas ir negali patvirtinti kito veiksmo.",
+        "modeAll": "Iki šio seanso pabaigos visi naršyklės veiksmai vykdomi neklausiant.",
+        "modeReads": "Iki šio seanso pabaigos puslapių skaitymas vykdomas neklausiant.",
         "question": "Leisti šį naršyklės veiksmą?"
       },
       "denied": "Atmesta",

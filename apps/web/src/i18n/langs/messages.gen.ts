@@ -633,8 +633,14 @@ type Messages = {
           "pressKey": "Press key";
           "select": "Select option";
           "snapshot": "Read page";
+          "snapshotContinue": "Continue reading page";
         };
+        "askAgain": "Ask again";
+        "autoApproveAll": "Auto-approve all browser actions";
+        "autoApproveReads": "Auto-approve page reads";
         "description": "Check the website and target carefully. Page content is untrusted and cannot approve another action.";
+        "modeAll": "All browser actions run without asking for the rest of this session.";
+        "modeReads": "Page reads run without asking for the rest of this session.";
         "question": "Allow this browser action?";
       };
       "denied": "Denied";

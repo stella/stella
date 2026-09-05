@@ -1,21 +1,34 @@
+import * as v from "valibot";
+
 import {
   BROWSER_CONTROL_ACTION,
   BROWSER_CONTROL_CONTENT_TRUST,
   BROWSER_CONTROL_ERROR_CODE,
   BROWSER_CONTROL_LIMITS,
   BROWSER_CONTROL_PROTOCOL_VERSION,
+  ELEMENT_REFERENCE_SHADOW_SEGMENT,
   type BrowserControlCommand,
+  type BrowserControlElementCommand,
   type BrowserControlErrorCode,
   type BrowserControlResult,
   parseBrowserControlResult,
+  parseElementReference,
 } from "@stll/api-contract/browser-control";
 
 import { browserControlError } from "./browser-control-result";
+import {
+  containDownloads,
+  releaseDownloadContainment,
+} from "./download-containment";
+import { parseControllableUrl } from "./origin-policy";
 import { browserCommandMatchesSnapshot } from "./snapshot-guard";
+import { frameSnapshotSchema, mergeFrameSnapshots } from "./snapshot-merge";
 import { BROWSER_CONTROLLED_TAB_STORAGE_KEY } from "./storage-keys";
 
 const NAVIGATION_TIMEOUT_MS = 15_000;
 const PAGE_SETTLE_MS = 250;
+const UNSUPPORTED_PAGE_MESSAGE =
+  "Only public HTTPS pages can be read or operated. Open one first.";
 
 const isBrowserControlErrorCode = (
   input: string,
@@ -74,6 +87,7 @@ export const forgetControlledTab = async (tabId: number): Promise<void> => {
   const state = await readControlledTabState();
   if (state?.tabId === tabId) {
     await chrome.storage.session.remove(BROWSER_CONTROLLED_TAB_STORAGE_KEY);
+    await releaseDownloadContainment();
   }
 };
 
@@ -89,22 +103,6 @@ const readControlledTab = async (
     return { state, tab: await chrome.tabs.get(state.tabId) };
   } catch {
     await chrome.storage.session.remove(BROWSER_CONTROLLED_TAB_STORAGE_KEY);
-    return null;
-  }
-};
-
-const parseHttpUrl = (rawUrl: string): URL | null => {
-  try {
-    const url = new URL(rawUrl);
-    if (
-      (url.protocol !== "http:" && url.protocol !== "https:") ||
-      url.username !== "" ||
-      url.password !== ""
-    ) {
-      return null;
-    }
-    return url;
-  } catch {
     return null;
   }
 };
@@ -139,6 +137,24 @@ const waitForTabLoad = async (tabId: number): Promise<boolean> => {
   clearTimeout(timeout);
   chrome.tabs.onUpdated.removeListener(listener);
   return result;
+};
+
+/**
+ * `chrome.tabs.goBack` rejects on some Chromium builds even with a back
+ * entry present; the page's own history API is the portable path. Only a tab
+ * whose document cannot run scripts (an error page) still needs the tabs API.
+ */
+const navigateBack = async (tabId: number): Promise<void> => {
+  try {
+    await chrome.scripting.executeScript({
+      func: () => {
+        window.history.back();
+      },
+      target: { tabId },
+    });
+  } catch {
+    await chrome.tabs.goBack(tabId);
+  }
 };
 
 const settlePage = async (): Promise<void> => {
@@ -206,31 +222,34 @@ const createTabNavigationObserver = (tabId: number) => {
 
 type PageOperation =
   | {
-      action: BrowserControlCommand;
+      action: BrowserControlElementCommand;
       errorCode: typeof BROWSER_CONTROL_ERROR_CODE;
       kind: "action";
       limits: typeof BROWSER_CONTROL_LIMITS;
+      path: string;
+      shadowSegment: typeof ELEMENT_REFERENCE_SHADOW_SEGMENT;
     }
   | {
-      contentTrust: typeof BROWSER_CONTROL_CONTENT_TRUST.untrustedWebContent;
       kind: "snapshot";
       limits: typeof BROWSER_CONTROL_LIMITS;
-      protocolVersion: typeof BROWSER_CONTROL_PROTOCOL_VERSION;
-      snapshotRevision: string;
+      shadowSegment: typeof ELEMENT_REFERENCE_SHADOW_SEGMENT;
     };
 
 /**
- * The one script injected into the controlled tab. Chrome serializes `func`,
- * so every DOM helper lives inside it; both operations share this single copy.
+ * The one script injected into a frame of the controlled tab. Chrome
+ * serializes `func`, so every DOM helper lives inside it; both operations
+ * share this single copy. Element paths are frame-local; the worker qualifies
+ * them with the frame id.
  */
 const runPageOperation = async (
-  tabId: number,
+  target: chrome.scripting.InjectionTarget,
   operation: PageOperation,
-): Promise<unknown> => {
-  const results = await chrome.scripting.executeScript({
+) =>
+  await chrome.scripting.executeScript({
     args: [operation],
     func: (operation) => {
-      const { limits } = operation;
+      const { limits, shadowSegment } = operation;
+      const SKIPPED_TAGS = new Set(["NOSCRIPT", "SCRIPT", "STYLE", "TEMPLATE"]);
       const normalize = (value: string) =>
         value.replaceAll(/\s+/gu, " ").trim();
       const visible = (element: Element) => {
@@ -238,24 +257,51 @@ const runPageOperation = async (
         return (
           style.display !== "none" &&
           style.visibility !== "hidden" &&
-          element.getClientRects().length > 0
+          (style.display === "contents" || element.getClientRects().length > 0)
         );
       };
-      const visibleText = (root: Element, maxChars: number) => {
-        const parts: string[] = [];
-        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-        let totalChars = 0;
-        let node = walker.nextNode();
-        while (node && totalChars < maxChars) {
-          const parent = node.parentElement;
-          if (parent && visible(parent) && node.nodeValue) {
-            const value = node.nodeValue.slice(0, maxChars - totalChars);
-            parts.push(value);
-            totalChars += value.length;
+      const childNodesOf = (element: Element): readonly Node[] => {
+        if (element instanceof HTMLSlotElement) {
+          const assigned = element.assignedNodes({ flatten: true });
+          if (assigned.length > 0) {
+            return assigned;
           }
-          node = walker.nextNode();
         }
-        return parts.join(" ");
+        return [...(element.shadowRoot ?? element).childNodes];
+      };
+      const collectText = (root: Node, maxChars: number) => {
+        const parts: string[] = [];
+        let total = 0;
+        const stack: Node[] = [root];
+        while (total < maxChars) {
+          const node = stack.pop();
+          if (!node) {
+            break;
+          }
+          if (node instanceof Text) {
+            const value = (node.nodeValue ?? "").slice(0, maxChars - total);
+            if (value.trim().length > 0) {
+              parts.push(value);
+              total += value.length;
+            }
+            continue;
+          }
+          if (
+            !(node instanceof Element) ||
+            SKIPPED_TAGS.has(node.tagName) ||
+            !visible(node)
+          ) {
+            continue;
+          }
+          const children = childNodesOf(node);
+          for (let index = children.length - 1; index >= 0; index -= 1) {
+            const child = children[index];
+            if (child) {
+              stack.push(child);
+            }
+          }
+        }
+        return normalize(parts.join(" "));
       };
       const roleFor = (element: Element) => {
         const explicit = element.getAttribute("role");
@@ -286,7 +332,7 @@ const runPageOperation = async (
           element.getAttribute("aria-label") ??
             element.getAttribute("title") ??
             element.getAttribute("placeholder") ??
-            visibleText(element, limits.elementNameChars),
+            collectText(element, limits.elementNameChars),
         ).slice(0, limits.elementNameChars);
       const valueFor = (element: Element) => {
         if (element instanceof HTMLInputElement) {
@@ -302,38 +348,55 @@ const runPageOperation = async (
         }
         return undefined;
       };
-      const referenceFor = (element: Element) => {
-        const indexes: number[] = [];
-        let current = element;
+      const hrefFor = (element: Element) =>
+        element instanceof HTMLAnchorElement && element.href !== ""
+          ? element.href.slice(0, limits.urlChars)
+          : undefined;
+      const pathFor = (element: Element) => {
+        const segments: string[] = [];
+        let current: Element = element;
         while (current !== document.documentElement) {
           const parent = current.parentElement;
-          if (!parent) {
+          if (parent) {
+            segments.push(
+              String(Array.prototype.indexOf.call(parent.children, current)),
+            );
+            current = parent;
+            continue;
+          }
+          const root = current.parentNode;
+          if (!(root instanceof ShadowRoot)) {
             return null;
           }
-          const index = Array.prototype.indexOf.call(parent.children, current);
-          if (index < 0) {
-            return null;
-          }
-          indexes.push(index);
-          current = parent;
+          segments.push(
+            String(Array.prototype.indexOf.call(root.children, current)),
+            shadowSegment,
+          );
+          current = root.host;
         }
-        return `e:${indexes.toReversed().join(".")}`;
+        return segments.toReversed().join(".");
       };
-      const resolveReference = (reference: string): Element | null => {
-        const indexes = reference.slice(2).split(".").map(Number);
-        let current: Element = document.documentElement;
-        for (const index of indexes) {
-          const next = current.children.item(index);
+      const resolveElement = (path: string): Element | null => {
+        let container: Element | ShadowRoot = document.documentElement;
+        for (const segment of path.split(".")) {
+          if (segment === shadowSegment) {
+            if (!(container instanceof Element) || !container.shadowRoot) {
+              return null;
+            }
+            container = container.shadowRoot;
+            continue;
+          }
+          const next = container.children.item(Number(segment));
           if (!next) {
             return null;
           }
-          current = next;
+          container = next;
         }
-        return current;
+        return container instanceof Element ? container : null;
       };
 
       if (operation.kind === "snapshot") {
-        const selectors = [
+        const interactiveSelector = [
           "a[href]",
           "button",
           "input",
@@ -350,58 +413,51 @@ const runPageOperation = async (
           "[role='textbox']",
         ].join(",");
         const elements: {
+          href?: string;
           name: string;
-          ref: string;
+          path: string;
           role: string;
           value?: string;
         }[] = [];
-        for (const element of document.querySelectorAll(selectors)) {
-          if (elements.length >= limits.elements || !visible(element)) {
-            continue;
+        const visit = (root: ParentNode) => {
+          for (const element of root.querySelectorAll("*")) {
+            if (elements.length >= limits.elements) {
+              return;
+            }
+            if (element.matches(interactiveSelector) && visible(element)) {
+              const path = pathFor(element);
+              if (path !== null) {
+                const href = hrefFor(element);
+                const value = valueFor(element);
+                elements.push({
+                  name: nameFor(element),
+                  path,
+                  role: roleFor(element),
+                  ...(href === undefined ? {} : { href }),
+                  ...(value === undefined ? {} : { value }),
+                });
+              }
+            }
+            if (element.shadowRoot) {
+              visit(element.shadowRoot);
+            }
           }
-          const ref = referenceFor(element);
-          if (!ref) {
-            continue;
-          }
-          const value = valueFor(element);
-          elements.push({
-            name: nameFor(element),
-            ref,
-            role: roleFor(element),
-            ...(value === undefined ? {} : { value }),
-          });
-        }
+        };
+        visit(document);
 
         return {
-          protocolVersion: operation.protocolVersion,
-          snapshot: {
-            contentTrust: operation.contentTrust,
-            elements,
-            revision: operation.snapshotRevision,
-            text: normalize(
-              visibleText(document.body, limits.pageTextChars),
-            ).slice(0, limits.pageTextChars),
-            title: document.title.slice(0, limits.titleChars),
-            url: window.location.href.slice(0, limits.urlChars),
-          },
-          status: "success",
+          elements,
+          text: collectText(
+            document.body ?? document.documentElement,
+            limits.pageTextTotalChars,
+          ),
+          title: document.title.slice(0, limits.titleChars),
+          url: window.location.href.slice(0, limits.urlChars),
         };
       }
 
       const { action, errorCode } = operation;
-      if (
-        action.action === "open" ||
-        action.action === "snapshot" ||
-        action.action === "go-back"
-      ) {
-        return {
-          code: errorCode.invalidCommand,
-          error: "Unsupported injected action.",
-          ok: false,
-        };
-      }
-
-      const target = resolveReference(action.target.ref);
+      const target = resolveElement(operation.path);
       if (!target) {
         return {
           error: "The referenced element is no longer on the page.",
@@ -411,7 +467,9 @@ const runPageOperation = async (
       }
       if (
         nameFor(target) !== action.target.name ||
-        roleFor(target) !== action.target.role
+        roleFor(target) !== action.target.role ||
+        (action.target.href !== undefined &&
+          hrefFor(target) !== action.target.href)
       ) {
         return {
           error: "The referenced element changed after the page snapshot.",
@@ -515,23 +573,35 @@ const runPageOperation = async (
       target.dispatchEvent(new KeyboardEvent("keyup", { bubbles: true, key }));
       return { ok: true };
     },
-    target: { tabId },
+    target,
   });
-  return results.at(0)?.result;
-};
 
 const injectDomAction = async (
   tabId: number,
-  command: BrowserControlCommand,
+  command: BrowserControlElementCommand,
 ): Promise<
   { code: BrowserControlErrorCode; error: string; ok: false } | { ok: true }
 > => {
-  const result = await runPageOperation(tabId, {
-    action: command,
-    errorCode: BROWSER_CONTROL_ERROR_CODE,
-    kind: "action",
-    limits: BROWSER_CONTROL_LIMITS,
-  });
+  const reference = parseElementReference(command.target.ref);
+  if (!reference) {
+    return {
+      code: BROWSER_CONTROL_ERROR_CODE.invalidCommand,
+      error: "The element reference is malformed.",
+      ok: false,
+    };
+  }
+  const results = await runPageOperation(
+    { frameIds: [reference.frameId], tabId },
+    {
+      action: command,
+      errorCode: BROWSER_CONTROL_ERROR_CODE,
+      kind: "action",
+      limits: BROWSER_CONTROL_LIMITS,
+      path: reference.path,
+      shadowSegment: ELEMENT_REFERENCE_SHADOW_SEGMENT,
+    },
+  );
+  const result: unknown = results.at(0)?.result;
   if (
     typeof result !== "object" ||
     result === null ||
@@ -563,22 +633,56 @@ const injectDomAction = async (
   };
 };
 
-const readSnapshot = async (
-  controllerId: string,
-  tabId: number,
-): Promise<BrowserControlResult> => {
-  const result = await runPageOperation(tabId, {
-    contentTrust: BROWSER_CONTROL_CONTENT_TRUST.untrustedWebContent,
-    kind: "snapshot",
-    limits: BROWSER_CONTROL_LIMITS,
-    protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
-    snapshotRevision: crypto.randomUUID(),
+type ReadSnapshotOptions = {
+  controllerId: string;
+  tabId: number;
+  textOffset: number;
+};
+
+const readSnapshot = async ({
+  controllerId,
+  tabId,
+  textOffset,
+}: ReadSnapshotOptions): Promise<BrowserControlResult> => {
+  const tab = await chrome.tabs.get(tabId);
+  if (tab.url === undefined || parseControllableUrl(tab.url) === null) {
+    return browserControlError(
+      BROWSER_CONTROL_ERROR_CODE.unsupportedPage,
+      UNSUPPORTED_PAGE_MESSAGE,
+    );
+  }
+  const results = await runPageOperation(
+    { allFrames: true, tabId },
+    {
+      kind: "snapshot",
+      limits: BROWSER_CONTROL_LIMITS,
+      shadowSegment: ELEMENT_REFERENCE_SHADOW_SEGMENT,
+    },
+  );
+  const frames = results.flatMap(({ frameId, result }) => {
+    const parsed = v.safeParse(frameSnapshotSchema, result);
+    return parsed.success ? [{ frameId, snapshot: parsed.output }] : [];
   });
-  const parsed = parseBrowserControlResult(result);
-  if (!parsed) {
+  const merged = mergeFrameSnapshots({ frames, textOffset });
+  if (!merged) {
     return browserControlError(
       BROWSER_CONTROL_ERROR_CODE.executionFailed,
       "The page returned an invalid snapshot.",
+    );
+  }
+  const parsed = parseBrowserControlResult({
+    protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+    snapshot: {
+      contentTrust: BROWSER_CONTROL_CONTENT_TRUST.untrustedWebContent,
+      revision: crypto.randomUUID(),
+      ...merged,
+    },
+    status: "success",
+  } satisfies BrowserControlResult);
+  if (!parsed) {
+    return browserControlError(
+      BROWSER_CONTROL_ERROR_CODE.executionFailed,
+      "The page returned a snapshot outside the protocol bounds.",
     );
   }
   if (parsed.status === "success") {
@@ -596,7 +700,7 @@ const openControlledTab = async (
   controllerId: string,
   rawUrl: string,
 ): Promise<chrome.tabs.Tab | null> => {
-  const url = parseHttpUrl(rawUrl);
+  const url = parseControllableUrl(rawUrl);
   if (!url) {
     return null;
   }
@@ -612,6 +716,7 @@ const openControlledTab = async (
   if (!tab || tab.id === undefined) {
     return null;
   }
+  await containDownloads(tab.id);
   await writeControlledTabState({
     controllerId,
     revision: null,
@@ -632,7 +737,7 @@ export const executeBrowserCommand = async (
       if (tab?.id === undefined) {
         return browserControlError(
           BROWSER_CONTROL_ERROR_CODE.navigationFailed,
-          "Only HTTP and HTTPS pages without embedded credentials can be opened.",
+          "Only public HTTPS pages without embedded credentials can be opened; intranet, loopback and private addresses are refused.",
         );
       }
       if (!(await waitForTabLoad(tab.id))) {
@@ -641,7 +746,7 @@ export const executeBrowserCommand = async (
           "The page did not finish loading in time.",
         );
       }
-      return await readSnapshot(controllerId, tab.id);
+      return await readSnapshot({ controllerId, tabId: tab.id, textOffset: 0 });
     }
 
     if (!controlledTab) {
@@ -663,7 +768,7 @@ export const executeBrowserCommand = async (
       const navigation = createTabNavigationObserver(tabId);
       let loaded = false;
       try {
-        await chrome.tabs.goBack(tabId);
+        await navigateBack(tabId);
         loaded = await navigation.waitForSettled();
       } finally {
         navigation.dispose();
@@ -674,43 +779,54 @@ export const executeBrowserCommand = async (
           "The previous page did not finish loading in time.",
         );
       }
-      return await readSnapshot(controllerId, tabId);
+      return await readSnapshot({ controllerId, tabId, textOffset: 0 });
     }
 
-    if (command.action !== BROWSER_CONTROL_ACTION.snapshot) {
-      if (!browserCommandMatchesSnapshot(state, tab.url, command)) {
-        return browserControlError(
-          BROWSER_CONTROL_ERROR_CODE.staleSnapshot,
-          "The page changed after this browser action was proposed. Take a new snapshot before acting.",
-        );
-      }
-      const navigation = createTabNavigationObserver(tabId);
-      let actionResult: Awaited<ReturnType<typeof injectDomAction>>;
-      let loaded = false;
-      try {
-        actionResult = await injectDomAction(tabId, command);
-        if (actionResult.ok) {
-          loaded = await navigation.waitForSettled();
-        }
-      } finally {
-        navigation.dispose();
-      }
-      if (!actionResult.ok) {
-        return browserControlError(actionResult.code, actionResult.error);
-      }
-      if (!loaded) {
-        return browserControlError(
-          BROWSER_CONTROL_ERROR_CODE.timedOut,
-          "The page did not finish loading after the action.",
-        );
-      }
+    if (command.action === BROWSER_CONTROL_ACTION.snapshot) {
+      return await readSnapshot({
+        controllerId,
+        tabId,
+        textOffset: command.textOffset ?? 0,
+      });
     }
 
-    return await readSnapshot(controllerId, tabId);
+    if (tab.url === undefined || parseControllableUrl(tab.url) === null) {
+      return browserControlError(
+        BROWSER_CONTROL_ERROR_CODE.unsupportedPage,
+        UNSUPPORTED_PAGE_MESSAGE,
+      );
+    }
+    if (!browserCommandMatchesSnapshot(state, tab.url, command)) {
+      return browserControlError(
+        BROWSER_CONTROL_ERROR_CODE.staleSnapshot,
+        "The page changed after this browser action was proposed. Take a new snapshot before acting.",
+      );
+    }
+    const navigation = createTabNavigationObserver(tabId);
+    let actionResult: Awaited<ReturnType<typeof injectDomAction>>;
+    let loaded = false;
+    try {
+      actionResult = await injectDomAction(tabId, command);
+      if (actionResult.ok) {
+        loaded = await navigation.waitForSettled();
+      }
+    } finally {
+      navigation.dispose();
+    }
+    if (!actionResult.ok) {
+      return browserControlError(actionResult.code, actionResult.error);
+    }
+    if (!loaded) {
+      return browserControlError(
+        BROWSER_CONTROL_ERROR_CODE.timedOut,
+        "The page did not finish loading after the action.",
+      );
+    }
+    return await readSnapshot({ controllerId, tabId, textOffset: 0 });
   } catch {
     return browserControlError(
       BROWSER_CONTROL_ERROR_CODE.executionFailed,
-      "Chrome could not execute the browser action on this page.",
+      "Chrome could not run this action on the current page. Error pages and blocked file downloads cannot be read; open another page or go back.",
     );
   }
 };

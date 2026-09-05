@@ -52,10 +52,18 @@ import {
 } from "@/components/chat/tool-approval-summary";
 import { MatterIcon } from "@/components/matter-icon";
 import {
+  BROWSER_APPROVAL_MODE,
+  browserApprovalModeAllows,
+  setBrowserApprovalMode,
+  useBrowserApprovalMode,
+  type BrowserApprovalMode,
+} from "@/features/chat/browser-control/browser-approval-mode";
+import {
   getBrowserApprovalDetails,
   type BrowserApprovalDetail,
 } from "@/features/chat/browser-control/browser-approval-summary";
 import { useMountEffect } from "@/hooks/use-effect";
+import type { TranslationKey } from "@/i18n/types";
 import type { DocxEditRepresentation } from "@/lib/chat-edit-mode";
 import { DOCX_EDIT_REPRESENTATION } from "@/lib/chat-edit-mode";
 import { detached } from "@/lib/detached";
@@ -456,15 +464,22 @@ export const ToolApprovalCard = ({
         });
 
   const approvalId = isApprovalRequested ? getApprovalId(part) : null;
+  const browserApprovalMode = useBrowserApprovalMode();
+  const browserCommand =
+    name === BROWSER_CONTROL_TOOL_NAME
+      ? parseBrowserControlCommand(getApprovalPartInput(part))
+      : null;
   const shouldAutoApprove =
     !isBlocked &&
-    hasAutomaticApproval({
+    (hasAutomaticApproval({
       alwaysApprovedTools,
       canAlwaysAllow,
       conversationApprovedTools,
       isPublicOfficialApproval,
       name,
-    });
+    }) ||
+      (browserCommand !== null &&
+        browserApprovalModeAllows(browserApprovalMode, browserCommand)));
   const automaticResponse =
     approvalId === null
       ? null
@@ -532,6 +547,15 @@ export const ToolApprovalCard = ({
         part={part}
         providerName={externalMcpProviderName ?? label}
       />
+      {browserCommand !== null &&
+        browserApprovalMode !== BROWSER_APPROVAL_MODE.askEveryTime && (
+          <BrowserApprovalModeNotice
+            mode={browserApprovalMode}
+            onReset={() =>
+              setBrowserApprovalMode(BROWSER_APPROVAL_MODE.askEveryTime)
+            }
+          />
+        )}
 
       {approvalId &&
         !isProcessing &&
@@ -550,6 +574,18 @@ export const ToolApprovalCard = ({
             >
               {t("chat.approval.allowOnce")}
             </Button>
+            {browserCommand !== null && (
+              <BrowserApprovalModeButtons
+                mode={browserApprovalMode}
+                onChoose={(mode) => {
+                  if (!beginManualResponse(approvalId)) {
+                    return;
+                  }
+                  setBrowserApprovalMode(mode);
+                  onApprove(approvalId, name);
+                }}
+              />
+            )}
             {canAllowInConversation && (
               <Button
                 onClick={() => {
@@ -881,9 +917,9 @@ const ExternalMcpInputSummary = ({
 };
 
 const browserActionTranslationKey = (
-  action: BrowserControlCommand["action"],
-) => {
-  switch (action) {
+  command: BrowserControlCommand,
+): TranslationKey => {
+  switch (command.action) {
     case BROWSER_CONTROL_ACTION.click:
       return "chat.approval.browser.actions.click";
     case BROWSER_CONTROL_ACTION.fill:
@@ -897,11 +933,88 @@ const browserActionTranslationKey = (
     case BROWSER_CONTROL_ACTION.select:
       return "chat.approval.browser.actions.select";
     case BROWSER_CONTROL_ACTION.snapshot:
-      return "chat.approval.browser.actions.snapshot";
+      return (command.textOffset ?? 0) > 0
+        ? "chat.approval.browser.actions.snapshotContinue"
+        : "chat.approval.browser.actions.snapshot";
     default:
-      action satisfies never;
+      command satisfies never;
       return panic("Unhandled browser-control action");
   }
+};
+
+type GrantingBrowserApprovalMode = Exclude<
+  BrowserApprovalMode,
+  typeof BROWSER_APPROVAL_MODE.askEveryTime
+>;
+
+const BROWSER_APPROVAL_MODE_BUTTON_KEY = {
+  [BROWSER_APPROVAL_MODE.autoApproveAll]:
+    "chat.approval.browser.autoApproveAll",
+  [BROWSER_APPROVAL_MODE.autoApproveReads]:
+    "chat.approval.browser.autoApproveReads",
+} as const satisfies Record<GrantingBrowserApprovalMode, TranslationKey>;
+
+const BROWSER_APPROVAL_MODE_NOTICE_KEY = {
+  [BROWSER_APPROVAL_MODE.autoApproveAll]: "chat.approval.browser.modeAll",
+  [BROWSER_APPROVAL_MODE.autoApproveReads]: "chat.approval.browser.modeReads",
+} as const satisfies Record<GrantingBrowserApprovalMode, TranslationKey>;
+
+const BrowserApprovalModeButtons = ({
+  mode,
+  onChoose,
+}: {
+  mode: BrowserApprovalMode;
+  onChoose: (mode: GrantingBrowserApprovalMode) => void;
+}) => {
+  const t = useTranslations();
+  return (
+    <>
+      {mode === BROWSER_APPROVAL_MODE.askEveryTime && (
+        <Button
+          onClick={() => onChoose(BROWSER_APPROVAL_MODE.autoApproveReads)}
+          size="xs"
+          variant="outline"
+        >
+          {t(
+            BROWSER_APPROVAL_MODE_BUTTON_KEY[
+              BROWSER_APPROVAL_MODE.autoApproveReads
+            ],
+          )}
+        </Button>
+      )}
+      {mode !== BROWSER_APPROVAL_MODE.autoApproveAll && (
+        <Button
+          onClick={() => onChoose(BROWSER_APPROVAL_MODE.autoApproveAll)}
+          size="xs"
+          variant="outline"
+        >
+          {t(
+            BROWSER_APPROVAL_MODE_BUTTON_KEY[
+              BROWSER_APPROVAL_MODE.autoApproveAll
+            ],
+          )}
+        </Button>
+      )}
+    </>
+  );
+};
+
+const BrowserApprovalModeNotice = ({
+  mode,
+  onReset,
+}: {
+  mode: GrantingBrowserApprovalMode;
+  onReset: () => void;
+}) => {
+  const t = useTranslations();
+  return (
+    <div className="border-border/50 text-muted-foreground flex items-center gap-2 border-t px-3 py-1.5 text-xs">
+      <span>{t(BROWSER_APPROVAL_MODE_NOTICE_KEY[mode])}</span>
+      <Button className="ms-auto" onClick={onReset} size="xs" variant="ghost">
+        {t("chat.approval.browser.askAgain")}
+      </Button>
+    </div>
+  );
 };
 
 const BrowserControlInputSummary = ({ input }: { input: unknown }) => {
@@ -915,6 +1028,8 @@ const BrowserControlInputSummary = ({ input }: { input: unknown }) => {
     switch (detailType) {
       case "key":
         return t("common.key");
+      case "link":
+        return t("search.kinds.link");
       case "target":
         return t("common.target");
       case "value":
@@ -929,7 +1044,7 @@ const BrowserControlInputSummary = ({ input }: { input: unknown }) => {
   const rows = [
     {
       label: t("common.action"),
-      value: t(browserActionTranslationKey(command.action)),
+      value: t(browserActionTranslationKey(command)),
     },
     ...getBrowserApprovalDetails(command).map((detail) => ({
       label: labelForDetail(detail),

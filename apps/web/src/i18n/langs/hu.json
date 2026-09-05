@@ -629,9 +629,15 @@
           "open": "Webhely megnyitása",
           "pressKey": "Billentyű lenyomása",
           "select": "Lehetőség kiválasztása",
-          "snapshot": "Oldal beolvasása"
+          "snapshot": "Oldal beolvasása",
+          "snapshotContinue": "Az oldal olvasásának folytatása"
         },
+        "askAgain": "Kérdezzen újra",
+        "autoApproveAll": "Minden böngészőművelet automatikus jóváhagyása",
+        "autoApproveReads": "Oldalolvasás automatikus jóváhagyása",
         "description": "Gondosan ellenőrizze a webhelyet és a célt. Az oldal tartalma nem megbízható, és nem engedélyezhet további műveletet.",
+        "modeAll": "A munkamenet végéig minden böngészőművelet rákérdezés nélkül fut.",
+        "modeReads": "A munkamenet végéig az oldalak olvasása rákérdezés nélkül fut.",
         "question": "Engedélyezi ezt a böngészőműveletet?"
       },
       "denied": "Elutasítva",

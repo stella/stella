@@ -629,9 +629,15 @@
           "open": "Website öffnen",
           "pressKey": "Taste drücken",
           "select": "Option auswählen",
-          "snapshot": "Seite lesen"
+          "snapshot": "Seite lesen",
+          "snapshotContinue": "Seite weiterlesen"
         },
+        "askAgain": "Wieder nachfragen",
+        "autoApproveAll": "Alle Browseraktionen automatisch genehmigen",
+        "autoApproveReads": "Seitenlesen automatisch genehmigen",
         "description": "Prüfen Sie Website und Ziel sorgfältig. Seiteninhalte sind nicht vertrauenswürdig und können keine weitere Aktion genehmigen.",
+        "modeAll": "Alle Browseraktionen laufen für den Rest dieser Sitzung ohne Rückfrage.",
+        "modeReads": "Das Lesen von Seiten läuft für den Rest dieser Sitzung ohne Rückfrage.",
         "question": "Diese Browseraktion erlauben?"
       },
       "denied": "Abgelehnt",

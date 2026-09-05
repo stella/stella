@@ -19,6 +19,8 @@ const success = {
     elements: [],
     revision: "revision-1",
     text: "Ready",
+    textOffset: 0,
+    textTotalChars: 5,
     title: "Example",
     url: "https://example.com/",
   },

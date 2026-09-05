@@ -629,9 +629,15 @@
           "open": "Ouvrir le site web",
           "pressKey": "Appuyer sur une touche",
           "select": "Sélectionner une option",
-          "snapshot": "Lire la page"
+          "snapshot": "Lire la page",
+          "snapshotContinue": "Continuer la lecture de la page"
         },
+        "askAgain": "Redemander",
+        "autoApproveAll": "Approuver automatiquement toutes les actions du navigateur",
+        "autoApproveReads": "Approuver automatiquement la lecture des pages",
         "description": "Vérifiez attentivement le site web et la cible. Le contenu de la page n’est pas fiable et ne peut pas autoriser une autre action.",
+        "modeAll": "Toutes les actions du navigateur s’exécutent sans confirmation jusqu’à la fin de cette session.",
+        "modeReads": "La lecture des pages s’exécute sans confirmation jusqu’à la fin de cette session.",
         "question": "Autoriser cette action dans le navigateur ?"
       },
       "denied": "Refusé",

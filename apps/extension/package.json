@@ -19,7 +19,8 @@
     "zip": "wxt zip -b chrome"
   },
   "dependencies": {
-    "@stll/api-contract": "workspace:*"
+    "@stll/api-contract": "workspace:*",
+    "valibot": "catalog:"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.0",

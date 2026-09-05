@@ -629,9 +629,15 @@
           "open": "Otwórz witrynę",
           "pressKey": "Naciśnij klawisz",
           "select": "Wybierz opcję",
-          "snapshot": "Odczytaj stronę"
+          "snapshot": "Odczytaj stronę",
+          "snapshotContinue": "Czytaj stronę dalej"
         },
+        "askAgain": "Pytaj ponownie",
+        "autoApproveAll": "Automatycznie zatwierdzaj wszystkie działania w przeglądarce",
+        "autoApproveReads": "Automatycznie zatwierdzaj odczyt stron",
         "description": "Dokładnie sprawdź witrynę i cel. Zawartość strony jest niezaufana i nie może zatwierdzić kolejnego działania.",
+        "modeAll": "Do końca tej sesji wszystkie działania w przeglądarce wykonują się bez pytania.",
+        "modeReads": "Do końca tej sesji odczyt stron wykonuje się bez pytania.",
         "question": "Zezwolić na to działanie w przeglądarce?"
       },
       "denied": "Odrzucono",

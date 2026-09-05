@@ -7,28 +7,36 @@ import {
   BROWSER_CONTROL_PROTOCOL_VERSION,
   type BrowserControlCommand,
   type BrowserControlResult,
+  formatElementReference,
+  isReadOnlyBrowserCommand,
   parseBrowserControlCommand,
   parseBrowserControlResult,
   parseBrowserExtensionResponse,
   parseBrowserExtensionRequest,
+  parseElementReference,
 } from "./browser-control";
 
 const PAGE = {
   revision: "revision-1",
   url: "https://example.com/",
 } as const;
-const TARGET = { name: "Submit", ref: "e:0.12.3", role: "button" } as const;
+const TARGET = { name: "Submit", ref: "e:0:0.12.3", role: "button" } as const;
 
 const COMMAND_EXAMPLES = {
   [BROWSER_CONTROL_ACTION.click]: {
     action: "click",
     page: PAGE,
-    target: TARGET,
+    target: {
+      href: "https://example.com/next",
+      name: "Next",
+      ref: "e:0:1.s.0.2",
+      role: "link",
+    },
   },
   [BROWSER_CONTROL_ACTION.fill]: {
     action: "fill",
     page: PAGE,
-    target: { name: "Search", ref: "e:1.2", role: "textbox" },
+    target: { name: "Search", ref: "e:1:2", role: "textbox" },
     value: "search text",
   },
   [BROWSER_CONTROL_ACTION.goBack]: { action: "go-back" },
@@ -40,19 +48,51 @@ const COMMAND_EXAMPLES = {
     action: "press-key",
     key: "Enter",
     page: PAGE,
-    target: { name: "Search", ref: "e:2.0", role: "textbox" },
+    target: { name: "Search", ref: "e:2:0", role: "textbox" },
   },
   [BROWSER_CONTROL_ACTION.select]: {
     action: "select",
     page: PAGE,
-    target: { name: "Court", ref: "e:3.1", role: "select" },
+    target: { name: "Court", ref: "e:0:3.1", role: "select" },
     value: "option-1",
   },
-  [BROWSER_CONTROL_ACTION.snapshot]: { action: "snapshot" },
+  [BROWSER_CONTROL_ACTION.snapshot]: { action: "snapshot", textOffset: 48_000 },
 } as const satisfies Record<
   BrowserControlCommand["action"],
   BrowserControlCommand
 >;
+
+describe("element references", () => {
+  test("round-trips frame and shadow-root paths", () => {
+    expect(parseElementReference("e:0:0.12.3")).toEqual({
+      frameId: 0,
+      path: "0.12.3",
+    });
+    expect(parseElementReference("e:7:1.s.0.2")).toEqual({
+      frameId: 7,
+      path: "1.s.0.2",
+    });
+    expect(formatElementReference({ frameId: 7, path: "1.s.0.2" })).toBe(
+      "e:7:1.s.0.2",
+    );
+  });
+
+  test("rejects references that do not address one element in one frame", () => {
+    for (const reference of [
+      "e:0.12.3",
+      "e:0:",
+      "e:0:1.s",
+      "e:0:s.1",
+      "e:0:1.s.s.0",
+      "e:a:1",
+      "e:0:1:2",
+      "#submit",
+      `e:0:${"1.".repeat(BROWSER_CONTROL_LIMITS.referenceChars)}1`,
+    ]) {
+      expect(parseElementReference(reference)).toBeNull();
+    }
+  });
+});
 
 describe("browser control command contract", () => {
   test("exercises and accepts every declared action", () => {
@@ -64,7 +104,14 @@ describe("browser control command contract", () => {
     }
   });
 
-  test("rejects extra fields and malformed element references", () => {
+  test("classifies reads separately from actions", () => {
+    expect(isReadOnlyBrowserCommand(COMMAND_EXAMPLES.snapshot)).toBe(true);
+    expect(isReadOnlyBrowserCommand(COMMAND_EXAMPLES["go-back"])).toBe(true);
+    expect(isReadOnlyBrowserCommand(COMMAND_EXAMPLES.open)).toBe(false);
+    expect(isReadOnlyBrowserCommand(COMMAND_EXAMPLES.click)).toBe(false);
+  });
+
+  test("rejects extra fields, malformed references and out-of-range offsets", () => {
     expect(
       parseBrowserControlCommand({
         action: "snapshot",
@@ -78,6 +125,19 @@ describe("browser control command contract", () => {
         target: { ...TARGET, ref: "#submit" },
       }),
     ).toBeNull();
+    expect(
+      parseBrowserControlCommand({
+        action: "click",
+        page: PAGE,
+        target: { ...TARGET, ref: "e:0.12.3" },
+      }),
+    ).toBeNull();
+    expect(
+      parseBrowserControlCommand({
+        action: "snapshot",
+        textOffset: BROWSER_CONTROL_LIMITS.pageTextTotalChars + 1,
+      }),
+    ).toBeNull();
   });
 });
 
@@ -86,9 +146,19 @@ describe("browser control result contract", () => {
     protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
     snapshot: {
       contentTrust: BROWSER_CONTROL_CONTENT_TRUST.untrustedWebContent,
-      elements: [{ name: "Submit", ref: "e:0.1", role: "button" }],
+      elements: [
+        {
+          href: "https://example.com/next",
+          name: "Next",
+          ref: "e:0:0.1",
+          role: "link",
+        },
+        { name: "Search", ref: "e:1:0.2.s.1", role: "textbox", value: "" },
+      ],
       revision: "revision-1",
       text: "Page text",
+      textOffset: 0,
+      textTotalChars: 9,
       title: "Example",
       url: "https://example.com/",
     },

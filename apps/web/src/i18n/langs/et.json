@@ -629,9 +629,15 @@
           "open": "Ava veebisait",
           "pressKey": "Vajuta klahvi",
           "select": "Vali suvand",
-          "snapshot": "Loe lehte"
+          "snapshot": "Loe lehte",
+          "snapshotContinue": "Jätka lehe lugemist"
         },
+        "askAgain": "Küsi uuesti",
+        "autoApproveAll": "Kinnita kõik brauseritoimingud automaatselt",
+        "autoApproveReads": "Kinnita lehtede lugemine automaatselt",
         "description": "Kontrollige veebisaiti ja sihtmärki hoolikalt. Lehe sisu ei ole usaldusväärne ega saa järgmist toimingut lubada.",
+        "modeAll": "Kõik brauseritoimingud tehakse selle seansi lõpuni küsimata.",
+        "modeReads": "Lehtede lugemine toimub selle seansi lõpuni küsimata.",
         "question": "Kas lubada see brauseritoiming?"
       },
       "denied": "Keelatud",

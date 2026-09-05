@@ -629,9 +629,15 @@
           "open": "Abrir site",
           "pressKey": "Pressionar tecla",
           "select": "Selecionar opção",
-          "snapshot": "Ler página"
+          "snapshot": "Ler página",
+          "snapshotContinue": "Continuar lendo a página"
         },
+        "askAgain": "Perguntar novamente",
+        "autoApproveAll": "Aprovar automaticamente todas as ações do navegador",
+        "autoApproveReads": "Aprovar automaticamente a leitura de páginas",
         "description": "Confira com atenção o site e o destino. O conteúdo da página não é confiável e não pode aprovar outra ação.",
+        "modeAll": "Todas as ações do navegador são executadas sem perguntar até o fim desta sessão.",
+        "modeReads": "A leitura de páginas é executada sem perguntar até o fim desta sessão.",
         "question": "Permitir esta ação no navegador?"
       },
       "denied": "Negado",

@@ -629,9 +629,15 @@
           "open": "Otevřít web",
           "pressKey": "Stisknout klávesu",
           "select": "Vybrat možnost",
-          "snapshot": "Přečíst stránku"
+          "snapshot": "Přečíst stránku",
+          "snapshotContinue": "Pokračovat ve čtení stránky"
         },
+        "askAgain": "Znovu se ptát",
+        "autoApproveAll": "Automaticky schvalovat všechny akce v prohlížeči",
+        "autoApproveReads": "Automaticky schvalovat čtení stránek",
         "description": "Pečlivě zkontrolujte web a cíl. Obsah stránky není důvěryhodný a nemůže schválit další akci.",
+        "modeAll": "Všechny akce v prohlížeči se do konce této relace provádějí bez dotazu.",
+        "modeReads": "Čtení stránek se do konce této relace provádí bez dotazu.",
         "question": "Povolit tuto akci v prohlížeči?"
       },
       "denied": "Zamítnuto",

@@ -5,6 +5,7 @@ import {
 } from "@stll/api-contract/browser-control";
 
 import { hasAllSiteAccess } from "./access";
+import { releaseDownloadContainment } from "./download-containment";
 import {
   BROWSER_CONTROLLER_STORAGE_KEY,
   BROWSER_CONTROLLED_TAB_STORAGE_KEY,
@@ -118,6 +119,7 @@ export const pairActiveStellaTab =
       [BROWSER_CONTROLLER_STORAGE_KEY]: controller,
     });
     await chrome.storage.session.remove([...CONTROLLER_DATA_STORAGE_KEYS]);
+    await releaseDownloadContainment();
     if (previous && previous.tabId !== controller.tabId) {
       await notifyControllerTab(previous.tabId, null);
     }
@@ -128,6 +130,7 @@ export const pairActiveStellaTab =
 export const disconnectBrowserController = async (): Promise<void> => {
   const controller = await readBrowserController();
   await chrome.storage.session.remove([...CONTROLLER_SESSION_STORAGE_KEYS]);
+  await releaseDownloadContainment();
   if (controller) {
     await notifyControllerTab(controller.tabId, null);
   }

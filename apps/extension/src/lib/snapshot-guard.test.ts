@@ -7,7 +7,7 @@ import { browserCommandMatchesSnapshot } from "./snapshot-guard";
 const command = {
   action: "click",
   page: { revision: "revision-1", url: "https://example.com/" },
-  target: { name: "Submit", ref: "e:0.1", role: "button" },
+  target: { name: "Submit", ref: "e:0:1", role: "button" },
 } satisfies BrowserControlCommand;
 
 describe("browser snapshot identity", () => {

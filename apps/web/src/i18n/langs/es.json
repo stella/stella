@@ -629,9 +629,15 @@
           "open": "Abrir sitio web",
           "pressKey": "Pulsar tecla",
           "select": "Seleccionar opción",
-          "snapshot": "Leer página"
+          "snapshot": "Leer página",
+          "snapshotContinue": "Seguir leyendo la página"
         },
+        "askAgain": "Volver a preguntar",
+        "autoApproveAll": "Aprobar automáticamente todas las acciones del navegador",
+        "autoApproveReads": "Aprobar automáticamente la lectura de páginas",
         "description": "Comprueba con atención el sitio web y el destino. El contenido de la página no es de confianza y no puede aprobar otra acción.",
+        "modeAll": "Todas las acciones del navegador se ejecutan sin preguntar durante el resto de esta sesión.",
+        "modeReads": "La lectura de páginas se ejecuta sin preguntar durante el resto de esta sesión.",
         "question": "¿Permitir esta acción en el navegador?"
       },
       "denied": "Denegado",
