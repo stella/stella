@@ -34,7 +34,7 @@ import readResearchTable from "@/api/handlers/case-law/research/get";
 import listResearchTables from "@/api/handlers/case-law/research/list";
 import readContactById from "@/api/handlers/contacts/get";
 import listDocumentReviewSources from "@/api/handlers/document-reviews/list-sources";
-import readDocumentTranslationRun from "@/api/handlers/document-translations/read-run";
+import readDocumentTranslationRun from "@/api/handlers/document-translations/runs/get";
 import listDocxSuggestions from "@/api/handlers/docx-suggestions/read";
 import readEntityById from "@/api/handlers/entities/get";
 import readVersionById from "@/api/handlers/entities/read-version-by-id";

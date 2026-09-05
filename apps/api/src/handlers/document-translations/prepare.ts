@@ -27,7 +27,7 @@ const config = {
   // Inspection is a read, but the handler also stamps the language it detected
   // onto versions that predate `entity_versions.detected_language`.
   access: "write",
-  mcp: { type: "internal", reason: "document_processing" },
+  mcp: { type: "capability", reason: "document_processing" },
   params: workspaceParams({}),
   body: prepareDocumentTranslationBodySchema,
 } satisfies HandlerConfig;

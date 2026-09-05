@@ -43,7 +43,6 @@ import releaseDesktopEditLock from "@/api/handlers/entities/release-desktop-edit
 import renameEntity from "@/api/handlers/entities/rename";
 import requestDesktopEditTakeover from "@/api/handlers/entities/request-desktop-edit-takeover";
 import restoreVersion from "@/api/handlers/entities/restore-version";
-import translateEntity from "@/api/handlers/entities/translate";
 import updateVersionDescription from "@/api/handlers/entities/update-version-description";
 import updateVersionLabel from "@/api/handlers/entities/update-version-label";
 import uploadEntity, {
@@ -342,11 +341,6 @@ export const entitiesRoute = new Elysia({
     body: uploadVersion.config.body,
     resourceSetUpdated: entityVersionRealtimeUpdates,
     permissions: uploadVersion.config.permissions,
-  })
-  .post("/translate", translateEntity.handler, {
-    body: translateEntity.config.body,
-    resourceSetUpdated: entityFileRealtimeUpdates,
-    permissions: translateEntity.config.permissions,
   })
   .post("/bilingual", createBilingualEntity.handler, {
     body: createBilingualEntity.config.body,

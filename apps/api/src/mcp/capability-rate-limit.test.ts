@@ -30,14 +30,16 @@ describe("resolveInvokeRateLimit", () => {
     );
   });
 
-  test("mirrors the stricter REST route limit for entities.translate", () => {
-    expect(resolveInvokeRateLimit("entities.translate")).toEqual({
-      windowMs: 60_000,
-      max: 30,
-    });
-    expect(resolveInvokeRateLimit("entities.translate")).not.toBe(
-      DEFAULT_INVOKE_RATE_LIMIT,
+  test("mirrors the stricter REST route limit for a translation run", () => {
+    expect(resolveInvokeRateLimit("document-translations.runs.create")).toEqual(
+      {
+        windowMs: 60_000,
+        max: 30,
+      },
     );
+    expect(
+      resolveInvokeRateLimit("document-translations.runs.create"),
+    ).not.toBe(DEFAULT_INVOKE_RATE_LIMIT);
   });
 
   test("mirrors the source-fetch REST limit for skill capabilities", () => {
@@ -60,10 +62,10 @@ describe("resolveInvokeRateLimit", () => {
 describe("consumeInvokeCapabilityRateLimit", () => {
   test("allows up to the limit, then refuses", async () => {
     const guards = freshGuards();
-    const max = resolveInvokeRateLimit("entities.translate").max;
+    const max = resolveInvokeRateLimit("document-translations.runs.create").max;
     expect(max).toBeGreaterThan(0);
     const input = {
-      capabilityId: "entities.translate",
+      capabilityId: "document-translations.runs.create",
       organizationId: org("org_a"),
       userId: user("user_a"),
       guards,
@@ -78,9 +80,9 @@ describe("consumeInvokeCapabilityRateLimit", () => {
 
   test("distinct capabilities share no budget", async () => {
     const guards = freshGuards();
-    const max = resolveInvokeRateLimit("entities.translate").max;
+    const max = resolveInvokeRateLimit("document-translations.runs.create").max;
     const translate = {
-      capabilityId: "entities.translate",
+      capabilityId: "document-translations.runs.create",
       organizationId: org("org_a"),
       userId: user("user_a"),
       guards,
@@ -154,9 +156,9 @@ describe("consumeInvokeCapabilityRateLimit", () => {
     // The budget bounds what one caller can spend, so exhausting it must not
     // reach across to a colleague on the same capability.
     const guards = freshGuards();
-    const max = resolveInvokeRateLimit("entities.translate").max;
+    const max = resolveInvokeRateLimit("document-translations.runs.create").max;
     const first = {
-      capabilityId: "entities.translate",
+      capabilityId: "document-translations.runs.create",
       organizationId: org("org_a"),
       userId: user("user_a"),
       guards,
@@ -177,9 +179,9 @@ describe("consumeInvokeCapabilityRateLimit", () => {
 
   test("distinct organizations share no budget", async () => {
     const guards = freshGuards();
-    const max = resolveInvokeRateLimit("entities.translate").max;
+    const max = resolveInvokeRateLimit("document-translations.runs.create").max;
     const orgA = {
-      capabilityId: "entities.translate",
+      capabilityId: "document-translations.runs.create",
       organizationId: org("org_a"),
       userId: user("user_a"),
       guards,
@@ -191,7 +193,7 @@ describe("consumeInvokeCapabilityRateLimit", () => {
     expect(
       (
         await consumeInvokeCapabilityRateLimit({
-          capabilityId: "entities.translate",
+          capabilityId: "document-translations.runs.create",
           organizationId: org("org_b"),
           userId: user("user_a"),
           guards,

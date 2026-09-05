@@ -16,9 +16,14 @@ import {
   RouteGenerationError,
 } from "./generate-route-map.js";
 import { DOCUMENT_VERSION_UPLOAD_TRANSPORT } from "./generated/document-version-upload-transport.js";
+import {
+  buildInputContractHelp,
+  formatInputExample,
+} from "./input-contract-help.js";
 import { exitCodeEntries } from "./mcp-constants.js";
 import type {
   FlagSpec,
+  JsonSchema,
   LeafCommandSpec,
   RegistryToolListing,
   RouteNode,
@@ -242,15 +247,16 @@ const routeNodeAt = (
  * Two worked "no curated command" examples (spec 049-flags deliverable 2):
  * task prose plus the command path to a real capability leaf. The invocation
  * — every required flag, in the leaf's own flag order, placeholder named
- * after the flag itself — is derived from that leaf at render time (see
+ * after the flag itself, plus a schema-derived `--input` payload for the
+ * parts no flag can address — is derived from that leaf at render time (see
  * `capabilityExampleLine`), so a catalog change that renames a flag, adds a
- * new required one, or drops the leaf fails codegen instead of shipping a
- * stale example.
+ * new required one, reshapes the body, or drops the leaf fails codegen
+ * instead of shipping a stale example.
  */
 const CAPABILITY_WORKED_EXAMPLES = [
   {
-    task: "Translate a document",
-    commandPath: [CAPABILITY_NAMESPACE, "entities", "translate"],
+    task: "Start a document translation run",
+    commandPath: [CAPABILITY_NAMESPACE, "document-translations", "runs-create"],
   },
   {
     task: "Start workflow extraction",
@@ -263,19 +269,50 @@ const capabilityExampleLine = (
   example: (typeof CAPABILITY_WORKED_EXAMPLES)[number],
 ): string => {
   const node = routeNodeAt(tree, example.commandPath);
-  if (node?.kind !== "capability-leaf") {
+  const leaf = node?.kind === "capability-leaf" ? node : null;
+  const inputArg = leaf === null ? null : inputOnlyExampleArg(leaf.spec);
+  if (leaf === null || inputArg === null) {
     throw new RouteGenerationError(
-      `generateCliSkill: worked example "${example.task}" names command "stella ${example.commandPath.join(" ")}", which is not a capability command in the current tree; update or drop the example`,
+      leaf === null
+        ? `generateCliSkill: worked example "${example.task}" names command "stella ${example.commandPath.join(" ")}", which is not a capability command in the current tree; update or drop the example`
+        : `generateCliSkill: worked example "${example.task}" needs an \`--input\` payload, but no complete example can be derived from the capability's schema; pick a flag-addressable example`,
     );
   }
-  const required = node.spec.flags.filter((flag) => flag.required);
+  const required = leaf.spec.flags.filter((flag) => flag.required);
   const args = required
     .map((flag) => `${flag.flag} <${flag.flag.replace(/^--/u, "")}>`)
     .join(" ");
-  const invocation = [`stella ${example.commandPath.join(" ")}`, args]
+  const invocation = [`stella ${example.commandPath.join(" ")}`, args, inputArg]
     .filter((part) => part.length > 0)
     .join(" ");
   return `- ${example.task}: \`${invocation}\`.`;
+};
+
+// The parts of a capability's input that no generated flag addresses (a body
+// that is a union, say) are reachable only through `--input`. An example that
+// showed the flags alone would fail validation when copied, so those parts
+// are rendered from the schema; the flag-addressed parts stay out of the
+// payload rather than appearing twice. `null` when the schema yields no
+// complete example, which the caller turns into a codegen failure.
+const inputOnlyExampleArg = (spec: {
+  inputSchema: JsonSchema;
+  inputOnly: readonly string[];
+}): string | null => {
+  const help = buildInputContractHelp({
+    schema: spec.inputSchema,
+    inputOnly: spec.inputOnly,
+  });
+  if (help === undefined) {
+    return "";
+  }
+  if (help.example.status !== "complete") {
+    return null;
+  }
+  const partRoots = new Set(spec.inputOnly.map((path) => path.split(".")[0]));
+  const payload = Object.fromEntries(
+    Object.entries(help.example.value).filter(([key]) => partRoots.has(key)),
+  );
+  return formatInputExample(payload);
 };
 
 /**

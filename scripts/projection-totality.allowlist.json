@@ -100,7 +100,7 @@
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },
   {
-    "file": "apps/api/src/handlers/document-translations/read-run.ts",
+    "file": "apps/api/src/handlers/document-translations/runs/get.ts",
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },
   {
