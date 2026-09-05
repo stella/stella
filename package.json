@@ -162,7 +162,7 @@
     "svgo": "4.0.2",
     "undici": "8.10.0"
   },
-  "packageManager": "bun@1.4.1",
+  "packageManager": "bun@1.4.2",
   "catalog": {
     "@ag-ui/core": "0.1.1-canary.beta.0",
     "@base-ui/react": "1.7.0",
@@ -201,7 +201,7 @@
     "@tanstack/eslint-plugin-router": "1.162.0",
     "@types/node": "26.1.2",
     "@typescript-eslint/utils": "8.65.0",
-    "bun-types": "1.4.1",
+    "bun-types": "1.4.2",
     "@vitejs/plugin-react": "^6.1.0",
     "better-auth": "1.7.1",
     "better-result": "3.0.0",
@@ -242,8 +242,7 @@
     "eslint-plugin-drizzle@0.2.3": "patches/eslint-plugin-drizzle@0.2.3.patch",
     "drizzle-kit@1.0.0-rc.4": "patches/drizzle-kit@1.0.0-rc.4.patch",
     "better-call@1.4.0": "patches/better-call@1.4.0.patch",
-    "@better-auth/oauth-provider@1.7.1": "patches/@better-auth%2Foauth-provider@1.7.1.patch",
-    "elysia@1.4.29": "patches/elysia@1.4.29.patch"
+    "@better-auth/oauth-provider@1.7.1": "patches/@better-auth%2Foauth-provider@1.7.1.patch"
   },
   "trustedDependencies": [
     "lefthook"
