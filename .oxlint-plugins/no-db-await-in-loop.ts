@@ -102,6 +102,7 @@ import { eslintCompatPlugin, type ESTree } from "@oxlint/plugins";
 
 import {
   getPropertyName,
+  isAstNode,
   isIdentifier,
   isPerIterationLoopPosition,
   isResultTryPromiseCallback,
@@ -128,19 +129,14 @@ const AWAIT_UNWRAP_TYPES = new Set([
   "ChainExpression",
 ]);
 
-const getType = (node: unknown): string | null => {
-  if (typeof node !== "object" || node === null || !("type" in node)) {
-    return null;
-  }
-  const { type } = node as { type: unknown };
-  return typeof type === "string" ? type : null;
-};
+const getType = (node: unknown): string | null =>
+  isAstNode(node) ? node.type : null;
 
 const getField = (node: unknown, field: string): unknown => {
   if (typeof node !== "object" || node === null || !(field in node)) {
     return null;
   }
-  return (node as Record<string, unknown>)[field];
+  return Reflect.get(node, field);
 };
 
 const isComputed = (node: unknown): boolean =>
@@ -381,13 +377,13 @@ const containsDbRootedCall = (
     }
   }
 
-  for (const key of Object.keys(node as Record<string, unknown>)) {
+  for (const key of Object.keys(node)) {
     if (key === "parent") {
       continue;
     }
     if (
       containsDbRootedCall(
-        (node as Record<string, unknown>)[key],
+        Reflect.get(node, key),
         canResolveFurther,
         viaResolution,
       )

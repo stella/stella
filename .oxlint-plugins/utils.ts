@@ -20,7 +20,7 @@ export const isAstNode = (node: unknown): node is AstNode =>
   typeof node === "object" &&
   node !== null &&
   "type" in node &&
-  typeof (node as { type: unknown }).type === "string" &&
+  typeof node.type === "string" &&
   "range" in node;
 
 export const isIdentifier = (
@@ -150,13 +150,16 @@ export const getImportLocalName = (specifier: unknown): string | null => {
 // Positions of a loop node that re-run on every iteration. A `for`
 // initializer and a `for-of` / `for-in` right-hand side are evaluated once, so
 // an await there costs one round-trip, not one per item.
-const PER_ITERATION_LOOP_FIELDS: Record<string, readonly string[]> = {
-  ForStatement: ["body", "test", "update"],
-  ForOfStatement: ["body"],
-  ForInStatement: ["body"],
-  WhileStatement: ["body", "test"],
-  DoWhileStatement: ["body", "test"],
-};
+// Keyed by node type, so a lookup for any other node type misses: the value
+// is optional, not a total map over a closed union.
+const PER_ITERATION_LOOP_FIELDS: Record<string, readonly string[] | undefined> =
+  {
+    ForStatement: ["body", "test", "update"],
+    ForOfStatement: ["body"],
+    ForInStatement: ["body"],
+    WhileStatement: ["body", "test"],
+    DoWhileStatement: ["body", "test"],
+  };
 
 export const LOOP_NODE_TYPES: ReadonlySet<string> = new Set(
   Object.keys(PER_ITERATION_LOOP_FIELDS),
@@ -170,7 +173,7 @@ export const isPerIterationLoopPosition = (
     return false;
   }
   const fields = PER_ITERATION_LOOP_FIELDS[loop.type];
-  return fields !== undefined && fields.some((field) => loop[field] === child);
+  return fields?.some((field) => loop[field] === child) ?? false;
 };
 
 const isResultTryPromiseArgument = (node: unknown): boolean => {

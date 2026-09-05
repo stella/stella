@@ -114,7 +114,7 @@ const getField = (node: unknown, field: string): unknown => {
   if (typeof node !== "object" || node === null || !(field in node)) {
     return null;
   }
-  return (node as Record<string, unknown>)[field];
+  return Reflect.get(node, field);
 };
 
 const isComputed = (node: unknown): boolean =>
@@ -154,7 +154,7 @@ const isAwsCommandSend = (node: unknown): boolean => {
     return false;
   }
   const constructorName = resolveChainRootName(getField(first, "callee"));
-  return constructorName !== null && constructorName.endsWith("Command");
+  return constructorName?.endsWith("Command") ?? false;
 };
 
 const isClientModuleSource = (source: string): boolean =>
