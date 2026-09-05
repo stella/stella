@@ -62,12 +62,12 @@ export default eslintCompatPlugin({
 
         return {
           before() {
-            const options = context.options?.[0] ?? {};
+            const options: unknown = context.options[0];
             const configuredFiles =
               typeof options === "object" &&
               options !== null &&
               !Array.isArray(options)
-                ? options["allowedFiles"]
+                ? Reflect.get(options, "allowedFiles")
                 : undefined;
             const allowedFiles = Array.isArray(configuredFiles)
               ? configuredFiles.filter(
@@ -79,10 +79,7 @@ export default eslintCompatPlugin({
           },
           CallExpression(node) {
             const callee = node.callee;
-            if (
-              callee.type !== "MemberExpression" ||
-              callee.computed !== false
-            ) {
+            if (callee.type !== "MemberExpression" || callee.computed) {
               return;
             }
             if (getPropertyName(callee.property) !== "localeCompare") {

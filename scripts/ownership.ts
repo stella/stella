@@ -308,12 +308,30 @@ export const OWNERSHIP = [
   {
     id: "collation",
     capability: "Locale-aware sorting of human-readable text",
-    owner: ["apps/api/src/lib/collation.ts", "apps/web/src/lib/collation.ts"],
+    owner: ["packages/collation/"],
     summary:
       "Constructing an `Intl.Collator` per comparison is a documented hot-path " +
-      "cost, so both sides cache them; `require-cached-collator` enforces that. " +
-      "The two modules are deliberate mirrors and are meant to converge into a " +
-      "shared package.",
+      "cost, so the package caches one per locale behind a bounded LRU; " +
+      "`require-cached-collator` routes every `localeCompare` through it.",
+    enforcement: { kind: "none" },
+  },
+  {
+    id: "stable-stringify",
+    capability: "Deterministic string form of a value for hashing and keys",
+    owner: ["packages/stable-stringify/"],
+    summary:
+      "Sorted keys, cycle detection, and one spelling for bigint, symbol, and " +
+      "function values, so a hash or cache key computed in the api and in the " +
+      "browser agree byte for byte.",
+    enforcement: { kind: "none" },
+  },
+  {
+    id: "user-agent",
+    capability: "Browser and OS names parsed from a user-agent string",
+    owner: ["packages/user-agent/"],
+    summary:
+      "One parser feeds session listings on the api and the device labels in " +
+      "the web client, so a new browser family is recognised in both at once.",
     enforcement: { kind: "none" },
   },
 ] as const satisfies readonly OwnershipEntry[];

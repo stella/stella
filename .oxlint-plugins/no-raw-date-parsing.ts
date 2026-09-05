@@ -146,7 +146,7 @@ export default eslintCompatPlugin({
             if (
               callee.type === "Identifier" &&
               callee.name === "Date" &&
-              isDateOnlyStringArg(node.arguments?.[0])
+              isDateOnlyStringArg(node.arguments.at(0))
             ) {
               context.report({ node, messageId: "dateOnlyString" });
             }
@@ -178,8 +178,7 @@ export default eslintCompatPlugin({
               parent = parent.parent ?? undefined;
             }
             if (
-              parent &&
-              parent.type === "BinaryExpression" &&
+              parent?.type === "BinaryExpression" &&
               parent.operator === "*"
             ) {
               return;
