@@ -13,6 +13,7 @@ import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-sc
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 import {
+  CANARY_TEXT_FINISH_POLICY,
   CanaryCredentialRejectedError,
   CanaryProviderRunError,
   CATALOG_SWEEP_BUDGET_MS,
@@ -43,6 +44,15 @@ describe("AI provider canary probe deadlines", () => {
     );
     expect(canaryCapabilityProbeTimeout("structured-output")).toBe(20_000);
     expect(canaryCapabilityProbeTimeout("unknown-probe")).toBeUndefined();
+  });
+});
+
+describe("AI provider canary text finish policy", () => {
+  test("accepts a run that stopped at the probe's own output ceiling", () => {
+    // The probes size their ceiling for a one-line answer, so a model that
+    // spends the whole budget finishes on `length`. Rejecting that grades the
+    // canary's own budget as provider drift, on every provider at once.
+    expect(CANARY_TEXT_FINISH_POLICY).toBe("allow-incomplete");
   });
 });
 
