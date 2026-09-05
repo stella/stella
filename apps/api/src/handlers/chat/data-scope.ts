@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import {
   findCanonicalChatResourceHrefs,
   isSafeIdValue,
@@ -172,6 +174,7 @@ const collectTextRefWorkspaceIds = (
         break;
       default:
         target satisfies never;
+        panic(`Unhandled target: ${String(target)}`);
     }
   }
 };

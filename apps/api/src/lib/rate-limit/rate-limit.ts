@@ -386,7 +386,7 @@ export const rateLimit = ({
         return undefined;
       default: {
         state satisfies never;
-        return undefined;
+        return panic(`Unhandled state: ${String(state)}`);
       }
     }
   });

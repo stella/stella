@@ -7,6 +7,8 @@
  * whole-paragraph rewrite and a missing limb cannot become a replacement.
  */
 
+import { panic } from "better-result";
+
 import type {
   ReferenceImpact,
   ReviewPerspective,
@@ -126,6 +128,6 @@ export const deriveParameterImpact = ({
       return targetIsHigher ? "unfavourable" : "favourable";
     default:
       direction satisfies never;
-      return "unknown";
+      return panic(`Unhandled direction: ${String(direction)}`);
   }
 };

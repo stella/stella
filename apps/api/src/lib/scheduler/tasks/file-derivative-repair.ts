@@ -99,7 +99,7 @@ const derivativeRetryVerdict = (
     }
     default: {
       state satisfies never;
-      return DERIVATIVE_RETRY_VERDICT.UNRECOGNIZED;
+      return panic(`Unhandled state: ${String(state)}`);
     }
   }
 };

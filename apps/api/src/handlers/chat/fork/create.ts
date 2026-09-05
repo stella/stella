@@ -1,4 +1,4 @@
-import { Result, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { t } from "elysia";
 
@@ -583,6 +583,7 @@ export const createForkThread = ({
           }
           default: {
             copied.value satisfies never;
+            panic(`Unhandled value: ${String(copied.value)}`);
           }
         }
       }

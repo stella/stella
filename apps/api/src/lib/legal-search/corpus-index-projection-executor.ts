@@ -590,6 +590,7 @@ const processPreparedRequests = async ({
           break;
         default:
           outcome satisfies never;
+          panic(`Unhandled outcome: ${String(outcome)}`);
       }
     }
     return counts;

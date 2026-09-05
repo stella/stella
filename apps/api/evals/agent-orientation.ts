@@ -775,7 +775,7 @@ const runModelTurn = async ({
         }
         default: {
           chunk satisfies never;
-          break;
+          panic(`Unhandled chunk: ${String(chunk)}`);
         }
       }
     },

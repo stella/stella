@@ -167,6 +167,7 @@ export const collectReviewCitations = (
         break;
       default:
         block satisfies never;
+        panic(`Unhandled block: ${String(block)}`);
     }
   }
   return citations;

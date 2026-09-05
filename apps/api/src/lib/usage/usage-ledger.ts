@@ -67,7 +67,7 @@ export const isConsumableEntitlementStatus = (
       return false;
     default:
       status satisfies never;
-      return false;
+      return panic(`Unhandled status: ${String(status)}`);
   }
 };
 

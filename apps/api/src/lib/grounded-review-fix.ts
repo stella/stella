@@ -9,6 +9,8 @@
  * into `applyAIEditOperations`.
  */
 
+import { panic } from "better-result";
+
 import type { ReviewDelta } from "@/api/lib/document-review/review-delta";
 import type { DocxFolioCitation } from "@/api/lib/document-review/review-extract";
 import { foreignLanguageOf } from "@/api/lib/document-review/target-language";
@@ -128,6 +130,6 @@ export const buildGroundedReviewFix = ({
       return { kind: "replaceBlock", blockId, text };
     default:
       delta satisfies never;
-      return null;
+      return panic(`Unhandled delta: ${String(delta)}`);
   }
 };

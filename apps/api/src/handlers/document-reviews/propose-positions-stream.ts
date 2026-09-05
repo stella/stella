@@ -12,7 +12,7 @@
  * same model output.
  */
 
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import { DOCUMENT_REVIEW_LIMITS } from "@stll/api-contract";
 
@@ -153,6 +153,7 @@ const proposePositionsStream = createSafeHandler(
                 break;
               default:
                 event satisfies never;
+                panic(`Unhandled event: ${String(event)}`);
             }
           }
         } catch {

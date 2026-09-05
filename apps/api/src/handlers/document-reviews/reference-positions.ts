@@ -28,7 +28,7 @@
  */
 
 import type { ModelMessage } from "@tanstack/ai";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import {
   createPartialProposalReader,
@@ -124,7 +124,7 @@ const perspectiveLine = (perspective: ReviewPerspective): string => {
       return "Side the review takes: none. Write purpose and guidance without taking a side, naming what the term does to each side instead.";
     default:
       perspective satisfies never;
-      return "";
+      return panic(`Unhandled perspective: ${String(perspective)}`);
   }
 };
 
@@ -313,6 +313,7 @@ export const streamReferenceProposal = async function* ({
         break;
       default:
         event satisfies never;
+        panic(`Unhandled event: ${String(event)}`);
     }
   };
 
@@ -335,6 +336,7 @@ export const streamReferenceProposal = async function* ({
           break;
         default:
           chunk satisfies never;
+          panic(`Unhandled chunk: ${String(chunk)}`);
       }
     }
   } catch (error) {

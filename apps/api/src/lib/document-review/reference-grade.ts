@@ -311,7 +311,7 @@ const normalizeDelta = (
       return LANGUAGE_DELTA;
     default:
       termKind satisfies never;
-      return LANGUAGE_DELTA;
+      return panic(`Unhandled term kind: ${String(termKind)}`);
   }
 };
 
@@ -397,7 +397,7 @@ const isGrounded = (
       return false;
     default:
       assessment satisfies never;
-      return false;
+      return panic(`Unhandled assessment: ${String(assessment)}`);
   }
 };
 
@@ -416,7 +416,7 @@ const normalizeConsensus = (
       return "consistent";
     default:
       consensus satisfies never;
-      return "consistent";
+      return panic(`Unhandled consensus: ${String(consensus)}`);
   }
 };
 

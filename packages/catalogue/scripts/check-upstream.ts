@@ -16,7 +16,7 @@
  *
  * Set GITHUB_TOKEN to raise the API rate limit (Authorization header).
  */
-import { TaggedError } from "better-result";
+import { panic, TaggedError } from "better-result";
 
 import { isGithubSkillEntry, loadCatalogue } from "../src/loader";
 
@@ -284,6 +284,7 @@ export const runUpstreamCheck = async (): Promise<UpstreamCheckResult> => {
           break;
         default:
           state satisfies never;
+          panic(`Unhandled state: ${String(state)}`);
       }
     } catch (error) {
       failures.push({

@@ -2547,6 +2547,7 @@ const attachActiveFileFallbackWhenExtractionIsEmpty = async ({
         break;
       default:
         activeFileFallback satisfies never;
+        panic(`Unhandled active file fallback: ${String(activeFileFallback)}`);
     }
 
     nextMessages[latestUserIndex] = {

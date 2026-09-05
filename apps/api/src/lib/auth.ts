@@ -1084,7 +1084,9 @@ const createAuth = () => {
                   return;
                 default:
                   newAccountOtpAction satisfies never;
-                  return;
+                  panic(
+                    `Unhandled new account otp action: ${String(newAccountOtpAction)}`,
+                  );
               }
 
               if (env.isDev) {
