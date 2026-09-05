@@ -393,7 +393,7 @@ describe("handleMcpHttpRequest", () => {
                 { type: "text", text: "Choose a file in the upload panel." },
               ],
               structuredContent: {
-                entityId: "entity_1",
+                entityId: "00000000-0000-4000-8000-0000000e0001",
                 workspaceId: "workspace_1",
               },
             },
@@ -433,7 +433,7 @@ describe("handleMcpHttpRequest", () => {
         {
           name: "upload_document_version",
           arguments: {
-            entity_id: "entity_1",
+            entity_id: "00000000-0000-4000-8000-0000000e0001",
             file: {
               download_url: "https://files.example/agreement.docx",
               file_id: "file_1",
@@ -451,12 +451,12 @@ describe("handleMcpHttpRequest", () => {
       const opened = await client.callTool(
         {
           name: "open_document_version_upload",
-          arguments: { entity_id: "entity_1" },
+          arguments: { entity_id: "00000000-0000-4000-8000-0000000e0001" },
         },
         { timeout: 2000 },
       );
       expect(opened.structuredContent).toEqual({
-        entityId: "entity_1",
+        entityId: "00000000-0000-4000-8000-0000000e0001",
         workspaceId: "workspace_1",
       });
       expect(authenticateMcpRequestMock).toHaveBeenCalledWith("token", {
@@ -471,7 +471,7 @@ describe("handleMcpHttpRequest", () => {
         [
           {
             args: {
-              entity_id: "entity_1",
+              entity_id: "00000000-0000-4000-8000-0000000e0001",
               file: {
                 download_url: "https://files.example/agreement.docx",
                 file_id: "file_1",
@@ -487,7 +487,7 @@ describe("handleMcpHttpRequest", () => {
         ],
         [
           {
-            args: { entity_id: "entity_1" },
+            args: { entity_id: "00000000-0000-4000-8000-0000000e0001" },
             context,
             mode: "documents",
             toolName: "open_document_version_upload",

@@ -353,7 +353,7 @@ describe("MCP anonymization canary corpus", () => {
     searchProviderSearchMock.mockResolvedValue({
       hits: [
         {
-          entityId: "entity_1",
+          entityId: "00000000-0000-4000-8000-0000000e0001",
           workspaceId: "ws_1",
           title: titleSeed,
         },
@@ -364,7 +364,11 @@ describe("MCP anonymization canary corpus", () => {
     const tx = {
       select: () =>
         chainableJoinRows([
-          { entityId: "entity_1", workspaceId: "ws_1", fieldId: "field_1" },
+          {
+            entityId: "00000000-0000-4000-8000-0000000e0001",
+            workspaceId: "ws_1",
+            fieldId: "field_1",
+          },
         ]),
     };
     const context = buildContext({ tx });
@@ -401,7 +405,7 @@ describe("MCP anonymization canary corpus", () => {
     const context = buildContext({ tx });
 
     const response = await COMPAT_TOOL_HANDLERS.fetch({
-      args: { id: "entity_1" },
+      args: { id: "00000000-0000-4000-8000-0000000e0001" },
       context,
     });
     const result = await finalize(context, response);
@@ -485,7 +489,7 @@ describe("MCP anonymization canary corpus", () => {
         taskCount: 0,
         recentEntities: [
           {
-            entityId: "entity_1",
+            entityId: "00000000-0000-4000-8000-0000000e0001",
             name: recentNameSeed,
             kind: "document",
             status: null,
@@ -564,7 +568,7 @@ describe("MCP anonymization canary corpus", () => {
       searchProviderSearchMock.mockResolvedValue({
         hits: [
           {
-            entityId: "entity_1",
+            entityId: "00000000-0000-4000-8000-0000000e0001",
             workspaceId: "ws_1",
             title: nameSeed,
             headline: headlineSeed,
@@ -646,7 +650,7 @@ describe("MCP anonymization canary corpus", () => {
       const context = buildContext({ tx });
 
       const response = await STELLA_TOOL_HANDLERS.read_content_across_matters({
-        args: { entity_id: "entity_1" },
+        args: { entity_id: "00000000-0000-4000-8000-0000000e0001" },
         context,
       });
       const result = await finalize(context, response);
@@ -802,7 +806,10 @@ describe("MCP anonymization canary corpus", () => {
       const context = buildContext({ tx });
 
       const response = await DOCUMENT_TOOL_HANDLERS.read_document({
-        args: { entity_id: "entity_1", include_versions: true },
+        args: {
+          entity_id: "00000000-0000-4000-8000-0000000e0001",
+          include_versions: true,
+        },
         context,
       });
       const result = await finalize(context, response);
@@ -859,7 +866,10 @@ describe("MCP anonymization canary corpus", () => {
       const context = buildContext({ tx });
 
       const response = await DOCUMENT_TOOL_HANDLERS.read_document({
-        args: { entity_id: "entity_1", version_id: "ver_1" },
+        args: {
+          entity_id: "00000000-0000-4000-8000-0000000e0001",
+          version_id: "ver_1",
+        },
         context,
       });
       const result = await finalize(context, response);
@@ -882,7 +892,7 @@ describe("MCP anonymization canary corpus", () => {
       const diffSeed = mkSeed(tool, 5);
       const diffSegment = { kind: "unchanged" as const, text: diffSeed };
       const payload = {
-        entityId: "entity_1",
+        entityId: "00000000-0000-4000-8000-0000000e0001",
         name: "Doc",
         diff: {
           baseVersionId: "ver_a",
@@ -1151,7 +1161,7 @@ describe("MCP anonymization canary corpus", () => {
           entryRows: [
             {
               id: "te_1",
-              entityId: "entity_1",
+              entityId: "00000000-0000-4000-8000-0000000e0001",
               userId: "user_2",
               dateWorked: "2026-01-01",
               durationMinutes: 60,
@@ -1198,7 +1208,7 @@ describe("MCP anonymization canary corpus", () => {
           entryRows: [
             {
               id: "te_2",
-              entityId: "entity_1",
+              entityId: "00000000-0000-4000-8000-0000000e0001",
               userId: "user_3",
               dateWorked: "2026-01-01",
               durationMinutes: 30,
@@ -1295,7 +1305,7 @@ describe("MCP anonymization canary corpus", () => {
               timeEntries: [
                 {
                   id: "te_1",
-                  workItemId: "entity_1",
+                  workItemId: "00000000-0000-4000-8000-0000000e0001",
                   dateWorked: "2026-01-01",
                   billedMinutes: 60,
                   rateAtEntry: 100,
@@ -1303,7 +1313,10 @@ describe("MCP anonymization canary corpus", () => {
                   narrative: teNarrativeSeed,
                   invoiceNarrative: teInvoiceNarrativeSeed,
                   status: "invoiced",
-                  workItem: { id: "entity_1", name: teEntityNameSeed },
+                  workItem: {
+                    id: "00000000-0000-4000-8000-0000000e0001",
+                    name: teEntityNameSeed,
+                  },
                 },
               ],
               expenses: [

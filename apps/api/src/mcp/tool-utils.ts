@@ -57,6 +57,14 @@ export const DEFAULT_COMPAT_SEARCH_LIMIT =
   LIMITS.mcpCompatSearchPageSizeDefault;
 export const ISO_DATE_SCHEMA = v.pipe(v.string(), v.isoDate());
 
+/**
+ * A UUID-shaped id input. Ids reach SQL as uuid columns, so a malformed one
+ * must fail here as a validation error naming the field rather than as a
+ * database cast failure reported as an internal error.
+ */
+export const uuidInputSchema = (description: string) =>
+  v.pipe(v.string(), v.uuid(), v.description(description));
+
 type LocalToolExecutionOptions = {
   messages: [];
   toolCallId: string;

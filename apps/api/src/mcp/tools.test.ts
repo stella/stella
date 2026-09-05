@@ -448,7 +448,7 @@ const DEFAULT_EXTRACTED_CONTENT = await encryptContent(
 const createExtractedContentRow = ({
   charCount = 321,
   encrypted = DEFAULT_EXTRACTED_CONTENT,
-  entityId = "entity_1",
+  entityId = "00000000-0000-4000-8000-0000000e0001",
   name = "Share Purchase Agreement",
   workspaceId = "ws_1",
   sourceEntityVersionId = null,
@@ -982,12 +982,12 @@ describe("OpenAI-compatible MCP tools", () => {
     searchAcrossMattersExecute.mockResolvedValue({
       hits: [
         {
-          entityId: "entity_1",
+          entityId: "00000000-0000-4000-8000-0000000e0001",
           workspaceId: "ws_1",
           name: "Share Purchase Agreement",
         },
         {
-          entityId: "entity_2",
+          entityId: "00000000-0000-4000-8000-0000000e0002",
           workspaceId: "ws_2",
           name: "Not Fetchable",
         },
@@ -999,7 +999,7 @@ describe("OpenAI-compatible MCP tools", () => {
       context: createContext({
         scopedDb: createScopedDb([
           {
-            entityId: "entity_1",
+            entityId: "00000000-0000-4000-8000-0000000e0001",
             fieldId: "field_1",
             workspaceId: "ws_1",
           },
@@ -1023,9 +1023,9 @@ describe("OpenAI-compatible MCP tools", () => {
       nextCursor: null,
       results: [
         {
-          id: "entity_1",
+          id: "00000000-0000-4000-8000-0000000e0001",
           title: "Share Purchase Agreement",
-          url: `${APP_BASE_URL}/workspaces/ws_1/all/pdf?entity=entity_1&field=field_1`,
+          url: `${APP_BASE_URL}/workspaces/ws_1/all/pdf?entity=00000000-0000-4000-8000-0000000e0001&field=field_1`,
         },
       ],
     });
@@ -1039,16 +1039,16 @@ describe("OpenAI-compatible MCP tools", () => {
       ),
     });
     const result = await handleMcpToolCall({
-      args: { id: "entity_1" },
+      args: { id: "00000000-0000-4000-8000-0000000e0001" },
       context,
       toolName: "fetch",
     });
 
     expect(parseToolPayload(result)).toEqual({
-      id: "entity_1",
+      id: "00000000-0000-4000-8000-0000000e0001",
       title: "Share Purchase Agreement",
       text: "Full document text",
-      url: `${APP_BASE_URL}/workspaces/ws_1/all/pdf?entity=entity_1&field=field_1`,
+      url: `${APP_BASE_URL}/workspaces/ws_1/all/pdf?entity=00000000-0000-4000-8000-0000000e0001&field=field_1`,
       nextCursor: null,
       metadata: {
         charCount: "Full document text".length,
@@ -1077,7 +1077,7 @@ describe("OpenAI-compatible MCP tools", () => {
     }>(
       parseToolPayload(
         await handleMcpToolCall({
-          args: { id: "entity_1" },
+          args: { id: "00000000-0000-4000-8000-0000000e0001" },
           context,
           toolName: "fetch",
         }),
@@ -1095,7 +1095,10 @@ describe("OpenAI-compatible MCP tools", () => {
     }>(
       parseToolPayload(
         await handleMcpToolCall({
-          args: { id: "entity_1", cursor: first.nextCursor },
+          args: {
+            id: "00000000-0000-4000-8000-0000000e0001",
+            cursor: first.nextCursor,
+          },
           context,
           toolName: "fetch",
         }),
@@ -1667,7 +1670,7 @@ describe("OpenAI-compatible MCP tools", () => {
 
   test("fetch rejects documents outside the MCP workspace allowlist", async () => {
     const result = await handleMcpToolCall({
-      args: { id: "entity_1" },
+      args: { id: "00000000-0000-4000-8000-0000000e0001" },
       context: createContext({
         accessibleWorkspaceIds: ["ws_1"],
         scopedDb: createScopedDb(
@@ -1730,14 +1733,14 @@ describe("OpenAI-compatible MCP tools", () => {
       scopedDb: createScopedDb([], createExtractedContentRow()),
     });
     const result = await handleMcpToolCall({
-      args: { entity_id: "entity_1" },
+      args: { entity_id: "00000000-0000-4000-8000-0000000e0001" },
       context,
       toolName: "read_content_across_matters",
     });
 
     expect(parseToolPayload(result)).toEqual({
       charCount: "Full document text".length,
-      entityId: "entity_1",
+      entityId: "00000000-0000-4000-8000-0000000e0001",
       kind: "document",
       name: "Share Purchase Agreement",
       text: "Full document text",
@@ -1761,14 +1764,14 @@ describe("OpenAI-compatible MCP tools", () => {
       ]),
     });
     const result = await handleMcpToolCall({
-      args: { entity_id: "entity_1" },
+      args: { entity_id: "00000000-0000-4000-8000-0000000e0001" },
       context,
       toolName: "read_content_across_matters",
     });
 
     const payload = parseToolPayload(result);
     expect(payload).toMatchObject({
-      entityId: "entity_1",
+      entityId: "00000000-0000-4000-8000-0000000e0001",
       kind: "document",
       name: "Share Purchase Agreement",
       workspaceId: "ws_1",
@@ -1805,7 +1808,7 @@ describe("OpenAI-compatible MCP tools", () => {
           },
         ],
         {
-          entityId: "entity_1",
+          entityId: "00000000-0000-4000-8000-0000000e0001",
           kind: "document",
           name: "Fresh Agreement",
           workspaceId: "ws_1",
@@ -1814,13 +1817,13 @@ describe("OpenAI-compatible MCP tools", () => {
     });
 
     const result = await handleMcpToolCall({
-      args: { entity_id: "entity_1" },
+      args: { entity_id: "00000000-0000-4000-8000-0000000e0001" },
       context,
       toolName: "read_content_across_matters",
     });
 
     expect(parseToolPayload(result)).toMatchObject({
-      entityId: "entity_1",
+      entityId: "00000000-0000-4000-8000-0000000e0001",
       name: "Fresh Agreement",
       text: expect.stringContaining("# Agreement"),
     });
@@ -1847,7 +1850,7 @@ describe("OpenAI-compatible MCP tools", () => {
     });
 
     const result = await handleMcpToolCall({
-      args: { entity_id: "entity_1" },
+      args: { entity_id: "00000000-0000-4000-8000-0000000e0001" },
       context,
       toolName: "read_content_across_matters",
     });
@@ -1881,7 +1884,7 @@ describe("OpenAI-compatible MCP tools", () => {
     });
 
     const result = await handleMcpToolCall({
-      args: { entity_id: "entity_1" },
+      args: { entity_id: "00000000-0000-4000-8000-0000000e0001" },
       context,
       toolName: "read_content_across_matters",
     });
@@ -1923,7 +1926,7 @@ describe("OpenAI-compatible MCP tools", () => {
     });
 
     const result = await handleMcpToolCall({
-      args: { entity_id: "entity_1" },
+      args: { entity_id: "00000000-0000-4000-8000-0000000e0001" },
       context,
       toolName: "read_content_across_matters",
     });
@@ -1952,7 +1955,7 @@ describe("OpenAI-compatible MCP tools", () => {
           },
         ],
         {
-          entityId: "entity_1",
+          entityId: "00000000-0000-4000-8000-0000000e0001",
           kind: "document",
           name: "Promoted Version",
           workspaceId: "ws_1",
@@ -1962,7 +1965,7 @@ describe("OpenAI-compatible MCP tools", () => {
     });
 
     const result = await handleMcpToolCall({
-      args: { entity_id: "entity_1" },
+      args: { entity_id: "00000000-0000-4000-8000-0000000e0001" },
       context,
       toolName: "read_content_across_matters",
     });
@@ -2010,7 +2013,7 @@ describe("OpenAI-compatible MCP tools", () => {
       ),
     });
     const result = await handleMcpToolCall({
-      args: { entity_id: "entity_1" },
+      args: { entity_id: "00000000-0000-4000-8000-0000000e0001" },
       context,
       toolName: "read_content_across_matters",
     });
@@ -2058,7 +2061,7 @@ describe("OpenAI-compatible MCP tools", () => {
     });
 
     const result = await handleMcpToolCall({
-      args: { entity_id: "entity_1" },
+      args: { entity_id: "00000000-0000-4000-8000-0000000e0001" },
       context,
       toolName: "read_content_across_matters",
     });
@@ -2086,7 +2089,7 @@ describe("OpenAI-compatible MCP tools", () => {
       ]),
     });
     const result = await handleMcpToolCall({
-      args: { entity_id: "entity_1" },
+      args: { entity_id: "00000000-0000-4000-8000-0000000e0001" },
       context,
       toolName: "read_content_across_matters",
     });
@@ -2118,7 +2121,10 @@ describe("OpenAI-compatible MCP tools", () => {
     // than the Markdown the cursor was computed against (skipped/duplicated
     // content).
     const result = await handleMcpToolCall({
-      args: { entity_id: "entity_1", cursor: encodePaginationCursor([5]) },
+      args: {
+        entity_id: "00000000-0000-4000-8000-0000000e0001",
+        cursor: encodePaginationCursor([5]),
+      },
       context,
       toolName: "read_content_across_matters",
     });
@@ -2157,7 +2163,7 @@ describe("OpenAI-compatible MCP tools", () => {
     // still falls back to the cached plaintext rather than hanging or
     // erroring the whole request.
     const result = await handleMcpToolCall({
-      args: { entity_id: "entity_1" },
+      args: { entity_id: "00000000-0000-4000-8000-0000000e0001" },
       context,
       toolName: "read_content_across_matters",
     });
@@ -2175,7 +2181,7 @@ describe("OpenAI-compatible MCP tools", () => {
     searchAcrossMattersExecute.mockResolvedValue({
       hits: [
         {
-          entityId: "entity_1",
+          entityId: "00000000-0000-4000-8000-0000000e0001",
           workspaceId: "ws_1",
           name: "John Smith SPA",
         },
@@ -2191,7 +2197,7 @@ describe("OpenAI-compatible MCP tools", () => {
       context: createContext({
         scopedDb: createScopedDb([
           {
-            entityId: "entity_1",
+            entityId: "00000000-0000-4000-8000-0000000e0001",
             fieldId: "field_1",
             workspaceId: "ws_1",
           },
@@ -2205,9 +2211,9 @@ describe("OpenAI-compatible MCP tools", () => {
       nextCursor: null,
       results: [
         {
-          id: "entity_1",
+          id: "00000000-0000-4000-8000-0000000e0001",
           title: "[PERSON_1] SPA",
-          url: `${APP_BASE_URL}/workspaces/ws_1/all/pdf?entity=entity_1&field=field_1`,
+          url: `${APP_BASE_URL}/workspaces/ws_1/all/pdf?entity=00000000-0000-4000-8000-0000000e0001&field=field_1`,
         },
       ],
     });
@@ -2228,12 +2234,12 @@ describe("OpenAI-compatible MCP tools", () => {
     searchAcrossMattersExecute.mockResolvedValue({
       hits: [
         {
-          entityId: "entity_1",
+          entityId: "00000000-0000-4000-8000-0000000e0001",
           workspaceId: "ws_1",
           name: "John Smith SPA",
         },
         {
-          entityId: "entity_2",
+          entityId: "00000000-0000-4000-8000-0000000e0002",
           workspaceId: "ws_1",
           name: "Jane Doe NDA",
         },
@@ -2249,12 +2255,12 @@ describe("OpenAI-compatible MCP tools", () => {
       context: createContext({
         scopedDb: createScopedDb([
           {
-            entityId: "entity_1",
+            entityId: "00000000-0000-4000-8000-0000000e0001",
             fieldId: "field_1",
             workspaceId: "ws_1",
           },
           {
-            entityId: "entity_2",
+            entityId: "00000000-0000-4000-8000-0000000e0002",
             fieldId: "field_2",
             workspaceId: "ws_1",
           },
@@ -2268,14 +2274,14 @@ describe("OpenAI-compatible MCP tools", () => {
       nextCursor: null,
       results: [
         {
-          id: "entity_1",
+          id: "00000000-0000-4000-8000-0000000e0001",
           title: "[PERSON_1] SPA",
-          url: `${APP_BASE_URL}/workspaces/ws_1/all/pdf?entity=entity_1&field=field_1`,
+          url: `${APP_BASE_URL}/workspaces/ws_1/all/pdf?entity=00000000-0000-4000-8000-0000000e0001&field=field_1`,
         },
         {
-          id: "entity_2",
+          id: "00000000-0000-4000-8000-0000000e0002",
           title: "[PERSON_2] NDA",
-          url: `${APP_BASE_URL}/workspaces/ws_1/all/pdf?entity=entity_2&field=field_2`,
+          url: `${APP_BASE_URL}/workspaces/ws_1/all/pdf?entity=00000000-0000-4000-8000-0000000e0002&field=field_2`,
         },
       ],
     });
@@ -2290,7 +2296,7 @@ describe("OpenAI-compatible MCP tools", () => {
     searchAcrossMattersExecute.mockResolvedValue({
       hits: [
         {
-          entityId: "entity_1",
+          entityId: "00000000-0000-4000-8000-0000000e0001",
           workspaceId: "ws_1",
           name: "John Smith",
         },
@@ -2306,7 +2312,7 @@ describe("OpenAI-compatible MCP tools", () => {
       context: createContext({
         scopedDb: createScopedDb([
           {
-            entityId: "entity_1",
+            entityId: "00000000-0000-4000-8000-0000000e0001",
             fieldId: "field_1",
             workspaceId: "ws_1",
           },
@@ -2320,9 +2326,9 @@ describe("OpenAI-compatible MCP tools", () => {
       nextCursor: null,
       results: [
         {
-          id: "entity_1",
+          id: "00000000-0000-4000-8000-0000000e0001",
           title: "",
-          url: `${APP_BASE_URL}/workspaces/ws_1/all/pdf?entity=entity_1&field=field_1`,
+          url: `${APP_BASE_URL}/workspaces/ws_1/all/pdf?entity=00000000-0000-4000-8000-0000000e0001&field=field_1`,
         },
       ],
     });
@@ -2332,7 +2338,7 @@ describe("OpenAI-compatible MCP tools", () => {
     searchAcrossMattersExecute.mockResolvedValue({
       hits: [
         {
-          entityId: "entity_1",
+          entityId: "00000000-0000-4000-8000-0000000e0001",
           workspaceId: "ws_1",
           name: "John Smith",
         },
@@ -2348,7 +2354,7 @@ describe("OpenAI-compatible MCP tools", () => {
       context: createContext({
         scopedDb: createScopedDb([
           {
-            entityId: "entity_1",
+            entityId: "00000000-0000-4000-8000-0000000e0001",
             fieldId: "field_1",
             workspaceId: "ws_1",
           },
@@ -2362,9 +2368,9 @@ describe("OpenAI-compatible MCP tools", () => {
       nextCursor: null,
       results: [
         {
-          id: "entity_1",
+          id: "00000000-0000-4000-8000-0000000e0001",
           title: "[REDACTED]",
-          url: `${APP_BASE_URL}/workspaces/ws_1/all/pdf?entity=entity_1&field=field_1`,
+          url: `${APP_BASE_URL}/workspaces/ws_1/all/pdf?entity=00000000-0000-4000-8000-0000000e0001&field=field_1`,
         },
       ],
     });
@@ -2377,7 +2383,7 @@ describe("OpenAI-compatible MCP tools", () => {
     });
 
     const result = await handleMcpToolCall({
-      args: { id: "entity_1" },
+      args: { id: "00000000-0000-4000-8000-0000000e0001" },
       context: createContext({
         scopedDb: createScopedDb(
           [],
@@ -2395,10 +2401,10 @@ describe("OpenAI-compatible MCP tools", () => {
     });
 
     expect(parseToolPayload(result)).toEqual({
-      id: "entity_1",
+      id: "00000000-0000-4000-8000-0000000e0001",
       title: "[PERSON_1] SPA",
       text: "[PERSON_1] signed the agreement",
-      url: `${APP_BASE_URL}/workspaces/ws_1/all/pdf?entity=entity_1&field=field_1`,
+      url: `${APP_BASE_URL}/workspaces/ws_1/all/pdf?entity=00000000-0000-4000-8000-0000000e0001&field=field_1`,
       nextCursor: null,
       metadata: {
         anonymized: true,
@@ -2418,7 +2424,7 @@ describe("OpenAI-compatible MCP tools", () => {
     });
 
     const result = await handleMcpToolCall({
-      args: { id: "entity_1" },
+      args: { id: "00000000-0000-4000-8000-0000000e0001" },
       context: createContext({
         scopedDb: createScopedDb(
           [],
@@ -2434,10 +2440,10 @@ describe("OpenAI-compatible MCP tools", () => {
     });
 
     expect(parseToolPayload(result)).toEqual({
-      id: "entity_1",
+      id: "00000000-0000-4000-8000-0000000e0001",
       title: "",
       text: "",
-      url: `${APP_BASE_URL}/workspaces/ws_1/all/pdf?entity=entity_1&field=field_1`,
+      url: `${APP_BASE_URL}/workspaces/ws_1/all/pdf?entity=00000000-0000-4000-8000-0000000e0001&field=field_1`,
       nextCursor: null,
       metadata: {
         anonymized: true,
@@ -2457,7 +2463,7 @@ describe("OpenAI-compatible MCP tools", () => {
     });
 
     const result = await handleMcpToolCall({
-      args: { id: "entity_1" },
+      args: { id: "00000000-0000-4000-8000-0000000e0001" },
       context: createContext({
         scopedDb: createScopedDb(
           [],
@@ -2473,10 +2479,10 @@ describe("OpenAI-compatible MCP tools", () => {
     });
 
     expect(parseToolPayload(result)).toEqual({
-      id: "entity_1",
+      id: "00000000-0000-4000-8000-0000000e0001",
       title: "[REDACTED]",
       text: "[REDACTED]",
-      url: `${APP_BASE_URL}/workspaces/ws_1/all/pdf?entity=entity_1&field=field_1`,
+      url: `${APP_BASE_URL}/workspaces/ws_1/all/pdf?entity=00000000-0000-4000-8000-0000000e0001&field=field_1`,
       nextCursor: null,
       metadata: {
         anonymized: true,
@@ -2551,7 +2557,7 @@ describe("OpenAI-compatible MCP tools", () => {
 
   test("read_document rejects an entity that is not a document or folder", async () => {
     const result = await handleMcpToolCall({
-      args: { entity_id: "entity_task" },
+      args: { entity_id: "00000000-0000-4000-8000-0000000e7a5c" },
       context: createContext({ scopedDb: createEntityKindScopedDb("task") }),
       toolName: "read_document",
     });
@@ -2564,7 +2570,10 @@ describe("OpenAI-compatible MCP tools", () => {
 
   test("save_document (update branch) rejects an entity that is not a document or folder", async () => {
     const result = await handleMcpToolCall({
-      args: { entity_id: "entity_message", name: "Renamed" },
+      args: {
+        entity_id: "00000000-0000-4000-8000-0000000e0e5a",
+        name: "Renamed",
+      },
       context: createContext({ scopedDb: createEntityKindScopedDb("message") }),
       toolName: "save_document",
     });
@@ -2607,7 +2616,10 @@ describe("OpenAI-compatible MCP tools", () => {
 
   test("read_document rejects compare_with_version_id without version_id", async () => {
     const result = await handleMcpToolCall({
-      args: { entity_id: "entity_1", compare_with_version_id: "ver_base" },
+      args: {
+        entity_id: "00000000-0000-4000-8000-0000000e0001",
+        compare_with_version_id: "ver_base",
+      },
       context: createContext(),
       toolName: "read_document",
     });
@@ -2631,10 +2643,10 @@ describe("OpenAI-compatible MCP tools", () => {
       version: 1,
     };
     const result = await handleMcpToolCall({
-      args: { entity_id: "entity_1" },
+      args: { entity_id: "00000000-0000-4000-8000-0000000e0001" },
       context: createContext({
         scopedDb: createScopedDb([], null, [currentDocx], {
-          entityId: "entity_1",
+          entityId: "00000000-0000-4000-8000-0000000e0001",
           kind: "document",
           name: "Fresh Agreement",
           workspaceId: "ws_1",
@@ -2670,14 +2682,14 @@ describe("OpenAI-compatible MCP tools", () => {
       version: 1,
     };
     const result = await handleMcpToolCall({
-      args: { entity_id: "entity_1" },
+      args: { entity_id: "00000000-0000-4000-8000-0000000e0001" },
       context: createContext({
         scopedDb: createScopedDb(
           [],
           null,
           [currentDocx],
           {
-            entityId: "entity_1",
+            entityId: "00000000-0000-4000-8000-0000000e0001",
             kind: "document",
             name: "Corrupt Agreement",
             workspaceId: "ws_1",
@@ -2725,7 +2737,7 @@ describe("OpenAI-compatible MCP tools", () => {
       version: 1,
     };
     const result = await handleMcpToolCall({
-      args: { entity_id: "entity_1" },
+      args: { entity_id: "00000000-0000-4000-8000-0000000e0001" },
       context: {
         ...createContext({
           scopedDb: createScopedDb([], textlessProjection, [currentPdf]),
@@ -2746,7 +2758,10 @@ describe("OpenAI-compatible MCP tools", () => {
           arguments: {
             capability: "entities.ocr.create",
             input: {
-              params: { workspaceId: "ws_1", entityId: "entity_1" },
+              params: {
+                workspaceId: "ws_1",
+                entityId: "00000000-0000-4000-8000-0000000e0001",
+              },
               body: { fieldId: "field_1" },
             },
           },
@@ -2758,7 +2773,7 @@ describe("OpenAI-compatible MCP tools", () => {
   test("read_document derives state and remediation from the persisted non-first source", async () => {
     const sourceSha256Hex = "b".repeat(64);
     const result = await handleMcpToolCall({
-      args: { entity_id: "entity_1" },
+      args: { entity_id: "00000000-0000-4000-8000-0000000e0001" },
       context: {
         ...createContext({
           scopedDb: createScopedDb(
@@ -2845,7 +2860,7 @@ describe("OpenAI-compatible MCP tools", () => {
         scopedDb: createScopedDb([], textlessProjection, [currentPdf]),
       });
       const result = await handleMcpToolCall({
-        args: { entity_id: "entity_1" },
+        args: { entity_id: "00000000-0000-4000-8000-0000000e0001" },
         context: {
           ...context,
           grantedScopes,
@@ -2871,7 +2886,7 @@ describe("OpenAI-compatible MCP tools", () => {
 
   test("read_document returns an OCR escalation to internal chat", async () => {
     const result = await handleMcpToolCall({
-      args: { entity_id: "entity_1" },
+      args: { entity_id: "00000000-0000-4000-8000-0000000e0001" },
       context: createContext({
         scopedDb: createScopedDb(
           [],
@@ -2916,7 +2931,7 @@ describe("OpenAI-compatible MCP tools", () => {
       version: 1,
     };
     const result = await handleMcpToolCall({
-      args: { entity_id: "entity_1" },
+      args: { entity_id: "00000000-0000-4000-8000-0000000e0001" },
       context: {
         ...createContext({
           scopedDb: createScopedDb(
@@ -2924,7 +2939,7 @@ describe("OpenAI-compatible MCP tools", () => {
             createExtractedContentRow(),
             [currentPdf],
             {
-              entityId: "entity_1",
+              entityId: "00000000-0000-4000-8000-0000000e0001",
               kind: "document",
               name: "Scan",
               workspaceId: "ws_1",
@@ -2963,7 +2978,7 @@ describe("OpenAI-compatible MCP tools", () => {
   test("read_document treats workspace-unavailable OCR cancellation as terminal", async () => {
     const sha256Hex = "a".repeat(64);
     const result = await handleMcpToolCall({
-      args: { entity_id: "entity_1" },
+      args: { entity_id: "00000000-0000-4000-8000-0000000e0001" },
       context: createContext({
         scopedDb: createScopedDb(
           [],
@@ -3025,14 +3040,14 @@ describe("OpenAI-compatible MCP tools", () => {
       version: 1,
     };
     const result = await handleMcpToolCall({
-      args: { entity_id: "entity_1" },
+      args: { entity_id: "00000000-0000-4000-8000-0000000e0001" },
       context: createContext({
         scopedDb: createScopedDb(
           [],
           createExtractedContentRow(),
           [currentPdf],
           {
-            entityId: "entity_1",
+            entityId: "00000000-0000-4000-8000-0000000e0001",
             kind: "document",
             name: "Scan",
             workspaceId: "ws_1",
@@ -3089,7 +3104,7 @@ describe("OpenAI-compatible MCP tools", () => {
       version: 1,
     };
     const result = await handleMcpToolCall({
-      args: { entity_id: "entity_1" },
+      args: { entity_id: "00000000-0000-4000-8000-0000000e0001" },
       context: {
         ...createContext({
           scopedDb: createScopedDb(
@@ -3097,7 +3112,7 @@ describe("OpenAI-compatible MCP tools", () => {
             createExtractedContentRow({ charCount: 0 }),
             [currentPdf],
             {
-              entityId: "entity_1",
+              entityId: "00000000-0000-4000-8000-0000000e0001",
               kind: "document",
               name: "Scan",
               workspaceId: "ws_1",
@@ -3170,14 +3185,14 @@ describe("OpenAI-compatible MCP tools", () => {
     }));
     const indexedAt = new Date("2026-01-03T00:00:00.000Z");
     const result = await handleMcpToolCall({
-      args: { entity_id: "entity_1" },
+      args: { entity_id: "00000000-0000-4000-8000-0000000e0001" },
       context: createContext({
         scopedDb: createScopedDb(
           [],
           createExtractedContentRow(),
           [currentPdf],
           {
-            entityId: "entity_1",
+            entityId: "00000000-0000-4000-8000-0000000e0001",
             kind: "document",
             name: "Current PDF",
             workspaceId: "ws_1",
@@ -3235,14 +3250,14 @@ describe("OpenAI-compatible MCP tools", () => {
       version: 1,
     };
     const result = await handleMcpToolCall({
-      args: { entity_id: "entity_1" },
+      args: { entity_id: "00000000-0000-4000-8000-0000000e0001" },
       context: createContext({
         scopedDb: createScopedDb(
           [],
           createExtractedContentRow(),
           [currentPdf],
           {
-            entityId: "entity_1",
+            entityId: "00000000-0000-4000-8000-0000000e0001",
             kind: "document",
             name: "Current PDF",
             workspaceId: "ws_1",
@@ -3298,14 +3313,14 @@ describe("OpenAI-compatible MCP tools", () => {
       version: 1,
     };
     const result = await handleMcpToolCall({
-      args: { entity_id: "entity_1" },
+      args: { entity_id: "00000000-0000-4000-8000-0000000e0001" },
       context: createContext({
         scopedDb: createScopedDb(
           [],
           createExtractedContentRow(),
           [currentPdf],
           {
-            entityId: "entity_1",
+            entityId: "00000000-0000-4000-8000-0000000e0001",
             kind: "document",
             name: "Searchable PDF",
             workspaceId: "ws_1",
@@ -3353,14 +3368,14 @@ describe("OpenAI-compatible MCP tools", () => {
       version: 1,
     };
     const result = await handleMcpToolCall({
-      args: { entity_id: "entity_1" },
+      args: { entity_id: "00000000-0000-4000-8000-0000000e0001" },
       context: createContext({
         scopedDb: createScopedDb(
           [],
           null,
           [unsupportedFile],
           {
-            entityId: "entity_1",
+            entityId: "00000000-0000-4000-8000-0000000e0001",
             kind: "document",
             name: "Binary payload",
             workspaceId: "ws_1",
@@ -3426,7 +3441,7 @@ describe("OpenAI-compatible MCP tools", () => {
   test("set_field_value explains the primary-file upload boundary", async () => {
     const result = await handleMcpToolCall({
       args: {
-        entity_id: "entity_1",
+        entity_id: "00000000-0000-4000-8000-0000000e0001",
         property_id: "property_file",
         content: { type: "file", value: "not-supported" },
       },
@@ -3450,7 +3465,7 @@ describe("OpenAI-compatible MCP tools", () => {
 
   test("save_document (update branch) rejects an empty update", async () => {
     const result = await handleMcpToolCall({
-      args: { entity_id: "entity_1" },
+      args: { entity_id: "00000000-0000-4000-8000-0000000e0001" },
       context: createContext(),
       toolName: "save_document",
     });
@@ -3464,7 +3479,7 @@ describe("OpenAI-compatible MCP tools", () => {
   test("save_document (update branch) rejects parent_id together with move_to_root", async () => {
     const result = await handleMcpToolCall({
       args: {
-        entity_id: "entity_1",
+        entity_id: "00000000-0000-4000-8000-0000000e0001",
         move_to_root: true,
         parent_id: "entity_folder",
       },
@@ -3482,7 +3497,11 @@ describe("OpenAI-compatible MCP tools", () => {
     // A rename keeps rule 1 (at least one change) satisfied so the failure
     // isolates the label-requires-version_id rule.
     const result = await handleMcpToolCall({
-      args: { entity_id: "entity_1", name: "Renamed", label: "Signed copy" },
+      args: {
+        entity_id: "00000000-0000-4000-8000-0000000e0001",
+        name: "Renamed",
+        label: "Signed copy",
+      },
       context: createContext(),
       toolName: "save_document",
     });
@@ -3492,7 +3511,11 @@ describe("OpenAI-compatible MCP tools", () => {
 
   test("save_document rejects workspace_id (a create field) alongside entity_id", async () => {
     const result = await handleMcpToolCall({
-      args: { entity_id: "entity_1", workspace_id: "ws_1", name: "Renamed" },
+      args: {
+        entity_id: "00000000-0000-4000-8000-0000000e0001",
+        workspace_id: "ws_1",
+        name: "Renamed",
+      },
       context: createContext(),
       toolName: "save_document",
     });
@@ -3592,7 +3615,10 @@ describe("OpenAI-compatible MCP tools", () => {
     });
 
     const result = await handleMcpToolCall({
-      args: { entity_id: "entity_1", include_versions: true },
+      args: {
+        entity_id: "00000000-0000-4000-8000-0000000e0001",
+        include_versions: true,
+      },
       context: createContext({
         scopedDb: createVersionHistoryScopedDb([
           {
@@ -3887,7 +3913,11 @@ describe("OpenAI-compatible MCP tools", () => {
   // updated a task under the wrong matter. The handler now rejects it.
   test("save_task rejects a task whose workspace_id does not match", async () => {
     const result = await handleMcpToolCall({
-      args: { task_id: "task_1", workspace_id: "ws_2", name: "Renamed" },
+      args: {
+        task_id: "00000000-0000-4000-8000-00000007a001",
+        workspace_id: "ws_2",
+        name: "Renamed",
+      },
       context: createContext({ scopedDb: createTaskKindScopedDb("task") }),
       toolName: "save_task",
     });
@@ -3905,7 +3935,10 @@ describe("OpenAI-compatible MCP tools", () => {
   // detail branch now enforces the same pairing check as save_task.
   test("list_tasks detail rejects a task whose workspace_id does not match", async () => {
     const result = await handleMcpToolCall({
-      args: { task_id: "task_1", workspace_id: "ws_2" },
+      args: {
+        task_id: "00000000-0000-4000-8000-00000007a001",
+        workspace_id: "ws_2",
+      },
       context: createContext({
         accessibleWorkspaceIds: ["ws_1", "ws_2"],
         scopedDb: createTaskKindScopedDb("task"),
@@ -3962,7 +3995,10 @@ describe("OpenAI-compatible MCP tools", () => {
 
   test("save_task rejects an unlink_link_id that belongs to another task", async () => {
     const result = await handleMcpToolCall({
-      args: { task_id: "task_1", unlink_link_id: "link_1" },
+      args: {
+        task_id: "00000000-0000-4000-8000-00000007a001",
+        unlink_link_id: "link_1",
+      },
       context: createContext({ scopedDb: createUnlinkMismatchScopedDb() }),
       toolName: "save_task",
     });
@@ -4028,7 +4064,11 @@ describe("OpenAI-compatible MCP tools", () => {
     }));
 
     const result = await handleMcpToolCall({
-      args: { task_id: "task_1", name: "Renamed", link_entity_id: "task_1" },
+      args: {
+        task_id: "00000000-0000-4000-8000-00000007a001",
+        name: "Renamed",
+        link_entity_id: "00000000-0000-4000-8000-00000007a001",
+      },
       context: createContext({
         scopedDb: createLinkRejectionScopedDb({ updateMock }),
       }),
@@ -4048,7 +4088,11 @@ describe("OpenAI-compatible MCP tools", () => {
     }));
 
     const result = await handleMcpToolCall({
-      args: { task_id: "task_1", name: "Renamed", link_entity_id: "task_2" },
+      args: {
+        task_id: "00000000-0000-4000-8000-00000007a001",
+        name: "Renamed",
+        link_entity_id: "00000000-0000-4000-8000-00000007a002",
+      },
       context: createContext({
         scopedDb: createLinkRejectionScopedDb({
           existingLink: { id: "link_existing" },
@@ -4089,7 +4133,7 @@ describe("OpenAI-compatible MCP tools", () => {
             limit: () => ({
               for: async () => [
                 {
-                  entityId: "task_1",
+                  entityId: "00000000-0000-4000-8000-00000007a001",
                   workspaceId: "ws_1",
                   type: "task",
                   status: WORK_OBLIGATION_STATUS.CANCELLED,
@@ -4112,8 +4156,8 @@ describe("OpenAI-compatible MCP tools", () => {
             where: () => ({
               returning: async () =>
                 table === entities
-                  ? [{ id: "task_1" }]
-                  : [{ entityId: "task_1" }],
+                  ? [{ id: "00000000-0000-4000-8000-00000007a001" }]
+                  : [{ entityId: "00000000-0000-4000-8000-00000007a001" }],
             }),
           };
         },
@@ -4127,7 +4171,7 @@ describe("OpenAI-compatible MCP tools", () => {
     const { scopedDb, workflowUpdates } = createTaskStatusScopedDb();
 
     const result = await handleMcpToolCall({
-      args: { task_id: "task_1", status: "done" },
+      args: { task_id: "00000000-0000-4000-8000-00000007a001", status: "done" },
       context: createContext({ scopedDb }),
       toolName: "save_task",
     });
@@ -4136,10 +4180,16 @@ describe("OpenAI-compatible MCP tools", () => {
       content: [
         {
           type: "text",
-          text: JSON.stringify({ taskId: "task_1", updated: true }),
+          text: JSON.stringify({
+            taskId: "00000000-0000-4000-8000-00000007a001",
+            updated: true,
+          }),
         },
       ],
-      structuredContent: { taskId: "task_1", updated: true },
+      structuredContent: {
+        taskId: "00000000-0000-4000-8000-00000007a001",
+        updated: true,
+      },
     });
     expect(workflowUpdates).toEqual([
       expect.objectContaining({ status: WORK_OBLIGATION_STATUS.COMPLETED }),
@@ -4218,7 +4268,7 @@ describe("OpenAI-compatible MCP tools", () => {
         scopedDb: createSelectListScopedDb([
           {
             createdAt: "2026-01-01T00:00:00.000000",
-            id: "task_1",
+            id: "00000000-0000-4000-8000-00000007a001",
             name: "John Smith deposition",
             status: "open",
             priority: "high",
@@ -4239,7 +4289,7 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(parseToolPayload(result)).toEqual({
       tasks: [
         {
-          id: "task_1",
+          id: "00000000-0000-4000-8000-00000007a001",
           itemType: "task",
           name: "[PERSON_1] deposition",
           status: "open",
@@ -4267,7 +4317,7 @@ describe("OpenAI-compatible MCP tools", () => {
         scopedDb: createSelectListScopedDb([
           {
             id: "te_1",
-            entityId: "entity_1",
+            entityId: "00000000-0000-4000-8000-0000000e0001",
             userId: null,
             dateWorked: "2026-02-01",
             durationMinutes: 60,
@@ -4297,7 +4347,7 @@ describe("OpenAI-compatible MCP tools", () => {
       entries: [
         {
           id: "te_1",
-          entityId: "entity_1",
+          entityId: "00000000-0000-4000-8000-0000000e0001",
           userId: null,
           userName: null,
           dateWorked: "2026-02-01",
@@ -4398,7 +4448,7 @@ describe("OpenAI-compatible MCP tools", () => {
         const result = await handleMcpToolCall({
           args: {
             workspace_id: "ws_1",
-            entity_id: "entity_1",
+            entity_id: "00000000-0000-4000-8000-0000000e0001",
             date_worked: "2026-02-01",
             timezone_id: "Europe/Prague",
             duration_minutes: 60,
@@ -4466,7 +4516,7 @@ describe("OpenAI-compatible MCP tools", () => {
   // human-approved confirmation. The gate runs before any DB access.
   test("delete_document refuses to run without confirm: true", async () => {
     const result = await handleMcpToolCall({
-      args: { entity_id: "entity_1" },
+      args: { entity_id: "00000000-0000-4000-8000-0000000e0001" },
       context: createContext(),
       toolName: "delete_document",
     });
@@ -4484,7 +4534,10 @@ describe("OpenAI-compatible MCP tools", () => {
     // which 404s the unknown entity — proving the gate no longer short-circuits
     // and that the handler tolerates the extra confirm arg.
     const result = await handleMcpToolCall({
-      args: { entity_id: "entity_missing", confirm: true },
+      args: {
+        entity_id: "00000000-0000-4000-8000-0000000e0404",
+        confirm: true,
+      },
       context: createContext(),
       toolName: "delete_document",
     });

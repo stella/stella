@@ -389,7 +389,7 @@ const listTimeEntriesArgsSchema = v.pipe(
     entity_id: v.optional(
       v.pipe(
         v.string(),
-        v.minLength(1),
+        v.uuid(),
         v.description(
           "List only entries logged against this entity (document, folder, " +
             "or task the time is billed to)",
@@ -725,7 +725,7 @@ const saveTimeEntryArgsSchema = v.pipe(
     ),
     entity_id: v.optional(
       v.pipe(
-        v.nullable(v.pipe(v.string(), v.minLength(1))),
+        v.nullable(v.pipe(v.string(), v.uuid())),
         v.description(
           "Optional work item context (document, folder, or task). When " +
             "updating, moves the entry to a different entity in the same " +

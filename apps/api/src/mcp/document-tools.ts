@@ -104,6 +104,7 @@ import {
   structuredErrorResult,
   toolDataResult,
   validationErrorResult,
+  uuidInputSchema,
 } from "@/api/mcp/tool-utils";
 import { defineValibotMcpTool } from "@/api/mcp/valibot-tool-definition";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
@@ -804,11 +805,7 @@ const decodeVersionsPageCursor = (
 
 const readDocumentArgsSchema = v.pipe(
   v.strictObject({
-    entity_id: v.pipe(
-      v.string(),
-      v.minLength(1),
-      v.description("Document entity ID"),
-    ),
+    entity_id: uuidInputSchema("Document entity ID"),
     version_id: v.optional(
       v.pipe(
         v.string(),
@@ -838,7 +835,7 @@ const readDocumentArgsSchema = v.pipe(
         v.string(),
         v.maxLength(512),
         v.description(
-          "Opaque cursor from a previous call to fetch the next page of version history",
+          "Cursor from a previous call for the next page of version history",
         ),
       ),
     ),
@@ -2152,11 +2149,7 @@ const handleOpenDocumentVersionUploadTool: McpToolHandler = async ({
 };
 
 const deleteDocumentArgsSchema = v.strictObject({
-  entity_id: v.pipe(
-    v.string(),
-    v.minLength(1),
-    v.description("Document entity ID to delete"),
-  ),
+  entity_id: uuidInputSchema("Document entity ID to delete"),
   version_id: v.optional(
     v.pipe(
       v.string(),
@@ -2429,11 +2422,7 @@ const setFieldValueContentSchema = v.variant("type", [
 ]);
 
 const setFieldValueArgsSchema = v.strictObject({
-  entity_id: v.pipe(
-    v.string(),
-    v.minLength(1),
-    v.description("Document entity ID whose cell to set"),
-  ),
+  entity_id: uuidInputSchema("Document entity ID whose cell to set"),
   property_id: v.pipe(
     v.string(),
     v.minLength(1),
