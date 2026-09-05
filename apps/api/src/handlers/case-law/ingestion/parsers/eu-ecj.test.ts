@@ -21,6 +21,7 @@
 
 import { Glob } from "bun";
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
+import * as cheerio from "cheerio";
 
 import {
   hasBlockInlines,
@@ -29,6 +30,7 @@ import {
 import type { Block, Inline } from "@/api/handlers/case-law/document-ast";
 import {
   ecjDocumentHtml,
+  ecjDocumentRoot,
   parseEcjDecisionHtml,
 } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj";
 import {
@@ -42,6 +44,8 @@ import {
   PORTAL_DOCUMENT_CONTAINER,
   PORTAL_STEM_SUFFIX,
   type PortalPair,
+  SHELL_STEM,
+  SHELL_STEM_SUFFIX,
   manifestationStem,
   portalStem,
 } from "./__fixtures__/eu-ecj/corpus";
@@ -77,6 +81,14 @@ if (fixtureStems.length === 0) {
     "No eu-ecj parser fixtures found; run scripts/record-eu-ecj-fixtures.ts",
   );
 }
+
+/**
+ * Recordings that hold a decision. A shell recording holds none, so
+ * every completeness and fidelity assertion below would be false of it.
+ */
+const decisionStems = fixtureStems.filter(
+  (stem) => !stem.endsWith(SHELL_STEM_SUFFIX),
+);
 
 /** Replace every link inline with the text it carries. */
 const flattenLinks = (inlines: readonly Inline[]): Inline[] =>
@@ -162,7 +174,7 @@ const countBlockLinks = (blocks: readonly Block[]): number => {
 };
 
 describe("parseEcjDecisionHtml", () => {
-  test.each(fixtureStems)("%s", async (stem) => {
+  test.each(decisionStems)("%s", async (stem) => {
     const [celex = "", language = ""] = stem.split(".");
     const html = await readFixture(`${stem}.html.gz`);
     if (html === undefined) {
@@ -298,7 +310,7 @@ describe("parseEcjDecisionHtml", () => {
 
   test("keeps every document kind in the corpus", async () => {
     const kinds = new Set<string>();
-    for (const stem of fixtureStems) {
+    for (const stem of decisionStems) {
       const formex = await readFixture(`${stem}.fmx.xml.gz`);
       if (formex !== undefined) {
         kinds.add(parseFormex(formex).kind);
@@ -312,7 +324,7 @@ describe("parseEcjDecisionHtml", () => {
 
   test("keeps both converter spellings in the corpus", async () => {
     const spellings = new Set<string>();
-    for (const stem of fixtureStems) {
+    for (const stem of decisionStems) {
       const html = await readFixture(`${stem}.html.gz`);
       if (html === undefined) {
         continue;
@@ -405,14 +417,54 @@ describe("parseEcjDecisionHtml", () => {
       // That fallback takes the same boundary without parsing, so it
       // cannot store the page either.
       const bounded = ecjDocumentHtml(page);
-      expect(bounded).not.toContain(PORTAL_DOCUMENT_CONTAINER);
-      expect(parsePair(bounded).fulltext).toEqual(parsedDecision.fulltext);
+      expect(bounded.boundary).toBe("converter");
+      expect(bounded.html).not.toContain(PORTAL_DOCUMENT_CONTAINER);
+      expect(parsePair(bounded.html).fulltext).toEqual(parsedDecision.fulltext);
 
       // A decision served on its own is already the whole document, so
-      // bounding must leave it byte-identical.
-      expect(ecjDocumentHtml(decision)).toBe(decision);
+      // bounding must leave it byte-identical — and it is still the
+      // converter's markers that say so, not the absence of a page.
+      expect(ecjDocumentHtml(decision)).toEqual({
+        boundary: "converter",
+        html: decision,
+      });
     },
   );
+
+  /**
+   * The boundary is also the answer to "is this converter output at
+   * all". A page the publisher serves where a decision would be carries
+   * site chrome and nothing else, and reports the fallback boundary —
+   * which is what tells the adapter it is holding a page rather than a
+   * layout it failed to recognise.
+   */
+  test("reports the fallback boundary for a page holding no decision", async () => {
+    const [shell, decision] = await Promise.all([
+      readFixture(`${SHELL_STEM}.html.gz`),
+      readFixture(
+        `${manifestationStem({ celex: "62013TO0488", language: "CS" })}.html.gz`,
+      ),
+    ]);
+    if (shell === undefined || decision === undefined) {
+      throw new Error(`Missing the ${SHELL_STEM} recording or its decision`);
+    }
+
+    expect(ecjDocumentRoot(cheerio.load(shell)).boundary).toBe("document");
+    // The same decision, in the language the Court did publish it in:
+    // without this the assertion above would hold of a parser that had
+    // simply stopped finding markers anywhere.
+    expect(ecjDocumentRoot(cheerio.load(decision)).boundary).toBe("converter");
+  });
+
+  test("holds one declared shell recording", () => {
+    // A shell on disk that nothing declares would silently sit out the
+    // decision corpus's assertions, which is the opposite of coverage.
+    const recorded = fixtureStems
+      .filter((stem) => stem.endsWith(SHELL_STEM_SUFFIX))
+      .sort();
+
+    expect(recorded).toEqual([SHELL_STEM]);
+  });
 
   test("compares every portal recording it holds", () => {
     // The other direction of the check above: a recording on disk that

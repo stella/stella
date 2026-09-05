@@ -17,12 +17,15 @@
  *   bun apps/api/scripts/capture-parser-fixture.ts <url> --name cz-nss-8-as-12-2026.html
  *   bun apps/api/scripts/capture-parser-fixture.ts <url> --dir src/handlers/.../__fixtures__
  *   bun apps/api/scripts/capture-parser-fixture.ts <url> --note "spacer-span verdict"
+ *   bun apps/api/scripts/capture-parser-fixture.ts <url> --name page.html.gz --gzip
  *
- * The eu-ecj corpus is not captured with this script: those fixtures are
- * gzipped and paired with their Formex oracle, which only the adapter's
+ * The eu-ecj decision corpus is not captured with this script: those
+ * fixtures are paired with their Formex oracle, which only the adapter's
  * own query path can resolve. Re-record them with
  * `bun apps/api/scripts/record-eu-ecj-fixtures.ts`, which writes the
- * same sidecars.
+ * same sidecars. A single page in that directory that has no oracle to
+ * pair with is captured here, with `--gzip` for the directory's
+ * convention.
  */
 
 import path from "node:path";
@@ -125,7 +128,12 @@ const capture = async (argv: readonly string[]): Promise<void> => {
     fail(`${url.href}: ${response.status} ${response.statusText}`);
   }
 
-  const bytes = new Uint8Array(await response.arrayBuffer());
+  const served = new Uint8Array(await response.arrayBuffer());
+  // Compression is not a rewrite: gunzipping gives the served bytes back
+  // exactly, and the sidecar pins what is on disk, which is what the
+  // guard rehashes. Directories whose fixtures run to hundreds of
+  // kilobytes store them this way.
+  const bytes = argv.includes("--gzip") ? Bun.gzipSync(served) : served;
   const note = flagValue(argv, "--note");
   await Bun.write(path.resolve(API_ROOT, relativePath), bytes);
   await Bun.write(

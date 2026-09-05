@@ -842,6 +842,10 @@ const fetchManifestation = async ({
  * A parse failure must not lose the decision: the raw XHTML is stored
  * either way, so fall back to stripped text and an empty AST and let
  * the guard tests and the validator surface the regression.
+ *
+ * No fulltext is the one exception, and it means the response was not a
+ * decision to begin with; `ecjDecisionFromHtml` drops such a result
+ * rather than storing a document nobody can read.
  */
 type ParsedManifestation = {
   documentAst: DocumentAst | EmptyAst;
@@ -863,7 +867,11 @@ const parseManifestation = (
     const lostContent = parsed.validationIssues.some(
       (code) => code === "CONTENT_LOSS" || code === "MISSING_WORDS",
     );
-    if (parsed.documentAst.blocks.length > 0 && !lostContent) {
+    if (
+      parsed.boundary === "converter" &&
+      parsed.documentAst.blocks.length > 0 &&
+      !lostContent
+    ) {
       return {
         documentAst: parsed.documentAst,
         sections: sectionsFromAst(parsed.documentAst.blocks),
@@ -883,7 +891,33 @@ const parseManifestation = (
   // Bounded to the decision, as a parse would have been: a page that
   // carries the decision also carries its own navigation and footer,
   // and neither belongs in a decision's stored text.
-  const text = stripHtml(ecjDocumentHtml(input.html)).trim();
+  const source = ecjDocumentHtml(input.html);
+
+  // Rule 10 keeps text a parser could not classify, because that text is
+  // still the decision's. A response holding none of the converter's
+  // vocabulary is not a decision at all — it is the site's own shell,
+  // which the portal serves under a success status for a language
+  // variant the Court has not published. Storing it would file the
+  // publisher's navigation and contact block under a case number, so it
+  // is reported as no document instead, exactly as an unserved variant
+  // is.
+  if (source.boundary === "document") {
+    logger.warn("case_law.ingestion.manifestation_not_a_decision", {
+      adapterKey: ADAPTER_KEYS.EU_ECJ,
+      celex: input.celex,
+      caseNumber: input.caseNumber,
+      ...(input.language === undefined ? {} : { language: input.language }),
+      ...(input.sourceUrl === undefined ? {} : { url: input.sourceUrl }),
+    });
+    return {
+      documentAst: EMPTY_AST,
+      sections: undefined,
+      fulltext: undefined,
+      keywords: [],
+    };
+  }
+
+  const text = stripHtml(source.html).trim();
   return {
     documentAst: EMPTY_AST,
     sections: undefined,
