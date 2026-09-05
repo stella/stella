@@ -2,6 +2,7 @@ import {
   chat,
   EventType,
   maxIterations,
+  normalizeStreamChunk,
   StreamProcessor,
   toolDefinition,
 } from "@tanstack/ai";
@@ -2397,17 +2398,23 @@ describe("chat stream refs", () => {
           delta: JSON.stringify({ matter_id: matterRef }),
           toolCallId: "tool-1",
         },
-        {
+        // Shaped by the SDK's own normalizer, as `chat()` emits it: `input`
+        // and `toolName` are not spec keys on TOOL_CALL_END, so the engine
+        // moves them into `metadata.tanstack` before the chunk reaches this
+        // pipeline. An adapter that parses the whole input on END (Anthropic)
+        // delivers the canonical arguments there.
+        ...normalizeStreamChunk({
           type: EventType.TOOL_CALL_END,
           input: { matter_id: matterRef },
           toolCallId: "tool-1",
-        },
-        {
+          toolName: "list_matters",
+        }),
+        ...normalizeStreamChunk({
           type: EventType.RUN_FINISHED,
           finishReason: "tool_calls",
           runId: "run-1",
           threadId: "thread-1",
-        },
+        }),
       ]),
     });
     const processed = processServerChatStream({
