@@ -6,15 +6,11 @@
  * names, ...), so this helper takes over everything else and hands each
  * chunk to the caller unchanged.
  */
-import type { ChatStream, TokenUsage } from "@tanstack/ai";
+import type { TokenUsage } from "@tanstack/ai";
 import { EventType } from "@tanstack/ai";
 
+import type { PublicStreamChunk } from "@/api/lib/chat/tanstack-chat-runtime";
 import { tokenUsageFromRunFinishedChunk } from "@/api/lib/tanstack-ai-usage";
-
-// The element type of the stream `chat()` returns; not exported by
-// `@tanstack/ai` under its own name.
-type ChatStreamChunk =
-  ChatStream extends AsyncIterable<infer Chunk> ? Chunk : never;
 
 export type EvalModelTurnResult = {
   /** The provider's run error, or the stream/`chat()` rejection message. */
@@ -28,14 +24,14 @@ export type RunEvalModelTurnOptions = {
    * Starts the model call. Receives the `AbortController` this helper owns
    * so the caller can pass it straight into `chat()`.
    */
-  chat: (abortController: AbortController) => ChatStream;
+  chat: (abortController: AbortController) => AsyncIterable<PublicStreamChunk>;
   /** Aborts the run, and unblocks a hung stream, after this many ms. */
   timeoutMs: number;
   /**
    * Invoked for every chunk the stream yields, in order, so the caller can
    * accumulate whatever it scores on (text, tool-call arguments, ...).
    */
-  onChunk: (chunk: ChatStreamChunk) => void;
+  onChunk: (chunk: PublicStreamChunk) => void;
   /** Injectable for tests; defaults to the global timer functions. */
   setTimer?: (
     callback: () => void,

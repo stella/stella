@@ -9,13 +9,14 @@
  *   bun apps/api/scripts/benchmark-chat-read-surface.ts --json
  */
 
-import { EventType, chat, maxIterations, toolDefinition } from "@tanstack/ai";
+import { EventType, maxIterations, toolDefinition } from "@tanstack/ai";
 import type { AnyServerTool, TokenUsage } from "@tanstack/ai";
 import { panic } from "better-result";
 import * as v from "valibot";
 
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import { resolveCaching } from "@/api/lib/ai-config";
+import { streamChatChunks } from "@/api/lib/chat/tanstack-chat-runtime";
 import {
   mergeGenerationOptions,
   systemPromptsPatch,
@@ -874,7 +875,7 @@ const runBenchTask = async ({
     role: "fast",
     scopeKey: null,
   });
-  const stream = chat({
+  const stream = streamChatChunks({
     adapter: model.adapter,
     messages: [
       {

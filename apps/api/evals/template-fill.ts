@@ -32,7 +32,7 @@
  *   bun run eval:template-fill -- --models gpt-5.6-luna --task cs-work-contract
  *   bun run eval:template-fill -- --runs 3 --json out.json
  */
-import { EventType, chat, maxIterations, toolDefinition } from "@tanstack/ai";
+import { EventType, maxIterations, toolDefinition } from "@tanstack/ai";
 import type { AnyServerTool, TokenUsage } from "@tanstack/ai";
 import { panic } from "better-result";
 import JSZip from "jszip";
@@ -49,6 +49,7 @@ import {
 } from "@/api/handlers/chat/tools/template-tools";
 import { resolveCaching } from "@/api/lib/ai-config";
 import type { SafeId } from "@/api/lib/branded-types";
+import { streamChatChunks } from "@/api/lib/chat/tanstack-chat-runtime";
 import { extractText } from "@/api/lib/docx/extract-text";
 import { writeManifest } from "@/api/lib/docx/template-manifest";
 import type { FieldMeta, TemplateManifest } from "@/api/lib/docx/types";
@@ -822,7 +823,7 @@ const runModelTurn = async ({
   const { error, latencyMs, usage } = await runEvalModelTurn({
     timeoutMs: MODEL_REQUEST_TIMEOUT_MS,
     chat: (abortController) =>
-      chat({
+      streamChatChunks({
         abortController,
         adapter: model.adapter,
         messages: [{ role: "user", content: task.prompt }],

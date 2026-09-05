@@ -39,7 +39,7 @@ import type { StandardJSONSchemaV1 } from "@standard-schema/spec";
  *   bun run eval:agent-orientation -- --models gpt-5.6-luna --surface mcp
  *   bun run eval:agent-orientation -- --task delete-contact --json out.json
  */
-import { EventType, chat, maxIterations, toolDefinition } from "@tanstack/ai";
+import { EventType, maxIterations, toolDefinition } from "@tanstack/ai";
 import type { AnyClientTool, TokenUsage } from "@tanstack/ai";
 import { panic } from "better-result";
 import { readFileSync } from "node:fs";
@@ -48,6 +48,10 @@ import path from "node:path";
 import * as v from "valibot";
 
 import { resolveCaching } from "@/api/lib/ai-config";
+import {
+  streamChatChunks,
+  toolCallEndInputOf,
+} from "@/api/lib/chat/tanstack-chat-runtime";
 import {
   mergeGenerationOptions,
   systemPromptsPatch,
@@ -709,7 +713,7 @@ const runModelTurn = async ({
   const { error, latencyMs, usage } = await runEvalModelTurn({
     timeoutMs: MODEL_REQUEST_TIMEOUT_MS,
     chat: (abortController) =>
-      chat({
+      streamChatChunks({
         abortController,
         adapter: model.adapter,
         messages: [{ role: "user", content: request }],
@@ -758,8 +762,9 @@ const runModelTurn = async ({
           break;
         }
         case "TOOL_CALL_END": {
-          if (chunk.input !== undefined) {
-            parsedInputs.set(chunk.toolCallId, chunk.input);
+          const input = toolCallEndInputOf(chunk);
+          if (input !== undefined) {
+            parsedInputs.set(chunk.toolCallId, input);
           }
           break;
         }

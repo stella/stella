@@ -30,7 +30,7 @@
  * Model ids use `provider::modelId` or a bare id resolved through the
  * default provider chain (see `getTanStackTextModelById`).
  */
-import { EventType, chat, maxIterations } from "@tanstack/ai";
+import { EventType, maxIterations } from "@tanstack/ai";
 import type { TokenUsage } from "@tanstack/ai";
 import { panic } from "better-result";
 import { mkdir, writeFile } from "node:fs/promises";
@@ -50,6 +50,10 @@ import {
   createDocumentToolInputSchema,
 } from "@/api/handlers/chat/tools/create-document-tool";
 import { resolveCaching } from "@/api/lib/ai-config";
+import {
+  streamChatChunks,
+  toolCallEndInputOf,
+} from "@/api/lib/chat/tanstack-chat-runtime";
 import {
   mergeGenerationOptions,
   systemPromptsPatch,
@@ -266,7 +270,7 @@ const runModelTurn = async (
   const { error, latencyMs, usage } = await runEvalModelTurn({
     timeoutMs: MODEL_REQUEST_TIMEOUT_MS,
     chat: (abortController) =>
-      chat({
+      streamChatChunks({
         abortController,
         adapter: model.adapter,
         messages: [{ role: "user", content: prompt }],
@@ -295,8 +299,11 @@ const runModelTurn = async (
         );
         return;
       }
-      if (chunk.type === EventType.TOOL_CALL_END && chunk.input !== undefined) {
-        parsedInputs.set(chunk.toolCallId, chunk.input);
+      if (chunk.type === EventType.TOOL_CALL_END) {
+        const input = toolCallEndInputOf(chunk);
+        if (input !== undefined) {
+          parsedInputs.set(chunk.toolCallId, input);
+        }
       }
     },
   });

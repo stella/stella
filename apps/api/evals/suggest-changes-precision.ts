@@ -29,7 +29,7 @@
  *   bun run eval:suggest-changes -- --models gpt-5.6-luna --task rename-party
  *   bun run eval:suggest-changes -- --runs 3 --json out.json
  */
-import { EventType, chat, maxIterations, toolDefinition } from "@tanstack/ai";
+import { EventType, maxIterations, toolDefinition } from "@tanstack/ai";
 import type { AnyServerTool, TokenUsage } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 import { writeFile } from "node:fs/promises";
@@ -46,6 +46,7 @@ import { FolioDocxReviewer } from "@stll/folio-core/server";
 import type { FolioAIEditSnapshot } from "@stll/folio-core/server";
 
 import { resolveCaching } from "@/api/lib/ai-config";
+import { streamChatChunks } from "@/api/lib/chat/tanstack-chat-runtime";
 import { markdownToStellaDocx } from "@/api/lib/docx-authoring/from-markdown";
 import {
   mergeGenerationOptions,
@@ -415,7 +416,7 @@ const runModelTurn = async ({
   const { error, latencyMs, usage } = await runEvalModelTurn({
     timeoutMs: MODEL_REQUEST_TIMEOUT_MS,
     chat: (abortController) =>
-      chat({
+      streamChatChunks({
         abortController,
         adapter: model.adapter,
         messages: [{ role: "user", content: request }],

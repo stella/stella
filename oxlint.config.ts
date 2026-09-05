@@ -3220,6 +3220,12 @@ export default defineConfig({
       // record for what may now reach the capability.
       files: [
         "apps/api/src/**/*.ts",
+        // The api's runnable evals and operational scripts reach the same
+        // capabilities as `src` and ship the same defects when they bypass an
+        // owner: an eval that read a moved chunk key scored every Anthropic
+        // tool call as absent.
+        "apps/api/evals/**/*.ts",
+        "apps/api/scripts/**/*.ts",
         "apps/web/src/**/*.{ts,tsx}",
         // An owner that lives in a package (`@stll/clipboard`) confines
         // nothing if the rule stops at the apps: a second package could reach
@@ -3234,6 +3240,8 @@ export default defineConfig({
       excludeFiles: [
         "apps/api/src/**/*.test.ts",
         "apps/api/src/tests/**/*.ts",
+        "apps/api/evals/**/*.test.ts",
+        "apps/api/scripts/**/*.test.ts",
         "apps/web/src/**/*.test.{ts,tsx}",
         "packages/*/src/**/*.test.{ts,tsx}",
         "packages/*/src/**/tests/**/*.{ts,tsx}",

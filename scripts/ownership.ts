@@ -289,7 +289,13 @@ export const OWNERSHIP = [
         "fromMarkdown",
         "serializeDocumentToDocx",
       ],
-      allowed: [],
+      allowed: [
+        {
+          path: "apps/api/evals/create-document-drafting.ts",
+          reason:
+            "Scoring harness: compiles the model's legal source to read the compiler's own diagnostics (errors, fixes, warnings) and never writes a document.",
+        },
+      ],
     },
   },
   {

@@ -1,4 +1,4 @@
-import { chat, EventType, maxIterations, toolDefinition } from "@tanstack/ai";
+import { EventType, maxIterations, toolDefinition } from "@tanstack/ai";
 import type { AnyClientTool, AnyServerTool, ModelMessage } from "@tanstack/ai";
 import { panic, Result, TaggedError } from "better-result";
 import { isDeepStrictEqual } from "node:util";
@@ -16,6 +16,7 @@ import type { ModelRole } from "@stll/ai-catalog";
 
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import type { CachingDecision, OrgAIConfig } from "@/api/lib/ai-config";
+import { streamChatChunks } from "@/api/lib/chat/tanstack-chat-runtime";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { providerSafeJsonSchemaOptionsForTanStackProvider } from "@/api/lib/provider-safe-json-schema";
 import { buildBudgetEdgeSchema } from "@/api/lib/structured-output-budget-probe";
@@ -1351,7 +1352,7 @@ const runToolProbe = async ({
     ...(inputSchema === undefined ? {} : { inputSchema }),
   };
 
-  const stream = chat({
+  const stream = streamChatChunks({
     adapter: model.adapter,
     abortController: abortControllerFromSignal(signal),
     agentLoopStrategy: maxIterations(2),
@@ -1363,7 +1364,6 @@ const runToolProbe = async ({
       serviceTier: "standard",
       temperature: 0,
     }),
-    stream: true,
     tools: [projectedTool],
   });
   let output = "";
