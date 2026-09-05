@@ -32,7 +32,7 @@ const config = {
     "clauseOverrides replaces a clause slot's body for this fill only. " +
     "Registry lookups, formulas, composite fields, AI-drafted fields, and " +
     "conditional sections resolve server-side. Use " +
-    "templates.fill-to-workspace to save the same fill into a matter instead " +
+    "templates.fill-to-matter to save the same fill into a matter instead " +
     "of downloading it, and templates.fill-preview to see the text without " +
     "producing a file.",
   permissions: { template: ["use"] },
@@ -45,7 +45,7 @@ const config = {
     response: { mediaTypes: [OCTET_STREAM_MIME_TYPE] },
     alternative: {
       type: "complete",
-      via: ["templates.fill-to-workspace"],
+      via: ["templates.fill-to-matter"],
       note: "same stored template and values, with the filled document saved into a matter and its entity id returned instead of the bytes",
     },
   },

@@ -208,7 +208,7 @@ export const CAPABILITY_DISPATCH = {
   "entities.compare-versions": {
     load: async () => await import("@/api/handlers/entities/compare-versions"),
   },
-  "entities.copy-to-workspace": {
+  "entities.copy-to-matter": {
     load: async () => await import("@/api/handlers/entities/copy-to-workspace"),
   },
   "entities.create": {
@@ -466,6 +466,85 @@ export const CAPABILITY_DISPATCH = {
   },
   "lists.update": {
     load: async () => await import("@/api/handlers/lists/update"),
+  },
+  "matters.anonymization-allowlist.create": {
+    load: async () =>
+      await import("@/api/handlers/workspaces/anonymization-allowlist/create"),
+  },
+  "matters.anonymization-allowlist.delete": {
+    load: async () =>
+      await import("@/api/handlers/workspaces/anonymization-allowlist/delete"),
+  },
+  "matters.anonymization-allowlist.list": {
+    load: async () =>
+      await import("@/api/handlers/workspaces/anonymization-allowlist/list"),
+  },
+  "matters.anonymization-terms.create": {
+    load: async () =>
+      await import("@/api/handlers/workspaces/anonymization-terms/create"),
+  },
+  "matters.anonymization-terms.delete": {
+    load: async () =>
+      await import("@/api/handlers/workspaces/anonymization-terms/delete"),
+  },
+  "matters.anonymization-terms.list": {
+    load: async () =>
+      await import("@/api/handlers/workspaces/anonymization-terms/list"),
+  },
+  "matters.archive": {
+    load: async () => await import("@/api/handlers/workspaces/archive"),
+  },
+  "matters.cell-retry": {
+    load: async () => await import("@/api/handlers/workspaces/cell-retry"),
+  },
+  "matters.create": {
+    load: async () => await import("@/api/handlers/workspaces/create"),
+  },
+  "matters.delete": {
+    load: async () => await import("@/api/handlers/workspaces/delete"),
+  },
+  "matters.duplicate": {
+    load: async () => await import("@/api/handlers/workspaces/duplicate"),
+  },
+  "matters.list": {
+    load: async () => await import("@/api/handlers/workspaces/list"),
+  },
+  "matters.matter-contacts-create": {
+    load: async () =>
+      await import("@/api/handlers/workspaces/workspace-contacts-create"),
+  },
+  "matters.matter-contacts-delete": {
+    load: async () =>
+      await import("@/api/handlers/workspaces/workspace-contacts-delete"),
+  },
+  "matters.matter-members-add": {
+    load: async () =>
+      await import("@/api/handlers/workspaces/workspace-members-add"),
+  },
+  "matters.matter-members-remove": {
+    load: async () =>
+      await import("@/api/handlers/workspaces/workspace-members-remove"),
+  },
+  "matters.read-justifications": {
+    load: async () =>
+      await import("@/api/handlers/workspaces/read-justifications"),
+  },
+  "matters.read-workflow-status": {
+    load: async () =>
+      await import("@/api/handlers/workspaces/read-workflow-status"),
+  },
+  "matters.read-workflow-target-count": {
+    load: async () =>
+      await import("@/api/handlers/workspaces/read-workflow-target-count"),
+  },
+  "matters.unarchive": {
+    load: async () => await import("@/api/handlers/workspaces/unarchive"),
+  },
+  "matters.update": {
+    load: async () => await import("@/api/handlers/workspaces/update"),
+  },
+  "matters.workflow-start": {
+    load: async () => await import("@/api/handlers/workspaces/workflow-start"),
   },
   "organization-settings.document-ocr-availability.get": {
     load: async () =>
@@ -877,7 +956,7 @@ export const CAPABILITY_DISPATCH = {
   "templates.fill-preview": {
     load: async () => await import("@/api/handlers/templates/fill-preview"),
   },
-  "templates.fill-to-workspace": {
+  "templates.fill-to-matter": {
     load: async () =>
       await import("@/api/handlers/templates/fill-to-workspace"),
   },
@@ -1020,85 +1099,6 @@ export const CAPABILITY_DISPATCH = {
   },
   "work-obligations.update": {
     load: async () => await import("@/api/handlers/work-obligations/update"),
-  },
-  "workspaces.anonymization-allowlist.create": {
-    load: async () =>
-      await import("@/api/handlers/workspaces/anonymization-allowlist/create"),
-  },
-  "workspaces.anonymization-allowlist.delete": {
-    load: async () =>
-      await import("@/api/handlers/workspaces/anonymization-allowlist/delete"),
-  },
-  "workspaces.anonymization-allowlist.list": {
-    load: async () =>
-      await import("@/api/handlers/workspaces/anonymization-allowlist/list"),
-  },
-  "workspaces.anonymization-terms.create": {
-    load: async () =>
-      await import("@/api/handlers/workspaces/anonymization-terms/create"),
-  },
-  "workspaces.anonymization-terms.delete": {
-    load: async () =>
-      await import("@/api/handlers/workspaces/anonymization-terms/delete"),
-  },
-  "workspaces.anonymization-terms.list": {
-    load: async () =>
-      await import("@/api/handlers/workspaces/anonymization-terms/list"),
-  },
-  "workspaces.archive": {
-    load: async () => await import("@/api/handlers/workspaces/archive"),
-  },
-  "workspaces.cell-retry": {
-    load: async () => await import("@/api/handlers/workspaces/cell-retry"),
-  },
-  "workspaces.create": {
-    load: async () => await import("@/api/handlers/workspaces/create"),
-  },
-  "workspaces.delete": {
-    load: async () => await import("@/api/handlers/workspaces/delete"),
-  },
-  "workspaces.duplicate": {
-    load: async () => await import("@/api/handlers/workspaces/duplicate"),
-  },
-  "workspaces.list": {
-    load: async () => await import("@/api/handlers/workspaces/list"),
-  },
-  "workspaces.read-justifications": {
-    load: async () =>
-      await import("@/api/handlers/workspaces/read-justifications"),
-  },
-  "workspaces.read-workflow-status": {
-    load: async () =>
-      await import("@/api/handlers/workspaces/read-workflow-status"),
-  },
-  "workspaces.read-workflow-target-count": {
-    load: async () =>
-      await import("@/api/handlers/workspaces/read-workflow-target-count"),
-  },
-  "workspaces.unarchive": {
-    load: async () => await import("@/api/handlers/workspaces/unarchive"),
-  },
-  "workspaces.update": {
-    load: async () => await import("@/api/handlers/workspaces/update"),
-  },
-  "workspaces.workflow-start": {
-    load: async () => await import("@/api/handlers/workspaces/workflow-start"),
-  },
-  "workspaces.workspace-contacts-create": {
-    load: async () =>
-      await import("@/api/handlers/workspaces/workspace-contacts-create"),
-  },
-  "workspaces.workspace-contacts-delete": {
-    load: async () =>
-      await import("@/api/handlers/workspaces/workspace-contacts-delete"),
-  },
-  "workspaces.workspace-members-add": {
-    load: async () =>
-      await import("@/api/handlers/workspaces/workspace-members-add"),
-  },
-  "workspaces.workspace-members-remove": {
-    load: async () =>
-      await import("@/api/handlers/workspaces/workspace-members-remove"),
   },
 } as const satisfies Record<string, CapabilityDispatchEntry>;
 

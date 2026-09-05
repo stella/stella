@@ -467,7 +467,7 @@ describe("deriveCapabilityLeaf: pagination + suppression + truncation", () => {
   test("maps compound catalog scopes into the capability preflight", () => {
     const { spec } = deriveCapabilityLeaf(
       entry({
-        id: "templates.fill-to-workspace",
+        id: "templates.fill-to-matter",
         scope: "stella:documents_write",
         additionalScopes: ["stella:templates"],
       }),

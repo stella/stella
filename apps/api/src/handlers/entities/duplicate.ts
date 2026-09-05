@@ -252,7 +252,7 @@ const config = {
     "matter, placing the copy alongside the original. Stored files are " +
     "copied too, so the copies own their own bytes and get their own text " +
     "extraction and PDF and thumbnail derivatives. Use " +
-    "entities.copy-to-workspace to copy into a different matter.",
+    "entities.copy-to-matter to copy into a different matter.",
   permissions: { entity: ["create"] },
   mcp: { type: "capability", reason: "document_processing" },
   body: duplicateEntityBodySchema,

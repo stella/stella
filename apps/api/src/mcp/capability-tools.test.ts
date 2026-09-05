@@ -357,7 +357,7 @@ describe("invoke_capability gates", () => {
 
   test("compound capability scope rejects a document-only grant", async () => {
     const result = await handleMcpToolCall({
-      args: { capability: "templates.fill-to-workspace", input: {} },
+      args: { capability: "templates.fill-to-matter", input: {} },
       context: createContext({
         grantedScopes: ["stella:read", "stella:documents_write"],
       }),
@@ -656,7 +656,7 @@ describe("synthesized capability authorization lifetime", () => {
       },
     };
     const synthesized = await synthesizeCapabilityContext({
-      capabilityId: "entities.copy-to-workspace",
+      capabilityId: "entities.copy-to-matter",
       context,
       input: { body: {}, params: {}, query: {} },
       request: new Request("http://localhost/mcp"),
@@ -703,7 +703,7 @@ describe("synthesized capability authorization lifetime", () => {
       }),
     });
     const synthesized = await synthesizeCapabilityContext({
-      capabilityId: "entities.copy-to-workspace",
+      capabilityId: "entities.copy-to-matter",
       context,
       input: { body: {}, params: {}, query: {} },
       request: new Request("http://localhost/mcp"),
@@ -730,7 +730,7 @@ describe("synthesized capability authorization lifetime", () => {
     // bun-types declares `.rejects.toThrow` as void, so awaiting it trips
     // type-aware lint; capture the rejection explicitly instead.
     const rejection = await synthesizeCapabilityContext({
-      capabilityId: "entities.copy-to-workspace",
+      capabilityId: "entities.copy-to-matter",
       context,
       input: { body: {}, params: {}, query: {} },
       request: new Request("http://localhost/mcp"),
@@ -1197,7 +1197,7 @@ describe("invoke_capability archived-workspace gate (fix-4)", () => {
     // this asserts the gate result independent of the unarchive DB work.
     const result = await handleMcpToolCall({
       args: {
-        capability: "workspaces.unarchive",
+        capability: "matters.unarchive",
         input: { params: { workspaceId: "ws_arch" } },
         validate_only: true,
       },
@@ -1208,7 +1208,7 @@ describe("invoke_capability archived-workspace gate (fix-4)", () => {
       parseToolPayload<{ valid: boolean; capability: string }>(result),
     ).toEqual({
       valid: true,
-      capability: "workspaces.unarchive",
+      capability: "matters.unarchive",
     });
   });
 

@@ -4575,11 +4575,11 @@ describe("OpenAI-compatible MCP tools", () => {
       expect(isDocumentsMcpCapabilityAllowed({ capability })).toBe(true);
     }
     expect(
-      isDocumentsMcpCapabilityAllowed({ capability: "workspaces.create" }),
+      isDocumentsMcpCapabilityAllowed({ capability: "matters.create" }),
     ).toBe(false);
 
     const result = await handleMcpToolCall({
-      args: { capability: "workspaces.create", input: {} },
+      args: { capability: "matters.create", input: {} },
       context: createContext(),
       mode: "documents",
       toolName: "invoke_capability",

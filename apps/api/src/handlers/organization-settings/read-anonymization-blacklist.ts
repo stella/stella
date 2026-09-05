@@ -12,7 +12,7 @@ const config = {
     "Read the organization-wide always-mask terms: each entry's canonical " +
     "form, label, spelling variants, and enabled flag. Matter-scoped terms " +
     "live in the same table but are never returned here; read those with " +
-    "workspaces.anonymization-terms.list.",
+    "matters.anonymization-terms.list.",
   permissions: { organizationSettings: ["update"] },
   access: "read",
   mcp: { type: "capability", reason: "anonymization_admin" },

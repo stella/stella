@@ -52,7 +52,7 @@ export const cliMcp = {
       path: "apps/api/src/mcp/server-core.ts",
       contains: ["export const createMcpHttpRequestHandler"],
     },
-    { type: "capability", id: "workspaces.list" },
+    { type: "capability", id: "matters.list" },
   ],
   cta: {
     href: "https://github.com/stella/stella/tree/main/packages/cli",

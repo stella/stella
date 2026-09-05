@@ -281,7 +281,7 @@ const config = {
     response: { mediaTypes: [OCTET_STREAM_MIME_TYPE] },
     alternative: {
       type: "partial",
-      via: ["templates.fill-to-workspace"],
+      via: ["templates.fill-to-matter"],
       limitation:
         "the template must already be stored, and the filled document lands in a matter instead of coming back as bytes",
     },

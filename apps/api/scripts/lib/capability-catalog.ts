@@ -32,11 +32,37 @@ import type { HandlerKind } from "./enumerate-safe-handlers";
 export const HANDLERS_ROOT_PREFIX = "apps/api/src/handlers/";
 
 /**
+ * Internal handler-tree words and the public word each becomes in a capability
+ * id. The client-engagement container is a `matter` to every user and agent and
+ * a `workspace` only inside the code (the handler directory, the DB schema, the
+ * HTTP routes), and a capability id is public: it is the CLI command path and
+ * the `invoke_capability` argument. Substitution is per WORD, so it covers the
+ * domain segment (`workspaces.*` -> `matters.*`), the doubly-named actions
+ * (`workspaces.workspace-members-add` -> `matters.matter-members-add`) and the
+ * cross-domain verbs (`entities.copy-to-workspace` -> `entities.copy-to-matter`)
+ * from one table.
+ *
+ * This runs inside `deriveCapabilityId`, the sole id chokepoint, so the catalog,
+ * the generated dispatch table, the coverage doc and the CLI route tree all
+ * carry the public spelling and no second id namespace exists to drift.
+ */
+const PUBLIC_ID_WORDS: Readonly<Record<string, string>> = {
+  workspace: "matter",
+  workspaces: "matters",
+};
+
+/** Rewrite every internal word of a derived id to its public spelling. */
+const toPublicId = (id: string): string =>
+  id.replaceAll(/[a-z0-9]+/gu, (word) => PUBLIC_ID_WORDS[word] ?? word);
+
+/**
  * Capability id from a repo-relative handler path plus (optional) export name:
  * directories and basename joined with `.`, the export name suffixed when the
- * endpoint is a named export rather than the file's default. e.g.
+ * endpoint is a named export rather than the file's default, then each word
+ * mapped to its public spelling (`PUBLIC_ID_WORDS`). e.g.
  * `apps/api/src/handlers/time-entries/create.ts` (default) -> `time-entries.create`;
- * a named export `foo` in the same file -> `time-entries.create.foo`.
+ * a named export `foo` in the same file -> `time-entries.create.foo`;
+ * `apps/api/src/handlers/workspaces/archive.ts` -> `matters.archive`.
  */
 export const deriveCapabilityId = ({
   file,
@@ -53,7 +79,7 @@ export const deriveCapabilityId = ({
   const withoutPrefix = file.slice(HANDLERS_ROOT_PREFIX.length);
   const withoutExt = withoutPrefix.replace(/\.ts$/u, "");
   const base = withoutExt.split("/").join(".");
-  return exportName === undefined ? base : `${base}.${exportName}`;
+  return toPublicId(exportName === undefined ? base : `${base}.${exportName}`);
 };
 
 /**
@@ -62,7 +88,7 @@ export const deriveCapabilityId = ({
  * `invoke_capability` takes them verbatim — so they must never leak an internal
  * identifier. `deriveCapabilityId` suffixes a NAMED export's identifier, which is
  * a TS identifier and therefore camelCase; that is exactly how ids such as
- * `workspaces.anonymization-terms.deleteWorkspaceAnonymizationTerm` were minted.
+ * `matters.anonymization-terms.deleteWorkspaceAnonymizationTerm` were minted.
  * Enforcing this pattern over every segment makes that class of id impossible:
  * a capability endpoint must live in its own kebab-case-named file and be the
  * file's DEFAULT export, so the id is derived purely from the handler path.
@@ -152,7 +178,7 @@ export const DOMAIN_ACTION_VERBS = new Set([
   "clone-builtin",
   "compare-versions",
   "convert",
-  "copy-to-workspace",
+  "copy-to-matter",
   "create-batch",
   "create-blank",
   "create-blank-document",
@@ -181,7 +207,7 @@ export const DOMAIN_ACTION_VERBS = new Set([
   "fill",
   "fill-by-id",
   "fill-preview",
-  "fill-to-workspace",
+  "fill-to-matter",
   "from-blueprint",
   "from-run",
   "from-starter",
@@ -205,6 +231,10 @@ export const DOMAIN_ACTION_VERBS = new Set([
   "lookup-preview",
   "manifest",
   "mark-column-flag",
+  "matter-contacts-create",
+  "matter-contacts-delete",
+  "matter-members-add",
+  "matter-members-remove",
   "move",
   "organize-suggestions",
   "prefill",
@@ -277,10 +307,6 @@ export const DOMAIN_ACTION_VERBS = new Set([
   "versions-restore",
   "versions-summarize",
   "workflow-start",
-  "workspace-contacts-create",
-  "workspace-contacts-delete",
-  "workspace-members-add",
-  "workspace-members-remove",
 ]);
 
 /** The action a capability id names: its final `.`-separated segment. */
@@ -611,7 +637,7 @@ export type CapabilityDispatchRecord = {
  * generated module's structure.
  *
  * - id: dot-joined lowercase kebab-case path segments (e.g.
- *   `workspaces.anonymization-terms.delete`), reusing
+ *   `matters.anonymization-terms.delete`), reusing
  *   `CAPABILITY_ID_SEGMENT_PATTERN` so the emitted dispatch keys cannot drift
  *   from the catalog's id shape; segments allow no dots at all (the id is split
  *   ON dots, so an empty segment already fails), which structurally rules out

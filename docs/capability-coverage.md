@@ -121,7 +121,7 @@ here as its CLI form). Projected from the same handler enumeration that builds
 | `entities.check-stamp`                | read               | stella:read            | —       | not runnable over the generic transport: requires a file in `file`, which JSON cannot carry. No JSON-transport alternative: the lookup reads a stamp out of the supplied document's bytes; no capability accepts the stamp on its own                                           |
 | `entities.clip`                       | write              | stella:matters_write   | —       | generic invoke → `stella capability entities clip`                                                                                                                                                                                                                              |
 | `entities.compare-versions`           | read               | stella:read            | —       | generic invoke → `stella capability entities compare-versions`                                                                                                                                                                                                                  |
-| `entities.copy-to-workspace`          | write, destructive | stella:matters_write   | —       | generic invoke → `stella capability entities copy-to-workspace`                                                                                                                                                                                                                 |
+| `entities.copy-to-matter`             | write, destructive | stella:matters_write   | —       | generic invoke → `stella capability entities copy-to-matter`                                                                                                                                                                                                                    |
 | `entities.create`                     | write              | stella:documents_write | —       | curated tool `save_document`                                                                                                                                                                                                                                                    |
 | `entities.create-blank-document`      | write              | stella:documents_write | —       | generic invoke → `stella capability entities create-blank-document`                                                                                                                                                                                                             |
 | `entities.create-from-legal-source`   | write              | stella:matters_write   | —       | generic invoke → `stella capability entities create-from-legal-source`                                                                                                                                                                                                          |
@@ -234,6 +234,33 @@ here as its CLI form). Projected from the same handler enumeration that builds
 | `lists.list`                                    | read   | stella:read          | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists list`                                    |
 | `lists.sections.create`                         | write  | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists sections-create`                         |
 | `lists.update`                                  | write  | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists update`                                  |
+
+## matters
+
+| Capability                               | Access             | Scope                | Feature | Reachable via                                                               |
+| ---------------------------------------- | ------------------ | -------------------- | ------- | --------------------------------------------------------------------------- |
+| `matters.anonymization-allowlist.create` | write              | stella:matters_write | —       | generic invoke → `stella capability matters anonymization-allowlist-create` |
+| `matters.anonymization-allowlist.delete` | write, destructive | stella:matters_write | —       | generic invoke → `stella capability matters anonymization-allowlist-delete` |
+| `matters.anonymization-allowlist.list`   | read               | stella:read          | —       | generic invoke → `stella capability matters anonymization-allowlist-list`   |
+| `matters.anonymization-terms.create`     | write              | stella:matters_write | —       | generic invoke → `stella capability matters anonymization-terms-create`     |
+| `matters.anonymization-terms.delete`     | write, destructive | stella:matters_write | —       | generic invoke → `stella capability matters anonymization-terms-delete`     |
+| `matters.anonymization-terms.list`       | read               | stella:read          | —       | generic invoke → `stella capability matters anonymization-terms-list`       |
+| `matters.archive`                        | write              | stella:matters_write | —       | covered by `save_matter`                                                    |
+| `matters.cell-retry`                     | write              | stella:matters_write | —       | generic invoke → `stella capability matters cell-retry`                     |
+| `matters.create`                         | write              | stella:matters_write | —       | curated tool `save_matter`                                                  |
+| `matters.delete`                         | write, destructive | stella:matters_write | —       | curated tool `delete_matter`                                                |
+| `matters.duplicate`                      | write              | stella:matters_write | —       | generic invoke → `stella capability matters duplicate`                      |
+| `matters.list`                           | read               | stella:read          | —       | curated tool `list_matters`                                                 |
+| `matters.matter-contacts-create`         | write              | stella:matters_write | —       | curated tool `link_matter_contact`                                          |
+| `matters.matter-contacts-delete`         | write, destructive | stella:matters_write | —       | covered by `link_matter_contact`                                            |
+| `matters.matter-members-add`             | write              | stella:admin_write   | —       | curated tool `manage_organization`                                          |
+| `matters.matter-members-remove`          | write, destructive | stella:admin_write   | —       | covered by `manage_organization`                                            |
+| `matters.read-justifications`            | read               | stella:read          | —       | generic invoke → `stella capability matters read-justifications`            |
+| `matters.read-workflow-status`           | read               | stella:read          | —       | generic invoke → `stella capability matters read-workflow-status`           |
+| `matters.read-workflow-target-count`     | read               | stella:read          | —       | generic invoke → `stella capability matters read-workflow-target-count`     |
+| `matters.unarchive`                      | write              | stella:matters_write | —       | covered by `save_matter`                                                    |
+| `matters.update`                         | write              | stella:matters_write | —       | covered by `save_matter`                                                    |
+| `matters.workflow-start`                 | write              | stella:matters_write | —       | generic invoke → `stella capability matters workflow-start`                 |
 
 ## organization-settings
 
@@ -426,7 +453,7 @@ here as its CLI form). Projected from the same handler enumeration that builds
 | `templates.fill`                  | write              | stella:templates                         | —       | curated tool `fill_template`                                                                                                                                                                                                                                          |
 | `templates.fill-by-id`            | write              | stella:templates                         | —       | covered by `fill_template`                                                                                                                                                                                                                                            |
 | `templates.fill-preview`          | read               | stella:templates                         | —       | covered by `fill_template`                                                                                                                                                                                                                                            |
-| `templates.fill-to-workspace`     | write              | stella:documents_write, stella:templates | —       | covered by `save_filled_template`                                                                                                                                                                                                                                     |
+| `templates.fill-to-matter`        | write              | stella:documents_write, stella:templates | —       | covered by `save_filled_template`                                                                                                                                                                                                                                     |
 | `templates.get`                   | read               | stella:templates                         | —       | covered by `list_templates`                                                                                                                                                                                                                                           |
 | `templates.list`                  | read               | stella:templates                         | —       | curated tool `list_templates`                                                                                                                                                                                                                                         |
 | `templates.lookup-preview`        | read               | stella:templates                         | —       | generic invoke → `stella capability templates lookup-preview`                                                                                                                                                                                                         |
@@ -503,33 +530,6 @@ here as its CLI form). Projected from the same handler enumeration that builds
 | `work-obligations.queues.list`             | read   | stella:read          | FEATURE_GOVERNED_WORKFLOW | generic invoke → `stella capability work-obligations queues-list`             |
 | `work-obligations.transition`              | write  | stella:matters_write | FEATURE_GOVERNED_WORKFLOW | generic invoke → `stella capability work-obligations transition`              |
 | `work-obligations.update`                  | write  | stella:matters_write | FEATURE_GOVERNED_WORKFLOW | generic invoke → `stella capability work-obligations update`                  |
-
-## workspaces
-
-| Capability                                  | Access             | Scope                | Feature | Reachable via                                                                  |
-| ------------------------------------------- | ------------------ | -------------------- | ------- | ------------------------------------------------------------------------------ |
-| `workspaces.anonymization-allowlist.create` | write              | stella:matters_write | —       | generic invoke → `stella capability workspaces anonymization-allowlist-create` |
-| `workspaces.anonymization-allowlist.delete` | write, destructive | stella:matters_write | —       | generic invoke → `stella capability workspaces anonymization-allowlist-delete` |
-| `workspaces.anonymization-allowlist.list`   | read               | stella:read          | —       | generic invoke → `stella capability workspaces anonymization-allowlist-list`   |
-| `workspaces.anonymization-terms.create`     | write              | stella:matters_write | —       | generic invoke → `stella capability workspaces anonymization-terms-create`     |
-| `workspaces.anonymization-terms.delete`     | write, destructive | stella:matters_write | —       | generic invoke → `stella capability workspaces anonymization-terms-delete`     |
-| `workspaces.anonymization-terms.list`       | read               | stella:read          | —       | generic invoke → `stella capability workspaces anonymization-terms-list`       |
-| `workspaces.archive`                        | write              | stella:matters_write | —       | covered by `save_matter`                                                       |
-| `workspaces.cell-retry`                     | write              | stella:matters_write | —       | generic invoke → `stella capability workspaces cell-retry`                     |
-| `workspaces.create`                         | write              | stella:matters_write | —       | curated tool `save_matter`                                                     |
-| `workspaces.delete`                         | write, destructive | stella:matters_write | —       | curated tool `delete_matter`                                                   |
-| `workspaces.duplicate`                      | write              | stella:matters_write | —       | generic invoke → `stella capability workspaces duplicate`                      |
-| `workspaces.list`                           | read               | stella:read          | —       | curated tool `list_matters`                                                    |
-| `workspaces.read-justifications`            | read               | stella:read          | —       | generic invoke → `stella capability workspaces read-justifications`            |
-| `workspaces.read-workflow-status`           | read               | stella:read          | —       | generic invoke → `stella capability workspaces read-workflow-status`           |
-| `workspaces.read-workflow-target-count`     | read               | stella:read          | —       | generic invoke → `stella capability workspaces read-workflow-target-count`     |
-| `workspaces.unarchive`                      | write              | stella:matters_write | —       | covered by `save_matter`                                                       |
-| `workspaces.update`                         | write              | stella:matters_write | —       | covered by `save_matter`                                                       |
-| `workspaces.workflow-start`                 | write              | stella:matters_write | —       | generic invoke → `stella capability workspaces workflow-start`                 |
-| `workspaces.workspace-contacts-create`      | write              | stella:matters_write | —       | curated tool `link_matter_contact`                                             |
-| `workspaces.workspace-contacts-delete`      | write, destructive | stella:matters_write | —       | covered by `link_matter_contact`                                               |
-| `workspaces.workspace-members-add`          | write              | stella:admin_write   | —       | curated tool `manage_organization`                                             |
-| `workspaces.workspace-members-remove`       | write, destructive | stella:admin_write   | —       | covered by `manage_organization`                                               |
 
 ## Waived internal handlers
 

@@ -72,7 +72,3 @@ export const MCP_CLI_TOOL_SCOPES = [
   "feedback",
 ] as const;
 export type McpCliToolScope = (typeof MCP_CLI_TOOL_SCOPES)[number];
-/** Deprecated tool-input names the server still accepts, keyed to their replacement. */
-export const MCP_DEPRECATED_INPUT_ALIASES = {
-  matter_id: "workspace_id",
-} as const;
