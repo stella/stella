@@ -98,7 +98,9 @@ export const MCP_ALLOWED_HEADERS = [
 // property of the wire protocol and capabilities, not release numbering.
 export const STELLA_API_CONTRACT = {
   protocol: 1,
-  revision: 1,
+  // 2: the agent surface renamed the client-engagement container to "matter"
+  // (tool inputs, capability ids, capability params), with no alias.
+  revision: 2,
   capabilities: {
     "document-version-upload": 1,
     "mcp-v2-transport": 1,
