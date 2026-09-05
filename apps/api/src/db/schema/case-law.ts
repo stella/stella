@@ -84,6 +84,7 @@ import { workspaces } from "./contacts";
 import {
   CORPUS_INDEX_JOB_OPERATION_SQL_VALUES,
   CORPUS_INDEX_JOB_STATUS_SQL_VALUES,
+  CORPUS_INDEX_JOB_SUCCEEDED_SQL_VALUE,
 } from "./corpus-index-jobs";
 import type {
   CorpusIndexJobOperation,
@@ -2061,6 +2062,13 @@ export const caseLawIndexJobs = p.pgTable(
     p.check(
       "case_law_index_jobs_status_values",
       sql`${t.status} IN (${sql.join(CORPUS_INDEX_JOB_STATUS_SQL_VALUES, sql.raw(","))})`,
+    ),
+    // A row that succeeded carries no failure; its reason belongs in `detail`.
+    // The reverse is open on purpose: a failed row may record both what it was
+    // for and what went wrong.
+    p.check(
+      "case_law_index_jobs_succeeded_error_message",
+      sql`${t.status} <> ${CORPUS_INDEX_JOB_SUCCEEDED_SQL_VALUE} OR ${t.errorMessage} IS NULL`,
     ),
     ...globalCaseLawPolicies(),
   ],
