@@ -136,7 +136,6 @@ beforeAll(async () => {
       .padStart(3, "0")}`;
     requesterExports.push({ id: exportId, timestamp });
     seededExportIds.push(exportId);
-    // oxlint-disable-next-line no-await-in-loop -- deterministic timestamp ties exercise the id cursor boundary
     await seedExport({
       exportId,
       mode: index === 0 ? "download" : "workspace",
@@ -205,7 +204,6 @@ describe("report export history", () => {
     let cursor: string | undefined;
 
     for (let pageNumber = 0; pageNumber < 7; pageNumber++) {
-      // oxlint-disable-next-line no-await-in-loop -- each cursor comes from the preceding page
       const result = await readRequesterExportPage(cursor);
       if (Result.isError(result)) {
         throw result.error;

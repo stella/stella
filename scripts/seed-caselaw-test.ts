@@ -86,7 +86,6 @@ const main = async () => {
     const printUrl = `${BASE}/WebPrint/${unid}?openDocument`;
 
     // Crawled one decision at a time on purpose; the sleep below rate-limits it.
-    // oxlint-disable-next-line no-await-in-loop -- deliberate sequential crawl
     const [webHtml, printHtml] = await Promise.all([
       fetchHtml(webUrl),
       fetchHtml(printUrl),
@@ -112,7 +111,6 @@ const main = async () => {
 
     // Bun SQL double-encodes JSONB params. Use a
     // two-step approach: insert row, then update JSONB.
-    // oxlint-disable-next-line no-await-in-loop -- deliberate sequential write
     await db`
       INSERT INTO case_law_decisions (
         id, source_id, case_number, slug, ecli, court,
@@ -135,7 +133,6 @@ const main = async () => {
     // jsonb string instead of the object.
     const astStr = JSON.stringify(result.documentAst);
     const metaStr = JSON.stringify(result.sourceMetadata);
-    // oxlint-disable-next-line no-await-in-loop -- deliberate sequential write
     await db.unsafe(
       `UPDATE case_law_decisions
        SET document_ast = $1::text::jsonb,
@@ -150,7 +147,6 @@ const main = async () => {
     success++;
 
     if (i < UNIDS.length - 1) {
-      // oxlint-disable-next-line no-await-in-loop -- this await is the rate limit
       await Bun.sleep(300);
     }
   }

@@ -5501,7 +5501,6 @@ export async function seed(organizationId?: string, userId?: string) {
     // 1. Contacts (original orgs + people)
     const coreContacts = [...orgContacts, ...personContacts];
     for (const c of coreContacts) {
-      // oxlint-disable-next-line no-await-in-loop -- sequential seeding preserves insert order
       await rootDb
         .insert(contacts)
         .values({
@@ -5537,7 +5536,6 @@ export async function seed(organizationId?: string, userId?: string) {
     }
     // 1b. Additional org contacts for overview stress-testing
     for (const c of moreOrgContacts) {
-      // oxlint-disable-next-line no-await-in-loop -- sequential seeding preserves insert order
       await rootDb
         .insert(contacts)
         .values({
@@ -5598,7 +5596,6 @@ export async function seed(organizationId?: string, userId?: string) {
   for (const [wsIndex, ws] of seedWorkspaces.entries()) {
     const lastActivityAt = workspaceLastActivityAt(ws.reference, wsIndex);
     workspaceActivityById.set(ws.id, lastActivityAt);
-    // oxlint-disable-next-line no-await-in-loop -- sequential seeding preserves insert order / FK dependencies
     await rootDb
       .insert(workspaces)
       .values({
@@ -5626,7 +5623,6 @@ export async function seed(organizationId?: string, userId?: string) {
       seedWorkspaces.length + moreWsCount,
     );
     workspaceActivityById.set(wsId, lastActivityAt);
-    // oxlint-disable-next-line no-await-in-loop -- sequential seeding preserves insert order / FK dependencies
     await rootDb
       .insert(workspaces)
       .values({
@@ -5736,7 +5732,6 @@ export async function seed(organizationId?: string, userId?: string) {
   ];
   for (const wsId of allWsIds) {
     for (const uid of seedUserIds) {
-      // oxlint-disable-next-line no-await-in-loop -- sequential seeding preserves insert order / FK dependencies
       await rootDb
         .insert(workspaceMembers)
         .values({
@@ -5764,7 +5759,6 @@ export async function seed(organizationId?: string, userId?: string) {
     allProperties.push(...buildProperties(wsId, label));
   }
   for (const prop of allProperties) {
-    // oxlint-disable-next-line no-await-in-loop -- sequential seeding preserves insert order / FK dependencies
     await rootDb
       .insert(properties)
       .values({
@@ -5850,7 +5844,6 @@ export async function seed(organizationId?: string, userId?: string) {
       indexInWorkspace,
       workspaceActivityAt,
     });
-    // oxlint-disable-next-line no-await-in-loop -- entity row must exist before its version + currentVersion link below
     await rootDb
       .insert(entities)
       .values({
@@ -5874,7 +5867,6 @@ export async function seed(organizationId?: string, userId?: string) {
         },
       });
 
-    // oxlint-disable-next-line no-await-in-loop -- version row depends on the entity inserted just above
     await rootDb
       .insert(entityVersions)
       .values({
@@ -5885,11 +5877,9 @@ export async function seed(organizationId?: string, userId?: string) {
       .onConflictDoNothing();
 
     // Link currentVersionId
-    // oxlint-disable-next-line no-await-in-loop -- links the entity row to the version inserted in this same iteration
     await rootDb
       .update(entities)
       .set({ currentVersionId: e.versionId })
-      // oxlint-disable-next-line no-await-in-loop -- dynamic import of drizzle-orm eq() inside the where clause
       .where((await import("drizzle-orm")).eq(entities.id, e.entityId));
   }
   console.log(
@@ -5962,12 +5952,10 @@ export async function seed(organizationId?: string, userId?: string) {
           }
         }
       };
-      // oxlint-disable-next-line no-await-in-loop -- bounded memory: build one document's bytes at a time
       const content = await buildContent();
       const docText =
         format.type === "email"
           ? parsedEmailToText(
-              // oxlint-disable-next-line no-await-in-loop -- parse this bounded fixture before inserting its extraction row
               await parseEmail(Uint8Array.from(content).buffer, EML_MIME_TYPE),
             )
           : configuredDocText;
@@ -5978,7 +5966,6 @@ export async function seed(organizationId?: string, userId?: string) {
 
       const fileId = seedId(`${wsLabel}-file-${j}`);
       const s3Key = `${ORG_ID}/${wsId}/${fileId}.${format.extension}`;
-      // oxlint-disable-next-line no-await-in-loop -- bounded memory: upload one document's bytes to S3 at a time
       await writeS3ObjectWithRetry({
         data: new Uint8Array(content),
         key: s3Key,
@@ -6000,7 +5987,6 @@ export async function seed(organizationId?: string, userId?: string) {
       } as const satisfies FieldContent;
 
       // ── File field ──
-      // oxlint-disable-next-line no-await-in-loop -- references the fileId/sha256 produced by the S3 write above
       await rootDb
         .insert(fields)
         .values({
@@ -6022,7 +6008,6 @@ export async function seed(organizationId?: string, userId?: string) {
       // (workspaces may belong to an org created before
       // the seed ran, e.g. via manual signup).
       if (docText) {
-        // oxlint-disable-next-line no-await-in-loop -- per-document org lookup feeds the extracted-content insert that follows
         const ws = await rootDb.query.workspaces.findFirst({
           where: { id: { eq: toWs(wsId) } },
           columns: { organizationId: true },
@@ -6033,7 +6018,6 @@ export async function seed(organizationId?: string, userId?: string) {
           iv: Buffer.alloc(IV_BYTES),
         };
 
-        // oxlint-disable-next-line no-await-in-loop -- depends on the org resolved from the workspace query above
         await rootDb
           .insert(extractedContent)
           .values({
@@ -6093,7 +6077,6 @@ export async function seed(organizationId?: string, userId?: string) {
   }
 
   for (const plan of docPlans) {
-    // oxlint-disable-next-line no-await-in-loop -- bounded memory and S3 throughput: process one workspace's documents at a time
     await seedDocumentsForWorkspace(plan.wsId, plan.wsLabel, plan.docNames);
   }
 
@@ -6109,7 +6092,6 @@ export async function seed(organizationId?: string, userId?: string) {
     allFields.push(...buildFields(plan.wsLabel, wsEntities));
   }
   for (const f of allFields) {
-    // oxlint-disable-next-line no-await-in-loop -- sequential seeding preserves insert order / FK dependencies
     await rootDb
       .insert(fields)
       .values({
@@ -6131,7 +6113,6 @@ export async function seed(organizationId?: string, userId?: string) {
     );
   }
   for (const justification of allJustifications) {
-    // oxlint-disable-next-line no-await-in-loop -- sequential seeding preserves insert order / FK dependencies
     await rootDb
       .insert(justifications)
       .values({
@@ -6191,7 +6172,6 @@ export async function seed(organizationId?: string, userId?: string) {
   // 7c. Search index (depends on fields + extracted content)
   let searchCount = 0;
   for (const e of allEntities) {
-    // oxlint-disable-next-line no-await-in-loop -- sequential indexing keeps memory bounded and avoids overwhelming the DB
     await upsertSearchDocument(e.entityId);
     searchCount++;
   }
@@ -6199,7 +6179,6 @@ export async function seed(organizationId?: string, userId?: string) {
 
   // 8. Workspace contacts (parties)
   for (const party of seedParties) {
-    // oxlint-disable-next-line no-await-in-loop -- sequential seeding preserves insert order / FK dependencies
     await rootDb
       .insert(workspaceContacts)
       .values({
@@ -6216,7 +6195,6 @@ export async function seed(organizationId?: string, userId?: string) {
   // 9. Billing codes
   const billingCodeSeeds = buildBillingCodes();
   for (const bc of billingCodeSeeds) {
-    // oxlint-disable-next-line no-await-in-loop -- sequential seeding preserves insert order
     await rootDb
       .insert(billingCodes)
       .values({
@@ -6238,7 +6216,6 @@ export async function seed(organizationId?: string, userId?: string) {
     userRates: seedUserRates,
   });
   for (const rt of rateTableSeeds) {
-    // oxlint-disable-next-line no-await-in-loop -- sequential seeding preserves insert order / FK dependencies
     await rootDb
       .insert(rateTables)
       .values({
@@ -6252,7 +6229,6 @@ export async function seed(organizationId?: string, userId?: string) {
       .onConflictDoNothing();
   }
   for (const re of rateEntrySeeds) {
-    // oxlint-disable-next-line no-await-in-loop -- rate entries depend on rate tables seeded above; sequential preserves FK dependencies
     await rootDb
       .insert(rateEntries)
       .values({
@@ -6273,7 +6249,6 @@ export async function seed(organizationId?: string, userId?: string) {
   // that reference them)
   const invoiceSeeds = buildInvoices();
   for (const inv of invoiceSeeds) {
-    // oxlint-disable-next-line no-await-in-loop -- invoices must be inserted before time entries that reference them
     await rootDb
       .insert(invoices)
       .values({
@@ -6299,7 +6274,6 @@ export async function seed(organizationId?: string, userId?: string) {
     seedUserRates,
   );
   for (const te of extTimeEntries) {
-    // oxlint-disable-next-line no-await-in-loop -- sequential seeding preserves insert order
     await rootDb
       .insert(timeEntries)
       .values({
@@ -6328,7 +6302,6 @@ export async function seed(organizationId?: string, userId?: string) {
   // 13. Expenses (~50)
   const expenseSeeds = buildExpenses(seedUserIds);
   for (const exp of expenseSeeds) {
-    // oxlint-disable-next-line no-await-in-loop -- sequential seeding preserves insert order
     await rootDb
       .insert(expenses)
       .values({

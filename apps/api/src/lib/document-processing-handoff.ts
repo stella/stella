@@ -36,7 +36,6 @@ export const handoffCommittedDocumentProcessingRuns = async ({
       start,
       start + DOCUMENT_PROCESSING_HANDOFF_CONCURRENCY,
     );
-    // oxlint-disable-next-line no-await-in-loop -- sequential batches cap concurrent Redis handoffs while draining every committed run ID
     await Promise.all(
       batch.map(async (runId) => {
         const result = await Result.tryPromise({

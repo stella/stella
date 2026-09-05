@@ -82,7 +82,6 @@ export const installCaseLawProjectionTrigger = async (
   db: Executor,
 ): Promise<void> => {
   for (const statement of caseLawProjectionTriggerStatements()) {
-    // oxlint-disable-next-line no-await-in-loop -- functions, replacement drop, and trigger creation are order-dependent DDL
     await db.execute(sql.raw(statement));
   }
 };
@@ -96,7 +95,6 @@ export const installCaseLawProjectionAccounting = async (
   db: Executor,
 ): Promise<void> => {
   for (const statement of caseLawProjectionAccountingStatements()) {
-    // oxlint-disable-next-line no-await-in-loop -- seed state, functions, and triggers are order-dependent DDL
     await db.execute(sql.raw(statement));
   }
 };

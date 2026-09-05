@@ -109,7 +109,6 @@ test("repeated parks advance one row along the widening schedule", async () => {
   const now = new Date("2026-08-11T09:00:00.000Z");
 
   for (const [index, delayMs] of RECONCILIATION_RETRY_DELAYS_MS.entries()) {
-    // oxlint-disable-next-line no-await-in-loop -- the schedule is sequential by construction; each park reads the attempt the previous one wrote
     const parked = await parkReconciliationItem(scopedDb, {
       sourceId,
       slice: SLICE,
@@ -123,7 +122,6 @@ test("repeated parks advance one row along the widening schedule", async () => {
       status: RECONCILIATION_ITEM_STATUS.PARKED,
       attempts: index + 1,
     });
-    // oxlint-disable-next-line no-await-in-loop -- reads the row the park above just wrote
     const row = await readRow(sourceId, DOCUMENT_KEY);
     expect(row?.nextAttemptAt?.getTime()).toBe(now.getTime() + delayMs);
   }
@@ -142,7 +140,6 @@ test("the attempt past the schedule retires the item and stops scheduling it", a
 
   let attempts = 0;
   while (attempts < RECONCILIATION_TERMINAL_ATTEMPTS) {
-    // oxlint-disable-next-line no-await-in-loop -- each park depends on the attempt the previous one recorded
     const parked = await parkReconciliationItem(scopedDb, {
       sourceId,
       slice: SLICE,
@@ -209,7 +206,6 @@ test("the due read hands out only what has come due, oldest first", async () => 
   // A second item one step further along, so its next attempt is later.
   for (const attempt of [1, 2]) {
     expect(attempt).toBeGreaterThan(0);
-    // oxlint-disable-next-line no-await-in-loop -- the second park depends on the attempt the first recorded
     await parkReconciliationItem(scopedDb, {
       sourceId,
       slice: SLICE,
@@ -397,7 +393,6 @@ test("paging the listing reaches every item exactly once", async () => {
   const sourceId = await seedSource();
   const now = new Date("2026-08-11T09:00:00.000Z");
   for (const identityKey of [DOCKET_KEY, DOCUMENT_KEY]) {
-    // oxlint-disable-next-line no-await-in-loop -- fixture rows, written in sequence so the paging walk below has a fixed population
     await parkReconciliationItem(scopedDb, {
       sourceId,
       slice: SLICE,
@@ -423,7 +418,6 @@ test("paging the listing reaches every item exactly once", async () => {
   const walked: string[] = [];
   let after: string | undefined;
   for (let page = 0; page < unpaged.length + 2; page += 1) {
-    // oxlint-disable-next-line no-await-in-loop -- a cursor walk is sequential by definition; each page's cursor comes from the last
     const items = await listReconciliationItems(scopedDb, {
       sourceId,
       limit: 1,

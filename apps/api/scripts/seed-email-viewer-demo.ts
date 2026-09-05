@@ -224,7 +224,6 @@ const seedEmailViewerDemo = async () => {
       .digest("hex");
     const createdAt = new Date(Date.UTC(2026, 6, 14 + index, 9, index * 7));
 
-    // oxlint-disable-next-line no-await-in-loop -- each email's version depends on its entity
     await rootDb
       .insert(entities)
       .values({
@@ -243,7 +242,6 @@ const seedEmailViewerDemo = async () => {
         set: { name: fileName, displayName: fileName },
       });
 
-    // oxlint-disable-next-line no-await-in-loop -- the version references the entity inserted above
     await rootDb
       .insert(entityVersions)
       .values({
@@ -253,14 +251,12 @@ const seedEmailViewerDemo = async () => {
         createdBy: target.userId,
       })
       .onConflictDoNothing();
-    // oxlint-disable-next-line no-await-in-loop -- links the current email version
     await rootDb
       .update(entities)
       .set({ currentVersionId: entityVersionId })
       .where(eq(entities.id, entityId));
 
     const s3Key = `${target.organizationId}/${target.workspaceId}/${fileId}.eml`;
-    // oxlint-disable-next-line no-await-in-loop -- keep fixture uploads bounded and deterministic
     await writeS3ObjectWithRetry({
       contentType: EML_MIME_TYPE,
       data: new Uint8Array(content),
@@ -281,7 +277,6 @@ const seedEmailViewerDemo = async () => {
       thumbnailFileId: null,
       thumbnailDerivative: { status: "not-required" },
     } as const satisfies FieldContent;
-    // oxlint-disable-next-line no-await-in-loop -- the field references this email's version and uploaded object
     await rootDb
       .insert(fields)
       .values({
@@ -295,14 +290,12 @@ const seedEmailViewerDemo = async () => {
       .onConflictDoUpdate({ target: fields.id, set: { content: fileContent } });
 
     const extractedText = parsedEmailToText(
-      // oxlint-disable-next-line no-await-in-loop -- parse this bounded fixture before inserting its extraction row
       await parseEmail(Uint8Array.from(content).buffer, EML_MIME_TYPE),
     );
     const extractionEnvelope = {
       ciphertext: Buffer.from(extractedText, "utf-8"),
       iv: Buffer.alloc(IV_BYTES),
     };
-    // oxlint-disable-next-line no-await-in-loop -- provenance points at the field inserted above
     await rootDb
       .insert(extractedContent)
       .values({
@@ -332,7 +325,6 @@ const seedEmailViewerDemo = async () => {
           extractedAt: new Date(),
         },
       });
-    // oxlint-disable-next-line no-await-in-loop -- index after fields and extraction are durable
     await upsertSearchDocument(entityId);
   }
 

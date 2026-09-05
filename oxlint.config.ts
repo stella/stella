@@ -573,6 +573,12 @@ export default defineConfig({
   rules: {
     ...libraryRules,
     // Override ultracite defaults for Stella
+    // The generic rule fires on every sequential await, including the ones a
+    // stream, a cursor, a rate limit, or an ordered write requires; it was
+    // waived far more often than it was obeyed. The cost it exists to catch
+    // is per-iteration I/O, which `no-db-await-in-loop` and
+    // `no-network-await-in-loop` flag with the owner in hand.
+    "no-await-in-loop": "off",
     "no-console": "error",
     "no-shadow": "error",
     "no-unused-vars": [

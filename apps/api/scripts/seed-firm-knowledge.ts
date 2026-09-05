@@ -144,7 +144,6 @@ const discoverApiOrigin = async (): Promise<string> => {
   ].sort((a, b) => a - b);
 
   for (const port of ports) {
-    // oxlint-disable-next-line no-await-in-loop -- probe in order, stop at the first hit
     if (await isStellaApi(port)) {
       console.log(`Found the dev API on port ${String(port)}.`);
       return `http://127.0.0.1:${String(port)}`;
@@ -328,7 +327,6 @@ const readMatter = async (matterRoot: string): Promise<MatterManifest> => {
 
       if (entry.isDirectory()) {
         directories.push({ key, parentKey, name: entry.name });
-        // oxlint-disable-next-line no-await-in-loop -- depth-first keeps parents before children
         await walk(absolutePath, key);
         continue;
       }
@@ -339,7 +337,6 @@ const readMatter = async (matterRoot: string): Promise<MatterManifest> => {
         continue;
       }
 
-      // oxlint-disable-next-line no-await-in-loop -- hashing is the browser's own work
       const bytes = await Bun.file(absolutePath).bytes();
       files.push({
         absolutePath,
@@ -437,9 +434,7 @@ const createApiClient = (apiOrigin: string, cookie: string) => {
       response.status === RATE_LIMIT_STATUS && attempt < RATE_LIMIT_MAX_RETRIES;
       attempt++
     ) {
-      // oxlint-disable-next-line no-await-in-loop -- sequential backoff: each retry must follow the prior wait
       await Bun.sleep(rateLimitDelayMs(response, attempt));
-      // oxlint-disable-next-line no-await-in-loop -- see above
       response = await send();
     }
 
@@ -524,7 +519,6 @@ export const seedFirmKnowledge = async ({
   let empty = 0;
 
   for (const matterDirectory of matterDirectories) {
-    // oxlint-disable-next-line no-await-in-loop -- one matter at a time keeps the queue depth sane
     const manifest = await readMatter(
       path.join(corpusRoot, matterDirectory.name),
     );
@@ -561,7 +555,6 @@ export const seedFirmKnowledge = async ({
         `${manifest.reference}: incomplete ` +
           `(${String(present.entityCount)}/${String(expectedEntities)} entities), reseeding.`,
       );
-      // oxlint-disable-next-line no-await-in-loop -- sequential by design
       await api.request(`/workspaces/${present.id}`, {
         body: { queryKey: WORKSPACES_QUERY_KEY },
         method: "DELETE",
@@ -571,7 +564,6 @@ export const seedFirmKnowledge = async ({
     // Minted client-side, as the web app does.
     const workspaceId = Bun.randomUUIDv7();
 
-    // oxlint-disable-next-line no-await-in-loop -- sequential by design
     await api.request("/workspaces", {
       body: {
         filePropertyName: FILE_PROPERTY_NAME,
@@ -582,7 +574,6 @@ export const seedFirmKnowledge = async ({
     });
 
     // The tree endpoint needs the file property id; the create response omits it.
-    // oxlint-disable-next-line no-await-in-loop -- sequential by design
     const properties = await api.request<WorkspaceProperty[]>(
       `/properties/${workspaceId}`,
     );
@@ -593,7 +584,6 @@ export const seedFirmKnowledge = async ({
       fail(`Matter ${manifest.reference} has no file property.`);
     }
 
-    // oxlint-disable-next-line no-await-in-loop -- sequential by design
     const signed = await api.request<{ files: SignedFile[] }>(
       `/uploads/${workspaceId}/entity-create/tree`,
       {
@@ -613,9 +603,7 @@ export const seedFirmKnowledge = async ({
         fail(`Server signed an unknown key '${key}'.`);
       }
 
-      // oxlint-disable-next-line no-await-in-loop -- sequential, as the browser uploads
       const body = await Bun.file(file.absolutePath).bytes();
-      // oxlint-disable-next-line no-await-in-loop -- sequential, as the browser uploads
       const put = await fetch(url, {
         body,
         // Sent verbatim: content-type is part of the signed set, so composing
@@ -628,7 +616,6 @@ export const seedFirmKnowledge = async ({
         fail(`Upload of ${file.name} failed: ${put.status}`);
       }
 
-      // oxlint-disable-next-line no-await-in-loop -- finalize follows its own PUT
       await api.request(`/uploads/${workspaceId}/${uploadId}/finalize`, {
         method: "POST",
       });

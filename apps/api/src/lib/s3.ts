@@ -493,7 +493,6 @@ export const writeS3ObjectWithRetry = async (
   let lastError: unknown;
   let priorAttemptMayCompleteLate = false;
   for (let attempt = 1; attempt <= S3_WRITE_MAX_ATTEMPTS; attempt += 1) {
-    // oxlint-disable-next-line no-await-in-loop -- sequential by construction: each attempt must observe the previous one's failure
     const written = await Result.tryPromise({
       try: async () =>
         await withTimeout(async () => await write(object), {
@@ -513,7 +512,6 @@ export const writeS3ObjectWithRetry = async (
       break;
     }
     if (attempt < S3_WRITE_MAX_ATTEMPTS) {
-      // oxlint-disable-next-line no-await-in-loop -- backoff between attempts is the point of the loop
       await Bun.sleep(s3WriteRetryDelayMs(attempt));
     }
   }

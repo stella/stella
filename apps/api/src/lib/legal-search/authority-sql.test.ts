@@ -67,7 +67,6 @@ const authorityLiteral = (value: number): ReturnType<typeof sql> =>
 
 test("the SQL saturation equals saturateAuthority(), value for value", async () => {
   for (const authority of [0, 0.25, AUTHORITY_PIVOT, 5, 40, 1000]) {
-    // oxlint-disable-next-line no-await-in-loop -- one round-trip per sampled value against an in-process database
     const inPostgres = await evaluate(
       saturatedAuthoritySql(authorityLiteral(authority)),
     );
@@ -113,7 +112,6 @@ test("the blended rank is the lexical score plus the bounded terms", async () =>
 
 test("the SQL court-tier scale equals courtTierValue(), rank for rank", async () => {
   for (const tier of [LOWEST_COURT_TIER, 2, 3, HIGHEST_COURT_TIER]) {
-    // oxlint-disable-next-line no-await-in-loop -- one round-trip per rank against an in-process database
     const inPostgres = await evaluate(
       courtTierValueSql(sql`${sql.raw(String(tier))}::int`),
     );
@@ -178,11 +176,9 @@ test("the Postgres blend equals the TypeScript blend for the same decision", asy
       courtTier,
       lexicalRank: sql`${sql.raw(lexical.toString())}::float8`,
     })})::float8`;
-    const [row] =
-      // oxlint-disable-next-line no-await-in-loop -- one round-trip per fixture against an in-process database
-      await db
-        .select({ v: scored })
-        .from(sql`(VALUES (${court}, ${country})) AS d(court, country)`);
+    const [row] = await db
+      .select({ v: scored })
+      .from(sql`(VALUES (${court}, ${country})) AS d(court, country)`);
 
     expect(Number(row?.v), court).toBeCloseTo(
       inTypeScript?.score ?? Number.NaN,

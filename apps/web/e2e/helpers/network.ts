@@ -110,7 +110,6 @@ export const waitForQuietPeriod = async ({
     if (current >= timeoutAt) {
       return "timeout";
     }
-    // eslint-disable-next-line no-await-in-loop -- each wait observes activity that may have arrived during the preceding wait; parallel sleeps cannot model a quiet period
     await sleep(Math.min(idleAt, timeoutAt) - current);
   }
 };

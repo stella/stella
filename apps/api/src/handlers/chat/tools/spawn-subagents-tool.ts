@@ -448,7 +448,6 @@ export const createSpawnSubagentsTool = (
       if (props.thirdPartyBoundary.type === "anonymized") {
         const results: Awaited<ReturnType<typeof runOneSubagent>>[] = [];
         for (const [index, sub] of subagents.entries()) {
-          // eslint-disable-next-line no-await-in-loop -- sequential by design: parallel subagents would race the anonymization boundary's shared mutable redaction state
           results.push(await runOneSubagent(sub, index));
         }
         return { results };

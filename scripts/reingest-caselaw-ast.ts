@@ -75,7 +75,6 @@ const main = async () => {
     const signal = AbortSignal.timeout(15_000);
 
     // Crawled one decision at a time on purpose; the sleep below rate-limits it.
-    // oxlint-disable-next-line no-await-in-loop -- deliberate sequential crawl
     const [webHtml, printHtml] = await Promise.all([
       fetchHtml(webUrl, signal),
       fetchHtml(printUrl, signal),
@@ -101,7 +100,6 @@ const main = async () => {
       const astJson = JSON.stringify(result.documentAst);
       const metaJson = JSON.stringify(result.sourceMetadata);
       // Each decision is written before the next is fetched.
-      // oxlint-disable-next-line no-await-in-loop -- deliberate sequential write
       await db`
         UPDATE case_law_decisions
         SET
@@ -127,7 +125,6 @@ const main = async () => {
 
     // Rate limit
     if (i < rows.length - 1) {
-      // oxlint-disable-next-line no-await-in-loop -- this await is the rate limit
       await Bun.sleep(300);
     }
   }

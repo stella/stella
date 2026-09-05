@@ -335,7 +335,7 @@ export const resolveTemplateProperties = async ({
   }
 
   for (const templateProperty of templatePropertiesToCreate) {
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential inserts preserve column order and feed the source-id mapping
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- sequential inserts preserve column order and feed the source-id mapping
     const [inserted] = await tx
       .insert(properties)
       .values({
@@ -361,7 +361,6 @@ export const resolveTemplateProperties = async ({
     propertyIdBySourceId.set(templateProperty.sourceId, inserted.id);
     nextPropertyIds.push(inserted.id);
 
-    // oxlint-disable-next-line no-await-in-loop -- audit row depends on the property id inserted in this same iteration
     await recordAuditEvent(tx, {
       action: AUDIT_ACTION.CREATE,
       resourceType: AUDIT_RESOURCE_TYPE.PROPERTY,

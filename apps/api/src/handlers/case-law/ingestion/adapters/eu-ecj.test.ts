@@ -1362,7 +1362,6 @@ describe("euEcjAdapter.reconciliation.buildDecision", () => {
       { celex: "62021CJ0128" },
       "62021CJ0128",
     ]) {
-      // oxlint-disable-next-line no-await-in-loop -- each payload is asserted in turn
       expect(await reconciliation.buildDecision(payload)).toEqual({
         type: "unkeyable",
       });

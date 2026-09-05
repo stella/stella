@@ -139,7 +139,6 @@ describe("sk-courts crawl pagination", () => {
     const collected: string[] = [];
     let cursor: string | null = "live:0";
     for (let step = 0; step < LIVE_WINDOW_ITEMS / PAGE_SIZE; step += 1) {
-      // oxlint-disable-next-line no-await-in-loop -- each step's cursor is the previous step's output; that dependency is the walk
       const page = await fetchAt(cursor);
       pages.push(...endpoint.requestedPages.splice(0));
       collected.push(...page.decisions.map(({ caseNumber }) => caseNumber));

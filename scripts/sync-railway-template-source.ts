@@ -671,7 +671,6 @@ const main = async () => {
       );
     }
 
-    // eslint-disable-next-line no-await-in-loop -- diff output is intentionally ordered by service for operator review.
     const current = await readVariables({
       auth,
       projectId: resolvedProject.projectId,
@@ -698,7 +697,6 @@ const main = async () => {
     }
 
     if (apply) {
-      // eslint-disable-next-line no-await-in-loop -- service variable writes are intentionally sequential to keep Railway changes easy to audit.
       await writeVariables({
         auth,
         projectId: resolvedProject.projectId,

@@ -116,7 +116,6 @@ let totalUpdated = 0;
 let batchCount = 0;
 
 while (true) {
-  // oxlint-disable-next-line no-await-in-loop -- sequential workspace keyset pagination: the next cursor depends on this batch
   const result = await backfillBatch(cursor);
 
   if (!result || result.scanned_workspaces === 0) {

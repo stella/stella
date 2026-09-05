@@ -53,7 +53,6 @@ export const legalListsOptions = (workspaceId: string) =>
       const items = [...firstResponse.data.items];
       let cursor = firstResponse.data.nextCursor ?? undefined;
       while (cursor !== undefined) {
-        // oxlint-disable-next-line no-await-in-loop -- cursor pagination is sequential by definition; the sidebar must include every active List
         const response = await api
           .lists({ workspaceId: toSafeId<"workspace">(workspaceId) })
           .get({

@@ -59,7 +59,7 @@ type PollSeedJobOptions = {
  * Drive one start-then-poll seed job to a terminal state.
  *
  * Shared by both seeds: the loop is the only place that awaits in sequence, so
- * the `no-await-in-loop` exceptions live here once instead of per job.
+ * the polling contract lives here once instead of per job.
  */
 const pollSeedJob = async ({
   poll,
@@ -69,7 +69,6 @@ const pollSeedJob = async ({
   maxPolls = SEED_STATUS_MAX_POLLS,
 }: PollSeedJobOptions) => {
   for (let attempt = 0; attempt < maxPolls; attempt++) {
-    // oxlint-disable-next-line no-await-in-loop -- sequential status poll: each probe reflects progress after the prior interval
     const status = await poll();
     if (status === null) {
       onFailed(undefined);
@@ -83,7 +82,6 @@ const pollSeedJob = async ({
       onSucceeded();
       return;
     }
-    // oxlint-disable-next-line no-await-in-loop -- sequential poll backoff: wait between status probes
     await sleep(SEED_STATUS_POLL_INTERVAL_MS);
   }
   onPending();

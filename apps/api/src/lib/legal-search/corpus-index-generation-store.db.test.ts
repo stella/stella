@@ -50,7 +50,6 @@ test("the ingestion role can fence every corpus source family", async () => {
   await db.transaction(async (tx) => {
     await tx.execute(sql`SET LOCAL ROLE stella_ingestion`);
     for (const family of CORPUS_FAMILIES) {
-      // oxlint-disable-next-line no-await-in-loop -- one transaction proves the role can acquire every source fence
       await lockCorpusIndexGenerationActivationTx(
         asTestRaw<Transaction>(tx),
         family,

@@ -69,7 +69,6 @@ describe("consumeInvokeCapabilityRateLimit", () => {
       guards,
     };
     for (let i = 0; i < max; i += 1) {
-      // eslint-disable-next-line no-await-in-loop -- sequential counter increments are the unit under test
       expect((await consumeInvokeCapabilityRateLimit(input)).ok).toBe(true);
     }
     const overflow = await consumeInvokeCapabilityRateLimit(input);
@@ -87,7 +86,6 @@ describe("consumeInvokeCapabilityRateLimit", () => {
       guards,
     };
     for (let i = 0; i < max; i += 1) {
-      // eslint-disable-next-line no-await-in-loop -- sequential counter increments are the unit under test
       await consumeInvokeCapabilityRateLimit(translate);
     }
     expect((await consumeInvokeCapabilityRateLimit(translate)).ok).toBe(false);
@@ -118,7 +116,6 @@ describe("consumeInvokeCapabilityRateLimit", () => {
       return { ok: count <= max, retryAfterSeconds: 60 };
     };
     for (let i = 0; i < max - 1; i += 1) {
-      // eslint-disable-next-line no-await-in-loop -- sequential counter increments are the unit under test
       await consumeInvokeCapabilityRateLimit({
         capabilityId: "skills.discover",
         clientIp: "192.0.2.1",
@@ -165,7 +162,6 @@ describe("consumeInvokeCapabilityRateLimit", () => {
       guards,
     };
     for (let i = 0; i < max; i += 1) {
-      // eslint-disable-next-line no-await-in-loop -- sequential counter increments are the unit under test
       await consumeInvokeCapabilityRateLimit(first);
     }
     expect((await consumeInvokeCapabilityRateLimit(first)).ok).toBe(false);
@@ -189,7 +185,6 @@ describe("consumeInvokeCapabilityRateLimit", () => {
       guards,
     };
     for (let i = 0; i < max; i += 1) {
-      // eslint-disable-next-line no-await-in-loop -- sequential counter increments are the unit under test
       await consumeInvokeCapabilityRateLimit(orgA);
     }
     expect((await consumeInvokeCapabilityRateLimit(orgA)).ok).toBe(false);

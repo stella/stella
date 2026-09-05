@@ -315,7 +315,6 @@ export const composeInputFromFlags = async <T extends FlagSpec>({
     if (!flagValueProvided(flagSpec, value)) {
       continue;
     }
-    // eslint-disable-next-line no-await-in-loop -- @file/@- reads must stay sequential
     const coerced = await coerceFlagValue(flagSpec, value);
     if (Result.isError(coerced)) {
       return { ok: false, message: coerced.error };
@@ -811,7 +810,6 @@ const followAll = async ({
 
   do {
     const args = cursor === null ? baseArgs : cursorInto(baseArgs, cursor);
-    // eslint-disable-next-line no-await-in-loop -- each page's cursor comes from the previous response
     const call = await callTool({
       serverUrl,
       token,

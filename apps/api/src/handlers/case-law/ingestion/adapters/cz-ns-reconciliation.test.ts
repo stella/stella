@@ -618,7 +618,6 @@ describe("cz-ns buildDecision", () => {
       { unid: UNID.FIRST },
       { unid: 7, caseNumber: DOCKET.FIRST },
     ]) {
-      // oxlint-disable-next-line no-await-in-loop -- assertions over a fixed payload list, no I/O to overlap
       expect(await reconciliation.buildDecision(payload)).toEqual({
         type: "unkeyable",
       });

@@ -206,7 +206,6 @@ const waitForDeployedRevision = async (): Promise<void> => {
   );
 
   while (Date.now() < deadline) {
-    // oxlint-disable-next-line no-await-in-loop -- sequential readiness sampling: each sample must follow the prior interval to build a streak
     const samples = await Promise.all(
       ORIGINS.map(async (origin) => await origin.sample(expectedCommit)),
     );
@@ -227,7 +226,6 @@ const waitForDeployedRevision = async (): Promise<void> => {
       writeReadinessLog(`ready after ${String(consecutive)} stable samples`);
       return;
     }
-    // oxlint-disable-next-line no-await-in-loop -- sequential poll backoff: wait between readiness samples
     await sleep(READINESS_INTERVAL_MS);
   }
 

@@ -330,7 +330,6 @@ const rollUpThreadText = async ({
           AND (created_at, id) > (select created_at, id from chat_messages where id = ${cursor})`
       : sql`thread_id = ${threadId}`;
 
-    // eslint-disable-next-line no-await-in-loop -- sequential keyset pagination: each page's WHERE depends on the previous page's last (created_at, id) cursor.
     const page = await database.execute<ChatSearchMessageRow>(sql`
       SELECT id, role, content, created_at::text AS "createdAtToken"
       FROM chat_messages
@@ -343,7 +342,6 @@ const rollUpThreadText = async ({
       break;
     }
 
-    // eslint-disable-next-line no-await-in-loop -- sequential keyset pagination: per-page writes are ordered with the cursor advance above.
     await upsertChatMessageSearchDocuments({
       database,
       messages: page,
@@ -442,7 +440,7 @@ export const backfillChatThreadSearchIndex = async ({
     if (signal?.aborted) {
       return total;
     }
-    // oxlint-disable-next-line no-await-in-loop, require-search-scope/require-search-scope -- system backfill repairs derived search documents across all threads; it does not return request data
+    // oxlint-disable-next-line require-search-scope/require-search-scope -- system backfill repairs derived search documents across all threads; it does not return request data
     const batch = await database.execute<{ id: SafeId<"chatThread"> }>(sql`
       SELECT t.id
       FROM chat_threads t
@@ -478,7 +476,6 @@ export const backfillChatThreadSearchIndex = async ({
         return total;
       }
       try {
-        // oxlint-disable-next-line no-await-in-loop -- sequential by design: sequential per-thread backfill writes bound DB load
         await upsertChatThreadSearchDocument(row.id, database);
       } catch (error) {
         captureError(error, {

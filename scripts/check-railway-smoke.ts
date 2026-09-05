@@ -105,7 +105,6 @@ const runProbe = async (name: string, probe: () => Promise<void>) => {
   let lastError: Error | undefined;
   for (let attempt = 1; attempt <= PROBE_ATTEMPTS; attempt += 1) {
     try {
-      // eslint-disable-next-line no-await-in-loop -- retry probes must observe the result before deciding whether to wait and try again.
       await probe();
       console.log(`${name}: ok`);
       return;
@@ -118,7 +117,6 @@ const runProbe = async (name: string, probe: () => Promise<void>) => {
         break;
       }
       console.log(`${name}: waiting (${attempt}/${PROBE_ATTEMPTS})`);
-      // eslint-disable-next-line no-await-in-loop -- retries are intentionally sequential to give the deployment time to become healthy.
       await sleep(PROBE_DELAY_MS);
       continue;
     }

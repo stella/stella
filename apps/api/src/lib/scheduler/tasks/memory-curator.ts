@@ -211,7 +211,6 @@ const recordMemoryLifecycleAuditEvents = async (
       workspaceId: null,
       userId: MEMORY_CURATOR_AUDIT_ACTOR,
     });
-    // oxlint-disable-next-line no-await-in-loop -- one bounded insert per organization represented in the scheduler batch
     await recordAuditEvent(
       tx,
       organizationRows.map((row) => ({

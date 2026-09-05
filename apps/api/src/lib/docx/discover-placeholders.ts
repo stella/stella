@@ -64,7 +64,6 @@ export const discoverPlaceholders = async (
       continue;
     }
 
-    // oxlint-disable-next-line no-await-in-loop -- bounded memory while streaming content parts; accumulates into shared counts map
     const xml = await entry.async("string");
     scanParagraphs(slimdom.parseXmlDocument(xml), counts);
   }

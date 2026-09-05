@@ -489,7 +489,6 @@ export const redactCaseLawDecision = async ({
       }
       await scopedDb(async (tx) => {
         for (const lease of leases.values()) {
-          // oxlint-disable-next-line no-await-in-loop -- one transaction renews every held generation fence before clearing durable targets
           await lease.beforeDatabaseMark(tx);
         }
         const stillErased = (

@@ -731,7 +731,6 @@ const recordAccountDeletionAuditEvents = async (
       workspaceId: null,
       userId,
     });
-    // oxlint-disable-next-line no-await-in-loop -- one bounded insert per affected organization in the enclosing account-deletion transaction
     await recordAuditEvent(tx, events);
   }
 };

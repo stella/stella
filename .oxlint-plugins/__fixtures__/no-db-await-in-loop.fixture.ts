@@ -8,9 +8,7 @@
 // or not). If the rule regresses, the matching disable goes unused and
 // `--report-unused-disable-directives-severity=error` fails CI. The cases
 // WITHOUT a `no-db-await-in-loop` disable must NOT be flagged by it; a false
-// positive there fails the same run. (Some flagged cases also carry an
-// unrelated `no-await-in-loop` disable — the generic built-in rule already
-// fires on any await-in-loop; that is expected and out of scope here.)
+// positive there fails the same run.
 
 declare const db: {
   select: (columns?: unknown) => {
@@ -39,7 +37,7 @@ declare function doInMemoryWorkAsync(item: unknown): Promise<void>;
 
 export const forOfLoopAwaitInsert = async () => {
   for (const item of items) {
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- fixture: intentionally unbatched to exercise the rule
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- fixture: intentionally unbatched to exercise the rule
     await tx.insert(itemsTable).values(item);
   }
 };
@@ -49,7 +47,7 @@ export const whileLoopAwaitSafeDb = async () => {
   const results: unknown[] = [];
   while (index < items.length) {
     const currentItem = items[index];
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- fixture: intentionally unbatched to exercise the rule
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- fixture: intentionally unbatched to exercise the rule
     const result = await safeDb(async (scopedTx: typeof tx) => {
       const inserted = await scopedTx.insert(itemsTable).values(currentItem);
       return inserted;
@@ -167,7 +165,7 @@ export const boundedConstantLoop = async () => {
   for (const status of fixedStatuses) {
     // SAFETY: fixedStatuses is a 2-element compile-time constant, not
     // tenant-scaled input, so this cannot become an N+1.
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop
     await tx.select().from(itemsTable).where(status);
   }
 };

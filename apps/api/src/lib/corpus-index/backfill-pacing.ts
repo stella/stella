@@ -338,7 +338,6 @@ export const createBackfillPacer = ({
     beforeBatch: async () => {
       await maybeSample();
       while (state === BACKFILL_PACING_STATE.paused) {
-        // oxlint-disable-next-line no-await-in-loop -- the pause is the wait
         await pauseStep();
       }
       maybeHeartbeat();

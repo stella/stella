@@ -26,7 +26,6 @@ describe("external source preview", () => {
     ];
 
     for (const url of nonPublicUrls) {
-      // oxlint-disable-next-line no-await-in-loop -- each literal must independently cross the async preview boundary
       const result = await validatePreviewUrl(url);
       expect(Result.isError(result), url).toBe(true);
     }

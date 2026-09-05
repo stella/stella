@@ -30,7 +30,6 @@ const { rootDb } = await enterCaseLawMaintenanceLane();
 console.log(`Seeding ${SEED_RULES.length} polarity rules...`);
 
 for (const rule of SEED_RULES) {
-  // oxlint-disable-next-line no-await-in-loop -- sequential seeding preserves upsert order across rules
   await rootDb.transaction(async (tx) => {
     await tx
       .insert(caseLawPolarityRules)

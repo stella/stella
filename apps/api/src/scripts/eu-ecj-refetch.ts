@@ -269,13 +269,11 @@ try {
       // Listed again right before the fetch: the count is what detects a
       // variant the fetch dropped silently, and the extra query per CELEX
       // is noise next to the manifestation downloads themselves.
-      // oxlint-disable-next-line no-await-in-loop -- rate-limited publisher traffic stays sequential
       const expected = await listCelexVariants({
         celexNumbers: [celex],
         signal: AbortSignal.timeout(ECJ_LISTING_TIMEOUT_MS),
       });
       counts.variantsExpected += expected.length;
-      // oxlint-disable-next-line no-await-in-loop -- rate-limited publisher traffic stays sequential
       const results = await fetchDecisionsByCelex({
         celexNumbers: [celex],
         signal: AbortSignal.timeout(CELEX_FETCH_TIMEOUT_MS),
@@ -291,15 +289,12 @@ try {
       }
       for (const result of results) {
         counts.variantsFetched += 1;
-        // oxlint-disable-next-line no-await-in-loop -- observation orders are allocated sequentially under the lease
         await sourceLease.beforeDatabaseMark();
-        // oxlint-disable-next-line no-await-in-loop -- observation orders are allocated sequentially under the lease
         const observationOrder = await allocateSourceObservationOrder({
           leaseToken: sourceLease.leaseToken,
           scopedDb: ingestionDb,
           sourceId: source.id,
         });
-        // oxlint-disable-next-line no-await-in-loop -- each decision is one pipeline write
         const processed = await processDecision({
           input: result,
           sourceId: source.id,
@@ -333,7 +328,6 @@ try {
         `progress: ${counts.visited}/${plan.length} celex, ${counts.complete} variants written, ${failedCelex.length} celex failed`,
       );
     }
-    // oxlint-disable-next-line no-await-in-loop -- politeness pause between decisions, matching the crawl
     await Bun.sleep(delayMs);
   }
 } finally {

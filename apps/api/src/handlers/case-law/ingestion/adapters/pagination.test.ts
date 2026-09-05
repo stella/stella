@@ -203,7 +203,6 @@ describe("createPagePaginatedFetch", () => {
       "offset:01",
       "offset:9007199254740992",
     ]) {
-      // oxlint-disable-next-line no-await-in-loop -- every malformed persisted cursor must be rejected independently
       const result = await fetchPage(cursor, {});
       expect(result.isErr()).toBe(true);
     }
@@ -275,7 +274,6 @@ describe("createPagePaginatedFetch", () => {
 
     let cursor: string | null = null;
     for (let i = 0; i < 3; i++) {
-      // oxlint-disable-next-line no-await-in-loop -- sequential paginated fetch (each page's cursor depends on the previous page)
       const result = await fetchAtPageSize20(cursor, {});
       const page = result.unwrap();
       cursor = page.nextCursor;
@@ -423,7 +421,6 @@ describe("an offset names the same items whatever the publisher numbers from", (
     const fetchPage = createTestFetch({ pageSize: PAGE_SIZE, firstPage });
 
     for (const offset of [0, PAGE_SIZE, 3 * PAGE_SIZE, 19 * PAGE_SIZE]) {
-      // oxlint-disable-next-line no-await-in-loop -- one offset at a time so a failure names the offset that broke
       const result = await fetchPage(encodeOffsetCursor(offset), {});
       const page = result.unwrap();
       // The cursor is an item offset, so the first decision it yields is the
@@ -453,7 +450,6 @@ describe("an offset names the same items whatever the publisher numbers from", (
     const seen: string[] = [];
     let cursor: string | null = null;
     for (let step = 0; step < 5; step += 1) {
-      // oxlint-disable-next-line no-await-in-loop -- each step's cursor is the previous step's output
       const result = await fetchPage(cursor, {});
       const page = result.unwrap();
       seen.push(...page.decisions.map(({ caseNumber }) => caseNumber));

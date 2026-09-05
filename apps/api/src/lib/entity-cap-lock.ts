@@ -78,7 +78,7 @@ export const lockWorkspacesForEntityCap = async (
     // caller, and the insert that follows has an FK to `workspaces`
     // that would fail regardless.
     //
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential, ascending-id acquisition is the invariant this function exists to provide; see the module doc comment
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- sequential, ascending-id acquisition is the invariant this function exists to provide; see the module doc comment
     await tx.execute(
       sql`SELECT id FROM ${workspaces} WHERE id = ${id} FOR UPDATE`,
     );

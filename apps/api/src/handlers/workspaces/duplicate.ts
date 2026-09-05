@@ -378,7 +378,6 @@ const copyWorkspaceFiles = async ({
         return;
       }
 
-      // oxlint-disable-next-line no-await-in-loop -- sequential by design: worker drains the shared queue sequentially; bounded concurrency comes from running multiple copyNext workers
       await copyWorkspaceFile({
         copiedS3Keys,
         copy,
@@ -817,14 +816,13 @@ export const createDuplicateWorkspace = (
             const newVersionId = createSafeId<"entityVersion">();
             const entityStamp =
               source.kind === "document"
-                ? // oxlint-disable-next-line no-await-in-loop -- sequential by design: stamp allocation is a sequential per-workspace counter; must run in order within the transaction
-                  await allocateEntityStamp(tx, targetWorkspaceId)
+                ? await allocateEntityStamp(tx, targetWorkspaceId)
                 : null;
             const newParentId = source.parentId
               ? (entityIdMap.get(source.parentId) ?? null)
               : null;
 
-            // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential by design: children reference parent IDs created in earlier iterations via entityIdMap; also the version insert and currentVersionId update just below depend on this row
+            // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- sequential by design: children reference parent IDs created in earlier iterations via entityIdMap; also the version insert and currentVersionId update just below depend on this row
             await tx.insert(entities).values({
               id: newEntityId,
               workspaceId: targetWorkspaceId,
@@ -862,7 +860,7 @@ export const createDuplicateWorkspace = (
               metadata: source.metadata,
             });
 
-            // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential version insert depends on the entity row created just above in this iteration
+            // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- sequential version insert depends on the entity row created just above in this iteration
             await tx.insert(entityVersions).values({
               id: newVersionId,
               workspaceId: targetWorkspaceId,
@@ -873,7 +871,7 @@ export const createDuplicateWorkspace = (
               createdBy: user.id,
             });
 
-            // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential update sets currentVersionId on the just-created entity/version pair
+            // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- sequential update sets currentVersionId on the just-created entity/version pair
             await tx
               .update(entities)
               .set({ currentVersionId: newVersionId })
@@ -895,7 +893,7 @@ export const createDuplicateWorkspace = (
               ];
             });
             if (newFields.length > 0) {
-              // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential field insert depends on the version created in this iteration
+              // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- sequential field insert depends on the version created in this iteration
               await tx.insert(fields).values(newFields);
             }
 

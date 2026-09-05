@@ -90,7 +90,6 @@ const sweep = async (
   const now = options.now ?? NOW;
   const totals = { recomputed: 0, cited: 0, batches: 0 };
   for (let turn = 0; turn < 200; turn += 1) {
-    // oxlint-disable-next-line no-await-in-loop -- the sweep advances by the work each batch commits; the next batch reads what this one wrote
     const batch = await db.transaction(
       async (tx) =>
         await recomputeCitationAuthorityBatch(tx, {
@@ -395,7 +394,6 @@ test("a rolling window converges even when the host clock runs ahead", async () 
   let turnsTaken = 0;
   let converged = false;
   for (let turn = 0; turn < 50; turn += 1) {
-    // oxlint-disable-next-line no-await-in-loop -- the sweep advances by the work each batch commits
     const batch = await db.transaction(
       async (tx) =>
         await recomputeCitationAuthorityBatch(tx, {

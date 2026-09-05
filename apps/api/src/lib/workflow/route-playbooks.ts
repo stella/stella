@@ -296,7 +296,6 @@ export const routeClassifiedDocuments = async ({
 
     const ids: SafeId<"property">[] = [];
     for (const definition of applicable) {
-      // oxlint-disable-next-line no-await-in-loop -- one shared transaction: each run reads the cumulative property count to enforce the per-workspace cap, and a single tx cannot run writes in parallel
       const result = await openPlaybookRun({
         tx,
         workspaceId,

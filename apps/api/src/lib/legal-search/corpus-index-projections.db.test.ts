@@ -94,7 +94,6 @@ beforeAll(
     `);
 
     for (const migrationUrl of MIGRATION_URLS) {
-      // oxlint-disable-next-line no-await-in-loop -- migrations and their dependent DDL must replay in committed order
       const migration = await Bun.file(migrationUrl).text();
       for (const statement of migration.split("--> statement-breakpoint")) {
         const ddl = statement.trim();
@@ -109,7 +108,6 @@ beforeAll(
         ) {
           continue;
         }
-        // oxlint-disable-next-line no-await-in-loop -- ordered migration-owned functions and dependent triggers
         await db.execute(sql.raw(ddl));
       }
     }

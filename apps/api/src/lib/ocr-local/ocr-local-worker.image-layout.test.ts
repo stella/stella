@@ -74,7 +74,6 @@ describe.skipIf(!modelsPresent)("ocr-local-worker image layout", () => {
       );
       // Native lookups from the shared manifest.
       for (const dir of RUNTIME_WORKER_NATIVE_LOOKUPS.siblingDirs) {
-        // oxlint-disable-next-line no-await-in-loop -- tiny manifest, sequential copies keep the test readable
         await cp(
           path.join(REPO_ROOT, "node_modules", dir.source),
           path.join(root, dir.target),

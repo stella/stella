@@ -1049,10 +1049,8 @@ export const czRegionalAdapter = defineSourceAdapter({
 
         for (let i = 0; i < decisions.length; i += FINALDOC_CONCURRENCY) {
           if (i > 0) {
-            // oxlint-disable-next-line no-await-in-loop -- deliberate crawl delay between sequential enrichment batches against the court server
             await Bun.sleep(FINALDOC_BATCH_DELAY_MS);
           }
-          // oxlint-disable-next-line no-await-in-loop -- batches must run sequentially with delays between them to respect the court server; parallelism is bounded within each batch
           await Promise.all(
             decisions.slice(i, i + FINALDOC_CONCURRENCY).map(enrichDecision),
           );

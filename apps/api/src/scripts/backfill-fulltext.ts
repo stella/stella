@@ -177,7 +177,6 @@ const backfillAdapter = async (config: BackfillConfig) => {
   let failed = 0;
 
   while (true) {
-    // oxlint-disable-next-line no-await-in-loop -- bounded memory: fetch one batch of missing-fulltext rows at a time
     const batch = await rootDb.transaction(
       async (tx) =>
         await tx
@@ -205,7 +204,6 @@ const backfillAdapter = async (config: BackfillConfig) => {
 
       if (!url) {
         // No URL available — mark as empty to prevent re-query
-        // oxlint-disable-next-line no-await-in-loop -- mark this row empty before continuing; keeps progress per row
         await rootDb.transaction(async (tx) => {
           await tx
             .update(caseLawDecisions)
@@ -217,13 +215,11 @@ const backfillAdapter = async (config: BackfillConfig) => {
         continue;
       }
 
-      // oxlint-disable-next-line no-await-in-loop -- rate-limited source fetch, one row at a time
       const fulltext = await config.fetchFulltext(url);
 
       // Always update the row — set empty string on failure so
       // the NULL check no longer matches and we don't re-query
       // this row forever.
-      // oxlint-disable-next-line no-await-in-loop -- update this row's fulltext after its sequential, rate-limited fetch
       await rootDb.transaction(async (tx) => {
         await tx
           .update(caseLawDecisions)
@@ -246,7 +242,6 @@ const backfillAdapter = async (config: BackfillConfig) => {
         );
       }
 
-      // oxlint-disable-next-line no-await-in-loop -- per-row delay enforces the source rate limit between fetches
       await Bun.sleep(config.delayMs);
     }
   }
@@ -260,7 +255,6 @@ const backfillAdapter = async (config: BackfillConfig) => {
 console.log("Starting fulltext backfill...\n");
 
 for (const config of CONFIGS) {
-  // oxlint-disable-next-line no-await-in-loop -- run adapters one at a time; each is independently rate-limited
   await backfillAdapter(config);
   console.log();
 }

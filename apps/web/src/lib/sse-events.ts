@@ -59,7 +59,6 @@ export const readSSEEvents = async (
   const reader = body.getReader();
   try {
     while (true) {
-      // oxlint-disable-next-line no-await-in-loop -- sequential stream read: each chunk must be decoded before the next
       const chunk = await reader.read();
       if (chunk.done) {
         // A stream that ends mid-frame has nothing complete left to report.

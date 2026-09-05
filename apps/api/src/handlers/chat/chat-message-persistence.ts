@@ -546,7 +546,6 @@ const runPersistMessage = async ({
           );
 
         for (const deletedMessageId of deleteMessageIds) {
-          // oxlint-disable-next-line no-await-in-loop -- sequential audit writes on the same transaction connection (one in-flight query per tx)
           await recordAuditEvent(tx, {
             action: AUDIT_ACTION.DELETE,
             resourceType: AUDIT_RESOURCE_TYPE.CHAT_MESSAGE,

@@ -99,7 +99,6 @@ export const maybeStartUploadTriggeredFlows = async ({
       continue;
     }
 
-    // oxlint-disable-next-line no-await-in-loop -- sequential starts bound concurrent run inserts; the set is capped at LIMITS.flowDefinitionsCount and each start is independent
     await startAutomatedFlowRun({
       definitionId: definition.id,
       organizationId,

@@ -152,7 +152,6 @@ const collect = async (
   let cursor: string | undefined;
 
   for (let request = 0; request < 3; request += 1) {
-    // oxlint-disable-next-line no-await-in-loop -- cursor pages are sequential
     const page = await readPage(cursor);
     items.push(...page.items.map((item) => item.citationText));
     cursor = page.nextCursor ?? undefined;

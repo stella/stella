@@ -69,7 +69,6 @@ const expectNoIntlErrors = () => {
 describe("OTP email", () => {
   test("renders the one-time code for every OTP type", async () => {
     for (const type of OTP_TYPES) {
-      // oxlint-disable-next-line no-await-in-loop -- sequential renders keep console.error capture attributable per type
       const html = await render(
         <BetterAuthOTP.Email lang="en" otp="951753" type={type} />,
       );
@@ -137,13 +136,11 @@ describe("every supported locale renders without missing-interpolation errors", 
     // Sequential renders so a captured console.error stays attributable to a
     // single locale rather than interleaving across parallel renders.
     for (const lang of LOCALES) {
-      // oxlint-disable-next-line no-await-in-loop -- see note above
       const otpHtml = await render(
         <BetterAuthOTP.Email lang={lang} otp="123456" type="sign-in" />,
       );
       expect(otpHtml).toContain("123456");
 
-      // oxlint-disable-next-line no-await-in-loop -- see note above
       const inviteHtml = await render(
         <OrganizationInvitation.Email
           invitedByUsername="Jane Doe"
@@ -157,7 +154,6 @@ describe("every supported locale renders without missing-interpolation errors", 
       expect(inviteHtml).toContain("Acme Inc");
       expect(inviteHtml).toContain("Jane Doe");
 
-      // oxlint-disable-next-line no-await-in-loop -- see note above
       const deviceHtml = await render(
         <NewDeviceLogin.Email
           device="Chrome on macOS"

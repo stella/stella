@@ -52,7 +52,6 @@ describe("skill source rate-limit routing", () => {
     });
     try {
       for (let index = 0; index < 10; index += 1) {
-        // oxlint-disable-next-line no-await-in-loop -- sequential increments exercise one fixed-window counter
         const result = await consumeSkillSourceRateLimit({
           clientIp: "192.0.2.1",
           context,

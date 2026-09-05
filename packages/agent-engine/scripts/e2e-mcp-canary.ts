@@ -172,9 +172,6 @@ const startServer = async (
 
   try {
     for (let attempt = 0; attempt < 40; attempt += 1) {
-      // Sequential polling is intentional: each attempt observes the service
-      // state after the previous bounded delay.
-      // eslint-disable-next-line no-await-in-loop
       const probe = await docker(
         [
           "exec",
@@ -188,9 +185,6 @@ const startServer = async (
       if (probe.exitCode === 0) {
         return;
       }
-      // The service is local and starts in milliseconds; bounded polling
-      // avoids hiding a failed container behind a fixed long sleep.
-      // eslint-disable-next-line no-await-in-loop
       await Bun.sleep(100);
     }
     fail("MCP canary server did not become healthy");

@@ -349,7 +349,7 @@ const trimRow = async (row: TrimRow): Promise<void> => {
 
 const trimInChunks = async (rows: TrimRow[]): Promise<void> => {
   for (let i = 0; i < rows.length; i += CONCURRENCY) {
-    // oxlint-disable-next-line no-await-in-loop, no-db-await-in-loop/no-db-await-in-loop -- bounded concurrency: drain one CONCURRENCY-sized chunk before starting the next
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- bounded concurrency: drain one CONCURRENCY-sized chunk before starting the next
     await Promise.all(rows.slice(i, i + CONCURRENCY).map(trimRow));
   }
 };
@@ -423,7 +423,6 @@ for (const [index, range] of ranges.entries()) {
       columnTrimPageRange({ range, cursor: lastId }),
     );
 
-    // oxlint-disable-next-line no-await-in-loop -- sequential keyset pagination: the next page cursor (lastId) depends on this query
     const rows: TrimRow[] = await ingestionDb((tx) =>
       tx
         .select({
@@ -440,7 +439,6 @@ for (const [index, range] of ranges.entries()) {
       break;
     }
 
-    // oxlint-disable-next-line no-await-in-loop -- sequential keyset pages: the next page's cursor depends on this one completing
     await trimInChunks(rows);
 
     scanned += rows.length;

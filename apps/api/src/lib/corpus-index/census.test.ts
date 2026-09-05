@@ -592,7 +592,6 @@ describe("census reporting", () => {
     });
 
     for (let cycle = 0; cycle < CENSUS_CYCLE_INTERVAL; cycle += 1) {
-      // oxlint-disable-next-line no-await-in-loop -- the step counts cycles; it only censuses on the last one
       await census.step();
     }
 
@@ -612,7 +611,6 @@ describe("census reporting", () => {
     });
 
     for (let cycle = 0; cycle < CENSUS_CYCLE_INTERVAL - 1; cycle += 1) {
-      // oxlint-disable-next-line no-await-in-loop -- the cycles are the subject of the test
       await census.step();
     }
 
@@ -635,13 +633,11 @@ describe("census reporting", () => {
     });
 
     for (let cycle = 0; cycle < CENSUS_CYCLE_INTERVAL; cycle += 1) {
-      // oxlint-disable-next-line no-await-in-loop -- the cycles are the subject of the test
       await census.step();
     }
     expect(warn).not.toHaveBeenCalled();
 
     for (let cycle = 0; cycle < CENSUS_CYCLE_INTERVAL; cycle += 1) {
-      // oxlint-disable-next-line no-await-in-loop -- the cycles are the subject of the test
       await census.step();
     }
     expect(warn.mock.calls.at(0)?.at(0)).toBe(
@@ -664,7 +660,6 @@ describe("census reporting", () => {
     });
 
     for (let cycle = 0; cycle < CENSUS_CYCLE_INTERVAL; cycle += 1) {
-      // oxlint-disable-next-line no-await-in-loop -- the cycles are the subject of the test
       await census.step();
     }
 
@@ -690,7 +685,6 @@ describe("census sweep unit", () => {
       startAt: 0,
     });
     for (let cycle = 0; cycle < CENSUS_CYCLE_INTERVAL * count; cycle += 1) {
-      // oxlint-disable-next-line no-await-in-loop -- the cycles are the subject of the test
       await census.step();
     }
     return countedIndexIds;

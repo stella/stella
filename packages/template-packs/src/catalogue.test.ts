@@ -108,7 +108,6 @@ describe("template pack catalogue", () => {
 
     for (const pack of catalogue.list()) {
       for (const template of pack.templates) {
-        // oxlint-disable-next-line no-await-in-loop -- census over a handful of files
         const docx = await catalogue.readTemplateDocx({
           packId: pack.id,
           slug: template.slug,

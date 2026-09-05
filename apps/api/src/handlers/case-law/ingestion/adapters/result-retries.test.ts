@@ -9,7 +9,6 @@ const CZ_RETRY_DELAY_MS = 5000;
 
 const flush = async () => {
   for (let tick = 0; tick < 40; tick++) {
-    // oxlint-disable-next-line no-await-in-loop -- pumps the multi-await retry chain one microtask at a time
     await Promise.resolve();
   }
 };

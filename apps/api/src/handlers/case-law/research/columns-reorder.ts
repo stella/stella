@@ -74,7 +74,7 @@ const reorderResearchColumns = createSafeRootHandler(
         for (const [index, columnId] of columnIds.entries()) {
           // SAFETY: bounded by LIMITS.caseLawResearchColumnsPerTable (the body
           // schema's maxItems), inside one transaction.
-          // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- bounded by the column cap
+          // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- bounded by the column cap
           await tx
             .update(caseLawResearchColumns)
             .set({ position: index + 1 })

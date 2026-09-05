@@ -628,7 +628,6 @@ export const runLegislationIngestion = async ({
     if (cycleSignal.aborted) {
       break;
     }
-    // oxlint-disable-next-line no-await-in-loop -- cursor pagination: each page consumes the cursor returned by the prior page
     const pageResult = await fetchPagePaced(page, cursor);
     if (Result.isError(pageResult)) {
       // Hold the cursor: the page this cursor names was never read, so
@@ -664,7 +663,6 @@ export const runLegislationIngestion = async ({
           reason: refusal.reason,
         });
       }
-      // oxlint-disable-next-line no-await-in-loop -- sequential ingestion: ordered counters and per-page cursor hold on write failure
       const result = await processLegislationDocument(
         checked.document,
         scopedDb,

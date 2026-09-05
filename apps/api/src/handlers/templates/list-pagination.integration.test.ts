@@ -151,7 +151,6 @@ describe("templates list cursor ordering", () => {
     let cursor: string | undefined;
 
     for (let pageNumber = 0; pageNumber < 10; pageNumber++) {
-      // oxlint-disable-next-line no-await-in-loop -- each cursor comes from the preceding page
       const result = await readPage(safeDb, cursor);
       if (Result.isError(result)) {
         throw result.error;

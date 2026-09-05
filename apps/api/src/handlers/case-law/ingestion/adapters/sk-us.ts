@@ -1028,7 +1028,6 @@ export const skUsAdapter = defineSourceAdapter({
 
         for (const doc of data.documents) {
           try {
-            // oxlint-disable-next-line no-await-in-loop -- sequential per-document PDF download/parse, rate-limited via Bun.sleep below
             const built = await buildSkUsDecision(doc, signal);
             switch (built.type) {
               case "unkeyable":
@@ -1053,7 +1052,6 @@ export const skUsAdapter = defineSourceAdapter({
           }
 
           // Rate limit between PDF downloads
-          // oxlint-disable-next-line no-await-in-loop -- deliberate crawl delay between sequential PDF downloads from the court server
           await Bun.sleep(300);
         }
 

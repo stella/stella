@@ -185,7 +185,6 @@ const runQuery = async (
   let startOffset = 0;
   let ranked = rankDocumentHits(scanned, depth);
   for (;;) {
-    // oxlint-disable-next-line no-await-in-loop -- offset pagination: each scan depends on the previous startOffset
     const searched = await client.search({
       indexId,
       query: engineQuery,
@@ -220,7 +219,6 @@ const baseClient = corpusIndexQueryDiffClientForGeneration(baseGeneration);
 const candidateClient =
   corpusIndexQueryDiffClientForGeneration(candidateGeneration);
 for (const query of queries.value) {
-  // oxlint-disable-next-line no-await-in-loop -- one query at a time keeps the load on the engine bounded
   const [base, candidate] = await Promise.all([
     runQuery(baseClient, baseGeneration, query),
     runQuery(candidateClient, candidateGeneration, query),

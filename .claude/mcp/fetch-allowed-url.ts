@@ -36,7 +36,6 @@ export const fetchAllowedUrl = async ({
   for (let requestIndex = 0; requestIndex <= MAX_REDIRECTS; requestIndex += 1) {
     validateAllowedUrl(currentUrl, allowedHosts);
 
-    // oxlint-disable-next-line no-await-in-loop -- redirects are sequential and share one timeout budget
     const response = await fetchImpl(currentUrl, {
       redirect: "manual",
       signal,
@@ -46,7 +45,6 @@ export const fetchAllowedUrl = async ({
       if (!response.ok) {
         throw new Error(`${response.status} ${response.statusText}`);
       }
-      // oxlint-disable-next-line no-await-in-loop -- terminal response belongs to the current redirect hop
       return await readLimitedText({
         maxBytes: maxResponseBytes,
         response,
@@ -105,7 +103,6 @@ const readLimitedText = async ({
   let totalBytes = 0;
 
   while (true) {
-    // oxlint-disable-next-line no-await-in-loop -- streams must be consumed in order with a cumulative byte limit
     const { done, value } = await reader.read();
     if (done) {
       break;
@@ -113,7 +110,6 @@ const readLimitedText = async ({
 
     totalBytes += value.byteLength;
     if (totalBytes > maxBytes) {
-      // oxlint-disable-next-line no-await-in-loop -- cancel at the exact chunk that crosses the limit
       await reader.cancel();
       throw new Error("Documentation response exceeds size limit");
     }

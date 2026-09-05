@@ -1750,7 +1750,6 @@ export const upsertWorkspaceSearchDocuments = async (
           if (!workspaceId) {
             return;
           }
-          // oxlint-disable-next-line no-await-in-loop -- sequential by design: bounded-concurrency worker draining a shared queue; the pool itself runs in parallel
           await upsertWorkspaceSearchDocument(workspaceId);
         }
       })(),
@@ -1800,7 +1799,6 @@ export const rebuildSupplementalSearchIndex = async (
   let hasMoreContacts = true;
 
   while (hasMoreContacts) {
-    // oxlint-disable-next-line no-await-in-loop -- keyset pagination: each batch depends on the previous lastContactId cursor
     const batch = await rootDb
       .select({ id: contacts.id })
       .from(contacts)
@@ -1816,7 +1814,6 @@ export const rebuildSupplementalSearchIndex = async (
       .limit(REINDEX_BATCH_SIZE);
 
     for (const contact of batch) {
-      // oxlint-disable-next-line no-await-in-loop -- sequential by design: sequential per-contact reindex writes bound DB load during rebuild
       await upsertContactSearchDocument(contact.id);
     }
 
@@ -1828,7 +1825,6 @@ export const rebuildSupplementalSearchIndex = async (
   let hasMoreWorkspaces = true;
 
   while (hasMoreWorkspaces) {
-    // oxlint-disable-next-line no-await-in-loop -- keyset pagination: each batch depends on the previous lastWorkspaceId cursor
     const batch = await rootDb
       .select({ id: workspaces.id })
       .from(workspaces)
@@ -1844,7 +1840,6 @@ export const rebuildSupplementalSearchIndex = async (
       .limit(REINDEX_BATCH_SIZE);
 
     for (const workspace of batch) {
-      // oxlint-disable-next-line no-await-in-loop -- sequential by design: sequential per-workspace reindex writes bound DB load during rebuild
       await upsertWorkspaceSearchDocument(workspace.id);
     }
 

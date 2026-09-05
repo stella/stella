@@ -97,11 +97,9 @@ test("repeated navigation does not grow the JS heap unboundedly", async ({
   const heapSnapshots: number[] = [];
 
   for (let cycle = 1; cycle <= NAVIGATION_CYCLES; cycle++) {
-    // eslint-disable-next-line no-await-in-loop -- cycles are sequential client-side navigations against one page; each cycle's leak (if any) must accumulate on top of the last
     await runNavigationCycle(page);
 
     if (cycle === 1 || cycle === NAVIGATION_CYCLES) {
-      // eslint-disable-next-line no-await-in-loop -- measurement must happen inline right after its cycle, not batched afterward
       heapSnapshots.push(await measureHeapUsedBytes(page, client));
     }
   }
@@ -133,7 +131,6 @@ const runNavigationCycle = async (page: Page) => {
     // Mark the Outlet-owned root inside the persistent shell content scroller.
     // Its removal proves the previous route unmounted; URL changes alone can
     // happen before a cold route chunk or loader has mounted.
-    // eslint-disable-next-line no-await-in-loop -- each marker belongs to the route being left in this sequential navigation cycle
     await currentRouteRoot.evaluate((element, value) => {
       element.dataset["heapCanaryRouteRoot"] = value;
     }, marker);
@@ -146,23 +143,17 @@ const runNavigationCycle = async (page: Page) => {
     // Sidebar chrome can briefly render a loading skeleton across a route
     // transition (recents/pinned data refetching); an explicit visibility
     // wait survives that instead of racing click()'s shorter action timeout.
-    // eslint-disable-next-line no-await-in-loop -- links within a cycle are clicked in order on the same page so any per-navigation leak accumulates
     await expect(link).toBeVisible({ timeout: 30_000 });
-    // eslint-disable-next-line no-await-in-loop -- see above
     await link.click();
-    // eslint-disable-next-line no-await-in-loop -- see above
     await page.waitForURL((url) => url.pathname === route.path, {
       timeout: 30_000,
     });
-    // eslint-disable-next-line no-await-in-loop -- see above
     await expect(
       page.locator(`[data-heap-canary-route-root="${marker}"]`),
     ).toHaveCount(0, { timeout: 30_000 });
-    // eslint-disable-next-line no-await-in-loop -- route-specific content proves the destination mounted before the next navigation can replace it
     await expect(page.locator(route.readySelector)).toBeVisible({
       timeout: 30_000,
     });
-    // eslint-disable-next-line no-await-in-loop -- see above
     await page.waitForTimeout(ROUTE_SETTLE_MS);
   }
 };
@@ -173,11 +164,8 @@ const measureHeapUsedBytes = async (
 ): Promise<number> => {
   const samples: number[] = [];
   for (let attempt = 0; attempt < GC_SAMPLE_ATTEMPTS; attempt++) {
-    // eslint-disable-next-line no-await-in-loop -- each GC+measure attempt must settle before the next runs, otherwise back-to-back gc() calls race the same sweep
     await forceGarbageCollection(page);
-    // eslint-disable-next-line no-await-in-loop -- see above
     await page.waitForTimeout(GC_SETTLE_MS);
-    // eslint-disable-next-line no-await-in-loop -- see above
     const { metrics } = await client.send("Performance.getMetrics");
     const heapUsed = metrics.find(
       (metric) => metric.name === "JSHeapUsedSize",

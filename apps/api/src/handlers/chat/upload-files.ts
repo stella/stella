@@ -154,11 +154,9 @@ export const uploadMessageFiles = async ({
 
     const parsedPart = parseMessageFileDataUrl({ part });
     if (Result.isError(parsedPart)) {
-      // oxlint-disable-next-line no-await-in-loop -- early-exit on first parse failure; awaits rollback of already-uploaded files
       return await fail(parsedPart.error);
     }
 
-    // oxlint-disable-next-line no-await-in-loop -- sequential per-file upload + DB write preserving parts order, with rollback on error
     const uploadedFile = await uploadUserFile({
       ...(dependencies === undefined ? {} : { dependencies }),
       file: parsedPart.value,
@@ -169,7 +167,6 @@ export const uploadMessageFiles = async ({
       workspaceId,
     });
     if (Result.isError(uploadedFile)) {
-      // oxlint-disable-next-line no-await-in-loop -- early-exit on first upload failure; awaits rollback of already-uploaded files
       return await fail(uploadedFile.error);
     }
 

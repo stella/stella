@@ -726,7 +726,7 @@ export const syncAllClausesHandler = async ({
         continue;
       }
 
-      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential: this update runs inside the one bulk-sync transaction after its findFirst
+      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- sequential: this update runs inside the one bulk-sync transaction after its findFirst
       await tx
         .update(templateClauses)
         .set({ clauseVersionId: latestVersion.id })
@@ -737,7 +737,6 @@ export const syncAllClausesHandler = async ({
           ),
         );
 
-      // oxlint-disable-next-line no-await-in-loop -- sequential: audit write must follow its update within the one bulk-sync transaction
       await recordAuditEvent(tx, {
         action: AUDIT_ACTION.UPDATE,
         resourceType: AUDIT_RESOURCE_TYPE.CLAUSE_TEMPLATE_LINK,

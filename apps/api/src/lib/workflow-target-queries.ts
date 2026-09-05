@@ -54,7 +54,6 @@ export const fetchExplicitWorkflowTargetRows = async ({
 }): Promise<WorkflowTargetEntityRow[]> => {
   const entityRows: WorkflowTargetEntityRow[] = [];
   for (const chunk of chunkEntityIds(inputEntityIds)) {
-    // oxlint-disable-next-line no-await-in-loop -- sequential by design: bounds connection-pool/DB load when the caller passes a large explicit entity selection
     const rows = await scopedDb((tx) =>
       tx
         .select({ id: entities.id, kind: entities.kind })
@@ -152,7 +151,6 @@ export const collectFullWorkflowTargetIds = async ({
   let lastCursor: FullWorkflowTargetCursor | null = null;
 
   while (true) {
-    // oxlint-disable-next-line no-await-in-loop -- keyset pagination: each batch depends on the previous lastCursor
     const rows = await fetchFullWorkflowTargetBatch({
       createdAtCutoff,
       lastCursor,

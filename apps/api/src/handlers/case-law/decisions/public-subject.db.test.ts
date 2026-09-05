@@ -175,10 +175,8 @@ test(
       "/s/no-such-slug",
       "/s/open-case?language=xx_notalanguage!",
     ]) {
-      // oxlint-disable-next-line no-await-in-loop -- table-driven requests
       const response = await get(path);
       expect(response.status).toBe(404);
-      // oxlint-disable-next-line no-await-in-loop -- table-driven requests
       expect(await response.json()).toEqual({ message: "Decision not found" });
     }
   },
@@ -193,10 +191,8 @@ test(
       "/s/open-case",
       "/s/open-case?language=CS",
     ]) {
-      // oxlint-disable-next-line no-await-in-loop -- table-driven requests
       const response = await get(path);
       expect(response.status).toBe(200);
-      // oxlint-disable-next-line no-await-in-loop -- table-driven requests
       expect(await response.json()).toMatchObject({ reached: openId });
     }
   },
@@ -211,10 +207,8 @@ test(
       "/s/variant-case?language=PT_BR",
       "/s/variant-case?language=pt_br",
     ]) {
-      // oxlint-disable-next-line no-await-in-loop -- table-driven requests
       const response = await get(path);
       expect(response.status).toBe(200);
-      // oxlint-disable-next-line no-await-in-loop -- table-driven requests
       expect(await response.json()).toMatchObject({ reached: variantId });
     }
     // A different tag must still miss, so the normalisation is not a wildcard.

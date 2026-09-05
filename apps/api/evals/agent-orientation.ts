@@ -1332,9 +1332,6 @@ const main = async () => {
           process.stderr.write(
             `${id} · ${surface} · ${task.id} · run ${String(repeat)}\n`,
           );
-          // One model turn at a time keeps provider rate limits and the
-          // report order.
-          // eslint-disable-next-line no-await-in-loop
           const run = await (surface === "mcp"
             ? runMcpTask({ model, modelId: id, task, repeat, tools: mcpTools })
             : runCliTask({ model, modelId: id, task, repeat, skill }));

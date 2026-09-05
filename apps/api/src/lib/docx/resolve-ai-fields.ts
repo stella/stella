@@ -87,7 +87,6 @@ export const resolveAiFields = async ({
 
     const boundary = findArrayBoundary(field.path, resolved);
     if (boundary !== undefined) {
-      // oxlint-disable-next-line no-await-in-loop -- awaited at its position to preserve declaration order; rows fan out internally
       await resolveArrayField({
         rows: boundary.rows,
         fields,
@@ -109,7 +108,6 @@ export const resolveAiFields = async ({
     if (existing !== undefined && existing !== "") {
       continue; // user-entered value wins
     }
-    // oxlint-disable-next-line no-await-in-loop -- sequential: metered AI draft call that reads the shared `resolved` accumulator each iteration; must not fan out
     const value = await generate({
       prompt,
       fieldPath: field.path,
@@ -257,7 +255,6 @@ const resolveArrayField = async ({
       if (task === undefined) {
         return;
       }
-      // oxlint-disable-next-line no-await-in-loop -- bounded-concurrency worker draining a shared queue; the pool runs in parallel
       const value = await draftRow({
         row: task.row,
         fields,

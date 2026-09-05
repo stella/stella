@@ -1126,7 +1126,6 @@ const formatReleaseDate = (publishedAt: string) =>
       let hasMoreGithubPages = true;
 
       while (hasMoreGithubPages && releaseEntries.length < releaseEntryLimit) {
-        // eslint-disable-next-line no-await-in-loop -- GitHub pagination is sequential: the next page number and stop condition depend on this page's rel="next" link header, so pages cannot be fetched in parallel
         const response = await fetch(buildReleasesUrl(githubPage), {
           headers: { Accept: "application/vnd.github+json" },
           signal,
@@ -1135,7 +1134,6 @@ const formatReleaseDate = (publishedAt: string) =>
           return null;
         }
 
-        // eslint-disable-next-line no-await-in-loop -- body of the sequentially fetched page; see above
         const releases = parseGitHubReleases(await response.json());
         stellaReleases.push(...releases.filter(isListedStellaRelease));
         releaseEntries = groupMaintenanceReleases(

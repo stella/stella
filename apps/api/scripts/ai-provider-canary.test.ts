@@ -63,7 +63,6 @@ describe("AI provider catalog canary coverage", () => {
   test("the sweep probes exactly the declared ids, each once", async () => {
     for (const provider of CANARY_PROVIDERS) {
       const probed: string[] = [];
-      // oxlint-disable-next-line no-await-in-loop -- providers run one at a time so the recorded order stays deterministic.
       const failures = await runCatalogCanaryProbes(
         {
           apiKey: "test-key",

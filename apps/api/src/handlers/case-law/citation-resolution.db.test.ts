@@ -387,7 +387,6 @@ const drain = async () => {
   };
   let after: CitationResolutionCursor | null = null;
   for (let turn = 0; turn < 20; turn += 1) {
-    // oxlint-disable-next-line no-await-in-loop -- keyset walk: each batch's cursor comes from the previous one
     const batch = await resolveCitationBatch(scopedDb, { limit: 3, after });
     if (batch.scanned === 0) {
       return totals;
@@ -992,7 +991,6 @@ test("the walk's position is advanced and wrapped under its own lock", async () 
 
   // Walk to the end; the batch that finds nothing wraps the position.
   for (let turn = 0; turn < 30; turn += 1) {
-    // oxlint-disable-next-line no-await-in-loop -- the walk advances by what each batch commits
     const batch = await tryResolveCitationBatch(scopedDb, { limit: 5 });
     if (batch?.scanned === 0) {
       break;

@@ -373,7 +373,6 @@ const backfillCaseLaw = async (
     if (batchSize === 0) {
       break;
     }
-    // oxlint-disable-next-line no-await-in-loop -- credential refresh must complete before the next batch's S3 writes; sequential by design
     await refreshStaleS3();
 
     const idFilter: SQL | undefined =
@@ -382,7 +381,6 @@ const backfillCaseLaw = async (
       ? and(isNull(caseLawDecisions.textS3Key), idFilter)
       : isNull(caseLawDecisions.textS3Key);
 
-    // oxlint-disable-next-line no-await-in-loop -- cursor-paged select; each page depends on the prior page's lastId, so batches must run sequentially
     const rows: BackfillRow[] = await ingestionDb((tx) =>
       tx
         .select({
@@ -404,7 +402,6 @@ const backfillCaseLaw = async (
     }
 
     for (let i = 0; i < rows.length; i += CONCURRENCY) {
-      // oxlint-disable-next-line no-await-in-loop -- bounded chunked writes: each CONCURRENCY-sized chunk must settle before the next to cap in-flight S3/DB pressure
       const outcomes = await Promise.all(
         rows.slice(i, i + CONCURRENCY).map(backfillRow),
       );
@@ -441,7 +438,6 @@ const backfillLegislation = async (
     if (batchSize === 0) {
       break;
     }
-    // oxlint-disable-next-line no-await-in-loop -- credential refresh must complete before the next batch's S3 writes; sequential by design
     await refreshStaleS3();
 
     const idFilter: SQL | undefined =
@@ -450,7 +446,6 @@ const backfillLegislation = async (
       ? and(isNull(legislationDocuments.textS3Key), idFilter)
       : isNull(legislationDocuments.textS3Key);
 
-    // oxlint-disable-next-line no-await-in-loop -- cursor-paged select; each page depends on the prior page's lastId, so batches must run sequentially
     const rows: LegislationBackfillRow[] = await ingestionDb((tx) =>
       tx
         .select({
@@ -472,7 +467,6 @@ const backfillLegislation = async (
     }
 
     for (let i = 0; i < rows.length; i += CONCURRENCY) {
-      // oxlint-disable-next-line no-await-in-loop -- bounded chunked writes: each CONCURRENCY-sized chunk must settle before the next to cap in-flight S3/DB pressure
       const outcomes = await Promise.all(
         rows.slice(i, i + CONCURRENCY).map(backfillLegislationRow),
       );
@@ -516,10 +510,8 @@ const backfillCaseLawIndex = async (
     if (batchSize === 0) {
       break;
     }
-    // oxlint-disable-next-line no-await-in-loop -- credential refresh must complete before the next batch's S3 reads; sequential by design
     await refreshStaleS3();
 
-    // oxlint-disable-next-line no-await-in-loop -- batches drain a queue sequentially; the next iteration only proceeds once this batch's progress is known
     const result = await backfillCorpusIndex(
       ingestionDb,
       batchSize,
@@ -568,10 +560,8 @@ const backfillLegislationIndex = async (
     if (batchSize === 0) {
       break;
     }
-    // oxlint-disable-next-line no-await-in-loop -- credential refresh must complete before the next batch's S3 reads; sequential by design
     await refreshStaleS3();
 
-    // oxlint-disable-next-line no-await-in-loop -- batches drain a queue sequentially; the next iteration only proceeds once this batch's count is known
     const count = await backfillLegislationCorpusIndex(
       ingestionDb,
       batchSize,

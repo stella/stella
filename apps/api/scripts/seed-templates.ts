@@ -2351,7 +2351,6 @@ export async function seedTemplates(
 
   // ── 1. Clause categories ────────────────────────────
   for (const cat of CLAUSE_CATS) {
-    // oxlint-disable-next-line no-await-in-loop -- sequential seeding preserves clause-category insert order
     await rootDb
       .insert(clauseCategories)
       .values({
@@ -2371,7 +2370,6 @@ export async function seedTemplates(
     const clauseId = scopedSeedId(c.label);
     const versionId = scopedSeedId(`${c.label}-v1`);
 
-    // oxlint-disable-next-line no-await-in-loop -- sequential seeding preserves clause insert order / FK dependencies
     await rootDb
       .insert(clauses)
       .values({
@@ -2388,7 +2386,6 @@ export async function seedTemplates(
       })
       .onConflictDoNothing();
 
-    // oxlint-disable-next-line no-await-in-loop -- FK dependency: clause version references the clause inserted just above
     await rootDb
       .insert(clauseVersions)
       .values({
@@ -2403,7 +2400,6 @@ export async function seedTemplates(
     // 3. Clause variants
     if (c.variants) {
       for (const [vi, v] of c.variants.entries()) {
-        // oxlint-disable-next-line no-await-in-loop -- sequential seeding preserves clause-variant insert order under the parent clause
         await rootDb
           .insert(clauseVariants)
           .values({
@@ -2423,7 +2419,6 @@ export async function seedTemplates(
 
   // ── 4. Template categories ──────────────────────────
   for (const cat of TEMPLATE_CATS) {
-    // oxlint-disable-next-line no-await-in-loop -- sequential seeding preserves template-category insert order
     await rootDb
       .insert(templateCategories)
       .values({
@@ -2469,25 +2464,21 @@ export async function seedTemplates(
     };
 
     // Generate DOCX with body content
-    // oxlint-disable-next-line no-await-in-loop -- bounded memory: generate one template's DOCX at a time
     let docxBuffer = await createTemplateDocx(t.name, t.bodyXml);
 
     // Embed manifest into DOCX
-    // oxlint-disable-next-line no-await-in-loop -- depends on the DOCX buffer generated in the line above
     docxBuffer = await writeManifest(docxBuffer, manifest);
 
     const sizeBytes = docxBuffer.length;
 
     // Upload to S3
     const s3Key = `${ORG_ID}/templates/${templateId}.docx`;
-    // oxlint-disable-next-line no-await-in-loop -- bounded memory: write one template's DOCX buffer to S3 at a time
     await writeS3ObjectWithRetry({
       data: new Uint8Array(docxBuffer),
       key: s3Key,
     });
 
     // Insert template
-    // oxlint-disable-next-line no-await-in-loop -- depends on the template DOCX uploaded to S3 just above this iteration
     await rootDb
       .insert(templates)
       .values({
@@ -2507,13 +2498,11 @@ export async function seedTemplates(
 
     // Insert version v1
     const versionS3Key = `${ORG_ID}/templates/${templateId}/v1.docx`;
-    // oxlint-disable-next-line no-await-in-loop -- bounded memory: write one template's DOCX buffer to S3 at a time
     await writeS3ObjectWithRetry({
       data: new Uint8Array(docxBuffer),
       key: versionS3Key,
     });
 
-    // oxlint-disable-next-line no-await-in-loop -- depends on the template version's DOCX buffer written to S3 just above this iteration
     await rootDb
       .insert(templateVersions)
       .values({
@@ -2549,7 +2538,6 @@ export async function seedTemplates(
       }
     }
 
-    // oxlint-disable-next-line no-await-in-loop -- sequential seeding preserves template-clause link insert order
     await rootDb
       .insert(templateClauses)
       .values({

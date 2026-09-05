@@ -298,7 +298,6 @@ const gradeTierMatchPositions = async ({
       break;
     }
     const batch = positions.slice(cursor, cursor + TIER_MATCH_BATCH_SIZE);
-    // oxlint-disable-next-line no-await-in-loop -- one model call per batch, in order, keeps the single-doc review's fan-out bounded
     const graded = await gradeTierMatchesForReview({
       items: batch.map((position) => ({
         key: position.sourceId,
@@ -324,7 +323,6 @@ const gradeTierMatchPositions = async ({
         verdict === undefined ? UNGRADED_VERDICT : toGradedVerdict(verdict),
       );
     }
-    // oxlint-disable-next-line no-await-in-loop -- progress is committed per batch, in order, before the next call starts
     await emit(batch);
   }
 };
@@ -400,7 +398,6 @@ const runBatchesWithConcurrency = async <Batch>({
       if (batch === undefined) {
         return;
       }
-      // oxlint-disable-next-line no-await-in-loop -- one worker's batches run in sequence; concurrency comes from running several workers, not from parallelizing within one
       await onBatch(batch);
     }
   };

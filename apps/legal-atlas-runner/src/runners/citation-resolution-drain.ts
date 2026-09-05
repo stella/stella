@@ -264,7 +264,6 @@ export const runCitationResolutionDrain = async ({
     let delayMs = timing.batchDelayMs;
 
     try {
-      // oxlint-disable-next-line no-await-in-loop -- one bounded batch at a time is the point; the next turn only starts after this one is paced
       const step = await settleBatch();
       failureStreak = 0;
       switch (step.type) {
@@ -309,7 +308,6 @@ export const runCitationResolutionDrain = async ({
     }
 
     if (now() >= summaryDueAt) {
-      // oxlint-disable-next-line no-await-in-loop -- the gauge is read once per window, inside the walk's own pacing
       await flushSummary();
     }
 
@@ -318,7 +316,6 @@ export const runCitationResolutionDrain = async ({
     let remainingMs = delayMs;
     while (remainingMs > 0 && !isDraining()) {
       const sliceMs = Math.min(remainingMs, CITATION_RESOLUTION_CHECK_SLICE_MS);
-      // oxlint-disable-next-line no-await-in-loop -- sequential pacing wait, sliced only to re-check the drain flag
       await sleep(sliceMs);
       remainingMs -= sliceMs;
     }

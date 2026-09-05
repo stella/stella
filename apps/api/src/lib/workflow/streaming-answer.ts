@@ -103,7 +103,6 @@ export const consumePartialAnswers = async ({
         continue;
       }
 
-      // oxlint-disable-next-line no-await-in-loop -- sequential by design: partial answers must be emitted in stream arrival order
       await onPartialAnswer({ propertyId, answer });
     }
   }

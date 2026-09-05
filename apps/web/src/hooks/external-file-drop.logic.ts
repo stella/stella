@@ -112,7 +112,6 @@ const readAllDirectoryEntries = async (
   const entries: unknown[] = [];
 
   while (true) {
-    // oxlint-disable-next-line no-await-in-loop -- paged reader: each readEntries call drains the next batch from the same cursor
     const batch = await readDirectoryEntriesBatch(reader);
     if (batch.length === 0) {
       return entries;
@@ -137,7 +136,6 @@ const collectDirectory = async ({
   const entries = await readAllDirectoryEntries(entry);
   for (const child of entries) {
     if (isDirectoryEntry(child)) {
-      // oxlint-disable-next-line no-await-in-loop -- ordered traversal: children append to a shared tree in deterministic order
       await collectDirectory({
         entry: child,
         path: pathWithSegment(path, child.name),
@@ -150,7 +148,6 @@ const collectDirectory = async ({
       continue;
     }
 
-    // oxlint-disable-next-line no-await-in-loop -- ordered traversal: files append to a shared tree in deterministic order
     const file = await readFileEntry(child);
     tree.files.push({
       file,
@@ -198,7 +195,6 @@ export const collectDroppedFileTree = async ({
   for (const snapshot of snapshots) {
     switch (snapshot.type) {
       case "directory":
-        // oxlint-disable-next-line no-await-in-loop -- ordered traversal: dropped items append to a shared tree in deterministic order
         await collectDirectory({
           entry: snapshot.entry,
           path: pathWithSegment([], snapshot.entry.name),
@@ -206,7 +202,6 @@ export const collectDroppedFileTree = async ({
         });
         break;
       case "file_entry": {
-        // oxlint-disable-next-line no-await-in-loop -- ordered traversal: dropped files append to a shared tree in deterministic order
         const file = await readFileEntry(snapshot.entry);
         tree.files.push({
           file,

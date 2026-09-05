@@ -333,7 +333,6 @@ if (!databaseUrl || !runPostgresTests) {
     afterAll(async () => {
       restoreFetch?.();
       for (const sourceId of createdSourceIds) {
-        // oxlint-disable-next-line no-await-in-loop -- test teardown of a handful of source rows
         await db.delete(caseLawSources).where(eq(caseLawSources.id, sourceId));
       }
     });

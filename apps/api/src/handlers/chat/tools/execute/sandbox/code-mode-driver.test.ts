@@ -38,7 +38,6 @@ const waitForCondition = async (condition: () => boolean): Promise<void> => {
     if (Date.now() > deadline) {
       throw new Error("Condition was not met before timeout.");
     }
-    // oxlint-disable-next-line no-await-in-loop -- polling loop: each tick must wait before re-checking the condition
     await Bun.sleep(5);
   }
 };

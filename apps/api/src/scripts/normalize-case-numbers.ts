@@ -71,7 +71,6 @@ while (true) {
   // the lock a resolver batch holding a snapshot from before the key was
   // cleared can commit a `resolved` edge to a decision that no longer carries
   // that key, and nothing revisits it.
-  // oxlint-disable-next-line no-await-in-loop -- each batch depends on the previous one having committed
   const result = await rootDb.transaction(async (tx) => {
     await lockCitationGraph(tx);
     return await tx.execute(normalizeSheetNumbersStatement(BATCH));

@@ -2793,7 +2793,6 @@ export const runDocumentProcessingReconciliationPhases = async ({
     [RECONCILIATION_PHASE.STALE_LEASE]: drained(),
   };
   for (const phase of phases) {
-    // oxlint-disable-next-line no-await-in-loop -- repair phases are deliberately isolated and ordered
     const result = await Result.tryPromise({
       // Called through an arrow rather than passed by reference: a phase
       // is defined as taking nothing, and handing the reference over lets

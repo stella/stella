@@ -161,7 +161,6 @@ const insertNotifications = async (
 
   const inserted: NotificationInsertRow[] = [];
   for (const batch of chunked(values, NOTIFICATION_INSERT_BATCH_SIZE)) {
-    // oxlint-disable-next-line no-await-in-loop -- batches are written in order so one oversized fan-out cannot hold every pool connection at once
     const batchRows = await writeBatch(
       async (tx) =>
         await tx

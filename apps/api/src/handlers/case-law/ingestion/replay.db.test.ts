@@ -129,7 +129,6 @@ const walkIds = async (
   const seen: SafeId<"caseLawDecision">[] = [];
   let after: SafeId<"caseLawDecision"> | null = null;
   for (let step = 0; step < WALK_STEP_BUDGET; step += 1) {
-    // oxlint-disable-next-line no-await-in-loop -- sequential keyset walk; each page's boundary is the previous page's last row
     const page = await selectReplayPage({
       scopedDb,
       sourceId,
@@ -306,7 +305,6 @@ describe("replay of a source", () => {
   test("an adapter that cannot re-parse a stored payload is refused, not run", async () => {
     const sourceId = await createSource();
     for (const sub of [1, 2, 3]) {
-      // oxlint-disable-next-line no-await-in-loop -- fixture rows are inserted in order to keep their timestamps distinct
       await insertDecision({
         sourceId,
         id: createSafeId<"caseLawDecision">(),
@@ -370,7 +368,6 @@ describe("replay of a source", () => {
     for (const sub of [1, 2, 3]) {
       const id = createSafeId<"caseLawDecision">();
       ids.push(id);
-      // oxlint-disable-next-line no-await-in-loop -- fixture rows are inserted in order to keep their timestamps distinct
       await insertDecision({
         sourceId,
         id,
@@ -797,7 +794,6 @@ describe("replay of a source", () => {
       false,
       false,
     ].entries()) {
-      // oxlint-disable-next-line no-await-in-loop -- fixture rows are inserted in order to keep their timestamps distinct
       await insertDecision({
         sourceId,
         id: createSafeId<"caseLawDecision">(),

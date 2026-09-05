@@ -644,7 +644,6 @@ export const createWorkflowRunStateStore = (redis: WorkflowRunStateRedis) => {
       const workspaceIds: string[] = [];
       let cursor = "0";
       do {
-        // oxlint-disable-next-line no-await-in-loop -- each SCAN cursor depends on the prior reply
         const reply = await redis.send("SCAN", [
           cursor,
           "MATCH",

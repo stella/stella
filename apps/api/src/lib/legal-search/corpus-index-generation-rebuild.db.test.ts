@@ -71,7 +71,6 @@ beforeAll(async () => {
   client = await createTestPglite();
   db = drizzle({ client });
   for (const migrationUrl of MIGRATION_URLS) {
-    // oxlint-disable-next-line no-await-in-loop -- migration-owned functions and their triggers must install in production order
     const migration = await Bun.file(migrationUrl).text();
     for (const statement of migration.split("--> statement-breakpoint")) {
       const ddl = statement.trim();
@@ -83,7 +82,6 @@ beforeAll(async () => {
       ) {
         continue;
       }
-      // oxlint-disable-next-line no-await-in-loop -- each trigger depends on the preceding migration-owned function
       await db.execute(sql.raw(ddl));
     }
   }

@@ -96,7 +96,6 @@ export const fetchWithRetry = async (
       throw signal.reason ?? new DOMException("Aborted", "AbortError");
     }
     try {
-      // oxlint-disable-next-line no-await-in-loop -- retry-with-backoff: each attempt must await the previous attempt's outcome
       const response = await (beforeAttempt?.() ?? Promise.resolve()).then(
         async () =>
           await fetchWithTimeout(url, {
@@ -127,7 +126,6 @@ export const fetchWithRetry = async (
           delayMs: Math.round(delay),
         });
       }
-      // oxlint-disable-next-line no-await-in-loop -- sequential backoff delay before the next retry attempt
       await Bun.sleep(delay);
     } catch (error) {
       // Parent signal aborted: propagate immediately
@@ -147,7 +145,6 @@ export const fetchWithRetry = async (
             delayMs: Math.round(delay),
           });
         }
-        // oxlint-disable-next-line no-await-in-loop -- sequential backoff delay before retrying after a timeout
         await Bun.sleep(delay);
         continue;
       }

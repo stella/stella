@@ -195,7 +195,6 @@ afterAll(async () => {
 describe("starter playbook content", () => {
   test("every starter's authored positions pass assertPositionsValid", async () => {
     for (const starter of STARTER_PLAYBOOKS) {
-      // oxlint-disable-next-line no-await-in-loop -- sequential validation over a fixed, small starter list
       const result = await assertPositionsValid({
         safeDb: createScopedDbMock(noDbTx).safeDb,
         organizationId: ids.orgA,
@@ -226,7 +225,6 @@ describe("starter playbook content", () => {
     };
 
     for (const starter of STARTER_PLAYBOOKS) {
-      // oxlint-disable-next-line no-await-in-loop -- fixed starter catalog; each payload is checked independently
       await deriveAutoAsks(instantiateStarterPositions(starter.positions), {
         organizationId: ids.orgA,
         orgAIConfig: null,

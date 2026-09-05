@@ -271,7 +271,6 @@ describe("GitHub skill package discovery", () => {
       ["server-error", "Skill source returned HTTP 503"],
     ] as const) {
       invalidSkillScenario = scenario;
-      // oxlint-disable-next-line no-await-in-loop -- each scenario must exercise a complete discovery request
       const result = await discoverSkillPackagesFromUrl(
         "https://github.com/example/skills",
       );

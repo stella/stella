@@ -159,7 +159,6 @@ export const installPgliteWorkspaceAccessObjects = async (
     CHAT_THREAD_TURN_WORKSPACE_CASCADE_MIGRATION_PATH,
   ];
   for (const migrationPath of migrationPaths) {
-    // oxlint-disable-next-line no-await-in-loop -- migration batches must stay ordered
     await installPgliteMigration({ db, migrationPath });
   }
   // The replay above rewrites every `workspace_*` policy to the plain matter
@@ -170,7 +169,6 @@ export const installPgliteWorkspaceAccessObjects = async (
     DOCX_SUGGESTION_SOURCE_MATTERS_MIGRATION_PATH,
   ).filter((statement) => executableSql(statement).startsWith("ALTER POLICY"));
   for (const statement of policyStatements) {
-    // oxlint-disable-next-line no-await-in-loop -- policy DDL must execute in source order
     await db.execute(sql.raw(statement));
   }
 };
@@ -201,7 +199,6 @@ export const installPgliteAgentSkillRevisionTrigger = async (
     ),
   );
   for (const statement of statements) {
-    // oxlint-disable-next-line no-await-in-loop -- function/trigger DDL must execute in source order
     await db.execute(sql.raw(statement));
   }
 };
@@ -226,7 +223,6 @@ export const installPgliteCorpusProjectionRevisionFence = async (
         ),
     );
     for (const statement of statements) {
-      // oxlint-disable-next-line no-await-in-loop -- function/trigger DDL must execute in source order
       await db.execute(sql.raw(statement));
     }
   }
@@ -258,7 +254,6 @@ export const installPgliteMigration = async ({
     if (/^SET LOCAL\b/iu.test(executable)) {
       continue;
     }
-    // oxlint-disable-next-line no-await-in-loop -- migration DDL must execute in source order
     await db.execute(sql.raw(statement));
   }
 };

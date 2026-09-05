@@ -369,7 +369,6 @@ const removeQueuedWorkflowJobs = async (
   jobIds: readonly string[],
 ): Promise<void> => {
   for (const chunk of chunked(jobIds, LIMITS.workflowEntityBatchSize)) {
-    // oxlint-disable-next-line no-await-in-loop -- sequential chunk drain bounds the per-batch Promise.all concurrency
     await Promise.all(
       chunk.map(async (jobId) => {
         try {
@@ -614,7 +613,6 @@ export const startWorkflow = async ({
           workflowEntityJobId({ entityId, requestId }),
         );
         queuedJobIds.push(...chunkJobIds);
-        // oxlint-disable-next-line no-await-in-loop -- sequential chunk enqueue bounds queue write batch size and preserves job ordering
         await enqueueEntityJobs({
           entityIds: chunk,
           executionPlan,
@@ -709,7 +707,6 @@ const selectWorkspacesWithPendingCells = async (
             fields.workspaceId,
             workspaceIdBatch.map((id) => brandPersistedWorkspaceId(id)),
           );
-    // oxlint-disable-next-line no-await-in-loop -- sequential batched DB scan bounds the IN-list size per query; workspace count is unbounded across tenants, so unbounded parallel fan-out risks DB pool exhaustion
     const rows = await rootDb
       .selectDistinct({ workspaceId: fields.workspaceId })
       .from(fields)
@@ -748,7 +745,6 @@ const readWorkflowRequestIds = async (
     workspaceIds,
     LIMITS.workflowEntityBatchSize,
   )) {
-    // oxlint-disable-next-line no-await-in-loop -- sequential batch drain bounds the per-batch Promise.all concurrency against Redis
     await Promise.all(
       workspaceIdBatch.map(async (id) => {
         const requestId = await runStateStore.getRequestId(
@@ -770,7 +766,6 @@ const readWorkflowRunningValues = async (
     workspaceIds,
     LIMITS.workflowEntityBatchSize,
   )) {
-    // oxlint-disable-next-line no-await-in-loop -- sequential batch drain bounds the per-batch Promise.all concurrency against Redis
     await Promise.all(
       workspaceIdBatch.map(async (id) => {
         const runningValue = await runStateStore.getRunningValue(
@@ -949,7 +944,6 @@ export const reconcileOrphanedWorkflows = async ({
   });
 
   for (const workspaceId of recoverableOrphans) {
-    // oxlint-disable-next-line no-await-in-loop -- sequential recovery serialises lock contention across orphaned workflows
     await recoverOrphanedWorkflow({
       expectedRequestId: currentRequestIds.get(workspaceId) ?? null,
       workspaceId: brandPersistedWorkspaceId(workspaceId),
@@ -1317,7 +1311,6 @@ const processEntityJob = async (data: EntityJobData, signal: AbortSignal) => {
   });
 
   for (let level = 0; level < executionPlan.length; level++) {
-    // oxlint-disable-next-line no-await-in-loop -- levels run in dependency order; recheck current request before each level
     const isStillCurrentRequest = await isCurrentWorkflowRequest({
       requestId,
       workspaceId: branded.workspaceId,
@@ -1337,7 +1330,7 @@ const processEntityJob = async (data: EntityJobData, signal: AbortSignal) => {
 
     // Process all batches at this level in parallel
     // (same level = independent dependencies)
-    // oxlint-disable-next-line no-await-in-loop, no-db-await-in-loop/no-db-await-in-loop -- levels run in dependency order; a level must finish before the next starts. Same-level batches process a single entity's properties in parallel, so the fan-out width is bounded by the workspace's configured property count, not tenant row volume
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- levels run in dependency order; a level must finish before the next starts. Same-level batches process a single entity's properties in parallel, so the fan-out width is bounded by the workspace's configured property count, not tenant row volume
     await Promise.all(
       batches.map(
         async (batch) =>

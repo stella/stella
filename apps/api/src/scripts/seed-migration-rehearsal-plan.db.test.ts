@@ -51,7 +51,6 @@ test("every seeder satisfies the schema and writes its promised rows", async () 
   const db = drizzle({ client });
 
   for (const { statement } of rehearsalSeedSteps(DECISIONS)) {
-    // oxlint-disable-next-line no-await-in-loop -- statements apply in order
     await db.execute(sql.raw(statement));
   }
 
@@ -72,7 +71,6 @@ test("every seeder satisfies the schema and writes its promised rows", async () 
 
   // Rerunnable on a database that already holds the fixtures.
   for (const { statement } of rehearsalSeedSteps(DECISIONS).slice(0, 2)) {
-    // oxlint-disable-next-line no-await-in-loop -- statements apply in order
     await db.execute(sql.raw(statement));
   }
   await client.close();

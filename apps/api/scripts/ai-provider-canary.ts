@@ -722,7 +722,6 @@ export const runCanaryProbe = async ({
   for (let attempt = 1; attempt <= CANARY_PROBE_MAX_ATTEMPTS; attempt += 1) {
     const signal = AbortSignal.timeout(timeoutMs);
     try {
-      // oxlint-disable-next-line no-await-in-loop -- retries must wait for the preceding provider attempt to fail.
       await runAttempt(signal);
       return { attempts: attempt, status: "passed" };
     } catch (error) {
@@ -732,7 +731,6 @@ export const runCanaryProbe = async ({
       ) {
         return { attempts: attempt, error, signal, status: "failed" };
       }
-      // oxlint-disable-next-line no-await-in-loop -- bounded backoff separates sequential provider attempts.
       await wait(retryDelayMs * CANARY_PROBE_RETRY_BACKOFF ** (attempt - 1));
     }
   }
@@ -1834,7 +1832,6 @@ export const runCatalogCanaryProbes = async (
       });
       continue;
     }
-    // oxlint-disable-next-line no-await-in-loop -- catalog probes share the provider quota and must remain sequential.
     const result = await runProbe({
       run: async (signal) => {
         await probeModel({ apiKey, modelId, provider, signal });
@@ -1854,7 +1851,6 @@ const runWeeklyCanaryProbes = async (
 
   for (const role of context.rotation.modelRoles) {
     const label = `weekly-role-${role}:${context.rotation.modelId}`;
-    // oxlint-disable-next-line no-await-in-loop -- role probes must stay sequential so provider rate limits and output remain deterministic.
     const result = await runCanaryProbe({
       run: async (signal) => {
         await runWeeklyModelRoleProbe({ context, role, signal });
@@ -1868,7 +1864,6 @@ const runWeeklyCanaryProbes = async (
     });
 
     const structuredLabel = `weekly-structured-role-${role}:${context.rotation.modelId}`;
-    // oxlint-disable-next-line no-await-in-loop -- structured probes share the same provider quota and must remain sequential.
     const structuredResult = await runCanaryProbe({
       run: async (signal) => {
         await runWeeklyStructuredOutputModelRoleProbe({

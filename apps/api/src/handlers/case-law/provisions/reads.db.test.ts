@@ -379,7 +379,6 @@ test("citing decisions page through a stable cursor", async () => {
   let cursor: string | undefined;
 
   for (let request = 0; request < 4; request += 1) {
-    // oxlint-disable-next-line no-await-in-loop -- pagination is sequential by definition
     const page = await citingDecisions({
       limit: 1,
       ...(cursor === undefined ? {} : { cursor }),

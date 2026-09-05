@@ -64,7 +64,6 @@ const latestMigrationStatements = async (marker: string): Promise<string[]> => {
   ].sort();
   let latest: string | undefined;
   for (const migration of migrations) {
-    // oxlint-disable-next-line no-await-in-loop -- ordered scan over a directory listing
     const source = await Bun.file(new URL(migration, drizzleDir)).text();
     if (source.includes(marker)) {
       latest = source;
@@ -273,7 +272,6 @@ const installProjectionTrigger = async (): Promise<void> => {
     "UPDATE OF content_hash, indexed_hash, country, decision_date",
   );
   for (const statement of [...functionStatements, ...triggerStatements]) {
-    // oxlint-disable-next-line no-await-in-loop -- functions, replacement drop, and trigger creation are order-dependent DDL
     await db.execute(sql.raw(statement));
   }
 };
@@ -545,7 +543,6 @@ test("country guard rejects new malformed values without blocking legacy repairs
       );
     expect(countryGuardStatements).toHaveLength(3);
     for (const statement of countryGuardStatements) {
-      // oxlint-disable-next-line no-await-in-loop -- function, replacement drop, and trigger creation are order-dependent DDL
       await db.execute(sql.raw(statement));
     }
 
@@ -2038,7 +2035,6 @@ test("the database rejects every malformed corpus source descriptor shape", asyn
     );
   expect(descriptorGuardStatements).toHaveLength(3);
   for (const statement of descriptorGuardStatements) {
-    // oxlint-disable-next-line no-await-in-loop -- function, replacement drop, and trigger creation are order-dependent DDL
     await db.execute(sql.raw(statement));
   }
 
@@ -2853,7 +2849,6 @@ test(
       );
     expect(projectionTriggerStatements).toHaveLength(2);
     for (const statement of projectionTriggerStatements) {
-      // oxlint-disable-next-line no-await-in-loop -- function then trigger creation are order-dependent DDL
       await db.execute(sql.raw(statement));
     }
     await db.insert(caseLawSources).values({
@@ -3067,7 +3062,6 @@ test(
         let status = "";
         while (status !== "complete" && pages < 200) {
           pages += 1;
-          // oxlint-disable-next-line no-await-in-loop -- the walk is sequential by construction
           status = (await backfill(scopedDb, batchSize, generation)).status;
         }
         expect(status).toBe("complete");

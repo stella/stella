@@ -589,13 +589,11 @@ describe("dispatch — handleHostedEntitlementUpsert", () => {
       const designated = [fx.memberUserId];
       for (const _extra of [1, 2]) {
         const extraUserId = `user_${Bun.randomUUIDv7()}`;
-        // oxlint-disable-next-line no-await-in-loop -- two sequential seed rows in a test fixture
         await tx.insert(user).values({
           id: extraUserId,
           name: "Extra Member",
           email: `${extraUserId}@test.local`,
         });
-        // oxlint-disable-next-line no-await-in-loop -- see above
         await tx.insert(member).values({
           id: `member_${Bun.randomUUIDv7()}`,
           organizationId: fx.organizationId,

@@ -25,7 +25,6 @@ export const releaseOutsideFinally = async (
   // oxlint-disable-next-line require-stream-reader-disposal/require-stream-reader-disposal -- fixture: release is not protected by finally
   const reader = stream.getReader();
   while (true) {
-    // oxlint-disable-next-line no-await-in-loop -- fixture: stream reads are sequential
     const result = await reader.read();
     if (result.done) {
       break;
@@ -43,7 +42,6 @@ export const earlyReturnWithoutCancel = async (
   const reader = stream.getReader();
   try {
     while (true) {
-      // oxlint-disable-next-line no-await-in-loop -- fixture: stream reads are sequential
       const result = await reader.read();
       if (result.done) {
         return;
@@ -69,7 +67,6 @@ export const breakWithoutCancel = async (
   const reader = stream.getReader();
   try {
     while (true) {
-      // oxlint-disable-next-line no-await-in-loop -- fixture: stream reads are sequential
       const result = await reader.read();
       if (result.done || stopEarly) {
         break;
@@ -91,7 +88,6 @@ export const naturalReadErrorRelease = async (
   const reader = stream.getReader();
   try {
     while (true) {
-      // oxlint-disable-next-line no-await-in-loop -- fixture: stream reads are sequential
       const result = await reader.read();
       if (result.done) {
         break;
@@ -168,7 +164,6 @@ export async function* generatorWithoutCancel(
   const reader = stream.getReader();
   try {
     while (true) {
-      // oxlint-disable-next-line no-await-in-loop -- fixture: stream reads are sequential
       const result = await reader.read();
       if (result.done) {
         return;
@@ -189,7 +184,6 @@ export const consumeToEnd = async (stream: ReadableStream<Uint8Array>) => {
   const reader = stream.getReader();
   try {
     while (true) {
-      // oxlint-disable-next-line no-await-in-loop -- fixture: stream reads are sequential
       const result = await reader.read();
       if (result.done) {
         break;
@@ -240,13 +234,11 @@ export const cancelBeforeReturn = async (
   const reader = stream.getReader();
   try {
     while (true) {
-      // oxlint-disable-next-line no-await-in-loop -- fixture: stream reads are sequential
       const result = await reader.read();
       if (result.done) {
         return;
       }
       if (stopEarly) {
-        // oxlint-disable-next-line no-await-in-loop -- fixture: stream cancellation is sequential with the read
         await reader.cancel().catch(() => undefined);
         return;
       }
@@ -333,7 +325,6 @@ export async function* cancellableGenerator(
   const reader = stream.getReader();
   try {
     while (true) {
-      // oxlint-disable-next-line no-await-in-loop -- fixture: stream reads are sequential
       const result = await reader.read();
       if (result.done) {
         return;
@@ -438,12 +429,10 @@ export const rejectingProcessingWithoutCancel = async (
   const reader = stream.getReader();
   try {
     while (true) {
-      // oxlint-disable-next-line no-await-in-loop -- fixture: stream reads are sequential
       const result = await reader.read();
       if (result.done) {
         break;
       }
-      // oxlint-disable-next-line no-await-in-loop -- fixture: awaited processing is the unsafe exit under test
       await Promise.resolve(result.value);
     }
   } finally {
@@ -460,7 +449,6 @@ export const throwingSynchronousProcessing = async (
   const reader = stream.getReader();
   try {
     while (true) {
-      // oxlint-disable-next-line no-await-in-loop -- fixture: stream reads are sequential
       const result = await reader.read();
       if (result.done) {
         break;
@@ -491,7 +479,6 @@ export const eofCallbackBeforeRelease = async (
   const reader = stream.getReader();
   try {
     while (true) {
-      // oxlint-disable-next-line no-await-in-loop -- fixture: stream reads are sequential
       const result = await reader.read();
       if (result.done) {
         processChunk(new Uint8Array());
@@ -542,7 +529,6 @@ export const reassignedDoneGuard = async () => {
   const reader = stream.getReader();
   try {
     while (true) {
-      // oxlint-disable-next-line no-await-in-loop -- fixture: stream reads are sequential
       let { done } = await reader.read();
       done = stopEarly;
       if (done) {

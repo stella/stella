@@ -578,7 +578,6 @@ describe("a passage flood does not strand the reader", () => {
     const seen: string[] = [];
     let cursor: SearchCursor | null = null;
     for (let pageIndex = 0; pageIndex < 20; pageIndex += 1) {
-      // oxlint-disable-next-line no-await-in-loop -- each page depends on the cursor the previous one emitted
       const page = await readFloodPage(10, cursor);
       seen.push(...page.pageRanked.map((hit) => hit.id));
       if (page.nextCursor === null) {
@@ -695,7 +694,6 @@ describe("ranker-folded candidates stay folded across pages", () => {
     const seen: string[] = [];
     let cursor: SearchCursor | null = null;
     for (let pageIndex = 0; pageIndex < 20; pageIndex += 1) {
-      // oxlint-disable-next-line no-await-in-loop -- each page depends on the cursor the previous one emitted
       const page = await readFoldedPage(3, cursor);
       seen.push(...page.pageRanked.map((hit) => hit.id));
       const last = page.pageRanked.at(-1);

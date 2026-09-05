@@ -35,8 +35,8 @@ export type DrainMemoryLifecyclePhaseOptions<TRow> = {
  *
  *  - `maxBatches` caps the work one run may do, so a large backlog is drained
  *    across successive runs instead of holding the scheduler slot. Because
- *    the phase recurses (batches are strictly sequential, so `no-await-in-loop`
- *    rules out a plain loop), this cap is also what bounds the call depth.
+ *    the phase recurses rather than looping, this cap is also what bounds the
+ *    call depth.
  *  - It stops when a batch transitions nothing. Termination otherwise relies
  *    on `transitionBatch` mutating exactly what `selectBatch` matched; if the
  *    two predicates ever drift, it would re-select the same rows forever.
