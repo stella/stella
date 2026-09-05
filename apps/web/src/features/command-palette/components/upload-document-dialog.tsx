@@ -96,9 +96,11 @@ export const UploadDocumentDialog = ({
         </DialogHeader>
         <DialogPanel className="flex flex-col gap-4">
           {workspaceId ? (
-            <p className="text-sm">
-              <BidiText>{selectedMatter?.name ?? t("common.loading")}</BidiText>
-            </p>
+            selectedMatter && (
+              <p className="text-sm">
+                <BidiText>{selectedMatter.name}</BidiText>
+              </p>
+            )
           ) : (
             <div className="flex flex-col gap-2">
               <label className="text-sm font-medium" htmlFor="upload-matter">
@@ -133,30 +135,33 @@ export const UploadDocumentDialog = ({
                   <ComboboxEmpty>{t("common.noResults")}</ComboboxEmpty>
                 </ComboboxPopup>
               </Combobox>
-              {isPending && (
-                <p className="text-muted-foreground text-sm">
-                  {t("common.loading")}
-                </p>
-              )}
-              {error && (
-                <div className="flex items-center justify-between gap-2 text-sm">
-                  <span className="text-destructive">
-                    {t("errors.actionFailed")}
-                  </span>
-                  <Button
-                    onClick={() =>
-                      detached(refetch(), "upload-document.retry-matters")
-                    }
-                    size="xs"
-                    variant="ghost"
-                  >
-                    {t("common.retry")}
-                  </Button>
-                </div>
-              )}
             </div>
           )}
-          {selectedWorkspaceId && (
+          {isPending && (
+            <p className="text-muted-foreground text-sm">
+              {t("common.loading")}
+            </p>
+          )}
+          {(error !== null ||
+            (workspaceId !== undefined &&
+              !isPending &&
+              selectedMatter === undefined)) && (
+            <div className="flex items-center justify-between gap-2 text-sm">
+              <span className="text-destructive">
+                {t("errors.actionFailed")}
+              </span>
+              <Button
+                onClick={() =>
+                  detached(refetch(), "upload-document.retry-matters")
+                }
+                size="xs"
+                variant="ghost"
+              >
+                {t("common.retry")}
+              </Button>
+            </div>
+          )}
+          {selectedMatter && (
             <QuerySuspenseBoundary
               area="command-palette.upload-document"
               errorFallback={({ reset }) => (
@@ -174,12 +179,12 @@ export const UploadDocumentDialog = ({
                   {t("common.loading")}
                 </p>
               }
-              resetKeys={[selectedWorkspaceId]}
+              resetKeys={[selectedMatter.id]}
             >
               <UploadDocumentForMatter
-                key={selectedWorkspaceId}
+                key={selectedMatter.id}
                 onClose={onClose}
-                workspaceId={selectedWorkspaceId}
+                workspaceId={selectedMatter.id}
               />
             </QuerySuspenseBoundary>
           )}
@@ -216,9 +221,16 @@ const UploadDocumentForMatter = ({
     isWorkflowRunning ||
     isUploadPending;
 
-  if (isEntitiesLimitReached || !canCreateEntity) {
+  if (!canCreateEntity) {
     return (
-      <p className="text-destructive text-sm">{t("errors.actionFailed")}</p>
+      <p className="text-destructive text-sm">{t("errors.api.forbidden")}</p>
+    );
+  }
+  if (isEntitiesLimitReached) {
+    return (
+      <p className="text-destructive text-sm">
+        {t("workspaces.files.itemLimitReached")}
+      </p>
     );
   }
 

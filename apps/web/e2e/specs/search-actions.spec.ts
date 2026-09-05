@@ -247,4 +247,48 @@ test.describe("global create actions", () => {
       dialog.getByText(`search-actions-${testWorkspace.id.slice(0, 8)}`),
     ).toBeVisible();
   });
+  test("fixed matter upload recovers when its name is missing from navigation", async ({
+    page,
+    request,
+  }) => {
+    const testWorkspace = workspace;
+    if (testWorkspace === null) {
+      throw new Error("Test workspace was not created");
+    }
+    const { cookies } = await request.storageState();
+    await page.context().addCookies(cookies);
+    const navigationRoute = "**/v1/workspaces/navigation**";
+    await page.route(navigationRoute, async (route) => {
+      const response = await route.fetch();
+      const body: unknown = await response.json();
+      if (
+        typeof body !== "object" ||
+        body === null ||
+        !("workspaces" in body)
+      ) {
+        throw new Error("Navigation response has no workspaces");
+      }
+      await route.fulfill({ response, json: { ...body, workspaces: [] } });
+    });
+    await openSearch(page, `/workspaces/${testWorkspace.id}`);
+    await page
+      .locator(
+        '[data-search-empty-row][data-command-action-id="upload-document"]',
+      )
+      .click();
+    const dialog = page.getByRole("dialog", { name: "Upload document" });
+    const retry = dialog.getByRole("button", { name: "Retry", exact: true });
+    await expect(retry).toBeVisible();
+    await expect(
+      dialog.getByRole("button", { name: "Upload files", exact: true }),
+    ).toHaveCount(0);
+    await page.unroute(navigationRoute);
+    await retry.click();
+    await expect(
+      dialog.getByText(`search-actions-${testWorkspace.id.slice(0, 8)}`),
+    ).toBeVisible();
+    await expect(
+      dialog.getByRole("button", { name: "Upload files", exact: true }),
+    ).toBeEnabled();
+  });
 });

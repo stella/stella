@@ -4536,6 +4536,7 @@
       "downloadScrubbed": "Lejupielādēt bez metadatiem",
       "downloadScrubbedHint": "Noņem failā esošo autoru, uzņēmumu un rediģēšanas vēsturi. Lietā esošā kopija tos saglabā.",
       "downloadSearchablePdf": "Meklējams PDF",
+      "itemLimitReached": "Šajā lietā ir sasniegts vienumu ierobežojums.",
       "maxEntitiesReached": "Sasniegts maksimālais ierakstu skaits",
       "ocrAlreadyProcessed": "Teksta atpazīšana jau ir pabeigta",
       "ocrQueueFailed": "Neizdevās ievietot teksta atpazīšanu rindā",

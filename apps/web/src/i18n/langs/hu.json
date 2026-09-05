@@ -4536,6 +4536,7 @@
       "downloadScrubbed": "Letöltés metaadatok nélkül",
       "downloadScrubbedHint": "Eltávolítja a fájlban tárolt szerzőt, céget és szerkesztési előzményeket. Az ügyben lévő példány megtartja őket.",
       "downloadSearchablePdf": "Kereshető PDF",
+      "itemLimitReached": "Ez az ügy elérte az elemek korlátját.",
       "maxEntitiesReached": "Elérte a maximális elemszámot",
       "ocrAlreadyProcessed": "A szövegfelismerés már befejeződött",
       "ocrQueueFailed": "A szövegfelismerést nem sikerült várólistára tenni",

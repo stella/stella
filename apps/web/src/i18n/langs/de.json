@@ -4536,6 +4536,7 @@
       "downloadScrubbed": "Ohne Metadaten herunterladen",
       "downloadScrubbedHint": "Entfernt Autor, Firma und Bearbeitungsverlauf aus der Datei. Die Kopie in der Akte behält sie.",
       "downloadSearchablePdf": "Durchsuchbare PDF",
+      "itemLimitReached": "Diese Angelegenheit hat das Limit für Einträge erreicht.",
       "maxEntitiesReached": "Maximale Anzahl an Einträgen erreicht",
       "ocrAlreadyProcessed": "Texterkennung wurde bereits abgeschlossen",
       "ocrQueueFailed": "Texterkennung konnte nicht in die Warteschlange gestellt werden",

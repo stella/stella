@@ -4536,6 +4536,7 @@
       "downloadScrubbed": "Stáhnout bez metadat",
       "downloadScrubbedHint": "Odstraní autora, společnost i historii úprav, které soubor nese. Kopie ve spisu si je ponechá.",
       "downloadSearchablePdf": "Prohledávatelné PDF",
+      "itemLimitReached": "Tato věc dosáhla limitu položek.",
       "maxEntitiesReached": "Dosažen maximální počet položek",
       "ocrAlreadyProcessed": "Rozpoznávání textu již bylo dokončeno",
       "ocrQueueFailed": "Rozpoznávání textu se nepodařilo zařadit do fronty",

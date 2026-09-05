@@ -262,7 +262,9 @@ export const ChatMatterPicker = ({
           }
           return <MatterIcon className="size-3 shrink-0" variant="none" />;
         })()}
-        <span className="min-w-0 truncate">{triggerLabel}</span>
+        <span className="min-w-0 truncate" dir="auto">
+          {triggerLabel}
+        </span>
         {extraCount > 0 && (
           <span
             className="bg-muted text-foreground rounded-sm px-1 text-[10px] font-medium tabular-nums"
