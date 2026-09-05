@@ -17,7 +17,11 @@ import { resolveCaching } from "@/api/lib/ai-config";
 import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { createAuditRecorder } from "@/api/lib/audit-log";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  createAuditRecorder,
+} from "@/api/lib/audit-log";
 import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent } from "@/api/lib/content-encryption";
@@ -892,6 +896,74 @@ const flowRunCompletedNotification = ({
 });
 
 /**
+ * Raise the task a review gate hands its reviewer. A manual run's launcher is
+ * a member of the matter; the author of an automated definition need not be
+ * a member of every matter its trigger reaches. The task can only be
+ * assigned to a member, so an outside author gets an unassigned task and the
+ * bell notification the gate sends anyway.
+ */
+const raiseReviewTask = async ({
+  tx,
+  run,
+  stepDef,
+  actorUserId,
+  features,
+  recordAuditEvent,
+}: {
+  tx: Transaction;
+  run: LoadedRun;
+  stepDef: Extract<FlowStep, { kind: "review-gate" }>;
+  actorUserId: SafeId<"user">;
+  features: TaskDeploymentFeatures;
+  recordAuditEvent: AuditRecorder;
+}): Promise<SafeId<"entity">> => {
+  const workspaceId = run.workspaceId;
+  const membership = await tx
+    .select({ userId: workspaceMembers.userId })
+    .from(workspaceMembers)
+    .where(
+      and(
+        eq(workspaceMembers.workspaceId, workspaceId),
+        eq(workspaceMembers.userId, actorUserId),
+      ),
+    )
+    .limit(1);
+  const actorIsMember = membership.length > 0;
+  const task = await Result.gen(() =>
+    createTaskEntityHandler({
+      tx,
+      workspaceId,
+      userId: actorUserId,
+      recordAuditEvent,
+      body: {
+        name: `${run.definitionSnapshot.name} · ${stepDef.name}`,
+        assigneeIds: actorIsMember ? [actorUserId] : [],
+        ...(features.governedWorkflow
+          ? {
+              ...(actorIsMember ? { ownerUserId: actorUserId } : {}),
+              // A gate is due the moment the run reaches it.
+              workingTargetDate: new Date().toISOString().slice(0, 10),
+            }
+          : {}),
+      },
+      features,
+      ...(features.governedWorkflow
+        ? {
+            workObligationSource: {
+              type: WORK_OBLIGATION_SOURCE.FLOW,
+              description: null,
+            },
+          }
+        : {}),
+    }),
+  );
+  return unwrapOrFlowStepError(
+    task,
+    "The review task for this gate could not be created.",
+  ).entityId;
+};
+
+/**
  * Pause the run at a review gate. The gate raises a task for the run's actor
  * (the launcher, or the definition's author for an automated run) so the
  * decision sits in their task list and, under governed workflow, in My Work;
@@ -927,59 +999,28 @@ const pauseAtReviewGate = async ({
   });
   const features = taskFeatures;
   const { payload, pings, taskEntityId } = await scopedDb(async (tx) => {
-    // A manual run's launcher is a member of the matter; the author of an
-    // automated definition need not be a member of every matter its trigger
-    // reaches. The task can only be assigned to a member, so an outside
-    // author gets an unassigned task and the bell notification below.
-    const membership = await tx
-      .select({ userId: workspaceMembers.userId })
-      .from(workspaceMembers)
+    // A redelivered job must not raise a second task: the step keeps the one
+    // it already raised and only the status writes below are repeated.
+    const stepRows = await tx
+      .select({ reviewTaskEntityId: flowRunSteps.reviewTaskEntityId })
+      .from(flowRunSteps)
       .where(
-        and(
-          eq(workspaceMembers.workspaceId, workspaceId),
-          eq(workspaceMembers.userId, actorUserId),
-        ),
+        and(eq(flowRunSteps.runId, runId), eq(flowRunSteps.index, stepIndex)),
       )
       .limit(1);
-    const actorIsMember = membership.length > 0;
-    const task = await Result.gen(() =>
-      createTaskEntityHandler({
+    const reviewTaskEntityId =
+      stepRows.at(0)?.reviewTaskEntityId ??
+      (await raiseReviewTask({
         tx,
-        workspaceId,
-        userId: actorUserId,
-        recordAuditEvent,
-        body: {
-          name: `${flowName} · ${stepDef.name}`,
-          assigneeIds: actorIsMember ? [actorUserId] : [],
-          ...(features.governedWorkflow
-            ? {
-                ...(actorIsMember ? { ownerUserId: actorUserId } : {}),
-                // A gate is due the moment the run reaches it.
-                workingTargetDate: new Date().toISOString().slice(0, 10),
-              }
-            : {}),
-        },
+        run,
+        stepDef,
+        actorUserId,
         features,
-        ...(features.governedWorkflow
-          ? {
-              workObligationSource: {
-                type: WORK_OBLIGATION_SOURCE.FLOW,
-                description: null,
-              },
-            }
-          : {}),
-      }),
-    );
-    const reviewTask = unwrapOrFlowStepError(
-      task,
-      "The review task for this gate could not be created.",
-    );
+        recordAuditEvent,
+      }));
     await tx
       .update(flowRunSteps)
-      .set({
-        status: "awaiting_review",
-        reviewTaskEntityId: reviewTask.entityId,
-      })
+      .set({ status: "awaiting_review", reviewTaskEntityId })
       .where(
         and(eq(flowRunSteps.runId, runId), eq(flowRunSteps.index, stepIndex)),
       );
@@ -1005,7 +1046,7 @@ const pauseAtReviewGate = async ({
     return {
       payload: await readRunProgress(tx, runId),
       pings: gatePings,
-      taskEntityId: reviewTask.entityId,
+      taskEntityId: reviewTaskEntityId,
     };
   });
   broadcastUpdate(workspaceId, payload);
@@ -1302,6 +1343,13 @@ export const resolveFlowReviewGate = async (
               ),
             );
         }
+
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.REVIEW,
+          resourceType: AUDIT_RESOURCE_TYPE.FLOW_RUN,
+          resourceId: runId,
+          changes: { review: { old: null, new: { decision } } },
+        });
 
         return {
           nextStatus,

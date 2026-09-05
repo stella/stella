@@ -1,5 +1,3 @@
-import { useState } from "react";
-
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, getRouteApi, redirect } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
@@ -8,14 +6,17 @@ import * as v from "valibot";
 import { Skeleton } from "@stll/ui/skeleton";
 
 import { workflowsRouteAvailable } from "@/hooks/use-workflows-preview";
+import { detached } from "@/lib/detached";
 import { flowRunsOptions } from "@/lib/workspaces/queries/flow-runs";
 import { RunDetail } from "@/routes/_protected.workspaces/$workspaceId/-components/flows/run-detail";
 import { RunLauncher } from "@/routes/_protected.workspaces/$workspaceId/-components/flows/run-launcher";
 import { RunsList } from "@/routes/_protected.workspaces/$workspaceId/-components/flows/runs-list";
 
 /**
- * `run` opens one run's detail on arrival: the task a review gate raised and
- * the notification bell both land here with the run they are about.
+ * `run` is the open run: the task a review gate raised and the notification
+ * bell both land here with the run they are about, and the list, the launcher,
+ * and the back button all move by changing it, so history and a later link
+ * agree on what is shown.
  */
 const workflowsSearchSchema = v.object({
   run: v.optional(v.string()),
@@ -83,11 +84,14 @@ function WorkflowsView({
   const organizationId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
-  const [view, setView] = useState<View>(
+  const navigate = Route.useNavigate();
+  const openRun = (runId: string) => {
+    detached(navigate({ search: { run: runId } }), "workflows.open-run");
+  };
+  const view: View =
     requestedRunId === undefined
       ? { kind: "list" }
-      : { kind: "detail", runId: requestedRunId },
-  );
+      : { kind: "detail", runId: requestedRunId };
 
   const { data, isPending } = useQuery(flowRunsOptions({ workspaceId }));
 
@@ -95,7 +99,9 @@ function WorkflowsView({
     return (
       <div className="flex h-full flex-col overflow-y-auto">
         <RunDetail
-          onBack={() => setView({ kind: "list" })}
+          onBack={() => {
+            detached(navigate({ search: {} }), "workflows.back-to-list");
+          }}
           runId={view.runId}
           workspaceId={workspaceId}
         />
@@ -116,7 +122,7 @@ function WorkflowsView({
           <section className="space-y-2">
             <h2 className="text-sm font-semibold">{t("flows.runs.launch")}</h2>
             <RunLauncher
-              onStarted={(runId) => setView({ kind: "detail", runId })}
+              onStarted={openRun}
               organizationId={organizationId}
               workspaceId={workspaceId}
             />
@@ -127,10 +133,7 @@ function WorkflowsView({
             {isPending ? (
               <RunsSkeleton />
             ) : (
-              <RunsList
-                onSelect={(runId) => setView({ kind: "detail", runId })}
-                runs={runs}
-              />
+              <RunsList onSelect={openRun} runs={runs} />
             )}
           </section>
         </div>

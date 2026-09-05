@@ -11,6 +11,7 @@ import {
   entities,
   LIST_ITEM_TYPES,
   WORK_OBLIGATION_EVENT_TYPE,
+  WORK_OBLIGATION_SOURCE,
   WORK_OBLIGATION_STATUS,
   WORK_OBLIGATION_TYPE,
   workObligationEvents,
@@ -34,6 +35,11 @@ import {
   TASK_STATUSES,
 } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { FlowReviewDecision } from "@/api/lib/flows/flow-types";
+import {
+  decideGateForTask,
+  gateDecisionForTransition,
+} from "@/api/lib/flows/review-gate-task";
 import { LIMITS } from "@/api/lib/limits";
 import { validateAgendaFields } from "@/api/lib/tasks/agenda-fields";
 import {
@@ -538,18 +544,31 @@ export type UpdateTaskHandlerProps = {
   recordAuditEvent: AuditRecorder;
   body: UpdateTaskBody;
   features?: TaskDeploymentFeatures;
+  /** The gate decision's queue and broadcast boundaries; tests pin them. */
+  decideGate?: typeof decideGateForTask;
 };
 
-// Shared task-update logic reused by the HTTP handler and the
-// `save_task` MCP tool, so both emit identical audit events.
-export const updateTaskHandler = async function* ({
+type ApplyTaskUpdateOutcome =
+  | { type: "updated" }
+  | { type: "gate"; decision: FlowReviewDecision };
+
+// Keeps both branches typed as the union, so the wrapper reads one `Result`
+// rather than one per branch.
+const applyTaskUpdateOutcome = (
+  outcome: ApplyTaskUpdateOutcome,
+): ApplyTaskUpdateOutcome => outcome;
+
+// One pass over the task: every field the body carries, or the discovery
+// that a closing status belongs to a workflow review gate, in which case
+// nothing is written and the caller takes the decision first.
+const applyTaskUpdate = async function* ({
   safeDb,
   workspaceId,
   userId,
   recordAuditEvent,
   body,
-  features = deployedTaskFeatures(),
-}: UpdateTaskHandlerProps) {
+  features,
+}: Omit<Required<UpdateTaskHandlerProps>, "decideGate">) {
   if (
     !features.legalLists &&
     body.listItemType !== undefined &&
@@ -615,6 +634,31 @@ export const updateTaskHandler = async function* ({
           status: 409,
           message: "Task workflow is not initialized",
         });
+      }
+
+      // A closing status on the task a workflow review gate raised is the
+      // gate's decision, whichever surface asks for it. Nothing is written
+      // here: the decision is taken once this transaction has released the
+      // row, and the run then settles the task itself.
+      if (
+        workflow?.sourceType === WORK_OBLIGATION_SOURCE.FLOW &&
+        body.status !== undefined
+      ) {
+        const intent = workObligationIntentForTaskStatus({
+          currentStatus: workflow.status,
+          requestedTaskStatus: body.status,
+        });
+        if (intent.type === "transition") {
+          const decision = gateDecisionForTransition(intent.action);
+          if (decision === null) {
+            throw new HandlerError({
+              status: 409,
+              message:
+                "A workflow review cannot be reopened; start the workflow again instead",
+            });
+          }
+          return { type: "gate" as const, decision };
+        }
       }
 
       const eligibility = await listItemTypeTransition({
@@ -855,11 +899,17 @@ export const updateTaskHandler = async function* ({
         });
       }
 
-      return { rows };
+      return { type: "updated" as const, rows };
     }),
   );
 
-  const { rows: updated } = txResult;
+  if (txResult.type === "gate") {
+    return Result.ok(
+      applyTaskUpdateOutcome({ type: "gate", decision: txResult.decision }),
+    );
+  }
+
+  const updated = txResult.rows;
 
   if (updated.length === 0) {
     const [task] = yield* Result.await(
@@ -889,5 +939,41 @@ export const updateTaskHandler = async function* ({
     );
   }
 
+  return Result.ok(applyTaskUpdateOutcome({ type: "updated" }));
+};
+
+// Shared task-update logic reused by the HTTP handler and the
+// `save_task` MCP tool, so both emit identical audit events.
+export const updateTaskHandler = async function* ({
+  features = deployedTaskFeatures(),
+  decideGate = decideGateForTask,
+  ...props
+}: UpdateTaskHandlerProps) {
+  const first = yield* applyTaskUpdate({ ...props, features });
+  if (Result.isError(first)) {
+    return first;
+  }
+  if (first.value.type === "updated") {
+    return Result.ok({ success: true });
+  }
+  // A closing status on the task a workflow review gate raised is the gate's
+  // decision; the run settles the task, and the rest of the change applies
+  // as usual.
+  yield* Result.await(
+    decideGate({
+      safeDb: props.safeDb,
+      workspaceId: props.workspaceId,
+      taskEntityId: props.body.taskId,
+      userId: props.userId,
+      decision: first.value.decision,
+      note: props.body.workflowReason?.trim() ?? null,
+      recordAuditEvent: props.recordAuditEvent,
+    }),
+  );
+  const { status: _decided, ...rest } = props.body;
+  const second = yield* applyTaskUpdate({ ...props, body: rest, features });
+  if (Result.isError(second)) {
+    return second;
+  }
   return Result.ok({ success: true });
 };

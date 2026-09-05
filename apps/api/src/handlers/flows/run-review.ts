@@ -6,7 +6,6 @@ import {
 } from "@/api/handlers/flows/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { resolveFlowReviewGate } from "@/api/lib/flows/flow-executor";
 
 const config = {
@@ -43,20 +42,6 @@ const reviewFlowRun = createSafeHandler(
         note: body.note ?? null,
         recordAuditEvent,
       }),
-    );
-
-    yield* Result.await(
-      safeDb(
-        async (tx) =>
-          await recordAuditEvent(tx, {
-            action: AUDIT_ACTION.REVIEW,
-            resourceType: AUDIT_RESOURCE_TYPE.FLOW_RUN,
-            resourceId: params.runId,
-            changes: {
-              review: { old: null, new: { decision: body.decision } },
-            },
-          }),
-      ),
     );
 
     return Result.ok({ runId: resolved.runId, status: resolved.status });

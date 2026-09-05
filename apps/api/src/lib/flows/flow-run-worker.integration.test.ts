@@ -53,8 +53,10 @@ import {
   resolveFlowReviewGate as resolveFlowReviewGateWithDependencies,
 } from "@/api/lib/flows/flow-executor";
 import type { FlowStep, FlowTrigger } from "@/api/lib/flows/flow-types";
+import { decideGateForTask } from "@/api/lib/flows/review-gate-task";
 import { startFlowRun } from "@/api/lib/flows/start-flow-run";
 import type { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
+import { updateTaskHandler } from "@/api/lib/tasks/update-task";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -454,6 +456,78 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
     expect(
       inspection.xmlParts.find((part) => part.path === "word/styles.xml")?.text,
     ).toContain('w:styleId="BodyText"');
+  });
+
+  test("closing the gate's task through a task status change approves the gate", async () => {
+    const definitionId = createSafeId<"flowDefinition">();
+    await testDb.insert(flowDefinitions).values({
+      id: definitionId,
+      organizationId,
+      name: "Task-decided flow",
+      steps: [AI_STEP, REVIEW_GATE_STEP, CREATE_DOCUMENT_STEP],
+      trigger: MANUAL_TRIGGER,
+      enabled: true,
+      createdByUserId: userId,
+    });
+    const safeDb = asTestRaw<SafeDb>(
+      createSafeDb(testDb, [workspaceId], organizationId, userId),
+    );
+    const started = await startFlowRun({
+      safeDb,
+      workspaceId,
+      organizationId,
+      definitionId,
+      inputEntityIds: [],
+      triggerSource: { type: "manual", userId },
+      enqueueStep: enqueueFlowStepMock,
+    });
+    if (Result.isError(started)) {
+      throw started.error;
+    }
+    const runId = started.value.runId;
+    expect(enqueuedSteps.pop()).toEqual({ runId, stepIndex: 0 });
+    await executeFlowStepWithTestModel(
+      { runId, stepIndex: 0 },
+      new AbortController().signal,
+    );
+    expect(enqueuedSteps.pop()).toEqual({ runId, stepIndex: 1 });
+    await executeFlowStepWithTestModel(
+      { runId, stepIndex: 1 },
+      new AbortController().signal,
+    );
+    const raised = await loadReviewTask(runId, 1);
+
+    // The task panel, the kanban board, and the save_task capability all
+    // change a task's status this way; for a gate task that is the decision.
+    const updated = await Result.gen(() =>
+      updateTaskHandler({
+        safeDb,
+        workspaceId,
+        userId,
+        recordAuditEvent: async () => undefined,
+        body: { taskId: raised.taskEntityId, status: "done" },
+        features: { governedWorkflow: true, legalLists: false },
+        decideGate: async (options) =>
+          await decideGateForTask(options, {
+            broadcastUpdate,
+            enqueueStep: enqueueFlowStepMock,
+            database: reviewGateDatabase,
+          }),
+      }),
+    );
+    if (Result.isError(updated)) {
+      throw updated.error;
+    }
+
+    const run = await testDb.query.flowRuns.findFirst({
+      where: { id: { eq: runId } },
+      columns: { status: true, currentStepIndex: true },
+    });
+    expect(run).toEqual({ status: "running", currentStepIndex: 2 });
+    expect(enqueuedSteps.pop()).toEqual({ runId, stepIndex: 2 });
+    const settled = await loadReviewTask(runId, 1);
+    expect(settled.task.status).toBe("done");
+    expect(settled.obligation.status).toBe(WORK_OBLIGATION_STATUS.COMPLETED);
   });
 
   test("rejecting the review gate cancels the run instead of creating a document", async () => {

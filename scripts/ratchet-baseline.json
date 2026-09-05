@@ -88,7 +88,7 @@
     "files": {}
   },
   "throw-outside-boundary": {
-    "count": 1121,
+    "count": 1118,
     "files": {
       "apps/api/src/handlers/case-law/corpus-index.ts": 12,
       "apps/api/src/handlers/case-law/decisions/latest.ts": 3,
@@ -244,7 +244,7 @@
       "apps/api/src/lib/style-set-editor.ts": 1,
       "apps/api/src/lib/subprocess.ts": 1,
       "apps/api/src/lib/tanstack-ai-models.ts": 9,
-      "apps/api/src/lib/tasks/update-task.ts": 6,
+      "apps/api/src/lib/tasks/update-task.ts": 3,
       "apps/api/src/lib/two-factor.ts": 1,
       "apps/api/src/lib/user-shortcuts.ts": 1,
       "apps/api/src/lib/views/template-properties.ts": 11,

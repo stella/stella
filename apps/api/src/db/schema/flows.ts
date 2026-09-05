@@ -135,8 +135,15 @@ export const flowRunSteps = p.pgTable(
      * The task a review gate raises for its reviewer while the run waits.
      * Settling the gate settles the task and completing the task settles the
      * gate, so the two never disagree; only a `review-gate` step carries one.
+     * A single-column reference: the tenant pair would need
+     * `ON DELETE SET NULL (review_task_entity_id)`, which drizzle cannot
+     * declare, and every lookup of this column carries the workspace
+     * predicate.
      */
-    reviewTaskEntityId: safeUuid<"entity">("review_task_entity_id"),
+    reviewTaskEntityId: safeUuid<"entity">("review_task_entity_id").references(
+      () => entities.id,
+      { onDelete: "set null" },
+    ),
     startedAt: timestamptz("started_at"),
     finishedAt: timestamptz("finished_at"),
   },
@@ -147,13 +154,6 @@ export const flowRunSteps = p.pgTable(
         foreignColumns: [flowRuns.id, flowRuns.workspaceId],
       })
       .onDelete("cascade"),
-    p
-      .foreignKey({
-        columns: [table.reviewTaskEntityId, table.workspaceId],
-        foreignColumns: [entities.id, entities.workspaceId],
-        name: "flow_run_steps_review_task_entity_workspace_fk",
-      })
-      .onDelete("set null"),
     p.uniqueIndex("flow_run_steps_run_index_key").on(table.runId, table.index),
     p
       .uniqueIndex("flow_run_steps_review_task_entity_key")

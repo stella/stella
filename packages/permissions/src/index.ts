@@ -124,6 +124,27 @@ const managementStellaGrants = {
   firmMemory: ["create", "update"],
 } satisfies StellaPermissionMap;
 
+/**
+ * Closing a task can decide the workflow review gate that raised it, so a
+ * role that edits tasks must also hold the review permission. The task paths
+ * rely on this binding rather than checking twice.
+ */
+type TaskEditWithoutFlowReview<G extends StellaPermissionMap> =
+  "update" extends G["entity"][number]
+    ? "review" extends G["flow"][number]
+      ? never
+      : G
+    : never;
+
+true satisfies [
+  TaskEditWithoutFlowReview<typeof externalStellaGrants>,
+  TaskEditWithoutFlowReview<typeof internStellaGrants>,
+  TaskEditWithoutFlowReview<typeof memberStellaGrants>,
+  TaskEditWithoutFlowReview<typeof managementStellaGrants>,
+] extends [never, never, never, never]
+  ? true
+  : never;
+
 export const roles = {
   owner: ac.newRole({
     ...BETTER_AUTH_ORGANIZATION_ROLE_GRANTS.owner,
