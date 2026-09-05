@@ -17,15 +17,20 @@ export type CentsAmount = number & {
 /**
  * Construct a CentsAmount from a value already known to be in minor
  * units. Use at boundaries where the input is validated as an integer
- * minor-unit value (e.g. after Elysia `t.Integer({ minimum: 0 })` or
- * after scaling a typed major-unit amount by the currency's exponent).
+ * minor-unit value (e.g. after Elysia `tMinorUnitAmount(...)` or after
+ * scaling a typed major-unit amount by the currency's exponent).
  *
- * A non-integer input is a caller defect, not a runtime condition: money
- * math at the minor-unit level must be exact, so it panics.
+ * SAFE integer, not merely integer: `Number.isInteger` is true for 2^53 and
+ * everything above it, where the spacing between representable doubles is
+ * larger than one minor unit, so `x + 1 === x` and a total silently stops
+ * moving. An amount that far out is a caller defect rather than a runtime
+ * condition, like a fractional one, so it panics the same way.
  */
 export const cents = (value: number): CentsAmount => {
-  if (!Number.isInteger(value)) {
-    return panic(`cents(${value}): money values must be integer minor units`);
+  if (!Number.isSafeInteger(value)) {
+    return panic(
+      `cents(${value}): money values must be safe integer minor units`,
+    );
   }
   // SAFETY: validated to be an integer; brand is nominal so the
   // assertion is sound at runtime.

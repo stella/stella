@@ -77,6 +77,22 @@ describe("cents() brand constructor", () => {
     }
   });
 
+  test("rejects an integer past the safe range, where +1 stops moving", () => {
+    // 2^53 is an integer to `Number.isInteger`, and 2^53 + 1 is the same
+    // double, so a total that reached here would silently stop adding up.
+    expect(Number.MAX_SAFE_INTEGER + 1).toBe(Number.MAX_SAFE_INTEGER + 2);
+    for (const bad of [
+      Number.MAX_SAFE_INTEGER + 1,
+      Number.MIN_SAFE_INTEGER - 1,
+      2 ** 60,
+    ]) {
+      expect(() => cents(bad)).toThrow("safe integer minor units");
+    }
+    expect(cents(Number.MAX_SAFE_INTEGER)).toBe(
+      unsafeCents(Number.MAX_SAFE_INTEGER),
+    );
+  });
+
   test("unsafeCents is a pure brand attach with no rounding", () => {
     // Documented escape hatch: it must not silently coerce; the value
     // passes through verbatim (callers assert validity themselves).
