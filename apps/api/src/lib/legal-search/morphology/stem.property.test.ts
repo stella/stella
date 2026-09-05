@@ -46,10 +46,19 @@ test("a stem never grows and never empties a non-empty term", () => {
       // the composition-exclusion list, so normalising it yields two code
       // points, never one. That growth is normalisation's, not the
       // stemmer's; see the pinned vector in stem.test.ts.
+      //
+      // The one letter a stemmer itself expands is the German sharp s: the
+      // algorithm's prelude rewrites it as "ss" before any suffix is removed,
+      // so a term ending in it can come back one code point longer per sharp
+      // s. The bound allows exactly that expansion and nothing else.
       const normalized = input.normalize("NFC").toLowerCase();
+      const bound =
+        code === "de"
+          ? normalized.replaceAll("ß", "ss").length
+          : normalized.length;
       const stem = stemLegalTerm(input, code);
 
-      expect<number>(stem.length).toBeLessThanOrEqual(normalized.length);
+      expect<number>(stem.length).toBeLessThanOrEqual(bound);
       expect<boolean>(stem.length > 0).toBe(true);
     }),
     propertyConfig({ numRuns: 2000 }),

@@ -235,6 +235,15 @@ describe("stemLegalTerm", () => {
     expect<string>(stemLegalTerm(input, "cs")).toBe(input.normalize("NFC"));
   });
 
+  test("the German sharp s expands to ss, so a stem can outgrow its term", () => {
+    // The German algorithm's prelude rewrites the sharp s as "ss" before it
+    // strips any suffix: the one expansion a stemmer performs itself. Pinned
+    // so the growth bound in stem.property.test.ts stays honest about where
+    // the extra code point comes from.
+    expect<string>(stemLegalTerm("groß", "de")).toBe("gross");
+    expect<string>(stemLegalTerm("\u1E9E", "de")).toBe("ss");
+  });
+
   test("NFC and NFD agree across the whole reference vocabulary", () => {
     // 1123 of 2517 Czech and 454 of 2695 Polish words diverged before NFC
     // normalisation landed at the entry point; the class is wide enough that
