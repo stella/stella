@@ -100,7 +100,7 @@ const loginCommand = buildCommand<LoginFlags, [], Context>({
   parameters: {
     flags: {
       org: stringFlag(
-        "Organization slug to select in the browser when prompted (label only, not enforced server-side; see --help)",
+        "Organization slug to preselect on the sign-in page; a label for the browser step, the granted organization comes from the token",
       ),
       scopes: stringFlag(
         `Comma-separated stella: resource scopes to request instead of the default working set (${CLI_DEFAULT_RESOURCE_SCOPES.join(",")}); the identity scopes ${CLI_IDENTITY_SCOPES.join(",")} are always requested`,

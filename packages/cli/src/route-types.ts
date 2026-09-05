@@ -100,6 +100,8 @@ export type LeafCommandSpec = {
   additionalScopes?: readonly ToolScope[];
   requestTimeoutMs?: number;
   toolName: string;
+  /** The tool's authored description, first sentence; the command's `--help` brief. */
+  description?: string;
   discriminatorInject?: Record<string, string>;
   flags: readonly FlagSpec[];
   inputOnly: readonly string[];

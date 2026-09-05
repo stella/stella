@@ -156,8 +156,26 @@ const leafBrief = (spec: LeafCommandSpec): string => {
     spec.inputOnly.length > 0
       ? ` (via --input only: ${spec.inputOnly.join(", ")})`
       : "";
-  return `Run the ${spec.toolName} tool${inputHint}`;
+  return `${spec.description ?? `Run the ${spec.toolName} tool`}${inputHint}`;
 };
+
+/**
+ * Every value flag is optional at the parser (a field may arrive through
+ * `--input`), so the usage line brackets required flags too. This line states
+ * the tool's actual requirement where the usage line cannot.
+ */
+const requiredFlagsLine = (
+  flags: readonly { flag: string; required: boolean }[],
+): string | undefined => {
+  const required = flags.filter((flag) => flag.required).map((f) => f.flag);
+  return required.length === 0
+    ? undefined
+    : `Required (as flags, or inside --input): ${required.join(", ")}`;
+};
+
+/** A route group's brief names the commands under it instead of a placeholder. */
+const groupBrief = (name: string, children: Record<string, unknown>): string =>
+  `${name} commands: ${Object.keys(children).join(", ")}`;
 
 const fullDescription = ({
   brief,
@@ -165,30 +183,42 @@ const fullDescription = ({
   inputSchema,
   inputOnly,
   requiredPaths,
+  requiredFlags,
 }: {
   brief: string;
   discriminatorInject?: Readonly<Record<string, string>> | undefined;
   inputSchema: Record<string, unknown> | undefined;
   inputOnly: readonly string[];
   requiredPaths: readonly string[];
+  requiredFlags: readonly { flag: string; required: boolean }[];
 }): string | undefined => {
-  if (inputSchema === undefined) {
+  const required = requiredFlagsLine(requiredFlags);
+  const contract =
+    inputSchema === undefined
+      ? undefined
+      : buildInputContractHelp({
+          schema: inputSchema,
+          inputOnly,
+          requiredPaths,
+        });
+  if (
+    required === undefined &&
+    (contract === undefined || contract.fields.length === 0)
+  ) {
     return undefined;
   }
-  const contract = buildInputContractHelp({
-    schema: inputSchema,
-    inputOnly,
-    requiredPaths,
-  });
+  const lines = [brief];
+  if (required !== undefined) {
+    lines.push("", required);
+  }
   if (contract === undefined || contract.fields.length === 0) {
-    return undefined;
+    return lines.join("\n");
   }
-  const lines = [
-    brief,
+  lines.push(
     "",
     "--input JSON fields (explicit value flags override matching JSON paths):",
     ...contract.fields.map((line) => `  ${line}`),
-  ];
+  );
   if (contract.example.status === "complete") {
     const example =
       discriminatorInject === undefined
@@ -219,6 +249,7 @@ const buildLeafCommand = (spec: LeafCommandSpec): RoutingTarget => {
     requiredPaths: spec.flags
       .filter((flag) => flag.required)
       .map((flag) => flag.prop),
+    requiredFlags: spec.flags,
   });
   const builderArgs = {
     docs: {
@@ -287,10 +318,12 @@ const buildCapabilityLeafFlags = (
     "Never prompt; fail closed (exit 7) where a confirmation is required",
     false,
   );
-  flags[RESERVED_FLAG_KEYS.dryRun] = booleanFlag(
-    "Validate the input server-side and return without executing (validate_only)",
-    false,
-  );
+  if (spec.access === "write") {
+    flags[RESERVED_FLAG_KEYS.dryRun] = booleanFlag(
+      "Validate the input server-side and return without executing (validate_only)",
+      false,
+    );
+  }
 
   if (spec.paginated) {
     flags[RESERVED_FLAG_KEYS.cursor] = parsedStringFlag(
@@ -303,12 +336,15 @@ const buildCapabilityLeafFlags = (
     );
   }
 
-  // Every capability leaf carries the server's per-capability confirm gate, so
-  // it always accepts --yes (pre-approve) alongside the TTY prompt/retry flow.
-  flags[RESERVED_FLAG_KEYS.yes] = booleanFlag(
-    "Skip the destructive-op confirmation prompt",
-    false,
-  );
+  // A write capability carries the server's per-capability confirm gate, so it
+  // accepts --yes (pre-approve) alongside the TTY prompt/retry flow; a read has
+  // nothing to confirm.
+  if (spec.access === "write") {
+    flags[RESERVED_FLAG_KEYS.yes] = booleanFlag(
+      "Skip the destructive-op confirmation prompt",
+      false,
+    );
+  }
 
   return flags;
 };
@@ -330,6 +366,7 @@ const buildCapabilityLeafCommand = (
     requiredPaths: spec.flags
       .filter((flag) => flag.required)
       .map((flag) => `${flag.part}.${flag.partPath}`),
+    requiredFlags: spec.flags,
   });
   const builderArgs = {
     docs: {
@@ -359,10 +396,13 @@ const buildRouteNode = (node: RouteNode, brief: string): RoutingTarget => {
   }
   const routes: Record<string, RoutingTarget> = {};
   for (const [name, child] of Object.entries(node.children)) {
-    routes[name] = buildRouteNode(child, `The ${name} command group`);
+    routes[name] = buildRouteNode(child, routeBrief(name, child));
   }
   return buildRouteMap({ docs: { brief }, routes });
 };
+
+const routeBrief = (name: string, node: RouteNode): string =>
+  node.kind === "route" ? groupBrief(name, node.children) : name;
 
 /**
  * Fold a generated `RouteNode` (route) into stricli `RoutingTarget` children,
@@ -376,7 +416,7 @@ const buildGeneratedRoutes = (
   }
   const routes: Record<string, RoutingTarget> = {};
   for (const [name, child] of Object.entries(node.children)) {
-    routes[name] = buildRouteNode(child, `The ${name} command group`);
+    routes[name] = buildRouteNode(child, routeBrief(name, child));
   }
   return routes;
 };
@@ -412,10 +452,13 @@ const buildResourceNode = (
   }
   const routes: Record<string, RoutingTarget> = {};
   for (const [name, child] of Object.entries(node.children)) {
-    routes[name] = buildResourceNode(child, `The ${name} command group`);
+    routes[name] = buildResourceNode(child, resourceBrief(name, child));
   }
   return buildRouteMap({ docs: { brief }, routes });
 };
+
+const resourceBrief = (name: string, node: ResourceNode): string =>
+  node.kind === "route" ? groupBrief(name, node.children) : name;
 
 /**
  * Fold a generated resource `ResourceNode` (route) into a single stricli
@@ -425,7 +468,7 @@ const buildResourceRoutes = (node: ResourceNode): RouteMap<Context> => {
   const routes: Record<string, RoutingTarget> = {};
   if (node.kind === "route") {
     for (const [name, child] of Object.entries(node.children)) {
-      routes[name] = buildResourceNode(child, `The ${name} command group`);
+      routes[name] = buildResourceNode(child, resourceBrief(name, child));
     }
   }
   return buildRouteMap({
