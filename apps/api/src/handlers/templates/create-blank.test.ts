@@ -7,7 +7,7 @@ import {
   createStellaStyleDocumentPreset,
 } from "@stll/folio-core/server";
 
-import { createTemplateBuffer } from "@/api/lib/create-template-buffer";
+import { createTemplateBuffer } from "@/api/lib/docx-authoring/create-template-buffer";
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
 import { readManifest } from "@/api/lib/docx/template-manifest";
 

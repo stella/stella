@@ -19,6 +19,15 @@ import { createRedisClient } from "@/api/lib/redis-client";
 // oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a type-only import still opens the owned surface and is rejected
 import type { createBullMqConnection } from "@/api/lib/redis-client";
 
+// oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a facade re-exporting an owned binding is rejected
+export { createDocx as serialize } from "@stll/folio-core/server";
+// oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a star re-export reaches every owned binding and is rejected
+export * from "@stll/docx-core";
+// oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a re-export of a whole owned module is rejected
+export { createRedisClient as client } from "@/api/lib/redis-client";
+// Accepted: a facade over a sibling export does not hand out the capability.
+export { heading } from "@stll/folio-core/server";
+
 declare const navigator: {
   clipboard: {
     readText: () => Promise<string>;
