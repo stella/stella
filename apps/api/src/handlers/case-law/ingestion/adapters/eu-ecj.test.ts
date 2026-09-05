@@ -991,6 +991,129 @@ describe("euEcjAdapter.reconciliation.buildDecision", () => {
     ]);
   });
 
+  /**
+   * Serve the manifestation only at one of its numbered items, the way Cellar
+   * stores a work whose manifestation resource does not content-negotiate:
+   * the manifestation URL answers 404 whatever is asked for, and the document
+   * is reachable only under it. Records every request so a test can state
+   * which addresses were tried, in order, and with what `Accept`.
+   */
+  const installItemOnlyMock = (
+    servedOrdinal: number,
+  ): { fetches: { url: string; accept: string | undefined }[] } => {
+    const fetches: { url: string; accept: string | undefined }[] = [];
+    globalThis.fetch = asFetchMock(
+      mock((input: string | URL | Request, init?: RequestInit) => {
+        const url = requestUrl(input);
+        if (url.includes("sparql")) {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({ results: { bindings: [enBinding] } }),
+              { status: 200 },
+            ),
+          );
+        }
+        const accept = new Headers(init?.headers).get("accept") ?? undefined;
+        fetches.push({ url, accept });
+        if (!url.endsWith(`/DOC_${servedOrdinal}`)) {
+          return Promise.resolve(new Response("Not found", { status: 404 }));
+        }
+        // Cellar serves an older item as simplified HTML, and refuses any
+        // `Accept` naming a bare type it does not match.
+        if (accept !== undefined) {
+          return Promise.resolve(new Response("", { status: 406 }));
+        }
+        return Promise.resolve(
+          new Response(shortDocumentHtml, {
+            status: 200,
+            headers: { "Content-Type": "text/html;type=simplified" },
+          }),
+        );
+      }),
+    );
+    return { fetches };
+  };
+
+  test("falls back to the manifestation's items when negotiation is refused", async () => {
+    // Addressing the manifestation fixed the works whose XHTML sits at a later
+    // ordinal, but it is not how Cellar stores all of them: for the rest the
+    // manifestation URL answers 404 under negotiation while the document is
+    // served under it as an item. Neither addressing scheme covers the corpus,
+    // so a variant refused by one has to be tried against the other before it
+    // can be called unavailable.
+    const { fetches } = installItemOnlyMock(1);
+
+    const outcome = await reconciliation.buildDecision({
+      celex: "62021CJ0128",
+      language: "EN",
+    });
+
+    if (outcome.type !== "built") {
+      throw new TypeError(`Expected built, got ${outcome.type}`);
+    }
+    expect(fetches.map(({ url }) => url)).toEqual([
+      `https://publications.europa.eu/resource/cellar/${EN_MANIFESTATION_ID}`,
+      `https://publications.europa.eu/resource/cellar/${EN_MANIFESTATION_ID}/DOC_1`,
+    ]);
+  });
+
+  test("walks past an item ordinal the manifestation does not serve", async () => {
+    // The ordinal is no more fixed on this path than it was on the old one:
+    // stopping at `DOC_1` would reinstate the same defect one address along.
+    const { fetches } = installItemOnlyMock(2);
+
+    const outcome = await reconciliation.buildDecision({
+      celex: "62021CJ0128",
+      language: "EN",
+    });
+
+    if (outcome.type !== "built") {
+      throw new TypeError(`Expected built, got ${outcome.type}`);
+    }
+    expect(fetches.at(-1)?.url).toBe(
+      `https://publications.europa.eu/resource/cellar/${EN_MANIFESTATION_ID}/DOC_2`,
+    );
+  });
+
+  test("asks an item for no media type in particular", async () => {
+    // The negotiated request names XHTML; an item request must not. Cellar
+    // serves these items as `text/html;type=simplified` and matches an
+    // `Accept` against that whole type, so naming a document type answers 406
+    // on precisely the documents this fallback exists to reach.
+    const { fetches } = installItemOnlyMock(1);
+
+    await reconciliation.buildDecision({
+      celex: "62021CJ0128",
+      language: "EN",
+    });
+
+    // Strict: `toEqual` drops a trailing `undefined`, so it would hold just as
+    // well against a single negotiated request that never reached an item.
+    expect(fetches.map(({ accept }) => accept)).toStrictEqual([
+      "application/xhtml+xml",
+      undefined,
+    ]);
+  });
+
+  test("reports a variant unavailable only once every address has refused", async () => {
+    // The distinction the warning carries is only true if it is emitted after
+    // both addressing schemes have been tried, not after the first.
+    const { fetches } = installItemOnlyMock(0);
+
+    const outcome = await reconciliation.buildDecision({
+      celex: "62021CJ0128",
+      language: "EN",
+    });
+
+    expect(outcome).toEqual({ type: "detail-unavailable" });
+    expect(fetches.map(({ url }) => url)).toEqual([
+      `https://publications.europa.eu/resource/cellar/${EN_MANIFESTATION_ID}`,
+      `https://publications.europa.eu/resource/cellar/${EN_MANIFESTATION_ID}/DOC_1`,
+      `https://publications.europa.eu/resource/cellar/${EN_MANIFESTATION_ID}/DOC_2`,
+      `https://publications.europa.eu/resource/cellar/${EN_MANIFESTATION_ID}/DOC_3`,
+    ]);
+  });
+
   test("asks the content stream for XHTML", async () => {
     // The item is chosen by content negotiation now that the URL no longer
     // names one, so the Accept header is what selects the document.

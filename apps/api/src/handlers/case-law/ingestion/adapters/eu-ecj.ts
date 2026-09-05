@@ -551,6 +551,35 @@ const XHTML_MEDIA_TYPE = "application/xhtml+xml";
 const DOCUMENT_MEDIA_TYPES = [XHTML_MEDIA_TYPE, "text/html"] as const;
 
 /**
+ * How many of a manifestation's items to try once negotiation has failed.
+ *
+ * Cellar addresses a manifestation two ways and neither covers the corpus on
+ * its own, so the document is looked for under both. Negotiating on the
+ * manifestation redirects to the right item for works Cellar stores that way;
+ * for the rest that URL answers 404 whatever is asked for, and the document is
+ * only reachable as a numbered item under it. The item ordinal is not fixed
+ * either — `DOC_1` is the manifestation's first item, not necessarily its
+ * document — so the items are tried in order rather than guessed at.
+ *
+ * Two is enough for every manifestation observed; the third is margin. The
+ * walk only runs when negotiation has already failed, so the modern corpus
+ * still costs one request.
+ */
+const MAX_MANIFESTATION_ITEMS = 3;
+
+/**
+ * Budget for acquiring one variant, across every address tried.
+ *
+ * Derived rather than chosen: the lookup makes at most one negotiated request
+ * plus one per item, each already bounded by `ADAPTER_TIMEOUT.REQUEST`. Bounding
+ * the whole lookup by a single request's budget instead would abort the walk
+ * partway and drop a document Cellar serves, which is the failure this fallback
+ * exists to prevent.
+ */
+const MANIFESTATION_LOOKUP_TIMEOUT =
+  ADAPTER_TIMEOUT.REQUEST * (MAX_MANIFESTATION_ITEMS + 1);
+
+/**
  * The media type a `Content-Type` names, without its parameters.
  *
  * Compared whole and case-insensitively rather than searched for. A parameter
@@ -565,6 +594,119 @@ const DOCUMENT_MEDIA_TYPES = [XHTML_MEDIA_TYPE, "text/html"] as const;
 const mediaTypeOf = (contentType: string): string =>
   (contentType.split(";").at(0) ?? "").trim().toLowerCase();
 
+type ManifestationRead =
+  | { type: "document"; html: string }
+  | { type: "unusable"; status: number };
+
+type ReadDocumentOptions = {
+  url: string;
+  /**
+   * `undefined` for an item URL, rather than the document types. Cellar serves
+   * an older item as `text/html;type=simplified` and matches an `Accept`
+   * against that whole type, so naming `text/html` answers 406 on exactly the
+   * documents the item walk exists to reach.
+   */
+  accept: string | undefined;
+  celex: string;
+  lang: EcjLanguage;
+  signal: AbortSignal;
+};
+
+/**
+ * Read one candidate address, yielding the document only when the response is
+ * one. An unusable answer is not reportable on its own: only the caller knows
+ * whether another address is left to try.
+ */
+const readDocumentResponse = async ({
+  url,
+  accept,
+  celex,
+  lang,
+  signal,
+}: ReadDocumentOptions): Promise<ManifestationRead> => {
+  const response = await fetchWithTimeout(url, {
+    signal,
+    timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+    headers: {
+      "User-Agent": INGESTION_USER_AGENT,
+      ...(accept === undefined ? {} : { Accept: accept }),
+    },
+  });
+
+  if (!response.ok) {
+    return { type: "unusable", status: response.status };
+  }
+
+  const mediaType = mediaTypeOf(response.headers.get("content-type") ?? "");
+  if (!DOCUMENT_MEDIA_TYPES.some((type) => type === mediaType)) {
+    logger.warn("case_law.ingestion.manifestation_not_a_document", {
+      adapterKey: ADAPTER_KEYS.EU_ECJ,
+      celex,
+      language: lang,
+      mediaType,
+      url,
+    });
+    return { type: "unusable", status: response.status };
+  }
+
+  const html = await response.text();
+  return html.length > MIN_DOCUMENT_LENGTH
+    ? { type: "document", html }
+    : { type: "unusable", status: response.status };
+};
+
+type ManifestationAddress = { url: string; accept: string | undefined };
+
+type ReadFirstServedOptions = {
+  addresses: ManifestationAddress[];
+  /** Refused statuses so far, in address order; appended to as they come. */
+  statuses: number[];
+  celex: string;
+  lang: EcjLanguage;
+  signal: AbortSignal;
+};
+
+/**
+ * Try each address in turn, yielding the first that serves a document.
+ *
+ * Recursive rather than a loop because the addresses must be tried in order
+ * and stopped at: awaiting them together would ask Cellar for every address
+ * of every variant, several times the requests for the fleet's most expensive
+ * source, to discard all but one answer.
+ */
+const readFirstServedAddress = async ({
+  addresses,
+  statuses,
+  celex,
+  lang,
+  signal,
+}: ReadFirstServedOptions): Promise<string | undefined> => {
+  const [address, ...rest] = addresses;
+  if (address === undefined) {
+    return undefined;
+  }
+
+  const read = await readDocumentResponse({
+    url: address.url,
+    accept: address.accept,
+    celex,
+    lang,
+    signal,
+  });
+  if (read.type === "document") {
+    return read.html;
+  }
+
+  statuses.push(read.status);
+  return readFirstServedAddress({
+    addresses: rest,
+    statuses,
+    celex,
+    lang,
+    signal,
+  });
+};
+
 const fetchManifestation = async ({
   contentUrl,
   celex,
@@ -572,44 +714,40 @@ const fetchManifestation = async ({
   signal,
 }: FetchManifestationOptions): Promise<string | undefined> => {
   try {
-    const response = await fetchWithTimeout(contentUrl, {
+    const statuses: number[] = [];
+    const html = await readFirstServedAddress({
+      addresses: [
+        { url: contentUrl, accept: XHTML_MEDIA_TYPE },
+        ...Array.from(
+          { length: MAX_MANIFESTATION_ITEMS },
+          (_unused, index): ManifestationAddress => ({
+            url: `${contentUrl}/DOC_${index + 1}`,
+            accept: undefined,
+          }),
+        ),
+      ],
+      statuses,
+      celex,
+      lang,
       signal,
-      timeoutMs: ADAPTER_TIMEOUT.REQUEST,
-      headers: {
-        "User-Agent": INGESTION_USER_AGENT,
-        Accept: XHTML_MEDIA_TYPE,
-      },
     });
-
-    if (!response.ok) {
-      // A variant the listing named and the content stream will not serve is
-      // reported unavailable, and the reconciliation loop retires it after
-      // its retry schedule. Saying so keeps a transport fault distinguishable
-      // from a translation the publisher never published.
-      logger.warn("case_law.ingestion.manifestation_unavailable", {
-        adapterKey: ADAPTER_KEYS.EU_ECJ,
-        celex,
-        language: lang,
-        httpStatus: response.status,
-        url: contentUrl,
-      });
-      return undefined;
+    if (html !== undefined) {
+      return html;
     }
 
-    const mediaType = mediaTypeOf(response.headers.get("content-type") ?? "");
-    if (!DOCUMENT_MEDIA_TYPES.some((type) => type === mediaType)) {
-      logger.warn("case_law.ingestion.manifestation_not_a_document", {
-        adapterKey: ADAPTER_KEYS.EU_ECJ,
-        celex,
-        language: lang,
-        mediaType,
-        url: contentUrl,
-      });
-      return undefined;
-    }
-
-    const html = await response.text();
-    return html.length > MIN_DOCUMENT_LENGTH ? html : undefined;
+    // A variant the listing named and no address on the content stream serves
+    // is reported unavailable, and the reconciliation loop retires it after
+    // its retry schedule. Saying so keeps a transport fault distinguishable
+    // from a translation the publisher never published; the statuses say which
+    // of the two addressing schemes refused it.
+    logger.warn("case_law.ingestion.manifestation_unavailable", {
+      adapterKey: ADAPTER_KEYS.EU_ECJ,
+      celex,
+      language: lang,
+      httpStatuses: statuses.join(","),
+      url: contentUrl,
+    });
+    return undefined;
   } catch (error) {
     // AbortErrors are expected (timeout, page cancellation)
     if (!(error instanceof DOMException)) {
@@ -1035,7 +1173,7 @@ export const buildDecision = async (
     lang,
     signal: AbortSignal.any([
       signal,
-      AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
+      AbortSignal.timeout(MANIFESTATION_LOOKUP_TIMEOUT),
     ]),
   });
 
