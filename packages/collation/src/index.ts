@@ -1,2 +1,2 @@
-// Locale-aware collation, and the codepoint order for technical keys.
-export { compareByLocale, compareCodepoint, getCollator } from "./collation";
+// Locale-aware collation, and the code-unit order for technical keys.
+export { compareByLocale, compareCodeUnit, getCollator } from "./collation";

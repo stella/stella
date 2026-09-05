@@ -15,7 +15,7 @@ import JSZip from "jszip";
 import * as slimdom from "slimdom";
 import * as valibot from "valibot";
 
-import { compareCodepoint } from "@stll/collation";
+import { compareCodeUnit } from "@stll/collation";
 import type { ConditionNode } from "@stll/conditions";
 import { conditionNodeSchema } from "@stll/conditions";
 import { isFieldPath } from "@stll/template-conditions";
@@ -731,7 +731,7 @@ const compareCustomXmlSlots = (
   }
 
   // index is a DOCX custom-XML part slot index, not display text.
-  return compareCodepoint(left.index, right.index);
+  return compareCodeUnit(left.index, right.index);
 };
 
 /**

@@ -13,7 +13,7 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
-import { compareCodepoint } from "@stll/collation";
+import { compareCodeUnit } from "@stll/collation";
 
 import { apikey } from "@/api/db/auth-schema";
 import { createListMachineApiKeysHandler } from "@/api/handlers/api-keys/list";
@@ -147,11 +147,11 @@ const expectedOrder = (): string[] =>
       id: `machine-key-${String(index).padStart(3, "0")}`,
     }))
     // Newest first, ties broken by descending id: the query's own ORDER BY.
-    // Codepoint order, matching PostgreSQL's ordering of these opaque keys.
+    // Code-unit order, matching PostgreSQL's ordering of these opaque keys.
     .toSorted((left, right) =>
       left.createdAt === right.createdAt
-        ? compareCodepoint(right.id, left.id)
-        : compareCodepoint(right.createdAt, left.createdAt),
+        ? compareCodeUnit(right.id, left.id)
+        : compareCodeUnit(right.createdAt, left.createdAt),
     )
     .map(({ id }) => id);
 

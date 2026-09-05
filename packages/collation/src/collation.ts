@@ -95,5 +95,5 @@ export const compareByLocale = (
  * by their surrogate pair, so U+1F600 precedes U+E000. Persisted orderings
  * were computed under this rule; the test pins it.
  */
-export const compareCodepoint = (a: string, b: string): number =>
+export const compareCodeUnit = (a: string, b: string): number =>
   a < b ? -1 : Number(a > b);

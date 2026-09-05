@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 import { eq, sql } from "drizzle-orm";
 
-import { compareCodepoint } from "@stll/collation";
+import { compareCodeUnit } from "@stll/collation";
 
 import { rootDb } from "@/api/db/root";
 import { entities, extractedContent } from "@/api/db/schema";
@@ -194,7 +194,7 @@ const buildSearchDocument = async (
 
   // Sort by propertyId (an internal id) for deterministic title extraction
   const sortedFields = [...version.fields].toSorted((a, b) =>
-    compareCodepoint(a.propertyId, b.propertyId),
+    compareCodeUnit(a.propertyId, b.propertyId),
   );
 
   for (const field of sortedFields) {

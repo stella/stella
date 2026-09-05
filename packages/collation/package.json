@@ -2,7 +2,7 @@
   "name": "@stll/collation",
   "version": "0.0.0",
   "private": true,
-  "description": "locale-aware string collation with a cached Intl.Collator per locale, plus the codepoint comparator for technical keys",
+  "description": "locale-aware string collation with a cached Intl.Collator per locale, plus the code-unit comparator for technical keys",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,

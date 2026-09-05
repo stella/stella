@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, expect, setDefaultTimeout, test } from "bun:test";
 import { sql, TransactionRollbackError } from "drizzle-orm";
 
-import { compareCodepoint } from "@stll/collation";
+import { compareCodeUnit } from "@stll/collation";
 
 import {
   oauthClient,
@@ -66,7 +66,7 @@ test("startup initializes only a pristine Better Auth database", async () => {
       `);
       expect(initialized.rows).toEqual(
         EXPECTED_RESOURCES.map(({ identifier }) => ({ identifier })).toSorted(
-          (left, right) => compareCodepoint(left.identifier, right.identifier),
+          (left, right) => compareCodeUnit(left.identifier, right.identifier),
         ),
       );
 

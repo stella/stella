@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { compareByLocale, compareCodepoint, getCollator } from "./collation";
+import { compareByLocale, compareCodeUnit, getCollator } from "./collation";
 
 describe("getCollator", () => {
   test("caches one collator instance per locale", () => {
@@ -26,8 +26,8 @@ describe("compareByLocale", () => {
   test('cs treats "ch" as its own letter, collated after "h" and before "i"', () => {
     // Czech alphabetical order runs ..., h, ch, i, ... — "cha" (the digraph
     // "ch" plus "a") must therefore land strictly between any "h..." and
-    // "i..." word, which a codepoint-order (bare, locale-less) sort gets
-    // wrong: "cha" < "ha" by codepoint ('c' < 'h'), the opposite of Czech
+    // "i..." word, which a code-unit-order (bare, locale-less) sort gets
+    // wrong: "cha" < "ha" by code unit ('c' < 'h'), the opposite of Czech
     // collation order.
     expect(["ia", "cha", "ha"].toSorted(compareByLocale("cs"))).toEqual([
       "ha",
@@ -53,11 +53,11 @@ describe("compareByLocale", () => {
   });
 });
 
-describe("compareCodepoint", () => {
-  test("orders by codepoint, ignoring locale collation rules", () => {
-    // Under cs-CZ collation "ch" sorts after "h", but codepoint order must
+describe("compareCodeUnit", () => {
+  test("orders by code unit, ignoring locale collation rules", () => {
+    // Under cs-CZ collation "ch" sorts after "h", but code-unit order must
     // not follow that rule.
-    expect(["ia", "cha", "ha"].toSorted(compareCodepoint)).toEqual([
+    expect(["ia", "cha", "ha"].toSorted(compareCodeUnit)).toEqual([
       "cha",
       "ha",
       "ia",
@@ -65,15 +65,15 @@ describe("compareCodepoint", () => {
   });
 
   test("is antisymmetric and reports equality as 0", () => {
-    expect(compareCodepoint("a", "a")).toBe(0);
-    expect(compareCodepoint("a", "b")).toBe(-1);
-    expect(compareCodepoint("b", "a")).toBe(1);
+    expect(compareCodeUnit("a", "a")).toBe(0);
+    expect(compareCodeUnit("a", "b")).toBe(-1);
+    expect(compareCodeUnit("b", "a")).toBe(1);
   });
 
   test("orders supplementary characters by their UTF-16 surrogates", () => {
     // U+1F600 is encoded as D83D DE00, so it sorts before U+E000 under the
     // code-unit order that JavaScript `<` and the default sort share. Stored
     // orderings depend on this staying put.
-    expect(compareCodepoint("\u{1F600}", "\uE000")).toBe(-1);
+    expect(compareCodeUnit("\u{1F600}", "\uE000")).toBe(-1);
   });
 });

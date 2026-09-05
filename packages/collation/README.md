@@ -1,6 +1,6 @@
 # @stll/collation
 
-Locale-aware string collation with a cached Intl.Collator per locale, plus the codepoint comparator for technical keys.
+Locale-aware string collation with a cached Intl.Collator per locale, plus the code-unit comparator for technical keys.
 
 ## What lives here
 

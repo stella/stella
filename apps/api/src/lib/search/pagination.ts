@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
-import { compareCodepoint } from "@stll/collation";
+import { compareCodeUnit } from "@stll/collation";
 
 import { decodeCursor, encodeCursor } from "@/api/lib/search/cursor";
 
@@ -38,14 +38,14 @@ type ScoredSearchHit<T extends { id: string }> = {
 export const compareScoredSearchHits = <T extends { id: string }>(
   a: ScoredSearchHit<T>,
   b: ScoredSearchHit<T>,
-): number => b.score - a.score || compareCodepoint(b.hit.id, a.hit.id);
+): number => b.score - a.score || compareCodeUnit(b.hit.id, a.hit.id);
 
 export const isAfterGlobalSearchCursor = (
   hit: { id: string; score: number },
   cursor: GlobalSearchCursor,
 ): boolean =>
   hit.score < cursor.score ||
-  (hit.score === cursor.score && compareCodepoint(hit.id, cursor.id) < 0);
+  (hit.score === cursor.score && compareCodeUnit(hit.id, cursor.id) < 0);
 
 const decodeGlobalSearchKeysetPayload = (
   cursor: string,

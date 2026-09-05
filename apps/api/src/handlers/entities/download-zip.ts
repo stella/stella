@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { makeZip } from "client-zip";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
-import { compareCodepoint } from "@stll/collation";
+import { compareCodeUnit } from "@stll/collation";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { entities, entityVersions, fields } from "@/api/db/schema";
@@ -234,8 +234,8 @@ const downloadZipHandler = async function* ({
   });
   rawFiles.sort(
     (a, b) =>
-      compareCodepoint(a.rawPath, b.rawPath) ||
-      compareCodepoint(a.fileId, b.fileId),
+      compareCodeUnit(a.rawPath, b.rawPath) ||
+      compareCodeUnit(a.fileId, b.fileId),
   );
 
   const seenPaths = new Set<string>();

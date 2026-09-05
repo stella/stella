@@ -11,7 +11,7 @@ import { getColumns, getTableName, sql } from "drizzle-orm";
 import type { SQL, Table } from "drizzle-orm";
 import * as v from "valibot";
 
-import { compareCodepoint } from "@stll/collation";
+import { compareCodeUnit } from "@stll/collation";
 
 import { authSchema } from "@/api/db/auth-schema";
 import { isRecord } from "@/api/lib/type-guards";
@@ -1098,7 +1098,7 @@ const initializeOAuthPolicyProjection = (
 ) => {
   const hasher = new Bun.CryptoHasher("sha256");
   const sortedResources = [...expectedResources].toSorted((left, right) =>
-    compareCodepoint(left.identifier, right.identifier),
+    compareCodeUnit(left.identifier, right.identifier),
   );
   let valid =
     sortedResources.length > 0 &&
