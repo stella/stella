@@ -49,9 +49,10 @@ details unless they are already public in the repository.
   timed re-request after a rate limit). Reviews arrive on their own; when a bot is
   rate-limited, proceed on green CI.
 - This repository (including PRs, commits, comments) is public. Never include
-  marketing language, internal business context, pricing, competitive analysis, user
-  identities, conversation specifics, or security architecture beyond what the diff
-  shows. Write for the reviewing engineer.
+  marketing language, internal business context, pricing, competitive analysis,
+  product or end-user identities, conversation specifics, or security architecture
+  beyond what the diff shows. The requester attribution above is the one identity a
+  comment carries. Write for the reviewing engineer.
 
 ## Meta Preferences
 

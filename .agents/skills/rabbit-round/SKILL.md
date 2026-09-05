@@ -36,6 +36,8 @@ comment:
 - **Already addressed**: current code or a pushed commit demonstrably resolves it.
 - **Push back**: incorrect, stale, speculative, or contrary to documented
   constraints.
+- **Defer**: accepted, but landing in a named follow-up PR because the enclosing
+  workflow's review budget is spent. Only with the follow-up PR's URL.
 
 Read the cited code and applicable instructions before deciding. Treat security,
 authorization, data loss, and compatibility claims as hypotheses to verify, not
@@ -62,13 +64,14 @@ finding. Keep responses short and factual:
 - implemented with an adjustment and why
 - already addressed, with the code or commit that proves it
 - not changing, with a concrete repository constraint or technical reason
+- deferred to a named follow-up PR, with its URL
 
 Follow repository attribution rules for GitHub comments. Do not claim a check
 passed unless it ran successfully on the reported head.
 
 After replying, resolve only review threads whose every participant is a
-confirmed allowed bot and that are implemented, already addressed, or answered
-with a supported pushback. Leave human, mixed-participant, and uncertain threads
+confirmed allowed bot and that are implemented, already addressed, answered
+with a supported pushback, or deferred to a named follow-up PR. Leave human, mixed-participant, and uncertain threads
 open. Top-level comments have no thread-resolution state; do not minimize bot
 summaries by default.
 
