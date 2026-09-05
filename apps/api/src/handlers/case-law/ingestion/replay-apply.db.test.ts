@@ -699,7 +699,6 @@ test("a corpus object that outlives its delete leaves the row alone", async () =
   // next run has something to withdraw rather than a row that reads as
   // already done.
   for (const { id } of [first, second]) {
-    // oxlint-disable-next-line no-await-in-loop -- two rows, read in turn
     expect((await storedDocumentOf(id))?.fulltext).toBe(STORED_PAGE_TEXT);
   }
 

@@ -484,7 +484,6 @@ describe("parseEcjDecisionHtml", () => {
     // manifestation is converter output and nothing else, in every layout,
     // including the pre-v9 spelling that carries no `coj-` class at all.
     for (const stem of decisionStems) {
-      // oxlint-disable-next-line no-await-in-loop -- one fixture read per corpus entry, released before the next
       const html = await readFixture(`${stem}.html.gz`);
       if (html === undefined || stem.endsWith(PORTAL_STEM_SUFFIX)) {
         continue;
