@@ -4,6 +4,7 @@ import {
   BROWSER_CONTROL_ACTION,
   BROWSER_CONTROL_CONTENT_TRUST,
   BROWSER_CONTROL_ERROR_CODE,
+  type BROWSER_CONTROL_KEYS,
   BROWSER_CONTROL_LIMITS,
   BROWSER_CONTROL_PROTOCOL_VERSION,
   ELEMENT_REFERENCE_SHADOW_SEGMENT,
@@ -352,6 +353,131 @@ const runPageOperation = async (
         element instanceof HTMLAnchorElement && element.href !== ""
           ? element.href.slice(0, limits.urlChars)
           : undefined;
+      const isDisabled = (element: Element) =>
+        element.matches(":disabled") ||
+        element.getAttribute("aria-disabled") === "true";
+      // The row, list item or form around a control: identical controls in
+      // repeated rows differ only by this text, so it is part of the identity
+      // a later action must match.
+      const CONTEXT_SELECTOR =
+        "tr, li, [role='row'], [role='listitem'], article, fieldset, form, section";
+      const contextFor = (element: Element) => {
+        const container = element.closest(CONTEXT_SELECTOR);
+        if (!container || container === document.body) {
+          return undefined;
+        }
+        const text = collectText(container, limits.contextChars).slice(
+          0,
+          limits.contextChars,
+        );
+        return text.length === 0 || text === nameFor(element)
+          ? undefined
+          : text;
+      };
+      const focusableSelector =
+        "a[href], button, input, select, textarea, [tabindex]:not([tabindex='-1'])";
+      const moveFocus = (element: HTMLElement) => {
+        const focusables = [
+          ...document.querySelectorAll(focusableSelector),
+        ].filter(
+          (candidate): candidate is HTMLElement =>
+            candidate instanceof HTMLElement &&
+            visible(candidate) &&
+            !isDisabled(candidate),
+        );
+        focusables[focusables.indexOf(element) + 1]?.focus();
+      };
+      const editValue = (
+        element: HTMLElement,
+        edit: (value: string) => string,
+      ) => {
+        if (
+          !(element instanceof HTMLInputElement) &&
+          !(element instanceof HTMLTextAreaElement)
+        ) {
+          return;
+        }
+        Reflect.set(
+          element instanceof HTMLInputElement
+            ? HTMLInputElement.prototype
+            : HTMLTextAreaElement.prototype,
+          "value",
+          edit(element.value),
+          element,
+        );
+        element.dispatchEvent(
+          new InputEvent("input", {
+            bubbles: true,
+            inputType: "deleteContentBackward",
+          }),
+        );
+        element.dispatchEvent(new Event("change", { bubbles: true }));
+      };
+      const stepSelect = (element: HTMLElement, delta: number) => {
+        if (!(element instanceof HTMLSelectElement)) {
+          return;
+        }
+        const next = Math.min(
+          Math.max(element.selectedIndex + delta, 0),
+          element.options.length - 1,
+        );
+        if (next === element.selectedIndex) {
+          return;
+        }
+        element.selectedIndex = next;
+        element.dispatchEvent(new Event("input", { bubbles: true }));
+        element.dispatchEvent(new Event("change", { bubbles: true }));
+      };
+      // Synthetic KeyboardEvents reach page listeners but never trigger the
+      // browser's default action, so each supported key performs it here.
+      const performDefaultKeyAction = (
+        element: HTMLElement,
+        key: (typeof BROWSER_CONTROL_KEYS)[number],
+      ) => {
+        switch (key) {
+          case "Enter":
+            if (element instanceof HTMLTextAreaElement) {
+              editValue(element, (value) => `${value}\n`);
+            } else if (element instanceof HTMLInputElement && element.form) {
+              element.form.requestSubmit();
+            } else if (
+              element instanceof HTMLButtonElement ||
+              element instanceof HTMLAnchorElement
+            ) {
+              element.click();
+            }
+            return;
+          case "Space":
+            if (
+              element instanceof HTMLButtonElement ||
+              (element instanceof HTMLInputElement &&
+                (element.type === "checkbox" || element.type === "radio"))
+            ) {
+              element.click();
+            }
+            return;
+          case "Backspace":
+            editValue(element, (value) => value.slice(0, -1));
+            return;
+          case "Tab":
+            moveFocus(element);
+            return;
+          case "ArrowDown":
+          case "ArrowRight":
+            stepSelect(element, 1);
+            return;
+          case "ArrowUp":
+          case "ArrowLeft":
+            stepSelect(element, -1);
+            return;
+          case "Escape":
+            element.blur();
+            return;
+          default:
+            key satisfies never;
+            throw new TypeError("Unhandled browser key");
+        }
+      };
       const pathFor = (element: Element) => {
         const segments: string[] = [];
         let current: Element = element;
@@ -413,6 +539,7 @@ const runPageOperation = async (
           "[role='textbox']",
         ].join(",");
         const elements: {
+          context?: string;
           href?: string;
           name: string;
           path: string;
@@ -424,15 +551,21 @@ const runPageOperation = async (
             if (elements.length >= limits.elements) {
               return;
             }
-            if (element.matches(interactiveSelector) && visible(element)) {
+            if (
+              element.matches(interactiveSelector) &&
+              visible(element) &&
+              !isDisabled(element)
+            ) {
               const path = pathFor(element);
               if (path !== null) {
+                const context = contextFor(element);
                 const href = hrefFor(element);
                 const value = valueFor(element);
                 elements.push({
                   name: nameFor(element),
                   path,
                   role: roleFor(element),
+                  ...(context === undefined ? {} : { context }),
                   ...(href === undefined ? {} : { href }),
                   ...(value === undefined ? {} : { value }),
                 });
@@ -466,11 +599,21 @@ const runPageOperation = async (
         nameFor(target) !== action.target.name ||
         roleFor(target) !== action.target.role ||
         (action.target.href !== undefined &&
-          hrefFor(target) !== action.target.href)
+          hrefFor(target) !== action.target.href) ||
+        (action.target.context !== undefined &&
+          contextFor(target) !== action.target.context)
       ) {
         return {
           error: "The referenced element changed after the page snapshot.",
           code: errorCode.staleSnapshot,
+          ok: false,
+        };
+      }
+      if (isDisabled(target)) {
+        return {
+          code: errorCode.executionFailed,
+          error:
+            "The control is disabled; the page does not accept this action.",
           ok: false,
         };
       }
@@ -567,6 +710,7 @@ const runPageOperation = async (
       target.dispatchEvent(
         new KeyboardEvent("keydown", { bubbles: true, key }),
       );
+      performDefaultKeyAction(target, action.key);
       target.dispatchEvent(new KeyboardEvent("keyup", { bubbles: true, key }));
       return { ok: true };
     },
@@ -725,13 +869,8 @@ export const adoptControlledTab = async (
 
 const openControlledTab = async (
   controllerId: string,
-  rawUrl: string,
+  url: URL,
 ): Promise<chrome.tabs.Tab | null> => {
-  const url = parseControllableUrl(rawUrl);
-  if (!url) {
-    return null;
-  }
-
   const existing = await readControlledTab(controllerId);
   const tab =
     existing?.tab.id !== undefined
@@ -760,8 +899,12 @@ export const executeBrowserCommand = async (
   try {
     const controlledTab = await readControlledTab(controllerId);
     if (command.action === BROWSER_CONTROL_ACTION.open) {
-      const tab = await openControlledTab(controllerId, command.url);
-      if (tab?.id === undefined) {
+      const requested = parseControllableUrl(command.url);
+      const tab =
+        requested === null
+          ? null
+          : await openControlledTab(controllerId, requested);
+      if (requested === null || tab?.id === undefined) {
         return browserControlError(
           BROWSER_CONTROL_ERROR_CODE.navigationFailed,
           "Only public HTTPS pages without embedded credentials can be opened; intranet, loopback and private addresses are refused.",
@@ -771,6 +914,17 @@ export const executeBrowserCommand = async (
         return browserControlError(
           BROWSER_CONTROL_ERROR_CODE.timedOut,
           "The page did not finish loading in time.",
+        );
+      }
+      // The user approved the requested origin, not wherever it redirected.
+      // Reading the landing page needs its own approved snapshot.
+      const landed = await chrome.tabs.get(tab.id);
+      const landedUrl =
+        landed.url === undefined ? null : parseControllableUrl(landed.url);
+      if (landedUrl === null || landedUrl.origin !== requested.origin) {
+        return browserControlError(
+          BROWSER_CONTROL_ERROR_CODE.redirected,
+          `The page redirected away from ${requested.origin} to ${landedUrl?.origin ?? "an unsupported address"} and was not read. Use snapshot to read it after approval.`,
         );
       }
       return await readSnapshot({ controllerId, tabId: tab.id, textOffset: 0 });

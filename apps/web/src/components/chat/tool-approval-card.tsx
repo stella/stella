@@ -1023,6 +1023,8 @@ const BrowserControlInputSummary = ({ input }: { input: unknown }) => {
 
   const labelForDetail = ({ type: detailType }: BrowserApprovalDetail) => {
     switch (detailType) {
+      case "context":
+        return t("chat.approval.browser.within");
       case "key":
         return t("common.key");
       case "link":

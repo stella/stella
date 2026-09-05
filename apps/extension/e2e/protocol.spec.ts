@@ -15,7 +15,11 @@ import {
   parseBrowserControlResult,
 } from "@stll/api-contract/browser-control";
 
-import { FIXTURE_ORIGIN, FIXTURE_PAGES } from "./fixtures/pages";
+import {
+  ELSEWHERE_ORIGIN,
+  FIXTURE_ORIGIN,
+  FIXTURE_PAGES,
+} from "./fixtures/pages";
 
 const builtExtensionPath = path.join(
   import.meta.dirname,
@@ -131,10 +135,17 @@ const elementNamed = (
   return element;
 };
 
-const targetOf = ({ href, name, ref, role }: BrowserControlElement) => ({
+const targetOf = ({
+  context,
+  href,
   name,
   ref,
   role,
+}: BrowserControlElement) => ({
+  name,
+  ref,
+  role,
+  ...(context === undefined ? {} : { context }),
   ...(href === undefined ? {} : { href }),
 });
 
@@ -162,8 +173,18 @@ test("reads frames and shadow roots, pages text, and enforces the origin policy"
     channel: "chromium",
     headless: true,
   });
-  await context.route(`${FIXTURE_ORIGIN}/**`, async (route) => {
-    const body = FIXTURE_PAGES[new URL(route.request().url()).pathname];
+  const serveFixture = async (
+    route: Parameters<Parameters<typeof context.route>[1]>[0],
+  ) => {
+    const { pathname } = new URL(route.request().url());
+    if (pathname === "/redirect") {
+      await route.fulfill({
+        headers: { location: `${ELSEWHERE_ORIGIN}/landing.html` },
+        status: 302,
+      });
+      return;
+    }
+    const body = FIXTURE_PAGES[pathname];
     await (body === undefined
       ? route.fulfill({ body: "not found", status: 404 })
       : route.fulfill({
@@ -171,7 +192,9 @@ test("reads frames and shadow roots, pages text, and enforces the origin policy"
           contentType: "text/html; charset=utf-8",
           status: 200,
         }));
-  });
+  };
+  await context.route(`${FIXTURE_ORIGIN}/**`, serveFixture);
+  await context.route(`${ELSEWHERE_ORIGIN}/**`, serveFixture);
 
   try {
     const stella = await context.newPage();
@@ -300,12 +323,45 @@ test("reads frames and shadow roots, pages text, and enforces the origin policy"
     );
     snapshot = successful(
       await send({
-        action: "click",
+        action: "press-key",
+        key: "Enter",
         page: page(),
-        target: targetOf(elementNamed(snapshot.elements, "Run search")),
+        target: targetOf(elementNamed(snapshot.elements, "Search query")),
       }),
     );
     expect(snapshot.text).toContain("Submitted: notice period");
+    expect(
+      snapshot.elements.some(({ name }) => name === "Archive (disabled)"),
+    ).toBe(false);
+
+    // Two identical "Delete" buttons differ only by their row. Removing the
+    // first row moves the second row's button onto the first target's
+    // child-index path; the bound row context catches it before the wrong
+    // case is deleted.
+    const deleteButtons = snapshot.elements.filter(
+      ({ name, role }) => name === "Delete" && role === "button",
+    );
+    expect(deleteButtons.map((button) => button.context)).toEqual([
+      "Case 12 C 345/2024 Delete",
+      "Case 7 T 89/2023 Delete",
+    ]);
+    const firstDeleteElement = deleteButtons.at(0);
+    if (!firstDeleteElement) {
+      throw new TypeError("Expected a Delete button");
+    }
+    const firstDelete = targetOf(firstDeleteElement);
+    snapshot = successful(
+      await send({
+        action: "click",
+        page: page(),
+        target: targetOf(elementNamed(snapshot.elements, "Drop first row")),
+      }),
+    );
+    expect(
+      await send({ action: "click", page: page(), target: firstDelete }),
+    ).toMatchObject({ code: BROWSER_CONTROL_ERROR_CODE.staleSnapshot });
+    snapshot = successful(await send({ action: "snapshot" }));
+    expect(snapshot.text).not.toContain("Deleted case");
     snapshot = successful(
       await send({
         action: "click",
@@ -357,9 +413,26 @@ test("reads frames and shadow roots, pages text, and enforces the origin policy"
     snapshot = successful(await send({ action: "go-back" }));
     expect(snapshot.url).toBe(indexUrl);
 
+    const redirected = await send({
+      action: "open",
+      url: `${FIXTURE_ORIGIN}/redirect`,
+    });
+    expect(redirected).toMatchObject({
+      code: BROWSER_CONTROL_ERROR_CODE.redirected,
+    });
+    expect(JSON.stringify(redirected)).not.toContain("Private text");
+    // Route interception does not follow the redirect chain to the second
+    // host, so the landing page is read through a fresh, separately approved
+    // navigation, which is the flow the guard prescribes.
+    snapshot = successful(
+      await send({ action: "open", url: `${ELSEWHERE_ORIGIN}/landing.html` }),
+    );
+    expect(snapshot.url).toBe(`${ELSEWHERE_ORIGIN}/landing.html`);
+    expect(snapshot.text).toContain("Private text on another origin");
+
     const controlled = context
       .pages()
-      .find((candidate) => candidate.url().startsWith(FIXTURE_ORIGIN));
+      .find((candidate) => candidate.url().startsWith(ELSEWHERE_ORIGIN));
     if (!controlled) {
       throw new TypeError("Controlled tab not found");
     }

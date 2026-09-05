@@ -31,6 +31,8 @@ export const BROWSER_CONTROL_KEYS = [
 ] as const;
 
 export const BROWSER_CONTROL_LIMITS = {
+  /** Text of the row, list item or form an element sits in; disambiguates identical controls. */
+  contextChars: 200,
   elementNameChars: 500,
   elements: 300,
   errorMessageChars: 1000,
@@ -144,7 +146,14 @@ const pageSchema = v.strictObject({
   url: urlSchema,
 });
 
+const contextSchema = v.pipe(
+  v.string(),
+  v.maxLength(BROWSER_CONTROL_LIMITS.contextChars),
+);
+
 const targetSchema = v.strictObject({
+  /** Enclosing row or form text copied from the snapshot; rejected when the element now sits in a different row. */
+  context: v.optional(contextSchema),
   /** Link destination copied from the snapshot; the extension rejects a target whose href changed. */
   href: v.optional(urlSchema),
   name: v.pipe(
@@ -227,6 +236,7 @@ export type BrowserControlElementCommand = Extract<
 >;
 
 const browserControlElementSchema = v.strictObject({
+  context: v.optional(contextSchema),
   href: v.optional(urlSchema),
   name: v.pipe(
     v.string(),
@@ -276,6 +286,8 @@ export const BROWSER_CONTROL_ERROR_CODE = {
   navigationFailed: "navigation-failed",
   noControlledTab: "no-controlled-tab",
   permissionDenied: "permission-denied",
+  /** `open` landed on another origin than approved; the page was not read. */
+  redirected: "redirected",
   replayStateUnknown: "replay-state-unknown",
   sensitiveField: "sensitive-field",
   staleController: "stale-controller",

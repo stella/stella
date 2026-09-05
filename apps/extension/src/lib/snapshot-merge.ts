@@ -10,6 +10,7 @@ import {
 export const frameSnapshotSchema = v.strictObject({
   elements: v.array(
     v.strictObject({
+      context: v.optional(v.string()),
       href: v.optional(v.string()),
       name: v.string(),
       path: v.string(),
@@ -68,6 +69,7 @@ export const mergeFrameSnapshots = ({
         name: element.name,
         ref: formatElementReference({ frameId, path: element.path }),
         role: element.role,
+        ...(element.context === undefined ? {} : { context: element.context }),
         ...(element.href === undefined ? {} : { href: element.href }),
         ...(element.value === undefined ? {} : { value: element.value }),
       });

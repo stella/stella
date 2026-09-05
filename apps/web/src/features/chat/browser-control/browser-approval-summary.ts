@@ -7,7 +7,7 @@ import {
 } from "@stll/api-contract/browser-control";
 
 export type BrowserApprovalDetail = {
-  type: "key" | "link" | "target" | "value" | "website";
+  type: "context" | "key" | "link" | "target" | "value" | "website";
   value: string;
 };
 
@@ -17,6 +17,14 @@ const targetDetails = ({
 }: BrowserControlElementCommand): BrowserApprovalDetail[] => [
   { type: "website", value: page.url },
   { type: "target", value: `${target.name} (${target.role})` },
+  ...(target.context === undefined
+    ? []
+    : [
+        {
+          type: "context",
+          value: target.context,
+        } satisfies BrowserApprovalDetail,
+      ]),
   ...(target.href === undefined
     ? []
     : [{ type: "link", value: target.href } satisfies BrowserApprovalDetail]),
