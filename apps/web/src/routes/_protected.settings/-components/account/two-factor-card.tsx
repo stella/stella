@@ -10,6 +10,7 @@ import { panic, Result } from "better-result";
 import { renderSVG } from "uqr";
 import { useTranslations } from "use-intl";
 
+import { copyToClipboard } from "@stll/clipboard";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
@@ -41,7 +42,6 @@ import {
 } from "@/lib/auth";
 import { authCapabilitiesOptions } from "@/lib/auth-capabilities";
 import { sessionOptions } from "@/lib/auth-queries";
-import { copyToClipboard } from "@/lib/copy-to-clipboard";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";

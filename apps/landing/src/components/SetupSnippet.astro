@@ -86,7 +86,7 @@ const { class: className, copiedLabel, copyLabel, text } = Astro.props;
 <script>
   import { Result } from "better-result";
 
-  import { copyToClipboard } from "../scripts/copy-to-clipboard";
+  import { copyToClipboard } from "@stll/clipboard";
 
   for (const button of document.querySelectorAll<HTMLButtonElement>(
     "[data-copy-snippet]",

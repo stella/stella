@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { CopyIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { copyToClipboard } from "@stll/clipboard";
 import { Button } from "@stll/ui/button";
 import {
   InputGroup,
@@ -11,7 +12,6 @@ import {
 import { stellaToast } from "@stll/ui/toast";
 
 import { getAnalytics } from "@/lib/analytics/provider";
-import { copyToClipboard } from "@/lib/copy-to-clipboard";
 import { detached } from "@/lib/detached";
 
 type CopyFieldProps = {

@@ -218,6 +218,7 @@
         "@stll/anonymize-chat": "workspace:*",
         "@stll/anonymize-data": "catalog:",
         "@stll/anonymize-wasm": "catalog:",
+        "@stll/clipboard": "workspace:*",
         "@stll/folio-react": "catalog:",
         "@stll/locales": "workspace:*",
         "@stll/ui": "workspace:*",
@@ -328,6 +329,7 @@
         "@stll/catalogue": "workspace:*",
         "@stll/chat": "workspace:*",
         "@stll/chat-limits": "workspace:*",
+        "@stll/clipboard": "workspace:*",
         "@stll/collation": "workspace:*",
         "@stll/conditions": "workspace:*",
         "@stll/country-codes": "workspace:*",
@@ -625,6 +627,17 @@
         "better-result": "catalog:",
         "re2-wasm": "^1.0.2",
         "valibot": "catalog:",
+      },
+      "devDependencies": {
+        "@stll/typescript-config": "workspace:*",
+        "bun-types": "catalog:",
+      },
+    },
+    "packages/clipboard": {
+      "name": "@stll/clipboard",
+      "version": "0.0.0",
+      "dependencies": {
+        "better-result": "catalog:",
       },
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
@@ -2517,6 +2530,8 @@
     "@stll/chat-limits": ["@stll/chat-limits@workspace:packages/chat-limits"],
 
     "@stll/cli": ["@stll/cli@workspace:packages/cli"],
+
+    "@stll/clipboard": ["@stll/clipboard@workspace:packages/clipboard"],
 
     "@stll/collab": ["@stll/collab@workspace:apps/collab"],
 

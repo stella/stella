@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { copyToClipboard } from "@stll/clipboard";
 import { plainTextOf } from "@stll/legal-ast/document-ast";
 import type { Block, HeadingLevel, Inline } from "@stll/legal-ast/document-ast";
 import { stellaToast } from "@stll/ui/toast";
@@ -16,7 +17,6 @@ import type {
 import Tooltip from "@/components/tooltip";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { normalizeOptionalArray } from "@/lib/arrays";
-import { copyToClipboard } from "@/lib/copy-to-clipboard";
 import { detached } from "@/lib/detached";
 import { sanitizeHref } from "@/lib/sanitize-href";
 import { forceReflow } from "@/lib/utils";

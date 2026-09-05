@@ -83,6 +83,9 @@
       "entry": ["src/index.ts", "src/**/*.test.ts"],
       "ignoreDependencies": ["@stll/api"]
     },
+    "packages/clipboard": {
+      "entry": ["src/index.ts", "src/**/*.test.ts"]
+    },
     "packages/collation": {
       "entry": ["src/index.ts", "src/**/*.test.ts"]
     },

@@ -1917,7 +1917,7 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     scope: "file",
     id: "landing-inline-clipboard-writes",
     description:
-      "`navigator.clipboard.writeText` calls in apps/landing `.astro` files, where the `clipboard-write` ownership rule cannot reach because oxlint does not scan Astro; the fix is one shared landing script module the pages import, so the failure path is written once",
+      "`navigator.clipboard.writeText` calls in apps/landing `.astro` files, where the `clipboard-write` ownership rule cannot reach because oxlint does not scan Astro; the fix is to import `@stll/clipboard`, the one owner of the call, so the failure path is written once",
     include: ["apps/landing/src/**/*.astro"],
     exclude: () => false,
     count: countInlineClipboardWrites,
@@ -3176,7 +3176,7 @@ const EXPECTED_AD_HOC_SUBJECT_GATES = 2;
 const INLINE_CLIPBOARD_FIXTURE_LINES = [
   "<button data-copy>Copy</button>",
   "<script>",
-  '  import { copyToClipboard } from "../scripts/copy-to-clipboard";',
+  '  import { copyToClipboard } from "@stll/clipboard";',
   '  const button = document.querySelector("[data-copy]");',
   "  button?.addEventListener('click', async () => {",
   "    await navigator.clipboard.writeText(button.dataset.copy);",
@@ -3190,7 +3190,7 @@ const INLINE_CLIPBOARD_FIXTURE_LINES = [
 ];
 const SELF_TEST_INLINE_CLIPBOARD = `${INLINE_CLIPBOARD_FIXTURE_LINES.join("\n")}\n`;
 // Expected: the plain call and the optional-chained one. `readText` is a
-// sibling capability, the call through the landing owner is the fixed shape,
+// sibling capability, the call through `@stll/clipboard` is the fixed shape,
 // and the owner module itself is a `.ts` file the glob never reaches — the
 // `clipboard-write` ownership row guards that one.
 const EXPECTED_INLINE_CLIPBOARD_WRITES = 2;
@@ -3380,9 +3380,9 @@ const inlineClipboardSelfTestFailures = (snapshot: Baseline): string[] => {
       `landing-inline-clipboard-writes counted ${metric.count}, expected ${EXPECTED_INLINE_CLIPBOARD_WRITES}`,
     );
   }
-  if ("apps/landing/src/scripts/copy-to-clipboard.ts" in metric.files) {
+  if ("packages/clipboard/src/index.ts" in metric.files) {
     failures.push(
-      "landing-inline-clipboard-writes did not exclude the landing owner module",
+      "landing-inline-clipboard-writes did not exclude the owner package",
     );
   }
   return failures;
@@ -3731,11 +3731,11 @@ const runSelfTest = (): number => {
       "apps/landing/src/components/CopySnippet.astro",
       SELF_TEST_INLINE_CLIPBOARD,
     );
-    // The landing owner: a `.ts` module outside the `.astro` glob, so its own
+    // The owner package: a `.ts` module outside the `.astro` glob, so its own
     // call must not land in the budget it exists to zero.
     writeFixture(
       root,
-      "apps/landing/src/scripts/copy-to-clipboard.ts",
+      "packages/clipboard/src/index.ts",
       "export const copyToClipboard = async (text: string) =>\n  await navigator.clipboard.writeText(text);\n",
     );
     writeFixture(root, "apps/api/src/db/index.ts", "export const x = 1;\n");

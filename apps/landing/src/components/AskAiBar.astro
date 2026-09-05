@@ -91,7 +91,7 @@ const t = getTranslations(locale);
 <script>
   import { Result } from "better-result";
 
-  import { copyToClipboard } from "../scripts/copy-to-clipboard";
+  import { copyToClipboard } from "@stll/clipboard";
 
   document.addEventListener("astro:page-load", () => {
     const root = document.querySelector<HTMLElement>("[data-ask-ai]");

@@ -6,11 +6,11 @@ import { Prism, useTokenize } from "prism-react-renderer";
 import type { PrismTheme, Token } from "prism-react-renderer";
 import { useTranslations } from "use-intl";
 
+import { copyToClipboard } from "@stll/clipboard";
 import { Button } from "@stll/ui/button";
 import { stellaToast } from "@stll/ui/toast";
 
 import { getAnalytics } from "@/lib/analytics/provider";
-import { copyToClipboard } from "@/lib/copy-to-clipboard";
 import { detached } from "@/lib/detached";
 
 const TOOL_CODE_THEME = {
