@@ -10,7 +10,7 @@ import { panic } from "better-result";
 
 import type { CalculationKind, CalculationValue } from "@stll/calculations";
 import { NUMERIC_CALCULATION_KINDS } from "@stll/calculations";
-import { toMinorUnits, unsafeCents } from "@stll/money";
+import { tryToMinorUnits, unsafeCents } from "@stll/money";
 
 import type {
   EntityKind,
@@ -81,11 +81,16 @@ export const toCalculationValue = (
       // reduction counts minor ones, so the amount is scaled by the currency's
       // own exponent on the way in. A money field needs no scaling: it already
       // stores minor units, which is the point of it being its own type.
-      return {
-        type: "money",
-        amountCents: toMinorUnits({ amount: value, currency }),
-        currency,
-      };
+      //
+      // A stored int large enough that scaling it leaves the safe integer
+      // range contributes nothing rather than taking the column header down:
+      // this runs while a view renders, and no total is better than one that
+      // silently stopped adding up.
+      const amountCents = tryToMinorUnits({ amount: value, currency });
+      if (amountCents === null) {
+        return { type: "empty" };
+      }
+      return { type: "money", amountCents, currency };
     }
     case "money":
       return {

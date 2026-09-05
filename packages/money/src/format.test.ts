@@ -5,6 +5,7 @@ import {
   formatMoneyCents,
   toMajorUnits,
   toMinorUnits,
+  tryToMinorUnits,
 } from "./format";
 
 describe("currencyMinorUnitDigits", () => {
@@ -34,14 +35,72 @@ describe("toMinorUnits", () => {
     expect(toMinorUnits({ amount: 12.3456, currency: "KWD" })).toBe(12_346);
   });
 
+  test("scales the decimal, not the float: 1.005 USD is 101", () => {
+    // `1.005 * 100` is 100.49999999999999, so a float multiply rounds it down
+    // and the line item loses a cent. The digits say 101 either way.
+    expect(1.005 * 100).toBeLessThan(100.5);
+    expect(toMinorUnits({ amount: 1.005, currency: "USD" })).toBe(101);
+    expect(toMinorUnits({ amount: "1.005", currency: "USD" })).toBe(101);
+    // The same shortfall at the currency's own boundary, three decimals in.
+    expect(toMinorUnits({ amount: 1.0005, currency: "KWD" })).toBe(1001);
+    expect(toMinorUnits({ amount: "8.1235", currency: "KWD" })).toBe(8124);
+    // A zero-digit currency rounds on the first decimal and nothing else.
+    expect(toMinorUnits({ amount: "1500.5", currency: "JPY" })).toBe(1501);
+    expect(toMinorUnits({ amount: "1500.49", currency: "JPY" })).toBe(1500);
+  });
+
+  test("carries a rounded fraction into the whole part", () => {
+    expect(toMinorUnits({ amount: "0.999", currency: "USD" })).toBe(100);
+    expect(toMinorUnits({ amount: "9.9999", currency: "KWD" })).toBe(10_000);
+  });
+
+  test("reads text the way it was typed, including the odd shapes", () => {
+    expect(toMinorUnits({ amount: " 12.5 ", currency: "USD" })).toBe(1250);
+    expect(toMinorUnits({ amount: ".5", currency: "USD" })).toBe(50);
+    expect(toMinorUnits({ amount: "12.", currency: "USD" })).toBe(1200);
+    expect(toMinorUnits({ amount: "-1.005", currency: "USD" })).toBe(-101);
+    // Scientific notation is what `String` gives a very small or large number.
+    expect(toMinorUnits({ amount: 1e-7, currency: "USD" })).toBe(0);
+    expect(toMinorUnits({ amount: 1.5e3, currency: "JPY" })).toBe(1500);
+  });
+
+  test("refuses text it cannot scale", () => {
+    for (const bad of ["", "abc", "12abc", "1,005", "0x10", "."]) {
+      expect(tryToMinorUnits({ amount: bad, currency: "USD" })).toBeNull();
+      expect(() => toMinorUnits({ amount: bad, currency: "USD" })).toThrow(
+        "not an amount USD can store",
+      );
+    }
+  });
+
+  test("tryToMinorUnits declines what toMinorUnits would panic on", () => {
+    // The gate a form needs: unparseable text, and text whose scaled value
+    // would leave the range where +1 still moves.
+    expect(
+      tryToMinorUnits({ amount: "99999999999999999", currency: "USD" }),
+    ).toBeNull();
+    for (const good of ["0", "12", "12.5", ".5", "12.", " 1.005 ", "-3.20"]) {
+      expect(tryToMinorUnits({ amount: good, currency: "USD" })).toBe(
+        toMinorUnits({ amount: good, currency: "USD" }),
+      );
+    }
+  });
+
   test("falls back to the ISO default for a code Intl rejects", () => {
     expect(toMinorUnits({ amount: 15, currency: "A1C" })).toBe(1500);
   });
 
   test("refuses an amount that cannot become an exact integer", () => {
     expect(() => toMinorUnits({ amount: Number.NaN, currency: "USD" })).toThrow(
-      "integer minor units",
+      "not an amount USD can store",
     );
+    expect(() => toMinorUnits({ amount: Infinity, currency: "USD" })).toThrow(
+      "not an amount USD can store",
+    );
+    // Past the safe range the scaled value stops being the amount it names.
+    expect(() =>
+      toMinorUnits({ amount: "99999999999999999", currency: "USD" }),
+    ).toThrow("not an amount USD can store");
   });
 });
 

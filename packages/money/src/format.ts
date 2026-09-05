@@ -13,7 +13,7 @@
  * from the app around it.
  */
 
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import { type CentsAmount, cents } from "./cents";
 
@@ -47,9 +47,74 @@ export const currencyMinorUnitDigits = (currency: string): number => {
   return resolved.value ?? DEFAULT_MINOR_UNIT_DIGITS;
 };
 
+/** A decimal amount in major units: an optional sign, digits, an optional point. */
+const DECIMAL_AMOUNT = /^(?<sign>[+-]?)(?<whole>\d*)(?:\.(?<fraction>\d*))?$/u;
+
+/** Scientific notation, which `String(1e21)` and `String(1e-7)` both produce. */
+const EXPONENT_AMOUNT =
+  /^(?<sign>[+-]?)(?<whole>\d+)(?:\.(?<fraction>\d+))?[eE](?<exponent>[+-]?\d+)$/u;
+
+const expandExponent = (text: string): string | null => {
+  const groups = EXPONENT_AMOUNT.exec(text)?.groups;
+  if (!groups) {
+    return null;
+  }
+  const sign = groups["sign"] ?? "";
+  const digits = `${groups["whole"] ?? ""}${groups["fraction"] ?? ""}`;
+  const point = (groups["whole"] ?? "").length + Number(groups["exponent"]);
+  if (point <= 0) {
+    return `${sign}0.${"0".repeat(-point)}${digits}`;
+  }
+  if (point >= digits.length) {
+    return `${sign}${digits}${"0".repeat(point - digits.length)}`;
+  }
+  return `${sign}${digits.slice(0, point)}.${digits.slice(point)}`;
+};
+
+/**
+ * The amount as decimal text, or null when it is not a decimal amount.
+ *
+ * A number is rendered by `String`, which produces the SHORTEST text that
+ * round-trips back to the same double. That is what makes the number path
+ * exact: the double nearest 1.005 prints as "1.005", which is the amount the
+ * person typed, where multiplying that double by 100 yields 100.49999999999999.
+ */
+const decimalText = (amount: number | string): string | null => {
+  if (typeof amount === "number") {
+    if (!Number.isFinite(amount)) {
+      return null;
+    }
+    const rendered = String(amount);
+    return rendered.includes("e") ? expandExponent(rendered) : rendered;
+  }
+  const trimmed = amount.trim();
+  return /[eE]/u.test(trimmed) ? expandExponent(trimmed) : trimmed;
+};
+
+/** The digits of a decimal amount, or null when the text is not one. */
+const amountDigits = (
+  amount: number | string,
+): { sign: string; whole: string; fraction: string } | null => {
+  const text = decimalText(amount);
+  const groups = text === null ? undefined : DECIMAL_AMOUNT.exec(text)?.groups;
+  if (groups === undefined) {
+    return null;
+  }
+  const whole = groups["whole"] ?? "";
+  const fraction = groups["fraction"] ?? "";
+  if (`${whole}${fraction}`.length === 0) {
+    return null;
+  }
+  return { sign: groups["sign"] ?? "", whole, fraction };
+};
+
 export type ToMinorUnitsParams = {
-  /** The amount in major units, as typed. */
-  amount: number;
+  /**
+   * The amount in major units: the decimal text a form holds, or a number.
+   * Text is preferred where the caller has it, because it is what the person
+   * typed rather than the nearest double to it.
+   */
+  amount: number | string;
   currency: string;
 };
 
@@ -57,16 +122,54 @@ export type ToMinorUnitsParams = {
  * A typed major-unit amount as the minor units the currency actually counts:
  * 12.5 USD is 1250, 1500 JPY is 1500, 12.5 KWD is 12500.
  *
- * Rounding is the point: a decimal input carries more places than the currency
- * has, and the stored value must be an exact integer. A non-finite `amount`
- * panics through `cents()`, so a form parses and rejects its own input before
- * asking for a value to store.
+ * The scaling is decimal, not a float multiply. `1.005 * 100` is
+ * 100.49999999999999 in binary floating point, so `Math.round` of it is 100
+ * and a $1.005 line item silently loses a cent; the same shortfall appears at
+ * a different decimal for every currency. Splitting the text on the point and
+ * moving the digits instead keeps the amount the person typed: the kept
+ * fraction digits are appended to the whole part, and the first digit dropped
+ * decides a half-up carry on the magnitude.
+ *
+ * Rounding is still the point -- a typed amount carries more places than the
+ * currency has -- and it happens on digits, exactly. Text this cannot parse,
+ * and a result outside the safe integer range, are caller defects: gate the
+ * text with `isDecimalAmount` first.
  */
-export const toMinorUnits = ({
+export const toMinorUnits = (params: ToMinorUnitsParams): CentsAmount =>
+  tryToMinorUnits(params) ??
+  panic(
+    `toMinorUnits(${JSON.stringify(params.amount)}): not an amount ${params.currency} can store`,
+  );
+
+/**
+ * The same conversion for text nobody has vouched for yet: null when the text
+ * is not a decimal amount, and null when the scaled value would leave the safe
+ * integer range, where a total silently stops adding up.
+ *
+ * A form holds whatever was typed and has to be able to decline it. Everything
+ * past that gate calls `toMinorUnits`, which panics, because by then the
+ * decision has been made.
+ */
+export const tryToMinorUnits = ({
   amount,
   currency,
-}: ToMinorUnitsParams): CentsAmount =>
-  cents(Math.round(amount * 10 ** currencyMinorUnitDigits(currency)));
+}: ToMinorUnitsParams): CentsAmount | null => {
+  const parsed = amountDigits(amount);
+  if (parsed === null) {
+    return null;
+  }
+
+  const digits = currencyMinorUnitDigits(currency);
+  const kept = parsed.fraction.slice(0, digits).padEnd(digits, "0");
+  const dropped = parsed.fraction.charAt(digits);
+  // Half-up on the magnitude: the sign is reattached after, so -0.005 and
+  // 0.005 both move away from zero rather than both moving up.
+  const magnitude =
+    BigInt(`${parsed.whole || "0"}${kept}`) + (dropped >= "5" ? 1n : 0n);
+  const value = Number(parsed.sign === "-" ? -magnitude : magnitude);
+
+  return Number.isSafeInteger(value) ? cents(value) : null;
+};
 
 export type ToMajorUnitsParams = {
   amountCents: number;

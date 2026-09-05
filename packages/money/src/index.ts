@@ -214,4 +214,5 @@ export {
   type ToMajorUnitsParams,
   toMinorUnits,
   type ToMinorUnitsParams,
+  tryToMinorUnits,
 } from "./format";

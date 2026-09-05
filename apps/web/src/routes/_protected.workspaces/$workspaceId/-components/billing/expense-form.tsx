@@ -8,7 +8,7 @@ import { EXPENSE_CATEGORIES, type ExpenseCategory } from "@stll/api-contract";
 import {
   currencyMinorUnitDigits,
   toMajorUnits,
-  toMinorUnits,
+  tryToMinorUnits,
 } from "@stll/money";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
@@ -101,11 +101,14 @@ export const ExpenseForm = ({
       }
       // The currency input sits beside the amount and can still change after
       // it is typed, so the minor-unit scaling happens here, against the
-      // currency the form actually submits.
-      const typed = Number.parseFloat(amountInputValue);
-      const amount = Number.isNaN(typed)
-        ? 0
-        : toMinorUnits({ amount: typed, currency: value.currency });
+      // currency the form actually submits. The typed TEXT is what is scaled:
+      // 1.005 through a float multiply is 100.49999999999999, and the cent
+      // that rounds away never comes back.
+      const amount =
+        tryToMinorUnits({
+          amount: amountInputValue,
+          currency: value.currency,
+        }) ?? 0;
       if (amount <= 0) {
         stellaToast.add({
           title: t("billing.failedToSave"),
@@ -189,16 +192,14 @@ export const ExpenseForm = ({
             dir="ltr"
             inputMode="decimal"
             onBlur={() => {
-              const typed = Number.parseFloat(amountInputValue);
-              if (Number.isNaN(typed) || typed <= 0) {
+              const amount = tryToMinorUnits({
+                amount: amountInputValue,
+                currency: currentCurrency,
+              });
+              if (amount === null || amount <= 0) {
                 return;
               }
-              setAmountInputValue(
-                majorUnitInput(
-                  toMinorUnits({ amount: typed, currency: currentCurrency }),
-                  currentCurrency,
-                ),
-              );
+              setAmountInputValue(majorUnitInput(amount, currentCurrency));
             }}
             onChange={(e) => setAmountInputValue(e.currentTarget.value)}
             placeholder="350.00"
