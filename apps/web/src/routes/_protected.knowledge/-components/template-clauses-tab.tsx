@@ -41,6 +41,7 @@ import type {
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
+import { unwrapEden } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { knowledgeKeys, templateClausesOptions } from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
@@ -398,23 +399,19 @@ export const OutdatedChanges = ({
       return;
     }
     setDiff({ status: "loading" });
-    const requested = await Result.tryPromise(
-      async () =>
+    const requested = await Result.tryPromise(async () =>
+      unwrapEden(
         await api
           .clauses({ clauseId: toSafeId<"clause">(clauseId) })
           .versions({ versionId: toSafeId<"clauseVersion">(versionId) })
           .diff.get(),
+      ),
     );
     if (Result.isError(requested)) {
       setDiff({ status: "error" });
       return;
     }
-    const response = requested.value;
-    if (response.error) {
-      setDiff({ status: "error" });
-      return;
-    }
-    setDiff({ status: "ready", value: response.data.segments });
+    setDiff({ status: "ready", value: requested.value.segments });
   };
 
   const handleSummarize = async () => {
@@ -422,23 +419,19 @@ export const OutdatedChanges = ({
       return;
     }
     setSummary({ status: "loading" });
-    const requested = await Result.tryPromise(
-      async () =>
+    const requested = await Result.tryPromise(async () =>
+      unwrapEden(
         await api
           .clauses({ clauseId: toSafeId<"clause">(clauseId) })
           .versions({ versionId: toSafeId<"clauseVersion">(versionId) })
           .summarize.post(),
+      ),
     );
     if (Result.isError(requested)) {
       setSummary({ status: "error" });
       return;
     }
-    const response = requested.value;
-    if (response.error) {
-      setSummary({ status: "error" });
-      return;
-    }
-    setSummary({ status: "ready", value: response.data.summary });
+    setSummary({ status: "ready", value: requested.value.summary });
   };
 
   return (

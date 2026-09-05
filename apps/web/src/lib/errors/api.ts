@@ -1,4 +1,4 @@
-import { Result, TaggedError } from "better-result";
+import { TaggedError } from "better-result";
 
 import {
   API_VERSION_CONFLICT_ERROR_CODE,
@@ -54,28 +54,6 @@ export function unwrapEden<T>(response: EdenResponse<T>): T {
   }
   return response.data;
 }
-
-/**
- * The cause of a failed api call, or `null` when it succeeded.
- *
- * A transport failure (offline, reset connection) rejects the promise rather
- * than producing `response.error`, so a call wrapped in `Result.tryPromise` has
- * two failure shapes. Both resolve here to one cause, which is what a caller
- * that reports the same way for either one needs. Callers that also read the
- * payload branch on the `Result` themselves, so narrowing survives.
- */
-export const edenCallFailure = <
-  TResponse extends { error: ToAPIErrorProps | null },
-  TCause,
->(
-  requested: Result<TResponse, TCause>,
-): unknown => {
-  if (Result.isError(requested)) {
-    return requested.error;
-  }
-  const { error } = requested.value;
-  return error === null ? null : toAPIError(error);
-};
 
 export const toAPIError = (input: ToAPIErrorProps) => {
   const { code, details, rawMessage, status } = normalizeApiError(input);

@@ -36,7 +36,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { DOCX_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
-import { edenCallFailure, unwrapEden } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { filesKeys } from "@/lib/files/queries";
 import { uploadEntityVersion } from "@/lib/files/upload-entity-version";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
@@ -248,18 +248,17 @@ export const VersionsSidebar = ({
     const switchTarget =
       remaining.find((v) => v.id === currentVersionId) ?? remaining.at(0);
 
-    const requested = await Result.tryPromise(
-      async () =>
+    const requested = await Result.tryPromise(async () =>
+      unwrapEden(
         await api
           .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
           .entity({ entityId: toSafeId<"entity">(entityId) })
           .versions({ versionId: toSafeId<"entityVersion">(versionId) })
           .delete({}),
+      ),
     );
-
-    const failure = edenCallFailure(requested);
-    if (failure !== null) {
-      getAnalytics().captureError(failure);
+    if (Result.isError(requested)) {
+      getAnalytics().captureError(requested.error);
       stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
       await invalidateVersions();
       return;
@@ -277,8 +276,8 @@ export const VersionsSidebar = ({
   };
 
   const handleSetLabel = async (versionId: string, label: string | null) => {
-    const requested = await Result.tryPromise(
-      async () =>
+    const requested = await Result.tryPromise(async () =>
+      unwrapEden(
         await api
           .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
           .entity({ entityId: toSafeId<"entity">(entityId) })
@@ -286,11 +285,10 @@ export const VersionsSidebar = ({
           .label.patch({
             label,
           }),
+      ),
     );
-
-    const failure = edenCallFailure(requested);
-    if (failure !== null) {
-      getAnalytics().captureError(failure);
+    if (Result.isError(requested)) {
+      getAnalytics().captureError(requested.error);
       stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
     }
 
@@ -298,18 +296,17 @@ export const VersionsSidebar = ({
   };
 
   const handleRestore = async (versionId: string) => {
-    const requested = await Result.tryPromise(
-      async () =>
+    const requested = await Result.tryPromise(async () =>
+      unwrapEden(
         await api
           .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
           .entity({ entityId: toSafeId<"entity">(entityId) })
           .versions({ versionId: toSafeId<"entityVersion">(versionId) })
           .restore.post({}),
+      ),
     );
-
-    const failure = edenCallFailure(requested);
-    if (failure !== null) {
-      getAnalytics().captureError(failure);
+    if (Result.isError(requested)) {
+      getAnalytics().captureError(requested.error);
       stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
     }
 

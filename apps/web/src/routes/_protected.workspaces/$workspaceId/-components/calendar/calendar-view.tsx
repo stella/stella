@@ -18,7 +18,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { normalizeOptionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
-import { edenCallFailure } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import { captureInvalidTaskOption } from "@/lib/task-option-telemetry";
 import type { EntityKind, WorkspaceView } from "@/lib/types";
@@ -436,18 +436,18 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
     if (datePropertyId === TASK_DATE_IDS[0] && kind === "task") {
       detached(
         (async () => {
-          const requested = await Result.tryPromise(
-            async () =>
+          const requested = await Result.tryPromise(async () =>
+            unwrapEden(
               await api
                 .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
                 .patch({
                   taskId: toSafeId<"entity">(entityId),
                   dueDate: date,
                 }),
+            ),
           );
-          const failure = edenCallFailure(requested);
-          if (failure !== null) {
-            getAnalytics().captureError(failure);
+          if (Result.isError(requested)) {
+            getAnalytics().captureError(requested.error);
             stellaToast.add({
               title: t("errors.actionFailed"),
               type: "error",
@@ -463,8 +463,8 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
     } else if (datePropertyId === TASK_DATE_IDS[1] && kind === "task") {
       detached(
         (async () => {
-          const requested = await Result.tryPromise(
-            async () =>
+          const requested = await Result.tryPromise(async () =>
+            unwrapEden(
               await api
                 .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
                 .patch({
@@ -472,10 +472,10 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
                   allDay: true,
                   startAt: toAllDayAgendaDateTime(date),
                 }),
+            ),
           );
-          const failure = edenCallFailure(requested);
-          if (failure !== null) {
-            getAnalytics().captureError(failure);
+          if (Result.isError(requested)) {
+            getAnalytics().captureError(requested.error);
             stellaToast.add({
               title: t("errors.actionFailed"),
               type: "error",

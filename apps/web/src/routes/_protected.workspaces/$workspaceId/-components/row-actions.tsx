@@ -92,7 +92,7 @@ import {
 } from "@/lib/desktop-edit-formats";
 import { showDesktopEditOpenResultToast } from "@/lib/desktop-edit-status-toast";
 import { detached } from "@/lib/detached";
-import { edenCallFailure, unwrapEden } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { isUnauthorizedError } from "@/lib/errors/auth";
 import { ClientOperationError } from "@/lib/errors/client";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
@@ -681,22 +681,21 @@ export const RowActions = ({
     }
 
     if (desktopEditLockState === "locked-by-me") {
-      const requested = await Result.tryPromise(
-        async () =>
+      const requested = await Result.tryPromise(async () =>
+        unwrapEden(
           await api
             .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
             ["desktop-edit-sessions"].release.post({
               entityId: toSafeId<"entity">(file.entityId),
               propertyId: toSafeId<"property">(file.propertyId),
             }),
+        ),
       );
-
-      const releaseFailure = edenCallFailure(requested);
-      if (releaseFailure !== null) {
-        analytics.captureError(releaseFailure);
+      if (Result.isError(requested)) {
+        analytics.captureError(requested.error);
         stellaToast.add({
           description: userErrorFromThrown(
-            releaseFailure,
+            requested.error,
             t("common.unexpectedError"),
           ),
           title: t("errors.actionFailed"),
