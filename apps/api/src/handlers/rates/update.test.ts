@@ -106,7 +106,8 @@ test("changing a rate table from USD to JPY restates every rate under it", async
   // $100.00 is 100 yen and $250.50 rounds to 251: JPY counts whole units, so
   // the stored integer drops two decimal places rather than staying as it was.
   expect(rows.map((row) => row.hourlyRate).toSorted((a, b) => a - b)).toEqual([
-    100, 251,
+    cents(100),
+    cents(251),
   ]);
 
   const [table] = await testDb
@@ -147,7 +148,7 @@ test("the scale reads each row's current value, not one read earlier", async () 
     .where(eq(rateEntries.id, defaultEntryId));
   // 7 yen is 7.000 dinars: the value in the database when the statement ran,
   // scaled by the exponent difference, not the 100 this row held before.
-  expect(row?.hourlyRate).toBe(7000);
+  expect(row?.hourlyRate).toBe(cents(7000));
 });
 
 test("refuses a currency change whose scaled rate leaves the safe range", async () => {
@@ -181,7 +182,7 @@ test("refuses a currency change whose scaled rate leaves the safe range", async 
     .select({ hourlyRate: rateEntries.hourlyRate })
     .from(rateEntries)
     .where(eq(rateEntries.id, defaultEntryId));
-  expect(row?.hourlyRate).toBe(beyondRange);
+  expect(row?.hourlyRate).toBe(cents(beyondRange));
   const [table] = await testDb
     .select({ currency: rateTables.currency })
     .from(rateTables)

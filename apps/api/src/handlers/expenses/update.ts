@@ -122,19 +122,25 @@ const updateExpense = createSafeHandler(
     // instead, in the transaction that changes the code. An amount sent
     // alongside the currency is already in the new currency's units and wins
     // as given.
-    const restatesAmount =
+    // The currency this update restates the amount INTO, or null when it does
+    // not restate: an amount sent alongside the currency is already in the new
+    // currency's units and wins as given.
+    const restatementCurrency =
       body.amount === undefined &&
       body.currency !== undefined &&
-      body.currency !== existing.currency;
-    const restatedAmount = restatesAmount
-      ? tryToMinorUnits({
-          amount: toMajorUnits({
-            amountCents: existing.amount,
-            currency: existing.currency,
-          }),
-          currency: body.currency,
-        })
-      : 0;
+      body.currency !== existing.currency
+        ? body.currency
+        : null;
+    const restatedAmount =
+      restatementCurrency === null
+        ? null
+        : tryToMinorUnits({
+            amount: toMajorUnits({
+              amountCents: existing.amount,
+              currency: existing.currency,
+            }),
+            currency: restatementCurrency,
+          });
 
     // Both ends of the new currency's range, refused before anything is
     // written. Too small: a zero would break `expenses_amount_positive_check`.
@@ -142,7 +148,10 @@ const updateExpense = createSafeHandler(
     // integer range, where the stored amount stops being the one it names --
     // three decimals from none multiplies by a thousand, so an amount well
     // inside the old currency's range can leave it.
-    if (restatesAmount && (restatedAmount === null || restatedAmount < 1)) {
+    if (
+      restatementCurrency !== null &&
+      (restatedAmount === null || restatedAmount < 1)
+    ) {
       return Result.err(
         new HandlerError({
           status: 400,
@@ -165,9 +174,7 @@ const updateExpense = createSafeHandler(
         "matterId",
         "status",
       ]),
-      ...(restatesAmount && restatedAmount !== null
-        ? { amount: restatedAmount }
-        : {}),
+      ...(restatedAmount === null ? {} : { amount: restatedAmount }),
       ...(body.amount !== undefined ? { amount: cents(body.amount) } : {}),
       updatedAt: new Date(),
     };
