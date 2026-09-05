@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   evaluateMergeBar,
+  isSeededBaselineFile,
   mergeBarMigrationDirectory,
   mergeBarRequiredCheckRuns,
   type MergeBarSnapshot,
@@ -22,8 +23,10 @@ const passingSnapshot = (
     state: "OPEN",
     isDraft: false,
     mergeable: "MERGEABLE",
+    mergeStateStatus: "CLEAN",
     headSha: HEAD_SHA,
   },
+  changedFiles: ["apps/api/src/budget/resolve.ts"],
   checkRunsHeadSha: HEAD_SHA,
   checkRuns: [
     { name: "ci-result", status: "completed", conclusion: "success" },
@@ -169,6 +172,74 @@ describe("merge bar", () => {
         }),
       ),
     ).toEqual({ decision: "abort", reasons: ["MERGEABLE_UNKNOWN"] });
+  });
+
+  // Failure class (d): a budget measured on a head that is not above the base.
+  test("a baseline seeded off the base aborts", () => {
+    expect(
+      failedGate(
+        passingSnapshot({
+          pullRequest: {
+            ...passingSnapshot().pullRequest,
+            mergeStateStatus: "BEHIND",
+          },
+          changedFiles: ["scripts/knip-exports-baseline.json"],
+        }),
+      ),
+    ).toEqual({ decision: "abort", reasons: ["BASELINE_SEEDED_OFF_BASE"] });
+  });
+
+  // BLOCKED, DIRTY and UNKNOWN all mask BEHIND, so only the states that
+  // positively rule it out may vouch for a baseline.
+  test("a merge state that masks BEHIND cannot vouch for a baseline", () => {
+    expect(
+      failedGate(
+        passingSnapshot({
+          pullRequest: {
+            ...passingSnapshot().pullRequest,
+            mergeStateStatus: "BLOCKED",
+          },
+          changedFiles: ["scripts/ratchet-baseline.json"],
+        }),
+      ),
+    ).toEqual({ decision: "abort", reasons: ["BASELINE_SEEDED_OFF_BASE"] });
+  });
+
+  test("a baseline on a head current with the base merges", () => {
+    expect(
+      evaluateMergeBar(
+        passingSnapshot({
+          changedFiles: [
+            "scripts/react-compiler-bailouts.json",
+            "apps/web/src/lib/copy-to-clipboard.ts",
+          ],
+        }),
+      ).decision,
+    ).toBe("merge");
+  });
+
+  test("a pull request carrying no baseline is not held to the base", () => {
+    expect(
+      evaluateMergeBar(
+        passingSnapshot({
+          pullRequest: {
+            ...passingSnapshot().pullRequest,
+            mergeStateStatus: "BEHIND",
+          },
+        }),
+      ).decision,
+    ).toBe("merge");
+  });
+
+  test("every committed budget under scripts/ counts as a baseline", () => {
+    expect(isSeededBaselineFile("scripts/ratchet-baseline.json")).toBe(true);
+    expect(isSeededBaselineFile("scripts/typecheck-baseline.json")).toBe(true);
+    expect(isSeededBaselineFile("scripts/bundle-baseline.json")).toBe(true);
+    expect(isSeededBaselineFile("scripts/react-compiler-bailouts.json")).toBe(
+      true,
+    );
+    expect(isSeededBaselineFile("scripts/migration-baseline.txt")).toBe(false);
+    expect(isSeededBaselineFile("apps/api/src/baseline.json")).toBe(false);
   });
 
   test("a closed pull request is refused", () => {
@@ -355,6 +426,7 @@ describe("merge bar", () => {
 
     expect(gates.toSorted()).toEqual([
       "base-stability",
+      "baseline-freshness",
       "head-stability",
       "mergeable",
       "migration-order",

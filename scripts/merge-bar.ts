@@ -32,6 +32,12 @@
 //     rewrites the commit message. The body is read and inlined here at
 //     startup; the merge call never receives a path.
 //
+// (d) Budgets measured off the base. A committed baseline records counts for
+//     the head that seeded it. Merging one seeded below the base branch turns
+//     the default branch red after the write: the check reads a budget for a
+//     tree that never existed. Such a pull request must be current with its
+//     base, which is a property of the merge state, not of its own CI run.
+//
 // Known boundary. `--match-head-commit` binds the pull request head and
 // nothing else, and `--admin` merges past branch protection by definition, so
 // the review-thread and base-branch gates are client-side assertions with no
@@ -89,6 +95,7 @@ export const mergeBarMigrationDirectory = (repo: string): string | null =>
 const GATE_IDS = [
   "pull-request-state",
   "mergeable",
+  "baseline-freshness",
   "required-check",
   "review-threads",
   "migration-order",
@@ -107,6 +114,7 @@ const MERGE_BAR_REASONS = {
   requiredCheckMissing: "REQUIRED_CHECK_MISSING",
   requiredCheckIncomplete: "REQUIRED_CHECK_INCOMPLETE",
   requiredCheckNotSuccessful: "REQUIRED_CHECK_NOT_SUCCESSFUL",
+  baselineNotCurrent: "BASELINE_SEEDED_OFF_BASE",
   unresolvedReviewThreads: "UNRESOLVED_REVIEW_THREADS",
   migrationOrder: "MIGRATION_ORDER_VIOLATION",
   baseMoved: "BASE_MOVED_UNDER_ADDED_MIGRATIONS",
@@ -117,6 +125,17 @@ type MergeBarReason =
 
 const PULL_REQUEST_STATES = ["OPEN", "CLOSED", "MERGED"] as const;
 const MERGEABLE_STATES = ["MERGEABLE", "CONFLICTING", "UNKNOWN"] as const;
+const MERGE_STATE_STATUSES = [
+  "BEHIND",
+  "BLOCKED",
+  "CLEAN",
+  "DIRTY",
+  "DRAFT",
+  "HAS_HOOKS",
+  "UNKNOWN",
+  "UNSTABLE",
+] as const;
+type MergeStateStatus = (typeof MERGE_STATE_STATUSES)[number];
 
 type PullRequestSnapshot = {
   number: number;
@@ -125,6 +144,9 @@ type PullRequestSnapshot = {
   state: (typeof PULL_REQUEST_STATES)[number];
   isDraft: boolean;
   mergeable: (typeof MERGEABLE_STATES)[number];
+  // Coarser than `mergeable`: this is where GitHub reports that the head is
+  // behind the base branch.
+  mergeStateStatus: MergeStateStatus;
   headSha: string;
 };
 
@@ -153,6 +175,8 @@ export type MergeBarSnapshot = {
   // as a read against the current one.
   checkRunsHeadSha: string;
   checkRuns: readonly CheckRunSnapshot[];
+  // Every path this pull request touches, whatever the change status.
+  changedFiles: readonly string[];
   reviewThreads: readonly ReviewThreadSnapshot[];
   migrations: MigrationSnapshot;
   // Both re-read immediately before the merge call.
@@ -213,6 +237,69 @@ const evaluateMergeable = (pullRequest: PullRequestSnapshot): GateVerdict => {
     };
   }
   return { gate: "mergeable", status: "pass", detail: "MERGEABLE" };
+};
+
+// A committed budget file: counts, sizes, or export lists measured on the head
+// that seeded them. `scripts/*-baseline.json` plus the budgets that predate the
+// suffix.
+const BASELINE_DIRECTORY = "scripts/";
+const BASELINE_FILE_SUFFIX = "-baseline.json";
+const NAMED_BASELINE_FILES = ["scripts/react-compiler-bailouts.json"] as const;
+
+export const isSeededBaselineFile = (file: string): boolean =>
+  NAMED_BASELINE_FILES.some((name) => name === file) ||
+  (file.startsWith(BASELINE_DIRECTORY) && file.endsWith(BASELINE_FILE_SUFFIX));
+
+// GitHub reports one merge state, and several of them mask BEHIND: a pull
+// request held by branch protection reads BLOCKED whether or not its head is
+// current. So this map records which states positively place the head above
+// the base, rather than treating "not BEHIND" as current.
+const MERGE_STATE_PROVES_CURRENT_WITH_BASE = {
+  BEHIND: false,
+  BLOCKED: false,
+  CLEAN: true,
+  DIRTY: false,
+  DRAFT: false,
+  HAS_HOOKS: true,
+  UNKNOWN: false,
+  UNSTABLE: true,
+} as const satisfies Record<MergeStateStatus, boolean>;
+
+// A baseline is measured against the head that seeded it. Merging one that was
+// seeded below the base branch publishes a budget for a tree that never
+// existed: whatever landed in between is unaccounted for, and the check that
+// reads the budget goes red on the default branch after the merge, not before.
+const evaluateBaselineFreshness = ({
+  changedFiles,
+  mergeStateStatus,
+}: {
+  changedFiles: readonly string[];
+  mergeStateStatus: MergeStateStatus;
+}): GateVerdict => {
+  const baselines = changedFiles.filter(isSeededBaselineFile);
+  if (baselines.length === 0) {
+    return {
+      gate: "baseline-freshness",
+      status: "pass",
+      detail: "no committed baseline in this pull request",
+    };
+  }
+  if (!MERGE_STATE_PROVES_CURRENT_WITH_BASE[mergeStateStatus]) {
+    return {
+      gate: "baseline-freshness",
+      status: "fail",
+      reason: MERGE_BAR_REASONS.baselineNotCurrent,
+      detail:
+        `merge state ${mergeStateStatus} does not place this head above the ` +
+        `base, and ${baselines.join(", ")} was seeded on this head; rebase ` +
+        "onto the base branch and reseed the baseline",
+    };
+  }
+  return {
+    gate: "baseline-freshness",
+    status: "pass",
+    detail: `${baselines.length} baseline(s) seeded on a head current with the base`,
+  };
 };
 
 const evaluateRequiredCheck = ({
@@ -404,6 +491,10 @@ export const evaluateMergeBar = (
   const gates = [
     evaluatePullRequestState(snapshot.pullRequest),
     evaluateMergeable(snapshot.pullRequest),
+    evaluateBaselineFreshness({
+      changedFiles: snapshot.changedFiles,
+      mergeStateStatus: snapshot.pullRequest.mergeStateStatus,
+    }),
     evaluateRequiredCheck({
       checkRuns: snapshot.checkRuns,
       checkRunsHeadSha: snapshot.checkRunsHeadSha,
@@ -438,6 +529,7 @@ type GitHubGateway = {
   // Tip of the branch this pull request merges into.
   readBaseSha: () => string;
   readCheckRuns: (headSha: string) => readonly CheckRunSnapshot[];
+  readChangedFiles: () => readonly string[];
   readReviewThreads: () => readonly ReviewThreadSnapshot[];
   readMigrationDirectories: () => MigrationSnapshot;
   merge: (input: {
@@ -529,6 +621,29 @@ const createGhGateway = ({
   }
   const prArgs = [String(pullNumber), "--repo", repo];
 
+  // One paginated listing serves both the baseline gate and the migration read.
+  type PullRequestFile = { filename: string; status: string };
+  let files: readonly PullRequestFile[] | null = null;
+  const readFiles = (): readonly PullRequestFile[] => {
+    files ??= runGh([
+      "api",
+      "--paginate",
+      `repos/${repo}/pulls/${pullNumber}/files`,
+      "--jq",
+      ".[] | [.status, .filename] | @tsv",
+    ])
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => {
+        const [status, filename] = line.split("\t");
+        if (status === undefined || filename === undefined) {
+          panic(`Malformed changed-file row from gh: ${line}`);
+        }
+        return { filename, status };
+      });
+    return files;
+  };
+
   return {
     readHeadSha: () =>
       readString(
@@ -571,7 +686,7 @@ const createGhGateway = ({
           "view",
           ...prArgs,
           "--json",
-          "number,title,body,state,isDraft,mergeable,headRefOid",
+          "number,title,body,state,isDraft,mergeable,mergeStateStatus,headRefOid",
         ]),
         "pr view",
       );
@@ -593,6 +708,11 @@ const createGhGateway = ({
           MERGEABLE_STATES,
           readString(raw, "mergeable"),
           "mergeable",
+        ),
+        mergeStateStatus: readMember(
+          MERGE_STATE_STATUSES,
+          readString(raw, "mergeStateStatus"),
+          "mergeStateStatus",
         ),
         headSha: readString(raw, "headRefOid"),
       };
@@ -626,6 +746,8 @@ const createGhGateway = ({
       }
       return runs;
     },
+
+    readChangedFiles: () => readFiles().map(({ filename }) => filename),
 
     readReviewThreads: () => {
       const threads: ReviewThreadSnapshot[] = [];
@@ -724,20 +846,14 @@ const createGhGateway = ({
         );
       }
 
-      const addedDirectories = runGh([
-        "api",
-        "--paginate",
-        `repos/${repo}/pulls/${pullNumber}/files`,
-        "--jq",
-        '.[] | select(.status == "added") | .filename',
-      ])
-        .split("\n")
+      const addedDirectories = readFiles()
         .filter(
-          (file) =>
-            file.startsWith(`${migrationDirectory}/`) &&
-            file.endsWith("/migration.sql"),
+          ({ filename, status }) =>
+            status === "added" &&
+            filename.startsWith(`${migrationDirectory}/`) &&
+            filename.endsWith("/migration.sql"),
         )
-        .map((file) => file.slice(0, file.lastIndexOf("/")));
+        .map(({ filename }) => filename.slice(0, filename.lastIndexOf("/")));
 
       return { baseDirectories, addedDirectories, baseSha };
     },
@@ -900,6 +1016,7 @@ if (import.meta.main) {
     requiredCheckRuns: mergeBarRequiredCheckRuns(options.repo),
     checkRunsHeadSha: pullRequest.headSha,
     checkRuns: gateway.readCheckRuns(pullRequest.headSha),
+    changedFiles: gateway.readChangedFiles(),
     migrations: gateway.readMigrationDirectories(),
     reviewThreads: gateway.readReviewThreads(),
     baseShaBeforeMerge: gateway.readBaseSha(),
