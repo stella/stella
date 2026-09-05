@@ -834,6 +834,20 @@ const countTrackedRuleSuppressions =
 const countResidualLintSuppressions = (content: string, file: string): number =>
   collectLintDirectives(content, file).filter(isResidualDirective).length;
 
+// The linter is oxlint, so the oxlint spelling of a disable directive is the
+// one the conventions teach; the eslint spelling is a legacy alias oxlint still
+// honors. Two spellings for one directive make every suppression audit grep
+// twice, so the alias may only shrink.
+const ESLINT_SPELLED_DIRECTIVE = /^(?:\/\/|\/\*)\s*eslint-disable/u;
+
+const countEslintSpelledSuppressions = (
+  content: string,
+  file: string,
+): number =>
+  collectLintDirectives(content, file).filter(({ text }) =>
+    ESLINT_SPELLED_DIRECTIVE.test(text),
+  ).length;
+
 // A compiler-suppression directive. Fidelity limit: a prose comment that
 // STARTS with the directive token (`// @ts-expect-error is bad`) counts, one
 // that merely mentions it mid-sentence does not; directives and leading
@@ -1975,6 +1989,15 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     include: ALL_SOURCE_GLOBS,
     exclude: isExcludedSource,
     count: countResidualLintSuppressions,
+  },
+  {
+    scope: "file",
+    id: "eslint-spelled-suppression-directives",
+    description:
+      "disable directives written with the legacy `eslint-disable` spelling instead of `oxlint-disable`, repo-wide (one directive, one spelling; new suppressions use the oxlint form)",
+    include: ALL_SOURCE_GLOBS,
+    exclude: isExcludedSource,
+    count: countEslintSpelledSuppressions,
   },
   {
     scope: "file",

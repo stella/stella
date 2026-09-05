@@ -1,0 +1,24 @@
+name: AI Shared Update
+
+on:
+  schedule:
+    # Weekly, Monday 06:00 UTC: propose the current stella/ai-shared revision
+    # and its regenerated instructions as a pull request.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  update:
+    name: Propose ai-shared update
+    permissions:
+      actions: write
+      contents: write
+      pull-requests: write
+    uses: stella/.github/.github/workflows/ai-shared-update.yml@2420b3b02096bcd9adcebb7f82b9d5b575bad9cb
+    with:
+      validation-workflow: ci.yml
+    secrets:
+      app_id: ${{ secrets.CHANGELOG_APP_ID }}
+      app_private_key: ${{ secrets.CHANGELOG_APP_PRIVATE_KEY }}
