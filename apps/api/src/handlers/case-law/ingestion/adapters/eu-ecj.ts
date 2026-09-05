@@ -605,6 +605,7 @@ const mediaTypeOf = (contentType: string): string =>
  * conflation this adapter exists to avoid.
  */
 const ADDRESS_EXHAUSTED_STATUSES = [404, 406, 410, 415] as const;
+const INVALID_DOCUMENT_REQUEST_STATUS = 400;
 
 type ManifestationRead =
   | { type: "document"; html: string }
@@ -768,6 +769,18 @@ const fetchManifestation = async ({
       case "document":
         return { html: lookup.html, url: lookup.url };
       case "failed":
+        if (lookup.status === INVALID_DOCUMENT_REQUEST_STATUS) {
+          // A deterministic bad document request must not pin the crawl's
+          // date cursor and prevent every later decision from being fetched.
+          logger.warn("case_law.ingestion.manifestation_rejected", {
+            adapterKey: ADAPTER_KEYS.EU_ECJ,
+            celex,
+            language: lang,
+            httpStatus: lookup.status,
+            url: contentUrl,
+          });
+          return undefined;
+        }
         // Propagate to the caller's retry path instead of reporting missing
         // content or probing another manifestation during a provider outage.
         throw new AdapterFetchError({
