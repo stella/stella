@@ -977,6 +977,65 @@ describe("TanStack AI text generation", () => {
     expect(classifyAIError(caught)).toBe("quota_exhausted");
   });
 
+  // An adapter whose SDK exception stringifies the response body into the
+  // message reports the run error with no `code` and no `rawEvent`. The body is
+  // then the only evidence of what the provider answered, so the wrap has to
+  // keep it: without it quota, billing, retired model and outage all read as
+  // one unnamed transport failure.
+  test("classifies a run error whose only detail is the provider body", async () => {
+    capturedChatOptions.length = 0;
+    nextChatResult = createRunErrorStream({
+      message: JSON.stringify({
+        error: {
+          code: 429,
+          message: "Resource has been exhausted.",
+          status: "RESOURCE_EXHAUSTED",
+        },
+      }),
+    });
+
+    const caught = await generateTextForTestModel({
+      caching: noCaching,
+      finishPolicy: "allow-incomplete",
+      organizationId: null,
+      orgAIConfig: null,
+      prompt: "Say hello.",
+      role: "chat",
+      serviceTier: "standard",
+      tenantWorkspaceIds: [],
+    }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+
+    expect(caught).toMatchObject({ status: 502 });
+    expect(classifyAIError(caught)).toBe("quota_exhausted");
+  });
+
+  test("leaves a plain-text run error unclassified", async () => {
+    capturedChatOptions.length = 0;
+    nextChatResult = createRunErrorStream({
+      message: "The model is currently overloaded.",
+    });
+
+    const caught = await generateTextForTestModel({
+      caching: noCaching,
+      finishPolicy: "allow-incomplete",
+      organizationId: null,
+      orgAIConfig: null,
+      prompt: "Say hello.",
+      role: "chat",
+      serviceTier: "standard",
+      tenantWorkspaceIds: [],
+    }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+
+    expect(caught).toMatchObject({ status: 502 });
+    expect(classifyAIError(caught)).toBe("unknown");
+  });
+
   test("propagates provider run errors from streaming text", async () => {
     capturedChatOptions.length = 0;
     nextChatResult = createRunErrorStream({
@@ -1180,11 +1239,11 @@ const createRunErrorStream = async function* ({
   code,
   message,
 }: {
-  code: string;
+  code?: string | undefined;
   message: string;
 }) {
   yield {
-    code,
+    ...(code === undefined ? {} : { code }),
     message,
     type: realTanStackAI.EventType.RUN_ERROR,
   };
