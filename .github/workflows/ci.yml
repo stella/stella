@@ -1018,6 +1018,7 @@ jobs:
           bun scripts/check-published-exports.ts packages/calculations
           bun scripts/check-published-exports.ts packages/workspace-model
           bun scripts/check-published-exports.ts packages/workspace-ui
+          bun scripts/check-published-exports.ts packages/stable-stringify
 
       # Release ordering is a safety property. This test has no workspace
       # dependencies, so it remains runnable when a PR changes only workflows

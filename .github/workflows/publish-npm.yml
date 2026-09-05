@@ -37,6 +37,7 @@ on:
       - packages/ui/CHANGELOG.md
       - packages/workspace-model/CHANGELOG.md
       - packages/workspace-ui/CHANGELOG.md
+      - packages/stable-stringify/CHANGELOG.md
   workflow_run: # zizmor: ignore[dangerous-triggers] the release tag and SHA are revalidated before the release job receives id-token
     workflows: ["Release Artifacts"]
     types: [completed]
@@ -64,6 +65,7 @@ on:
           - ui
           - workspace-model
           - workspace-ui
+          - stable-stringify
           - cli
         default: all
       publish:
@@ -427,6 +429,15 @@ jobs:
         with:
           name: npm-tarball-country-codes
           path: release-artifacts/country-codes/
+          retention-days: 1
+          if-no-files-found: error
+
+      - name: Upload stable-stringify tarball
+        if: contains(fromJSON(steps.pack.outputs.packages), 'stable-stringify')
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: npm-tarball-stable-stringify
+          path: release-artifacts/stable-stringify/
           retention-days: 1
           if-no-files-found: error
 

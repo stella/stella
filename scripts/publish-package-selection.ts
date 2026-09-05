@@ -18,6 +18,7 @@ export const LIBRARY_PACKAGE_ORDER = [
   "calculations",
   "workspace-model",
   "workspace-ui",
+  "stable-stringify",
 ] as const;
 
 export const ALL_PACKAGE_ORDER = [...LIBRARY_PACKAGE_ORDER, "cli"] as const;

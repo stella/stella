@@ -1,21 +1,50 @@
 {
   "name": "@stll/stable-stringify",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
   "description": "deterministic string form of JSON-shaped values, for fingerprints and cache keys that must agree across environments",
+  "keywords": [
+    "canonical",
+    "deterministic",
+    "fingerprint",
+    "json",
+    "serialization",
+    "stringify"
+  ],
+  "homepage": "https://github.com/stella/stella/tree/main/packages/stable-stringify",
+  "bugs": {
+    "url": "https://github.com/stella/stella/issues"
+  },
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/stella/stella.git",
+    "directory": "packages/stable-stringify"
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
   "type": "module",
   "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": "./src/index.ts"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
-    "clean": "git clean -xdf .cache .turbo node_modules",
+    "clean": "git clean -xdf dist .cache .turbo node_modules",
+    "build": "rm -rf dist && bun ../../packages/scripts/src/tsc-native.ts -p tsconfig.build.json",
+    "pack:dry-run": "bun pm pack --dry-run",
     "test": "bun test src",
     "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware packages/stable-stringify",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/stable-stringify",
-    "format": "bun ../../scripts/run-oxfmt.ts ."
+    "format": "bun ../../scripts/run-oxfmt.ts .",
+    "prepack": "bun run build"
   },
   "devDependencies": {
     "@stll/typescript-config": "workspace:*",
