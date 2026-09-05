@@ -15,6 +15,7 @@ use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
+  borrow::Cow,
   collections::{BTreeSet, HashMap, HashSet},
   io::{Cursor, Write},
   net::IpAddr,
@@ -2215,6 +2216,13 @@ fn prune_items_preserving(
   items.len() != original_len
 }
 
+/// Largest `colspan`/`rowspan` kept; anything wider is layout abuse, not a clip.
+const MAX_TABLE_SPAN: u32 = 20;
+/// Rules thicker than this are decoration, not a signature line.
+const MAX_RULE_WIDTH_PT: f32 = 6.0;
+const MAX_CELL_WIDTH_PT: f32 = 800.0;
+const HIGHLIGHT_BACKGROUND: &str = "var(--highlight, #fef08a)";
+
 fn sanitized_html(raw_html: &str) -> Option<String> {
   if raw_html.len() > MAX_ITEM_HTML_BYTES {
     return None;
@@ -2235,14 +2243,37 @@ fn sanitized_html(raw_html: &str) -> Option<String> {
     "span",
     "strike",
     "strong",
+    "table",
+    "tbody",
+    "td",
+    "tfoot",
+    "th",
+    "thead",
+    "tr",
     "u",
     "ul",
   ]);
+  let tag_attributes = HashMap::from([
+    (
+      "td",
+      HashSet::from(["align", "colspan", "rowspan", "valign"]),
+    ),
+    (
+      "th",
+      HashSet::from(["align", "colspan", "rowspan", "valign"]),
+    ),
+    ("tr", HashSet::from(["align", "valign"])),
+    ("p", HashSet::from(["align"])),
+    ("div", HashSet::from(["align"])),
+  ]);
   let html = HtmlSanitizer::new()
     .tags(allowed_tags)
+    .tag_attributes(tag_attributes)
+    .generic_attributes(HashSet::from(["style"]))
+    .attribute_filter(sanitized_attribute)
     .clean(&without_word_list_spacers(raw_html))
     .to_string();
-  let html = collapse_html_whitespace(&html);
+  let html = without_table_gaps(&collapse_html_whitespace(&html));
   let has_formatting = [
     "b",
     "blockquote",
@@ -2254,12 +2285,210 @@ fn sanitized_html(raw_html: &str) -> Option<String> {
     "pre",
     "s",
     "strong",
+    "table",
     "u",
     "ul",
   ]
   .iter()
-  .any(|tag| find_opening_tag(&html, tag).is_some());
+  .any(|tag| find_opening_tag(&html, tag).is_some())
+    || html.contains(" style=\"")
+    || html.contains(" align=\"");
   if has_formatting { Some(html) } else { None }
+}
+
+/// Source whitespace between table structure tags is never rendered; dropping
+/// it keeps the stored markup canonical.
+fn without_table_gaps(html: &str) -> String {
+  const TABLE_TAGS: [&str; 12] = [
+    "<table", "</table>", "<tbody", "</tbody>", "<thead", "</thead>", "<tfoot",
+    "</tfoot>", "<tr", "</tr>", "<td", "</td>",
+  ];
+  let mut output = String::with_capacity(html.len());
+  let mut rest = html;
+  while let Some(space) = rest.find(" <") {
+    let after_space = &rest[space + 1..];
+    let is_table_tag = TABLE_TAGS.iter().any(|tag| {
+      after_space.strip_prefix(tag).is_some_and(|following| {
+        tag.ends_with('>') || following.starts_with(['>', ' '])
+      })
+    }) || after_space.starts_with("<th")
+      && !after_space.starts_with("<thead")
+      || after_space.starts_with("</th>");
+    output.push_str(&rest[..space]);
+    if !is_table_tag {
+      output.push(' ');
+    }
+    rest = after_space;
+  }
+  output.push_str(rest);
+  output
+}
+
+/// Attribute values are re-emitted from parsed tokens, never passed through, so
+/// the webview only ever sees the vocabulary below.
+fn sanitized_attribute<'value>(
+  element: &str,
+  attribute: &str,
+  value: &'value str,
+) -> Option<Cow<'value, str>> {
+  let value = value.trim();
+  match attribute {
+    "style" => sanitized_style(element, value).map(Cow::Owned),
+    "colspan" | "rowspan" => value
+      .parse::<u32>()
+      .ok()
+      .filter(|span| (2..=MAX_TABLE_SPAN).contains(span))
+      .map(|span| Cow::Owned(span.to_string())),
+    "align" => {
+      let value = value.to_ascii_lowercase();
+      matches!(value.as_str(), "left" | "right" | "center" | "justify")
+        .then_some(Cow::Owned(value))
+    }
+    "valign" => {
+      let value = value.to_ascii_lowercase();
+      matches!(value.as_str(), "top" | "middle" | "bottom").then_some(Cow::Owned(value))
+    }
+    _ => None,
+  }
+}
+
+/// Keeps the layout a copied block needs to stay legible (alignment, cell
+/// widths, rules, highlight) and drops typography, spacing and everything
+/// application-specific, so cards keep the app's type and theme. Colours are
+/// replaced by theme tokens rather than copied.
+fn sanitized_style(element: &str, style: &str) -> Option<String> {
+  let mut declarations = Vec::new();
+  for declaration in style.split(';') {
+    let Some((property, value)) = declaration.split_once(':') else {
+      continue;
+    };
+    let property = property.trim().to_ascii_lowercase();
+    let value = value.trim().to_ascii_lowercase();
+    let kept = match property.as_str() {
+      "text-align" => matches!(
+        value.as_str(),
+        "left" | "right" | "center" | "justify" | "start" | "end"
+      )
+      .then(|| format!("text-align: {value}")),
+      "vertical-align" => {
+        matches!(value.as_str(), "top" | "middle" | "bottom" | "baseline")
+          .then(|| format!("vertical-align: {value}"))
+      }
+      "border-top" | "border-bottom" => {
+        sanitized_rule(&value).map(|(width, line_style)| {
+          format!("{property}: {width}pt {line_style} currentColor")
+        })
+      }
+      // Only cells keep a width: a table width would override the full-width
+      // layout and clip columns in the card.
+      "width" if matches!(element, "td" | "th") => {
+        sanitized_width(&value).map(|width| format!("width: {width}"))
+      }
+      // The theme token styles cards; the fallback keeps the highlight when
+      // the HTML is pasted into another application.
+      "background" | "background-color" => {
+        is_plain_color(&value).then(|| format!("background: {HIGHLIGHT_BACKGROUND}"))
+      }
+      _ => None,
+    };
+    if let Some(kept) = kept {
+      declarations.push(kept);
+    }
+  }
+  (!declarations.is_empty()).then(|| declarations.join("; "))
+}
+
+/// A visible rule: its width in points (capped) and its line style.
+fn sanitized_rule(value: &str) -> Option<(String, &'static str)> {
+  let mut width = None;
+  let mut line_style = None;
+  for token in value.split_whitespace() {
+    match token {
+      "solid" => line_style = Some("solid"),
+      "double" => line_style = Some("double"),
+      "dotted" => line_style = Some("dotted"),
+      "dashed" => line_style = Some("dashed"),
+      _ => {
+        if let Some(points) = length_in_points(token) {
+          width = Some(points.min(MAX_RULE_WIDTH_PT));
+        }
+      }
+    }
+  }
+  let width = width.filter(|width| *width > 0.0)?;
+  Some((format_points(width), line_style?))
+}
+
+fn sanitized_width(value: &str) -> Option<String> {
+  if let Some(percent) = value.strip_suffix('%') {
+    let percent: f32 = percent.trim().parse().ok()?;
+    return (0.0..=100.0)
+      .contains(&percent)
+      .then(|| format!("{}%", format_points(percent)));
+  }
+  let points = length_in_points(value)?;
+  (points > 0.0).then(|| format!("{}pt", format_points(points.min(MAX_CELL_WIDTH_PT))))
+}
+
+/// CSS lengths as points. Negative lengths are Word's sub-point nudges and
+/// count as nothing.
+fn length_in_points(token: &str) -> Option<f32> {
+  let (number, factor) = if let Some(number) = token.strip_suffix("pt") {
+    (number, 1.0)
+  } else if let Some(number) = token.strip_suffix("px") {
+    (number, 0.75)
+  } else if let Some(number) = token.strip_suffix("cm") {
+    (number, 72.0 / 2.54)
+  } else if let Some(number) = token.strip_suffix("mm") {
+    (number, 7.2 / 2.54)
+  } else if let Some(number) = token.strip_suffix("in") {
+    (number, 72.0)
+  } else if let Some(number) = token.strip_suffix("em") {
+    (number, 12.0)
+  } else if token == "0" {
+    ("0", 1.0)
+  } else {
+    return None;
+  };
+  let number: f32 = number.trim().parse().ok()?;
+  number.is_finite().then(|| (number * factor).max(0.0))
+}
+
+fn format_points(value: f32) -> String {
+  let text = format!("{value:.2}");
+  text.trim_end_matches('0').trim_end_matches('.').to_string()
+}
+
+/// A colour literal a highlight can be mapped from: a name, `#hex` or an
+/// `rgb(...)` call. Anything else (`url(...)`, gradients, keywords) is not.
+fn is_plain_color(value: &str) -> bool {
+  if matches!(
+    value,
+    "" | "none"
+      | "transparent"
+      | "inherit"
+      | "initial"
+      | "unset"
+      | "white"
+      | "#fff"
+      | "#ffffff"
+  ) {
+    return false;
+  }
+  if let Some(hex) = value.strip_prefix('#') {
+    return matches!(hex.len(), 3 | 4 | 6 | 8)
+      && hex.chars().all(|c| c.is_ascii_hexdigit());
+  }
+  if let Some(arguments) = value
+    .strip_prefix("rgb(")
+    .or_else(|| value.strip_prefix("rgba("))
+    .and_then(|rest| rest.strip_suffix(')'))
+  {
+    return arguments
+      .chars()
+      .all(|c| c.is_ascii_digit() || matches!(c, ',' | '.' | '%' | ' ' | '/'));
+  }
+  value.chars().all(|c| c.is_ascii_alphabetic())
 }
 
 /// Word separates an auto-numbered list label from its paragraph with a span in
@@ -3670,6 +3899,91 @@ mod tests {
     let html = sanitized_html("<p>a\n\n  b</p>\n<pre>a\n  b</pre>\n").unwrap();
 
     assert_eq!(html, "<p>a b</p> <pre>a\n  b</pre>");
+  }
+
+  /// A Word signature block as Word puts it on the clipboard: a borderless
+  /// table, party headers spanning two cells with a highlight, a signature
+  /// rule drawn as a paragraph border, right-aligned names and values.
+  const WORD_SIGNATURE_TABLE_HTML: &str = concat!(
+    "<table border=0 cellspacing=0 cellpadding=0 style='border-collapse:collapse;",
+    "mso-table-layout-alt:fixed;mso-padding-alt:0cm 5.0pt 0cm 0cm'>\n",
+    " <tr>\n <td colspan=2 style='width:50.0%;padding:0cm 5.0pt 0cm 0cm'>\n",
+    " <p style='margin-bottom:30.0pt;text-align:justify;text-indent:-.05pt'>",
+    "<b><i><span style='font-size:10.0pt;mso-ascii-font-family:Aptos;",
+    "background:yellow;mso-highlight:yellow'>Strana A</span></i></b></p>\n",
+    " </td>\n <td colspan=2 style='width:50.0%'>\n <p><b><i>Strana B</i></b></p>\n",
+    " </td>\n </tr>\n <tr>\n <td colspan=2>\n",
+    " <div style='mso-element:para-border-div;border:none;",
+    "border-bottom:solid windowtext 1.5pt;padding:0cm 0cm 1.0pt 0cm'>\n",
+    " <p style='border:none;mso-border-bottom-alt:solid windowtext 1.5pt'>",
+    "<span style='font-size:10.0pt'>x</span></p>\n </div>\n",
+    " <p align=right style='margin:.05pt;text-align:right'><b>",
+    "<span style='background:yellow;mso-highlight:yellow'>Název strany A</span>",
+    "</b></p>\n </td>\n <td colspan=2><p>x</p></td>\n </tr>\n <tr>\n",
+    " <td width=94 valign=top style='width:15.0%'><p>Datum:</p></td>\n",
+    " <td style='width:35.0%'><p align=right style='text-align:right'>",
+    "05.09.2026</p></td>\n <td><p>Datum:</p></td><td><p>05.09.2026</p></td>\n",
+    " </tr>\n</table>",
+  );
+
+  #[test]
+  fn sanitizer_keeps_table_layout_rules_and_highlights_from_word() {
+    let html = sanitized_html(WORD_SIGNATURE_TABLE_HTML).unwrap();
+
+    assert!(
+      html.starts_with(r#"<table><tbody><tr><td colspan="2" style="width: 50%">"#),
+      "{html}"
+    );
+    assert!(html.contains("</td></tr><tr><td"), "{html}");
+    assert!(
+      html.contains(r#"<div style="border-bottom: 1.5pt solid currentColor">"#),
+      "{html}"
+    );
+    assert!(
+      html.contains(r#"<p align="right" style="text-align: right"><b><span style="background: var(--highlight, #fef08a)">Název strany A</span></b></p>"#),
+      "{html}"
+    );
+    assert!(
+      html.contains(r#"<td valign="top" style="width: 15%">"#),
+      "{html}"
+    );
+    for dropped in [
+      "mso-",
+      "Aptos",
+      "font-size",
+      "padding",
+      "margin",
+      "windowtext",
+      "yellow",
+      "border-collapse",
+      "cellspacing",
+      "width=\"94\"",
+    ] {
+      assert!(!html.contains(dropped), "{dropped} survived: {html}");
+    }
+  }
+
+  #[test]
+  fn sanitizer_re_emits_styles_from_an_allow_list_only() {
+    let html = sanitized_html(
+      r#"<table style="width:800pt"><tr><td colspan="9999" rowspan="abc" style="background:url(javascript:alert(1));text-align:RIGHT;position:fixed;width:120%;border-bottom:solid red 40pt;white-space:nowrap">x</td></tr></table>"#,
+    )
+    .unwrap();
+
+    assert_eq!(
+      html,
+      r#"<table><tbody><tr><td style="text-align: right; border-bottom: 6pt solid currentColor">x</td></tr></tbody></table>"#
+    );
+    assert_eq!(sanitized_style("span", "color:red;font-family:Aptos"), None);
+    assert_eq!(
+      sanitized_style("td", "width:98.3pt;background:#FFFF00").as_deref(),
+      Some("width: 98.3pt; background: var(--highlight, #fef08a)")
+    );
+    assert_eq!(sanitized_style("p", "width:98.3pt"), None);
+    assert_eq!(sanitized_style("td", "border-bottom:none;width:-5pt"), None);
+    // Alignment alone is worth keeping as formatting.
+    assert!(sanitized_html(r#"<p align="center">centred</p>"#).is_some());
+    assert!(sanitized_html(r#"<p style="text-align:right">right</p>"#).is_some());
   }
 
   #[test]

@@ -88,8 +88,16 @@ const EDITOR_BLOCK_TAGS = new Set([
   "OL",
   "P",
   "PRE",
+  "TABLE",
+  "TBODY",
+  "TFOOT",
+  "THEAD",
+  "TR",
   "UL",
 ]);
+
+/** Cells sit side by side: plain text separates them with a tab, rows with a newline. */
+const EDITOR_CELL_TAGS = new Set(["TD", "TH"]);
 
 const listItemsFromSelection = (fragment: DocumentFragment) => {
   const items: HTMLLIElement[] = [];
@@ -410,6 +418,27 @@ const editorPlainText = (editor: HTMLDivElement) => {
   };
   const isBlock = (node: Node) =>
     node instanceof HTMLElement && EDITOR_BLOCK_TAGS.has(node.tagName);
+  const isCell = (node: Node) =>
+    node instanceof HTMLElement && EDITOR_CELL_TAGS.has(node.tagName);
+  const appendSeparator = (child: Node, nextChild: Node | undefined) => {
+    if (!nextChild) {
+      return;
+    }
+    if (isCell(child) && isCell(nextChild)) {
+      parts.push("\t");
+      return;
+    }
+    if (isBlock(child) || isBlock(nextChild)) {
+      appendLineBreak();
+    }
+  };
+  const appendChildren = (node: Node) => {
+    const children = Array.from(node.childNodes);
+    for (const [index, child] of children.entries()) {
+      appendNode(child);
+      appendSeparator(child, children.at(index + 1));
+    }
+  };
   const appendNode = (node: Node) => {
     if (node instanceof Text) {
       parts.push(node.data);
@@ -422,24 +451,10 @@ const editorPlainText = (editor: HTMLDivElement) => {
       parts.push("\n");
       return;
     }
-    const children = Array.from(node.childNodes);
-    for (const [index, child] of children.entries()) {
-      appendNode(child);
-      const nextChild = children.at(index + 1);
-      if (nextChild && (isBlock(child) || isBlock(nextChild))) {
-        appendLineBreak();
-      }
-    }
+    appendChildren(node);
   };
 
-  const children = Array.from(editor.childNodes);
-  for (const [index, child] of children.entries()) {
-    appendNode(child);
-    const nextChild = children.at(index + 1);
-    if (nextChild && (isBlock(child) || isBlock(nextChild))) {
-      appendLineBreak();
-    }
-  }
+  appendChildren(editor);
   return parts.join("");
 };
 
@@ -471,7 +486,7 @@ const RichTextArea = memo(
         <div
           aria-label={label}
           autoFocus
-          className="clipboard-rich-editor bg-card ring-border focus:ring-ring min-h-0 flex-1 overflow-y-auto rounded-[22px] p-5 text-sm leading-6 ring-1 outline-none ring-inset focus:ring-2"
+          className="clipboard-rich-editor clipboard-html bg-card ring-border focus:ring-ring min-h-0 flex-1 overflow-y-auto rounded-[22px] p-5 text-sm leading-6 tab-4 ring-1 outline-none ring-inset focus:ring-2"
           contentEditable
           dir="auto"
           onInput={onInput}
