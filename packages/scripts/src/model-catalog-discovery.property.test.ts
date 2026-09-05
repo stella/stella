@@ -16,7 +16,8 @@ const EMPTY_OFFERED = {
   openai: [],
 } as const;
 
-const REVIEWED_REASON = "2026-07-23: property-test disposition";
+const REVIEWED_REASON =
+  "2026-07-23: duplicate alias; property-test disposition";
 
 const provider = fc.constantFrom("anthropic", "google", "mistral", "openai");
 
@@ -194,7 +195,8 @@ describe("model catalog discovery invariants", () => {
         upstream: googleAliases,
         offered: EMPTY_OFFERED,
         reviewedExclusions: {
-          "google:gemini-flash-latest": "2026-08-22: property-test disposition",
+          "google:gemini-flash-latest":
+            "2026-08-22: floating alias; property-test disposition",
         },
       }),
     ).toEqual([googleFlashLiteAlias]);
