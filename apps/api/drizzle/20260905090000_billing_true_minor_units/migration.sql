@@ -131,9 +131,40 @@ UPDATE "expenses" AS expense
        ) AS exponent(currency, digits)
  WHERE expense."currency" = exponent.currency;--> statement-breakpoint
 
+-- The invoice total is not rescaled: it is recomputed from the children this
+-- migration just moved, with the same proration and markup the handlers use
+-- (`prorateHourlyCents` and `applyMarkupCents`; see invoices/create.ts,
+-- add-entries.ts and remove-entries.ts, which are the only writers of this
+-- column). Rescaling the stored sum would carry the old per-line rounding: two
+-- one-hour JPY entries at a stored rate of 50 summed to 100, and 100 rescaled
+-- is 1, where each line rescaled and re-prorated is 1, so the invoice is 2.
+--
+-- An invoice's currency cannot change while an entry is attached
+-- (invoices/update.ts), so its children always share its currency, and an
+-- invoice with none recomputes to zero, which is what create.ts writes.
 UPDATE "invoices" AS invoice
-   SET "total_amount" =
-       ROUND(invoice."total_amount" * power(10::numeric, exponent.digits - 2))::integer
+   SET "total_amount" = (
+       COALESCE((
+         SELECT SUM(
+                  FLOOR(
+                    (entry."billed_minutes"::numeric * entry."rate_at_entry" + 30)
+                    / 60
+                  )
+                )
+           FROM "time_entries" AS entry
+          WHERE entry."invoice_id" = invoice."id"
+       ), 0)
+       + COALESCE((
+         SELECT SUM(
+                  FLOOR(
+                    (expense."amount"::numeric * (100 + expense."markup") + 50)
+                    / 100
+                  )
+                )
+           FROM "expenses" AS expense
+          WHERE expense."invoice_id" = invoice."id"
+       ), 0)
+       )::integer
   FROM (VALUES
   ('BHD', 3),
   ('BIF', 0),
