@@ -146,7 +146,9 @@ pub fn target_work_area(app: &AppHandle) -> Option<WorkArea> {
     // The focused screen: the one holding the window the user is working in.
     .or_else(|| {
       app
-        .get_focused_window()
+        .webview_windows()
+        .into_values()
+        .find(|window| window.is_focused().unwrap_or(false))
         .and_then(|window| window.current_monitor().ok().flatten())
     })
     .or_else(|| app.primary_monitor().ok().flatten())?;
