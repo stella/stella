@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import {
   WORK_OBLIGATION_EVENT_TYPE,
   WORK_OBLIGATION_STATUS,
@@ -151,8 +153,8 @@ export const nextWorkObligationStatus = (
     case WORK_OBLIGATION_TRANSITION_ACTION.REOPEN:
       return reopenedWorkObligationStatus(ownership);
     default: {
-      const exhaustive: never = action;
-      return exhaustive;
+      action satisfies never;
+      return panic(`Unhandled action: ${String(action)}`);
     }
   }
 };

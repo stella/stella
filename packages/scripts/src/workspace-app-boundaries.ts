@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
@@ -641,7 +642,8 @@ const violationMessage = (edge: AppBoundaryEdge): string => {
     case "tsconfig-path":
       return `TypeScript path mapping ${edge.specifier} targets ${edge.target}`;
     default:
-      return edge.kind satisfies never;
+      edge.kind satisfies never;
+      return panic(`Unhandled kind: ${String(edge.kind)}`);
   }
 };
 

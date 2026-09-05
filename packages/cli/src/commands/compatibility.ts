@@ -1,6 +1,6 @@
 import { buildCommand, buildRouteMap } from "@stricli/core";
 import type { RouteMap } from "@stricli/core";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import { resolveServerUrl } from "../auth/server-resolution.js";
 import {
@@ -52,8 +52,8 @@ const describeContract = (report: CompatibilityReport): string => {
     case "legacy":
       return `legacy API contract ${report.apiProtocolVersion}`;
     default: {
-      const exhaustive: never = report;
-      return exhaustive;
+      report satisfies never;
+      return panic(`Unhandled report: ${String(report)}`);
     }
   }
 };

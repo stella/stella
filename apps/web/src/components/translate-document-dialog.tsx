@@ -409,8 +409,8 @@ export const TranslateDocumentDialog = (
             );
           }
           default: {
-            const exhaustiveChoice: never = choice;
-            return exhaustiveChoice;
+            choice satisfies never;
+            return panic(`Unhandled choice: ${String(choice)}`);
           }
         }
       })();

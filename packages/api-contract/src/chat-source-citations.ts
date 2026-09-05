@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import { encodeRfc3986Component } from "./rfc3986";
 import { isSafeIdValue, toSafeId } from "./safe-id";
 import type { SafeId } from "./safe-id";
@@ -45,7 +47,8 @@ export const toChatSourceCitationHref = (
     case "pdf-bates":
       return `${CHAT_SOURCE_CITATION_HREF_PREFIX}${identity.join(":")}:${String(target.pageNumber)}:${encode(target.bates)}`;
     default:
-      return target satisfies never;
+      target satisfies never;
+      return panic(`Unhandled target: ${String(target)}`);
   }
 };
 

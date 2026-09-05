@@ -6,7 +6,7 @@ import {
 } from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import {
   ChevronRightIcon,
   FolderPlusIcon,
@@ -125,8 +125,8 @@ const canDropMatterFolder = (
     case "pending":
       return source.parentId !== targetParentId;
     default: {
-      const exhaustive: never = source;
-      return exhaustive;
+      source satisfies never;
+      return panic(`Unhandled source: ${String(source)}`);
     }
   }
 };
@@ -187,7 +187,8 @@ const FolderDragDropRow = ({
           name: source.name,
         } as const satisfies MatterFolderDragData;
       default:
-        return source satisfies never;
+        source satisfies never;
+        return panic(`Unhandled source: ${String(source)}`);
     }
   })();
   const moveDestinations =

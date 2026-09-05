@@ -290,7 +290,8 @@ export const getNewAccountEmailOtpAction = async (
     case "rate_limited":
       return { type: NEW_ACCOUNT_EMAIL_OTP_ACTION.suppressOtp };
     default:
-      return result satisfies never;
+      result satisfies never;
+      return panic(`Unhandled result: ${String(result)}`);
   }
 };
 

@@ -281,8 +281,8 @@ export const PropertyPopover = ({
         // Already reported by `useStartWorkflow`, error included.
         return;
       default: {
-        const exhaustive: never = status;
-        panic(`Unhandled workflow start status: ${String(exhaustive)}`);
+        status satisfies never;
+        panic(`Unhandled workflow start status: ${String(status)}`);
       }
     }
   };

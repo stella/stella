@@ -226,7 +226,8 @@ const uploadWriteFailureMessage = (
     case "missing-draft":
       return "Generated document draft not found";
     default:
-      return reason satisfies never;
+      reason satisfies never;
+      return panic(`Unhandled reason: ${String(reason)}`);
   }
 };
 
@@ -243,7 +244,8 @@ const uploadWriteFailureStatus = (
     case "invalid-property":
       return 400;
     default:
-      return reason satisfies never;
+      reason satisfies never;
+      return panic(`Unhandled reason: ${String(reason)}`);
   }
 };
 
@@ -440,7 +442,8 @@ const findGeneratedDocumentDraftState = async ({
     case "for-update":
       return toDraftState((await query.for("update")).at(0));
     default:
-      return lock satisfies never;
+      lock satisfies never;
+      return panic(`Unhandled lock: ${String(lock)}`);
   }
 };
 
@@ -700,7 +703,8 @@ const preflightGeneratedDocumentDraft = async ({
           : { result: saved, status: "saved" };
       }
       default:
-        return draftState satisfies never;
+        draftState satisfies never;
+        return panic(`Unhandled draft state: ${String(draftState)}`);
     }
   });
 
@@ -786,7 +790,8 @@ const uploadEntityHandler = async function* ({
       case "ready":
         break;
       default:
-        return preflightResult satisfies never;
+        preflightResult satisfies never;
+        return panic(`Unhandled preflight result: ${String(preflightResult)}`);
     }
   }
 

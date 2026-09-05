@@ -638,6 +638,10 @@
     "count": 0,
     "files": {}
   },
+  "require-exhaustive-panic-suppressions": {
+    "count": 0,
+    "files": {}
+  },
   "no-vacuous-throw-assertion-suppressions": {
     "count": 0,
     "files": {}

@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, asc, eq, isNotNull, isNull, sql, type SQL } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -133,7 +133,8 @@ const replayScopePredicate = (scope: CaseLawReplayScope): SQL | undefined => {
     case "celex":
       return sql`${caseLawDecisions.metadata}->>'celex' = ${scope.celex}`;
     default:
-      return scope satisfies never;
+      scope satisfies never;
+      return panic(`Unhandled scope: ${String(scope)}`);
   }
 };
 

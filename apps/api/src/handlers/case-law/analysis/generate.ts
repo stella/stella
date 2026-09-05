@@ -6,7 +6,7 @@
  * 202. The frontend polls until the analysis is ready.
  */
 
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 import * as v from "valibot";
@@ -416,8 +416,8 @@ export const generateAnalysis = async (
     case "none":
       break;
     default: {
-      const exhaustive: never = stored;
-      return exhaustive;
+      stored satisfies never;
+      return panic(`Unhandled stored: ${String(stored)}`);
     }
   }
 

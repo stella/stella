@@ -7,6 +7,8 @@
  * monetary reduction has one line per currency to lay out.
  */
 
+import { panic } from "better-result";
+
 import type { CalculationResult } from "@stll/calculations";
 import type { CentsAmount } from "@stll/money";
 
@@ -77,8 +79,8 @@ export const formatCalculationResult = ({
     case "unsupported":
       return line(labels.kind, labels.unavailable);
     default: {
-      const exhaustive: never = result;
-      return exhaustive;
+      result satisfies never;
+      return panic(`Unhandled result: ${String(result)}`);
     }
   }
 };

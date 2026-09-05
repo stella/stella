@@ -73,8 +73,8 @@ export const formatCorpusLocation = (location: CorpusLocation): string => {
     case "packed":
       return `${PACKED_LOCATION_PREFIX}${location.packKey}@${location.offset}+${location.length}`;
     default: {
-      const unhandled: never = location;
-      return panic(`Unhandled corpus location: ${String(unhandled)}`);
+      location satisfies never;
+      return panic(`Unhandled corpus location: ${String(location)}`);
     }
   }
 };

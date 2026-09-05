@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * Canonical legal-document AST shared by legal corpus readers and parsers.
  *
@@ -11,7 +12,6 @@
  * numbering and list counters stay inside the text, which is why there is
  * no list block.
  */
-
 import * as v from "valibot";
 
 import { collapseSpacedLetters } from "@stll/text-normalize";
@@ -383,8 +383,8 @@ const fillBlockPlainText = (block: WireBlock): Block => {
       };
     }
     default: {
-      const exhaustive: never = block;
-      return exhaustive;
+      block satisfies never;
+      return panic(`Unhandled block: ${String(block)}`);
     }
   }
 };
@@ -447,8 +447,8 @@ export const withProjectedPlainText = (ast: DocumentAst): DocumentAst => ({
         return { ...block, plainText: projectPlainText(block.inlines) };
       }
       default: {
-        const exhaustive: never = block;
-        return exhaustive;
+        block satisfies never;
+        return panic(`Unhandled block: ${String(block)}`);
       }
     }
   }),
@@ -485,8 +485,8 @@ export const omitDerivablePlainText = (ast: DocumentAst): WireDocumentAst => ({
         };
       }
       default: {
-        const exhaustive: never = block;
-        return exhaustive;
+        block satisfies never;
+        return panic(`Unhandled block: ${String(block)}`);
       }
     }
   }),

@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import type { SafeId } from "@/api/lib/branded-types";
 
 export const CHAT_TURN_STATUSES = [
@@ -235,7 +237,8 @@ export const planChatTurnTransition = (
         case "resume":
           return rejectedTransition(state, transition);
         default:
-          return transition satisfies never;
+          transition satisfies never;
+          return panic(`Unhandled transition: ${String(transition)}`);
       }
     case "running":
       switch (transition.type) {
@@ -304,7 +307,8 @@ export const planChatTurnTransition = (
         case "start":
           return rejectedTransition(state, transition);
         default:
-          return transition satisfies never;
+          transition satisfies never;
+          return panic(`Unhandled transition: ${String(transition)}`);
       }
     case "awaiting-user":
       switch (transition.type) {
@@ -339,7 +343,8 @@ export const planChatTurnTransition = (
         case "start":
           return rejectedTransition(state, transition);
         default:
-          return transition satisfies never;
+          transition satisfies never;
+          return panic(`Unhandled transition: ${String(transition)}`);
       }
     case "cancelled":
     case "completed":
@@ -347,6 +352,7 @@ export const planChatTurnTransition = (
     case "interrupted":
       return rejectedTransition(state, transition);
     default:
-      return state satisfies never;
+      state satisfies never;
+      return panic(`Unhandled state: ${String(state)}`);
   }
 };

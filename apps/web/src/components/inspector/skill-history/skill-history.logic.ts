@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import type { TranslationKey } from "@/i18n/types";
 import type {
   skillCommentsOptions,
@@ -87,8 +89,8 @@ export const canManageSkill = ({
     case "private":
       return ownerUserId === userId;
     default: {
-      const exhaustive: never = scope;
-      return exhaustive;
+      scope satisfies never;
+      return panic(`Unhandled scope: ${String(scope)}`);
     }
   }
 };

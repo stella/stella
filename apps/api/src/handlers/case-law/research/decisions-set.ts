@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 
 import {
@@ -167,8 +167,8 @@ const setResearchTableDecision = createSafeRootHandler(
           decision: summaries[0] ?? null,
         });
       default: {
-        const exhaustive: never = outcome;
-        return exhaustive;
+        outcome satisfies never;
+        return panic(`Unhandled outcome: ${String(outcome)}`);
       }
     }
   },

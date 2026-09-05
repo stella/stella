@@ -338,7 +338,7 @@ const normalizeQueuedOperation = (
       return operation;
     default:
       operation satisfies never;
-      return operation;
+      return panic(`Unhandled operation: ${String(operation)}`);
   }
 };
 

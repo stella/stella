@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import { createDocumentDraftReviewId } from "@/components/chat/create-document-draft.logic";
 
 type FileReviewSessionContext =
@@ -16,8 +18,8 @@ export const resolveFileReviewSessionId = (
     case "none":
       return undefined;
     default: {
-      const exhaustive: never = context;
-      return exhaustive;
+      context satisfies never;
+      return panic(`Unhandled context: ${String(context)}`);
     }
   }
 };

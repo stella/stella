@@ -68,8 +68,8 @@ export const resolvedDocumentTranslationSource = ({
     case "automatic":
       return detection?.type === "detected" ? detection.language : null;
     default: {
-      const exhaustiveSelection: never = selection;
-      return exhaustiveSelection;
+      selection satisfies never;
+      return panic(`Unhandled selection: ${String(selection)}`);
     }
   }
 };
@@ -118,8 +118,8 @@ export const activeTranslationChoice = ({
     case "bilingual:ai":
       return isDocx || !canUseDeepL ? selected : "translated:deepl";
     default: {
-      const exhaustiveSelected: never = selected;
-      return exhaustiveSelected;
+      selected satisfies never;
+      return panic(`Unhandled selected: ${String(selected)}`);
     }
   }
 };
@@ -234,8 +234,8 @@ export const commentPolicyStateForSource = ({
         ? state
         : UNCHECKED_COMMENT_POLICY_STATE;
     default: {
-      const exhaustiveState: never = state;
-      return exhaustiveState;
+      state satisfies never;
+      return panic(`Unhandled state: ${String(state)}`);
     }
   }
 };

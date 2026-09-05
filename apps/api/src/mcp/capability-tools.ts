@@ -921,8 +921,8 @@ const transportBlockReason = (transport: CapabilityTransport): string => {
     case "file-both":
       return `requires a file in \`${transport.input.field}\` and returns a file or stream`;
     default: {
-      const exhaustive: never = transport;
-      return exhaustive;
+      transport satisfies never;
+      return panic(`Unhandled transport: ${String(transport)}`);
     }
   }
 };

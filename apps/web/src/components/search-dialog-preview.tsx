@@ -1,6 +1,7 @@
 import { lazy, Suspense, useId, useMemo } from "react";
 
 import { useQuery } from "@tanstack/react-query";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
@@ -99,8 +100,8 @@ const RecentFilePreviewUnavailable = ({
       message = t("common.somethingWentWrong");
       break;
     default: {
-      const exhaustive: never = reason;
-      return exhaustive;
+      reason satisfies never;
+      return panic(`Unhandled reason: ${String(reason)}`);
     }
   }
   return (

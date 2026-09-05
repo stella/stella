@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
@@ -128,8 +128,8 @@ const loadCommentTarget = async (
       return { revisionId: revision.id, text: revision.body };
     }
     default: {
-      const exhaustive: never = anchor;
-      return exhaustive;
+      anchor satisfies never;
+      return panic(`Unhandled anchor: ${String(anchor)}`);
     }
   }
 };

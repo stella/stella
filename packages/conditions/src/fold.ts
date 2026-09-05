@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 /**
  * The single owner of "which condition nodes survive compilation" — the
  * structural rule that decides whether a leaf or group contributes anything
@@ -67,7 +69,8 @@ export const foldCondition = <T>(
       return handlers.group(node, children);
     }
     default:
-      return node satisfies never;
+      node satisfies never;
+      return panic(`Unhandled node: ${String(node)}`);
   }
 };
 

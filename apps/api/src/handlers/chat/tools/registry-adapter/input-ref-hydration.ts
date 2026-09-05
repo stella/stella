@@ -146,7 +146,8 @@ const isKnownRef = ({
     case "contact":
       return Result.isOk(refRegistry.resolveContactRefs([ref]));
     default:
-      return kind satisfies never;
+      kind satisfies never;
+      return panic(`Unhandled kind: ${String(kind)}`);
   }
 };
 

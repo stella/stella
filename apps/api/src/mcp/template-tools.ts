@@ -1218,8 +1218,8 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
           "A save with this idempotency_key is still in progress; retry shortly",
         );
       default: {
-        const unreachable: never = claim.value;
-        return unreachable;
+        claim.value satisfies never;
+        return panic(`Unhandled value: ${String(claim.value)}`);
       }
     }
   })();

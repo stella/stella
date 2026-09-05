@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import { chatMessageFromPersisted } from "@/api/handlers/chat/chat-message-parts";
 import type {
   ChatTurnOutcome,
@@ -167,6 +169,7 @@ export const planAssistantFinishPersistence = ({
         ? { type: "update", messageId: message.id, message }
         : { type: "insert", message };
     default:
-      return finishOutcome satisfies never;
+      finishOutcome satisfies never;
+      return panic(`Unhandled finish outcome: ${String(finishOutcome)}`);
   }
 };

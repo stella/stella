@@ -14,6 +14,8 @@
  * database; {@link build-binding-context} maps the matter's records onto them.
  */
 
+import { panic } from "better-result";
+
 import type { ContactType } from "@stll/api-contract";
 import { resolvePath } from "@stll/template-conditions";
 
@@ -259,8 +261,8 @@ const resolveSource = (
         ? null
         : resolveFirmField(context.firm, source.field);
     default: {
-      const exhaustive: never = source;
-      return exhaustive;
+      source satisfies never;
+      return panic(`Unhandled source: ${String(source)}`);
     }
   }
 };

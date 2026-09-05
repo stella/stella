@@ -60,8 +60,8 @@ export const parseArgs = (argv: readonly string[]): ParsedArgs => {
           root = value;
           break;
         default: {
-          const unreachable: never = flag;
-          panic(`unhandled flag ${String(unreachable)}`);
+          flag satisfies never;
+          panic(`unhandled flag ${String(flag)}`);
         }
       }
       continue;

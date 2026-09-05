@@ -137,7 +137,8 @@ const getEntityWorkspaceId = ({
         param: workspace.param,
       })?.workspace.id;
     default:
-      return workspace satisfies never;
+      workspace satisfies never;
+      return panic(`Unhandled workspace: ${String(workspace)}`);
   }
 };
 

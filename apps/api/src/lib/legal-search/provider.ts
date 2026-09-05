@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import { envBase } from "@/api/env-base";
 import { corpusIndexProvider } from "@/api/lib/legal-search/corpus-index-provider";
 import { pgFtsLegalProvider } from "@/api/lib/legal-search/pg-fts-legal-provider";
@@ -19,7 +21,8 @@ const providerFor = (engine: LegalSearchEngine): LegalSearchProvider => {
     case "corpus-index":
       return corpusIndexProvider;
     default:
-      return engine satisfies never;
+      engine satisfies never;
+      return panic(`Unhandled engine: ${String(engine)}`);
   }
 };
 

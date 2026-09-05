@@ -1094,6 +1094,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-async-context-enter-with.ts",
     "./.oxlint-plugins/no-omitted-prop-respread.ts",
     "./.oxlint-plugins/no-throw-outside-boundary.ts",
+    "./.oxlint-plugins/require-exhaustive-panic.ts",
     "./.oxlint-plugins/no-try-catch-outside-boundary.ts",
   ],
 
@@ -1709,6 +1710,38 @@ export default defineConfig({
       ],
       rules: {
         "no-path-prefix-containment/no-path-prefix-containment": "error",
+      },
+    },
+    {
+      // An exhaustiveness check must fail loudly. Both `const x: never = value`
+      // and `return value satisfies never` type-check and then hand the
+      // unhandled value back at runtime, so a widened union flows on as if it
+      // had been handled. The assertion belongs on its own line, with
+      // `panic(...)` after it. Tests are exempt: a fixture may bind the value
+      // to prove a helper rejects it.
+      // Scope mirrors ALL_SOURCE_GLOBS in scripts/source-globs.ts, plus the
+      // `evals` and `e2e` trees it leaves out: a widened union returned from a
+      // backfill script or an eval harness is the same defect as one returned
+      // from a handler.
+      files: [
+        "apps/*/src/**/*.{ts,tsx}",
+        "apps/*/scripts/**/*.{ts,tsx}",
+        "apps/*/evals/**/*.{ts,tsx}",
+        "apps/*/e2e/**/*.{ts,tsx}",
+        "packages/*/src/**/*.{ts,tsx}",
+        "packages/*/scripts/**/*.{ts,tsx}",
+        "scripts/**/*.{ts,tsx}",
+        ".oxlint-plugins/**/*.{ts,tsx}",
+      ],
+      excludeFiles: [
+        "**/*.{test,spec}.{ts,tsx}",
+        "**/*.db.test.ts",
+        "**/*.property.test.ts",
+        "**/tests/**",
+        "**/__tests__/**",
+      ],
+      rules: {
+        "require-exhaustive-panic/require-exhaustive-panic": "error",
       },
     },
     {

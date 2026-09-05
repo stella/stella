@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import type { UseMutationResult } from "@tanstack/react-query";
+import { panic } from "better-result";
 import {
   FileTextIcon,
   HistoryIcon,
@@ -417,8 +418,8 @@ export const SearchHitIcon = ({ hit }: { hit: GlobalSearchHit }) => {
       return <Icon className="text-muted-foreground mt-0.5 size-4 shrink-0" />;
     }
     default: {
-      const exhaustive: never = hit;
-      return exhaustive;
+      hit satisfies never;
+      return panic(`Unhandled hit: ${String(hit)}`);
     }
   }
 };

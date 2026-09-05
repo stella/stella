@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -155,6 +156,7 @@ export const advanceCorpusIngestionCheckpoint = async ({
           : { status: INGESTION_CHECKPOINT_STATUS.MISSING };
       }
       default:
-        return source satisfies never;
+        source satisfies never;
+        return panic(`Unhandled source: ${String(source)}`);
     }
   });

@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import type { RefObject } from "react";
 
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import {
   AlertTriangleIcon,
   ArrowLeftIcon,
@@ -177,8 +177,8 @@ const currentStep = (state: StudioState, hasResults: boolean): number => {
     case "review":
       return hasResults ? 3 : 2;
     default: {
-      const exhaustive: never = state;
-      return exhaustive;
+      state satisfies never;
+      return panic(`Unhandled state: ${String(state)}`);
     }
   }
 };

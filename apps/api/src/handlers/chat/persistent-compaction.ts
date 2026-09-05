@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import type { Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 
@@ -138,8 +139,8 @@ export const shouldInvalidateChatCompactionCheckpoint = ({
     case "none":
       return false;
     default: {
-      const exhaustive: never = persistencePlan.type;
-      return exhaustive;
+      persistencePlan.type satisfies never;
+      return panic(`Unhandled type: ${String(persistencePlan.type)}`);
     }
   }
 };

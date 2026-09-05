@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import {
   SIGNAL_KIND,
@@ -258,8 +258,8 @@ export const createAcceptSignal = (
           break;
         }
         default: {
-          const exhaustive: never = suggestion;
-          return exhaustive;
+          suggestion satisfies never;
+          return panic(`Unhandled suggestion: ${String(suggestion)}`);
         }
       }
 

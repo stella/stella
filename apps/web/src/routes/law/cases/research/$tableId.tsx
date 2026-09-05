@@ -405,8 +405,8 @@ function ResearchTablePage() {
         setColumnToDelete(column);
         return;
       default: {
-        const exhaustive: never = action;
-        panic(`Unhandled research column action: ${String(exhaustive)}`);
+        action satisfies never;
+        panic(`Unhandled research column action: ${String(action)}`);
       }
     }
   };

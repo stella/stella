@@ -2,6 +2,7 @@ import { useId, useState } from "react";
 
 import { useHotkeyRecorder } from "@tanstack/react-hotkeys";
 import type { Hotkey } from "@tanstack/react-hotkeys";
+import { panic } from "better-result";
 import { PencilIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -234,8 +235,8 @@ const RebindableBinding = ({
       case "notRebindable":
         return t("navigation.shortcutsDialog.notRebindable");
       default: {
-        const _exhaustive: never = rebindError;
-        return _exhaustive;
+        rebindError satisfies never;
+        return panic(`Unhandled rebind error: ${String(rebindError)}`);
       }
     }
   })();

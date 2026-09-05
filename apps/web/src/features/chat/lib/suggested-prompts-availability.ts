@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import type { ChatMessage, ChatPart } from "@/components/chat/chat-ui-tools";
 import { resolveChatAssistantTurnOutcome } from "@/components/chat/chat-ui-tools";
 
@@ -109,6 +111,7 @@ export const resolveSuggestedPromptsAvailability = ({
     case "interrupted":
       return { status: "blocked", reason: "terminal-outcome" };
     default:
-      return turnOutcome satisfies never;
+      turnOutcome satisfies never;
+      return panic(`Unhandled turn outcome: ${String(turnOutcome)}`);
   }
 };

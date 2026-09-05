@@ -13,7 +13,7 @@
  * never silently stuck and the status endpoint can surface it.
  */
 
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { Worker } from "bullmq";
 import { and, eq, inArray } from "drizzle-orm";
 
@@ -732,7 +732,8 @@ const completedExportValues = (result: CompletedExportResult) => {
         resultS3Key: result.s3Key,
       };
     default:
-      return result satisfies never;
+      result satisfies never;
+      return panic(`Unhandled result: ${String(result)}`);
   }
 };
 

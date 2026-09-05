@@ -1,5 +1,6 @@
 import type { APIRequestContext, FullConfig } from "@playwright/test";
 import { request as apiRequestFactory } from "@playwright/test";
+import { panic } from "better-result";
 import path from "node:path";
 
 import { apiDelete } from "./helpers/api";
@@ -25,7 +26,8 @@ const cleanupTarget = async (
       await apiDelete(request, `/workspaces/${target.id}`);
       return;
     default:
-      return target satisfies never;
+      target satisfies never;
+      return panic(`Unhandled target: ${String(target)}`);
   }
 };
 

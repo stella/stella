@@ -92,8 +92,8 @@ const onMessage = (event: MessageEvent<DemoResponse>) => {
       return;
     }
     default: {
-      const exhaustive: never = message;
-      panic(`unhandled anonymization worker message: ${String(exhaustive)}`);
+      message satisfies never;
+      panic(`unhandled anonymization worker message: ${String(message)}`);
     }
   }
 };

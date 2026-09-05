@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import { APIError } from "@/lib/errors/api";
 import { AuthClientError } from "@/lib/errors/auth";
 import { CriticalQueryTimeoutError } from "@/lib/react-query";
@@ -76,8 +78,8 @@ export const recoverRouteError = async ({
       return;
     }
     default: {
-      const exhaustive: never = recovery;
-      return exhaustive;
+      recovery satisfies never;
+      return panic(`Unhandled recovery: ${String(recovery)}`);
     }
   }
 };

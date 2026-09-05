@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
+import { panic } from "better-result";
 import { AlertCircleIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -339,8 +340,8 @@ const EvidenceBody = ({ evidence, signal }: EvidenceBodyProps) => {
         </dl>
       );
     default: {
-      const exhaustive: never = evidence;
-      return exhaustive;
+      evidence satisfies never;
+      return panic(`Unhandled evidence: ${String(evidence)}`);
     }
   }
 };

@@ -444,7 +444,9 @@ export const reducePageOrganizer = (
         ui: normalizeUI(state.ui, next),
       };
     }
-    default:
-      return action satisfies never;
+    default: {
+      action satisfies never;
+      return panic(`Unhandled action: ${String(action)}`);
+    }
   }
 };

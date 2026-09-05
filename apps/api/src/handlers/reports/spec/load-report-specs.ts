@@ -97,8 +97,8 @@ const promptRefs = (sections: ReportSection[]): string[] => {
       case "matrix":
         break;
       default: {
-        const exhaustive: never = section;
-        return exhaustive;
+        section satisfies never;
+        return panic(`Unhandled section: ${String(section)}`);
       }
     }
   }
@@ -336,8 +336,8 @@ export const readReportSpecSourcesFromS3 = async ({
         break;
       }
       default: {
-        const exhaustive: never = file;
-        return exhaustive;
+        file satisfies never;
+        return panic(`Unhandled file: ${String(file)}`);
       }
     }
   }
@@ -421,8 +421,8 @@ export const readReportSpecSourcesFromS3 = async ({
         break;
       }
       default: {
-        const exhaustive: never = read;
-        return exhaustive;
+        read satisfies never;
+        return panic(`Unhandled read: ${String(read)}`);
       }
     }
   }
@@ -453,8 +453,8 @@ const readRuntimeSources = async (
     case "s3":
       return await readReportSpecSourcesFromS3(runtime);
     default: {
-      const exhaustive: never = runtime;
-      return exhaustive;
+      runtime satisfies never;
+      return panic(`Unhandled runtime: ${String(runtime)}`);
     }
   }
 };

@@ -252,7 +252,8 @@ export const lockCorpusProjectionSourceTx = async (
       await lockLegislationProjectionSource(tx, subject);
       return;
     default:
-      return subject satisfies never;
+      subject satisfies never;
+      return panic(`Unhandled subject: ${String(subject)}`);
   }
 };
 
@@ -295,7 +296,8 @@ export const lockCorpusProjectionSourceByIdTx = async (
       return;
     }
     default:
-      return source satisfies never;
+      source satisfies never;
+      return panic(`Unhandled source: ${String(source)}`);
   }
 };
 
@@ -475,7 +477,8 @@ const lockProjectionInput = async (
     case "legislation":
       return await lockLegislationProjectionInput(tx, subject);
     default:
-      return subject satisfies never;
+      subject satisfies never;
+      return panic(`Unhandled subject: ${String(subject)}`);
   }
 };
 
@@ -498,7 +501,8 @@ const setCanonicalProjectionEpoch = async (
         .where(eq(legislationDocuments.id, subject.entityId));
       return;
     default:
-      return subject satisfies never;
+      subject satisfies never;
+      return panic(`Unhandled subject: ${String(subject)}`);
   }
 };
 

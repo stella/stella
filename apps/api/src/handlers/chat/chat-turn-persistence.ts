@@ -694,7 +694,8 @@ export const settleChatTurnOnTx = async ({
           status: "interrupted" as const,
         };
       default:
-        return outcome satisfies never;
+        outcome satisfies never;
+        return panic(`Unhandled outcome: ${String(outcome)}`);
     }
   })();
 

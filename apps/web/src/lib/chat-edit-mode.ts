@@ -66,10 +66,12 @@ const resolveChatEditModeOptionId = (
         case DOCX_EDIT_REPRESENTATION.direct:
           return CHAT_EDIT_MODE_OPTION_ID.autoDirect;
         default:
-          return representation satisfies never;
+          representation satisfies never;
+          return panic(`Unhandled representation: ${String(representation)}`);
       }
     default:
-      return applyMode satisfies never;
+      applyMode satisfies never;
+      return panic(`Unhandled apply mode: ${String(applyMode)}`);
   }
 };
 

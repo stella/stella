@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { AlarmClockIcon, MessageSquareIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -494,8 +494,8 @@ const SuggestionButton = ({
         </Button>
       );
     default: {
-      const exhaustive: never = suggestion;
-      return exhaustive;
+      suggestion satisfies never;
+      return panic(`Unhandled suggestion: ${String(suggestion)}`);
     }
   }
 };

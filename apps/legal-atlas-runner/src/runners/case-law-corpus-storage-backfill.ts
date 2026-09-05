@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { and, asc, eq, gt, isNull } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
@@ -542,8 +543,8 @@ const backfillCaseLawIndex = async (
             "Case-law corpus index backfill is already running for this generation; retry after the active writer finishes.",
         });
       default: {
-        const exhausted: never = result;
-        return exhausted;
+        result satisfies never;
+        return panic(`Unhandled result: ${String(result)}`);
       }
     }
   }

@@ -2319,10 +2319,8 @@ const scanMetric = (metric: RatchetMetric, root: string): MetricSnapshot => {
       return sortedSnapshot({ count, files });
     }
     default: {
-      const unreachable: never = metric;
-      return panic(
-        `ratchet metric has an unknown scope: ${String(unreachable)}`,
-      );
+      metric satisfies never;
+      return panic(`ratchet metric has an unknown scope: ${String(metric)}`);
     }
   }
 };
@@ -2835,6 +2833,7 @@ const EXPECTED_NAMED_FIXTURE_SUPPRESSIONS = {
   "no-detached-void/no-detached-void": 0,
   "require-detached-label-shape/require-detached-label-shape": 0,
   "no-awaited-builder-union/no-awaited-builder-union": 0,
+  "require-exhaustive-panic/require-exhaustive-panic": 0,
   "no-vacuous-throw-assertion/no-vacuous-throw-assertion": 0,
   "no-internal-module-mock/no-internal-module-mock": 0,
 } as const satisfies Record<TrackedRule, number>;

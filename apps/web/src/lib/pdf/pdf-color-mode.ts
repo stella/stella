@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 export const PDF_COLOR_MODES = ["light", "dark", "system"] as const;
 
 export type PDFColorMode = (typeof PDF_COLOR_MODES)[number];
@@ -22,8 +24,8 @@ export const resolvePDFInvertColors = ({
     case "system":
       return undefined;
     default: {
-      const exhaustiveColorMode: never = colorMode;
-      return exhaustiveColorMode;
+      colorMode satisfies never;
+      return panic(`Unhandled color mode: ${String(colorMode)}`);
     }
   }
 };

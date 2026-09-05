@@ -192,7 +192,7 @@ export const decideDependabotEmptyChangeset = ({
           reason:
             eligibleCount > 0 || refusals.length > 1
               ? "mixed-change"
-              : refusals.at(0)?.reason ?? "malformed-manifest",
+              : (refusals.at(0)?.reason ?? "malformed-manifest"),
         };
       }
 
@@ -207,8 +207,8 @@ export const decideDependabotEmptyChangeset = ({
       };
     }
     default: {
-      const unreachable: never = gate;
-      return unreachable;
+      gate satisfies never;
+      return panic(`Unhandled gate: ${String(gate)}`);
     }
   }
 };
@@ -321,14 +321,7 @@ export const runDependabotEmptyChangeset = (
   }
 
   const changedFiles = gitPaths(
-    [
-      "diff",
-      "--name-only",
-      "-z",
-      "--diff-filter=ACMRD",
-      mergeBase,
-      exactHead,
-    ],
+    ["diff", "--name-only", "-z", "--diff-filter=ACMRD", mergeBase, exactHead],
     root,
   );
   const addedChangesetFiles = gitPaths(
@@ -376,7 +369,9 @@ export const runDependabotEmptyChangeset = (
       process.stdout.write(`dependabot changeset: ${decision.reason}\n`);
       return 0;
     case "refuse":
-      process.stdout.write(`dependabot changeset: refused ${decision.reason}\n`);
+      process.stdout.write(
+        `dependabot changeset: refused ${decision.reason}\n`,
+      );
       return 0;
     case "create": {
       const absoluteOutput = path.join(root, output);
@@ -390,8 +385,8 @@ export const runDependabotEmptyChangeset = (
       return 0;
     }
     default: {
-      const unreachable: never = decision;
-      return unreachable;
+      decision satisfies never;
+      return panic(`Unhandled decision: ${String(decision)}`);
     }
   }
 };

@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { Elysia, type Context } from "elysia";
 
 import { isResponseValidationError } from "@/api/lib/errors/response-validation";
@@ -307,8 +308,8 @@ export const rateLimit = ({
           case "skipped":
             return undefined;
           default: {
-            const unreachable: never = state;
-            return unreachable;
+            state satisfies never;
+            return panic(`Unhandled state: ${String(state)}`);
           }
         }
       }

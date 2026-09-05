@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import {
   DESKTOP_EDIT_FILE_TYPE_CONFIG,
   desktopEditFileTypeForMimeType,
@@ -22,7 +24,8 @@ export const getNativeOfficeViewerFormat = (
     case null:
       return null;
     default:
-      return fileType satisfies never;
+      fileType satisfies never;
+      return panic(`Unhandled file type: ${String(fileType)}`);
   }
 };
 

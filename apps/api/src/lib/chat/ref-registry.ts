@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import {
   type ChatSourceCitationTarget,
@@ -103,7 +103,8 @@ const createSourceCitationRefKey = (target: ChatSourceCitationTarget) => {
         target.bates,
       ]);
     default:
-      return target satisfies never;
+      target satisfies never;
+      return panic(`Unhandled target: ${String(target)}`);
   }
 };
 
@@ -469,7 +470,8 @@ export const createChatRefRegistry = (): ChatRefRegistry => {
           case RESOURCE_TYPE.CASE_LAW_DECISION:
             return href;
           default:
-            return target satisfies never;
+            target satisfies never;
+            return panic(`Unhandled target: ${String(target)}`);
         }
       },
     );
@@ -505,7 +507,8 @@ export const createChatRefRegistry = (): ChatRefRegistry => {
           case RESOURCE_TYPE.CASE_LAW_DECISION:
             return href;
           default:
-            return target satisfies never;
+            target satisfies never;
+            return panic(`Unhandled target: ${String(target)}`);
         }
       },
     );
@@ -526,7 +529,8 @@ export const createChatRefRegistry = (): ChatRefRegistry => {
       case "contact":
         return contactState.refToTarget.get(value) ?? value;
       default:
-        return kind satisfies never;
+        kind satisfies never;
+        return panic(`Unhandled kind: ${String(kind)}`);
     }
   };
 
@@ -622,7 +626,8 @@ export const createChatRefRegistry = (): ChatRefRegistry => {
       case "property":
         return toHydratedPropertyRef(value, inputState);
       default:
-        return kind satisfies never;
+        kind satisfies never;
+        return panic(`Unhandled kind: ${String(kind)}`);
     }
   };
 

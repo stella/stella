@@ -81,7 +81,8 @@
   },
   "dependencies": {
     "@stll/country-codes": "workspace:*",
-    "@stll/stdnum": "^2.3.2"
+    "@stll/stdnum": "^2.3.2",
+    "better-result": "catalog:"
   },
   "devDependencies": {
     "@stll/typescript-config": "workspace:*",

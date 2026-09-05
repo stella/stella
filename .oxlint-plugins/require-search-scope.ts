@@ -13,6 +13,7 @@ import {
   type Scope as OxlintScope,
   type Variable,
 } from "@oxlint/plugins";
+import { panic } from "better-result";
 
 import {
   getImportedName,
@@ -369,16 +370,28 @@ const SQL_COPY_TO_RELATION_REFERENCE = new RegExp(
 );
 const SQL_FROM_CLAUSE_BOUNDARY =
   /\b(?:except|from|group|having|intersect|limit|offset|order|returning|union|using|where|window)\b/giu;
+// `String#match` resets `lastIndex` on a global pattern, so this shared
+// instance is safe to reuse across calls.
+const SQL_IDENTIFIER_SCAN = new RegExp(SQL_IDENTIFIER_PATTERN, "giu");
+const SQL_LEADING_PROJECTION_ALIAS = new RegExp(
+  `^\\s+(?:as\\s+)?(${SQL_IDENTIFIER_PATTERN})(?=\\s|$|[,;)])`,
+  "iu",
+);
+const SQL_TRAILING_IDENTIFIER_PATH = new RegExp(
+  `(${SQL_IDENTIFIER_PATTERN})(?:\\s*\\.\\s*${SQL_IDENTIFIER_PATTERN})*\\s*$`,
+  "iu",
+);
+
+const SQL_UNICODE_IDENTIFIER_VALUE =
+  /^U&"((?:[^"]|"")*)"(?:\s*UESCAPE\s*'((?:[^']|'')*)')?$/iu;
 
 const unicodeEscapedIdentifierValue = (identifier: string): string | null => {
-  const match = identifier.match(
-    /^U&"((?:[^"]|"")*)"(?:\s*UESCAPE\s*'((?:[^']|'')*)')?$/iu,
-  );
+  const match = SQL_UNICODE_IDENTIFIER_VALUE.exec(identifier);
   const encoded = match?.at(1);
-  if (encoded === undefined) {
+  if (match === null || encoded === undefined) {
     return null;
   }
-  const escapeCharacter = (match?.at(2) ?? "\\").replaceAll("''", "'");
+  const escapeCharacter = (match.at(2) ?? "\\").replaceAll("''", "'");
   if (escapeCharacter.length !== 1 || /[+\s'"0-9A-F]/iu.test(escapeCharacter)) {
     return null;
   }
@@ -456,8 +469,7 @@ const normalizeSqlIdentifier = (identifier: string): string | null => {
 };
 
 const finalRelationIdentifier = (path: string): string | null => {
-  const identifiers = path.match(new RegExp(SQL_IDENTIFIER_PATTERN, "giu"));
-  const finalIdentifier = identifiers?.at(-1);
+  const finalIdentifier = path.match(SQL_IDENTIFIER_SCAN)?.at(-1);
   return finalIdentifier === undefined
     ? null
     : normalizeSqlIdentifier(finalIdentifier);
@@ -519,15 +531,13 @@ const projectionReadAliases = (
       continue;
     }
     if (
-      match.index !== undefined &&
       relationReferenceIsDeleteTarget(structuralText, match.index, fullMatch)
     ) {
       continue;
     }
     if (
       fullMatch.trimStart().startsWith(",") &&
-      (match.index === undefined ||
-        !commaIntroducesReadRelation(structuralText, match.index))
+      !commaIntroducesReadRelation(structuralText, match.index)
     ) {
       continue;
     }
@@ -555,8 +565,7 @@ const hasUnsupportedUnicodeRelationIdentifier = (
     if (relationPath === undefined) {
       continue;
     }
-    const identifiers =
-      relationPath.match(new RegExp(SQL_IDENTIFIER_PATTERN, "giu")) ?? [];
+    const identifiers = relationPath.match(SQL_IDENTIFIER_SCAN) ?? [];
     if (
       identifiers.some(
         (identifier) =>
@@ -570,15 +579,8 @@ const hasUnsupportedUnicodeRelationIdentifier = (
   return false;
 };
 
-const leadingProjectionAlias = (text: string): string | null => {
-  const match = text.match(
-    new RegExp(
-      `^\\s+(?:as\\s+)?(${SQL_IDENTIFIER_PATTERN})(?=\\s|$|[,;)])`,
-      "iu",
-    ),
-  );
-  return normalizeProjectionAlias(match?.at(1));
-};
+const leadingProjectionAlias = (text: string): string | null =>
+  normalizeProjectionAlias(SQL_LEADING_PROJECTION_ALIAS.exec(text)?.at(1));
 
 const hasProjectionReadIntroducer = (
   tokens: readonly SqlTemplateToken[],
@@ -630,7 +632,7 @@ const interpolationHasFollowingTokenBoundary = (
   expressionIndex: number,
 ): boolean => {
   const nextToken = tokens.at(expressionIndex + 1);
-  if (nextToken === undefined || nextToken.type !== "text") {
+  if (nextToken?.type !== "text") {
     return true;
   }
   return nextToken.value.length === 0 || /^(?:\s|[,;)])/u.test(nextToken.value);
@@ -671,7 +673,9 @@ const startsPostgresEscapeString = (text: string, index: number): boolean => {
   if ((prefix !== "E" && prefix !== "e") || text[index + 1] !== "'") {
     return false;
   }
-  const previous = text[index - 1];
+  // `E'` opens an escape string only at a token boundary. Index 0 is one, and
+  // `at(-1)` would wrap to the last character rather than report absence.
+  const previous = index === 0 ? undefined : text.at(index - 1);
   return previous === undefined || !SQL_IDENTIFIER_CONTINUATION.test(previous);
 };
 
@@ -685,7 +689,7 @@ const sqlLexStateAfter = (
   let state = initialState;
   for (let index = 0; index < text.length; index += 1) {
     const char = text[index];
-    const next = text[index + 1];
+    const next = text.at(index + 1);
     switch (state.type) {
       case "normal":
         if (char === "-" && next === "-") {
@@ -704,7 +708,7 @@ const sqlLexStateAfter = (
         } else if (char === '"') {
           state = { type: "double-quote" };
         } else if (char === "$") {
-          const delimiter = text.slice(index).match(DOLLAR_QUOTE_START)?.at(0);
+          const delimiter = DOLLAR_QUOTE_START.exec(text.slice(index))?.at(0);
           if (delimiter) {
             state = { type: "dollar-quote", delimiter };
             index += delimiter.length - 1;
@@ -765,8 +769,8 @@ const sqlLexStateAfter = (
         }
         break;
       default: {
-        const exhaustive: never = state;
-        return exhaustive;
+        state satisfies never;
+        return panic(`Unhandled state: ${String(state)}`);
       }
     }
   }
@@ -778,7 +782,7 @@ const sqlStructuralText = (text: string, initialState: SqlLexState): string => {
   let structuralText = "";
   for (let index = 0; index < text.length; index += 1) {
     const char = text[index];
-    const next = text[index + 1];
+    const next = text.at(index + 1);
     switch (state.type) {
       case "normal":
         if (char === "-" && next === "-") {
@@ -803,7 +807,7 @@ const sqlStructuralText = (text: string, initialState: SqlLexState): string => {
           structuralText += char;
           state = { type: "double-quote" };
         } else if (char === "$") {
-          const delimiter = text.slice(index).match(DOLLAR_QUOTE_START)?.at(0);
+          const delimiter = DOLLAR_QUOTE_START.exec(text.slice(index))?.at(0);
           if (delimiter) {
             structuralText += " ".repeat(delimiter.length);
             state = { type: "dollar-quote", delimiter };
@@ -885,8 +889,8 @@ const sqlStructuralText = (text: string, initialState: SqlLexState): string => {
         }
         break;
       default: {
-        const exhaustive: never = state;
-        return exhaustive;
+        state satisfies never;
+        return panic(`Unhandled state: ${String(state)}`);
       }
     }
   }
@@ -925,7 +929,7 @@ const sqlQueryNestingEvents = (
   for (const match of text.matchAll(SQL_QUERY_NESTING_TOKEN)) {
     const matchIndex = match.index;
     const matchText = match.at(0);
-    if (matchIndex === undefined || matchText === undefined) {
+    if (matchText === undefined) {
       continue;
     }
     state.lexState = sqlLexStateAfter(
@@ -1011,7 +1015,7 @@ const splitAtSqlQueryBoundaries = (
   for (const match of text.matchAll(SQL_QUERY_BOUNDARY)) {
     const matchIndex = match.index;
     const matchText = match.at(0);
-    if (matchIndex === undefined || matchText === undefined) {
+    if (matchText === undefined) {
       continue;
     }
     scanState = sqlLexStateAfter(text.slice(scanCursor, matchIndex), scanState);
@@ -1122,7 +1126,7 @@ const scopeSuffixDisposition = (
   if (remainder.length === 0) {
     return "pending";
   }
-  const safeTest = remainder.match(SQL_TRUTH_PRESERVING_SCOPE_TEST)?.at(0);
+  const safeTest = SQL_TRUTH_PRESERVING_SCOPE_TEST.exec(remainder)?.at(0);
   if (safeTest !== undefined) {
     remainder = remainder.slice(safeTest.length).replace(/^(?:\s|\))+/u, "");
     if (remainder.length === 0) {
@@ -1214,14 +1218,7 @@ const isFunctionArgumentOpening = (
   initialLexState: SqlLexState,
 ): boolean => {
   const prefix = sqlStructuralText(text.slice(0, index), initialLexState);
-  const identifier = prefix
-    .match(
-      new RegExp(
-        `(${SQL_IDENTIFIER_PATTERN})(?:\\s*\\.\\s*${SQL_IDENTIFIER_PATTERN})*\\s*$`,
-        "iu",
-      ),
-    )
-    ?.at(1);
+  const identifier = SQL_TRAILING_IDENTIFIER_PATH.exec(prefix)?.at(1);
   if (identifier === undefined) {
     return false;
   }
@@ -1230,6 +1227,135 @@ const isFunctionArgumentOpening = (
     normalized === null ||
     !SQL_BOOLEAN_GROUPING_PREFIXES.has(normalized.toLowerCase())
   );
+};
+
+type SqlGroupOpening = {
+  initialLexState: SqlLexState;
+  matchIndex: number;
+  text: string;
+};
+
+// A `(` either opens an aggregate `FILTER`, nests inside one, nests inside a
+// function argument list, or opens one; the last two suspend the enclosing
+// filtering clause because their contents cannot restrict the outer rows.
+const openSqlScopeGroup = (
+  context: SqlScopeContext,
+  { initialLexState, matchIndex, text }: SqlGroupOpening,
+): void => {
+  if (context.pendingAggregateFilter) {
+    Object.assign(context, {
+      aggregateFilterDepth: 1,
+      aggregateFilterOuterClause: context.clause,
+      clause: "non-filtering",
+      pendingAggregateFilter: false,
+    });
+  } else if (context.aggregateFilterDepth > 0) {
+    context.aggregateFilterDepth += 1;
+  } else if (context.functionArgumentDepth > 0) {
+    context.functionArgumentDepth += 1;
+  } else if (
+    context.clause !== "non-filtering" &&
+    isFunctionArgumentOpening(text, matchIndex, initialLexState)
+  ) {
+    Object.assign(context, {
+      clause: "non-filtering",
+      functionArgumentDepth: 1,
+      functionArgumentOuterClause: context.clause,
+    });
+  }
+};
+
+const closeSqlScopeGroup = (context: SqlScopeContext): void => {
+  if (context.aggregateFilterDepth === 1) {
+    Object.assign(context, {
+      aggregateFilterDepth: 0,
+      aggregateFilterOuterClause: null,
+      clause: context.aggregateFilterOuterClause ?? "non-filtering",
+    });
+  } else if (context.aggregateFilterDepth > 1) {
+    context.aggregateFilterDepth -= 1;
+  } else if (context.functionArgumentDepth === 1) {
+    Object.assign(context, {
+      clause: context.functionArgumentOuterClause ?? "non-filtering",
+      functionArgumentDepth: 0,
+      functionArgumentOuterClause: null,
+    });
+  } else if (context.functionArgumentDepth > 1) {
+    context.functionArgumentDepth -= 1;
+  }
+};
+
+const applySqlClauseKeyword = (
+  context: SqlScopeContext,
+  keyword: SqlClauseKeyword,
+): void => {
+  switch (keyword) {
+    case "left":
+    case "right":
+    case "full":
+      Object.assign(context, {
+        clause: "non-filtering",
+        pendingJoinIsOuter: true,
+      });
+      break;
+    case "inner":
+    case "cross":
+      Object.assign(context, {
+        clause: "non-filtering",
+        pendingJoinIsOuter: false,
+      });
+      break;
+    case "join":
+      Object.assign(context, {
+        clause: "non-filtering",
+        currentJoinIsOuter: context.pendingJoinIsOuter,
+        pendingJoinIsOuter: false,
+      });
+      break;
+    case "on":
+      context.clause =
+        context.isMergeStatement || context.currentJoinIsOuter
+          ? "non-filtering"
+          : "inner-join-on";
+      break;
+    case "merge":
+      Object.assign(context, {
+        clause: "non-filtering",
+        isMergeStatement: true,
+      });
+      break;
+    case "having":
+      context.clause = "non-filtering";
+      break;
+    case "where":
+      context.clause =
+        context.aggregateFilterDepth > 0 || context.caseDepth > 0
+          ? "non-filtering"
+          : "query-filter";
+      break;
+    case "or":
+    case "not":
+      context.hasNonConjunctiveFilter ||= context.clause !== "non-filtering";
+      break;
+    case "from":
+    case "group":
+    case "limit":
+    case "offset":
+    case "order":
+    case "returning":
+    case "select":
+    case "set":
+    case "using":
+    case "values":
+    case "when":
+    case "window":
+      context.clause = "non-filtering";
+      break;
+    default: {
+      keyword satisfies never;
+      return panic(`Unhandled keyword: ${String(keyword)}`);
+    }
+  }
 };
 
 const sqlScopeContextAfter = (
@@ -1243,7 +1369,7 @@ const sqlScopeContextAfter = (
   for (const match of text.matchAll(SQL_SCOPE_CONTEXT_TOKEN)) {
     const matchIndex = match.index;
     const matchText = match.at(0)?.toLowerCase();
-    if (matchIndex === undefined || matchText === undefined) {
+    if (matchText === undefined) {
       continue;
     }
     scanState = sqlLexStateAfter(text.slice(scanCursor, matchIndex), scanState);
@@ -1272,47 +1398,11 @@ const sqlScopeContextAfter = (
       continue;
     }
     if (matchText === "(") {
-      if (context.pendingAggregateFilter) {
-        Object.assign(context, {
-          aggregateFilterDepth: 1,
-          aggregateFilterOuterClause: context.clause,
-          clause: "non-filtering",
-          pendingAggregateFilter: false,
-        });
-      } else if (context.aggregateFilterDepth > 0) {
-        context.aggregateFilterDepth += 1;
-      } else if (context.functionArgumentDepth > 0) {
-        context.functionArgumentDepth += 1;
-      } else if (
-        context.clause !== "non-filtering" &&
-        isFunctionArgumentOpening(text, matchIndex, initialLexState)
-      ) {
-        Object.assign(context, {
-          clause: "non-filtering",
-          functionArgumentDepth: 1,
-          functionArgumentOuterClause: context.clause,
-        });
-      }
+      openSqlScopeGroup(context, { initialLexState, matchIndex, text });
       continue;
     }
     if (matchText === ")") {
-      if (context.aggregateFilterDepth === 1) {
-        Object.assign(context, {
-          aggregateFilterDepth: 0,
-          aggregateFilterOuterClause: null,
-          clause: context.aggregateFilterOuterClause ?? "non-filtering",
-        });
-      } else if (context.aggregateFilterDepth > 1) {
-        context.aggregateFilterDepth -= 1;
-      } else if (context.functionArgumentDepth === 1) {
-        Object.assign(context, {
-          clause: context.functionArgumentOuterClause ?? "non-filtering",
-          functionArgumentDepth: 0,
-          functionArgumentOuterClause: null,
-        });
-      } else if (context.functionArgumentDepth > 1) {
-        context.functionArgumentDepth -= 1;
-      }
+      closeSqlScopeGroup(context);
       continue;
     }
     if (/^(?:not\s+)?in\b/iu.test(matchText)) {
@@ -1325,74 +1415,7 @@ const sqlScopeContextAfter = (
       context.hasNonConjunctiveFilter ||= context.clause !== "non-filtering";
       continue;
     }
-    const keyword = matchText;
-    switch (keyword) {
-      case "left":
-      case "right":
-      case "full":
-        Object.assign(context, {
-          clause: "non-filtering",
-          pendingJoinIsOuter: true,
-        });
-        break;
-      case "inner":
-      case "cross":
-        Object.assign(context, {
-          clause: "non-filtering",
-          pendingJoinIsOuter: false,
-        });
-        break;
-      case "join":
-        Object.assign(context, {
-          clause: "non-filtering",
-          currentJoinIsOuter: context.pendingJoinIsOuter,
-          pendingJoinIsOuter: false,
-        });
-        break;
-      case "on":
-        context.clause =
-          context.isMergeStatement || context.currentJoinIsOuter
-            ? "non-filtering"
-            : "inner-join-on";
-        break;
-      case "merge":
-        Object.assign(context, {
-          clause: "non-filtering",
-          isMergeStatement: true,
-        });
-        break;
-      case "having":
-        context.clause = "non-filtering";
-        break;
-      case "where":
-        context.clause =
-          context.aggregateFilterDepth > 0 || context.caseDepth > 0
-            ? "non-filtering"
-            : "query-filter";
-        break;
-      case "or":
-      case "not":
-        context.hasNonConjunctiveFilter ||= context.clause !== "non-filtering";
-        break;
-      case "from":
-      case "group":
-      case "limit":
-      case "offset":
-      case "order":
-      case "returning":
-      case "select":
-      case "set":
-      case "using":
-      case "values":
-      case "when":
-      case "window":
-        context.clause = "non-filtering";
-        break;
-      default: {
-        const exhaustive: never = keyword;
-        return exhaustive;
-      }
-    }
+    applySqlClauseKeyword(context, matchText);
   }
   return context;
 };
@@ -1768,7 +1791,7 @@ export default eslintCompatPlugin({
             : privateProjectionTable(resolveConstInitializer(table));
         };
 
-        const rootDbExecutionArgument = (node: AstNode): unknown | null => {
+        const rootDbExecutionArgument = (node: AstNode): unknown => {
           if (
             node.type !== "CallExpression" ||
             !isAstNode(node.callee) ||
@@ -1887,7 +1910,7 @@ export default eslintCompatPlugin({
 
         const constIdentifierInitializer = (
           identifier: AstNode & { name: string },
-        ): unknown | null => {
+        ): unknown => {
           const variable = resolveVariable(identifier);
           for (const definition of variable?.defs ?? []) {
             if (

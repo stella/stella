@@ -433,8 +433,8 @@ export const corpusMirrorColumns = (
         contentHash: state.written?.contentHash ?? null,
       };
     default: {
-      const unhandled: never = state;
-      return unhandled;
+      state satisfies never;
+      return panic(`Unhandled state: ${String(state)}`);
     }
   }
 };
@@ -507,8 +507,8 @@ export const corpusPayloadDisposition = ({
     case "canonical":
       return written === null ? "retain" : "trim";
     default: {
-      const unhandled: never = mode;
-      return panic(`Unhandled corpus storage mode: ${String(unhandled)}`);
+      mode satisfies never;
+      return panic(`Unhandled corpus storage mode: ${String(mode)}`);
     }
   }
 };
@@ -633,8 +633,8 @@ export const readCorpusBytesAt = async ({
       });
     }
     default: {
-      const unhandled: never = location;
-      return panic(`Unhandled corpus location: ${String(unhandled)}`);
+      location satisfies never;
+      return panic(`Unhandled corpus location: ${String(location)}`);
     }
   }
 };

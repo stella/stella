@@ -78,7 +78,8 @@ export const entityIdsForCorpusProjectionWorkScope = <
       }
       return [...scope.entityIds];
     default:
-      return scope satisfies never;
+      scope satisfies never;
+      return panic(`Unhandled scope: ${String(scope)}`);
   }
 };
 
@@ -101,6 +102,7 @@ export const indexIdForCorpusProjectionWorkScope = <
     case "route":
       return requireCorpusIndexIdForManifest(manifest, scope.indexId);
     default:
-      return scope satisfies never;
+      scope satisfies never;
+      return panic(`Unhandled scope: ${String(scope)}`);
   }
 };

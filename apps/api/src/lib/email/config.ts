@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 type EmailTransportConfig = {
   emailProvider: "ses" | "smtp" | undefined;
   sesAccessKeyId: string | undefined;
@@ -45,8 +47,8 @@ export const isEmailTransportConfigComplete = ({
     case undefined:
       return false;
     default: {
-      const _exhaustive: never = emailProvider;
-      return _exhaustive;
+      emailProvider satisfies never;
+      return panic(`Unhandled email provider: ${String(emailProvider)}`);
     }
   }
 };

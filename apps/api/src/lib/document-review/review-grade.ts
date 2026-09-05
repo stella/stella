@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import type { VerdictMatchedRef } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
@@ -523,7 +523,8 @@ const projectGrading = ({
         fix: null,
       };
     default:
-      return grading satisfies never;
+      grading satisfies never;
+      return panic(`Unhandled grading: ${String(grading)}`);
   }
 };
 

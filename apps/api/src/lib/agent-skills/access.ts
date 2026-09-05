@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import type { roles } from "@stll/permissions";
@@ -97,8 +98,8 @@ export const canManageSkill = ({
     case "private":
       return skill.userId === userId;
     default: {
-      const exhaustive: never = skill.scope;
-      return exhaustive;
+      skill.scope satisfies never;
+      return panic(`Unhandled scope: ${String(skill.scope)}`);
     }
   }
 };

@@ -71,8 +71,8 @@ export const isCloneableBuiltin = (
     case "spec":
       return false;
     default: {
-      const exhaustive: never = template;
-      return exhaustive;
+      template satisfies never;
+      return panic(`Unhandled template: ${String(template)}`);
     }
   }
 };

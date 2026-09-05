@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import {
   CircleDashedIcon,
   FileIcon,
@@ -70,8 +71,8 @@ export const EntityIcon = ({
         <CircleDashedIcon className={cn("text-muted-foreground", className)} />
       );
     default: {
-      const exhaustive: never = source;
-      return exhaustive;
+      source satisfies never;
+      return panic(`Unhandled source: ${String(source)}`);
     }
   }
 };
@@ -135,8 +136,8 @@ export const EntityKindIcon = ({
         <FileIcon className={className} />
       );
     default: {
-      const exhaustive: never = kind;
-      return exhaustive;
+      kind satisfies never;
+      return panic(`Unhandled kind: ${String(kind)}`);
     }
   }
 };

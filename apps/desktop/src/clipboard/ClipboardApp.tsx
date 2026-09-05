@@ -21,6 +21,7 @@ import {
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview";
 import { preserveOffsetOnSource } from "@atlaskit/pragmatic-drag-and-drop/utils/preserve-offset-on-source";
 import { invoke } from "@tauri-apps/api/core";
+import { panic } from "better-result";
 import {
   ClipboardIcon,
   CircleHelpIcon,
@@ -873,8 +874,8 @@ const ClipboardDialog = ({
         </DialogShell>
       );
     default: {
-      const exhaustive: never = dialog;
-      return exhaustive;
+      dialog satisfies never;
+      return panic(`Unhandled dialog: ${String(dialog)}`);
     }
   }
 };

@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import {
   availableField,
   fromCanonicalRegistryIdentifier,
@@ -23,8 +25,8 @@ const normalizeStatus = (status: ZefixCompanyStatus): EntityStatus => {
     case "unknown":
       return { type: "unknown" };
     default: {
-      const unreachable: never = status;
-      return unreachable;
+      status satisfies never;
+      return panic(`Unhandled status: ${String(status)}`);
     }
   }
 };

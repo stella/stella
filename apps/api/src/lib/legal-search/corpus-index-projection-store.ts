@@ -1194,6 +1194,7 @@ export const classifyCorpusProjectionReservationFailureTx = async (
         `Projection failure classification returned ${workStatus} work`,
       );
     default:
-      return workStatus satisfies never;
+      workStatus satisfies never;
+      return panic(`Unhandled work status: ${String(workStatus)}`);
   }
 };

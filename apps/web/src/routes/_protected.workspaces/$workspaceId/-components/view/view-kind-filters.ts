@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import { isEntityKind } from "@stll/api-contract";
 import {
   conditionIncludesKind,
@@ -107,7 +109,8 @@ const admittedKindsForGroup: FoldHandlers<AdmittedKinds>["group"] = (
     case "or":
       return combineOr(children);
     default:
-      return node.combinator satisfies never;
+      node.combinator satisfies never;
+      return panic(`Unhandled combinator: ${String(node.combinator)}`);
   }
 };
 

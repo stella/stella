@@ -8,6 +8,8 @@
  * AI-visible data object (see `build-report-data.ts` for the hygiene rule).
  */
 
+import { panic } from "better-result";
+
 import type { JustificationContent } from "@/api/db/schema";
 import type { DocumentReviewDecision } from "@/api/lib/document-review/run-contract";
 import type { PositionSeverity } from "@/api/lib/workflow/playbook-position-facets";
@@ -270,8 +272,8 @@ export const quotableCitationText = (citations: ReportCitation[]): string => {
       case "pdf":
         return citation.text;
       default: {
-        const exhaustive: never = citation;
-        return exhaustive;
+        citation satisfies never;
+        return panic(`Unhandled citation: ${String(citation)}`);
       }
     }
   }

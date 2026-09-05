@@ -9,6 +9,8 @@
  * grouped.
  */
 
+import { panic } from "better-result";
+
 import type { OptionColor } from "../lib/option-color";
 
 /**
@@ -154,8 +156,8 @@ export const getKanbanGroupingPropertyId = <
     case "property":
       return grouping.propertyId;
     default: {
-      const exhaustive: never = grouping;
-      return exhaustive;
+      grouping satisfies never;
+      return panic(`Unhandled grouping: ${String(grouping)}`);
     }
   }
 };
@@ -181,8 +183,8 @@ export const isKanbanGroupingRenderable = <
     case "property":
       return true;
     default: {
-      const exhaustive: never = grouping;
-      return exhaustive;
+      grouping satisfies never;
+      return panic(`Unhandled grouping: ${String(grouping)}`);
     }
   }
 };
@@ -206,8 +208,8 @@ export const selectKanbanRows = <
     case "property":
       return [...rows];
     default: {
-      const exhaustive: never = grouping;
-      return exhaustive;
+      grouping satisfies never;
+      return panic(`Unhandled grouping: ${String(grouping)}`);
     }
   }
 };
@@ -228,8 +230,8 @@ export const resolveKanbanGroupOptions = <
     case "property":
       return grouping.options;
     default: {
-      const exhaustive: never = grouping;
-      return exhaustive;
+      grouping satisfies never;
+      return panic(`Unhandled grouping: ${String(grouping)}`);
     }
   }
 };

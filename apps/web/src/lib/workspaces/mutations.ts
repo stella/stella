@@ -4,6 +4,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
+import { panic } from "better-result";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -131,8 +132,8 @@ export const workspaceUpdateBody = (update: WorkspaceUpdate) => {
     case "reference":
       return { reference: update.value };
     default: {
-      const unreachable: never = update;
-      return unreachable;
+      update satisfies never;
+      return panic(`Unhandled update: ${String(update)}`);
     }
   }
 };

@@ -541,8 +541,10 @@ export const assembleReportData = ({
         case "none":
           break;
         default: {
-          const exhaustive: never = finding.review.decision;
-          return exhaustive;
+          finding.review.decision satisfies never;
+          return panic(
+            `Unhandled decision: ${String(finding.review.decision)}`,
+          );
         }
       }
     }

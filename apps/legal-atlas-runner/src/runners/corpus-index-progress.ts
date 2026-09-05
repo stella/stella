@@ -118,8 +118,8 @@ export const stepCorpusIndexProgress = ({
       };
     }
     default: {
-      const unhandled: never = kind;
-      return panic(`Unhandled corpus index step: ${String(unhandled)}`);
+      kind satisfies never;
+      return panic(`Unhandled corpus index step: ${String(kind)}`);
     }
   }
 };

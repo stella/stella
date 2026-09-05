@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 /**
  * The single owner of "does this leaf compile to anything at all" —
  * structural facts about a `compare`/`predicate` node's own shape that make
@@ -89,7 +91,8 @@ const isEffectiveBuiltinPredicate = (
     case "contains_all":
       return false;
     default:
-      return op satisfies never;
+      op satisfies never;
+      return panic(`Unhandled op: ${String(op)}`);
   }
 };
 
@@ -112,7 +115,8 @@ const isEffectivePropertyPredicate = (
     case "in":
       return hasPredicatePayload(value);
     default:
-      return op satisfies never;
+      op satisfies never;
+      return panic(`Unhandled op: ${String(op)}`);
   }
 };
 
@@ -129,7 +133,8 @@ const isEffectivePredicate = (node: PredicateNode): boolean => {
     case "literal":
       return false;
     default:
-      return node.operand satisfies never;
+      node.operand satisfies never;
+      return panic(`Unhandled operand: ${String(node.operand)}`);
   }
 };
 

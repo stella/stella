@@ -742,10 +742,8 @@ const buildCzNsFromPayload = async (
       // would make the identity held while its document stayed unread.
       return { type: "detail-unavailable" };
     default: {
-      const exhaustive: never = built;
-      return panic(
-        `Unhandled cz-ns build result: ${JSON.stringify(exhaustive)}`,
-      );
+      built satisfies never;
+      return panic(`Unhandled cz-ns build result: ${JSON.stringify(built)}`);
     }
   }
 };
@@ -877,9 +875,9 @@ export const czNsAdapter = defineSourceAdapter({
                 break;
               }
               default: {
-                const exhaustive: never = built;
+                built satisfies never;
                 return panic(
-                  `Unhandled cz-ns build result: ${JSON.stringify(exhaustive)}`,
+                  `Unhandled cz-ns build result: ${JSON.stringify(built)}`,
                 );
               }
             }

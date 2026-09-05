@@ -232,8 +232,8 @@ const sweepInstants = (
         now: sql`now()`,
       };
     default: {
-      const unhandled: never = window;
-      return panic(`Unhandled sweep window: ${JSON.stringify(unhandled)}`);
+      window satisfies never;
+      return panic(`Unhandled sweep window: ${JSON.stringify(window)}`);
     }
   }
 };

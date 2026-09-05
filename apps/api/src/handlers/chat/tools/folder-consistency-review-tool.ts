@@ -368,7 +368,8 @@ const mapCitation = ({
         pageNumber: citation.pageNumber,
       } as const;
     default:
-      return citation satisfies never;
+      citation satisfies never;
+      return panic(`Unhandled citation: ${String(citation)}`);
   }
 };
 

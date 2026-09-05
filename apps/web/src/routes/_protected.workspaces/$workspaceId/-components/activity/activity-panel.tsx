@@ -5,7 +5,7 @@ import {
   useInfiniteQuery,
   useSuspenseInfiniteQuery,
 } from "@tanstack/react-query";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import {
   BotIcon,
   ChevronDownIcon,
@@ -1559,8 +1559,8 @@ const ApprovalName = ({
     case "rejected":
       return t("workspaces.overview.activity.approvals.rejected");
     default: {
-      const exhaustive: never = status;
-      return exhaustive;
+      status satisfies never;
+      return panic(`Unhandled status: ${String(status)}`);
     }
   }
 };
@@ -1745,8 +1745,8 @@ const TriggerDetail = ({ item }: { item: MatterActivityItem }) => {
         </TriggerLabelWithSource>
       );
     default: {
-      const exhaustive: never = triggerType;
-      return exhaustive;
+      triggerType satisfies never;
+      return panic(`Unhandled trigger type: ${String(triggerType)}`);
     }
   }
 };
@@ -1794,8 +1794,8 @@ const targetIcon = (item: MatterActivityItem) => {
     case "automation":
       return <WorkflowIcon className="text-muted-foreground size-3.5" />;
     default: {
-      const exhaustive: never = kind;
-      return exhaustive;
+      kind satisfies never;
+      return panic(`Unhandled kind: ${String(kind)}`);
     }
   }
 };

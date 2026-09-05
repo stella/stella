@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import { agentRegistration } from "@/api/db/agent-auth-schema";
@@ -103,8 +104,8 @@ export const resolveAgentAuditExecution = async ({
       };
     }
     default: {
-      const exhaustive: never = credential;
-      return exhaustive;
+      credential satisfies never;
+      return panic(`Unhandled credential: ${String(credential)}`);
     }
   }
 };

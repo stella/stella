@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import type { ContactUpdate } from "@/lib/contacts/mutations";
 import type { EditableField } from "@/routes/_protected.contacts/-components/types";
 
@@ -61,7 +63,8 @@ const buildNumericPayload = (
     case "paymentTermDays":
       return { paymentTermDays: value };
     default:
-      return field satisfies never;
+      field satisfies never;
+      return panic(`Unhandled field: ${String(field)}`);
   }
 };
 
@@ -124,6 +127,7 @@ export const buildTextContactPayload = (
     case "taxId":
       return { taxId: value || null };
     default:
-      return field satisfies never;
+      field satisfies never;
+      return panic(`Unhandled field: ${String(field)}`);
   }
 };

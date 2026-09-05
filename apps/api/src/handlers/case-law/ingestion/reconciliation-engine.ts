@@ -822,9 +822,9 @@ const ingestListedItem = async ({
         return;
       }
       default: {
-        const exhaustive: never = built;
+        built satisfies never;
         panic(
-          `Unhandled reconciliation build outcome: ${JSON.stringify(exhaustive)}`,
+          `Unhandled reconciliation build outcome: ${JSON.stringify(built)}`,
         );
       }
     }
@@ -1321,9 +1321,9 @@ export const runReconciliationWorkUnit = async ({
           }),
         };
       default: {
-        const exhaustive: never = unit;
+        unit satisfies never;
         return panic(
-          `Unhandled reconciliation work unit: ${JSON.stringify(exhaustive)}`,
+          `Unhandled reconciliation work unit: ${JSON.stringify(unit)}`,
         );
       }
     }

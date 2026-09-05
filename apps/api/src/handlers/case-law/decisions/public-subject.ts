@@ -18,7 +18,7 @@
  * transaction is a repeatable-read snapshot, so every statement under it —
  * the gate's and the handler's — sees that one state.
  */
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import { status } from "elysia";
 
@@ -80,8 +80,8 @@ const locatorCondition = (locator: DecisionSubjectLocator) => {
           );
     }
     default: {
-      const exhaustive: never = locator;
-      return exhaustive;
+      locator satisfies never;
+      return panic(`Unhandled locator: ${String(locator)}`);
     }
   }
 };

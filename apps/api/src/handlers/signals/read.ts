@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, desc, eq, isNull, lte, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
@@ -57,8 +57,8 @@ const viewCondition = (view: SignalView, now: Date): SQL | undefined => {
         eq(signals.status, SIGNAL_STATUS.DISMISSED),
       );
     default: {
-      const exhaustive: never = view;
-      return exhaustive;
+      view satisfies never;
+      return panic(`Unhandled view: ${String(view)}`);
     }
   }
 };

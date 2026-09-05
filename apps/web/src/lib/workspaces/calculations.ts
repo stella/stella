@@ -6,6 +6,8 @@
  * one place that knows how a workspace field maps onto it.
  */
 
+import { panic } from "better-result";
+
 import type { CalculationKind, CalculationValue } from "@stll/calculations";
 import { NUMERIC_CALCULATION_KINDS } from "@stll/calculations";
 import { unsafeCents } from "@stll/money";
@@ -112,8 +114,8 @@ export const toCalculationValue = (
     case "unsupported":
       return { type: "empty" };
     default: {
-      const exhaustive: never = field.content;
-      return exhaustive;
+      field.content satisfies never;
+      return panic(`Unhandled content: ${String(field.content)}`);
     }
   }
 };

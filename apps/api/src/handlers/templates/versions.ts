@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { and, desc, eq, lt } from "drizzle-orm";
 import { status } from "elysia";
 
@@ -219,8 +220,8 @@ export const getTemplateVersionHandler = async ({
     case "version-not-found":
       return status(404, { message: "Version not found" });
     default: {
-      const exhaustive: never = result;
-      return exhaustive;
+      result satisfies never;
+      return panic(`Unhandled result: ${String(result)}`);
     }
   }
 };

@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import type {
   GlobalSearchHit,
   GlobalSearchResultType,
@@ -162,8 +164,8 @@ export const getSearchPreviewRenderContent = (
         text: preview.content,
       };
     default: {
-      const exhaustive: never = preview;
-      return exhaustive;
+      preview satisfies never;
+      return panic(`Unhandled preview: ${String(preview)}`);
     }
   }
 };
@@ -342,8 +344,8 @@ export const getSearchPreviewTarget = (
     case "link":
       return { resultId: hit.entityId, type: hit.type };
     default: {
-      const exhaustive: never = hit;
-      return exhaustive;
+      hit satisfies never;
+      return panic(`Unhandled hit: ${String(hit)}`);
     }
   }
 };

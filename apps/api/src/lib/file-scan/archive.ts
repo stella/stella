@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * Archive entries are inflated before rule evaluation.
  *
@@ -181,7 +182,8 @@ export const createArchiveContentScanner = ({
       case "complete":
         return await inner.scan(inflated.bytes);
       default:
-        return inflated satisfies never;
+        inflated satisfies never;
+        return panic(`Unhandled inflated: ${String(inflated)}`);
     }
   },
 });

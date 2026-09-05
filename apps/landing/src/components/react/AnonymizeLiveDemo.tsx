@@ -1,6 +1,7 @@
 import type { UIEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { panic } from "better-result";
 import { useDebouncedCallback } from "use-debounce";
 
 import type { ChatAnonPair } from "@stll/anonymize-chat";
@@ -386,8 +387,8 @@ const describeEngineStatus = (
         : `${highlights.pairs.length} entities detected`;
     }
     default: {
-      const exhaustive: never = engine;
-      return String(exhaustive);
+      engine satisfies never;
+      return panic(`Unhandled engine: ${String(engine)}`);
     }
   }
 };

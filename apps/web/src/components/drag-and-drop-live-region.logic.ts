@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 const DRAG_ANNOUNCEMENT_KEY = "stella/drag-announcement";
 
 type DragAnnouncementItem = {
@@ -110,7 +112,8 @@ export const getDragAnnouncementSubject = (
     case "reorder":
       return null;
     default:
-      return announcement satisfies never;
+      announcement satisfies never;
+      return panic(`Unhandled announcement: ${String(announcement)}`);
   }
 };
 

@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import { stripDiacriticsForSlug } from "@stll/text-normalize";
 
 const UUID_REGEX =
@@ -216,8 +218,8 @@ export const createCaseLawDecisionRouteParam = (input: {
     case "id":
       return createIdRouteParam(identity);
     default: {
-      const exhaustive: never = identity;
-      return exhaustive;
+      identity satisfies never;
+      return panic(`Unhandled identity: ${String(identity)}`);
     }
   }
 };

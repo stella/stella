@@ -1,6 +1,7 @@
 import { Fragment, useRef } from "react";
 import type { CSSProperties, ReactElement, ReactNode } from "react";
 
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { Block } from "@stll/legal-ast/document-ast";
@@ -237,8 +238,8 @@ const annotationClassName = ({
       return "cursor-pointer text-inherit";
     }
     default: {
-      const unreachable: never = style;
-      return unreachable;
+      style satisfies never;
+      return panic(`Unhandled style: ${String(style)}`);
     }
   }
 };

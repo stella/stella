@@ -96,8 +96,12 @@ export const runCheckResolutionsOnlyChange = async (
       );
       return 1;
     default: {
-      const unreachable: never = verdict;
-      return unreachable;
+      // The Dependabot autofix job runs this script without an install, so
+      // the miss throws the local error instead of better-result's panic.
+      verdict satisfies never;
+      throw new ResolutionChangeCheckError(
+        `Unhandled verdict: ${String(verdict)}`,
+      );
     }
   }
 };

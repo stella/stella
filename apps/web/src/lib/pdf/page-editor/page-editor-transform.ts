@@ -1,4 +1,5 @@
 import { PDF, PdfArray, PdfName, PdfNumber } from "@libpdf/core";
+import { panic } from "better-result";
 
 import { ClientOperationError } from "@/lib/errors/client";
 
@@ -39,8 +40,10 @@ const applyCrop = (
           width: crop.height,
           height: crop.width,
         };
-      default:
-        return rotation satisfies never;
+      default: {
+        rotation satisfies never;
+        return panic(`Unhandled rotation: ${String(rotation)}`);
+      }
     }
   })();
   const sourceBox = page.getCropBox();

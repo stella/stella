@@ -1479,8 +1479,8 @@ export const runCaseLawIngest = async (
             foldCorpusStep(CORPUS_INDEX_STEP.COMPLETE);
             break;
           default: {
-            const unhandled: never = result;
-            panic(`Unhandled corpus index result: ${String(unhandled)}`);
+            result satisfies never;
+            panic(`Unhandled corpus index result: ${String(result)}`);
           }
         }
       } catch (error) {
@@ -1705,9 +1705,9 @@ export const runCaseLawIngest = async (
             case "idle":
               return { turn: RECONCILIATION_TURN.IDLE };
             default: {
-              const exhaustive: never = outcome;
+              outcome satisfies never;
               return panic(
-                `Unhandled reconciliation outcome: ${JSON.stringify(exhaustive)}`,
+                `Unhandled reconciliation outcome: ${JSON.stringify(outcome)}`,
               );
             }
           }

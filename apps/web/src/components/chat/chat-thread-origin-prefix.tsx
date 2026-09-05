@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { GitBranchIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -30,8 +31,8 @@ export const ChatThreadOriginPrefix = ({
       );
     }
     default: {
-      const exhaustive: never = origin;
-      return exhaustive;
+      origin satisfies never;
+      return panic(`Unhandled origin: ${String(origin)}`);
     }
   }
 };

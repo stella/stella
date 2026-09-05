@@ -528,8 +528,8 @@ const recordOutcome = (item: CzRegionalApiItem, outcome: IngestOutcome) => {
       consecutiveFailures += 1;
       break;
     default: {
-      const exhaustive: never = outcome;
-      panic(`Unhandled ingest outcome: ${String(exhaustive)}`);
+      outcome satisfies never;
+      panic(`Unhandled ingest outcome: ${String(outcome)}`);
     }
   }
   if (counts.processed % PROGRESS_EVERY === 0) {

@@ -501,9 +501,9 @@ const parseItemWithDetail = async (
     case "built":
       return built.decision;
     default: {
-      const exhaustive: never = built;
+      built satisfies never;
       return panic(
-        `Unhandled sk-courts build result: ${JSON.stringify(exhaustive)}`,
+        `Unhandled sk-courts build result: ${JSON.stringify(built)}`,
       );
     }
   }
@@ -747,9 +747,9 @@ const buildSkCourtsFromPayload = async (
     case "detail-unavailable":
       return { type: "detail-unavailable" };
     default: {
-      const exhaustive: never = built;
+      built satisfies never;
       return panic(
-        `Unhandled sk-courts build result: ${JSON.stringify(exhaustive)}`,
+        `Unhandled sk-courts build result: ${JSON.stringify(built)}`,
       );
     }
   }

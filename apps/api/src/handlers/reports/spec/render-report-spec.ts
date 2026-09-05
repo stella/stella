@@ -13,7 +13,7 @@
  * key, and only when a `linkBase` is supplied.
  */
 
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import { compareByLocale } from "@stll/collation";
 import {
@@ -211,8 +211,8 @@ const findingCell = (
     case "recommendation":
       return recommendationText(finding);
     default: {
-      const exhaustive: never = column;
-      return exhaustive;
+      column satisfies never;
+      return panic(`Unhandled column: ${String(column)}`);
     }
   }
 };
@@ -344,8 +344,8 @@ const citationUrl = (
       url.searchParams.set("block", citation.blockId);
       break;
     default: {
-      const exhaustive: never = citation;
-      return exhaustive;
+      citation satisfies never;
+      return panic(`Unhandled citation: ${String(citation)}`);
     }
   }
   return url.toString();
@@ -360,8 +360,8 @@ const isQuotable = (citation: ReportCitation): boolean => {
     case "pdf":
       return true;
     default: {
-      const exhaustive: never = citation;
-      return exhaustive;
+      citation satisfies never;
+      return panic(`Unhandled citation: ${String(citation)}`);
     }
   }
 };
@@ -375,8 +375,8 @@ const citationLocator = (citation: ReportCitation): string => {
         ? ` (${citation.bates}, p. ${citation.pageNumber})`
         : ` (p. ${citation.pageNumber})`;
     default: {
-      const exhaustive: never = citation;
-      return exhaustive;
+      citation satisfies never;
+      return panic(`Unhandled citation: ${String(citation)}`);
     }
   }
 };
@@ -605,8 +605,8 @@ const renderFindingParts = (
         }
         break;
       default: {
-        const exhaustive: never = part;
-        return exhaustive;
+        part satisfies never;
+        return panic(`Unhandled part: ${String(part)}`);
       }
     }
   }
@@ -665,8 +665,8 @@ const renderFindings = (
           case "none":
             break;
           default: {
-            const exhaustive: never = section.citations;
-            return exhaustive;
+            section.citations satisfies never;
+            return panic(`Unhandled citations: ${String(section.citations)}`);
           }
         }
       }
@@ -812,8 +812,8 @@ const matrixColumnIndexes = (
     case "graded":
       return all.filter((index) => grid.columns.at(index)?.kind === "graded");
     default: {
-      const exhaustive: never = columns;
-      return exhaustive;
+      columns satisfies never;
+      return panic(`Unhandled columns: ${String(columns)}`);
     }
   }
 };
@@ -871,8 +871,8 @@ const orderedGroups = (
         ),
       );
     default: {
-      const exhaustive: never = order;
-      return exhaustive;
+      order satisfies never;
+      return panic(`Unhandled order: ${String(order)}`);
     }
   }
 };
@@ -972,8 +972,8 @@ const renderSection = async (
     case "appendix":
       return await renderAppendix(section, ctx);
     default: {
-      const exhaustive: never = section;
-      return exhaustive;
+      section satisfies never;
+      return panic(`Unhandled section: ${String(section)}`);
     }
   }
 };
@@ -998,8 +998,8 @@ export const hasNarrativeSection = (sections: ReportSection[]): boolean =>
       case "matrix":
         return false;
       default: {
-        const exhaustive: never = section;
-        return exhaustive;
+        section satisfies never;
+        return panic(`Unhandled section: ${String(section)}`);
       }
     }
   });

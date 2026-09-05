@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { panic } from "better-result";
 // Every <img> in the landing source must carry an explicit alt attribute.
 // An empty alt (alt="") is valid and deliberate for decorative images — the
 // dark-theme poster duplicates and frame chrome — but an ABSENT attribute is
@@ -315,8 +316,8 @@ export const maskComments = (
       maskTsxComments(source, masked);
       break;
     default: {
-      const exhaustive: never = syntax;
-      return exhaustive;
+      syntax satisfies never;
+      return panic(`Unhandled syntax: ${String(syntax)}`);
     }
   }
   return masked.join("");

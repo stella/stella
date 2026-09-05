@@ -1,6 +1,7 @@
 import { EventType } from "@ag-ui/core";
 import type { StreamChunk } from "@tanstack/ai";
 import { tanstackMetadata } from "@tanstack/ai/adapter-internals";
+import { panic } from "better-result";
 
 import {
   CANARY_COMPLETION_MARKER,
@@ -188,8 +189,8 @@ export const consumeCanaryHarnessChunk = (
     case "TOOL_CALL_END":
       return;
     default: {
-      const exhaustive: never = chunk;
-      return exhaustive;
+      chunk satisfies never;
+      return panic(`Unhandled chunk: ${String(chunk)}`);
     }
   }
 };

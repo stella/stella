@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import { uploadVersionBodySchema } from "@/api/handlers/entities/upload-version-schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
@@ -157,8 +157,8 @@ export default createSafeHandler(
           break;
         }
         default: {
-          const exhaustive: never = created.error.code;
-          return exhaustive;
+          created.error.code satisfies never;
+          return panic(`Unhandled code: ${String(created.error.code)}`);
         }
       }
       return Result.err(

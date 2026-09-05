@@ -93,8 +93,8 @@ const extractFieldText = (content: FieldContent): string => {
     case "clip":
       return "";
     default: {
-      const _exhaustive: never = content;
-      return _exhaustive;
+      content satisfies never;
+      return panic(`Unhandled content: ${String(content)}`);
     }
   }
 };

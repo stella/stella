@@ -97,8 +97,8 @@ export const normalizeKanbanSavedViewState = <TGroupId extends string = string>(
     case 2:
       return state;
     default: {
-      const exhaustive: never = state;
-      return exhaustive;
+      state satisfies never;
+      return panic(`Unhandled state: ${String(state)}`);
     }
   }
 };

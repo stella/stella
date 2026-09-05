@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 
 import { useNavigate } from "@tanstack/react-router";
-import { Result, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
@@ -187,7 +187,8 @@ const waitForMatterImport = async (
     case "succeeded":
       return undefined;
     default:
-      return data satisfies never;
+      data satisfies never;
+      return panic(`Unhandled data: ${String(data)}`);
   }
 };
 

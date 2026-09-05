@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * Resolves the client IP for a request, refusing to trust
  * `x-forwarded-for` unless the request actually arrived through a trusted
@@ -179,7 +180,8 @@ export const resolveSignupRateLimitClientIp = (
     case SIGNUP_RATE_LIMIT_IP_SOURCE.trustedProxy:
       break;
     default:
-      return source satisfies never;
+      source satisfies never;
+      return panic(`Unhandled source: ${String(source)}`);
   }
 
   const trusted = options?.trusted ?? getTrustedProxies();

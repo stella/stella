@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
 import type { MorphologyLanguage } from "@/api/lib/legal-search/morphology/stem";
 import { stemCorpusText } from "@/api/lib/legal-search/morphology/stem-text";
@@ -216,7 +218,8 @@ const expansionLeaves = (
     case "expandable":
       return [...expand(token.value)].map(quoteCorpusValue);
     default:
-      return policy satisfies never;
+      policy satisfies never;
+      return panic(`Unhandled policy: ${String(policy)}`);
   }
 };
 

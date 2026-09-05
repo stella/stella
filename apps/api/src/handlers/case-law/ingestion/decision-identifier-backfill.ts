@@ -737,8 +737,8 @@ const runBackfillPage = async (
       case CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.COMPLETE:
         return { status: "completed" };
       default: {
-        const exhaustive: never = checkpoint;
-        return exhaustive;
+        checkpoint satisfies never;
+        return panic(`Unhandled checkpoint: ${String(checkpoint)}`);
       }
     }
   });
@@ -985,8 +985,8 @@ export const runDecisionIdentifierBackfill = async (
       case "complete":
         return { status: "complete", verification: result.verification };
       default: {
-        const exhaustive: never = result;
-        return exhaustive;
+        result satisfies never;
+        return panic(`Unhandled result: ${String(result)}`);
       }
     }
   }

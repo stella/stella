@@ -139,9 +139,9 @@ export const tallySourceTotalPollOutcomes = (
         break;
       }
       default: {
-        const exhaustive: never = outcome;
+        outcome satisfies never;
         return panic(
-          `unhandled source-total poll outcome: ${JSON.stringify(exhaustive)}`,
+          `unhandled source-total poll outcome: ${JSON.stringify(outcome)}`,
         );
       }
     }

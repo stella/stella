@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import { playbookDefinitions } from "@/api/db/schema";
@@ -168,8 +168,8 @@ const updatePlaybookDefinition = createSafeRootHandler(
       case "version-conflict":
         return Result.err(updated.error);
       default: {
-        const exhaustive: never = updated;
-        return exhaustive;
+        updated satisfies never;
+        return panic(`Unhandled updated: ${String(updated)}`);
       }
     }
   },

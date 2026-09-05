@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
@@ -261,8 +262,8 @@ const hasPositiveTerm = (ast: SearchAst, negated = false): boolean => {
         hasPositiveTerm(ast.right, negated)
       );
     default: {
-      const exhaustive: never = ast;
-      return exhaustive;
+      ast satisfies never;
+      return panic(`Unhandled ast: ${String(ast)}`);
     }
   }
 };
@@ -293,8 +294,8 @@ const collectPositiveLocatorTerms = (
       collectPositiveLocatorTerms(ast.right, terms, negated);
       return;
     default: {
-      const exhaustive: never = ast;
-      return exhaustive;
+      ast satisfies never;
+      return panic(`Unhandled ast: ${String(ast)}`);
     }
   }
 };
@@ -386,8 +387,8 @@ const collectPositiveLocatorCandidates = (
       collectPositiveLocatorCandidates(ast.right, candidates, negated);
       return;
     default: {
-      const exhaustive: never = ast;
-      return exhaustive;
+      ast satisfies never;
+      return panic(`Unhandled ast: ${String(ast)}`);
     }
   }
 };
@@ -449,7 +450,10 @@ const expandArabicFoldTargetVariants = (text: string): string[] => {
       continue;
     }
 
-    for (const variant of [...variants]) {
+    // Snapshot: the loop body adds to `variants`, and only the variants that
+    // existed before this character was expanded may be expanded again.
+    const expandable = [...variants];
+    for (const variant of expandable) {
       for (const alternate of alternates) {
         variants.add(
           `${variant.slice(0, index)}${alternate}${variant.slice(index + char.length)}`,
@@ -571,8 +575,8 @@ const astToTsQuery = (ast: SearchAst): string => {
     case "or":
       return `(${astToTsQuery(ast.left)}) | (${astToTsQuery(ast.right)})`;
     default: {
-      const exhaustive: never = ast;
-      return exhaustive;
+      ast satisfies never;
+      return panic(`Unhandled ast: ${String(ast)}`);
     }
   }
 };

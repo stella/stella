@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import {
@@ -132,8 +132,8 @@ const acknowledgeWorkObligation = createSafeHandler(
           }),
         );
       default: {
-        const exhaustive: never = result;
-        return exhaustive;
+        result satisfies never;
+        return panic(`Unhandled result: ${String(result)}`);
       }
     }
   },

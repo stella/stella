@@ -472,7 +472,8 @@ export const corpusIndexPublisherSummaryField = (
     case "legislation_v2":
       return null;
     default:
-      return manifest satisfies never;
+      manifest satisfies never;
+      return panic(`Unhandled manifest: ${String(manifest)}`);
   }
 };
 
@@ -498,7 +499,8 @@ export const corpusIndexStemFields = (
     case "legislation_v2":
       return null;
     default:
-      return manifest satisfies never;
+      manifest satisfies never;
+      return panic(`Unhandled manifest: ${String(manifest)}`);
   }
 };
 
@@ -609,7 +611,8 @@ export const corpusIndexIdFromManifest = (
       suffix = canonical.toLowerCase();
       break;
     default:
-      return manifest.route satisfies never;
+      manifest.route satisfies never;
+      return panic(`Unhandled route: ${String(manifest.route)}`);
   }
 
   const indexId = `${manifest.generation}_${suffix}`;
@@ -652,6 +655,7 @@ export const requireCorpusIndexIdForManifest = (
           );
     }
     default:
-      return manifest.route satisfies never;
+      manifest.route satisfies never;
+      return panic(`Unhandled route: ${String(manifest.route)}`);
   }
 };

@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
@@ -180,8 +181,8 @@ export const previewPassageJoin = (options: PreviewPassageJoinOptions): SQL => {
         ) preview_passage ON true
       `;
     default: {
-      const exhaustive: never = table;
-      return exhaustive;
+      table satisfies never;
+      return panic(`Unhandled table: ${String(table)}`);
     }
   }
 };

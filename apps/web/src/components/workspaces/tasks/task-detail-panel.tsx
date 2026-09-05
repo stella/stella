@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
+import { panic } from "better-result";
 import {
   ArrowLeftIcon,
   CheckCircle2Icon,
@@ -527,8 +528,8 @@ const TaskDetailPanelContent = ({
       case "api":
         return t("sourceTypeValues.api");
       default: {
-        const exhaustive: never = workflow.sourceType;
-        return exhaustive;
+        workflow.sourceType satisfies never;
+        return panic(`Unhandled source type: ${String(workflow.sourceType)}`);
       }
     }
   })();
@@ -812,8 +813,8 @@ const TaskDetailPanelContent = ({
                     case "cancelled":
                       return t("activityTypes.cancelled");
                     default: {
-                      const exhaustive: never = event.type;
-                      return exhaustive;
+                      event.type satisfies never;
+                      return panic(`Unhandled type: ${String(event.type)}`);
                     }
                   }
                 })();

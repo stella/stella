@@ -32,8 +32,8 @@ export const useProvisionPartRenderer = (): RenderProvisionPart => {
         return t("caseLaw.provision.subsection", { value });
       }
       default: {
-        const unreachable: never = key;
-        return panic("Unnamed provision subdivision", unreachable);
+        key satisfies never;
+        return panic("Unnamed provision subdivision", key);
       }
     }
   };

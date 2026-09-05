@@ -17,6 +17,7 @@ import {
 import { useNavigate } from "@tanstack/react-router";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { VirtualItem } from "@tanstack/react-virtual";
+import { panic } from "better-result";
 import { LoaderIcon, PanelRightIcon, WandSparklesIcon } from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
@@ -1943,8 +1944,8 @@ const SearchResultsContent = ({
     case "results":
       return children;
     default: {
-      const exhaustive: never = status;
-      return exhaustive;
+      status satisfies never;
+      return panic(`Unhandled status: ${String(status)}`);
     }
   }
 };
