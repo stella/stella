@@ -360,6 +360,10 @@ const gradients = [
   </div>
 
   <script>
+    import { Result } from "better-result";
+
+    import { copyToClipboard } from "../scripts/copy-to-clipboard";
+
     document.addEventListener("astro:page-load", () => {
       // Copy boilerplate paragraph
       for (const btn of document.querySelectorAll<HTMLElement>(".copy-btn")) {
@@ -376,7 +380,10 @@ const gradients = [
           if (!el?.textContent) {
             return;
           }
-          await navigator.clipboard.writeText(el.textContent.trim());
+          // The copy failed: leave the label as it is rather than claiming one.
+          if (Result.isError(await copyToClipboard(el.textContent.trim()))) {
+            return;
+          }
           const label = btn.querySelector(".copy-label");
           if (!label) {
             return;
@@ -400,7 +407,10 @@ const gradients = [
           if (!hex) {
             return;
           }
-          await navigator.clipboard.writeText(hex);
+          // The copy failed: show no confirmation.
+          if (Result.isError(await copyToClipboard(hex))) {
+            return;
+          }
           const fb = btn.querySelector(".copy-hex-feedback");
           if (!fb) {
             return;

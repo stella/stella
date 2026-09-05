@@ -84,6 +84,10 @@ const { class: className, copiedLabel, copyLabel, text } = Astro.props;
 </style>
 
 <script>
+  import { Result } from "better-result";
+
+  import { copyToClipboard } from "../scripts/copy-to-clipboard";
+
   for (const button of document.querySelectorAll<HTMLButtonElement>(
     "[data-copy-snippet]",
   )) {
@@ -92,7 +96,10 @@ const { class: className, copiedLabel, copyLabel, text } = Astro.props;
       if (!text) {
         return;
       }
-      await navigator.clipboard?.writeText(text);
+      // The copy failed: leave the button idle rather than claiming a copy.
+      if (Result.isError(await copyToClipboard(text))) {
+        return;
+      }
       button.classList.add("is-copied");
       const copied = button.dataset["copiedLabel"];
       if (copied) {

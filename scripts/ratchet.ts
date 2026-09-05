@@ -612,6 +612,14 @@ const countInlineTimestampCursorSql = (content: string): number =>
     /YYYY-MM-DD"T"HH24:MI:SS\.US(?!"Z")|::\s*timestamp\s+AT\s+TIME\s+ZONE\s*['"]UTC['"]/giu,
   );
 
+// `navigator.clipboard.writeText`, with or without optional chaining on either
+// hop. `.astro` files are markup with inline scripts rather than TypeScript, so
+// this is a plain lexical scan with no parse behind it.
+const CLIPBOARD_WRITE_CALL = /\bnavigator\??\.clipboard\??\.writeText\s*\(/gu;
+
+const countInlineClipboardWrites = (content: string): number =>
+  countMatches(content, CLIPBOARD_WRITE_CALL);
+
 /**
  * Direct `isRedistributable(x)` calls, counted from the syntax tree.
  *
@@ -1907,6 +1915,15 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
   },
   {
     scope: "file",
+    id: "landing-inline-clipboard-writes",
+    description:
+      "`navigator.clipboard.writeText` calls in apps/landing `.astro` files, where the `clipboard-write` ownership rule cannot reach because oxlint does not scan Astro; the fix is one shared landing script module the pages import, so the failure path is written once",
+    include: ["apps/landing/src/**/*.astro"],
+    exclude: () => false,
+    count: countInlineClipboardWrites,
+  },
+  {
+    scope: "file",
     id: "inline-timestamp-cursor-sql",
     description:
       "Z-less PostgreSQL microsecond cursor formats and inline UTC timestamp re-anchors outside db-pagination and non-cursor date arithmetic",
@@ -3156,6 +3173,28 @@ const SELF_TEST_AD_HOC_SUBJECT_GATE = `${AD_HOC_SUBJECT_GATE_FIXTURE_LINES.join(
 // counting it would make the metric un-zeroable and the guard meaningless.
 const EXPECTED_AD_HOC_SUBJECT_GATES = 2;
 
+const INLINE_CLIPBOARD_FIXTURE_LINES = [
+  "<button data-copy>Copy</button>",
+  "<script>",
+  '  import { copyToClipboard } from "../scripts/copy-to-clipboard";',
+  '  const button = document.querySelector("[data-copy]");',
+  "  button?.addEventListener('click', async () => {",
+  "    await navigator.clipboard.writeText(button.dataset.copy);",
+  "    await navigator.clipboard?.writeText(button.dataset.copy);",
+  "    // Reading the clipboard is a different capability.",
+  "    await navigator.clipboard.readText();",
+  "    // The shape the owner leaves behind, which must not count.",
+  "    await copyToClipboard(button.dataset.copy);",
+  "  });",
+  "</script>",
+];
+const SELF_TEST_INLINE_CLIPBOARD = `${INLINE_CLIPBOARD_FIXTURE_LINES.join("\n")}\n`;
+// Expected: the plain call and the optional-chained one. `readText` is a
+// sibling capability, the call through the landing owner is the fixed shape,
+// and the owner module itself is a `.ts` file the glob never reaches — the
+// `clipboard-write` ownership row guards that one.
+const EXPECTED_INLINE_CLIPBOARD_WRITES = 2;
+
 // Repo-scope fixtures. These metrics compare files against each other, so the
 // fixture is the layout, not one file's text: two apps holding the same path
 // below src/lib, one exported name defined in three workspaces, and the direct
@@ -3326,6 +3365,25 @@ const resultConventionSelfTestFailures = (snapshot: Baseline): string[] => {
     if ("apps/api/src/lib/api-handlers.ts" in metric.files) {
       failures.push(`${id} did not exclude a RESULT_BOUNDARY_GLOBS file`);
     }
+  }
+  return failures;
+};
+
+// The landing clipboard budget is defined by what it does NOT reach: the
+// `.astro` glob is the whole point, so the owner module's own call must stay
+// out of the count the metric exists to hold at zero.
+const inlineClipboardSelfTestFailures = (snapshot: Baseline): string[] => {
+  const failures: string[] = [];
+  const metric = requireSnapshot(snapshot, "landing-inline-clipboard-writes");
+  if (metric.count !== EXPECTED_INLINE_CLIPBOARD_WRITES) {
+    failures.push(
+      `landing-inline-clipboard-writes counted ${metric.count}, expected ${EXPECTED_INLINE_CLIPBOARD_WRITES}`,
+    );
+  }
+  if ("apps/landing/src/scripts/copy-to-clipboard.ts" in metric.files) {
+    failures.push(
+      "landing-inline-clipboard-writes did not exclude the landing owner module",
+    );
   }
   return failures;
 };
@@ -3668,6 +3726,18 @@ const runSelfTest = (): number => {
       INTERNAL_MODULE_MOCK_LEDGER_REL,
       SELF_TEST_INTERNAL_MODULE_MOCK_LEDGER,
     );
+    writeFixture(
+      root,
+      "apps/landing/src/components/CopySnippet.astro",
+      SELF_TEST_INLINE_CLIPBOARD,
+    );
+    // The landing owner: a `.ts` module outside the `.astro` glob, so its own
+    // call must not land in the budget it exists to zero.
+    writeFixture(
+      root,
+      "apps/landing/src/scripts/copy-to-clipboard.ts",
+      "export const copyToClipboard = async (text: string) =>\n  await navigator.clipboard.writeText(text);\n",
+    );
     writeFixture(root, "apps/api/src/db/index.ts", "export const x = 1;\n");
     writeFixture(root, "apps/web/src/lib/index.tsx", "export const y = 2;\n");
     // Repo-scope layout fixtures.
@@ -3879,6 +3949,8 @@ const runSelfTest = (): number => {
         "ad-hoc-decision-subject-gates did not exclude the gate module",
       );
     }
+
+    failures.push(...inlineClipboardSelfTestFailures(snapshot));
 
     const entityGlyphMetric = requireSnapshot(
       snapshot,

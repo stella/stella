@@ -89,6 +89,10 @@ const t = getTranslations(locale);
 </style>
 
 <script>
+  import { Result } from "better-result";
+
+  import { copyToClipboard } from "../scripts/copy-to-clipboard";
+
   document.addEventListener("astro:page-load", () => {
     const root = document.querySelector<HTMLElement>("[data-ask-ai]");
     if (root) {
@@ -122,7 +126,10 @@ const t = getTranslations(locale);
       const copyBtn = root.querySelector<HTMLButtonElement>("[data-copy]");
       const copyLabel = root.querySelector<HTMLElement>("[data-copy-label]");
       copyBtn?.addEventListener("click", async () => {
-        await navigator.clipboard?.writeText(PROMPT);
+        // The copy failed: leave the pill on its default label.
+        if (Result.isError(await copyToClipboard(PROMPT))) {
+          return;
+        }
         const copiedLabel = root.dataset.copiedLabel;
         const defaultLabel = root.dataset.copyLabelDefault;
         if (!(copyLabel && copiedLabel && defaultLabel)) {
