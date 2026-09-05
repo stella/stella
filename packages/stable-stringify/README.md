@@ -4,7 +4,7 @@ Deterministic string form of any value, for fingerprints and cache keys that mus
 
 ## What lives here
 
-Deterministic string form of any value, for fingerprints and cache keys that must agree across environments, and the tests that pin its behaviour.
+Deterministic string form of JSON-shaped values (primitives, arrays, plain objects), for fingerprints and cache keys that must agree across environments, and the tests that pin its behaviour. Keys sort in UTF-16 code-unit order, the order of JavaScript `<`. Other objects (`Date`, `Map`, `Set`) serialize through their enumerable own keys and read as `{}`: fingerprint data after it crosses a JSON boundary, not live instances.
 
 ## What does not
 

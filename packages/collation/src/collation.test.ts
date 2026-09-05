@@ -69,4 +69,11 @@ describe("compareCodepoint", () => {
     expect(compareCodepoint("a", "b")).toBe(-1);
     expect(compareCodepoint("b", "a")).toBe(1);
   });
+
+  test("orders supplementary characters by their UTF-16 surrogates", () => {
+    // U+1F600 is encoded as D83D DE00, so it sorts before U+E000 under the
+    // code-unit order that JavaScript `<` and the default sort share. Stored
+    // orderings depend on this staying put.
+    expect(compareCodepoint("\u{1F600}", "\uE000")).toBe(-1);
+  });
 });

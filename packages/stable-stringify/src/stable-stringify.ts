@@ -1,7 +1,14 @@
 /**
- * Deterministic serialization for hashing/keying arbitrary values: canonical
- * key order via plain codepoint comparison (not localeCompare), so the output
- * is bit-identical across environments regardless of runtime/ICU locale.
+ * Deterministic serialization for hashing/keying JSON-shaped values:
+ * canonical key order via plain UTF-16 code-unit comparison (the order of
+ * JavaScript `<`, not localeCompare), so the output is bit-identical across
+ * environments regardless of runtime/ICU locale.
+ *
+ * Input contract: primitives, arrays, and plain objects. Any other object
+ * serializes through its enumerable own string keys, so a `Date`, `Map`, or
+ * `Set` reads as `{}`; callers fingerprint data that already crossed a JSON
+ * boundary (tool-call arguments, review findings, editor state), never live
+ * instances. Fingerprints are persisted, so this contract does not widen.
  * Callers compare fingerprints — the chat loop detector's tool-call
  * signatures, a review finding's identity, an editor's dirty check — so two
  * structurally equal values must stringify identically no matter which order

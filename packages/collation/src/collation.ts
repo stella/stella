@@ -84,11 +84,16 @@ export const compareByLocale = (
 };
 
 /**
- * Plain codepoint comparator for `.sort()` / `.toSorted()` on strings that
- * are ids, paths, or other technical keys rather than user-facing text (lock
- * ordering, archive entry order, search tiebreaks, ...). Unlike
- * `.localeCompare()`, this is bit-identical across environments regardless
- * of runtime/ICU locale.
+ * Plain comparator for `.sort()` / `.toSorted()` on strings that are ids,
+ * paths, or other technical keys rather than user-facing text (lock ordering,
+ * archive entry order, search tiebreaks, ...). Unlike `.localeCompare()`, it
+ * is bit-identical across environments regardless of runtime/ICU locale.
+ *
+ * Order is UTF-16 code-unit order, the order JavaScript's `<` and the default
+ * `Array.prototype.sort` use, which is also code-point order for every
+ * character in the Basic Multilingual Plane. Supplementary characters sort
+ * by their surrogate pair, so U+1F600 precedes U+E000. Persisted orderings
+ * were computed under this rule; the test pins it.
  */
 export const compareCodepoint = (a: string, b: string): number =>
   a < b ? -1 : Number(a > b);
