@@ -216,6 +216,25 @@ Adding a suppression requires the directive, its reason, any required waiver ent
 and an explicit baseline change justified in the pull request. A baseline reseed is
 not a mechanical way to make CI pass.
 
+## Retiring a rule
+
+A rule that names one canonical helper or module is an instance guard: it exists
+because a specific wrong call site was reachable, so it carries a removal
+condition rather than living forever. Once the invalid state cannot be written at
+all, the rule costs lint time and reading time and proves nothing, and keeping it
+implies a hazard that is gone.
+
+- Retire it when its ratchet count has been zero for a quarter, and the state it
+  rejects is structurally impossible: an owner confinement row in
+  [`scripts/ownership.ts`](../scripts/ownership.ts), a type that cannot express
+  it, or a total map that forces a decision per member.
+- A count at zero on its own is not the condition. Zero says nobody wrote the
+  shape last quarter; only the structure says nobody can.
+- Delete the rule, its fixture, its catalogue entry above, and its suppression
+  budget in one change, so no baseline outlives the thing it measured.
+- Record the retirement in the ownership row that replaced it, naming the rule:
+  the row is then the only place a reader has to look.
+
 ## Adding or changing a rule
 
 1. Put one cohesive detector in `<plugin-name>.ts`; use multiple rule IDs only when
