@@ -14,9 +14,12 @@ import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliatio
 import {
   listingIdentityKey,
   parseListingIdentityKey,
+  STORED_RAW_REPARSE_REJECTION,
+  type StoredRawReparseInput,
 } from "@/api/lib/legal-search/ingestion-types";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
+import { SHELL_STEM } from "../parsers/__fixtures__/eu-ecj/corpus";
 import sparqlFixture from "./__fixtures__/eu-ecj-sparql.json";
 
 const fulltextHtml = await Bun.file(
@@ -516,12 +519,13 @@ const storedIdentityKey = (decision: {
   });
 
 /**
- * Enough text for the adapter to accept the response as a document. These
- * tests are about which variant is keyed, listed and built, so they stay off
- * the parser's own fixture: parsing a real judgment for each of them costs
- * seconds and proves nothing they assert.
+ * Enough text for the adapter to accept the response as a document, and
+ * the converter's own class on it, which is what marks a response as one.
+ * These tests are about which variant is keyed, listed and built, so they
+ * stay off the parser's own fixture: parsing a real judgment for each of
+ * them costs seconds and proves nothing they assert.
  */
-const shortDocumentHtml = `<html><body><p>${"Judgment of the Court. ".repeat(
+const shortDocumentHtml = `<html><body><p class="coj-normal">${"Judgment of the Court. ".repeat(
   20,
 )}</p></body></html>`;
 
@@ -1368,5 +1372,60 @@ describe("euEcjAdapter.reconciliation.buildDecision", () => {
     }
     expect(queries).toHaveLength(0);
     expect(documentFetches).toHaveLength(0);
+  });
+});
+
+describe("euEcjAdapter.reparseStoredRaw", () => {
+  const reparse = ecjAdapter.reparseStoredRaw;
+  if (reparse === undefined) {
+    throw new TypeError("Expected the CJEU adapter to support a re-parse");
+  }
+
+  const storedPayload = (html: string): StoredRawReparseInput => ({
+    raw: new TextEncoder().encode(html),
+    contentType: "text/html",
+    caseNumber: "T-488/13",
+    sourceDocumentId: null,
+    language: "GA",
+    court: "General Court",
+    ecli: "ECLI:EU:T:2014:1042",
+    decisionDate: "2014-12-04",
+    decisionType: "usnesení",
+    sourceUrl: null,
+    documentUrl: null,
+    metadata: { celex: "62013TO0488" },
+  });
+
+  test("reports no document for a page holding none", async () => {
+    const gzipped = await Bun.file(
+      new URL(
+        `../parsers/__fixtures__/eu-ecj/${SHELL_STEM}.html.gz`,
+        import.meta.url,
+      ),
+    ).bytes();
+    const shell = new TextDecoder().decode(Bun.gunzipSync(gzipped));
+
+    // The publisher answers a language variant it has not published with
+    // its own page, under a success status and far past the length a
+    // document has to clear. Everything in it — cookie banner,
+    // navigation, contact block, footer — is the site's, so storing it
+    // would file the site's copy under this case number.
+    expect(await reparse(storedPayload(shell))).toEqual({
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
+      detail: "no fulltext parsed from the stored payload for 62013TO0488",
+    });
+  });
+
+  test("re-parses a stored manifestation", async () => {
+    // The other side of the rule: a payload that does carry the
+    // converter's vocabulary still replays, or the assertion above would
+    // hold of an adapter that had stopped re-parsing anything at all.
+    const outcome = await reparse(storedPayload(fulltextHtml));
+
+    if (outcome.type !== "parsed") {
+      throw new TypeError(`Expected parsed, got ${outcome.rejection}`);
+    }
+    expect(outcome.result.fulltext ?? "").not.toBe("");
   });
 });

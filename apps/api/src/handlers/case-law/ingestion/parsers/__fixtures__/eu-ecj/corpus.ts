@@ -34,6 +34,28 @@ export const portalStem = (pair: PortalPair): string =>
 /** Suffix marking a portal recording among the fixture stems. */
 export const PORTAL_STEM_SUFFIX = ".page";
 
+/** Suffix marking a shell recording among the fixture stems. */
+export const SHELL_STEM_SUFFIX = ".portal-shell";
+
+/**
+ * A page the portal serves where a decision would be.
+ *
+ * The Court has not published this decision in this language, and the
+ * portal answers that with its own shell under a success status: cookie
+ * banner, navigation, the europa.eu contact block, a footer, and none of
+ * the converter's vocabulary. Every assertion the decision recordings
+ * carry is false of it, so it is named here and excluded from that
+ * corpus by name rather than by what it happens to lack.
+ *
+ * Recorded rather than written. A hand-built approximation would hold
+ * only the furniture whoever wrote it thought of, and what this fixture
+ * is for is the shape the publisher actually sends. It pairs with no
+ * manifestation and has no Formex sibling, so it is captured with
+ * `scripts/capture-parser-fixture.ts --gzip` rather than by the corpus
+ * recorder.
+ */
+export const SHELL_STEM = `62013TO0488.ga${SHELL_STEM_SUFFIX}`;
+
 /**
  * The container the publisher's portal wraps an embedded decision in.
  *

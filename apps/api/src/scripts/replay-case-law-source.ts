@@ -25,6 +25,10 @@ import { caseLawSources } from "@/api/db/schema";
  *   bun run src/scripts/replay-case-law-source.ts --adapter cz-nss \
  *     --court "Nejvyšší správní soud" --apply
  *
+ *   # take back rows whose stored payload re-parses to no document at all
+ *   bun run src/scripts/replay-case-law-source.ts --adapter eu-ecj \
+ *     --withdraw-rejected --apply
+ *
  *   # resume where an interrupted run stopped
  *   bun run src/scripts/replay-case-law-source.ts --adapter eu-ecj \
  *     --after <decisionId> --apply
@@ -36,6 +40,7 @@ import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-r
 import {
   CASE_LAW_REPLAY_SCOPE,
   countReplayability,
+  REPLAY_REJECTION_POLICY,
   REPLAY_ROW_OUTCOME,
   replayCapability,
   replayCaseLawSource,
@@ -67,6 +72,11 @@ const USAGE = `Usage: bun run src/scripts/replay-case-law-source.ts --adapter <k
   --adapter <key>   Required. Adapter whose source is replayed.
   --apply           Write the re-parsed results. Omitted, the run reports
                     what it would change and writes nothing.
+  --withdraw-rejected
+                    Take back the stored document of a decision whose
+                    payload re-parses to no document at all. The row, its
+                    metadata and its stored payload are kept. Without it
+                    such a row is only reported.
   --limit <n>       Maximum decisions to visit (default ${DEFAULT_LIMIT}).
   --court <name>    Replay only decisions from this exact court.
   --celex <value>   Replay only the decision stored under this publisher id
@@ -112,6 +122,9 @@ if (adapterKey === undefined || adapterKey.length === 0) {
 }
 
 const apply = hasFlag("apply");
+const rejectionPolicy = hasFlag("withdraw-rejected")
+  ? REPLAY_REJECTION_POLICY.WITHDRAW_NO_DOCUMENT
+  : REPLAY_REJECTION_POLICY.REPORT;
 const limit = positiveInteger(flagValue("limit"), DEFAULT_LIMIT, "limit");
 const pageSize = positiveInteger(
   flagValue("page-size"),
@@ -195,6 +208,7 @@ const split = await countReplayability({
 });
 console.log(`=== REPLAY ${adapterKey} (${source.name}) ===`);
 console.log(`mode:                ${apply ? "apply" : "dry run"}`);
+console.log(`rejected rows:       ${rejectionPolicy}`);
 console.log(`replayable locally:  ${split.storedLocally}`);
 console.log(`needs a re-fetch:    ${split.needsRefetch}`);
 if (celex !== undefined) {
@@ -246,6 +260,7 @@ const replayed = await Result.tryPromise({
       pageSize,
       after,
       scope,
+      rejectionPolicy,
     }),
   catch: (cause) => cause,
 });
@@ -275,7 +290,9 @@ console.log("--- outcomes ---");
 for (const [outcome, count] of Object.entries(report.outcomes)) {
   console.log(`${outcome.padEnd(20)} ${count}`);
 }
-if (report.outcomes[REPLAY_ROW_OUTCOME.REJECTED] > 0) {
+// Counted for a withdrawn row too: the reason it was withdrawn is the
+// rejection its re-parse reported.
+if (Object.values(report.rejections).some((count) => count > 0)) {
   console.log("--- rejections ---");
   for (const [rejection, count] of Object.entries(report.rejections)) {
     console.log(`${rejection.padEnd(20)} ${count}`);
@@ -294,6 +311,9 @@ if (report.haltReason !== null) {
   console.log(`halted:              ${report.haltReason}`);
 }
 if (!apply) {
+  console.log(
+    `would withdraw:      ${report.outcomes[REPLAY_ROW_OUTCOME.WOULD_WITHDRAW]}`,
+  );
   console.log("Dry run: nothing was written. Re-run with --apply.");
 }
 

@@ -79,7 +79,14 @@ export class CorpusObjectRetainedError extends TaggedError(
   retained: string[];
 }> {}
 
-type CorpusObjectErasure =
+/**
+ * Whether every corpus object a decision pointed at is gone.
+ *
+ * Exported because the withdrawal path deletes the same objects and must
+ * report the same partial outcome; one definition keeps the two from
+ * disagreeing about what "still there" means.
+ */
+export type CorpusObjectErasure =
   | { type: "deleted" }
   /**
    * At least one object still holds the payload, whether its DELETE failed

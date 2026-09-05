@@ -84,6 +84,13 @@ export type ParseEcjDecisionOutput = {
   /** Keyword chain from the `coj-index` line, one entry per segment. */
   keywords: string[];
   /**
+   * What bounded the parse. A caller storing the result needs it:
+   * `document` says the response carried none of the converter's
+   * vocabulary, so whatever the walk emitted came from a page rather
+   * than from the Court's own output.
+   */
+  boundary: EcjDocumentBoundary;
+  /**
    * Codes of the issues `validateAndLog` raised, empty on a clean
    * parse. Returned rather than only logged so callers can assert on
    * content retention without re-walking the source document.
@@ -95,7 +102,7 @@ export const parseEcjDecisionHtml = (
   input: ParseEcjDecisionInput,
 ): ParseEcjDecisionOutput => {
   const $ = cheerio.load(input.html);
-  const $document = ecjDocumentRoot($);
+  const { boundary, root: $document } = ecjDocumentRoot($);
   const blocks = buildBlocks($, $document);
   const keywords = extractKeywords($document);
 
@@ -132,6 +139,7 @@ export const parseEcjDecisionHtml = (
     },
     fulltext: toFulltext(blocks),
     keywords,
+    boundary,
     validationIssues: validation.issues.map((issue) => issue.code),
   };
 };
@@ -265,6 +273,50 @@ const commonAncestor = (nodes: readonly Element[]): Element | undefined => {
 };
 
 /**
+ * A parse boundary, and what the boundary was read off.
+ *
+ * `converter` bounds the decision by the source's own markers.
+ * `document` is the fallback to `<body>`, which says the response held
+ * no marker at all — a distinction the caller has to make, since it
+ * separates a layout the parser does not recognise from a page that is
+ * not converter output in the first place.
+ */
+export type EcjDocumentRoot =
+  | { boundary: "converter"; root: cheerio.Cheerio<AnyNode> }
+  | { boundary: "document"; root: cheerio.Cheerio<AnyNode> }
+  | { boundary: "page-chrome"; root: cheerio.Cheerio<AnyNode> };
+
+export type EcjDocumentBoundary = EcjDocumentRoot["boundary"];
+
+/**
+ * Class prefix of the Europa Component Library, the design system every
+ * europa.eu site is built from.
+ *
+ * It is the publisher's own annotation for its own furniture — header,
+ * language selector, cookie banner, contact block, footer — and it is
+ * spelled the same in all 24 languages, which a phrase list could never
+ * be. A converter manifestation carries none of it: the converter emits
+ * the document and nothing around it.
+ */
+const CHROME_CLASS_PREFIX = "ecl-";
+
+/**
+ * Whether the page is built out of the publisher's component library.
+ *
+ * Read off class tokens rather than off any text, and confirmed token by
+ * token: an attribute substring match would also accept a class that
+ * merely contains the prefix.
+ */
+export const ecjPageCarriesChrome = ($: cheerio.CheerioAPI): boolean =>
+  $(`[class*="${CHROME_CLASS_PREFIX}"]`)
+    .toArray()
+    .some((element) =>
+      ($(element).attr("class") ?? "")
+        .split(/\s+/u)
+        .some((token) => token.startsWith(CHROME_CLASS_PREFIX)),
+    );
+
+/**
  * The subtree holding the decision.
  *
  * A manifestation served on its own is the decision and nothing else,
@@ -280,10 +332,15 @@ const commonAncestor = (nodes: readonly Element[]): Element | undefined => {
  * working in all 24 languages, where a wording-based rule would hold in
  * one. Where no marker is found the whole body is the document, so an
  * unrecognised layout still contributes all of its text.
+ *
+ * A missing marker on its own says only that: unmatched. It becomes
+ * `page-chrome` — a page served where a decision would be — when the
+ * body is additionally built out of the publisher's component library,
+ * which converter output never is. Both signals are the publisher's own
+ * annotations, and a caller storing text needs the pair: one selector
+ * that stopped matching must not turn a decision into a page.
  */
-export const ecjDocumentRoot = (
-  $: cheerio.CheerioAPI,
-): cheerio.Cheerio<AnyNode> => {
+export const ecjDocumentRoot = ($: cheerio.CheerioAPI): EcjDocumentRoot => {
   const $body = $("body");
   for (const selector of DOCUMENT_MARKER_SELECTORS) {
     const marked = $body.find(selector).toArray();
@@ -304,11 +361,13 @@ export const ecjDocumentRoot = (
       parent !== null &&
       isTag(parent)
     ) {
-      return $(parent);
+      return { boundary: "converter", root: $(parent) };
     }
-    return $(ancestor);
+    return { boundary: "converter", root: $(ancestor) };
   }
-  return $body;
+  return ecjPageCarriesChrome($)
+    ? { boundary: "page-chrome", root: $body }
+    : { boundary: "document", root: $body };
 };
 
 /**
@@ -327,15 +386,27 @@ const documentSource = (
 ): string =>
   tagNameOf($document.get(0)) === "body" ? html : $.html($document);
 
+/** The decision's markup, and what bounded it. */
+export type EcjDocumentSource = {
+  boundary: EcjDocumentBoundary;
+  html: string;
+};
+
 /**
  * The decision's own markup, lifted out of whatever page carried it.
  *
  * For callers that need the source text without a parse, so that a
- * fallback path keeps the same boundary a successful parse would have.
+ * fallback path keeps the same boundary a successful parse would have —
+ * including the case where there was no marker to bound it by, which
+ * the caller must be able to tell apart from a bounded document.
  */
-export const ecjDocumentHtml = (html: string): string => {
+export const ecjDocumentHtml = (html: string): EcjDocumentSource => {
   const $ = cheerio.load(html);
-  return documentSource($, ecjDocumentRoot($), html);
+  const document = ecjDocumentRoot($);
+  return {
+    boundary: document.boundary,
+    html: documentSource($, document.root, html),
+  };
 };
 
 /** Semantic heading tags, mapped onto the AST's three levels. */

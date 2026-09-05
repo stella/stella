@@ -7,12 +7,23 @@
 
 import { sql } from "drizzle-orm";
 
-/** What an index-job row records having done to the corpus. */
+/**
+ * What an index-job row records having done to the corpus.
+ *
+ * `redact` and `withdraw` both leave a document row holding no text, and
+ * they are separate words because they mean opposite things about that
+ * row. A redaction is a takedown: the row is tombstoned and nothing may
+ * put text back on it, which is why a partial index over this column
+ * reads `redact` rows as tombstones. A withdrawal says the stored text
+ * was never the publisher's document; the row keeps its identity and its
+ * stored payload, and a later parser may replay it into a document.
+ */
 export const CORPUS_INDEX_JOB_OPERATIONS = [
   "index",
   "delete",
   "redact",
   "rebuild",
+  "withdraw",
 ] as const;
 
 export type CorpusIndexJobOperation =
