@@ -11,13 +11,15 @@ work.
 ## 1. Resolve Scope and Isolation
 
 Inspect the branch, worktree, status, remotes, applicable repository
-instructions, and existing PR before changing history:
+instructions, and existing PR before changing history. Resolve the base
+repository first (step 3) and query it explicitly; in a fork checkout, `gh`
+defaults to the fork and would miss an upstream PR:
 
 ```bash
 git branch --show-current
 git status --short
-gh pr list --head "$(git branch --show-current)" --state all \
-  --json number,state,isDraft,headRefName,baseRefName,url
+gh pr list --repo "$BASE_REPO" --head "$(git branch --show-current)" \
+  --state all --json number,state,isDraft,headRefName,baseRefName,url
 ```
 
 An empty PR list means no PR exists. Authentication, network, or repository
