@@ -55,7 +55,7 @@ import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 
 type UpdateEntityFieldsInput = ChatUITools["update-entity-fields"]["input"];
 type CreateWorkspaceDocumentInput =
-  ChatUITools["create_workspace_document"]["input"];
+  ChatUITools["create_matter_document"]["input"];
 
 const getApprovalId = (part: ApprovalToolPart): string | null => {
   const { state } = part;
@@ -265,7 +265,7 @@ type CreateWorkspaceDocumentSummaryProps = {
 };
 
 /**
- * Approval preview for `create_workspace_document`: the model-supplied
+ * Approval preview for `create_matter_document`: the model-supplied
  * title/filename and a truncated preview of the Markdown body, so the user
  * can see what will be written before approving a document write — rather
  * than the bare label the generic `ToolApprovalCard` falls back to.
@@ -623,10 +623,9 @@ const ToolApprovalSummary = ({
         isSuggestChangesApplyOutput(part.output) && (
           <SuggestChangesApplyResult output={part.output} />
         )}
-      {part.name === "create_workspace_document" &&
-        part.input !== undefined && (
-          <CreateWorkspaceDocumentSummary input={part.input} />
-        )}
+      {part.name === "create_matter_document" && part.input !== undefined && (
+        <CreateWorkspaceDocumentSummary input={part.input} />
+      )}
       {part.name === "spawn_subagents" && part.input !== undefined && (
         <SpawnSubagentsSubtaskList
           isAwaitingApproval={part.state === "approval-requested"}

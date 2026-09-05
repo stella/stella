@@ -55,7 +55,7 @@ export type SimpleRefKind = Exclude<RegistryRefKind, "entity">;
  * How an entity output ref recovers its owning workspace id, which
  * `toEntityRef` needs alongside the entity id. MCP handlers name these fields
  * differently per tool (a sibling `workspaceId`, a fixed `matter.id`, or the
- * tool's resolved `workspace_id` input), so the source is declared per field
+ * tool's resolved `matter_id` input), so the source is declared per field
  * rather than guessed from key names.
  */
 export type EntityWorkspaceSource =

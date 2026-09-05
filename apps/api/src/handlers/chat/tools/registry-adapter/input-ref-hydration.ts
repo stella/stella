@@ -69,7 +69,7 @@ const INPUT_REFS_BY_TOOL = buildInputRefsByTool();
 /**
  * The workspace an entity param's ref key needs. Chat's write tools that take
  * an entity id also take the matter it lives in (`save_task`'s `task_id` beside
- * its `workspace_id`), so the sibling matter param is the reliable source; without
+ * its `matter_id`), so the sibling matter param is the reliable source; without
  * one the registry falls back to a ref it already minted for that entity id.
  */
 const findMatterWorkspaceId = ({

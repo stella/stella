@@ -41,7 +41,7 @@ export const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
   "create-current-skill-resource": CHAT_TOOL_POLICY_KIND.mutation,
   // Creates a new entity and writes its rendered DOCX through the API's S3 +
   // database path, so each call requires explicit mutation approval.
-  create_workspace_document: CHAT_TOOL_POLICY_KIND.mutation,
+  create_matter_document: CHAT_TOOL_POLICY_KIND.mutation,
   describe_template: CHAT_TOOL_POLICY_KIND.internal,
   // Discovery and the hardened sandbox runner expose only authorization-bound
   // read projections; neither performs a mutation itself.

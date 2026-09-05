@@ -24,7 +24,7 @@ const BUILT_IN_CHAT_TOOL_ACTIVITY_CATEGORIES = {
   review_folder_consistency: "research",
   "create-current-skill-resource": "mutation",
   "create-document": "user-input",
-  create_workspace_document: "artifact",
+  create_matter_document: "artifact",
   delete_clause: "mutation",
   delete_contact: "mutation",
   delete_document: "mutation",

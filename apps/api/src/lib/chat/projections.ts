@@ -310,16 +310,16 @@ export const READ_CONTACT_PROJECTION = v.strictObject({
 /**
  * list_documents. Source of truth: `handleListDocumentsTool`
  * (`document-tools.ts`) — the selected entity columns minus the cursor
- * timestamp. `workspace_id` is required input, so it is every row's workspace.
+ * timestamp. `matter_id` is required input, so it is every row's workspace.
  */
 export const LIST_DOCUMENTS_PROJECTION = v.strictObject({
   documents: v.array(
     v.strictObject({
-      id: chatEntityRef({ from: "inputParam", param: "workspace_id" }),
+      id: chatEntityRef({ from: "inputParam", param: "matter_id" }),
       name: v.string(),
       kind: v.string(),
       parentId: v.nullable(
-        chatEntityRef({ from: "inputParam", param: "workspace_id" }),
+        chatEntityRef({ from: "inputParam", param: "matter_id" }),
       ),
     }),
   ),
@@ -658,7 +658,7 @@ export const LIST_PROPERTIES_PROJECTION = v.strictObject({
 export const LIST_TASKS_LIST_PROJECTION = v.strictObject({
   tasks: v.array(
     v.strictObject({
-      id: chatEntityRef({ from: "inputParam", param: "workspace_id" }),
+      id: chatEntityRef({ from: "inputParam", param: "matter_id" }),
       name: v.string(),
       status: v.nullable(v.string()),
       priority: v.nullable(v.string()),
@@ -1056,7 +1056,7 @@ const timeEntryFieldEntries = (workspace: { from: "inputParam" | "sibling" }) =>
     entityId: v.nullable(
       chatEntityRef(
         workspace.from === "inputParam"
-          ? { from: "inputParam", param: "workspace_id" }
+          ? { from: "inputParam", param: "matter_id" }
           : { from: "sibling", key: "workspaceId" },
       ),
     ),
@@ -1075,7 +1075,7 @@ const timeEntryFieldEntries = (workspace: { from: "inputParam" | "sibling" }) =>
   }) as const;
 
 /**
- * list_time_entries, list branch: workspace_id is schema-required, so it is
+ * list_time_entries, list branch: matter_id is schema-required, so it is
  * every row's workspace. `visibility` is explicit because ordinary members
  * and interns receive only their own entries, not the matter total.
  */
@@ -1132,7 +1132,7 @@ const invoiceLineEntityProjection = () =>
 
 /**
  * list_invoices. Source of truth: `handleListInvoicesTool`
- * (`billing-tools.ts`). Detail mode (invoice_id) may omit workspace_id, so every
+ * (`billing-tools.ts`). Detail mode (invoice_id) may omit matter_id, so every
  * line item's entity recovers its workspace from the invoice's own resolved
  * `workspaceId` rather than from the (absent) input arg; list mode returns no
  * line items.
@@ -1602,13 +1602,13 @@ export const SAVE_CONTACT_PROJECTION = v.strictObject({
 
 /**
  * save_task: create returns `{ taskId }` (a new entity whose workspace is the
- * resolved `workspace_id`, required on create via `ensureActiveWorkspace`);
+ * resolved `matter_id`, required on create via `ensureActiveWorkspace`);
  * update returns `{ taskId, updated: true }` echoing the input task, which
  * hydration catches first via the dehydrated-entity reuse map, so the
  * `inputParam` source only drives the create case.
  */
 export const SAVE_TASK_PROJECTION = v.strictObject({
-  taskId: chatEntityRef({ from: "inputParam", param: "workspace_id" }),
+  taskId: chatEntityRef({ from: "inputParam", param: "matter_id" }),
   updated: v.optional(v.literal(true)),
 });
 
@@ -1631,11 +1631,11 @@ export const LINK_MATTER_CONTACT_PROJECTION = v.union([
 
 /**
  * save_document: create returns `{ entityId }` (a new document whose
- * workspace is the resolved `workspace_id`, required on create); update returns
+ * workspace is the resolved `matter_id`, required on create); update returns
  * `{ updated: true }`.
  */
 export const SAVE_DOCUMENT_CREATE_PROJECTION = v.strictObject({
-  entityId: chatEntityRef({ from: "inputParam", param: "workspace_id" }),
+  entityId: chatEntityRef({ from: "inputParam", param: "matter_id" }),
 });
 
 export const SAVE_DOCUMENT_UPDATE_PROJECTION = v.strictObject({
