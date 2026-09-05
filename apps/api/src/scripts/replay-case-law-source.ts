@@ -106,33 +106,42 @@ const flagValue = (name: string): string | undefined => {
 
 const hasFlag = (name: string): boolean => process.argv.includes(`--${name}`);
 
-const positiveInteger = (
-  raw: string | undefined,
-  fallback: number,
-  name: string,
-): number => {
-  if (raw === undefined) {
-    return fallback;
-  }
-  const parsed = Number.parseInt(raw, 10);
-  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
-    console.error(`--${name} must be a positive integer, got: ${raw}`);
-    process.exit(1);
-  }
-  return parsed;
+/** Bounds a numeric flag accepts, with the wording its refusal uses. */
+const INTEGER_BOUND = {
+  POSITIVE: { minimum: 1, wording: "a positive integer" },
+  NON_NEGATIVE: { minimum: 0, wording: "a non-negative integer" },
+} as const;
+
+type IntegerBound = (typeof INTEGER_BOUND)[keyof typeof INTEGER_BOUND];
+
+type IntegerFlagOptions = {
+  bound: IntegerBound;
+  fallback: number;
+  name: string;
+  raw: string | undefined;
 };
 
-const nonNegativeInteger = (
-  raw: string | undefined,
-  fallback: number,
-  name: string,
-): number => {
+// The whole value has to be digits. `Number.parseInt` reads a prefix and
+// stops, so "30minutes" would pass as 30 minutes, "0.5" as 0 and "1e3" as 1:
+// every one of them a bound the operator did not ask for.
+const DECIMAL_DIGITS = /^\d+$/u;
+
+const integerFlag = ({
+  bound,
+  fallback,
+  name,
+  raw,
+}: IntegerFlagOptions): number => {
   if (raw === undefined) {
     return fallback;
   }
   const parsed = Number.parseInt(raw, 10);
-  if (!Number.isSafeInteger(parsed) || parsed < 0) {
-    console.error(`--${name} must be a non-negative integer, got: ${raw}`);
+  if (
+    !DECIMAL_DIGITS.test(raw) ||
+    !Number.isSafeInteger(parsed) ||
+    parsed < bound.minimum
+  ) {
+    console.error(`--${name} must be ${bound.wording}, got: ${raw}`);
     process.exit(1);
   }
   return parsed;
@@ -148,17 +157,24 @@ const apply = hasFlag("apply");
 const rejectionPolicy = hasFlag("withdraw-rejected")
   ? REPLAY_REJECTION_POLICY.WITHDRAW_NO_DOCUMENT
   : REPLAY_REJECTION_POLICY.REPORT;
-const limit = positiveInteger(flagValue("limit"), DEFAULT_LIMIT, "limit");
-const pageSize = positiveInteger(
-  flagValue("page-size"),
-  DEFAULT_PAGE_SIZE,
-  "page-size",
-);
-const leaseWaitMinutes = nonNegativeInteger(
-  flagValue("lease-wait"),
-  DEFAULT_LEASE_WAIT_MINUTES,
-  "lease-wait",
-);
+const limit = integerFlag({
+  bound: INTEGER_BOUND.POSITIVE,
+  fallback: DEFAULT_LIMIT,
+  name: "limit",
+  raw: flagValue("limit"),
+});
+const pageSize = integerFlag({
+  bound: INTEGER_BOUND.POSITIVE,
+  fallback: DEFAULT_PAGE_SIZE,
+  name: "page-size",
+  raw: flagValue("page-size"),
+});
+const leaseWaitMinutes = integerFlag({
+  bound: INTEGER_BOUND.NON_NEGATIVE,
+  fallback: DEFAULT_LEASE_WAIT_MINUTES,
+  name: "lease-wait",
+  raw: flagValue("lease-wait"),
+});
 const celex = flagValue("celex");
 const court = flagValue("court");
 if (celex?.length === 0) {
