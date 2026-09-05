@@ -270,10 +270,14 @@ describe("API deployment health receipt", () => {
       "needs: [resolve, build, prepare-web-image, smoke]",
     );
     expect(releaseWorkflow.match(/web-image-digest:/gu)).toHaveLength(2);
-    expect(releaseWorkflow).toContain("curl -fsS http://127.0.0.1:3001/live");
     expect(releaseWorkflow).toContain(
-      `grep -q '"message":"scheduler.started"'`,
+      "bash scripts/smoke-api-image.sh stella-api:smoke",
     );
+    const apiSmoke = await Bun.file(
+      new URL("smoke-api-image.sh", import.meta.url),
+    ).text();
+    expect(apiSmoke).toContain('fetch("http://127.0.0.1:3001/live")');
+    expect(apiSmoke).toContain(`grep -F '"message":"scheduler.started"'`);
     expect(promoteAction).toContain("readonly TOKEN_REFRESH_SECONDS=2700");
     expect(promoteAction).toContain("readonly TOKEN_REFRESH_ATTEMPTS=20");
     expect(promoteAction).toContain("refresh_app_token");

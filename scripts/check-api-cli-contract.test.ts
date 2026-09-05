@@ -50,6 +50,19 @@ const policy = loadChangesetPolicy();
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+const readReleaseSmokeSource = async () => {
+  const releaseWorkflow = await Bun.file(
+    new URL("../.github/workflows/release.yml", import.meta.url),
+  ).text();
+  const scriptPath = /run: bash (scripts\/smoke-api-image\.sh)\s/u
+    .exec(releaseWorkflow)
+    ?.at(1);
+  if (!scriptPath) {
+    throw new TypeError("Release must invoke the shared API image smoke");
+  }
+  return await Bun.file(new URL(`../${scriptPath}`, import.meta.url)).text();
+};
+
 const expectSubset = (
   subset: readonly string[],
   superset: readonly string[],
@@ -191,43 +204,40 @@ describe("API and CLI release contract", () => {
   });
 
   test("release and pull-request smoke tests reject synthetic migration history", async () => {
-    const workflows = await Promise.all([
-      Bun.file(
-        new URL("../.github/workflows/release.yml", import.meta.url),
-      ).text(),
+    const smokeSources = await Promise.all([
+      readReleaseSmokeSource(),
       Bun.file(
         new URL("../.github/workflows/db-migrations.yml", import.meta.url),
       ).text(),
     ]);
 
-    for (const workflow of workflows) {
-      expect(workflow).toContain(
+    for (const source of smokeSources) {
+      expect(source).toContain(
         "CREATE TABLE drizzle.__migration_history_smoke_backup AS SELECT id, hash",
       );
-      expect(workflow).toContain(
+      expect(source).toContain(
         "SET hash = backup.hash FROM drizzle.__migration_history_smoke_backup AS backup",
       );
-      expect(workflow).toContain(
+      expect(source).toContain(
         "DROP TABLE drizzle.__migration_history_smoke_backup",
       );
-      expect(workflow).not.toContain(":'original_hash'");
+      expect(source).not.toContain(":'original_hash'");
     }
   });
 
   test("release and migration smoke tests wait for scheduler initialization", async () => {
-    const workflows = await Promise.all([
-      Bun.file(
-        new URL("../.github/workflows/release.yml", import.meta.url),
-      ).text(),
+    const [releaseSmoke, migrationSmoke] = await Promise.all([
+      readReleaseSmokeSource(),
       Bun.file(
         new URL("../.github/workflows/db-migrations.yml", import.meta.url),
       ).text(),
     ]);
 
-    for (const workflow of workflows) {
-      expect(workflow).toContain("curl -fsS http://127.0.0.1:3001/live");
-      expect(workflow).toContain(`grep -q '"message":"scheduler.started"'`);
-    }
+    expect(releaseSmoke).toContain('fetch("http://127.0.0.1:3001/live")');
+    expect(releaseSmoke).toContain("process.exit(r.ok ? 0 : 1)");
+    expect(releaseSmoke).toContain(`grep -F '"message":"scheduler.started"'`);
+    expect(migrationSmoke).toContain("curl -fsS http://127.0.0.1:3001/live");
+    expect(migrationSmoke).toContain(`grep -q '"message":"scheduler.started"'`);
   });
 
   test("shared package publishing uses Changesets release signals", async () => {
