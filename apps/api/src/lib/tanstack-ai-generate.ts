@@ -8,6 +8,7 @@ import type {
   AnyTextAdapter,
   ModelMessage,
   RunErrorEvent,
+  RunFinishedEvent,
   StreamChunk,
   StructuredOutputPart,
   SystemPrompt,
@@ -108,8 +109,20 @@ type GenerateTanStackBaseOptions = {
 type TanStackTextForRoleOptions = GenerateTanStackBaseOptions &
   GenerateTanStackInputOptions;
 
+/**
+ * Which finish a caller accepts as an answer. `require-complete` rejects
+ * everything but `stop`. `allow-output-ceiling` also accepts `length`, the
+ * finish a run reports when it spends the whole `maxOutputTokens` budget, and
+ * still rejects a moderated (`content_filter`), tool-bearing, or unfinished
+ * run. `allow-incomplete` returns whatever text arrived.
+ */
+export type TanStackTextFinishPolicy =
+  | "allow-incomplete"
+  | "allow-output-ceiling"
+  | "require-complete";
+
 type GenerateTanStackTextForRoleOptions = TanStackTextForRoleOptions & {
-  finishPolicy: "allow-incomplete" | "require-complete";
+  finishPolicy: TanStackTextFinishPolicy;
 };
 
 type GenerateTanStackObjectForRoleOptions<TSchema extends v.GenericSchema> =
@@ -139,12 +152,19 @@ export type TanStackStructuredOutputEvent<TOutput> =
       type: "complete";
     };
 
-type TanStackTextFinishReason =
-  | "stop"
-  | "length"
-  | "content_filter"
-  | "tool_calls"
-  | null;
+type TanStackTextFinishReason = Exclude<
+  RunFinishedEvent["finishReason"],
+  undefined
+>;
+
+// `chat()` emits its public chunks in AG-UI spec shape, and `finishReason` is
+// not a spec key on `RUN_FINISHED`: the engine moves it into
+// `metadata.tanstack` before the chunk reaches a consumer. A chunk that never
+// went through the engine (a custom server, a fixture) still carries it at the
+// top level. Reading only the top level reports every finished run as
+// reason-less, which a complete-output caller then rejects.
+const runFinishReason = (chunk: RunFinishedEvent): TanStackTextFinishReason =>
+  chunk.finishReason ?? chunk.metadata?.tanstack?.finishReason ?? null;
 
 type ResolveTextModelOptions = Pick<
   GenerateTanStackBaseOptions,
@@ -172,6 +192,22 @@ const isAbortRejection = ({
   signal?.aborted === true &&
   (error === signal.reason ||
     (error instanceof Error && error.name === "AbortError"));
+
+const finishAccepted = (
+  finishPolicy: TanStackTextFinishPolicy,
+  finishReason: TanStackTextFinishReason,
+): boolean => {
+  switch (finishPolicy) {
+    case "allow-incomplete":
+      return true;
+    case "allow-output-ceiling":
+      return finishReason === "stop" || finishReason === "length";
+    case "require-complete":
+      return finishReason === "stop";
+    default:
+      return finishPolicy satisfies never;
+  }
+};
 
 export const generateTanStackTextForRole = async (
   options: GenerateTanStackTextForRoleOptions,
@@ -225,10 +261,7 @@ export const generateTanStackTextForRole = async (
     throw cancelledGenerationError();
   }
 
-  if (
-    options.finishPolicy === "require-complete" &&
-    state.finishReason !== "stop"
-  ) {
+  if (!finishAccepted(options.finishPolicy, state.finishReason)) {
     throw new HandlerError({
       status: 502,
       message: "AI generation did not complete",
@@ -400,7 +433,7 @@ const streamTanStackTextDeltas = async function* ({
       }),
     onChunk: (chunk) => {
       if (chunk.type === EventType.RUN_FINISHED) {
-        onFinishReason?.(chunk.finishReason ?? null);
+        onFinishReason?.(runFinishReason(chunk));
         return undefined;
       }
       if (

@@ -26,6 +26,7 @@ import {
   mergeGenerationOptions,
   resolveTanStackTextModel,
 } from "@/api/lib/tanstack-ai-generate";
+import type { TanStackTextFinishPolicy } from "@/api/lib/tanstack-ai-generate";
 import { projectSchemaInputJsonSchema } from "@/api/lib/tanstack-ai-schema";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
@@ -70,9 +71,10 @@ const MILLISECONDS_PER_WEEK = 7 * 24 * 60 * 60 * 1000;
 // inside the ceiling the probe itself set. Those ceilings are sized for a
 // one-line answer, so a model that spends the whole budget reports a `length`
 // finish; grading that as a failure would report the canary's own budget as
-// provider drift. The probes' own assertions carry the contract instead:
-// non-empty text, and the exact token for the PDF role.
-export const CANARY_TEXT_FINISH_POLICY = "allow-incomplete" as const;
+// provider drift. A moderated, tool-bearing, or unfinished run stays a
+// failure: those are the provider regressions the probes exist to catch.
+export const CANARY_TEXT_FINISH_POLICY =
+  "allow-output-ceiling" satisfies TanStackTextFinishPolicy;
 const SYNTHETIC_PROMPT = "Reply with exactly OK.";
 export const PDF_CANARY_TOKEN = "STELLA_PDF_CANARY_OK";
 const PDF_CANARY_FILENAME = "stella-provider-canary.pdf";
