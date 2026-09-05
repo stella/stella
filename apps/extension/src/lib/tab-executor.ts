@@ -242,13 +242,13 @@ type PageOperation =
  * them with the frame id.
  */
 const runPageOperation = async (
-  target: chrome.scripting.InjectionTarget,
+  injectionTarget: chrome.scripting.InjectionTarget,
   operation: PageOperation,
 ) =>
   await chrome.scripting.executeScript({
     args: [operation],
-    func: (operation) => {
-      const { limits, shadowSegment } = operation;
+    func: (pageOperation) => {
+      const { limits, shadowSegment } = pageOperation;
       const SKIPPED_TAGS = new Set(["NOSCRIPT", "SCRIPT", "STYLE", "TEMPLATE"]);
       const normalize = (value: string) =>
         value.replaceAll(/\s+/gu, " ").trim();
@@ -395,7 +395,7 @@ const runPageOperation = async (
         return container instanceof Element ? container : null;
       };
 
-      if (operation.kind === "snapshot") {
+      if (pageOperation.kind === "snapshot") {
         const interactiveSelector = [
           "a[href]",
           "button",
@@ -447,17 +447,14 @@ const runPageOperation = async (
 
         return {
           elements,
-          text: collectText(
-            document.body ?? document.documentElement,
-            limits.pageTextTotalChars,
-          ),
+          text: collectText(document.body, limits.pageTextTotalChars),
           title: document.title.slice(0, limits.titleChars),
           url: window.location.href.slice(0, limits.urlChars),
         };
       }
 
-      const { action, errorCode } = operation;
-      const target = resolveElement(operation.path);
+      const { action, errorCode } = pageOperation;
+      const target = resolveElement(pageOperation.path);
       if (!target) {
         return {
           error: "The referenced element is no longer on the page.",
@@ -573,7 +570,7 @@ const runPageOperation = async (
       target.dispatchEvent(new KeyboardEvent("keyup", { bubbles: true, key }));
       return { ok: true };
     },
-    target,
+    target: injectionTarget,
   });
 
 const injectDomAction = async (
@@ -694,6 +691,36 @@ const readSnapshot = async ({
     });
   }
   return parsed;
+};
+
+export type AdoptControlledTabResult =
+  | { status: "adopted"; url: string }
+  | { status: "unsupported-page" };
+
+/**
+ * Makes a tab the user already has open the controlled tab, so chat can read
+ * and act on it without re-navigating. Same origin policy and download
+ * containment as a tab opened by `open`.
+ */
+export const adoptControlledTab = async (
+  controllerId: string,
+  tab: chrome.tabs.Tab,
+): Promise<AdoptControlledTabResult> => {
+  if (
+    tab.id === undefined ||
+    tab.url === undefined ||
+    parseControllableUrl(tab.url) === null
+  ) {
+    return { status: "unsupported-page" };
+  }
+  await containDownloads(tab.id);
+  await writeControlledTabState({
+    controllerId,
+    revision: null,
+    tabId: tab.id,
+    url: null,
+  });
+  return { status: "adopted", url: tab.url };
 };
 
 const openControlledTab = async (

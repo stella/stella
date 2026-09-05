@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import * as v from "valibot";
 
 export const BROWSER_CONTROL_PROTOCOL_VERSION = 3 as const;
@@ -392,7 +393,7 @@ export const isReadOnlyBrowserCommand = (
       return false;
     default:
       command satisfies never;
-      return false;
+      return panic("Unhandled browser command action");
   }
 };
 

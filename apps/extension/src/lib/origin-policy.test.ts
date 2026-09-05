@@ -16,7 +16,8 @@ describe("controllable origin policy", () => {
   test("refuses plain HTTP and embedded credentials", () => {
     expect(parseControllableUrl("http://example.com/")).toBeNull();
     expect(parseControllableUrl("https://user:pw@example.com/")).toBeNull();
-    expect(parseControllableUrl("javascript:alert(1)")).toBeNull();
+    expect(parseControllableUrl("file:///etc/hosts")).toBeNull();
+    expect(parseControllableUrl("data:text/html,hello")).toBeNull();
     expect(parseControllableUrl("not a url")).toBeNull();
   });
 

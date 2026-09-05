@@ -8,6 +8,20 @@
   "accessUpdateFailed": {
     "message": "Chrome could not update website access."
   },
+  "adoptTab": {
+    "message": "Use this tab with stella"
+  },
+  "adoptUnsupported": {
+    "message": "Only public HTTPS pages can be used with stella."
+  },
+  "adoptedTab": {
+    "message": "stella can now read $ORIGIN$ in this tab. Ask about it in chat.",
+    "placeholders": {
+      "origin": {
+        "content": "$1"
+      }
+    }
+  },
   "checkingAccess": {
     "message": "Checking website access…"
   },
@@ -17,7 +31,9 @@
   "controllerReady": {
     "message": "Connected to $ORIGIN$. Each action still needs approval in stella.",
     "placeholders": {
-      "origin": { "content": "$1" }
+      "origin": {
+        "content": "$1"
+      }
     }
   },
   "disconnectTab": {

@@ -8,19 +8,49 @@
   "accessUpdateFailed": {
     "message": "تعذر على Chrome تغيير الوصول إلى المواقع."
   },
-  "checkingAccess": { "message": "جارٍ التحقق من الوصول إلى المواقع…" },
-  "connectTab": { "message": "ربط علامة تبويب stella الحالية" },
+  "adoptTab": {
+    "message": "استخدام هذا التبويب مع stella"
+  },
+  "adoptUnsupported": {
+    "message": "لا يمكن استخدام سوى الصفحات العامة عبر HTTPS مع stella."
+  },
+  "adoptedTab": {
+    "message": "يمكن لـ stella الآن قراءة $ORIGIN$ في هذا التبويب. اسأل عنه في المحادثة.",
+    "placeholders": {
+      "origin": {
+        "content": "$1"
+      }
+    }
+  },
+  "checkingAccess": {
+    "message": "جارٍ التحقق من الوصول إلى المواقع…"
+  },
+  "connectTab": {
+    "message": "ربط علامة تبويب stella الحالية"
+  },
   "controllerReady": {
     "message": "تم الربط بـ $ORIGIN$. لا يزال كل إجراء بحاجة إلى موافقة في stella.",
-    "placeholders": { "origin": { "content": "$1" } }
+    "placeholders": {
+      "origin": {
+        "content": "$1"
+      }
+    }
   },
-  "disconnectTab": { "message": "قطع اتصال علامة التبويب" },
+  "disconnectTab": {
+    "message": "قطع اتصال علامة التبويب"
+  },
   "extensionDescription": {
     "message": "يتيح لـ stella التحكم في علامة تبويب Chrome مخصصة بعد منح الإذن."
   },
-  "extensionName": { "message": "متصفح stella" },
-  "grantAccess": { "message": "السماح بجميع المواقع" },
-  "revokeAccess": { "message": "إزالة الوصول إلى المواقع" },
+  "extensionName": {
+    "message": "متصفح stella"
+  },
+  "grantAccess": {
+    "message": "السماح بجميع المواقع"
+  },
+  "revokeAccess": {
+    "message": "إزالة الوصول إلى المواقع"
+  },
   "unsupportedTab": {
     "message": "افتح علامة تبويب لتطبيق stella ثم حاول مجدداً."
   }

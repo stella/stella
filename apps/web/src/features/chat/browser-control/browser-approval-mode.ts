@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 
+import { panic } from "better-result";
 import * as v from "valibot";
 
 import {
@@ -81,6 +82,6 @@ export const browserApprovalModeAllows = (
       return true;
     default:
       mode satisfies never;
-      return false;
+      return panic("Unhandled browser approval mode");
   }
 };

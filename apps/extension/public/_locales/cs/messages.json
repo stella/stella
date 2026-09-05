@@ -8,19 +8,49 @@
   "accessUpdateFailed": {
     "message": "Chromu se nepodařilo změnit přístup k webům."
   },
-  "checkingAccess": { "message": "Kontrola přístupu k webům…" },
-  "connectTab": { "message": "Připojit aktuální kartu stella" },
+  "adoptTab": {
+    "message": "Použít tuto kartu se stellou"
+  },
+  "adoptUnsupported": {
+    "message": "Se stellou lze používat jen veřejné stránky na HTTPS."
+  },
+  "adoptedTab": {
+    "message": "stella teď může číst $ORIGIN$ v této kartě. Zeptejte se na ni v chatu.",
+    "placeholders": {
+      "origin": {
+        "content": "$1"
+      }
+    }
+  },
+  "checkingAccess": {
+    "message": "Kontrola přístupu k webům…"
+  },
+  "connectTab": {
+    "message": "Připojit aktuální kartu stella"
+  },
   "controllerReady": {
     "message": "Připojeno k $ORIGIN$. Každá akce stále vyžaduje schválení ve stelle.",
-    "placeholders": { "origin": { "content": "$1" } }
+    "placeholders": {
+      "origin": {
+        "content": "$1"
+      }
+    }
   },
-  "disconnectTab": { "message": "Odpojit kartu" },
+  "disconnectTab": {
+    "message": "Odpojit kartu"
+  },
   "extensionDescription": {
     "message": "Po udělení přístupu umožní stelle ovládat vyhrazenou kartu Chromu."
   },
-  "extensionName": { "message": "Prohlížeč stella" },
-  "grantAccess": { "message": "Povolit všechny weby" },
-  "revokeAccess": { "message": "Odebrat přístup k webům" },
+  "extensionName": {
+    "message": "Prohlížeč stella"
+  },
+  "grantAccess": {
+    "message": "Povolit všechny weby"
+  },
+  "revokeAccess": {
+    "message": "Odebrat přístup k webům"
+  },
   "unsupportedTab": {
     "message": "Otevřete kartu aplikace stella a zkuste to znovu."
   }

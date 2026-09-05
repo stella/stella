@@ -28,6 +28,10 @@ WXT_STELLA_ORIGINS=https://stella.example.org bun --filter @stll/extension build
 The popup binds one explicit tab and exact origin as the active controller.
 Website access is optional, HTTPS only, and requested in a user gesture.
 
+Chat reads the controlled tab. That tab is either one stella opened through
+`open`, or a tab the user already has open: open the popup on that page and
+choose **Use this tab with stella**, then ask about it in chat.
+
 The controlled tab may only open or act on public HTTPS pages: plain HTTP,
 loopback, private and link-local addresses, and `.local`/`.internal` hosts are
 refused so an approved action never reaches an intranet or a dev server with the
