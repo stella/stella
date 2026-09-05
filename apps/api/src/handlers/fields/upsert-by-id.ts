@@ -6,6 +6,7 @@ import type { Static } from "elysia";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { cellMetadata, entities, fields } from "@/api/db/schema";
+import { currencyCodeSchema } from "@/api/db/schema-validators";
 import type { CellMetadata } from "@/api/db/schema-validators";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
@@ -59,13 +60,9 @@ export const upsertFieldContentSchema = t.Union(
       }),
       value: t.Integer(),
       currency: t.Nullable(
-        t.String({
-          minLength: 3,
-          maxLength: 3,
-          pattern: "^[A-Za-z]{3}$",
-          description:
-            "For int values only: 3-letter ISO currency code, or null",
-        }),
+        currencyCodeSchema(
+          "For int values only: 3-letter ISO currency code, or null",
+        ),
       ),
     }),
     t.Object({
@@ -76,12 +73,7 @@ export const upsertFieldContentSchema = t.Union(
       amountCents: t.Integer({
         description: "Amount in the currency's minor units",
       }),
-      currency: t.String({
-        minLength: 3,
-        maxLength: 3,
-        pattern: "^[A-Za-z]{3}$",
-        description: "3-letter ISO currency code",
-      }),
+      currency: currencyCodeSchema("3-letter ISO currency code"),
     }),
     t.Object({
       version: t.Literal(1),

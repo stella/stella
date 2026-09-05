@@ -2,6 +2,7 @@ import { Value } from "@sinclair/typebox/value";
 import { t } from "elysia";
 
 import {
+  currencyCodeSchema,
   propertyContentSchema,
   propertyContentTypeSchema,
 } from "@/api/db/schema-validators";
@@ -42,7 +43,7 @@ export const createPropertyBodySchema = t.Object({
   ),
   options: t.Optional(t.Array(selectOptionSchema)),
   /** Money only: the currency new values default to, or null for per-value. */
-  currency: t.Optional(t.Nullable(t.String({ minLength: 3, maxLength: 3 }))),
+  currency: t.Optional(t.Nullable(currencyCodeSchema())),
   fallback: t.Optional(t.Nullable(t.String({ minLength: 1, maxLength: 1000 }))),
 });
 
