@@ -65,8 +65,10 @@ const loadEntityVersionDocxBufferMock = mock(async () =>
     entityId,
     workspaceId,
     entityVersionId,
+    fileId: toSafeId<"userFile">("00000000-0000-0000-0000-000000000008"),
     buffer: sourceDocx,
     fileName: "Smlouva.docx",
+    mimeType: DOCX_MIME_TYPE,
     filePropertyId: propertyId,
   }),
 );
