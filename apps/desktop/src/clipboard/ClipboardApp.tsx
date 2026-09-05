@@ -122,10 +122,14 @@ import {
   measureClipboardSnapshotRequest,
   observeClipboardReopens,
 } from "./clipboard-startup-timing";
-import { CLIPBOARD_GROUP_ACCENTS } from "./clipboard-style";
+import {
+  CLIPBOARD_GROUP_COLOR_PRESETS,
+  DEFAULT_CLIPBOARD_GROUP_COLOR,
+} from "./clipboard-style";
 import {
   CLIPBOARD_RETENTIONS,
   isClipboardCopyError,
+  isClipboardGroupColor,
   isClipboardSnapshot,
 } from "./clipboard-types";
 import type {
@@ -143,15 +147,6 @@ import type { ClipboardImagePreviewStatus } from "./ClipboardImagePreview";
 import { ClipboardSourceIcon } from "./ClipboardSourceIcon";
 import { useRailViewport } from "./use-rail-viewport";
 
-const CLIPBOARD_GROUP_COLORS = [
-  "gray",
-  "blue",
-  "emerald",
-  "amber",
-  "rose",
-  "violet",
-] as const satisfies readonly ClipboardGroupColor[];
-
 const STELLA_WEB_APP_URL = "https://my.stll.app";
 const MAX_GROUP_NAME_CHARACTERS = 64;
 const MAX_ITEM_NAME_CHARACTERS = 80;
@@ -161,6 +156,12 @@ const RETENTION_LABEL_KEYS = {
   year: "retentionYear",
 } as const satisfies Record<ClipboardRetention, string>;
 const CLIPBOARD_CARD_SELECTOR = "[data-clipboard-id]";
+const CLIPBOARD_SWATCH_CLASS_NAME =
+  "ring-offset-popover grid size-11 place-items-center rounded-full ring-offset-2 transition-transform outline-none hover:scale-105";
+const CLIPBOARD_CUSTOM_COLOR_RING = `conic-gradient(${[
+  ...CLIPBOARD_GROUP_COLOR_PRESETS,
+  DEFAULT_CLIPBOARD_GROUP_COLOR,
+].join(", ")})`;
 // Which step of a copy failed decides what the user is told: only a `copy`
 // failure means the clip never reached the system clipboard.
 const COPY_FAILURE_FEEDBACK = {
@@ -327,9 +328,7 @@ const ClipboardCard = ({
   const sourceTintIndex = clipboardSourceTintIndex(
     item.sourceApp ? clipboardSourceIdentity(item.sourceApp) : null,
   );
-  const accent = groupColor
-    ? CLIPBOARD_GROUP_ACCENTS[groupColor]
-    : sourceVisual?.color;
+  const accent = groupColor ?? sourceVisual?.color;
   const sourceStyle: ClipboardCardStyle | undefined = accent
     ? { "--clipboard-source-accent": accent }
     : undefined;
@@ -587,7 +586,12 @@ type ClipboardDialogState =
       mode: ClipboardGroupDeletionMode;
       type: "deleteGroup";
     }
-  | { groupId: string; name: string; type: "renameGroup" };
+  | {
+      color: ClipboardGroupColor;
+      groupId: string;
+      name: string;
+      type: "editGroup";
+    };
 
 type ClipboardGroupDeletionMode = "deleteClips" | "keepClips";
 
@@ -656,6 +660,104 @@ const DialogShell = ({
   );
 };
 
+type ClipboardGroupDraft = {
+  color: ClipboardGroupColor;
+  name: string;
+};
+
+type ClipboardGroupFieldsProps = ClipboardGroupDraft & {
+  autoFocus: boolean;
+  onChange: (fields: ClipboardGroupDraft) => void;
+};
+
+const ClipboardGroupFields = ({
+  autoFocus,
+  color,
+  name,
+  onChange,
+}: ClipboardGroupFieldsProps) => {
+  const t = useTranslations("clipboard");
+  const isPreset = CLIPBOARD_GROUP_COLOR_PRESETS.includes(color);
+  return (
+    <>
+      <label className="block">
+        <span className="text-muted-foreground text-sm">{t("groupName")}</span>
+        <Input
+          autoFocus={autoFocus}
+          className="mt-2 h-11 rounded-2xl text-base sm:text-base **:[input]:h-full **:[input]:px-4"
+          dir="auto"
+          onChange={(event) => {
+            if (
+              Array.from(event.target.value).length > MAX_GROUP_NAME_CHARACTERS
+            ) {
+              return;
+            }
+            onChange({ color, name: event.target.value });
+          }}
+          value={name}
+        />
+      </label>
+      <fieldset className="mt-4">
+        <legend className="text-muted-foreground text-sm">
+          {t("groupColor")}
+        </legend>
+        <div className="mt-2 flex items-center gap-2">
+          {CLIPBOARD_GROUP_COLOR_PRESETS.map((swatch, index) => (
+            <button
+              aria-label={`${t("groupColor")} ${index + 1}`}
+              aria-pressed={color === swatch}
+              className={cn(
+                CLIPBOARD_SWATCH_CLASS_NAME,
+                "focus-visible:ring-2",
+                color === swatch && "ring-foreground/70 ring-2",
+              )}
+              key={swatch}
+              onClick={() => onChange({ color: swatch, name })}
+              style={{ backgroundColor: swatch }}
+              type="button"
+            >
+              {color === swatch ? <SwatchCheck /> : null}
+            </button>
+          ))}
+          <label
+            className={cn(
+              CLIPBOARD_SWATCH_CLASS_NAME,
+              "cursor-pointer has-focus-visible:ring-2",
+              !isPreset && "ring-foreground/70 ring-2",
+            )}
+            style={
+              isPreset
+                ? { backgroundImage: CLIPBOARD_CUSTOM_COLOR_RING }
+                : { backgroundColor: color }
+            }
+          >
+            {isPreset ? null : <SwatchCheck />}
+            <input
+              aria-label={t("customColor")}
+              className="sr-only"
+              onChange={(event) => {
+                const picked = event.target.value.toLowerCase();
+                if (isClipboardGroupColor(picked)) {
+                  onChange({ color: picked, name });
+                }
+              }}
+              type="color"
+              value={color}
+            />
+          </label>
+        </div>
+      </fieldset>
+    </>
+  );
+};
+
+const SwatchCheck = () => (
+  <CheckIcon
+    aria-hidden="true"
+    className="bg-background/88 text-foreground size-5 rounded-full p-0.5 shadow-sm"
+  />
+);
+
 type ClipboardDialogProps = {
   dialog: ClipboardDialogState;
   onChange: (dialog: ClipboardDialogState) => void;
@@ -713,64 +815,14 @@ const ClipboardDialog = ({
           submitLabel={t("create")}
           title={t("createGroup")}
         >
-          <label className="block">
-            <span className="text-muted-foreground text-xs">
-              {t("groupName")}
-            </span>
-            <Input
-              autoFocus
-              className="mt-2 h-11 rounded-2xl"
-              dir="auto"
-              onChange={(event) => {
-                if (
-                  Array.from(event.target.value).length >
-                  MAX_GROUP_NAME_CHARACTERS
-                ) {
-                  return;
-                }
-                onChange({
-                  color: dialog.color,
-                  name: event.target.value,
-                  type: "createGroup",
-                });
-              }}
-              value={dialog.name}
-            />
-          </label>
-          <fieldset className="mt-4">
-            <legend className="text-muted-foreground text-xs">
-              {t("groupColor")}
-            </legend>
-            <div className="mt-2 flex items-center gap-2">
-              {CLIPBOARD_GROUP_COLORS.map((color, index) => (
-                <button
-                  aria-label={`${t("groupColor")} ${index + 1}`}
-                  aria-pressed={dialog.color === color}
-                  className={cn(
-                    "ring-offset-popover grid size-11 place-items-center rounded-full ring-offset-2 transition-transform outline-none hover:scale-105 focus-visible:ring-2",
-                    dialog.color === color && "ring-foreground/70 ring-2",
-                  )}
-                  key={color}
-                  onClick={() =>
-                    onChange({
-                      color,
-                      name: dialog.name,
-                      type: "createGroup",
-                    })
-                  }
-                  style={{ backgroundColor: CLIPBOARD_GROUP_ACCENTS[color] }}
-                  type="button"
-                >
-                  {dialog.color === color ? (
-                    <CheckIcon
-                      aria-hidden="true"
-                      className="bg-background/88 text-foreground size-5 rounded-full p-0.5 shadow-sm"
-                    />
-                  ) : null}
-                </button>
-              ))}
-            </div>
-          </fieldset>
+          <ClipboardGroupFields
+            autoFocus
+            color={dialog.color}
+            name={dialog.name}
+            onChange={({ color, name }) => {
+              onChange({ color, name, type: "createGroup" });
+            }}
+          />
         </DialogShell>
       );
     case "deleteGroup":
@@ -848,45 +900,38 @@ const ClipboardDialog = ({
           </fieldset>
         </DialogShell>
       );
-    case "renameGroup":
+    case "editGroup":
       return (
         <DialogShell
           onClose={close}
           onSubmit={() => {
             onCommand(
-              "clipboard_rename_group",
-              { id: dialog.groupId, name: dialog.name },
+              "clipboard_update_group",
+              {
+                color: dialog.color,
+                id: dialog.groupId,
+                name: dialog.name,
+              },
               close,
             );
           }}
           submitDisabled={!dialog.name.trim()}
-          submitLabel={t("renameGroup")}
-          title={t("renameGroup")}
+          submitLabel={t("editGroup")}
+          title={t("editGroup")}
         >
-          <label className="block">
-            <span className="text-muted-foreground text-xs">
-              {t("groupName")}
-            </span>
-            <Input
-              autoFocus
-              className="mt-2 h-11 rounded-2xl"
-              dir="auto"
-              onChange={(event) => {
-                if (
-                  Array.from(event.target.value).length >
-                  MAX_GROUP_NAME_CHARACTERS
-                ) {
-                  return;
-                }
-                onChange({
-                  groupId: dialog.groupId,
-                  name: event.target.value,
-                  type: "renameGroup",
-                });
-              }}
-              value={dialog.name}
-            />
-          </label>
+          <ClipboardGroupFields
+            autoFocus
+            color={dialog.color}
+            name={dialog.name}
+            onChange={({ color, name }) => {
+              onChange({
+                color,
+                groupId: dialog.groupId,
+                name,
+                type: "editGroup",
+              });
+            }}
+          />
         </DialogShell>
       );
     default: {
@@ -994,8 +1039,7 @@ const ClipboardContextMenu = ({
                           group.color === null
                             ? undefined
                             : {
-                                backgroundColor:
-                                  CLIPBOARD_GROUP_ACCENTS[group.color],
+                                backgroundColor: group.color,
                               }
                         }
                       />
@@ -1496,9 +1540,9 @@ const ClipboardApp = () => {
   }, [activeGroupId, activeItemId, snapshot.items, welcomeOpen]);
 
   const nextGroupColor =
-    CLIPBOARD_GROUP_COLORS.at(
-      snapshot.groups.length % CLIPBOARD_GROUP_COLORS.length,
-    ) ?? "gray";
+    CLIPBOARD_GROUP_COLOR_PRESETS.at(
+      snapshot.groups.length % CLIPBOARD_GROUP_COLOR_PRESETS.length,
+    ) ?? DEFAULT_CLIPBOARD_GROUP_COLOR;
   let emptyStateTitle = t("emptyTitle");
   if (filterQuery) {
     emptyStateTitle = t("noResults");
@@ -2154,20 +2198,20 @@ const ClipboardApp = () => {
             </Button>
             {snapshot.groups.map((group) => {
               const groupStyle: ClipboardGroupStyle = {
-                "--clipboard-group-accent":
-                  CLIPBOARD_GROUP_ACCENTS[group.color],
+                "--clipboard-group-accent": group.color,
               };
               return (
                 <ContextMenu
                   actions={[
                     {
                       icon: <PencilIcon aria-hidden="true" />,
-                      label: t("renameGroup"),
+                      label: t("editGroup"),
                       onClick: () =>
                         setDialog({
+                          color: group.color,
                           groupId: group.id,
                           name: group.name,
-                          type: "renameGroup",
+                          type: "editGroup",
                         }),
                     },
                     {

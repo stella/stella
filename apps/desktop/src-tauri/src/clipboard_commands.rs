@@ -210,7 +210,8 @@ pub fn clipboard_delete_group(
 }
 
 #[tauri::command]
-pub fn clipboard_rename_group(
+pub fn clipboard_update_group(
+  color: ClipboardGroupColor,
   id: String,
   name: String,
   state: State<'_, ClipboardAppState>,
@@ -218,7 +219,7 @@ pub fn clipboard_rename_group(
 ) -> Result<ClipboardSnapshot, String> {
   let snapshot = {
     let mut manager = state.lock().map_err(|_| lock_error())?;
-    if !manager.rename_group(&id, &name)? {
+    if !manager.update_group(&id, &name, color)? {
       return Err(GROUP_NOT_FOUND_ERROR.to_string());
     }
     manager.snapshot()

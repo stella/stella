@@ -31,7 +31,6 @@ import {
   reportDesktopError,
 } from "../telemetry/desktop-telemetry";
 import { clipboardSourceLabel, clipboardSourceTitle } from "./clipboard-logic";
-import { CLIPBOARD_GROUP_ACCENTS } from "./clipboard-style";
 import { isClipboardEditorContext } from "./clipboard-types";
 import type { ClipboardEditorContext } from "./clipboard-types";
 import { ClipboardImagePreview } from "./ClipboardImagePreview";
@@ -893,7 +892,7 @@ const ClipboardEditor = () => {
                       aria-hidden="true"
                       className="size-2 shrink-0 rounded-full"
                       style={{
-                        backgroundColor: CLIPBOARD_GROUP_ACCENTS[group.color],
+                        backgroundColor: group.color,
                       }}
                     />
                     <span dir="auto">{group.name}</span>

@@ -757,16 +757,63 @@ impl ClipboardItem {
   }
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum ClipboardGroupColor {
-  #[default]
-  Gray,
-  Blue,
-  Emerald,
-  Amber,
-  Rose,
-  Violet,
+/// A group accent as lowercase `#rrggbb`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClipboardGroupColor(String);
+
+const DEFAULT_GROUP_COLOR: &str = "#a3a3a3";
+const GROUP_COLOR_ERROR: &str = "clipboard group color must be #rrggbb";
+
+impl ClipboardGroupColor {
+  pub fn parse(raw: &str) -> Result<Self, String> {
+    let value = raw.trim();
+    let Some(digits) = value.strip_prefix('#') else {
+      return Err(GROUP_COLOR_ERROR.to_string());
+    };
+    if digits.len() != 6 || !digits.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+      return Err(GROUP_COLOR_ERROR.to_string());
+    }
+    Ok(Self(value.to_ascii_lowercase()))
+  }
+
+  pub fn as_str(&self) -> &str {
+    &self.0
+  }
+}
+
+impl Default for ClipboardGroupColor {
+  fn default() -> Self {
+    Self(DEFAULT_GROUP_COLOR.to_string())
+  }
+}
+
+impl Serialize for ClipboardGroupColor {
+  fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+    serializer.serialize_str(self.as_str())
+  }
+}
+
+impl<'de> Deserialize<'de> for ClipboardGroupColor {
+  fn deserialize<D: serde::Deserializer<'de>>(
+    deserializer: D,
+  ) -> Result<Self, D::Error> {
+    let raw = String::deserialize(deserializer)?;
+    // Named colors only ever reach us from encrypted stores written before
+    // group accents became hex; drop this branch once no such store matters.
+    let legacy = match raw.as_str() {
+      "gray" => Some(DEFAULT_GROUP_COLOR),
+      "blue" => Some("#60a5fa"),
+      "emerald" => Some("#34d399"),
+      "amber" => Some("#fbbf24"),
+      "rose" => Some("#fb7185"),
+      "violet" => Some("#a78bfa"),
+      _ => None,
+    };
+    if let Some(hex) = legacy {
+      return Ok(Self(hex.to_string()));
+    }
+    Self::parse(&raw).map_err(serde::de::Error::custom)
+  }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1401,7 +1448,12 @@ impl ClipboardManager {
     Ok(id)
   }
 
-  pub fn rename_group(&mut self, id: &str, name: &str) -> Result<bool, String> {
+  pub fn update_group(
+    &mut self,
+    id: &str,
+    name: &str,
+    color: ClipboardGroupColor,
+  ) -> Result<bool, String> {
     if !self.groups.iter().any(|group| group.id == id) {
       return Ok(false);
     }
@@ -1410,6 +1462,7 @@ impl ClipboardManager {
     let Some(group) = self.groups.iter_mut().find(|group| group.id == id) else {
       return Ok(false);
     };
+    group.color = color;
     group.name = name;
     self.persist_or_restore(checkpoint)?;
     Ok(true)
@@ -5184,7 +5237,7 @@ mod tests {
     let now = Utc::now();
     let mut manager = ready_manager();
     let group_id = manager
-      .create_group("Templates", ClipboardGroupColor::Gray)
+      .create_group("Templates", ClipboardGroupColor::default())
       .unwrap();
     let mut ungrouped = text_item(now - Duration::days(400), "ungrouped");
     ungrouped.set_group_id(Some(group_id.clone()), Utc::now());
@@ -5720,7 +5773,7 @@ mod tests {
   fn deleting_a_group_can_preserve_its_clips() {
     let mut manager = ready_manager();
     let group_id = manager
-      .create_group("Research", ClipboardGroupColor::Blue)
+      .create_group("Research", ClipboardGroupColor::parse("#60a5fa").unwrap())
       .unwrap();
     let mut grouped = text_item(Utc::now() - Duration::days(400), "grouped");
     let grouped_id = grouped.id().to_string();
@@ -5752,7 +5805,7 @@ mod tests {
     assert!(capture(&mut manager, "grouped", None, Utc::now()));
     assert!(capture(&mut manager, "ungrouped", None, Utc::now()));
     let group_id = manager
-      .create_group("Research", ClipboardGroupColor::Blue)
+      .create_group("Research", ClipboardGroupColor::parse("#60a5fa").unwrap())
       .unwrap();
     let grouped_id = manager.items[1].id().to_string();
     assert!(
@@ -5771,19 +5824,30 @@ mod tests {
   }
 
   #[test]
-  fn renaming_a_group_trims_and_rejects_duplicate_names() {
+  fn updating_a_group_trims_and_rejects_duplicate_names() {
     let mut manager = ready_manager();
     let research_id = manager
-      .create_group("Research", ClipboardGroupColor::Blue)
+      .create_group("Research", ClipboardGroupColor::parse("#60a5fa").unwrap())
       .unwrap();
     manager
-      .create_group("Templates", ClipboardGroupColor::Gray)
+      .create_group("Templates", ClipboardGroupColor::default())
       .unwrap();
+    let amber = ClipboardGroupColor::parse("#fbbf24").unwrap();
 
-    assert!(manager.rename_group(&research_id, "  Sources  ").unwrap());
+    assert!(
+      manager
+        .update_group(&research_id, "  Sources  ", amber.clone())
+        .unwrap()
+    );
     assert_eq!(manager.groups[0].name, "Sources");
-    assert!(manager.rename_group(&research_id, "templates").is_err());
+    assert_eq!(manager.groups[0].color, amber);
+    assert!(
+      manager
+        .update_group(&research_id, "templates", amber.clone())
+        .is_err()
+    );
     assert_eq!(manager.groups[0].name, "Sources");
+    assert!(!manager.update_group("missing", "Sources", amber).unwrap());
   }
 
   #[test]
@@ -5791,13 +5855,13 @@ mod tests {
     let mut manager = ready_manager();
     for index in 0..MAX_GROUPS {
       manager
-        .create_group(&format!("Group {index}"), ClipboardGroupColor::Gray)
+        .create_group(&format!("Group {index}"), ClipboardGroupColor::default())
         .unwrap();
     }
 
     assert!(
       manager
-        .create_group("One too many", ClipboardGroupColor::Gray)
+        .create_group("One too many", ClipboardGroupColor::default())
         .is_err()
     );
 
@@ -5806,7 +5870,7 @@ mod tests {
       manager
         .create_group(
           &"x".repeat(MAX_GROUP_NAME_CHARACTERS + 1),
-          ClipboardGroupColor::Gray,
+          ClipboardGroupColor::default(),
         )
         .is_err()
     );
@@ -5819,29 +5883,76 @@ mod tests {
 
     assert!(
       manager
-        .create_group(&international_name, ClipboardGroupColor::Blue)
+        .create_group(
+          &international_name,
+          ClipboardGroupColor::parse("#60a5fa").unwrap()
+        )
         .is_ok()
     );
     assert!(
       manager
         .create_group(
           &format!("{international_name}界"),
-          ClipboardGroupColor::Blue,
+          ClipboardGroupColor::parse("#60a5fa").unwrap(),
         )
         .is_err()
     );
   }
 
   #[test]
-  fn persisted_groups_without_a_color_default_to_gray() {
+  fn persisted_groups_without_a_color_take_the_default_accent() {
     let group: ClipboardGroup = serde_json::from_value(serde_json::json!({
       "id": "legacy-group",
       "name": "Legacy"
     }))
     .unwrap();
 
-    assert_eq!(group.color, ClipboardGroupColor::Gray);
-    assert_eq!(serde_json::to_value(group).unwrap()["color"], "gray");
+    assert_eq!(group.color, ClipboardGroupColor::default());
+    assert_eq!(serde_json::to_value(group).unwrap()["color"], "#a3a3a3");
+  }
+
+  #[test]
+  fn group_colors_parse_hex_and_reject_everything_else() {
+    assert_eq!(
+      ClipboardGroupColor::parse("  #FBBF24  ").unwrap().as_str(),
+      "#fbbf24"
+    );
+    for invalid in ["fbbf24", "#fff", "#gggggg", "red", ""] {
+      assert!(ClipboardGroupColor::parse(invalid).is_err());
+    }
+  }
+
+  #[test]
+  fn group_colors_round_trip_and_read_legacy_names() {
+    let group = ClipboardGroup {
+      color: ClipboardGroupColor::parse("#a78bfa").unwrap(),
+      id: "group-1".to_string(),
+      name: "Research".to_string(),
+    };
+    let persisted = serde_json::to_value(&group).unwrap();
+
+    assert_eq!(persisted["color"], "#a78bfa");
+    assert_eq!(
+      serde_json::from_value::<ClipboardGroup>(persisted).unwrap(),
+      group
+    );
+
+    let legacy: ClipboardGroup = serde_json::from_value(serde_json::json!({
+      "color": "blue",
+      "id": "legacy-group",
+      "name": "Legacy"
+    }))
+    .unwrap();
+
+    assert_eq!(legacy.color.as_str(), "#60a5fa");
+    assert!(
+      serde_json::from_value::<ClipboardGroup>(serde_json::json!({
+        "color": "chartreuse",
+        "id": "legacy-group",
+        "name": "Legacy"
+      }))
+      .is_err()
+    );
   }
 
   #[test]
@@ -5850,7 +5961,7 @@ mod tests {
     let mut manager = ready_manager();
     assert!(capture(&mut manager, "grouped", None, now));
     let group_id = manager
-      .create_group("Research", ClipboardGroupColor::Emerald)
+      .create_group("Research", ClipboardGroupColor::parse("#34d399").unwrap())
       .unwrap();
     let item_id = manager.items[0].id().to_string();
     manager
@@ -5871,7 +5982,7 @@ mod tests {
     let mut manager = ready_manager();
     assert!(capture(&mut manager, "clause", None, Utc::now()));
     let group_id = manager
-      .create_group("Research", ClipboardGroupColor::Emerald)
+      .create_group("Research", ClipboardGroupColor::parse("#34d399").unwrap())
       .unwrap();
     let item_id = manager.items[0].id().to_string();
 

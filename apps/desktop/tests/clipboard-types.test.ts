@@ -1,11 +1,14 @@
 import { describe, expect, test } from "bun:test";
 
+import { CLIPBOARD_GROUP_COLOR_PRESETS } from "../src/clipboard/clipboard-style";
 import {
   CLIPBOARD_RETENTIONS,
   CLIPBOARD_SCREEN_CAPTURES,
   isClipboardCopyError,
   isClipboardEditorContext,
+  isClipboardGroupColor,
   isClipboardImagePreviewDataUrl,
+  isClipboardGroup,
   isClipboardItem,
   isClipboardSnapshot,
 } from "../src/clipboard/clipboard-types";
@@ -156,6 +159,30 @@ describe("clipboard image items", () => {
         item: image,
         sourceAppVisual: null,
       }),
+    ).toBe(true);
+  });
+});
+
+describe("clipboard group colors", () => {
+  test("accepts the lowercase hex the native side normalises to", () => {
+    for (const color of CLIPBOARD_GROUP_COLOR_PRESETS) {
+      expect(isClipboardGroupColor(color)).toBe(true);
+    }
+    expect(isClipboardGroupColor("#60a5fa")).toBe(true);
+  });
+
+  test("rejects names, uppercase hex, and shorthand hex", () => {
+    for (const color of ["blue", "#60A5FA", "#fff", "60a5fa", null]) {
+      expect(isClipboardGroupColor(color)).toBe(false);
+    }
+  });
+
+  test("rejects groups whose color is not hex", () => {
+    expect(
+      isClipboardGroup({ color: "blue", id: "group-1", name: "Research" }),
+    ).toBe(false);
+    expect(
+      isClipboardGroup({ color: "#60a5fa", id: "group-1", name: "Research" }),
     ).toBe(true);
   });
 });

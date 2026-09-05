@@ -65,13 +65,10 @@ export type ClipboardItem =
 
 export type ClipboardCaptureStatus = "active" | "paused";
 
-export type ClipboardGroupColor =
-  | "gray"
-  | "blue"
-  | "emerald"
-  | "amber"
-  | "rose"
-  | "violet";
+/** A group accent as lowercase `#rrggbb`, the shape the native side normalises to. */
+export type ClipboardGroupColor = string & {
+  readonly __brand: "ClipboardGroupColor";
+};
 
 export type ClipboardGroup = {
   color: ClipboardGroupColor;
@@ -189,13 +186,10 @@ export const isClipboardItem = (value: unknown): value is ClipboardItem => {
   }
 };
 
-const isClipboardGroupColor = (value: unknown): value is ClipboardGroupColor =>
-  value === "gray" ||
-  value === "blue" ||
-  value === "emerald" ||
-  value === "amber" ||
-  value === "rose" ||
-  value === "violet";
+export const isClipboardGroupColor = (
+  value: unknown,
+): value is ClipboardGroupColor =>
+  typeof value === "string" && /^#[\da-f]{6}$/u.test(value);
 
 export const isClipboardGroup = (value: unknown): value is ClipboardGroup =>
   isRecord(value) &&
