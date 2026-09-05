@@ -9,18 +9,24 @@ SET statement_timeout = '5s';--> statement-breakpoint
 -- read as a takedown tombstone, and recording a withdrawal that way would
 -- mark the decision permanently erased.
 --
--- Widening an IN list revalidates nothing that was already accepted, so
--- both statements are metadata-only apart from the constraint re-check
--- Postgres runs over existing rows, which every current value satisfies.
+-- Widening an IN list accepts every value the old list accepted, so the
+-- constraint is re-added NOT VALID: nothing existing needs a scan, and every
+-- later INSERT and UPDATE is checked. Dropped by name and re-added so a
+-- second run re-records the same constraint. Rollback is the same pair with
+-- the previous list, which every row written before this migration satisfies.
+-- stella-migration-safety: reviewed drop-constraint - drops only this check,
+-- re-added in the next statement with one more accepted value
 ALTER TABLE "case_law_index_jobs"
   DROP CONSTRAINT IF EXISTS "case_law_index_jobs_operation_values";--> statement-breakpoint
 ALTER TABLE "case_law_index_jobs"
   ADD CONSTRAINT "case_law_index_jobs_operation_values"
-  CHECK ("operation" IN ('index', 'delete', 'redact', 'rebuild', 'withdraw'));--> statement-breakpoint
+  CHECK ("operation" IN ('index', 'delete', 'redact', 'rebuild', 'withdraw')) NOT VALID;--> statement-breakpoint
 
 -- The vocabulary is declared once and feeds both tables, so both move.
+-- stella-migration-safety: reviewed drop-constraint - drops only this check,
+-- re-added in the next statement with one more accepted value
 ALTER TABLE "legislation_index_jobs"
   DROP CONSTRAINT IF EXISTS "legislation_index_jobs_operation_values";--> statement-breakpoint
 ALTER TABLE "legislation_index_jobs"
   ADD CONSTRAINT "legislation_index_jobs_operation_values"
-  CHECK ("operation" IN ('index', 'delete', 'redact', 'rebuild', 'withdraw'));
+  CHECK ("operation" IN ('index', 'delete', 'redact', 'rebuild', 'withdraw')) NOT VALID;
