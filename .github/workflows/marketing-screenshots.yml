@@ -201,7 +201,7 @@ jobs:
       # belongs to a person, and a signed-commits rule would otherwise block
       # their pull request on this one commit.
       - name: Push regenerated baselines
-        uses: stella/.github/.github/actions/signed-commit@d2be63db3536d391c8a38e35d786b15884b253f3
+        uses: stella/.github/.github/actions/signed-commit@49138dbccd20714b3e8997c4346edc3efb5c29cd
         with:
           token: ${{ steps.app-token.outputs.token }}
           mode: append

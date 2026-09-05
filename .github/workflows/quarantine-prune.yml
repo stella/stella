@@ -78,7 +78,7 @@ jobs:
       # proposal with one computed from current main.
       - name: Open or update the removal PR
         if: steps.prune.outputs.changed == 'true'
-        uses: stella/.github/.github/actions/signed-commit@d2be63db3536d391c8a38e35d786b15884b253f3
+        uses: stella/.github/.github/actions/signed-commit@49138dbccd20714b3e8997c4346edc3efb5c29cd
         with:
           token: ${{ steps.app-token.outputs.token }}
           mode: refresh-pr
