@@ -33,12 +33,16 @@ export type CorpusIndexProjectionBootstrapOptions =
       family: "case_law";
       generation: string;
       limit: number;
+      /** Most rows the page may seed, from 1 to `limit`; defaults to `limit`. */
+      seedLimit?: number;
       afterEntityId?: SafeId<"caseLawDecision">;
     }
   | {
       family: "legislation";
       generation: string;
       limit: number;
+      /** Most rows the page may seed, from 1 to `limit`; defaults to `limit`. */
+      seedLimit?: number;
       afterEntityId?: SafeId<"legislationDocument">;
     };
 
@@ -94,6 +98,26 @@ const validateBootstrapLimit = (limit: number): number => {
     );
   }
   return limit;
+};
+
+/**
+ * How many of the page's gaps it may seed. A caller that reserves its I/O
+ * before the call bounds the page's writes with this; the page still walks
+ * `limit` ids, so it cannot exceed them.
+ */
+const validateBootstrapSeedLimit = (
+  seedLimit: number | undefined,
+  limit: number,
+): number => {
+  if (seedLimit === undefined) {
+    return limit;
+  }
+  if (!Number.isSafeInteger(seedLimit) || seedLimit < 1 || seedLimit > limit) {
+    return panic(
+      `Corpus projection bootstrap seed limit must be an integer from 1 to the page limit ${limit}`,
+    );
+  }
+  return seedLimit;
 };
 
 const setZeroCaseLawProjectionEpochs = async (
@@ -193,6 +217,8 @@ type CorpusBootstrapPageOptions<
   tx: Transaction;
   family: CorpusIndexProjectionSubject["family"];
   generation: string;
+  /** Most of the page's gaps this batch may lock and seed. */
+  seedLimit: number;
   afterEntityId: TEntityId | undefined;
   /** The page: the next `limit` canonical ids after the cursor, seeded or not. */
   selectCandidates: () => Promise<CorpusBootstrapCandidate<TEntityId>[]>;
@@ -210,9 +236,9 @@ type CorpusBootstrapPageOptions<
 
 /**
  * The page sequence both families share: read an id range, find which of its
- * ids still need a desired state, lock those, and seed the prefix the batch
- * can account for. Every read is bounded by the page, so the cost of a page
- * does not grow with the number of rows already seeded.
+ * ids still need a desired state, lock up to `seedLimit` of those, and seed
+ * the prefix the batch can account for. Every read is bounded by the page, so
+ * the cost of a page does not grow with the number of rows already seeded.
  */
 const runCorpusBootstrapPage = async <
   TEntityId extends string,
@@ -221,6 +247,7 @@ const runCorpusBootstrapPage = async <
   tx,
   family,
   generation,
+  seedLimit,
   afterEntityId,
   selectCandidates,
   lockUnseededRows,
@@ -247,8 +274,12 @@ const runCorpusBootstrapPage = async <
   const unseededIds = candidateIds.filter(
     (candidateId) => !seededEntityIds.has(candidateId),
   );
+  // The page reads its whole id range but writes at most `seedLimit` rows, so
+  // a caller that reserved its I/O up front can bound what a fresh region of
+  // the corpus costs it.
+  const seedableIds = unseededIds.slice(0, seedLimit);
   const lockedRows: TRow[] =
-    unseededIds.length === 0 ? [] : await lockUnseededRows(unseededIds);
+    seedableIds.length === 0 ? [] : await lockUnseededRows(seedableIds);
   const lockedById = new Map(lockedRows.map((row) => [row.documentId, row]));
   // Advance only across the contiguous prefix this batch accounts for: a row
   // that already has a desired state needs nothing, a locked row is ours, and
@@ -258,6 +289,12 @@ const runCorpusBootstrapPage = async <
   let pageEndEntityId: TEntityId | undefined;
   for (const candidate of candidates) {
     if (!seededEntityIds.has(candidate.documentId)) {
+      if (rows.length === seedLimit) {
+        // The seed budget is spent and this id is still a gap. The cursor
+        // stops at the last id the batch accounted for, so the rest of the
+        // range is met by the next page rather than stranded behind it.
+        break;
+      }
       const row = lockedById.get(candidate.documentId);
       if (row === undefined) {
         break;
@@ -326,12 +363,24 @@ const runCorpusBootstrapPage = async <
   };
 };
 
-const bootstrapCaseLaw = async (
-  tx: Transaction,
-  generation: string,
-  limit: number,
-  afterEntityId: SafeId<"caseLawDecision"> | undefined,
-): Promise<CorpusBootstrapPage<SafeId<"caseLawDecision">>> => {
+/** The validated options one family's page runs on. */
+type FamilyBootstrapOptions<TEntityId extends string> = {
+  tx: Transaction;
+  generation: string;
+  limit: number;
+  seedLimit: number;
+  afterEntityId: TEntityId | undefined;
+};
+
+const bootstrapCaseLaw = async ({
+  tx,
+  generation,
+  limit,
+  seedLimit,
+  afterEntityId,
+}: FamilyBootstrapOptions<SafeId<"caseLawDecision">>): Promise<
+  CorpusBootstrapPage<SafeId<"caseLawDecision">>
+> => {
   const projectionConditions = [
     eq(corpusIndexProjectionStates.family, "case_law"),
     eq(corpusIndexProjectionStates.generation, generation),
@@ -341,6 +390,7 @@ const bootstrapCaseLaw = async (
     tx,
     family: "case_law",
     generation,
+    seedLimit,
     afterEntityId,
     selectCandidates: async () =>
       await tx
@@ -390,7 +440,7 @@ const bootstrapCaseLaw = async (
           ),
         )
         .orderBy(asc(caseLawDecisions.id))
-        .limit(limit)
+        .limit(seedLimit)
         .for("update", { of: caseLawDecisions, skipLocked: true }),
     claimProjectionEpochs: async (entityIds) =>
       await setZeroCaseLawProjectionEpochs(tx, entityIds),
@@ -475,12 +525,15 @@ const bootstrapCaseLaw = async (
   });
 };
 
-const bootstrapLegislation = async (
-  tx: Transaction,
-  generation: string,
-  limit: number,
-  afterEntityId: SafeId<"legislationDocument"> | undefined,
-): Promise<CorpusBootstrapPage<SafeId<"legislationDocument">>> => {
+const bootstrapLegislation = async ({
+  tx,
+  generation,
+  limit,
+  seedLimit,
+  afterEntityId,
+}: FamilyBootstrapOptions<SafeId<"legislationDocument">>): Promise<
+  CorpusBootstrapPage<SafeId<"legislationDocument">>
+> => {
   const projectionConditions = [
     eq(corpusIndexProjectionStates.family, "legislation"),
     eq(corpusIndexProjectionStates.generation, generation),
@@ -490,6 +543,7 @@ const bootstrapLegislation = async (
     tx,
     family: "legislation",
     generation,
+    seedLimit,
     afterEntityId,
     selectCandidates: async () =>
       await tx
@@ -537,7 +591,7 @@ const bootstrapLegislation = async (
           ),
         )
         .orderBy(asc(legislationDocuments.id))
-        .limit(limit)
+        .limit(seedLimit)
         .for("update", { of: legislationDocuments, skipLocked: true }),
     claimProjectionEpochs: async (entityIds) =>
       await setZeroLegislationProjectionEpochs(tx, entityIds),
@@ -580,6 +634,12 @@ const bootstrapLegislation = async (
  * callers reset the cursor after range_complete. A busy result never advances
  * the cursor.
  *
+ * `seedLimit` bounds the writes as `limit` bounds the reads: a caller that
+ * reserves its I/O before the call needs a page over a fresh region to cost
+ * no more than it reserved. The page still walks `limit` ids; when its seed
+ * budget runs out with gaps left in the range, the cursor advances only to
+ * the last id it accounted for, and the next page meets the rest.
+ *
  * Every page reads only its own id range, so no page can tell that a
  * generation is fully seeded; complete means the corpus holds no rows at all.
  * A caller concludes a generation is seeded from a whole sweep that claimed
@@ -590,15 +650,17 @@ export const bootstrapCorpusProjectionDesiredStateBatchTx = async (
   options: CorpusIndexProjectionBootstrapOptions,
 ): Promise<CorpusIndexProjectionBootstrapResult> => {
   const limit = validateBootstrapLimit(options.limit);
+  const seedLimit = validateBootstrapSeedLimit(options.seedLimit, limit);
   const { generation } = options;
   switch (options.family) {
     case "case_law": {
-      const page = await bootstrapCaseLaw(
+      const page = await bootstrapCaseLaw({
         tx,
         generation,
         limit,
-        options.afterEntityId,
-      );
+        seedLimit,
+        afterEntityId: options.afterEntityId,
+      });
       if (page.status !== "advanced") {
         return emptyBootstrapResult(page.status, "case_law", generation);
       }
@@ -613,12 +675,13 @@ export const bootstrapCorpusProjectionDesiredStateBatchTx = async (
       };
     }
     case "legislation": {
-      const page = await bootstrapLegislation(
+      const page = await bootstrapLegislation({
         tx,
         generation,
         limit,
-        options.afterEntityId,
-      );
+        seedLimit,
+        afterEntityId: options.afterEntityId,
+      });
       if (page.status !== "advanced") {
         return emptyBootstrapResult(page.status, "legislation", generation);
       }

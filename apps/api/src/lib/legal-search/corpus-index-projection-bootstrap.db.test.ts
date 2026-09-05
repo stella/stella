@@ -557,3 +557,106 @@ test("a legislation page with nothing to seed advances instead of stalling", asy
   );
   expect(rangeComplete).toMatchObject({ status: "range_complete" });
 });
+
+test("a seed limit bounds what a page writes, and the cursor stops with it", async () => {
+  const THIRD_DECISION_ID = toSafeId<"caseLawDecision">(
+    "0198e331-e578-7000-8000-000000000107",
+  );
+  const FOURTH_DECISION_ID = toSafeId<"caseLawDecision">(
+    "0198e331-e578-7000-8000-000000000108",
+  );
+  await db.insert(caseLawDecisions).values(
+    [THIRD_DECISION_ID, FOURTH_DECISION_ID].map((id, index) => ({
+      id,
+      sourceId: CASE_LAW_SOURCE_ID,
+      caseNumber: `6 As ${index + 5}/2010`,
+      court: "Nejvyšší správní soud",
+      country: "CZE",
+      language: "cs",
+      contentHash: String(index).repeat(64),
+    })),
+  );
+
+  // Four ids in the range and a budget for two: the page reads all four and
+  // seeds the first two gaps among them.
+  const firstPage = await db.transaction(
+    async (tx) =>
+      await bootstrapCorpusProjectionDesiredStateBatchTx(
+        asTestRaw<Transaction>(tx),
+        {
+          family: "case_law",
+          generation: "case_law_v5",
+          limit: 4,
+          seedLimit: 2,
+        },
+      ),
+  );
+  // The cursor stops at the last id the page accounted for rather than at the
+  // end of the range it read, because the ids past it are still gaps.
+  expect(firstPage).toMatchObject({
+    status: "advanced",
+    claimedCount: 2,
+    seededCount: 2,
+    entityIds: [CASE_LAW_DECISION_ID, SECOND_CASE_LAW_DECISION_ID],
+    nextAfterEntityId: SECOND_CASE_LAW_DECISION_ID,
+  });
+
+  const secondPage = await db.transaction(
+    async (tx) =>
+      await bootstrapCorpusProjectionDesiredStateBatchTx(
+        asTestRaw<Transaction>(tx),
+        {
+          family: "case_law",
+          generation: "case_law_v5",
+          limit: 4,
+          seedLimit: 2,
+          afterEntityId: SECOND_CASE_LAW_DECISION_ID,
+        },
+      ),
+  );
+  expect(secondPage).toMatchObject({
+    status: "advanced",
+    claimedCount: 2,
+    seededCount: 2,
+    entityIds: [THIRD_DECISION_ID, FOURTH_DECISION_ID],
+    nextAfterEntityId: FOURTH_DECISION_ID,
+  });
+
+  expect(
+    await db
+      .select({ entityId: corpusIndexProjectionStates.entityId })
+      .from(corpusIndexProjectionStates)
+      .orderBy(corpusIndexProjectionStates.entityId),
+  ).toEqual([
+    { entityId: CASE_LAW_DECISION_ID },
+    { entityId: SECOND_CASE_LAW_DECISION_ID },
+    { entityId: THIRD_DECISION_ID },
+    { entityId: FOURTH_DECISION_ID },
+  ]);
+});
+
+test("a seed limit wider than the page is rejected before any row is read", async () => {
+  // bun-types declares `.rejects.toThrow` as void, so awaiting it trips
+  // type-aware lint; capture the rejection explicitly instead.
+  const rejection = await db
+    .transaction(
+      async (tx) =>
+        await bootstrapCorpusProjectionDesiredStateBatchTx(
+          asTestRaw<Transaction>(tx),
+          {
+            family: "case_law",
+            generation: "case_law_v5",
+            limit: 2,
+            seedLimit: 3,
+          },
+        ),
+    )
+    .then(
+      () => null,
+      (error: unknown) => error,
+    );
+  expect(rejection).toBeInstanceOf(Error);
+  expect(rejection instanceof Error ? rejection.message : "").toContain(
+    "seed limit must be an integer from 1 to the page limit 2",
+  );
+});
