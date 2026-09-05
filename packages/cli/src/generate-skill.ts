@@ -249,8 +249,8 @@ const routeNodeAt = (
  */
 const CAPABILITY_WORKED_EXAMPLES = [
   {
-    task: "Translate a document",
-    commandPath: [CAPABILITY_NAMESPACE, "entities", "translate"],
+    task: "Start a document translation run",
+    commandPath: [CAPABILITY_NAMESPACE, "document-translations", "runs-create"],
   },
   {
     task: "Start workflow extraction",

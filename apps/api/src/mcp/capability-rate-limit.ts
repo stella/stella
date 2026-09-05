@@ -4,7 +4,7 @@
  * the REST routes' shared client-IP budget instead.
  *
  * The generic invoke path bypasses the per-route rate-limit middleware some REST
- * routes install (e.g. `entities.translate`, `entities.upload`), so it needs its
+ * routes install (e.g. `document-translations.runs.create`, `entities.upload`), so it needs its
  * own budget or an agent could drive backend cost through the long tail. It
  * reuses the same fixed-window counter the public feedback intake and the MCP
  * `send_feedback` tool ride on (`FeedbackIntakeGuards.consumeCounter`,
@@ -64,9 +64,17 @@ const DEFAULT_INVOKE_RATE_LIMIT_POLICY = {
 const INVOKE_RATE_LIMIT_POLICY_BY_CAPABILITY: Readonly<
   Record<string, InvokeRateLimitPolicy>
 > = {
-  // entities.translate: ships a full document to the external provider and
-  // consumes the org's paid character quota (REST: translate limiter).
-  "entities.translate": {
+  // A translation run ships a document to the provider and spends the org's
+  // paid character quota; a bilingual layout shares the same conversion budget
+  // (REST: translate limiter on both routes).
+  "document-translations.runs.create": {
+    budget: "capability",
+    limit: {
+      windowMs: API_RATE_LIMITS.translate.duration,
+      max: API_RATE_LIMITS.translate.max,
+    },
+  },
+  "entities.bilingual.create": {
     budget: "capability",
     limit: {
       windowMs: API_RATE_LIMITS.translate.duration,

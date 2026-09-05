@@ -95,6 +95,14 @@ here as its CLI form). Projected from the same handler enumeration that builds
 | `contacts.search`                     | read               | stella:read           | —       | generic invoke → `stella capability contacts search`                                                                                                                                                                   |
 | `contacts.update`                     | write              | stella:contacts_write | —       | covered by `save_contact`                                                                                                                                                                                              |
 
+## document-translations
+
+| Capability                          | Access | Scope                | Feature | Reachable via                                                          |
+| ----------------------------------- | ------ | -------------------- | ------- | ---------------------------------------------------------------------- |
+| `document-translations.prepare`     | write  | stella:matters_write | —       | generic invoke → `stella capability document-translations prepare`     |
+| `document-translations.runs.create` | write  | stella:matters_write | —       | generic invoke → `stella capability document-translations runs-create` |
+| `document-translations.runs.get`    | read   | stella:read          | —       | generic invoke → `stella capability document-translations runs-get`    |
+
 ## document-types
 
 | Capability               | Access             | Scope                | Feature | Reachable via                                               |
@@ -136,7 +144,6 @@ here as its CLI form). Projected from the same handler enumeration that builds
 | `entities.read-window`                | read               | stella:read            | —       | covered by `read_content_across_matters`                                                                                                                                                                                                                                        |
 | `entities.rename`                     | write              | stella:documents_write | —       | covered by `save_document`                                                                                                                                                                                                                                                      |
 | `entities.restore-version`            | write              | stella:matters_write   | —       | generic invoke → `stella capability entities restore-version`                                                                                                                                                                                                                   |
-| `entities.translate`                  | write              | stella:matters_write   | —       | generic invoke → `stella capability entities translate`                                                                                                                                                                                                                         |
 | `entities.update-version-description` | write              | stella:documents_write | —       | covered by `save_document`                                                                                                                                                                                                                                                      |
 | `entities.update-version-label`       | write              | stella:documents_write | —       | covered by `save_document`                                                                                                                                                                                                                                                      |
 | `entities.upload`                     | write              | stella:matters_write   | —       | not runnable over the generic transport: requires a file in `file`, which JSON cannot carry. Use uploads.create then uploads.update instead: presign with purpose entity_create, PUT the bytes to the returned URL, then finalize                                               |
@@ -539,7 +546,7 @@ mechanics, and similar), not gaps in coverage.
 | chat_thread_ui         | 2     |
 | compound_consent       | 1     |
 | deploy_mechanics       | 1     |
-| document_processing    | 26    |
+| document_processing    | 23    |
 | health_infra           | 1     |
 | hosted_billing         | 6     |
 | mcp_transport          | 11    |
@@ -554,4 +561,4 @@ mechanics, and similar), not gaps in coverage.
 | upload_mechanics       | 14    |
 | url_preview            | 2     |
 
-Total: 170
+Total: 167

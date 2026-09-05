@@ -15,10 +15,12 @@ export const isUploadRateLimitedPath = (pathname: string): boolean => {
   return action !== undefined && UPLOAD_ROUTE_NAMES.has(action);
 };
 
-// Bilingual layout shares the translate budget: both turn one stored file
-// into a new document through a CPU-bound conversion.
-const TRANSLATE_RATE_LIMIT_PATH_RE =
-  /\/entities\/[^/]+\/(translate|bilingual)\/?$/u;
+// A bilingual layout and a translation run share one budget: each turns a
+// stored file into a new document, and a translation run also spends the
+// organisation's paid character quota with the provider.
+const BILINGUAL_PATH_RE = /\/entities\/[^/]+\/bilingual\/?$/u;
+const TRANSLATION_RUN_START_PATH_RE = /\/document-translations\/runs\/?$/u;
 
 export const isTranslateRateLimitedPath = (pathname: string) =>
-  TRANSLATE_RATE_LIMIT_PATH_RE.test(pathname);
+  BILINGUAL_PATH_RE.test(pathname) ||
+  TRANSLATION_RUN_START_PATH_RE.test(pathname);

@@ -186,6 +186,9 @@ const DOMAIN_SCOPE: Record<string, string> = {
   // they require their own consent instead of borrowing a workspace write.
   contacts: "stella:contacts_write",
   "document-types": "stella:matters_write",
+  // A translation run reads a matter document and writes the translated one
+  // back as a new document, so it takes the workspace write bucket.
+  "document-translations": "stella:matters_write",
   entities: "stella:matters_write",
   expenses: "stella:billing_write",
   fields: "stella:matters_write",

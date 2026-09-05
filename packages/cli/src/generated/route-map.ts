@@ -10291,6 +10291,416 @@ export const generatedRouteMap: RouteNode = {
             },
           },
         },
+        "document-translations": {
+          kind: "route",
+          children: {
+            prepare: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "document-translations", "prepare"],
+                capabilityId: "document-translations.prepare",
+                description:
+                  "Inspect the current DOCX version and prepare its source-language and comment requirements for translation.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--workspace-id",
+                    prop: "workspaceId",
+                    required: true,
+                    part: "params",
+                    partPath: "workspaceId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--entity-id",
+                    prop: "entityId",
+                    required: true,
+                    part: "body",
+                    partPath: "entityId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--field-id",
+                    prop: "fieldId",
+                    required: true,
+                    part: "body",
+                    partPath: "fieldId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "matters_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["entityId", "fieldId"],
+                      properties: {
+                        entityId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        fieldId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      required: ["workspaceId"],
+                      properties: {
+                        workspaceId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "runs-create": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "document-translations",
+                  "runs-create",
+                ],
+                capabilityId: "document-translations.runs.create",
+                description:
+                  "Start a background document translation and save only the completed output as a new document.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--workspace-id",
+                    prop: "workspaceId",
+                    required: true,
+                    part: "params",
+                    partPath: "workspaceId",
+                  },
+                ],
+                inputOnly: ["body"],
+                paginated: false,
+                destructive: false,
+                scope: "matters_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      anyOf: [
+                        {
+                          type: "object",
+                          required: [
+                            "entityId",
+                            "fieldId",
+                            "targetLang",
+                            "engine",
+                            "output",
+                          ],
+                          properties: {
+                            entityId: {
+                              minLength: 36,
+                              maxLength: 36,
+                              pattern:
+                                "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                              type: "string",
+                            },
+                            fieldId: {
+                              minLength: 36,
+                              maxLength: 36,
+                              pattern:
+                                "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                              type: "string",
+                            },
+                            commentPolicy: {
+                              anyOf: [
+                                {
+                                  const: "original",
+                                  type: "string",
+                                },
+                                {
+                                  const: "original-and-translated",
+                                  type: "string",
+                                },
+                                {
+                                  const: "translated",
+                                  type: "string",
+                                },
+                              ],
+                            },
+                            targetLang: {
+                              $ref: "#/$defs/s_97e4937dafc8",
+                            },
+                            engine: {
+                              const: "deepl",
+                              type: "string",
+                            },
+                            output: {
+                              const: "translated",
+                              type: "string",
+                            },
+                            sourceLang: {
+                              minLength: 2,
+                              maxLength: 16,
+                              type: "string",
+                            },
+                          },
+                        },
+                        {
+                          type: "object",
+                          required: [
+                            "entityId",
+                            "fieldId",
+                            "targetLang",
+                            "engine",
+                            "output",
+                            "sourceLang",
+                            "entityVersionId",
+                          ],
+                          properties: {
+                            entityId: {
+                              minLength: 36,
+                              maxLength: 36,
+                              pattern:
+                                "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                              type: "string",
+                            },
+                            fieldId: {
+                              minLength: 36,
+                              maxLength: 36,
+                              pattern:
+                                "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                              type: "string",
+                            },
+                            commentPolicy: {
+                              anyOf: [
+                                {
+                                  const: "original",
+                                  type: "string",
+                                },
+                                {
+                                  const: "original-and-translated",
+                                  type: "string",
+                                },
+                                {
+                                  const: "translated",
+                                  type: "string",
+                                },
+                              ],
+                            },
+                            targetLang: {
+                              $ref: "#/$defs/s_97e4937dafc8",
+                            },
+                            engine: {
+                              const: "ai",
+                              type: "string",
+                            },
+                            output: {
+                              anyOf: [
+                                {
+                                  const: "translated",
+                                  type: "string",
+                                },
+                                {
+                                  const: "bilingual",
+                                  type: "string",
+                                },
+                              ],
+                            },
+                            sourceLang: {
+                              default: "AR",
+                              type: "string",
+                              enum: [
+                                "AR",
+                                "BG",
+                                "ZH",
+                                "CS",
+                                "DA",
+                                "NL",
+                                "EN-GB",
+                                "ET",
+                                "FI",
+                                "FR",
+                                "DE",
+                                "EL",
+                                "HU",
+                                "ID",
+                                "IT",
+                                "JA",
+                                "KO",
+                                "LV",
+                                "LT",
+                                "NB",
+                                "PL",
+                                "PT-PT",
+                                "RO",
+                                "RU",
+                                "SK",
+                                "SL",
+                                "ES",
+                                "SV",
+                                "TR",
+                                "UK",
+                              ],
+                            },
+                            entityVersionId: {
+                              minLength: 36,
+                              maxLength: 36,
+                              pattern:
+                                "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                              type: "string",
+                            },
+                          },
+                        },
+                      ],
+                    },
+                    params: {
+                      type: "object",
+                      required: ["workspaceId"],
+                      properties: {
+                        workspaceId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                  $defs: {
+                    s_97e4937dafc8: {
+                      default: "AR",
+                      type: "string",
+                      enum: [
+                        "AR",
+                        "BG",
+                        "ZH",
+                        "ZH-HANS",
+                        "ZH-HANT",
+                        "CS",
+                        "DA",
+                        "NL",
+                        "EN-US",
+                        "EN-GB",
+                        "ET",
+                        "FI",
+                        "FR",
+                        "DE",
+                        "EL",
+                        "HU",
+                        "ID",
+                        "IT",
+                        "JA",
+                        "KO",
+                        "LV",
+                        "LT",
+                        "NB",
+                        "PL",
+                        "PT-BR",
+                        "PT-PT",
+                        "RO",
+                        "RU",
+                        "SK",
+                        "SL",
+                        "ES",
+                        "ES-419",
+                        "SV",
+                        "TR",
+                        "UK",
+                      ],
+                    },
+                  },
+                },
+              },
+            },
+            "runs-get": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "document-translations",
+                  "runs-get",
+                ],
+                capabilityId: "document-translations.runs.get",
+                description:
+                  "Read a document translation run and its progress.",
+                access: "read",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--workspace-id",
+                    prop: "workspaceId",
+                    required: true,
+                    part: "params",
+                    partPath: "workspaceId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--run-id",
+                    prop: "runId",
+                    required: true,
+                    part: "params",
+                    partPath: "runId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["workspaceId", "runId"],
+                      properties: {
+                        workspaceId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        runId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
         "document-types": {
           kind: "route",
           children: {
@@ -14147,120 +14557,6 @@ export const generatedRouteMap: RouteNode = {
                           type: "string",
                         },
                       },
-                    },
-                  },
-                },
-              },
-            },
-            translate: {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: ["capability", "entities", "translate"],
-                capabilityId: "entities.translate",
-                description:
-                  "Translate a document file with the organization's configured translation provider and save the translated result as a new document.",
-                access: "write",
-                flags: [
-                  {
-                    flag: "--workspace-id",
-                    prop: "workspace",
-                    kind: "string",
-                    required: true,
-                    repeatable: false,
-                    part: "params",
-                    partPath: "workspaceId",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--field-id",
-                    prop: "fieldId",
-                    required: true,
-                    part: "body",
-                    partPath: "fieldId",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--target-lang",
-                    prop: "targetLang",
-                    required: true,
-                    part: "body",
-                    partPath: "targetLang",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--source-lang",
-                    prop: "sourceLang",
-                    required: false,
-                    part: "body",
-                    partPath: "sourceLang",
-                  },
-                ],
-                inputOnly: ["body.formality"],
-                paginated: false,
-                destructive: false,
-                scope: "matters_write",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    body: {
-                      type: "object",
-                      required: ["fieldId", "targetLang"],
-                      properties: {
-                        fieldId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                        targetLang: {
-                          minLength: 2,
-                          maxLength: 16,
-                          type: "string",
-                        },
-                        sourceLang: {
-                          minLength: 2,
-                          maxLength: 16,
-                          type: "string",
-                        },
-                        formality: {
-                          anyOf: [
-                            {
-                              const: "default",
-                              type: "string",
-                            },
-                            {
-                              const: "more",
-                              type: "string",
-                            },
-                            {
-                              const: "less",
-                              type: "string",
-                            },
-                            {
-                              const: "prefer_more",
-                              type: "string",
-                            },
-                            {
-                              const: "prefer_less",
-                              type: "string",
-                            },
-                          ],
-                        },
-                      },
-                    },
-                    params: {
-                      type: "object",
-                      properties: {
-                        workspaceId: {
-                          type: "string",
-                        },
-                      },
-                      required: ["workspaceId"],
                     },
                   },
                 },

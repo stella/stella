@@ -499,12 +499,13 @@ const TASKS: readonly Task[] = [
   {
     id: "translate-document",
     request:
-      "Translate the document file in workspace ws_acme_2024, field " +
-      "fld_5e5e5e5e-1111-2222-3333-444444444444, to German.",
+      "Start a DeepL translation to German of document " +
+      "ent_7f7f7f7f-1111-2222-3333-444444444444, file field " +
+      "fld_5e5e5e5e-1111-2222-3333-444444444444, in workspace ws_acme_2024.",
     mcp: {
       toolName: "invoke_capability",
       checkArgs: (args) => [
-        ...field(args, "capability", "entities.translate"),
+        ...field(args, "capability", "document-translations.runs.create"),
         ...nestedField(
           args,
           ["input", "params", "workspaceId"],
@@ -512,15 +513,21 @@ const TASKS: readonly Task[] = [
         ),
         ...nestedField(
           args,
+          ["input", "body", "entityId"],
+          "7f7f7f7f-1111-2222-3333-444444444444",
+        ),
+        ...nestedField(
+          args,
           ["input", "body", "fieldId"],
           "5e5e5e5e-1111-2222-3333-444444444444",
         ),
         ...nestedField(args, ["input", "body", "targetLang"], "de"),
+        ...nestedField(args, ["input", "body", "engine"], "deepl"),
       ],
     },
     cli: {
       kind: "command",
-      path: ["capability", "entities", "translate"],
+      path: ["capability", "document-translations", "runs-create"],
       flags: { workspace: "ws_acme_2024" },
     },
   },

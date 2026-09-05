@@ -169,6 +169,18 @@ export const CAPABILITY_DISPATCH = {
   "contacts.update": {
     load: async () => await import("@/api/handlers/contacts/update"),
   },
+  "document-translations.prepare": {
+    load: async () =>
+      await import("@/api/handlers/document-translations/prepare"),
+  },
+  "document-translations.runs.create": {
+    load: async () =>
+      await import("@/api/handlers/document-translations/runs/create"),
+  },
+  "document-translations.runs.get": {
+    load: async () =>
+      await import("@/api/handlers/document-translations/runs/get"),
+  },
   "document-types.create": {
     load: async () => await import("@/api/handlers/document-types/create"),
   },
@@ -270,9 +282,6 @@ export const CAPABILITY_DISPATCH = {
   },
   "entities.restore-version": {
     load: async () => await import("@/api/handlers/entities/restore-version"),
-  },
-  "entities.translate": {
-    load: async () => await import("@/api/handlers/entities/translate"),
   },
   "entities.update-version-description": {
     load: async () =>
