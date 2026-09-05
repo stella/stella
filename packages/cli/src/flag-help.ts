@@ -43,25 +43,9 @@ const mechanicalFlagFacts = (spec: FlagSpec): string => {
  * caller — usually an agent — actually needs), then the mechanical
  * required/kind/enum/range facts the schema already encodes.
  */
-/**
- * A deprecated input name is honored only inside `--input` (see
- * `deprecated-input-aliases.ts`); no flag is generated for it, so the sentence
- * the server appends to the property's description would advertise a flag the
- * parser rejects. The server always appends it last.
- */
-const DEPRECATED_ALIAS_SENTENCE = "Deprecated input alias:";
-
-const withoutAliasSentence = (description: string): string => {
-  const index = description.indexOf(DEPRECATED_ALIAS_SENTENCE);
-  return (index === -1 ? description : description.slice(0, index)).trim();
-};
-
 export const flagBrief = (spec: FlagSpec): string => {
   const facts = mechanicalFlagFacts(spec);
-  const description =
-    spec.description === undefined
-      ? undefined
-      : withoutAliasSentence(spec.description);
+  const description = spec.description?.trim();
   return description === undefined || description.length === 0
     ? facts
     : `${description} ${facts}`;

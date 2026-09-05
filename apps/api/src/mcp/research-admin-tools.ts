@@ -124,13 +124,11 @@ const widenDateOnlyBound = (bound: string, edge: "start" | "end"): string =>
 
 const listAuditLogArgsSchema = v.pipe(
   v.strictObject({
-    workspace_id: v.optional(
+    matter_id: v.optional(
       v.pipe(
         v.string(),
         v.minLength(1),
-        v.description(
-          "Only entries scoped to this workspace. Deprecated input alias: matter_id.",
-        ),
+        v.description("Only entries scoped to this matter."),
       ),
     ),
     action: v.optional(
@@ -219,7 +217,7 @@ const LIST_AUDIT_LOG_TOOL_DEFINITION = defineValibotMcpTool({
   description:
     "Read the organization's audit trail (compliance view). Returns audit " +
     "entries newest first, each with its action, resource type and id, actor " +
-    "user id, workspace, timestamp, and change detail. Filter by workspace_id, " +
+    "user id, matter, timestamp, and change detail. Filter by matter_id, " +
     "action, resource_type (with optional resource_id), user_id, and a " +
     "created-at range (from/to, ISO date-time). Paginate with limit and " +
     "cursor. Requires organization audit-log access.",
@@ -599,9 +597,9 @@ const handleListAuditLogTool: McpToolHandler = async ({ args, context }) => {
   const input = parsed.output;
 
   const filter: AuditLogFilter = {
-    ...(input.workspace_id === undefined
+    ...(input.matter_id === undefined
       ? {}
-      : { workspaceId: brandPersistedWorkspaceId(input.workspace_id) }),
+      : { workspaceId: brandPersistedWorkspaceId(input.matter_id) }),
     ...(input.action === undefined ? {} : { action: input.action }),
     ...(input.resource_type === undefined
       ? {}
@@ -654,14 +652,11 @@ const manageOrganizationArgsSchema = v.pipe(
       v.picklist(MANAGE_ORG_ACTIONS),
       v.description("Administrative action to perform"),
     ),
-    workspace_id: v.optional(
+    matter_id: v.optional(
       v.pipe(
         v.string(),
         v.minLength(1),
-        v.description(
-          "Workspace id for add_member and remove_member. Deprecated input alias: " +
-            "matter_id.",
-        ),
+        v.description("Matter ID for add_member and remove_member."),
       ),
     ),
     user_id: v.optional(
@@ -725,12 +720,12 @@ const manageOrganizationArgsSchema = v.pipe(
   // Member actions need a matter and a user.
   v.forward(
     v.partialCheck(
-      [["action"], ["workspace_id"]],
-      ({ action, workspace_id }) =>
-        action === "update_org_settings" || workspace_id !== undefined,
-      "workspace_id is required for add_member and remove_member",
+      [["action"], ["matter_id"]],
+      ({ action, matter_id }) =>
+        action === "update_org_settings" || matter_id !== undefined,
+      "matter_id is required for add_member and remove_member",
     ),
-    ["workspace_id"],
+    ["matter_id"],
   ),
   v.forward(
     v.partialCheck(
@@ -758,13 +753,13 @@ const manageOrganizationArgsSchema = v.pipe(
         i.document_processing_mode === undefined),
     "matter_number_pattern, matter_number_padding, prompt_caching_enabled, and document_processing_mode apply only to update_org_settings",
   ),
-  // workspace_id/user_id are meaningless for an org-settings update.
+  // matter_id/user_id are meaningless for an org-settings update.
   v.partialCheck(
-    [["action"], ["workspace_id"], ["user_id"]],
+    [["action"], ["matter_id"], ["user_id"]],
     (i) =>
       i.action !== "update_org_settings" ||
-      (i.workspace_id === undefined && i.user_id === undefined),
-    "workspace_id and user_id do not apply to update_org_settings",
+      (i.matter_id === undefined && i.user_id === undefined),
+    "matter_id and user_id do not apply to update_org_settings",
   ),
   // An org-settings update must change at least one field.
   v.partialCheck(
@@ -796,7 +791,7 @@ const manageOrganizationArgsSchema = v.pipe(
 const MANAGE_ORGANIZATION_TOOL_DEFINITION = defineValibotMcpTool({
   description:
     "Manage organization members and non-secret settings. Member actions " +
-    "require workspace_id and user_id. update_org_settings controls matter " +
+    "require matter_id and user_id. update_org_settings controls matter " +
     "numbering, prompt caching, and document processing. Manage provider " +
     "secrets in the dashboard.",
   inputSchema: manageOrganizationArgsSchema,
@@ -901,10 +896,10 @@ const handleManageOrganizationTool: TypedMcpToolHandler<
   const input = parsed.output;
 
   if (input.action === "add_member") {
-    // workspace_id and user_id are guaranteed present by the schema.
+    // matter_id and user_id are guaranteed present by the schema.
     return await handleAddMember({
       context,
-      requestedWorkspaceId: input.workspace_id ?? "",
+      requestedWorkspaceId: input.matter_id ?? "",
       userId: input.user_id ?? "",
     });
   }
@@ -923,10 +918,10 @@ const handleManageOrganizationTool: TypedMcpToolHandler<
         hint: "Removing a member is irreversible. Confirm with the human user, then retry with confirm: true.",
       });
     }
-    // workspace_id and user_id are guaranteed present by the schema.
+    // matter_id and user_id are guaranteed present by the schema.
     return await handleRemoveMember({
       context: bindApprovedMcpAuditContext(context),
-      requestedWorkspaceId: input.workspace_id ?? "",
+      requestedWorkspaceId: input.matter_id ?? "",
       userId: input.user_id ?? "",
     });
   }

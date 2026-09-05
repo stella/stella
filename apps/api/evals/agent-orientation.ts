@@ -5,7 +5,7 @@ import type { StandardJSONSchemaV1 } from "@standard-schema/spec";
  * without executing anything?
  *
  * Each task is one user request that carries concrete ids in its context
- * (a workspace, a template, a matter, a contact, a document). Two surfaces
+ * (a matter, a template, a contact, a document). Two surfaces
  * are checked:
  *
  *   mcp   The model sees the exact wire tools a real MCP client gets
@@ -412,17 +412,17 @@ type Task = {
 
 const TASKS: readonly Task[] = [
   {
-    id: "list-workspace-documents",
+    id: "list-matter-documents",
     request:
-      "List every document and folder in workspace ws_acme_2024, the top level.",
+      "List every document and folder in matter ws_acme_2024, the top level.",
     mcp: {
       toolName: "list_documents",
-      checkArgs: (args) => field(args, "workspace_id", "ws_acme_2024"),
+      checkArgs: (args) => field(args, "matter_id", "ws_acme_2024"),
     },
     cli: {
       kind: "command",
       path: ["document", "list"],
-      flags: { "workspace-id": "ws_acme_2024" },
+      flags: { "matter-id": "ws_acme_2024" },
     },
   },
   {
@@ -463,11 +463,11 @@ const TASKS: readonly Task[] = [
   },
   {
     id: "run-playbook",
-    request: "Run playbook pb_diligence_v2 over workspace ws_diligence_17.",
+    request: "Run playbook pb_diligence_v2 over matter ws_diligence_17.",
     mcp: {
       toolName: "run_playbook",
       checkArgs: (args) => [
-        ...field(args, "workspace_id", "ws_diligence_17"),
+        ...field(args, "matter_id", "ws_diligence_17"),
         ...field(args, "playbook_id", "pb_diligence_v2"),
       ],
     },
@@ -475,7 +475,7 @@ const TASKS: readonly Task[] = [
       kind: "command",
       path: ["playbook", "run"],
       flags: {
-        "workspace-id": "ws_diligence_17",
+        "matter-id": "ws_diligence_17",
         "playbook-id": "pb_diligence_v2",
       },
     },
@@ -499,7 +499,7 @@ const TASKS: readonly Task[] = [
   {
     id: "translate-document",
     request:
-      "Translate the document file in workspace ws_acme_2024, field " +
+      "Translate the document file in matter ws_acme_2024, field " +
       "fld_5e5e5e5e-1111-2222-3333-444444444444, to German.",
     mcp: {
       toolName: "invoke_capability",
@@ -526,7 +526,7 @@ const TASKS: readonly Task[] = [
   },
   {
     id: "start-workflow-extraction",
-    request: "Start the extraction workflow in workspace ws_acme_2024.",
+    request: "Start the extraction workflow in matter ws_acme_2024.",
     mcp: {
       toolName: "invoke_capability",
       checkArgs: (args) => [
@@ -587,7 +587,7 @@ const TASKS: readonly Task[] = [
       path: ["upload"],
       flags: {
         file: "./contract-v2.docx",
-        "workspace-id": "ws_acme_2024",
+        "matter-id": "ws_acme_2024",
         "entity-id": "doc_42",
       },
     },

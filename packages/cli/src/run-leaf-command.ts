@@ -13,7 +13,6 @@ import { text as readStreamText } from "node:stream/consumers";
 import { decodeAccessTokenClaims } from "./auth/jwt.js";
 import { RESOURCE_SCOPE_PREFIX } from "./auth/scopes.js";
 import type { Context } from "./context.js";
-import { applyDeprecatedInputAliases } from "./deprecated-input-aliases.js";
 import { flagKey } from "./flag-name.js";
 import { kebabCase } from "./generate-route-map.js";
 import { normalizeInputKeyCasing } from "./input-key-casing.js";
@@ -389,7 +388,7 @@ export const parseInputObject = async ({
   // Parse only: schema validation runs on the COMPOSED args (after value flags
   // overlay their paths), never on the raw `--input` alone. Validating here would
   // reject a `--input` that legitimately omits a required flag-backed path (e.g.
-  // a `workspace_id` supplied by `--workspace-id`), defeating the compose semantics.
+  // a `matter_id` supplied by `--matter-id`), defeating the compose semantics.
   return parsed.value;
 };
 
@@ -957,8 +956,8 @@ export const streamOrRenderAllPages = async ({
 };
 
 /**
- * A wire field the active leaf exposes as a flag (`workspace_id`) is what the
- * caller typed (`--workspace-id`), so an issue names the flag. A field that
+ * A wire field the active leaf exposes as a flag (`matter_id`) is what the
+ * caller typed (`--matter-id`), so an issue names the flag. A field that
  * only travels inside `--input` (input-only or nested) stays a path.
  */
 const issueLocation = (
@@ -1137,7 +1136,7 @@ export const runLeafCommand = async ({
 
   // `--input` and value flags COMPOSE: the JSON is the base, then each explicit
   // flag overlays its own path on top (flag wins). This lets a required value
-  // flag (e.g. --workspace, advertised on the usage line) coexist with a body
+  // flag (e.g. --matter-id, advertised on the usage line) coexist with a body
   // passed through --input, instead of forcing the caller to hand-relocate it
   // into the JSON under a different key.
   const inputRaw = flags[RESERVED_FLAG_KEYS.input];
@@ -1150,27 +1149,10 @@ export const runLeafCommand = async ({
     return;
   }
 
-  // A deprecated input name reaches the CLI only through `--input` (no flag is
-  // generated for it), and both the required-flag check and local schema
-  // validation read the baked schema, which names the replacement. Rewrite the
-  // JSON base before either runs, so the alias each field description
-  // advertises is honored here exactly as it is on the server.
-  const aliased = applyDeprecatedInputAliases({
-    args: argsBase,
-    inputSchema: spec.inputSchema,
-  });
-  if (aliased.status === "conflict") {
-    writers.stderr(
-      `--input invalid at ${aliased.alias}: deprecated alias for ${aliased.canonical}; they were supplied with different values\n`,
-    );
-    setExit(context, EXIT_CODES.validation);
-    return;
-  }
-
   // Responses are camelCase and inputs snake_case; a payload handed back from
   // a list (the natural scripting loop) is accepted under either casing.
   const cased = normalizeInputKeyCasing({
-    args: aliased.args,
+    args: argsBase,
     inputSchema: spec.inputSchema,
   });
   if (cased.status === "conflict") {

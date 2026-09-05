@@ -736,27 +736,27 @@ describe("scopePreflightFailure: the hint must survive a re-parse", () => {
 });
 
 describe("toolErrorLines", () => {
-  const FLAGS = new Set(["workspace_id", "entity_id"]);
+  const FLAGS = new Set(["matter_id", "entity_id"]);
 
   test("a lone issue repeating the summary folds into one line naming the flag", () => {
     expect(
       toolErrorLines(
         {
           message:
-            "Provide workspace_id to list tasks, or task_id to read one task",
+            "Provide matter_id to list tasks, or task_id to read one task",
           hint: undefined,
           issues: [
             {
-              path: "workspace_id",
+              path: "matter_id",
               message:
-                "Provide workspace_id to list tasks, or task_id to read one task",
+                "Provide matter_id to list tasks, or task_id to read one task",
             },
           ],
         },
         FLAGS,
       ),
     ).toEqual([
-      "error: Provide workspace_id to list tasks, or task_id to read one task (--workspace-id)",
+      "error: Provide matter_id to list tasks, or task_id to read one task (--matter-id)",
     ]);
   });
 

@@ -1424,12 +1424,10 @@ const handleListPlaybooksTool: TypedMcpToolHandler<
 // --- run_playbook -------------------------------------------------------
 
 const runPlaybookArgsSchema = v.strictObject({
-  workspace_id: v.pipe(
+  matter_id: v.pipe(
     v.string(),
     v.minLength(1),
-    v.description(
-      "Workspace id to run the playbook over. Deprecated input alias: matter_id.",
-    ),
+    v.description("Matter ID to run the playbook over."),
   ),
   playbook_id: v.pipe(
     v.string(),
@@ -1468,7 +1466,7 @@ const handleRunPlaybookTool: TypedMcpToolHandler<
   // active, matching the HTTP run route behind the active-only workspace group.
   const workspaceId = ensureActiveWorkspace({
     context,
-    workspaceId: parsed.output.workspace_id,
+    workspaceId: parsed.output.matter_id,
   });
   if (typeof workspaceId !== "string") {
     return workspaceId;
@@ -1669,10 +1667,10 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
   }),
   defineValibotMcpTool({
     description:
-      "Run a review playbook over a workspace's documents. Materializes the " +
-      "playbook's extraction and verdict columns onto the workspace's table " +
+      "Run a review playbook over a matter's documents. Materializes the " +
+      "playbook's extraction and verdict columns onto the matter's table " +
       "and starts the AI review; findings populate asynchronously. Pass " +
-      "workspace_id and playbook_id. Returns the number of columns queued for review.",
+      "matter_id and playbook_id. Returns the number of columns queued for review.",
     inputSchema: runPlaybookArgsSchema,
     annotations: {
       title: "Run playbook",
