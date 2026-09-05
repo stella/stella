@@ -102,7 +102,6 @@ import {
   clipboardSourceLabel,
   clipboardSourceTintIndex,
   clipboardSourceTitle,
-  clipboardSourceVisual,
   clipboardTimelineKeyAction,
   filterClipboardItems,
   formatClipboardAge,
@@ -331,6 +330,9 @@ const ClipboardCard = ({
     : undefined;
   const rendersHtml = item.type === "formattedText" && !query;
   const fallbackName = item.type === "image" ? t("image") : t("unnamedClip");
+  // An unnamed browser copy is named after the page it came from.
+  const untitledName =
+    item.sourceApp?.page && sourceLabel ? sourceLabel : fallbackName;
   const previewClassName = cn(
     "text-foreground line-clamp-[8] text-sm leading-5 text-pretty wrap-break-word",
     // HTML collapses its source whitespace; only plain text (and <pre>) keeps it.
@@ -531,7 +533,7 @@ const ClipboardCard = ({
             type="button"
           >
             <span className="truncate" dir="auto">
-              {item.name ?? fallbackName}
+              {item.name ?? untitledName}
             </span>
             <PencilIcon
               aria-hidden="true"
@@ -2043,10 +2045,12 @@ const ClipboardApp = () => {
                     }
                     onSelect={setSelectedIndex}
                     query={filterQuery}
-                    sourceVisual={clipboardSourceVisual(
-                      sourceAppVisuals,
-                      item.sourceApp,
-                    )}
+                    sourceVisual={
+                      item.sourceApp?.visualKey
+                        ? (sourceAppVisuals.get(item.sourceApp.visualKey) ??
+                          null)
+                        : null
+                    }
                   />
                 );
               })}

@@ -1,5 +1,6 @@
 export type ClipboardSourcePage = {
   host: string;
+  origin: string;
   url: string;
 };
 
@@ -7,6 +8,8 @@ export type ClipboardSourceApp = {
   identifier: string | null;
   name: string;
   page: ClipboardSourcePage | null;
+  /** Key into the snapshot's `sourceAppVisuals`, resolved by the desktop core. */
+  visualKey: string | null;
 };
 
 export type ClipboardSourceAppVisual = {
@@ -103,13 +106,15 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const isClipboardSourcePage = (value: unknown): value is ClipboardSourcePage =>
   isRecord(value) &&
   typeof value["host"] === "string" &&
+  typeof value["origin"] === "string" &&
   typeof value["url"] === "string";
 
 const isClipboardSourceApp = (value: unknown): value is ClipboardSourceApp =>
   isRecord(value) &&
   (value["identifier"] === null || typeof value["identifier"] === "string") &&
   typeof value["name"] === "string" &&
-  (value["page"] === null || isClipboardSourcePage(value["page"]));
+  (value["page"] === null || isClipboardSourcePage(value["page"])) &&
+  (value["visualKey"] === null || typeof value["visualKey"] === "string");
 
 const isClipboardSourceAppVisual = (
   value: unknown,

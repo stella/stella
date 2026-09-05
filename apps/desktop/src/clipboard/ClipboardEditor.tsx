@@ -22,6 +22,7 @@ import {
 } from "@stll/ui/select";
 import { cn } from "@stll/ui/utils";
 
+import { subscribeDesktopEvent } from "../shared/desktop-events";
 import {
   DESKTOP_TELEMETRY_ERROR_CODES,
   DESKTOP_TELEMETRY_OPERATIONS,
@@ -519,41 +520,73 @@ const ClipboardEditor = () => {
 
   useEffect(() => {
     let disposed = false;
-    void invoke<unknown>("clipboard_get_editor_context")
-      .then((value) => {
-        if (disposed) {
+    const loadContext = () => {
+      void invoke<unknown>("clipboard_get_editor_context")
+        .then((value) => {
+          if (disposed) {
+            return undefined;
+          }
+          if (!isClipboardEditorContext(value)) {
+            reportDesktopError({
+              code: DESKTOP_TELEMETRY_ERROR_CODES.invalidResponse,
+              operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardEditorRead,
+              window: DESKTOP_TELEMETRY_WINDOWS.clipboardEditor,
+            });
+            setState({ message: loadError, type: "error" });
+            return undefined;
+          }
+          setState((current) => {
+            if (current.type !== "ready") {
+              return {
+                context: value,
+                groupId: value.item.groupId,
+                save: { type: "idle" },
+                type: "ready",
+              };
+            }
+            // A refresh must not touch the text being edited or the user's
+            // group choice; it only takes what resolves underneath an open
+            // editor.
+            return {
+              ...current,
+              context: {
+                ...current.context,
+                groups: value.groups,
+                sourceAppVisual: value.sourceAppVisual,
+              },
+            };
+          });
           return undefined;
-        }
-        if (!isClipboardEditorContext(value)) {
+        })
+        .catch(() => {
+          if (disposed) {
+            return;
+          }
           reportDesktopError({
-            code: DESKTOP_TELEMETRY_ERROR_CODES.invalidResponse,
+            code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
             operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardEditorRead,
             window: DESKTOP_TELEMETRY_WINDOWS.clipboardEditor,
           });
           setState({ message: loadError, type: "error" });
-          return undefined;
-        }
-        setState({
-          context: value,
-          groupId: value.item.groupId,
-          save: { type: "idle" },
-          type: "ready",
         });
-        return undefined;
-      })
-      .catch(() => {
-        if (disposed) {
-          return;
-        }
+    };
+    loadContext();
+    // The source visual can resolve after the editor opened (a favicon fetched
+    // in the background); the history event announces it.
+    const stopListening = subscribeDesktopEvent({
+      event: "clipboard-history-changed",
+      handler: loadContext,
+      onError: () => {
         reportDesktopError({
-          code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+          code: DESKTOP_TELEMETRY_ERROR_CODES.eventSubscriptionFailed,
           operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardEditorRead,
           window: DESKTOP_TELEMETRY_WINDOWS.clipboardEditor,
         });
-        setState({ message: loadError, type: "error" });
-      });
+      },
+    });
     return () => {
       disposed = true;
+      stopListening();
     };
   }, [loadError]);
 

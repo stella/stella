@@ -5,44 +5,13 @@ import {
 } from "@stll/text-normalize";
 import type { FoldedSearchText, SearchMatchRange } from "@stll/text-normalize";
 
-import type {
-  ClipboardItem,
-  ClipboardSourceApp,
-  ClipboardSourceAppVisual,
-} from "./clipboard-types";
+import type { ClipboardItem, ClipboardSourceApp } from "./clipboard-types";
 
 const CLIPBOARD_SOURCE_TINT_COUNT = 6;
 
-/**
- * Lookup keys of a source's visuals, most specific first: the page favicon,
- * then the app icon. Mirrors `ClipboardSourceApp::visual_keys` in the desktop
- * core, which writes the map.
- */
-const clipboardSourceVisualKeys = (
-  sourceApp: ClipboardSourceApp,
-): [string, ...string[]] => {
-  const appKey = sourceApp.identifier ?? sourceApp.name;
-  return sourceApp.page ? [sourceApp.page.host, appKey] : [appKey];
-};
-
+/** What the accent tint is derived from: the page origin, else the app. */
 export const clipboardSourceIdentity = (sourceApp: ClipboardSourceApp) =>
-  clipboardSourceVisualKeys(sourceApp)[0];
-
-export const clipboardSourceVisual = (
-  visuals: ReadonlyMap<string, ClipboardSourceAppVisual>,
-  sourceApp: ClipboardSourceApp | null,
-) => {
-  if (!sourceApp) {
-    return null;
-  }
-  for (const key of clipboardSourceVisualKeys(sourceApp)) {
-    const visual = visuals.get(key);
-    if (visual) {
-      return visual;
-    }
-  }
-  return null;
-};
+  sourceApp.page?.origin ?? sourceApp.identifier ?? sourceApp.name;
 
 /** The page's host for browser copies (without a leading `www.`), else the app. */
 export const clipboardSourceLabel = (sourceApp: ClipboardSourceApp) =>
