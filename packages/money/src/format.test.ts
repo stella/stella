@@ -2,8 +2,9 @@ import { describe, expect, test } from "bun:test";
 
 import {
   currencyMinorUnitDigits,
-  formatHundredths,
   formatMoneyCents,
+  toMajorUnits,
+  toMinorUnits,
 } from "./format";
 
 describe("currencyMinorUnitDigits", () => {
@@ -18,6 +19,44 @@ describe("currencyMinorUnitDigits", () => {
   });
 });
 
+describe("toMinorUnits", () => {
+  test("scales by the currency's own exponent", () => {
+    expect(toMinorUnits({ amount: 15, currency: "USD" })).toBe(1500);
+    // A zero-exponent currency counts whole units: 1500 yen is 1500.
+    expect(toMinorUnits({ amount: 1500, currency: "JPY" })).toBe(1500);
+    // A three-exponent currency counts thousandths.
+    expect(toMinorUnits({ amount: 15, currency: "KWD" })).toBe(15_000);
+  });
+
+  test("rounds to the exact integer the currency can store", () => {
+    expect(toMinorUnits({ amount: 12.345, currency: "USD" })).toBe(1235);
+    expect(toMinorUnits({ amount: 1500.4, currency: "JPY" })).toBe(1500);
+    expect(toMinorUnits({ amount: 12.3456, currency: "KWD" })).toBe(12_346);
+  });
+
+  test("falls back to the ISO default for a code Intl rejects", () => {
+    expect(toMinorUnits({ amount: 15, currency: "A1C" })).toBe(1500);
+  });
+
+  test("refuses an amount that cannot become an exact integer", () => {
+    expect(() => toMinorUnits({ amount: Number.NaN, currency: "USD" })).toThrow(
+      TypeError,
+    );
+  });
+});
+
+describe("toMajorUnits", () => {
+  test("is the inverse of toMinorUnits for every exponent", () => {
+    expect(toMajorUnits({ amountCents: 1500, currency: "USD" })).toBe(15);
+    expect(toMajorUnits({ amountCents: 1500, currency: "JPY" })).toBe(1500);
+    expect(toMajorUnits({ amountCents: 15_000, currency: "KWD" })).toBe(15);
+  });
+
+  test("falls back to the ISO default for a code Intl rejects", () => {
+    expect(toMajorUnits({ amountCents: 1500, currency: "A1C" })).toBe(15);
+  });
+});
+
 describe("formatMoneyCents", () => {
   test("scales by the currency's own exponent", () => {
     expect(
@@ -27,60 +66,45 @@ describe("formatMoneyCents", () => {
     expect(
       formatMoneyCents({ amountCents: 1500, currency: "JPY", locale: "en-US" }),
     ).toBe("¥1,500");
-  });
-
-  test("shows the amount beside a code Intl rejects instead of throwing", () => {
     expect(
-      formatMoneyCents({ amountCents: 1500, currency: "A1C", locale: "en-US" }),
-    ).toBe("15 A1C");
-  });
-});
-
-describe("formatHundredths", () => {
-  test("renders the two-digit billing preset", () => {
-    expect(
-      formatHundredths({
-        amountCents: 123_456,
-        currency: "USD",
+      formatMoneyCents({
+        amountCents: 15_000,
+        currency: "KWD",
         locale: "en-US",
-        fractionDigits: 2,
       }),
-    ).toBe("$1,234.56");
+    ).toBe("KWD\u00A015.000");
   });
 
-  test("renders the rounded summary preset", () => {
+  test("pins the shown digits when the caller asks for a rounded summary", () => {
     expect(
-      formatHundredths({
+      formatMoneyCents({
         amountCents: 123_456,
         currency: "USD",
         locale: "en-US",
         fractionDigits: 0,
       }),
     ).toBe("$1,235");
-  });
-
-  test("keeps the hundredth assumption a zero-exponent currency does not share", () => {
-    // Documented wrongness: billing stores every currency in hundredths, so
-    // 1500 minor units renders as 15 yen rather than 1500. The money model
-    // change that fixes it is tracked separately.
     expect(
-      formatHundredths({
-        amountCents: 1500,
-        currency: "JPY",
+      formatMoneyCents({
+        amountCents: 123_456,
+        currency: "KWD",
         locale: "en-US",
         fractionDigits: 0,
       }),
-    ).toBe("¥15");
+    ).toBe("KWD\u00A0123");
   });
 
-  test("falls back to the digits it was asked for", () => {
+  test("shows the amount beside a code Intl rejects instead of throwing", () => {
     expect(
-      formatHundredths({
+      formatMoneyCents({ amountCents: 1500, currency: "A1C", locale: "en-US" }),
+    ).toBe("15.00 A1C");
+    expect(
+      formatMoneyCents({
         amountCents: 1500,
         currency: "A1C",
         locale: "en-US",
-        fractionDigits: 2,
+        fractionDigits: 0,
       }),
-    ).toBe("15.00 A1C");
+    ).toBe("15 A1C");
   });
 });

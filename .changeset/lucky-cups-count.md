@@ -1,6 +1,11 @@
 ---
 "@stll/money": minor
-"@stll/workspace-ui": patch
+"@stll/workspace-ui": minor
 ---
 
-Money display moves to the package that owns the amounts: `formatMoneyCents` scales by the currency's own exponent, `formatHundredths` renders the fixed-hundredth billing presets, and `currencyMinorUnitDigits` answers the exponent question. The locale is always a parameter. `@stll/workspace-ui/calculation-format` re-exports them, so its consumers are unchanged.
+Money conversion and display move to the package that owns the amounts.
+`toMinorUnits` and `toMajorUnits` scale a typed amount by the currency's own
+exponent, `formatMoneyCents` renders on the same rule and takes an optional
+`fractionDigits` for a rounded summary, and `currencyMinorUnitDigits` answers
+the exponent question. The locale is always a parameter. `@stll/workspace-ui`
+no longer re-exports the money helpers; import them from `@stll/money`.

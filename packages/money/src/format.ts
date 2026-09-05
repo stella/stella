@@ -1,10 +1,12 @@
 /**
- * Rendering a stored minor-unit amount as text.
+ * Moving between a stored minor-unit amount and the major-unit number a
+ * person types, and rendering either as text.
  *
- * The brand keeps the arithmetic honest; this keeps the display honest. Both
+ * The brand keeps the arithmetic honest; this keeps the scale honest. Both
  * live here because "how many minor units make a major one" is a property of
- * the currency, and every surface that shows money has to answer it the same
- * way — a workspace column header, a billing summary, an invoice line.
+ * the currency, and every surface that touches money has to answer it the
+ * same way — a workspace column header, a billing form, an invoice line, an
+ * export row.
  *
  * The locale is always a parameter. A package cannot read the reader's
  * formatting locale, and one that guessed would render a number differently
@@ -12,6 +14,8 @@
  */
 
 import { Result } from "better-result";
+
+import { type CentsAmount, cents } from "./cents";
 
 /**
  * Two, the ISO 4217 default, used when a stored code is one `Intl` will not
@@ -43,10 +47,48 @@ export const currencyMinorUnitDigits = (currency: string): number => {
   return resolved.value ?? DEFAULT_MINOR_UNIT_DIGITS;
 };
 
+export type ToMinorUnitsParams = {
+  /** The amount in major units, as typed. */
+  amount: number;
+  currency: string;
+};
+
+/**
+ * A typed major-unit amount as the minor units the currency actually counts:
+ * 12.5 USD is 1250, 1500 JPY is 1500, 12.5 KWD is 12500.
+ *
+ * Rounding is the point: a decimal input carries more places than the currency
+ * has, and the stored value must be an exact integer. A non-finite `amount`
+ * throws through `cents()`, so a form parses and rejects its own input before
+ * asking for a value to store.
+ */
+export const toMinorUnits = ({
+  amount,
+  currency,
+}: ToMinorUnitsParams): CentsAmount =>
+  cents(Math.round(amount * 10 ** currencyMinorUnitDigits(currency)));
+
+export type ToMajorUnitsParams = {
+  amountCents: number;
+  currency: string;
+};
+
+/** The inverse: a stored amount as the major-unit number a person reads. */
+export const toMajorUnits = ({
+  amountCents,
+  currency,
+}: ToMajorUnitsParams): number =>
+  amountCents / 10 ** currencyMinorUnitDigits(currency);
+
 export type FormatMoneyCentsParams = {
   amountCents: number;
   currency: string;
   locale: string;
+  /**
+   * Digits to show, minimum and maximum alike. Defaults to the currency's own
+   * exponent; pass 0 for a rounded summary that has no room for decimals.
+   */
+  fractionDigits?: number;
 };
 
 /**
@@ -54,55 +96,27 @@ export type FormatMoneyCentsParams = {
  * property of the currency. Ask the currency rather than assuming a hundred.
  *
  * A code `Intl` rejects falls back to the amount beside the raw code: a column
- * showing "1500 A1C" is wrong-looking data, which is the truth, where a thrown
+ * showing "15.00 A1C" is wrong-looking data, which is the truth, where a thrown
  * RangeError would take the whole board down with it.
  */
 export const formatMoneyCents = ({
   amountCents,
   currency,
   locale,
-}: FormatMoneyCentsParams): string => {
-  const major = amountCents / 10 ** currencyMinorUnitDigits(currency);
-  const formatted = Result.try(() =>
-    new Intl.NumberFormat(locale, { style: "currency", currency }).format(
-      major,
-    ),
-  );
-
-  return formatted.isErr() ? `${major} ${currency}` : formatted.value;
-};
-
-export type FormatHundredthsParams = FormatMoneyCentsParams & {
-  /** Digits to show, minimum and maximum alike. */
-  fractionDigits: number;
-};
-
-/**
- * The same rendering with the minor unit fixed at a hundredth, and the shown
- * digits fixed by the caller.
- *
- * Wrong for a currency whose exponent is not 2 (JPY has 0, KWD has 3), and
- * kept only because billing amounts are stored on that assumption: changing
- * it is a money-model migration, not a formatting change. New surfaces call
- * `formatMoneyCents`, which asks the currency.
- */
-export const formatHundredths = ({
-  amountCents,
-  currency,
-  locale,
   fractionDigits,
-}: FormatHundredthsParams): string => {
-  const major = amountCents / 100;
+}: FormatMoneyCentsParams): string => {
+  const major = toMajorUnits({ amountCents, currency });
+  const digits = fractionDigits ?? currencyMinorUnitDigits(currency);
   const formatted = Result.try(() =>
     new Intl.NumberFormat(locale, {
       style: "currency",
       currency,
-      minimumFractionDigits: fractionDigits,
-      maximumFractionDigits: fractionDigits,
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits,
     }).format(major),
   );
 
   return formatted.isErr()
-    ? `${major.toFixed(fractionDigits)} ${currency}`
+    ? `${major.toFixed(digits)} ${currency}`
     : formatted.value;
 };

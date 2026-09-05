@@ -6,7 +6,7 @@
  * brand prevents the canonical 100x bug where a major-unit value
  * (12.50 dollars) is silently mixed with minor-unit math (1250 cents).
  *
- * The brand lives here, in a shared package, so it threads end to end:
+ * The brand lives in this package, so it threads end to end:
  * the same `CentsAmount` flows from a Drizzle column declared with
  * `.$type<CentsAmount>()`, across the API boundary (Eden infers the
  * brand from the handler's return type), into browser previews and back.
@@ -19,43 +19,9 @@
  * responsibility.
  */
 
-declare const __cents: unique symbol;
+import { type CentsAmount, cents } from "./cents";
 
-export type CentsAmount = number & {
-  readonly [__cents]: "CentsAmount";
-};
-
-/**
- * Construct a CentsAmount from a value already known to be in minor
- * units. Use at boundaries where the input is validated as an integer
- * minor-unit value (e.g. after Elysia `t.Integer({ minimum: 0 })` or
- * after parsing user input that has been multiplied by 100).
- *
- * Throws on non-integer input — money math at the minor-unit level must
- * be exact.
- */
-export const cents = (value: number): CentsAmount => {
-  if (!Number.isInteger(value)) {
-    throw new TypeError(
-      `cents(${value}): money values must be integer minor units`,
-    );
-  }
-  // SAFETY: validated to be an integer; brand is nominal so the
-  // assertion is sound at runtime.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion
-  return value as CentsAmount;
-};
-
-/**
- * Escape hatch for code paths that genuinely need to attach the brand
- * without a runtime check (test fixtures, generated code). Prefer
- * `cents()` everywhere else; reach for this only with a `// SAFETY:`
- * comment naming why the value is already a valid minor-unit integer.
- */
-export const unsafeCents = (value: number): CentsAmount =>
-  // SAFETY: documented escape hatch; caller asserts value is already a valid minor-unit integer.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion
-  value as CentsAmount;
+export { type CentsAmount, cents, unsafeCents } from "./cents";
 
 export type ProrateHourlyCentsInput = {
   billedMinutes: number;
@@ -242,8 +208,10 @@ export class MoneyTotals {
 
 export {
   currencyMinorUnitDigits,
-  formatHundredths,
-  type FormatHundredthsParams,
   formatMoneyCents,
   type FormatMoneyCentsParams,
+  toMajorUnits,
+  type ToMajorUnitsParams,
+  toMinorUnits,
+  type ToMinorUnitsParams,
 } from "./format";
