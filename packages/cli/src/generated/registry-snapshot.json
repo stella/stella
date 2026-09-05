@@ -2087,6 +2087,36 @@
   },
   {
     "cli": {
+      "command": ["task", "delete"],
+      "scope": "matters_write"
+    },
+    "name": "delete_task",
+    "description": "Permanently delete a task from its matter, together with its links, assignees and audit-visible field values. Refused while the matter is archived. This is irreversible.",
+    "inputSchema": {
+      "type": "object",
+      "required": ["task_id"],
+      "additionalProperties": false,
+      "properties": {
+        "task_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Task entity ID to delete"
+        },
+        "confirm": {
+          "type": "boolean",
+          "description": "Must be true to run this irreversible operation. Set it only after a human user has explicitly approved the deletion."
+        }
+      }
+    },
+    "annotations": {
+      "title": "Delete task",
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "cli": {
       "command": ["matter", "link-contact"],
       "scope": "matters_write"
     },

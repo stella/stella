@@ -2154,6 +2154,36 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     }
   },
   {
+    "name": "delete_task",
+    "scope": "stella:matters_write",
+    "access": "write",
+    "description": "Permanently delete a task from its matter, together with its links, assignees and audit-visible field values. Refused while the matter is archived. This is irreversible.",
+    "annotations": {
+      "title": "Delete task",
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "task_id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "task_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Task entity ID to delete"
+        },
+        "confirm": {
+          "type": "boolean",
+          "description": "Must be true to run this irreversible operation. Set it only after a human user has explicitly approved the deletion."
+        }
+      }
+    }
+  },
+  {
     "name": "link_matter_contact",
     "scope": "stella:matters_write",
     "access": "write",

@@ -831,6 +831,15 @@ describe("OpenAI-compatible MCP tools", () => {
     ).toBe("stella:search");
   });
 
+  test("delete_task is a matter write and confirm-gated like the other deletes", async () => {
+    const definition = await getMcpToolDefinition(
+      "delete_task",
+      createContext(),
+    );
+    expect(definition?.scope).toBe("stella:matters_write");
+    expect(definition?.annotations.destructiveHint).toBe(true);
+  });
+
   test("separates organization-wide contact mutations from matter writes", async () => {
     expect(
       (await getMcpToolDefinition("save_contact", createContext()))?.scope,

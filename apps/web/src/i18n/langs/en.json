@@ -880,6 +880,7 @@
       "delete_contact": "Delete contact",
       "delete_document": "Delete document",
       "delete_matter": "Delete matter",
+      "delete_task": "Delete task",
       "delete_time_entry": "Delete time entry",
       "describe-stella-api": "Preparing data lookup",
       "describe-stella-function": "Preparing data lookup",

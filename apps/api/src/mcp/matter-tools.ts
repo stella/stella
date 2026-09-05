@@ -15,6 +15,7 @@ import { createContactHandler } from "@/api/handlers/contacts/create";
 import { deleteContactHandler } from "@/api/handlers/contacts/delete";
 import { listContactsPage } from "@/api/handlers/contacts/list-query";
 import { updateContactHandler } from "@/api/handlers/contacts/update";
+import { deleteEntitiesHandler } from "@/api/handlers/entities/delete";
 import { addAssigneeHandler } from "@/api/handlers/tasks/assignees-add";
 import { removeAssigneeHandler } from "@/api/handlers/tasks/assignees-remove";
 import { createEntityLinkHandler } from "@/api/handlers/tasks/entity-links-create";
@@ -95,6 +96,7 @@ import {
   structuredErrorResult,
   toolDataResult,
   validationErrorResult,
+  uuidInputSchema,
 } from "@/api/mcp/tool-utils";
 import { defineValibotMcpTool } from "@/api/mcp/valibot-tool-definition";
 
@@ -107,6 +109,7 @@ type MatterToolName =
   | "lookup_business_registry"
   | "list_tasks"
   | "save_task"
+  | "delete_task"
   | "link_matter_contact";
 
 /** Statuses a matter can be flipped to through save_matter. */
@@ -1866,6 +1869,62 @@ const handleSaveTaskTool: TypedMcpToolHandler<
   } satisfies v.InferInput<typeof SAVE_TASK_PROJECTION>);
 };
 
+// --- delete_task --------------------------------------------------------
+
+const deleteTaskArgsSchema = v.strictObject({
+  task_id: uuidInputSchema("Task entity ID to delete"),
+  confirm: v.optional(
+    v.pipe(
+      v.boolean(),
+      v.description(
+        "Must be true to run this irreversible operation. Set it only after a " +
+          "human user has explicitly approved the deletion.",
+      ),
+    ),
+  ),
+});
+
+const handleDeleteTaskTool: TypedMcpToolHandler<
+  v.InferInput<typeof DELETED_TRUE_PROJECTION>
+> = async ({ args, context }) => {
+  if (!hasEffectiveAuthority(context, { entity: ["delete"] })) {
+    return errorResult("Forbidden");
+  }
+  const parsed = v.safeParse(deleteTaskArgsSchema, args);
+  if (!parsed.success) {
+    return validationErrorResult(parsed.issues);
+  }
+  const taskId = brandPersistedEntityId(parsed.output.task_id);
+  const owner = await resolveTaskWorkspace({ context, taskId });
+  if (owner.status === "wrong-kind") {
+    return errorResult("Not a task entity");
+  }
+  if (owner.status !== "ok") {
+    return notFoundResult("Task not found or not accessible");
+  }
+  const workspaceId = owner.workspaceId;
+  // Same rule as save_task: an archived matter is read-only.
+  const active = ensureActiveWorkspace({ context, workspaceId });
+  if (typeof active !== "string") {
+    return active;
+  }
+  const deleted = await Result.gen(() =>
+    deleteEntitiesHandler({
+      safeDb: context.safeDb,
+      organizationId: context.organizationId,
+      workspaceId,
+      recordAuditEvent: bindWorkspaceRecorder(context, workspaceId),
+      body: { entityIds: [taskId] },
+    }),
+  );
+  if (Result.isError(deleted)) {
+    return internalFailureResult(deleted.error);
+  }
+  return toolDataResult({
+    deleted: true,
+  } satisfies v.InferInput<typeof DELETED_TRUE_PROJECTION>);
+};
+
 // --- link_matter_contact ------------------------------------------------
 
 const linkMatterContactArgsSchema = v.pipe(
@@ -2215,6 +2274,23 @@ export const MATTER_TOOL_DEFINITIONS = [
     scope: "stella:matters_write",
   }),
   defineValibotMcpTool({
+    annotations: {
+      title: "Delete task",
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    description:
+      "Permanently delete a task from its matter, together with its links, " +
+      "assignees and audit-visible field values. Refused while the matter is " +
+      "archived. This is irreversible.",
+    inputSchema: deleteTaskArgsSchema,
+    access: "write",
+    anonymized: { exposure: "excluded", reason: "write" },
+    name: "delete_task",
+    scope: "stella:matters_write",
+  }),
+  defineValibotMcpTool({
     description:
       "Link a contact to a matter in a party role (opposing party/counsel, " +
       "co-counsel, witness, expert witness, third party, judge, mediator, or " +
@@ -2249,6 +2325,7 @@ export const MATTER_TOOL_HANDLERS = {
   lookup_business_registry: handleLookupBusinessRegistryTool,
   list_tasks: handleListTasksTool,
   save_task: handleSaveTaskTool,
+  delete_task: handleDeleteTaskTool,
   link_matter_contact: handleLinkMatterContactTool,
 } satisfies Record<MatterToolName, McpToolHandler>;
 

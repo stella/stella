@@ -29,6 +29,7 @@ const BUILT_IN_CHAT_TOOL_ACTIVITY_CATEGORIES = {
   delete_contact: "mutation",
   delete_document: "mutation",
   delete_matter: "mutation",
+  delete_task: "mutation",
   delete_time_entry: "mutation",
   describe_template: "research",
   discover_tools: "research",

@@ -3375,6 +3375,47 @@ export const generatedRouteMap: RouteNode = {
             },
           },
         },
+        delete: {
+          kind: "leaf",
+          spec: {
+            commandPath: ["task", "delete"],
+            toolName: "delete_task",
+            description:
+              "Permanently delete a task from its matter, together with its links, assignees and audit-visible field values.",
+            flags: [
+              {
+                flag: "--task-id",
+                prop: "task_id",
+                kind: "string",
+                repeatable: false,
+                description: "Task entity ID to delete",
+                required: true,
+              },
+            ],
+            inputOnly: [],
+            paginated: false,
+            windowedText: false,
+            destructive: true,
+            scope: "matters_write",
+            inputSchema: {
+              type: "object",
+              required: ["task_id"],
+              additionalProperties: false,
+              properties: {
+                task_id: {
+                  type: "string",
+                  format: "uuid",
+                  description: "Task entity ID to delete",
+                },
+                confirm: {
+                  type: "boolean",
+                  description:
+                    "Must be true to run this irreversible operation. Set it only after a human user has explicitly approved the deletion.",
+                },
+              },
+            },
+          },
+        },
       },
     },
     clause: {

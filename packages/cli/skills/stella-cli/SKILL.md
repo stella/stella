@@ -118,6 +118,7 @@ requires (request it at `stella auth login --scopes`).
 | playbook     | `stella playbook run`                      | knowledge_write             |                                       |
 | rate         | `stella rate resolve`                      | read                        |                                       |
 | search       | `stella search matters`                    | search                      | paginated                             |
+| task         | `stella task delete`                       | matters_write               | destructive (needs `--yes` off a TTY) |
 | task         | `stella task list`                         | read                        | paginated                             |
 | task         | `stella task save`                         | matters_write               |                                       |
 | template     | `stella template fill`                     | templates                   |                                       |
@@ -224,6 +225,8 @@ are omitted here.
   - `--date` — Date to resolve the rate on (ISO YYYY-MM-DD) (string)
 - `stella search matters`
   - `--query` — Search query (string)
+- `stella task delete`
+  - `--task-id` — Task entity ID to delete (string)
 - `stella task list`
   - optional: --workspace-id, --task-id, --date-from, --date-to, --status
 - `stella task save`

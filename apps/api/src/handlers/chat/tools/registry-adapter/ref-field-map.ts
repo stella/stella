@@ -367,6 +367,11 @@ export const WRITE_TOOL_REF_FIELD_MAP = {
     inputRefs: [{ kind: "entity", param: "entity_id" }],
     projection: DELETED_TRUE_PROJECTION,
   },
+  delete_task: {
+    chatProjectable: true,
+    inputRefs: [{ kind: "entity", param: "task_id" }],
+    projection: DELETED_TRUE_PROJECTION,
+  },
   set_field_value: {
     chatProjectable: true,
     // The only write tool with a `property` input ref (called out in
