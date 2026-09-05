@@ -3157,12 +3157,18 @@ export default defineConfig({
       files: [
         "apps/api/src/**/*.ts",
         "apps/web/src/**/*.{ts,tsx}",
+        // An owner that lives in a package (`@stll/clipboard`) confines
+        // nothing if the rule stops at the apps: a second package could reach
+        // the capability directly and no guard would say so.
+        "packages/*/src/**/*.{ts,tsx}",
         ".oxlint-plugins/__fixtures__/confine-owner.fixture.ts",
       ],
       excludeFiles: [
         "apps/api/src/**/*.test.ts",
         "apps/api/src/tests/**/*.ts",
         "apps/web/src/**/*.test.{ts,tsx}",
+        "packages/*/src/**/*.test.{ts,tsx}",
+        "packages/*/src/**/tests/**/*.{ts,tsx}",
       ],
       rules: {
         "confine-owner/confine-owner": [
