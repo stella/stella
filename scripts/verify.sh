@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 #
 # Local mirror of the required package checks in .github/workflows/ci.yml:
-# one command that answers "will CI pass?" without reverse-engineering
-# the workflow. Green here means green on the required `ci-result`
-# check (the separate build/e2e jobs are not included; they need the
-# full service stack).
+# one command for local package validation without reverse-engineering
+# the workflow. Passing here covers package checks, not the entire
+# `ci-result`: final release-image builds/smokes and separate build/e2e
+# jobs still run in CI.
 #
 # Keep the check list in sync with ci.yml when adding or removing
 # checks there.
@@ -327,6 +327,7 @@ run_step "API release contract self-test" bun test \
   scripts/check-api-cli-contract.test.ts \
   scripts/check-api-deployment.test.ts
 run_step "Release manifest self-test" bash scripts/create-release-manifest.test.sh
+run_step "Release image CI gate self-test" bun test scripts/ci-plan.test.ts
 run_step "Maintenance release preparation self-test" bun test \
   scripts/prepare-maintenance-release.property.test.ts
 run_step "Desktop-release-changes self-test" bash scripts/detect-desktop-release-changes.test.sh

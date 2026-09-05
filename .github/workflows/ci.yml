@@ -41,6 +41,7 @@ jobs:
       trusted: ${{ steps.check.outputs.trusted }}
       agent_sandbox_docker_required: ${{ steps.changed-files.outputs.agent_sandbox_docker_required }}
       api_image_deps_required: ${{ steps.changed-files.outputs.api_image_deps_required }}
+      api_image_smoke_required: ${{ steps.changed-files.outputs.api_image_smoke_required }}
       collab_redis_required: ${{ steps.changed-files.outputs.collab_redis_required }}
       desktop_rust_checks_required: ${{ steps.changed-files.outputs.desktop_rust_checks_required }}
       e2e_core_required: ${{ steps.changed-files.outputs.e2e_core_required }}
@@ -99,6 +100,7 @@ jobs:
             {
               echo "agent_sandbox_docker_required=true"
               echo "api_image_deps_required=true"
+              echo "api_image_smoke_required=true"
               echo "collab_redis_required=true"
               echo "desktop_rust_checks_required=true"
               echo "e2e_core_required=true"
@@ -126,6 +128,7 @@ jobs:
             {
               echo "agent_sandbox_docker_required=false"
               echo "api_image_deps_required=false"
+              echo "api_image_smoke_required=false"
               echo "collab_redis_required=false"
               echo "desktop_rust_checks_required=false"
               echo "e2e_core_required=false"
@@ -169,6 +172,7 @@ jobs:
           # runner just to decide it has nothing to do.
           agent_sandbox_docker_required=false
           api_image_deps_required=false
+          api_image_smoke_required=false
           collab_redis_required=false
           landing_build_required=false
           legal_atlas_image_required=false
@@ -184,6 +188,12 @@ jobs:
             if [[ "$file" == "VERSION" ]]; then
               release_typecheck_required=true
             fi
+            # Rehearse the final release artifact before a version can merge.
+            case "$file" in
+              VERSION|apps/api/Dockerfile|scripts/smoke-api-image.sh|.dockerignore|.github/workflows/ci.yml|.github/workflows/release.yml)
+                api_image_smoke_required=true
+                ;;
+            esac
             # The upgrade rehearsal: what a promotion of this change would run
             # against production's schema at production's row counts. A
             # release PR always rehearses; so does anything that changes what
@@ -256,7 +266,7 @@ jobs:
             # ordinary app-source changes are covered by web-build's cheaper
             # in-checkout boot smoke instead of a full image build.
             case "$file" in
-              apps/web/Dockerfile|apps/web/src/runtime.ts|apps/web/vite.config.ts|packages/start-runtime/**|packages/*/package.json|scripts/stage-web-runtime.ts|scripts/publish-manifest.ts|scripts/web-runtime-closure.ts|bun.lock|.dockerignore|.github/workflows/ci.yml)
+              VERSION|apps/web/Dockerfile|apps/web/src/runtime.ts|apps/web/vite.config.ts|packages/start-runtime/**|packages/*/package.json|scripts/stage-web-runtime.ts|scripts/publish-manifest.ts|scripts/web-runtime-closure.ts|bun.lock|.dockerignore|.github/workflows/ci.yml)
                 web_image_smoke_required=true
                 ;;
             esac
@@ -273,6 +283,7 @@ jobs:
           {
             echo "agent_sandbox_docker_required=$agent_sandbox_docker_required"
             echo "api_image_deps_required=$api_image_deps_required"
+            echo "api_image_smoke_required=$api_image_smoke_required"
             echo "collab_redis_required=$collab_redis_required"
             echo "desktop_rust_checks_required=$desktop_rust_checks_required"
             echo "e2e_core_required=$e2e_core_required"
@@ -1055,6 +1066,10 @@ jobs:
           bun test scripts/check-staging-deploy-decision.test.ts
           bash scripts/create-release-manifest.test.sh
           bash scripts/promote-desktop-release.test.sh
+
+      - name: Test release image CI gate
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        run: bun test scripts/ci-plan.test.ts
 
       - name: Test maintenance release preparation
         if: needs.ci-plan.outputs.package_checks_required == 'true'
@@ -2221,6 +2236,42 @@ jobs:
             echo "Browser checks were cancelled; a newer run is authoritative."
           fi
 
+  api-image-smoke:
+    name: API release image (${{ matrix.platform }})
+    needs: ci-plan
+    if: >-
+      (needs.ci-plan.outputs.trusted == 'true'
+       || github.event_name == 'workflow_dispatch')
+      && needs.ci-plan.outputs.api_image_smoke_required == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            platform: linux/amd64
+          - runner: ubuntu-24.04-arm
+            platform: linux/arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: true
+
+      - name: Build final API release image
+        run: |
+          docker build --file apps/api/Dockerfile \
+            --build-arg "STELLA_VERSION=$(tr -d '[:space:]' < VERSION)" \
+            --build-arg "STELLA_COMMIT_SHA=$(git rev-parse HEAD)" \
+            --tag stella-api-release:ci .
+
+      - name: Rehearse migrations and boot packaged entrypoints
+        run: bash scripts/smoke-api-image.sh stella-api-release:ci
+
   # Image dependency guard. The API image and legal-atlas-runner Dockerfile use
   # Turbo only for pruned source overlays; dependency installs come from the
   # committed root bun.lock plus every workspace package.json so Bun remains
@@ -2546,6 +2597,7 @@ jobs:
         e2e,
         stack-redaction-browsers,
         api-image-deps,
+        api-image-smoke,
         legal-atlas-image,
         windows-scripts,
         desktop-clippy,
@@ -2557,6 +2609,8 @@ jobs:
       - name: Evaluate CI outcome
         env:
           API_IMAGE_DEPS_RESULT: ${{ needs.api-image-deps.result }}
+          API_IMAGE_SMOKE_REQUIRED: ${{ needs.ci-plan.outputs.api_image_smoke_required }}
+          API_IMAGE_SMOKE_RESULT: ${{ needs.api-image-smoke.result }}
           AGENT_SANDBOX_DOCKER_RESULT: ${{ needs.agent-sandbox-docker.result }}
           CHANGESET_RESULT: ${{ needs.changeset.result }}
           CI_RESULT: ${{ needs.ci-checks.result }}
@@ -2578,6 +2632,7 @@ jobs:
           TYPECHECK_BASELINE_RESULT: ${{ needs.typecheck-baseline.result }}
           WEB_RESULT: ${{ needs.web-build.result }}
           WEB_IMAGE_SMOKE_RESULT: ${{ needs.web-image-smoke.result }}
+          WEB_IMAGE_SMOKE_REQUIRED: ${{ needs.ci-plan.outputs.web_image_smoke_required }}
           WINDOWS_SCRIPTS_RESULT: ${{ needs.windows-scripts.result }}
         run: |
           # When the CI plan was skipped (draft PR or
@@ -2586,6 +2641,14 @@ jobs:
           if [[ "$PLAN_RESULT" == "skipped" ]]; then
             echo "CI plan skipped. Passing."
             exit 0
+          fi
+
+          # Selected artifact checks must positively succeed. A skipped,
+          # cancelled, or missing result cannot certify a release candidate.
+          if [[ "$API_IMAGE_SMOKE_REQUIRED" == "true" && "$API_IMAGE_SMOKE_RESULT" != "success" ]] \
+            || [[ "$WEB_IMAGE_SMOKE_REQUIRED" == "true" && "$WEB_IMAGE_SMOKE_RESULT" != "success" ]]; then
+            echo "::error::Required release image smoke did not succeed."
+            exit 1
           fi
 
           if [[ "$EVENT" == "workflow_dispatch" ]]; then
