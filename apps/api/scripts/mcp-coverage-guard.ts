@@ -125,6 +125,8 @@ const TOOLS_WITHOUT_ENUMERABLE_ENDPOINT: Record<string, string> = {
     "no dedicated endpoint: MCP host adapter bridges attached files through the canonical upload lifecycle (apps/api/src/mcp/document-file-upload.ts)",
   open_document_version_upload:
     "no dedicated endpoint: MCP-only launcher resolves an authorized document target for the portable upload App (apps/api/src/mcp/document-tools.ts)",
+  delete_task:
+    "no dedicated endpoint: reuses the entities delete handler already claimed by delete_document, confined to kind task (apps/api/src/mcp/matter-tools.ts)",
 };
 
 // Re-exported from the shared enumeration lib so the guard's own test suite

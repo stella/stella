@@ -280,7 +280,7 @@ describe("internalFailureResult preserves expected handler errors", () => {
 describe("save_time_entry threads backing handler errors correctly", () => {
   const TIME_ENTRY_CREATE_ARGS = {
     workspace_id: "ws_1",
-    entity_id: "entity_1",
+    entity_id: "00000000-0000-4000-8000-0000000e0001",
     date_worked: "2024-01-01",
     timezone_id: "Europe/Prague",
     duration_minutes: 60,

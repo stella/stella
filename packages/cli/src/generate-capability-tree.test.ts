@@ -297,18 +297,24 @@ describe("deriveCapabilityLeaf: flags", () => {
     expect(flagCollisions).toEqual(["--body-user-id", "--query-user-id"]);
   });
 
-  test("a prop colliding with the synthetic --workspace is part-prefixed", () => {
+  test("a prop colliding with the synthetic --workspace-id is part-prefixed", () => {
     const { spec } = deriveCapabilityLeaf(
       entry({
         id: "a.b",
         handlerKind: "workspace",
-        inputSchema: { body: objectSchema({ workspace: { type: "string" } }) },
+        inputSchema: {
+          body: objectSchema({ workspaceId: { type: "string" } }),
+        },
       }),
     );
-    const workspaceFlags = spec.flags.filter((f) => f.flag === "--workspace");
+    const workspaceFlags = spec.flags.filter(
+      (f) => f.flag === "--workspace-id",
+    );
     expect(workspaceFlags).toHaveLength(1);
-    expect(workspaceFlags[0]?.partPath).toBe("workspaceId");
-    expect(flagByCli(spec, "--body-workspace")?.partPath).toBe("workspace");
+    expect(workspaceFlags[0]?.part).toBe("params");
+    expect(flagByCli(spec, "--body-workspace-id")?.partPath).toBe(
+      "workspaceId",
+    );
   });
 
   test("an irresolvable duplicate fails generation naming the capability", () => {
@@ -333,7 +339,7 @@ describe("deriveCapabilityLeaf: flags", () => {
 });
 
 describe("deriveCapabilityLeaf: workspace flag", () => {
-  test("a workspace entry missing params.workspaceId gets a required --workspace", () => {
+  test("a workspace entry missing params.workspaceId gets a required --workspace-id", () => {
     const { spec } = deriveCapabilityLeaf(
       entry({
         id: "billing-codes.create",
@@ -341,7 +347,7 @@ describe("deriveCapabilityLeaf: workspace flag", () => {
         inputSchema: { body: objectSchema({ code: { type: "string" } }) },
       }),
     );
-    const workspace = flagByCli(spec, "--workspace");
+    const workspace = flagByCli(spec, "--workspace-id");
     expect(workspace?.required).toBe(true);
     expect(workspace?.part).toBe("params");
     expect(workspace?.partPath).toBe("workspaceId");
@@ -361,8 +367,10 @@ describe("deriveCapabilityLeaf: workspace flag", () => {
         },
       }),
     );
-    expect(flagByCli(spec, "--workspace")).toBeUndefined();
     expect(flagByCli(spec, "--workspace-id")?.partPath).toBe("workspaceId");
+    expect(spec.flags.filter((f) => f.flag === "--workspace-id")).toHaveLength(
+      1,
+    );
   });
 });
 

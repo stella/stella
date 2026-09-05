@@ -20,6 +20,7 @@ import type { McpToolResponse } from "@/api/mcp/tool-types";
 import {
   internalFailureResult,
   structuredErrorResult,
+  uuidInputSchema,
 } from "@/api/mcp/tool-utils";
 
 export const DOCUMENT_UPLOAD_APP_RESOURCE_URI =
@@ -56,23 +57,15 @@ export const OPENAI_FILE_REFERENCE_SCHEMA = v.pipe(
 );
 
 export const UPLOAD_DOCUMENT_VERSION_INPUT_SCHEMA = v.strictObject({
-  entity_id: v.pipe(
-    v.string(),
-    v.minLength(1),
-    v.description(
-      "Existing document entity ID that will receive a new version",
-    ),
+  entity_id: uuidInputSchema(
+    "Existing document entity ID that will receive a new version",
   ),
   file: OPENAI_FILE_REFERENCE_SCHEMA,
 });
 
 export const OPEN_DOCUMENT_VERSION_UPLOAD_INPUT_SCHEMA = v.strictObject({
-  entity_id: v.pipe(
-    v.string(),
-    v.minLength(1),
-    v.description(
-      "Existing document entity ID that will receive a new version",
-    ),
+  entity_id: uuidInputSchema(
+    "Existing document entity ID that will receive a new version",
   ),
 });
 

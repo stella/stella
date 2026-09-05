@@ -14,6 +14,7 @@ import { defaultConfigDir } from "./auth/config-dir.js";
 import { resolveAccessToken } from "./auth/resolve-access-token.js";
 import { resolveServerUrl } from "./auth/server-resolution.js";
 import { buildApp } from "./build-cli-tree.js";
+import { normalizeProcessExitCode } from "./cli-exit-code.js";
 import { commandNeedsRegistry } from "./command-locality.js";
 import { HOME, XDG_CACHE_HOME } from "./env.js";
 import { reportFatalError } from "./main-error-boundary.js";
@@ -114,7 +115,7 @@ const main = async (): Promise<void> => {
   // Startup always resolves against the baked-in tree unless a validated cache
   // shows a non-empty delta, in which case build from the cached listings and
   // surface the one-line divergence notice (spec S5.3). No network here.
-  const { tree, notice } = await resolveCommandTree({
+  const { tree, notice, disabledTools } = await resolveCommandTree({
     serverOrigin: serverUrl,
     env: cacheEnv,
   });
@@ -122,10 +123,14 @@ const main = async (): Promise<void> => {
     process.stderr.write(notice);
   }
 
-  await run(buildApp(tree), argv, {
+  await run(buildApp(tree, disabledTools), argv, {
     forCommand: () => ({ configDir, process, serverUrl, token }),
     process: stricliProcess,
   });
+  // stricli reports its own parse failures (unknown command, bad flag) with
+  // negative codes the OS folds into 251/252; the contract calls them usage
+  // errors (exit 2).
+  process.exitCode = normalizeProcessExitCode(process.exitCode);
 
   // Seed/refresh the cache right after a successful `auth login` (the one
   // explicit-network moment), using the freshly stored credential.

@@ -83,6 +83,45 @@ const MANAGE_ORG_ACTIONS = [
   "update_org_settings",
 ] as const;
 
+const DATE_ONLY_BOUND = /^\d{4}-\d{2}-\d{2}$/u;
+const ISO_TIMESTAMP_BOUND =
+  /^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d{1,9})?)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/u;
+
+/**
+ * Calendar validity from the components themselves: `Date` silently normalizes
+ * `2026-02-31` to March, so a parsed instant proves nothing about the input.
+ */
+const isRealCalendarDate = (value: string): boolean => {
+  const [year, month, day] = value.slice(0, 10).split("-").map(Number);
+  if (year === undefined || month === undefined || day === undefined) {
+    return false;
+  }
+  const utc = new Date(Date.UTC(year, month - 1, day));
+  return (
+    utc.getUTCFullYear() === year &&
+    utc.getUTCMonth() === month - 1 &&
+    utc.getUTCDate() === day
+  );
+};
+
+const isRangeBound = (value: string): boolean =>
+  DATE_ONLY_BOUND.test(value)
+    ? isRealCalendarDate(value)
+    : ISO_TIMESTAMP_BOUND.test(value) && isRealCalendarDate(value);
+
+/** A range bound: an ISO date-time, or a date whose whole UTC day the bound covers. */
+const auditRangeBoundSchema = v.pipe(
+  v.string(),
+  v.maxLength(40),
+  v.check(isRangeBound, "Expected an ISO date-time or a YYYY-MM-DD date"),
+);
+
+/** Widen a date-only bound to the edge of its UTC day so `to: 2026-09-05` includes that day. */
+const widenDateOnlyBound = (bound: string, edge: "start" | "end"): string =>
+  DATE_ONLY_BOUND.test(bound)
+    ? `${bound}T${edge === "start" ? "00:00:00.000" : "23:59:59.999"}Z`
+    : bound;
+
 const listAuditLogArgsSchema = v.pipe(
   v.strictObject({
     workspace_id: v.optional(
@@ -126,18 +165,18 @@ const listAuditLogArgsSchema = v.pipe(
     ),
     from: v.optional(
       v.pipe(
-        v.string(),
-        v.isoTimestamp(),
-        v.maxLength(40),
-        v.description("Only entries created on or after this ISO date-time"),
+        auditRangeBoundSchema,
+        v.description(
+          "Only entries created on or after this ISO date-time, or from the start of this YYYY-MM-DD date (UTC)",
+        ),
       ),
     ),
     to: v.optional(
       v.pipe(
-        v.string(),
-        v.isoTimestamp(),
-        v.maxLength(40),
-        v.description("Only entries created on or before this ISO date-time"),
+        auditRangeBoundSchema,
+        v.description(
+          "Only entries created on or before this ISO date-time, or up to the end of this YYYY-MM-DD date (UTC)",
+        ),
       ),
     ),
     limit: v.optional(
@@ -186,9 +225,9 @@ const LIST_AUDIT_LOG_TOOL_DEFINITION = defineValibotMcpTool({
     "cursor. Requires organization audit-log access.",
   inputSchema: listAuditLogArgsSchema,
   jsonSchemaProjectionWaiver: {
-    ignoreActions: ["iso_timestamp", "partial_check"],
+    ignoreActions: ["check", "partial_check"],
     reason:
-      "The CLI trust boundary does not interpret format; ISO timestamps and the resource_id dependency remain authoritative in the runtime schema.",
+      "The range-bound check (ISO date-time or date) and the resource_id dependency cannot be projected; both remain authoritative in the runtime schema.",
   },
   // Audit payloads carry free-form tenant-authored change diffs whose text
   // fields cannot be enumerated for redaction, so this read tool fails closed
@@ -573,8 +612,12 @@ const handleListAuditLogTool: McpToolHandler = async ({ args, context }) => {
     ...(input.user_id === undefined
       ? {}
       : { userId: brandPersistedUserId(input.user_id) }),
-    ...(input.from === undefined ? {} : { from: input.from }),
-    ...(input.to === undefined ? {} : { to: input.to }),
+    ...(input.from === undefined
+      ? {}
+      : { from: widenDateOnlyBound(input.from, "start") }),
+    ...(input.to === undefined
+      ? {}
+      : { to: widenDateOnlyBound(input.to, "end") }),
     ...(input.limit === undefined ? {} : { limit: input.limit }),
     ...(input.cursor === undefined ? {} : { cursor: input.cursor }),
   };

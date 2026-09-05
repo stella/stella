@@ -16,7 +16,7 @@
 // build-time path.
 
 import { Result } from "better-result";
-import { readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 
 import { TOOL_ANNOTATIONS } from "./annotations.js";
 import { loadBakedCapabilityCatalog } from "./capability-catalog-load.js";
@@ -53,6 +53,9 @@ const SNAPSHOT_URL = new URL(
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
+
+const cacheFileExists = async (filePath: string): Promise<boolean> =>
+  Result.isOk(await Result.tryPromise(async () => await access(filePath)));
 
 /** Load the baked-in listings (the committed snapshot) for the delta diff. */
 const loadBakedListings = async (): Promise<readonly RegistryToolListing[]> => {
@@ -165,6 +168,13 @@ const divergenceNotice = (delta: RegistryDelta): string => {
   return `server registry differs: ${segments.join("; ")}\n`;
 };
 
+export type ResolvedCommandTree = {
+  tree: RouteNode;
+  notice?: string;
+  /** Baked tool names the server attested are gated off in this deployment. */
+  disabledTools: readonly string[];
+};
+
 /**
  * Pick the command tree for this invocation without any network (spec S5.3).
  * The baked-in tree is the default; a valid same-origin cache with a non-empty
@@ -185,19 +195,23 @@ export const resolveCommandTree = async ({
 }: {
   serverOrigin: string | undefined;
   env: CacheEnv;
-}): Promise<{ tree: RouteNode; notice?: string }> => {
+}): Promise<ResolvedCommandTree> => {
   if (serverOrigin === undefined) {
-    return { tree: generatedRouteMap };
+    return { tree: generatedRouteMap, disabledTools: [] };
   }
   const file = await readCacheFile(cachePathFor(serverOrigin, env));
   if (file === undefined || file.serverOrigin !== serverOrigin) {
-    return { tree: generatedRouteMap };
+    return { tree: generatedRouteMap, disabledTools: [] };
   }
+  // Tools the server attested it omits because a deployment feature is off.
+  // They stay in the tree (the server answers a call with its own
+  // feature_disabled), and help/tools list mark them so nobody has to try.
+  const disabledTools = file.featureOmittedTools ?? [];
   const prunedByScope = (file.scopeOmittedTools ?? []).some(
     (name) => !isCompoundTool(name),
   );
   if (isDeltaEmpty(file.delta) && !prunedByScope) {
-    return { tree: generatedRouteMap };
+    return { tree: generatedRouteMap, disabledTools };
   }
   // Rebuild through the SAME shared builder codegen uses (curated tools from
   // the cached listings + the baked capability merge), so a diverged registry
@@ -205,7 +219,7 @@ export const resolveCommandTree = async ({
   // a tree that fails to build falls back to the baked-in tree (rule 6).
   const entries = await loadBakedCapabilityCatalog();
   if (entries === null) {
-    return { tree: generatedRouteMap };
+    return { tree: generatedRouteMap, disabledTools };
   }
   const listings = retainAttestedOmittedListings({
     fetched: file.listings,
@@ -222,11 +236,15 @@ export const resolveCommandTree = async ({
       }).tree,
   );
   if (Result.isError(built)) {
-    return { tree: generatedRouteMap };
+    return { tree: generatedRouteMap, disabledTools };
   }
   return isDeltaEmpty(file.delta)
-    ? { tree: built.value }
-    : { tree: built.value, notice: divergenceNotice(file.delta) };
+    ? { tree: built.value, disabledTools }
+    : {
+        tree: built.value,
+        notice: divergenceNotice(file.delta),
+        disabledTools,
+      };
 };
 
 /** The outcome of a cache-refresh attempt (spec S5.3/S5.5 + addendum nudge). */
@@ -272,9 +290,15 @@ export const refreshRegistryCache = async ({
 
   if (!force) {
     if (existing === undefined) {
-      return { status: "skipped", reason: "no-cache" };
-    }
-    if (!isCacheStale(existing, now)) {
+      // Only a genuinely absent cache stays offline-instant (seeded at login).
+      // A file that exists but no longer validates (an older schema version
+      // left behind by an upgrade, or corruption) would otherwise be skipped
+      // forever, freezing the delta notice and the update nudge until the next
+      // login; treat it as stale and rebuild it.
+      if (!(await cacheFileExists(filePath))) {
+        return { status: "skipped", reason: "no-cache" };
+      }
+    } else if (!isCacheStale(existing, now)) {
       return { status: "skipped", reason: "fresh" };
     }
   }

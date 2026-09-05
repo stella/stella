@@ -38,9 +38,11 @@ server, using a loopback listener (`http://127.0.0.1/callback`, ephemeral port)
 to capture the code. Credentials are stored per server origin, so one machine
 can hold sessions for several servers at once. The first login needs
 `--server <url>` (or `STELLA_SERVER_URL`); it then becomes the default, and
-every command accepts `--server <url>` to target another one. Scope the
-session with `--scopes`; the default scopes are
-`openid profile email offline_access stella:read stella:search`.
+every command accepts `--server <url>` to target another one. A default
+login requests the working set of scopes (everything but organization
+administration writes and one-off setup); pass `--scopes` to request an
+explicit set. The
+default scopes are `openid profile email offline_access stella:read stella:search stella:templates stella:documents_write stella:matters_write stella:contacts_write stella:chat stella:knowledge_write stella:billing_write stella:admin_read stella:skills stella:feedback`.
 `stella auth whoami` shows the active session; `stella auth logout` clears it.
 
 ## Conventions every agent must know
@@ -116,6 +118,7 @@ requires (request it at `stella auth login --scopes`).
 | playbook     | `stella playbook run`                      | knowledge_write             |                                       |
 | rate         | `stella rate resolve`                      | read                        |                                       |
 | search       | `stella search matters`                    | search                      | paginated                             |
+| task         | `stella task delete`                       | matters_write               | destructive (needs `--yes` off a TTY) |
 | task         | `stella task list`                         | read                        | paginated                             |
 | task         | `stella task save`                         | matters_write               |                                       |
 | template     | `stella template fill`                     | templates                   |                                       |
@@ -222,10 +225,12 @@ are omitted here.
   - `--date` — Date to resolve the rate on (ISO YYYY-MM-DD) (string)
 - `stella search matters`
   - `--query` — Search query (string)
+- `stella task delete`
+  - `--task-id` — Task entity ID to delete (string)
 - `stella task list`
   - optional: --workspace-id, --task-id, --date-from, --date-to, --status
 - `stella task save`
-  - optional: --task-id, --workspace-id, --name, --status, --priority, --item-type (task|fact|issue|requirement|event), --list-id, --list-section-id, --list-description, --due-date, --workflow-reason, --add-assignee-user-id, --remove-assignee-user-id, --link-entity-id, --unlink-link-id
+  - optional: --task-id, --workspace-id, --name, --status (open|in_progress|in_review|done|cancelled), --priority (none|urgent|high|medium|low), --item-type (task|fact|issue|requirement|event), --list-id, --list-section-id, --list-description, --due-date, --workflow-reason, --add-assignee-user-id, --remove-assignee-user-id, --link-entity-id, --unlink-link-id
 - `stella template fill`
   - `--template-id` — Template id, as returned by list_templates (string)
   - optional: --allow-unused-values, --completion-mode (require_complete|allow_partial)
@@ -288,10 +293,10 @@ multi-segment capability actions are flattened with hyphens into `<action>`.
 - **Invoke by id** (forward-compatible with any server): `stella capability
 invoke <id> --input '<json>'`, where the JSON is `{ body?, params?, query? }`.
 - **Flags**: each capability command derives flags from its input schema;
-  workspace-scoped capabilities take a required `--workspace <id>`. Deep or
+  workspace-scoped capabilities take a required `--workspace-id <id>`. Deep or
   ambiguous payloads use `--input` (the whole `{ body?, params?, query? }`).
-- **Dry run**: `--dry-run` validates the input server-side and returns without
-  executing (maps to `validate_only`).
+- **Dry run**: write capabilities accept `--dry-run`, which validates the input
+  server-side and returns without executing (maps to `validate_only`).
 - **Destructive** capabilities prompt on a TTY and need `--yes` off a TTY; the
   server's per-capability confirm gate is satisfied automatically once confirmed.
 - Exit codes are identical to the curated commands (see above).
@@ -301,8 +306,8 @@ invoke <id> --input '<json>'`, where the JSON is `{ body?, params?, query? }`.
 The curated commands above cover common tasks; anything else goes through the
 generic capability path. Current domains: `audit-logs`, `billing-codes`, `case-law`, `catalogue`, `chat`, `clauses`, `contacts`, `document-types`, `entities`, `expenses`, `fields`, `flows`, `invoices`, `legislation`, `lists`, `organization-settings`, `playbooks`, `properties`, `rates`, `reports`, `signals`, `skills`, `style-sets`, `tasks`, `template-packs`, `template-recipes`, `templates`, `time-entries`, `uploads`, `usage`, `view-templates`, `views`, `work-obligations`, `workspaces`.
 
-- Translate a document: `stella capability entities translate --workspace <workspace> --field-id <field-id> --target-lang <target-lang>`.
-- Start workflow extraction: `stella capability workspaces workflow-start --workspace <workspace>`.
+- Translate a document: `stella capability entities translate --workspace-id <workspace-id> --field-id <field-id> --target-lang <target-lang>`.
+- Start workflow extraction: `stella capability workspaces workflow-start --workspace-id <workspace-id>`.
 - **`--input` casing is not uniform; never guess it.** A curated command's
   `--input` JSON (the table and flags above) uses the MCP tool schema's own
   keys, snake_case (`workspace_id`, `contact_id`). A capability command's

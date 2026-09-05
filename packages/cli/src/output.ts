@@ -111,60 +111,218 @@ export const buildRenderPlan = ({
   return { kind: "single", payload };
 };
 
+const isScalar = (value: unknown): value is string | number | boolean =>
+  typeof value === "string" ||
+  typeof value === "number" ||
+  typeof value === "boolean";
+
 const formatCell = (value: unknown): string => {
   if (value === null || value === undefined) {
     return "";
   }
-  if (typeof value === "string") {
-    return value;
-  }
-  if (typeof value === "number" || typeof value === "boolean") {
+  if (isScalar(value)) {
     return String(value);
   }
+  if (Array.isArray(value) && value.every(isScalar)) {
+    return value.map(String).join(", ");
+  }
   return JSON.stringify(value);
+};
+
+const MIN_COLUMN_WIDTH = 8;
+const COLUMN_GUTTER = 2;
+const ELLIPSIS = "\u2026";
+
+const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+
+/** East Asian wide and fullwidth forms, and pictographic emoji: two terminal cells. */
+const WIDE_GRAPHEME =
+  /^[\u1100-\u115F\u2E80-\u303E\u3041-\u33FF\u3400-\u4DBF\u4E00-\u9FFF\uA000-\uA4CF\uAC00-\uD7A3\uF900-\uFAFF\uFE30-\uFE4F\uFF00-\uFF60\uFFE0-\uFFE6\u{1F300}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{20000}-\u{3FFFD}]/u;
+/** Combining marks alone take no cell; so do the joiners and the emoji variation selector. */
+const COMBINING_MARKS = /^\p{M}+$/u;
+const ZERO_WIDTH_CODE_POINTS: ReadonlySet<number> = new Set([
+  0x20_0b, 0x20_0c, 0x20_0d, 0xfe_0f,
+]);
+
+const isZeroWidth = (grapheme: string): boolean => {
+  if (COMBINING_MARKS.test(grapheme)) {
+    return true;
+  }
+  for (const char of grapheme) {
+    if (!ZERO_WIDTH_CODE_POINTS.has(char.codePointAt(0) ?? -1)) {
+      return false;
+    }
+  }
+  return true;
+};
+
+const graphemeWidth = (grapheme: string): number => {
+  if (isZeroWidth(grapheme)) {
+    return 0;
+  }
+  return WIDE_GRAPHEME.test(grapheme) ? 2 : 1;
+};
+
+/**
+ * Terminal cells a string occupies. UTF-16 length is wrong for CJK (two cells
+ * per character), emoji (surrogate pairs, one or two cells) and combining
+ * marks (zero), all of which appear in legal names and document titles.
+ */
+export const displayWidth = (text: string): number => {
+  let width = 0;
+  for (const { segment } of graphemes.segment(text)) {
+    width += graphemeWidth(segment);
+  }
+  return width;
+};
+
+/** Cut on grapheme boundaries so a surrogate pair or a mark is never split. */
+const truncate = (text: string, width: number): string => {
+  if (displayWidth(text) <= width) {
+    return text;
+  }
+  const budget = Math.max(width - 1, 1);
+  let out = "";
+  let used = 0;
+  for (const { segment } of graphemes.segment(text)) {
+    const cells = graphemeWidth(segment);
+    if (used + cells > budget) {
+      break;
+    }
+    out += segment;
+    used += cells;
+  }
+  return `${out}${ELLIPSIS}`;
+};
+
+const padToWidth = (text: string, width: number): string =>
+  `${text}${" ".repeat(Math.max(width - displayWidth(text), 0))}`;
+
+/**
+ * Shrink the widest columns first until one row fits `width`; a column never
+ * drops below `MIN_COLUMN_WIDTH`, so a very narrow terminal still shows every
+ * column and the reader scrolls instead of losing one.
+ */
+const fitWidths = (
+  natural: readonly number[],
+  width: number | undefined,
+): number[] => {
+  const fitted = [...natural];
+  if (width === undefined) {
+    return fitted;
+  }
+  let total =
+    fitted.reduce((sum, columnWidth) => sum + columnWidth, 0) +
+    COLUMN_GUTTER * (fitted.length - 1);
+  while (total > width) {
+    const widest = Math.max(...fitted);
+    if (widest <= MIN_COLUMN_WIDTH) {
+      break;
+    }
+    fitted[fitted.indexOf(widest)] = widest - 1;
+    total -= 1;
+  }
+  return fitted;
 };
 
 const renderTable = ({
   items,
   columns,
+  width,
 }: {
   items: readonly unknown[];
   columns: readonly string[] | undefined;
+  width: number | undefined;
 }): string => {
   if (items.length === 0) {
     return "(no results)";
   }
   const first = items.at(0);
-  const cols = columns ?? (isRecord(first) ? Object.keys(first) : ["value"]);
-  const rows = items.map((item) =>
-    cols.map((col) =>
+  const allCols = columns ?? (isRecord(first) ? Object.keys(first) : ["value"]);
+  const allRows = items.map((item) =>
+    allCols.map((col) =>
       isRecord(item) ? formatCell(item[col]) : formatCell(item),
     ),
   );
-  const widths = cols.map((col, index) =>
-    Math.max(col.length, ...rows.map((row) => (row[index] ?? "").length)),
+  // An inferred column that is empty on every row carries nothing; a caller's
+  // explicit column list is kept as given.
+  const keep = allCols.map(
+    (_col, index) =>
+      columns !== undefined || allRows.some((row) => row[index] !== ""),
+  );
+  const cols = keep.some(Boolean)
+    ? allCols.filter((_col, index) => keep[index])
+    : allCols;
+  const rows = allRows.map((row) =>
+    keep.some(Boolean) ? row.filter((_cell, index) => keep[index]) : row,
+  );
+  const widths = fitWidths(
+    cols.map((col, index) =>
+      Math.max(
+        displayWidth(col),
+        ...rows.map((row) => displayWidth(row[index] ?? "")),
+      ),
+    ),
+    width,
   );
   const pad = (cells: readonly string[]): string =>
     cells
-      .map((cell, index) => cell.padEnd(widths[index] ?? cell.length))
-      .join("  ")
+      .map((cell, index) => {
+        const columnWidth = widths[index] ?? displayWidth(cell);
+        return padToWidth(truncate(cell, columnWidth), columnWidth);
+      })
+      .join(" ".repeat(COLUMN_GUTTER))
       .trimEnd();
   const header = pad(cols);
-  const separator = widths.map((width) => "-".repeat(width)).join("  ");
+  const separator = widths
+    .map((columnWidth) => "-".repeat(columnWidth))
+    .join(" ".repeat(COLUMN_GUTTER));
   return [header, separator, ...rows.map(pad)].join("\n");
 };
 
-const renderKeyValue = (payload: unknown): string => {
+/**
+ * One level of nesting is flattened to dotted keys (`matter.name`), so a
+ * response that groups its fields reads as a list instead of JSON blobs.
+ */
+const flattenRecord = (
+  payload: Record<string, unknown>,
+): readonly (readonly [string, unknown])[] => {
+  const entries: (readonly [string, unknown])[] = [];
+  for (const [key, value] of Object.entries(payload)) {
+    if (isRecord(value) && Object.keys(value).length > 0) {
+      for (const [subKey, subValue] of Object.entries(value)) {
+        entries.push([`${key}.${subKey}`, subValue]);
+      }
+      continue;
+    }
+    entries.push([key, value]);
+  }
+  return entries;
+};
+
+const renderKeyValue = (
+  payload: unknown,
+  width: number | undefined,
+): string => {
   if (!isRecord(payload)) {
     return formatCell(payload);
   }
-  const keys = Object.keys(payload);
-  if (keys.length === 0) {
+  const entries = flattenRecord(payload);
+  if (entries.length === 0) {
     return "(empty)";
   }
-  const width = Math.max(...keys.map((key) => key.length));
-  return keys
-    .map((key) => `${key.padEnd(width)}  ${formatCell(payload[key])}`)
+  const keyWidth = Math.max(...entries.map(([key]) => displayWidth(key)));
+  const valueWidth =
+    width === undefined
+      ? undefined
+      : Math.max(width - keyWidth - COLUMN_GUTTER, MIN_COLUMN_WIDTH);
+  return entries
+    .map(([key, value]) => {
+      const cell = formatCell(value);
+      const shown =
+        valueWidth === undefined ? cell : truncate(cell, valueWidth);
+      return `${padToWidth(key, keyWidth)}${" ".repeat(COLUMN_GUTTER)}${shown}`.trimEnd();
+    })
     .join("\n");
 };
 
@@ -173,17 +331,24 @@ export type Writers = {
   stderr: (text: string) => void;
 };
 
-/** Render a plan to stdout, emitting a `--cursor` resume hint on stderr. */
+/**
+ * Render a plan to stdout, emitting a `--cursor` resume hint on stderr.
+ * `width` is the terminal's column count; a table is fitted to it (columns
+ * shrink, cells truncate with an ellipsis) so a row never wraps. JSON output
+ * ignores it.
+ */
 export const renderResult = ({
   plan,
   format,
   writers,
   allActive,
+  width,
 }: {
   plan: RenderPlan;
   format: OutputFormat;
   writers: Writers;
   allActive: boolean;
+  width?: number | undefined;
 }): void => {
   if (plan.kind === "raw-text") {
     writers.stdout(plan.text.endsWith("\n") ? plan.text : `${plan.text}\n`);
@@ -210,7 +375,7 @@ export const renderResult = ({
     } else if (format === "jsonl") {
       writers.stdout(jsonlLine(plan.payload));
     } else {
-      writers.stdout(`${renderKeyValue(plan.payload)}\n`);
+      writers.stdout(`${renderKeyValue(plan.payload, width)}\n`);
     }
     return;
   }
@@ -225,10 +390,20 @@ export const renderResult = ({
     }
   } else {
     writers.stdout(
-      `${renderTable({ items: plan.items, columns: plan.columns })}\n`,
+      `${renderTable({ items: plan.items, columns: plan.columns, width })}\n`,
     );
   }
   if (!allActive && plan.nextCursor !== null) {
     writers.stderr(`more: --cursor ${plan.nextCursor}\n`);
   }
 };
+
+/** The terminal's column count when stdout is a TTY, else undefined (no fitting). */
+export const terminalWidth = (context: {
+  process: {
+    stdout: { isTTY?: boolean | undefined; columns?: number | undefined };
+  };
+}): number | undefined =>
+  context.process.stdout.isTTY === true
+    ? context.process.stdout.columns
+    : undefined;

@@ -6,7 +6,7 @@ import type { Context } from "../context.js";
 import { formatCapabilityCommand } from "../generate-capability-tree.js";
 import { EXIT_CODES } from "../mcp-constants.js";
 import { buildCommonFlags, type CommonFlagValues } from "../output-flags.js";
-import { buildRenderPlan, renderResult } from "../output.js";
+import { buildRenderPlan, renderResult, terminalWidth } from "../output.js";
 import {
   mapClientErrorExit,
   readOutputFormat,
@@ -15,6 +15,8 @@ import {
   scopeGranted,
   setExit,
   writersFor,
+  requestIdLine,
+  readRequestReceipt,
 } from "../run-leaf-command.js";
 import {
   createUploadDocumentDependencies,
@@ -101,6 +103,9 @@ const renderNestedFailure = ({
  * instead of hand-typed prose that could silently drift from it. A flag here
  * is required unless it carries `optional: true` (see `optionalStringFlag`).
  */
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
 export const uploadSpecificFlags: {
   readonly file: RequiredStringFlagSpec;
   readonly workspaceId: RequiredStringFlagSpec;
@@ -211,9 +216,20 @@ export const uploadCommand: Command<Context> = buildCommand<
       },
     });
     if (Result.isOk(uploaded)) {
+      // The finalize capability wraps its outcome in `{ finalizedResult, meta }`;
+      // the outcome alone is the command's result, shaped like every other
+      // save (`{ type, entityId, ... }`), and the receipt goes to stderr like
+      // any other write's request id.
+      const envelope = isRecord(uploaded.value) ? uploaded.value : {};
+      const requestId = readRequestReceipt(uploaded.value);
+      if (requestId !== undefined) {
+        writers.stderr(requestIdLine(requestId, this.process.stderr.isTTY));
+      }
+      const finalizedResult = envelope["finalizedResult"];
       renderResult({
+        width: terminalWidth(this),
         plan: buildRenderPlan({
-          payload: uploaded.value,
+          payload: isRecord(finalizedResult) ? finalizedResult : uploaded.value,
           itemsKey: undefined,
           windowedText: false,
           singleReadActive: true,

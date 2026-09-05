@@ -51,6 +51,7 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
       singleReadWhen: "task_id",
     },
     save_task: { command: ["task", "save"], scope: "matters_write" },
+    delete_task: { command: ["task", "delete"], scope: "matters_write" },
 
     list_documents: {
       command: ["document", "list"],

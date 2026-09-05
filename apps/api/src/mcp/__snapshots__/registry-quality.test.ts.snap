@@ -238,7 +238,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "properties": {
         "entity_id": {
           "type": "string",
-          "minLength": 1,
+          "format": "uuid",
           "description": "Entity ID"
         },
         "cursor": {
@@ -1249,7 +1249,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "properties": {
         "entity_id": {
           "type": "string",
-          "minLength": 1,
+          "format": "uuid",
           "description": "Document entity ID"
         },
         "version_id": {
@@ -1269,7 +1269,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "versions_cursor": {
           "type": "string",
           "maxLength": 512,
-          "description": "Opaque cursor from a previous call to fetch the next page of version history"
+          "description": "Cursor from a previous call for the next page of version history"
         }
       }
     }
@@ -1376,7 +1376,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "properties": {
         "entity_id": {
           "type": "string",
-          "minLength": 1,
+          "format": "uuid",
           "description": "Existing document entity ID that will receive a new version"
         },
         "file": {
@@ -1428,7 +1428,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "properties": {
         "entity_id": {
           "type": "string",
-          "minLength": 1,
+          "format": "uuid",
           "description": "Existing document entity ID that will receive a new version"
         }
       }
@@ -1454,7 +1454,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "properties": {
         "entity_id": {
           "type": "string",
-          "minLength": 1,
+          "format": "uuid",
           "description": "Document entity ID to delete"
         },
         "version_id": {
@@ -1526,7 +1526,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "properties": {
         "entity_id": {
           "type": "string",
-          "minLength": 1,
+          "format": "uuid",
           "description": "Document entity ID whose cell to set"
         },
         "property_id": {
@@ -2057,16 +2057,26 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "description": "Task name; required when creating"
         },
         "status": {
+          "enum": [
+            "open",
+            "in_progress",
+            "in_review",
+            "done",
+            "cancelled"
+          ],
           "type": "string",
-          "minLength": 1,
-          "maxLength": 32,
-          "description": "Task status (e.g. open, in_progress, done)"
+          "description": "Task status"
         },
         "priority": {
+          "enum": [
+            "none",
+            "urgent",
+            "high",
+            "medium",
+            "low"
+          ],
           "type": "string",
-          "minLength": 1,
-          "maxLength": 16,
-          "description": "Task priority (e.g. none, low, medium, high)"
+          "description": "Task priority"
         },
         "item_type": {
           "enum": [
@@ -2139,6 +2149,36 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "type": "string",
           "minLength": 1,
           "description": "Entity-link ID to remove"
+        }
+      }
+    }
+  },
+  {
+    "name": "delete_task",
+    "scope": "stella:matters_write",
+    "access": "write",
+    "description": "Permanently delete a task from its matter, together with its links, assignees and audit-visible field values. Refused while the matter is archived. This is irreversible.",
+    "annotations": {
+      "title": "Delete task",
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "task_id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "task_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Task entity ID to delete"
+        },
+        "confirm": {
+          "type": "boolean",
+          "description": "Must be true to run this irreversible operation. Set it only after a human user has explicitly approved the deletion."
         }
       }
     }
@@ -2546,7 +2586,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         },
         "entity_id": {
           "type": "string",
-          "minLength": 1,
+          "format": "uuid",
           "description": "List only entries logged against this entity (document, folder, or task the time is billed to)"
         },
         "user_id": {
@@ -2620,7 +2660,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "anyOf": [
             {
               "type": "string",
-              "minLength": 1
+              "format": "uuid"
             },
             {
               "type": "null"
@@ -2964,12 +3004,12 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "from": {
           "type": "string",
           "maxLength": 40,
-          "description": "Only entries created on or after this ISO date-time"
+          "description": "Only entries created on or after this ISO date-time, or from the start of this YYYY-MM-DD date (UTC)"
         },
         "to": {
           "type": "string",
           "maxLength": 40,
-          "description": "Only entries created on or before this ISO date-time"
+          "description": "Only entries created on or before this ISO date-time, or up to the end of this YYYY-MM-DD date (UTC)"
         },
         "limit": {
           "type": "integer",
@@ -3464,7 +3504,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "properties": {
         "entity_id": {
           "type": "string",
-          "minLength": 1,
+          "format": "uuid",
           "description": "Entity ID"
         },
         "cursor": {
@@ -3627,7 +3667,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "properties": {
         "entity_id": {
           "type": "string",
-          "minLength": 1,
+          "format": "uuid",
           "description": "Document entity ID"
         },
         "version_id": {
@@ -3647,7 +3687,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         "versions_cursor": {
           "type": "string",
           "maxLength": 512,
-          "description": "Opaque cursor from a previous call to fetch the next page of version history"
+          "description": "Cursor from a previous call for the next page of version history"
         }
       }
     }
@@ -3904,7 +3944,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         },
         "entity_id": {
           "type": "string",
-          "minLength": 1,
+          "format": "uuid",
           "description": "List only entries logged against this entity (document, folder, or task the time is billed to)"
         },
         "user_id": {

@@ -224,6 +224,7 @@ const CHAT_TOOL_TITLE_KEYS = {
   delete_contact: "chat.tool.delete_contact",
   delete_document: "chat.tool.delete_document",
   delete_matter: "chat.tool.delete_matter",
+  delete_task: "chat.tool.delete_task",
   delete_time_entry: "chat.tool.delete_time_entry",
   describe_template: "chat.tool.describe_template",
   // Code-mode discovery companion to execute_typescript: fetches a read tool's
@@ -403,6 +404,7 @@ const CHAT_TOOL_GRANT_POLICY = {
   delete_contact: CHAT_TOOL_GRANT_POLICY_KIND.approveOnce,
   delete_document: CHAT_TOOL_GRANT_POLICY_KIND.approveOnce,
   delete_matter: CHAT_TOOL_GRANT_POLICY_KIND.approveOnce,
+  delete_task: CHAT_TOOL_GRANT_POLICY_KIND.approveOnce,
   delete_time_entry: CHAT_TOOL_GRANT_POLICY_KIND.approveOnce,
   fetch_url: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
   fill_template: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
@@ -489,6 +491,7 @@ const REGISTRY_WRITE_SUMMARY_TOOL_NAMES = {
   delete_contact: true,
   delete_document: true,
   delete_matter: true,
+  delete_task: true,
   delete_time_entry: true,
   fetch_url: false,
   fill_template: true,

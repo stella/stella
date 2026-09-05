@@ -308,12 +308,11 @@ describe("one-command document upload", () => {
     server.stop();
 
     expect(result.exitCode).toBe(0);
+    // The finalize envelope's outcome alone, shaped like every other save.
     expect(JSON.parse(result.stdout)).toEqual({
-      finalizedResult: {
-        type: "entity_create",
-        entityId: "entity-1",
-        fileName: "agreement.txt",
-      },
+      type: "entity_create",
+      entityId: "entity-1",
+      fileName: "agreement.txt",
     });
     expect(result.stderr).toBe("");
     expect(putBodies).toEqual(["agreement body"]);
@@ -888,9 +887,9 @@ describe("error tiers -> exit codes (S4)", () => {
     server.stop();
     expect(result.exitCode).toBe(2);
     expect(result.stderr).toContain("error: Invalid input");
-    // A field issue renders as `  <path>: <message>`; a root issue (empty path)
+    // A field issue renders as `  <flag>: <message>`; a root issue (empty path)
     // renders its message without a bare `: ` prefix.
-    expect(result.stderr).toContain("  matter_id: Required");
+    expect(result.stderr).toContain("  --matter-id: Required");
     expect(result.stderr).toContain("  at least one filter is required");
   });
 });

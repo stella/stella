@@ -5,7 +5,7 @@ import path from "node:path";
 
 import { respondToMcpLifecycle } from "../../tests/mcp-test-lifecycle.js";
 import type { Context } from "../context.js";
-import { runWhoami } from "./auth.js";
+import { describeExpiry, runWhoami } from "./auth.js";
 
 // Guards the "identity command whose --help promises a server-verified result
 // but does no server call" class. `stella auth whoami` under STELLA_API_KEY used
@@ -217,5 +217,16 @@ describe("runWhoami with a stored credential", () => {
     expect(result).toBeUndefined();
     expect(fake.stdout()).not.toContain("Account:");
     expect(fake.stdout()).toContain("Organization: org_1");
+  });
+});
+
+describe("describeExpiry", () => {
+  const now = Date.UTC(2026, 8, 5, 9, 0, 0);
+
+  test("reads as minutes, hours, days, or expired", () => {
+    expect(describeExpiry(now + 12 * 60_000, now)).toBe("in 12 min");
+    expect(describeExpiry(now + 3 * 3_600_000, now)).toBe("in 3 h");
+    expect(describeExpiry(now + 2 * 86_400_000, now)).toBe("in 2 d");
+    expect(describeExpiry(now - 1, now)).toBe("expired");
   });
 });

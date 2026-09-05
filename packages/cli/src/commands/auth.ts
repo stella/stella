@@ -14,9 +14,11 @@ import { login } from "../auth/login.js";
 import { logout, switchOrg, whoami } from "../auth/manage.js";
 import { parseScopesFlag } from "../auth/scopes.js";
 import { resolveServerUrl } from "../auth/server-resolution.js";
+import { CliCommandError } from "../cli-exit-code.js";
 import type { Context } from "../context.js";
 import { STELLA_API_KEY } from "../env.js";
 import { fetchMachineIdentity } from "../mcp-client.js";
+import { EXIT_CODES } from "../mcp-constants.js";
 
 const parseString = (input: string): string => input;
 
@@ -27,6 +29,28 @@ const requiredStringFlag = (brief: string) =>
   ({ brief, kind: "parsed", parse: parseString }) as const;
 
 const formatDate = (epochMs: number): string => new Date(epochMs).toISOString();
+
+const MINUTE_MS = 60_000;
+const HOUR_MS = 60 * MINUTE_MS;
+const DAY_MS = 24 * HOUR_MS;
+
+/**
+ * How far away an expiry is, for a reader who does not want to subtract UTC
+ * timestamps in their head: "in 12 min", "in 3 h", "in 2 d", or "expired".
+ */
+export const describeExpiry = (expiresAt: number, now: number): string => {
+  const remaining = expiresAt - now;
+  if (remaining <= 0) {
+    return "expired";
+  }
+  if (remaining < HOUR_MS) {
+    return `in ${Math.max(1, Math.round(remaining / MINUTE_MS))} min`;
+  }
+  if (remaining < DAY_MS) {
+    return `in ${Math.round(remaining / HOUR_MS)} h`;
+  }
+  return `in ${Math.round(remaining / DAY_MS)} d`;
+};
 
 type LoginFlags = {
   readonly org: string | undefined;
@@ -58,7 +82,10 @@ const loginCommand = buildCommand<LoginFlags, [], Context>({
     if (flags.scopes) {
       const parsedScopes = parseScopesFlag(flags.scopes);
       if (Result.isError(parsedScopes)) {
-        return new Error(parsedScopes.error.message);
+        return new CliCommandError(
+          parsedScopes.error.message,
+          EXIT_CODES.validation,
+        );
       }
       resourceScopes = parsedScopes.value;
       requiredScopes = parsedScopes.value;
@@ -74,7 +101,7 @@ const loginCommand = buildCommand<LoginFlags, [], Context>({
     });
 
     if (Result.isError(result)) {
-      return new Error(result.error.message);
+      return new CliCommandError(result.error.message, EXIT_CODES.auth);
     }
 
     const lines = [
@@ -95,10 +122,10 @@ const loginCommand = buildCommand<LoginFlags, [], Context>({
   parameters: {
     flags: {
       org: stringFlag(
-        "Organization slug to select in the browser when prompted (label only, not enforced server-side; see --help)",
+        "Organization slug to preselect on the sign-in page; a label for the browser step, the granted organization comes from the token",
       ),
       scopes: stringFlag(
-        `Comma-separated stella: resource scopes to request (default: ${CLI_DEFAULT_RESOURCE_SCOPES.join(",")}); the identity scopes ${CLI_IDENTITY_SCOPES.join(",")} are always requested`,
+        `Comma-separated stella: resource scopes to request instead of the default working set (${CLI_DEFAULT_RESOURCE_SCOPES.join(",")}); the identity scopes ${CLI_IDENTITY_SCOPES.join(",")} are always requested`,
       ),
       server: stringFlag("Stella API origin to sign in to"),
     },
@@ -129,7 +156,7 @@ export const runWhoami = async ({
     flagValue: serverFlag,
   });
   if (Result.isError(serverUrlResult)) {
-    return new Error(serverUrlResult.error.message);
+    return new CliCommandError(serverUrlResult.error.message, EXIT_CODES.auth);
   }
   const serverUrl = serverUrlResult.value;
 
@@ -142,8 +169,9 @@ export const runWhoami = async ({
   if (apiKey !== undefined && apiKey !== "") {
     const identity = await fetchMachineIdentity({ serverUrl, token: apiKey });
     if (Result.isError(identity)) {
-      return new Error(
+      return new CliCommandError(
         `Machine API key (STELLA_API_KEY) was rejected by ${serverUrl}: ${identity.error.message}. Confirm STELLA_API_KEY is a current, enabled key for this server.`,
+        EXIT_CODES.auth,
       );
     }
     const { organizationId, scopes } = identity.value;
@@ -162,7 +190,7 @@ export const runWhoami = async ({
 
   const result = await whoami(configDir, serverUrl, orgFlag);
   if (Result.isError(result)) {
-    return new Error(result.error.message);
+    return new CliCommandError(result.error.message, EXIT_CODES.auth);
   }
 
   const info = result.value;
@@ -177,7 +205,7 @@ export const runWhoami = async ({
     ...(account ? [`Account: ${account}`] : []),
     `Organization: ${info.orgLabel ? `${info.orgLabel} (${info.orgId})` : info.orgId}`,
     `Scopes: ${info.scope}`,
-    `Expires: ${formatDate(info.expiresAt)}${info.isExpired ? " (expired)" : ""}`,
+    `Expires: ${formatDate(info.expiresAt)} (${describeExpiry(info.expiresAt, Date.now())})`,
     `Refresh token: ${info.hasRefreshToken ? "yes" : "no"}`,
   ];
   if (info.claims?.sub) {
@@ -218,7 +246,10 @@ const logoutCommand = buildCommand<ServerOrgFlags, [], Context>({
       flagValue: flags.server,
     });
     if (Result.isError(serverUrlResult)) {
-      return new Error(serverUrlResult.error.message);
+      return new CliCommandError(
+        serverUrlResult.error.message,
+        EXIT_CODES.auth,
+      );
     }
 
     const result = await logout(
@@ -227,7 +258,7 @@ const logoutCommand = buildCommand<ServerOrgFlags, [], Context>({
       flags.org,
     );
     if (Result.isError(result)) {
-      return new Error(result.error.message);
+      return new CliCommandError(result.error.message, EXIT_CODES.auth);
     }
 
     this.process.stdout.write(
@@ -258,7 +289,10 @@ const switchCommand = buildCommand<SwitchFlags, [], Context>({
       flagValue: flags.server,
     });
     if (Result.isError(serverUrlResult)) {
-      return new Error(serverUrlResult.error.message);
+      return new CliCommandError(
+        serverUrlResult.error.message,
+        EXIT_CODES.auth,
+      );
     }
 
     const result = await switchOrg(
@@ -267,7 +301,7 @@ const switchCommand = buildCommand<SwitchFlags, [], Context>({
       flags.org,
     );
     if (Result.isError(result)) {
-      return new Error(result.error.message);
+      return new CliCommandError(result.error.message, EXIT_CODES.auth);
     }
 
     this.process.stdout.write(

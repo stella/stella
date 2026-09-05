@@ -52,8 +52,12 @@ type SurfaceMode = (typeof SURFACES)[number]["mode"];
 // default bumped 47 -> 48 to split the host-file data tool from its portable
 // picker launcher; UI metadata is static, so a combined tool rendered the
 // picker even after a host-provided file had already uploaded successfully.
+// default bumped 48 -> 49 for delete_task: tasks were the one workspace entity
+// deletable over HTTP but not through MCP (delete_document refuses them by
+// kind), so agents and the CLI had no way to remove one. Write-only, so the
+// anonymized ceiling is unchanged.
 const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
-  default: 48,
+  default: 49,
   anonymized: 21,
 };
 
@@ -81,8 +85,10 @@ const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
 // the scoping input `workspace_id` and stating its deprecated `matter_id` alias
 // in one clause per field. The alias clause comes back out when the
 // deprecation window closes.
+// default bumped 70_000 -> 70_100 for delete_task plus the uuid format on
+// entity ids and the task status/priority enums: measured 70_059 chars.
 const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 70_000,
+  default: 70_100,
   anonymized: 23_557,
 };
 

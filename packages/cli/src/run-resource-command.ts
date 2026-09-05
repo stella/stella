@@ -17,7 +17,12 @@ import {
   mapHttpStatusExit,
   type ExitCode,
 } from "./mcp-constants.js";
-import { renderResult, type OutputFormat, type Writers } from "./output.js";
+import {
+  renderResult,
+  type OutputFormat,
+  type Writers,
+  terminalWidth,
+} from "./output.js";
 import type { ResourceLeafSpec } from "./resource-types.js";
 import {
   readOutputFormat,
@@ -61,6 +66,7 @@ const runList = async ({
   }
   const items = result.value.resources;
   renderResult({
+    width: terminalWidth(context),
     plan: {
       kind: "page",
       itemsKey: "resources",

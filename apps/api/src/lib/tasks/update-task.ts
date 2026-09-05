@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
+import { isDeepStrictEqual } from "node:util";
 
 import type { Transaction } from "@/api/db/root";
 import { abortableTx } from "@/api/db/safe-db";
@@ -248,6 +249,30 @@ const taskUpdateValues = ({
   ...(body.sortOrder !== undefined && { sortOrder: body.sortOrder }),
   updatedAt: new Date(),
 });
+
+/**
+ * Field-level old/new pairs for the entity audit entry. A value equal to the
+ * stored one is not a change, so a no-op save records nothing; `updatedAt` is
+ * bookkeeping, not a change the compliance view needs.
+ */
+const taskFieldDiffs = (
+  before: Record<string, unknown>,
+  values: Record<string, unknown>,
+): FieldDiffs => {
+  const changes: FieldDiffs = {};
+  for (const [field, next] of Object.entries(values)) {
+    if (field === "updatedAt") {
+      continue;
+    }
+    const previous = before[field];
+    // Structural, not serialized: JSONB reorders object keys on the way back,
+    // so a no-op save of organizer/attendees/recurrence must not read as a change.
+    if (!isDeepStrictEqual(previous, next)) {
+      changes[field] = { old: previous, new: next };
+    }
+  }
+  return changes;
+};
 
 type LockedWorkObligation = NonNullable<
   Awaited<ReturnType<typeof lockWorkObligation>>
@@ -751,17 +776,32 @@ export const updateTaskHandler = async function* ({
         }
       }
 
+      const values = taskUpdateValues({
+        agendaFields,
+        agendaKind,
+        body,
+        listItemType,
+      });
+      // The row as it stands, locked for the update that follows, so the audit
+      // entry can carry old/new pairs like every other update handler does
+      // instead of a bare "updated".
+      const before = (
+        await tx
+          .select()
+          .from(entities)
+          .where(
+            and(
+              eq(entities.id, body.taskId),
+              eq(entities.workspaceId, workspaceId),
+              eq(entities.kind, "task"),
+            ),
+          )
+          .limit(1)
+          .for("update")
+      ).at(0);
       const rows = await tx
         .update(entities)
-        .set({
-          ...taskUpdateValues({
-            agendaFields,
-            agendaKind,
-            body,
-            listItemType,
-          }),
-          updatedAt: now,
-        })
+        .set({ ...values, updatedAt: now })
         .where(
           and(
             eq(entities.id, body.taskId),
@@ -810,6 +850,7 @@ export const updateTaskHandler = async function* ({
           action: AUDIT_ACTION.UPDATE,
           resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
           resourceId: body.taskId,
+          changes: before === undefined ? null : taskFieldDiffs(before, values),
           metadata: { kind: "task" },
         });
       }

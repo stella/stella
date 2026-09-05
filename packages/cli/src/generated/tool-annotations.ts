@@ -188,6 +188,10 @@ export const generatedToolAnnotations: Readonly<
     command: ["task", "save"],
     scope: "matters_write",
   },
+  delete_task: {
+    command: ["task", "delete"],
+    scope: "matters_write",
+  },
   link_matter_contact: {
     command: ["matter", "link-contact"],
     scope: "matters_write",

@@ -2,6 +2,7 @@ import type {
   CallToolResult,
   Tool as McpTool,
 } from "@modelcontextprotocol/server";
+import { Result } from "better-result";
 
 import { DOCUMENT_VERSION_UPLOAD_CAPABILITY_IDS } from "@stll/api-contract";
 
@@ -41,6 +42,8 @@ import {
   MCP_INTERNAL_ERROR_HINT,
   serializeToolResult,
   structuredErrorResult,
+  FEATURE_DISABLED_MESSAGE,
+  featureDisabledHint,
 } from "@/api/mcp/tool-utils";
 
 const MCP_TOOL_HANDLERS = new Map<string, McpToolHandler>(
@@ -214,8 +217,8 @@ export const handleMcpToolCall = async ({
     return serializeToolResult(
       structuredErrorResult({
         code: "feature_disabled",
-        message: "This feature is not enabled on this deployment",
-        hint: "This deployment or organization has this feature turned off; it cannot be enabled from the client.",
+        message: FEATURE_DISABLED_MESSAGE,
+        hint: featureDisabledHint(staticTool.feature),
       }),
     );
   }
@@ -290,22 +293,22 @@ export const handleMcpToolCall = async ({
     );
   }
 
-  try {
-    const executionContext =
-      staticTool.annotations.destructiveHint === true
-        ? bindApprovedMcpAuditContext(context)
-        : context;
-    // Handlers never see the mode: they return either a finished result or an
-    // egress plan. The central pipeline applies anonymization (anonymized mode)
-    // before windowing; this transport boundary then serializes. Both steps run
-    // inside this try so an anonymization or windowing failure is captured like
-    // any handler failure.
-    const response = await handler({
-      args: toolArgs,
-      context: executionContext,
-    });
-    return serializeToolResult(
-      await finalizeToolEgress(
+  const executionContext =
+    staticTool.annotations.destructiveHint === true
+      ? bindApprovedMcpAuditContext(context)
+      : context;
+  // Handlers never see the mode: they return either a finished result or an
+  // egress plan. The central pipeline applies anonymization (anonymized mode)
+  // before windowing; this transport boundary then serializes. Both steps run
+  // inside one Result so an anonymization or windowing failure is captured like
+  // any handler failure.
+  const finished = await Result.tryPromise({
+    try: async () => {
+      const response = await handler({
+        args: toolArgs,
+        context: executionContext,
+      });
+      return await finalizeToolEgress(
         {
           context: executionContext,
           mode,
@@ -315,10 +318,12 @@ export const handleMcpToolCall = async ({
           anonymizeTextFields:
             executionContext.testDependencies?.anonymizeTextFields,
         },
-      ),
-    );
-  } catch (error) {
-    captureError(error, { source: "mcp", toolName });
+      );
+    },
+    catch: (error) => error,
+  });
+  if (Result.isError(finished)) {
+    captureError(finished.error, { source: "mcp", toolName });
     // Generic message: never leak internals to the caller. `captureError` keeps
     // the real exception for observability.
     return serializeToolResult(
@@ -329,4 +334,5 @@ export const handleMcpToolCall = async ({
       }),
     );
   }
+  return serializeToolResult(finished.value);
 };

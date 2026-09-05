@@ -94,6 +94,7 @@ export const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
   delete_contact: CHAT_TOOL_POLICY_KIND.mutation,
   delete_document: CHAT_TOOL_POLICY_KIND.mutation,
   delete_matter: CHAT_TOOL_POLICY_KIND.mutation,
+  delete_task: CHAT_TOOL_POLICY_KIND.mutation,
   delete_time_entry: CHAT_TOOL_POLICY_KIND.mutation,
   link_matter_contact: CHAT_TOOL_POLICY_KIND.mutation,
   manage_organization: CHAT_TOOL_POLICY_KIND.mutation,

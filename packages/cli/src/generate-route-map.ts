@@ -77,6 +77,21 @@ export class RouteGenerationError extends RouteGenerationErrorBase<{
   }
 }
 
+/**
+ * The first sentence of a tool's description, the line `--help` shows next to
+ * the command; the full text stays on the server's `tools/list`.
+ */
+const describe = (description: string): { description?: string } => {
+  const sentence = description
+    .trim()
+    .split(/(?<=[.!?])\s+/u)
+    .at(0)
+    ?.trim();
+  return sentence === undefined || sentence.length === 0
+    ? {}
+    : { description: sentence };
+};
+
 /** snake_case or camelCase segment -> kebab-case. */
 export const kebabCase = (segment: string): string =>
   segment
@@ -659,6 +674,7 @@ const leafSpecsForTool = ({
       specs.push({
         commandPath: [...command, subCommandName],
         toolName: listing.name,
+        ...describe(listing.description),
         discriminatorInject: { [discriminatorProp]: value },
         flags,
         inputOnly,
@@ -687,6 +703,7 @@ const leafSpecsForTool = ({
     {
       commandPath: command,
       toolName: listing.name,
+      ...describe(listing.description),
       flags,
       inputOnly,
       paginated,

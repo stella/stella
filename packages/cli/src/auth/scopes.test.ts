@@ -1,6 +1,11 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import {
+  CLI_DEFAULT_RESOURCE_SCOPES,
+  CLI_NON_DEFAULT_RESOURCE_SCOPES,
+  CLI_REQUIRED_RESOURCE_SCOPES,
+} from "./constants.js";
 import { parseScopesFlag } from "./scopes.js";
 
 describe("parseScopesFlag", () => {
@@ -46,5 +51,22 @@ describe("parseScopesFlag", () => {
   test("rejects a scope token containing internal whitespace", () => {
     const result = parseScopesFlag("stella:read,stella read");
     expect(Result.isError(result)).toBe(true);
+  });
+});
+
+describe("default login scopes", () => {
+  test("every catalog scope is either requested by default or deliberately left out", () => {
+    const classified = new Set<string>([
+      ...CLI_DEFAULT_RESOURCE_SCOPES,
+      ...CLI_NON_DEFAULT_RESOURCE_SCOPES,
+    ]);
+    expect(
+      CLI_REQUIRED_RESOURCE_SCOPES.filter((scope) => !classified.has(scope)),
+    ).toEqual([]);
+    expect(
+      CLI_DEFAULT_RESOURCE_SCOPES.filter((scope) =>
+        (CLI_NON_DEFAULT_RESOURCE_SCOPES as readonly string[]).includes(scope),
+      ),
+    ).toEqual([]);
   });
 });

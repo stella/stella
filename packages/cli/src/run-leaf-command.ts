@@ -15,6 +15,8 @@ import { RESOURCE_SCOPE_PREFIX } from "./auth/scopes.js";
 import type { Context } from "./context.js";
 import { applyDeprecatedInputAliases } from "./deprecated-input-aliases.js";
 import { flagKey } from "./flag-name.js";
+import { kebabCase } from "./generate-route-map.js";
+import { normalizeInputKeyCasing } from "./input-key-casing.js";
 import { validateAgainstSchema } from "./json-schema-validate.js";
 import {
   callTool,
@@ -38,6 +40,7 @@ import {
   selectFormat,
   type OutputFormat,
   type Writers,
+  terminalWidth,
 } from "./output.js";
 import { RESERVED_FLAG_KEYS } from "./reserved-flag-keys.js";
 import type { FlagSpec, LeafCommandSpec } from "./route-types.js";
@@ -938,13 +941,71 @@ export const streamOrRenderAllPages = async ({
       singleReadActive: false,
       columns: undefined,
     });
-    renderResult({ plan, format, writers, allActive: true });
+    renderResult({
+      plan,
+      format,
+      writers,
+      allActive: true,
+      width: terminalWidth(context),
+    });
   }
   if (outcome.value.truncated) {
     writers.stderr(
       `--all truncated at ${outcome.value.count} items/pages; resume with --cursor ${outcome.value.lastCursor}\n`,
     );
   }
+};
+
+/**
+ * A wire field the active leaf exposes as a flag (`workspace_id`) is what the
+ * caller typed (`--workspace-id`), so an issue names the flag. A field that
+ * only travels inside `--input` (input-only or nested) stays a path.
+ */
+const issueLocation = (
+  path: string,
+  flagPaths: ReadonlySet<string> | undefined,
+): string => (flagPaths?.has(path) ? `--${kebabCase(path)}` : path);
+
+/** The input paths a leaf's generated flags write to. */
+const leafFlagPaths = (
+  spec: Pick<LeafCommandSpec, "flags">,
+): ReadonlySet<string> => new Set(spec.flags.map((flag) => flag.prop));
+
+/**
+ * The stderr lines for a structured tool error: the summary, then one line per
+ * field issue, then the hint. A lone issue that only repeats the summary is
+ * folded into it (`error: <message> (--flag)`) instead of printing twice.
+ */
+export const toolErrorLines = (
+  envelope: {
+    message: string;
+    hint: string | undefined;
+    issues: readonly { path: string; message: string }[];
+  },
+  flagPaths?: ReadonlySet<string>,
+): string[] => {
+  const lines: string[] = [];
+  const [only] = envelope.issues;
+  if (envelope.issues.length === 1 && only?.message === envelope.message) {
+    lines.push(
+      only.path === ""
+        ? `error: ${envelope.message}`
+        : `error: ${envelope.message} (${issueLocation(only.path, flagPaths)})`,
+    );
+  } else {
+    lines.push(`error: ${envelope.message}`);
+    for (const issue of envelope.issues) {
+      lines.push(
+        issue.path === ""
+          ? `  ${issue.message}`
+          : `  ${issueLocation(issue.path, flagPaths)}: ${issue.message}`,
+      );
+    }
+  }
+  if (envelope.hint !== undefined) {
+    lines.push(`hint: ${envelope.hint}`);
+  }
+  return lines;
 };
 
 /**
@@ -958,27 +1019,18 @@ export const renderToolError = ({
   context,
   result,
   writers,
+  flagPaths,
 }: {
   context: Context;
   result: CallToolResult;
   writers: Writers;
+  flagPaths?: ReadonlySet<string> | undefined;
 }): void => {
   const errorPayload = parsePayload(result);
   const envelope = errorEnvelope(errorPayload);
   if (envelope !== null) {
-    writers.stderr(`error: ${envelope.message}\n`);
-    // Field-level validation issues follow the summary, one indented line each,
-    // so an agent can map a failure back to the offending field. A root issue
-    // (empty path) renders its message without a bare `: ` prefix.
-    for (const issue of envelope.issues) {
-      writers.stderr(
-        issue.path === ""
-          ? `  ${issue.message}\n`
-          : `  ${issue.path}: ${issue.message}\n`,
-      );
-    }
-    if (envelope.hint !== undefined) {
-      writers.stderr(`hint: ${envelope.hint}\n`);
+    for (const line of toolErrorLines(envelope, flagPaths)) {
+      writers.stderr(`${line}\n`);
     }
     if (envelope.requestId !== undefined) {
       writers.stderr(
@@ -999,6 +1051,8 @@ type RenderCommandResultOptions = {
   windowedText: boolean;
   writers: Writers;
   writeReceipt: boolean;
+  /** Input paths the leaf exposes as flags, so an issue can name the flag. */
+  flagPaths?: ReadonlySet<string> | undefined;
 };
 
 export const renderCommandResult = ({
@@ -1009,9 +1063,10 @@ export const renderCommandResult = ({
   windowedText,
   writers,
   writeReceipt,
+  flagPaths,
 }: RenderCommandResultOptions): void => {
   if (result.isError) {
-    renderToolError({ context, result, writers });
+    renderToolError({ context, result, writers, flagPaths });
     return;
   }
   const payload = parsePayload(result);
@@ -1026,7 +1081,13 @@ export const renderCommandResult = ({
     singleReadActive: false,
     columns: undefined,
   });
-  renderResult({ plan, format, writers, allActive: false });
+  renderResult({
+    plan,
+    format,
+    writers,
+    allActive: false,
+    width: terminalWidth(context),
+  });
 
   // Generic two-phase handshake affordance (driven by the response fields, not
   // any tool name): a phase-1 `approval_required` response carries a
@@ -1106,7 +1167,21 @@ export const runLeafCommand = async ({
     return;
   }
 
-  const built = await buildArgsFromFlags(spec, flags, aliased.args);
+  // Responses are camelCase and inputs snake_case; a payload handed back from
+  // a list (the natural scripting loop) is accepted under either casing.
+  const cased = normalizeInputKeyCasing({
+    args: aliased.args,
+    inputSchema: spec.inputSchema,
+  });
+  if (cased.status === "conflict") {
+    writers.stderr(
+      `--input invalid: ${cased.camel} and ${cased.snake} name the same field but were supplied with different values\n`,
+    );
+    setExit(context, EXIT_CODES.validation);
+    return;
+  }
+
+  const built = await buildArgsFromFlags(spec, flags, cased.args);
   if (!built.ok) {
     writers.stderr(`${built.message}\n`);
     setExit(context, EXIT_CODES.validation);
@@ -1179,6 +1254,7 @@ export const runLeafCommand = async ({
       windowedText: spec.windowedText,
       writers,
       writeReceipt: false,
+      flagPaths: leafFlagPaths(spec),
     });
   };
   const allActive = spec.paginated && flags[RESERVED_FLAG_KEYS.all] === true;

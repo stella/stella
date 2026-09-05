@@ -20,6 +20,7 @@ import {
   reservedFlagUsageError,
   runLeafCommand,
   scopePreflightFailure,
+  toolErrorLines,
 } from "./run-leaf-command.js";
 
 const specWith = (flags: readonly FlagSpec[]): LeafCommandSpec => ({
@@ -731,5 +732,56 @@ describe("scopePreflightFailure: the hint must survive a re-parse", () => {
         expect(reparsed.value).not.toContain(identityScope);
       }
     }
+  });
+});
+
+describe("toolErrorLines", () => {
+  const FLAGS = new Set(["workspace_id", "entity_id"]);
+
+  test("a lone issue repeating the summary folds into one line naming the flag", () => {
+    expect(
+      toolErrorLines(
+        {
+          message:
+            "Provide workspace_id to list tasks, or task_id to read one task",
+          hint: undefined,
+          issues: [
+            {
+              path: "workspace_id",
+              message:
+                "Provide workspace_id to list tasks, or task_id to read one task",
+            },
+          ],
+        },
+        FLAGS,
+      ),
+    ).toEqual([
+      "error: Provide workspace_id to list tasks, or task_id to read one task (--workspace-id)",
+    ]);
+  });
+
+  test("distinct issues list one per line; only real flags become flags, input-only and nested paths stay paths", () => {
+    expect(
+      toolErrorLines(
+        {
+          message: "Invalid input",
+          hint: "Fix the fields",
+          issues: [
+            { path: "entity_id", message: "Invalid UUID" },
+            { path: "values", message: "Expected an object" },
+            { path: "values.title", message: "Expected string" },
+            { path: "", message: "Body too large" },
+          ],
+        },
+        FLAGS,
+      ),
+    ).toEqual([
+      "error: Invalid input",
+      "  --entity-id: Invalid UUID",
+      "  values: Expected an object",
+      "  values.title: Expected string",
+      "  Body too large",
+      "hint: Fix the fields",
+    ]);
   });
 });

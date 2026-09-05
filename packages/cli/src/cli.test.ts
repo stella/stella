@@ -1,9 +1,33 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 
 import packageJson from "../package.json" with { type: "json" };
 
 const CLI_ENTRYPOINT = path.join(import.meta.dirname, "cli.ts");
+
+// A CLI process with no stored session, no cache, and no server in the
+// environment, so exit codes reflect the argv alone.
+const spawnIsolated = (args: readonly string[]) => {
+  const home = mkdtempSync(path.join(os.tmpdir(), "stella-cli-shell-"));
+  const {
+    STELLA_SERVER_URL: _server,
+    STELLA_API_KEY: _key,
+    ...env
+  } = process.env;
+  return Bun.spawnSync({
+    cmd: ["bun", CLI_ENTRYPOINT, ...args],
+    env: {
+      ...env,
+      HOME: home,
+      XDG_CACHE_HOME: path.join(home, ".cache"),
+      XDG_CONFIG_HOME: path.join(home, ".config"),
+    },
+    stderr: "pipe",
+    stdout: "pipe",
+  });
+};
 
 describe("stella CLI shell", () => {
   test("--version prints the package version", () => {
@@ -69,5 +93,26 @@ describe("stella CLI shell", () => {
     expect(result.exitCode).toBe(0);
     expect(result.stdout.toString()).toContain("list");
     expect(result.stdout.toString()).toContain("save");
+  });
+
+  // The documented contract (root --help) is the whole exit-code surface;
+  // stricli's own negative codes (folded to 251/252 by the OS) and its default 1
+  // for a returned Error must never reach the caller.
+  test("an unknown command exits 2, not stricli's 251", () => {
+    const result = spawnIsolated(["matters", "list"]);
+    expect(result.exitCode).toBe(2);
+    expect(result.stderr.toString()).toContain("did you mean `matter`");
+  });
+
+  test("an unknown flag exits 2, not stricli's 252", () => {
+    const result = spawnIsolated(["matter", "list", "--limt", "2"]);
+    expect(result.exitCode).toBe(2);
+    expect(result.stderr.toString()).toContain("--limit");
+  });
+
+  test("a command with no server configured exits 3", () => {
+    const result = spawnIsolated(["auth", "whoami"]);
+    expect(result.exitCode).toBe(3);
+    expect(result.stderr.toString()).toContain("No server configured");
   });
 });

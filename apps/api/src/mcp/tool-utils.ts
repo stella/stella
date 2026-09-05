@@ -57,6 +57,26 @@ export const DEFAULT_COMPAT_SEARCH_LIMIT =
   LIMITS.mcpCompatSearchPageSizeDefault;
 export const ISO_DATE_SCHEMA = v.pipe(v.string(), v.isoDate());
 
+export const FEATURE_DISABLED_MESSAGE =
+  "This feature is not enabled on this deployment";
+
+/**
+ * The next step for a `feature_disabled` refusal. Naming the deployment flag
+ * tells a self-hosting operator what to set; a client can never flip it.
+ */
+export const featureDisabledHint = (feature: string | undefined): string =>
+  feature === undefined
+    ? "This deployment has this feature turned off; it cannot be enabled from the client."
+    : `This deployment has ${feature} turned off; a server operator enables it by setting ${feature}=true. It cannot be enabled from the client.`;
+
+/**
+ * A UUID-shaped id input. Ids reach SQL as uuid columns, so a malformed one
+ * must fail here as a validation error naming the field rather than as a
+ * database cast failure reported as an internal error.
+ */
+export const uuidInputSchema = (description: string) =>
+  v.pipe(v.string(), v.uuid(), v.description(description));
+
 type LocalToolExecutionOptions = {
   messages: [];
   toolCallId: string;

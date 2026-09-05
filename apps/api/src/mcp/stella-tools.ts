@@ -99,6 +99,7 @@ import {
   toolDataResult,
   toPlainTextSnippet,
   validationErrorResult,
+  uuidInputSchema,
 } from "@/api/mcp/tool-utils";
 import { defineValibotMcpTool } from "@/api/mcp/valibot-tool-definition";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
@@ -624,7 +625,7 @@ const searchCaseLawArgsSchema = v.strictObject({
 });
 
 const readContentAcrossMattersArgsSchema = v.strictObject({
-  entity_id: v.pipe(v.string(), v.minLength(1), v.description("Entity ID")),
+  entity_id: uuidInputSchema("Entity ID"),
   cursor: v.optional(
     v.pipe(
       v.string(),

@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   buildRenderPlan,
+  displayWidth,
   renderResult,
   selectFormat,
   type Writers,
@@ -177,5 +178,149 @@ describe("renderResult (S4)", () => {
       allActive: false,
     });
     expect(out.join("")).toBe("raw body\n");
+  });
+});
+
+describe("renderResult: table fitting and flattening", () => {
+  const page = (items: readonly unknown[]) =>
+    buildRenderPlan({
+      payload: { items, nextCursor: null },
+      itemsKey: "items",
+      windowedText: false,
+      singleReadActive: false,
+      columns: undefined,
+    });
+
+  test("an inferred column that is empty on every row is dropped", () => {
+    const { out, writers } = capture();
+    renderResult({
+      plan: page([
+        { id: "a", tags: [], color: null, name: "One" },
+        { id: "b", tags: [], color: null, name: "Two" },
+      ]),
+      format: "table",
+      writers,
+      allActive: false,
+    });
+    const header = out.join("").split("\n")[0] ?? "";
+    expect(header).toContain("id");
+    expect(header).toContain("name");
+    expect(header).not.toContain("tags");
+    expect(header).not.toContain("color");
+  });
+
+  test("scalar arrays render as a comma list, not JSON", () => {
+    const { out, writers } = capture();
+    renderResult({
+      plan: page([{ id: "a", tags: ["urgent", "client"] }]),
+      format: "table",
+      writers,
+      allActive: false,
+    });
+    expect(out.join("")).toContain("urgent, client");
+  });
+
+  test("rows are fitted to the terminal width with an ellipsis", () => {
+    const { out, writers } = capture();
+    renderResult({
+      plan: page([{ id: "a", headline: "x".repeat(200) }]),
+      format: "table",
+      writers,
+      allActive: false,
+      width: 40,
+    });
+    const lines = out.join("").trimEnd().split("\n");
+    for (const line of lines) {
+      expect(line.length).toBeLessThanOrEqual(40);
+    }
+    expect(lines.at(-1)).toContain("\u2026");
+  });
+
+  test("without a width nothing is truncated", () => {
+    const { out, writers } = capture();
+    renderResult({
+      plan: page([{ id: "a", headline: "x".repeat(200) }]),
+      format: "table",
+      writers,
+      allActive: false,
+    });
+    expect(out.join("")).toContain("x".repeat(200));
+  });
+
+  test("an empty nested record keeps its key instead of vanishing", () => {
+    const { out, writers } = capture();
+    renderResult({
+      plan: buildRenderPlan({
+        payload: { id: "m1", meta: {} },
+        itemsKey: undefined,
+        windowedText: false,
+        singleReadActive: true,
+        columns: undefined,
+      }),
+      format: "table",
+      writers,
+      allActive: false,
+    });
+    expect(out.join("")).toContain("meta");
+    expect(out.join("")).toContain("{}");
+  });
+
+  test("a single object flattens one level of nesting to dotted keys", () => {
+    const { out, writers } = capture();
+    renderResult({
+      plan: buildRenderPlan({
+        payload: {
+          matter: { id: "m1", name: "Probe" },
+          overview: { entityCount: 3 },
+          members: [{ userId: "u1" }],
+        },
+        itemsKey: undefined,
+        windowedText: false,
+        singleReadActive: true,
+        columns: undefined,
+      }),
+      format: "table",
+      writers,
+      allActive: false,
+    });
+    const text = out.join("");
+    expect(text).toContain("matter.name");
+    expect(text).toContain("Probe");
+    expect(text).toContain("overview.entityCount");
+    expect(text).not.toContain('{"id":"m1"');
+  });
+});
+
+describe("displayWidth and Unicode-aware truncation", () => {
+  test("counts terminal cells, not UTF-16 code units", () => {
+    expect(displayWidth("abc")).toBe(3);
+    expect(displayWidth("\u6cd5\u5f8b")).toBe(4);
+    expect(displayWidth("caf\u00e9")).toBe(4);
+    expect(displayWidth("e\u0301")).toBe(1);
+    expect(displayWidth("\u{1F4C4}")).toBe(2);
+  });
+
+  test("a CJK cell is cut on a character boundary and stays within the column", () => {
+    const { out, writers } = capture();
+    renderResult({
+      plan: buildRenderPlan({
+        payload: {
+          items: [{ id: "a", name: "\u6cd5\u5f8b".repeat(30) }],
+          nextCursor: null,
+        },
+        itemsKey: "items",
+        windowedText: false,
+        singleReadActive: false,
+        columns: undefined,
+      }),
+      format: "table",
+      writers,
+      allActive: false,
+      width: 30,
+    });
+    for (const line of out.join("").trimEnd().split("\n")) {
+      expect(displayWidth(line)).toBeLessThanOrEqual(30);
+      expect(line).not.toContain("\uFFFD");
+    }
   });
 });

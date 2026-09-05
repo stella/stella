@@ -3,11 +3,13 @@ import type { RouteMap } from "@stricli/core";
 import { panic, Result } from "better-result";
 
 import { resolveServerUrl } from "../auth/server-resolution.js";
+import { CliCommandError } from "../cli-exit-code.js";
 import {
   checkServerCompatibility,
   type CompatibilityReport,
 } from "../compatibility.js";
 import type { Context } from "../context.js";
+import { EXIT_CODES } from "../mcp-constants.js";
 import { buildServerFlag } from "../output-flags.js";
 
 type CheckFlags = {
@@ -29,11 +31,12 @@ const checkCommand = buildCommand<CheckFlags, [], Context>({
       flagValue: flags.server,
     });
     if (Result.isError(serverUrl)) {
-      return new Error(serverUrl.error.message);
+      return new CliCommandError(serverUrl.error.message, EXIT_CODES.auth);
     }
     const result = await checkServerCompatibility(serverUrl.value);
     if (Result.isError(result)) {
-      return new Error(result.error.message);
+      // An incompatible or unreachable server is a server-class failure.
+      return new CliCommandError(result.error.message, EXIT_CODES.server);
     }
 
     const contract = describeContract(result.value);

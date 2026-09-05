@@ -192,7 +192,7 @@ describe("runCapabilityCommand: flag -> invoke_capability payload", () => {
       capabilityId: "billing-codes.create",
       commandPath: ["billing-codes", "create"],
       flags: [
-        stringFlag("--workspace", "params", "workspaceId", true),
+        stringFlag("--workspace-id", "params", "workspaceId", true),
         stringFlag("--code", "body", "code", true),
       ],
     });
@@ -203,7 +203,7 @@ describe("runCapabilityCommand: flag -> invoke_capability payload", () => {
     });
     await runCapabilityCommand({
       context: tty.context,
-      flags: { workspace: "ws-1", code: "A1" },
+      flags: { workspaceId: "ws-1", code: "A1" },
       spec,
     });
     server.stop();
@@ -317,7 +317,7 @@ describe("runCapabilityCommand: flag -> invoke_capability payload", () => {
     const server = startServer({ kind: "echo" });
     const spec = capSpec({
       capabilityId: "uploads.create",
-      flags: [stringFlag("--workspace", "params", "workspaceId", true)],
+      flags: [stringFlag("--workspace-id", "params", "workspaceId", true)],
       inputSchema: {
         type: "object",
         additionalProperties: false,
@@ -340,14 +340,14 @@ describe("runCapabilityCommand: flag -> invoke_capability payload", () => {
       stdinData: "",
       isTTY: false,
     });
-    // The body rides --input; the required --workspace flag overlays
+    // The body rides --input; the required --workspace-id flag overlays
     // params.workspaceId (and overrides the stale id present in the JSON).
     await runCapabilityCommand({
       context: tty.context,
       flags: {
         input:
           '{"body":{"purpose":"agent_skill"},"params":{"workspaceId":"stale"}}',
-        workspace: "ws-1",
+        workspaceId: "ws-1",
       },
       spec,
     });
@@ -363,7 +363,7 @@ describe("runCapabilityCommand: flag -> invoke_capability payload", () => {
     const server = startServer({ kind: "echo" });
     const spec = capSpec({
       capabilityId: "uploads.create",
-      flags: [stringFlag("--workspace", "params", "workspaceId", true)],
+      flags: [stringFlag("--workspace-id", "params", "workspaceId", true)],
       inputSchema: {
         type: "object",
         additionalProperties: false,
@@ -397,10 +397,10 @@ describe("runCapabilityCommand: flag -> invoke_capability payload", () => {
     const server = startServer({ kind: "echo" });
     // A synthetic-required workspaceId plus a body-borne required field: the
     // exact shape (e.g. view-templates.delete) where validating the RAW --input
-    // would reject params.workspaceId before --workspace overlays it.
+    // would reject params.workspaceId before --workspace-id overlays it.
     const spec = capSpec({
       capabilityId: "view-templates.delete",
-      flags: [stringFlag("--workspace", "params", "workspaceId", true)],
+      flags: [stringFlag("--workspace-id", "params", "workspaceId", true)],
       inputSchema: {
         type: "object",
         additionalProperties: false,
@@ -424,7 +424,7 @@ describe("runCapabilityCommand: flag -> invoke_capability payload", () => {
     });
     await runCapabilityCommand({
       context: tty.context,
-      flags: { input: '{"params":{"templateId":"t1"}}', workspace: "ws-1" },
+      flags: { input: '{"params":{"templateId":"t1"}}', workspaceId: "ws-1" },
       spec,
     });
     server.stop();
@@ -438,7 +438,7 @@ describe("runCapabilityCommand: flag -> invoke_capability payload", () => {
     const server = startServer({ kind: "echo" });
     const spec = capSpec({
       capabilityId: "uploads.create",
-      flags: [stringFlag("--workspace", "params", "workspaceId", true)],
+      flags: [stringFlag("--workspace-id", "params", "workspaceId", true)],
     });
     const tty = makeTtyContext({
       serverUrl: server.url,

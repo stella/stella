@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -125,12 +125,26 @@ const writeCache = async (
 describe("resolveCommandTree (S5.3)", () => {
   test("no cache -> baked-in tree, no notice", async () => {
     const env = await makeCacheEnv();
-    const { tree, notice } = await resolveCommandTree({
+    const { tree, notice, disabledTools } = await resolveCommandTree({
       serverOrigin: ORIGIN,
       env,
     });
     expect(tree).toBe(generatedRouteMap);
     expect(notice).toBeUndefined();
+    expect(disabledTools).toEqual([]);
+  });
+
+  test("feature-omitted tools are reported as disabled for help and tools list", async () => {
+    const env = await makeCacheEnv();
+    await writeCache(env, {
+      featureOmittedTools: ["search_case_law", "get_usage"],
+    });
+    const { tree, disabledTools } = await resolveCommandTree({
+      serverOrigin: ORIGIN,
+      env,
+    });
+    expect(tree).toBe(generatedRouteMap);
+    expect(disabledTools).toEqual(["search_case_law", "get_usage"]);
   });
 
   test("empty delta -> baked-in tree", async () => {
@@ -356,6 +370,30 @@ describe("refreshRegistryCache (S5.3/S5.5)", () => {
       },
     });
     expect(outcome).toEqual({ status: "skipped", reason: "no-cache" });
+  });
+
+  test("an unreadable cache left by an older schema version is refreshed, not skipped", async () => {
+    const env = await makeCacheEnv();
+    const filePath = await writeCache(env, {});
+    // Simulate a file written by a CLI with a previous cache schema version.
+    await writeFile(
+      filePath,
+      JSON.stringify({
+        version: CACHE_SCHEMA_VERSION - 1,
+        serverOrigin: ORIGIN,
+      }),
+    );
+    const outcome = await refreshRegistryCache({
+      serverOrigin: ORIGIN,
+      token: "t",
+      env,
+      fetchLatestVersion: async () => undefined,
+      fetchRaw: okFetch(toolsBody(["list_matters"])),
+      bakedListings: [listing("list_matters")],
+    });
+    expect(outcome).toEqual({ status: "refreshed", deltaEmpty: true });
+    const written = await readCacheFile(filePath);
+    expect(written?.version).toBe(CACHE_SCHEMA_VERSION);
   });
 
   test("skips a fresh existing cache when not forced", async () => {

@@ -23,6 +23,7 @@ import type {
 } from "@stricli/core";
 
 import packageJson from "../package.json" with { type: "json" };
+import { determineCommandExitCode } from "./cli-exit-code.js";
 import { authRoute } from "./commands/auth.js";
 import { compatibilityRoute } from "./commands/compatibility.js";
 import { uploadCommand } from "./commands/upload.js";
@@ -155,8 +156,26 @@ const leafBrief = (spec: LeafCommandSpec): string => {
     spec.inputOnly.length > 0
       ? ` (via --input only: ${spec.inputOnly.join(", ")})`
       : "";
-  return `Run the ${spec.toolName} tool${inputHint}`;
+  return `${spec.description ?? `Run the ${spec.toolName} tool`}${inputHint}`;
 };
+
+/**
+ * Every value flag is optional at the parser (a field may arrive through
+ * `--input`), so the usage line brackets required flags too. This line states
+ * the tool's actual requirement where the usage line cannot.
+ */
+const requiredFlagsLine = (
+  flags: readonly { flag: string; required: boolean }[],
+): string | undefined => {
+  const required = flags.filter((flag) => flag.required).map((f) => f.flag);
+  return required.length === 0
+    ? undefined
+    : `Required (as flags, or inside --input): ${required.join(", ")}`;
+};
+
+/** A route group's brief names the commands under it instead of a placeholder. */
+const groupBrief = (name: string, children: Record<string, unknown>): string =>
+  `${name} commands: ${Object.keys(children).join(", ")}`;
 
 const fullDescription = ({
   brief,
@@ -164,30 +183,42 @@ const fullDescription = ({
   inputSchema,
   inputOnly,
   requiredPaths,
+  requiredFlags,
 }: {
   brief: string;
   discriminatorInject?: Readonly<Record<string, string>> | undefined;
   inputSchema: Record<string, unknown> | undefined;
   inputOnly: readonly string[];
   requiredPaths: readonly string[];
+  requiredFlags: readonly { flag: string; required: boolean }[];
 }): string | undefined => {
-  if (inputSchema === undefined) {
+  const required = requiredFlagsLine(requiredFlags);
+  const contract =
+    inputSchema === undefined
+      ? undefined
+      : buildInputContractHelp({
+          schema: inputSchema,
+          inputOnly,
+          requiredPaths,
+        });
+  if (
+    required === undefined &&
+    (contract === undefined || contract.fields.length === 0)
+  ) {
     return undefined;
   }
-  const contract = buildInputContractHelp({
-    schema: inputSchema,
-    inputOnly,
-    requiredPaths,
-  });
+  const lines = [brief];
+  if (required !== undefined) {
+    lines.push("", required);
+  }
   if (contract === undefined || contract.fields.length === 0) {
-    return undefined;
+    return lines.join("\n");
   }
-  const lines = [
-    brief,
+  lines.push(
     "",
     "--input JSON fields (explicit value flags override matching JSON paths):",
     ...contract.fields.map((line) => `  ${line}`),
-  ];
+  );
   if (contract.example.status === "complete") {
     const example =
       discriminatorInject === undefined
@@ -207,9 +238,17 @@ const fullDescription = ({
   return lines.join("\n");
 };
 
-const buildLeafCommand = (spec: LeafCommandSpec): RoutingTarget => {
+/** The suffix a gated-off command's brief carries in --help and tools list. */
+export const DISABLED_MARKER = "[disabled on this server]";
+
+const buildLeafCommand = (
+  spec: LeafCommandSpec,
+  disabled: ReadonlySet<string>,
+): RoutingTarget => {
   const flags = buildLeafFlags(spec);
-  const brief = leafBrief(spec);
+  const brief = disabled.has(spec.toolName)
+    ? `${leafBrief(spec)} ${DISABLED_MARKER}`
+    : leafBrief(spec);
   const description = fullDescription({
     brief,
     discriminatorInject: spec.discriminatorInject,
@@ -218,6 +257,7 @@ const buildLeafCommand = (spec: LeafCommandSpec): RoutingTarget => {
     requiredPaths: spec.flags
       .filter((flag) => flag.required)
       .map((flag) => flag.prop),
+    requiredFlags: spec.flags,
   });
   const builderArgs = {
     docs: {
@@ -286,10 +326,12 @@ const buildCapabilityLeafFlags = (
     "Never prompt; fail closed (exit 7) where a confirmation is required",
     false,
   );
-  flags[RESERVED_FLAG_KEYS.dryRun] = booleanFlag(
-    "Validate the input server-side and return without executing (validate_only)",
-    false,
-  );
+  if (spec.access === "write") {
+    flags[RESERVED_FLAG_KEYS.dryRun] = booleanFlag(
+      "Validate the input server-side and return without executing (validate_only)",
+      false,
+    );
+  }
 
   if (spec.paginated) {
     flags[RESERVED_FLAG_KEYS.cursor] = parsedStringFlag(
@@ -302,12 +344,15 @@ const buildCapabilityLeafFlags = (
     );
   }
 
-  // Every capability leaf carries the server's per-capability confirm gate, so
-  // it always accepts --yes (pre-approve) alongside the TTY prompt/retry flow.
-  flags[RESERVED_FLAG_KEYS.yes] = booleanFlag(
-    "Skip the destructive-op confirmation prompt",
-    false,
-  );
+  // A write capability carries the server's per-capability confirm gate, so it
+  // accepts --yes (pre-approve) alongside the TTY prompt/retry flow; a read has
+  // nothing to confirm.
+  if (spec.access === "write") {
+    flags[RESERVED_FLAG_KEYS.yes] = booleanFlag(
+      "Skip the destructive-op confirmation prompt",
+      false,
+    );
+  }
 
   return flags;
 };
@@ -329,6 +374,7 @@ const buildCapabilityLeafCommand = (
     requiredPaths: spec.flags
       .filter((flag) => flag.required)
       .map((flag) => `${flag.part}.${flag.partPath}`),
+    requiredFlags: spec.flags,
   });
   const builderArgs = {
     docs: {
@@ -349,19 +395,26 @@ const buildCapabilityLeafCommand = (
   return buildCommand(typedArgs);
 };
 
-const buildRouteNode = (node: RouteNode, brief: string): RoutingTarget => {
+const buildRouteNode = (
+  node: RouteNode,
+  brief: string,
+  disabled: ReadonlySet<string>,
+): RoutingTarget => {
   if (node.kind === "leaf") {
-    return buildLeafCommand(node.spec);
+    return buildLeafCommand(node.spec, disabled);
   }
   if (node.kind === "capability-leaf") {
     return buildCapabilityLeafCommand(node.spec);
   }
   const routes: Record<string, RoutingTarget> = {};
   for (const [name, child] of Object.entries(node.children)) {
-    routes[name] = buildRouteNode(child, `The ${name} command group`);
+    routes[name] = buildRouteNode(child, routeBrief(name, child), disabled);
   }
   return buildRouteMap({ docs: { brief }, routes });
 };
+
+const routeBrief = (name: string, node: RouteNode): string =>
+  node.kind === "route" ? groupBrief(name, node.children) : name;
 
 /**
  * Fold a generated `RouteNode` (route) into stricli `RoutingTarget` children,
@@ -369,13 +422,14 @@ const buildRouteNode = (node: RouteNode, brief: string): RoutingTarget => {
  */
 const buildGeneratedRoutes = (
   node: RouteNode,
+  disabled: ReadonlySet<string>,
 ): Record<string, RoutingTarget> => {
   if (node.kind !== "route") {
     return {};
   }
   const routes: Record<string, RoutingTarget> = {};
   for (const [name, child] of Object.entries(node.children)) {
-    routes[name] = buildRouteNode(child, `The ${name} command group`);
+    routes[name] = buildRouteNode(child, routeBrief(name, child), disabled);
   }
   return routes;
 };
@@ -411,10 +465,13 @@ const buildResourceNode = (
   }
   const routes: Record<string, RoutingTarget> = {};
   for (const [name, child] of Object.entries(node.children)) {
-    routes[name] = buildResourceNode(child, `The ${name} command group`);
+    routes[name] = buildResourceNode(child, resourceBrief(name, child));
   }
   return buildRouteMap({ docs: { brief }, routes });
 };
+
+const resourceBrief = (name: string, node: ResourceNode): string =>
+  node.kind === "route" ? groupBrief(name, node.children) : name;
 
 /**
  * Fold a generated resource `ResourceNode` (route) into a single stricli
@@ -424,7 +481,7 @@ const buildResourceRoutes = (node: ResourceNode): RouteMap<Context> => {
   const routes: Record<string, RoutingTarget> = {};
   if (node.kind === "route") {
     for (const [name, child] of Object.entries(node.children)) {
-      routes[name] = buildResourceNode(child, `The ${name} command group`);
+      routes[name] = buildResourceNode(child, resourceBrief(name, child));
     }
   }
   return buildRouteMap({
@@ -439,9 +496,13 @@ const collectLeafPaths = (
   node: RouteNode,
   path: readonly string[],
   lines: string[],
+  disabled: ReadonlySet<string>,
 ): void => {
   if (node.kind === "leaf") {
-    lines.push(`${path.join(" ")}\t(${node.spec.toolName})`);
+    const marker = disabled.has(node.spec.toolName)
+      ? ` ${DISABLED_MARKER}`
+      : "";
+    lines.push(`${path.join(" ")}\t(${node.spec.toolName})${marker}`);
     return;
   }
   if (node.kind === "capability-leaf") {
@@ -451,7 +512,7 @@ const collectLeafPaths = (
     return;
   }
   for (const [name, child] of Object.entries(node.children)) {
-    collectLeafPaths(child, [...path, name], lines);
+    collectLeafPaths(child, [...path, name], lines, disabled);
   }
 };
 
@@ -472,7 +533,10 @@ const HELP_FORMATTING = {
   caseStyle: "convert-camel-to-kebab",
 } as const;
 
-const buildRootRoute = (tree: RouteNode): RouteMap<Context> => {
+const buildRootRoute = (
+  tree: RouteNode,
+  disabled: ReadonlySet<string>,
+): RouteMap<Context> => {
   const toolsListCommand = buildCommand<
     { readonly server: string | undefined },
     [],
@@ -486,7 +550,7 @@ const buildRootRoute = (tree: RouteNode): RouteMap<Context> => {
       const lines: string[] = [];
       // Reflect the ACTIVE tree (the cached-listings tree when the server
       // registry has diverged), not the baked-in one.
-      collectLeafPaths(tree, [], lines);
+      collectLeafPaths(tree, [], lines, disabled);
       this.process.stdout.write(`${lines.sort().join("\n")}\n`);
     },
     parameters: { flags: buildServerFlag() },
@@ -508,7 +572,7 @@ const buildRootRoute = (tree: RouteNode): RouteMap<Context> => {
       upload: uploadCommand,
       tools: toolsRoute,
       reference: buildResourceRoutes(generatedResourceTree),
-      ...buildGeneratedRoutes(tree),
+      ...buildGeneratedRoutes(tree, disabled),
     },
   });
 };
@@ -518,11 +582,18 @@ const buildRootRoute = (tree: RouteNode): RouteMap<Context> => {
  * lives here rather than in `cli.ts` so tests can walk the real route tree the
  * CLI dispatches against instead of a re-wired copy of it.
  */
-export const buildApp = (tree: RouteNode): Application<Context> =>
+export const buildApp = (
+  tree: RouteNode,
+  disabledTools: readonly string[] = [],
+): Application<Context> =>
   buildApplication(
-    buildRootRoute(tree),
+    buildRootRoute(tree, new Set(disabledTools)),
     {
       name: "stella",
+      // A hand-written command's returned `CliCommandError` carries its exit
+      // class; anything else that escapes is an unexpected error, never 1 by
+      // stricli default.
+      determineExitCode: determineCommandExitCode,
       // Renders (and accepts) multi-word flags as kebab-case, e.g. the
       // `noInput` flag as `--no-input` rather than `--noInput` — matches the
       // documented command surface and every other kebab-case CLI convention
