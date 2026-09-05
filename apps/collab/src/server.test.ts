@@ -107,6 +107,10 @@ const SECOND_TEST_ROOM_ID = "00000000-0000-4000-8000-000000000002";
 const SECOND_TEST_ROOM_NAME = `{${SECOND_TEST_ROOM_ID}}`;
 const TEST_SERVICE_TOKEN = "test_collaboration_service_token_32_chars";
 const DOCKER_OPERATION_TIMEOUT_MS = 10_000;
+// The suite models an outage, so Redis gets one second to exit before docker
+// sends SIGKILL. Docker's default grace period equals the operation timeout
+// above, and a slow shutdown would then fail the test instead of the stop.
+const DOCKER_STOP_GRACE_SECONDS = 1;
 
 const createFakeStellaApi = ({
   additionalRoomIds = [],
@@ -346,7 +350,17 @@ const requireRedisTestUrl = () => {
 };
 
 const runDocker = async (action: "start" | "stop", containerId: string) => {
-  const dockerProcess = Bun.spawn(["docker", action, containerId], {
+  const args =
+    action === "stop"
+      ? [
+          "docker",
+          "stop",
+          "--time",
+          String(DOCKER_STOP_GRACE_SECONDS),
+          containerId,
+        ]
+      : ["docker", "start", containerId];
+  const dockerProcess = Bun.spawn(args, {
     stderr: "pipe",
     stdout: "pipe",
   });
