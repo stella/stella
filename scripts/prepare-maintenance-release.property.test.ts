@@ -86,64 +86,71 @@ afterEach(() => {
   }
 });
 
-// The CLI is a spawned process in a release run; here it is a reader that
-// records whether it was asked at all.
-const cliToken = (token: string | null) => {
-  let asked = 0;
+// The CLI is a spawned process in a release run; here it is a command runner
+// that records what it was asked to run, if anything.
+const cliToken = (stdout: string | null) => {
+  const commands: (readonly string[])[] = [];
   return {
-    asked: () => asked,
-    read: () => {
-      asked += 1;
-      return token;
+    commands,
+    run: (command: readonly string[]) => {
+      commands.push(command);
+      return stdout;
     },
   };
 };
 
 describe("the token the GitHub reads are made with", () => {
   test("prefers GH_TOKEN, and does not ask the CLI for one", () => {
-    const cli = cliToken("cli-token");
+    const cli = cliToken("cli-token\n");
 
     expect(
       resolveGitHubToken(
         { GH_TOKEN: "gh-token", GITHUB_TOKEN: "github-token" },
-        cli.read,
+        cli.run,
       ),
     ).toBe("gh-token");
-    expect(cli.asked()).toBe(0);
+    expect(cli.commands).toEqual([]);
   });
 
   test("accepts GITHUB_TOKEN where GH_TOKEN is unset", () => {
-    const cli = cliToken("cli-token");
+    const cli = cliToken("cli-token\n");
 
-    expect(resolveGitHubToken({ GITHUB_TOKEN: "github-token" }, cli.read)).toBe(
+    expect(resolveGitHubToken({ GITHUB_TOKEN: "github-token" }, cli.run)).toBe(
       "github-token",
     );
-    expect(cli.asked()).toBe(0);
+    expect(cli.commands).toEqual([]);
   });
 
   // Without this the reads go out anonymous, and the anonymous rate limit
   // answers a release preparation with HTTP 403.
   test("falls back to the signed-in CLI when neither variable is set", () => {
-    const cli = cliToken("cli-token");
+    const cli = cliToken("cli-token\n");
 
-    expect(resolveGitHubToken({}, cli.read)).toBe("cli-token");
-    expect(cli.asked()).toBe(1);
+    expect(resolveGitHubToken({}, cli.run)).toBe("cli-token");
+    // The reads go to github.com. A bare `gh auth token` would answer for
+    // the CLI's default host, which is an Enterprise instance under GH_HOST.
+    expect(cli.commands).toEqual([
+      ["gh", "auth", "token", "--hostname", "github.com"],
+    ]);
   });
 
   test("reads an empty variable as no token at all", () => {
     expect(
       resolveGitHubToken(
         { GH_TOKEN: "", GITHUB_TOKEN: "" },
-        cliToken("cli-token").read,
+        cliToken("cli-token\n").run,
       ),
     ).toBe("cli-token");
   });
 
-  // A missing `gh`, or one that is signed out: the run continues
-  // unauthenticated rather than failing on the token.
-  test("stays unauthenticated when the CLI has no token to give", () => {
-    expect(resolveGitHubToken({}, cliToken(null).read)).toBeNull();
-  });
+  // A missing `gh`, one signed out of github.com, or one that answers with
+  // nothing: the run continues unauthenticated rather than failing.
+  test.each([[null], [""], ["\n"]])(
+    "stays unauthenticated when the CLI answers %p",
+    (stdout) => {
+      expect(resolveGitHubToken({}, cliToken(stdout).run)).toBeNull();
+    },
+  );
 });
 
 describe("maintenance release preparation", () => {

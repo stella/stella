@@ -306,26 +306,36 @@ const assertCleanWorktree = () => {
   }
 };
 
-/** Asks the GitHub CLI for a token; the seam a test stands in for. */
-export type GhTokenReader = () => string | null;
+/** Runs a command and returns its stdout; null when it does not run. */
+export type CommandOutput = (command: readonly string[]) => string | null;
 
-const nonEmptyToken = (value: string | undefined): string | null =>
-  value === undefined || value.length === 0 ? null : value;
+const nonEmptyToken = (value: string | null | undefined): string | null =>
+  value === undefined || value === null || value.length === 0 ? null : value;
 
-// `gh` may be absent, or present and signed out. Both mean the same thing
-// here: no token, and the reads below go out unauthenticated.
-const readCliToken: GhTokenReader = () => {
+// The reads go to github.com, so the token has to be that host's. A bare
+// `gh auth token` answers for the CLI's default host, which is an Enterprise
+// instance wherever the operator's GH_HOST points at one.
+const GH_TOKEN_COMMAND = [
+  "gh",
+  "auth",
+  "token",
+  "--hostname",
+  "github.com",
+] as const;
+
+// `gh` may be absent, or present and signed out of github.com. Both mean the
+// same thing here: no token, and the reads below go out unauthenticated.
+const spawnOutput: CommandOutput = (command) => {
   const spawned = Result.try(() =>
-    Bun.spawnSync(["gh", "auth", "token"], {
+    Bun.spawnSync([...command], {
       cwd: ROOT_DIR,
       stderr: "pipe",
       stdout: "pipe",
     }),
   );
-  if (Result.isError(spawned) || !spawned.value.success) {
-    return null;
-  }
-  return nonEmptyToken(spawned.value.stdout.toString().trim());
+  return Result.isError(spawned) || !spawned.value.success
+    ? null
+    : spawned.value.stdout.toString();
 };
 
 /**
@@ -337,11 +347,11 @@ const readCliToken: GhTokenReader = () => {
  */
 export const resolveGitHubToken = (
   env: Record<string, string | undefined>,
-  readGhToken: GhTokenReader = readCliToken,
+  runCommand: CommandOutput = spawnOutput,
 ): string | null =>
   nonEmptyToken(env["GH_TOKEN"]) ??
   nonEmptyToken(env["GITHUB_TOKEN"]) ??
-  readGhToken();
+  nonEmptyToken(runCommand(GH_TOKEN_COMMAND)?.trim());
 
 // Resolved once: one preparation makes a page of reads, and asking the CLI
 // per read would spawn it as many times.
