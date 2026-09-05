@@ -128,7 +128,11 @@ export const readOverviewHandler = async ({
       if (c.type === "text") {
         name = c.value;
       } else if (c.type === "file") {
-        name = c.fileName;
+        // The entity's own name is what read_document and list_documents
+        // report; the current version's file name only labels a document that
+        // has none (the display_name trigger's rule), so uploading a new
+        // version does not appear to rename the document here.
+        name = e.name || c.fileName;
         mimeType = c.mimeType;
         pdfFileId = c.pdfFileId;
         encrypted = c.encrypted;
