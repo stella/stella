@@ -246,6 +246,7 @@ const evaluateMergeable = (pullRequest: PullRequestSnapshot): GateVerdict => {
 const GUARD_DEFINITION_PATHS = [
   ".oxlint-plugins/",
   "oxlint.config.ts",
+  "oxlint.result-boundary.config.ts",
   "scripts/lint-suppressions.ts",
 ] as const;
 

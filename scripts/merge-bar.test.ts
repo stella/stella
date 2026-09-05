@@ -239,6 +239,7 @@ describe("merge bar", () => {
     for (const guard of [
       ".oxlint-plugins/no-bare-error.ts",
       "oxlint.config.ts",
+      "oxlint.result-boundary.config.ts",
       "scripts/lint-suppressions.ts",
     ]) {
       expect(
