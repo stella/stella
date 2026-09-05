@@ -29,6 +29,9 @@ import { caseLawSources } from "@/api/db/schema";
  *   bun run src/scripts/replay-case-law-source.ts --adapter eu-ecj \
  *     --withdraw-rejected --apply
  *
+ *   # every decision of the source, with no cap on the run
+ *   bun run src/scripts/replay-case-law-source.ts --adapter eu-ecj --all --apply
+ *
  *   # resume where an interrupted run stopped
  *   bun run src/scripts/replay-case-law-source.ts --adapter eu-ecj \
  *     --after <decisionId> --apply
@@ -39,17 +42,12 @@ import { caseLawSources } from "@/api/db/schema";
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import {
   acquireReplayLease,
-  CASE_LAW_REPLAY_SCOPE,
   countReplayability,
-  REPLAY_REJECTION_POLICY,
   REPLAY_ROW_OUTCOME,
   replayCapability,
   replayCaseLawSource,
 } from "@/api/handlers/case-law/ingestion/replay";
-import type {
-  CaseLawReplayScope,
-  StoredRawReader,
-} from "@/api/handlers/case-law/ingestion/replay";
+import type { StoredRawReader } from "@/api/handlers/case-law/ingestion/replay";
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import {
@@ -57,153 +55,31 @@ import {
   refreshCorpusS3,
   refreshS3,
 } from "@/api/lib/s3";
-import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
+import { parseReplayCaseLawSourceArgs } from "@/api/scripts/replay-case-law-source-args";
 
 // Hold the maintenance lane before the first statement: operator passes over
 // the case-law tables serialize here instead of deadlocking on row locks.
 const { ingestionDb } = await enterCaseLawMaintenanceLane();
 
-const DEFAULT_LIMIT = 100;
-const DEFAULT_PAGE_SIZE = 25;
-const DEFAULT_LEASE_WAIT_MINUTES = 30;
 const MINUTE_MS = 60_000;
 /** A stored payload is one document; nothing here should take longer. */
 const STORED_RAW_READ_TIMEOUT_MS = 30_000;
 
-const USAGE = `Usage: bun run src/scripts/replay-case-law-source.ts --adapter <key> [options]
-
-  --adapter <key>   Required. Adapter whose source is replayed.
-  --apply           Write the re-parsed results. Omitted, the run reports
-                    what it would change and writes nothing.
-  --withdraw-rejected
-                    Take back the stored document of a decision whose
-                    payload re-parses to no document at all. The row, its
-                    metadata and its stored payload are kept. Without it
-                    such a row is only reported.
-  --limit <n>       Maximum decisions to visit (default ${DEFAULT_LIMIT}).
-  --court <name>    Replay only decisions from this exact court.
-  --celex <value>   Replay only the decision stored under this publisher id
-                    (metadata.celex).
-  --after <id>      Resume strictly after this decision id.
-  --page-size <n>   Rows read per query (default ${DEFAULT_PAGE_SIZE}).
-  --lease-wait <minutes>
-                    How long an --apply run waits for the source's ingestion
-                    lease before giving up (default ${DEFAULT_LEASE_WAIT_MINUTES}).
-                    0 attempts once and exits if the lease is held.`;
-
-const flagValue = (name: string): string | undefined => {
-  const index = process.argv.indexOf(`--${name}`);
-  if (index === -1) {
-    return undefined;
-  }
-  const value = process.argv[index + 1];
-  if (value === undefined || value.startsWith("--")) {
-    console.error(`--${name} requires a value`);
-    process.exit(1);
-  }
-  return value;
-};
-
-const hasFlag = (name: string): boolean => process.argv.includes(`--${name}`);
-
-/** Bounds a numeric flag accepts, with the wording its refusal uses. */
-const INTEGER_BOUND = {
-  POSITIVE: { minimum: 1, wording: "a positive integer" },
-  NON_NEGATIVE: { minimum: 0, wording: "a non-negative integer" },
-} as const;
-
-type IntegerBound = (typeof INTEGER_BOUND)[keyof typeof INTEGER_BOUND];
-
-type IntegerFlagOptions = {
-  bound: IntegerBound;
-  fallback: number;
-  name: string;
-  raw: string | undefined;
-};
-
-// The whole value has to be digits. `Number.parseInt` reads a prefix and
-// stops, so "30minutes" would pass as 30 minutes, "0.5" as 0 and "1e3" as 1:
-// every one of them a bound the operator did not ask for.
-const DECIMAL_DIGITS = /^\d+$/u;
-
-const integerFlag = ({
+const parsed = parseReplayCaseLawSourceArgs(process.argv.slice(2));
+if (Result.isError(parsed)) {
+  console.error(parsed.error.message);
+  process.exit(1);
+}
+const {
+  adapterKey,
+  after,
+  apply,
   bound,
-  fallback,
-  name,
-  raw,
-}: IntegerFlagOptions): number => {
-  if (raw === undefined) {
-    return fallback;
-  }
-  const parsed = Number.parseInt(raw, 10);
-  if (
-    !DECIMAL_DIGITS.test(raw) ||
-    !Number.isSafeInteger(parsed) ||
-    parsed < bound.minimum
-  ) {
-    console.error(`--${name} must be ${bound.wording}, got: ${raw}`);
-    process.exit(1);
-  }
-  return parsed;
-};
-
-const adapterKey = flagValue("adapter");
-if (adapterKey === undefined || adapterKey.length === 0) {
-  console.error(USAGE);
-  process.exit(1);
-}
-
-const apply = hasFlag("apply");
-const rejectionPolicy = hasFlag("withdraw-rejected")
-  ? REPLAY_REJECTION_POLICY.WITHDRAW_NO_DOCUMENT
-  : REPLAY_REJECTION_POLICY.REPORT;
-const limit = integerFlag({
-  bound: INTEGER_BOUND.POSITIVE,
-  fallback: DEFAULT_LIMIT,
-  name: "limit",
-  raw: flagValue("limit"),
-});
-const pageSize = integerFlag({
-  bound: INTEGER_BOUND.POSITIVE,
-  fallback: DEFAULT_PAGE_SIZE,
-  name: "page-size",
-  raw: flagValue("page-size"),
-});
-const leaseWaitMinutes = integerFlag({
-  bound: INTEGER_BOUND.NON_NEGATIVE,
-  fallback: DEFAULT_LEASE_WAIT_MINUTES,
-  name: "lease-wait",
-  raw: flagValue("lease-wait"),
-});
-const celex = flagValue("celex");
-const court = flagValue("court");
-if (celex?.length === 0) {
-  console.error("--celex requires a non-empty value");
-  process.exit(1);
-}
-if (court?.length === 0) {
-  console.error("--court requires a non-empty value");
-  process.exit(1);
-}
-if (celex !== undefined && court !== undefined) {
-  console.error("--celex and --court are mutually exclusive replay scopes");
-  process.exit(1);
-}
-const replayScope = (): CaseLawReplayScope => {
-  if (court !== undefined) {
-    return { type: "court", court };
-  }
-  if (celex !== undefined) {
-    return { type: "celex", celex };
-  }
-  return CASE_LAW_REPLAY_SCOPE.SOURCE;
-};
-const scope = replayScope();
-const afterArgument = flagValue("after");
-const after =
-  afterArgument === undefined
-    ? null
-    : brandPersistedCaseLawDecisionId(afterArgument);
+  leaseWaitMinutes,
+  pageSize,
+  rejectionPolicy,
+  scope,
+} = parsed.value;
 
 const adapter = getAdapter(adapterKey);
 if (!adapter) {
@@ -255,11 +131,11 @@ console.log(`mode:                ${apply ? "apply" : "dry run"}`);
 console.log(`rejected rows:       ${rejectionPolicy}`);
 console.log(`replayable locally:  ${split.storedLocally}`);
 console.log(`needs a re-fetch:    ${split.needsRefetch}`);
-if (celex !== undefined) {
-  console.log(`targeting celex:     ${celex}`);
+if (scope.type === "celex") {
+  console.log(`targeting celex:     ${scope.celex}`);
 }
-if (court !== undefined) {
-  console.log(`targeting court:     ${court}`);
+if (scope.type === "court") {
+  console.log(`targeting court:     ${scope.court}`);
 }
 
 // `null` only where the store confirmed it holds no such object, which is a
@@ -315,7 +191,7 @@ const replayed = await Result.tryPromise({
       sourceId: source.id,
       readStoredRaw,
       sourceLease,
-      limit,
+      bound,
       pageSize,
       after,
       scope,
@@ -362,7 +238,9 @@ for (const problem of report.problems) {
     `${problem.outcome}: ${problem.caseNumber} (${problem.language}) ${problem.id} ${problem.detail ?? ""}`,
   );
 }
-console.log(`visited:             ${report.visited} of at most ${limit}`);
+console.log(
+  `visited:             ${report.visited} of ${bound.type === "all" ? "all" : `at most ${bound.limit}`}`,
+);
 if (report.resumeAfter !== null) {
   console.log(`resume with:         --after ${report.resumeAfter}`);
 }

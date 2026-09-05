@@ -26,6 +26,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/replay";
 import type {
   CaseLawReplayScope,
+  ReplayVisitBound,
   StoredRawReader,
 } from "@/api/handlers/case-law/ingestion/replay";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -323,7 +324,7 @@ describe("replay of a source", () => {
       scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
       readStoredRaw: storedRawReader(refusedReads),
       sourceLease: null,
-      limit: 10,
+      bound: { type: "at-most", limit: 10 },
       pageSize: 10,
     });
 
@@ -349,7 +350,7 @@ describe("replay of a source", () => {
       scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
       readStoredRaw: storedRawReader(capableReads),
       sourceLease: null,
-      limit: 10,
+      bound: { type: "at-most", limit: 10 },
       pageSize: 2,
     });
 
@@ -397,7 +398,7 @@ describe("replay of a source", () => {
         scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
         readStoredRaw,
         sourceLease: null,
-        limit: 10,
+        bound: { type: "at-most", limit: 10 },
         pageSize: 10,
       });
 
@@ -465,7 +466,7 @@ describe("replay of a source", () => {
         scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
         readStoredRaw: storedRawReader(reads),
         sourceLease: null,
-        limit: 10,
+        bound: { type: "at-most", limit: 10 },
         pageSize: 10,
         after,
       });
@@ -551,7 +552,7 @@ describe("replay of a source", () => {
       scope,
       readStoredRaw: storedRawReader(reads),
       sourceLease: null,
-      limit: 10,
+      bound: { type: "at-most", limit: 10 },
       pageSize: 10,
       after: otherCourtId,
     });
@@ -568,7 +569,7 @@ describe("replay of a source", () => {
       scope,
       readStoredRaw: storedRawReader(reads),
       sourceLease: null,
-      limit: 10,
+      bound: { type: "at-most", limit: 10 },
       pageSize: 10,
     });
     if (ran.type !== "ran") {
@@ -623,7 +624,7 @@ describe("replay of a source", () => {
       scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
       readStoredRaw: storedRawReader([]),
       sourceLease: null,
-      limit: 10,
+      bound: { type: "at-most", limit: 10 },
       pageSize: 10,
     });
 
@@ -681,7 +682,7 @@ describe("replay of a source", () => {
       scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
       readStoredRaw: storedRawReader([]),
       sourceLease: null,
-      limit: 10,
+      bound: { type: "at-most", limit: 10 },
       pageSize: 10,
     });
 
@@ -730,7 +731,7 @@ describe("replay of a source", () => {
       scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
       readStoredRaw: storedRawReader([]),
       sourceLease: null,
-      limit: 10,
+      bound: { type: "at-most", limit: 10 },
       pageSize: 10,
     });
 
@@ -771,7 +772,7 @@ describe("replay of a source", () => {
       scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
       readStoredRaw: storedRawReader([]),
       sourceLease: null,
-      limit: inserted.length,
+      bound: { type: "at-most", limit: inserted.length },
       pageSize: 13,
     });
 
@@ -783,6 +784,50 @@ describe("replay of a source", () => {
       new Set(inserted),
     );
     expect(ran.report.resumeAfter).not.toBeNull();
+  });
+
+  test("an unbounded run visits the whole scope, a bounded one stops at its cap", async () => {
+    const sourceId = await createSource();
+    const rows = 12;
+    await Promise.all(
+      Array.from({ length: rows }, async (_, index) => {
+        await insertDecision({
+          sourceId,
+          id: createSafeId<"caseLawDecision">(),
+          sub: 200 + index,
+          caseNumber: `C-${200 + index}/26`,
+          storedRaw: true,
+          sourceHash: `stored-hash-${200 + index}`,
+        });
+      }),
+    );
+
+    const replay = async (bound: ReplayVisitBound) =>
+      await replayCaseLawSource({
+        adapter: stubAdapter({
+          reparse: () => ({
+            type: "rejected",
+            rejection: "no-document",
+            detail: "fixture rejection",
+          }),
+        }),
+        scopedDb,
+        sourceId,
+        scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
+        readStoredRaw: storedRawReader([]),
+        sourceLease: null,
+        bound,
+        // Smaller than the scope, so an unbounded run has to page.
+        pageSize: 5,
+      });
+
+    const all = await replay({ type: "all" });
+    const capped = await replay({ type: "at-most", limit: 4 });
+    if (all.type !== "ran" || capped.type !== "ran") {
+      throw new TypeError("Expected the capable adapter to run");
+    }
+    expect(all.report.visited).toBe(rows);
+    expect(capped.report.visited).toBe(4);
   });
 
   test("the replayable split counts stored payloads against re-fetches", async () => {

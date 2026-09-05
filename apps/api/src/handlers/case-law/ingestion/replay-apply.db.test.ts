@@ -184,7 +184,7 @@ test("a writing replay goes through the pipeline, and replaying again converges"
       readStoredRaw: async () =>
         await Promise.resolve(new TextEncoder().encode(STORED_PAYLOAD)),
       sourceLease,
-      limit: 10,
+      bound: { type: "at-most", limit: 10 },
       pageSize: 10,
     });
 
@@ -382,7 +382,7 @@ test("a restructure the flattened text does not show is still applied", async ()
     readStoredRaw: async () =>
       await Promise.resolve(new TextEncoder().encode(STORED_PAYLOAD)),
     sourceLease,
-    limit: 10,
+    bound: { type: "at-most", limit: 10 },
     pageSize: 10,
   });
 
@@ -416,7 +416,7 @@ test("a restructure the flattened text does not show is still applied", async ()
     readStoredRaw: async () =>
       await Promise.resolve(new TextEncoder().encode(STORED_PAYLOAD)),
     sourceLease,
-    limit: 10,
+    bound: { type: "at-most", limit: 10 },
     pageSize: 10,
   });
   if (second.type !== "ran") {
@@ -503,7 +503,7 @@ const withdrawingReplay = async ({
     readStoredRaw: async () =>
       await Promise.resolve(new TextEncoder().encode(STORED_PAYLOAD)),
     sourceLease,
-    limit: 10,
+    bound: { type: "at-most", limit: 10 },
     pageSize: 10,
     rejectionPolicy,
     ...(withdraw === undefined ? {} : { withdraw }),

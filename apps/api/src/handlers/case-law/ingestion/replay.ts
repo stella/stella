@@ -884,6 +884,17 @@ export const acquireReplayLease = async <TLease>({
   return { type: "unavailable", waitedMs };
 };
 
+/**
+ * How many decisions one run may visit.
+ *
+ * A discriminator rather than a sentinel count: "as many as the scope holds"
+ * is a different instruction from "at most n", and an unattended run that
+ * means the first must not read as a very large second.
+ */
+export type ReplayVisitBound =
+  | { type: "all" }
+  | { type: "at-most"; limit: number };
+
 export type ReplayCaseLawSourceOptions = {
   adapter: SourceAdapter;
   scopedDb: ScopedDb;
@@ -891,8 +902,7 @@ export type ReplayCaseLawSourceOptions = {
   readStoredRaw: StoredRawReader;
   /** Held for a writing run; null for a dry run, which writes nothing. */
   sourceLease: CaseLawSourceIngestionLease | null;
-  /** Maximum decisions to visit in this run. */
-  limit: number;
+  bound: ReplayVisitBound;
   pageSize: number;
   after?: SafeId<"caseLawDecision"> | null;
   scope: CaseLawReplayScope;
@@ -965,7 +975,7 @@ export const replayCaseLawSource = async ({
   sourceId,
   readStoredRaw,
   sourceLease,
-  limit,
+  bound,
   pageSize,
   after = null,
   scope,
@@ -1062,7 +1072,11 @@ export const replayCaseLawSource = async ({
   };
 
   const walk = async (): Promise<void> => {
-    if (visited >= limit) {
+    const remaining =
+      bound.type === "all"
+        ? pageSize
+        : Math.min(pageSize, bound.limit - visited);
+    if (remaining <= 0) {
       return;
     }
     const page = await selectReplayPage({
@@ -1070,7 +1084,7 @@ export const replayCaseLawSource = async ({
       sourceId,
       scope,
       after: cursor,
-      limit: Math.min(pageSize, limit - visited),
+      limit: remaining,
     });
     if (page.length === 0) {
       return;
