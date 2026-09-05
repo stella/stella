@@ -151,7 +151,7 @@ describe("document upload state machine", () => {
         size: localFile.bytes.byteLength,
         sha256Hex: localFile.sha256Hex,
       },
-      params: { workspaceId: "workspace-1" },
+      params: { matterId: "workspace-1" },
     });
     expect(puts).toEqual([
       {
@@ -276,7 +276,7 @@ describe("document upload state machine", () => {
       {
         capability: "uploads.delete",
         input: {
-          params: { uploadId: "upload-1", workspaceId: "workspace-1" },
+          params: { uploadId: "upload-1", matterId: "workspace-1" },
         },
         confirm: true,
       },

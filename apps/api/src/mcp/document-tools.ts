@@ -986,7 +986,7 @@ type DocumentContentState =
               capability: "entities.ocr.create";
               input: {
                 params: {
-                  workspaceId: SafeId<"workspace">;
+                  matterId: SafeId<"workspace">;
                   entityId: SafeId<"entity">;
                 };
                 body: { fieldId: SafeId<"field"> };
@@ -1306,7 +1306,9 @@ const loadDocumentProcessingStates = async ({
               arguments: {
                 capability: "entities.ocr.create",
                 input: {
-                  params: { workspaceId, entityId },
+                  // The remediation is handed to an agent to call verbatim, so
+                  // it speaks the public name the capability advertises.
+                  params: { matterId: workspaceId, entityId },
                   body: {
                     fieldId:
                       sourceFieldId ??

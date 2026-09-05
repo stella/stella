@@ -22,9 +22,6 @@ const snapshotUrl = new URL(
 const snapshotListings: readonly RegistryToolListing[] =
   await Bun.file(snapshotUrl).json();
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
 const findLeaf = (
   node: RouteNode,
   path: readonly string[],
@@ -179,8 +176,8 @@ describe("generateRouteMap: discriminator split (S2)", () => {
 
   test("per-subcommand flag sets and required sets match the table", () => {
     expect(add?.flags.map((f) => f.flag).sort()).toEqual([
+      "--matter-id",
       "--user-id",
-      "--workspace-id",
     ]);
     expect(add?.flags.every((f) => f.required)).toBe(true);
     expect(settings?.flags.map((f) => f.flag).sort()).toEqual([
@@ -257,44 +254,6 @@ describe("generateRouteMap: discriminator split (S2)", () => {
     expect(flagFor(newVersion ?? errorSpec(), "--entity-id")?.required).toBe(
       true,
     );
-  });
-
-  test("a subcommand include list falls back to a schema's deprecated name", () => {
-    // This generator also runs at runtime over a `tools/list` refreshed from a
-    // self-hosted server still on the pre-rename registry. The Annotation Table
-    // names `workspace_id`; that schema still says `matter_id`. Without the
-    // alias fallback the subcommand would expose NEITHER, because the canonical
-    // prop is absent and the deprecated one is not in the include list.
-    const listing = snapshotListings.find(
-      (candidate) => candidate.name === "manage_organization",
-    );
-    if (listing === undefined) {
-      throw new Error("manage_organization missing from the snapshot");
-    }
-    const properties = listing.inputSchema["properties"];
-    if (!isRecord(properties)) {
-      throw new Error("manage_organization has no properties");
-    }
-    const { workspace_id: scoping, ...rest } = properties;
-    const olderTree = generateRouteMap(
-      [
-        {
-          ...listing,
-          inputSchema: {
-            ...listing.inputSchema,
-            properties: { ...rest, matter_id: scoping },
-          },
-        },
-      ],
-      TOOL_ANNOTATIONS,
-    );
-
-    const olderAdd = findLeaf(olderTree, ["organization", "add-member"]);
-    expect(olderAdd?.flags.map((f) => f.flag).sort()).toEqual([
-      "--matter-id",
-      "--user-id",
-    ]);
-    expect(olderAdd?.flags.every((f) => f.required)).toBe(true);
   });
 });
 
@@ -519,7 +478,7 @@ describe("generateRouteMap: Phase 4 domains (S1/S3)", () => {
 
   test("run_playbook required[] props become required flags", () => {
     const run = findLeaf(tree, ["playbook", "run"]);
-    expect(flagFor(run ?? errorSpec(), "--workspace-id")?.required).toBe(true);
+    expect(flagFor(run ?? errorSpec(), "--matter-id")?.required).toBe(true);
     expect(flagFor(run ?? errorSpec(), "--playbook-id")?.required).toBe(true);
   });
 });

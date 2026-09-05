@@ -260,7 +260,7 @@ const CAPABILITY_WORKED_EXAMPLES = [
   },
   {
     task: "Start workflow extraction",
-    commandPath: [CAPABILITY_NAMESPACE, "workspaces", "workflow-start"],
+    commandPath: [CAPABILITY_NAMESPACE, "matters", "workflow-start"],
   },
 ] as const;
 
@@ -344,7 +344,7 @@ const renderCapabilitySection = (summary: CapabilitySkillSummary): string => {
     "- **Invoke by id** (forward-compatible with any server): `stella capability",
     "  invoke <id> --input '<json>'`, where the JSON is `{ body?, params?, query? }`.",
     "- **Flags**: each capability command derives flags from its input schema;",
-    "  workspace-scoped capabilities take a required `--workspace-id <id>`. Deep or",
+    "  matter-scoped capabilities take a required `--matter-id <id>`. Deep or",
     "  ambiguous payloads use `--input` (the whole `{ body?, params?, query? }`).",
     "- **Dry run**: write capabilities accept `--dry-run`, which validates the input",
     "  server-side and returns without executing (maps to `validate_only`).",
@@ -360,9 +360,9 @@ const renderCapabilitySection = (summary: CapabilitySkillSummary): string => {
     ...exampleLines,
     "- **`--input` casing is not uniform; never guess it.** A curated command's",
     "  `--input` JSON (the table and flags above) uses the MCP tool schema's own",
-    "  keys, snake_case (`workspace_id`, `contact_id`). A capability command's",
+    "  keys, snake_case (`matter_id`, `contact_id`). A capability command's",
     "  `--input` JSON uses the handler schema's own keys, camelCase (`fieldId`,",
-    "  `workspaceId`). Run `stella <command> --help` or `stella capability describe",
+    "  `matterId`). Run `stella <command> --help` or `stella capability describe",
     "  <id>` and copy the field paths it prints.",
   ].join("\n");
 };
@@ -376,7 +376,7 @@ const isOptionalUploadFlag = (flag: UploadFlagEntry): boolean =>
 const uploadFlagName = (key: string): string => `--${kebabCase(key)}`;
 
 /** `stella upload`'s required flags, in invocation order (spec upload-note). */
-const REQUIRED_UPLOAD_KEYS = ["file", "workspaceId"] as const;
+const REQUIRED_UPLOAD_KEYS = ["file", "matterId"] as const;
 
 /**
  * Documents the real `stella upload` invocation, including uploading a new

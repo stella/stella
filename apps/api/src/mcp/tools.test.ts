@@ -2768,7 +2768,7 @@ describe("OpenAI-compatible MCP tools", () => {
             capability: "entities.ocr.create",
             input: {
               params: {
-                workspaceId: "ws_1",
+                matterId: "ws_1",
                 entityId: "00000000-0000-4000-8000-0000000e0001",
               },
               body: { fieldId: "field_1" },

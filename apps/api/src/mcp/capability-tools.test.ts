@@ -385,7 +385,7 @@ describe("invoke_capability gates", () => {
             size: 42,
             sha256Hex: "a".repeat(64),
           },
-          params: { workspaceId: "ws_1" },
+          params: { matterId: "ws_1" },
         },
         validate_only: true,
       },
@@ -464,7 +464,7 @@ describe("invoke_capability gates", () => {
     const result = await handleMcpToolCall({
       args: {
         capability: "time-entries.export-csv",
-        input: { params: { workspaceId: "ws_1" }, query: { status: "bogus" } },
+        input: { params: { matterId: "ws_1" }, query: { status: "bogus" } },
       },
       context: createContext(),
       toolName: "invoke_capability",
@@ -496,6 +496,87 @@ describe("invoke_capability gates", () => {
   });
 });
 
+// --- invoke_capability: the container's public name --------------------------
+
+// The rename is a clean cutover: `matterId` is the only spelling the wire
+// accepts, and every issue an agent reads back names the field it was shown.
+describe("invoke_capability names the container matterId", () => {
+  const UUID = "44444444-4444-4444-8444-444444444444";
+
+  const invokeIssues = async (
+    args: Record<string, unknown>,
+  ): Promise<{ path: string; message: string }[]> => {
+    const result = await handleMcpToolCall({
+      args,
+      context: createContext(),
+      toolName: "invoke_capability",
+    });
+    const error = errorEnvelope(result);
+    expect(error.code).toBe("validation_error");
+    return asTestRaw<{ path: string; message: string }[]>(error.issues ?? []);
+  };
+
+  test("the internal spelling alone is refused, not silently accepted", async () => {
+    const issues = await invokeIssues({
+      capability: "time-entries.export-csv",
+      input: { params: { workspaceId: "ws_1" } },
+    });
+    expect(issues).toEqual([
+      {
+        path: "params.matterId",
+        message: "workspaceId is the internal name for matterId; send matterId",
+      },
+    ]);
+    // Refused before anything ran: no handler, no workspace resolution.
+    expect(loadOrgSettingsMock).not.toHaveBeenCalled();
+  });
+
+  test("both spellings are refused rather than letting key order decide", async () => {
+    // Whichever way the JSON is ordered, the answer is the same refusal --
+    // never "the last key wins".
+    for (const params of [
+      { matterId: "ws_1", workspaceId: "ws_2" },
+      { workspaceId: "ws_2", matterId: "ws_1" },
+    ]) {
+      const issues = await invokeIssues({
+        capability: "time-entries.export-csv",
+        input: { params },
+      });
+      expect(issues.map((issue) => issue.path)).toEqual(["params.matterId"]);
+    }
+    expect(loadOrgSettingsMock).not.toHaveBeenCalled();
+  });
+
+  test("a nested internal spelling is refused at its own path", async () => {
+    // signals.acceptances.create carries the container inside body.result, so
+    // the refusal has to reach past the top level of the part.
+    const issues = await invokeIssues({
+      capability: "signals.acceptances.create",
+      input: {
+        params: { signalId: UUID },
+        body: {
+          suggestionKind: "promote-to-workspace",
+          result: { type: "workspace", workspaceId: UUID },
+        },
+      },
+    });
+    expect(issues.map((issue) => issue.path)).toEqual(["body.result.matterId"]);
+  });
+
+  test("a validation issue on the container names matterId, not workspaceId", async () => {
+    // Validation runs against the handler's own schema, which calls the field
+    // workspaceId; the agent typed --matter-id and must be pointed there.
+    const issues = await invokeIssues({
+      capability: "entities.get",
+      input: { params: { matterId: "not-a-uuid", entityId: UUID } },
+    });
+    expect(issues.map((issue) => issue.path)).toContain("params.matterId");
+    expect(issues.some((issue) => issue.path.includes("workspaceId"))).toBe(
+      false,
+    );
+  });
+});
+
 // --- invoke_capability: discriminated-union input errors --------------------
 
 // Guards the "path-less union error" class: a failed discriminated union must
@@ -510,7 +591,7 @@ describe("discriminated-union input validation names the field", () => {
     const result = await handleMcpToolCall({
       args: {
         capability: "uploads.create",
-        input: { params: { workspaceId: "ws_1" }, body },
+        input: { params: { matterId: "ws_1" }, body },
       },
       context: createContext(),
       toolName: "invoke_capability",
@@ -568,7 +649,7 @@ describe("invoke_capability workspace resolution", () => {
     const result = await handleMcpToolCall({
       args: {
         capability: "time-entries.export-csv",
-        input: { params: { workspaceId: "ws_nope" } },
+        input: { params: { matterId: "ws_nope" } },
       },
       context: createContext(),
       toolName: "invoke_capability",
@@ -583,7 +664,7 @@ describe("invoke_capability workspace resolution", () => {
     const result = await handleMcpToolCall({
       args: {
         capability: "time-entries.export-csv",
-        input: { params: { workspaceId: "ws_arch" } },
+        input: { params: { matterId: "ws_arch" } },
       },
       context: createContext({
         workspaceIds: ["ws_arch"],
@@ -606,7 +687,7 @@ describe("invoke_capability workspace resolution", () => {
         capability: "case-law.matter-links.create",
         input: {
           body: { decisionId: "00000000-0000-0000-0000-000000000000" },
-          params: { workspaceId: "ws_arch" },
+          params: { matterId: "ws_arch" },
         },
       },
       context: createContext({
@@ -625,7 +706,7 @@ describe("invoke_capability workspace resolution", () => {
         capability: "case-law.matter-links.create",
         input: {
           body: { decisionId: "00000000-0000-0000-0000-000000000000" },
-          params: { workspaceId: "ws_1" },
+          params: { matterId: "ws_1" },
         },
         validate_only: true,
       },
@@ -753,7 +834,7 @@ describe("invoke_capability execution", () => {
     const result = await handleMcpToolCall({
       args: {
         capability: "time-entries.export-csv",
-        input: { params: { workspaceId: "ws_1" } },
+        input: { params: { matterId: "ws_1" } },
       },
       context: createContext(),
       toolName: "invoke_capability",
@@ -853,7 +934,7 @@ describe("invoke_capability upload purpose gate", () => {
     const result = await handleMcpToolCall({
       args: {
         capability: "uploads.create",
-        input: { body: skillPackBody, params: { workspaceId: "ws_1" } },
+        input: { body: skillPackBody, params: { matterId: "ws_1" } },
         validate_only: true,
       },
       context: createContext({ grantedScopes: ["stella:matters_write"] }),
@@ -868,7 +949,7 @@ describe("invoke_capability upload purpose gate", () => {
     const result = await handleMcpToolCall({
       args: {
         capability: "uploads.create",
-        input: { body: skillPackBody, params: { workspaceId: "ws_1" } },
+        input: { body: skillPackBody, params: { matterId: "ws_1" } },
         validate_only: true,
       },
       context: createContext({
@@ -883,7 +964,7 @@ describe("invoke_capability upload purpose gate", () => {
     const result = await handleMcpToolCall({
       args: {
         capability: "uploads.create",
-        input: { body: documentBody, params: { workspaceId: "ws_1" } },
+        input: { body: documentBody, params: { matterId: "ws_1" } },
         validate_only: true,
       },
       context: createContext({ grantedScopes: ["stella:matters_write"] }),
@@ -898,7 +979,7 @@ describe("invoke_capability upload purpose gate", () => {
     const result = await handleMcpToolCall({
       args: {
         capability: "uploads.update",
-        input: { params: { workspaceId: WORKSPACE_ID, uploadId: UPLOAD_ID } },
+        input: { params: { matterId: WORKSPACE_ID, uploadId: UPLOAD_ID } },
         validate_only: true,
       },
       context: createContext({
@@ -917,7 +998,7 @@ describe("invoke_capability upload purpose gate", () => {
     const result = await handleMcpToolCall({
       args: {
         capability: "uploads.update",
-        input: { params: { workspaceId: WORKSPACE_ID, uploadId: UPLOAD_ID } },
+        input: { params: { matterId: WORKSPACE_ID, uploadId: UPLOAD_ID } },
         validate_only: true,
       },
       context: createContext({
@@ -938,7 +1019,7 @@ describe("invoke_capability upload purpose gate", () => {
     const result = await handleMcpToolCall({
       args: {
         capability: "uploads.create",
-        input: { body: skillPackBody, params: { workspaceId: "ws_1" } },
+        input: { body: skillPackBody, params: { matterId: "ws_1" } },
         validate_only: true,
       },
       // intern holds workspace:read (the config gate) but no agentSkill grant.
@@ -955,7 +1036,7 @@ describe("invoke_capability upload purpose gate", () => {
     const result = await handleMcpToolCall({
       args: {
         capability: "uploads.create",
-        input: { body: skillPackBody, params: { workspaceId: "ws_1" } },
+        input: { body: skillPackBody, params: { matterId: "ws_1" } },
         validate_only: true,
       },
       context: createContext({
@@ -971,7 +1052,7 @@ describe("invoke_capability upload purpose gate", () => {
     const result = await handleMcpToolCall({
       args: {
         capability: "uploads.create",
-        input: { body: skillPackBody, params: { workspaceId: "ws_1" } },
+        input: { body: skillPackBody, params: { matterId: "ws_1" } },
         validate_only: true,
       },
       context: createContext({
@@ -990,7 +1071,7 @@ describe("invoke_capability upload purpose gate", () => {
     const result = await handleMcpToolCall({
       args: {
         capability: "uploads.update",
-        input: { params: { workspaceId: WORKSPACE_ID, uploadId: UPLOAD_ID } },
+        input: { params: { matterId: WORKSPACE_ID, uploadId: UPLOAD_ID } },
         validate_only: true,
       },
       context: createContext({
@@ -1009,7 +1090,7 @@ describe("invoke_capability upload purpose gate", () => {
       args: {
         capability: "uploads.delete",
         confirm: true,
-        input: { params: { workspaceId: WORKSPACE_ID, uploadId: UPLOAD_ID } },
+        input: { params: { matterId: WORKSPACE_ID, uploadId: UPLOAD_ID } },
         validate_only: true,
       },
       context: createContext({
@@ -1156,7 +1237,7 @@ describe("invoke_capability rate limit (fix-3)", () => {
     const result = await handleMcpToolCall({
       args: {
         capability: "time-entries.export-csv",
-        input: { params: { workspaceId: "ws_1" } },
+        input: { params: { matterId: "ws_1" } },
       },
       context: createContext(),
       toolName: "invoke_capability",
@@ -1172,7 +1253,7 @@ describe("invoke_capability rate limit (fix-3)", () => {
     await handleMcpToolCall({
       args: {
         capability: "time-entries.export-csv",
-        input: { params: { workspaceId: "ws_1" } },
+        input: { params: { matterId: "ws_1" } },
       },
       context: createContext(),
       toolName: "invoke_capability",
@@ -1198,7 +1279,7 @@ describe("invoke_capability archived-workspace gate (fix-4)", () => {
     const result = await handleMcpToolCall({
       args: {
         capability: "matters.unarchive",
-        input: { params: { workspaceId: "ws_arch" } },
+        input: { params: { matterId: "ws_arch" } },
         validate_only: true,
       },
       context: archivedCtx(),
@@ -1220,7 +1301,7 @@ describe("invoke_capability archived-workspace gate (fix-4)", () => {
       args: {
         capability: "case-law.matter-links.create",
         input: {
-          params: { workspaceId: "ws_arch" },
+          params: { matterId: "ws_arch" },
           body: { decisionId: "00000000-0000-0000-0000-000000000000" },
         },
         validate_only: true,
@@ -1257,7 +1338,7 @@ describe("invoke_capability validate_only ordering (fix-5)", () => {
     const result = await handleMcpToolCall({
       args: {
         capability: "time-entries.export-csv",
-        input: { params: { workspaceId: "ws_1" } },
+        input: { params: { matterId: "ws_1" } },
         validate_only: true,
       },
       context: createContext(),
@@ -1295,7 +1376,7 @@ describe("invoke_capability file-response gate (fix-6)", () => {
     const result = await handleMcpToolCall({
       args: {
         capability: "time-entries.export-pdf",
-        input: { params: { workspaceId: "ws_1" } },
+        input: { params: { matterId: "ws_1" } },
       },
       context: createContext(),
       toolName: "invoke_capability",
@@ -1390,7 +1471,7 @@ describe("invoke_capability file-input gate", () => {
       args: {
         capability: "entities.upload",
         input: {
-          params: { workspaceId: "ws_1" },
+          params: { matterId: "ws_1" },
           body: { file: "not-a-file" },
         },
       },
@@ -1410,7 +1491,7 @@ describe("invoke_capability file-input gate", () => {
       args: {
         capability: "entities.upload",
         input: {
-          params: { workspaceId: "ws_1" },
+          params: { matterId: "ws_1" },
           body: { file: "not-a-file" },
         },
         validate_only: true,
@@ -1771,7 +1852,7 @@ describe("invoke_capability input normalization", () => {
       args: {
         capability: "tasks.calendar",
         input: {
-          params: { workspaceId: "ws_1" },
+          params: { matterId: "ws_1" },
           body: {
             dateFrom: "2026-01-01T00:00:00.000Z",
             dateTo: "2026-01-31T00:00:00.000Z",
@@ -1795,7 +1876,7 @@ describe("invoke_capability input normalization", () => {
     const result = await handleMcpToolCall({
       args: {
         capability: "time-entries.export-csv",
-        input: { params: { workspaceId: "ws_1" } },
+        input: { params: { matterId: "ws_1" } },
       },
       context: createContext(),
       toolName: "invoke_capability",
@@ -1812,7 +1893,7 @@ describe("invoke_capability deployment feature gate", () => {
     const result = await handleMcpToolCall({
       args: {
         capability: "time-entries.export-csv",
-        input: { params: { workspaceId: "ws_1" } },
+        input: { params: { matterId: "ws_1" } },
       },
       context: createContext(),
       toolName: "invoke_capability",
@@ -1828,7 +1909,7 @@ describe("invoke_capability deployment feature gate", () => {
     const result = await handleMcpToolCall({
       args: {
         capability: "time-entries.export-csv",
-        input: { params: { workspaceId: "ws_1" } },
+        input: { params: { matterId: "ws_1" } },
         validate_only: true,
       },
       context: createContext(),
@@ -1859,7 +1940,7 @@ describe("invoke_capability deployment feature gate", () => {
     const result = await handleMcpToolCall({
       args: {
         capability: "time-entries.export-csv",
-        input: { params: { workspaceId: "ws_1" } },
+        input: { params: { matterId: "ws_1" } },
       },
       context: createContext(),
       toolName: "invoke_capability",

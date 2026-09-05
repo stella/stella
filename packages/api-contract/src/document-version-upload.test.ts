@@ -32,7 +32,9 @@ describe("document version upload transport contract", () => {
         sha256Hex: "a".repeat(64),
         size: 42,
       },
-      params: { workspaceId },
+      // The wire params speak the public vocabulary; the caller still holds the
+      // id as a workspaceId.
+      params: { matterId: workspaceId },
     });
     expect(buildUploadFinalizeInput({ uploadId, workspaceId })).toEqual(
       buildUploadAbortInput({ uploadId, workspaceId }),

@@ -73,7 +73,7 @@ default scopes are `openid profile email offline_access stella:read stella:searc
   (windowed, so follow `--cursor`).
 - **MCP resources**: `stella reference list` enumerates static server resources;
   `stella reference show <name>` prints one.
-- **Uploading a file**: `stella upload --file <file> --workspace-id <workspace-id>` uploads a local file as a new document; add `--entity-id <id>` to upload it as a new version of an existing document instead — a CLI-native path (the CLI reads the file itself), separate from the MCP `upload_document_version`/`open_document_version_upload` tools (which take a host-supplied file reference and are excluded from the CLI).
+- **Uploading a file**: `stella upload --file <file> --matter-id <matter-id>` uploads a local file as a new document; add `--entity-id <id>` to upload it as a new version of an existing document instead — a CLI-native path (the CLI reads the file itself), separate from the MCP `upload_document_version`/`open_document_version_upload` tools (which take a host-supplied file reference and are excluded from the CLI).
 
 ## Command tree
 
@@ -139,7 +139,7 @@ Global flags (output/cursor/limit/all/yes/input; see Conventions above)
 are omitted here.
 
 - `stella audit-log list`
-  - optional: --workspace-id, --action, --resource-type, --resource-id, --user-id, --from, --to
+  - optional: --matter-id, --action, --resource-type, --resource-id, --user-id, --from, --to
 - `stella capability describe`
   - `--capability` — Capability id to describe, as returned by list_capabilities (e.g. "time-entries.create"). (string)
 - `stella capability invoke`
@@ -178,38 +178,38 @@ are omitted here.
   - `--entity-id` — Document entity ID whose cell to set (string)
   - `--property-id` — Property ID, as returned by list_properties (string)
 - `stella document list`
-  - `--workspace-id` — Workspace ID to list documents in. Deprecated input alias: matter_id. (string)
+  - `--matter-id` — Matter ID to list documents in. (string)
   - optional: --mode (flat|children), --parent-id
 - `stella document properties list`
-  - `--workspace-id` — Workspace ID to list properties for. Deprecated input alias: matter_id. (string)
+  - `--matter-id` — Matter ID to list properties for. (string)
 - `stella document read`
   - `--entity-id` — Document entity ID (string)
   - optional: --version-id, --compare-with-version-id, --include-versions, --versions-cursor
 - `stella document save`
-  - optional: --entity-id, --workspace-id, --name, --parent-id, --kind (document|folder), --move-to-root, --version-id, --label, --description
+  - optional: --entity-id, --matter-id, --name, --parent-id, --kind (document|folder), --move-to-root, --version-id, --label, --description
 - `stella feedback send`
   - `--kind` — Feedback category: bug, feature_request, docs, or other (enum: bug, feature_request, docs, other)
   - `--title` — Short one-line summary of the issue; no tenant data, ids, or secrets (string)
   - `--body` — Markdown details: reproduction steps, expected vs actual behavior, environment. Never include tenant data, client or matter names, ids, or secrets; they are redacted server-side. (string)
   - optional: --channel (github)
 - `stella invoice list`
-  - optional: --workspace-id, --invoice-id
+  - optional: --matter-id, --invoice-id
 - `stella legislation search`
   - optional: --query, --title, --department-code, --legal-range-code, --matter-code, --date-from, --date-to, --law-id, --block-id, --relation-type (modifies|modifiedBy|derogates|derogatedBy|all), --full-text
 - `stella matter delete`
-  - `--matter-id` — Matter/workspace ID to delete (string)
+  - `--matter-id` — Matter ID to delete (string)
 - `stella matter link-contact`
-  - `--matter-id` — Matter/workspace ID (string)
-  - optional: --contact-id, --role (opposing_party|opposing_counsel|co_counsel|witness|expert_witness|third_party|judge|mediator|other), --workspace-contact-id
+  - `--matter-id` — Matter ID (string)
+  - optional: --contact-id, --role (opposing_party|opposing_counsel|co_counsel|witness|expert_witness|third_party|judge|mediator|other), --matter-contact-id
 - `stella matter list`
   - optional: --matter-id, --status (active|all)
 - `stella matter save`
   - optional: --matter-id, --name, --client-id, --reference, --billing-reference, --status (active|archived)
 - `stella organization add-member`
-  - `--workspace-id` — Workspace id for add_member and remove_member. Deprecated input alias: matter_id. (string)
+  - `--matter-id` — Matter ID for add_member and remove_member. (string)
   - `--user-id` — User id to add or remove for the member actions (string)
 - `stella organization remove-member`
-  - `--workspace-id` — Workspace id for add_member and remove_member. Deprecated input alias: matter_id. (string)
+  - `--matter-id` — Matter ID for add_member and remove_member. (string)
   - `--user-id` — User id to add or remove for the member actions (string)
 - `stella organization set-jurisdictions` — no flags; pass `--input` with jurisdictions
 - `stella organization update-settings`
@@ -217,10 +217,10 @@ are omitted here.
 - `stella playbook list`
   - optional: --playbook-id
 - `stella playbook run`
-  - `--workspace-id` — Workspace id to run the playbook over. Deprecated input alias: matter_id. (string)
+  - `--matter-id` — Matter ID to run the playbook over. (string)
   - `--playbook-id` — Playbook id to run (string)
 - `stella rate resolve`
-  - `--workspace-id` — Workspace ID to resolve the rate in. Deprecated input alias: matter_id. (string)
+  - `--matter-id` — Matter ID to resolve the rate in. (string)
   - `--user-id` — User ID to resolve the rate for (string)
   - `--date` — Date to resolve the rate on (ISO YYYY-MM-DD) (string)
 - `stella search matters`
@@ -228,9 +228,9 @@ are omitted here.
 - `stella task delete`
   - `--task-id` — Task entity ID to delete (string)
 - `stella task list`
-  - optional: --workspace-id, --task-id, --date-from, --date-to, --status
+  - optional: --matter-id, --task-id, --date-from, --date-to, --status
 - `stella task save`
-  - optional: --task-id, --workspace-id, --name, --status (open|in_progress|in_review|done|cancelled), --priority (none|urgent|high|medium|low), --item-type (task|fact|issue|requirement|event), --list-id, --list-section-id, --list-description, --due-date, --workflow-reason, --add-assignee-user-id, --remove-assignee-user-id, --link-entity-id, --unlink-link-id
+  - optional: --task-id, --matter-id, --name, --status (open|in_progress|in_review|done|cancelled), --priority (none|urgent|high|medium|low), --item-type (task|fact|issue|requirement|event), --list-id, --list-section-id, --list-description, --due-date, --workflow-reason, --add-assignee-user-id, --remove-assignee-user-id, --link-entity-id, --unlink-link-id
 - `stella template fill`
   - `--template-id` — Template id, as returned by list_templates (string)
   - optional: --allow-unused-values, --completion-mode (require_complete|allow_partial)
@@ -240,21 +240,21 @@ are omitted here.
   - optional: --template-id, --name, --docx-base64
 - `stella template save-filled new-document`
   - `--template-id` — Template id, as returned by list_templates (string)
-  - `--workspace-id` — Workspace receiving the filled DOCX. Deprecated input alias: matter_id. (string)
+  - `--matter-id` — Matter receiving the filled DOCX. (string)
   - `--idempotency-key` — Unique retry key for this save operation; reuse it only to recover the same timed-out request (string)
   - optional: --parent-id, --name
 - `stella template save-filled new-version`
   - `--template-id` — Template id, as returned by list_templates (string)
-  - `--workspace-id` — Workspace receiving the filled DOCX. Deprecated input alias: matter_id. (string)
+  - `--matter-id` — Matter receiving the filled DOCX. (string)
   - `--idempotency-key` — Unique retry key for this save operation; reuse it only to recover the same timed-out request (string)
   - `--entity-id` — Existing document entity id; required only for create_version (string)
   - optional: --name
 - `stella time-entry delete`
   - `--time-entry-id` — Time entry ID to delete or write off (string)
 - `stella time-entry list`
-  - optional: --workspace-id, --time-entry-id, --entity-id, --user-id, --date-from, --date-to, --status (draft|approved|billed|written_off)
+  - optional: --matter-id, --time-entry-id, --entity-id, --user-id, --date-from, --date-to, --status (draft|approved|billed|written_off)
 - `stella time-entry save`
-  - optional: --time-entry-id, --workspace-id, --entity-id, --date-worked, --timezone-id, --duration-minutes, --narrative, --invoice-narrative, --billable, --no-charge, --task-code, --activity-code
+  - optional: --time-entry-id, --matter-id, --entity-id, --date-worked, --timezone-id, --duration-minutes, --narrative, --invoice-narrative, --billable, --no-charge, --task-code, --activity-code
 - `stella usage get` — no arguments
 
 ## Exit codes
@@ -293,7 +293,7 @@ multi-segment capability actions are flattened with hyphens into `<action>`.
 - **Invoke by id** (forward-compatible with any server): `stella capability
 invoke <id> --input '<json>'`, where the JSON is `{ body?, params?, query? }`.
 - **Flags**: each capability command derives flags from its input schema;
-  workspace-scoped capabilities take a required `--workspace-id <id>`. Deep or
+  matter-scoped capabilities take a required `--matter-id <id>`. Deep or
   ambiguous payloads use `--input` (the whole `{ body?, params?, query? }`).
 - **Dry run**: write capabilities accept `--dry-run`, which validates the input
   server-side and returns without executing (maps to `validate_only`).
@@ -304,15 +304,15 @@ invoke <id> --input '<json>'`, where the JSON is `{ body?, params?, query? }`.
 ### When no curated command fits
 
 The curated commands above cover common tasks; anything else goes through the
-generic capability path. Current domains: `audit-logs`, `billing-codes`, `case-law`, `catalogue`, `chat`, `clauses`, `contacts`, `document-translations`, `document-types`, `entities`, `expenses`, `fields`, `flows`, `invoices`, `legislation`, `lists`, `organization-settings`, `playbooks`, `properties`, `rates`, `reports`, `signals`, `skills`, `style-sets`, `tasks`, `template-packs`, `template-recipes`, `templates`, `time-entries`, `uploads`, `usage`, `view-templates`, `views`, `work-obligations`, `workspaces`.
+generic capability path. Current domains: `audit-logs`, `billing-codes`, `case-law`, `catalogue`, `chat`, `clauses`, `contacts`, `document-translations`, `document-types`, `entities`, `expenses`, `fields`, `flows`, `invoices`, `legislation`, `lists`, `matters`, `organization-settings`, `playbooks`, `properties`, `rates`, `reports`, `signals`, `skills`, `style-sets`, `tasks`, `template-packs`, `template-recipes`, `templates`, `time-entries`, `uploads`, `usage`, `view-templates`, `views`, `work-obligations`.
 
-- Start a document translation run: `stella capability document-translations runs-create --workspace-id <workspace-id> --input '{"body":{"entityId":"00000000-0000-4000-8000-000000000000","fieldId":"00000000-0000-4000-8000-000000000000","targetLang":"value","engine":"deepl","output":"translated"}}'`.
-- Start workflow extraction: `stella capability workspaces workflow-start --workspace-id <workspace-id> --input '{"body":{"serviceTier":"standard"}}'`.
+- Start a document translation run: `stella capability document-translations runs-create --matter-id <matter-id> --input '{"body":{"entityId":"00000000-0000-4000-8000-000000000000","fieldId":"00000000-0000-4000-8000-000000000000","targetLang":"value","engine":"deepl","output":"translated"}}'`.
+- Start workflow extraction: `stella capability matters workflow-start --matter-id <matter-id> --input '{"body":{"serviceTier":"standard"}}'`.
 - **`--input` casing is not uniform; never guess it.** A curated command's
   `--input` JSON (the table and flags above) uses the MCP tool schema's own
-  keys, snake_case (`workspace_id`, `contact_id`). A capability command's
+  keys, snake_case (`matter_id`, `contact_id`). A capability command's
   `--input` JSON uses the handler schema's own keys, camelCase (`fieldId`,
-  `workspaceId`). Run `stella <command> --help` or `stella capability describe
+  `matterId`). Run `stella <command> --help` or `stella capability describe
 <id>` and copy the field paths it prints.
 
 ## Filing feedback

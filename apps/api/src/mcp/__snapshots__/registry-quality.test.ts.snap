@@ -3213,7 +3213,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "name": "invoke_capability",
     "scope": "stella:read",
     "access": "write",
-    "description": "Invoke one capability by id (from list_capabilities/describe_capability). Pass its input under input: { body, params, query } (no other top-level argument is accepted); workspace-scoped capabilities take the target workspace as input.params.workspaceId. Real authority is enforced per capability: the session must hold the capability's scope and your member role its permissions. Set validate_only: true to check input without running it; destructive capabilities require confirm: true after human approval.",
+    "description": "Invoke one capability by id (from list_capabilities/describe_capability). Pass its input under input: { body, params, query } (no other top-level argument is accepted); matter-scoped capabilities take the target matter as input.params.matterId. Real authority is enforced per capability: the session must hold the capability's scope and your member role its permissions. Set validate_only: true to check input without running it; destructive capabilities require confirm: true after human approval.",
     "annotations": {
       "title": "Invoke capability",
       "idempotentHint": false,
@@ -3237,7 +3237,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
             },
             "params": {
               "type": "object",
-              "description": "Path parameters; workspace-scoped capabilities require workspaceId here.",
+              "description": "Path parameters; matter-scoped capabilities require matterId here.",
               "additionalProperties": true
             },
             "query": {

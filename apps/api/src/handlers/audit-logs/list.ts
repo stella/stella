@@ -14,7 +14,7 @@ const config = {
   description:
     "Read the organization's audit trail (compliance view). Returns audit " +
     "entries newest first, each with its action, resource type and id, actor " +
-    "user id, workspace, timestamp, and change detail. Filter by workspaceId, " +
+    "user id, matter, timestamp, and change detail. Filter by matterId, " +
     "action, resourceType (with optional resourceId), userId, and a " +
     "created-at range (from/to, ISO date-time). Paginate with limit and " +
     "cursor. Requires organization audit-log access.",

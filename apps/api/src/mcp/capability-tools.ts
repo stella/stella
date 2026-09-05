@@ -24,7 +24,7 @@ import {
   encodePaginationCursor,
 } from "@/api/lib/pagination";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
-import { isRecord } from "@/api/lib/type-guards";
+import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { advertisedSchemas } from "@/api/mcp/advertised-schema";
 import { synthesizeCapabilityContext } from "@/api/mcp/capability-context";
 import type { SynthesizedCapabilityContext } from "@/api/mcp/capability-context";
@@ -39,6 +39,11 @@ import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import type { McpErrorCode, McpValidationIssue } from "@/api/mcp/error-codes";
 import { CAPABILITY_DISPATCH } from "@/api/mcp/generated/capability-dispatch";
 import type { CapabilityDispatchEntry } from "@/api/mcp/generated/capability-dispatch";
+import {
+  declaresInternalField,
+  INTERNAL_FIELD_NAME,
+  PUBLIC_FIELD_NAME,
+} from "@/api/mcp/public-field-names";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import type {
   InternalToolErrorResult,
@@ -102,7 +107,7 @@ type CatalogEntry = {
   additionalScopes?: readonly string[];
   /**
    * When true, this capability's REST route resolves workspace access through
-   * `validateWorkspaceAccessIncludingArchived` (e.g. `workspaces.unarchive`), so
+   * `validateWorkspaceAccessIncludingArchived` (e.g. `matters.unarchive`), so
    * the generic write gate must let it run against an archived workspace.
    */
   allowsArchivedWorkspace?: boolean;
@@ -363,6 +368,27 @@ const joinDot = (head: string, tail: string): string => {
   }
   return tail.length === 0 ? head : `${head}.${tail}`;
 };
+
+/**
+ * Translate a dot-path back to the names the agent was actually shown.
+ *
+ * Validation runs against the handler's own schema, so its issue paths name
+ * internal fields (`params.workspaceId`). The agent read `params.matterId` off
+ * `describe_capability` and typed `--matter-id`, so an issue that names the
+ * internal field points at a field it cannot see. Segments are exact keys, and
+ * an array index is a numeric segment that no field name collides with.
+ */
+const toPublicIssuePath = (dot: string): string =>
+  dot
+    .split(".")
+    .map((segment) => PUBLIC_FIELD_NAME[segment] ?? segment)
+    .join(".");
+
+/** An issue re-pointed at the public spelling of its field. */
+const toPublicIssue = (issue: McpValidationIssue): McpValidationIssue => ({
+  ...issue,
+  path: toPublicIssuePath(issue.path),
+});
 
 /**
  * Prefix a validated part name onto a dot-path so an agent sees `body.purpose`,
@@ -1050,6 +1076,156 @@ const invokeArgIssues = (
   return issues;
 };
 
+/**
+ * Rename the public input field names back to the internal ones a handler
+ * declares, walking the value alongside the schema that describes it.
+ *
+ * The container is a `matterId` to every agent and a `workspaceId` in the DB,
+ * the handler config and the REST route. This is the inbound half of that
+ * split, and the only place it happens: after it the raw input, the
+ * config-schema validation and the workspace resolution all speak the internal
+ * name, exactly as a REST call does. The outbound half is `withPublicFieldNames`
+ * (apps/api/scripts/export-capability-catalog.ts), which advertises `matterId`.
+ *
+ * Two rules, both evaluated per NODE rather than per part, because the
+ * container can sit inside a union branch, an array item or a sub-object
+ * (`flows.create` body.trigger, `signals.acceptances.create` body.result):
+ *
+ *  - a node whose schema declares an internal name is projected: its public
+ *    keys are renamed onto the internal ones;
+ *  - on such a node the internal spelling is REFUSED rather than passed
+ *    through. The rename is a clean cutover with no alias, so `workspaceId`
+ *    is not a second accepted name for `matterId`; accepting it would also
+ *    make the result depend on JSON key order when a caller sends both.
+ *
+ * A node that already owns the public name (`expenses.create` body declares
+ * its own `matterId`) declares no internal name, so it is left alone and an
+ * unrecognized key there is stripped by `Value.Clean`, exactly as at REST.
+ *
+ * Both directions come from `INTERNAL_FIELD_NAME`'s one table.
+ */
+type FieldProjection =
+  | { ok: true; value: unknown }
+  | { ok: false; issues: McpValidationIssue[] };
+
+const internalNameRefusal = (
+  path: string,
+  internal: string,
+  publicName: string,
+): McpValidationIssue => ({
+  path: joinDot(path, publicName),
+  message: `${internal} is the internal name for ${publicName}; send ${publicName}`,
+});
+
+/** The schema node describing one property of `schemaNode`, if it names one. */
+const propertySchema = (schemaNode: unknown, name: string): unknown => {
+  const properties = isRecord(schemaNode)
+    ? schemaNode["properties"]
+    : undefined;
+  return isRecord(properties) ? properties[name] : undefined;
+};
+
+/** The schema node describing an array's items, if it names one. */
+const itemsSchema = (schemaNode: unknown): unknown =>
+  isRecord(schemaNode) ? schemaNode["items"] : undefined;
+
+/**
+ * The union branch that describes `value`, when the node is a union: the first
+ * branch that declares an internal name AND fits the value's own keys. Picking
+ * a branch matters only for deciding whether to project, so a wrong guess costs
+ * nothing the validator will not catch.
+ */
+const unionBranchFor = (schemaNode: unknown, value: unknown): unknown => {
+  if (!isRecord(schemaNode) || !isRecord(value)) {
+    return undefined;
+  }
+  for (const keyword of ["anyOf", "oneOf", "allOf"]) {
+    const branches = schemaNode[keyword];
+    if (!isUnknownArray(branches)) {
+      continue;
+    }
+    const match = branches.find(
+      (branch) =>
+        declaresInternalField(branch) &&
+        Object.keys(value).some(
+          (key) =>
+            propertySchema(branch, INTERNAL_FIELD_NAME[key] ?? key) !==
+            undefined,
+        ),
+    );
+    if (match !== undefined) {
+      return match;
+    }
+  }
+  return undefined;
+};
+
+const withInternalFieldNames = ({
+  alwaysProject = false,
+  path,
+  schema,
+  value,
+}: {
+  /** Path params carry the container even when no config schema declares it. */
+  alwaysProject?: boolean;
+  path: string;
+  schema: unknown;
+  value: unknown;
+}): FieldProjection => {
+  if (isUnknownArray(value)) {
+    const items = itemsSchema(schema);
+    const issues: McpValidationIssue[] = [];
+    const projected = value.map((entry, index) => {
+      const result = withInternalFieldNames({
+        path: joinDot(path, String(index)),
+        schema: items,
+        value: entry,
+      });
+      if (!result.ok) {
+        issues.push(...result.issues);
+        return entry;
+      }
+      return result.value;
+    });
+    return issues.length > 0
+      ? { ok: false, issues }
+      : { ok: true, value: projected };
+  }
+  if (!isRecord(value)) {
+    return { ok: true, value };
+  }
+
+  const node = declaresInternalField(schema)
+    ? schema
+    : (unionBranchFor(schema, value) ?? schema);
+  const project = alwaysProject || declaresInternalField(node);
+  const issues: McpValidationIssue[] = [];
+  const projected: Record<string, unknown> = {};
+
+  for (const [name, entry] of Object.entries(value)) {
+    const publicName = project ? PUBLIC_FIELD_NAME[name] : undefined;
+    if (publicName !== undefined) {
+      issues.push(internalNameRefusal(path, name, publicName));
+      continue;
+    }
+    const internalName = project ? (INTERNAL_FIELD_NAME[name] ?? name) : name;
+    const child = withInternalFieldNames({
+      path: joinDot(path, name),
+      schema: propertySchema(node, internalName),
+      value: entry,
+    });
+    if (!child.ok) {
+      issues.push(...child.issues);
+      continue;
+    }
+    projected[internalName] = child.value;
+  }
+
+  return issues.length > 0
+    ? { ok: false, issues }
+    : { ok: true, value: projected };
+};
+
 /** Split the (already shape-validated) `input` arg into its three parts. */
 const readInvokeInput = (raw: unknown): InvokeInput => {
   if (!isRecord(raw)) {
@@ -1062,7 +1238,7 @@ const readInvokeInput = (raw: unknown): InvokeInput => {
   };
 };
 
-/** Resolve the workspace id for a workspace-kind capability from `input.params.workspaceId`. */
+/** Resolve the workspace id for a workspace-kind capability from `input.params.matterId`. */
 const resolveCapabilityWorkspace = ({
   context,
   entry,
@@ -1081,11 +1257,11 @@ const resolveCapabilityWorkspace = ({
       result: structuredErrorResult({
         code: "validation_error",
         message:
-          "This capability is workspace-scoped and requires input.params.workspaceId",
+          "This capability is matter-scoped and requires input.params.matterId",
         issues: [
           {
-            path: "params.workspaceId",
-            message: "Provide the target workspace id as a non-empty string",
+            path: "params.matterId",
+            message: "Provide the target matter id as a non-empty string",
           },
         ],
       }),
@@ -1097,7 +1273,7 @@ const resolveCapabilityWorkspace = ({
   if (!branded) {
     return {
       ok: false,
-      result: notFoundResult("Workspace not found or not accessible"),
+      result: notFoundResult("Matter not found or not accessible"),
     };
   }
   // Mirror `validateWorkspaceAccess` exactly (lib/auth.ts): the REST macro
@@ -1114,14 +1290,14 @@ const resolveCapabilityWorkspace = ({
     return {
       ok: false,
       result: notFoundResult(
-        "Workspace is archived; unarchive it before invoking capabilities against it",
+        "Matter is archived; unarchive it before invoking capabilities against it",
       ),
     };
   }
   if (context.pinServerValidatedWorkspaceId?.(branded) === false) {
     return {
       ok: false,
-      result: notFoundResult("Workspace not found or not accessible"),
+      result: notFoundResult("Matter not found or not accessible"),
     };
   }
   return { ok: true, workspaceId: branded };
@@ -1305,7 +1481,7 @@ const executeInvoke = async ({
   context,
   entry,
   id,
-  input,
+  input: publicInput,
   validateOnly,
 }: {
   context: McpRequestContext;
@@ -1325,12 +1501,11 @@ const executeInvoke = async ({
   // (same `advertisedSchemas` projection of the live endpoint config, so a
   // bound an agent read is a bound this gate enforces), run Default -> Convert
   // -> Clean -> Check to mirror the Elysia boundary; see validatePart. A
-  // workspace-scoped capability takes its workspace as
-  // `input.params.workspaceId`; at REST that param belongs to the route macro's
-  // schema, not the handler config's, so it is resolved from the RAW params
-  // below (Clean would strip it from configs that do not declare it) and
-  // re-merged into the params the handler receives, exactly like the macro's
-  // merged schema.
+  // matter-scoped capability takes its matter as `input.params.matterId`; at
+  // REST that param belongs to the route macro's schema, not the handler
+  // config's, so it is resolved from the RAW params below (Clean would strip it
+  // from configs that do not declare it) and re-merged into the params the
+  // handler receives, exactly like the macro's merged schema.
   // In fileless mode the withheld file field does not exist for this call, so
   // it is removed from the schema before validation rather than merely left
   // unset. `t.File()` carries `default: "File"`, and the Default step would
@@ -1338,6 +1513,45 @@ const executeInvoke = async ({
   // then fail Check on it — a capability that is reachable in principle,
   // un-callable in practice.
   const advertised = advertisedSchemas(endpoint.config);
+  // The public field names go back to the internal ones here, before anything
+  // reads the input, so the rest of this function is the REST boundary verbatim.
+  // A refusal (the caller sent an internal spelling) is reported before
+  // validation, against the public name the schema actually advertises.
+  const projections = [
+    withInternalFieldNames({
+      path: "body",
+      schema: advertised.body,
+      value: publicInput.body,
+    }),
+    withInternalFieldNames({
+      alwaysProject: true,
+      path: "params",
+      schema: advertised.params,
+      value: publicInput.params,
+    }),
+    withInternalFieldNames({
+      path: "query",
+      schema: advertised.query,
+      value: publicInput.query,
+    }),
+  ] as const;
+  const projectionIssues = projections.flatMap((projection) =>
+    projection.ok ? [] : projection.issues,
+  );
+  if (projectionIssues.length > 0) {
+    return structuredErrorResult({
+      code: "validation_error",
+      message: "Capability input failed validation",
+      issues: projectionIssues,
+      hint: "Fix the fields named in issues[] and retry.",
+    });
+  }
+  const [projectedBody, projectedParams, projectedQuery] = projections;
+  const input: InvokeInput = {
+    body: projectedBody.ok ? projectedBody.value : publicInput.body,
+    params: projectedParams.ok ? projectedParams.value : publicInput.params,
+    query: projectedQuery.ok ? projectedQuery.value : publicInput.query,
+  };
   const bodySchema = schemaWithoutField(
     advertised.body,
     filelessOnlyField(entry.transport),
@@ -1349,7 +1563,7 @@ const executeInvoke = async ({
   ] as const;
 
   const issues = validations.flatMap((result) =>
-    result.ok ? [] : result.issues,
+    result.ok ? [] : result.issues.map(toPublicIssue),
   );
   if (issues.length > 0) {
     return structuredErrorResult({
@@ -1641,8 +1855,8 @@ const CAPABILITY_TOOL_DEFINITIONS = [
     description:
       "Invoke one capability by id (from list_capabilities/describe_capability). " +
       "Pass its input under input: { body, params, query } (no other top-level " +
-      "argument is accepted); workspace-scoped capabilities take the target " +
-      "workspace as input.params.workspaceId. Real authority is enforced per " +
+      "argument is accepted); matter-scoped capabilities take the target " +
+      "matter as input.params.matterId. Real authority is enforced per " +
       "capability: the session must hold the capability's scope and your member " +
       "role its permissions. Set validate_only: true to check input without " +
       "running it; destructive capabilities require confirm: true after human " +
@@ -1667,7 +1881,7 @@ const CAPABILITY_TOOL_DEFINITIONS = [
             params: {
               type: "object",
               description:
-                "Path parameters; workspace-scoped capabilities require workspaceId here.",
+                "Path parameters; matter-scoped capabilities require matterId here.",
               additionalProperties: true,
             },
             query: {
