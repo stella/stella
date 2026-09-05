@@ -126,7 +126,7 @@ export const SHORTCUT_GROUPS = [
         id: "newChat",
         binding: { type: "hotkey", hotkey: HOTKEYS.NEW_CHAT },
         labelKey: "chat.newChat",
-        contexts: ["workspace"],
+        contexts: ["global", "workspace"],
       },
       {
         id: "selectAll",

@@ -1,6 +1,4 @@
-import { MessageSquare, PanelLeft, PanelRight, Plus } from "lucide-react";
-
-import { HOTKEYS } from "@/lib/hotkeys";
+import { MessageSquare, Plus, Upload, SquareCheck } from "lucide-react";
 
 import type { CommandAction } from "./types";
 
@@ -10,7 +8,7 @@ export const COMMAND_ACTIONS: readonly CommandAction[] = [
     group: "create",
     titleKey: "common.newMatter",
     icon: Plus,
-    hotkey: HOTKEYS.NEW_MATTER,
+    shortcutId: "newMatter",
     isAvailable: (ctx) => ctx.canCreateMatter,
     run: (ctx) => {
       ctx.openCreateMatterDialog();
@@ -21,32 +19,30 @@ export const COMMAND_ACTIONS: readonly CommandAction[] = [
     group: "create",
     titleKey: "chat.newChat",
     icon: MessageSquare,
-    hotkey: HOTKEYS.NEW_CHAT,
-    isAvailable: (ctx) => Boolean(ctx.workspaceId),
+    shortcutId: "newChat",
+    isAvailable: () => true,
     run: (ctx) => {
       ctx.openNewChat();
     },
   },
   {
-    id: "toggle-sidebar",
-    group: "view",
-    titleKey: "navigation.toggleSidebar",
-    icon: PanelLeft,
-    hotkey: HOTKEYS.TOGGLE_SIDEBAR,
-    isAvailable: () => true,
+    id: "upload-document",
+    group: "create",
+    titleKey: "workspaces.kanban.uploadDocument",
+    icon: Upload,
+    isAvailable: (ctx) => ctx.canUploadDocument,
     run: (ctx) => {
-      ctx.toggleSidebar();
+      ctx.openUploadDocument();
     },
   },
   {
-    id: "toggle-chat",
-    group: "view",
-    titleKey: "navigation.toggleChat",
-    icon: PanelRight,
-    hotkey: HOTKEYS.TOGGLE_CHAT,
-    isAvailable: () => true,
+    id: "new-task",
+    group: "create",
+    titleKey: "tasks.newTask",
+    icon: SquareCheck,
+    isAvailable: (ctx) => ctx.canCreateTask,
     run: (ctx) => {
-      ctx.toggleChat();
+      ctx.createTask();
     },
   },
 ];

@@ -51,31 +51,28 @@ type SearchSummaryItemProps = {
   onCitationClick: (citationId: string) => void;
 };
 
-type CommandActionItemProps = {
+export type CommandActionEntry = {
+  type: "command-action";
+  title: string;
   action: ResolvedCommandAction;
+};
+
+type CommandActionItemProps = {
+  entry: CommandActionEntry;
+  navigation: { type: "button" } | { type: "command"; index: number };
   onSelect: (actionId: string) => void;
 };
 
-/**
- * Renders as a plain button rather than a `CommandItem`: quick actions sit
- * alongside the recents rows (search-dialog.tsx), which use the same
- * `data-search-empty-row` pattern instead of the virtualized listbox's
- * index-based roving focus.
- */
 export const CommandActionItem = ({
-  action,
+  entry,
+  navigation,
   onSelect,
 }: CommandActionItemProps) => {
+  const { action } = entry;
   const Icon = action.icon;
   const hotkeyPlatform = useHydrationSafeHotkeyPlatform();
-
-  return (
-    <Button
-      className="h-auto w-full justify-start gap-2 px-2 py-2 text-start text-sm"
-      data-search-empty-row=""
-      onClick={() => onSelect(action.id)}
-      variant="ghost"
-    >
+  const content = (
+    <>
       <Icon className="text-muted-foreground size-4 shrink-0" />
       <span className="min-w-0 flex-1 truncate">{action.title}</span>
       {action.hotkey && (
@@ -83,8 +80,39 @@ export const CommandActionItem = ({
           {formatHotkeyForPlatform(action.hotkey, hotkeyPlatform)}
         </kbd>
       )}
-    </Button>
+    </>
   );
+  switch (navigation.type) {
+    case "command":
+      return (
+        <CommandItem
+          className="min-h-11 w-full gap-2 px-2 py-2 text-start text-sm"
+          data-command-action-id={action.id}
+          data-command-action-index={navigation.index}
+          index={navigation.index}
+          onClick={() => onSelect(action.id)}
+          value={entry}
+        >
+          {content}
+        </CommandItem>
+      );
+    case "button":
+      return (
+        <Button
+          className="h-auto min-h-11 w-full justify-start gap-2 px-2 py-2 text-start text-sm"
+          data-command-action-id={action.id}
+          data-search-empty-row=""
+          onClick={() => onSelect(action.id)}
+          variant="ghost"
+        >
+          {content}
+        </Button>
+      );
+    default: {
+      const exhaustive: never = navigation;
+      return exhaustive;
+    }
+  }
 };
 
 export const SearchSummaryItem = ({

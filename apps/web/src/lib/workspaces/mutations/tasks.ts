@@ -4,13 +4,58 @@ import { useTranslations } from "use-intl";
 
 import { stellaToast } from "@stll/ui/toast";
 
+import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import { workspacesKeys } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
+import { myWorkKeys } from "@/lib/workspaces/queries/my-work";
 import { taskKeys } from "@/lib/workspaces/queries/tasks";
+
+/** Create an untitled task and open it in the inspector for naming. */
+export const useCreateTask = () => {
+  const queryClient = useQueryClient();
+  const analytics = useAnalytics();
+  const t = useTranslations();
+
+  return useMutation({
+    mutationFn: async (workspaceId: string) => {
+      const response = await api
+        .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .put({ name: t("tasks.untitled") });
+      return unwrapEden(response);
+    },
+    onSuccess: async (data, workspaceId) => {
+      stellaToast.add({
+        title: t("success.taskCreated"),
+        type: "success",
+      });
+      useInspectorTabsStore.getState().openTask({
+        taskId: data.entityId,
+        workspaceId,
+        isNew: true,
+      });
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: entitiesKeys.all(workspaceId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: workspacesKeys.overview(workspaceId),
+        }),
+        queryClient.invalidateQueries({ queryKey: myWorkKeys.all }),
+      ]);
+    },
+    onError: (error) => {
+      analytics.captureError(error);
+      stellaToast.add({
+        title: t("errors.actionFailed"),
+        type: "error",
+      });
+    },
+  });
+};
 
 type TaskAssigneeVars = {
   taskId: string;

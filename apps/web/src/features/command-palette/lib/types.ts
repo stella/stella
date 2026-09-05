@@ -1,15 +1,15 @@
-import type { Hotkey } from "@tanstack/react-hotkeys";
 import type { LucideIcon } from "lucide-react";
 
 import type { TranslationKey } from "@/i18n/types";
+import type { ShortcutId } from "@/lib/hotkeys";
 
 type CommandActionGroup = "create" | "navigate" | "view" | "workspace";
 
 type CommandActionId =
   | "new-matter"
   | "new-chat"
-  | "toggle-sidebar"
-  | "toggle-chat";
+  | "upload-document"
+  | "new-task";
 
 /**
  * No-argument TranslationKeys usable as command action labels, narrowed like
@@ -20,18 +20,18 @@ type CommandActionTextKey = Extract<
   TranslationKey,
   | "common.newMatter"
   | "chat.newChat"
-  | "navigation.toggleSidebar"
-  | "navigation.toggleChat"
+  | "workspaces.kanban.uploadDocument"
+  | "tasks.newTask"
 >;
 
 export type CommandActionContext = {
-  navigate: (opts: { to: string }) => void;
-  workspaceId: string | undefined;
   canCreateMatter: boolean;
+  canUploadDocument: boolean;
+  canCreateTask: boolean;
+  openUploadDocument: () => void;
+  createTask: () => void;
   openCreateMatterDialog: () => void;
   openNewChat: () => void;
-  toggleChat: () => void;
-  toggleSidebar: () => void;
 };
 
 export type CommandAction = {
@@ -40,7 +40,7 @@ export type CommandAction = {
   titleKey: CommandActionTextKey;
   keywords?: readonly CommandActionTextKey[];
   icon: LucideIcon;
-  hotkey?: Hotkey;
+  shortcutId?: ShortcutId;
   isAvailable: (ctx: CommandActionContext) => boolean;
   run: (ctx: CommandActionContext) => void;
 };

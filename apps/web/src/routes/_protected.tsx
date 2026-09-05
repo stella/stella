@@ -373,6 +373,16 @@ function ProtectedComponent() {
     }
   }, [activeWorkspaceId]);
   useHotkey(useEffectiveHotkey("toggleChat"), handleToggleInspectorHotkey);
+  useHotkey(useEffectiveHotkey("newChat"), () => {
+    useInspectorTabsStore.getState().openChat(
+      activeWorkspaceId === undefined
+        ? {}
+        : {
+            workspaceId: activeWorkspaceId,
+            contextMatterIds: [activeWorkspaceId],
+          },
+    );
+  });
 
   return (
     <AuthenticatedUserProvider user={analyticsUser}>

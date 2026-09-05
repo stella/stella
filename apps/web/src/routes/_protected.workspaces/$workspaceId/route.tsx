@@ -1,6 +1,5 @@
 import { useState } from "react";
 
-import { useHotkey } from "@tanstack/react-hotkeys";
 import { type QueryClient, useQueryClient } from "@tanstack/react-query";
 import {
   createFileRoute,
@@ -17,7 +16,6 @@ import {
 } from "@stll/api-contract";
 import { stellaToast } from "@stll/ui/toast";
 
-import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { WorkflowServiceTierPromptProvider } from "@/components/workspaces/workflow-service-tier-prompt";
 import { WorkflowStartConfirmationPromptProvider } from "@/components/workspaces/workflow-start-confirmation-prompt";
 import { useWorkspaceChatMentionRegistration } from "@/features/chat/hooks/use-workspace-chat-mention-registration";
@@ -29,7 +27,6 @@ import { APIError } from "@/lib/errors/api";
 import { pageTitle, pageTitleLiteral } from "@/lib/page-title";
 import { ensureRouteQueryData, prefetchRouteQuery } from "@/lib/react-query";
 import { useWorkspaceSSE } from "@/lib/sse";
-import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
 import { overviewOptions, workspaceOptions } from "@/lib/workspaces/queries";
 import { workspacesKeys } from "@/lib/workspaces/queries.logic";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
@@ -235,18 +232,6 @@ function RouteComponent() {
     from: "/_protected/workspaces/$workspaceId/invoices",
     shouldThrow: false,
   });
-  // Always-new-chat shortcut. `Mod+J` (defined in `_protected.tsx`)
-  // is a smart toggle — it creates a chat only if no inspector
-  // tabs exist, otherwise it minimises/restores the pane.
-  // `Mod+Shift+J` here always spawns a fresh chat tab, so a user
-  // can start a new conversation without first dismissing whatever
-  // is currently open.
-  const openChat = useInspectorTabsStore((s) => s.openChat);
-  const handleOpenChat = () => {
-    openChat({ workspaceId, contextMatterIds: [workspaceId] });
-  };
-  useHotkey(useEffectiveHotkey("newChat"), handleOpenChat);
-
   // The right-side inspector pane (file viewers + chat tabs) is
   // mounted at the protected layout level (`_protected.tsx`) so
   // its mount survives matter→matter switches without flinching.

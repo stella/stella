@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useMemo, useRef, useState } from "react";
 import type {
   ComponentProps,
   CSSProperties,
@@ -58,6 +58,7 @@ import {
   RecentFilePreviewPanel,
   SearchPreviewPanel,
 } from "@/components/search-dialog-preview";
+import type { CommandActionEntry } from "@/components/search-dialog-results";
 import {
   CommandActionItem,
   SearchRecents,
@@ -290,6 +291,12 @@ const resolveSearchResultsStatus = ({
     : { type: "hidden" };
 };
 
+const UploadDocumentDialog = lazy(async () => {
+  const module =
+    await import("@/features/command-palette/components/upload-document-dialog");
+  return { default: module.UploadDocumentDialog };
+});
+
 type SearchDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -324,6 +331,7 @@ export const SearchDialog = ({
   const [resultsElement, setResultsElement] = useState<HTMLDivElement | null>(
     null,
   );
+  const [hitsScrollMargin, setHitsScrollMargin] = useState(0);
   // Draggable column widths. `null` keeps the default responsive classes;
   // a drag pins the column to a px width via the CSS variables below
   // (session-only, like the inspector pane resize).
@@ -524,6 +532,7 @@ export const SearchDialog = ({
     getItemKey: getHitVirtualKey,
     getScrollElement: () => resultsElement,
     overscan: VIRTUAL_HIT_OVERSCAN,
+    scrollMargin: hitsScrollMargin,
   });
   const virtualHits = hitVirtualizer.getVirtualItems();
 
@@ -598,20 +607,31 @@ export const SearchDialog = ({
   });
   const canAskAI = canSummarizeSearch && aiAvailability?.available === true;
 
-  const { resolvedActions, executeAction } = useCommandActions();
+  const { resolvedActions, executeAction, uploadRequest, closeUpload } =
+    useCommandActions(open);
 
   const normalizedActionQuery = query.trim().toLowerCase();
   const filteredActions = resolvedActions.filter(
     (action) =>
-      normalizedActionQuery.length === 0 ||
-      action.title.toLowerCase().includes(normalizedActionQuery) ||
-      action.keywordLabels.some((keyword) =>
-        keyword.toLowerCase().includes(normalizedActionQuery),
-      ),
+      mode.type === "browse" &&
+      (normalizedActionQuery.length === 0 ||
+        action.title.toLowerCase().includes(normalizedActionQuery) ||
+        action.keywordLabels.some((keyword) =>
+          keyword.toLowerCase().includes(normalizedActionQuery),
+        )),
+  );
+
+  const actionEntries = filteredActions.map(
+    (action) =>
+      ({
+        type: "command-action",
+        title: action.title,
+        action,
+      }) as const satisfies CommandActionEntry,
   );
 
   const handleActionSelect = (actionId: string) => {
-    executeAction(actionId);
+    closeActionQueue.schedule(() => executeAction(actionId));
     onOpenChange(false);
   };
 
@@ -1116,6 +1136,8 @@ export const SearchDialog = ({
     !isBlockingSearchError &&
     hasResults;
   const commandHits = shouldShowResults ? allHits : [];
+  const commandActions = hasVisibleSearch ? actionEntries : [];
+  const commandItems = [...commandActions, ...commandHits];
   const resultsStatus = resolveSearchResultsStatus({
     hasActiveSearch,
     hasQuery,
@@ -1185,7 +1207,7 @@ export const SearchDialog = ({
   // Roving focus for the zero-query screen: the saved-search and recents
   // rows are ordinary buttons, not command items, so the listbox highlight
   // never reaches them. ArrowDown from the input walks them in DOM order
-  // (saved searches, then recent searches, then recent files); ArrowUp from
+  // (saved searches, recent searches, recent files, actions); ArrowUp from
   // the first row returns to the input.
   const getEmptyScreenRows = (): HTMLElement[] =>
     resultsElement === null
@@ -1307,286 +1329,341 @@ export const SearchDialog = ({
   };
 
   return (
-    <CommandDialog
-      onOpenChangeComplete={(nextOpen) => {
-        closeActionQueue.complete(nextOpen);
-      }}
-      onOpenChange={(nextOpen, eventDetails) => {
-        if (nextOpen) {
-          closeActionQueue.cancel();
-        }
-        if (
-          !nextOpen &&
-          eventDetails.reason === "escape-key" &&
-          hasVisibleSearch
-        ) {
-          eventDetails.cancel();
-          clearSearch();
-          return;
-        }
-        onOpenChange(nextOpen);
-      }}
-      open={open}
-    >
-      <CommandDialogPopup
-        className={cn(
-          "flex h-[calc(100dvh-32px)] w-[calc(100vw-16px)] max-w-none flex-col overflow-clip sm:h-[min(720px,calc(100dvh-96px))]",
-          showPreview
-            ? "sm:w-[min(1120px,calc(100vw-32px))] xl:w-[min(1280px,calc(100vw-48px))]"
-            : "sm:w-[min(960px,calc(100vw-32px))]",
-        )}
-        layer="search"
-        showCloseButton={false}
+    <>
+      <CommandDialog
+        onOpenChangeComplete={(nextOpen) => {
+          closeActionQueue.complete(nextOpen);
+        }}
+        onOpenChange={(nextOpen, eventDetails) => {
+          if (nextOpen) {
+            closeActionQueue.cancel();
+          }
+          if (
+            !nextOpen &&
+            eventDetails.reason === "escape-key" &&
+            hasVisibleSearch
+          ) {
+            eventDetails.cancel();
+            clearSearch();
+            return;
+          }
+          onOpenChange(nextOpen);
+        }}
+        open={open}
       >
-        <RenderStormRegion name="search-dialog">
-          <Command
-            itemToStringValue={(hit) => hit.title}
-            items={commandHits}
-            keepHighlight
-            mode="none"
-            onItemHighlighted={(_, eventDetails) => {
-              if (eventDetails.index < 0) {
-                debouncedSetHighlightedHitId.cancel();
-                return;
-              }
-              const highlightedHit = allHits.at(eventDetails.index);
-              if (highlightedHit) {
-                if (eventDetails.reason === "keyboard") {
+        <CommandDialogPopup
+          className={cn(
+            "flex h-[calc(100dvh-32px)] w-[calc(100vw-16px)] max-w-none flex-col overflow-clip sm:h-[min(720px,calc(100dvh-96px))]",
+            showPreview
+              ? "sm:w-[min(1120px,calc(100vw-32px))] xl:w-[min(1280px,calc(100vw-48px))]"
+              : "sm:w-[min(960px,calc(100vw-32px))]",
+          )}
+          layer="search"
+          showCloseButton={false}
+        >
+          <RenderStormRegion name="search-dialog">
+            <Command
+              itemToStringValue={(hit) => hit.title}
+              items={commandItems}
+              keepHighlight
+              mode="none"
+              onItemHighlighted={(_, eventDetails) => {
+                if (eventDetails.index < 0) {
                   debouncedSetHighlightedHitId.cancel();
-                  setHighlightedHitId(highlightedHit.id);
-                } else {
-                  debouncedSetHighlightedHitId(highlightedHit.id);
+                  return;
                 }
-              }
-              if (eventDetails.reason === "keyboard") {
-                hitVirtualizer.scrollToIndex(eventDetails.index, {
-                  align: "auto",
-                });
-              }
-            }}
-            onValueChange={(value, eventDetails) => {
-              if (eventDetails.reason === "item-press") {
-                return;
-              }
-              setQuery(value);
-              setRecentPreviewFile(null);
-              debouncedSetQuery(value);
-              summarizeSearchMutation.reset();
-            }}
-            value={query}
-            virtualized
-          >
-            {mode.type === "pick" && (
-              <p className="bg-muted/50 text-muted-foreground shrink-0 border-b px-4 py-2 text-xs italic">
-                {PICK_MODE_LABEL}
-              </p>
-            )}
-            {/* Search input */}
-            <div className="flex shrink-0 items-center gap-3 border-b px-4 py-3">
-              <CommandInput
-                autoFocus
-                className="text-sm"
-                dir={contentDir(query)}
-                onKeyDown={(event) => {
-                  if (event.key === "ArrowDown" && !hasVisibleSearch) {
-                    const firstRow = getEmptyScreenRows().at(0);
-                    if (firstRow) {
-                      event.preventDefault();
-                      firstRow.focus();
-                    }
-                    return;
+                const highlightedHit = commandItems.at(eventDetails.index);
+                if (highlightedHit?.type === "command-action") {
+                  debouncedSetHighlightedHitId.cancel();
+                  setHighlightedHitId(null);
+                  if (eventDetails.reason === "keyboard") {
+                    resultsElement
+                      ?.querySelector<HTMLElement>(
+                        `[data-command-action-index="${String(eventDetails.index)}"]`,
+                      )
+                      ?.scrollIntoView({ block: "nearest" });
                   }
-                  if (event.key !== "Tab" || event.shiftKey) {
-                    return;
+                  return;
+                }
+                if (highlightedHit) {
+                  if (eventDetails.reason === "keyboard") {
+                    debouncedSetHighlightedHitId.cancel();
+                    setHighlightedHitId(highlightedHit.id);
+                  } else {
+                    debouncedSetHighlightedHitId(highlightedHit.id);
                   }
-                  if (
-                    !canUseAskAIShortcut({
-                      canAskAI,
-                      mode: mode.type,
-                      query,
-                    })
-                  ) {
-                    return;
-                  }
-                  event.preventDefault();
-                  handleAskAI();
-                }}
-                placeholder={t("search.placeholder")}
-                ref={searchInputRef}
-              />
-              {isFetching && !isFetchingNextPage && (
-                <LoaderIcon className="text-muted-foreground size-4 shrink-0 animate-spin" />
+                }
+                if (eventDetails.reason === "keyboard") {
+                  hitVirtualizer.scrollToIndex(
+                    eventDetails.index - commandActions.length,
+                    {
+                      align: "auto",
+                    },
+                  );
+                }
+              }}
+              onValueChange={(value, eventDetails) => {
+                if (eventDetails.reason === "item-press") {
+                  return;
+                }
+                setQuery(value);
+                setRecentPreviewFile(null);
+                debouncedSetQuery(value);
+                summarizeSearchMutation.reset();
+              }}
+              value={query}
+              virtualized
+            >
+              {mode.type === "pick" && (
+                <p className="bg-muted/50 text-muted-foreground shrink-0 border-b px-4 py-2 text-xs italic">
+                  {PICK_MODE_LABEL}
+                </p>
               )}
-              <Button
-                aria-label={t("search.aiRefine")}
-                className="size-8 shrink-0"
-                disabled={!query.trim() || refineSearchMutation.isPending}
-                onClick={() => {
-                  handleRefineQuery();
-                }}
-                size="icon-sm"
-                title={t("search.aiRefine")}
-                variant="ghost"
-              >
-                {refineSearchMutation.isPending ? (
-                  <LoaderIcon className="size-4 animate-spin" />
-                ) : (
-                  <WandSparklesIcon className="size-4" />
+              {/* Search input */}
+              <div className="flex shrink-0 items-center gap-3 border-b px-4 py-3">
+                <CommandInput
+                  autoFocus
+                  className="text-sm"
+                  dir={contentDir(query)}
+                  onKeyDown={(event) => {
+                    if (event.key === "ArrowDown" && !hasVisibleSearch) {
+                      const firstRow = getEmptyScreenRows().at(0);
+                      if (firstRow) {
+                        event.preventDefault();
+                        firstRow.focus();
+                      }
+                      return;
+                    }
+                    if (event.key !== "Tab" || event.shiftKey) {
+                      return;
+                    }
+                    if (
+                      !canUseAskAIShortcut({
+                        canAskAI,
+                        mode: mode.type,
+                        query,
+                      })
+                    ) {
+                      return;
+                    }
+                    event.preventDefault();
+                    handleAskAI();
+                  }}
+                  placeholder={t("search.placeholder")}
+                  ref={searchInputRef}
+                />
+                {isFetching && !isFetchingNextPage && (
+                  <LoaderIcon className="text-muted-foreground size-4 shrink-0 animate-spin" />
                 )}
-              </Button>
-              <SavedSearches
-                filters={filters}
-                isOpen={open}
-                onApply={applySavedSearch}
-                overlayLayer="search-child"
-                query={query}
-                showList={false}
-              />
-              {hasVisibleSearch && (
                 <Button
-                  className="min-h-11 shrink-0 sm:hidden"
-                  onClick={clearSearch}
-                  size="sm"
+                  aria-label={t("search.aiRefine")}
+                  className="size-8 shrink-0"
+                  disabled={!query.trim() || refineSearchMutation.isPending}
+                  onClick={() => {
+                    handleRefineQuery();
+                  }}
+                  size="icon-sm"
+                  title={t("search.aiRefine")}
                   variant="ghost"
                 >
-                  {t("common.reset")}
+                  {refineSearchMutation.isPending ? (
+                    <LoaderIcon className="size-4 animate-spin" />
+                  ) : (
+                    <WandSparklesIcon className="size-4" />
+                  )}
                 </Button>
-              )}
-            </div>
-
-            {/* Content area */}
-            <div
-              className="flex min-h-0 flex-1 overflow-hidden"
-              ref={contentAreaRef}
-              style={columnsStyle}
-            >
-              {/* Facets sidebar — always present so the layout stays stable. */}
-              <div
-                className={cn(
-                  "hidden w-[var(--search-facets-w,14rem)] shrink-0 overflow-y-auto border-e px-3 py-3",
-                  showPreview ? "xl:block" : "sm:block",
-                )}
-              >
-                <SearchFacetsBody
-                  editorBuckets={editorBuckets}
-                  facetSearchParams={facetSearchParams}
+                <SavedSearches
                   filters={filters}
-                  hasSearchCriteria={hasSearchCriteria}
-                  locale={locale}
-                  mimeTypeBuckets={mimeTypeBuckets}
-                  publicLawPreviewEnabled={publicLawPreviewEnabled}
-                  setFilters={setFilters}
-                  typeBuckets={typeBuckets}
-                  workspaceBuckets={workspaceBuckets}
+                  isOpen={open}
+                  onApply={applySavedSearch}
+                  overlayLayer="search-child"
+                  query={query}
+                  showList={false}
+                />
+                {hasVisibleSearch && (
+                  <Button
+                    className="min-h-11 shrink-0 sm:hidden"
+                    onClick={clearSearch}
+                    size="sm"
+                    variant="ghost"
+                  >
+                    {t("common.reset")}
+                  </Button>
+                )}
+              </div>
+
+              {/* Content area */}
+              <div
+                className="flex min-h-0 flex-1 overflow-hidden"
+                ref={contentAreaRef}
+                style={columnsStyle}
+              >
+                {/* Facets sidebar — always present so the layout stays stable. */}
+                <div
+                  className={cn(
+                    "hidden w-[var(--search-facets-w,14rem)] shrink-0 overflow-y-auto border-e px-3 py-3",
+                    showPreview ? "xl:block" : "sm:block",
+                  )}
+                >
+                  <SearchFacetsBody
+                    editorBuckets={editorBuckets}
+                    facetSearchParams={facetSearchParams}
+                    filters={filters}
+                    hasSearchCriteria={hasSearchCriteria}
+                    locale={locale}
+                    mimeTypeBuckets={mimeTypeBuckets}
+                    publicLawPreviewEnabled={publicLawPreviewEnabled}
+                    setFilters={setFilters}
+                    typeBuckets={typeBuckets}
+                    workspaceBuckets={workspaceBuckets}
+                  />
+                </div>
+
+                <SearchColumnResizeHandle
+                  className={cn(
+                    "hidden",
+                    showPreview ? "xl:block" : "sm:block",
+                  )}
+                  label={t("search.resizeFilters")}
+                  max={SEARCH_FACETS_MAX_WIDTH}
+                  min={SEARCH_FACETS_MIN_WIDTH}
+                  onResize={resizeFacetsColumn}
+                  value={facetsWidth ?? SEARCH_FACETS_DEFAULT_WIDTH}
+                />
+
+                {/* Results */}
+                <CommandList
+                  className={cn(
+                    "max-h-none min-w-0 flex-1",
+                    hasVisibleSearch
+                      ? "overflow-y-auto"
+                      : "flex min-h-0 flex-col overflow-hidden",
+                  )}
+                  onKeyDown={handleEmptyScreenListKeyDown}
+                  ref={setResultsElement}
+                >
+                  <div
+                    className="min-h-0 flex-1 overflow-y-auto"
+                    hidden={hasVisibleSearch}
+                  >
+                    <SearchRecentsScreen
+                      filters={filters}
+                      onApplySavedSearch={applySavedSearch}
+                      onFileClick={openRecentFile}
+                      onFilePreview={setRecentPreviewFile}
+                      onSearchClick={applyRecentSearch}
+                      open={open}
+                      previewedFileId={displayedRecentFile?.entityId ?? null}
+                      query={query}
+                      recentFiles={recentFiles}
+                      recentSearches={recentSearches}
+                      visible={!hasVisibleSearch}
+                    />
+                  </div>
+                  {mode.type === "browse" && filteredActions.length > 0 && (
+                    <section className="shrink-0 px-4 py-4">
+                      <h3 className="text-muted-foreground mb-2 text-xs font-medium">
+                        {t("common.actions")}
+                      </h3>
+                      <div className="space-y-1">
+                        {actionEntries.map((entry, index) => (
+                          <CommandActionItem
+                            entry={entry}
+                            navigation={
+                              hasVisibleSearch
+                                ? { type: "command", index }
+                                : { type: "button" }
+                            }
+                            key={entry.action.id}
+                            onSelect={handleActionSelect}
+                          />
+                        ))}
+                      </div>
+                    </section>
+                  )}
+                  <SearchResultsContent
+                    onRetry={() => {
+                      detached(refetchSearch(), "search-dialog.refetch-search");
+                    }}
+                    status={resultsStatus}
+                  >
+                    <SearchHitResults
+                      commandIndexOffset={commandActions.length}
+                      measureContainer={(element) => {
+                        if (element && resultsElement) {
+                          // Actions and the result heading precede the virtual rows.
+                          setHitsScrollMargin(
+                            element.getBoundingClientRect().top -
+                              resultsElement.getBoundingClientRect().top +
+                              resultsElement.scrollTop,
+                          );
+                        }
+                      }}
+                      hits={allHits}
+                      onOpenResult={openSearchResult}
+                      pagination={{
+                        fetchNextPage,
+                        hasNextPage,
+                        isFetchNextPageError,
+                        isFetchingNextPage,
+                        loadMoreRef,
+                      }}
+                      summary={{
+                        isOpeningChat: createSummaryChatMutation.isPending,
+                        onOpenChat: handleOpenSummaryChat,
+                        onSummarize: handleSummarizeResults,
+                        summarizeMutation: summarizeSearchMutation,
+                        visible: showSearchSummary,
+                      }}
+                      totalCount={totalCount}
+                      virtual={{
+                        items: virtualHits,
+                        measureElement: hitVirtualizer.measureElement,
+                        totalSize: hitVirtualizer.getTotalSize(),
+                        scrollMargin: hitsScrollMargin,
+                      }}
+                    />
+                  </SearchResultsContent>
+                </CommandList>
+                <SearchPreviewColumn
+                  displayedHit={displayedPreviewHit}
+                  displayedRecentFile={displayedRecentFile}
+                  locationModifierHeld={locationModifierHeld}
+                  onOpenRecentFile={openRecentFile}
+                  onOpenSearchResult={openSearchResult}
+                  onResize={resizePreviewColumn}
+                  previewLocatorCandidates={previewLocatorCandidates}
+                  previewWidth={previewWidth}
+                  query={searchQuery}
+                  scope={searchRecentsScope}
+                  visible={showPreview}
                 />
               </div>
 
-              <SearchColumnResizeHandle
-                className={cn("hidden", showPreview ? "xl:block" : "sm:block")}
-                label={t("search.resizeFilters")}
-                max={SEARCH_FACETS_MAX_WIDTH}
-                min={SEARCH_FACETS_MIN_WIDTH}
-                onResize={resizeFacetsColumn}
-                value={facetsWidth ?? SEARCH_FACETS_DEFAULT_WIDTH}
-              />
-
-              {/* Results */}
-              <CommandList
-                className="max-h-none min-w-0 flex-1 overflow-y-auto"
-                onKeyDown={handleEmptyScreenListKeyDown}
-                ref={setResultsElement}
-              >
-                <SearchRecentsScreen
-                  filters={filters}
-                  onApplySavedSearch={applySavedSearch}
-                  onFileClick={openRecentFile}
-                  onFilePreview={setRecentPreviewFile}
-                  onSearchClick={applyRecentSearch}
-                  open={open}
-                  previewedFileId={displayedRecentFile?.entityId ?? null}
-                  query={query}
-                  recentFiles={recentFiles}
-                  recentSearches={recentSearches}
-                  visible={!hasVisibleSearch}
-                />
-                {mode.type === "browse" && filteredActions.length > 0 && (
-                  <section className="px-4 py-4">
-                    <h3 className="text-muted-foreground mb-2 text-xs font-medium">
-                      {t("common.actions")}
-                    </h3>
-                    <div className="space-y-1">
-                      {filteredActions.map((action) => (
-                        <CommandActionItem
-                          action={action}
-                          key={action.id}
-                          onSelect={handleActionSelect}
-                        />
-                      ))}
-                    </div>
-                  </section>
-                )}
-                <SearchResultsContent
-                  onRetry={() => {
-                    detached(refetchSearch(), "search-dialog.refetch-search");
-                  }}
-                  status={resultsStatus}
-                >
-                  <SearchHitResults
-                    hits={allHits}
-                    onOpenResult={openSearchResult}
-                    pagination={{
-                      fetchNextPage,
-                      hasNextPage,
-                      isFetchNextPageError,
-                      isFetchingNextPage,
-                      loadMoreRef,
-                    }}
-                    summary={{
-                      isOpeningChat: createSummaryChatMutation.isPending,
-                      onOpenChat: handleOpenSummaryChat,
-                      onSummarize: handleSummarizeResults,
-                      summarizeMutation: summarizeSearchMutation,
-                      visible: showSearchSummary,
-                    }}
-                    totalCount={totalCount}
-                    virtual={{
-                      items: virtualHits,
-                      measureElement: hitVirtualizer.measureElement,
-                      totalSize: hitVirtualizer.getTotalSize(),
-                    }}
-                  />
-                </SearchResultsContent>
-              </CommandList>
-              <SearchPreviewColumn
-                displayedHit={displayedPreviewHit}
-                displayedRecentFile={displayedRecentFile}
-                locationModifierHeld={locationModifierHeld}
-                onOpenRecentFile={openRecentFile}
-                onOpenSearchResult={openSearchResult}
-                onResize={resizePreviewColumn}
-                previewLocatorCandidates={previewLocatorCandidates}
-                previewWidth={previewWidth}
-                query={searchQuery}
-                scope={searchRecentsScope}
-                visible={showPreview}
-              />
-            </div>
-
-            {/* Footer: keyboard hints on the left, dialog-level controls on
+              {/* Footer: keyboard hints on the left, dialog-level controls on
                 the right — everything that is not the query itself lives
                 here so the input row stays a plain input. */}
-            <SearchDialogFooter
-              canAskAI={canAskAI}
-              isAskingAI={askAIMutation.isPending}
-              mode={mode.type}
-              onAskAI={handleAskAI}
-              previewEnabled={previewEnabled}
-              setPreviewEnabled={setPreviewEnabled}
-            />
-          </Command>
-        </RenderStormRegion>
-      </CommandDialogPopup>
-    </CommandDialog>
+              <SearchDialogFooter
+                canAskAI={canAskAI}
+                isAskingAI={askAIMutation.isPending}
+                mode={mode.type}
+                onAskAI={handleAskAI}
+                previewEnabled={previewEnabled}
+                setPreviewEnabled={setPreviewEnabled}
+              />
+            </Command>
+          </RenderStormRegion>
+        </CommandDialogPopup>
+      </CommandDialog>
+      {uploadRequest.type === "open" && (
+        <Suspense fallback={null}>
+          <UploadDocumentDialog
+            workspaceId={uploadRequest.workspaceId}
+            onClose={closeUpload}
+          />
+        </Suspense>
+      )}
+    </>
   );
 };
 
@@ -1985,6 +2062,8 @@ const SearchResultsContent = ({
 };
 
 type SearchHitResultsProps = {
+  measureContainer: (element: HTMLDivElement | null) => void;
+  commandIndexOffset: number;
   hits: readonly GlobalSearchHit[];
   onOpenResult: ComponentProps<typeof SearchResultItem>["onClick"];
   pagination: {
@@ -2008,10 +2087,13 @@ type SearchHitResultsProps = {
     items: VirtualItem[];
     measureElement: (element: Element | null) => void;
     totalSize: number;
+    scrollMargin: number;
   };
 };
 
 const SearchHitResults = ({
+  measureContainer,
+  commandIndexOffset,
   hits,
   onOpenResult,
   pagination,
@@ -2039,7 +2121,11 @@ const SearchHitResults = ({
           summarizeMutation={summary.summarizeMutation}
         />
       )}
-      <div className="relative" style={{ height: `${virtual.totalSize}px` }}>
+      <div
+        className="relative"
+        ref={measureContainer}
+        style={{ height: `${virtual.totalSize}px` }}
+      >
         {virtual.items.map((virtualHit) => {
           const hit = hits.at(virtualHit.index);
           if (!hit) {
@@ -2051,11 +2137,13 @@ const SearchHitResults = ({
               data-index={virtualHit.index}
               key={hit.id}
               ref={virtual.measureElement}
-              style={{ transform: `translateY(${virtualHit.start}px)` }}
+              style={{
+                transform: `translateY(${virtualHit.start - virtual.scrollMargin}px)`,
+              }}
             >
               <SearchResultItem
                 hit={hit}
-                index={virtualHit.index}
+                index={virtualHit.index + commandIndexOffset}
                 onClick={onOpenResult}
                 resultNumber={virtualHit.index + 1}
               />
