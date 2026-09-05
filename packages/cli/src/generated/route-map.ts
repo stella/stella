@@ -5275,7 +5275,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -5390,7 +5390,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -5452,7 +5452,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -5534,7 +5534,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -5719,7 +5719,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -5862,7 +5862,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -10486,7 +10486,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -10611,7 +10611,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -10855,7 +10855,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -10974,7 +10974,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -11087,7 +11087,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -11175,7 +11175,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -11248,7 +11248,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -11391,7 +11391,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -11515,7 +11515,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -12126,7 +12126,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -12184,7 +12184,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -12242,7 +12242,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -12410,7 +12410,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -12532,7 +12532,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -13092,7 +13092,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -13150,7 +13150,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -13347,7 +13347,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -13969,7 +13969,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -14121,7 +14121,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -14600,7 +14600,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -14820,7 +14820,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -14882,7 +14882,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -15052,7 +15052,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -15287,7 +15287,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -15675,7 +15675,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -16284,7 +16284,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -16436,7 +16436,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -18008,7 +18008,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -18305,7 +18305,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -19400,7 +19400,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -19504,7 +19504,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -19589,7 +19589,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -19703,7 +19703,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -19949,7 +19949,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -20043,7 +20043,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -20137,7 +20137,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -20238,7 +20238,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -20312,7 +20312,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -20368,7 +20368,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -20458,7 +20458,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -20550,7 +20550,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -20624,7 +20624,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -20737,7 +20737,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -20917,7 +20917,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -21011,7 +21011,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -21119,7 +21119,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -21256,7 +21256,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -21328,7 +21328,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -21418,7 +21418,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -24983,7 +24983,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -25661,7 +25661,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -26375,7 +26375,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -26415,7 +26415,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -26555,7 +26555,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -27505,7 +27505,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -27592,7 +27592,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -28084,7 +28084,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -28142,7 +28142,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -28220,7 +28220,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -32285,7 +32285,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -32375,7 +32375,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -32451,7 +32451,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -32557,7 +32557,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -33130,7 +33130,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -33811,7 +33811,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -33903,7 +33903,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -34085,7 +34085,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -37031,7 +37031,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -37098,7 +37098,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -37190,7 +37190,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -37394,7 +37394,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -37458,7 +37458,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -37560,7 +37560,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -37722,7 +37722,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -37925,7 +37925,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -38010,7 +38010,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -38099,7 +38099,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -38196,7 +38196,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -38236,7 +38236,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -38469,7 +38469,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -38808,7 +38808,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -39687,7 +39687,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -39743,7 +39743,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -39883,7 +39883,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -41123,7 +41123,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -41163,7 +41163,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -42893,7 +42893,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -43066,7 +43066,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -43131,7 +43131,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -43275,7 +43275,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -43315,7 +43315,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -43355,7 +43355,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -43543,7 +43543,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -43583,7 +43583,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -43664,7 +43664,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -43735,7 +43735,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -43779,7 +43779,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -43844,7 +43844,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -43884,7 +43884,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -44057,7 +44057,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -44178,7 +44178,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,
@@ -44381,7 +44381,7 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace",
+                    flag: "--workspace-id",
                     prop: "workspace",
                     kind: "string",
                     required: true,

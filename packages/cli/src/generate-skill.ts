@@ -307,7 +307,7 @@ const renderCapabilitySection = (summary: CapabilitySkillSummary): string => {
     "- **Invoke by id** (forward-compatible with any server): `stella capability",
     "  invoke <id> --input '<json>'`, where the JSON is `{ body?, params?, query? }`.",
     "- **Flags**: each capability command derives flags from its input schema;",
-    "  workspace-scoped capabilities take a required `--workspace <id>`. Deep or",
+    "  workspace-scoped capabilities take a required `--workspace-id <id>`. Deep or",
     "  ambiguous payloads use `--input` (the whole `{ body?, params?, query? }`).",
     "- **Dry run**: write capabilities accept `--dry-run`, which validates the input",
     "  server-side and returns without executing (maps to `validate_only`).",

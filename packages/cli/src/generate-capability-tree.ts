@@ -566,12 +566,15 @@ export const deriveCapabilityLeaf = (
   const { flags: resolvedFlags, flagCollisions } = resolveFlags({
     capabilityId: entry.id,
     candidates,
-    takenNames: injectWorkspace ? new Set(["--workspace"]) : new Set(),
+    takenNames: injectWorkspace ? new Set(["--workspace-id"]) : new Set(),
   });
   const flags: CapabilityFlagSpec[] = injectWorkspace
     ? [
+        // Named like the flag a capability declaring params.workspaceId
+        // itself derives, so every workspace-scoped command takes the same
+        // --workspace-id whichever way its schema arrived.
         {
-          flag: "--workspace",
+          flag: "--workspace-id",
           prop: "workspace",
           kind: "string",
           required: true,
