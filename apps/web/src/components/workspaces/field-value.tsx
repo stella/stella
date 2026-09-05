@@ -2,10 +2,10 @@ import { Result } from "better-result";
 import { Loader2Icon, SquareMinusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { formatMoneyCents } from "@stll/money";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
-import { formatMoneyCents } from "@stll/workspace-ui/calculation-format";
 import { getClipFieldValueLabel } from "@stll/workspace-ui/field-value-logic";
 
 import {

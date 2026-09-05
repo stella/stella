@@ -10,8 +10,7 @@ import { panic } from "better-result";
 
 import type { CalculationKind, CalculationValue } from "@stll/calculations";
 import { NUMERIC_CALCULATION_KINDS } from "@stll/calculations";
-import { unsafeCents } from "@stll/money";
-import { currencyMinorUnitDigits } from "@stll/workspace-ui/calculation-format";
+import { toMinorUnits, unsafeCents } from "@stll/money";
 
 import type {
   EntityKind,
@@ -84,9 +83,7 @@ export const toCalculationValue = (
       // stores minor units, which is the point of it being its own type.
       return {
         type: "money",
-        amountCents: unsafeCents(
-          Math.round(value * 10 ** currencyMinorUnitDigits(currency)),
-        ),
+        amountCents: toMinorUnits({ amount: value, currency }),
         currency,
       };
     }

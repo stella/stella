@@ -2,11 +2,11 @@ import { Result } from "better-result";
 import { Loader2Icon, SquareMinusIcon } from "lucide-react";
 import { useFormatter, useLocale, useTranslations } from "use-intl";
 
+import { formatMoneyCents } from "@stll/money";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
-import { formatMoneyCents } from "./calculation-format";
 import { emptyColor, resolveOptionColor } from "./colors";
 import { getClipFieldValueLabel } from "./field-value-logic";
 import type { GenericProperty, WorkspaceFieldContent } from "./types";
