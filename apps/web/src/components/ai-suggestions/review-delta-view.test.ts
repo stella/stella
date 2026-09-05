@@ -122,7 +122,7 @@ describe("review delta view dispatch", () => {
       standard: side,
       target: side,
     });
-    expect(element?.type).toBe(ReviewAlignedPair);
+    expect(element.type).toBe(ReviewAlignedPair);
     expect(readProp(element, "delta")).toBeUndefined();
   });
 

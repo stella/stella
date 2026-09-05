@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { panic } from "better-result";
 import { ArrowUpIcon, RotateCcwIcon, SquareIcon } from "lucide-react";
 
 import { Button } from "@stll/ui/button";
@@ -61,6 +62,7 @@ export const ChatComposerAction = ({
         return;
       default:
         mode satisfies never;
+        panic(`Unhandled mode: ${String(mode)}`);
     }
   };
 

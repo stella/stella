@@ -585,7 +585,7 @@ const checkExpectation = (
     }
     default:
       expectation satisfies never;
-      return null;
+      return panic(`Unhandled expectation: ${String(expectation)}`);
   }
 };
 

@@ -8,7 +8,7 @@
  * on the saved playbook see the runs that came before it.
  */
 
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
@@ -70,7 +70,7 @@ const scopePerspectiveForRun = (
       ];
     default:
       perspective satisfies never;
-      return undefined;
+      return panic(`Unhandled perspective: ${String(perspective)}`);
   }
 };
 

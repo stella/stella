@@ -336,6 +336,7 @@ const readOutputCeilingStopAsLength = async function* (
       }
       default: {
         chunk satisfies never;
+        panic(`Unhandled chunk: ${String(chunk)}`);
       }
     }
     yield chunk;

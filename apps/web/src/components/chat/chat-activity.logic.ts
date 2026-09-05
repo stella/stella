@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import type { OrbState } from "thinking-orbs";
 
 import type { ChatMessage, ChatUITools } from "@/components/chat/chat-ui-tools";
@@ -162,7 +163,7 @@ export const getChatToolActivityState = (
       return null;
     default:
       category satisfies never;
-      return null;
+      return panic(`Unhandled category: ${String(category)}`);
   }
 };
 

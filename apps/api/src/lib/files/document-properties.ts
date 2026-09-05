@@ -723,6 +723,7 @@ const scrubCollaborationAttributes = (xml: string): string => {
           break;
         default:
           action satisfies never;
+          panic(`Unhandled action: ${String(action)}`);
       }
     }
   }

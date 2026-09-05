@@ -14,6 +14,7 @@
  * one carries.
  */
 
+import { panic } from "better-result";
 import * as v from "valibot";
 
 import { parseApiErrorValue } from "@stll/api-contract";
@@ -205,7 +206,7 @@ export const parseReviewProposalEvent = (
     }
     default:
       name satisfies never;
-      return null;
+      return panic(`Unhandled name: ${String(name)}`);
   }
 };
 

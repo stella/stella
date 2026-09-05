@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, count, eq } from "drizzle-orm";
 import { t } from "elysia";
 
@@ -152,7 +152,7 @@ const assignSeat = createSafeRootHandler(
         return Result.ok({ assigned: true });
       default:
         outcome satisfies never;
-        return Result.ok({ assigned: true });
+        return panic(`Unhandled outcome: ${String(outcome)}`);
     }
   },
 );

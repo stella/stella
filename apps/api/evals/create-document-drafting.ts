@@ -413,7 +413,7 @@ const collectParagraphs = (
         return collectParagraphs(block.content, tableHeader);
       default:
         block satisfies never;
-        return [];
+        return panic(`Unhandled block: ${String(block)}`);
     }
   });
 

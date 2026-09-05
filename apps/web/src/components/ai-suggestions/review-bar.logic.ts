@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import {
   REVIEW_SUGGESTION_ORIGIN,
   REVIEW_UNSPECIFIED_AREA,
@@ -21,7 +23,7 @@ export const canRevertReviewSuggestion = (
       return false;
     default:
       suggestion.status satisfies never;
-      return false;
+      return panic(`Unhandled status: ${String(suggestion.status)}`);
   }
 };
 
@@ -40,7 +42,7 @@ export const getReviewBarAction = (
       return canRevertReviewSuggestion(suggestion) ? "revert" : "resolved";
     default:
       suggestion.status satisfies never;
-      return "busy";
+      return panic(`Unhandled status: ${String(suggestion.status)}`);
   }
 };
 

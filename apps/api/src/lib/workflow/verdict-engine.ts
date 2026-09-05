@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import type { ConditionNode } from "@stll/conditions";
@@ -72,7 +72,7 @@ export const askPresence = (
       return "present";
     default: {
       content satisfies never;
-      return "missing";
+      return panic(`Unhandled content: ${String(content)}`);
     }
   }
 };
@@ -123,7 +123,7 @@ export const extractedFromContent = (
       return null;
     default: {
       content satisfies never;
-      return null;
+      return panic(`Unhandled content: ${String(content)}`);
     }
   }
 };
@@ -158,7 +158,7 @@ export const askText = (content: FieldContent | undefined): string | null => {
       return null;
     default: {
       content satisfies never;
-      return null;
+      return panic(`Unhandled content: ${String(content)}`);
     }
   }
 };
@@ -737,7 +737,7 @@ export const computeVerdictBatch = async ({
       }
       default: {
         rule satisfies never;
-        break;
+        panic(`Unhandled rule: ${String(rule)}`);
       }
     }
   }

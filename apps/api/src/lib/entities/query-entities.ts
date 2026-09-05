@@ -571,7 +571,7 @@ const parseCursorValue = (
     }
     default: {
       key.type satisfies never;
-      return null;
+      return panic(`Unhandled type: ${String(key.type)}`);
     }
   }
 };

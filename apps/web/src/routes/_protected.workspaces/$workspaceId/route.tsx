@@ -8,6 +8,7 @@ import {
   redirect,
   useMatch,
 } from "@tanstack/react-router";
+import { panic } from "better-result";
 import { useDebouncedCallback } from "use-debounce";
 
 import {
@@ -173,7 +174,7 @@ function RouteComponent() {
         break;
       default:
         event satisfies never;
-        return;
+        panic(`Unhandled event: ${String(event)}`);
     }
 
     const data = event.data;

@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { FilterIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -56,7 +57,7 @@ export const ColumnFilterButton = ({
         return filters.createdAt !== undefined;
       default: {
         columnId satisfies never;
-        return false;
+        return panic(`Unhandled column id: ${String(columnId)}`);
       }
     }
   })();

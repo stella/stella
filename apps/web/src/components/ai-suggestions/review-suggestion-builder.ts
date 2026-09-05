@@ -11,6 +11,8 @@
  * of chat/tool-input shapes.
  */
 
+import { panic } from "better-result";
+
 import type {
   FolioAIEditOperation,
   FolioAIEditSnapshot,
@@ -248,6 +250,6 @@ export const buildPreview = (
       };
     default:
       operation satisfies never;
-      return null;
+      return panic(`Unhandled operation: ${String(operation)}`);
   }
 };

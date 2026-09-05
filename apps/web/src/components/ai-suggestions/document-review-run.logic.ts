@@ -8,6 +8,8 @@
  * an already active run (409).
  */
 
+import { panic } from "better-result";
+
 import type { ReviewFlag } from "@stll/api-contract";
 
 import type {
@@ -51,7 +53,7 @@ export const documentReviewRunPollInterval = (
       return false;
     default:
       status satisfies never;
-      return false;
+      return panic(`Unhandled status: ${String(status)}`);
   }
 };
 
@@ -158,7 +160,7 @@ export const resolveRunConflictAttachment = (
       return null;
     default:
       restore satisfies never;
-      return null;
+      return panic(`Unhandled restore: ${String(restore)}`);
   }
 };
 
@@ -181,7 +183,7 @@ export const reviewRunView = (
       return "failed";
     default:
       status satisfies never;
-      return "failed";
+      return panic(`Unhandled status: ${String(status)}`);
   }
 };
 

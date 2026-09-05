@@ -10,6 +10,8 @@
  * pinned snapshot alone — a replayed job plans identically to the first one.
  */
 
+import { panic } from "better-result";
+
 import { DOCUMENT_REVIEW_RUN_EXECUTOR } from "@/api/lib/document-review/run-contract";
 import type {
   DocumentReviewRunBasis,
@@ -77,7 +79,7 @@ const isGradeable = (
       break;
     default:
       executor satisfies never;
-      return false;
+      return panic(`Unhandled executor: ${String(executor)}`);
   }
   const ask = resolveEffectiveAsk(position);
   return ask.question.trim().length > 0 && ask.content.type !== "file";

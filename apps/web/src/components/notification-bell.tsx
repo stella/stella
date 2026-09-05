@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { BellIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -404,7 +404,7 @@ const NotificationLink = ({
       );
     default:
       entityType satisfies never;
-      return null;
+      return panic(`Unhandled entity type: ${String(entityType)}`);
   }
 };
 
@@ -505,6 +505,6 @@ const NotificationMessage = ({
       });
     default:
       kind satisfies never;
-      return "";
+      return panic(`Unhandled kind: ${String(kind)}`);
   }
 };

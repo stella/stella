@@ -11,6 +11,7 @@ import { useState, type ReactNode } from "react";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "@tanstack/react-router";
+import { panic } from "better-result";
 import { BookOpenCheckIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -238,7 +239,7 @@ export const BilingualTranslateDialog = ({
         );
       default:
         state satisfies never;
-        return null;
+        return panic(`Unhandled state: ${String(state)}`);
     }
   };
 

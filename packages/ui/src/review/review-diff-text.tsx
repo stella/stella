@@ -1,5 +1,7 @@
 import type { CSSProperties, ReactNode } from "react";
 
+import { panic } from "better-result";
+
 import { cn } from "../lib/utils";
 
 // Track-changes styling, matched to folio's suggestion preview
@@ -113,6 +115,6 @@ const ReviewDiffSegmentSpan = ({ segment }: { segment: ReviewDiffSegment }) => {
       return <span>{segment.text}</span>;
     default:
       segment.type satisfies never;
-      return null;
+      return panic(`Unhandled type: ${String(segment.type)}`);
   }
 };

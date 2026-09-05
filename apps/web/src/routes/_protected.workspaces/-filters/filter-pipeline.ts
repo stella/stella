@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { getFirstWeekday } from "@/i18n/week";
 import type {
@@ -101,7 +103,7 @@ const resolveDateRange = (
     }
     default: {
       filter.preset satisfies never;
-      return null;
+      return panic(`Unhandled preset: ${String(filter.preset)}`);
     }
   }
 };
@@ -142,7 +144,7 @@ const passesLeadFilter = (
       return workspace.leadUserId === filter.userId;
     default: {
       filter satisfies never;
-      return false;
+      return panic(`Unhandled filter: ${String(filter)}`);
     }
   }
 };

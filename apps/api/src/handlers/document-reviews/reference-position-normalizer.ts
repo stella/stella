@@ -19,6 +19,7 @@
  *     comparable past that is reported as skipped rather than dropped.
  */
 
+import { panic } from "better-result";
 import * as v from "valibot";
 
 import type { SafeId } from "@/api/lib/branded-types";
@@ -493,6 +494,7 @@ export const normalizeProposal = ({
           break;
         default:
           event satisfies never;
+          panic(`Unhandled event: ${String(event)}`);
       }
     }
   };

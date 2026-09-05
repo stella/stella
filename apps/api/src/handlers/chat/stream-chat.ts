@@ -1281,7 +1281,7 @@ const createChatRuntimeMiddleware = ({
         return;
       default:
         event satisfies never;
-        return;
+        panic(`Unhandled event: ${String(event)}`);
     }
   });
   return {

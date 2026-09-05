@@ -11,6 +11,8 @@
  * these functions decide, so the matching is unit-testable without a DOM.
  */
 
+import { panic } from "better-result";
+
 import { diffWords } from "@/components/ai-suggestions/review-word-diff";
 
 export const KEY_TERM_KIND = {
@@ -360,6 +362,7 @@ export const diffHighlightRanges = ({
         break;
       default:
         op.type satisfies never;
+        panic(`Unhandled type: ${String(op.type)}`);
     }
   }
 

@@ -221,7 +221,7 @@ const isPersistedIdForInput = (
       return UUID_REGEX.test(value);
     default:
       inputState satisfies never;
-      return false;
+      return panic(`Unhandled input state: ${String(inputState)}`);
   }
 };
 

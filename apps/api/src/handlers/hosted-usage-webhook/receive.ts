@@ -26,6 +26,7 @@
  * narrow helpers.
  */
 
+import { panic } from "better-result";
 import * as v from "valibot";
 
 import {
@@ -288,7 +289,7 @@ const dispatchEvent = async (
       return await handleHostedAllocation({ tx, payload: event.data, eventId });
     default: {
       event satisfies never;
-      return { kind: "ignored", reason: "unhandled event type" };
+      return panic(`Unhandled event: ${String(event)}`);
     }
   }
 };

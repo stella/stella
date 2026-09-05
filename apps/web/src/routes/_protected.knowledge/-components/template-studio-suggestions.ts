@@ -11,6 +11,7 @@
  * range.
  */
 
+import { panic } from "better-result";
 import type { Node as PMNode } from "prosemirror-model";
 
 import type {
@@ -209,7 +210,7 @@ export const toTemplateEditOperation = (
       return null;
     default:
       operation satisfies never;
-      return null;
+      return panic(`Unhandled operation: ${String(operation)}`);
   }
 };
 
@@ -335,6 +336,7 @@ export const buildOperationSpecs = ({
       }
       default: {
         operation satisfies never;
+        panic(`Unhandled operation: ${String(operation)}`);
       }
     }
   }

@@ -10,7 +10,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { Link, useMatch, useNavigate } from "@tanstack/react-router";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import {
   CheckIcon,
   ChevronRightIcon,
@@ -4083,7 +4083,7 @@ const SuggestionButtons = ({
       );
     default:
       suggestion.status satisfies never;
-      return null;
+      return panic(`Unhandled status: ${String(suggestion.status)}`);
   }
 };
 

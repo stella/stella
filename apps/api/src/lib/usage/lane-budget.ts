@@ -8,6 +8,7 @@
  * reads as zero.
  */
 
+import { panic } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 
 import { DAY_IN_MS } from "@stll/time";
@@ -43,7 +44,7 @@ export const laneCounterBucketStart = (
       return utcIsoWeekStart(asOf);
     default:
       kind satisfies never;
-      return utcDayStart(asOf);
+      return panic(`Unhandled kind: ${String(kind)}`);
   }
 };
 

@@ -1,5 +1,6 @@
 import type { ComponentProps } from "react";
 
+import { panic } from "better-result";
 import { ArrowUpIcon, RotateCcwIcon, SquareIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -40,7 +41,7 @@ export const ChatComposerActionButton = (
         return t("common.retry");
       default:
         mode satisfies never;
-        return "";
+        return panic(`Unhandled mode: ${String(mode)}`);
     }
   })();
   const enabled = mode !== "send" || props.canSend;
@@ -58,6 +59,7 @@ export const ChatComposerActionButton = (
         return;
       default:
         mode satisfies never;
+        panic(`Unhandled mode: ${String(mode)}`);
     }
   };
 

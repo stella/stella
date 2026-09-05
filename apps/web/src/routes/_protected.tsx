@@ -8,6 +8,7 @@ import {
   redirect,
   useMatch,
 } from "@tanstack/react-router";
+import { panic } from "better-result";
 import {
   CogIcon,
   MessageSquarePlusIcon,
@@ -667,7 +668,7 @@ const getInspectorTabWorkspaceId = (
       return undefined;
     default: {
       tab satisfies never;
-      return undefined;
+      return panic(`Unhandled tab: ${String(tab)}`);
     }
   }
 };

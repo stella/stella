@@ -492,6 +492,7 @@ const buildMediationLists = (
       }
       default: {
         annotation satisfies never;
+        panic(`Unhandled annotation: ${String(annotation)}`);
       }
     }
   });
@@ -778,7 +779,7 @@ const resolveEntityWorkspaceUuid = (
     }
     default: {
       workspace satisfies never;
-      return undefined;
+      return panic(`Unhandled workspace: ${String(workspace)}`);
     }
   }
 };
@@ -856,7 +857,7 @@ const projectRefLeaf = ({
     }
     default: {
       kind satisfies never;
-      return value;
+      return panic(`Unhandled kind: ${String(kind)}`);
     }
   }
 };
@@ -974,7 +975,7 @@ const projectField = ({
       }
       default: {
         annotation satisfies never;
-        return value;
+        return panic(`Unhandled annotation: ${String(annotation)}`);
       }
     }
   }

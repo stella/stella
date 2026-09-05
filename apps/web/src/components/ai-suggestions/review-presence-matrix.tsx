@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
@@ -113,7 +114,7 @@ const presenceMatrixRows = (
       ];
     default:
       delta satisfies never;
-      return [];
+      return panic(`Unhandled delta: ${String(delta)}`);
   }
 };
 

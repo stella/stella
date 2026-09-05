@@ -23,6 +23,8 @@
  *   CORPUS_INDEX_ENDPOINT=... CORPUS_STORAGE_MODE=dual-write \
  *     bun run src/scripts/build-corpus-index.ts [generation]
  */
+import { panic } from "better-result";
+
 import { envBase } from "@/api/env-base";
 import { backfillCorpusIndexGenerationPage } from "@/api/handlers/case-law/corpus-index";
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
@@ -80,6 +82,7 @@ while (true) {
       continue;
     default:
       result satisfies never;
+      panic(`Unhandled result: ${String(result)}`);
   }
   break;
 }

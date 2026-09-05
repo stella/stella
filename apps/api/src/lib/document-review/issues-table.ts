@@ -190,7 +190,9 @@ const precedentPosition = ({
       return playbookName.length === 0 ? NO_VALUE : `Playbook: ${playbookName}`;
     default:
       finding.standardSource satisfies never;
-      return NO_VALUE;
+      return panic(
+        `Unhandled standard source: ${String(finding.standardSource)}`,
+      );
   }
 };
 
@@ -219,7 +221,7 @@ const explanationText = (finding: ReviewFinding): string | null => {
       return INSUFFICIENT_EVIDENCE_LABEL;
     default:
       explanation satisfies never;
-      return null;
+      return panic(`Unhandled explanation: ${String(explanation)}`);
   }
 };
 
@@ -250,7 +252,7 @@ const proposedWording = (finding: ReviewFinding): string => {
       return fix.text;
     default:
       fix satisfies never;
-      return NO_VALUE;
+      return panic(`Unhandled fix: ${String(fix)}`);
   }
 };
 

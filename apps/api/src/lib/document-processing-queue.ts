@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { Worker } from "bullmq";
 import {
   and,
@@ -806,6 +806,7 @@ export const processDocumentProcessingRun = async (
         return null;
       default:
         workspaceDispatch satisfies never;
+        panic(`Unhandled workspace dispatch: ${String(workspaceDispatch)}`);
     }
 
     // Opt-out takes this same settings lock before checking for running
@@ -963,6 +964,9 @@ export const processDocumentProcessingRun = async (
               return;
             default:
               extractionOutcome satisfies never;
+              panic(
+                `Unhandled extraction outcome: ${String(extractionOutcome)}`,
+              );
           }
           lifecycleSignal.throwIfAborted();
           const persistedSource = await readCurrentDocumentSource({
@@ -987,6 +991,7 @@ export const processDocumentProcessingRun = async (
           break;
         default:
           run.kind satisfies never;
+          panic(`Unhandled kind: ${String(run.kind)}`);
       }
       if (!isCurrentOcrSource({ run, source })) {
         await markRunCancelled(run.id, claimToken, "source_superseded");
@@ -1039,6 +1044,7 @@ export const processDocumentProcessingRun = async (
           return;
         default:
           persistenceOutcome satisfies never;
+          panic(`Unhandled persistence outcome: ${String(persistenceOutcome)}`);
       }
       lifecycleSignal.throwIfAborted();
 
@@ -1974,6 +1980,7 @@ export const dispatchQueuedDocumentProcessingRuns = async ({
         break;
       default:
         attempt satisfies never;
+        panic(`Unhandled attempt: ${String(attempt)}`);
     }
   }
 
@@ -2606,6 +2613,7 @@ const handleDocumentProcessingFailure = ({
       return;
     default:
       report satisfies never;
+      panic(`Unhandled report: ${String(report)}`);
   }
 };
 

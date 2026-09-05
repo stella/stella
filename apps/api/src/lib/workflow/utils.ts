@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import {
   type ConditionNode,
   type ConditionValue,
@@ -72,7 +74,7 @@ export const fieldContentToValue = (content: FieldContent): ConditionValue => {
       return undefined;
     default: {
       content satisfies never;
-      return undefined;
+      return panic(`Unhandled content: ${String(content)}`);
     }
   }
 };

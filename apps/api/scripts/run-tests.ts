@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -219,6 +220,7 @@ for (const { source, testPath } of classifiedTests) {
       break;
     default:
       batchKind satisfies never;
+      panic(`Unhandled batch kind: ${String(batchKind)}`);
   }
 }
 

@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 
 import { useNavigate } from "@tanstack/react-router";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { stellaToast } from "@stll/ui/toast";
@@ -176,6 +177,7 @@ export const useGuideRunner = ({
       }
       default:
         seed satisfies never;
+        panic(`Unhandled seed: ${String(seed)}`);
     }
   };
 
@@ -434,6 +436,7 @@ export const useGuideRunner = ({
           }
           default:
             outcome satisfies never;
+            panic(`Unhandled outcome: ${String(outcome)}`);
         }
       }
     };
@@ -462,6 +465,7 @@ export const useGuideRunner = ({
           return;
         default:
           exit satisfies never;
+          panic(`Unhandled exit: ${String(exit)}`);
       }
     };
 

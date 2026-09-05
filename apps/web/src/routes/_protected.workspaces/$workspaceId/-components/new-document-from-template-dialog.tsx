@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi, useNavigate } from "@tanstack/react-router";
+import { panic } from "better-result";
 import { ArrowLeftIcon, LayoutTemplateIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -280,6 +281,7 @@ const FillStep = ({
               return;
             default:
               created satisfies never;
+              panic(`Unhandled created: ${String(created)}`);
           }
         },
       }}

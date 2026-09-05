@@ -30,9 +30,11 @@
 
 import { panic } from "better-result";
 import { and, eq, gt, lte, sql } from "drizzle-orm";
+import * as v from "valibot";
 
 import type { Transaction } from "@/api/db/root";
 import {
+  USAGE_ENTITLEMENT_STATUSES,
   usageEvents,
   usageAllocations,
   usageEntitlements,
@@ -48,6 +50,26 @@ import type {
 import type { SafeId } from "@/api/lib/branded-types";
 import { UsageLimitExceededError } from "@/api/lib/errors/tagged-errors";
 
+/** A stored status this build does not know. */
+const UNRECOGNIZED_STATUS = "unrecognized" as const;
+
+type ReadEntitlementStatus =
+  | UsageEntitlementStatus
+  | typeof UNRECOGNIZED_STATUS;
+
+const storedEntitlementStatusSchema = v.picklist(USAGE_ENTITLEMENT_STATUSES);
+
+/**
+ * `usage_entitlements.status` is a text column, so a status written by a newer
+ * build reaches this predicate as-is whatever the Drizzle type says. Classify
+ * it at the read: what comes back is a status this build knows, or the
+ * `unrecognized` tag the switch below refuses consumption for.
+ */
+const readEntitlementStatus = (
+  status: UsageEntitlementStatus,
+): ReadEntitlementStatus =>
+  v.is(storedEntitlementStatusSchema, status) ? status : UNRECOGNIZED_STATUS;
+
 /**
  * Whether an entitlement lifecycle status permits consumption.
  *
@@ -57,17 +79,20 @@ import { UsageLimitExceededError } from "@/api/lib/errors/tagged-errors";
 export const isConsumableEntitlementStatus = (
   status: UsageEntitlementStatus,
 ): boolean => {
-  switch (status) {
+  const read = readEntitlementStatus(status);
+  switch (read) {
     case "active":
     case "trialing":
       return true;
     case "cancelled":
     case "past_due":
     case "paused":
+    case UNRECOGNIZED_STATUS:
+      // Fail closed: a status nobody here classified must not grant usage.
       return false;
     default:
-      status satisfies never;
-      return false;
+      read satisfies never;
+      return panic(`Unhandled status: ${String(read)}`);
   }
 };
 

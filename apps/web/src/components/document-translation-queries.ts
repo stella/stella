@@ -1,5 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
+import { panic } from "better-result";
 
 import { api } from "@/lib/api";
 import { shouldRetryAPIRequest, unwrapEden } from "@/lib/errors/api";
@@ -110,7 +111,7 @@ export const isDocumentTranslationRunActive = (
       return false;
     default:
       status satisfies never;
-      return false;
+      return panic(`Unhandled status: ${String(status)}`);
   }
 };
 

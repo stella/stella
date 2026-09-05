@@ -408,6 +408,37 @@ describe("file derivative repair", () => {
     expect(job?.payload).toEqual({ cursor: stuck });
   });
 
+  // A status this build does not know: what a newer writer leaves behind. The
+  // column's Drizzle type does not describe it, so the read boundary is what
+  // keeps it from reaching the classifier as a state nobody handled.
+  test("reports a status it does not know and leaves the row alone", async () => {
+    const unknownStatus = await seedFileField();
+    const stuck = await seedFileField();
+    await testDb.execute(
+      sql`update ${fields}
+        set content = jsonb_set(content, '{pdfDerivative}', '{"status":"converting"}'::jsonb, true)
+        where id = ${unknownStatus}`,
+    );
+
+    await runRepair();
+
+    expect(queued.map(({ data }) => data.fieldId)).toEqual([stuck]);
+    const reported = analytics
+      .exceptions()
+      .map((event) => event.properties)
+      .filter(
+        (properties) =>
+          properties["error.class"] === "UnrecognizedDerivativeStateError",
+      );
+    expect(reported.map((properties) => properties["fieldId"])).toEqual([
+      unknownStatus,
+    ]);
+    // Read as `unknown`: the column's type cannot describe a status this build
+    // does not know, which is the whole point of the row.
+    const stored: unknown = await readDerivativeStatus(unknownStatus);
+    expect(stored).toEqual({ status: "converting" });
+  });
+
   // A row whose repair throws stops the tick (the queue may be down), but the
   // cursor still moves past it: the next tick continues behind the row
   // instead of replaying the same failure forever and starving what follows.

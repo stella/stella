@@ -31,6 +31,7 @@ import { useRef } from "react";
 import type { RefObject } from "react";
 
 import { matchesKeyboardEvent } from "@tanstack/react-hotkeys";
+import { panic } from "better-result";
 import { ChevronDownIcon, ChevronUpIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -486,7 +487,7 @@ const SuggestionChangeLine = ({
         return t(change.key);
       default:
         change satisfies never;
-        return "";
+        return panic(`Unhandled change: ${String(change)}`);
     }
   })();
 

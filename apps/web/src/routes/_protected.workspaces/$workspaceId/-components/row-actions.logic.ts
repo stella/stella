@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import {
   DOCUMENT_PROPERTIES_MAX_BYTES,
   hasDocumentProperties,
@@ -47,7 +49,7 @@ export const getOcrExportFormats = (
       return [];
     default:
       exportStatus satisfies never;
-      return [];
+      return panic(`Unhandled export status: ${String(exportStatus)}`);
   }
 };
 
