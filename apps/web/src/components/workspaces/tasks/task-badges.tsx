@@ -16,6 +16,7 @@ import {
 import { env } from "@/env";
 import { useLocale } from "@/i18n/formatting-context";
 import { localISODate } from "@/lib/local-iso-date";
+import { UTC_CALENDAR_DATE_FORMAT } from "@/lib/relative-time";
 import type { WorkspaceEntity } from "@/lib/types";
 
 const PRIORITY_CONFIG: Record<
@@ -90,12 +91,10 @@ export const TaskBadges = ({ entity, className }: TaskBadgesProps) => {
         >
           <CalendarIcon className="size-3" />
           <span>
-            {new Date(entity.dueDate).toLocaleDateString(locale, {
-              year: "numeric",
-              month: "short",
-              day: "numeric",
-              timeZone: "UTC",
-            })}
+            {new Date(entity.dueDate).toLocaleDateString(
+              locale,
+              UTC_CALENDAR_DATE_FORMAT,
+            )}
           </span>
         </span>
       )}

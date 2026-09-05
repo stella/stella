@@ -66,6 +66,7 @@ import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useFormatter, useLocale } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
 import { getFileSizeDisplay } from "@/lib/file-size";
+import { UTC_CALENDAR_DATE_FORMAT } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
 import { readStoredJson, writeStoredJson } from "@/lib/stored-json";
 import type {
@@ -1783,12 +1784,7 @@ const formatDateValue = (
   if (value === undefined || value === null) {
     return "";
   }
-  return new Date(value).toLocaleDateString(locale, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    timeZone: "UTC",
-  });
+  return new Date(value).toLocaleDateString(locale, UTC_CALENDAR_DATE_FORMAT);
 };
 
 const ExtraColumnCell = ({ column, entity }: ExtraColumnCellProps) => {

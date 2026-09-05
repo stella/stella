@@ -15,6 +15,10 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import { prefetchRouteQuery } from "@/lib/react-query";
 import {
+  CALENDAR_DATE_FORMAT,
+  DAY_AND_MONTH_FORMAT,
+} from "@/lib/relative-time";
+import {
   addDays,
   expensesOptions,
   getExpensesWeekRange,
@@ -115,14 +119,7 @@ function ExpensesPage() {
     setCurrentDate(new Date());
   };
 
-  const dateLabel = `${monday.toLocaleDateString(locale, {
-    month: "short",
-    day: "numeric",
-  })} – ${sunday.toLocaleDateString(locale, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  })}`;
+  const dateLabel = `${monday.toLocaleDateString(locale, DAY_AND_MONTH_FORMAT)} – ${sunday.toLocaleDateString(locale, CALENDAR_DATE_FORMAT)}`;
 
   return (
     <div className="flex h-full flex-col">

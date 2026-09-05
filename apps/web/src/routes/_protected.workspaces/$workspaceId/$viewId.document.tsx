@@ -90,6 +90,7 @@ import {
 import { getPDFPageIdByNumber } from "@/lib/pdf/utils";
 import { ensureRouteQueryData, prefetchRouteQuery } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
+import { downloadFile } from "@/lib/utils";
 import { docxSuggestionsOptions } from "@/lib/workspaces/queries/docx-suggestions";
 import { entityOptions } from "@/lib/workspaces/queries/entities";
 import {
@@ -98,8 +99,8 @@ import {
   fieldFileOptions,
 } from "@/lib/workspaces/queries/entity-versions";
 import { justificationsOptions } from "@/lib/workspaces/queries/workspace";
-import { useWorkspaceStore } from "@/lib/workspaces/store";
 import "@/components/pdf/peek/peek-docx.css";
+import { useWorkspaceStore } from "@/lib/workspaces/store";
 import { PdfViewerControls } from "@/routes/_protected.workspaces/-components/pdf-viewer-controls";
 
 import { loadDocumentEntityWithChatPrefetch } from "./-document-loader";
@@ -1451,15 +1452,10 @@ const downloadBase64AsFile = (
   fileName: string,
   mimeType: string,
 ) => {
-  const blob = new Blob([decodeBase64ToArrayBuffer(base64)], {
-    type: mimeType,
-  });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = fileName;
-  a.click();
-  URL.revokeObjectURL(url);
+  downloadFile(
+    new Blob([decodeBase64ToArrayBuffer(base64)], { type: mimeType }),
+    fileName,
+  );
 };
 
 const decodeBase64ToArrayBuffer = (base64: string) => {

@@ -80,6 +80,7 @@ import { DOCX_MIME, PDF_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
+import { downloadFile } from "@/lib/utils";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import { resolveCanonicalDocumentDestinationQuery } from "@/lib/workspaces/resolve-document-destination-query";
 
@@ -2081,9 +2082,6 @@ export const TemplateForm = ({
 
       const mimeType = format === "pdf" ? PDF_MIME : DOCX_MIME;
       const blob = await normalizeBinaryResponse(response.data, mimeType);
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = url;
       // SAFETY: the discriminated union guarantees `file` is
       // defined when `fileName` (from server-side path) is absent.
       const baseName = fileName ?? file.name;
@@ -2091,9 +2089,7 @@ export const TemplateForm = ({
         format === "pdf"
           ? `filled-${DOCX_EXT_RE.test(baseName) ? baseName.replace(DOCX_EXT_RE, ".pdf") : `${baseName}.pdf`}`
           : `filled-${baseName}`;
-      anchor.download = filename;
-      anchor.click();
-      URL.revokeObjectURL(url);
+      downloadFile(blob, filename);
 
       onDone(filename);
     },

@@ -45,6 +45,7 @@ import { copyToClipboard } from "@/lib/copy-to-clipboard";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
+import { downloadFile } from "@/lib/utils";
 
 const TOTP_LENGTH = 6;
 const HTTP_BAD_REQUEST = 400;
@@ -251,15 +252,10 @@ const getTotpSecret = (totpURI: string): string | null => {
 };
 
 const downloadBackupCodes = (codes: readonly string[]) => {
-  const blob = new Blob([codes.join("\n")], { type: "text/plain" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = BACKUP_CODES_FILE_NAME;
-  document.body.append(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
+  downloadFile(
+    new Blob([codes.join("\n")], { type: "text/plain" }),
+    BACKUP_CODES_FILE_NAME,
+  );
 };
 
 const BackupCodesList = ({ codes }: { codes: readonly string[] }) => {

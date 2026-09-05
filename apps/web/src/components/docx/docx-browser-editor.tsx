@@ -29,6 +29,7 @@ import {
   XIcon,
 } from "lucide-react";
 import type { EditorView } from "prosemirror-view";
+import { useDebouncedCallback } from "use-debounce";
 import { useFormatter, useTranslations } from "use-intl";
 
 import {
@@ -57,9 +58,9 @@ import { composeRefs } from "@stll/ui/utils";
 import { useActiveDocxStore } from "@/components/ai-suggestions/active-docx-store";
 import type { ActiveDocxRegistrationToken } from "@/components/ai-suggestions/active-docx-store";
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
-import { ReviewBar } from "@/components/ai-suggestions/review-bar";
 import "@stll/folio-react/editor.css";
 
+import { ReviewBar } from "@/components/ai-suggestions/review-bar";
 import { useReviewStore } from "@/components/ai-suggestions/review-store";
 import { useAutocompleteStream } from "@/components/autocomplete/use-autocomplete-stream";
 import {
@@ -96,8 +97,8 @@ import { fileOptions } from "@/lib/files/queries";
 import { folioUIComponents } from "@/lib/folio-ui-components";
 import { getDisplayName } from "@/lib/get-display-name";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
-import { toSafeId } from "@/lib/safe-id";
 import "@/components/pdf/peek/peek-docx.css";
+import { toSafeId } from "@/lib/safe-id";
 import { anonymizationAllowlistOptions } from "@/lib/workspaces/queries/anonymization-allowlist";
 import { anonymizationTermsOptions } from "@/lib/workspaces/queries/anonymization-terms";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
@@ -629,9 +630,6 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     buffer: ArrayBuffer;
     fieldId: string;
   } | null>(null);
-  const changeCheckpointTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null,
-  );
   const changeCheckpointIdleCallbackRef = useRef<number | null>(null);
   const [editorMode, setEditorMode] = useState<EditorMode>("editing");
   const editTargetKey = `${workspaceId}:${entityId}:${propertyId}:${fieldId}`;
@@ -1056,17 +1054,6 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     return () => cancelAnimationFrame(frame);
   }, [isUnlocked]);
 
-  const clearQueuedChangeCheckpoint = useCallback(() => {
-    if (changeCheckpointTimerRef.current !== null) {
-      clearTimeout(changeCheckpointTimerRef.current);
-      changeCheckpointTimerRef.current = null;
-    }
-    if (changeCheckpointIdleCallbackRef.current !== null) {
-      window.cancelIdleCallback(changeCheckpointIdleCallbackRef.current);
-      changeCheckpointIdleCallbackRef.current = null;
-    }
-  }, []);
-
   // The debounced autosave, the awaitable flush, and the Cmd/Ctrl+S
   // handler all serialize the live editor and persist the buffer.
   // Firing two concurrently raced two `ref.save()` round-trips whose
@@ -1126,6 +1113,27 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     );
   }, [triggerCheckpointSave]);
 
+  // The checkpoint waits for the typing to stop, then for the main thread to
+  // be idle. `useDebouncedCallback` owns the first wait; the idle handle is
+  // not a debounce and stays a ref, because the cancel path has to reach it.
+  const queueChangeCheckpointSave = useDebouncedCallback(() => {
+    changeCheckpointIdleCallbackRef.current = window.requestIdleCallback(
+      () => {
+        changeCheckpointIdleCallbackRef.current = null;
+        saveChangeCheckpoint();
+      },
+      { timeout: 2000 },
+    );
+  }, CHANGE_CHECKPOINT_DELAY);
+
+  const clearQueuedChangeCheckpoint = useCallback(() => {
+    queueChangeCheckpointSave.cancel();
+    if (changeCheckpointIdleCallbackRef.current !== null) {
+      window.cancelIdleCallback(changeCheckpointIdleCallbackRef.current);
+      changeCheckpointIdleCallbackRef.current = null;
+    }
+  }, [queueChangeCheckpointSave]);
+
   // Awaitable variant of `saveChangeCheckpoint` for callers that
   // need to wait for the round-trip before navigating (e.g. the
   // sidepeek → full view handoff). Cancels the queued debounced
@@ -1162,19 +1170,6 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     clearQueuedChangeCheckpoint();
   });
 
-  const scheduleChangeCheckpointSave = useCallback(() => {
-    changeCheckpointTimerRef.current = setTimeout(() => {
-      changeCheckpointTimerRef.current = null;
-      changeCheckpointIdleCallbackRef.current = window.requestIdleCallback(
-        () => {
-          changeCheckpointIdleCallbackRef.current = null;
-          saveChangeCheckpoint();
-        },
-        { timeout: 2000 },
-      );
-    }, CHANGE_CHECKPOINT_DELAY);
-  }, [saveChangeCheckpoint]);
-
   const handleChange = useCallback(() => {
     if (!isUnlocked) {
       return;
@@ -1189,13 +1184,13 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     }
 
     setAutosaveStatus("pending");
-    scheduleChangeCheckpointSave();
+    queueChangeCheckpointSave();
   }, [
     clearQueuedChangeCheckpoint,
     isCollaborativeEditing,
     isUnlocked,
     markDirty,
-    scheduleChangeCheckpointSave,
+    queueChangeCheckpointSave,
     setAutosaveStatus,
   ]);
 

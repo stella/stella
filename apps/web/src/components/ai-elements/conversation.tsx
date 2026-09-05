@@ -18,6 +18,7 @@ import {
   useStickToBottom,
   useStickToBottomContext,
 } from "@/hooks/use-stick-to-bottom";
+import { downloadFile } from "@/lib/utils";
 
 type ConversationScrollProviderProps = {
   children: ReactNode;
@@ -241,15 +242,7 @@ export const ConversationDownload = ({
 }: ConversationDownloadProps) => {
   const handleDownload = () => {
     const markdown = messagesToMarkdown(messages, formatMessage);
-    const blob = new Blob([markdown], { type: "text/markdown" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = filename;
-    document.body.append(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
+    downloadFile(new Blob([markdown], { type: "text/markdown" }), filename);
   };
 
   return (
