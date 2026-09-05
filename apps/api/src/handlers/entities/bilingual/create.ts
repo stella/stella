@@ -21,7 +21,7 @@ import { BILINGUAL_TABLE_LAYOUT } from "@/api/lib/bilingual/contract";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { buildBilingualFileName } from "@/api/lib/document-translation/output";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
-import { loadEntityVersionDocxBuffer } from "@/api/lib/entity-versions/load-entity-version-docx-buffer";
+import { loadEntityVersionDocxBuffer } from "@/api/lib/entity-versions/load-entity-version-file-buffer";
 import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getScanWarnings, scanFile } from "@/api/lib/file-scan/scan";

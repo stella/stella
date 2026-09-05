@@ -12,9 +12,6 @@ import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   documentTranslationRuns,
   documentTranslationUnits,
-  entities,
-  entityVersions,
-  fields,
 } from "@/api/db/schema";
 import {
   loadOrgAIConfig,
@@ -96,16 +93,15 @@ import {
 } from "@/api/lib/document-translation/segments";
 import { applyAiEditsToDocx } from "@/api/lib/docx-authoring/apply-ai-edits";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
+import { loadEntityVersionFileBuffer } from "@/api/lib/entity-versions/load-entity-version-file-buffer";
 import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buffer";
 import { errorTag } from "@/api/lib/errors/utils";
 import { getScanWarnings, scanFile } from "@/api/lib/file-scan/scan";
-import { createFileKey } from "@/api/lib/files/utils";
 import { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval";
 import { logger } from "@/api/lib/observability/logger";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import { createBullMqConnection } from "@/api/lib/redis-client";
 import { createRootSafeDb, createRootScopedDb } from "@/api/lib/root-scoped-db";
-import { readS3ArrayBuffer } from "@/api/lib/s3";
 import {
   brandPersistedDocumentTranslationRunId,
   brandPersistedUserId,
@@ -388,70 +384,34 @@ const setRunFailed = async (
   });
 };
 
-type SourceBytes = { buffer: ArrayBuffer };
-
+/**
+ * The run pinned the version, the file, and its type when it was created;
+ * a source that drifted on any of them is a different document, and the
+ * run fails rather than translating what the user did not ask for.
+ */
 const loadPinnedSource = async (
   actor: RunActor,
   run: ClaimedRun,
-): Promise<Result<SourceBytes, DocumentTranslationRunErrorCode>> => {
-  const current = await actor.safeDb((tx) =>
-    tx
-      .select({
-        entityVersionId: entityVersions.id,
-        content: fields.content,
-      })
-      .from(entities)
-      .innerJoin(
-        entityVersions,
-        and(
-          eq(entityVersions.id, entities.currentVersionId),
-          eq(entityVersions.entityId, entities.id),
-        ),
-      )
-      .innerJoin(
-        fields,
-        and(
-          eq(fields.id, run.fileFieldId),
-          eq(fields.entityVersionId, entityVersions.id),
-        ),
-      )
-      .where(
-        and(
-          eq(entities.id, run.entityId),
-          eq(entities.workspaceId, actor.workspaceId),
-        ),
-      )
-      .limit(1),
-  );
-  if (Result.isError(current)) {
-    return Result.err("document_unresolved");
-  }
-  const source = current.value.at(0);
-  if (!source || source.content.type !== "file" || source.content.encrypted) {
+): Promise<Result<ArrayBuffer, DocumentTranslationRunErrorCode>> => {
+  const loaded = await loadEntityVersionFileBuffer({
+    safeDb: actor.safeDb,
+    organizationId: actor.organizationId,
+    workspaceId: actor.workspaceId,
+    entityId: run.entityId,
+    fileFieldId: run.fileFieldId,
+    allowReadOnly: true,
+  });
+  if (Result.isError(loaded)) {
     return Result.err("document_unresolved");
   }
   if (
-    source.entityVersionId !== run.entityVersionId ||
-    source.content.id !== run.sourceFileId ||
-    source.content.mimeType !== run.sourceMimeType
+    loaded.value.entityVersionId !== run.entityVersionId ||
+    loaded.value.fileId !== run.sourceFileId ||
+    loaded.value.mimeType !== run.sourceMimeType
   ) {
     return Result.err("document_changed");
   }
-  const bytes = await Result.tryPromise({
-    try: async () =>
-      await readS3ArrayBuffer(
-        createFileKey({
-          organizationId: actor.organizationId,
-          workspaceId: actor.workspaceId,
-          fileId: run.sourceFileId,
-          mimeType: run.sourceMimeType,
-        }),
-      ),
-    catch: (cause) => cause,
-  });
-  return Result.isError(bytes)
-    ? Result.err("document_unresolved")
-    : Result.ok({ buffer: bytes.value });
+  return Result.ok(loaded.value.buffer);
 };
 
 const createAIContext = async (
@@ -1049,7 +1009,7 @@ const executeRun = async (
   if (Result.isError(loaded)) {
     return loaded.error;
   }
-  let source = loaded.value.buffer;
+  let source = loaded.value;
   let comments: DocxCommentTranslationUnit[] = [];
   if (run.sourceMimeType === DOCX_MIME_TYPE) {
     const prepared = await Result.tryPromise({

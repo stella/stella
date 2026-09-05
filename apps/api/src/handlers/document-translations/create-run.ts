@@ -1,14 +1,8 @@
 import { Result } from "better-result";
-import { and, eq } from "drizzle-orm";
 
 import { isDocumentTranslationDeepLSupportedMimeType } from "@stll/api-contract/document-translation";
 
-import {
-  documentTranslationRuns,
-  entities,
-  entityVersions,
-  fields,
-} from "@/api/db/schema";
+import { documentTranslationRuns } from "@/api/db/schema";
 import { createDocumentTranslationRunBodySchema } from "@/api/handlers/document-translations/schemas";
 import { captureError } from "@/api/lib/analytics/capture";
 import {
@@ -27,10 +21,11 @@ import {
 } from "@/api/lib/document-translation/contract";
 import { inspectDocxComments } from "@/api/lib/document-translation/docx-review";
 import { handoffCommittedDocumentTranslationRun } from "@/api/lib/document-translation/handoff";
+import {
+  readEntityVersionFile,
+  resolveEntityVersionFile,
+} from "@/api/lib/entity-versions/load-entity-version-file-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { createFileKey } from "@/api/lib/files/utils";
-import { readS3ArrayBuffer } from "@/api/lib/s3";
-import { brandPersistedUserFileId } from "@/api/lib/safe-id-boundaries";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const config = {
@@ -69,44 +64,16 @@ const createDocumentTranslationRun = createSafeHandler<
         }),
       );
     }
-    const sources = yield* Result.await(
-      safeDb((tx) =>
-        tx
-          .select({
-            entityVersionId: entityVersions.id,
-            content: fields.content,
-          })
-          .from(entities)
-          .innerJoin(
-            entityVersions,
-            and(
-              eq(entityVersions.id, entities.currentVersionId),
-              eq(entityVersions.entityId, entities.id),
-              eq(entityVersions.workspaceId, workspaceId),
-            ),
-          )
-          .innerJoin(
-            fields,
-            and(
-              eq(fields.id, body.fieldId),
-              eq(fields.entityVersionId, entityVersions.id),
-            ),
-          )
-          .where(
-            and(
-              eq(entities.id, body.entityId),
-              eq(entities.workspaceId, workspaceId),
-            ),
-          )
-          .limit(1),
-      ),
+    // The translation derives a new document, so a read-only source is fine.
+    const source = yield* Result.await(
+      resolveEntityVersionFile({
+        safeDb,
+        workspaceId,
+        entityId: body.entityId,
+        fileFieldId: body.fieldId,
+        allowReadOnly: true,
+      }),
     );
-    const source = sources.at(0);
-    if (!source || source.content.type !== "file") {
-      return Result.err(
-        new HandlerError({ status: 404, message: "Source document not found" }),
-      );
-    }
     if (
       body.engine === DOCUMENT_TRANSLATION_ENGINE.AI &&
       body.entityVersionId !== source.entityVersionId
@@ -119,18 +86,9 @@ const createDocumentTranslationRun = createSafeHandler<
         }),
       );
     }
-    const sourceContent = source.content;
-    if (sourceContent.encrypted) {
-      return Result.err(
-        new HandlerError({
-          status: 422,
-          message: "Encrypted files cannot be translated",
-        }),
-      );
-    }
     if (
       body.engine === DOCUMENT_TRANSLATION_ENGINE.AI &&
-      sourceContent.mimeType !== DOCX_MIME_TYPE
+      source.mimeType !== DOCX_MIME_TYPE
     ) {
       return Result.err(
         new HandlerError({
@@ -141,18 +99,18 @@ const createDocumentTranslationRun = createSafeHandler<
     }
     if (
       body.engine === DOCUMENT_TRANSLATION_ENGINE.DEEPL &&
-      !isDocumentTranslationDeepLSupportedMimeType(sourceContent.mimeType)
+      !isDocumentTranslationDeepLSupportedMimeType(source.mimeType)
     ) {
       return Result.err(
         new HandlerError({
           status: 422,
-          message: `DeepL does not support ${sourceContent.mimeType}`,
+          message: `DeepL does not support ${source.mimeType}`,
         }),
       );
     }
     if (
       body.output === DOCUMENT_TRANSLATION_OUTPUT.BILINGUAL &&
-      sourceContent.mimeType !== DOCX_MIME_TYPE
+      source.mimeType !== DOCX_MIME_TYPE
     ) {
       return Result.err(
         new HandlerError({
@@ -163,7 +121,7 @@ const createDocumentTranslationRun = createSafeHandler<
     }
     if (
       body.commentPolicy !== undefined &&
-      sourceContent.mimeType !== DOCX_MIME_TYPE
+      source.mimeType !== DOCX_MIME_TYPE
     ) {
       return Result.err(
         new HandlerError({
@@ -174,20 +132,14 @@ const createDocumentTranslationRun = createSafeHandler<
     }
 
     const organizationId = session.activeOrganizationId;
-    const sourceFileId = brandPersistedUserFileId(sourceContent.id);
     if (
-      sourceContent.mimeType === DOCX_MIME_TYPE &&
+      source.mimeType === DOCX_MIME_TYPE &&
       body.commentPolicy === undefined
     ) {
       const inspection = await Result.tryPromise({
         try: async () => {
-          const buffer = await readS3ArrayBuffer(
-            createFileKey({
-              organizationId,
-              workspaceId,
-              fileId: sourceFileId,
-              mimeType: sourceContent.mimeType,
-            }),
+          const buffer = Result.unwrap(
+            await readEntityVersionFile(source, organizationId),
           );
           return await inspectDocxComments(buffer);
         },
@@ -233,9 +185,9 @@ const createDocumentTranslationRun = createSafeHandler<
             entityId: body.entityId,
             fileFieldId: body.fieldId,
             entityVersionId: source.entityVersionId,
-            sourceFileId,
-            sourceFileName: sourceContent.fileName,
-            sourceMimeType: sourceContent.mimeType,
+            sourceFileId: source.fileId,
+            sourceFileName: source.fileName,
+            sourceMimeType: source.mimeType,
             output: body.output,
             engine: body.engine,
             commentPolicy: body.commentPolicy,

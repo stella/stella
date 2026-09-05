@@ -21,7 +21,7 @@ import {
   flattenBilingualRows,
 } from "@/api/lib/bilingual/rows";
 import { workspaceParams } from "@/api/lib/custom-schema";
-import { loadEntityVersionDocxBuffer } from "@/api/lib/entity-versions/load-entity-version-docx-buffer";
+import { loadEntityVersionDocxBuffer } from "@/api/lib/entity-versions/load-entity-version-file-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const PREPARE_TIMEOUT_MS = 150_000;

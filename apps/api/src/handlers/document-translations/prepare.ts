@@ -17,7 +17,7 @@ import {
   type MatterDocumentLanguage,
 } from "@/api/lib/document-translation/version-language";
 import { extractText } from "@/api/lib/docx/extract-text";
-import { loadEntityVersionDocxBuffer } from "@/api/lib/entity-versions/load-entity-version-docx-buffer";
+import { loadEntityVersionDocxBuffer } from "@/api/lib/entity-versions/load-entity-version-file-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
