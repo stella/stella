@@ -189,7 +189,6 @@ export const ChatMatterPicker = ({
     }
     return selected[0]?.name ?? t("inspector.matterPicker.noMatter");
   })();
-  const compactTriggerLabel = Array.from(triggerLabel).at(0) ?? "";
   const extraCount =
     !allSelected && selected.length > 1 ? selected.length - 1 : 0;
   const triggerSwatch = selected[0]
@@ -242,10 +241,7 @@ export const ChatMatterPicker = ({
       }}
     >
       <MenuTrigger
-        className={cn(
-          COMPOSER_PICKER_TRIGGER_CLASS,
-          "w-full max-w-[220px] gap-0.5",
-        )}
+        className={cn(COMPOSER_PICKER_TRIGGER_CLASS, "max-w-[220px] gap-0.5")}
         title={
           selected.length > 1
             ? selected.map((m) => m.name).join(", ")
@@ -266,16 +262,7 @@ export const ChatMatterPicker = ({
           }
           return <MatterIcon className="size-3 shrink-0" variant="none" />;
         })()}
-        <span className="min-w-0 flex-1">
-          <span className="@container/matter-label block w-full">
-            <span className="block @min-[3rem]/matter-label:hidden">
-              {compactTriggerLabel}
-            </span>
-            <span className="hidden truncate @min-[3rem]/matter-label:block">
-              {triggerLabel}
-            </span>
-          </span>
-        </span>
+        <span className="min-w-0 truncate">{triggerLabel}</span>
         {extraCount > 0 && (
           <span
             className="bg-muted text-foreground rounded-sm px-1 text-[10px] font-medium tabular-nums"
