@@ -1,6 +1,12 @@
+export type ClipboardSourcePage = {
+  host: string;
+  url: string;
+};
+
 export type ClipboardSourceApp = {
   identifier: string | null;
   name: string;
+  page: ClipboardSourcePage | null;
 };
 
 export type ClipboardSourceAppVisual = {
@@ -94,10 +100,16 @@ export type ClipboardSnapshot = {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
+const isClipboardSourcePage = (value: unknown): value is ClipboardSourcePage =>
+  isRecord(value) &&
+  typeof value["host"] === "string" &&
+  typeof value["url"] === "string";
+
 const isClipboardSourceApp = (value: unknown): value is ClipboardSourceApp =>
   isRecord(value) &&
   (value["identifier"] === null || typeof value["identifier"] === "string") &&
-  typeof value["name"] === "string";
+  typeof value["name"] === "string" &&
+  (value["page"] === null || isClipboardSourcePage(value["page"]));
 
 const isClipboardSourceAppVisual = (
   value: unknown,

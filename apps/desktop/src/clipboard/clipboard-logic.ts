@@ -5,9 +5,52 @@ import {
 } from "@stll/text-normalize";
 import type { FoldedSearchText, SearchMatchRange } from "@stll/text-normalize";
 
-import type { ClipboardItem } from "./clipboard-types";
+import type {
+  ClipboardItem,
+  ClipboardSourceApp,
+  ClipboardSourceAppVisual,
+} from "./clipboard-types";
 
 const CLIPBOARD_SOURCE_TINT_COUNT = 6;
+
+/**
+ * Lookup keys of a source's visuals, most specific first: the page favicon,
+ * then the app icon. Mirrors `ClipboardSourceApp::visual_keys` in the desktop
+ * core, which writes the map.
+ */
+const clipboardSourceVisualKeys = (
+  sourceApp: ClipboardSourceApp,
+): [string, ...string[]] => {
+  const appKey = sourceApp.identifier ?? sourceApp.name;
+  return sourceApp.page ? [sourceApp.page.host, appKey] : [appKey];
+};
+
+export const clipboardSourceIdentity = (sourceApp: ClipboardSourceApp) =>
+  clipboardSourceVisualKeys(sourceApp)[0];
+
+export const clipboardSourceVisual = (
+  visuals: ReadonlyMap<string, ClipboardSourceAppVisual>,
+  sourceApp: ClipboardSourceApp | null,
+) => {
+  if (!sourceApp) {
+    return null;
+  }
+  for (const key of clipboardSourceVisualKeys(sourceApp)) {
+    const visual = visuals.get(key);
+    if (visual) {
+      return visual;
+    }
+  }
+  return null;
+};
+
+/** The page's host for browser copies (without a leading `www.`), else the app. */
+export const clipboardSourceLabel = (sourceApp: ClipboardSourceApp) =>
+  sourceApp.page ? sourceApp.page.host.replace(/^www\./u, "") : sourceApp.name;
+
+/** The full page URL for browser copies, else the app name. */
+export const clipboardSourceTitle = (sourceApp: ClipboardSourceApp) =>
+  sourceApp.page?.url ?? sourceApp.name;
 
 export const CLIPBOARD_ITEM_DRAG_TYPE =
   "application/x-stella-clipboard-item-id";

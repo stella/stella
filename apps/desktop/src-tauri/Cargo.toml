@@ -87,6 +87,7 @@ dirs = "6"
 futures-util = "0.3"
 hex = "0.4"
 image = { version = "0.25", default-features = false, features = [
+  "ico",
   "png",
   "tiff",
 ] }

@@ -28,6 +28,7 @@ import {
   DESKTOP_TELEMETRY_WINDOWS,
   reportDesktopError,
 } from "../telemetry/desktop-telemetry";
+import { clipboardSourceLabel, clipboardSourceTitle } from "./clipboard-logic";
 import { CLIPBOARD_GROUP_ACCENTS } from "./clipboard-style";
 import { isClipboardEditorContext } from "./clipboard-types";
 import type { ClipboardEditorContext } from "./clipboard-types";
@@ -670,7 +671,12 @@ const ClipboardEditor = () => {
   }
 
   const { item } = state.context;
-  const sourceName = item.sourceApp?.name;
+  const sourceName = item.sourceApp
+    ? clipboardSourceLabel(item.sourceApp)
+    : null;
+  const sourceTitle = item.sourceApp
+    ? clipboardSourceTitle(item.sourceApp)
+    : undefined;
   const sourceVisual = state.context.sourceAppVisual;
   const toolbarItems = [
     { command: "bold", icon: BoldIcon, label: t("bold") },
@@ -706,6 +712,7 @@ const ClipboardEditor = () => {
             <p
               className="text-muted-foreground flex min-w-0 items-center gap-1.5 truncate text-xs"
               data-tauri-drag-region
+              title={sourceTitle}
             >
               {sourceVisual?.iconDataUrl ? (
                 <img

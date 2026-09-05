@@ -98,7 +98,11 @@ import {
   clipboardRailScrollDelta,
   clipboardRailWindow,
   clipboardSearchPreviewText,
+  clipboardSourceIdentity,
+  clipboardSourceLabel,
   clipboardSourceTintIndex,
+  clipboardSourceTitle,
+  clipboardSourceVisual,
   clipboardTimelineKeyAction,
   filterClipboardItems,
   formatClipboardAge,
@@ -310,9 +314,14 @@ const ClipboardCard = ({
     dateStyle: "full",
     timeStyle: "medium",
   });
-  const sourceAppName = item.sourceApp?.name ?? null;
+  const sourceLabel = item.sourceApp
+    ? clipboardSourceLabel(item.sourceApp)
+    : null;
+  const sourceTitle = item.sourceApp
+    ? clipboardSourceTitle(item.sourceApp)
+    : null;
   const sourceTintIndex = clipboardSourceTintIndex(
-    item.sourceApp?.identifier ?? sourceAppName,
+    item.sourceApp ? clipboardSourceIdentity(item.sourceApp) : null,
   );
   const accent = groupColor
     ? CLIPBOARD_GROUP_ACCENTS[groupColor]
@@ -401,12 +410,16 @@ const ClipboardCard = ({
       <TagsIcon aria-hidden="true" className="text-muted-foreground size-6" />
     );
   }
-  if (sourceAppName) {
+  if (sourceLabel) {
     metadataIcon = sourceVisual?.iconDataUrl ? (
       <img
         alt=""
         aria-hidden="true"
-        className="clipboard-source-icon size-7 shrink-0"
+        className={cn(
+          "clipboard-source-icon size-7 shrink-0",
+          // Favicons are plain squares; app icons carry their own shape.
+          item.sourceApp?.page && "rounded-md",
+        )}
         draggable={false}
         src={sourceVisual.iconDataUrl}
       />
@@ -479,7 +492,7 @@ const ClipboardCard = ({
       <footer className="clipboard-card-footer flex h-12 shrink-0 items-center gap-2 px-4">
         <span
           className="relative flex shrink-0 items-center"
-          title={sourceAppName ?? groupName ?? metadataTitle}
+          title={sourceTitle ?? groupName ?? metadataTitle}
         >
           {metadataIcon}
         </span>
@@ -2030,13 +2043,10 @@ const ClipboardApp = () => {
                     }
                     onSelect={setSelectedIndex}
                     query={filterQuery}
-                    sourceVisual={
-                      item.sourceApp
-                        ? (sourceAppVisuals.get(
-                            item.sourceApp.identifier ?? item.sourceApp.name,
-                          ) ?? null)
-                        : null
-                    }
+                    sourceVisual={clipboardSourceVisual(
+                      sourceAppVisuals,
+                      item.sourceApp,
+                    )}
                   />
                 );
               })}
