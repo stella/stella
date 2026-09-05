@@ -165,6 +165,7 @@ export const getFlowRunHandler = async function* ({
           status: flowRunSteps.status,
           output: flowRunSteps.output,
           error: flowRunSteps.error,
+          reviewTaskEntityId: flowRunSteps.reviewTaskEntityId,
           startedAt: flowRunSteps.startedAt,
           finishedAt: flowRunSteps.finishedAt,
         })
@@ -196,6 +197,7 @@ export const getFlowRunHandler = async function* ({
       status: step.status,
       output: step.output,
       error: step.error,
+      reviewTaskEntityId: step.reviewTaskEntityId,
       startedAt: step.startedAt?.toISOString() ?? null,
       finishedAt: step.finishedAt?.toISOString() ?? null,
     })),

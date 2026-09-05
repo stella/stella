@@ -105,6 +105,39 @@ export const WORK_OBLIGATION_TRANSITIONS = {
 >;
 
 /**
+ * A source that settles its own obligation (a workflow run whose review gate
+ * was decided) closes it from any open status: the owner's acknowledgement
+ * was a step towards the decision, not a precondition of recording it.
+ */
+export const WORK_OBLIGATION_SOURCE_SETTLEMENT = {
+  complete: {
+    type: "allowed",
+    from: [
+      WORK_OBLIGATION_STATUS.UNASSIGNED,
+      WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,
+      WORK_OBLIGATION_STATUS.ACTIVE,
+    ],
+    nextStatus: WORK_OBLIGATION_STATUS.COMPLETED,
+    eventType: WORK_OBLIGATION_EVENT_TYPE.COMPLETED,
+    taskStatus: TASK_STATUS.DONE,
+  },
+  cancel: {
+    type: "allowed",
+    from: [
+      WORK_OBLIGATION_STATUS.UNASSIGNED,
+      WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,
+      WORK_OBLIGATION_STATUS.ACTIVE,
+    ],
+    nextStatus: WORK_OBLIGATION_STATUS.CANCELLED,
+    eventType: WORK_OBLIGATION_EVENT_TYPE.CANCELLED,
+    taskStatus: TASK_STATUS.CANCELLED,
+  },
+} as const satisfies Record<
+  Exclude<WorkObligationTransitionAction, "reopen">,
+  Extract<WorkObligationTransitionResolution, { type: "allowed" }>
+>;
+
+/**
  * How each lifecycle move reads in the audit trail. Cancellation is its own
  * audited action; the rest are ordinary updates to the obligation.
  */

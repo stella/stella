@@ -1535,7 +1535,7 @@ const SourceName = ({
     case "chat":
       return t("workspaces.overview.activity.sources.chat");
     case "flow":
-      return t("workspaces.overview.activity.sources.flow");
+      return t("common.workflow");
     case "mcp":
       return t("workspaces.overview.activity.sources.mcp");
     default:

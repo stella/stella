@@ -41,6 +41,7 @@ const reviewFlowRun = createSafeHandler(
         userId: user.id,
         decision: body.decision,
         note: body.note ?? null,
+        recordAuditEvent,
       }),
     );
 

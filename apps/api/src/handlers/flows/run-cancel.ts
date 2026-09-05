@@ -19,9 +19,15 @@ const config = {
 
 const cancelFlowRunHandler = createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId, params, recordAuditEvent }) {
+  async function* ({ safeDb, workspaceId, params, user, recordAuditEvent }) {
     const cancelled = yield* Result.await(
-      cancelFlowRun({ safeDb, workspaceId, runId: params.runId }),
+      cancelFlowRun({
+        safeDb,
+        workspaceId,
+        runId: params.runId,
+        userId: user.id,
+        recordAuditEvent,
+      }),
     );
 
     yield* Result.await(

@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRouteContext } from "@tanstack/react-router";
+import { Link, useRouteContext } from "@tanstack/react-router";
 import { panic } from "better-result";
 import {
   ArrowLeftIcon,
@@ -527,6 +527,8 @@ const TaskDetailPanelContent = ({
         return tCommon("import");
       case "api":
         return t("sourceTypeValues.api");
+      case "flow":
+        return tCommon("workflow");
       default: {
         workflow.sourceType satisfies never;
         return panic(`Unhandled source type: ${String(workflow.sourceType)}`);
@@ -687,6 +689,24 @@ const TaskDetailPanelContent = ({
                   <span dir="auto">{sourceLabel}</span>
                 </span>
               </MetadataRow>
+
+              {task.flowReview !== null && (
+                <MetadataRow label={tCommon("workflow")}>
+                  <Button
+                    render={
+                      <Link
+                        params={{ workspaceId }}
+                        search={{ run: task.flowReview.runId }}
+                        to="/workspaces/$workspaceId/workflows"
+                      />
+                    }
+                    size="sm"
+                    variant="outline"
+                  >
+                    {t("openWorkflowRun")}
+                  </Button>
+                </MetadataRow>
+              )}
 
               <MetadataRow label={t("delegationReason")}>
                 <Input

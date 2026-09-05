@@ -36,6 +36,9 @@ import {
   flowRunSteps,
   notifications,
   properties,
+  WORK_OBLIGATION_SOURCE,
+  WORK_OBLIGATION_STATUS,
+  workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
@@ -139,7 +142,33 @@ const executeFlowStepWithTestModel = async (
     broadcastUpdate,
     createEntity,
     loadAIConfig: async () => null,
+    // Governed workflow on: the gate's task must carry an obligation.
+    taskFeatures: { governedWorkflow: true, legalLists: false },
   });
+
+/** The task a run's review gate raised, with the obligation that governs it. */
+const loadReviewTask = async (runId: SafeId<"flowRun">, stepIndex: number) => {
+  const step = await testDb.query.flowRunSteps.findFirst({
+    where: { runId: { eq: runId }, index: { eq: stepIndex } },
+    columns: { reviewTaskEntityId: true },
+  });
+  const taskEntityId = step?.reviewTaskEntityId ?? null;
+  if (taskEntityId === null) {
+    throw new Error("expected the review gate to have raised a task");
+  }
+  const task = await testDb.query.entities.findFirst({
+    where: { id: { eq: taskEntityId } },
+    columns: { kind: true, name: true, status: true, workspaceId: true },
+  });
+  const obligation = await testDb.query.workObligations.findFirst({
+    where: { entityId: { eq: taskEntityId } },
+    columns: { status: true, ownerUserId: true, sourceType: true },
+  });
+  if (!task || !obligation) {
+    throw new Error("expected the review task and its obligation to exist");
+  }
+  return { taskEntityId, task, obligation };
+};
 
 type ResolveReviewGateDependencies = NonNullable<
   Parameters<typeof resolveFlowReviewGateWithDependencies>[1]
@@ -206,6 +235,11 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       organizationId,
       name: "Flow worker test matter",
       reference: workspaceId.slice(0, 8),
+    });
+    await testDb.insert(workspaceMembers).values({
+      id: createSafeId<"workspaceMember">(),
+      workspaceId,
+      userId,
     });
     await testDb.insert(properties).values({
       id: propertyId,
@@ -276,6 +310,22 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
     // A review gate pauses for a human; the executor does not self-enqueue.
     expect(enqueuedSteps).toHaveLength(0);
 
+    // The gate raised a task for the run's actor, owned and already
+    // acknowledged by them, sourced from the flow so its completion routes
+    // back to the gate.
+    const raised = await loadReviewTask(runId, 1);
+    expect(raised.task).toEqual({
+      kind: "task",
+      name: "Contract memo flow · Legal review",
+      status: "open",
+      workspaceId,
+    });
+    expect(raised.obligation).toEqual({
+      status: WORK_OBLIGATION_STATUS.ACTIVE,
+      ownerUserId: userId,
+      sourceType: WORK_OBLIGATION_SOURCE.FLOW,
+    });
+
     const reviewed = await resolveFlowReviewGate({
       safeDb,
       workspaceId,
@@ -284,11 +334,17 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       userId,
       decision: "approved",
       note: null,
+      recordAuditEvent: async () => undefined,
     });
     if (Result.isError(reviewed)) {
       throw reviewed.error;
     }
     expect(reviewed.value.status).toBe("running");
+
+    // Deciding the gate fulfils the task it raised.
+    const settled = await loadReviewTask(runId, 1);
+    expect(settled.task.status).toBe("done");
+    expect(settled.obligation.status).toBe(WORK_OBLIGATION_STATUS.COMPLETED);
 
     // Approving advances to `create-document`.
     expect(enqueuedSteps.pop()).toEqual({ runId, stepIndex: 2 });
@@ -448,11 +504,17 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       userId,
       decision: "rejected",
       note: "Not approved.",
+      recordAuditEvent: async () => undefined,
     });
     if (Result.isError(rejected)) {
       throw rejected.error;
     }
     expect(rejected.value.status).toBe("cancelled");
+
+    // A rejection is a decision too: the review task is done, not abandoned.
+    const settled = await loadReviewTask(runId, 1);
+    expect(settled.task.status).toBe("done");
+    expect(settled.obligation.status).toBe(WORK_OBLIGATION_STATUS.COMPLETED);
 
     const run = await testDb.query.flowRuns.findFirst({
       where: { id: { eq: runId } },
@@ -515,6 +577,7 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       userId,
       decision: "approved",
       note: null,
+      recordAuditEvent: async () => undefined,
     });
     if (Result.isError(approved)) {
       throw approved.error;

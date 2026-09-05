@@ -1343,6 +1343,7 @@
     "version": "Verzió",
     "versionLabel": "{version}. verzió",
     "viewSource": "Forrás megtekintése",
+    "workflow": "Munkafolyamat",
     "workflows": "Munkafolyamatok"
   },
   "consent": {
@@ -3968,6 +3969,7 @@
     "noTasksAssigned": "Nincsenek hozzárendelt feladatok",
     "noWorkInQueue": "Nincs munka ebben a sorban",
     "notFound": "A feladat nem található",
+    "openWorkflowRun": "Munkafolyamat futtatásának megnyitása",
     "overdue": "Lejárt",
     "owner": "Felelős",
     "priority": "Prioritás",
@@ -4782,7 +4784,6 @@
         "runCount": "{count, plural, one {# tevékenység} other {# tevékenység}}",
         "sources": {
           "chat": "Csevegés",
-          "flow": "Munkafolyamat",
           "mcp": "Csatlakoztatott eszköz"
         },
         "targets": {

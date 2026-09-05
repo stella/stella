@@ -385,8 +385,6 @@ const NotificationLink = ({
           {children}
         </PopoverClose>
       );
-    // The run detail is panel state rather than a route parameter, so the run
-    // id has nowhere to go; Workflows is the page that holds it.
     case NOTIFICATION_ENTITY_TYPE.FLOW_RUN:
       return (
         <PopoverClose
@@ -395,6 +393,7 @@ const NotificationLink = ({
               className={className}
               onClick={onRead}
               params={{ workspaceId }}
+              search={{ run: entityId }}
               to="/workspaces/$workspaceId/workflows"
             />
           }

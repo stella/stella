@@ -46,6 +46,8 @@ export const WORK_OBLIGATION_SOURCE = {
   COURT: "court",
   IMPORT: "import",
   API: "api",
+  /** A workflow run waiting at a review gate for the owner's decision. */
+  FLOW: "flow",
 } as const;
 
 export const WORK_OBLIGATION_SOURCES = [
@@ -56,6 +58,7 @@ export const WORK_OBLIGATION_SOURCES = [
   WORK_OBLIGATION_SOURCE.COURT,
   WORK_OBLIGATION_SOURCE.IMPORT,
   WORK_OBLIGATION_SOURCE.API,
+  WORK_OBLIGATION_SOURCE.FLOW,
 ] as const;
 export type WorkObligationSource = (typeof WORK_OBLIGATION_SOURCES)[number];
 

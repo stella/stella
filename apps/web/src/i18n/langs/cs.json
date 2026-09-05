@@ -1343,6 +1343,7 @@
     "version": "Verze",
     "versionLabel": "Verze {version}",
     "viewSource": "Zobrazit zdroj",
+    "workflow": "Pracovní postup",
     "workflows": "Pracovní postupy"
   },
   "consent": {
@@ -3968,6 +3969,7 @@
     "noTasksAssigned": "Nemáte přiřazené žádné úkoly",
     "noWorkInQueue": "V této frontě není žádná práce",
     "notFound": "Úkol nenalezen",
+    "openWorkflowRun": "Otevřít běh pracovního postupu",
     "overdue": "Po termínu",
     "owner": "Odpovědná osoba",
     "priority": "Priorita",
@@ -4782,7 +4784,6 @@
         "runCount": "{count, plural, one {# aktivita} few {# aktivity} other {# aktivit}}",
         "sources": {
           "chat": "Konverzace v chatu",
-          "flow": "Pracovní postup",
           "mcp": "Připojený nástroj"
         },
         "targets": {

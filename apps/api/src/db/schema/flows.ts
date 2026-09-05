@@ -1,3 +1,5 @@
+import { sql } from "drizzle-orm";
+
 import {
   FLOW_RUN_STATUSES,
   FLOW_RUN_STEP_STATUSES,
@@ -25,6 +27,7 @@ import {
   timestamptz,
 } from "./common";
 import { workspaces } from "./contacts";
+import { entities } from "./entities";
 
 // -- Flows (Workflows feature) --
 
@@ -128,6 +131,12 @@ export const flowRunSteps = p.pgTable(
       .default("pending"),
     output: jsonb().$type<FlowStepOutput>(),
     error: p.text(),
+    /**
+     * The task a review gate raises for its reviewer while the run waits.
+     * Settling the gate settles the task and completing the task settles the
+     * gate, so the two never disagree; only a `review-gate` step carries one.
+     */
+    reviewTaskEntityId: safeUuid<"entity">("review_task_entity_id"),
     startedAt: timestamptz("started_at"),
     finishedAt: timestamptz("finished_at"),
   },
@@ -138,7 +147,18 @@ export const flowRunSteps = p.pgTable(
         foreignColumns: [flowRuns.id, flowRuns.workspaceId],
       })
       .onDelete("cascade"),
+    p
+      .foreignKey({
+        columns: [table.reviewTaskEntityId, table.workspaceId],
+        foreignColumns: [entities.id, entities.workspaceId],
+        name: "flow_run_steps_review_task_entity_workspace_fk",
+      })
+      .onDelete("set null"),
     p.uniqueIndex("flow_run_steps_run_index_key").on(table.runId, table.index),
+    p
+      .uniqueIndex("flow_run_steps_review_task_entity_key")
+      .on(table.workspaceId, table.reviewTaskEntityId)
+      .where(sql`${table.reviewTaskEntityId} IS NOT NULL`),
     p.index("flow_run_steps_workspace_id_idx").on(table.workspaceId),
     ...wsPolicies(),
   ],

@@ -1343,6 +1343,7 @@
     "version": "Versija",
     "versionLabel": "{version}. versija",
     "viewSource": "Skatīt avotu",
+    "workflow": "Darbplūsma",
     "workflows": "Darbplūsmas"
   },
   "consent": {
@@ -3968,6 +3969,7 @@
     "noTasksAssigned": "Jums nav piešķirtu uzdevumu",
     "noWorkInQueue": "Šajā rindā nav darba",
     "notFound": "Uzdevums nav atrasts",
+    "openWorkflowRun": "Atvērt darbplūsmas izpildi",
     "overdue": "Nokavēts",
     "owner": "Atbildīgā persona",
     "priority": "Prioritāte",
@@ -4782,7 +4784,6 @@
         "runCount": "{count, plural, zero {# darbību} one {# darbība} other {# darbības}}",
         "sources": {
           "chat": "Tērzēšana",
-          "flow": "Darbplūsma",
           "mcp": "Pievienots rīks"
         },
         "targets": {

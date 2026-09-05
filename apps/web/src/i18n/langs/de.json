@@ -1343,6 +1343,7 @@
     "version": "Version",
     "versionLabel": "Version {version}",
     "viewSource": "Quelle anzeigen",
+    "workflow": "Arbeitsablauf",
     "workflows": "Workflows"
   },
   "consent": {
@@ -3968,6 +3969,7 @@
     "noTasksAssigned": "Keine Aufgaben zugewiesen",
     "noWorkInQueue": "Keine Arbeit in dieser Warteschlange",
     "notFound": "Aufgabe nicht gefunden",
+    "openWorkflowRun": "Arbeitsablauf-Ausführung öffnen",
     "overdue": "Überfällig",
     "owner": "Verantwortlich",
     "priority": "Priorität",
@@ -4782,7 +4784,6 @@
         "runCount": "{count, plural, one {# Aktivität} other {# Aktivitäten}}",
         "sources": {
           "chat": "Chat-Unterhaltung",
-          "flow": "Arbeitsablauf",
           "mcp": "Verbundenes Werkzeug"
         },
         "targets": {

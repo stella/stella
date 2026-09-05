@@ -1343,6 +1343,7 @@
     "version": "Versija",
     "versionLabel": "{version} versija",
     "viewSource": "Žiūrėti šaltinį",
+    "workflow": "Darbo eiga",
     "workflows": "Darbo eigos"
   },
   "consent": {
@@ -3968,6 +3969,7 @@
     "noTasksAssigned": "Jums nėra priskirtų užduočių",
     "noWorkInQueue": "Šioje eilėje darbų nėra",
     "notFound": "Užduotis nerasta",
+    "openWorkflowRun": "Atidaryti darbo eigos vykdymą",
     "overdue": "Vėluojama",
     "owner": "Atsakingas asmuo",
     "priority": "Prioritetas",
@@ -4782,7 +4784,6 @@
         "runCount": "{count, plural, one {# veikla} few {# veiklos} other {# veiklų}}",
         "sources": {
           "chat": "Pokalbis",
-          "flow": "Darbo eiga",
           "mcp": "Prijungtas įrankis"
         },
         "targets": {

@@ -1343,6 +1343,7 @@
     "version": "Versioon",
     "versionLabel": "Versioon {version}",
     "viewSource": "Vaata allikat",
+    "workflow": "Töövoog",
     "workflows": "Töövood"
   },
   "consent": {
@@ -3968,6 +3969,7 @@
     "noTasksAssigned": "Sulle pole ülesandeid määratud",
     "noWorkInQueue": "Selles järjekorras pole tööd",
     "notFound": "Ülesannet ei leitud",
+    "openWorkflowRun": "Ava töövoo käivitus",
     "overdue": "Tähtaeg ületatud",
     "owner": "Vastutaja",
     "priority": "Prioriteet",
@@ -4782,7 +4784,6 @@
         "runCount": "{count, plural, one {# tegevus} other {# tegevust}}",
         "sources": {
           "chat": "Vestlus",
-          "flow": "Töövoog",
           "mcp": "Ühendatud tööriist"
         },
         "targets": {

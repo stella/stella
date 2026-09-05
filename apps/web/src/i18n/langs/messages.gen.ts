@@ -1346,6 +1346,7 @@ type Messages = {
     "version": "Version";
     "versionLabel": "Version {version}";
     "viewSource": "View source";
+    "workflow": "Workflow";
     "workflows": "Workflows";
   };
   "consent": {
@@ -3971,6 +3972,7 @@ type Messages = {
     "noTasksAssigned": "No tasks assigned to you";
     "noWorkInQueue": "No work in this queue";
     "notFound": "Task not found";
+    "openWorkflowRun": "Open workflow run";
     "overdue": "Overdue";
     "owner": "Owner";
     "priority": "Priority";
@@ -4785,7 +4787,6 @@ type Messages = {
         "runCount": "{count, plural, one {# activity} other {# activities}}";
         "sources": {
           "chat": "Chat conversation";
-          "flow": "Workflow";
           "mcp": "Connected tool";
         };
         "targets": {

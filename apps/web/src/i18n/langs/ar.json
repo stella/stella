@@ -1343,6 +1343,7 @@
     "version": "الإصدار",
     "versionLabel": "الإصدار {version}",
     "viewSource": "عرض المصدر",
+    "workflow": "سير العمل",
     "workflows": "مسارات العمل"
   },
   "consent": {
@@ -3968,6 +3969,7 @@
     "noTasksAssigned": "لا توجد مهام مُكلَّفة إليك",
     "noWorkInQueue": "لا يوجد عمل في هذه القائمة",
     "notFound": "لم يُعثر على المهمة",
+    "openWorkflowRun": "فتح تشغيل سير العمل",
     "overdue": "متأخرة",
     "owner": "المسؤول",
     "priority": "الأولوية",
@@ -4782,7 +4784,6 @@
         "runCount": "{count, plural, zero {لا أنشطة} one {نشاط واحد} two {نشاطان} few {# أنشطة} many {# نشاطًا} other {# نشاط}}",
         "sources": {
           "chat": "محادثة الدردشة",
-          "flow": "سير العمل",
           "mcp": "أداة متصلة"
         },
         "targets": {

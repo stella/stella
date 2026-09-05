@@ -88,7 +88,7 @@
     "files": {}
   },
   "throw-outside-boundary": {
-    "count": 1122,
+    "count": 1121,
     "files": {
       "apps/api/src/handlers/case-law/corpus-index.ts": 12,
       "apps/api/src/handlers/case-law/decisions/latest.ts": 3,
@@ -211,7 +211,7 @@
       "apps/api/src/lib/files/gotenberg.ts": 1,
       "apps/api/src/lib/files/office-evidence-xlsx.ts": 3,
       "apps/api/src/lib/files/outlook-msg.ts": 14,
-      "apps/api/src/lib/flows/flow-executor.ts": 5,
+      "apps/api/src/lib/flows/flow-executor.ts": 4,
       "apps/api/src/lib/folio-collab-rooms.ts": 2,
       "apps/api/src/lib/health/probe-document-converter.ts": 1,
       "apps/api/src/lib/hosted-usage-provider/client.ts": 6,

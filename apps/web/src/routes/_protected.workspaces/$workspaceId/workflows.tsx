@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, getRouteApi, redirect } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
+import * as v from "valibot";
 
 import { Skeleton } from "@stll/ui/skeleton";
 
@@ -12,9 +13,18 @@ import { RunDetail } from "@/routes/_protected.workspaces/$workspaceId/-componen
 import { RunLauncher } from "@/routes/_protected.workspaces/$workspaceId/-components/flows/run-launcher";
 import { RunsList } from "@/routes/_protected.workspaces/$workspaceId/-components/flows/runs-list";
 
+/**
+ * `run` opens one run's detail on arrival: the task a review gate raised and
+ * the notification bell both land here with the run they are about.
+ */
+const workflowsSearchSchema = v.object({
+  run: v.optional(v.string()),
+});
+
 export const Route = createFileRoute(
   "/_protected/workspaces/$workspaceId/workflows",
 )({
+  validateSearch: workflowsSearchSchema,
   beforeLoad: ({ params }) => {
     if (!workflowsRouteAvailable()) {
       throw redirect({
@@ -48,19 +58,36 @@ const RunsSkeleton = () => (
 
 function WorkflowsPage() {
   const workspaceId = Route.useParams({ select: (p) => p.workspaceId });
+  const requestedRunId = Route.useSearch({ select: (s) => s.run });
   // Key on the matter so navigating directly between two matters' Workflows
   // pages remounts the view: TanStack reuses this route instance across a
   // param change, which would otherwise keep the previous matter's run-detail
   // state (a `runId` from matter A requested under matter B → load failure).
-  return <WorkflowsView key={workspaceId} workspaceId={workspaceId} />;
+  return (
+    <WorkflowsView
+      key={workspaceId}
+      requestedRunId={requestedRunId}
+      workspaceId={workspaceId}
+    />
+  );
 }
 
-function WorkflowsView({ workspaceId }: { workspaceId: string }) {
+function WorkflowsView({
+  workspaceId,
+  requestedRunId,
+}: {
+  workspaceId: string;
+  requestedRunId: string | undefined;
+}) {
   const t = useTranslations();
   const organizationId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
-  const [view, setView] = useState<View>({ kind: "list" });
+  const [view, setView] = useState<View>(
+    requestedRunId === undefined
+      ? { kind: "list" }
+      : { kind: "detail", runId: requestedRunId },
+  );
 
   const { data, isPending } = useQuery(flowRunsOptions({ workspaceId }));
 

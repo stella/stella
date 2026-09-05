@@ -10,6 +10,9 @@ import { inArray } from "drizzle-orm";
 
 import {
   entities,
+  flowRuns,
+  flowRunSteps,
+  WORK_OBLIGATION_SOURCE,
   WORK_OBLIGATION_STATUS,
   workObligations,
 } from "@/api/db/schema";
@@ -18,6 +21,7 @@ import acknowledgeWorkObligation from "@/api/handlers/work-obligations/acknowled
 import transitionWorkObligation from "@/api/handlers/work-obligations/transition";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { FlowStep } from "@/api/lib/flows/flow-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -36,6 +40,7 @@ type TransitionContext = Parameters<typeof transitionWorkObligation.handler>[0];
 let testDb: TestDatabase;
 let ids: TestIds;
 const taskIds: SafeId<"entity">[] = [];
+const runIds: SafeId<"flowRun">[] = [];
 
 beforeAll(async () => {
   const fixture = await getRlsFixture();
@@ -45,6 +50,9 @@ beforeAll(async () => {
 
 afterAll(async () => {
   try {
+    if (runIds.length > 0) {
+      await testDb.delete(flowRuns).where(inArray(flowRuns.id, runIds));
+    }
     if (taskIds.length > 0) {
       await testDb.delete(entities).where(inArray(entities.id, taskIds));
     }
@@ -72,6 +80,71 @@ const seedAwaitingWork = async () => {
     createdByUserId: ids.userA2,
   });
   return entityId;
+};
+
+const REVIEW_GATE_STEP: FlowStep = {
+  kind: "review-gate",
+  name: "Partner sign-off",
+  instructions: "Check the draft before it goes out.",
+};
+const AI_STEP: FlowStep = {
+  kind: "ai",
+  name: "Draft",
+  prompt: "Draft the letter.",
+  includeDocuments: false,
+};
+
+/**
+ * A run paused at its first gate, with the task that gate raised for userA1:
+ * the shape `pauseAtReviewGate` leaves behind, seeded directly so the test
+ * needs no worker.
+ */
+const seedFlowReviewWork = async () => {
+  const entityId = createSafeId<"entity">();
+  const runId = createSafeId<"flowRun">();
+  taskIds.push(entityId);
+  runIds.push(runId);
+  await testDb.insert(entities).values({
+    id: entityId,
+    workspaceId: ids.wsA1,
+    kind: "task",
+    name: "Letter flow · Partner sign-off",
+    status: "open",
+    createdBy: ids.userA1,
+  });
+  await testDb.insert(workObligations).values({
+    entityId,
+    workspaceId: ids.wsA1,
+    ownerUserId: ids.userA1,
+    status: WORK_OBLIGATION_STATUS.ACTIVE,
+    acknowledgedAt: new Date(),
+    acknowledgedByUserId: ids.userA1,
+    sourceType: WORK_OBLIGATION_SOURCE.FLOW,
+    createdByUserId: ids.userA1,
+  });
+  await testDb.insert(flowRuns).values({
+    id: runId,
+    workspaceId: ids.wsA1,
+    definitionSnapshot: {
+      name: "Letter flow",
+      steps: [REVIEW_GATE_STEP, AI_STEP],
+    },
+    triggerSource: { type: "manual", userId: ids.userA1 },
+    status: "awaiting_review",
+    currentStepIndex: 0,
+    startedAt: new Date(),
+  });
+  await testDb.insert(flowRunSteps).values({
+    id: createSafeId<"flowRunStep">(),
+    workspaceId: ids.wsA1,
+    runId,
+    index: 0,
+    kind: "review-gate",
+    status: "awaiting_review",
+    reviewTaskEntityId: entityId,
+    startedAt: new Date(),
+  });
+  return { entityId, runId };
 };
 
 const contextBase = (userId: SafeId<"user">) => {
@@ -114,11 +187,21 @@ const transition = async (
   entityId: SafeId<"entity">,
   userId: SafeId<"user">,
   action: TransitionContext["body"]["action"],
+  options: {
+    reason?: string;
+    role?: TransitionContext["memberRole"]["role"];
+  } = {},
 ) =>
   await transitionWorkObligation.handler(
     asTestRaw<TransitionContext>({
       ...contextBase(userId),
-      body: { action },
+      ...(options.role === undefined
+        ? {}
+        : { memberRole: { role: options.role } }),
+      body: {
+        action,
+        ...(options.reason === undefined ? {} : { reason: options.reason }),
+      },
       params: { workspaceId: ids.wsA1, entityId },
       route: "/test/work-obligations/transition",
     }),
@@ -170,5 +253,55 @@ describe("work obligation transitions", () => {
     });
     expect(obligation?.status).toBe(WORK_OBLIGATION_STATUS.COMPLETED);
     expect(task?.status).toBe("done");
+  });
+
+  test("cancelling the task a review gate raised rejects the gate", async () => {
+    const { entityId, runId } = await seedFlowReviewWork();
+
+    expect(
+      await transition(entityId, ids.userA1, "cancel", {
+        reason: "Needs another pass",
+      }),
+    ).toEqual({ success: true });
+
+    const run = await testDb.query.flowRuns.findFirst({
+      where: { id: { eq: runId } },
+      columns: { status: true },
+    });
+    const step = await testDb.query.flowRunSteps.findFirst({
+      where: { runId: { eq: runId }, index: { eq: 0 } },
+      columns: { status: true, output: true },
+    });
+    const obligation = await testDb.query.workObligations.findFirst({
+      where: { entityId: { eq: entityId } },
+      columns: { status: true },
+    });
+    const task = await testDb.query.entities.findFirst({
+      where: { id: { eq: entityId } },
+      columns: { status: true },
+    });
+    expect(run?.status).toBe("cancelled");
+    expect(step?.status).toBe("completed");
+    expect(step?.output).toEqual({
+      kind: "review-gate",
+      decision: "rejected",
+      userId: ids.userA1,
+      note: "Needs another pass",
+    });
+    // The decision fulfils the review task even when it rejects the draft.
+    expect(obligation?.status).toBe(WORK_OBLIGATION_STATUS.COMPLETED);
+    expect(task?.status).toBe("done");
+  });
+
+  test("a gate task cannot be reopened", async () => {
+    const { entityId } = await seedFlowReviewWork();
+
+    expect(await transition(entityId, ids.userA1, "reopen")).toEqual({
+      code: 409,
+      response: {
+        message:
+          "A workflow review cannot be reopened; start the workflow again instead",
+      },
+    });
   });
 });

@@ -1343,6 +1343,7 @@
     "version": "Versión",
     "versionLabel": "Versión {version}",
     "viewSource": "Ver fuente",
+    "workflow": "Flujo de trabajo",
     "workflows": "Flujos de trabajo"
   },
   "consent": {
@@ -3968,6 +3969,7 @@
     "noTasksAssigned": "No tienes tareas asignadas",
     "noWorkInQueue": "No hay trabajo en esta cola",
     "notFound": "Tarea no encontrada",
+    "openWorkflowRun": "Abrir la ejecución del flujo de trabajo",
     "overdue": "Vencida",
     "owner": "Responsable",
     "priority": "Prioridad",
@@ -4782,7 +4784,6 @@
         "runCount": "{count, plural, one {# actividad} other {# actividades}}",
         "sources": {
           "chat": "Conversación de chat",
-          "flow": "Flujo de trabajo",
           "mcp": "Herramienta conectada"
         },
         "targets": {

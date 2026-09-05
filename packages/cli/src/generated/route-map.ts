@@ -42888,7 +42888,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "work-obligations", "transition"],
                 capabilityId: "work-obligations.transition",
                 description:
-                  "Complete, cancel, or reopen governed work while preserving its lifecycle history.",
+                  "Complete, cancel, or reopen governed work while preserving its lifecycle history. Completing or cancelling the task a workflow review gate raised approves or rejects that gate.",
                 access: "write",
                 flags: [
                   {
