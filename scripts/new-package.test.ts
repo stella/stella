@@ -12,6 +12,8 @@ import path from "node:path";
 
 import { parseArgs, scaffoldPackage } from "./new-package";
 
+const REPO_ROOT = path.resolve(import.meta.dir, "..");
+
 const KNIP_FIXTURE = `{
   "workspaces": {
     ".": {
@@ -135,6 +137,39 @@ test("scaffolds the package files and registers the knip workspace", () => {
       },
     },
   });
+});
+
+// The scaffold's own output is the fixture, and oxfmt is the oracle: no
+// hand-written expectation can drift away from what the formatter does.
+test("scaffolded files need no formatting pass", () => {
+  const root = createRoot();
+  const result = scaffoldPackage({
+    name: "matter-dates",
+    description: "matter date arithmetic shared by the API and the web client",
+    root,
+  });
+  if (result.status !== "created") {
+    throw new Error(`scaffold rejected: ${result.message}`);
+  }
+
+  const scaffolded = result.files.filter((rel) => rel !== "knip.json");
+  const before = scaffolded.map((rel) => read(root, rel));
+
+  const formatter = Bun.spawnSync(
+    [
+      process.execPath,
+      "--bun",
+      "oxfmt",
+      "-c",
+      path.join(REPO_ROOT, ".oxfmtrc.json"),
+      ...scaffolded.map((rel) => path.join(root, rel)),
+    ],
+    { cwd: REPO_ROOT, stderr: "pipe", stdout: "pipe" },
+  );
+  expect(formatter.stderr.toString()).toBe("");
+  expect(formatter.exitCode).toBe(0);
+
+  expect(scaffolded.map((rel) => read(root, rel))).toEqual(before);
 });
 
 test("appends after the last packages entry when the name sorts last", () => {
