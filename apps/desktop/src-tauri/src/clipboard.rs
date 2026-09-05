@@ -224,6 +224,10 @@ pub enum ClipboardItem {
     copied_at: DateTime<Utc>,
     #[serde(rename = "groupId", alias = "group_id")]
     group_id: Option<String>,
+    /// When the clip joined its group. Groups list clips in this order, so
+    /// copying a clip again never reshuffles a group.
+    #[serde(default, rename = "groupedAt", alias = "grouped_at")]
+    grouped_at: Option<DateTime<Utc>>,
     id: String,
     #[serde(default)]
     name: Option<String>,
@@ -244,6 +248,10 @@ pub enum ClipboardItem {
     copied_at: DateTime<Utc>,
     #[serde(rename = "groupId", alias = "group_id")]
     group_id: Option<String>,
+    /// When the clip joined its group. Groups list clips in this order, so
+    /// copying a clip again never reshuffles a group.
+    #[serde(default, rename = "groupedAt", alias = "grouped_at")]
+    grouped_at: Option<DateTime<Utc>>,
     html: String,
     id: String,
     #[serde(default)]
@@ -276,6 +284,10 @@ pub enum ClipboardItem {
     copied_at: DateTime<Utc>,
     #[serde(rename = "groupId", alias = "group_id")]
     group_id: Option<String>,
+    /// When the clip joined its group. Groups list clips in this order, so
+    /// copying a clip again never reshuffles a group.
+    #[serde(default, rename = "groupedAt", alias = "grouped_at")]
+    grouped_at: Option<DateTime<Utc>>,
     height: u32,
     id: String,
     #[serde(skip)]
@@ -371,6 +383,7 @@ impl ClipboardItem {
       Self::Text {
         copied_at,
         group_id,
+        grouped_at,
         id,
         name,
         plain_text,
@@ -379,6 +392,7 @@ impl ClipboardItem {
       } => Self::Text {
         copied_at: *copied_at,
         group_id: group_id.clone(),
+        grouped_at: *grouped_at,
         id: id.clone(),
         name: name.clone(),
         plain_text: plain_text.clone(),
@@ -388,6 +402,7 @@ impl ClipboardItem {
       Self::FormattedText {
         copied_at,
         group_id,
+        grouped_at,
         html,
         id,
         name,
@@ -397,6 +412,7 @@ impl ClipboardItem {
       } => Self::FormattedText {
         copied_at: *copied_at,
         group_id: group_id.clone(),
+        grouped_at: *grouped_at,
         html: html.clone(),
         id: id.clone(),
         name: name.clone(),
@@ -409,6 +425,7 @@ impl ClipboardItem {
         byte_size,
         copied_at,
         group_id,
+        grouped_at,
         height,
         id,
         name,
@@ -421,6 +438,7 @@ impl ClipboardItem {
         checksum: String::new(),
         copied_at: *copied_at,
         group_id: group_id.clone(),
+        grouped_at: *grouped_at,
         height: *height,
         id: id.clone(),
         image: None,
@@ -438,6 +456,14 @@ impl ClipboardItem {
       Self::Text { group_id, .. }
       | Self::FormattedText { group_id, .. }
       | Self::Image { group_id, .. } => group_id.as_deref(),
+    }
+  }
+
+  fn grouped_at(&self) -> Option<DateTime<Utc>> {
+    match self {
+      Self::Text { grouped_at, .. }
+      | Self::FormattedText { grouped_at, .. }
+      | Self::Image { grouped_at, .. } => *grouped_at,
     }
   }
 
@@ -488,23 +514,27 @@ impl ClipboardItem {
       .flat_map(ClipboardSourceApp::visual_keys)
   }
 
-  fn set_group_id(&mut self, new_group_id: Option<String>) {
+  fn set_group_id(&mut self, new_group_id: Option<String>, now: DateTime<Utc>) {
     match self {
       Self::Text {
         group_id,
+        grouped_at,
         retention_class,
         ..
       }
       | Self::FormattedText {
         group_id,
+        grouped_at,
         retention_class,
         ..
       }
       | Self::Image {
         group_id,
+        grouped_at,
         retention_class,
         ..
       } => {
+        *grouped_at = new_group_id.is_some().then_some(now);
         *group_id = new_group_id;
         *retention_class = ClipboardItemRetentionClass::History;
       }
@@ -546,38 +576,43 @@ impl ClipboardItem {
   }
 
   fn replace_content(&mut self, new_plain_text: String, new_html: Option<String>) {
-    let (copied_at, group_id, id, name, retention_class, source_app) = match self {
-      Self::Text {
-        copied_at,
-        group_id,
-        id,
-        name,
-        retention_class,
-        source_app,
-        ..
-      }
-      | Self::FormattedText {
-        copied_at,
-        group_id,
-        id,
-        name,
-        retention_class,
-        source_app,
-        ..
-      } => (
-        *copied_at,
-        group_id.clone(),
-        id.clone(),
-        name.clone(),
-        *retention_class,
-        source_app.clone(),
-      ),
-      Self::Image { .. } => return,
-    };
+    let (copied_at, group_id, grouped_at, id, name, retention_class, source_app) =
+      match self {
+        Self::Text {
+          copied_at,
+          group_id,
+          grouped_at,
+          id,
+          name,
+          retention_class,
+          source_app,
+          ..
+        }
+        | Self::FormattedText {
+          copied_at,
+          group_id,
+          grouped_at,
+          id,
+          name,
+          retention_class,
+          source_app,
+          ..
+        } => (
+          *copied_at,
+          group_id.clone(),
+          *grouped_at,
+          id.clone(),
+          name.clone(),
+          *retention_class,
+          source_app.clone(),
+        ),
+        Self::Image { .. } => return,
+      };
     *self = match new_html {
       Some(html) => Self::FormattedText {
         copied_at,
         group_id,
+        grouped_at,
         html,
         id,
         name,
@@ -589,6 +624,7 @@ impl ClipboardItem {
       None => Self::Text {
         copied_at,
         group_id,
+        grouped_at,
         id,
         name,
         plain_text: new_plain_text,
@@ -607,6 +643,7 @@ impl ClipboardItem {
     match self {
       Self::Text {
         group_id,
+        grouped_at,
         name,
         plain_text,
         retention_class,
@@ -615,6 +652,7 @@ impl ClipboardItem {
       } => Self::Text {
         copied_at,
         group_id: group_id.clone(),
+        grouped_at: *grouped_at,
         id,
         name: name.clone(),
         plain_text: plain_text.clone(),
@@ -623,6 +661,7 @@ impl ClipboardItem {
       },
       Self::FormattedText {
         group_id,
+        grouped_at,
         html,
         name,
         plain_text,
@@ -633,6 +672,7 @@ impl ClipboardItem {
       } => Self::FormattedText {
         copied_at,
         group_id: group_id.clone(),
+        grouped_at: *grouped_at,
         html: html.clone(),
         id,
         name: name.clone(),
@@ -646,6 +686,7 @@ impl ClipboardItem {
         byte_size,
         checksum,
         group_id,
+        grouped_at,
         height,
         image,
         name,
@@ -660,6 +701,7 @@ impl ClipboardItem {
         checksum: checksum.clone(),
         copied_at,
         group_id: group_id.clone(),
+        grouped_at: *grouped_at,
         height: *height,
         id,
         image: image.clone(),
@@ -1394,7 +1436,7 @@ impl ClipboardManager {
       ClipboardGroupDeletionMode::KeepClips => {
         for item in &mut self.items {
           if item.group_id() == Some(id) {
-            item.set_group_id(None);
+            item.set_group_id(None, Utc::now());
             item.set_retention_class(ClipboardItemRetentionClass::Kept);
           }
         }
@@ -1434,7 +1476,7 @@ impl ClipboardManager {
       item.replace_content(plain_text.to_string(), html);
     }
     if item.group_id() != group_id.as_deref() {
-      item.set_group_id(group_id);
+      item.set_group_id(group_id, Utc::now());
     }
     prune_items_preserving(&mut self.items, self.retention, Utc::now(), Some(id));
     self.persist_or_restore(checkpoint)?;
@@ -1458,7 +1500,7 @@ impl ClipboardManager {
       return Ok(true);
     }
     let checkpoint = self.checkpoint();
-    self.items[item_index].set_group_id(group_id);
+    self.items[item_index].set_group_id(group_id, Utc::now());
     // Ungrouping puts the clip back under the history rules.
     prune_items(&mut self.items, self.retention, Utc::now());
     self.persist_or_restore(checkpoint)?;
@@ -1680,6 +1722,7 @@ impl ClipboardManager {
       .map(|item| {
         (
           item.group_id().map(str::to_string),
+          item.grouped_at(),
           item.name().map(str::to_string),
           item.retention_class(),
         )
@@ -1688,12 +1731,17 @@ impl ClipboardManager {
       .items
       .retain(|item| !item.same_text_content(&plain_text, html.as_deref()));
     let id = uuid::Uuid::new_v4().to_string();
-    let (group_id, name, retention_class) =
-      preserved_metadata.unwrap_or((None, None, ClipboardItemRetentionClass::History));
+    let (group_id, grouped_at, name, retention_class) = preserved_metadata.unwrap_or((
+      None,
+      None,
+      None,
+      ClipboardItemRetentionClass::History,
+    ));
     let item = match html {
       Some(html) => ClipboardItem::FormattedText {
         copied_at,
         group_id,
+        grouped_at,
         html,
         id,
         name,
@@ -1705,6 +1753,7 @@ impl ClipboardManager {
       None => ClipboardItem::Text {
         copied_at,
         group_id,
+        grouped_at,
         id,
         name,
         plain_text,
@@ -1753,6 +1802,7 @@ impl ClipboardManager {
           blob_id,
           byte_size,
           group_id,
+          grouped_at,
           name,
           retention_class,
           ..
@@ -1760,6 +1810,7 @@ impl ClipboardManager {
           blob_id.clone(),
           *byte_size,
           group_id.clone(),
+          *grouped_at,
           name.clone(),
           *retention_class,
         ),
@@ -1771,16 +1822,18 @@ impl ClipboardManager {
       .items
       .retain(|item| item.image_checksum() != Some(checksum.as_str()));
     let id = uuid::Uuid::new_v4().to_string();
-    let (blob_id, byte_size, group_id, name, retention_class) = match existing {
-      Some(existing) => existing,
-      None => (
-        uuid::Uuid::new_v4().to_string(),
-        image.len(),
-        None,
-        None,
-        ClipboardItemRetentionClass::History,
-      ),
-    };
+    let (blob_id, byte_size, group_id, grouped_at, name, retention_class) =
+      match existing {
+        Some(existing) => existing,
+        None => (
+          uuid::Uuid::new_v4().to_string(),
+          image.len(),
+          None,
+          None,
+          None,
+          ClipboardItemRetentionClass::History,
+        ),
+      };
     self.items.insert(
       0,
       ClipboardItem::Image {
@@ -1789,6 +1842,7 @@ impl ClipboardManager {
         checksum,
         copied_at,
         group_id,
+        grouped_at,
         height,
         id: id.clone(),
         image: Some(image.into()),
@@ -3728,6 +3782,7 @@ mod tests {
     ClipboardItem::Text {
       copied_at,
       group_id: None,
+      grouped_at: None,
       id: uuid::Uuid::new_v4().to_string(),
       name: None,
       plain_text: text.to_string(),
@@ -3748,6 +3803,7 @@ mod tests {
       checksum: checksum.to_string(),
       copied_at: Utc::now(),
       group_id: None,
+      grouped_at: None,
       height: 2,
       id: id.to_string(),
       image: Some(vec![0x89, 0x50, 0x4e, 0x47].into()),
@@ -4347,6 +4403,7 @@ mod tests {
     let formatted = ClipboardItem::FormattedText {
       copied_at: Utc::now(),
       group_id: None,
+      grouped_at: None,
       html: "<strong>Clause</strong>".to_string(),
       id: "formatted".to_string(),
       name: None,
@@ -4368,6 +4425,7 @@ mod tests {
     let text = ClipboardItem::Text {
       copied_at: Utc::now(),
       group_id: None,
+      grouped_at: None,
       id: "text".to_string(),
       name: None,
       plain_text: "text".to_string(),
@@ -4874,6 +4932,7 @@ mod tests {
     let original = ClipboardItem::FormattedText {
       copied_at: original_time,
       group_id: Some("research".to_string()),
+      grouped_at: None,
       html: "<strong>Clause</strong>".to_string(),
       rtf: None,
       id: "original".to_string(),
@@ -5058,7 +5117,7 @@ mod tests {
   fn organised_items_outlive_retention_and_count_limits() {
     let now = Utc::now();
     let mut grouped = text_item(now - Duration::days(400), "grouped");
-    grouped.set_group_id(Some("templates".to_string()));
+    grouped.set_group_id(Some("templates".to_string()), Utc::now());
     let mut named = text_item(now - Duration::days(400), "named");
     named.set_name(Some("Key clause".to_string()));
     let mut items = vec![text_item(now - Duration::days(31), "expired")];
@@ -5087,7 +5146,7 @@ mod tests {
     let mut items = vec![text_item(now, "plain")];
     for _ in 0..(MAX_HISTORY_BYTES / MAX_ITEM_TEXT_BYTES + 1) {
       let mut item = text_item(now - Duration::days(1), &large_text);
-      item.set_group_id(Some("templates".to_string()));
+      item.set_group_id(Some("templates".to_string()), Utc::now());
       items.push(item);
     }
 
@@ -5109,10 +5168,10 @@ mod tests {
       .create_group("Templates", ClipboardGroupColor::Gray)
       .unwrap();
     let mut ungrouped = text_item(now - Duration::days(400), "ungrouped");
-    ungrouped.set_group_id(Some(group_id.clone()));
+    ungrouped.set_group_id(Some(group_id.clone()), Utc::now());
     let ungrouped_id = ungrouped.id().to_string();
     let mut orphaned = text_item(now - Duration::days(400), "orphaned");
-    orphaned.set_group_id(Some(group_id.clone()));
+    orphaned.set_group_id(Some(group_id.clone()), Utc::now());
     manager.items.push(ungrouped);
     manager.items.push(orphaned);
 
@@ -5425,6 +5484,7 @@ mod tests {
     let item = ClipboardItem::FormattedText {
       copied_at: Utc::now(),
       group_id: None,
+      grouped_at: None,
       html: "<strong>formatted</strong>".to_string(),
       id: "item-id".to_string(),
       name: Some("Formatted note".to_string()),
@@ -5502,7 +5562,7 @@ mod tests {
       "organised-checksum",
       MAX_HISTORY_IMAGE_BYTES - 2 * MAX_ITEM_IMAGE_PREVIEW_BYTES - 2,
     );
-    organised.set_group_id(Some("screenshots".to_string()));
+    organised.set_group_id(Some("screenshots".to_string()), Utc::now());
     let newest = image_item("newest", "newest-blob", "newest-checksum", 1);
     let oldest = image_item(
       "oldest",
@@ -5526,7 +5586,7 @@ mod tests {
       "newest-checksum",
       MAX_HISTORY_IMAGE_BYTES,
     );
-    newest.set_group_id(Some("screenshots".to_string()));
+    newest.set_group_id(Some("screenshots".to_string()), Utc::now());
     let mut oldest = image_item("oldest", "oldest-blob", "oldest-checksum", 1);
     oldest.set_name(Some("Older screenshot".to_string()));
     let mut items = vec![newest, oldest];
@@ -5545,7 +5605,7 @@ mod tests {
       "organised-checksum",
       MAX_HISTORY_IMAGE_BYTES - MAX_ITEM_IMAGE_PREVIEW_BYTES,
     );
-    organised.set_group_id(Some("screenshots".to_string()));
+    organised.set_group_id(Some("screenshots".to_string()), Utc::now());
     manager.items.push(organised.clone());
 
     let outcome = manager
@@ -5590,7 +5650,7 @@ mod tests {
     let original_id = manager.items[0].id().to_string();
     let original_blob_id = manager.items[0].image_blob_id().unwrap().to_string();
     manager.items[0].set_name(Some("Pinned screenshot".to_string()));
-    manager.items[0].set_group_id(Some("screenshots".to_string()));
+    manager.items[0].set_group_id(Some("screenshots".to_string()), Utc::now());
 
     assert_eq!(
       manager
@@ -5645,7 +5705,7 @@ mod tests {
       .unwrap();
     let mut grouped = text_item(Utc::now() - Duration::days(400), "grouped");
     let grouped_id = grouped.id().to_string();
-    grouped.set_group_id(Some(group_id.clone()));
+    grouped.set_group_id(Some(group_id.clone()), Utc::now());
     manager.items.push(grouped);
 
     assert!(
@@ -5778,9 +5838,34 @@ mod tests {
       .update_item(&item_id, "grouped", None, Some(group_id.clone()))
       .unwrap();
 
+    let grouped_at = manager.items[0].grouped_at();
+    assert!(grouped_at.is_some());
+
     assert!(capture(&mut manager, "grouped", None, now));
 
     assert_eq!(manager.items[0].group_id(), Some(group_id.as_str()));
+    assert_eq!(manager.items[0].grouped_at(), grouped_at);
+  }
+
+  #[test]
+  fn grouping_stamps_the_join_time_and_ungrouping_clears_it() {
+    let mut manager = ready_manager();
+    assert!(capture(&mut manager, "clause", None, Utc::now()));
+    let group_id = manager
+      .create_group("Research", ClipboardGroupColor::Emerald)
+      .unwrap();
+    let item_id = manager.items[0].id().to_string();
+
+    assert!(manager.set_item_group(&item_id, Some(group_id)).unwrap());
+    let joined = manager.items[0].grouped_at().unwrap();
+    assert!(joined <= Utc::now());
+    // Copying the clip again refreshes its timeline position, not its place
+    // in the group.
+    assert!(manager.touch_item(&item_id, Utc::now()).unwrap());
+    assert_eq!(manager.items[0].grouped_at(), Some(joined));
+
+    assert!(manager.set_item_group(&item_id, None).unwrap());
+    assert_eq!(manager.items[0].grouped_at(), None);
   }
 
   #[test]

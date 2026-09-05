@@ -343,8 +343,16 @@ export const filterClipboardItems = (
   query: string,
   groupId: string | null = null,
 ) => {
+  // The timeline follows recency; a group keeps the order clips were added
+  // in, so copying a clip again never reshuffles the group.
   const groupedItems = groupId
-    ? items.filter((item) => item.groupId === groupId)
+    ? items
+        .filter((item) => item.groupId === groupId)
+        .sort((left, right) =>
+          (right.groupedAt ?? right.copiedAt).localeCompare(
+            left.groupedAt ?? left.copiedAt,
+          ),
+        )
     : items;
   const terms = clipboardQueryTerms(query);
   if (terms.length === 0) {

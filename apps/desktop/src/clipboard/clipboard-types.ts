@@ -31,6 +31,8 @@ export type ClipboardItem =
   | {
       copiedAt: string;
       groupId: string | null;
+      /** When the clip joined its group; groups list clips by it. */
+      groupedAt: string | null;
       id: string;
       name: string | null;
       plainText: string;
@@ -40,6 +42,7 @@ export type ClipboardItem =
   | {
       copiedAt: string;
       groupId: string | null;
+      groupedAt: string | null;
       html: string;
       id: string;
       name: string | null;
@@ -51,6 +54,7 @@ export type ClipboardItem =
       byteSize: number;
       copiedAt: string;
       groupId: string | null;
+      groupedAt: string | null;
       height: number;
       id: string;
       name: string | null;
@@ -134,6 +138,7 @@ export const isClipboardItem = (value: unknown): value is ClipboardItem => {
     !isRecord(value) ||
     typeof value["copiedAt"] !== "string" ||
     (value["groupId"] !== null && typeof value["groupId"] !== "string") ||
+    (value["groupedAt"] !== null && typeof value["groupedAt"] !== "string") ||
     typeof value["id"] !== "string" ||
     (value["name"] !== null && typeof value["name"] !== "string") ||
     (value["sourceApp"] !== null && !isClipboardSourceApp(value["sourceApp"]))

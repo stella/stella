@@ -531,6 +531,7 @@ mod tests {
       items: vec![ClipboardItem::Text {
         copied_at: Utc::now(),
         group_id: None,
+        grouped_at: None,
         id: "item-1".to_string(),
         name: Some("Privileged draft".to_string()),
         plain_text: "privileged draft text".to_string(),

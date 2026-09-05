@@ -102,6 +102,7 @@ describe("clipboard image items", () => {
     byteSize: 2048,
     copiedAt: "2026-09-04T07:00:00.000Z",
     groupId: null,
+    groupedAt: null,
     height: 720,
     id: "image-1",
     name: "Screenshot",

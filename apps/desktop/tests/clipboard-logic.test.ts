@@ -25,6 +25,7 @@ import type { ClipboardItem } from "../src/clipboard/clipboard-types";
 const TEXT_ITEM = {
   copiedAt: "2026-08-23T10:00:00Z",
   groupId: null,
+  groupedAt: null,
   id: "one",
   name: "Acquisition draft",
   plainText: "Share purchase agreement",
@@ -35,6 +36,7 @@ const TEXT_ITEM = {
 const FORMATTED_ITEM = {
   copiedAt: "2026-08-23T10:01:00Z",
   groupId: null,
+  groupedAt: null,
   html: "<strong>Closing date</strong>",
   id: "two",
   name: null,
@@ -47,6 +49,7 @@ const IMAGE_ITEM = {
   byteSize: 245_760,
   copiedAt: "2026-08-23T10:02:00Z",
   groupId: null,
+  groupedAt: null,
   height: 720,
   id: "three",
   name: "Hearing exhibit",
@@ -205,6 +208,7 @@ describe("diacritic-insensitive search", () => {
   const ACCENTED_ITEM = {
     copiedAt: "2026-08-23T10:02:00Z",
     groupId: null,
+    groupedAt: null,
     id: "three",
     name: null,
     plainText: "Karel Čapek, Uherské Hradiště",
@@ -262,6 +266,39 @@ describe("filterClipboardItems", () => {
 
     expect(filterClipboardItems(grouped, "", "research")).toEqual([
       groupedItem,
+    ]);
+  });
+
+  test("orders a group by when clips joined it, not by recency", () => {
+    // Copied most recently, but added to the group first.
+    const joinedFirst = {
+      ...TEXT_ITEM,
+      copiedAt: "2026-08-25T10:00:00Z",
+      groupId: "research",
+      groupedAt: "2026-08-20T10:00:00Z",
+      id: "joined-first",
+    };
+    const joinedLast = {
+      ...FORMATTED_ITEM,
+      copiedAt: "2026-08-21T10:00:00Z",
+      groupId: "research",
+      groupedAt: "2026-08-24T10:00:00Z",
+      id: "joined-last",
+    };
+    // Grouped before join times were recorded: its copy time stands in.
+    const legacy = {
+      ...TEXT_ITEM,
+      copiedAt: "2026-08-22T10:00:00Z",
+      groupId: "research",
+      id: "legacy",
+    };
+
+    expect(
+      filterClipboardItems([joinedFirst, legacy, joinedLast], "", "research"),
+    ).toEqual([joinedLast, legacy, joinedFirst]);
+    expect(filterClipboardItems([joinedFirst, joinedLast], "")).toEqual([
+      joinedFirst,
+      joinedLast,
     ]);
   });
 });
