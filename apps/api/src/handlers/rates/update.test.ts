@@ -149,3 +149,42 @@ test("the scale reads each row's current value, not one read earlier", async () 
   // scaled by the exponent difference, not the 100 this row held before.
   expect(row?.hourlyRate).toBe(7000);
 });
+
+test("refuses a currency change whose scaled rate leaves the safe range", async () => {
+  // Zero decimals to three multiplies by a thousand. This rate is a fine
+  // integer on its own and its scaled value is not: the column is bigint and
+  // would store it, but the API hands it back as a JSON number, past which
+  // point the amount stops naming itself.
+  const beyondRange = Math.floor(Number.MAX_SAFE_INTEGER / 1000) + 1;
+  await testDb
+    .update(rateEntries)
+    .set({ hourlyRate: cents(beyondRange) })
+    .where(eq(rateEntries.id, defaultEntryId));
+  await testDb
+    .update(rateTables)
+    .set({ currency: "JPY" })
+    .where(eq(rateTables.id, rateTableId));
+
+  const result = await updateRateTableHandler.handler(
+    createTestHandlerContext<UpdateRateTableCtx>({
+      workspaceId: ids.wsA1,
+      session: { activeOrganizationId: ids.orgA },
+      user: { id: ids.userA1 },
+      safeDb: scopedSafeDb(),
+      body: { id: rateTableId, currency: "KWD" },
+    }),
+  );
+  expect(result).toMatchObject({ code: 400 });
+
+  // Refused before any write: the rate and the table's currency are untouched.
+  const [row] = await testDb
+    .select({ hourlyRate: rateEntries.hourlyRate })
+    .from(rateEntries)
+    .where(eq(rateEntries.id, defaultEntryId));
+  expect(row?.hourlyRate).toBe(beyondRange);
+  const [table] = await testDb
+    .select({ currency: rateTables.currency })
+    .from(rateTables)
+    .where(eq(rateTables.id, rateTableId));
+  expect(table?.currency).toBe("JPY");
+});

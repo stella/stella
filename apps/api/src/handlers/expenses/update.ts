@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
-import { toMajorUnits, toMinorUnits } from "@stll/money";
+import { toMajorUnits, tryToMinorUnits } from "@stll/money";
 
 import { expenseCategorySchema } from "@/api/db/billing-validators";
 import { BILLING_STATUS, expenses } from "@/api/db/schema";
@@ -127,21 +127,27 @@ const updateExpense = createSafeHandler(
       body.currency !== undefined &&
       body.currency !== existing.currency;
     const restatedAmount = restatesAmount
-      ? toMinorUnits({
+      ? tryToMinorUnits({
           amount: toMajorUnits({
             amountCents: existing.amount,
             currency: existing.currency,
           }),
           currency: body.currency,
         })
-      : null;
+      : 0;
 
-    if (restatedAmount !== null && restatedAmount < 1) {
+    // Both ends of the new currency's range, refused before anything is
+    // written. Too small: a zero would break `expenses_amount_positive_check`.
+    // Too large: `tryToMinorUnits` declines a scaled value past the safe
+    // integer range, where the stored amount stops being the one it names --
+    // three decimals from none multiplies by a thousand, so an amount well
+    // inside the old currency's range can leave it.
+    if (restatesAmount && (restatedAmount === null || restatedAmount < 1)) {
       return Result.err(
         new HandlerError({
           status: 400,
           message:
-            "This expense is smaller than the new currency's smallest unit; " +
+            "This expense cannot be restated in the new currency; " +
             "send the amount in that currency instead",
         }),
       );
@@ -159,7 +165,9 @@ const updateExpense = createSafeHandler(
         "matterId",
         "status",
       ]),
-      ...(restatedAmount === null ? {} : { amount: restatedAmount }),
+      ...(restatesAmount && restatedAmount !== null
+        ? { amount: restatedAmount }
+        : {}),
       ...(body.amount !== undefined ? { amount: cents(body.amount) } : {}),
       updatedAt: new Date(),
     };
