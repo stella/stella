@@ -13,6 +13,7 @@
 // it, and say in `summary` why one owner and what callers get. Start at
 // `kind: "none"`; move to an enforced kind once the bypass sites are gone.
 
+import { panic } from "better-result";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -385,8 +386,8 @@ const enforcementCell = (enforcement: OwnershipEnforcement): string => {
       return `global \`${[enforcement.object, ...enforcement.path].join(".")}\``;
     }
     default: {
-      const unhandled: never = enforcement;
-      return unhandled;
+      enforcement satisfies never;
+      return panic(`Unhandled enforcement: ${String(enforcement)}`);
     }
   }
 };
