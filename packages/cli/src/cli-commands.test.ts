@@ -308,12 +308,11 @@ describe("one-command document upload", () => {
     server.stop();
 
     expect(result.exitCode).toBe(0);
+    // The finalize envelope's outcome alone, shaped like every other save.
     expect(JSON.parse(result.stdout)).toEqual({
-      finalizedResult: {
-        type: "entity_create",
-        entityId: "entity-1",
-        fileName: "agreement.txt",
-      },
+      type: "entity_create",
+      entityId: "entity-1",
+      fileName: "agreement.txt",
     });
     expect(result.stderr).toBe("");
     expect(putBodies).toEqual(["agreement body"]);
