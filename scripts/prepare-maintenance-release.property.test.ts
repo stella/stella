@@ -20,6 +20,7 @@ import {
   parseMaintenanceReleaseOptions,
   parseStableVersion,
   prepareMaintenanceReleaseFiles,
+  resolveGitHubToken,
   withFileRollback,
 } from "./prepare-maintenance-release";
 
@@ -83,6 +84,66 @@ afterEach(() => {
   for (const restore of restores.splice(0)) {
     restore();
   }
+});
+
+// The CLI is a spawned process in a release run; here it is a reader that
+// records whether it was asked at all.
+const cliToken = (token: string | null) => {
+  let asked = 0;
+  return {
+    asked: () => asked,
+    read: () => {
+      asked += 1;
+      return token;
+    },
+  };
+};
+
+describe("the token the GitHub reads are made with", () => {
+  test("prefers GH_TOKEN, and does not ask the CLI for one", () => {
+    const cli = cliToken("cli-token");
+
+    expect(
+      resolveGitHubToken(
+        { GH_TOKEN: "gh-token", GITHUB_TOKEN: "github-token" },
+        cli.read,
+      ),
+    ).toBe("gh-token");
+    expect(cli.asked()).toBe(0);
+  });
+
+  test("accepts GITHUB_TOKEN where GH_TOKEN is unset", () => {
+    const cli = cliToken("cli-token");
+
+    expect(resolveGitHubToken({ GITHUB_TOKEN: "github-token" }, cli.read)).toBe(
+      "github-token",
+    );
+    expect(cli.asked()).toBe(0);
+  });
+
+  // Without this the reads go out anonymous, and the anonymous rate limit
+  // answers a release preparation with HTTP 403.
+  test("falls back to the signed-in CLI when neither variable is set", () => {
+    const cli = cliToken("cli-token");
+
+    expect(resolveGitHubToken({}, cli.read)).toBe("cli-token");
+    expect(cli.asked()).toBe(1);
+  });
+
+  test("reads an empty variable as no token at all", () => {
+    expect(
+      resolveGitHubToken(
+        { GH_TOKEN: "", GITHUB_TOKEN: "" },
+        cliToken("cli-token").read,
+      ),
+    ).toBe("cli-token");
+  });
+
+  // A missing `gh`, or one that is signed out: the run continues
+  // unauthenticated rather than failing on the token.
+  test("stays unauthenticated when the CLI has no token to give", () => {
+    expect(resolveGitHubToken({}, cliToken(null).read)).toBeNull();
+  });
 });
 
 describe("maintenance release preparation", () => {

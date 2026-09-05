@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 
+import { Result } from "better-result";
 import { randomUUID } from "node:crypto";
 import {
   existsSync,
@@ -305,15 +306,58 @@ const assertCleanWorktree = () => {
   }
 };
 
+/** Asks the GitHub CLI for a token; the seam a test stands in for. */
+export type GhTokenReader = () => string | null;
+
+const nonEmptyToken = (value: string | undefined): string | null =>
+  value === undefined || value.length === 0 ? null : value;
+
+// `gh` may be absent, or present and signed out. Both mean the same thing
+// here: no token, and the reads below go out unauthenticated.
+const readCliToken: GhTokenReader = () => {
+  const spawned = Result.try(() =>
+    Bun.spawnSync(["gh", "auth", "token"], {
+      cwd: ROOT_DIR,
+      stderr: "pipe",
+      stdout: "pipe",
+    }),
+  );
+  if (Result.isError(spawned) || !spawned.value.success) {
+    return null;
+  }
+  return nonEmptyToken(spawned.value.stdout.toString().trim());
+};
+
+/**
+ * Token the GitHub reads are made with.
+ *
+ * The variables come first, since a workflow sets them. The signed-in CLI
+ * stands behind them so a local run is not left to the anonymous rate limit,
+ * which answers a release preparation with HTTP 403.
+ */
+export const resolveGitHubToken = (
+  env: Record<string, string | undefined>,
+  readGhToken: GhTokenReader = readCliToken,
+): string | null =>
+  nonEmptyToken(env["GH_TOKEN"]) ??
+  nonEmptyToken(env["GITHUB_TOKEN"]) ??
+  readGhToken();
+
+// Resolved once: one preparation makes a page of reads, and asking the CLI
+// per read would spawn it as many times.
+let resolvedToken: string | null | undefined;
+
 const requestGitHub = async (path: string): Promise<Response> => {
   const headers: Record<string, string> = {
     Accept: "application/vnd.github+json",
     "User-Agent": "stella-maintenance-release",
     "X-GitHub-Api-Version": "2022-11-28",
   };
-  const token = process.env["GH_TOKEN"] ?? process.env["GITHUB_TOKEN"];
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
+  if (resolvedToken === undefined) {
+    resolvedToken = resolveGitHubToken(process.env);
+  }
+  if (resolvedToken !== null) {
+    headers["Authorization"] = `Bearer ${resolvedToken}`;
   }
   return fetch(`${GITHUB_API_ROOT}${path}`, { headers });
 };
