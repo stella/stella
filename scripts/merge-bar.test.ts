@@ -27,6 +27,7 @@ const passingSnapshot = (
     headSha: HEAD_SHA,
   },
   changedFiles: ["apps/api/src/budget/resolve.ts"],
+  mergeStateBaseSha: BASE_SHA,
   checkRunsHeadSha: HEAD_SHA,
   checkRuns: [
     { name: "ci-result", status: "completed", conclusion: "success" },
@@ -213,6 +214,40 @@ describe("merge bar", () => {
             "scripts/react-compiler-bailouts.json",
             "apps/web/src/lib/copy-to-clipboard.ts",
           ],
+        }),
+      ).decision,
+    ).toBe("merge");
+  });
+
+  // The merge state describes the base commit it was read against; the gates
+  // after it take seconds, and a merge landing in that window is exactly the
+  // stale budget the state check ruled out a moment earlier.
+  test("a base that moves after the merge state is read aborts a baseline", () => {
+    expect(
+      failedGate(
+        passingSnapshot({
+          changedFiles: ["scripts/typecheck-baseline.json"],
+          migrations: {
+            baseDirectories: ["20260816200000_landed_meanwhile"],
+            addedDirectories: [],
+            baseSha: OTHER_BASE_SHA,
+          },
+          baseShaBeforeMerge: OTHER_BASE_SHA,
+        }),
+      ),
+    ).toEqual({ decision: "abort", reasons: ["BASE_MOVED_UNDER_BASELINE"] });
+  });
+
+  test("a base that moves under a pull request carrying no baseline is not this gate's business", () => {
+    expect(
+      evaluateMergeBar(
+        passingSnapshot({
+          migrations: {
+            baseDirectories: ["20260816200000_landed_meanwhile"],
+            addedDirectories: [],
+            baseSha: OTHER_BASE_SHA,
+          },
+          baseShaBeforeMerge: OTHER_BASE_SHA,
         }),
       ).decision,
     ).toBe("merge");

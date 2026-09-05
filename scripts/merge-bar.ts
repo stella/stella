@@ -115,6 +115,7 @@ const MERGE_BAR_REASONS = {
   requiredCheckIncomplete: "REQUIRED_CHECK_INCOMPLETE",
   requiredCheckNotSuccessful: "REQUIRED_CHECK_NOT_SUCCESSFUL",
   baselineNotCurrent: "BASELINE_SEEDED_OFF_BASE",
+  baselineBaseMoved: "BASE_MOVED_UNDER_BASELINE",
   unresolvedReviewThreads: "UNRESOLVED_REVIEW_THREADS",
   migrationOrder: "MIGRATION_ORDER_VIOLATION",
   baseMoved: "BASE_MOVED_UNDER_ADDED_MIGRATIONS",
@@ -177,6 +178,9 @@ export type MergeBarSnapshot = {
   checkRuns: readonly CheckRunSnapshot[];
   // Every path this pull request touches, whatever the change status.
   changedFiles: readonly string[];
+  // The base-branch tip as it stood when `mergeStateStatus` was read. The
+  // merge state describes that commit and no later one.
+  mergeStateBaseSha: string;
   reviewThreads: readonly ReviewThreadSnapshot[];
   migrations: MigrationSnapshot;
   // Both re-read immediately before the merge call.
@@ -270,10 +274,14 @@ const MERGE_STATE_PROVES_CURRENT_WITH_BASE = {
 // existed: whatever landed in between is unaccounted for, and the check that
 // reads the budget goes red on the default branch after the merge, not before.
 const evaluateBaselineFreshness = ({
+  baseShaBeforeMerge,
   changedFiles,
+  mergeStateBaseSha,
   mergeStateStatus,
 }: {
+  baseShaBeforeMerge: string;
   changedFiles: readonly string[];
+  mergeStateBaseSha: string;
   mergeStateStatus: MergeStateStatus;
 }): GateVerdict => {
   const baselines = changedFiles.filter(isSeededBaselineFile);
@@ -295,10 +303,25 @@ const evaluateBaselineFreshness = ({
         "onto the base branch and reseed the baseline",
     };
   }
+  // The merge state describes the base commit it was read against. The gates
+  // below it take seconds, and a merge landing in that window puts the base
+  // above the tree the baseline was measured on, which is the same stale
+  // budget the state check just ruled out.
+  if (mergeStateBaseSha !== baseShaBeforeMerge) {
+    return {
+      gate: "baseline-freshness",
+      status: "fail",
+      reason: MERGE_BAR_REASONS.baselineBaseMoved,
+      detail:
+        `default branch moved ${mergeStateBaseSha} -> ${baseShaBeforeMerge} ` +
+        `after the merge state was read, and ${baselines.join(", ")} was ` +
+        "seeded below it; rebase onto the base branch and reseed the baseline",
+    };
+  }
   return {
     gate: "baseline-freshness",
     status: "pass",
-    detail: `${baselines.length} baseline(s) seeded on a head current with the base`,
+    detail: `${baselines.length} baseline(s) seeded on a head current with ${baseShaBeforeMerge}`,
   };
 };
 
@@ -492,7 +515,9 @@ export const evaluateMergeBar = (
     evaluatePullRequestState(snapshot.pullRequest),
     evaluateMergeable(snapshot.pullRequest),
     evaluateBaselineFreshness({
+      baseShaBeforeMerge: snapshot.baseShaBeforeMerge,
       changedFiles: snapshot.changedFiles,
+      mergeStateBaseSha: snapshot.mergeStateBaseSha,
       mergeStateStatus: snapshot.pullRequest.mergeStateStatus,
     }),
     evaluateRequiredCheck({
@@ -1013,6 +1038,10 @@ if (import.meta.main) {
   // shrinks that window to those two calls; it does not remove it.
   const snapshot: MergeBarSnapshot = {
     pullRequest,
+    // First read after the pull request, so the merge state above and this
+    // base commit describe the same instant; the pre-merge base read then
+    // proves nothing landed in between.
+    mergeStateBaseSha: gateway.readBaseSha(),
     requiredCheckRuns: mergeBarRequiredCheckRuns(options.repo),
     checkRunsHeadSha: pullRequest.headSha,
     checkRuns: gateway.readCheckRuns(pullRequest.headSha),
