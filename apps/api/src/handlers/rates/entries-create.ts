@@ -6,7 +6,12 @@ import { abortableTx } from "@/api/db/safe-db";
 import { rateEntries } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { tSafeId, tUserId, workspaceParams } from "@/api/lib/custom-schema";
+import {
+  tMinorUnitAmount,
+  tSafeId,
+  tUserId,
+  workspaceParams,
+} from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
@@ -15,7 +20,7 @@ import { validateOrgUserId } from "@/api/lib/validated-org-user-id";
 
 const createRateEntryBodySchema = t.Object({
   userId: t.Optional(t.Nullable(tUserId)),
-  hourlyRate: t.Integer({ minimum: 0 }),
+  hourlyRate: tMinorUnitAmount(0),
   effectiveFrom: t.String({ format: "date" }),
   effectiveTo: t.Optional(t.Nullable(t.String({ format: "date" }))),
 });

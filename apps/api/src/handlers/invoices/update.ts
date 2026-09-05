@@ -12,7 +12,11 @@ import { lockInvoiceInStatus } from "@/api/handlers/invoices/lock-invoice";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { FieldDiffs } from "@/api/lib/audit-log";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import {
+  tCurrencyCode,
+  tSafeId,
+  workspaceParams,
+} from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { pickDefined } from "@/api/lib/pick-defined";
 
@@ -21,7 +25,7 @@ const updateInvoiceBodySchema = t.Object({
   invoiceDate: t.Optional(t.String({ format: "date" })),
   dueDate: t.Optional(t.Nullable(t.String({ format: "date" }))),
   reference: t.Optional(t.Nullable(t.String({ maxLength: 256 }))),
-  currency: t.Optional(t.String({ minLength: 3, maxLength: 3 })),
+  currency: t.Optional(tCurrencyCode),
   notes: t.Optional(t.Nullable(t.String({ maxLength: 10_000 }))),
 });
 

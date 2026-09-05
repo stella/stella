@@ -22,7 +22,7 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId, tUserId } from "@/api/lib/custom-schema";
+import { tMinorUnitAmount, tSafeId, tUserId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
@@ -54,7 +54,7 @@ export const createContactBodySchema = t.Object({
   taxId: t.Optional(t.String({ maxLength: 64 })),
   bankAccounts: t.Optional(t.Array(bankAccountSchema, { maxItems: 10 })),
   billingAddress: t.Optional(billingAddressSchema),
-  defaultHourlyRate: t.Optional(t.Integer({ minimum: 0 })),
+  defaultHourlyRate: t.Optional(tMinorUnitAmount(0)),
   currency: t.Optional(t.String({ minLength: 3, maxLength: 3 })),
   paymentTermDays: t.Optional(t.Integer({ minimum: 0, maximum: 365 })),
   originatingAttorneyId: t.Optional(tUserId),

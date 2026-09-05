@@ -28,3 +28,8 @@ test("formats Indian currency using lakh and crore grouping", () => {
 test("automatic format keeps non-Indian grouping for a US browser locale", () => {
   expect(formatCurrencyAmount(10_000_000, "INR")).toBe("₹100,000.00");
 });
+
+test("a zero-exponent currency is shown whole, not divided by a hundred", () => {
+  expect(formatCurrencyAmount(10_000_000, "JPY")).toBe("¥10,000,000");
+  expect(formatCurrencyCompact(10_000_000, "JPY")).toBe("¥10,000,000");
+});

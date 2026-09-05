@@ -1,12 +1,14 @@
+/**
+ * The consumer-side contract this kit depends on: a money column renders
+ * whatever currency code a row carries. The rendering lives in `@stll/money`;
+ * the column that must not go down lives here, so the property does too.
+ */
+
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { currencyMinorUnitDigits, formatMoneyCents } from "@stll/money";
 import { propertyConfig } from "@stll/property-testing";
-
-import {
-  currencyMinorUnitDigits,
-  formatMoneyCents,
-} from "./calculation-format";
 
 describe("currencyMinorUnitDigits", () => {
   test("reads the exponent from the currency", () => {
@@ -29,7 +31,7 @@ describe("formatMoneyCents", () => {
   test("a malformed code shows the amount beside the raw code", () => {
     expect(
       formatMoneyCents({ amountCents: 1500, currency: "A1C", locale: "en" }),
-    ).toBe("15 A1C");
+    ).toBe("15.00 A1C");
   });
 
   test("a currency with no minor unit is not divided", () => {

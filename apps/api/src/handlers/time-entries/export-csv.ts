@@ -9,6 +9,7 @@ import { member, user } from "@/api/db/auth-schema";
 import { timeEntryStatusSchema } from "@/api/db/billing-validators";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { timeEntries } from "@/api/db/schema";
+import { exportAmountText } from "@/api/handlers/time-entries/export-amount";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -136,9 +137,9 @@ export const exportCsvHandler = async ({
         escapeCSV(row.workItemId ?? ""),
         String(row.durationMinutes),
         String(row.billedMinutes),
-        (row.rateAtEntry / 100).toFixed(2),
+        exportAmountText(row.rateAtEntry, row.currency),
         escapeCSV(row.currency),
-        (amount / 100).toFixed(2),
+        exportAmountText(amount, row.currency),
         row.billable ? "Yes" : "No",
         escapeCSV(row.status),
         escapeCSV(row.taskCode ?? ""),

@@ -1,4 +1,4 @@
-import { formatMoneyCents } from "@stll/workspace-ui/calculation-format";
+import { formatMoneyCents } from "@stll/money";
 
 import type { TableTreeNode } from "@/components/workspaces/table/types";
 import { getFormatter, getFormattingLocale } from "@/i18n/i18n-store";

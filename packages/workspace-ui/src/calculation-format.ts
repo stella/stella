@@ -12,16 +12,6 @@ import { panic } from "better-result";
 import type { CalculationResult } from "@stll/calculations";
 import type { CentsAmount } from "@stll/money";
 
-// Money display belongs to the package that owns the amounts: the minor-unit
-// question ("how many make a major one?") is a property of the currency, not
-// of this kit. Re-exported here so the subpath consumers already import stays
-// the one they import.
-export {
-  currencyMinorUnitDigits,
-  formatMoneyCents,
-  type FormatMoneyCentsParams,
-} from "@stll/money";
-
 export type CalculationFormatters = {
   number: (value: number) => string;
   money: (amountCents: CentsAmount, currency: string) => string;

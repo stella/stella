@@ -326,8 +326,19 @@ export const safeOrganizationId = (name: string) =>
 export const safeUuid = <T extends MintedSafeIdType>(name: string) =>
   p.uuid(name).$type<SafeId<T>>();
 
+/**
+ * A money column, in the currency's minor units.
+ *
+ * `bigint`, not `integer`: a four-decimal currency (CLF) puts a plausible
+ * amount past 2^31-1 the moment it is scaled, and an overflow on a money
+ * column fails the write rather than rounding it. `mode: "number"` keeps the
+ * TypeScript type `number` so the `CentsAmount` brand and everything that
+ * carries it are unchanged; the write boundaries cap the value at
+ * `Number.MAX_SAFE_INTEGER` (`tMinorUnitAmount`), which is where a JSON number
+ * stops being the integer that was stored.
+ */
 export const centsColumn = (name: string) =>
-  p.integer(name).$type<CentsAmount>();
+  p.bigint(name, { mode: "number" }).$type<CentsAmount>();
 
 export const pUuid = <T extends MintedSafeIdType>() =>
   p

@@ -1,9 +1,11 @@
 import { useState } from "react";
 
 import { useForm } from "@tanstack/react-form";
+import { useSelector } from "@tanstack/react-store";
 import { useTranslations } from "use-intl";
 
 import { EXPENSE_CATEGORIES, type ExpenseCategory } from "@stll/api-contract";
+import { tryToMinorUnits } from "@stll/money";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { Input } from "@stll/ui/input";
@@ -20,6 +22,8 @@ import { stellaToast } from "@stll/ui/toast";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { detached } from "@/lib/detached";
+import { majorUnitInput } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/amount-input.logic";
+import { DEFAULT_CURRENCY } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-currency";
 import { MatterCombobox } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/matter-combobox";
 
 export type ExpenseFormValues = {
@@ -49,9 +53,10 @@ export const ExpenseForm = ({
   submitLabel,
 }: ExpenseFormProps) => {
   const t = useTranslations();
+  const initialCurrency = defaultValues?.currency ?? DEFAULT_CURRENCY;
   const [amountInputValue, setAmountInputValue] = useState(() =>
     (defaultValues?.amount ?? 0) > 0
-      ? ((defaultValues?.amount ?? 0) / 100).toFixed(2)
+      ? majorUnitInput(defaultValues?.amount ?? 0, initialCurrency)
       : "",
   );
 
@@ -67,8 +72,7 @@ export const ExpenseForm = ({
     defaultValues: {
       matterId: defaultValues?.matterId ?? "",
       dateIncurred: defaultValues?.dateIncurred ?? today,
-      amount: defaultValues?.amount ?? 0,
-      currency: defaultValues?.currency ?? "USD",
+      currency: initialCurrency,
       category: defaultValues?.category ?? "other",
       description: defaultValues?.description ?? "",
       billable: defaultValues?.billable ?? true,
@@ -82,16 +86,28 @@ export const ExpenseForm = ({
         });
         return;
       }
-      if (value.amount <= 0) {
+      // The currency input sits beside the amount and can still change after
+      // it is typed, so the minor-unit scaling happens here, against the
+      // currency the form actually submits. The typed TEXT is what is scaled:
+      // 1.005 through a float multiply is 100.49999999999999, and the cent
+      // that rounds away never comes back.
+      const amount =
+        tryToMinorUnits({
+          amount: amountInputValue,
+          currency: value.currency,
+        }) ?? 0;
+      if (amount <= 0) {
         stellaToast.add({
           title: t("billing.failedToSave"),
           type: "error",
         });
         return;
       }
-      await onSubmit(value);
+      await onSubmit({ ...value, amount });
     },
   });
+
+  const currentCurrency = useSelector(form.store, (s) => s.values.currency);
 
   return (
     <form
@@ -159,32 +175,23 @@ export const ExpenseForm = ({
       <div className="flex gap-3">
         <div className="flex flex-1 flex-col gap-1.5">
           <Label>{t("billing.amount")}</Label>
-          <form.Field name="amount">
-            {(field) => (
-              <Input
-                dir="ltr"
-                inputMode="decimal"
-                onBlur={() => {
-                  const cents = Math.round(
-                    Number.parseFloat(amountInputValue) * 100,
-                  );
-                  if (!Number.isNaN(cents) && cents > 0) {
-                    setAmountInputValue((cents / 100).toFixed(2));
-                  }
-                }}
-                onChange={(e) => {
-                  const raw = e.currentTarget.value;
-                  setAmountInputValue(raw);
-                  const cents = Math.round(Number.parseFloat(raw) * 100);
-                  field.handleChange(
-                    !Number.isNaN(cents) && cents > 0 ? cents : 0,
-                  );
-                }}
-                placeholder="350.00"
-                value={amountInputValue}
-              />
-            )}
-          </form.Field>
+          <Input
+            dir="ltr"
+            inputMode="decimal"
+            onBlur={() => {
+              const amount = tryToMinorUnits({
+                amount: amountInputValue,
+                currency: currentCurrency,
+              });
+              if (amount === null || amount <= 0) {
+                return;
+              }
+              setAmountInputValue(majorUnitInput(amount, currentCurrency));
+            }}
+            onChange={(e) => setAmountInputValue(e.currentTarget.value)}
+            placeholder="350.00"
+            value={amountInputValue}
+          />
         </div>
         <div className="flex w-20 flex-col gap-1.5">
           <Label>{t("common.currency")}</Label>

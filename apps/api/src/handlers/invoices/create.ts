@@ -13,7 +13,7 @@ import {
 } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { tCurrencyCode, tSafeId } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
@@ -30,7 +30,7 @@ const createInvoiceBodySchema = t.Object({
   invoiceDate: t.String({ format: "date" }),
   dueDate: t.Optional(t.Nullable(t.String({ format: "date" }))),
   reference: t.Optional(t.Nullable(t.String({ maxLength: 256 }))),
-  currency: t.String({ minLength: 3, maxLength: 3 }),
+  currency: tCurrencyCode,
   notes: t.Optional(t.Nullable(t.String({ maxLength: 10_000 }))),
   timeEntryIds: t.Array(tSafeId("timeEntry"), {
     minItems: 1,

@@ -15,17 +15,12 @@ export type {
   UseCalculationParams,
   WorkspaceCalculationLabels,
 } from "./calculations";
-export {
-  currencyMinorUnitDigits,
-  formatCalculationResult,
-  formatMoneyCents,
-} from "./calculation-format";
+export { formatCalculationResult } from "./calculation-format";
 export type {
   CalculationFormatters,
   CalculationLabels,
   FormattedCalculation,
   FormatCalculationParams,
-  FormatMoneyCentsParams,
 } from "./calculation-format";
 export { applyCalculationSelection } from "./calculation-selection";
 export type { ApplyCalculationSelectionParams } from "./calculation-selection";

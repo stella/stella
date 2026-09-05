@@ -36,10 +36,10 @@ describe("minor-unit billing arithmetic", () => {
         billedMinutes: Number.parseFloat("1.5"),
         hourlyRateCents: cents(100),
       }),
-    ).toThrow(TypeError);
+    ).toThrow("non-negative integer");
     expect(() =>
       applyMarkupCents({ amountCents: cents(100), markupPercent: -1 }),
-    ).toThrow(TypeError);
+    ).toThrow("non-negative integer");
   });
 });
 
@@ -73,8 +73,24 @@ describe("cents() brand constructor", () => {
       Infinity,
       -Infinity,
     ]) {
-      expect(() => cents(bad)).toThrow(TypeError);
+      expect(() => cents(bad)).toThrow("integer minor units");
     }
+  });
+
+  test("rejects an integer past the safe range, where +1 stops moving", () => {
+    // 2^53 is an integer to `Number.isInteger`, and 2^53 + 1 is the same
+    // double, so a total that reached here would silently stop adding up.
+    expect(Number.MAX_SAFE_INTEGER + 1).toBe(Number.MAX_SAFE_INTEGER + 2);
+    for (const bad of [
+      Number.MAX_SAFE_INTEGER + 1,
+      Number.MIN_SAFE_INTEGER - 1,
+      2 ** 60,
+    ]) {
+      expect(() => cents(bad)).toThrow("safe integer minor units");
+    }
+    expect(cents(Number.MAX_SAFE_INTEGER)).toBe(
+      unsafeCents(Number.MAX_SAFE_INTEGER),
+    );
   });
 
   test("unsafeCents is a pure brand attach with no rounding", () => {
@@ -161,13 +177,13 @@ describe("prorateHourlyCents invariants", () => {
   test("rejects non-integer or negative minutes", () => {
     expect(() =>
       prorateHourlyCents({ billedMinutes: -1, hourlyRateCents: cents(100) }),
-    ).toThrow(TypeError);
+    ).toThrow("non-negative integer");
     expect(() =>
       prorateHourlyCents({
         billedMinutes: Number.parseFloat("1.1"),
         hourlyRateCents: cents(100),
       }),
-    ).toThrow(TypeError);
+    ).toThrow("non-negative integer");
   });
 });
 
@@ -226,16 +242,16 @@ describe("applyMarkupCents invariants", () => {
         amountCents: cents(100),
         markupPercent: Number.parseFloat("1.5"),
       }),
-    ).toThrow(TypeError);
+    ).toThrow("non-negative integer");
     expect(() =>
       applyMarkupCents({ amountCents: cents(100), markupPercent: Infinity }),
-    ).toThrow(TypeError);
+    ).toThrow("non-negative integer");
   });
 });
 
 describe("currencyCents() and addCents()", () => {
   test("currencyCents rejects an empty currency code", () => {
-    expect(() => currencyCents("", 100)).toThrow(TypeError);
+    expect(() => currencyCents("", 100)).toThrow("non-empty code");
   });
 
   test("addCents sums two amounts of the same currency", () => {
@@ -245,7 +261,7 @@ describe("currencyCents() and addCents()", () => {
   });
 
   test("addCents rejects a bad minor-unit amount at construction", () => {
-    expect(() => currencyCents("USD", 1.5)).toThrow(TypeError);
+    expect(() => currencyCents("USD", 1.5)).toThrow("integer minor units");
   });
 
   test("INVARIANT: addCents is commutative and associative", () => {
@@ -288,7 +304,9 @@ describe("MoneyTotals", () => {
   });
 
   test("rejects an empty currency code", () => {
-    expect(() => new MoneyTotals().add("", cents(100))).toThrow(TypeError);
+    expect(() => new MoneyTotals().add("", cents(100))).toThrow(
+      "non-empty code",
+    );
   });
 
   test("INVARIANT: entries() total per currency equals the sum of that currency's rows, regardless of insertion order", () => {

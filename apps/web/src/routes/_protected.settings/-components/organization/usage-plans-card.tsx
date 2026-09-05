@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
+import { toMajorUnits } from "@stll/money";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Frame, FramePanel } from "@stll/ui/frame";
@@ -195,10 +196,13 @@ function PolicyRow({
         {policy.price && (
           <p className="text-sm">
             {t(PRICE_TEMPLATE_KEYS[priceShapeOf(policy.price)], {
-              price: format.number(policy.price.amountCents / 100, {
-                style: "currency",
-                currency: policy.price.currency,
-              }),
+              price: format.number(
+                toMajorUnits({
+                  amountCents: policy.price.amountCents,
+                  currency: policy.price.currency,
+                }),
+                { style: "currency", currency: policy.price.currency },
+              ),
             })}
           </p>
         )}

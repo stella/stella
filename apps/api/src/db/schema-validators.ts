@@ -67,16 +67,39 @@ const moneyType = t.Literal("money");
 const personType = t.Literal("person");
 
 /**
- * ISO 4217 alphabetic code. Three *letters*, not three characters: a stored
- * "A1C" satisfies a length check and then makes Intl.NumberFormat throw the
- * moment a column formats it. An unknown-but-well-formed code ("ZZZ") is
- * accepted, because Intl accepts it too.
+ * ISO 4217 alphabetic code for a workspace money or int field, normalized to
+ * upper case on the way in.
+ *
+ * Three *letters*, not three characters: a stored "A1C" satisfies a length
+ * check and then makes Intl.NumberFormat throw the moment a column formats it.
+ * An unknown-but-well-formed code ("ZZZ") is accepted, because Intl accepts it
+ * too.
+ *
+ * Either case is ACCEPTED, upper case is STORED. Billing's own boundary
+ * (`tCurrencyCode`) rejects lower case outright, but that column had a
+ * migration to bring its rows along and this one is reached by clients that
+ * were always free to send either case, so rejecting now would break writes
+ * that used to work. Normalizing instead leaves nothing to migrate: display
+ * resolves either case through `Intl` already, and every row written from here
+ * on groups and compares as one currency rather than two.
+ *
+ * `Value.Check` sees through a transform to the string underneath, so the
+ * modules that validate an already-stored value are unaffected.
  */
-const currencyCode = t.String({
-  minLength: 3,
-  maxLength: 3,
-  pattern: "^[A-Za-z]{3}$",
-});
+export const currencyCodeSchema = (description?: string) =>
+  t
+    .Transform(
+      t.String({
+        minLength: 3,
+        maxLength: 3,
+        pattern: "^[A-Za-z]{3}$",
+        ...(description === undefined ? {} : { description }),
+      }),
+    )
+    .Decode((code) => code.toUpperCase())
+    .Encode((code) => code);
+
+const currencyCode = currencyCodeSchema();
 
 export const entityKindSchema = t.UnionEnum(ENTITY_KINDS);
 export type { EntityKind } from "@stll/api-contract";

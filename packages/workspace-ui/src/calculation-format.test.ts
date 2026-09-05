@@ -1,14 +1,15 @@
 import { describe, expect, test } from "bun:test";
 
 import { runCalculation } from "@stll/calculations";
-import { cents } from "@stll/money";
+import { cents, toMajorUnits } from "@stll/money";
 
 import type { CalculationFormatters } from "./calculation-format";
 import { formatCalculationResult } from "./calculation-format";
 
 const formatters: CalculationFormatters = {
   number: String,
-  money: (amountCents, currency) => `${amountCents / 100} ${currency}`,
+  money: (amountCents, currency) =>
+    `${toMajorUnits({ amountCents, currency })} ${currency}`,
   percent: (ratio) => `${Math.round(ratio * 100)}%`,
 };
 

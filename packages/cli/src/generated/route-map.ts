@@ -8608,6 +8608,7 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "int",
                     min: 0,
+                    max: 9007199254740991,
                     repeatable: false,
                     flag: "--default-hourly-rate",
                     prop: "defaultHourlyRate",
@@ -8961,6 +8962,7 @@ export const generatedRouteMap: RouteNode = {
                         },
                         defaultHourlyRate: {
                           minimum: 0,
+                          maximum: 9007199254740991,
                           type: "integer",
                         },
                         currency: {
@@ -9585,6 +9587,7 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "int",
                     min: 0,
+                    max: 9007199254740991,
                     repeatable: false,
                     flag: "--default-hourly-rate",
                     prop: "defaultHourlyRate",
@@ -10078,6 +10081,7 @@ export const generatedRouteMap: RouteNode = {
                           anyOf: [
                             {
                               minimum: 0,
+                              maximum: 9007199254740991,
                               type: "integer",
                             },
                             {
@@ -14546,6 +14550,7 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "int",
                     min: 1,
+                    max: 9007199254740991,
                     repeatable: false,
                     flag: "--amount",
                     prop: "amount",
@@ -14656,11 +14661,13 @@ export const generatedRouteMap: RouteNode = {
                         },
                         amount: {
                           minimum: 1,
+                          maximum: 9007199254740991,
                           type: "integer",
                         },
                         currency: {
                           minLength: 3,
                           maxLength: 3,
+                          pattern: "^[A-Z]{3}$",
                           type: "string",
                         },
                         category: {
@@ -14986,6 +14993,7 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "int",
                     min: 1,
+                    max: 9007199254740991,
                     repeatable: false,
                     flag: "--amount",
                     prop: "amount",
@@ -15092,11 +15100,13 @@ export const generatedRouteMap: RouteNode = {
                         },
                         amount: {
                           minimum: 1,
+                          maximum: 9007199254740991,
                           type: "integer",
                         },
                         currency: {
                           minLength: 3,
                           maxLength: 3,
+                          pattern: "^[A-Z]{3}$",
                           type: "string",
                         },
                         category: {
@@ -18035,6 +18045,7 @@ export const generatedRouteMap: RouteNode = {
                         currency: {
                           minLength: 3,
                           maxLength: 3,
+                          pattern: "^[A-Z]{3}$",
                           type: "string",
                         },
                         notes: {
@@ -18584,6 +18595,7 @@ export const generatedRouteMap: RouteNode = {
                         currency: {
                           minLength: 3,
                           maxLength: 3,
+                          pattern: "^[A-Z]{3}$",
                           type: "string",
                         },
                         notes: {
@@ -25362,6 +25374,7 @@ export const generatedRouteMap: RouteNode = {
                             {
                               minLength: 3,
                               maxLength: 3,
+                              pattern: "^[A-Za-z]{3}$",
                               type: "string",
                             },
                             {
@@ -26012,6 +26025,7 @@ export const generatedRouteMap: RouteNode = {
                                   {
                                     minLength: 3,
                                     maxLength: 3,
+                                    pattern: "^[A-Za-z]{3}$",
                                     type: "string",
                                   },
                                   {
@@ -27459,6 +27473,7 @@ export const generatedRouteMap: RouteNode = {
                         currency: {
                           minLength: 3,
                           maxLength: 3,
+                          pattern: "^[A-Z]{3}$",
                           type: "string",
                         },
                         isDefault: {
@@ -27580,6 +27595,7 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "int",
                     min: 0,
+                    max: 9007199254740991,
                     repeatable: false,
                     flag: "--hourly-rate",
                     prop: "hourlyRate",
@@ -27633,6 +27649,7 @@ export const generatedRouteMap: RouteNode = {
                         },
                         hourlyRate: {
                           minimum: 0,
+                          maximum: 9007199254740991,
                           type: "integer",
                         },
                         effectiveFrom: {
@@ -27876,6 +27893,7 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "int",
                     min: 0,
+                    max: 9007199254740991,
                     repeatable: false,
                     flag: "--hourly-rate",
                     prop: "hourlyRate",
@@ -27923,6 +27941,7 @@ export const generatedRouteMap: RouteNode = {
                         },
                         hourlyRate: {
                           minimum: 0,
+                          maximum: 9007199254740991,
                           type: "integer",
                         },
                         effectiveFrom: {
@@ -28185,6 +28204,7 @@ export const generatedRouteMap: RouteNode = {
                         currency: {
                           minLength: 3,
                           maxLength: 3,
+                          pattern: "^[A-Z]{3}$",
                           type: "string",
                         },
                         isDefault: {

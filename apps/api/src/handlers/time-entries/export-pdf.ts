@@ -9,6 +9,7 @@ import { member, user } from "@/api/db/auth-schema";
 import { timeEntryStatusSchema } from "@/api/db/billing-validators";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { timeEntries } from "@/api/db/schema";
+import { exportAmountText } from "@/api/handlers/time-entries/export-amount";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -128,7 +129,7 @@ export const exportPdfHandler = async ({
       ? (userMap.get(row.userId) ?? "Unknown")
       : "Unknown";
     const hours = (row.billedMinutes / 60).toFixed(2);
-    const rate = (row.rateAtEntry / 100).toFixed(2);
+    const rate = exportAmountText(row.rateAtEntry, row.currency);
     const amount = prorateHourlyCents({
       billedMinutes: row.billedMinutes,
       hourlyRateCents: row.rateAtEntry,
@@ -142,7 +143,7 @@ export const exportPdfHandler = async ({
 
     textLines.push(`Date: ${row.dateWorked}  User: ${userName}`);
     textLines.push(
-      `Duration: ${hours}h  Rate: ${row.currency} ${rate}/hr  Amount: ${row.currency} ${(amount / 100).toFixed(2)}`,
+      `Duration: ${hours}h  Rate: ${row.currency} ${rate}/hr  Amount: ${row.currency} ${exportAmountText(amount, row.currency)}`,
     );
     textLines.push(
       `Status: ${row.status}  Billable: ${row.billable ? "Yes" : "No"}`,
@@ -162,7 +163,7 @@ export const exportPdfHandler = async ({
   textLines.push(`Total Hours: ${totalHours}`);
   for (const { currency, amountCents } of totalAmountByCurrency.entries()) {
     textLines.push(
-      `Total Amount: ${currency} ${(amountCents / 100).toFixed(2)}`,
+      `Total Amount: ${currency} ${exportAmountText(amountCents, currency)}`,
     );
   }
 

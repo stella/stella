@@ -20,7 +20,7 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId, tUserId } from "@/api/lib/custom-schema";
+import { tMinorUnitAmount, tSafeId, tUserId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { cents } from "@/api/lib/money";
 import { pickDefined } from "@/api/lib/pick-defined";
@@ -55,7 +55,7 @@ const updateContactBodySchema = t.Object({
     t.Nullable(t.Array(bankAccountSchema, { maxItems: 10 })),
   ),
   billingAddress: t.Optional(t.Nullable(billingAddressSchema)),
-  defaultHourlyRate: t.Optional(t.Nullable(t.Integer({ minimum: 0 }))),
+  defaultHourlyRate: t.Optional(t.Nullable(tMinorUnitAmount(0))),
   currency: t.Optional(t.Nullable(t.String({ minLength: 3, maxLength: 3 }))),
   paymentTermDays: t.Optional(
     t.Nullable(t.Integer({ minimum: 0, maximum: 365 })),

@@ -2,12 +2,18 @@ import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
+import { toMajorUnits, tryToMinorUnits } from "@stll/money";
+
 import { expenseCategorySchema } from "@/api/db/billing-validators";
 import { BILLING_STATUS, expenses } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { tSafeId } from "@/api/lib/custom-schema";
+import {
+  tCurrencyCode,
+  tMinorUnitAmount,
+  tSafeId,
+} from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { cents } from "@/api/lib/money";
 import { pickDefined } from "@/api/lib/pick-defined";
@@ -15,8 +21,8 @@ import { pickDefined } from "@/api/lib/pick-defined";
 const updateExpenseBodySchema = t.Object({
   id: tSafeId("expense"),
   dateIncurred: t.Optional(t.String({ format: "date" })),
-  amount: t.Optional(t.Integer({ minimum: 1 })),
-  currency: t.Optional(t.String({ minLength: 3, maxLength: 3 })),
+  amount: t.Optional(tMinorUnitAmount(1)),
+  currency: t.Optional(tCurrencyCode),
   category: t.Optional(expenseCategorySchema),
   description: t.Optional(t.String({ minLength: 1, maxLength: 10_000 })),
   invoiceDescription: t.Optional(t.Nullable(t.String({ maxLength: 10_000 }))),
@@ -110,6 +116,52 @@ const updateExpense = createSafeHandler(
       }
     }
 
+    // The stored integer means nothing without its currency: 1250 is 12.50 USD
+    // and 1250 JPY. A currency change that leaves the amount alone would
+    // therefore silently restate the expense's value, so restate it here
+    // instead, in the transaction that changes the code. An amount sent
+    // alongside the currency is already in the new currency's units and wins
+    // as given.
+    // The currency this update restates the amount INTO, or null when it does
+    // not restate: an amount sent alongside the currency is already in the new
+    // currency's units and wins as given.
+    const restatementCurrency =
+      body.amount === undefined &&
+      body.currency !== undefined &&
+      body.currency !== existing.currency
+        ? body.currency
+        : null;
+    const restatedAmount =
+      restatementCurrency === null
+        ? null
+        : tryToMinorUnits({
+            amount: toMajorUnits({
+              amountCents: existing.amount,
+              currency: existing.currency,
+            }),
+            currency: restatementCurrency,
+          });
+
+    // Both ends of the new currency's range, refused before anything is
+    // written. Too small: a zero would break `expenses_amount_positive_check`.
+    // Too large: `tryToMinorUnits` declines a scaled value past the safe
+    // integer range, where the stored amount stops being the one it names --
+    // three decimals from none multiplies by a thousand, so an amount well
+    // inside the old currency's range can leave it.
+    if (
+      restatementCurrency !== null &&
+      (restatedAmount === null || restatedAmount < 1)
+    ) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message:
+            "This expense cannot be restated in the new currency; " +
+            "send the amount in that currency instead",
+        }),
+      );
+    }
+
     const updates = {
       ...pickDefined(body, [
         "dateIncurred",
@@ -122,6 +174,7 @@ const updateExpense = createSafeHandler(
         "matterId",
         "status",
       ]),
+      ...(restatedAmount === null ? {} : { amount: restatedAmount }),
       ...(body.amount !== undefined ? { amount: cents(body.amount) } : {}),
       updatedAt: new Date(),
     };

@@ -9,7 +9,7 @@ import type {
   CalculationValue,
 } from "@stll/calculations";
 import { runCalculation } from "@stll/calculations";
-import type { CentsAmount } from "@stll/money";
+import { type CentsAmount, formatMoneyCents } from "@stll/money";
 import { Button } from "@stll/ui/button";
 import {
   Menu,
@@ -26,10 +26,7 @@ import type {
   CalculationFormatters,
   FormattedCalculation,
 } from "./calculation-format";
-import {
-  formatCalculationResult,
-  formatMoneyCents,
-} from "./calculation-format";
+import { formatCalculationResult } from "./calculation-format";
 import { applyCalculationSelection } from "./calculation-selection";
 import type { CalculationSelection } from "./calculation-selection";
 
