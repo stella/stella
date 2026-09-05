@@ -42,6 +42,10 @@ const loadConnection = async () =>
   // oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a dynamic import of an owned module is rejected
   await import("@/api/lib/redis-client");
 
+const loadSerializer = async () =>
+  // oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a dynamic import of a name-confined entry point reaches every owned binding and is rejected
+  await import("@stll/folio-core");
+
 export const copyDirectly = async (text: string) => {
   // oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a direct clipboard write is rejected
   await navigator.clipboard.writeText(text);
@@ -60,6 +64,7 @@ export const pasteDirectly = async () => await navigator.clipboard.readText();
 export const readTitle = (page: { clipboard: string }) => page.clipboard;
 
 void loadConnection;
+void loadSerializer;
 void createRedisClient;
 void createDocx;
 void compile;
