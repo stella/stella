@@ -143,6 +143,12 @@ pub fn target_work_area(app: &AppHandle) -> Option<WorkArea> {
         .ok()
         .flatten()
     })
+    // The focused screen: the one holding the window the user is working in.
+    .or_else(|| {
+      app
+        .get_focused_window()
+        .and_then(|window| window.current_monitor().ok().flatten())
+    })
     .or_else(|| app.primary_monitor().ok().flatten())?;
   let scale_factor = monitor.scale_factor();
   let work_area = monitor.work_area();
