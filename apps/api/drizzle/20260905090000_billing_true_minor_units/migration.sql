@@ -14,9 +14,12 @@ SET statement_timeout = '30s';--> statement-breakpoint
 -- currencies are not matched by the join at all.
 --
 -- The exponent table is data because a migration cannot call the helper.
--- Regenerate it with `bun apps/api/scripts/print-currency-exponents.ts`,
--- which brute-forces the three-letter code space through `Intl` so the list
--- matches exactly what the helper answers for any code a row can carry.
+-- Regenerate it with `bun apps/api/scripts/print-currency-exponents.ts`, which
+-- brute-forces the three-letter code space through `Intl` so the list matches
+-- exactly what the helper answers for any code a row can carry.
+-- `apps/api/src/db/currency-exponents.test.ts` compares every block below with
+-- what `Intl` answers today, so an ICU update fails the build rather than
+-- leaving migrated rows stored one way and the running code scaling another.
 -- 26 codes; every other well-formed code resolves to 2.
 --
 -- One statement per table, each joined to a 26-row list: the planner filters

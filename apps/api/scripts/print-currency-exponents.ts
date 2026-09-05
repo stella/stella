@@ -3,33 +3,16 @@
  * not two, as `Intl` resolves it.
  *
  * The migration that rescaled billing amounts to true minor units
- * (`20260905090000_billing_true_minor_units`) inlines this output: a migration
- * cannot call `currencyMinorUnitDigits`, so the answer has to travel as data.
- * Rerun this to see whether the runtime's currency table has moved since.
- *
- * Brute-forced over the whole three-letter space rather than
- * `Intl.supportedValuesOf("currency")`, because a stored code only has to be
- * well formed to reach `Intl`, and the two lists are not the same.
+ * (`20260905090000_billing_true_minor_units`) inlines this output. Run this to
+ * regenerate that block; `apps/api/src/db/currency-exponents.test.ts` fails the
+ * build when the two stop matching, so the copy cannot drift on its own.
  */
 
-const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
-const DEFAULT_MINOR_UNIT_DIGITS = 2;
+import {
+  currencyExponentRows,
+  renderCurrencyExponentValues,
+} from "@/api/db/currency-exponents";
 
-const rows: string[] = [];
-for (const first of LETTERS) {
-  for (const second of LETTERS) {
-    for (const third of LETTERS) {
-      const currency = `${first}${second}${third}`;
-      const digits =
-        new Intl.NumberFormat("en", {
-          style: "currency",
-          currency,
-        }).resolvedOptions().maximumFractionDigits ?? DEFAULT_MINOR_UNIT_DIGITS;
-      if (digits !== DEFAULT_MINOR_UNIT_DIGITS) {
-        rows.push(`  ('${currency}', ${digits})`);
-      }
-    }
-  }
-}
-
-console.info(`${rows.join(",\n")}\n-- ${rows.length} codes`);
+console.info(
+  `${renderCurrencyExponentValues()}\n-- ${currencyExponentRows().length} codes`,
+);
