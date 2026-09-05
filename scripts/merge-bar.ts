@@ -259,10 +259,28 @@ const MERGE_STATE_PROVES_CURRENT_WITH_BASE = {
   UNSTABLE: true,
 } as const satisfies Record<MergeStateStatus, boolean>;
 
+// A guard definition: a lint rule, the config that enables it, or the table of
+// budgeted suppressions. A rule proves something about the tree it ran on, so a
+// pull request that adds or tightens one is measured off its own head exactly
+// as a baseline is: land it beside a pull request that adds the shape it
+// rejects and both are green alone and red together on the default branch.
+const GUARD_DEFINITION_PATHS = [
+  ".oxlint-plugins/",
+  "oxlint.config.ts",
+  "scripts/lint-suppressions.ts",
+] as const;
+
+const isGuardDefinitionFile = (file: string): boolean =>
+  GUARD_DEFINITION_PATHS.some(
+    (guard) => file === guard || file.startsWith(guard),
+  );
+
 // A baseline is measured against the head that seeded it. Merging one that was
 // seeded below the base branch publishes a budget for a tree that never
 // existed: whatever landed in between is unaccounted for, and the check that
 // reads the budget goes red on the default branch after the merge, not before.
+// A guard definition carries the same property from the other direction, so
+// both are held to the same currency requirement.
 const evaluateBaselineFreshness = ({
   baseShaBeforeMerge,
   changedFiles,
@@ -274,12 +292,14 @@ const evaluateBaselineFreshness = ({
   mergeStateBaseSha: string;
   mergeStateStatus: MergeStateStatus;
 }): GateVerdict => {
-  const baselines = changedFiles.filter(isSeededBaselineFile);
-  if (baselines.length === 0) {
+  const measured = changedFiles.filter(
+    (file) => isSeededBaselineFile(file) || isGuardDefinitionFile(file),
+  );
+  if (measured.length === 0) {
     return {
       gate: "baseline-freshness",
       status: "pass",
-      detail: "no committed baseline in this pull request",
+      detail: "no baseline or guard definition in this pull request",
     };
   }
   if (!MERGE_STATE_PROVES_CURRENT_WITH_BASE[mergeStateStatus]) {
@@ -289,8 +309,9 @@ const evaluateBaselineFreshness = ({
       reason: MERGE_BAR_REASONS.baselineNotCurrent,
       detail:
         `merge state ${mergeStateStatus} does not place this head above the ` +
-        `base, and ${baselines.join(", ")} was seeded on this head; rebase ` +
-        "onto the base branch and reseed the baseline",
+        `base, and ${measured.join(", ")} only holds for the head it was ` +
+        "measured on; rebase onto the base branch, reseed any baseline, and " +
+        "let CI re-run",
     };
   }
   // The merge state describes the base commit it was read against. The gates
@@ -304,14 +325,15 @@ const evaluateBaselineFreshness = ({
       reason: MERGE_BAR_REASONS.baselineBaseMoved,
       detail:
         `default branch moved ${mergeStateBaseSha} -> ${baseShaBeforeMerge} ` +
-        `after the merge state was read, and ${baselines.join(", ")} was ` +
-        "seeded below it; rebase onto the base branch and reseed the baseline",
+        `after the merge state was read, and ${measured.join(", ")} was ` +
+        "measured below it; rebase onto the base branch, reseed any baseline, " +
+        "and let CI re-run",
     };
   }
   return {
     gate: "baseline-freshness",
     status: "pass",
-    detail: `${baselines.length} baseline(s) seeded on a head current with ${baseShaBeforeMerge}`,
+    detail: `${measured.length} measured file(s) on a head current with ${baseShaBeforeMerge}`,
   };
 };
 

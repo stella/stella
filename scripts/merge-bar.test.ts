@@ -253,6 +253,28 @@ describe("merge bar", () => {
     ).toBe("merge");
   });
 
+  // A rule proves something about the tree it ran on: a pull request that adds
+  // one and a pull request that adds the shape it rejects are each green alone.
+  test("a pull request that changes a lint guard is held to the base", () => {
+    for (const guard of [
+      ".oxlint-plugins/no-bare-error.ts",
+      "oxlint.config.ts",
+      "scripts/lint-suppressions.ts",
+    ]) {
+      expect(
+        failedGate(
+          passingSnapshot({
+            pullRequest: {
+              ...passingSnapshot().pullRequest,
+              mergeStateStatus: "BEHIND",
+            },
+            changedFiles: [guard],
+          }),
+        ),
+      ).toEqual({ decision: "abort", reasons: ["BASELINE_SEEDED_OFF_BASE"] });
+    }
+  });
+
   test("a pull request carrying no baseline is not held to the base", () => {
     expect(
       evaluateMergeBar(
