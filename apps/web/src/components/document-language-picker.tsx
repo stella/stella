@@ -11,6 +11,7 @@ import {
   isDocumentTranslationSourceLanguageCode,
   type DocumentTranslationSourceLanguageCode,
 } from "@stll/api-contract/document-translation";
+import { compareByLocale } from "@stll/collation";
 import {
   Combobox,
   ComboboxEmpty,
@@ -22,7 +23,6 @@ import {
 
 import { matchesLanguageQuery } from "@/components/document-language-picker.logic";
 import { useLocale } from "@/i18n/formatting-context";
-import { compareByLocale } from "@/lib/collation";
 import {
   DEEPL_TARGET_LANGUAGES,
   type DeepLTargetLanguageCode,

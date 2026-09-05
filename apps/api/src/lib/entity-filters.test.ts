@@ -2,10 +2,9 @@ import { describe, expect, test } from "bun:test";
 import { PgDialect } from "drizzle-orm/pg-core";
 import fc from "fast-check";
 
+import { compareByLocale } from "@stll/collation";
 import type { ConditionNode } from "@stll/conditions";
 import { propertyConfig } from "@stll/property-testing";
-
-import { compareByLocale } from "@/api/lib/collation";
 
 import {
   applyFilters,

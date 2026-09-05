@@ -1,7 +1,8 @@
 // Pure helpers for streaming a folder subtree as a ZIP archive.
 // `download-zip.ts` wires these to the database, S3, and `client-zip`.
 
-import { compareCodepoint } from "@/api/lib/collation";
+import { compareCodeUnit } from "@stll/collation";
+
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 
 /** A folder descendant, with the fields needed to rebuild the tree. */
@@ -21,9 +22,9 @@ type BuildArchivePathsArgs = {
 // Deterministic archive entry order (id/name fields as stable sort keys, not
 // linguistic sorting) so the same subtree always streams identically.
 const compareArchiveNode = (a: ArchiveNode, b: ArchiveNode): number =>
-  compareCodepoint(a.parentId, b.parentId) ||
-  compareCodepoint(sanitizeFilename(a.name), sanitizeFilename(b.name)) ||
-  compareCodepoint(a.id, b.id);
+  compareCodeUnit(a.parentId, b.parentId) ||
+  compareCodeUnit(sanitizeFilename(a.name), sanitizeFilename(b.name)) ||
+  compareCodeUnit(a.id, b.id);
 
 const uniqueSegment = (seen: Set<string>, segment: string): string => {
   if (!seen.has(segment)) {

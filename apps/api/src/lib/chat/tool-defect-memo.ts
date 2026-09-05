@@ -1,4 +1,6 @@
-import { stableStringify } from "./stable-stringify";
+import { stableStringify } from "@stll/stable-stringify";
+
+import { toJsonValue } from "@/api/lib/json-value";
 
 /**
  * Per-turn memo of tool calls that failed with a `server-defect`
@@ -17,8 +19,11 @@ export type ChatToolDefectMemo = {
   recordDefect: (toolName: string, args: unknown) => void;
 };
 
+// Tool arguments reach the memo as `unknown` from the model runtime, which
+// decoded them from JSON; `toJsonValue` is where that becomes a fact the
+// fingerprint's input contract can rely on.
 const keyOf = (toolName: string, args: unknown): string =>
-  `${toolName}:${stableStringify(args)}`;
+  `${toolName}:${stableStringify(toJsonValue(args))}`;
 
 export const createChatToolDefectMemo = (): ChatToolDefectMemo => {
   const defects = new Set<string>();

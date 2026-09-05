@@ -12,9 +12,8 @@ import { panic } from "better-result";
 import JSZip from "jszip";
 import * as slimdom from "slimdom";
 
+import { compareCodeUnit } from "@stll/collation";
 import { parseCondition, type ConditionNode } from "@stll/template-conditions";
-
-import { compareCodepoint } from "@/api/lib/collation";
 
 import { parseBlockTree, scanBlockDirectives } from "./block-directives";
 import { PLACEHOLDER_RE } from "./discover-placeholders";
@@ -836,7 +835,7 @@ export const discoverTemplate = async (
   const placeholders: DiscoveredPlaceholder[] = [...placeholderCounts.entries()]
     // placeholder name is a template merge-field path (e.g. "client.name"),
     // not display text
-    .toSorted(([a], [b]) => compareCodepoint(a, b))
+    .toSorted(([a], [b]) => compareCodeUnit(a, b))
     .map(([name, count]) => ({ name, count }));
 
   // Build DiscoveredField[]
@@ -883,7 +882,7 @@ export const discoverTemplate = async (
   }
 
   // Sort fields by path (a template merge-field path, not display text)
-  discoveredFields.sort((a, b) => compareCodepoint(a.path, b.path));
+  discoveredFields.sort((a, b) => compareCodeUnit(a.path, b.path));
 
   return {
     placeholders,

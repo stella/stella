@@ -640,11 +640,5 @@
       "packages/scripts/src/model-catalog-discovery.ts": 1,
       "packages/scripts/src/tsgo-compiler-options.ts": 1
     }
-  },
-  "packages/template-conditions": {
-    "count": 1,
-    "files": {
-      "packages/template-conditions/src/path.ts": 1
-    }
   }
 }

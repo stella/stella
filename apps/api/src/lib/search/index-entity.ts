@@ -1,13 +1,14 @@
 import { panic } from "better-result";
 import { eq, sql } from "drizzle-orm";
 
+import { compareCodeUnit } from "@stll/collation";
+
 import { rootDb } from "@/api/db/root";
 import { entities, extractedContent } from "@/api/db/schema";
 import type { LinkMetadata, searchDocuments } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
-import { compareCodepoint } from "@/api/lib/collation";
 import { decryptContent } from "@/api/lib/content-encryption";
 import { timestampCasToken } from "@/api/lib/db/timestamp-cas";
 import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
@@ -193,7 +194,7 @@ const buildSearchDocument = async (
 
   // Sort by propertyId (an internal id) for deterministic title extraction
   const sortedFields = [...version.fields].toSorted((a, b) =>
-    compareCodepoint(a.propertyId, b.propertyId),
+    compareCodeUnit(a.propertyId, b.propertyId),
   );
 
   for (const field of sortedFields) {

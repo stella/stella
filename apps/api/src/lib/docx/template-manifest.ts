@@ -15,12 +15,12 @@ import JSZip from "jszip";
 import * as slimdom from "slimdom";
 import * as valibot from "valibot";
 
+import { compareCodeUnit } from "@stll/collation";
 import type { ConditionNode } from "@stll/conditions";
 import { conditionNodeSchema } from "@stll/conditions";
 import { isFieldPath } from "@stll/template-conditions";
 
 import { arrayOrEmpty } from "@/api/lib/array";
-import { compareCodepoint } from "@/api/lib/collation";
 
 import { isElement } from "./ooxml";
 import type {
@@ -637,12 +637,11 @@ const parseFieldMeta = (el: slimdom.Element): FieldMeta => {
 };
 
 const parseManifestXml = (xml: string): TemplateManifest | null => {
-  let doc: slimdom.Document;
-  try {
-    doc = slimdom.parseXmlDocument(xml);
-  } catch {
+  const document = Result.try(() => slimdom.parseXmlDocument(xml));
+  if (Result.isError(document)) {
     return null;
   }
+  const doc = document.value;
 
   const root = doc.documentElement;
   // Require the root element to actually be `template` *in* our namespace.
@@ -732,7 +731,7 @@ const compareCustomXmlSlots = (
   }
 
   // index is a DOCX custom-XML part slot index, not display text.
-  return compareCodepoint(left.index, right.index);
+  return compareCodeUnit(left.index, right.index);
 };
 
 /**

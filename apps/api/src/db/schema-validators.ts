@@ -16,7 +16,16 @@ import {
 
 const v1 = t.Literal(1);
 
-const namedOptionColor = t.UnionEnum([
+/**
+ * The sixteen preset colours a select option may carry.
+ *
+ * `@stll/ui`'s `option-color` module holds the same list, because it maps each
+ * name to a CSS custom property. The kit is published and deliberately carries
+ * no `@stll/*` runtime dependency, and this app must not import a React kit, so
+ * neither side can derive from the other today; a name added here has to be
+ * added there too, or the token resolves to the empty colour.
+ */
+const NAMED_OPTION_COLORS = [
   "red",
   "orange",
   "amber",
@@ -36,7 +45,9 @@ const namedOptionColor = t.UnionEnum([
   "purple",
   "fuchsia",
   "gray",
-]);
+] as const;
+
+const namedOptionColor = t.UnionEnum([...NAMED_OPTION_COLORS]);
 
 /** 6-character hex color (e.g. "FF0000"). */
 const hexColor = t.String({ pattern: "^[0-9A-Fa-f]{6}$" });

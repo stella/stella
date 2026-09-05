@@ -10,9 +10,8 @@
 import JSZip from "jszip";
 import * as slimdom from "slimdom";
 
+import { compareCodeUnit } from "@stll/collation";
 import { placeholderPattern } from "@stll/template-conditions";
-
-import { compareCodepoint } from "@/api/lib/collation";
 
 import { paragraphText, templateContentPartPaths, W_NS } from "./ooxml";
 import type { DiscoveredPlaceholder } from "./types";
@@ -73,7 +72,7 @@ export const discoverPlaceholders = async (
   return (
     [...counts.entries()]
       // placeholder name is a template merge-field path, not display text
-      .toSorted(([a], [b]) => compareCodepoint(a, b))
+      .toSorted(([a], [b]) => compareCodeUnit(a, b))
       .map(([name, count]) => ({ name, count }))
   );
 };

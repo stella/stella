@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { compareByLocale } from "@stll/collation";
 import { displayLanguageName, LANGUAGES, toLanguageCode } from "@stll/locales";
 import {
   AlertDialog,
@@ -72,7 +73,6 @@ import { useFormatter } from "@/i18n/formatting-context";
 import { useI18nStore } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
-import { compareByLocale } from "@/lib/collation";
 import { isDocxFile, TOOLBAR_ROW_MIN_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { userErrorMessage } from "@/lib/errors/user-safe";

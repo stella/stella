@@ -149,7 +149,12 @@ export type SafeIdType =
 export const isSafeIdValue = (value: string): boolean =>
   value.length > 0 && value.isWellFormed();
 
-const safeIdSchema = v.pipe(
+/**
+ * The one validator behind every brander: a consumer that narrows the id set
+ * (the api closes `SafeIdType`) parses with this schema rather than restating
+ * the check and its message.
+ */
+export const safeIdSchema = v.pipe(
   v.string(),
   v.check(isSafeIdValue, "Expected a non-empty, well-formed identifier"),
   v.brand("SafeId"),

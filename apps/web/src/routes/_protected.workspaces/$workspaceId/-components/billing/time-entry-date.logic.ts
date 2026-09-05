@@ -1,4 +1,5 @@
-import { addDays, parseIsoDateLocal } from "@/lib/dates";
+import { addDays, parseIsoDateLocal } from "@stll/time";
+
 import { localISODate } from "@/lib/local-iso-date";
 
 const MAX_TIME_ENTRY_AGE_DAYS = 90;

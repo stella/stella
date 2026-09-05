@@ -12,8 +12,7 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 //
 // Route through the shared collation helper instead, which caches one
 // `Intl.Collator` per locale:
-//   apps/web -> getCollator / compareByLocale from @/lib/collation
-//   apps/api -> getCollator / compareByLocale from @/api/lib/collation
+//   getCollator / compareByLocale from @stll/collation
 //
 // Not every `.localeCompare(` call sorts display text — comparing opaque
 // ids, file paths, or other non-linguistic keys for a deterministic (not
@@ -63,12 +62,12 @@ export default eslintCompatPlugin({
 
         return {
           before() {
-            const options = context.options?.[0] ?? {};
+            const options: unknown = context.options[0];
             const configuredFiles =
               typeof options === "object" &&
               options !== null &&
               !Array.isArray(options)
-                ? options["allowedFiles"]
+                ? Reflect.get(options, "allowedFiles")
                 : undefined;
             const allowedFiles = Array.isArray(configuredFiles)
               ? configuredFiles.filter(
@@ -80,10 +79,7 @@ export default eslintCompatPlugin({
           },
           CallExpression(node) {
             const callee = node.callee;
-            if (
-              callee.type !== "MemberExpression" ||
-              callee.computed !== false
-            ) {
+            if (callee.type !== "MemberExpression" || callee.computed) {
               return;
             }
             if (getPropertyName(callee.property) !== "localeCompare") {

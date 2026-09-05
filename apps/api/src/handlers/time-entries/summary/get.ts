@@ -3,12 +3,12 @@ import { and, eq, gte, lte, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import type { TimeEntrySummary } from "@stll/api-contract/time-entry-types";
+import { addDays, parseIsoDateLocal } from "@stll/time";
 
 import { member, user } from "@/api/db/auth-schema";
 import { timeEntries, workspaceMembers } from "@/api/db/schema";
 import { canApproveTimeEntries } from "@/api/handlers/time-entries/authorization";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import { addDays, parseIsoDateLocal } from "@/api/lib/dates";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 

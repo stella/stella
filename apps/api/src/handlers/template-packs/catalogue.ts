@@ -5,6 +5,7 @@
  * first. Pure over the catalogue so the list handler and its tests share it.
  */
 
+import { compareByLocale, compareCodeUnit } from "@stll/collation";
 import type { CountryCode } from "@stll/country-codes";
 import {
   createBundledTemplatePackCatalogue,
@@ -16,7 +17,6 @@ import type {
 } from "@stll/template-packs/schema";
 
 import { env } from "@/api/env";
-import { compareByLocale, compareCodepoint } from "@/api/lib/collation";
 import type { MemberRole } from "@/api/lib/member-roles";
 
 let catalogue: TemplatePackCatalogue | null = null;
@@ -165,6 +165,6 @@ export const rankTemplatePacks = (
       if (byLanguage !== 0) {
         return byLanguage;
       }
-      return compareNames(a.name, b.name) || compareCodepoint(a.id, b.id);
+      return compareNames(a.name, b.name) || compareCodeUnit(a.id, b.id);
     });
 };

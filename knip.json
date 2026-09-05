@@ -83,6 +83,9 @@
       "entry": ["src/index.ts", "src/**/*.test.ts"],
       "ignoreDependencies": ["@stll/api"]
     },
+    "packages/collation": {
+      "entry": ["src/index.ts", "src/**/*.test.ts"]
+    },
     "packages/legal-atlas": {
       "entry": ["src/index.ts", "src/**/*.test.ts"]
     },
@@ -102,6 +105,9 @@
     "packages/skills": {
       "entry": ["scripts/*.ts", "src/**/*.test.ts"]
     },
+    "packages/stable-stringify": {
+      "entry": ["src/index.ts", "src/**/*.test.ts"]
+    },
     "packages/template-conditions": {
       "entry": ["src/index.ts", "src/**/*.test.ts"]
     },
@@ -119,6 +125,9 @@
         "src/styles/theme.css",
         "tsdown.config.ts"
       ]
+    },
+    "packages/user-agent": {
+      "entry": ["src/index.ts", "src/**/*.test.ts"]
     }
   },
   "ignore": [".oxlint-plugins/**", ".claude/**"],

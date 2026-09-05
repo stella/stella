@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { makeZip } from "client-zip";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
+import { compareCodeUnit } from "@stll/collation";
+
 import type { SafeDb } from "@/api/db/safe-db";
 import { entities, entityVersions, fields } from "@/api/db/schema";
 import {
@@ -21,7 +23,6 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { compareCodepoint } from "@/api/lib/collation";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import {
   FetchBoundaryError,
@@ -233,8 +234,8 @@ const downloadZipHandler = async function* ({
   });
   rawFiles.sort(
     (a, b) =>
-      compareCodepoint(a.rawPath, b.rawPath) ||
-      compareCodepoint(a.fileId, b.fileId),
+      compareCodeUnit(a.rawPath, b.rawPath) ||
+      compareCodeUnit(a.fileId, b.fileId),
   );
 
   const seenPaths = new Set<string>();

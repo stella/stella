@@ -1,5 +1,6 @@
+import { addDays, parseIsoDateLocal } from "@stll/time";
+
 import type { TranslationKey } from "@/i18n/types";
-import { addDays, parseIsoDateLocal } from "@/lib/dates";
 import type { MatterActivityItem } from "@/lib/workspaces/queries";
 
 /**

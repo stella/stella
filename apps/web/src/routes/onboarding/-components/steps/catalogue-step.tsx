@@ -17,6 +17,7 @@ import {
   recommendedSlugsForJurisdictions,
   type LoadedCatalogueEntry,
 } from "@stll/catalogue";
+import { compareByLocale } from "@stll/collation";
 import { Button } from "@stll/ui/button";
 import type { ContextMenuAction } from "@stll/ui/context-menu";
 import { Form } from "@stll/ui/form";
@@ -35,7 +36,6 @@ import {
 } from "@/components/catalogue/catalogue-row";
 import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
 import { useLocale } from "@/i18n/formatting-context";
-import { compareByLocale } from "@/lib/collation";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
 import { sanitizeHref } from "@/lib/sanitize-href";
 import { isCatalogueEntryAvailableDuringOnboarding } from "@/routes/onboarding/-components/onboarding-catalogue-setup.logic";

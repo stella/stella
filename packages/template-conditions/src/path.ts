@@ -4,7 +4,14 @@
  * import it without a dependency cycle.
  */
 
-/** Narrow `unknown` to a string-keyed record. */
+/**
+ * Narrow `unknown` to something a path segment can be read from.
+ *
+ * Unlike the same-named predicates that screen JSON payload shapes, this one
+ * accepts arrays on purpose: a dotted path segment may be an array index
+ * (`parties.1.name`), and rejecting arrays would silently resolve those to
+ * `undefined`.
+ */
 export const isRecord = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null;
 

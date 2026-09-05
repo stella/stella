@@ -1,4 +1,4 @@
-import { compareByLocale } from "@/lib/collation";
+import { compareByLocale } from "@stll/collation";
 
 type ExistingWorkspace = {
   client?: { id: string } | null;

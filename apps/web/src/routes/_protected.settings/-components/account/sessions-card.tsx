@@ -30,6 +30,7 @@ import {
   TableRow,
 } from "@stll/ui/table";
 import { stellaToast } from "@stll/ui/toast";
+import { parseUserAgent } from "@stll/user-agent";
 
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
 import Tooltip from "@/components/tooltip";
@@ -40,7 +41,6 @@ import type { SessionRevocationToken } from "@/lib/auth";
 import { sessionOptions } from "@/lib/auth-queries";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
-import { parseUserAgent } from "@/lib/parse-user-agent";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 
 const MISSING_VALUE = "-";

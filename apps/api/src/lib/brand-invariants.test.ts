@@ -35,7 +35,7 @@ test("SafeId constructors return the requested brand", () => {
 
 test("SafeId constructors reject empty identifiers", () => {
   expect(() => toSafeId<"entity">("")).toThrow(
-    "Expected a non-empty identifier",
+    "Expected a non-empty, well-formed identifier",
   );
 });
 

@@ -1,4 +1,4 @@
-import { addDays, parseIsoDateLocal } from "@/lib/dates";
+import { addDays, parseIsoDateLocal } from "@stll/time";
 
 type AuditLogDateRangeInput = {
   from: string | null;

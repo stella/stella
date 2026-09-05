@@ -16,6 +16,7 @@ import {
 import { useTranslations } from "use-intl";
 
 import { EU_MEMBER_STATES } from "@stll/catalogue";
+import { compareByLocale } from "@stll/collation";
 import { Button } from "@stll/ui/button";
 import type { ContextMenuAction } from "@stll/ui/context-menu";
 import {
@@ -42,7 +43,6 @@ import {
 } from "@/components/responsive-action-toolbar";
 import { useLocale } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
-import { compareByLocale } from "@/lib/collation";
 import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";

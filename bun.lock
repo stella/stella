@@ -85,6 +85,7 @@
         "@stll/catalogue": "workspace:*",
         "@stll/chat-limits": "workspace:*",
         "@stll/cli": "workspace:*",
+        "@stll/collation": "workspace:*",
         "@stll/conditions": "workspace:*",
         "@stll/country-codes": "workspace:*",
         "@stll/docx-core": "catalog:",
@@ -99,11 +100,13 @@
         "@stll/money": "workspace:*",
         "@stll/permissions": "workspace:*",
         "@stll/skills": "workspace:*",
+        "@stll/stable-stringify": "workspace:*",
         "@stll/template-conditions": "workspace:*",
         "@stll/template-packs": "workspace:*",
         "@stll/text-normalize": "workspace:*",
         "@stll/time": "workspace:*",
         "@stll/transactional": "workspace:*",
+        "@stll/user-agent": "workspace:*",
         "@t3-oss/env-core": "catalog:",
         "@tanstack/ai": "catalog:",
         "@tanstack/ai-anthropic": "catalog:",
@@ -325,6 +328,7 @@
         "@stll/catalogue": "workspace:*",
         "@stll/chat": "workspace:*",
         "@stll/chat-limits": "workspace:*",
+        "@stll/collation": "workspace:*",
         "@stll/conditions": "workspace:*",
         "@stll/country-codes": "workspace:*",
         "@stll/docx-core": "catalog:",
@@ -340,11 +344,13 @@
         "@stll/permissions": "workspace:*",
         "@stll/skills": "workspace:*",
         "@stll/ssr-kit": "workspace:^",
+        "@stll/stable-stringify": "workspace:*",
         "@stll/start-runtime": "workspace:^",
         "@stll/template-conditions": "workspace:*",
         "@stll/text-normalize": "workspace:*",
         "@stll/time": "workspace:*",
         "@stll/ui": "workspace:*",
+        "@stll/user-agent": "workspace:*",
         "@stll/workspace-ui": "workspace:*",
         "@streamdown/cjk": "^1.0.2",
         "@streamdown/math": "^1.0.2",
@@ -622,6 +628,14 @@
         "bun-types": "catalog:",
       },
     },
+    "packages/collation": {
+      "name": "@stll/collation",
+      "version": "0.0.0",
+      "devDependencies": {
+        "@stll/typescript-config": "workspace:*",
+        "bun-types": "catalog:",
+      },
+    },
     "packages/conditions": {
       "name": "@stll/conditions",
       "version": "0.3.0",
@@ -814,6 +828,14 @@
         "tsdown": "catalog:",
       },
     },
+    "packages/stable-stringify": {
+      "name": "@stll/stable-stringify",
+      "version": "0.0.0",
+      "devDependencies": {
+        "@stll/typescript-config": "workspace:*",
+        "bun-types": "catalog:",
+      },
+    },
     "packages/start-runtime": {
       "name": "@stll/start-runtime",
       "version": "0.1.0",
@@ -930,6 +952,14 @@
         "react": ">=19",
         "react-dom": ">=19",
         "tailwindcss": "^4.3.0",
+      },
+    },
+    "packages/user-agent": {
+      "name": "@stll/user-agent",
+      "version": "0.0.0",
+      "devDependencies": {
+        "@stll/typescript-config": "workspace:*",
+        "bun-types": "catalog:",
       },
     },
     "packages/workspace-model": {
@@ -2483,6 +2513,8 @@
 
     "@stll/collab": ["@stll/collab@workspace:apps/collab"],
 
+    "@stll/collation": ["@stll/collation@workspace:packages/collation"],
+
     "@stll/conditions": ["@stll/conditions@workspace:packages/conditions"],
 
     "@stll/country-codes": ["@stll/country-codes@workspace:packages/country-codes"],
@@ -2535,6 +2567,8 @@
 
     "@stll/ssr-testkit": ["@stll/ssr-testkit@workspace:packages/ssr-testkit"],
 
+    "@stll/stable-stringify": ["@stll/stable-stringify@workspace:packages/stable-stringify"],
+
     "@stll/start-runtime": ["@stll/start-runtime@workspace:packages/start-runtime"],
 
     "@stll/stdnum": ["@stll/stdnum@2.3.2", "", { "optionalDependencies": { "@stll/stdnum-darwin-arm64": "2.3.2", "@stll/stdnum-darwin-x64": "2.3.2", "@stll/stdnum-linux-arm64-gnu": "2.3.2", "@stll/stdnum-linux-x64-gnu": "2.3.2", "@stll/stdnum-wasm": "2.3.2", "@stll/stdnum-win32-x64-msvc": "2.3.2" } }, "sha512-HnICsbwqTwbttzvEBwOPJQ2RCi9MzWrNwq7aZLDhRtt+Wo7EfTtStpnyJ3ZVY7Z2AyhA2ebnPQCo1hFQdVyftQ=="],
@@ -2564,6 +2598,8 @@
     "@stll/typescript-config": ["@stll/typescript-config@workspace:packages/typescript-config"],
 
     "@stll/ui": ["@stll/ui@workspace:packages/ui"],
+
+    "@stll/user-agent": ["@stll/user-agent@workspace:packages/user-agent"],
 
     "@stll/web": ["@stll/web@workspace:apps/web"],
 

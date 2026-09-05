@@ -3,6 +3,7 @@ import { and, asc, eq, gt, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import { isEntityKind, resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { compareCodeUnit } from "@stll/collation";
 
 import { rootDb } from "@/api/db/root";
 import { contacts, workspaceContacts, workspaces } from "@/api/db/schema";
@@ -15,7 +16,6 @@ import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decisionIdentifierProjection } from "@/api/lib/case-law/decision-identifiers";
 import { redistributableSourceJoin } from "@/api/lib/case-law/search-sql";
-import { compareCodepoint } from "@/api/lib/collation";
 import { LIMITS } from "@/api/lib/limits";
 import {
   brandPersistedCaseLawDecisionId,
@@ -371,7 +371,7 @@ const facetBuckets = (
       return bucket;
     })
     // facet value is a raw filter key (id/enum), a count tiebreak, not display text
-    .sort((a, b) => b.count - a.count || compareCodepoint(a.value, b.value));
+    .sort((a, b) => b.count - a.count || compareCodeUnit(a.value, b.value));
 
 const totalFrom = (rows: CountRow[]): number => Number(rows.at(0)?.total ?? 0);
 

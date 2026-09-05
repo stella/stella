@@ -25,6 +25,7 @@ import Elysia, { t } from "elysia";
 import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
 import { ac, roles } from "@stll/permissions";
 import type { PermissionInput } from "@stll/permissions";
+import { parseUserAgent } from "@stll/user-agent";
 
 import { member, user as authUser } from "@/api/db/auth-schema";
 import { rootDb, rlsDb } from "@/api/db/root";
@@ -100,7 +101,6 @@ import {
   completeOrganizationDeletion,
   OrganizationStorageTeardownBoundError,
 } from "@/api/lib/organization-storage-teardown";
-import { parseUserAgent } from "@/api/lib/parse-user-agent";
 import {
   hasMemberPermission,
   readAuthorizedMemberRole,

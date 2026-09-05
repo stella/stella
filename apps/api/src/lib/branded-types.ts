@@ -1,16 +1,7 @@
 import * as v from "valibot";
 
-import {
-  isSafeIdValue,
-  type SafeId as PortableSafeId,
-  type SafeIdType,
-} from "@stll/api-contract";
-
-const safeIdSchema = v.pipe(
-  v.string(),
-  v.check(isSafeIdValue, "Expected a non-empty identifier"),
-  v.brand("SafeId"),
-);
+import type { SafeId as PortableSafeId, SafeIdType } from "@stll/api-contract";
+import { safeIdSchema } from "@stll/api-contract/safe-id";
 
 export type { SafeIdType } from "@stll/api-contract";
 
@@ -35,6 +26,12 @@ export type AuthProviderIdType = (typeof AUTH_PROVIDER_ID_TYPES)[number];
 /** Id types this codebase mints itself, as UUIDv7. */
 export type MintedSafeIdType = Exclude<SafeIdType, AuthProviderIdType>;
 
+/**
+ * The api's brander over the contract's validator, narrowed to the id types
+ * this codebase knows. The portable brander accepts any string as the type
+ * parameter, which would let a misspelled `toSafeId<"mater">` compile; inside
+ * the api the set is closed, which is why the api never imports it.
+ */
 export const toSafeId = <T extends SafeIdType>(value: string): SafeId<T> =>
   v.parse(safeIdSchema, value);
 
