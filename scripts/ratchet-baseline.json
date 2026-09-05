@@ -576,8 +576,10 @@
     }
   },
   "no-db-await-in-loop-suppressions": {
-    "count": 47,
+    "count": 49,
     "files": {
+      "apps/api/scripts/seed-matter-activity.ts": 1,
+      "apps/api/scripts/seed-usage-policies.ts": 1,
       "apps/api/src/handlers/case-law/decisions/slug-backfill.ts": 2,
       "apps/api/src/handlers/case-law/ingestion/pipeline.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/status.ts": 8,
@@ -607,13 +609,16 @@
     }
   },
   "no-network-await-in-loop-suppressions": {
-    "count": 10,
+    "count": 13,
     "files": {
+      "apps/api/scripts/seed-firm-knowledge.ts": 1,
       "apps/api/src/handlers/external-preview/preview.ts": 1,
+      "apps/web/src/components/workspaces/copy-to-matter-dialog.tsx": 1,
       "apps/web/src/lib/workspaces/queries/entities.ts": 3,
       "apps/web/src/lib/workspaces/queries/legal-lists.ts": 1,
       "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx": 3,
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/row-actions.tsx": 1,
       "packages/scripts/src/dev-runner.ts": 1
     }
   },

@@ -23,13 +23,18 @@
 //   - A method call on a binding imported from `@aws-sdk/*`,
 //     `@stll/api-client`, or the Eden client (`@/lib/eden-client` and its
 //     `@/lib/api` barrel, which export `api` / `memoriesApi`), e.g.
-//     `await api.documents({ id }).get()`.
+//     `await api.documents({ id }).get()`. Computed access is traversed, so a
+//     generated hyphenated route (`api["copy-to-workspace"].post(...)`) still
+//     resolves to the imported client.
 //
-// "Inside a loop" walks up `parent` links from the await, stopping at the
-// first `for` / `for-of` / `for-in` / `while` / `do-while` whose BODY is the
-// ancestor (an await in the loop head is not a per-iteration call), or at the
-// first function boundary — a network await inside a nested function belongs
-// to that function's own call site.
+// "Inside a loop" walks up `parent` links from the await to the first
+// position that re-runs on every iteration: a loop BODY, a `while` / `do`
+// test, or a `for` test or update. The one-time positions — a `for`
+// initializer and a `for-of` / `for-in` right-hand side — are not per-iteration
+// work. The walk stops at the first function boundary, since a network await
+// inside a nested function belongs to that function's own call site; a
+// `Result.tryPromise` callback is not such a boundary, because it runs where
+// it stands.
 //
 // `yield* Result.await(fetchWithTimeout(...))` is the same operation written
 // on the Result boundary and is treated as an await.
@@ -65,17 +70,13 @@ import {
   getPropertyName,
   isAstNode,
   isIdentifier,
+  isPerIterationLoopPosition,
+  isResultTryPromiseCallback,
   isStringLiteral,
+  LOOP_NODE_TYPES,
+  resolveChainRootName,
   unwrapExpression,
 } from "./utils.ts";
-
-const LOOP_TYPES = new Set([
-  "ForStatement",
-  "ForOfStatement",
-  "ForInStatement",
-  "WhileStatement",
-  "DoWhileStatement",
-]);
 
 const FUNCTION_TYPES = new Set([
   "FunctionDeclaration",
@@ -119,20 +120,6 @@ const getField = (node: unknown, field: string): unknown => {
 const isComputed = (node: unknown): boolean =>
   getField(node, "computed") === true;
 
-// Leftmost identifier of a member/call chain: `api.v1.documents.get()` and
-// `client.send(cmd)` both resolve to their root binding.
-const getChainRootName = (node: unknown): string | null => {
-  const current = unwrapExpression(node);
-  const type = getType(current);
-  if (type === "CallExpression") {
-    return getChainRootName(getField(current, "callee"));
-  }
-  if (type === "MemberExpression" && !isComputed(current)) {
-    return getChainRootName(getField(current, "object"));
-  }
-  return isIdentifier(current) ? current.name : null;
-};
-
 const isGlobalFetchCallee = (callee: unknown): boolean => {
   if (isIdentifier(callee, "fetch")) {
     return true;
@@ -140,7 +127,7 @@ const isGlobalFetchCallee = (callee: unknown): boolean => {
   if (getType(callee) !== "MemberExpression" || isComputed(callee)) {
     return false;
   }
-  const objectName = getChainRootName(getField(callee, "object"));
+  const objectName = resolveChainRootName(getField(callee, "object"));
   return (
     objectName !== null &&
     GLOBAL_FETCH_OBJECTS.has(objectName) &&
@@ -166,27 +153,31 @@ const isAwsCommandSend = (node: unknown): boolean => {
   if (getType(first) !== "NewExpression") {
     return false;
   }
-  const constructorName = getChainRootName(getField(first, "callee"));
+  const constructorName = resolveChainRootName(getField(first, "callee"));
   return constructorName !== null && constructorName.endsWith("Command");
 };
 
 const isClientModuleSource = (source: string): boolean =>
   CLIENT_MODULES.has(source) || source.startsWith(CLIENT_MODULE_PREFIX);
 
-// Walk up from an awaited expression to the first loop body or function
-// boundary. Returns true only for a loop the await runs once per iteration
-// of.
-const isInsideLoopBody = (node: unknown): boolean => {
+// Walk up from an awaited expression to the first per-iteration loop position
+// or function boundary. A `Result.tryPromise` callback is not a boundary: it
+// runs where it stands, so the walk continues through it.
+const runsOncePerIteration = (node: unknown): boolean => {
   let child = node;
   let current = getField(node, "parent");
 
   while (current !== null && current !== undefined) {
     const type = getType(current);
-    if (type !== null && LOOP_TYPES.has(type)) {
-      if (getField(current, "body") === child) {
+    if (type !== null && LOOP_NODE_TYPES.has(type)) {
+      if (isPerIterationLoopPosition(current, child)) {
         return true;
       }
-    } else if (type !== null && FUNCTION_TYPES.has(type)) {
+    } else if (
+      type !== null &&
+      FUNCTION_TYPES.has(type) &&
+      !isResultTryPromiseCallback(current)
+    ) {
       return false;
     }
     child = current;
@@ -243,7 +234,7 @@ export default eslintCompatPlugin({
           if (isAwsCommandSend(node)) {
             return true;
           }
-          const root = getChainRootName(node);
+          const root = resolveChainRootName(node);
           return (
             root !== null &&
             (fetchBindings.has(root) || clientBindings.has(root))
@@ -254,7 +245,7 @@ export default eslintCompatPlugin({
           node: ESTree.AwaitExpression | ESTree.YieldExpression,
           argument: unknown,
         ): void => {
-          if (isNetworkCall(argument) && isInsideLoopBody(node)) {
+          if (isNetworkCall(argument) && runsOncePerIteration(node)) {
             context.report({ node, messageId: "noNetworkAwaitInLoop" });
           }
         };

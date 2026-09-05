@@ -2934,13 +2934,22 @@ export default defineConfig({
     {
       // no-db-await-in-loop flags an `await db...` / `await tx...` /
       // `await safeDb(...)` or `yield* Result.await(safeDb(...))` lexically
-      // inside a loop body, plus a
+      // inside a loop position that re-runs per iteration, plus a
       // `Promise.all(items.map(...))` fan-out — the N+1 antipattern. Scoped
-      // to backend source, where `db`/`tx`/`safeDb` are Drizzle handles;
-      // test files intentionally exercise unbatched loops in fixtures/mocks
-      // and are excluded.
-      files: ["apps/api/src/**/*.ts"],
-      excludeFiles: ["apps/api/src/**/*.test.ts", "apps/api/src/tests/**/*.ts"],
+      // to backend source and the workspace scripts, where `db`/`tx`/`safeDb`
+      // are Drizzle handles; test files intentionally exercise unbatched
+      // loops in fixtures/mocks and are excluded.
+      files: [
+        "apps/api/src/**/*.ts",
+        "apps/*/scripts/**/*.ts",
+        "packages/*/scripts/**/*.ts",
+      ],
+      excludeFiles: [
+        "apps/api/src/**/*.test.ts",
+        "apps/api/src/tests/**/*.ts",
+        "**/*.test.{ts,tsx}",
+        "**/*.spec.{ts,tsx}",
+      ],
       rules: {
         "no-db-await-in-loop/no-db-await-in-loop": "error",
       },
@@ -2954,6 +2963,8 @@ export default defineConfig({
       files: [
         "apps/*/src/**/*.{ts,tsx}",
         "packages/*/src/**/*.{ts,tsx}",
+        "apps/*/scripts/**/*.ts",
+        "packages/*/scripts/**/*.ts",
         "scripts/**/*.ts",
       ],
       excludeFiles: [

@@ -26,6 +26,9 @@ declare const ids: string[];
 declare const urls: string[];
 declare const Result: {
   await: <T>(promise: Promise<T>) => AsyncGenerator<never, T, unknown>;
+  tryPromise: <T>(
+    source: (() => Promise<T>) | { try: () => Promise<T>; catch: unknown },
+  ) => Promise<T>;
 };
 declare const stream: AsyncIterable<Uint8Array>;
 declare function consume(chunk: Uint8Array): void;
@@ -100,6 +103,57 @@ export const paginatedCursorWalk = async () => {
   }
 };
 
+// A `while` test re-runs on every iteration, so an await there is as
+// per-iteration as one in the body.
+export const awaitInWhileTest = async () => {
+  let attempts = 0;
+  // oxlint-disable-next-line no-network-await-in-loop/no-network-await-in-loop -- fixture: the probe in the loop test runs once per iteration
+  while (!(await fetch("/ready")).ok && attempts < 5) {
+    attempts += 1;
+  }
+};
+
+export const awaitInForUpdate = async () => {
+  for (
+    let page = 0;
+    page < 5;
+    // oxlint-disable-next-line no-network-await-in-loop/no-network-await-in-loop -- fixture: the update expression runs once per iteration
+    page = (await fetch(`/pages/${String(page)}`)).status
+  ) {
+    collect(page);
+  }
+};
+
+// `Result.tryPromise` runs its callback where it stands: the await inside it
+// is the loop's own work, in both the bare and the object form.
+export const resultTryPromiseInForOf = async () => {
+  for (const url of urls) {
+    // oxlint-disable-next-line no-network-await-in-loop/no-network-await-in-loop -- fixture: the tryPromise callback is part of the loop body
+    collect(await Result.tryPromise(async () => await fetch(url)));
+  }
+};
+
+export const resultTryPromiseObjectFormInForOf = async () => {
+  for (const url of urls) {
+    collect(
+      await Result.tryPromise({
+        // oxlint-disable-next-line no-network-await-in-loop/no-network-await-in-loop -- fixture: the object form's `try` callback is part of the loop body
+        try: async () => await fetchWithTimeout(url, { timeoutMs: 5000 }),
+        catch: (cause: unknown) => cause,
+      }),
+    );
+  }
+};
+
+// A generated route name that is not a valid identifier is reached through
+// computed access; its root is still the imported client.
+export const computedEdenRouteInForOf = async () => {
+  for (const id of ids) {
+    // oxlint-disable-next-line no-network-await-in-loop/no-network-await-in-loop -- fixture: computed access resolves to the imported client root
+    collect(await api.workspaces["copy-to-workspace"].post({ id }));
+  }
+};
+
 // --- Cases the rule must NOT flag ---
 
 // The bounded fan-out this rule asks for.
@@ -129,10 +183,17 @@ export const definedNotAwaited = () => {
   return loaders;
 };
 
-// An await in the loop head runs once, not once per iteration.
+// A `for-of` right-hand side and a `for` initializer are evaluated once, not
+// once per iteration.
 export const awaitInLoopHead = async () => {
   for (const url of (await fetch("/list")).headers.keys()) {
     collect(url);
+  }
+};
+
+export const awaitInForInitializer = async () => {
+  for (let page = (await fetch("/pages/first")).status; page < 5; page += 1) {
+    collect(page);
   }
 };
 

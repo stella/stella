@@ -604,6 +604,7 @@ export const seedFirmKnowledge = async ({
       }
 
       const body = await Bun.file(file.absolutePath).bytes();
+      // oxlint-disable-next-line no-network-await-in-loop/no-network-await-in-loop -- each upload holds a whole seed file in memory; sequential keeps peak memory at one file and names the first upload that fails
       const put = await fetch(url, {
         body,
         // Sent verbatim: content-type is part of the signed set, so composing

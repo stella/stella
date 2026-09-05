@@ -140,3 +140,94 @@ export const getImportLocalName = (specifier: unknown): string | null => {
   }
   return isIdentifier(specifier.local) ? specifier.local.name : null;
 };
+
+// --- Loop and async-boundary shape, shared by the await-in-loop rules -------
+//
+// `no-db-await-in-loop` and `no-network-await-in-loop` must agree on what
+// counts as per-iteration work, so the shape lives here once instead of in two
+// hand-kept copies.
+
+// Positions of a loop node that re-run on every iteration. A `for`
+// initializer and a `for-of` / `for-in` right-hand side are evaluated once, so
+// an await there costs one round-trip, not one per item.
+const PER_ITERATION_LOOP_FIELDS: Record<string, readonly string[]> = {
+  ForStatement: ["body", "test", "update"],
+  ForOfStatement: ["body"],
+  ForInStatement: ["body"],
+  WhileStatement: ["body", "test"],
+  DoWhileStatement: ["body", "test"],
+};
+
+export const LOOP_NODE_TYPES: ReadonlySet<string> = new Set(
+  Object.keys(PER_ITERATION_LOOP_FIELDS),
+);
+
+export const isPerIterationLoopPosition = (
+  loop: unknown,
+  child: unknown,
+): boolean => {
+  if (!isAstNode(loop)) {
+    return false;
+  }
+  const fields = PER_ITERATION_LOOP_FIELDS[loop.type];
+  return fields !== undefined && fields.some((field) => loop[field] === child);
+};
+
+const isResultTryPromiseArgument = (node: unknown): boolean => {
+  if (!isAstNode(node)) {
+    return false;
+  }
+  const call = node.parent;
+  if (
+    !isAstNode(call) ||
+    call.type !== "CallExpression" ||
+    !isMemberAccess(call.callee, "Result", "tryPromise")
+  ) {
+    return false;
+  }
+  return Array.isArray(call.arguments) && call.arguments.includes(node);
+};
+
+// `Result.tryPromise(async () => ...)` and its object form
+// `Result.tryPromise({ try: async () => ..., catch })` run the callback where
+// it stands. Inside a loop that callback is the loop's own work, so a walk
+// looking for the enclosing loop passes through this boundary instead of
+// stopping at it.
+export const isResultTryPromiseCallback = (fnNode: unknown): boolean => {
+  if (!isAstNode(fnNode)) {
+    return false;
+  }
+  const parent = fnNode.parent;
+  if (
+    isAstNode(parent) &&
+    parent.type === "Property" &&
+    parent.value === fnNode &&
+    getPropertyName(parent.key) === "try"
+  ) {
+    const objectExpression = parent.parent;
+    return (
+      isAstNode(objectExpression) &&
+      objectExpression.type === "ObjectExpression" &&
+      isResultTryPromiseArgument(objectExpression)
+    );
+  }
+  return isResultTryPromiseArgument(fnNode);
+};
+
+// Leftmost identifier of a member/call chain, descending through
+// `CallExpression.callee` and `MemberExpression.object`. Computed access is
+// traversed too: a generated route reads `api["copy-to-workspace"].post()`,
+// and its root is still the imported client.
+export const resolveChainRootName = (node: unknown): string | null => {
+  const current = unwrapExpression(node);
+  if (!isAstNode(current)) {
+    return null;
+  }
+  if (current.type === "CallExpression") {
+    return resolveChainRootName(current.callee);
+  }
+  if (current.type === "MemberExpression") {
+    return resolveChainRootName(current.object);
+  }
+  return isIdentifier(current) ? current.name : null;
+};

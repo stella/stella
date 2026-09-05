@@ -117,6 +117,7 @@ export const CopyToMatterDialog = ({
     let firstErrorMessage: string | null = null;
     for (const { entityId } of transferEntities) {
       const result = await Result.tryPromise(async () => {
+        // oxlint-disable-next-line no-network-await-in-loop/no-network-await-in-loop -- sequential bulk copy/move: a partial failure leaves a deterministic prefix transferred, and the run continues to report the first error and the count
         const { data, error } = await api
           .entities({ workspaceId: toSafeId<"workspace">(sourceWorkspaceId) })
           ["copy-to-workspace"].post({
