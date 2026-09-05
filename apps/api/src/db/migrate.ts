@@ -10,7 +10,7 @@ import nodePath from "node:path";
 import { resolveDatabaseUrl } from "../db-url";
 import { assertMigrationHistory } from "../lib/db/migration-history";
 import {
-  CORPUS_SCHEMA_LANE_LOCK_SQL,
+  CORPUS_SCHEMA_LANE_LOCK_STATEMENTS,
   CORPUS_SCHEMA_LANE_UNLOCK_SQL,
 } from "./corpus-schema-lane";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
@@ -106,8 +106,12 @@ let laneHeld = false;
 const connection = await client.reserve();
 try {
   await connection.unsafe(bootstrapRoleSql);
-  await connection.unsafe(CORPUS_SCHEMA_LANE_LOCK_SQL);
+  const [liftTimeout, takeLane, restoreTimeout] =
+    CORPUS_SCHEMA_LANE_LOCK_STATEMENTS;
+  await connection.unsafe(liftTimeout);
+  await connection.unsafe(takeLane);
   laneHeld = true;
+  await connection.unsafe(restoreTimeout);
   const database = drizzle({ client: connection });
   await migrate(database, { migrationsFolder });
   await assertMigrationHistory({

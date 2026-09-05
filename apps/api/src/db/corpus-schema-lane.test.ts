@@ -1,10 +1,13 @@
 import { expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import nodePath from "node:path";
 
 import { CASE_LAW_MAINTENANCE_LANE } from "@/api/lib/case-law/maintenance-lane";
 
 import {
   CORPUS_SCHEMA_LANE,
   CORPUS_SCHEMA_LANE_LOCK_SQL,
+  CORPUS_SCHEMA_LANE_LOCK_STATEMENTS,
   CORPUS_SCHEMA_LANE_RETRY_MS,
   CORPUS_SCHEMA_LANE_TRY_SHARED_XACT_SQL,
   CORPUS_SCHEMA_LANE_UNLOCK_SQL,
@@ -146,4 +149,36 @@ test("a budget that is not a multiple of the retry pause is honoured exactly", a
   );
   expect(rejection).toMatchObject({ waitedMs: 300 });
   expect(refused.attempts.filter((step) => step === "begin")).toHaveLength(3);
+});
+
+test("the exclusive wait runs with the statement timeout off and restores it once held", () => {
+  const [lift, lock, restore] = CORPUS_SCHEMA_LANE_LOCK_STATEMENTS;
+  expect(lift).toBe("SET statement_timeout = '0'");
+  expect(lock).toBe(CORPUS_SCHEMA_LANE_LOCK_SQL);
+  expect(restore).toBe("RESET statement_timeout");
+});
+
+// The entrypoint runs at import against a live database, so its lane
+// sequence is pinned at the source: the three statements reach the reserved
+// connection in order, the lane is recorded held between the lock and the
+// restore, and nothing takes the lock any other way.
+test("the migrate entrypoint takes the lane through the timeout-free sequence", () => {
+  const source = readFileSync(
+    nodePath.resolve(import.meta.dir, "migrate.ts"),
+    "utf-8",
+  );
+  const positions = [
+    "CORPUS_SCHEMA_LANE_LOCK_STATEMENTS;",
+    "await connection.unsafe(liftTimeout);",
+    "await connection.unsafe(takeLane);",
+    "laneHeld = true;",
+    "await connection.unsafe(restoreTimeout);",
+    "await migrate(database",
+  ].map((needle) => {
+    const at = source.indexOf(needle);
+    expect(at, needle).toBeGreaterThan(-1);
+    return at;
+  });
+  expect(positions).toEqual([...positions].sort((a, b) => a - b));
+  expect(source).not.toContain("CORPUS_SCHEMA_LANE_LOCK_SQL");
 });
