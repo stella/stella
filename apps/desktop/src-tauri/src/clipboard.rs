@@ -643,7 +643,6 @@ impl ClipboardItem {
     match self {
       Self::Text {
         group_id,
-        grouped_at,
         name,
         plain_text,
         retention_class,
@@ -652,7 +651,7 @@ impl ClipboardItem {
       } => Self::Text {
         copied_at,
         group_id: group_id.clone(),
-        grouped_at: *grouped_at,
+        grouped_at: group_id.as_ref().map(|_| copied_at),
         id,
         name: name.clone(),
         plain_text: plain_text.clone(),
@@ -661,7 +660,6 @@ impl ClipboardItem {
       },
       Self::FormattedText {
         group_id,
-        grouped_at,
         html,
         name,
         plain_text,
@@ -672,7 +670,7 @@ impl ClipboardItem {
       } => Self::FormattedText {
         copied_at,
         group_id: group_id.clone(),
-        grouped_at: *grouped_at,
+        grouped_at: group_id.as_ref().map(|_| copied_at),
         html: html.clone(),
         id,
         name: name.clone(),
@@ -686,7 +684,6 @@ impl ClipboardItem {
         byte_size,
         checksum,
         group_id,
-        grouped_at,
         height,
         image,
         name,
@@ -701,7 +698,7 @@ impl ClipboardItem {
         checksum: checksum.clone(),
         copied_at,
         group_id: group_id.clone(),
-        grouped_at: *grouped_at,
+        grouped_at: group_id.as_ref().map(|_| copied_at),
         height: *height,
         id,
         image: image.clone(),
@@ -4932,7 +4929,7 @@ mod tests {
     let original = ClipboardItem::FormattedText {
       copied_at: original_time,
       group_id: Some("research".to_string()),
-      grouped_at: None,
+      grouped_at: Some(original_time),
       html: "<strong>Clause</strong>".to_string(),
       rtf: None,
       id: "original".to_string(),
@@ -4960,6 +4957,8 @@ mod tests {
     assert_eq!(manager.items[0].plain_text(), original.plain_text());
     assert_eq!(manager.items[0].html(), original.html());
     assert_eq!(manager.items[0].group_id(), original.group_id());
+    // The duplicate joins the group now, so it sorts as the newest member.
+    assert_eq!(manager.items[0].grouped_at(), Some(duplicate_time));
     assert_eq!(manager.items[0].name(), original.name());
     assert_eq!(manager.items[0].source_app(), original.source_app());
     assert_eq!(manager.items[1], original);
