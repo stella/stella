@@ -467,7 +467,6 @@ const ActivityAdvancedFilters = ({
                           title: t("errors.actionFailed"),
                           type: "error",
                         });
-                        throw error;
                       });
                     detached(request, "activity-panel.fetch-actors");
                   }}
@@ -673,7 +672,6 @@ const ActivityTimeline = ({
           title: t("errors.actionFailed"),
           type: "error",
         });
-        throw error;
       });
     detached(request, "activity-panel.fetch-next-page");
   };
