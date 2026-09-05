@@ -1,4 +1,4 @@
-import { MessageSquare, Plus, PanelLeft, PanelRight } from "lucide-react";
+import { MessageSquare, PanelLeft, PanelRight, Plus } from "lucide-react";
 
 import { HOTKEYS } from "@/lib/hotkeys";
 
@@ -11,9 +11,9 @@ export const COMMAND_ACTIONS: readonly CommandAction[] = [
     titleKey: "common.newMatter",
     icon: Plus,
     hotkey: HOTKEYS.NEW_MATTER,
-    isAvailable: (ctx) => Boolean(ctx.workspaceId),
+    isAvailable: (ctx) => ctx.canCreateMatter,
     run: (ctx) => {
-      ctx.navigate({ to: "/matters/new" });
+      ctx.openCreateMatterDialog();
     },
   },
   {
@@ -22,8 +22,10 @@ export const COMMAND_ACTIONS: readonly CommandAction[] = [
     titleKey: "chat.newChat",
     icon: MessageSquare,
     hotkey: HOTKEYS.NEW_CHAT,
-    isAvailable: () => true,
-    run: (_ctx) => undefined,
+    isAvailable: (ctx) => Boolean(ctx.workspaceId),
+    run: (ctx) => {
+      ctx.openNewChat();
+    },
   },
   {
     id: "toggle-sidebar",
@@ -32,15 +34,19 @@ export const COMMAND_ACTIONS: readonly CommandAction[] = [
     icon: PanelLeft,
     hotkey: HOTKEYS.TOGGLE_SIDEBAR,
     isAvailable: () => true,
-    run: (_ctx) => undefined,
+    run: (ctx) => {
+      ctx.toggleSidebar();
+    },
   },
   {
     id: "toggle-chat",
     group: "view",
-    titleKey: "chat.newChat",
+    titleKey: "navigation.toggleChat",
     icon: PanelRight,
     hotkey: HOTKEYS.TOGGLE_CHAT,
     isAvailable: () => true,
-    run: (_ctx) => undefined,
+    run: (ctx) => {
+      ctx.toggleChat();
+    },
   },
 ];

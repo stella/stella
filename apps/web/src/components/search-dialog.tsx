@@ -59,6 +59,7 @@ import {
   SearchPreviewPanel,
 } from "@/components/search-dialog-preview";
 import {
+  CommandActionItem,
   SearchRecents,
   SearchResultItem,
   SearchSummaryItem,
@@ -101,6 +102,7 @@ import type { SearchFilters } from "@/components/search-filters.logic";
 import { useChatUserContext } from "@/features/chat/hooks/use-chat-user-context";
 import { startNewThreadCommandHandoff } from "@/features/chat/lib/start-new-thread-command-handoff";
 import { invalidateGroupedChatThreads } from "@/features/chat/queries";
+import { useCommandActions } from "@/features/command-palette/hooks/use-command-actions";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -595,6 +597,23 @@ export const SearchDialog = ({
     enabled: open,
   });
   const canAskAI = canSummarizeSearch && aiAvailability?.available === true;
+
+  const { resolvedActions, executeAction } = useCommandActions();
+
+  const normalizedActionQuery = query.trim().toLowerCase();
+  const filteredActions = resolvedActions.filter(
+    (action) =>
+      normalizedActionQuery.length === 0 ||
+      action.title.toLowerCase().includes(normalizedActionQuery) ||
+      action.keywordLabels.some((keyword) =>
+        keyword.toLowerCase().includes(normalizedActionQuery),
+      ),
+  );
+
+  const handleActionSelect = (actionId: string) => {
+    executeAction(actionId);
+    onOpenChange(false);
+  };
 
   const summarizeSearchMutation = useMutation({
     mutationFn: async (params: SearchAISummaryParams) => {
@@ -1490,6 +1509,22 @@ export const SearchDialog = ({
                   recentSearches={recentSearches}
                   visible={!hasVisibleSearch}
                 />
+                {mode.type === "browse" && filteredActions.length > 0 && (
+                  <section className="px-4 py-4">
+                    <h3 className="text-muted-foreground mb-2 text-xs font-medium">
+                      {t("common.actions")}
+                    </h3>
+                    <div className="space-y-1">
+                      {filteredActions.map((action) => (
+                        <CommandActionItem
+                          action={action}
+                          key={action.id}
+                          onSelect={handleActionSelect}
+                        />
+                      ))}
+                    </div>
+                  </section>
+                )}
                 <SearchResultsContent
                   onRetry={() => {
                     detached(refetchSearch(), "search-dialog.refetch-search");
