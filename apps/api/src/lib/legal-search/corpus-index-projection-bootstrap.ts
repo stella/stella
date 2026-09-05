@@ -163,6 +163,34 @@ const setZeroLegislationProjectionEpochs = async (
     );
 };
 
+type SeededEntityIdQuery = {
+  family: CorpusIndexProjectionSubject["family"];
+  generation: string;
+  entityIds: string[];
+};
+
+/**
+ * Which of the page's canonical ids already carry a desired state. The read is
+ * a primary-key lookup bounded by the page, so it never widens with the number
+ * of rows seeded so far.
+ */
+const selectSeededEntityIds = async (
+  tx: Transaction,
+  { family, generation, entityIds }: SeededEntityIdQuery,
+): Promise<ReadonlySet<string>> => {
+  const rows = await tx
+    .select({ entityId: corpusIndexProjectionStates.entityId })
+    .from(corpusIndexProjectionStates)
+    .where(
+      and(
+        eq(corpusIndexProjectionStates.family, family),
+        eq(corpusIndexProjectionStates.generation, generation),
+        inArray(corpusIndexProjectionStates.entityId, entityIds),
+      ),
+    );
+  return new Set(rows.map(({ entityId }) => entityId));
+};
+
 const hasUnseededCaseLawRows = async (
   tx: Transaction,
   generation: string,
@@ -209,19 +237,10 @@ const bootstrapCaseLaw = async (
   limit: number,
   afterEntityId: SafeId<"caseLawDecision"> | undefined,
 ): Promise<CorpusIndexProjectionBootstrapResult> => {
-  const conditions = [
-    isNull(corpusIndexProjectionStates.entityId),
-    ...(afterEntityId === undefined
-      ? []
-      : [gt(caseLawDecisions.id, afterEntityId)]),
-  ];
   const projectionConditions = [
     eq(corpusIndexProjectionStates.family, "case_law"),
     eq(corpusIndexProjectionStates.generation, generation),
     eq(corpusIndexProjectionStates.entityId, caseLawDecisions.id),
-    ...(afterEntityId === undefined
-      ? []
-      : [gt(corpusIndexProjectionStates.entityId, afterEntityId)]),
   ];
   const candidates = await tx
     .select({
@@ -231,8 +250,11 @@ const bootstrapCaseLaw = async (
     })
     .from(caseLawDecisions)
     .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
-    .leftJoin(corpusIndexProjectionStates, and(...projectionConditions))
-    .where(and(...conditions))
+    .where(
+      afterEntityId === undefined
+        ? undefined
+        : gt(caseLawDecisions.id, afterEntityId),
+    )
     .orderBy(asc(caseLawDecisions.id))
     .limit(limit)
     // Canonical mutations lock source policy before the decision. Bootstrap
@@ -250,41 +272,82 @@ const bootstrapCaseLaw = async (
   }
 
   const candidateIds = candidates.map(({ documentId }) => documentId);
-  const lockedRows = await tx
-    .select({
-      documentId: caseLawDecisions.id,
-      sourceId: caseLawDecisions.sourceId,
-      jurisdiction: caseLawDecisions.country,
-      language: caseLawDecisions.language,
-      documentType: caseLawDecisions.decisionType,
-      contentHash: caseLawDecisions.contentHash,
-      redactedAt: caseLawDecisions.redactedAt,
-      caseNumber: caseLawDecisions.caseNumber,
-      court: caseLawDecisions.court,
-      decisionDate: caseLawDecisions.decisionDate,
-      ecli: caseLawDecisions.ecli,
-      metadata: caseLawDecisions.metadata,
-      projectionEpoch: caseLawDecisions.projectionEpoch,
-    })
-    .from(caseLawDecisions)
-    .leftJoin(corpusIndexProjectionStates, and(...projectionConditions))
-    .where(and(...conditions, inArray(caseLawDecisions.id, candidateIds)))
-    .orderBy(asc(caseLawDecisions.id))
-    .limit(limit)
-    .for("update", { of: caseLawDecisions, skipLocked: true });
+  const seededEntityIds = await selectSeededEntityIds(tx, {
+    family: "case_law",
+    generation,
+    entityIds: candidateIds,
+  });
+  const unseededIds = candidateIds.filter(
+    (candidateId) => !seededEntityIds.has(candidateId),
+  );
+  const lockedRows: BootstrapCaseLawRow[] =
+    unseededIds.length === 0
+      ? []
+      : await tx
+          .select({
+            documentId: caseLawDecisions.id,
+            sourceId: caseLawDecisions.sourceId,
+            jurisdiction: caseLawDecisions.country,
+            language: caseLawDecisions.language,
+            documentType: caseLawDecisions.decisionType,
+            contentHash: caseLawDecisions.contentHash,
+            redactedAt: caseLawDecisions.redactedAt,
+            caseNumber: caseLawDecisions.caseNumber,
+            court: caseLawDecisions.court,
+            decisionDate: caseLawDecisions.decisionDate,
+            ecli: caseLawDecisions.ecli,
+            metadata: caseLawDecisions.metadata,
+            projectionEpoch: caseLawDecisions.projectionEpoch,
+          })
+          .from(caseLawDecisions)
+          .leftJoin(corpusIndexProjectionStates, and(...projectionConditions))
+          .where(
+            and(
+              isNull(corpusIndexProjectionStates.entityId),
+              inArray(caseLawDecisions.id, unseededIds),
+            ),
+          )
+          .orderBy(asc(caseLawDecisions.id))
+          .limit(limit)
+          .for("update", { of: caseLawDecisions, skipLocked: true });
   const lockedById = new Map(lockedRows.map((row) => [row.documentId, row]));
-  // Advance only across the contiguous prefix actually locked. Skipping past
-  // an earlier busy row would make a keyset cursor strand it indefinitely.
+  // Advance only across the contiguous prefix this batch accounts for: a row
+  // that already has a desired state needs nothing, a locked row is ours, and
+  // the first row another worker holds ends the page, because skipping past it
+  // would make a keyset cursor strand it indefinitely.
   const rows: BootstrapCaseLawRow[] = [];
+  let pageEndEntityId: SafeId<"caseLawDecision"> | undefined;
   for (const candidate of candidates) {
-    const row = lockedById.get(candidate.documentId);
-    if (row === undefined) {
-      break;
+    if (!seededEntityIds.has(candidate.documentId)) {
+      const row = lockedById.get(candidate.documentId);
+      if (row === undefined) {
+        break;
+      }
+      rows.push(row);
     }
-    rows.push(row);
+    pageEndEntityId = candidate.documentId;
+  }
+  if (pageEndEntityId === undefined) {
+    return emptyBootstrapResult("busy", "case_law", generation);
   }
   if (rows.length === 0) {
-    return emptyBootstrapResult("busy", "case_law", generation);
+    // Only a page starting at the head of the corpus can conclude anything
+    // about rows outside its own id range.
+    if (
+      afterEntityId === undefined &&
+      !(await hasUnseededCaseLawRows(tx, generation))
+    ) {
+      return emptyBootstrapResult("complete", "case_law", generation);
+    }
+    return {
+      status: "advanced",
+      family: "case_law",
+      generation,
+      claimedCount: 0,
+      seededCount: 0,
+      entityIds: [],
+      nextAfterEntityId: pageEndEntityId,
+    };
   }
 
   const entityIds = rows.map(({ documentId }) => documentId);
@@ -386,10 +449,6 @@ const bootstrapCaseLaw = async (
       `Corpus projection bootstrap inserted ${inserted.length} of ${rows.length} case-law states`,
     );
   }
-  const lastEntityId = rows.at(-1)?.documentId;
-  if (lastEntityId === undefined) {
-    return panic("Corpus projection bootstrap claimed no case-law row");
-  }
   return {
     status: "advanced",
     family: "case_law",
@@ -397,7 +456,7 @@ const bootstrapCaseLaw = async (
     claimedCount: rows.length,
     seededCount: inserted.length,
     entityIds,
-    nextAfterEntityId: lastEntityId,
+    nextAfterEntityId: pageEndEntityId,
   };
 };
 
@@ -407,19 +466,10 @@ const bootstrapLegislation = async (
   limit: number,
   afterEntityId: SafeId<"legislationDocument"> | undefined,
 ): Promise<CorpusIndexProjectionBootstrapResult> => {
-  const conditions = [
-    isNull(corpusIndexProjectionStates.entityId),
-    ...(afterEntityId === undefined
-      ? []
-      : [gt(legislationDocuments.id, afterEntityId)]),
-  ];
   const projectionConditions = [
     eq(corpusIndexProjectionStates.family, "legislation"),
     eq(corpusIndexProjectionStates.generation, generation),
     eq(corpusIndexProjectionStates.entityId, legislationDocuments.id),
-    ...(afterEntityId === undefined
-      ? []
-      : [gt(corpusIndexProjectionStates.entityId, afterEntityId)]),
   ];
   const candidates = await tx
     .select({
@@ -432,8 +482,11 @@ const bootstrapLegislation = async (
       legislationSources,
       eq(legislationSources.id, legislationDocuments.sourceId),
     )
-    .leftJoin(corpusIndexProjectionStates, and(...projectionConditions))
-    .where(and(...conditions))
+    .where(
+      afterEntityId === undefined
+        ? undefined
+        : gt(legislationDocuments.id, afterEntityId),
+    )
     .orderBy(asc(legislationDocuments.id))
     .limit(limit)
     .for("share", { of: legislationSources });
@@ -449,40 +502,78 @@ const bootstrapLegislation = async (
   }
 
   const candidateIds = candidates.map(({ documentId }) => documentId);
-  const lockedRows = await tx
-    .select({
-      documentId: legislationDocuments.id,
-      sourceId: legislationDocuments.sourceId,
-      jurisdiction: legislationDocuments.country,
-      language: legislationDocuments.language,
-      documentType: legislationDocuments.documentType,
-      contentHash: legislationDocuments.contentHash,
-      title: legislationDocuments.title,
-      status: legislationDocuments.status,
-      effectiveDate: legislationDocuments.effectiveDate,
-      versionValidFrom: legislationDocuments.versionValidFrom,
-      versionValidTo: legislationDocuments.versionValidTo,
-      eli: legislationDocuments.eli,
-      projectionEpoch: legislationDocuments.projectionEpoch,
-    })
-    .from(legislationDocuments)
-    .leftJoin(corpusIndexProjectionStates, and(...projectionConditions))
-    .where(and(...conditions, inArray(legislationDocuments.id, candidateIds)))
-    .orderBy(asc(legislationDocuments.id))
-    .limit(limit)
-    .for("update", { of: legislationDocuments, skipLocked: true });
+  const seededEntityIds = await selectSeededEntityIds(tx, {
+    family: "legislation",
+    generation,
+    entityIds: candidateIds,
+  });
+  const unseededIds = candidateIds.filter(
+    (candidateId) => !seededEntityIds.has(candidateId),
+  );
+  const lockedRows: BootstrapLegislationRow[] =
+    unseededIds.length === 0
+      ? []
+      : await tx
+          .select({
+            documentId: legislationDocuments.id,
+            sourceId: legislationDocuments.sourceId,
+            jurisdiction: legislationDocuments.country,
+            language: legislationDocuments.language,
+            documentType: legislationDocuments.documentType,
+            contentHash: legislationDocuments.contentHash,
+            title: legislationDocuments.title,
+            status: legislationDocuments.status,
+            effectiveDate: legislationDocuments.effectiveDate,
+            versionValidFrom: legislationDocuments.versionValidFrom,
+            versionValidTo: legislationDocuments.versionValidTo,
+            eli: legislationDocuments.eli,
+            projectionEpoch: legislationDocuments.projectionEpoch,
+          })
+          .from(legislationDocuments)
+          .leftJoin(corpusIndexProjectionStates, and(...projectionConditions))
+          .where(
+            and(
+              isNull(corpusIndexProjectionStates.entityId),
+              inArray(legislationDocuments.id, unseededIds),
+            ),
+          )
+          .orderBy(asc(legislationDocuments.id))
+          .limit(limit)
+          .for("update", { of: legislationDocuments, skipLocked: true });
   const lockedById = new Map(lockedRows.map((row) => [row.documentId, row]));
-  // See the case-law path: the cursor may cross only a fully claimed prefix.
+  // See the case-law path: the cursor may cross only the prefix this batch
+  // accounts for, seeded or claimed.
   const rows: BootstrapLegislationRow[] = [];
+  let pageEndEntityId: SafeId<"legislationDocument"> | undefined;
   for (const candidate of candidates) {
-    const row = lockedById.get(candidate.documentId);
-    if (row === undefined) {
-      break;
+    if (!seededEntityIds.has(candidate.documentId)) {
+      const row = lockedById.get(candidate.documentId);
+      if (row === undefined) {
+        break;
+      }
+      rows.push(row);
     }
-    rows.push(row);
+    pageEndEntityId = candidate.documentId;
+  }
+  if (pageEndEntityId === undefined) {
+    return emptyBootstrapResult("busy", "legislation", generation);
   }
   if (rows.length === 0) {
-    return emptyBootstrapResult("busy", "legislation", generation);
+    if (
+      afterEntityId === undefined &&
+      !(await hasUnseededLegislationRows(tx, generation))
+    ) {
+      return emptyBootstrapResult("complete", "legislation", generation);
+    }
+    return {
+      status: "advanced",
+      family: "legislation",
+      generation,
+      claimedCount: 0,
+      seededCount: 0,
+      entityIds: [],
+      nextAfterEntityId: pageEndEntityId,
+    };
   }
 
   const entityIds = rows.map(({ documentId }) => documentId);
@@ -538,10 +629,6 @@ const bootstrapLegislation = async (
       `Corpus projection bootstrap inserted ${inserted.length} of ${rows.length} legislation states`,
     );
   }
-  const lastEntityId = rows.at(-1)?.documentId;
-  if (lastEntityId === undefined) {
-    return panic("Corpus projection bootstrap claimed no legislation row");
-  }
   return {
     status: "advanced",
     family: "legislation",
@@ -549,16 +636,19 @@ const bootstrapLegislation = async (
     claimedCount: rows.length,
     seededCount: inserted.length,
     entityIds,
-    nextAfterEntityId: lastEntityId,
+    nextAfterEntityId: pageEndEntityId,
   };
 };
 
 /**
- * Seed one active final generation in a bounded, replay-safe batch. The query
- * uses a keyset cursor so a large seeded prefix is not rescanned on every
- * batch. Rows skipped because another worker owns them remain eligible for a
- * later null-cursor sweep; callers reset the cursor after range_complete.
- * A busy result never advances the cursor.
+ * Seed one active final generation in a bounded, replay-safe batch. A page is
+ * the next `limit` canonical ids after the keyset cursor, and only the ids in
+ * that page that still lack a desired state are locked and seeded, so a page
+ * costs its limit however much of the corpus is already seeded. The cursor
+ * crosses the whole page even when it seeds nothing. Rows skipped because
+ * another worker owns them remain eligible for a later null-cursor sweep;
+ * callers reset the cursor after range_complete. A busy result never advances
+ * the cursor.
  */
 export const bootstrapCorpusProjectionDesiredStateBatchTx = async (
   tx: Transaction,

@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
-import { sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import type { Transaction } from "@/api/db/root";
@@ -282,7 +282,7 @@ test("bootstrap locks source policy before canonical rows for every family", asy
   assertSourceBeforeDocument("legislation_sources", "legislation_documents");
 });
 
-test("cursor pages seek both canonical and projection primary keys", async () => {
+test("a cursor page is an id-range seek, never an anti-join over the corpus", async () => {
   const statements: string[] = [];
   const loggedDb = drizzle({
     client,
@@ -317,23 +317,212 @@ test("cursor pages seek both canonical and projection primary keys", async () =>
       ),
   );
 
-  const assertCursorBound = (
+  const assertPagedByIdRange = (
     canonicalTable: string,
-    canonicalId: string,
+    sourceTable: string,
   ): void => {
-    const queries = statements.filter(
-      (query) =>
-        query.includes(`from "${canonicalTable}"`) &&
-        query.includes('left join "corpus_index_projection_states"'),
+    const cursorPages = statements.filter((query) =>
+      query.includes(`for share of "${sourceTable}"`),
     );
-    expect(queries).toHaveLength(2);
-    for (const query of queries) {
-      expect(query).toContain(`"${canonicalTable}"."${canonicalId}" > $`);
-      expect(query).toContain(
-        '"corpus_index_projection_states"."entity_id" > $',
-      );
-    }
+    expect(cursorPages).toHaveLength(1);
+    const cursorPage = cursorPages.at(0);
+    expect(cursorPage).toContain(`"${canonicalTable}"."id" > $`);
+    // The page must not pay for rows outside its id range, so the desired
+    // state anti-join belongs to the rows it seeds, not to its paging.
+    expect(cursorPage).not.toContain(
+      'left join "corpus_index_projection_states"',
+    );
+
+    const seedingReads = statements.filter((query) =>
+      query.includes(`for update of "${canonicalTable}"`),
+    );
+    expect(seedingReads).toHaveLength(1);
+    const seedingRead = seedingReads.at(0);
+    expect(seedingRead).toContain('left join "corpus_index_projection_states"');
+    expect(seedingRead).toContain(`"${canonicalTable}"."id" in (`);
   };
-  assertCursorBound("case_law_decisions", "id");
-  assertCursorBound("legislation_documents", "id");
+  assertPagedByIdRange("case_law_decisions", "case_law_sources");
+  assertPagedByIdRange("legislation_documents", "legislation_sources");
+});
+
+test("a page's work is bounded by its limit, not by how many rows are already seeded", async () => {
+  const THIRD_DECISION_ID = toSafeId<"caseLawDecision">(
+    "0198e331-e578-7000-8000-000000000107",
+  );
+  const FOURTH_DECISION_ID = toSafeId<"caseLawDecision">(
+    "0198e331-e578-7000-8000-000000000108",
+  );
+  const FIFTH_DECISION_ID = toSafeId<"caseLawDecision">(
+    "0198e331-e578-7000-8000-000000000109",
+  );
+  await db.insert(caseLawDecisions).values(
+    [THIRD_DECISION_ID, FOURTH_DECISION_ID, FIFTH_DECISION_ID].map(
+      (id, index) => ({
+        id,
+        sourceId: CASE_LAW_SOURCE_ID,
+        caseNumber: `6 As ${index + 5}/2010`,
+        court: "Nejvyšší správní soud",
+        country: "CZE",
+        language: "cs",
+        contentHash: String(index).repeat(64),
+      }),
+    ),
+  );
+
+  const seedAll = await db.transaction(
+    async (tx) =>
+      await bootstrapCorpusProjectionDesiredStateBatchTx(
+        asTestRaw<Transaction>(tx),
+        { family: "case_law", generation: "case_law_v5", limit: 5 },
+      ),
+  );
+  expect(seedAll).toMatchObject({ status: "advanced", seededCount: 5 });
+  await db
+    .delete(corpusIndexProjectionStates)
+    .where(
+      and(
+        eq(corpusIndexProjectionStates.family, "case_law"),
+        eq(corpusIndexProjectionStates.generation, "case_law_v5"),
+        inArray(corpusIndexProjectionStates.entityId, [
+          SECOND_CASE_LAW_DECISION_ID,
+          THIRD_DECISION_ID,
+        ]),
+      ),
+    );
+
+  const firstPage = await db.transaction(
+    async (tx) =>
+      await bootstrapCorpusProjectionDesiredStateBatchTx(
+        asTestRaw<Transaction>(tx),
+        { family: "case_law", generation: "case_law_v5", limit: 2 },
+      ),
+  );
+  // The page covers the first two ids and seeds only the gap among them; it
+  // does not skip ahead to the next unseeded row.
+  expect(firstPage).toMatchObject({
+    status: "advanced",
+    claimedCount: 1,
+    seededCount: 1,
+    entityIds: [SECOND_CASE_LAW_DECISION_ID],
+    nextAfterEntityId: SECOND_CASE_LAW_DECISION_ID,
+  });
+
+  const secondPage = await db.transaction(
+    async (tx) =>
+      await bootstrapCorpusProjectionDesiredStateBatchTx(
+        asTestRaw<Transaction>(tx),
+        {
+          family: "case_law",
+          generation: "case_law_v5",
+          limit: 2,
+          afterEntityId: SECOND_CASE_LAW_DECISION_ID,
+        },
+      ),
+  );
+  expect(secondPage).toMatchObject({
+    status: "advanced",
+    claimedCount: 1,
+    seededCount: 1,
+    entityIds: [THIRD_DECISION_ID],
+    nextAfterEntityId: FOURTH_DECISION_ID,
+  });
+
+  const seededPage = await db.transaction(
+    async (tx) =>
+      await bootstrapCorpusProjectionDesiredStateBatchTx(
+        asTestRaw<Transaction>(tx),
+        {
+          family: "case_law",
+          generation: "case_law_v5",
+          limit: 2,
+          afterEntityId: FOURTH_DECISION_ID,
+        },
+      ),
+  );
+  expect(seededPage).toMatchObject({
+    status: "advanced",
+    claimedCount: 0,
+    seededCount: 0,
+    entityIds: [],
+    nextAfterEntityId: FIFTH_DECISION_ID,
+  });
+
+  const rangeComplete = await db.transaction(
+    async (tx) =>
+      await bootstrapCorpusProjectionDesiredStateBatchTx(
+        asTestRaw<Transaction>(tx),
+        {
+          family: "case_law",
+          generation: "case_law_v5",
+          limit: 2,
+          afterEntityId: FIFTH_DECISION_ID,
+        },
+      ),
+  );
+  expect(rangeComplete).toMatchObject({ status: "range_complete" });
+
+  const complete = await db.transaction(
+    async (tx) =>
+      await bootstrapCorpusProjectionDesiredStateBatchTx(
+        asTestRaw<Transaction>(tx),
+        { family: "case_law", generation: "case_law_v5", limit: 2 },
+      ),
+  );
+  expect(complete).toMatchObject({ status: "complete" });
+
+  expect(
+    await db
+      .select({ entityId: corpusIndexProjectionStates.entityId })
+      .from(corpusIndexProjectionStates),
+  ).toHaveLength(5);
+});
+
+test("a legislation page with nothing to seed advances instead of stalling", async () => {
+  const seedFirst = await db.transaction(
+    async (tx) =>
+      await bootstrapCorpusProjectionDesiredStateBatchTx(
+        asTestRaw<Transaction>(tx),
+        { family: "legislation", generation: "legislation_v2", limit: 1 },
+      ),
+  );
+  expect(seedFirst).toMatchObject({
+    status: "advanced",
+    seededCount: 1,
+    nextAfterEntityId: LEGISLATION_DOCUMENT_ID,
+  });
+
+  const seededPage = await db.transaction(
+    async (tx) =>
+      await bootstrapCorpusProjectionDesiredStateBatchTx(
+        asTestRaw<Transaction>(tx),
+        { family: "legislation", generation: "legislation_v2", limit: 1 },
+      ),
+  );
+  expect(seededPage).toMatchObject({
+    status: "advanced",
+    claimedCount: 0,
+    seededCount: 0,
+    entityIds: [],
+    nextAfterEntityId: LEGISLATION_DOCUMENT_ID,
+  });
+
+  const gapPage = await db.transaction(
+    async (tx) =>
+      await bootstrapCorpusProjectionDesiredStateBatchTx(
+        asTestRaw<Transaction>(tx),
+        {
+          family: "legislation",
+          generation: "legislation_v2",
+          limit: 1,
+          afterEntityId: LEGISLATION_DOCUMENT_ID,
+        },
+      ),
+  );
+  expect(gapPage).toMatchObject({
+    status: "advanced",
+    claimedCount: 1,
+    seededCount: 1,
+    entityIds: [SECOND_LEGISLATION_DOCUMENT_ID],
+    nextAfterEntityId: SECOND_LEGISLATION_DOCUMENT_ID,
+  });
 });
