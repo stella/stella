@@ -1160,12 +1160,16 @@ describe("euEcjAdapter.reconciliation.buildDecision", () => {
         }),
       );
 
-      await expect(
+      const rejection = await rejectionOf(
         reconciliation.buildDecision({
           celex: "62021CJ0128",
           language: "EN",
         }),
-      ).rejects.toThrow(`CJEU document request failed: ${status}`);
+      );
+
+      expect(rejectionMessage(rejection)).toContain(
+        `CJEU document request failed: ${status}`,
+      );
       expect(fetches).toHaveLength(ordinal + 1);
       expect(fetches.at(-1)?.url).toBe(failedUrl);
     },
