@@ -31,11 +31,11 @@ import { DOCX_MIME } from "@/lib/consts";
 import { toSafeId } from "@/lib/safe-id";
 import { useCreateEntities } from "@/lib/workspaces/mutations/entities";
 import { useCreateTask } from "@/lib/workspaces/mutations/tasks";
+import { useCreateFileEntities } from "@/lib/workspaces/mutations/use-create-file-entities";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 import { useIsWorkflowRunning } from "@/lib/workspaces/queries/workspace";
 import { NewDocumentFromTemplateDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/new-document-from-template-dialog";
-import { useCreateFileEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities";
 
 type VirtualAnchor = {
   getBoundingClientRect: () => DOMRect;

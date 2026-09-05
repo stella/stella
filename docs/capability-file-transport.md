@@ -189,7 +189,7 @@ budget and unusable downstream. So:
 
 - `--file <path>` on upload leaves: hash -> presign -> PUT -> finalize, with
   best-effort `uploads.delete` on any failure after presign, mirroring
-  `apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities.ts`.
+  `apps/web/src/lib/workspaces/mutations/use-create-file-entities.ts`.
 - `--output <path|->` on download leaves: fetch the presigned URL and stream to
   the path, or to stdout for `-`.
 

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { buildDroppedFolderUploadPlan } from "@/routes/_protected.workspaces/$workspaceId/-hooks/create-file-tree-upload.logic";
+import { buildDroppedFolderUploadPlan } from "@/lib/workspaces/mutations/create-file-tree-upload.logic";
 
 describe("dropped folder upload planning", () => {
   test("creates directories before assigning files to leaf parents", () => {

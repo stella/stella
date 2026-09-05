@@ -55,6 +55,10 @@ import {
 import { useUpdateProperty } from "@/lib/workspaces/mutations/properties";
 import { useMoveTaskAssignee } from "@/lib/workspaces/mutations/tasks";
 import {
+  uploadFileEntitiesBatched,
+  useBatchUploadLabels,
+} from "@/lib/workspaces/mutations/use-create-file-entities";
+import {
   isGradableProperty,
   isPlaybookVerdictProperty,
 } from "@/lib/workspaces/playbook-verdicts";
@@ -84,10 +88,6 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.logic";
 import { useWorkspaceKanbanSchema } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/use-kanban-schema";
 import { viewEntityKinds } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
-import {
-  uploadFileEntitiesBatched,
-  useBatchUploadLabels,
-} from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities";
 import { useUpdateView } from "@/routes/_protected.workspaces/$workspaceId/-mutations/views";
 
 type KanbanViewProps = {

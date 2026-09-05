@@ -604,7 +604,7 @@
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-columns.tsx": 2,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-schema.ts": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-grid.tsx": 1,
-      "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/create-file-tree-upload.logic.ts": 2,
+      "apps/web/src/lib/workspaces/mutations/create-file-tree-upload.logic.ts": 2,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-mutations/time-entries.ts": 5,
       "apps/web/src/routes/_protected.workspaces/-filters/filter-pipeline.ts": 1,
       "apps/web/src/routes/_protected.workspaces/-utils.ts": 1,

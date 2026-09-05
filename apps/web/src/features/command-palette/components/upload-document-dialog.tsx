@@ -28,9 +28,9 @@ import { useEntitiesCountLimit } from "@/components/workspaces/hooks/use-limits"
 import { usePermissions } from "@/hooks/use-permissions";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
+import { useCreateFileEntities } from "@/lib/workspaces/mutations/use-create-file-entities";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import { useIsWorkflowRunning } from "@/lib/workspaces/queries/workspace";
-import { useCreateFileEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities";
 
 type UploadDocumentDialogProps = {
   onClose: () => void;
@@ -43,6 +43,8 @@ type MatterOption = {
   clientName: string | null;
 };
 
+const EMPTY_MATTERS: MatterOption[] = [];
+
 export const UploadDocumentDialog = ({
   onClose,
   workspaceId,
@@ -52,17 +54,21 @@ export const UploadDocumentDialog = ({
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState(workspaceId);
   const [matterSearch, setMatterSearch] = useState("");
   const deferredMatterSearch = useDeferredValue(matterSearch);
-  const { data, error, isPending, refetch } = useQuery({
+  const {
+    data: matters = EMPTY_MATTERS,
+    error,
+    isPending,
+    refetch,
+  } = useQuery({
     ...workspacesNavigationOptions(activeOrganizationId),
-    enabled: workspaceId === undefined,
+    select: (data) =>
+      data.workspaces.map((matter) => ({
+        clientName: matter.client?.displayName ?? null,
+        id: matter.id,
+        name: matter.name,
+      })),
   });
 
-  const matters: MatterOption[] =
-    data?.workspaces.map((matter) => ({
-      clientName: matter.client?.displayName ?? null,
-      id: matter.id,
-      name: matter.name,
-    })) ?? [];
   const filteredMatters = matters.filter((matter) => {
     const search = deferredMatterSearch.trim().toLocaleLowerCase();
     return (

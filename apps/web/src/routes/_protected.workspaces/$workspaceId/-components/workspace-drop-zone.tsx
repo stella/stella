@@ -5,8 +5,8 @@ import { useMatch } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { FileDropZone } from "@/components/file-drop-zone";
+import { useCreateFileEntities } from "@/lib/workspaces/mutations/use-create-file-entities";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
-import { useCreateFileEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities";
 
 import { resolveWorkspaceDropUploadParentId } from "./workspace-drop-zone.logic";
 

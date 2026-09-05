@@ -937,7 +937,7 @@
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/row-cells.tsx": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/template-picker-dialog.tsx": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-filters.tsx": 2,
-      "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities.ts": 3,
+      "apps/web/src/lib/workspaces/mutations/use-create-file-entities.ts": 3,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/route.tsx": 1,
       "apps/web/src/routes/auth/organization.tsx": 1,
       "apps/web/src/routes/onboarding/-components/onboarding-wizard.tsx": 2,

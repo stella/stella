@@ -7,7 +7,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 
 import { EmptyScreen } from "@/components/empty-screen";
-import { useCreateFileEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities";
+import { useCreateFileEntities } from "@/lib/workspaces/mutations/use-create-file-entities";
 
 type EmptyStateProps = {
   icon: LucideIcon;
