@@ -23,6 +23,22 @@ SET statement_timeout = '30s';--> statement-breakpoint
 -- on the currency column, so this touches only the rows that are wrong. None
 -- of these tables is registered in high-volume-tables.ts.
 
+-- The code is stored beside the amount and everything that groups or joins on
+-- it -- this migration, `MoneyTotals`, the invoice single-currency checks --
+-- compares the raw string, so a stored "jpy" and a stored "JPY" were two
+-- currencies. `Intl` resolves both, so nothing ever complained. The write
+-- boundaries now admit only `^[A-Z]{3}$` (`tCurrencyCode`); this brings the
+-- rows already written up to that rule. `rate_tables` carries the currency for
+-- its rate entries, so it is normalized too.
+UPDATE "time_entries" SET "currency" = UPPER("currency")
+ WHERE "currency" <> UPPER("currency");--> statement-breakpoint
+UPDATE "rate_tables" SET "currency" = UPPER("currency")
+ WHERE "currency" <> UPPER("currency");--> statement-breakpoint
+UPDATE "expenses" SET "currency" = UPPER("currency")
+ WHERE "currency" <> UPPER("currency");--> statement-breakpoint
+UPDATE "invoices" SET "currency" = UPPER("currency")
+ WHERE "currency" <> UPPER("currency");--> statement-breakpoint
+
 UPDATE "time_entries" AS entry
    SET "rate_at_entry" =
        ROUND(entry."rate_at_entry" * power(10::numeric, exponent.digits - 2))::integer
@@ -54,7 +70,7 @@ UPDATE "time_entries" AS entry
   ('XOF', 0),
   ('XPF', 0)
        ) AS exponent(currency, digits)
- WHERE entry."currency" = exponent.currency;--> statement-breakpoint
+ WHERE UPPER(entry."currency") = exponent.currency;--> statement-breakpoint
 
 -- A rate entry carries no currency of its own; its rate table names one.
 UPDATE "rate_entries" AS rate
@@ -89,7 +105,7 @@ UPDATE "rate_entries" AS rate
   ('XPF', 0)
        ) AS exponent(currency, digits)
  WHERE rate."rate_table_id" = rate_table."id"
-   AND rate_table."currency" = exponent.currency;--> statement-breakpoint
+   AND UPPER(rate_table."currency") = exponent.currency;--> statement-breakpoint
 
 -- `expenses_amount_positive_check` forbids zero, and a zero-exponent currency
 -- divides by a hundred, so a stored amount below 50 (under half a yen — an
@@ -129,7 +145,7 @@ UPDATE "expenses" AS expense
   ('XOF', 0),
   ('XPF', 0)
        ) AS exponent(currency, digits)
- WHERE expense."currency" = exponent.currency;--> statement-breakpoint
+ WHERE UPPER(expense."currency") = exponent.currency;--> statement-breakpoint
 
 -- The invoice total is not rescaled: it is recomputed from the children this
 -- migration just moved, with the same proration and markup the handlers use
@@ -193,4 +209,4 @@ UPDATE "invoices" AS invoice
   ('XOF', 0),
   ('XPF', 0)
        ) AS exponent(currency, digits)
- WHERE invoice."currency" = exponent.currency;
+ WHERE UPPER(invoice."currency") = exponent.currency;

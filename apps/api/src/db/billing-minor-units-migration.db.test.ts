@@ -65,7 +65,8 @@ INSERT INTO time_entries VALUES
   ('te_jpy_1', 'inv_jpy', 60, 50, 'JPY'),
   ('te_jpy_2', 'inv_jpy', 60, 50, 'JPY'),
   ('te_usd', 'inv_usd', 60, 10000, 'USD'),
-  ('te_kwd', NULL, 60, 1250, 'KWD');
+  ('te_kwd', NULL, 60, 1250, 'KWD'),
+  ('te_lower', NULL, 60, 150000, 'jpy');
 INSERT INTO rate_tables VALUES ('rt_jpy', 'JPY'), ('rt_usd', 'USD');
 INSERT INTO rate_entries VALUES
   ('re_jpy', 'rt_jpy', 150000),
@@ -163,6 +164,20 @@ test("the invoice total is recomputed from its migrated lines, not rescaled", as
       "SELECT total_amount AS value FROM invoices WHERE id = 'inv_jpy'",
     ),
   ).toBe(2);
+});
+
+test("a lower-case code rescales and is normalized to upper case", async () => {
+  // `Intl` resolves "jpy" and "JPY" alike, so a row written through a boundary
+  // that admitted either case must move with the rest.
+  expect(
+    await scalar(
+      "SELECT rate_at_entry AS value FROM time_entries WHERE id = 'te_lower'",
+    ),
+  ).toBe(1500);
+  const codes = await database.query<{ currency: string }>(
+    "SELECT currency FROM time_entries WHERE id = 'te_lower'",
+  );
+  expect(codes.rows.at(0)?.currency).toBe("JPY");
 });
 
 test("an invoice with no attached lines recomputes to zero", async () => {

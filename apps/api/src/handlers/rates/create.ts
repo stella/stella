@@ -6,13 +6,13 @@ import { abortableTx } from "@/api/db/safe-db";
 import { rateTables } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { tDefaultVarchar } from "@/api/lib/custom-schema";
+import { tCurrencyCode, tDefaultVarchar } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
 const createRateTableBodySchema = t.Object({
   name: tDefaultVarchar,
-  currency: t.String({ minLength: 3, maxLength: 3 }),
+  currency: tCurrencyCode,
   isDefault: t.Optional(t.Boolean()),
 });
 

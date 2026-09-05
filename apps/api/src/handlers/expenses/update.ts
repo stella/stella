@@ -7,7 +7,7 @@ import { BILLING_STATUS, expenses } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { tCurrencyCode, tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { cents } from "@/api/lib/money";
 import { pickDefined } from "@/api/lib/pick-defined";
@@ -16,7 +16,7 @@ const updateExpenseBodySchema = t.Object({
   id: tSafeId("expense"),
   dateIncurred: t.Optional(t.String({ format: "date" })),
   amount: t.Optional(t.Integer({ minimum: 1 })),
-  currency: t.Optional(t.String({ minLength: 3, maxLength: 3 })),
+  currency: t.Optional(tCurrencyCode),
   category: t.Optional(expenseCategorySchema),
   description: t.Optional(t.String({ minLength: 1, maxLength: 10_000 })),
   invoiceDescription: t.Optional(t.Nullable(t.String({ maxLength: 10_000 }))),
