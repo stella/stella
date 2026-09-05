@@ -223,9 +223,10 @@ export default eslintCompatPlugin({
             ([start, end]) => node.range[0] >= start && node.range[1] <= end,
           );
 
-        const noteShadow = (node: AstNode, statements: unknown) => {
+        const noteShadow = (node: unknown, statements: unknown) => {
           if (
             panicNames.size === 0 ||
+            !isAstNode(node) ||
             !Array.isArray(statements) ||
             !declaresAny(statements, panicNames)
           ) {
