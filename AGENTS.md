@@ -228,6 +228,14 @@ Record<Union, T>`, never `Partial<Record<...>>`; `Partial` lets a new union
   failures through the shared analytics or logging helpers so observability stays
   structured.
 
+## Product Vocabulary
+
+- "matter" is the user- and agent-facing name of the client-engagement
+  container: CLI flags, MCP tool inputs, capability ids, help text, and product
+  copy. "workspace" is the internal identifier for the same thing (DB schema,
+  TypeScript, HTTP routes) and the product-category word ("an open-source legal
+  workspace"). Where the two meet, rename at the boundary, once.
+
 ## Project Overview
 
 **Monorepo:** runnable services and clients live in `apps/` (`api`, `web`, desktop,
