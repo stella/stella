@@ -329,6 +329,18 @@ export const OWNERSHIP = [
     enforcement: { kind: "none" },
   },
   {
+    id: "time",
+    capability: "Calendar-date arithmetic, ISO date-only parsing, durations",
+    owner: ["packages/time/"],
+    summary:
+      "A calendar day is not 24 hours across a DST transition, so moving to " +
+      "another date goes through `addDays` and date-only strings are parsed " +
+      'in local time by `parseIsoDateLocal`, never by `new Date("...")`. ' +
+      "Elapsed-time math uses the duration constants instead. The " +
+      "`no-raw-date-parsing` rule routes callers here.",
+    enforcement: { kind: "none" },
+  },
+  {
     id: "user-agent",
     capability: "Browser and OS names parsed from a user-agent string",
     owner: ["packages/user-agent/"],
