@@ -91,13 +91,22 @@ const INTEGER_BOUND = {
 
 type IntegerBound = (typeof INTEGER_BOUND)[keyof typeof INTEGER_BOUND];
 
+// The whole value has to be digits. `Number.parseInt` reads a prefix and
+// stops, so "20rows" would pass as 20, "0.5" as 0 and "1e3" as 1: every one
+// of them a bound the operator did not ask for.
+const DECIMAL_DIGITS = /^\d+$/u;
+
 const boundedInteger = (
   raw: string,
   name: string,
   bound: IntegerBound,
 ): Result<number, ReplayArgumentsError> => {
   const parsed = Number.parseInt(raw, 10);
-  if (!Number.isSafeInteger(parsed) || parsed < bound.minimum) {
+  if (
+    !DECIMAL_DIGITS.test(raw) ||
+    !Number.isSafeInteger(parsed) ||
+    parsed < bound.minimum
+  ) {
     return invalid(`--${name} must be ${bound.wording}, got: ${raw}`);
   }
   return Result.ok(parsed);

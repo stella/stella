@@ -54,7 +54,7 @@ describe("how many decisions a replay run may visit", () => {
     );
   });
 
-  test.each([["0"], ["-5"], ["many"]])(
+  test.each([["0"], ["-5"], ["many"], ["0.5"], ["1e3"], ["20rows"]])(
     "--limit %p is not a count of decisions",
     (limit) => {
       expect(rejection("--adapter", "eu-ecj", "--limit", limit)).toBe(
@@ -77,11 +77,14 @@ describe("how long a writing run waits for the source's lease", () => {
     ).toBe(0);
   });
 
-  test.each([["-1"], ["soon"]])("--lease-wait %p is not a wait", (minutes) => {
-    expect(rejection("--adapter", "eu-ecj", "--lease-wait", minutes)).toBe(
-      `--lease-wait must be a non-negative integer, got: ${minutes}`,
-    );
-  });
+  test.each([["-1"], ["soon"], ["0.5"], ["30minutes"]])(
+    "--lease-wait %p is not a wait",
+    (minutes) => {
+      expect(rejection("--adapter", "eu-ecj", "--lease-wait", minutes)).toBe(
+        `--lease-wait must be a non-negative integer, got: ${minutes}`,
+      );
+    },
+  );
 });
 
 describe("the rest of a replay's command line", () => {
