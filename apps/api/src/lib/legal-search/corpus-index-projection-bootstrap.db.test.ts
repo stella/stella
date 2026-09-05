@@ -192,20 +192,24 @@ test("bulk bootstrap advances a keyset cursor and reaches a fixed point", async 
     entityIds: [],
   });
 
-  const complete = await db.transaction(
+  // Replaying the sweep from the head of the corpus claims nothing and still
+  // advances: a page sees only its own id range, so concluding that the
+  // generation is seeded belongs to the caller driving the sweep.
+  const replay = await db.transaction(
     async (tx) =>
       await bootstrapCorpusProjectionDesiredStateBatchTx(
         asTestRaw<Transaction>(tx),
         { family: "case_law", generation: "case_law_v5", limit: 1 },
       ),
   );
-  expect(complete).toEqual({
-    status: "complete",
+  expect(replay).toEqual({
+    status: "advanced",
     family: "case_law",
     generation: "case_law_v5",
     claimedCount: 0,
     seededCount: 0,
     entityIds: [],
+    nextAfterEntityId: CASE_LAW_DECISION_ID,
   });
 
   expect(
@@ -459,22 +463,35 @@ test("a page's work is bounded by its limit, not by how many rows are already se
         },
       ),
   );
+  // The sweep ends at the end of the id range; the pages above cost two ids
+  // each, whichever of those ids already carried a desired state.
   expect(rangeComplete).toMatchObject({ status: "range_complete" });
-
-  const complete = await db.transaction(
-    async (tx) =>
-      await bootstrapCorpusProjectionDesiredStateBatchTx(
-        asTestRaw<Transaction>(tx),
-        { family: "case_law", generation: "case_law_v5", limit: 2 },
-      ),
-  );
-  expect(complete).toMatchObject({ status: "complete" });
 
   expect(
     await db
       .select({ entityId: corpusIndexProjectionStates.entityId })
       .from(corpusIndexProjectionStates),
   ).toHaveLength(5);
+});
+
+test("a null-cursor page reports complete only when the corpus holds no rows", async () => {
+  await db.delete(caseLawDecisions).where(sql`true`);
+
+  const result = await db.transaction(
+    async (tx) =>
+      await bootstrapCorpusProjectionDesiredStateBatchTx(
+        asTestRaw<Transaction>(tx),
+        { family: "case_law", generation: "case_law_v5", limit: 2 },
+      ),
+  );
+  expect(result).toEqual({
+    status: "complete",
+    family: "case_law",
+    generation: "case_law_v5",
+    claimedCount: 0,
+    seededCount: 0,
+    entityIds: [],
+  });
 });
 
 test("a legislation page with nothing to seed advances instead of stalling", async () => {
@@ -525,4 +542,18 @@ test("a legislation page with nothing to seed advances instead of stalling", asy
     entityIds: [SECOND_LEGISLATION_DOCUMENT_ID],
     nextAfterEntityId: SECOND_LEGISLATION_DOCUMENT_ID,
   });
+
+  const rangeComplete = await db.transaction(
+    async (tx) =>
+      await bootstrapCorpusProjectionDesiredStateBatchTx(
+        asTestRaw<Transaction>(tx),
+        {
+          family: "legislation",
+          generation: "legislation_v2",
+          limit: 1,
+          afterEntityId: SECOND_LEGISLATION_DOCUMENT_ID,
+        },
+      ),
+  );
+  expect(rangeComplete).toMatchObject({ status: "range_complete" });
 });

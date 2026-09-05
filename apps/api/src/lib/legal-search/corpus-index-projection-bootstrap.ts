@@ -191,46 +191,6 @@ const selectSeededEntityIds = async (
   return new Set(rows.map(({ entityId }) => entityId));
 };
 
-const hasUnseededCaseLawRows = async (
-  tx: Transaction,
-  generation: string,
-): Promise<boolean> => {
-  const rows = await tx
-    .select({ documentId: caseLawDecisions.id })
-    .from(caseLawDecisions)
-    .leftJoin(
-      corpusIndexProjectionStates,
-      and(
-        eq(corpusIndexProjectionStates.family, "case_law"),
-        eq(corpusIndexProjectionStates.generation, generation),
-        eq(corpusIndexProjectionStates.entityId, caseLawDecisions.id),
-      ),
-    )
-    .where(isNull(corpusIndexProjectionStates.entityId))
-    .limit(1);
-  return rows.length > 0;
-};
-
-const hasUnseededLegislationRows = async (
-  tx: Transaction,
-  generation: string,
-): Promise<boolean> => {
-  const rows = await tx
-    .select({ documentId: legislationDocuments.id })
-    .from(legislationDocuments)
-    .leftJoin(
-      corpusIndexProjectionStates,
-      and(
-        eq(corpusIndexProjectionStates.family, "legislation"),
-        eq(corpusIndexProjectionStates.generation, generation),
-        eq(corpusIndexProjectionStates.entityId, legislationDocuments.id),
-      ),
-    )
-    .where(isNull(corpusIndexProjectionStates.entityId))
-    .limit(1);
-  return rows.length > 0;
-};
-
 const bootstrapCaseLaw = async (
   tx: Transaction,
   generation: string,
@@ -261,11 +221,10 @@ const bootstrapCaseLaw = async (
     // uses the same order; a short policy update may delay this bounded claim.
     .for("share", { of: caseLawSources });
   if (candidates.length === 0) {
-    if (afterEntityId !== undefined) {
-      return emptyBootstrapResult("range_complete", "case_law", generation);
-    }
+    // The id range is exhausted. Whether the generation is fully seeded is a
+    // question about every page of a sweep, so the caller owns it.
     return emptyBootstrapResult(
-      (await hasUnseededCaseLawRows(tx, generation)) ? "busy" : "complete",
+      afterEntityId === undefined ? "complete" : "range_complete",
       "case_law",
       generation,
     );
@@ -331,14 +290,6 @@ const bootstrapCaseLaw = async (
     return emptyBootstrapResult("busy", "case_law", generation);
   }
   if (rows.length === 0) {
-    // Only a page starting at the head of the corpus can conclude anything
-    // about rows outside its own id range.
-    if (
-      afterEntityId === undefined &&
-      !(await hasUnseededCaseLawRows(tx, generation))
-    ) {
-      return emptyBootstrapResult("complete", "case_law", generation);
-    }
     return {
       status: "advanced",
       family: "case_law",
@@ -491,11 +442,10 @@ const bootstrapLegislation = async (
     .limit(limit)
     .for("share", { of: legislationSources });
   if (candidates.length === 0) {
-    if (afterEntityId !== undefined) {
-      return emptyBootstrapResult("range_complete", "legislation", generation);
-    }
+    // The id range is exhausted. Whether the generation is fully seeded is a
+    // question about every page of a sweep, so the caller owns it.
     return emptyBootstrapResult(
-      (await hasUnseededLegislationRows(tx, generation)) ? "busy" : "complete",
+      afterEntityId === undefined ? "complete" : "range_complete",
       "legislation",
       generation,
     );
@@ -559,12 +509,6 @@ const bootstrapLegislation = async (
     return emptyBootstrapResult("busy", "legislation", generation);
   }
   if (rows.length === 0) {
-    if (
-      afterEntityId === undefined &&
-      !(await hasUnseededLegislationRows(tx, generation))
-    ) {
-      return emptyBootstrapResult("complete", "legislation", generation);
-    }
     return {
       status: "advanced",
       family: "legislation",
@@ -649,6 +593,11 @@ const bootstrapLegislation = async (
  * another worker owns them remain eligible for a later null-cursor sweep;
  * callers reset the cursor after range_complete. A busy result never advances
  * the cursor.
+ *
+ * Every page reads only its own id range, so no page can tell that a
+ * generation is fully seeded; complete means the corpus holds no rows at all.
+ * A caller concludes a generation is seeded from a whole sweep that claimed
+ * nothing and met no busy page.
  */
 export const bootstrapCorpusProjectionDesiredStateBatchTx = async (
   tx: Transaction,
