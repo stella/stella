@@ -551,6 +551,35 @@ const XHTML_MEDIA_TYPE = "application/xhtml+xml";
 const DOCUMENT_MEDIA_TYPES = [XHTML_MEDIA_TYPE, "text/html"] as const;
 
 /**
+ * How many of a manifestation's items to try once negotiation has failed.
+ *
+ * Cellar addresses a manifestation two ways and neither covers the corpus on
+ * its own, so the document is looked for under both. Negotiating on the
+ * manifestation redirects to the right item for works Cellar stores that way;
+ * for the rest that URL answers 404 whatever is asked for, and the document is
+ * only reachable as a numbered item under it. The item ordinal is not fixed
+ * either — `DOC_1` is the manifestation's first item, not necessarily its
+ * document — so the items are tried in order rather than guessed at.
+ *
+ * Two is enough for every manifestation observed; the third is margin. The
+ * walk only runs when negotiation has already failed, so the modern corpus
+ * still costs one request.
+ */
+const MAX_MANIFESTATION_ITEMS = 3;
+
+/**
+ * Budget for acquiring one variant, across every address tried.
+ *
+ * Derived rather than chosen: the lookup makes at most one negotiated request
+ * plus one per item, each already bounded by `ADAPTER_TIMEOUT.REQUEST`. Bounding
+ * the whole lookup by a single request's budget instead would abort the walk
+ * partway and drop a document Cellar serves, which is the failure this fallback
+ * exists to prevent.
+ */
+const MANIFESTATION_LOOKUP_TIMEOUT =
+  ADAPTER_TIMEOUT.REQUEST * (MAX_MANIFESTATION_ITEMS + 1);
+
+/**
  * The media type a `Content-Type` names, without its parameters.
  *
  * Compared whole and case-insensitively rather than searched for. A parameter
@@ -565,62 +594,245 @@ const DOCUMENT_MEDIA_TYPES = [XHTML_MEDIA_TYPE, "text/html"] as const;
 const mediaTypeOf = (contentType: string): string =>
   (contentType.split(";").at(0) ?? "").trim().toLowerCase();
 
+/**
+ * Statuses that say this address cannot serve this representation, and so are
+ * the only ones worth spending the next address on.
+ *
+ * Any other failure — throttling, a gateway error, a timeout — says nothing
+ * about the address. Walking on would ask a publisher already refusing load
+ * for the same document three more times, and would then report as
+ * permanently unserved a variant that was merely unreachable, which is the
+ * conflation this adapter exists to avoid.
+ */
+const ADDRESS_EXHAUSTED_STATUSES = [404, 406, 410, 415] as const;
+
+/**
+ * Statuses worth holding the page's cursor for.
+ *
+ * A timeout, a throttle or a server fault is the publisher failing to answer,
+ * and the identical request can succeed later. Every other refusal is this
+ * request being rejected on its merits, and since `fetchPage` walks a day's
+ * variants with no per-variant catch, propagating one would hold the date
+ * cursor on that variant for good. 401 and 403 pin the crawl exactly as 400
+ * would, so the split is on retryability rather than on a single status.
+ */
+const RETRYABLE_STATUSES = [408, 429] as const;
+
+const isRetryableStatus = (status: number): boolean =>
+  status >= 500 || RETRYABLE_STATUSES.some((retryable) => retryable === status);
+
+type ManifestationRead =
+  | { type: "document"; html: string }
+  | { type: "address-exhausted"; status: number }
+  | { type: "fetch-failed"; status: number };
+
+type ReadDocumentOptions = {
+  url: string;
+  /**
+   * `undefined` for an item URL, rather than the document types. Cellar serves
+   * an older item as `text/html;type=simplified` and matches an `Accept`
+   * against that whole type, so naming `text/html` answers 406 on exactly the
+   * documents the item walk exists to reach.
+   */
+  accept: string | undefined;
+  celex: string;
+  lang: EcjLanguage;
+  signal: AbortSignal;
+};
+
+/**
+ * Read one candidate address, yielding the document only when the response is
+ * one. An unusable answer is not reportable on its own: only the caller knows
+ * whether another address is left to try.
+ */
+const readDocumentResponse = async ({
+  url,
+  accept,
+  celex,
+  lang,
+  signal,
+}: ReadDocumentOptions): Promise<ManifestationRead> => {
+  const response = await fetchWithTimeout(url, {
+    signal,
+    timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+    headers: {
+      "User-Agent": INGESTION_USER_AGENT,
+      ...(accept === undefined ? {} : { Accept: accept }),
+    },
+  });
+
+  if (!response.ok) {
+    return ADDRESS_EXHAUSTED_STATUSES.some(
+      (status) => status === response.status,
+    )
+      ? { type: "address-exhausted", status: response.status }
+      : { type: "fetch-failed", status: response.status };
+  }
+
+  const mediaType = mediaTypeOf(response.headers.get("content-type") ?? "");
+  if (!DOCUMENT_MEDIA_TYPES.some((type) => type === mediaType)) {
+    logger.warn("case_law.ingestion.manifestation_not_a_document", {
+      adapterKey: ADAPTER_KEYS.EU_ECJ,
+      celex,
+      language: lang,
+      mediaType,
+      url,
+    });
+    return { type: "address-exhausted", status: response.status };
+  }
+
+  const html = await response.text();
+  return html.length > MIN_DOCUMENT_LENGTH
+    ? { type: "document", html }
+    : { type: "address-exhausted", status: response.status };
+};
+
+type ManifestationAddress = { url: string; accept: string | undefined };
+
+/**
+ * The document and the address that actually served it, which is not always
+ * the one the manifestation is named by: an item-only manifestation answers
+ * 404 at its own URL, so persisting that as the decision's `documentUrl`
+ * would publish a dead link.
+ */
+type ManifestationDocument = { html: string; url: string };
+
+type ManifestationLookup =
+  | ({ type: "document" } & ManifestationDocument)
+  | { type: "exhausted"; statuses: number[] }
+  | { type: "failed"; status: number };
+
+type ReadFirstServedOptions = {
+  addresses: ManifestationAddress[];
+  /** Refused statuses so far, in address order; appended to as they come. */
+  statuses: number[];
+  celex: string;
+  lang: EcjLanguage;
+  signal: AbortSignal;
+};
+
+/**
+ * Try each address in turn, yielding the first that serves a document.
+ *
+ * Recursive rather than a loop because the addresses must be tried in order
+ * and stopped at: awaiting them together would ask Cellar for every address
+ * of every variant, several times the requests for the fleet's most expensive
+ * source, to discard all but one answer.
+ */
+const readFirstServedAddress = async ({
+  addresses,
+  statuses,
+  celex,
+  lang,
+  signal,
+}: ReadFirstServedOptions): Promise<ManifestationLookup> => {
+  const [address, ...rest] = addresses;
+  if (address === undefined) {
+    return { type: "exhausted", statuses };
+  }
+
+  const read = await readDocumentResponse({
+    url: address.url,
+    accept: address.accept,
+    celex,
+    lang,
+    signal,
+  });
+  if (read.type === "document") {
+    return { type: "document", html: read.html, url: address.url };
+  }
+  if (read.type === "fetch-failed") {
+    return { type: "failed", status: read.status };
+  }
+
+  statuses.push(read.status);
+  return readFirstServedAddress({
+    addresses: rest,
+    statuses,
+    celex,
+    lang,
+    signal,
+  });
+};
+
+type FetchManifestationResult = Result<
+  ManifestationDocument | undefined,
+  AdapterFetchError
+>;
+
 const fetchManifestation = async ({
   contentUrl,
   celex,
   lang,
   signal,
-}: FetchManifestationOptions): Promise<string | undefined> => {
-  try {
-    const response = await fetchWithTimeout(contentUrl, {
-      signal,
-      timeoutMs: ADAPTER_TIMEOUT.REQUEST,
-      headers: {
-        "User-Agent": INGESTION_USER_AGENT,
-        Accept: XHTML_MEDIA_TYPE,
-      },
-    });
-
-    if (!response.ok) {
-      // A variant the listing named and the content stream will not serve is
-      // reported unavailable, and the reconciliation loop retires it after
-      // its retry schedule. Saying so keeps a transport fault distinguishable
-      // from a translation the publisher never published.
+}: FetchManifestationOptions): Promise<FetchManifestationResult> => {
+  const fetched = await Result.tryPromise({
+    try: async () =>
+      await readFirstServedAddress({
+        addresses: [
+          { url: contentUrl, accept: XHTML_MEDIA_TYPE },
+          ...Array.from(
+            { length: MAX_MANIFESTATION_ITEMS },
+            (_unused, index): ManifestationAddress => ({
+              url: `${contentUrl}/DOC_${index + 1}`,
+              accept: undefined,
+            }),
+          ),
+        ],
+        statuses: [],
+        celex,
+        lang,
+        signal,
+      }),
+    catch: (cause) =>
+      new AdapterFetchError({
+        message: `CJEU manifestation fetch failed for ${celex}/${lang}`,
+        adapterKey: ADAPTER_KEYS.EU_ECJ,
+        cursor: null,
+        cause,
+      }),
+  });
+  if (Result.isError(fetched)) {
+    return fetched;
+  }
+  const lookup = fetched.value;
+  switch (lookup.type) {
+    case "document":
+      return Result.ok({ html: lookup.html, url: lookup.url });
+    case "failed":
+      if (!isRetryableStatus(lookup.status)) {
+        // A deterministic bad document request must not pin the crawl's
+        // date cursor and prevent every later decision from being fetched.
+        logger.warn("case_law.ingestion.manifestation_rejected", {
+          adapterKey: ADAPTER_KEYS.EU_ECJ,
+          celex,
+          language: lang,
+          httpStatus: lookup.status,
+          url: contentUrl,
+        });
+        return Result.ok(undefined);
+      }
+      return Result.err(
+        new AdapterFetchError({
+          message: `CJEU document request failed: ${lookup.status}`,
+          adapterKey: ADAPTER_KEYS.EU_ECJ,
+          cursor: null,
+          httpStatus: lookup.status,
+        }),
+      );
+    case "exhausted":
       logger.warn("case_law.ingestion.manifestation_unavailable", {
         adapterKey: ADAPTER_KEYS.EU_ECJ,
         celex,
         language: lang,
-        httpStatus: response.status,
+        httpStatuses: lookup.statuses.join(","),
         url: contentUrl,
       });
-      return undefined;
+      return Result.ok(undefined);
+    default: {
+      const exhaustive: never = lookup;
+      return exhaustive;
     }
-
-    const mediaType = mediaTypeOf(response.headers.get("content-type") ?? "");
-    if (!DOCUMENT_MEDIA_TYPES.some((type) => type === mediaType)) {
-      logger.warn("case_law.ingestion.manifestation_not_a_document", {
-        adapterKey: ADAPTER_KEYS.EU_ECJ,
-        celex,
-        language: lang,
-        mediaType,
-        url: contentUrl,
-      });
-      return undefined;
-    }
-
-    const html = await response.text();
-    return html.length > MIN_DOCUMENT_LENGTH ? html : undefined;
-  } catch (error) {
-    // AbortErrors are expected (timeout, page cancellation)
-    if (!(error instanceof DOMException)) {
-      captureError(
-        new TelemetryError({
-          message: `[eu-ecj] manifestation fetch failed for ${celex}/${lang}`,
-          cause: error,
-        }),
-      );
-    }
-    return undefined;
   }
 };
 
@@ -1029,17 +1241,26 @@ export const buildDecision = async (
   // Fetch the language-specific XHTML stream from Cellar. The
   // human-facing EUR-Lex HTML endpoint is WAF-protected and may return
   // a challenge instead of document content to server-side callers.
-  const html = await fetchManifestation({
+  const manifestation = await fetchManifestation({
     contentUrl: documentUrl,
     celex,
     lang,
     signal: AbortSignal.any([
       signal,
-      AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
+      AbortSignal.timeout(MANIFESTATION_LOOKUP_TIMEOUT),
     ]),
   });
 
-  if (!html) {
+  if (Result.isError(manifestation)) {
+    const { error } = manifestation;
+    if (!(error.cause instanceof DOMException)) {
+      captureError(error);
+    }
+    // The adapter and fixture callers expose a rejecting promise contract.
+    throw error;
+  }
+  const served = manifestation.value;
+  if (!served) {
     return undefined;
   }
 
@@ -1051,8 +1272,10 @@ export const buildDecision = async (
     decisionType,
     language: ecjRowLanguage(lang),
     sourceUrl: eurLexSourceUrl(lang, celex),
-    documentUrl,
-    html,
+    // The address that answered, not the one the manifestation is named by:
+    // an item-only manifestation answers 404 at its own URL.
+    documentUrl: served.url,
+    html: served.html,
     metadata: {
       manifestationUri: binding.manifestation.value,
       languageUri: binding.language.value,
