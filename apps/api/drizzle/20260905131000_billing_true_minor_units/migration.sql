@@ -27,7 +27,7 @@ SET statement_timeout = '30s';--> statement-breakpoint
 -- of these tables is registered in high-volume-tables.ts.
 --
 -- The columns were widened to `bigint` in
--- `20260905090000_billing_money_columns_bigint`, which this migration
+-- `20260905130000_billing_money_columns_bigint`, which this migration
 -- requires: the rescale writes values `integer` cannot hold.
 
 -- The code is stored beside the amount and everything that groups or joins on

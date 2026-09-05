@@ -9,7 +9,7 @@ SET statement_timeout = '30s';--> statement-breakpoint
 -- released before the rescale takes its row locks instead of both being held
 -- for the length of one transaction.
 --
--- The rescale in `20260905091000_billing_true_minor_units` depends on this
+-- The rescale in `20260905131000_billing_true_minor_units` depends on this
 -- having run: it writes values `integer` cannot hold.
 
 -- `integer` cannot hold what this migration writes. CLF has four decimal

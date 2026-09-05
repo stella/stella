@@ -3,7 +3,7 @@
  * not two, as `Intl` resolves it.
  *
  * The migration that rescaled billing amounts to true minor units
- * (`20260905091000_billing_true_minor_units`) inlines this output. Run this to
+ * (`20260905131000_billing_true_minor_units`) inlines this output. Run this to
  * regenerate that block; `apps/api/src/db/currency-exponents.test.ts` fails the
  * build when the two stop matching, so the copy cannot drift on its own.
  */

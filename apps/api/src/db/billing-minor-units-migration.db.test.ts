@@ -22,8 +22,8 @@ import nodePath from "node:path";
 // Applied in order: the widening has to land before the rescale writes values
 // `integer` cannot hold.
 const MIGRATION_FILES = [
-  "20260905090000_billing_money_columns_bigint",
-  "20260905091000_billing_true_minor_units",
+  "20260905130000_billing_money_columns_bigint",
+  "20260905131000_billing_true_minor_units",
 ].map((directory) =>
   nodePath.resolve(import.meta.dir, `../../drizzle/${directory}/migration.sql`),
 );
