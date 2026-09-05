@@ -14,10 +14,6 @@ export type {
 } from "@/api/lib/deepl/client";
 export {
   DeepLAuthError,
-  DeepLDocumentError,
   DeepLQuotaError,
   DeepLRateLimitError,
-  DeepLTimeoutError,
-  DeepLUpstreamError,
 } from "@/api/lib/deepl/errors";
-export type { DeepLError } from "@/api/lib/deepl/errors";

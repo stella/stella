@@ -523,12 +523,23 @@ const TASKS: readonly Task[] = [
         ),
         ...nestedField(args, ["input", "body", "targetLang"], "de"),
         ...nestedField(args, ["input", "body", "engine"], "deepl"),
+        ...nestedField(args, ["input", "body", "output"], "translated"),
       ],
     },
     cli: {
       kind: "command",
       path: ["capability", "document-translations", "runs-create"],
-      flags: { workspace: "ws_acme_2024" },
+      // The run body is reachable only through `--input`; the scorer reads
+      // each expected value from that payload, so a reply that names the
+      // command but omits the body fails here as it would at the CLI.
+      flags: {
+        workspace: "ws_acme_2024",
+        "entity-id": "7f7f7f7f-1111-2222-3333-444444444444",
+        "field-id": "5e5e5e5e-1111-2222-3333-444444444444",
+        "target-lang": "de",
+        engine: "deepl",
+        output: "translated",
+      },
     },
   },
   {
@@ -924,6 +935,12 @@ const DECLINED_PATTERN =
 const kebabToSnake = (flagName: string): string =>
   flagName.replaceAll("-", "_");
 
+// A capability's `--input` keeps the handler schema's own camelCase keys.
+const kebabToCamel = (flagName: string): string =>
+  flagName.replaceAll(/-([a-z])/gu, (_match, letter: string) =>
+    letter.toUpperCase(),
+  );
+
 // A CLI flag whose value the eval also accepts from the `--input` JSON escape
 // hatch under a schema key that differs from the flag's own kebab-cased name
 // (`document field set`'s `translate`d body sits under a nested capability
@@ -979,6 +996,7 @@ const resolveFlagValue = (
   const flat = flattenInputPayload(parseJsonOrNull(inputText));
   const candidateKeys = [
     kebabToSnake(flagName),
+    kebabToCamel(flagName),
     ...(FLAG_INPUT_KEY_ALIASES[flagName] ?? []),
   ];
   for (const key of candidateKeys) {

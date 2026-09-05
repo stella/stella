@@ -1,6 +1,6 @@
 {
   "apps/api": {
-    "count": 785,
+    "count": 782,
     "files": {
       "apps/api/scripts/lib/capability-catalog.ts": 9,
       "apps/api/scripts/lib/enumerate-safe-handlers.ts": 7,
@@ -9,7 +9,7 @@
       "apps/api/src/db/billing-validators.ts": 3,
       "apps/api/src/db/corpus-schema-lane.ts": 2,
       "apps/api/src/db/online-migrations.ts": 1,
-      "apps/api/src/db/schema-validators.ts": 8,
+      "apps/api/src/db/schema-validators.ts": 7,
       "apps/api/src/db/schema/common.ts": 2,
       "apps/api/src/db/schema/corpus-index-jobs.ts": 2,
       "apps/api/src/env-base.ts": 1,
@@ -162,7 +162,7 @@
       "apps/api/src/lib/data-url.ts": 2,
       "apps/api/src/lib/db-pagination.ts": 2,
       "apps/api/src/lib/deepl/client.ts": 1,
-      "apps/api/src/lib/deepl/deepl.ts": 6,
+      "apps/api/src/lib/deepl/deepl.ts": 5,
       "apps/api/src/lib/deepl/errors.ts": 1,
       "apps/api/src/lib/desktop-edit-session-notifications.ts": 1,
       "apps/api/src/lib/desktop-edit-session-predicates.ts": 1,
@@ -200,7 +200,7 @@
       "apps/api/src/lib/entity-constants.ts": 6,
       "apps/api/src/lib/entity-deletion-effect-store.ts": 1,
       "apps/api/src/lib/entity-versions/desktop-edit-session-utils.ts": 2,
-      "apps/api/src/lib/errors/tagged-errors.ts": 5,
+      "apps/api/src/lib/errors/tagged-errors.ts": 4,
       "apps/api/src/lib/errors/utils.ts": 1,
       "apps/api/src/lib/file-derivative-decision.ts": 1,
       "apps/api/src/lib/file-derivative-queue.ts": 2,
@@ -383,7 +383,7 @@
     }
   },
   "apps/web": {
-    "count": 432,
+    "count": 431,
     "files": {
       "apps/web/src/components/ai-config-role-models.logic.ts": 6,
       "apps/web/src/components/ai-elements/conversation.tsx": 2,
@@ -553,6 +553,7 @@
       "apps/web/src/lib/use-shortcut-rebinding.ts": 1,
       "apps/web/src/lib/user-files.ts": 1,
       "apps/web/src/lib/utils.ts": 1,
+      "apps/web/src/lib/workspaces/mutations/create-file-tree-upload.logic.ts": 2,
       "apps/web/src/lib/workspaces/mutations/properties.ts": 1,
       "apps/web/src/lib/workspaces/queries.ts": 1,
       "apps/web/src/lib/workspaces/queries/anonymization-allowlist.ts": 1,
@@ -592,7 +593,6 @@
       "apps/web/src/routes/_protected.settings/-queries/memories.ts": 2,
       "apps/web/src/routes/_protected.settings/-queries/memory-matters.ts": 2,
       "apps/web/src/routes/_protected.settings/-queries/usage-policies.ts": 2,
-      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/format-currency.ts": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/format-duration.ts": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-scroll.logic.ts": 3,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-utils.ts": 2,
@@ -604,7 +604,6 @@
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-columns.tsx": 2,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-schema.ts": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-grid.tsx": 1,
-      "apps/web/src/lib/workspaces/mutations/create-file-tree-upload.logic.ts": 2,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-mutations/time-entries.ts": 5,
       "apps/web/src/routes/_protected.workspaces/-filters/filter-pipeline.ts": 1,
       "apps/web/src/routes/_protected.workspaces/-utils.ts": 1,

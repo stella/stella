@@ -16,9 +16,14 @@ import {
   RouteGenerationError,
 } from "./generate-route-map.js";
 import { DOCUMENT_VERSION_UPLOAD_TRANSPORT } from "./generated/document-version-upload-transport.js";
+import {
+  buildInputContractHelp,
+  formatInputExample,
+} from "./input-contract-help.js";
 import { exitCodeEntries } from "./mcp-constants.js";
 import type {
   FlagSpec,
+  JsonSchema,
   LeafCommandSpec,
   RegistryToolListing,
   RouteNode,
@@ -242,10 +247,11 @@ const routeNodeAt = (
  * Two worked "no curated command" examples (spec 049-flags deliverable 2):
  * task prose plus the command path to a real capability leaf. The invocation
  * — every required flag, in the leaf's own flag order, placeholder named
- * after the flag itself — is derived from that leaf at render time (see
+ * after the flag itself, plus a schema-derived `--input` payload for the
+ * parts no flag can address — is derived from that leaf at render time (see
  * `capabilityExampleLine`), so a catalog change that renames a flag, adds a
- * new required one, or drops the leaf fails codegen instead of shipping a
- * stale example.
+ * new required one, reshapes the body, or drops the leaf fails codegen
+ * instead of shipping a stale example.
  */
 const CAPABILITY_WORKED_EXAMPLES = [
   {
@@ -272,10 +278,42 @@ const capabilityExampleLine = (
   const args = required
     .map((flag) => `${flag.flag} <${flag.flag.replace(/^--/u, "")}>`)
     .join(" ");
-  const invocation = [`stella ${example.commandPath.join(" ")}`, args]
+  const invocation = [
+    `stella ${example.commandPath.join(" ")}`,
+    args,
+    inputOnlyExampleArg(example.task, node.spec),
+  ]
     .filter((part) => part.length > 0)
     .join(" ");
   return `- ${example.task}: \`${invocation}\`.`;
+};
+
+// The parts of a capability's input that no generated flag addresses (a body
+// that is a union, say) are reachable only through `--input`. An example that
+// showed the flags alone would fail validation when copied, so those parts
+// are rendered from the schema; the flag-addressed parts stay out of the
+// payload rather than appearing twice.
+const inputOnlyExampleArg = (
+  task: string,
+  spec: { inputSchema: JsonSchema; inputOnly: readonly string[] },
+): string => {
+  const help = buildInputContractHelp({
+    schema: spec.inputSchema,
+    inputOnly: spec.inputOnly,
+  });
+  if (help === undefined) {
+    return "";
+  }
+  if (help.example.status !== "complete") {
+    throw new RouteGenerationError(
+      `generateCliSkill: worked example "${task}" needs an \`--input\` payload, but no complete example can be derived from the capability's schema; pick a flag-addressable example`,
+    );
+  }
+  const partRoots = new Set(spec.inputOnly.map((path) => path.split(".")[0]));
+  const payload = Object.fromEntries(
+    Object.entries(help.example.value).filter(([key]) => partRoots.has(key)),
+  );
+  return formatInputExample(payload);
 };
 
 /**

@@ -306,8 +306,8 @@ invoke <id> --input '<json>'`, where the JSON is `{ body?, params?, query? }`.
 The curated commands above cover common tasks; anything else goes through the
 generic capability path. Current domains: `audit-logs`, `billing-codes`, `case-law`, `catalogue`, `chat`, `clauses`, `contacts`, `document-translations`, `document-types`, `entities`, `expenses`, `fields`, `flows`, `invoices`, `legislation`, `lists`, `organization-settings`, `playbooks`, `properties`, `rates`, `reports`, `signals`, `skills`, `style-sets`, `tasks`, `template-packs`, `template-recipes`, `templates`, `time-entries`, `uploads`, `usage`, `view-templates`, `views`, `work-obligations`, `workspaces`.
 
-- Start a document translation run: `stella capability document-translations runs-create --workspace-id <workspace-id>`.
-- Start workflow extraction: `stella capability workspaces workflow-start --workspace-id <workspace-id>`.
+- Start a document translation run: `stella capability document-translations runs-create --workspace-id <workspace-id> --input '{"body":{"entityId":"00000000-0000-4000-8000-000000000000","fieldId":"00000000-0000-4000-8000-000000000000","targetLang":"value","engine":"deepl","output":"translated"}}'`.
+- Start workflow extraction: `stella capability workspaces workflow-start --workspace-id <workspace-id> --input '{"body":{"serviceTier":"standard"}}'`.
 - **`--input` casing is not uniform; never guess it.** A curated command's
   `--input` JSON (the table and flags above) uses the MCP tool schema's own
   keys, snake_case (`workspace_id`, `contact_id`). A capability command's
