@@ -21,7 +21,24 @@ export type UpstreamDiscoveryModel = {
 };
 
 type DiscoveryModelKey = `${FirstPartyModelProvider}:${string}`;
-type DatedReviewReason = `${number}-${number}-${number}: ${string}`;
+
+/**
+ * The only grounds on which a picker-relevant model may stay unoffered. The
+ * picker offers every general-purpose first-party model; price, tier, and
+ * product fit are the key holder's call and are not representable here.
+ *
+ * - `floating alias`: a pointer whose target moves, so it cannot carry fixed
+ *   rates or capabilities.
+ * - `duplicate alias`: another ID of a model the picker already offers.
+ * - `third-party relay`: a model served through a provider that does not own
+ *   it.
+ */
+type ReviewedExclusionCategory =
+  | "floating alias"
+  | "duplicate alias"
+  | "third-party relay";
+type DatedReviewReason =
+  `${number}-${number}-${number}: ${ReviewedExclusionCategory}; ${string}`;
 
 /**
  * Stable, general-purpose models intentionally not exposed in the picker.
@@ -30,13 +47,13 @@ type DatedReviewReason = `${number}-${number}-${number}: ${string}`;
 // oxlint-disable-next-line no-partial-record-satisfies/no-partial-record-satisfies -- DiscoveryModelKey is `${provider}:${string}`, an unbounded template-literal type; a total record is not constructible. Absence here means "no reviewed exclusion for this model ID" (the default, checked via `!== undefined` in findUnreviewedModels), not an unclassified union member.
 export const REVIEWED_MODEL_EXCLUSIONS = {
   "google:gemini-flash-latest":
-    "2026-08-22: floating alias pointer; do not offer or assign fixed-model metadata",
+    "2026-08-22: floating alias; do not offer or assign fixed-model metadata",
   "google:gemini-flash-lite-latest":
-    "2026-08-22: floating alias pointer; do not offer or assign fixed-model metadata",
+    "2026-08-22: floating alias; do not offer or assign fixed-model metadata",
   "mistral:zai-glm-5-2":
-    "2026-08-28: third-party GLM model relayed through the Mistral platform; not a Mistral first-party model",
+    "2026-08-28: third-party relay; GLM model served through the Mistral platform, not a Mistral model",
   "openai:gpt-5.6-sol":
-    "2026-08-28: OpenAI's gpt-5.6 alias routes to Sol; offer the alias as the canonical picker ID",
+    "2026-08-28: duplicate alias; OpenAI's gpt-5.6 alias routes to Sol and is the offered picker ID",
 } as const satisfies Partial<Record<DiscoveryModelKey, DatedReviewReason>>;
 
 export type FindUnreviewedModelsOptions = {

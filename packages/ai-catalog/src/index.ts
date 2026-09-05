@@ -249,6 +249,7 @@ export const BYOK_MODEL_OPTIONS = {
     "claude-haiku-4-5-20251001",
   ],
   openai: [
+    "gpt-6-astra",
     "gpt-5.6",
     "gpt-5.6-terra",
     "gpt-5.6-luna",
@@ -259,6 +260,7 @@ export const BYOK_MODEL_OPTIONS = {
     "gpt-5.2",
   ],
   openrouter: [
+    "openai/gpt-6-astra",
     "openai/gpt-5.6-luna",
     "openai/gpt-5.6-terra",
     "google/gemini-3.8-flash",
@@ -388,6 +390,7 @@ export const MODEL_DISPLAY_METADATA = {
     displayName: "Claude Haiku 4.5",
     iconProvider: "anthropic",
   },
+  "gpt-6-astra": { displayName: "GPT-6 Astra", iconProvider: "openai" },
   // `gpt-5.6` is OpenAI's alias for the Sol model. Keep the API alias as the
   // canonical ID while exposing the family member's product name in pickers.
   "gpt-5.6": { displayName: "GPT-5.6 Sol", iconProvider: "openai" },
@@ -404,6 +407,10 @@ export const MODEL_DISPLAY_METADATA = {
     iconProvider: "openai",
   },
   "gpt-5.2": { displayName: "GPT-5.2", iconProvider: "openai" },
+  "openai/gpt-6-astra": {
+    displayName: "GPT-6 Astra",
+    iconProvider: "openai",
+  },
   "openai/gpt-5.6-luna": {
     displayName: "GPT-5.6 Luna",
     iconProvider: "openai",
@@ -962,6 +969,7 @@ export const CONTEXT_WINDOW_TOKENS = {
   "gpt-5.4-mini": 400_000,
   "gpt-5.4": 400_000,
   "gpt-5.5": 400_000,
+  "gpt-6-astra": 922_000,
   "gpt-5.6": 922_000,
   "gpt-5.6-luna": 922_000,
   "gpt-5.6-terra": 922_000,
@@ -997,6 +1005,7 @@ export const CONTEXT_WINDOW_TOKENS = {
   "anthropic/claude-opus-5": 1_000_000,
   "anthropic/claude-opus-4.8": 200_000,
   "anthropic/claude-sonnet-4.6": 200_000,
+  "openai/gpt-6-astra": 922_000,
   "openai/gpt-5.6-luna": 922_000,
   "openai/gpt-5.6-terra": 922_000,
   "openai/gpt-5.5": 400_000,
