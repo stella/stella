@@ -824,6 +824,66 @@ const failureDetail = (error: unknown): string =>
     FAILURE_DETAIL_LIMIT,
   );
 
+/** Pause between lease attempts while a replay waits for the source. */
+export const REPLAY_LEASE_RETRY_PAUSE_MS = 5000;
+
+export type ReplayLeaseAcquisition<TLease> =
+  | { type: "acquired"; lease: TLease; waitedMs: number }
+  | { type: "unavailable"; waitedMs: number };
+
+// Generic over the lease because the wait reads nothing from it: an acquire
+// either produced one or did not.
+export type AcquireReplayLeaseOptions<TLease> = {
+  acquire: () => Promise<TLease | null>;
+  /** Paused time the acquire may be retried for; 0 attempts once. */
+  waitBudgetMs: number;
+  /** Called once, when the first attempt lost and the wait begins. */
+  onWaitStart?: () => void;
+  /** Test seam; a run sleeps. */
+  sleep?: (ms: number) => Promise<void>;
+};
+
+/**
+ * Take a source's ingestion lease, waiting out an ingestion that holds it.
+ *
+ * An ingestion takes the lease per reconciliation unit and releases it in
+ * between, so a single attempt made while the source is being crawled loses
+ * far more often than it wins. Retrying on a fixed pause claims one of the
+ * gaps instead; the budget bounds the wait so an unattended run still ends.
+ *
+ * The budget counts paused time alone: an attempt is one indexed update, and
+ * counting attempts too would make the number of tries depend on database
+ * latency.
+ */
+export const acquireReplayLease = async <TLease>({
+  acquire,
+  waitBudgetMs,
+  onWaitStart,
+  sleep = Bun.sleep,
+}: AcquireReplayLeaseOptions<TLease>): Promise<
+  ReplayLeaseAcquisition<TLease>
+> => {
+  const lease = await acquire();
+  if (lease !== null) {
+    return { type: "acquired", lease, waitedMs: 0 };
+  }
+  if (waitBudgetMs < REPLAY_LEASE_RETRY_PAUSE_MS) {
+    return { type: "unavailable", waitedMs: 0 };
+  }
+
+  onWaitStart?.();
+  let waitedMs = 0;
+  while (waitedMs + REPLAY_LEASE_RETRY_PAUSE_MS <= waitBudgetMs) {
+    await sleep(REPLAY_LEASE_RETRY_PAUSE_MS);
+    waitedMs += REPLAY_LEASE_RETRY_PAUSE_MS;
+    const retried = await acquire();
+    if (retried !== null) {
+      return { type: "acquired", lease: retried, waitedMs };
+    }
+  }
+  return { type: "unavailable", waitedMs };
+};
+
 export type ReplayCaseLawSourceOptions = {
   adapter: SourceAdapter;
   scopedDb: ScopedDb;
