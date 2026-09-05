@@ -470,7 +470,7 @@ describe("runCapabilityCommand: compound scope preflight", () => {
       context: tty.context,
       flags: {},
       spec: capSpec({
-        capabilityId: "templates.fill-to-workspace",
+        capabilityId: "templates.fill-to-matter",
         scope: "documents_write",
         additionalScopes: ["templates"],
       }),

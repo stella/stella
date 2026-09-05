@@ -12,13 +12,13 @@ const config = {
   description:
     "Count the documents an extraction workflow would process in a matter, " +
     "optionally narrowed to a set of entity ids. Use it before " +
-    "workspaces.workflow-start to size the run.",
+    "matters.workflow-start to size the run.",
   permissions: { workspace: ["update"] },
   access: "read",
   mcp: { type: "capability", reason: "workflow_orchestration" },
   body: t.Object({
     // Bounded by what a run may actually be launched against: the same cap
-    // `workspaces.workflow-start` puts on its own entity list, so every set
+    // `matters.workflow-start` puts on its own entity list, so every set
     // that can start a run can also be sized first.
     entityIds: t.Optional(
       t.Array(tSafeId("entity"), { maxItems: LIMITS.entitiesCount }),

@@ -22,7 +22,7 @@ export const anonymization = {
     },
     {
       type: "capability",
-      id: "workspaces.anonymization-terms.list",
+      id: "matters.anonymization-terms.list",
     },
     {
       type: "source",

@@ -234,7 +234,7 @@ const DOMAIN_SCOPE: Record<string, string> = {
   "view-templates": "stella:matters_write",
   views: "stella:matters_write",
   "work-obligations": "stella:matters_write",
-  workspaces: "stella:matters_write",
+  matters: "stella:matters_write",
 };
 
 /**
@@ -297,7 +297,7 @@ const ENTRY_SCOPE_OVERRIDES: Record<string, string> = {
   // Filling is template-domain work, but this endpoint persists a new matter
   // entity and is covered by save_filled_template. Generic invocation must
   // therefore require the same document-write consent as the named tool.
-  "templates.fill-to-workspace": "stella:documents_write",
+  "templates.fill-to-matter": "stella:documents_write",
 };
 
 /**
@@ -342,11 +342,11 @@ const INLINE_CAPABILITY_ALLOWLIST: Record<string, number> = {};
  * (apps/api/src/handlers/workspaces/routes.ts): only `unarchive`. Stale-checked:
  * a flagged id that is no longer a discovered capability fails the export.
  *
- * - `workspaces.unarchive`: flips an archived workspace back to active; must be
+ * - `matters.unarchive`: flips an archived workspace back to active; must be
  *   reachable while the workspace is archived.
  */
 const ALLOWS_ARCHIVED_WORKSPACE: ReadonlySet<string> = new Set([
-  "workspaces.unarchive",
+  "matters.unarchive",
 ]);
 
 /**

@@ -61,14 +61,14 @@ alternative transport.
 | `entities.upload`              | x          |     | complete: `uploads.create` + `uploads.update` (`entity_create`)     |
 | `entities.upload-version`      | x          |     | complete: `uploads.create` + `uploads.update` (`entity_version`)    |
 | `skills.upload`                | x          |     | complete: `uploads.create` + `uploads.update` (`agent_skill`)       |
-| `templates.fill-by-id`         |            | x   | complete: `templates.fill-to-workspace`                             |
+| `templates.fill-by-id`         |            | x   | complete: `templates.fill-to-matter`                             |
 | `clauses.import`               | x          |     | partial: `clauses.create` (one clause per call, no CSV bulk)        |
 | `clauses.export`               |            | x   | partial: `clauses.list` + `clauses.get` (no single export file)     |
 | `skills.resources.upload`      | x          |     | partial: `skills.resources.create` (text only, no binary resource)  |
 | `style-sets.create`            | x          |     | partial: `style-sets.create-from-editor` (settings, not a DOCX)     |
 | `style-sets.replace`           | x          |     | partial: `style-sets.update-from-editor` (settings, not a DOCX)     |
 | `templates.create-from-styles` | x          |     | partial: style set from editor, then `create-from-style-set`        |
-| `templates.fill`               | x          | x   | partial: `templates.fill-to-workspace` (stored template, to matter) |
+| `templates.fill`               | x          | x   | partial: `templates.fill-to-matter` (stored template, to matter) |
 | `time-entries.export-pdf`      |            | x   | partial: `export-csv` / `export-ledes` (no rendered PDF)            |
 | `entities.check-stamp`         | x          |     | none                                                                |
 | `entities.download-zip`        |            | x   | none                                                                |

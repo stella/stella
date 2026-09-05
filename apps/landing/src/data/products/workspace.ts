@@ -35,7 +35,7 @@ export const workspace = {
     "ai-info": { to: "ai-info" },
   },
   evidence: [
-    { type: "capability", id: "workspaces.list" },
+    { type: "capability", id: "matters.list" },
     { type: "capability", id: "entities.list" },
     { type: "capability", id: "entities.upload" },
     { type: "capability", id: "views.list" },
