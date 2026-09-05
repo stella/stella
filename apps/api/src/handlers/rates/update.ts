@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { and, eq, ne, sql } from "drizzle-orm";
 import { t } from "elysia";
 
-import { toMajorUnits, toMinorUnits } from "@stll/money";
+import { currencyMinorUnitDigits } from "@stll/money";
 
 import { rateEntries, rateTables } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
@@ -14,7 +14,6 @@ import {
 } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { pickDefined } from "@/api/lib/pick-defined";
-import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 
 const updateRateTableBodySchema = t.Object({
   id: tSafeId("rateTable"),
@@ -107,6 +106,24 @@ const updateRateTable = createSafeHandler(
               .returning({ id: rateTables.id })
           : [];
 
+        // The currency the rates are currently stored in, read under a row
+        // lock. The `existing` read above happened outside this transaction,
+        // so a currency change that landed in between would leave this one
+        // scaling from a code the table no longer carries; the lock also
+        // serializes two concurrent currency changes, which would otherwise
+        // both scale from the same starting point.
+        const lockedRows = await tx
+          .select({ currency: rateTables.currency })
+          .from(rateTables)
+          .where(
+            and(
+              eq(rateTables.id, body.id),
+              eq(rateTables.workspaceId, workspaceId),
+            ),
+          )
+          .for("update");
+        const sourceCurrency = lockedRows.at(0)?.currency ?? existing.currency;
+
         await tx
           .update(rateTables)
           .set(updates)
@@ -123,39 +140,28 @@ const updateRateTable = createSafeHandler(
         // 10000 JPY), so the rates move with it, in this transaction. Rates
         // already copied onto time entries are not rewritten; those entries
         // carry the currency they were billed in.
+        //
+        // One set-based statement, not a CASE built from an earlier SELECT:
+        // each row's own current value is what gets scaled, so a rate updated
+        // between that read and this write is carried forward rather than
+        // overwritten with the value it used to have. The shift is the same
+        // for every row because both currencies are fixed, and `power` on
+        // `numeric` keeps the arithmetic exact.
         const nextCurrency = changedFields.currency;
-        if (nextCurrency !== undefined && nextCurrency !== existing.currency) {
-          const entries = await tx
-            .select({
-              id: rateEntries.id,
-              hourlyRate: rateEntries.hourlyRate,
-            })
-            .from(rateEntries)
-            .where(
-              and(
-                eq(rateEntries.rateTableId, body.id),
-                eq(rateEntries.workspaceId, workspaceId),
-              ),
-            );
-
+        const exponentShift =
+          nextCurrency === undefined
+            ? 0
+            : currencyMinorUnitDigits(nextCurrency) -
+              currencyMinorUnitDigits(sourceCurrency);
+        if (
+          nextCurrency !== undefined &&
+          nextCurrency !== sourceCurrency &&
+          exponentShift !== 0
+        ) {
           await tx
             .update(rateEntries)
             .set({
-              hourlyRate: sqlCaseFragment({
-                branches: entries.map(
-                  (entry) =>
-                    sql`WHEN ${rateEntries.id} = ${entry.id} THEN ${toMinorUnits(
-                      {
-                        amount: toMajorUnits({
-                          amountCents: entry.hourlyRate,
-                          currency: existing.currency,
-                        }),
-                        currency: nextCurrency,
-                      },
-                    )}`,
-                ),
-                fallback: sql`${rateEntries.hourlyRate}`,
-              }),
+              hourlyRate: sql`ROUND(${rateEntries.hourlyRate} * power(10::numeric, ${exponentShift}))::bigint`,
             })
             .where(
               and(
@@ -169,7 +175,12 @@ const updateRateTable = createSafeHandler(
         for (const field of ["name", "currency", "isDefault"] as const) {
           const next = changedFields[field];
           if (next !== undefined) {
-            changes[field] = { old: existing[field], new: next };
+            // The currency's old value comes from the locked row, so the
+            // audit trail records what was actually replaced.
+            changes[field] = {
+              old: field === "currency" ? sourceCurrency : existing[field],
+              new: next,
+            };
           }
         }
 

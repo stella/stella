@@ -29,6 +29,7 @@ import updateRateTableHandler from "./update";
 let testDb: TestDatabase;
 let ids: TestIds;
 let rateTableId: SafeId<"rateTable">;
+let defaultEntryId: SafeId<"rateEntry">;
 
 const USD_HOURLY_RATE = 10_000;
 const USER_HOURLY_RATE = 25_050;
@@ -47,9 +48,10 @@ beforeAll(async () => {
     currency: "USD",
     isDefault: false,
   });
+  defaultEntryId = toSafeId<"rateEntry">(Bun.randomUUIDv7());
   await testDb.insert(rateEntries).values([
     {
-      id: toSafeId<"rateEntry">(Bun.randomUUIDv7()),
+      id: defaultEntryId,
       workspaceId: ids.wsA1,
       rateTableId,
       userId: null,
@@ -112,4 +114,38 @@ test("changing a rate table from USD to JPY restates every rate under it", async
     .from(rateTables)
     .where(eq(rateTables.id, rateTableId));
   expect(table?.currency).toBe("JPY");
+});
+
+test("the scale reads each row's current value, not one read earlier", async () => {
+  // The defect a per-row CASE has: the new value is computed from a SELECT
+  // taken before the write, so a rate changed in between is overwritten with
+  // what it used to be. Writing the row after the handler's own pre-read and
+  // before its mutation reproduces exactly that ordering without needing two
+  // concurrent transactions.
+  //
+  // The table is JPY after the test above, so this converts back to KWD:
+  // three decimals from zero, a shift of +3.
+  await testDb
+    .update(rateEntries)
+    .set({ hourlyRate: cents(7) })
+    .where(eq(rateEntries.id, defaultEntryId));
+
+  const result = await updateRateTableHandler.handler(
+    createTestHandlerContext<UpdateRateTableCtx>({
+      workspaceId: ids.wsA1,
+      session: { activeOrganizationId: ids.orgA },
+      user: { id: ids.userA1 },
+      safeDb: scopedSafeDb(),
+      body: { id: rateTableId, currency: "KWD" },
+    }),
+  );
+  expect(result).toEqual({ id: rateTableId });
+
+  const [row] = await testDb
+    .select({ hourlyRate: rateEntries.hourlyRate })
+    .from(rateEntries)
+    .where(eq(rateEntries.id, defaultEntryId));
+  // 7 yen is 7.000 dinars: the value in the database when the statement ran,
+  // scaled by the exponent difference, not the 100 this row held before.
+  expect(row?.hourlyRate).toBe(7000);
 });
