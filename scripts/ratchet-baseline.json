@@ -84,7 +84,7 @@
     "files": {}
   },
   "throw-outside-boundary": {
-    "count": 879,
+    "count": 878,
     "files": {
       "apps/api/src/handlers/case-law/corpus-index.ts": 12,
       "apps/api/src/handlers/case-law/decisions/latest.ts": 3,
@@ -95,7 +95,7 @@
       "apps/api/src/handlers/case-law/ingestion/adapters/cz-nss.ts": 4,
       "apps/api/src/handlers/case-law/ingestion/adapters/cz-regional.ts": 9,
       "apps/api/src/handlers/case-law/ingestion/adapters/cz-us.ts": 11,
-      "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts": 6,
+      "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts": 5,
       "apps/api/src/handlers/case-law/ingestion/adapters/pagination.ts": 4,
       "apps/api/src/handlers/case-law/ingestion/adapters/pl-courts.ts": 5,
       "apps/api/src/handlers/case-law/ingestion/adapters/publisher-request-gate.ts": 2,

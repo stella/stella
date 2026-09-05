@@ -755,83 +755,84 @@ const readFirstServedAddress = async ({
   });
 };
 
+type FetchManifestationResult = Result<
+  ManifestationDocument | undefined,
+  AdapterFetchError
+>;
+
 const fetchManifestation = async ({
   contentUrl,
   celex,
   lang,
   signal,
-}: FetchManifestationOptions): Promise<ManifestationDocument | undefined> => {
-  try {
-    const lookup = await readFirstServedAddress({
-      addresses: [
-        { url: contentUrl, accept: XHTML_MEDIA_TYPE },
-        ...Array.from(
-          { length: MAX_MANIFESTATION_ITEMS },
-          (_unused, index): ManifestationAddress => ({
-            url: `${contentUrl}/DOC_${index + 1}`,
-            accept: undefined,
-          }),
-        ),
-      ],
-      statuses: [],
-      celex,
-      lang,
-      signal,
-    });
-
-    switch (lookup.type) {
-      case "document":
-        return { html: lookup.html, url: lookup.url };
-      case "failed":
-        if (!isRetryableStatus(lookup.status)) {
-          // A deterministic bad document request must not pin the crawl's
-          // date cursor and prevent every later decision from being fetched.
-          logger.warn("case_law.ingestion.manifestation_rejected", {
-            adapterKey: ADAPTER_KEYS.EU_ECJ,
-            celex,
-            language: lang,
-            httpStatus: lookup.status,
-            url: contentUrl,
-          });
-          return undefined;
-        }
-        // Propagate to the caller's retry path instead of reporting missing
-        // content or probing another manifestation during a provider outage.
-        throw new AdapterFetchError({
+}: FetchManifestationOptions): Promise<FetchManifestationResult> => {
+  const fetched = await Result.tryPromise({
+    try: async () =>
+      await readFirstServedAddress({
+        addresses: [
+          { url: contentUrl, accept: XHTML_MEDIA_TYPE },
+          ...Array.from(
+            { length: MAX_MANIFESTATION_ITEMS },
+            (_unused, index): ManifestationAddress => ({
+              url: `${contentUrl}/DOC_${index + 1}`,
+              accept: undefined,
+            }),
+          ),
+        ],
+        statuses: [],
+        celex,
+        lang,
+        signal,
+      }),
+    catch: (cause) =>
+      new AdapterFetchError({
+        message: `CJEU manifestation fetch failed for ${celex}/${lang}`,
+        adapterKey: ADAPTER_KEYS.EU_ECJ,
+        cursor: null,
+        cause,
+      }),
+  });
+  if (Result.isError(fetched)) {
+    return fetched;
+  }
+  const lookup = fetched.value;
+  switch (lookup.type) {
+    case "document":
+      return Result.ok({ html: lookup.html, url: lookup.url });
+    case "failed":
+      if (!isRetryableStatus(lookup.status)) {
+        // A deterministic bad document request must not pin the crawl's
+        // date cursor and prevent every later decision from being fetched.
+        logger.warn("case_law.ingestion.manifestation_rejected", {
+          adapterKey: ADAPTER_KEYS.EU_ECJ,
+          celex,
+          language: lang,
+          httpStatus: lookup.status,
+          url: contentUrl,
+        });
+        return Result.ok(undefined);
+      }
+      return Result.err(
+        new AdapterFetchError({
           message: `CJEU document request failed: ${lookup.status}`,
           adapterKey: ADAPTER_KEYS.EU_ECJ,
           cursor: null,
           httpStatus: lookup.status,
-        });
-      case "exhausted":
-        // A variant the listing named and no address on the content stream
-        // serves is reported unavailable, and the reconciliation loop retires
-        // it after its retry schedule. The statuses say which of the two
-        // addressing schemes refused it.
-        logger.warn("case_law.ingestion.manifestation_unavailable", {
-          adapterKey: ADAPTER_KEYS.EU_ECJ,
-          celex,
-          language: lang,
-          httpStatuses: lookup.statuses.join(","),
-          url: contentUrl,
-        });
-        return undefined;
-      default: {
-        const exhaustive: never = lookup;
-        return exhaustive;
-      }
-    }
-  } catch (error) {
-    // AbortErrors are expected (timeout, page cancellation)
-    if (!(error instanceof DOMException)) {
-      captureError(
-        new TelemetryError({
-          message: `[eu-ecj] manifestation fetch failed for ${celex}/${lang}`,
-          cause: error,
         }),
       );
+    case "exhausted":
+      logger.warn("case_law.ingestion.manifestation_unavailable", {
+        adapterKey: ADAPTER_KEYS.EU_ECJ,
+        celex,
+        language: lang,
+        httpStatuses: lookup.statuses.join(","),
+        url: contentUrl,
+      });
+      return Result.ok(undefined);
+    default: {
+      const exhaustive: never = lookup;
+      return exhaustive;
     }
-    throw error;
   }
 };
 
@@ -1240,7 +1241,7 @@ export const buildDecision = async (
   // Fetch the language-specific XHTML stream from Cellar. The
   // human-facing EUR-Lex HTML endpoint is WAF-protected and may return
   // a challenge instead of document content to server-side callers.
-  const served = await fetchManifestation({
+  const manifestation = await fetchManifestation({
     contentUrl: documentUrl,
     celex,
     lang,
@@ -1250,6 +1251,15 @@ export const buildDecision = async (
     ]),
   });
 
+  if (Result.isError(manifestation)) {
+    const { error } = manifestation;
+    if (!(error.cause instanceof DOMException)) {
+      captureError(error);
+    }
+    // The adapter and fixture callers expose a rejecting promise contract.
+    throw error;
+  }
+  const served = manifestation.value;
   if (!served) {
     return undefined;
   }
