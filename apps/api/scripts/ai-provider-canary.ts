@@ -26,6 +26,7 @@ import {
   mergeGenerationOptions,
   resolveTanStackTextModel,
 } from "@/api/lib/tanstack-ai-generate";
+import type { TanStackTextFinishPolicy } from "@/api/lib/tanstack-ai-generate";
 import { projectSchemaInputJsonSchema } from "@/api/lib/tanstack-ai-schema";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
@@ -66,6 +67,14 @@ const CANARY_PROBE_RETRY_DELAY_MS = 5000;
 const CANARY_PROBE_RETRY_BACKOFF = 4;
 const PROVIDER_ERROR_MESSAGE_MAX_LENGTH = 16_384;
 const MILLISECONDS_PER_WEEK = 7 * 24 * 60 * 60 * 1000;
+// Every text probe asserts what the provider returned, not that it finished
+// inside the ceiling the probe itself set. Those ceilings are sized for a
+// one-line answer, so a model that spends the whole budget reports a `length`
+// finish; grading that as a failure would report the canary's own budget as
+// provider drift. A moderated, tool-bearing, or unfinished run stays a
+// failure: those are the provider regressions the probes exist to catch.
+export const CANARY_TEXT_FINISH_POLICY =
+  "allow-output-ceiling" satisfies TanStackTextFinishPolicy;
 const SYNTHETIC_PROMPT = "Reply with exactly OK.";
 export const PDF_CANARY_TOKEN = "STELLA_PDF_CANARY_OK";
 const PDF_CANARY_FILENAME = "stella-provider-canary.pdf";
@@ -1032,7 +1041,7 @@ const capabilityProbes = [
       const output = await generateTanStackTextForRole({
         abortSignal: signal,
         caching: CANARY_CACHING,
-        finishPolicy: "require-complete",
+        finishPolicy: CANARY_TEXT_FINISH_POLICY,
         maxOutputTokens: modelRoleMaxOutputTokens({
           modelId: DEFAULT_MODELS[provider][CAPABILITY_ROLE],
           role: CAPABILITY_ROLE,
@@ -1105,7 +1114,7 @@ const runModelRoleProbe = async ({
   const output = await generateTanStackTextForRole({
     abortSignal: signal,
     caching: NO_CACHING,
-    finishPolicy: "require-complete",
+    finishPolicy: CANARY_TEXT_FINISH_POLICY,
     maxOutputTokens: modelRoleMaxOutputTokens({
       modelId: selection.modelId,
       role,
@@ -1167,7 +1176,7 @@ const runWeeklyModelRoleProbe = async ({
   const output = await generateTanStackTextForRole({
     abortSignal: signal,
     caching: NO_CACHING,
-    finishPolicy: "require-complete",
+    finishPolicy: CANARY_TEXT_FINISH_POLICY,
     maxOutputTokens: modelRoleMaxOutputTokens({
       modelId: rotation.modelId,
       role,
@@ -1772,7 +1781,7 @@ const runCatalogModelProbe = async ({
   const output = await generateTanStackTextForRole({
     abortSignal: signal,
     caching: NO_CACHING,
-    finishPolicy: "require-complete",
+    finishPolicy: CANARY_TEXT_FINISH_POLICY,
     maxOutputTokens: modelRoleMaxOutputTokens({
       modelId,
       role: CATALOG_PROBE_ROLE,

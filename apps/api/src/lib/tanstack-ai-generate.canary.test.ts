@@ -10,6 +10,7 @@ import {
   generateTanStackTextForRole,
   streamTanStackObjectForRole,
 } from "@/api/lib/tanstack-ai-generate";
+import type { TanStackTextFinishPolicy } from "@/api/lib/tanstack-ai-generate";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 
 // Real `chat()` runtime, no module mocks. `generateTanStackTextForRole`
@@ -135,13 +136,11 @@ const outputCeilingModel = {
   provider: "anthropic",
 } as ResolvedTanStackTextModel;
 
-type FinishPolicy = "allow-incomplete" | "require-complete";
-
 const generateAtOutputCeiling = async ({
   finishPolicy,
   terminalEvents,
 }: {
-  finishPolicy: FinishPolicy;
+  finishPolicy: TanStackTextFinishPolicy;
   terminalEvents: string[];
 }) =>
   await generateTanStackTextForRole({
@@ -195,6 +194,35 @@ const generateWithCancellation = async (cancelAt: CancellationPoint) => {
   });
 };
 
+describe("TanStack completed-run canary", () => {
+  test("a run that finished on stop satisfies a complete-output caller", async () => {
+    const controller = new AbortController();
+    // SAFETY: the adapter is the only part of the resolved model the real chat
+    // loop reads on this path.
+    const model = {
+      adapter: createCancellingAdapter(controller, "after-finish"),
+      keySource: "instance",
+      modelId: "cancelling",
+      modelOptions: {},
+      provider: "openai",
+    } as ResolvedTanStackTextModel;
+
+    expect(
+      await generateTanStackTextForRole({
+        caching: noCaching,
+        finishPolicy: "require-complete",
+        organizationId: null,
+        orgAIConfig: null,
+        prompt: "Rewrite it.",
+        resolveTextModel: () => model,
+        role: "chat",
+        serviceTier: "standard",
+        tenantWorkspaceIds: [],
+      }),
+    ).toBe("half an answer");
+  });
+});
+
 describe("TanStack cancellation canary", () => {
   test("a run cancelled mid-stream rejects instead of returning its prefix", async () => {
     const caught = await generateWithCancellation("mid-stream").then(
@@ -219,6 +247,18 @@ describe("TanStack output-ceiling canary", () => {
     expect(
       await generateAtOutputCeiling({
         finishPolicy: "allow-incomplete",
+        terminalEvents,
+      }),
+    ).toBe("as far as it got");
+    expect(terminalEvents).toEqual(["finish:length"]);
+  });
+
+  test("returns the same partial text to an output-ceiling caller", async () => {
+    const terminalEvents: string[] = [];
+
+    expect(
+      await generateAtOutputCeiling({
+        finishPolicy: "allow-output-ceiling",
         terminalEvents,
       }),
     ).toBe("as far as it got");

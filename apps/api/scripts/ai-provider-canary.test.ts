@@ -1,3 +1,5 @@
+import { EventType } from "@tanstack/ai";
+import type { AnyTextAdapter, StreamChunk } from "@tanstack/ai";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
@@ -10,9 +12,13 @@ import {
 } from "@stll/ai-catalog";
 
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
+import type { CachingDecision } from "@/api/lib/ai-config";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
+import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 
 import {
+  CANARY_TEXT_FINISH_POLICY,
   CanaryCredentialRejectedError,
   CanaryProviderRunError,
   CATALOG_SWEEP_BUDGET_MS,
@@ -43,6 +49,116 @@ describe("AI provider canary probe deadlines", () => {
     );
     expect(canaryCapabilityProbeTimeout("structured-output")).toBe(20_000);
     expect(canaryCapabilityProbeTimeout("unknown-probe")).toBeUndefined();
+  });
+});
+
+// The finish shapes a provider run can end in, as the probes' text calls see
+// them through the real chat runtime. `unfinished` is a stream that ends
+// without a `RUN_FINISHED` event at all.
+type ProbeFinish = "content_filter" | "length" | "stop" | "unfinished";
+
+const createProbeFinishAdapter = (finish: ProbeFinish): AnyTextAdapter => ({
+  kind: "text",
+  name: "probe-finish",
+  model: "probe-finish",
+  "~types": {
+    providerOptions: {},
+    inputModalities: ["text"],
+    messageMetadataByModality: {},
+    toolCapabilities: [],
+    toolCallMetadata: {},
+    systemPromptMetadata: undefined,
+  },
+  async *chatStream({ runId, threadId }) {
+    const resolvedRunId = runId ?? "run-1";
+    const resolvedThreadId = threadId ?? "thread-1";
+    const messageId = "provider-message-1";
+    yield {
+      type: EventType.RUN_STARTED,
+      runId: resolvedRunId,
+      threadId: resolvedThreadId,
+    } satisfies StreamChunk;
+    yield {
+      type: EventType.TEXT_MESSAGE_START,
+      messageId,
+      role: "assistant",
+    } satisfies StreamChunk;
+    yield {
+      type: EventType.TEXT_MESSAGE_CONTENT,
+      messageId,
+      delta: "OK",
+    } satisfies StreamChunk;
+    yield { type: EventType.TEXT_MESSAGE_END, messageId } satisfies StreamChunk;
+    if (finish === "unfinished") {
+      return;
+    }
+    yield {
+      type: EventType.RUN_FINISHED,
+      finishReason: finish,
+      runId: resolvedRunId,
+      threadId: resolvedThreadId,
+    } satisfies StreamChunk;
+  },
+  structuredOutput: () => {
+    throw new Error("Structured output is not part of this fixture");
+  },
+});
+
+const generateProbeTextFinishing = async (finish: ProbeFinish) => {
+  // SAFETY: the adapter is the only part of the resolved model the chat loop
+  // reads on this path; the rest is bookkeeping this test never routes through
+  // a provider.
+  const model = {
+    adapter: createProbeFinishAdapter(finish),
+    keySource: "instance",
+    modelId: "probe-finish",
+    modelOptions: {},
+    provider: "openai",
+  } as ResolvedTanStackTextModel;
+
+  return await generateTanStackTextForRole({
+    caching: {
+      enabled: false,
+      reason: "org-disabled",
+    } satisfies CachingDecision,
+    finishPolicy: CANARY_TEXT_FINISH_POLICY,
+    maxOutputTokens: 16,
+    organizationId: null,
+    orgAIConfig: null,
+    prompt: "Reply with exactly OK.",
+    resolveTextModel: () => model,
+    role: "chat",
+    serviceTier: "standard",
+    tenantWorkspaceIds: [],
+  });
+};
+
+const probeTextFailure = async (finish: ProbeFinish) =>
+  await generateProbeTextFinishing(finish).then(
+    () => undefined,
+    (error: unknown) => error,
+  );
+
+describe("AI provider canary text finish policy", () => {
+  // The probes size their ceiling for a one-line answer, so a model that
+  // spends the whole budget finishes on `length`. Rejecting that grades the
+  // canary's own budget as provider drift, on every provider at once.
+  test("accepts a run that stopped at the probe's own output ceiling", async () => {
+    expect(await generateProbeTextFinishing("length")).toBe("OK");
+    expect(await generateProbeTextFinishing("stop")).toBe("OK");
+  });
+
+  // Text still arrived in both cases, so `requireNonEmptyText` alone would
+  // pass them; the policy is what keeps a moderation or lifecycle regression
+  // from grading as a healthy provider.
+  test("rejects a moderated run that still returned text", async () => {
+    expect(await probeTextFailure("content_filter")).toBeInstanceOf(
+      HandlerError,
+    );
+  });
+
+  test("rejects a run that never reported a finish", async () => {
+    expect(await probeTextFailure("unfinished")).toBeInstanceOf(HandlerError);
   });
 });
 
