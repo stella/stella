@@ -13,6 +13,7 @@ import {
   legislationSources,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { CorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
 import { deriveCorpusIndexProjectionDescriptor } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
 import {
   buildCorpusIndexProjectionDesiredStateValues,
@@ -95,38 +96,6 @@ const validateBootstrapLimit = (limit: number): number => {
   return limit;
 };
 
-type BootstrapCaseLawRow = {
-  documentId: SafeId<"caseLawDecision">;
-  sourceId: SafeId<"caseLawSource">;
-  jurisdiction: string;
-  language: string;
-  documentType: string | null;
-  contentHash: string | null;
-  redactedAt: Date | null;
-  caseNumber: string;
-  court: string;
-  decisionDate: string | null;
-  ecli: string | null;
-  metadata: Record<string, unknown> | null;
-  projectionEpoch: bigint;
-};
-
-type BootstrapLegislationRow = {
-  documentId: SafeId<"legislationDocument">;
-  sourceId: SafeId<"legislationSource">;
-  jurisdiction: string;
-  language: string;
-  documentType: string | null;
-  contentHash: string | null;
-  title: string;
-  status: string;
-  effectiveDate: string | null;
-  versionValidFrom: string | null;
-  versionValidTo: string | null;
-  eli: string;
-  projectionEpoch: bigint;
-};
-
 const setZeroCaseLawProjectionEpochs = async (
   tx: Transaction,
   entityIds: readonly SafeId<"caseLawDecision">[],
@@ -191,91 +160,102 @@ const selectSeededEntityIds = async (
   return new Set(rows.map(({ entityId }) => entityId));
 };
 
-const bootstrapCaseLaw = async (
-  tx: Transaction,
-  generation: string,
-  limit: number,
-  afterEntityId: SafeId<"caseLawDecision"> | undefined,
-): Promise<CorpusIndexProjectionBootstrapResult> => {
-  const projectionConditions = [
-    eq(corpusIndexProjectionStates.family, "case_law"),
-    eq(corpusIndexProjectionStates.generation, generation),
-    eq(corpusIndexProjectionStates.entityId, caseLawDecisions.id),
-  ];
-  const candidates = await tx
-    .select({
-      documentId: caseLawDecisions.id,
-      sourceId: caseLawDecisions.sourceId,
-      sourceDescriptor: caseLawSources.descriptor,
-    })
-    .from(caseLawDecisions)
-    .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
-    .where(
-      afterEntityId === undefined
-        ? undefined
-        : gt(caseLawDecisions.id, afterEntityId),
-    )
-    .orderBy(asc(caseLawDecisions.id))
-    .limit(limit)
-    // Canonical mutations lock source policy before the decision. Bootstrap
-    // uses the same order; a short policy update may delay this bounded claim.
-    .for("share", { of: caseLawSources });
+type CorpusBootstrapCandidate<TEntityId extends string> = {
+  documentId: TEntityId;
+  sourceId: string;
+  sourceDescriptor: Parameters<typeof isRedistributable>[0];
+};
+
+/** One page's rows to insert; a family builds them with or without a query. */
+type CorpusBootstrapDesiredState =
+  (typeof corpusIndexProjectionStates.$inferInsert)[];
+
+type CorpusBootstrapRow<TEntityId extends string> = {
+  documentId: TEntityId;
+  sourceId: string;
+};
+
+/** What a page did, before it is dressed in its family's branded envelope. */
+type CorpusBootstrapPage<TEntityId extends string> =
+  | { status: "complete" | "range_complete" | "busy" }
+  | {
+      status: "advanced";
+      claimedCount: number;
+      seededCount: number;
+      entityIds: TEntityId[];
+      nextAfterEntityId: TEntityId;
+    };
+
+type CorpusBootstrapPageOptions<
+  TEntityId extends string,
+  TRow extends CorpusBootstrapRow<TEntityId>,
+> = {
+  tx: Transaction;
+  family: CorpusIndexProjectionSubject["family"];
+  generation: string;
+  afterEntityId: TEntityId | undefined;
+  /** The page: the next `limit` canonical ids after the cursor, seeded or not. */
+  selectCandidates: () => Promise<CorpusBootstrapCandidate<TEntityId>[]>;
+  lockUnseededRows: (unseededIds: TEntityId[]) => Promise<TRow[]>;
+  claimProjectionEpochs: (entityIds: TEntityId[]) => Promise<void>;
+  buildDesiredStateValues: (input: {
+    rows: TRow[];
+    entityIds: TEntityId[];
+    manifest: CorpusIndexManifest;
+    descriptorOf: (
+      sourceId: string,
+    ) => CorpusBootstrapCandidate<TEntityId>["sourceDescriptor"];
+  }) => CorpusBootstrapDesiredState | Promise<CorpusBootstrapDesiredState>;
+};
+
+/**
+ * The page sequence both families share: read an id range, find which of its
+ * ids still need a desired state, lock those, and seed the prefix the batch
+ * can account for. Every read is bounded by the page, so the cost of a page
+ * does not grow with the number of rows already seeded.
+ */
+const runCorpusBootstrapPage = async <
+  TEntityId extends string,
+  TRow extends CorpusBootstrapRow<TEntityId>,
+>({
+  tx,
+  family,
+  generation,
+  afterEntityId,
+  selectCandidates,
+  lockUnseededRows,
+  claimProjectionEpochs,
+  buildDesiredStateValues,
+}: CorpusBootstrapPageOptions<TEntityId, TRow>): Promise<
+  CorpusBootstrapPage<TEntityId>
+> => {
+  const candidates = await selectCandidates();
   if (candidates.length === 0) {
     // The id range is exhausted. Whether the generation is fully seeded is a
     // question about every page of a sweep, so the caller owns it.
-    return emptyBootstrapResult(
-      afterEntityId === undefined ? "complete" : "range_complete",
-      "case_law",
-      generation,
-    );
+    return {
+      status: afterEntityId === undefined ? "complete" : "range_complete",
+    };
   }
 
   const candidateIds = candidates.map(({ documentId }) => documentId);
   const seededEntityIds = await selectSeededEntityIds(tx, {
-    family: "case_law",
+    family,
     generation,
     entityIds: candidateIds,
   });
   const unseededIds = candidateIds.filter(
     (candidateId) => !seededEntityIds.has(candidateId),
   );
-  const lockedRows: BootstrapCaseLawRow[] =
-    unseededIds.length === 0
-      ? []
-      : await tx
-          .select({
-            documentId: caseLawDecisions.id,
-            sourceId: caseLawDecisions.sourceId,
-            jurisdiction: caseLawDecisions.country,
-            language: caseLawDecisions.language,
-            documentType: caseLawDecisions.decisionType,
-            contentHash: caseLawDecisions.contentHash,
-            redactedAt: caseLawDecisions.redactedAt,
-            caseNumber: caseLawDecisions.caseNumber,
-            court: caseLawDecisions.court,
-            decisionDate: caseLawDecisions.decisionDate,
-            ecli: caseLawDecisions.ecli,
-            metadata: caseLawDecisions.metadata,
-            projectionEpoch: caseLawDecisions.projectionEpoch,
-          })
-          .from(caseLawDecisions)
-          .leftJoin(corpusIndexProjectionStates, and(...projectionConditions))
-          .where(
-            and(
-              isNull(corpusIndexProjectionStates.entityId),
-              inArray(caseLawDecisions.id, unseededIds),
-            ),
-          )
-          .orderBy(asc(caseLawDecisions.id))
-          .limit(limit)
-          .for("update", { of: caseLawDecisions, skipLocked: true });
+  const lockedRows: TRow[] =
+    unseededIds.length === 0 ? [] : await lockUnseededRows(unseededIds);
   const lockedById = new Map(lockedRows.map((row) => [row.documentId, row]));
   // Advance only across the contiguous prefix this batch accounts for: a row
   // that already has a desired state needs nothing, a locked row is ours, and
   // the first row another worker holds ends the page, because skipping past it
   // would make a keyset cursor strand it indefinitely.
-  const rows: BootstrapCaseLawRow[] = [];
-  let pageEndEntityId: SafeId<"caseLawDecision"> | undefined;
+  const rows: TRow[] = [];
+  let pageEndEntityId: TEntityId | undefined;
   for (const candidate of candidates) {
     if (!seededEntityIds.has(candidate.documentId)) {
       const row = lockedById.get(candidate.documentId);
@@ -287,13 +267,11 @@ const bootstrapCaseLaw = async (
     pageEndEntityId = candidate.documentId;
   }
   if (pageEndEntityId === undefined) {
-    return emptyBootstrapResult("busy", "case_law", generation);
+    return { status: "busy" };
   }
   if (rows.length === 0) {
     return {
       status: "advanced",
-      family: "case_law",
-      generation,
       claimedCount: 0,
       seededCount: 0,
       entityIds: [],
@@ -308,102 +286,39 @@ const bootstrapCaseLaw = async (
       sourceDescriptor,
     ]),
   );
-
-  const identifiers = await tx
-    .select({
-      decisionId: caseLawDecisionIdentifiers.decisionId,
-      type: caseLawDecisionIdentifiers.type,
-      value: caseLawDecisionIdentifiers.value,
-    })
-    .from(caseLawDecisionIdentifiers)
-    .where(inArray(caseLawDecisionIdentifiers.decisionId, entityIds))
-    .orderBy(
-      asc(caseLawDecisionIdentifiers.decisionId),
-      asc(caseLawDecisionIdentifiers.type),
-      asc(caseLawDecisionIdentifiers.value),
-    )
-    .limit(entityIds.length * DECISION_IDENTIFIER_MAX_COUNT + 1)
-    .for("share");
-  if (identifiers.length > entityIds.length * DECISION_IDENTIFIER_MAX_COUNT) {
-    return panic(
-      `Corpus projection bootstrap identifier count exceeds ${DECISION_IDENTIFIER_MAX_COUNT} per decision`,
-    );
-  }
-  const identifiersByDecision = new Map<
-    string,
-    { type: string; value: string }[]
-  >(entityIds.map((entityId) => [entityId, []]));
-  for (const identifier of identifiers) {
-    const values = identifiersByDecision.get(identifier.decisionId);
-    if (values === undefined) {
-      return panic(
-        `Corpus projection bootstrap loaded an identifier for unclaimed decision ${identifier.decisionId}`,
-      );
-    }
-    if (values.length >= DECISION_IDENTIFIER_MAX_COUNT) {
-      return panic(
-        `Corpus projection bootstrap decision exceeds ${DECISION_IDENTIFIER_MAX_COUNT} identifiers: ${identifier.decisionId}`,
-      );
-    }
-    values.push({ type: identifier.type, value: identifier.value });
-  }
-
   // Recheck the generation after claiming canonical rows. Retirement waits on
   // this mutation fence, and a changed status rolls back the bounded claim.
   const manifest = await lockActiveCorpusProjectionManifestForMutation(
     tx,
-    "case_law",
+    family,
     generation,
   );
-  await setZeroCaseLawProjectionEpochs(tx, entityIds);
+  await claimProjectionEpochs(entityIds);
 
-  const values = rows.map((row: BootstrapCaseLawRow) =>
-    buildCorpusIndexProjectionDesiredStateValues({
-      subject: { family: "case_law", entityId: row.documentId },
-      generation,
-      epoch: row.projectionEpoch === 0n ? 1n : row.projectionEpoch,
-      descriptor: deriveCorpusIndexProjectionDescriptor(manifest, {
-        family: "case_law",
-        documentId: row.documentId,
-        sourceId: row.sourceId,
-        jurisdiction: row.jurisdiction,
-        language: row.language,
-        documentType: row.documentType,
-        contentHash: row.contentHash,
-        redistributionEligible: isRedistributable(
-          descriptors.has(row.sourceId)
-            ? (descriptors.get(row.sourceId) ?? null)
-            : panic(
-                `Corpus projection bootstrap lost source descriptor for case-law source ${row.sourceId}`,
-              ),
-        ),
-        redacted: row.redactedAt !== null,
-        caseNumber: row.caseNumber,
-        identifiers:
-          identifiersByDecision.get(row.documentId) ??
-          panic(
-            `Corpus projection bootstrap lost identifier state for decision ${row.documentId}`,
+  const values = await buildDesiredStateValues({
+    rows,
+    entityIds,
+    manifest,
+    // A source with no descriptor is a policy the corpus allows; a source the
+    // page never read is a bug in the candidate query.
+    descriptorOf: (sourceId) =>
+      descriptors.has(sourceId)
+        ? descriptors.get(sourceId)
+        : panic(
+            `Corpus projection bootstrap lost source descriptor for ${family} source ${sourceId}`,
           ),
-        court: row.court,
-        decisionDate: row.decisionDate,
-        ecli: row.ecli,
-        metadata: row.metadata,
-      }),
-    }),
-  );
+  });
   const inserted = await tx
     .insert(corpusIndexProjectionStates)
     .values(values)
     .returning({ entityId: corpusIndexProjectionStates.entityId });
   if (inserted.length !== rows.length) {
     return panic(
-      `Corpus projection bootstrap inserted ${inserted.length} of ${rows.length} case-law states`,
+      `Corpus projection bootstrap inserted ${inserted.length} of ${rows.length} ${family} states`,
     );
   }
   return {
     status: "advanced",
-    family: "case_law",
-    generation,
     claimedCount: rows.length,
     seededCount: inserted.length,
     entityIds,
@@ -411,177 +326,248 @@ const bootstrapCaseLaw = async (
   };
 };
 
+const bootstrapCaseLaw = async (
+  tx: Transaction,
+  generation: string,
+  limit: number,
+  afterEntityId: SafeId<"caseLawDecision"> | undefined,
+): Promise<CorpusBootstrapPage<SafeId<"caseLawDecision">>> => {
+  const projectionConditions = [
+    eq(corpusIndexProjectionStates.family, "case_law"),
+    eq(corpusIndexProjectionStates.generation, generation),
+    eq(corpusIndexProjectionStates.entityId, caseLawDecisions.id),
+  ];
+  return await runCorpusBootstrapPage({
+    tx,
+    family: "case_law",
+    generation,
+    afterEntityId,
+    selectCandidates: async () =>
+      await tx
+        .select({
+          documentId: caseLawDecisions.id,
+          sourceId: caseLawDecisions.sourceId,
+          sourceDescriptor: caseLawSources.descriptor,
+        })
+        .from(caseLawDecisions)
+        .innerJoin(
+          caseLawSources,
+          eq(caseLawSources.id, caseLawDecisions.sourceId),
+        )
+        .where(
+          afterEntityId === undefined
+            ? undefined
+            : gt(caseLawDecisions.id, afterEntityId),
+        )
+        .orderBy(asc(caseLawDecisions.id))
+        .limit(limit)
+        // Canonical mutations lock source policy before the decision. Bootstrap
+        // uses the same order; a short policy update may delay this bounded claim.
+        .for("share", { of: caseLawSources }),
+    lockUnseededRows: async (unseededIds) =>
+      await tx
+        .select({
+          documentId: caseLawDecisions.id,
+          sourceId: caseLawDecisions.sourceId,
+          jurisdiction: caseLawDecisions.country,
+          language: caseLawDecisions.language,
+          documentType: caseLawDecisions.decisionType,
+          contentHash: caseLawDecisions.contentHash,
+          redactedAt: caseLawDecisions.redactedAt,
+          caseNumber: caseLawDecisions.caseNumber,
+          court: caseLawDecisions.court,
+          decisionDate: caseLawDecisions.decisionDate,
+          ecli: caseLawDecisions.ecli,
+          metadata: caseLawDecisions.metadata,
+          projectionEpoch: caseLawDecisions.projectionEpoch,
+        })
+        .from(caseLawDecisions)
+        .leftJoin(corpusIndexProjectionStates, and(...projectionConditions))
+        .where(
+          and(
+            isNull(corpusIndexProjectionStates.entityId),
+            inArray(caseLawDecisions.id, unseededIds),
+          ),
+        )
+        .orderBy(asc(caseLawDecisions.id))
+        .limit(limit)
+        .for("update", { of: caseLawDecisions, skipLocked: true }),
+    claimProjectionEpochs: async (entityIds) =>
+      await setZeroCaseLawProjectionEpochs(tx, entityIds),
+    buildDesiredStateValues: async ({
+      rows,
+      entityIds,
+      manifest,
+      descriptorOf,
+    }) => {
+      const identifiers = await tx
+        .select({
+          decisionId: caseLawDecisionIdentifiers.decisionId,
+          type: caseLawDecisionIdentifiers.type,
+          value: caseLawDecisionIdentifiers.value,
+        })
+        .from(caseLawDecisionIdentifiers)
+        .where(inArray(caseLawDecisionIdentifiers.decisionId, entityIds))
+        .orderBy(
+          asc(caseLawDecisionIdentifiers.decisionId),
+          asc(caseLawDecisionIdentifiers.type),
+          asc(caseLawDecisionIdentifiers.value),
+        )
+        .limit(entityIds.length * DECISION_IDENTIFIER_MAX_COUNT + 1)
+        .for("share");
+      if (
+        identifiers.length >
+        entityIds.length * DECISION_IDENTIFIER_MAX_COUNT
+      ) {
+        return panic(
+          `Corpus projection bootstrap identifier count exceeds ${DECISION_IDENTIFIER_MAX_COUNT} per decision`,
+        );
+      }
+      const identifiersByDecision = new Map<
+        string,
+        { type: string; value: string }[]
+      >(entityIds.map((entityId) => [entityId, []]));
+      for (const identifier of identifiers) {
+        const values = identifiersByDecision.get(identifier.decisionId);
+        if (values === undefined) {
+          return panic(
+            `Corpus projection bootstrap loaded an identifier for unclaimed decision ${identifier.decisionId}`,
+          );
+        }
+        if (values.length >= DECISION_IDENTIFIER_MAX_COUNT) {
+          return panic(
+            `Corpus projection bootstrap decision exceeds ${DECISION_IDENTIFIER_MAX_COUNT} identifiers: ${identifier.decisionId}`,
+          );
+        }
+        values.push({ type: identifier.type, value: identifier.value });
+      }
+      return rows.map((row) =>
+        buildCorpusIndexProjectionDesiredStateValues({
+          subject: { family: "case_law", entityId: row.documentId },
+          generation,
+          epoch: row.projectionEpoch === 0n ? 1n : row.projectionEpoch,
+          descriptor: deriveCorpusIndexProjectionDescriptor(manifest, {
+            family: "case_law",
+            documentId: row.documentId,
+            sourceId: row.sourceId,
+            jurisdiction: row.jurisdiction,
+            language: row.language,
+            documentType: row.documentType,
+            contentHash: row.contentHash,
+            redistributionEligible: isRedistributable(
+              descriptorOf(row.sourceId),
+            ),
+            redacted: row.redactedAt !== null,
+            caseNumber: row.caseNumber,
+            identifiers:
+              identifiersByDecision.get(row.documentId) ??
+              panic(
+                `Corpus projection bootstrap lost identifier state for decision ${row.documentId}`,
+              ),
+            court: row.court,
+            decisionDate: row.decisionDate,
+            ecli: row.ecli,
+            metadata: row.metadata,
+          }),
+        }),
+      );
+    },
+  });
+};
+
 const bootstrapLegislation = async (
   tx: Transaction,
   generation: string,
   limit: number,
   afterEntityId: SafeId<"legislationDocument"> | undefined,
-): Promise<CorpusIndexProjectionBootstrapResult> => {
+): Promise<CorpusBootstrapPage<SafeId<"legislationDocument">>> => {
   const projectionConditions = [
     eq(corpusIndexProjectionStates.family, "legislation"),
     eq(corpusIndexProjectionStates.generation, generation),
     eq(corpusIndexProjectionStates.entityId, legislationDocuments.id),
   ];
-  const candidates = await tx
-    .select({
-      documentId: legislationDocuments.id,
-      sourceId: legislationDocuments.sourceId,
-      sourceDescriptor: legislationSources.descriptor,
-    })
-    .from(legislationDocuments)
-    .innerJoin(
-      legislationSources,
-      eq(legislationSources.id, legislationDocuments.sourceId),
-    )
-    .where(
-      afterEntityId === undefined
-        ? undefined
-        : gt(legislationDocuments.id, afterEntityId),
-    )
-    .orderBy(asc(legislationDocuments.id))
-    .limit(limit)
-    .for("share", { of: legislationSources });
-  if (candidates.length === 0) {
-    // The id range is exhausted. Whether the generation is fully seeded is a
-    // question about every page of a sweep, so the caller owns it.
-    return emptyBootstrapResult(
-      afterEntityId === undefined ? "complete" : "range_complete",
-      "legislation",
-      generation,
-    );
-  }
-
-  const candidateIds = candidates.map(({ documentId }) => documentId);
-  const seededEntityIds = await selectSeededEntityIds(tx, {
-    family: "legislation",
-    generation,
-    entityIds: candidateIds,
-  });
-  const unseededIds = candidateIds.filter(
-    (candidateId) => !seededEntityIds.has(candidateId),
-  );
-  const lockedRows: BootstrapLegislationRow[] =
-    unseededIds.length === 0
-      ? []
-      : await tx
-          .select({
-            documentId: legislationDocuments.id,
-            sourceId: legislationDocuments.sourceId,
-            jurisdiction: legislationDocuments.country,
-            language: legislationDocuments.language,
-            documentType: legislationDocuments.documentType,
-            contentHash: legislationDocuments.contentHash,
-            title: legislationDocuments.title,
-            status: legislationDocuments.status,
-            effectiveDate: legislationDocuments.effectiveDate,
-            versionValidFrom: legislationDocuments.versionValidFrom,
-            versionValidTo: legislationDocuments.versionValidTo,
-            eli: legislationDocuments.eli,
-            projectionEpoch: legislationDocuments.projectionEpoch,
-          })
-          .from(legislationDocuments)
-          .leftJoin(corpusIndexProjectionStates, and(...projectionConditions))
-          .where(
-            and(
-              isNull(corpusIndexProjectionStates.entityId),
-              inArray(legislationDocuments.id, unseededIds),
-            ),
-          )
-          .orderBy(asc(legislationDocuments.id))
-          .limit(limit)
-          .for("update", { of: legislationDocuments, skipLocked: true });
-  const lockedById = new Map(lockedRows.map((row) => [row.documentId, row]));
-  // See the case-law path: the cursor may cross only the prefix this batch
-  // accounts for, seeded or claimed.
-  const rows: BootstrapLegislationRow[] = [];
-  let pageEndEntityId: SafeId<"legislationDocument"> | undefined;
-  for (const candidate of candidates) {
-    if (!seededEntityIds.has(candidate.documentId)) {
-      const row = lockedById.get(candidate.documentId);
-      if (row === undefined) {
-        break;
-      }
-      rows.push(row);
-    }
-    pageEndEntityId = candidate.documentId;
-  }
-  if (pageEndEntityId === undefined) {
-    return emptyBootstrapResult("busy", "legislation", generation);
-  }
-  if (rows.length === 0) {
-    return {
-      status: "advanced",
-      family: "legislation",
-      generation,
-      claimedCount: 0,
-      seededCount: 0,
-      entityIds: [],
-      nextAfterEntityId: pageEndEntityId,
-    };
-  }
-
-  const entityIds = rows.map(({ documentId }) => documentId);
-  const descriptors = new Map(
-    candidates.map(({ sourceId, sourceDescriptor }) => [
-      sourceId,
-      sourceDescriptor,
-    ]),
-  );
-
-  const manifest = await lockActiveCorpusProjectionManifestForMutation(
+  return await runCorpusBootstrapPage({
     tx,
-    "legislation",
-    generation,
-  );
-  await setZeroLegislationProjectionEpochs(tx, entityIds);
-
-  const values = rows.map((row: BootstrapLegislationRow) =>
-    buildCorpusIndexProjectionDesiredStateValues({
-      subject: { family: "legislation", entityId: row.documentId },
-      generation,
-      epoch: row.projectionEpoch === 0n ? 1n : row.projectionEpoch,
-      descriptor: deriveCorpusIndexProjectionDescriptor(manifest, {
-        family: "legislation",
-        documentId: row.documentId,
-        sourceId: row.sourceId,
-        jurisdiction: row.jurisdiction,
-        language: row.language,
-        documentType: row.documentType,
-        contentHash: row.contentHash,
-        redistributionEligible: isRedistributable(
-          descriptors.has(row.sourceId)
-            ? (descriptors.get(row.sourceId) ?? null)
-            : panic(
-                `Corpus projection bootstrap lost source descriptor for legislation source ${row.sourceId}`,
-              ),
-        ),
-        title: row.title,
-        status: row.status,
-        effectiveDate: row.effectiveDate,
-        versionValidFrom: row.versionValidFrom,
-        versionValidTo: row.versionValidTo,
-        eli: row.eli,
-      }),
-    }),
-  );
-  const inserted = await tx
-    .insert(corpusIndexProjectionStates)
-    .values(values)
-    .returning({ entityId: corpusIndexProjectionStates.entityId });
-  if (inserted.length !== rows.length) {
-    return panic(
-      `Corpus projection bootstrap inserted ${inserted.length} of ${rows.length} legislation states`,
-    );
-  }
-  return {
-    status: "advanced",
     family: "legislation",
     generation,
-    claimedCount: rows.length,
-    seededCount: inserted.length,
-    entityIds,
-    nextAfterEntityId: pageEndEntityId,
-  };
+    afterEntityId,
+    selectCandidates: async () =>
+      await tx
+        .select({
+          documentId: legislationDocuments.id,
+          sourceId: legislationDocuments.sourceId,
+          sourceDescriptor: legislationSources.descriptor,
+        })
+        .from(legislationDocuments)
+        .innerJoin(
+          legislationSources,
+          eq(legislationSources.id, legislationDocuments.sourceId),
+        )
+        .where(
+          afterEntityId === undefined
+            ? undefined
+            : gt(legislationDocuments.id, afterEntityId),
+        )
+        .orderBy(asc(legislationDocuments.id))
+        .limit(limit)
+        .for("share", { of: legislationSources }),
+    lockUnseededRows: async (unseededIds) =>
+      await tx
+        .select({
+          documentId: legislationDocuments.id,
+          sourceId: legislationDocuments.sourceId,
+          jurisdiction: legislationDocuments.country,
+          language: legislationDocuments.language,
+          documentType: legislationDocuments.documentType,
+          contentHash: legislationDocuments.contentHash,
+          title: legislationDocuments.title,
+          status: legislationDocuments.status,
+          effectiveDate: legislationDocuments.effectiveDate,
+          versionValidFrom: legislationDocuments.versionValidFrom,
+          versionValidTo: legislationDocuments.versionValidTo,
+          eli: legislationDocuments.eli,
+          projectionEpoch: legislationDocuments.projectionEpoch,
+        })
+        .from(legislationDocuments)
+        .leftJoin(corpusIndexProjectionStates, and(...projectionConditions))
+        .where(
+          and(
+            isNull(corpusIndexProjectionStates.entityId),
+            inArray(legislationDocuments.id, unseededIds),
+          ),
+        )
+        .orderBy(asc(legislationDocuments.id))
+        .limit(limit)
+        .for("update", { of: legislationDocuments, skipLocked: true }),
+    claimProjectionEpochs: async (entityIds) =>
+      await setZeroLegislationProjectionEpochs(tx, entityIds),
+    buildDesiredStateValues: ({ rows, manifest, descriptorOf }) =>
+      rows.map((row) =>
+        buildCorpusIndexProjectionDesiredStateValues({
+          subject: { family: "legislation", entityId: row.documentId },
+          generation,
+          epoch: row.projectionEpoch === 0n ? 1n : row.projectionEpoch,
+          descriptor: deriveCorpusIndexProjectionDescriptor(manifest, {
+            family: "legislation",
+            documentId: row.documentId,
+            sourceId: row.sourceId,
+            jurisdiction: row.jurisdiction,
+            language: row.language,
+            documentType: row.documentType,
+            contentHash: row.contentHash,
+            redistributionEligible: isRedistributable(
+              descriptorOf(row.sourceId),
+            ),
+            title: row.title,
+            status: row.status,
+            effectiveDate: row.effectiveDate,
+            versionValidFrom: row.versionValidFrom,
+            versionValidTo: row.versionValidTo,
+            eli: row.eli,
+          }),
+        }),
+      ),
+  });
 };
 
 /**
@@ -604,21 +590,48 @@ export const bootstrapCorpusProjectionDesiredStateBatchTx = async (
   options: CorpusIndexProjectionBootstrapOptions,
 ): Promise<CorpusIndexProjectionBootstrapResult> => {
   const limit = validateBootstrapLimit(options.limit);
+  const { generation } = options;
   switch (options.family) {
-    case "case_law":
-      return await bootstrapCaseLaw(
+    case "case_law": {
+      const page = await bootstrapCaseLaw(
         tx,
-        options.generation,
+        generation,
         limit,
         options.afterEntityId,
       );
-    case "legislation":
-      return await bootstrapLegislation(
+      if (page.status !== "advanced") {
+        return emptyBootstrapResult(page.status, "case_law", generation);
+      }
+      return {
+        status: "advanced",
+        family: "case_law",
+        generation,
+        claimedCount: page.claimedCount,
+        seededCount: page.seededCount,
+        entityIds: page.entityIds,
+        nextAfterEntityId: page.nextAfterEntityId,
+      };
+    }
+    case "legislation": {
+      const page = await bootstrapLegislation(
         tx,
-        options.generation,
+        generation,
         limit,
         options.afterEntityId,
       );
+      if (page.status !== "advanced") {
+        return emptyBootstrapResult(page.status, "legislation", generation);
+      }
+      return {
+        status: "advanced",
+        family: "legislation",
+        generation,
+        claimedCount: page.claimedCount,
+        seededCount: page.seededCount,
+        entityIds: page.entityIds,
+        nextAfterEntityId: page.nextAfterEntityId,
+      };
+    }
     default:
       options satisfies never;
       return panic(`Unhandled options: ${String(options)}`);
