@@ -1034,6 +1034,29 @@ describe("euEcjAdapter.reconciliation.buildDecision", () => {
     return { fetches };
   };
 
+  /** Answer every document address with one status, and record the requests. */
+  const installStatusMock = (status: number): { fetches: string[] } => {
+    const fetches: string[] = [];
+    globalThis.fetch = asFetchMock(
+      mock((input: string | URL | Request) => {
+        const url = requestUrl(input);
+        if (url.includes("sparql")) {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({ results: { bindings: [enBinding] } }),
+              {
+                status: 200,
+              },
+            ),
+          );
+        }
+        fetches.push(url);
+        return Promise.resolve(new Response("", { status }));
+      }),
+    );
+    return { fetches };
+  };
+
   test("falls back to the manifestation's items when negotiation is refused", async () => {
     // Addressing the manifestation fixed the works whose XHTML sits at a later
     // ordinal, but it is not how Cellar stores all of them: for the rest the
@@ -1112,6 +1135,54 @@ describe("euEcjAdapter.reconciliation.buildDecision", () => {
       `https://publications.europa.eu/resource/cellar/${EN_MANIFESTATION_ID}/DOC_2`,
       `https://publications.europa.eu/resource/cellar/${EN_MANIFESTATION_ID}/DOC_3`,
     ]);
+  });
+
+  test("stops the walk when a refusal is transient, not the address", async () => {
+    // 429 and 5xx say nothing about whether this address can serve the
+    // representation, so walking on would ask a publisher already refusing
+    // load for the same document three more times over.
+    const { fetches } = installStatusMock(429);
+
+    const outcome = await reconciliation.buildDecision({
+      celex: "62021CJ0128",
+      language: "EN",
+    });
+
+    expect(outcome).toEqual({ type: "detail-unavailable" });
+    expect(fetches).toEqual([
+      `https://publications.europa.eu/resource/cellar/${EN_MANIFESTATION_ID}`,
+    ]);
+  });
+
+  test("keeps walking when a refusal means this address cannot serve it", async () => {
+    // The counterpart to the test above: 404 is what the item walk exists for,
+    // so it must still spend the remaining addresses.
+    const { fetches } = installStatusMock(404);
+
+    await reconciliation.buildDecision({
+      celex: "62021CJ0128",
+      language: "EN",
+    });
+
+    expect(fetches).toHaveLength(4);
+  });
+
+  test("records the address that served the document, not the one it is named by", async () => {
+    // An item-only manifestation answers 404 at its own URL, so persisting
+    // that as `documentUrl` would publish a link that does not resolve.
+    installItemOnlyMock(2);
+
+    const outcome = await reconciliation.buildDecision({
+      celex: "62021CJ0128",
+      language: "EN",
+    });
+
+    if (outcome.type !== "built") {
+      throw new TypeError(`Expected built, got ${outcome.type}`);
+    }
+    expect(outcome.decision.documentUrl).toBe(
+      `https://publications.europa.eu/resource/cellar/${EN_MANIFESTATION_ID}/DOC_2`,
+    );
   });
 
   test("asks the content stream for XHTML", async () => {
