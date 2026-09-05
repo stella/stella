@@ -46,7 +46,7 @@ export const CORPUS_INDEX_JOB_STATUS_SQL_VALUES = CORPUS_INDEX_JOB_STATUSES.map(
  * reason in `detail`; `error_message` is the failure of the row it sits on,
  * and both tables constrain the pair from this one declaration.
  */
-export const CORPUS_INDEX_JOB_SUCCEEDED_STATUS =
+const CORPUS_INDEX_JOB_SUCCEEDED_STATUS =
   "succeeded" as const satisfies CorpusIndexJobStatus;
 
 export const CORPUS_INDEX_JOB_SUCCEEDED_SQL_VALUE = sql.raw(
