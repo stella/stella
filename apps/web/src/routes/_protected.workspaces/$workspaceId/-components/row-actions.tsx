@@ -92,7 +92,7 @@ import {
 } from "@/lib/desktop-edit-formats";
 import { showDesktopEditOpenResultToast } from "@/lib/desktop-edit-status-toast";
 import { detached } from "@/lib/detached";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { edenCallFailure, unwrapEden } from "@/lib/errors/api";
 import { isUnauthorizedError } from "@/lib/errors/auth";
 import { ClientOperationError } from "@/lib/errors/client";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
@@ -681,19 +681,22 @@ export const RowActions = ({
     }
 
     if (desktopEditLockState === "locked-by-me") {
-      const response = await api
-        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        ["desktop-edit-sessions"].release.post({
-          entityId: toSafeId<"entity">(file.entityId),
-          propertyId: toSafeId<"property">(file.propertyId),
-        });
+      const requested = await Result.tryPromise(
+        async () =>
+          await api
+            .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+            ["desktop-edit-sessions"].release.post({
+              entityId: toSafeId<"entity">(file.entityId),
+              propertyId: toSafeId<"property">(file.propertyId),
+            }),
+      );
 
-      if (response.error) {
-        const releaseError = toAPIError(response.error);
-        analytics.captureError(releaseError);
+      const releaseFailure = edenCallFailure(requested);
+      if (releaseFailure !== null) {
+        analytics.captureError(releaseFailure);
         stellaToast.add({
           description: userErrorFromThrown(
-            releaseError,
+            releaseFailure,
             t("common.unexpectedError"),
           ),
           title: t("errors.actionFailed"),

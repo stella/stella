@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 import type { UIEvent } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Result } from "better-result";
 import { CalendarIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -17,7 +18,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { normalizeOptionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
-import { toAPIError } from "@/lib/errors/api";
+import { edenCallFailure } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import { captureInvalidTaskOption } from "@/lib/task-option-telemetry";
 import type { EntityKind, WorkspaceView } from "@/lib/types";
@@ -435,14 +436,18 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
     if (datePropertyId === TASK_DATE_IDS[0] && kind === "task") {
       detached(
         (async () => {
-          const response = await api
-            .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
-            .patch({
-              taskId: toSafeId<"entity">(entityId),
-              dueDate: date,
-            });
-          if (response.error) {
-            getAnalytics().captureError(toAPIError(response.error));
+          const requested = await Result.tryPromise(
+            async () =>
+              await api
+                .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
+                .patch({
+                  taskId: toSafeId<"entity">(entityId),
+                  dueDate: date,
+                }),
+          );
+          const failure = edenCallFailure(requested);
+          if (failure !== null) {
+            getAnalytics().captureError(failure);
             stellaToast.add({
               title: t("errors.actionFailed"),
               type: "error",
@@ -458,15 +463,19 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
     } else if (datePropertyId === TASK_DATE_IDS[1] && kind === "task") {
       detached(
         (async () => {
-          const response = await api
-            .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
-            .patch({
-              taskId: toSafeId<"entity">(entityId),
-              allDay: true,
-              startAt: toAllDayAgendaDateTime(date),
-            });
-          if (response.error) {
-            getAnalytics().captureError(toAPIError(response.error));
+          const requested = await Result.tryPromise(
+            async () =>
+              await api
+                .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
+                .patch({
+                  taskId: toSafeId<"entity">(entityId),
+                  allDay: true,
+                  startAt: toAllDayAgendaDateTime(date),
+                }),
+          );
+          const failure = edenCallFailure(requested);
+          if (failure !== null) {
+            getAnalytics().captureError(failure);
             stellaToast.add({
               title: t("errors.actionFailed"),
               type: "error",

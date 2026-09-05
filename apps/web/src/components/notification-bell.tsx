@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { Result } from "better-result";
 import { BellIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -32,7 +33,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { toAPIError } from "@/lib/errors/api";
+import { edenCallFailure } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import {
   notificationsOptions,
@@ -104,22 +105,29 @@ export const NotificationBell = () => {
     if (notification.readAt !== null) {
       return;
     }
-    const response = await api
-      .notifications({
-        notificationId: toSafeId<"notification">(notification.id),
-      })
-      .read.patch();
-    if (response.error) {
-      reportFailure(toAPIError(response.error));
+    const requested = await Result.tryPromise(
+      async () =>
+        await api
+          .notifications({
+            notificationId: toSafeId<"notification">(notification.id),
+          })
+          .read.patch(),
+    );
+    const failure = edenCallFailure(requested);
+    if (failure !== null) {
+      reportFailure(failure);
       return;
     }
     await refetchFirstNotificationsPage({ organizationId, queryClient });
   };
 
   const markAllRead = async () => {
-    const response = await api.notifications["read-all"].post();
-    if (response.error) {
-      reportFailure(toAPIError(response.error));
+    const requested = await Result.tryPromise(
+      async () => await api.notifications["read-all"].post(),
+    );
+    const failure = edenCallFailure(requested);
+    if (failure !== null) {
+      reportFailure(failure);
       return;
     }
     await refetchFirstNotificationsPage({ organizationId, queryClient });

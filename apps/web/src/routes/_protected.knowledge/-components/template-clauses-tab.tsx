@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
+import { Result } from "better-result";
 import {
   AlertTriangleIcon,
   ChevronDownIcon,
@@ -397,10 +398,18 @@ export const OutdatedChanges = ({
       return;
     }
     setDiff({ status: "loading" });
-    const response = await api
-      .clauses({ clauseId: toSafeId<"clause">(clauseId) })
-      .versions({ versionId: toSafeId<"clauseVersion">(versionId) })
-      .diff.get();
+    const requested = await Result.tryPromise(
+      async () =>
+        await api
+          .clauses({ clauseId: toSafeId<"clause">(clauseId) })
+          .versions({ versionId: toSafeId<"clauseVersion">(versionId) })
+          .diff.get(),
+    );
+    if (Result.isError(requested)) {
+      setDiff({ status: "error" });
+      return;
+    }
+    const response = requested.value;
     if (response.error) {
       setDiff({ status: "error" });
       return;
@@ -413,10 +422,18 @@ export const OutdatedChanges = ({
       return;
     }
     setSummary({ status: "loading" });
-    const response = await api
-      .clauses({ clauseId: toSafeId<"clause">(clauseId) })
-      .versions({ versionId: toSafeId<"clauseVersion">(versionId) })
-      .summarize.post();
+    const requested = await Result.tryPromise(
+      async () =>
+        await api
+          .clauses({ clauseId: toSafeId<"clause">(clauseId) })
+          .versions({ versionId: toSafeId<"clauseVersion">(versionId) })
+          .summarize.post(),
+    );
+    if (Result.isError(requested)) {
+      setSummary({ status: "error" });
+      return;
+    }
+    const response = requested.value;
     if (response.error) {
       setSummary({ status: "error" });
       return;
