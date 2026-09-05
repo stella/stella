@@ -505,11 +505,7 @@ const TASKS: readonly Task[] = [
       toolName: "invoke_capability",
       checkArgs: (args) => [
         ...field(args, "capability", "entities.translate"),
-        ...nestedField(
-          args,
-          ["input", "params", "workspaceId"],
-          "ws_acme_2024",
-        ),
+        ...nestedField(args, ["input", "params", "matterId"], "ws_acme_2024"),
         ...nestedField(
           args,
           ["input", "body", "fieldId"],
@@ -521,7 +517,7 @@ const TASKS: readonly Task[] = [
     cli: {
       kind: "command",
       path: ["capability", "entities", "translate"],
-      flags: { workspace: "ws_acme_2024" },
+      flags: { "matter-id": "ws_acme_2024" },
     },
   },
   {
@@ -530,18 +526,14 @@ const TASKS: readonly Task[] = [
     mcp: {
       toolName: "invoke_capability",
       checkArgs: (args) => [
-        ...field(args, "capability", "workspaces.workflow-start"),
-        ...nestedField(
-          args,
-          ["input", "params", "workspaceId"],
-          "ws_acme_2024",
-        ),
+        ...field(args, "capability", "matters.workflow-start"),
+        ...nestedField(args, ["input", "params", "matterId"], "ws_acme_2024"),
       ],
     },
     cli: {
       kind: "command",
-      path: ["capability", "workspaces", "workflow-start"],
-      flags: { workspace: "ws_acme_2024" },
+      path: ["capability", "matters", "workflow-start"],
+      flags: { "matter-id": "ws_acme_2024" },
     },
   },
   {
@@ -920,9 +912,9 @@ const kebabToSnake = (flagName: string): string =>
 // A CLI flag whose value the eval also accepts from the `--input` JSON escape
 // hatch under a schema key that differs from the flag's own kebab-cased name
 // (`document field set`'s `translate`d body sits under a nested capability
-// wrapper; `--workspace` maps to the schema's `workspaceId`, not `workspace`).
+// wrapper; `--matter-id` maps to the schema's `matterId`, not `matter_id`).
 const FLAG_INPUT_KEY_ALIASES: Readonly<Record<string, readonly string[]>> = {
-  workspace: ["workspaceId", "workspace_id"],
+  "matter-id": ["matterId", "matter_id"],
 };
 
 /** One level of `--input`'s body/params/query/values wrapper flattened to top. */

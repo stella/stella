@@ -19,7 +19,7 @@ const config = {
     "Page backwards through one of your own chat threads using the " +
     "olderCursor a previous read returned. Returns only the message page and " +
     "the next cursor, without the thread settings and context estimate that " +
-    "chat.get-messages carries. The thread must be yours and the workspaceId " +
+    "chat.get-messages carries. The thread must be yours and the matterId " +
     "scope must match the one it was created in.",
   permissions: { chat: ["create"] },
   access: "read",

@@ -36,7 +36,7 @@ const config = {
     "Run a review playbook over a matter's documents. Every DOCX document is " +
     "reviewed against the playbook's latest approved version, and each " +
     "document's findings are recorded against its own pinned version. Pass " +
-    'workspaceId, playbookId, and the projection: "columns" also ' +
+    'matterId, playbookId, and the projection: "columns" also ' +
     "materializes the playbook's extraction and verdict columns onto the " +
     'table, "none" materializes none. Findings populate asynchronously.',
   permissions: { playbook: ["apply"] },

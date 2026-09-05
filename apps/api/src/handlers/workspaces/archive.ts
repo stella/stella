@@ -18,7 +18,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 const config = {
   description:
     "Archive a matter: it stops being writable and is cleared from members' " +
-    "last-visited matter. Reversible with workspaces.unarchive, and nothing " +
+    "last-visited matter. Reversible with matters.unarchive, and nothing " +
     "is deleted. Refused while document processing is running in the matter " +
     "or any timer is still running there.",
   permissions: { workspace: ["update"] },

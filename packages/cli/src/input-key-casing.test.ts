@@ -7,7 +7,7 @@ const schema = {
   properties: {
     matter_id: { type: "string" },
     reference: { type: "string" },
-    matter_id: { type: "string" },
+    entity_id: { type: "string" },
   },
 };
 

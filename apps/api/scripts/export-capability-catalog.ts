@@ -57,6 +57,7 @@ import {
 } from "../src/lib/capability-transport";
 import { advertisedSchema } from "../src/mcp/advertised-schema";
 import { CONTEXT_FIDELITY_WAIVERS } from "../src/mcp/capability-waivers";
+import { PUBLIC_FIELD_NAME } from "../src/mcp/public-field-names";
 import type { McpToolDefinition } from "../src/mcp/tool-types";
 import {
   type CapabilityDispatchRecord,
@@ -502,13 +503,13 @@ const buildInputSchema = (
 ): CapabilityInputSchema => {
   const inputSchema: CapabilityInputSchema = {};
   if ("body" in config) {
-    inputSchema.body = advertisedPart(config["body"]);
+    inputSchema.body = withPublicFieldNames(advertisedPart(config["body"]));
   }
   if ("params" in config) {
-    inputSchema.params = advertisedPart(config["params"]);
+    inputSchema.params = withPublicFieldNames(advertisedPart(config["params"]));
   }
   if ("query" in config) {
-    inputSchema.query = advertisedPart(config["query"]);
+    inputSchema.query = withPublicFieldNames(advertisedPart(config["query"]));
   }
   return inputSchema;
 };
@@ -521,6 +522,57 @@ const buildInputSchema = (
  */
 const advertisedPart = (part: unknown): unknown =>
   KindGuard.IsSchema(part) ? advertisedSchema(part) : part;
+
+/**
+ * Rename internal input fields to their public spelling on the way out.
+ *
+ * The container is a `workspaceId` in the DB, the handler config and the REST
+ * route; it is a `matterId` to every agent. This is the outbound half of that
+ * split: `describe_capability` and the CLI's generated `--matter-id` flag both
+ * read this schema. The inbound half is `withInternalFieldNames`
+ * (apps/api/src/mcp/capability-tools.ts), which renames the field back before
+ * the handler's own schema validates it, so the two names never both reach a
+ * handler. Both halves derive from `PUBLIC_FIELD_NAME`'s one table. A part that
+ * already owns the public name (`expenses.*` declare their own `matterId`) has
+ * no internal name to rename, so the two cannot meet.
+ */
+const withPublicFieldNames = (part: unknown): unknown => {
+  if (!isRecord(part)) {
+    return part;
+  }
+  const rename = (name: string): string => PUBLIC_FIELD_NAME[name] ?? name;
+  const properties = part["properties"];
+  const required = part["required"];
+  if (isRecord(properties)) {
+    for (const [internal, publicName] of Object.entries(PUBLIC_FIELD_NAME)) {
+      if (internal in properties && publicName in properties) {
+        panic(
+          `capability input declares both ${internal} and ${publicName}; the public rename would drop one`,
+        );
+      }
+    }
+  }
+  return {
+    ...part,
+    ...(isRecord(properties)
+      ? {
+          properties: Object.fromEntries(
+            Object.entries(properties).map(([name, schema]) => [
+              rename(name),
+              schema,
+            ]),
+          ),
+        }
+      : {}),
+    ...(Array.isArray(required)
+      ? {
+          required: required.map((name) =>
+            typeof name === "string" ? rename(name) : name,
+          ),
+        }
+      : {}),
+  };
+};
 
 /**
  * The handler config's tool-level `description`. A non-string or empty value is

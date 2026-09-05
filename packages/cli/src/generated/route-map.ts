@@ -27,7 +27,7 @@ export const generatedRouteMap: RouteNode = {
                 kind: "string",
                 repeatable: false,
                 description:
-                  "Matter/workspace ID to return a single matter's overview; omit to list matters",
+                  "Matter ID to return a single matter's overview; omit to list matters",
                 required: false,
               },
               {
@@ -55,7 +55,7 @@ export const generatedRouteMap: RouteNode = {
                   type: "string",
                   minLength: 1,
                   description:
-                    "Matter/workspace ID to return a single matter's overview; omit to list matters",
+                    "Matter ID to return a single matter's overview; omit to list matters",
                 },
                 status: {
                   enum: ["active", "all"],
@@ -91,8 +91,7 @@ export const generatedRouteMap: RouteNode = {
                 prop: "matter_id",
                 kind: "string",
                 repeatable: false,
-                description:
-                  "Matter/workspace ID to update; omit to create a new matter",
+                description: "Matter ID to update; omit to create a new matter",
                 required: false,
               },
               {
@@ -155,7 +154,7 @@ export const generatedRouteMap: RouteNode = {
                   type: "string",
                   minLength: 1,
                   description:
-                    "Matter/workspace ID to update; omit to create a new matter",
+                    "Matter ID to update; omit to create a new matter",
                 },
                 name: {
                   type: "string",
@@ -212,7 +211,7 @@ export const generatedRouteMap: RouteNode = {
                 prop: "matter_id",
                 kind: "string",
                 repeatable: false,
-                description: "Matter/workspace ID to delete",
+                description: "Matter ID to delete",
                 required: true,
               },
             ],
@@ -229,7 +228,7 @@ export const generatedRouteMap: RouteNode = {
                 matter_id: {
                   type: "string",
                   minLength: 1,
-                  description: "Matter/workspace ID to delete",
+                  description: "Matter ID to delete",
                 },
                 confirm: {
                   type: "boolean",
@@ -253,7 +252,7 @@ export const generatedRouteMap: RouteNode = {
                 prop: "matter_id",
                 kind: "string",
                 repeatable: false,
-                description: "Matter/workspace ID",
+                description: "Matter ID",
                 required: true,
               },
               {
@@ -286,8 +285,8 @@ export const generatedRouteMap: RouteNode = {
                 required: false,
               },
               {
-                flag: "--workspace-contact-id",
-                prop: "workspace_contact_id",
+                flag: "--matter-contact-id",
+                prop: "matter_contact_id",
                 kind: "string",
                 repeatable: false,
                 description:
@@ -308,7 +307,7 @@ export const generatedRouteMap: RouteNode = {
                 matter_id: {
                   type: "string",
                   minLength: 1,
-                  description: "Matter/workspace ID",
+                  description: "Matter ID",
                 },
                 contact_id: {
                   type: "string",
@@ -332,7 +331,7 @@ export const generatedRouteMap: RouteNode = {
                   description:
                     "Party role for the linked contact; provide it only when linking",
                 },
-                workspace_contact_id: {
+                matter_contact_id: {
                   type: "string",
                   minLength: 1,
                   description:
@@ -640,15 +639,14 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["document", "list"],
             toolName: "list_documents",
-            description: "List the documents and folders in a workspace.",
+            description: "List the documents and folders in a matter.",
             flags: [
               {
-                flag: "--workspace-id",
-                prop: "workspace_id",
+                flag: "--matter-id",
+                prop: "matter_id",
                 kind: "string",
                 repeatable: false,
-                description:
-                  "Workspace ID to list documents in. Deprecated input alias: matter_id.",
+                description: "Matter ID to list documents in.",
                 required: true,
               },
               {
@@ -658,7 +656,7 @@ export const generatedRouteMap: RouteNode = {
                 enum: ["flat", "children"],
                 repeatable: false,
                 description:
-                  "'flat' lists every document and folder in the workspace; 'children' lists only the direct children of parent_id (or the workspace root when parent_id is omitted). Defaults to 'flat', or 'children' when parent_id is provided. Passing parent_id with mode 'flat' is rejected.",
+                  "'flat' lists every document and folder in the matter; 'children' lists only the direct children of parent_id (or the matter root when parent_id is omitted). Defaults to 'flat', or 'children' when parent_id is provided. Passing parent_id with mode 'flat' is rejected.",
                 required: false,
               },
               {
@@ -679,20 +677,19 @@ export const generatedRouteMap: RouteNode = {
             scope: "read",
             inputSchema: {
               type: "object",
-              required: ["workspace_id"],
+              required: ["matter_id"],
               additionalProperties: false,
               properties: {
-                workspace_id: {
+                matter_id: {
                   type: "string",
                   minLength: 1,
-                  description:
-                    "Workspace ID to list documents in. Deprecated input alias: matter_id.",
+                  description: "Matter ID to list documents in.",
                 },
                 mode: {
                   enum: ["flat", "children"],
                   type: "string",
                   description:
-                    "'flat' lists every document and folder in the workspace; 'children' lists only the direct children of parent_id (or the workspace root when parent_id is omitted). Defaults to 'flat', or 'children' when parent_id is provided. Passing parent_id with mode 'flat' is rejected.",
+                    "'flat' lists every document and folder in the matter; 'children' lists only the direct children of parent_id (or the matter root when parent_id is omitted). Defaults to 'flat', or 'children' when parent_id is provided. Passing parent_id with mode 'flat' is rejected.",
                 },
                 parent_id: {
                   type: "string",
@@ -826,12 +823,12 @@ export const generatedRouteMap: RouteNode = {
                 required: false,
               },
               {
-                flag: "--workspace-id",
-                prop: "workspace_id",
+                flag: "--matter-id",
+                prop: "matter_id",
                 kind: "string",
                 repeatable: false,
                 description:
-                  "Workspace ID to create the entity in; required when creating. Deprecated input alias: matter_id.",
+                  "Matter ID to create the entity in; required when creating.",
                 required: false,
               },
               {
@@ -914,11 +911,11 @@ export const generatedRouteMap: RouteNode = {
                   minLength: 1,
                   description: "Document entity ID to update; omit to create",
                 },
-                workspace_id: {
+                matter_id: {
                   type: "string",
                   minLength: 1,
                   description:
-                    "Workspace ID to create the entity in; required when creating. Deprecated input alias: matter_id.",
+                    "Matter ID to create the entity in; required when creating.",
                 },
                 name: {
                   type: "string",
@@ -1050,12 +1047,11 @@ export const generatedRouteMap: RouteNode = {
                   "List the property (column) definitions of a matter.",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace_id",
+                    flag: "--matter-id",
+                    prop: "matter_id",
                     kind: "string",
                     repeatable: false,
-                    description:
-                      "Workspace ID to list properties for. Deprecated input alias: matter_id.",
+                    description: "Matter ID to list properties for.",
                     required: true,
                   },
                 ],
@@ -1067,14 +1063,13 @@ export const generatedRouteMap: RouteNode = {
                 scope: "read",
                 inputSchema: {
                   type: "object",
-                  required: ["workspace_id"],
+                  required: ["matter_id"],
                   additionalProperties: false,
                   properties: {
-                    workspace_id: {
+                    matter_id: {
                       type: "string",
                       minLength: 1,
-                      description:
-                        "Workspace ID to list properties for. Deprecated input alias: matter_id.",
+                      description: "Matter ID to list properties for.",
                     },
                     limit: {
                       type: "integer",
@@ -1955,12 +1950,11 @@ export const generatedRouteMap: RouteNode = {
             },
             flags: [
               {
-                flag: "--workspace-id",
-                prop: "workspace_id",
+                flag: "--matter-id",
+                prop: "matter_id",
                 kind: "string",
                 repeatable: false,
-                description:
-                  "Workspace id for add_member and remove_member. Deprecated input alias: matter_id.",
+                description: "Matter ID for add_member and remove_member.",
                 required: true,
               },
               {
@@ -1987,11 +1981,10 @@ export const generatedRouteMap: RouteNode = {
                   type: "string",
                   description: "Administrative action to perform",
                 },
-                workspace_id: {
+                matter_id: {
                   type: "string",
                   minLength: 1,
-                  description:
-                    "Workspace id for add_member and remove_member. Deprecated input alias: matter_id.",
+                  description: "Matter ID for add_member and remove_member.",
                 },
                 user_id: {
                   type: "string",
@@ -2044,12 +2037,11 @@ export const generatedRouteMap: RouteNode = {
             },
             flags: [
               {
-                flag: "--workspace-id",
-                prop: "workspace_id",
+                flag: "--matter-id",
+                prop: "matter_id",
                 kind: "string",
                 repeatable: false,
-                description:
-                  "Workspace id for add_member and remove_member. Deprecated input alias: matter_id.",
+                description: "Matter ID for add_member and remove_member.",
                 required: true,
               },
               {
@@ -2076,11 +2068,10 @@ export const generatedRouteMap: RouteNode = {
                   type: "string",
                   description: "Administrative action to perform",
                 },
-                workspace_id: {
+                matter_id: {
                   type: "string",
                   minLength: 1,
-                  description:
-                    "Workspace id for add_member and remove_member. Deprecated input alias: matter_id.",
+                  description: "Matter ID for add_member and remove_member.",
                 },
                 user_id: {
                   type: "string",
@@ -2187,11 +2178,10 @@ export const generatedRouteMap: RouteNode = {
                   type: "string",
                   description: "Administrative action to perform",
                 },
-                workspace_id: {
+                matter_id: {
                   type: "string",
                   minLength: 1,
-                  description:
-                    "Workspace id for add_member and remove_member. Deprecated input alias: matter_id.",
+                  description: "Matter ID for add_member and remove_member.",
                 },
                 user_id: {
                   type: "string",
@@ -2361,7 +2351,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["template", "save-filled", "new-document"],
                 toolName: "save_filled_template",
                 description:
-                  "Fill a registered template and persist the generated DOCX directly in a workspace, without requiring the client to upload bytes.",
+                  "Fill a registered template and persist the generated DOCX directly in a matter, without requiring the client to upload bytes.",
                 discriminatorInject: {
                   action: "create_document",
                 },
@@ -2375,12 +2365,11 @@ export const generatedRouteMap: RouteNode = {
                     required: true,
                   },
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace_id",
+                    flag: "--matter-id",
+                    prop: "matter_id",
                     kind: "string",
                     repeatable: false,
-                    description:
-                      "Workspace receiving the filled DOCX. Deprecated input alias: matter_id.",
+                    description: "Matter receiving the filled DOCX.",
                     required: true,
                   },
                   {
@@ -2430,10 +2419,9 @@ export const generatedRouteMap: RouteNode = {
                       type: "string",
                       description: "Template id, as returned by list_templates",
                     },
-                    workspace_id: {
+                    matter_id: {
                       type: "string",
-                      description:
-                        "Workspace receiving the filled DOCX. Deprecated input alias: matter_id.",
+                      description: "Matter receiving the filled DOCX.",
                     },
                     entity_id: {
                       type: "string",
@@ -2466,7 +2454,7 @@ export const generatedRouteMap: RouteNode = {
                   required: [
                     "action",
                     "template_id",
-                    "workspace_id",
+                    "matter_id",
                     "idempotency_key",
                     "values",
                   ],
@@ -2480,7 +2468,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["template", "save-filled", "new-version"],
                 toolName: "save_filled_template",
                 description:
-                  "Fill a registered template and persist the generated DOCX directly in a workspace, without requiring the client to upload bytes.",
+                  "Fill a registered template and persist the generated DOCX directly in a matter, without requiring the client to upload bytes.",
                 discriminatorInject: {
                   action: "create_version",
                 },
@@ -2494,12 +2482,11 @@ export const generatedRouteMap: RouteNode = {
                     required: true,
                   },
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace_id",
+                    flag: "--matter-id",
+                    prop: "matter_id",
                     kind: "string",
                     repeatable: false,
-                    description:
-                      "Workspace receiving the filled DOCX. Deprecated input alias: matter_id.",
+                    description: "Matter receiving the filled DOCX.",
                     required: true,
                   },
                   {
@@ -2549,10 +2536,9 @@ export const generatedRouteMap: RouteNode = {
                       type: "string",
                       description: "Template id, as returned by list_templates",
                     },
-                    workspace_id: {
+                    matter_id: {
                       type: "string",
-                      description:
-                        "Workspace receiving the filled DOCX. Deprecated input alias: matter_id.",
+                      description: "Matter receiving the filled DOCX.",
                     },
                     entity_id: {
                       type: "string",
@@ -2585,7 +2571,7 @@ export const generatedRouteMap: RouteNode = {
                   required: [
                     "action",
                     "template_id",
-                    "workspace_id",
+                    "matter_id",
                     "idempotency_key",
                     "values",
                   ],
@@ -3017,16 +3003,15 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["task", "list"],
             toolName: "list_tasks",
-            description:
-              "List tasks in a workspace, or read one task in detail.",
+            description: "List tasks in a matter, or read one task in detail.",
             flags: [
               {
-                flag: "--workspace-id",
-                prop: "workspace_id",
+                flag: "--matter-id",
+                prop: "matter_id",
                 kind: "string",
                 repeatable: false,
                 description:
-                  "Workspace ID to list tasks in; required unless task_id is given. Deprecated input alias: matter_id.",
+                  "Matter ID to list tasks in; required unless task_id is given.",
                 required: false,
               },
               {
@@ -3075,11 +3060,11 @@ export const generatedRouteMap: RouteNode = {
               required: [],
               additionalProperties: false,
               properties: {
-                workspace_id: {
+                matter_id: {
                   type: "string",
                   minLength: 1,
                   description:
-                    "Workspace ID to list tasks in; required unless task_id is given. Deprecated input alias: matter_id.",
+                    "Matter ID to list tasks in; required unless task_id is given.",
                 },
                 task_id: {
                   type: "string",
@@ -3139,12 +3124,12 @@ export const generatedRouteMap: RouteNode = {
                 required: false,
               },
               {
-                flag: "--workspace-id",
-                prop: "workspace_id",
+                flag: "--matter-id",
+                prop: "matter_id",
                 kind: "string",
                 repeatable: false,
                 description:
-                  "Workspace ID to create the task in; required when creating. Deprecated input alias: matter_id.",
+                  "Matter ID to create the task in; required when creating.",
                 required: false,
               },
               {
@@ -3229,7 +3214,7 @@ export const generatedRouteMap: RouteNode = {
                 kind: "string",
                 repeatable: false,
                 description:
-                  "User ID to assign to the task (must be a workspace member)",
+                  "User ID to assign to the task (must be a matter member)",
                 required: false,
               },
               {
@@ -3273,11 +3258,11 @@ export const generatedRouteMap: RouteNode = {
                   minLength: 1,
                   description: "Task entity ID to update; omit to create",
                 },
-                workspace_id: {
+                matter_id: {
                   type: "string",
                   minLength: 1,
                   description:
-                    "Workspace ID to create the task in; required when creating. Deprecated input alias: matter_id.",
+                    "Matter ID to create the task in; required when creating.",
                 },
                 name: {
                   type: "string",
@@ -3353,7 +3338,7 @@ export const generatedRouteMap: RouteNode = {
                   type: "string",
                   minLength: 1,
                   description:
-                    "User ID to assign to the task (must be a workspace member)",
+                    "User ID to assign to the task (must be a matter member)",
                 },
                 remove_assignee_user_id: {
                   type: "string",
@@ -3876,15 +3861,14 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["playbook", "run"],
             toolName: "run_playbook",
-            description: "Run a review playbook over a workspace's documents.",
+            description: "Run a review playbook over a matter's documents.",
             flags: [
               {
-                flag: "--workspace-id",
-                prop: "workspace_id",
+                flag: "--matter-id",
+                prop: "matter_id",
                 kind: "string",
                 repeatable: false,
-                description:
-                  "Workspace id to run the playbook over. Deprecated input alias: matter_id.",
+                description: "Matter ID to run the playbook over.",
                 required: true,
               },
               {
@@ -3903,14 +3887,13 @@ export const generatedRouteMap: RouteNode = {
             scope: "knowledge_write",
             inputSchema: {
               type: "object",
-              required: ["workspace_id", "playbook_id"],
+              required: ["matter_id", "playbook_id"],
               additionalProperties: false,
               properties: {
-                workspace_id: {
+                matter_id: {
                   type: "string",
                   minLength: 1,
-                  description:
-                    "Workspace id to run the playbook over. Deprecated input alias: matter_id.",
+                  description: "Matter ID to run the playbook over.",
                 },
                 playbook_id: {
                   type: "string",
@@ -3932,15 +3915,15 @@ export const generatedRouteMap: RouteNode = {
             commandPath: ["time-entry", "list"],
             toolName: "list_time_entries",
             description:
-              "List time entries in a workspace, or read one entry in detail.",
+              "List time entries in a matter, or read one entry in detail.",
             flags: [
               {
-                flag: "--workspace-id",
-                prop: "workspace_id",
+                flag: "--matter-id",
+                prop: "matter_id",
                 kind: "string",
                 repeatable: false,
                 description:
-                  "Workspace ID to list time entries in; required unless time_entry_id is given. Deprecated input alias: matter_id.",
+                  "Matter ID to list time entries in; required unless time_entry_id is given.",
                 required: false,
               },
               {
@@ -4007,11 +3990,11 @@ export const generatedRouteMap: RouteNode = {
               required: [],
               additionalProperties: false,
               properties: {
-                workspace_id: {
+                matter_id: {
                   type: "string",
                   minLength: 1,
                   description:
-                    "Workspace ID to list time entries in; required unless time_entry_id is given. Deprecated input alias: matter_id.",
+                    "Matter ID to list time entries in; required unless time_entry_id is given.",
                 },
                 time_entry_id: {
                   type: "string",
@@ -4080,12 +4063,12 @@ export const generatedRouteMap: RouteNode = {
                 required: false,
               },
               {
-                flag: "--workspace-id",
-                prop: "workspace_id",
+                flag: "--matter-id",
+                prop: "matter_id",
                 kind: "string",
                 repeatable: false,
                 description:
-                  "Workspace ID to create the entry in; required when creating. Deprecated input alias: matter_id.",
+                  "Matter ID to create the entry in; required when creating.",
                 required: false,
               },
               {
@@ -4191,11 +4174,11 @@ export const generatedRouteMap: RouteNode = {
                   minLength: 1,
                   description: "Time entry ID to update; omit to create",
                 },
-                workspace_id: {
+                matter_id: {
                   type: "string",
                   minLength: 1,
                   description:
-                    "Workspace ID to create the entry in; required when creating. Deprecated input alias: matter_id.",
+                    "Matter ID to create the entry in; required when creating.",
                 },
                 entity_id: {
                   anyOf: [
@@ -4338,15 +4321,14 @@ export const generatedRouteMap: RouteNode = {
             commandPath: ["rate", "resolve"],
             toolName: "resolve_rate",
             description:
-              "Resolve the effective hourly rate for a user on a given date in a workspace, using its default rate table (user-specific rate first, then the table default).",
+              "Resolve the effective hourly rate for a user on a given date in a matter, using its default rate table (user-specific rate first, then the table default).",
             flags: [
               {
-                flag: "--workspace-id",
-                prop: "workspace_id",
+                flag: "--matter-id",
+                prop: "matter_id",
                 kind: "string",
                 repeatable: false,
-                description:
-                  "Workspace ID to resolve the rate in. Deprecated input alias: matter_id.",
+                description: "Matter ID to resolve the rate in.",
                 required: true,
               },
               {
@@ -4373,14 +4355,13 @@ export const generatedRouteMap: RouteNode = {
             scope: "read",
             inputSchema: {
               type: "object",
-              required: ["workspace_id", "user_id", "date"],
+              required: ["matter_id", "user_id", "date"],
               additionalProperties: false,
               properties: {
-                workspace_id: {
+                matter_id: {
                   type: "string",
                   minLength: 1,
-                  description:
-                    "Workspace ID to resolve the rate in. Deprecated input alias: matter_id.",
+                  description: "Matter ID to resolve the rate in.",
                 },
                 user_id: {
                   type: "string",
@@ -4408,15 +4389,15 @@ export const generatedRouteMap: RouteNode = {
             commandPath: ["invoice", "list"],
             toolName: "list_invoices",
             description:
-              "List invoices in a workspace, or read one invoice in detail.",
+              "List invoices in a matter, or read one invoice in detail.",
             flags: [
               {
-                flag: "--workspace-id",
-                prop: "workspace_id",
+                flag: "--matter-id",
+                prop: "matter_id",
                 kind: "string",
                 repeatable: false,
                 description:
-                  "Workspace ID to list invoices in; required unless invoice_id is given. Deprecated input alias: matter_id.",
+                  "Matter ID to list invoices in; required unless invoice_id is given.",
                 required: false,
               },
               {
@@ -4439,11 +4420,11 @@ export const generatedRouteMap: RouteNode = {
               required: [],
               additionalProperties: false,
               properties: {
-                workspace_id: {
+                matter_id: {
                   type: "string",
                   minLength: 1,
                   description:
-                    "Workspace ID to list invoices in; required unless invoice_id is given. Deprecated input alias: matter_id.",
+                    "Matter ID to list invoices in; required unless invoice_id is given.",
                 },
                 invoice_id: {
                   type: "string",
@@ -4721,12 +4702,11 @@ export const generatedRouteMap: RouteNode = {
               "Read the organization's audit trail (compliance view).",
             flags: [
               {
-                flag: "--workspace-id",
-                prop: "workspace_id",
+                flag: "--matter-id",
+                prop: "matter_id",
                 kind: "string",
                 repeatable: false,
-                description:
-                  "Only entries scoped to this workspace. Deprecated input alias: matter_id.",
+                description: "Only entries scoped to this matter.",
                 required: false,
               },
               {
@@ -4792,11 +4772,10 @@ export const generatedRouteMap: RouteNode = {
               required: [],
               additionalProperties: false,
               properties: {
-                workspace_id: {
+                matter_id: {
                   type: "string",
                   minLength: 1,
-                  description:
-                    "Only entries scoped to this workspace. Deprecated input alias: matter_id.",
+                  description: "Only entries scoped to this matter.",
                 },
                 action: {
                   type: "string",
@@ -5100,7 +5079,7 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       description:
-                        "Path parameters; workspace-scoped capabilities require workspaceId here.",
+                        "Path parameters; matter-scoped capabilities require matterId here.",
                       additionalProperties: true,
                     },
                     query: {
@@ -5137,18 +5116,18 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "audit-logs", "list"],
                 capabilityId: "audit-logs.list",
                 description:
-                  "Read the organization's audit trail (compliance view). Returns audit entries newest first, each with its action, resource type and id, actor user id, workspace, timestamp, and change detail. Filter by workspaceId, action, resourceType (with optional resourceId), userId, and a created-at range (from/to, ISO date-time). Paginate with limit and cursor. Requires organization audit-log access.",
+                  "Read the organization's audit trail (compliance view). Returns audit entries newest first, each with its action, resource type and id, actor user id, matter, timestamp, and change detail. Filter by matterId, action, resourceType (with optional resourceId), userId, and a created-at range (from/to, ISO date-time). Paginate with limit and cursor. Requires organization audit-log access.",
                 access: "read",
                 flags: [
                   {
                     kind: "string",
                     repeatable: false,
-                    description: "Only entries scoped to this matter/workspace",
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
+                    description: "Only entries scoped to this matter",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     required: false,
                     part: "query",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -5236,14 +5215,13 @@ export const generatedRouteMap: RouteNode = {
                     query: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
                             "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
                           type: "string",
-                          description:
-                            "Only entries scoped to this matter/workspace",
+                          description: "Only entries scoped to this matter",
                         },
                         action: {
                           minLength: 1,
@@ -5316,13 +5294,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "enum",
@@ -5411,11 +5389,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -5431,13 +5409,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -5473,11 +5451,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -5493,13 +5471,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "boolean",
@@ -5524,11 +5502,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                     query: {
                       type: "object",
@@ -5575,13 +5553,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -5671,11 +5649,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -5760,13 +5738,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -5823,11 +5801,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -5845,11 +5823,11 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     required: true,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -5871,9 +5849,9 @@ export const generatedRouteMap: RouteNode = {
                   properties: {
                     params: {
                       type: "object",
-                      required: ["workspaceId", "linkId"],
+                      required: ["matterId", "linkId"],
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -5903,13 +5881,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                 ],
                 inputOnly: [],
@@ -5923,11 +5901,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -6036,11 +6014,11 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     required: false,
                     part: "query",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                 ],
                 inputOnly: [],
@@ -6067,7 +6045,7 @@ export const generatedRouteMap: RouteNode = {
                     query: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -6119,11 +6097,11 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     required: false,
                     part: "query",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                 ],
                 inputOnly: ["body.citationStyle"],
@@ -6183,7 +6161,7 @@ export const generatedRouteMap: RouteNode = {
                     query: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -6235,11 +6213,11 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     required: false,
                     part: "query",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                 ],
                 inputOnly: [],
@@ -6286,7 +6264,7 @@ export const generatedRouteMap: RouteNode = {
                     query: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -6305,7 +6283,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "chat", "get-messages"],
                 capabilityId: "chat.get-messages",
                 description:
-                  "Read the most recent page of one of your own chat threads, together with the thread's context matters, model and reasoning-effort settings, anonymization flag, whether web search is available and enabled, and an estimate of the model context the next send would carry. Pass workspaceId for a matter-scoped thread and omit it for a global one; a scope that contradicts the stored thread is rejected. With allowMissingThread, a thread that does not exist yet returns an empty draft instead of a 404. Page further back with chat.get-older-messages.",
+                  "Read the most recent page of one of your own chat threads, together with the thread's context matters, model and reasoning-effort settings, anonymization flag, whether web search is available and enabled, and an estimate of the model context the next send would carry. Pass matterId for a matter-scoped thread and omit it for a global one; a scope that contradicts the stored thread is rejected. With allowMissingThread, a thread that does not exist yet returns an empty draft instead of a 404. Page further back with chat.get-older-messages.",
                 access: "read",
                 flags: [
                   {
@@ -6329,11 +6307,11 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     required: false,
                     part: "query",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                 ],
                 inputOnly: [],
@@ -6363,7 +6341,7 @@ export const generatedRouteMap: RouteNode = {
                         allowMissingThread: {
                           type: "boolean",
                         },
-                        workspaceId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -6382,7 +6360,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "chat", "get-older-messages"],
                 capabilityId: "chat.get-older-messages",
                 description:
-                  "Page backwards through one of your own chat threads using the olderCursor a previous read returned. Returns only the message page and the next cursor, without the thread settings and context estimate that chat.get-messages carries. The thread must be yours and the workspaceId scope must match the one it was created in.",
+                  "Page backwards through one of your own chat threads using the olderCursor a previous read returned. Returns only the message page and the next cursor, without the thread settings and context estimate that chat.get-messages carries. The thread must be yours and the matterId scope must match the one it was created in.",
                 access: "read",
                 flags: [
                   {
@@ -6406,11 +6384,11 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     required: false,
                     part: "query",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                 ],
                 inputOnly: [],
@@ -6441,7 +6419,7 @@ export const generatedRouteMap: RouteNode = {
                         before: {
                           type: "string",
                         },
-                        workspaceId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -6537,11 +6515,11 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     required: false,
                     part: "query",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                 ],
                 inputOnly: [],
@@ -6579,7 +6557,7 @@ export const generatedRouteMap: RouteNode = {
                     query: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -6622,11 +6600,11 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     required: false,
                     part: "query",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                 ],
                 inputOnly: [],
@@ -6662,7 +6640,7 @@ export const generatedRouteMap: RouteNode = {
                     query: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -10527,13 +10505,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -10632,11 +10610,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -10652,13 +10630,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -10758,11 +10736,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -10780,11 +10758,11 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     required: true,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -10864,9 +10842,9 @@ export const generatedRouteMap: RouteNode = {
                     },
                     params: {
                       type: "object",
-                      required: ["workspaceId", "entityId"],
+                      required: ["matterId", "entityId"],
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -10886,23 +10864,23 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
-            "copy-to-workspace": {
+            "copy-to-matter": {
               kind: "capability-leaf",
               spec: {
-                commandPath: ["capability", "entities", "copy-to-workspace"],
-                capabilityId: "entities.copy-to-workspace",
+                commandPath: ["capability", "entities", "copy-to-matter"],
+                capabilityId: "entities.copy-to-matter",
                 description:
                   "Copy a document or folder subtree into another matter, or move it with deleteSource, which permanently deletes the source documents, their version history, and their no-longer-referenced files. Fields whose property has no counterpart in the target matter are dropped rather than remapped, so a move can lose column values; read-only entities are refused.",
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -10916,11 +10894,11 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--target-workspace-id",
-                    prop: "targetWorkspaceId",
+                    flag: "--target-matter-id",
+                    prop: "targetMatterId",
                     required: true,
                     part: "body",
-                    partPath: "targetWorkspaceId",
+                    partPath: "targetMatterId",
                   },
                   {
                     kind: "nullable-string",
@@ -10953,7 +10931,7 @@ export const generatedRouteMap: RouteNode = {
                       type: "object",
                       required: [
                         "entityId",
-                        "targetWorkspaceId",
+                        "targetMatterId",
                         "targetParentId",
                         "deleteSource",
                       ],
@@ -10965,7 +10943,7 @@ export const generatedRouteMap: RouteNode = {
                             "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
                           type: "string",
                         },
-                        targetWorkspaceId: {
+                        targetMatterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -10995,11 +10973,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -11015,13 +10993,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "enum",
@@ -11104,11 +11082,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -11128,13 +11106,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -11192,11 +11170,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -11216,13 +11194,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -11269,11 +11247,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -11289,13 +11267,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string-array",
@@ -11336,11 +11314,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -11358,11 +11336,11 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     required: true,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -11393,9 +11371,9 @@ export const generatedRouteMap: RouteNode = {
                   properties: {
                     params: {
                       type: "object",
-                      required: ["workspaceId", "entityId", "versionId"],
+                      required: ["matterId", "entityId", "versionId"],
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -11428,17 +11406,17 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "entities", "duplicate"],
                 capabilityId: "entities.duplicate",
                 description:
-                  "Copy one document, or a folder with its whole subtree, inside the same matter, placing the copy alongside the original. Stored files are copied too, so the copies own their own bytes and get their own text extraction and PDF and thumbnail derivatives. Use entities.copy-to-workspace to copy into a different matter.",
+                  "Copy one document, or a folder with its whole subtree, inside the same matter, placing the copy alongside the original. Stored files are copied too, so the copies own their own bytes and get their own text extraction and PDF and thumbnail derivatives. Use entities.copy-to-matter to copy into a different matter.",
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -11474,11 +11452,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -11496,11 +11474,11 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     required: true,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -11523,9 +11501,9 @@ export const generatedRouteMap: RouteNode = {
                   properties: {
                     params: {
                       type: "object",
-                      required: ["workspaceId", "entityId"],
+                      required: ["matterId", "entityId"],
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -11556,13 +11534,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -11994,11 +11972,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                   $defs: {
@@ -12167,13 +12145,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                 ],
                 inputOnly: [],
@@ -12189,11 +12167,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                     query: {
                       type: "object",
@@ -12225,13 +12203,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                 ],
                 inputOnly: [],
@@ -12247,11 +12225,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                     query: {
                       type: "object",
@@ -12283,13 +12261,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -12349,11 +12327,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -12371,11 +12349,11 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     required: true,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -12419,9 +12397,9 @@ export const generatedRouteMap: RouteNode = {
                     },
                     params: {
                       type: "object",
-                      required: ["workspaceId", "entityId"],
+                      required: ["matterId", "entityId"],
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -12451,13 +12429,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -12553,11 +12531,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -12573,13 +12551,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -12960,11 +12938,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                   $defs: {
@@ -13133,13 +13111,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                 ],
                 inputOnly: [],
@@ -13155,11 +13133,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                     query: {
                       type: "object",
@@ -13191,13 +13169,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                 ],
                 inputOnly: [],
@@ -13211,11 +13189,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                     query: {
                       type: "object",
@@ -13237,11 +13215,11 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     required: true,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -13272,9 +13250,9 @@ export const generatedRouteMap: RouteNode = {
                   properties: {
                     params: {
                       type: "object",
-                      required: ["workspaceId", "entityId", "versionId"],
+                      required: ["matterId", "entityId", "versionId"],
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -13313,11 +13291,11 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     required: true,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -13348,9 +13326,9 @@ export const generatedRouteMap: RouteNode = {
                   properties: {
                     params: {
                       type: "object",
-                      required: ["workspaceId", "entityId"],
+                      required: ["matterId", "entityId"],
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -13388,13 +13366,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -13837,11 +13815,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                   $defs: {
@@ -14010,13 +13988,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -14066,11 +14044,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -14088,11 +14066,11 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     required: true,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -14123,9 +14101,9 @@ export const generatedRouteMap: RouteNode = {
                   properties: {
                     params: {
                       type: "object",
-                      required: ["workspaceId", "entityId", "versionId"],
+                      required: ["matterId", "entityId", "versionId"],
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -14162,13 +14140,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -14256,11 +14234,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -14282,11 +14260,11 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     required: true,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -14343,9 +14321,9 @@ export const generatedRouteMap: RouteNode = {
                     },
                     params: {
                       type: "object",
-                      required: ["workspaceId", "entityId", "versionId"],
+                      required: ["matterId", "entityId", "versionId"],
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -14384,11 +14362,11 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     required: true,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -14445,9 +14423,9 @@ export const generatedRouteMap: RouteNode = {
                     },
                     params: {
                       type: "object",
-                      required: ["workspaceId", "entityId", "versionId"],
+                      required: ["matterId", "entityId", "versionId"],
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -14486,11 +14464,11 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     required: true,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -14521,9 +14499,9 @@ export const generatedRouteMap: RouteNode = {
                   properties: {
                     params: {
                       type: "object",
-                      required: ["workspaceId", "entityId", "versionId"],
+                      required: ["matterId", "entityId", "versionId"],
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -14562,11 +14540,11 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     required: true,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -14597,9 +14575,9 @@ export const generatedRouteMap: RouteNode = {
                   properties: {
                     params: {
                       type: "object",
-                      required: ["workspaceId", "entityId", "versionId"],
+                      required: ["matterId", "entityId", "versionId"],
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -14641,19 +14619,19 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--matter-id",
-                    prop: "matterId",
+                    flag: "--body-matter-id",
+                    prop: "body.matterId",
                     required: true,
                     part: "body",
                     partPath: "matterId",
@@ -14841,11 +14819,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -14861,13 +14839,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -14903,11 +14881,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -14923,13 +14901,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -14943,8 +14921,8 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--matter-id",
-                    prop: "matterId",
+                    flag: "--query-matter-id",
+                    prop: "query.matterId",
                     required: false,
                     part: "query",
                     partPath: "matterId",
@@ -15017,11 +14995,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                     query: {
                       type: "object",
@@ -15093,13 +15071,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -15197,8 +15175,8 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--matter-id",
-                    prop: "matterId",
+                    flag: "--body-matter-id",
+                    prop: "body.matterId",
                     required: false,
                     part: "body",
                     partPath: "matterId",
@@ -15299,11 +15277,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -15328,13 +15306,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -15696,11 +15674,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -15716,13 +15694,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -16152,11 +16130,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                   $defs: {
@@ -16325,13 +16303,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -16457,11 +16435,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -16477,13 +16455,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -16834,11 +16812,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -17247,11 +17225,11 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     required: true,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -17273,9 +17251,9 @@ export const generatedRouteMap: RouteNode = {
                   properties: {
                     params: {
                       type: "object",
-                      required: ["workspaceId", "runId"],
+                      required: ["matterId", "runId"],
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -17307,11 +17285,11 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     required: true,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -17333,9 +17311,9 @@ export const generatedRouteMap: RouteNode = {
                   properties: {
                     params: {
                       type: "object",
-                      required: ["workspaceId", "runId"],
+                      required: ["matterId", "runId"],
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -17367,11 +17345,11 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     required: true,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                 ],
                 inputOnly: ["query.status"],
@@ -17386,9 +17364,9 @@ export const generatedRouteMap: RouteNode = {
                   properties: {
                     params: {
                       type: "object",
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -17457,11 +17435,11 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     required: true,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -17524,9 +17502,9 @@ export const generatedRouteMap: RouteNode = {
                     },
                     params: {
                       type: "object",
-                      required: ["workspaceId", "runId"],
+                      required: ["matterId", "runId"],
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -17558,11 +17536,11 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     required: true,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -17631,9 +17609,9 @@ export const generatedRouteMap: RouteNode = {
                     },
                     params: {
                       type: "object",
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -17944,11 +17922,11 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     required: true,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -18017,9 +17995,9 @@ export const generatedRouteMap: RouteNode = {
                     },
                     params: {
                       type: "object",
-                      required: ["workspaceId", "invoiceId"],
+                      required: ["matterId", "invoiceId"],
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -18049,13 +18027,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -18206,11 +18184,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -18228,11 +18206,11 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     required: true,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -18254,9 +18232,9 @@ export const generatedRouteMap: RouteNode = {
                   properties: {
                     params: {
                       type: "object",
-                      required: ["workspaceId", "invoiceId"],
+                      required: ["matterId", "invoiceId"],
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -18288,11 +18266,11 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     required: true,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -18314,9 +18292,9 @@ export const generatedRouteMap: RouteNode = {
                   properties: {
                     params: {
                       type: "object",
-                      required: ["workspaceId", "invoiceId"],
+                      required: ["matterId", "invoiceId"],
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -18346,13 +18324,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                 ],
                 inputOnly: [],
@@ -18368,11 +18346,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                     query: {
                       type: "object",
@@ -18407,11 +18385,11 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     required: true,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -18480,9 +18458,9 @@ export const generatedRouteMap: RouteNode = {
                     },
                     params: {
                       type: "object",
-                      required: ["workspaceId", "invoiceId"],
+                      required: ["matterId", "invoiceId"],
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -18514,11 +18492,11 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     required: true,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -18573,9 +18551,9 @@ export const generatedRouteMap: RouteNode = {
                     },
                     params: {
                       type: "object",
-                      required: ["workspaceId", "invoiceId"],
+                      required: ["matterId", "invoiceId"],
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -18607,11 +18585,11 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     required: true,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -18743,9 +18721,9 @@ export const generatedRouteMap: RouteNode = {
                     },
                     params: {
                       type: "object",
-                      required: ["workspaceId", "invoiceId"],
+                      required: ["matterId", "invoiceId"],
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -19441,13 +19419,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -19525,11 +19503,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -19545,13 +19523,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -19606,11 +19584,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -19630,13 +19608,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -19720,11 +19698,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -19744,13 +19722,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -19966,11 +19944,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -19990,13 +19968,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -20029,7 +20007,7 @@ export const generatedRouteMap: RouteNode = {
                   properties: {
                     params: {
                       type: "object",
-                      required: ["listId", "runId", "workspaceId"],
+                      required: ["listId", "runId", "matterId"],
                       properties: {
                         listId: {
                           minLength: 36,
@@ -20045,7 +20023,7 @@ export const generatedRouteMap: RouteNode = {
                             "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
                           type: "string",
                         },
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
@@ -20084,13 +20062,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -20158,11 +20136,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -20178,13 +20156,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -20259,11 +20237,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -20279,13 +20257,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -20309,7 +20287,7 @@ export const generatedRouteMap: RouteNode = {
                   properties: {
                     params: {
                       type: "object",
-                      required: ["listId", "workspaceId"],
+                      required: ["listId", "matterId"],
                       properties: {
                         listId: {
                           minLength: 36,
@@ -20318,7 +20296,7 @@ export const generatedRouteMap: RouteNode = {
                             "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
                           type: "string",
                         },
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
@@ -20353,13 +20331,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -20381,7 +20359,7 @@ export const generatedRouteMap: RouteNode = {
                   properties: {
                     params: {
                       type: "object",
-                      required: ["listId", "workspaceId"],
+                      required: ["listId", "matterId"],
                       properties: {
                         listId: {
                           minLength: 36,
@@ -20390,7 +20368,7 @@ export const generatedRouteMap: RouteNode = {
                             "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
                           type: "string",
                         },
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
@@ -20409,13 +20387,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -20448,7 +20426,7 @@ export const generatedRouteMap: RouteNode = {
                   properties: {
                     params: {
                       type: "object",
-                      required: ["listId", "itemEntityId", "workspaceId"],
+                      required: ["listId", "itemEntityId", "matterId"],
                       properties: {
                         listId: {
                           minLength: 36,
@@ -20464,7 +20442,7 @@ export const generatedRouteMap: RouteNode = {
                             "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
                           type: "string",
                         },
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
@@ -20499,13 +20477,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -20571,11 +20549,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -20591,13 +20569,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -20621,7 +20599,7 @@ export const generatedRouteMap: RouteNode = {
                   properties: {
                     params: {
                       type: "object",
-                      required: ["listId", "workspaceId"],
+                      required: ["listId", "matterId"],
                       properties: {
                         listId: {
                           minLength: 36,
@@ -20630,7 +20608,7 @@ export const generatedRouteMap: RouteNode = {
                             "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
                           type: "string",
                         },
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
@@ -20665,13 +20643,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -20758,11 +20736,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -20778,13 +20756,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -20938,11 +20916,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -20958,13 +20936,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -20997,7 +20975,7 @@ export const generatedRouteMap: RouteNode = {
                   properties: {
                     params: {
                       type: "object",
-                      required: ["listId", "itemEntityId", "workspaceId"],
+                      required: ["listId", "itemEntityId", "matterId"],
                       properties: {
                         listId: {
                           minLength: 36,
@@ -21013,7 +20991,7 @@ export const generatedRouteMap: RouteNode = {
                             "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
                           type: "string",
                         },
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
@@ -21052,13 +21030,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -21140,11 +21118,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -21160,13 +21138,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -21277,11 +21255,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -21297,13 +21275,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -21328,11 +21306,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                     query: {
                       type: "object",
@@ -21369,13 +21347,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -21439,11 +21417,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -21459,13 +21437,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -21550,11 +21528,1614 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        matters: {
+          kind: "route",
+          children: {
+            "anonymization-allowlist-create": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "matters",
+                  "anonymization-allowlist-create",
+                ],
+                capabilityId: "matters.anonymization-allowlist.create",
+                description:
+                  "Add a never-mask entry to a matter's anonymization allowlist, so a term that detection finds is left in the clear. scope workspace covers the whole matter; scope document covers one document and needs an entityId belonging to this matter. Only matter-scoped entries can be created here, never organization-wide ones. A term already listed is a no-op, until the matter reaches its allowlist limit: the cap is checked before the duplicate is detected, so replaying an existing entry is refused there rather than reported as a no-op.",
+                access: "write",
+                flags: [
+                  {
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--canonical",
+                    prop: "canonical",
+                    required: true,
+                    part: "body",
+                    partPath: "canonical",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--label",
+                    prop: "label",
+                    required: true,
+                    part: "body",
+                    partPath: "label",
+                  },
+                  {
+                    kind: "enum",
+                    enum: ["document", "workspace"],
+                    repeatable: false,
+                    flag: "--scope",
+                    prop: "scope",
+                    required: true,
+                    part: "body",
+                    partPath: "scope",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--entity-id",
+                    prop: "entityId",
+                    required: false,
+                    part: "body",
+                    partPath: "entityId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "matters_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["canonical", "label", "scope"],
+                      properties: {
+                        canonical: {
+                          minLength: 1,
+                          maxLength: 512,
+                          type: "string",
+                        },
+                        label: {
+                          minLength: 1,
+                          maxLength: 64,
+                          type: "string",
+                        },
+                        scope: {
+                          default: "document",
+                          type: "string",
+                          enum: ["document", "workspace"],
+                        },
+                        entityId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      properties: {
+                        matterId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["matterId"],
+                    },
+                  },
+                },
+              },
+            },
+            "anonymization-allowlist-delete": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "matters",
+                  "anonymization-allowlist-delete",
+                ],
+                capabilityId: "matters.anonymization-allowlist.delete",
+                description:
+                  "Remove one anonymization allowlist entry from a matter, so the term it exempted is masked again from the next detection run on. Only entries scoped to this matter can be removed here, never organization-wide ones, and output already anonymized is not revisited.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    required: true,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--entry-id",
+                    prop: "entryId",
+                    required: true,
+                    part: "params",
+                    partPath: "entryId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: true,
+                scope: "matters_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["matterId", "entryId"],
+                      properties: {
+                        matterId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        entryId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "anonymization-allowlist-list": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "matters",
+                  "anonymization-allowlist-list",
+                ],
+                capabilityId: "matters.anonymization-allowlist.list",
+                description:
+                  "Read the never-mask entries that apply in a matter: the organization-wide ones plus the matter's own and, when entityId is given, that document's own, merged into one list so a detection run can be filtered in a single pass.",
+                access: "read",
+                flags: [
+                  {
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--entity-id",
+                    prop: "entityId",
+                    required: false,
+                    part: "query",
+                    partPath: "entityId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      properties: {
+                        matterId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["matterId"],
+                    },
+                    query: {
+                      type: "object",
+                      properties: {
+                        entityId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "anonymization-terms-create": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "matters",
+                  "anonymization-terms-create",
+                ],
+                capabilityId: "matters.anonymization-terms.create",
+                description:
+                  "Add always-mask terms to a matter's anonymization gazetteer, each with a canonical form, a label, and optional spelling variants. Idempotent per canonical form: a term the matter already holds is left as it is and not counted as inserted. Refused when the batch would push the matter past its term limit. Organization-wide terms are managed separately.",
+                access: "write",
+                flags: [
+                  {
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                ],
+                inputOnly: ["body.entries"],
+                paginated: false,
+                destructive: false,
+                scope: "matters_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["entries"],
+                      properties: {
+                        entries: {
+                          minItems: 1,
+                          maxItems: 100,
+                          type: "array",
+                          items: {
+                            type: "object",
+                            required: ["canonical", "label"],
+                            properties: {
+                              canonical: {
+                                minLength: 1,
+                                maxLength: 512,
+                                type: "string",
+                              },
+                              label: {
+                                minLength: 1,
+                                maxLength: 64,
+                                type: "string",
+                              },
+                              variants: {
+                                maxItems: 20,
+                                type: "array",
+                                items: {
+                                  minLength: 1,
+                                  maxLength: 512,
+                                  type: "string",
+                                },
+                              },
+                            },
+                          },
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      properties: {
+                        matterId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["matterId"],
+                    },
+                  },
+                },
+              },
+            },
+            "anonymization-terms-delete": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "matters",
+                  "anonymization-terms-delete",
+                ],
+                capabilityId: "matters.anonymization-terms.delete",
+                description:
+                  "Remove one always-mask term from a matter's anonymization gazetteer, so it is no longer force-masked and is redacted only when detection finds it on its own. Only entries scoped to this matter can be removed here, never organization-wide ones; text already sent to a provider is unaffected.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    required: true,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--entry-id",
+                    prop: "entryId",
+                    required: true,
+                    part: "params",
+                    partPath: "entryId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: true,
+                scope: "matters_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["matterId", "entryId"],
+                      properties: {
+                        matterId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        entryId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "anonymization-terms-list": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "matters",
+                  "anonymization-terms-list",
+                ],
+                capabilityId: "matters.anonymization-terms.list",
+                description:
+                  "Read a matter's own always-mask terms with their canonical form, label, variants, and enabled flag. Organization-wide terms are not included; read those with organization-settings.read-anonymization-blacklist.",
+                access: "read",
+                flags: [
+                  {
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      properties: {
+                        matterId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["matterId"],
+                    },
+                  },
+                },
+              },
+            },
+            archive: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "matters", "archive"],
+                capabilityId: "matters.archive",
+                description:
+                  "Archive a matter: it stops being writable and is cleared from members' last-visited matter. Reversible with matters.unarchive, and nothing is deleted. Refused while document processing is running in the matter or any timer is still running there.",
+                access: "write",
+                flags: [
+                  {
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "matters_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      properties: {
+                        matterId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["matterId"],
+                    },
+                  },
+                },
+              },
+            },
+            "cell-retry": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "matters", "cell-retry"],
+                capabilityId: "matters.cell-retry",
+                description:
+                  "Re-run the AI extraction for one cell, meaning one document's value for one AI column, in a matter. Refused when the property is not AI-extracted, when the document is read-only, when the cell is locked, and while another workflow is already running in the matter.",
+                access: "write",
+                flags: [
+                  {
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--entity-id",
+                    prop: "entityId",
+                    required: true,
+                    part: "body",
+                    partPath: "entityId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--property-id",
+                    prop: "propertyId",
+                    required: true,
+                    part: "body",
+                    partPath: "propertyId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "matters_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["entityId", "propertyId"],
+                      properties: {
+                        entityId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        propertyId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      properties: {
+                        matterId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["matterId"],
+                    },
+                  },
+                },
+              },
+            },
+            create: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "matters", "create"],
+                capabilityId: "matters.create",
+                description:
+                  "Create a new matter (name required; pass clientId to attach a client contact). Returns the matter ID.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--id",
+                    prop: "id",
+                    required: true,
+                    part: "body",
+                    partPath: "id",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    description: "Contact ID to attach in the client role",
+                    flag: "--client-id",
+                    prop: "clientId",
+                    required: false,
+                    part: "body",
+                    partPath: "clientId",
+                  },
+                  {
+                    kind: "string-array",
+                    repeatable: true,
+                    flag: "--member-user-ids",
+                    prop: "memberUserIds",
+                    required: false,
+                    part: "body",
+                    partPath: "memberUserIds",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    description: "Matter name",
+                    flag: "--name",
+                    prop: "name",
+                    required: true,
+                    part: "body",
+                    partPath: "name",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--file-property-name",
+                    prop: "filePropertyName",
+                    required: true,
+                    part: "body",
+                    partPath: "filePropertyName",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "matters_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["id", "name", "filePropertyName"],
+                      properties: {
+                        id: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        clientId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                          description:
+                            "Contact ID to attach in the client role",
+                        },
+                        memberUserIds: {
+                          maxItems: 499,
+                          type: "array",
+                          items: {
+                            maxLength: 128,
+                            type: "string",
+                          },
+                        },
+                        name: {
+                          minLength: 1,
+                          maxLength: 256,
+                          type: "string",
+                          description: "Matter name",
+                        },
+                        filePropertyName: {
+                          minLength: 1,
+                          maxLength: 256,
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            delete: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "matters", "delete"],
+                capabilityId: "matters.delete",
+                description:
+                  "Permanently delete a matter and all its documents, tasks, fields, and chat history. This is irreversible.",
+                access: "write",
+                flags: [
+                  {
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: true,
+                scope: "matters_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      properties: {
+                        matterId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["matterId"],
+                    },
+                  },
+                },
+              },
+            },
+            duplicate: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "matters", "duplicate"],
+                capabilityId: "matters.duplicate",
+                description:
+                  "Copy a matter into a new one: its columns with their dependencies, views, members, party contacts, client, billing reference, colour, and lead. With includeContent true its documents, folders, tasks, and their stored files are copied as well; with false the new matter starts empty. The copy takes the organization's next matter number and its name gains a numeric suffix when earlier copies exist. Refused once the organization is at its matter limit.",
+                access: "write",
+                flags: [
+                  {
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                  {
+                    kind: "boolean",
+                    repeatable: false,
+                    flag: "--include-content",
+                    prop: "includeContent",
+                    required: true,
+                    part: "body",
+                    partPath: "includeContent",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "matters_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["includeContent"],
+                      properties: {
+                        includeContent: {
+                          type: "boolean",
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      properties: {
+                        matterId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["matterId"],
+                    },
+                  },
+                },
+              },
+            },
+            list: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "matters", "list"],
+                capabilityId: "matters.list",
+                description: "List the matters you can access.",
+                access: "read",
+                flags: [],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {},
+                },
+              },
+            },
+            "matter-contacts-create": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "matters",
+                  "matter-contacts-create",
+                ],
+                capabilityId: "matters.matter-contacts-create",
+                description:
+                  "Link a contact to a matter in a party role (opposing party/counsel, co-counsel, witness, expert witness, third party, judge, mediator, or other). Pass contactId with role to link.",
+                access: "write",
+                flags: [
+                  {
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    description: "Contact ID: with role to link the contact",
+                    flag: "--contact-id",
+                    prop: "contactId",
+                    required: true,
+                    part: "body",
+                    partPath: "contactId",
+                  },
+                  {
+                    kind: "enum",
+                    enum: [
+                      "opposing_party",
+                      "opposing_counsel",
+                      "co_counsel",
+                      "witness",
+                      "expert_witness",
+                      "third_party",
+                      "judge",
+                      "mediator",
+                      "other",
+                    ],
+                    repeatable: false,
+                    description: "Party role for the linked contact",
+                    flag: "--role",
+                    prop: "role",
+                    required: true,
+                    part: "body",
+                    partPath: "role",
+                  },
+                  {
+                    kind: "boolean",
+                    repeatable: false,
+                    flag: "--is-primary",
+                    prop: "isPrimary",
+                    required: false,
+                    part: "body",
+                    partPath: "isPrimary",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--notes",
+                    prop: "notes",
+                    required: false,
+                    part: "body",
+                    partPath: "notes",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "matters_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["contactId", "role"],
+                      properties: {
+                        contactId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                          description:
+                            "Contact ID: with role to link the contact",
+                        },
+                        role: {
+                          default: "opposing_party",
+                          description: "Party role for the linked contact",
+                          type: "string",
+                          enum: [
+                            "opposing_party",
+                            "opposing_counsel",
+                            "co_counsel",
+                            "witness",
+                            "expert_witness",
+                            "third_party",
+                            "judge",
+                            "mediator",
+                            "other",
+                          ],
+                        },
+                        isPrimary: {
+                          type: "boolean",
+                        },
+                        notes: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              maxLength: 10000,
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      properties: {
+                        matterId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["matterId"],
+                    },
+                  },
+                },
+              },
+            },
+            "matter-contacts-delete": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "matters",
+                  "matter-contacts-delete",
+                ],
+                capabilityId: "matters.matter-contacts-delete",
+                description:
+                  "Remove one contact from a matter's party list, deleting the link with the party role and notes recorded on it. The contact stays in the organization address book; use contacts.delete to remove it from there.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    required: true,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--matter-contact-id",
+                    prop: "matterContactId",
+                    required: true,
+                    part: "params",
+                    partPath: "matterContactId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: true,
+                scope: "matters_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["matterId", "matterContactId"],
+                      properties: {
+                        matterId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        matterContactId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "matter-members-add": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "matters", "matter-members-add"],
+                capabilityId: "matters.matter-members-add",
+                description:
+                  "Add one member of the organization to a matter, granting them access to it. A user who is already a member is a 409, and the call is refused once the matter holds its maximum number of members. Revoke access with matters.matter-members-remove.",
+                access: "write",
+                flags: [
+                  {
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--user-id",
+                    prop: "userId",
+                    required: true,
+                    part: "body",
+                    partPath: "userId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "admin_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["userId"],
+                      properties: {
+                        userId: {
+                          minLength: 1,
+                          maxLength: 128,
+                          type: "string",
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      properties: {
+                        matterId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["matterId"],
+                    },
+                  },
+                },
+              },
+            },
+            "matter-members-remove": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "matters", "matter-members-remove"],
+                capabilityId: "matters.matter-members-remove",
+                description:
+                  "Remove one member from a matter, revoking their live access and cancelling their open desktop editing sessions. Their active work obligations are unassigned rather than deleted; refused when they are the matter's last member, when a timer of theirs is still running, or when they own more work obligations than one call may unassign at once.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    required: true,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--user-id",
+                    prop: "userId",
+                    required: true,
+                    part: "params",
+                    partPath: "userId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: true,
+                scope: "admin_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["matterId", "userId"],
+                      properties: {
+                        matterId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        userId: {
+                          minLength: 1,
+                          maxLength: 128,
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "read-justifications": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "matters", "read-justifications"],
+                capabilityId: "matters.read-justifications",
+                description:
+                  "Read the stored justifications for the current versions of up to one page of documents in a matter: per extracted cell, the explanation the model gave, the bounding boxes on the source file, and the file fields those boxes belong to.",
+                access: "read",
+                flags: [
+                  {
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                  {
+                    kind: "string-array",
+                    repeatable: true,
+                    flag: "--entity-ids",
+                    prop: "entityIds",
+                    required: true,
+                    part: "body",
+                    partPath: "entityIds",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["entityIds"],
+                      properties: {
+                        entityIds: {
+                          minItems: 1,
+                          maxItems: 500,
+                          type: "array",
+                          items: {
+                            minLength: 36,
+                            maxLength: 36,
+                            pattern:
+                              "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                            type: "string",
+                          },
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      properties: {
+                        matterId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["matterId"],
+                    },
+                  },
+                },
+              },
+            },
+            "read-workflow-status": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "matters", "read-workflow-status"],
+                capabilityId: "matters.read-workflow-status",
+                description:
+                  "Report whether an extraction workflow is running in a matter and describe its most recent run: scope, status, how many targets it covers and how many are done, error code, and start and finish times.",
+                access: "read",
+                flags: [
+                  {
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      properties: {
+                        matterId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["matterId"],
+                    },
+                  },
+                },
+              },
+            },
+            "read-workflow-target-count": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "matters",
+                  "read-workflow-target-count",
+                ],
+                capabilityId: "matters.read-workflow-target-count",
+                description:
+                  "Count the documents an extraction workflow would process in a matter, optionally narrowed to a set of entity ids. Use it before matters.workflow-start to size the run.",
+                access: "read",
+                flags: [
+                  {
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                  {
+                    kind: "string-array",
+                    repeatable: true,
+                    flag: "--entity-ids",
+                    prop: "entityIds",
+                    required: false,
+                    part: "body",
+                    partPath: "entityIds",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      properties: {
+                        entityIds: {
+                          maxItems: 10000,
+                          type: "array",
+                          items: {
+                            minLength: 36,
+                            maxLength: 36,
+                            pattern:
+                              "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                            type: "string",
+                          },
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      properties: {
+                        matterId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["matterId"],
+                    },
+                  },
+                },
+              },
+            },
+            unarchive: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "matters", "unarchive"],
+                capabilityId: "matters.unarchive",
+                description:
+                  "Return an archived matter to active so it is writable again. The counterpart of matters.archive: a matter that is not archived is left exactly as it is.",
+                access: "write",
+                flags: [
+                  {
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "matters_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      properties: {
+                        matterId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["matterId"],
+                    },
+                  },
+                },
+              },
+            },
+            update: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "matters", "update"],
+                capabilityId: "matters.update",
+                description:
+                  "Change a matter: its name, reference, billing reference, colour, or lead (who must already be a member of it). Only the fields you pass are written. Attaching a client to a personal matter is a one-way promotion and must go through promote, which takes the client contact and optionally the members to share it with at the same time; a bare clientId on a personal matter, and any attempt to re-promote a matter that already has a client, are refused.",
+                access: "write",
+                flags: [
+                  {
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--name",
+                    prop: "name",
+                    required: false,
+                    part: "body",
+                    partPath: "name",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--client-id",
+                    prop: "clientId",
+                    required: false,
+                    part: "body",
+                    partPath: "clientId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--reference",
+                    prop: "reference",
+                    required: false,
+                    part: "body",
+                    partPath: "reference",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--billing-reference",
+                    prop: "billingReference",
+                    required: false,
+                    part: "body",
+                    partPath: "billingReference",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--color",
+                    prop: "color",
+                    required: false,
+                    part: "body",
+                    partPath: "color",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--lead-user-id",
+                    prop: "leadUserId",
+                    required: false,
+                    part: "body",
+                    partPath: "leadUserId",
+                  },
+                ],
+                inputOnly: ["body.promote"],
+                paginated: false,
+                destructive: false,
+                scope: "matters_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      properties: {
+                        name: {
+                          minLength: 1,
+                          maxLength: 256,
+                          type: "string",
+                        },
+                        clientId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        reference: {
+                          maxLength: 64,
+                          minLength: 1,
+                          type: "string",
+                        },
+                        billingReference: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              maxLength: 128,
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                        color: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              maxLength: 32,
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                        leadUserId: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              maxLength: 128,
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                        promote: {
+                          type: "object",
+                          required: ["clientId"],
+                          properties: {
+                            clientId: {
+                              minLength: 36,
+                              maxLength: 36,
+                              pattern:
+                                "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                              type: "string",
+                            },
+                            memberUserIds: {
+                              maxItems: 499,
+                              type: "array",
+                              items: {
+                                maxLength: 128,
+                                type: "string",
+                              },
+                            },
+                          },
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      properties: {
+                        matterId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["matterId"],
+                    },
+                  },
+                },
+              },
+            },
+            "workflow-start": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "matters", "workflow-start"],
+                capabilityId: "matters.workflow-start",
+                description:
+                  "Start an extraction workflow in a matter, filling the AI columns of the documents that need it. Narrow it with entityIds and propertyIds, set the processing order with entityIdsOrder, and choose serviceTier standard or flex, where flex is the cheaper deferred tier and is refused when the configured provider does not offer it. Returns the run's status, including already-running when one is in flight.",
+                access: "write",
+                flags: [
+                  {
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                  {
+                    kind: "string-array",
+                    repeatable: true,
+                    flag: "--entity-ids",
+                    prop: "entityIds",
+                    required: false,
+                    part: "body",
+                    partPath: "entityIds",
+                  },
+                  {
+                    kind: "string-array",
+                    repeatable: true,
+                    flag: "--entity-ids-order",
+                    prop: "entityIdsOrder",
+                    required: false,
+                    part: "body",
+                    partPath: "entityIdsOrder",
+                  },
+                  {
+                    kind: "string-array",
+                    repeatable: true,
+                    flag: "--property-ids",
+                    prop: "propertyIds",
+                    required: false,
+                    part: "body",
+                    partPath: "propertyIds",
+                  },
+                ],
+                inputOnly: ["body.serviceTier"],
+                paginated: false,
+                destructive: false,
+                scope: "matters_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      properties: {
+                        entityIds: {
+                          maxItems: 10000,
+                          type: "array",
+                          items: {
+                            minLength: 36,
+                            maxLength: 36,
+                            pattern:
+                              "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                            type: "string",
+                          },
+                        },
+                        entityIdsOrder: {
+                          maxItems: 10000,
+                          type: "array",
+                          items: {
+                            minLength: 36,
+                            maxLength: 36,
+                            pattern:
+                              "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                            type: "string",
+                          },
+                        },
+                        propertyIds: {
+                          maxItems: 300,
+                          type: "array",
+                          items: {
+                            minLength: 36,
+                            maxLength: 36,
+                            pattern:
+                              "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                            type: "string",
+                          },
+                        },
+                        serviceTier: {
+                          anyOf: [
+                            {
+                              const: "standard",
+                              type: "string",
+                            },
+                            {
+                              const: "flex",
+                              type: "string",
+                            },
+                          ],
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      properties: {
+                        matterId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -21703,7 +23284,7 @@ export const generatedRouteMap: RouteNode = {
                 capabilityId:
                   "organization-settings.read-anonymization-blacklist",
                 description:
-                  "Read the organization-wide always-mask terms: each entry's canonical form, label, spelling variants, and enabled flag. Matter-scoped terms live in the same table but are never returned here; read those with workspaces.anonymization-terms.list.",
+                  "Read the organization-wide always-mask terms: each entry's canonical form, label, spelling variants, and enabled flag. Matter-scoped terms live in the same table but are never returned here; read those with matters.anonymization-terms.list.",
                 access: "read",
                 flags: [],
                 inputOnly: [],
@@ -22034,11 +23615,11 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     required: true,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                 ],
                 inputOnly: [],
@@ -22051,9 +23632,9 @@ export const generatedRouteMap: RouteNode = {
                   properties: {
                     params: {
                       type: "object",
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -23316,11 +24897,11 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     required: true,
                     part: "body",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -23351,9 +24932,9 @@ export const generatedRouteMap: RouteNode = {
                   properties: {
                     body: {
                       type: "object",
-                      required: ["workspaceId", "runId"],
+                      required: ["matterId", "runId"],
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -23699,17 +25280,17 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "playbooks", "run"],
                 capabilityId: "playbooks.run",
                 description:
-                  "Run a review playbook over a matter's documents. Every DOCX document is reviewed against the playbook's latest approved version, and each document's findings are recorded against its own pinned version. Pass workspaceId, playbookId, and the projection: \"columns\" also materializes the playbook's extraction and verdict columns onto the table, \"none\" materializes none. Findings populate asynchronously.",
+                  "Run a review playbook over a matter's documents. Every DOCX document is reviewed against the playbook's latest approved version, and each document's findings are recorded against its own pinned version. Pass matterId, playbookId, and the projection: \"columns\" also materializes the playbook's extraction and verdict columns onto the table, \"none\" materializes none. Findings populate asynchronously.",
                 access: "write",
                 flags: [
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     required: true,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -23757,9 +25338,9 @@ export const generatedRouteMap: RouteNode = {
                     },
                     params: {
                       type: "object",
-                      required: ["workspaceId", "playbookId"],
+                      required: ["matterId", "playbookId"],
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -25024,13 +26605,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -25529,11 +27110,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                   $defs: {
@@ -25702,13 +27283,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                 ],
                 inputOnly: ["body.items"],
@@ -26183,11 +27764,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                   $defs: {
@@ -26358,11 +27939,11 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     required: true,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -26384,9 +27965,9 @@ export const generatedRouteMap: RouteNode = {
                   properties: {
                     params: {
                       type: "object",
-                      required: ["workspaceId", "propertyId"],
+                      required: ["matterId", "propertyId"],
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -26416,13 +27997,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                 ],
                 inputOnly: [],
@@ -26436,11 +28017,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -26456,13 +28037,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -26576,11 +28157,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -26596,13 +28177,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -26701,11 +28282,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -26723,11 +28304,11 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     required: true,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -27356,9 +28937,9 @@ export const generatedRouteMap: RouteNode = {
                     },
                     params: {
                       type: "object",
-                      required: ["workspaceId", "propertyId"],
+                      required: ["matterId", "propertyId"],
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -27546,13 +29127,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -27613,11 +29194,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -27633,13 +29214,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -27675,11 +29256,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -27697,11 +29278,11 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     required: true,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -27801,9 +29382,9 @@ export const generatedRouteMap: RouteNode = {
                     },
                     params: {
                       type: "object",
-                      required: ["workspaceId", "rateTableId"],
+                      required: ["matterId", "rateTableId"],
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -27835,11 +29416,11 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     required: true,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -27883,9 +29464,9 @@ export const generatedRouteMap: RouteNode = {
                     },
                     params: {
                       type: "object",
-                      required: ["workspaceId", "rateTableId"],
+                      required: ["matterId", "rateTableId"],
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -27917,11 +29498,11 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     required: true,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -27945,9 +29526,9 @@ export const generatedRouteMap: RouteNode = {
                   properties: {
                     params: {
                       type: "object",
-                      required: ["workspaceId", "rateTableId"],
+                      required: ["matterId", "rateTableId"],
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -27995,11 +29576,11 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     required: true,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -28093,9 +29674,9 @@ export const generatedRouteMap: RouteNode = {
                     },
                     params: {
                       type: "object",
-                      required: ["workspaceId", "rateTableId"],
+                      required: ["matterId", "rateTableId"],
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -28125,13 +29706,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                 ],
                 inputOnly: [],
@@ -28147,11 +29728,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                     query: {
                       type: "object",
@@ -28183,13 +29764,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -28223,11 +29804,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                     query: {
                       type: "object",
@@ -28261,13 +29842,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -28344,11 +29925,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -28371,11 +29952,11 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     required: true,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -28407,9 +29988,9 @@ export const generatedRouteMap: RouteNode = {
                     },
                     params: {
                       type: "object",
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -28434,11 +30015,11 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     required: true,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -28544,9 +30125,9 @@ export const generatedRouteMap: RouteNode = {
                     },
                     params: {
                       type: "object",
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -28571,11 +30152,11 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     required: true,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                 ],
                 inputOnly: [],
@@ -28590,9 +30171,9 @@ export const generatedRouteMap: RouteNode = {
                   properties: {
                     params: {
                       type: "object",
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -28633,11 +30214,11 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     required: true,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                 ],
                 inputOnly: [],
@@ -28650,9 +30231,9 @@ export const generatedRouteMap: RouteNode = {
                   properties: {
                     params: {
                       type: "object",
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -28677,11 +30258,11 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     required: true,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -28703,9 +30284,9 @@ export const generatedRouteMap: RouteNode = {
                   properties: {
                     params: {
                       type: "object",
-                      required: ["workspaceId", "exportId"],
+                      required: ["matterId", "exportId"],
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -32326,13 +33907,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -32396,11 +33977,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -32416,13 +33997,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -32472,11 +34053,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -32492,13 +34073,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -32578,11 +34159,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -32598,13 +34179,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -32998,11 +34579,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                   $defs: {
@@ -33171,13 +34752,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -33832,11 +35413,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -33852,13 +35433,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -33924,11 +35505,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -33944,13 +35525,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -33986,11 +35567,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -34008,11 +35589,11 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     required: true,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -34034,9 +35615,9 @@ export const generatedRouteMap: RouteNode = {
                   properties: {
                     params: {
                       type: "object",
-                      required: ["workspaceId", "taskId"],
+                      required: ["matterId", "taskId"],
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -34068,11 +35649,11 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     required: true,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -34094,9 +35675,9 @@ export const generatedRouteMap: RouteNode = {
                   properties: {
                     params: {
                       type: "object",
-                      required: ["workspaceId", "taskId"],
+                      required: ["matterId", "taskId"],
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -34126,13 +35707,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -34646,11 +36227,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -36053,11 +37634,11 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
-            "fill-to-workspace": {
+            "fill-to-matter": {
               kind: "capability-leaf",
               spec: {
-                commandPath: ["capability", "templates", "fill-to-workspace"],
-                capabilityId: "templates.fill-to-workspace",
+                commandPath: ["capability", "templates", "fill-to-matter"],
+                capabilityId: "templates.fill-to-matter",
                 description:
                   "Fill a stored template and save the result as a new document in a matter rather than returning bytes. Same values and clauseOverrides contract as templates.fill-by-id, plus an optional document name (the .docx extension is appended when missing) and a parent folder; the created entity is returned.",
                 access: "write",
@@ -36065,11 +37646,11 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     required: true,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -36231,9 +37812,9 @@ export const generatedRouteMap: RouteNode = {
                     },
                     params: {
                       type: "object",
-                      required: ["workspaceId", "templateId"],
+                      required: ["matterId", "templateId"],
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -37072,13 +38653,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string-array",
@@ -37119,11 +38700,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -37139,13 +38720,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string-array",
@@ -37211,11 +38792,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -37231,13 +38812,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "nullable-string",
@@ -37415,11 +38996,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -37435,13 +39016,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -37479,11 +39060,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -37499,13 +39080,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -37556,11 +39137,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                     query: {
                       type: "object",
@@ -37601,13 +39182,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -37658,11 +39239,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                     query: {
                       type: "object",
@@ -37705,11 +39286,11 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     required: true,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -37731,9 +39312,9 @@ export const generatedRouteMap: RouteNode = {
                   properties: {
                     params: {
                       type: "object",
-                      required: ["workspaceId", "id"],
+                      required: ["matterId", "id"],
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -37763,13 +39344,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -37878,11 +39459,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                     query: {
                       type: "object",
@@ -37966,13 +39547,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -38031,11 +39612,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -38051,13 +39632,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -38100,11 +39681,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                     query: {
                       type: "object",
@@ -38140,13 +39721,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "nullable-string",
@@ -38217,11 +39798,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -38237,13 +39818,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                 ],
                 inputOnly: [],
@@ -38257,11 +39838,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -38277,13 +39858,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -38485,11 +40066,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -38510,13 +40091,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                 ],
                 inputOnly: ["body"],
@@ -38679,11 +40260,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -38701,11 +40282,11 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     required: true,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -38727,9 +40308,9 @@ export const generatedRouteMap: RouteNode = {
                   properties: {
                     params: {
                       type: "object",
-                      required: ["workspaceId", "uploadId"],
+                      required: ["matterId", "uploadId"],
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -38761,11 +40342,11 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     required: true,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -38787,9 +40368,9 @@ export const generatedRouteMap: RouteNode = {
                   properties: {
                     params: {
                       type: "object",
-                      required: ["workspaceId", "uploadId"],
+                      required: ["matterId", "uploadId"],
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -38849,13 +40430,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -39208,11 +40789,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                   $defs: {
@@ -39728,13 +41309,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -39756,7 +41337,7 @@ export const generatedRouteMap: RouteNode = {
                   properties: {
                     params: {
                       type: "object",
-                      required: ["templateId", "workspaceId"],
+                      required: ["templateId", "matterId"],
                       properties: {
                         templateId: {
                           minLength: 36,
@@ -39765,7 +41346,7 @@ export const generatedRouteMap: RouteNode = {
                             "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
                           type: "string",
                         },
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
@@ -39784,13 +41365,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                 ],
                 inputOnly: [],
@@ -39804,11 +41385,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -39831,11 +41412,11 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     required: true,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -39892,9 +41473,9 @@ export const generatedRouteMap: RouteNode = {
                     },
                     params: {
                       type: "object",
-                      required: ["workspaceId", "viewId"],
+                      required: ["matterId", "viewId"],
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -39924,13 +41505,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -40590,11 +42171,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                   $defs: {
@@ -41106,11 +42687,11 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     required: true,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -41132,9 +42713,9 @@ export const generatedRouteMap: RouteNode = {
                   properties: {
                     params: {
                       type: "object",
-                      required: ["workspaceId", "viewId"],
+                      required: ["matterId", "viewId"],
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -41164,13 +42745,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "read",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                 ],
                 inputOnly: [],
@@ -41184,11 +42765,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -41204,13 +42785,13 @@ export const generatedRouteMap: RouteNode = {
                 access: "write",
                 flags: [
                   {
-                    flag: "--workspace-id",
-                    prop: "workspace",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     kind: "string",
                     required: true,
                     repeatable: false,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string-array",
@@ -41251,11 +42832,11 @@ export const generatedRouteMap: RouteNode = {
                     params: {
                       type: "object",
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           type: "string",
                         },
                       },
-                      required: ["workspaceId"],
+                      required: ["matterId"],
                     },
                   },
                 },
@@ -41273,11 +42854,11 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     required: true,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -41928,9 +43509,9 @@ export const generatedRouteMap: RouteNode = {
                     },
                     params: {
                       type: "object",
-                      required: ["workspaceId", "viewId"],
+                      required: ["matterId", "viewId"],
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -42465,11 +44046,11 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     required: true,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -42491,9 +44072,9 @@ export const generatedRouteMap: RouteNode = {
                   properties: {
                     params: {
                       type: "object",
-                      required: ["workspaceId", "entityId"],
+                      required: ["matterId", "entityId"],
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -42598,11 +44179,11 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     required: true,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -42659,9 +44240,9 @@ export const generatedRouteMap: RouteNode = {
                     },
                     params: {
                       type: "object",
-                      required: ["workspaceId", "entityId"],
+                      required: ["matterId", "entityId"],
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -42693,11 +44274,11 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
+                    flag: "--matter-id",
+                    prop: "matterId",
                     required: true,
                     part: "params",
-                    partPath: "workspaceId",
+                    partPath: "matterId",
                   },
                   {
                     kind: "string",
@@ -42893,9 +44474,9 @@ export const generatedRouteMap: RouteNode = {
                     },
                     params: {
                       type: "object",
-                      required: ["workspaceId", "entityId"],
+                      required: ["matterId", "entityId"],
                       properties: {
-                        workspaceId: {
+                        matterId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -42907,1625 +44488,6 @@ export const generatedRouteMap: RouteNode = {
                           maxLength: 36,
                           pattern:
                             "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-          },
-        },
-        workspaces: {
-          kind: "route",
-          children: {
-            "anonymization-allowlist-create": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: [
-                  "capability",
-                  "workspaces",
-                  "anonymization-allowlist-create",
-                ],
-                capabilityId: "workspaces.anonymization-allowlist.create",
-                description:
-                  "Add a never-mask entry to a matter's anonymization allowlist, so a term that detection finds is left in the clear. scope workspace covers the whole matter; scope document covers one document and needs an entityId belonging to this matter. Only matter-scoped entries can be created here, never organization-wide ones. A term already listed is a no-op, until the matter reaches its allowlist limit: the cap is checked before the duplicate is detected, so replaying an existing entry is refused there rather than reported as a no-op.",
-                access: "write",
-                flags: [
-                  {
-                    flag: "--workspace-id",
-                    prop: "workspace",
-                    kind: "string",
-                    required: true,
-                    repeatable: false,
-                    part: "params",
-                    partPath: "workspaceId",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--canonical",
-                    prop: "canonical",
-                    required: true,
-                    part: "body",
-                    partPath: "canonical",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--label",
-                    prop: "label",
-                    required: true,
-                    part: "body",
-                    partPath: "label",
-                  },
-                  {
-                    kind: "enum",
-                    enum: ["document", "workspace"],
-                    repeatable: false,
-                    flag: "--scope",
-                    prop: "scope",
-                    required: true,
-                    part: "body",
-                    partPath: "scope",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--entity-id",
-                    prop: "entityId",
-                    required: false,
-                    part: "body",
-                    partPath: "entityId",
-                  },
-                ],
-                inputOnly: [],
-                paginated: false,
-                destructive: false,
-                scope: "matters_write",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    body: {
-                      type: "object",
-                      required: ["canonical", "label", "scope"],
-                      properties: {
-                        canonical: {
-                          minLength: 1,
-                          maxLength: 512,
-                          type: "string",
-                        },
-                        label: {
-                          minLength: 1,
-                          maxLength: 64,
-                          type: "string",
-                        },
-                        scope: {
-                          default: "document",
-                          type: "string",
-                          enum: ["document", "workspace"],
-                        },
-                        entityId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                      },
-                    },
-                    params: {
-                      type: "object",
-                      properties: {
-                        workspaceId: {
-                          type: "string",
-                        },
-                      },
-                      required: ["workspaceId"],
-                    },
-                  },
-                },
-              },
-            },
-            "anonymization-allowlist-delete": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: [
-                  "capability",
-                  "workspaces",
-                  "anonymization-allowlist-delete",
-                ],
-                capabilityId: "workspaces.anonymization-allowlist.delete",
-                description:
-                  "Remove one anonymization allowlist entry from a matter, so the term it exempted is masked again from the next detection run on. Only entries scoped to this matter can be removed here, never organization-wide ones, and output already anonymized is not revisited.",
-                access: "write",
-                flags: [
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
-                    required: true,
-                    part: "params",
-                    partPath: "workspaceId",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--entry-id",
-                    prop: "entryId",
-                    required: true,
-                    part: "params",
-                    partPath: "entryId",
-                  },
-                ],
-                inputOnly: [],
-                paginated: false,
-                destructive: true,
-                scope: "matters_write",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    params: {
-                      type: "object",
-                      required: ["workspaceId", "entryId"],
-                      properties: {
-                        workspaceId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                        entryId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-            "anonymization-allowlist-list": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: [
-                  "capability",
-                  "workspaces",
-                  "anonymization-allowlist-list",
-                ],
-                capabilityId: "workspaces.anonymization-allowlist.list",
-                description:
-                  "Read the never-mask entries that apply in a matter: the organization-wide ones plus the matter's own and, when entityId is given, that document's own, merged into one list so a detection run can be filtered in a single pass.",
-                access: "read",
-                flags: [
-                  {
-                    flag: "--workspace-id",
-                    prop: "workspace",
-                    kind: "string",
-                    required: true,
-                    repeatable: false,
-                    part: "params",
-                    partPath: "workspaceId",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--entity-id",
-                    prop: "entityId",
-                    required: false,
-                    part: "query",
-                    partPath: "entityId",
-                  },
-                ],
-                inputOnly: [],
-                paginated: false,
-                destructive: false,
-                scope: "read",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    params: {
-                      type: "object",
-                      properties: {
-                        workspaceId: {
-                          type: "string",
-                        },
-                      },
-                      required: ["workspaceId"],
-                    },
-                    query: {
-                      type: "object",
-                      properties: {
-                        entityId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-            "anonymization-terms-create": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: [
-                  "capability",
-                  "workspaces",
-                  "anonymization-terms-create",
-                ],
-                capabilityId: "workspaces.anonymization-terms.create",
-                description:
-                  "Add always-mask terms to a matter's anonymization gazetteer, each with a canonical form, a label, and optional spelling variants. Idempotent per canonical form: a term the matter already holds is left as it is and not counted as inserted. Refused when the batch would push the matter past its term limit. Organization-wide terms are managed separately.",
-                access: "write",
-                flags: [
-                  {
-                    flag: "--workspace-id",
-                    prop: "workspace",
-                    kind: "string",
-                    required: true,
-                    repeatable: false,
-                    part: "params",
-                    partPath: "workspaceId",
-                  },
-                ],
-                inputOnly: ["body.entries"],
-                paginated: false,
-                destructive: false,
-                scope: "matters_write",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    body: {
-                      type: "object",
-                      required: ["entries"],
-                      properties: {
-                        entries: {
-                          minItems: 1,
-                          maxItems: 100,
-                          type: "array",
-                          items: {
-                            type: "object",
-                            required: ["canonical", "label"],
-                            properties: {
-                              canonical: {
-                                minLength: 1,
-                                maxLength: 512,
-                                type: "string",
-                              },
-                              label: {
-                                minLength: 1,
-                                maxLength: 64,
-                                type: "string",
-                              },
-                              variants: {
-                                maxItems: 20,
-                                type: "array",
-                                items: {
-                                  minLength: 1,
-                                  maxLength: 512,
-                                  type: "string",
-                                },
-                              },
-                            },
-                          },
-                        },
-                      },
-                    },
-                    params: {
-                      type: "object",
-                      properties: {
-                        workspaceId: {
-                          type: "string",
-                        },
-                      },
-                      required: ["workspaceId"],
-                    },
-                  },
-                },
-              },
-            },
-            "anonymization-terms-delete": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: [
-                  "capability",
-                  "workspaces",
-                  "anonymization-terms-delete",
-                ],
-                capabilityId: "workspaces.anonymization-terms.delete",
-                description:
-                  "Remove one always-mask term from a matter's anonymization gazetteer, so it is no longer force-masked and is redacted only when detection finds it on its own. Only entries scoped to this matter can be removed here, never organization-wide ones; text already sent to a provider is unaffected.",
-                access: "write",
-                flags: [
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
-                    required: true,
-                    part: "params",
-                    partPath: "workspaceId",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--entry-id",
-                    prop: "entryId",
-                    required: true,
-                    part: "params",
-                    partPath: "entryId",
-                  },
-                ],
-                inputOnly: [],
-                paginated: false,
-                destructive: true,
-                scope: "matters_write",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    params: {
-                      type: "object",
-                      required: ["workspaceId", "entryId"],
-                      properties: {
-                        workspaceId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                        entryId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-            "anonymization-terms-list": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: [
-                  "capability",
-                  "workspaces",
-                  "anonymization-terms-list",
-                ],
-                capabilityId: "workspaces.anonymization-terms.list",
-                description:
-                  "Read a matter's own always-mask terms with their canonical form, label, variants, and enabled flag. Organization-wide terms are not included; read those with organization-settings.read-anonymization-blacklist.",
-                access: "read",
-                flags: [
-                  {
-                    flag: "--workspace-id",
-                    prop: "workspace",
-                    kind: "string",
-                    required: true,
-                    repeatable: false,
-                    part: "params",
-                    partPath: "workspaceId",
-                  },
-                ],
-                inputOnly: [],
-                paginated: false,
-                destructive: false,
-                scope: "read",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    params: {
-                      type: "object",
-                      properties: {
-                        workspaceId: {
-                          type: "string",
-                        },
-                      },
-                      required: ["workspaceId"],
-                    },
-                  },
-                },
-              },
-            },
-            archive: {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: ["capability", "workspaces", "archive"],
-                capabilityId: "workspaces.archive",
-                description:
-                  "Archive a matter: it stops being writable and is cleared from members' last-visited matter. Reversible with workspaces.unarchive, and nothing is deleted. Refused while document processing is running in the matter or any timer is still running there.",
-                access: "write",
-                flags: [
-                  {
-                    flag: "--workspace-id",
-                    prop: "workspace",
-                    kind: "string",
-                    required: true,
-                    repeatable: false,
-                    part: "params",
-                    partPath: "workspaceId",
-                  },
-                ],
-                inputOnly: [],
-                paginated: false,
-                destructive: false,
-                scope: "matters_write",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    params: {
-                      type: "object",
-                      properties: {
-                        workspaceId: {
-                          type: "string",
-                        },
-                      },
-                      required: ["workspaceId"],
-                    },
-                  },
-                },
-              },
-            },
-            "cell-retry": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: ["capability", "workspaces", "cell-retry"],
-                capabilityId: "workspaces.cell-retry",
-                description:
-                  "Re-run the AI extraction for one cell, meaning one document's value for one AI column, in a matter. Refused when the property is not AI-extracted, when the document is read-only, when the cell is locked, and while another workflow is already running in the matter.",
-                access: "write",
-                flags: [
-                  {
-                    flag: "--workspace-id",
-                    prop: "workspace",
-                    kind: "string",
-                    required: true,
-                    repeatable: false,
-                    part: "params",
-                    partPath: "workspaceId",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--entity-id",
-                    prop: "entityId",
-                    required: true,
-                    part: "body",
-                    partPath: "entityId",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--property-id",
-                    prop: "propertyId",
-                    required: true,
-                    part: "body",
-                    partPath: "propertyId",
-                  },
-                ],
-                inputOnly: [],
-                paginated: false,
-                destructive: false,
-                scope: "matters_write",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    body: {
-                      type: "object",
-                      required: ["entityId", "propertyId"],
-                      properties: {
-                        entityId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                        propertyId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                      },
-                    },
-                    params: {
-                      type: "object",
-                      properties: {
-                        workspaceId: {
-                          type: "string",
-                        },
-                      },
-                      required: ["workspaceId"],
-                    },
-                  },
-                },
-              },
-            },
-            create: {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: ["capability", "workspaces", "create"],
-                capabilityId: "workspaces.create",
-                description:
-                  "Create a new matter (name required; pass clientId to attach a client contact). Returns the matter ID.",
-                access: "write",
-                flags: [
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--id",
-                    prop: "id",
-                    required: true,
-                    part: "body",
-                    partPath: "id",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    description: "Contact ID to attach in the client role",
-                    flag: "--client-id",
-                    prop: "clientId",
-                    required: false,
-                    part: "body",
-                    partPath: "clientId",
-                  },
-                  {
-                    kind: "string-array",
-                    repeatable: true,
-                    flag: "--member-user-ids",
-                    prop: "memberUserIds",
-                    required: false,
-                    part: "body",
-                    partPath: "memberUserIds",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    description: "Matter name",
-                    flag: "--name",
-                    prop: "name",
-                    required: true,
-                    part: "body",
-                    partPath: "name",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--file-property-name",
-                    prop: "filePropertyName",
-                    required: true,
-                    part: "body",
-                    partPath: "filePropertyName",
-                  },
-                ],
-                inputOnly: [],
-                paginated: false,
-                destructive: false,
-                scope: "matters_write",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    body: {
-                      type: "object",
-                      required: ["id", "name", "filePropertyName"],
-                      properties: {
-                        id: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                        clientId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                          description:
-                            "Contact ID to attach in the client role",
-                        },
-                        memberUserIds: {
-                          maxItems: 499,
-                          type: "array",
-                          items: {
-                            maxLength: 128,
-                            type: "string",
-                          },
-                        },
-                        name: {
-                          minLength: 1,
-                          maxLength: 256,
-                          type: "string",
-                          description: "Matter name",
-                        },
-                        filePropertyName: {
-                          minLength: 1,
-                          maxLength: 256,
-                          type: "string",
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-            delete: {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: ["capability", "workspaces", "delete"],
-                capabilityId: "workspaces.delete",
-                description:
-                  "Permanently delete a matter and all its documents, tasks, fields, and chat history. This is irreversible.",
-                access: "write",
-                flags: [
-                  {
-                    flag: "--workspace-id",
-                    prop: "workspace",
-                    kind: "string",
-                    required: true,
-                    repeatable: false,
-                    part: "params",
-                    partPath: "workspaceId",
-                  },
-                ],
-                inputOnly: [],
-                paginated: false,
-                destructive: true,
-                scope: "matters_write",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    params: {
-                      type: "object",
-                      properties: {
-                        workspaceId: {
-                          type: "string",
-                        },
-                      },
-                      required: ["workspaceId"],
-                    },
-                  },
-                },
-              },
-            },
-            duplicate: {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: ["capability", "workspaces", "duplicate"],
-                capabilityId: "workspaces.duplicate",
-                description:
-                  "Copy a matter into a new one: its columns with their dependencies, views, members, party contacts, client, billing reference, colour, and lead. With includeContent true its documents, folders, tasks, and their stored files are copied as well; with false the new matter starts empty. The copy takes the organization's next matter number and its name gains a numeric suffix when earlier copies exist. Refused once the organization is at its matter limit.",
-                access: "write",
-                flags: [
-                  {
-                    flag: "--workspace-id",
-                    prop: "workspace",
-                    kind: "string",
-                    required: true,
-                    repeatable: false,
-                    part: "params",
-                    partPath: "workspaceId",
-                  },
-                  {
-                    kind: "boolean",
-                    repeatable: false,
-                    flag: "--include-content",
-                    prop: "includeContent",
-                    required: true,
-                    part: "body",
-                    partPath: "includeContent",
-                  },
-                ],
-                inputOnly: [],
-                paginated: false,
-                destructive: false,
-                scope: "matters_write",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    body: {
-                      type: "object",
-                      required: ["includeContent"],
-                      properties: {
-                        includeContent: {
-                          type: "boolean",
-                        },
-                      },
-                    },
-                    params: {
-                      type: "object",
-                      properties: {
-                        workspaceId: {
-                          type: "string",
-                        },
-                      },
-                      required: ["workspaceId"],
-                    },
-                  },
-                },
-              },
-            },
-            list: {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: ["capability", "workspaces", "list"],
-                capabilityId: "workspaces.list",
-                description: "List the matters you can access.",
-                access: "read",
-                flags: [],
-                inputOnly: [],
-                paginated: false,
-                destructive: false,
-                scope: "read",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {},
-                },
-              },
-            },
-            "read-justifications": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: [
-                  "capability",
-                  "workspaces",
-                  "read-justifications",
-                ],
-                capabilityId: "workspaces.read-justifications",
-                description:
-                  "Read the stored justifications for the current versions of up to one page of documents in a matter: per extracted cell, the explanation the model gave, the bounding boxes on the source file, and the file fields those boxes belong to.",
-                access: "read",
-                flags: [
-                  {
-                    flag: "--workspace-id",
-                    prop: "workspace",
-                    kind: "string",
-                    required: true,
-                    repeatable: false,
-                    part: "params",
-                    partPath: "workspaceId",
-                  },
-                  {
-                    kind: "string-array",
-                    repeatable: true,
-                    flag: "--entity-ids",
-                    prop: "entityIds",
-                    required: true,
-                    part: "body",
-                    partPath: "entityIds",
-                  },
-                ],
-                inputOnly: [],
-                paginated: false,
-                destructive: false,
-                scope: "read",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    body: {
-                      type: "object",
-                      required: ["entityIds"],
-                      properties: {
-                        entityIds: {
-                          minItems: 1,
-                          maxItems: 500,
-                          type: "array",
-                          items: {
-                            minLength: 36,
-                            maxLength: 36,
-                            pattern:
-                              "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                            type: "string",
-                          },
-                        },
-                      },
-                    },
-                    params: {
-                      type: "object",
-                      properties: {
-                        workspaceId: {
-                          type: "string",
-                        },
-                      },
-                      required: ["workspaceId"],
-                    },
-                  },
-                },
-              },
-            },
-            "read-workflow-status": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: [
-                  "capability",
-                  "workspaces",
-                  "read-workflow-status",
-                ],
-                capabilityId: "workspaces.read-workflow-status",
-                description:
-                  "Report whether an extraction workflow is running in a matter and describe its most recent run: scope, status, how many targets it covers and how many are done, error code, and start and finish times.",
-                access: "read",
-                flags: [
-                  {
-                    flag: "--workspace-id",
-                    prop: "workspace",
-                    kind: "string",
-                    required: true,
-                    repeatable: false,
-                    part: "params",
-                    partPath: "workspaceId",
-                  },
-                ],
-                inputOnly: [],
-                paginated: false,
-                destructive: false,
-                scope: "read",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    params: {
-                      type: "object",
-                      properties: {
-                        workspaceId: {
-                          type: "string",
-                        },
-                      },
-                      required: ["workspaceId"],
-                    },
-                  },
-                },
-              },
-            },
-            "read-workflow-target-count": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: [
-                  "capability",
-                  "workspaces",
-                  "read-workflow-target-count",
-                ],
-                capabilityId: "workspaces.read-workflow-target-count",
-                description:
-                  "Count the documents an extraction workflow would process in a matter, optionally narrowed to a set of entity ids. Use it before workspaces.workflow-start to size the run.",
-                access: "read",
-                flags: [
-                  {
-                    flag: "--workspace-id",
-                    prop: "workspace",
-                    kind: "string",
-                    required: true,
-                    repeatable: false,
-                    part: "params",
-                    partPath: "workspaceId",
-                  },
-                  {
-                    kind: "string-array",
-                    repeatable: true,
-                    flag: "--entity-ids",
-                    prop: "entityIds",
-                    required: false,
-                    part: "body",
-                    partPath: "entityIds",
-                  },
-                ],
-                inputOnly: [],
-                paginated: false,
-                destructive: false,
-                scope: "read",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    body: {
-                      type: "object",
-                      properties: {
-                        entityIds: {
-                          maxItems: 10000,
-                          type: "array",
-                          items: {
-                            minLength: 36,
-                            maxLength: 36,
-                            pattern:
-                              "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                            type: "string",
-                          },
-                        },
-                      },
-                    },
-                    params: {
-                      type: "object",
-                      properties: {
-                        workspaceId: {
-                          type: "string",
-                        },
-                      },
-                      required: ["workspaceId"],
-                    },
-                  },
-                },
-              },
-            },
-            unarchive: {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: ["capability", "workspaces", "unarchive"],
-                capabilityId: "workspaces.unarchive",
-                description:
-                  "Return an archived matter to active so it is writable again. The counterpart of workspaces.archive: a matter that is not archived is left exactly as it is.",
-                access: "write",
-                flags: [
-                  {
-                    flag: "--workspace-id",
-                    prop: "workspace",
-                    kind: "string",
-                    required: true,
-                    repeatable: false,
-                    part: "params",
-                    partPath: "workspaceId",
-                  },
-                ],
-                inputOnly: [],
-                paginated: false,
-                destructive: false,
-                scope: "matters_write",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    params: {
-                      type: "object",
-                      properties: {
-                        workspaceId: {
-                          type: "string",
-                        },
-                      },
-                      required: ["workspaceId"],
-                    },
-                  },
-                },
-              },
-            },
-            update: {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: ["capability", "workspaces", "update"],
-                capabilityId: "workspaces.update",
-                description:
-                  "Change a matter: its name, reference, billing reference, colour, or lead (who must already be a member of it). Only the fields you pass are written. Attaching a client to a personal matter is a one-way promotion and must go through promote, which takes the client contact and optionally the members to share it with at the same time; a bare clientId on a personal matter, and any attempt to re-promote a matter that already has a client, are refused.",
-                access: "write",
-                flags: [
-                  {
-                    flag: "--workspace-id",
-                    prop: "workspace",
-                    kind: "string",
-                    required: true,
-                    repeatable: false,
-                    part: "params",
-                    partPath: "workspaceId",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--name",
-                    prop: "name",
-                    required: false,
-                    part: "body",
-                    partPath: "name",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--client-id",
-                    prop: "clientId",
-                    required: false,
-                    part: "body",
-                    partPath: "clientId",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--reference",
-                    prop: "reference",
-                    required: false,
-                    part: "body",
-                    partPath: "reference",
-                  },
-                  {
-                    kind: "nullable-string",
-                    repeatable: false,
-                    flag: "--billing-reference",
-                    prop: "billingReference",
-                    required: false,
-                    part: "body",
-                    partPath: "billingReference",
-                  },
-                  {
-                    kind: "nullable-string",
-                    repeatable: false,
-                    flag: "--color",
-                    prop: "color",
-                    required: false,
-                    part: "body",
-                    partPath: "color",
-                  },
-                  {
-                    kind: "nullable-string",
-                    repeatable: false,
-                    flag: "--lead-user-id",
-                    prop: "leadUserId",
-                    required: false,
-                    part: "body",
-                    partPath: "leadUserId",
-                  },
-                ],
-                inputOnly: ["body.promote"],
-                paginated: false,
-                destructive: false,
-                scope: "matters_write",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    body: {
-                      type: "object",
-                      properties: {
-                        name: {
-                          minLength: 1,
-                          maxLength: 256,
-                          type: "string",
-                        },
-                        clientId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                        reference: {
-                          maxLength: 64,
-                          minLength: 1,
-                          type: "string",
-                        },
-                        billingReference: {
-                          nullable: true,
-                          anyOf: [
-                            {
-                              maxLength: 128,
-                              type: "string",
-                            },
-                            {
-                              type: "null",
-                            },
-                          ],
-                        },
-                        color: {
-                          nullable: true,
-                          anyOf: [
-                            {
-                              maxLength: 32,
-                              type: "string",
-                            },
-                            {
-                              type: "null",
-                            },
-                          ],
-                        },
-                        leadUserId: {
-                          nullable: true,
-                          anyOf: [
-                            {
-                              maxLength: 128,
-                              type: "string",
-                            },
-                            {
-                              type: "null",
-                            },
-                          ],
-                        },
-                        promote: {
-                          type: "object",
-                          required: ["clientId"],
-                          properties: {
-                            clientId: {
-                              minLength: 36,
-                              maxLength: 36,
-                              pattern:
-                                "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                              type: "string",
-                            },
-                            memberUserIds: {
-                              maxItems: 499,
-                              type: "array",
-                              items: {
-                                maxLength: 128,
-                                type: "string",
-                              },
-                            },
-                          },
-                        },
-                      },
-                    },
-                    params: {
-                      type: "object",
-                      properties: {
-                        workspaceId: {
-                          type: "string",
-                        },
-                      },
-                      required: ["workspaceId"],
-                    },
-                  },
-                },
-              },
-            },
-            "workflow-start": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: ["capability", "workspaces", "workflow-start"],
-                capabilityId: "workspaces.workflow-start",
-                description:
-                  "Start an extraction workflow in a matter, filling the AI columns of the documents that need it. Narrow it with entityIds and propertyIds, set the processing order with entityIdsOrder, and choose serviceTier standard or flex, where flex is the cheaper deferred tier and is refused when the configured provider does not offer it. Returns the run's status, including already-running when one is in flight.",
-                access: "write",
-                flags: [
-                  {
-                    flag: "--workspace-id",
-                    prop: "workspace",
-                    kind: "string",
-                    required: true,
-                    repeatable: false,
-                    part: "params",
-                    partPath: "workspaceId",
-                  },
-                  {
-                    kind: "string-array",
-                    repeatable: true,
-                    flag: "--entity-ids",
-                    prop: "entityIds",
-                    required: false,
-                    part: "body",
-                    partPath: "entityIds",
-                  },
-                  {
-                    kind: "string-array",
-                    repeatable: true,
-                    flag: "--entity-ids-order",
-                    prop: "entityIdsOrder",
-                    required: false,
-                    part: "body",
-                    partPath: "entityIdsOrder",
-                  },
-                  {
-                    kind: "string-array",
-                    repeatable: true,
-                    flag: "--property-ids",
-                    prop: "propertyIds",
-                    required: false,
-                    part: "body",
-                    partPath: "propertyIds",
-                  },
-                ],
-                inputOnly: ["body.serviceTier"],
-                paginated: false,
-                destructive: false,
-                scope: "matters_write",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    body: {
-                      type: "object",
-                      properties: {
-                        entityIds: {
-                          maxItems: 10000,
-                          type: "array",
-                          items: {
-                            minLength: 36,
-                            maxLength: 36,
-                            pattern:
-                              "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                            type: "string",
-                          },
-                        },
-                        entityIdsOrder: {
-                          maxItems: 10000,
-                          type: "array",
-                          items: {
-                            minLength: 36,
-                            maxLength: 36,
-                            pattern:
-                              "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                            type: "string",
-                          },
-                        },
-                        propertyIds: {
-                          maxItems: 300,
-                          type: "array",
-                          items: {
-                            minLength: 36,
-                            maxLength: 36,
-                            pattern:
-                              "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                            type: "string",
-                          },
-                        },
-                        serviceTier: {
-                          anyOf: [
-                            {
-                              const: "standard",
-                              type: "string",
-                            },
-                            {
-                              const: "flex",
-                              type: "string",
-                            },
-                          ],
-                        },
-                      },
-                    },
-                    params: {
-                      type: "object",
-                      properties: {
-                        workspaceId: {
-                          type: "string",
-                        },
-                      },
-                      required: ["workspaceId"],
-                    },
-                  },
-                },
-              },
-            },
-            "workspace-contacts-create": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: [
-                  "capability",
-                  "workspaces",
-                  "workspace-contacts-create",
-                ],
-                capabilityId: "workspaces.workspace-contacts-create",
-                description:
-                  "Link a contact to a matter in a party role (opposing party/counsel, co-counsel, witness, expert witness, third party, judge, mediator, or other). Pass contactId with role to link.",
-                access: "write",
-                flags: [
-                  {
-                    flag: "--workspace-id",
-                    prop: "workspace",
-                    kind: "string",
-                    required: true,
-                    repeatable: false,
-                    part: "params",
-                    partPath: "workspaceId",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    description: "Contact ID: with role to link the contact",
-                    flag: "--contact-id",
-                    prop: "contactId",
-                    required: true,
-                    part: "body",
-                    partPath: "contactId",
-                  },
-                  {
-                    kind: "enum",
-                    enum: [
-                      "opposing_party",
-                      "opposing_counsel",
-                      "co_counsel",
-                      "witness",
-                      "expert_witness",
-                      "third_party",
-                      "judge",
-                      "mediator",
-                      "other",
-                    ],
-                    repeatable: false,
-                    description: "Party role for the linked contact",
-                    flag: "--role",
-                    prop: "role",
-                    required: true,
-                    part: "body",
-                    partPath: "role",
-                  },
-                  {
-                    kind: "boolean",
-                    repeatable: false,
-                    flag: "--is-primary",
-                    prop: "isPrimary",
-                    required: false,
-                    part: "body",
-                    partPath: "isPrimary",
-                  },
-                  {
-                    kind: "nullable-string",
-                    repeatable: false,
-                    flag: "--notes",
-                    prop: "notes",
-                    required: false,
-                    part: "body",
-                    partPath: "notes",
-                  },
-                ],
-                inputOnly: [],
-                paginated: false,
-                destructive: false,
-                scope: "matters_write",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    body: {
-                      type: "object",
-                      required: ["contactId", "role"],
-                      properties: {
-                        contactId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                          description:
-                            "Contact ID: with role to link the contact",
-                        },
-                        role: {
-                          default: "opposing_party",
-                          description: "Party role for the linked contact",
-                          type: "string",
-                          enum: [
-                            "opposing_party",
-                            "opposing_counsel",
-                            "co_counsel",
-                            "witness",
-                            "expert_witness",
-                            "third_party",
-                            "judge",
-                            "mediator",
-                            "other",
-                          ],
-                        },
-                        isPrimary: {
-                          type: "boolean",
-                        },
-                        notes: {
-                          nullable: true,
-                          anyOf: [
-                            {
-                              maxLength: 10000,
-                              type: "string",
-                            },
-                            {
-                              type: "null",
-                            },
-                          ],
-                        },
-                      },
-                    },
-                    params: {
-                      type: "object",
-                      properties: {
-                        workspaceId: {
-                          type: "string",
-                        },
-                      },
-                      required: ["workspaceId"],
-                    },
-                  },
-                },
-              },
-            },
-            "workspace-contacts-delete": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: [
-                  "capability",
-                  "workspaces",
-                  "workspace-contacts-delete",
-                ],
-                capabilityId: "workspaces.workspace-contacts-delete",
-                description:
-                  "Remove one contact from a matter's party list, deleting the link with the party role and notes recorded on it. The contact stays in the organization address book; use contacts.delete to remove it from there.",
-                access: "write",
-                flags: [
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
-                    required: true,
-                    part: "params",
-                    partPath: "workspaceId",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--workspace-contact-id",
-                    prop: "workspaceContactId",
-                    required: true,
-                    part: "params",
-                    partPath: "workspaceContactId",
-                  },
-                ],
-                inputOnly: [],
-                paginated: false,
-                destructive: true,
-                scope: "matters_write",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    params: {
-                      type: "object",
-                      required: ["workspaceId", "workspaceContactId"],
-                      properties: {
-                        workspaceId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                        workspaceContactId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-            "workspace-members-add": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: [
-                  "capability",
-                  "workspaces",
-                  "workspace-members-add",
-                ],
-                capabilityId: "workspaces.workspace-members-add",
-                description:
-                  "Add one member of the organization to a matter, granting them access to it. A user who is already a member is a 409, and the call is refused once the matter holds its maximum number of members. Revoke access with workspaces.workspace-members-remove.",
-                access: "write",
-                flags: [
-                  {
-                    flag: "--workspace-id",
-                    prop: "workspace",
-                    kind: "string",
-                    required: true,
-                    repeatable: false,
-                    part: "params",
-                    partPath: "workspaceId",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--user-id",
-                    prop: "userId",
-                    required: true,
-                    part: "body",
-                    partPath: "userId",
-                  },
-                ],
-                inputOnly: [],
-                paginated: false,
-                destructive: false,
-                scope: "admin_write",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    body: {
-                      type: "object",
-                      required: ["userId"],
-                      properties: {
-                        userId: {
-                          minLength: 1,
-                          maxLength: 128,
-                          type: "string",
-                        },
-                      },
-                    },
-                    params: {
-                      type: "object",
-                      properties: {
-                        workspaceId: {
-                          type: "string",
-                        },
-                      },
-                      required: ["workspaceId"],
-                    },
-                  },
-                },
-              },
-            },
-            "workspace-members-remove": {
-              kind: "capability-leaf",
-              spec: {
-                commandPath: [
-                  "capability",
-                  "workspaces",
-                  "workspace-members-remove",
-                ],
-                capabilityId: "workspaces.workspace-members-remove",
-                description:
-                  "Remove one member from a matter, revoking their live access and cancelling their open desktop editing sessions. Their active work obligations are unassigned rather than deleted; refused when they are the matter's last member, when a timer of theirs is still running, or when they own more work obligations than one call may unassign at once.",
-                access: "write",
-                flags: [
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--workspace-id",
-                    prop: "workspaceId",
-                    required: true,
-                    part: "params",
-                    partPath: "workspaceId",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--user-id",
-                    prop: "userId",
-                    required: true,
-                    part: "params",
-                    partPath: "userId",
-                  },
-                ],
-                inputOnly: [],
-                paginated: false,
-                destructive: true,
-                scope: "admin_write",
-                inputSchema: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    params: {
-                      type: "object",
-                      required: ["workspaceId", "userId"],
-                      properties: {
-                        workspaceId: {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                        userId: {
-                          minLength: 1,
-                          maxLength: 128,
                           type: "string",
                         },
                       },
