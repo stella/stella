@@ -939,8 +939,12 @@ const visitTable = (
     .children("tbody")
     .children("tr")
     .each((_, tr) => {
-      const cells = $(tr).children("td").toArray();
-      const [markerCell, contentCell] = cells;
+      // `th` counts as a cell. A decision quoting a tariff or rate
+      // table carries that table's column labels in a header row, and
+      // a row selected as `td` alone yields no cells at all — so the
+      // row would be dropped whole rather than shaped wrong.
+      const cells = $(tr).children("td, th").toArray();
+      const [markerCell, contentCell, ...extraCells] = cells;
       if (!markerCell) {
         return;
       }
@@ -954,19 +958,27 @@ const visitTable = (
         "number"
       ];
 
-      if (pointNumber !== undefined) {
+      if (pointNumber === undefined) {
+        // Unanchored markers ("–", "(22)", "1.") belong to the text: they
+        // number a quoted recital or an operative-part item.
+        visitCell($, builder, $(contentCell), {
+          marker: textOf($(markerCell)),
+        });
+      } else {
         builder.zone = builder.zone === "header" ? "body" : builder.zone;
         visitCell($, builder, $(contentCell), {
           number: Number.parseInt(pointNumber, 10),
         });
-        return;
       }
 
-      // Unanchored markers ("–", "(22)", "1.") belong to the text: they
-      // number a quoted recital or an operative-part item.
-      visitCell($, builder, $(contentCell), {
-        marker: textOf($(markerCell)),
-      });
+      // The marker/content pair is the converter's shape for a numbered
+      // paragraph, not a bound on the row: a quoted table has a column
+      // per tariff heading, description and rate, and the pair alone
+      // would silently keep the first two of them. Anything past the
+      // pair still contributes its text, in document order.
+      for (const cell of extraCells) {
+        visitCell($, builder, $(cell), undefined);
+      }
     });
 };
 

@@ -583,6 +583,55 @@ describe("parseEcjDecisionHtml", () => {
     ]);
   });
 
+  /**
+   * Rule 10 as an invariant rather than an example: a row shape the
+   * marker/content rules do not match is still walked for its text.
+   * The converter emits a numbered paragraph as a two-cell row, so the
+   * shape rules read cell 1 as the marker and cell 2 as its content —
+   * but a decision quoting a tariff or rate table carries a column per
+   * heading, description and rate, and a header row of `th`. Asserted
+   * across the row shapes rather than on one of them, because losing a
+   * cell is invisible downstream: the AST reads as complete.
+   */
+  test("keeps every cell of every row shape", () => {
+    const cellText = (row: number, cell: number) => `r${row}c${cell} content`;
+    const shapes = [1, 2, 3, 4, 5];
+    const rows = shapes
+      .map((cellCount, row) => {
+        const tag = row % 2 === 0 ? "td" : "th";
+        const cells = Array.from(
+          { length: cellCount },
+          (_, cell) => `<${tag}><p>${cellText(row, cell)}</p></${tag}>`,
+        ).join("");
+        return `<tr>${cells}</tr>`;
+      })
+      .join("");
+    const html = [
+      "<html><body><div class='coj-normal' lang='en'>",
+      "<p class='coj-sum-title-1'>JUDGMENT OF THE COURT</p>",
+      `<table><tbody>${rows}</tbody></table>`,
+      "</div></body></html>",
+    ].join("");
+
+    const { fulltext } = parseEcjDecisionHtml({
+      caseNumber: "C-1/00",
+      ecli: undefined,
+      court: "Court of Justice",
+      decisionDate: undefined,
+      decisionType: undefined,
+      sourceUrl: undefined,
+      celex: "62000CJ0001",
+      html,
+    });
+
+    const missing = shapes.flatMap((cellCount, row) =>
+      Array.from({ length: cellCount }, (_, cell) =>
+        cellText(row, cell),
+      ).filter((text) => !fulltext.includes(text)),
+    );
+    expect(missing).toEqual([]);
+  });
+
   test("reads the keyword chain in a non-Latin script", async () => {
     const html = await readFixture("62022CJ0128.el.html.gz");
     if (html === undefined) {
