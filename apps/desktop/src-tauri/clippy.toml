@@ -1,0 +1,30 @@
+# Screen selection has one owner: `window_placement`. The raw placement APIs
+# are banned everywhere else so a second "which screen" rule cannot appear;
+# the owner carries the only `allow`.
+disallowed-methods = [
+  { path = "tauri::webview::WebviewWindowBuilder::center", reason = "use window_placement::centered_on_target_screen" },
+  { path = "tauri::webview::WebviewWindow::center", reason = "position from window_placement::target_work_area" },
+  { path = "tauri::window::WindowBuilder::center", reason = "use window_placement::centered_on_target_screen" },
+  { path = "tauri::window::Window::center", reason = "position from window_placement::target_work_area" },
+  { path = "tauri::App::cursor_position", reason = "screen selection lives in window_placement" },
+  { path = "tauri::App::monitor_from_point", reason = "screen selection lives in window_placement" },
+  { path = "tauri::App::primary_monitor", reason = "screen selection lives in window_placement" },
+  { path = "tauri::App::available_monitors", reason = "screen selection lives in window_placement" },
+  { path = "tauri::AppHandle::cursor_position", reason = "screen selection lives in window_placement" },
+  { path = "tauri::AppHandle::monitor_from_point", reason = "screen selection lives in window_placement" },
+  { path = "tauri::AppHandle::primary_monitor", reason = "screen selection lives in window_placement" },
+  { path = "tauri::AppHandle::available_monitors", reason = "screen selection lives in window_placement" },
+  { path = "tauri::webview::Webview::cursor_position", reason = "screen selection lives in window_placement" },
+  { path = "tauri::webview::WebviewWindow::cursor_position", reason = "screen selection lives in window_placement" },
+  { path = "tauri::webview::WebviewWindow::monitor_from_point", reason = "screen selection lives in window_placement" },
+  { path = "tauri::webview::WebviewWindow::primary_monitor", reason = "screen selection lives in window_placement" },
+  { path = "tauri::webview::WebviewWindow::available_monitors", reason = "screen selection lives in window_placement" },
+  { path = "tauri::webview::WebviewWindow::current_monitor", reason = "screen selection lives in window_placement" },
+  { path = "tauri::window::Window::monitor_from_point", reason = "screen selection lives in window_placement" },
+  { path = "tauri::window::Window::primary_monitor", reason = "screen selection lives in window_placement" },
+  { path = "tauri::window::Window::available_monitors", reason = "screen selection lives in window_placement" },
+  { path = "tauri::window::Window::current_monitor", reason = "screen selection lives in window_placement" },
+  { path = "objc2_app_kit::NSScreen::screens", reason = "screen selection lives in window_placement" },
+  { path = "objc2_app_kit::NSScreen::mainScreen", reason = "screen selection lives in window_placement" },
+  { path = "objc2_app_kit::NSEvent::mouseLocation", reason = "screen selection lives in window_placement" },
+]

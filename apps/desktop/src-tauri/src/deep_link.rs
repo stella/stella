@@ -272,8 +272,12 @@ async fn show_self_host_connect_dialog(
   )
   .title("Connect self-hosted Stella")
   .inner_size(420.0, 320.0)
-  .resizable(false)
-  .center();
+  .resizable(false);
+  let builder = crate::window_placement::centered_on_target_screen(
+    app_handle,
+    builder,
+    tauri::LogicalSize::new(420.0, 320.0),
+  );
 
   #[cfg(target_os = "macos")]
   let builder = builder

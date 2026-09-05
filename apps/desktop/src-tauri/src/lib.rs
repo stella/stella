@@ -23,6 +23,7 @@ mod sse;
 mod tray;
 mod types;
 mod updater;
+mod window_placement;
 
 include!("command_manifest.rs");
 
@@ -428,8 +429,12 @@ fn ensure_main_window(handle: &tauri::AppHandle, tab: &str) {
   )
   .title("stella desktop")
   .inner_size(480.0, 460.0)
-  .resizable(false)
-  .center();
+  .resizable(false);
+  let builder = window_placement::centered_on_target_screen(
+    handle,
+    builder,
+    tauri::LogicalSize::new(480.0, 460.0),
+  );
 
   #[cfg(target_os = "macos")]
   let builder = builder

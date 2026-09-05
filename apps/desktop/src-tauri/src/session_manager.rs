@@ -2488,7 +2488,7 @@ async fn show_takeover_dialog(
     urlencode(file_name),
   );
 
-  let window = tauri::WebviewWindowBuilder::new(
+  let builder = tauri::WebviewWindowBuilder::new(
     handle,
     "takeover-dialog",
     tauri::WebviewUrl::App(format!("takeover-dialog.html#{hash}").into()),
@@ -2496,8 +2496,12 @@ async fn show_takeover_dialog(
   .title("stella desktop")
   .inner_size(400.0, 260.0)
   .resizable(false)
-  .center()
-  .always_on_top(true)
+  .always_on_top(true);
+  let window = crate::window_placement::centered_on_target_screen(
+    handle,
+    builder,
+    tauri::LogicalSize::new(400.0, 260.0),
+  )
   .build();
 
   match window {
