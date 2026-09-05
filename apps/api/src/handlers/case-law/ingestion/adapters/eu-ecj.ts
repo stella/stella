@@ -605,7 +605,21 @@ const mediaTypeOf = (contentType: string): string =>
  * conflation this adapter exists to avoid.
  */
 const ADDRESS_EXHAUSTED_STATUSES = [404, 406, 410, 415] as const;
-const INVALID_DOCUMENT_REQUEST_STATUS = 400;
+
+/**
+ * Statuses worth holding the page's cursor for.
+ *
+ * A timeout, a throttle or a server fault is the publisher failing to answer,
+ * and the identical request can succeed later. Every other refusal is this
+ * request being rejected on its merits, and since `fetchPage` walks a day's
+ * variants with no per-variant catch, propagating one would hold the date
+ * cursor on that variant for good. 401 and 403 pin the crawl exactly as 400
+ * would, so the split is on retryability rather than on a single status.
+ */
+const RETRYABLE_STATUSES = [408, 429] as const;
+
+const isRetryableStatus = (status: number): boolean =>
+  status >= 500 || RETRYABLE_STATUSES.some((retryable) => retryable === status);
 
 type ManifestationRead =
   | { type: "document"; html: string }
@@ -769,7 +783,7 @@ const fetchManifestation = async ({
       case "document":
         return { html: lookup.html, url: lookup.url };
       case "failed":
-        if (lookup.status === INVALID_DOCUMENT_REQUEST_STATUS) {
+        if (!isRetryableStatus(lookup.status)) {
           // A deterministic bad document request must not pin the crawl's
           // date cursor and prevent every later decision from being fetched.
           logger.warn("case_law.ingestion.manifestation_rejected", {

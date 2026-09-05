@@ -84,7 +84,7 @@
     "files": {}
   },
   "throw-outside-boundary": {
-    "count": 878,
+    "count": 879,
     "files": {
       "apps/api/src/handlers/case-law/corpus-index.ts": 12,
       "apps/api/src/handlers/case-law/decisions/latest.ts": 3,
@@ -95,7 +95,7 @@
       "apps/api/src/handlers/case-law/ingestion/adapters/cz-nss.ts": 4,
       "apps/api/src/handlers/case-law/ingestion/adapters/cz-regional.ts": 9,
       "apps/api/src/handlers/case-law/ingestion/adapters/cz-us.ts": 11,
-      "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts": 5,
+      "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts": 6,
       "apps/api/src/handlers/case-law/ingestion/adapters/pagination.ts": 4,
       "apps/api/src/handlers/case-law/ingestion/adapters/pl-courts.ts": 5,
       "apps/api/src/handlers/case-law/ingestion/adapters/publisher-request-gate.ts": 2,
@@ -1122,21 +1122,8 @@
     }
   },
   "duplicate-token-blocks": {
-    "count": 129,
+    "count": 111,
     "files": {
-      ".oxlint-plugins/no-ambient-nondeterminism.ts": 1,
-      ".oxlint-plugins/no-auth-token-in-web-storage.ts": 1,
-      ".oxlint-plugins/no-native-s3-object-read.ts": 1,
-      ".oxlint-plugins/no-native-s3-object-write.ts": 1,
-      ".oxlint-plugins/no-object-url-leak.ts": 1,
-      ".oxlint-plugins/require-cn-for-classname-composition.ts": 2,
-      ".oxlint-plugins/require-custom-jsonb-column.ts": 2,
-      ".oxlint-plugins/require-query-signal.ts": 1,
-      ".oxlint-plugins/require-safe-window-open.ts": 2,
-      ".oxlint-plugins/require-stable-snapshot.ts": 1,
-      ".oxlint-plugins/require-stream-reader-disposal.ts": 2,
-      ".oxlint-plugins/require-timestamptz-column.ts": 2,
-      ".oxlint-plugins/require-use-shallow.ts": 1,
       "apps/api/scripts/seed-dev.ts": 2,
       "apps/api/scripts/seed-templates.ts": 2,
       "apps/api/src/db/schema.ts": 1,

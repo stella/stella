@@ -1138,7 +1138,7 @@ describe("euEcjAdapter.reconciliation.buildDecision", () => {
   });
 
   test.each(
-    [401, 403, 408, 429, 500, 502, 503, 504].flatMap((status) =>
+    [408, 429, 500, 502, 503, 504].flatMap((status) =>
       [0, 1, 2].map((ordinal) => ({ status, ordinal })),
     ),
   )(
@@ -1175,37 +1175,44 @@ describe("euEcjAdapter.reconciliation.buildDecision", () => {
     },
   );
 
-  test("continues crawling other variants after a deterministic bad document request", async () => {
-    const { documentFetches } = installSparqlMock({
-      bindings: [enBinding, frBinding],
-      served: [FR_MANIFESTATION_ID],
-    });
-    const servedFetch = globalThis.fetch;
-    const rejectedUrl = `https://publications.europa.eu/resource/cellar/${EN_MANIFESTATION_ID}`;
-    globalThis.fetch = asFetchMock(
-      mock((input: string | URL | Request, init?: RequestInit) => {
-        if (requestUrl(input) === rejectedUrl) {
-          documentFetches.push(rejectedUrl);
-          return Promise.resolve(new Response("Bad request", { status: 400 }));
-        }
-        return servedFetch(input, init);
-      }),
-    );
+  // 401 and 403 pin the crawl exactly as 400 does, so the isolation has to
+  // key on retryability rather than on one status.
+  test.each([400, 401, 403])(
+    "continues crawling other variants after a deterministic HTTP %i document request",
+    async (rejectedStatus) => {
+      const { documentFetches } = installSparqlMock({
+        bindings: [enBinding, frBinding],
+        served: [FR_MANIFESTATION_ID],
+      });
+      const servedFetch = globalThis.fetch;
+      const rejectedUrl = `https://publications.europa.eu/resource/cellar/${EN_MANIFESTATION_ID}`;
+      globalThis.fetch = asFetchMock(
+        mock((input: string | URL | Request, init?: RequestInit) => {
+          if (requestUrl(input) === rejectedUrl) {
+            documentFetches.push(rejectedUrl);
+            return Promise.resolve(
+              new Response("Rejected", { status: rejectedStatus }),
+            );
+          }
+          return servedFetch(input, init);
+        }),
+      );
 
-    const outcome = await ecjAdapter.fetchPage("2024-01-18", {});
+      const outcome = await ecjAdapter.fetchPage("2024-01-18", {});
 
-    if (!Result.isOk(outcome)) {
-      throw new TypeError("Expected successful crawl page");
-    }
-    expect(outcome.value.decisions.map(({ language }) => language)).toEqual([
-      "fr",
-    ]);
-    expect(documentFetches).toEqual([
-      rejectedUrl,
-      `https://publications.europa.eu/resource/cellar/${FR_MANIFESTATION_ID}`,
-    ]);
-    expect(outcome.value.nextCursor).toBe("2024-01-19");
-  });
+      if (!Result.isOk(outcome)) {
+        throw new TypeError("Expected successful crawl page");
+      }
+      expect(outcome.value.decisions.map(({ language }) => language)).toEqual([
+        "fr",
+      ]);
+      expect(documentFetches).toEqual([
+        rejectedUrl,
+        `https://publications.europa.eu/resource/cellar/${FR_MANIFESTATION_ID}`,
+      ]);
+      expect(outcome.value.nextCursor).toBe("2024-01-19");
+    },
+  );
 
   test("keeps walking when a refusal means this address cannot serve it", async () => {
     // The counterpart to the test above: 404 is what the item walk exists for,
