@@ -193,17 +193,28 @@ const isAbortRejection = ({
   (error === signal.reason ||
     (error instanceof Error && error.name === "AbortError"));
 
+// How a text run ended, as the chat loop reported it. `unfinished` is a
+// stream that closed without a `RUN_FINISHED` at all (a cancellation, or a
+// lifecycle regression); `finished` carries the provider's reason, which the
+// event leaves optional, so `null` there means the provider reported none.
+type TextRunFinish =
+  | { kind: "finished"; reason: TanStackTextFinishReason }
+  | { kind: "unfinished" };
+
 const finishAccepted = (
   finishPolicy: TanStackTextFinishPolicy,
-  finishReason: TanStackTextFinishReason,
+  finish: TextRunFinish,
 ): boolean => {
   switch (finishPolicy) {
     case "allow-incomplete":
       return true;
     case "allow-output-ceiling":
-      return finishReason === "stop" || finishReason === "length";
+      return (
+        finish.kind === "finished" &&
+        (finish.reason === "stop" || finish.reason === "length")
+      );
     case "require-complete":
-      return finishReason === "stop";
+      return finish.kind === "finished" && finish.reason === "stop";
     default:
       finishPolicy satisfies never;
       return panic(`Unhandled finish policy: ${String(finishPolicy)}`);
@@ -218,12 +229,9 @@ export const generateTanStackTextForRole = async (
   const abortController = options.abortSignal
     ? abortControllerFromSignal(options.abortSignal)
     : undefined;
-  // `finished` records that the run reported its end at all; the reason is
-  // optional on that event, so it cannot stand in for the event itself.
-  const state: { finished: boolean; finishReason: TanStackTextFinishReason } = {
-    finished: false,
-    finishReason: null,
-  };
+  // Assigned from the stream callback, which control-flow analysis cannot
+  // see; a property keeps the declared union instead of the initial branch.
+  const run: { finish: TextRunFinish } = { finish: { kind: "unfinished" } };
   let output = "";
 
   try {
@@ -237,9 +245,8 @@ export const generateTanStackTextForRole = async (
       serviceTier: options.serviceTier,
       system: guardedSystemPrompt(options),
       temperature: options.temperature,
-      onFinishReason: (value) => {
-        state.finished = true;
-        state.finishReason = value;
+      onFinishReason: (reason) => {
+        run.finish = { kind: "finished", reason };
       },
     })) {
       output += delta;
@@ -258,11 +265,14 @@ export const generateTanStackTextForRole = async (
   // this the same cancellation is sometimes an error and sometimes a truncated
   // answer the caller cannot tell from a whole one. A reported finish
   // separates the two: that run completed before the signal fired.
-  if (!state.finished && options.abortSignal?.aborted === true) {
+  if (
+    run.finish.kind === "unfinished" &&
+    options.abortSignal?.aborted === true
+  ) {
     throw cancelledGenerationError();
   }
 
-  if (!finishAccepted(options.finishPolicy, state.finishReason)) {
+  if (!finishAccepted(options.finishPolicy, run.finish)) {
     throw new HandlerError({
       status: 502,
       message: "AI generation did not complete",
@@ -553,17 +563,38 @@ const shouldRetryWithStandardServiceTier = ({
   isDeferredServiceTier(serviceTier) &&
   isRetryableServiceTierFallbackError(error);
 
+// `chat({ outputSchema })` does not rethrow the adapter's error: it records
+// the failure and throws `new Error(message, { cause: providerError })`, so
+// the status and retry hints live one `cause` down. The streaming paths throw
+// the provider error itself. Walk the chain to the first link that carries a
+// provider status and judge that link; the depth bound keeps a cyclic cause
+// from hanging the request.
+const MAX_CAUSE_DEPTH = 8;
+
+const providerErrorInCauseChain = (
+  error: unknown,
+): { record: Record<string, unknown>; statusCode: number } | null => {
+  let current: unknown = error;
+  for (let depth = 0; depth < MAX_CAUSE_DEPTH; depth += 1) {
+    if (!isRecord(current)) {
+      return null;
+    }
+    const statusCode = providerStatusCode(current);
+    if (statusCode !== null) {
+      return { record: current, statusCode };
+    }
+    current = current["cause"];
+  }
+  return null;
+};
+
 const isRetryableServiceTierFallbackError = (error: unknown): boolean => {
-  if (!isRecord(error)) {
+  const provider = providerErrorInCauseChain(error);
+  if (provider === null) {
     return false;
   }
 
-  const statusCode = providerStatusCode(error);
-  if (statusCode === null) {
-    return false;
-  }
-
-  const isRetryable = error["isRetryable"];
+  const isRetryable = provider.record["isRetryable"];
   if (isRetryable === false) {
     return false;
   }
@@ -571,7 +602,7 @@ const isRetryableServiceTierFallbackError = (error: unknown): boolean => {
     return true;
   }
 
-  return statusCode === 429 || statusCode >= 500;
+  return provider.statusCode === 429 || provider.statusCode >= 500;
 };
 
 const providerStatusCode = (error: Record<string, unknown>): number | null => {

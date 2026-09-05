@@ -1968,13 +1968,33 @@ const createOutgoingChunkTransformer = ({
     }
   }
 
+  // `chat()` emits public chunks in AG-UI spec shape. `toolName`, `input`,
+  // and `output` are not spec keys on TOOL_CALL_END, so the engine moves them
+  // into `metadata.tanstack`; an adapter that parses the whole input on END
+  // (Anthropic) delivers the canonical arguments there and nowhere else. A
+  // chunk that never went through the engine (a fixture, a synthetic event)
+  // still carries them at the top level. Read both, top level first: that is
+  // the precedence the SDK's own persistence processor applies.
+  const readToolCallEndField = (chunk: object, key: string): unknown => {
+    if (key in chunk) {
+      const topLevel: unknown = Reflect.get(chunk, key);
+      if (topLevel !== undefined) {
+        return topLevel;
+      }
+    }
+    const metadata: unknown = "metadata" in chunk ? chunk.metadata : undefined;
+    const tanstack: unknown = isRecord(metadata)
+      ? metadata["tanstack"]
+      : undefined;
+    return isRecord(tanstack) ? tanstack[key] : undefined;
+  };
+
   const readToolCallName = (chunk: object): string | undefined => {
     if ("toolCallName" in chunk && typeof chunk.toolCallName === "string") {
       return chunk.toolCallName;
     }
-    return "toolName" in chunk && typeof chunk.toolName === "string"
-      ? chunk.toolName
-      : undefined;
+    const toolName = readToolCallEndField(chunk, "toolName");
+    return typeof toolName === "string" ? toolName : undefined;
   };
 
   const emitRestorationDelta = (
@@ -2218,21 +2238,27 @@ const createOutgoingChunkTransformer = ({
       if (toolName !== undefined) {
         toolNamesByCallId.set(chunk.toolCallId, toolName);
       }
+      // The transformed values are written at the top level: the persistence
+      // processor reads that before the metadata copy, and the wire encoder
+      // merges a top-level value over the metadata copy when it re-normalizes
+      // the chunk for the client.
+      const rawInput = readToolCallEndField(chunk, "input");
       let input: unknown;
-      if ("input" in chunk) {
+      if (rawInput !== undefined) {
         input = transformToolCallInput({
           boundary,
-          input: chunk.input,
+          input: rawInput,
           resolveAssistantToolInputRefs,
           resolveAssistantValueRefs,
           toolName,
         });
       }
+      const rawOutput = readToolCallEndField(chunk, "output");
       let output: unknown;
-      if ("output" in chunk) {
+      if (rawOutput !== undefined) {
         output = transformToolCallOutput({
           boundary,
-          output: chunk.output,
+          output: rawOutput,
           resolveAssistantToolOutputRefs,
           resolveAssistantValueRefs,
           toolName,

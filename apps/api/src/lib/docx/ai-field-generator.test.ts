@@ -1,5 +1,6 @@
-import * as realTanStackAI from "@tanstack/ai";
-import { afterAll, describe, expect, mock, test } from "bun:test";
+import { EventType } from "@tanstack/ai";
+import type { AnyTextAdapter, StreamChunk } from "@tanstack/ai";
+import { beforeEach, describe, expect, test } from "bun:test";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
@@ -10,43 +11,89 @@ import {
 } from "@/api/lib/docx/ai-field-generator";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 
-// Capture the args each chat() call receives so we can assert whether the skill
-// tools were wired and how the prompt was assembled. The model itself is
-// irrelevant here (chat is mocked). Skill refs run the agentic tool loop, so the
-// field generators call chat() directly; `tools` arrives as a ChatTool[] array.
-type CapturedChat = {
-  tools: { name: string }[] | undefined;
+// The real `chat()` engine runs here; only the provider boundary is faked, so
+// a fixture cannot invent chunk shapes the engine never emits. Each request the
+// engine dispatches is captured so we can assert whether the skill tools were
+// wired and how the prompt was assembled. Text drafting reaches the adapter
+// through `chatStream`; the occurrence adapter asks for structured output, and
+// with no skill tools the engine skips the agent loop and calls
+// `structuredOutput` alone.
+type CapturedRequest = {
   prompt: string | undefined;
+  toolNames: string[];
 };
 
-const chatArgs: CapturedChat[] = [];
+const capturedRequests: CapturedRequest[] = [];
 
-const captureChat = (options: {
-  tools?: { name: string }[];
-  messages?: { content?: string }[];
-  outputSchema?: unknown;
-}): CapturedChat => ({
-  tools: options.tools,
-  prompt: options.messages?.at(0)?.content,
-});
-
-const chat = (options: {
-  tools?: { name: string }[];
-  messages?: { content?: string }[];
-  outputSchema?: unknown;
-}): unknown => {
-  chatArgs.push(captureChat(options));
-  if (options.outputSchema) {
-    return Promise.resolve({ renderings: ["adapted"] });
-  }
-  return Promise.resolve("drafted value");
+const captureRequest = ({
+  messages,
+  tools,
+}: {
+  messages?: readonly { content?: unknown }[] | undefined;
+  tools?: readonly { name: string }[] | undefined;
+}): void => {
+  const content = messages?.at(0)?.content;
+  capturedRequests.push({
+    prompt: typeof content === "string" ? content : undefined,
+    toolNames: (tools ?? []).map((tool) => tool.name),
+  });
 };
 
-// SAFETY: `chat` is replaced at the provider boundary, so this suite never
-// invokes the adapter; it only verifies the options assembled around it.
-// oxlint-disable-next-line typescript/no-unsafe-type-assertion
+const DRAFTED_VALUE = "drafted value";
+const ADAPTED_RENDERINGS = { renderings: ["adapted"] };
+
+const providerAdapter: AnyTextAdapter = {
+  kind: "text",
+  name: "field-generator",
+  model: "test-model",
+  "~types": {
+    providerOptions: {},
+    inputModalities: ["text"],
+    messageMetadataByModality: {},
+    toolCapabilities: [],
+    toolCallMetadata: {},
+    systemPromptMetadata: undefined,
+  },
+  async *chatStream(options) {
+    captureRequest(options);
+    const messageId = "provider-message-1";
+    yield {
+      type: EventType.RUN_STARTED,
+      runId: "run-1",
+      threadId: "thread-1",
+    } satisfies StreamChunk;
+    yield {
+      type: EventType.TEXT_MESSAGE_START,
+      messageId,
+      role: "assistant",
+    } satisfies StreamChunk;
+    yield {
+      type: EventType.TEXT_MESSAGE_CONTENT,
+      messageId,
+      delta: DRAFTED_VALUE,
+    } satisfies StreamChunk;
+    yield { type: EventType.TEXT_MESSAGE_END, messageId } satisfies StreamChunk;
+    yield {
+      type: EventType.RUN_FINISHED,
+      finishReason: "stop",
+      runId: "run-1",
+      threadId: "thread-1",
+    } satisfies StreamChunk;
+  },
+  structuredOutput: async ({ chatOptions }) => {
+    captureRequest(chatOptions);
+    return {
+      data: ADAPTED_RENDERINGS,
+      rawText: JSON.stringify(ADAPTED_RENDERINGS),
+    };
+  },
+};
+
+// SAFETY: `adapter` is a real `AnyTextAdapter` the engine drives exactly as it
+// drives a provider; the remaining fields are bookkeeping these generators
+// never route through a provider.
 const testModel = {
-  adapter: {},
+  adapter: providerAdapter,
   keySource: "instance",
   modelId: "test-model",
   modelOptions: {},
@@ -55,22 +102,18 @@ const testModel = {
 
 const resolveTextModel = () => testModel;
 
-void mock.module("@tanstack/ai", () => ({
-  ...realTanStackAI,
-  chat,
-}));
-
-afterAll(() => {
-  mock.restore();
+beforeEach(() => {
+  capturedRequests.length = 0;
 });
 
-// SAFETY: only used as a non-null truthiness gate in the builders; the model
-// is mocked, so the config's contents are never read.
+// SAFETY: only used as a non-null truthiness gate in the builders; the model is
+// injected through `resolveTextModel`, so the config's contents are never read.
 // oxlint-disable-next-line typescript/no-unsafe-type-assertion
 const orgAIConfig = {} as OrgAIConfig;
 const organizationId = toSafeId<"organization">("org_test");
 const userId = toSafeId<"user">("user_test");
-// SAFETY: never invoked — the skill tools build lazily and the model is mocked.
+// SAFETY: never invoked — the skill catalog is empty here, so no skill tool is
+// ever built or run.
 // oxlint-disable-next-line typescript/no-unsafe-type-assertion
 const safeDb = (async () => undefined) as unknown as SafeDb;
 const skillContext = { organizationId, safeDb, userId };
@@ -79,8 +122,15 @@ const SKILL_REF_PROMPT =
   "Draft this clause [POA scope](#stella-skill-ref=poa-drafting).";
 const PLAIN_PROMPT = "Draft the scope of this power of attorney.";
 
-const lastChat = () => chatArgs.at(-1);
-const lastToolNames = () => (lastChat()?.tools ?? []).map((tool) => tool.name);
+// The generators swallow model failures and return `undefined`, so an absent
+// request has to fail loudly rather than read as "no tools were advertised".
+const lastRequest = (): CapturedRequest => {
+  const captured = capturedRequests.at(-1);
+  if (!captured) {
+    throw new Error("Expected the generator to reach the provider adapter.");
+  }
+  return captured;
+};
 const buildTestAiFieldGenerator = (
   options: Parameters<typeof buildAiFieldGenerator>[0],
 ) => buildAiFieldGenerator({ ...options, resolveTextModel });
@@ -103,8 +153,9 @@ describe("buildAiFieldGenerator skill-tool wiring", () => {
       values: {},
     });
 
-    expect(lastChat()?.tools).toBeUndefined();
-    expect(lastToolNames()).toEqual([]);
+    // The engine always hands the adapter a tool array; empty is what "no
+    // skill tools were wired" looks like at the provider boundary.
+    expect(lastRequest().toolNames).toEqual([]);
   });
 
   test("passes no tools when the prompt has no skill reference", async () => {
@@ -116,7 +167,7 @@ describe("buildAiFieldGenerator skill-tool wiring", () => {
     });
     await generate?.({ prompt: PLAIN_PROMPT, fieldPath: "scope", values: {} });
 
-    expect(lastChat()?.tools).toBeUndefined();
+    expect(lastRequest().toolNames).toEqual([]);
   });
 
   test("passes no tools without a skill context, even with a ref", async () => {
@@ -131,7 +182,7 @@ describe("buildAiFieldGenerator skill-tool wiring", () => {
       values: {},
     });
 
-    expect(lastChat()?.tools).toBeUndefined();
+    expect(lastRequest().toolNames).toEqual([]);
   });
 });
 
@@ -149,8 +200,9 @@ describe("buildAiFieldGenerator document-text injection", () => {
       documentText: "THE FULL CONTRACT BODY",
     });
 
-    const prompt = lastChat()?.prompt ?? "";
-    expect(prompt).toContain("Document:\nTHE FULL CONTRACT BODY");
+    expect(lastRequest().prompt ?? "").toContain(
+      "Document:\nTHE FULL CONTRACT BODY",
+    );
   });
 
   test("omits the Document section when no documentText is supplied", async () => {
@@ -161,7 +213,7 @@ describe("buildAiFieldGenerator document-text injection", () => {
     });
     await generate?.({ prompt: PLAIN_PROMPT, fieldPath: "scope", values: {} });
 
-    expect(lastChat()?.prompt ?? "").not.toContain("Document:");
+    expect(lastRequest().prompt ?? "").not.toContain("Document:");
   });
 
   test("omits the Document section for blank documentText", async () => {
@@ -177,7 +229,7 @@ describe("buildAiFieldGenerator document-text injection", () => {
       documentText: "   ",
     });
 
-    expect(lastChat()?.prompt ?? "").not.toContain("Document:");
+    expect(lastRequest().prompt ?? "").not.toContain("Document:");
   });
 });
 
@@ -200,8 +252,7 @@ describe("buildAiOccurrenceAdapter skill-tool wiring", () => {
       occurrences,
     });
 
-    expect(lastChat()?.tools).toBeUndefined();
-    expect(lastToolNames()).toEqual([]);
+    expect(lastRequest().toolNames).toEqual([]);
   });
 
   test("passes no tools when the instruction has no skill reference", async () => {
@@ -219,6 +270,6 @@ describe("buildAiOccurrenceAdapter skill-tool wiring", () => {
       occurrences,
     });
 
-    expect(lastChat()?.tools).toBeUndefined();
+    expect(lastRequest().toolNames).toEqual([]);
   });
 });

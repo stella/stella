@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { readFileSync, rmSync } from "node:fs";
+import { readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -24,10 +24,16 @@ import {
 import { partitionRunnerArguments, selectTestPaths } from "./test-path-filters";
 
 const PROPERTY_FLAG = "--property";
-// `evals/` carries only its own colocated unit tests (e.g.
-// `evals/lib/model-turn.test.ts`), never the eval scripts themselves, which
-// call paid models and run on demand.
-const TEST_FILE_GLOB = "{src,evals,scripts}/**/*.test.{ts,tsx}";
+// Every directory of this package that holds test files. `evals/` carries
+// only its own colocated unit tests (e.g. `evals/lib/model-turn.test.ts`),
+// never the eval scripts themselves, which call paid models and run on
+// demand. A test file outside these roots never runs and nothing notices
+// (the canary suites sat under `scripts/` unrun until the root was added), so
+// the run fails when a visible directory outside them holds one.
+const TEST_ROOTS = ["src", "evals", "scripts"] as const;
+const TEST_ROOT_SET = new Set<string>(TEST_ROOTS);
+const TEST_FILE_GLOB = `{${TEST_ROOTS.join(",")}}/**/*.test.{ts,tsx}`;
+const STRAY_TEST_FILE_GLOB = "**/*.test.{ts,tsx}";
 // Non-test helper modules live here; some install a module mock at import.
 const TEST_HELPER_GLOB = "src/tests/**/*.ts";
 const MODULE_MOCK_PATTERN = /\bmock\.module\s*\(/u;
@@ -160,6 +166,37 @@ const testPaths = [
     onlyFiles: true,
   }),
 ].sort();
+
+// Hidden directories are tool caches; `node_modules` is third-party code. A
+// test file colocated with a package-root module (`drizzle.config.test.ts`
+// beside `drizzle.config.ts`) is outside every root too, so files are scanned
+// alongside directories.
+const TEST_FILE_PATTERN = /\.test\.tsx?$/u;
+const strayTestPaths = readdirSync(apiRoot, { withFileTypes: true })
+  .filter(
+    (entry) => !entry.name.startsWith(".") && entry.name !== "node_modules",
+  )
+  .flatMap((entry) => {
+    if (entry.isFile()) {
+      return TEST_FILE_PATTERN.test(entry.name) ? [entry.name] : [];
+    }
+    if (!entry.isDirectory() || TEST_ROOT_SET.has(entry.name)) {
+      return [];
+    }
+    return [
+      ...new Bun.Glob(STRAY_TEST_FILE_GLOB).scanSync({
+        cwd: path.join(apiRoot, entry.name),
+        onlyFiles: true,
+      }),
+    ].map((testPath) => `${entry.name}/${testPath}`);
+  })
+  .sort();
+if (strayTestPaths.length > 0) {
+  console.error(
+    `Test files outside the runner roots (${TEST_ROOTS.join(", ")}) never run:\n  ${strayTestPaths.join("\n  ")}\nMove the file under a root, or add its directory to TEST_ROOTS in apps/api/scripts/run-tests.ts.`,
+  );
+  process.exit(1);
+}
 
 // A positional pattern narrows each batch rather than joining it; see
 // scripts/test-path-filters.ts for why appending would defeat the batcher.

@@ -1,4 +1,4 @@
-import { EventType } from "@tanstack/ai";
+import { EventType, normalizeStreamChunk } from "@tanstack/ai";
 import type { AnyTextAdapter, StreamChunk } from "@tanstack/ai";
 import { createAnthropicChatWithClient } from "@tanstack/ai-anthropic";
 import type { AnthropicMessagesClient } from "@tanstack/ai-anthropic";
@@ -193,6 +193,27 @@ const generateWithCancellation = async (cancelAt: CancellationPoint) => {
     tenantWorkspaceIds: [],
   });
 };
+
+// The SDK's own normalizer is the source of truth for where a non-spec field
+// lands on a public chunk. Pinning it here names the contract the reader in
+// tanstack-ai-generate.ts depends on: when an SDK update stops moving the
+// reason, this fails at the mapping, not at the next scheduled provider run.
+describe("TanStack public chunk shape", () => {
+  test("moves the finish reason off RUN_FINISHED into metadata.tanstack", () => {
+    const [normalized] = normalizeStreamChunk({
+      type: EventType.RUN_FINISHED,
+      finishReason: "stop",
+      runId: "run-1",
+      threadId: "thread-1",
+    });
+
+    if (normalized?.type !== EventType.RUN_FINISHED) {
+      throw new TypeError("normalizeStreamChunk changed the event type");
+    }
+    expect(normalized).not.toHaveProperty("finishReason");
+    expect(normalized.metadata?.tanstack?.finishReason).toBe("stop");
+  });
+});
 
 describe("TanStack completed-run canary", () => {
   test("a run that finished on stop satisfies a complete-output caller", async () => {
