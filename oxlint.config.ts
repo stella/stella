@@ -1075,6 +1075,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-path-prefix-containment.ts",
     "./.oxlint-plugins/no-eager-singleton.ts",
     "./.oxlint-plugins/no-db-await-in-loop.ts",
+    "./.oxlint-plugins/no-network-await-in-loop.ts",
     "./.oxlint-plugins/require-cached-collator.ts",
     "./.oxlint-plugins/require-query-signal.ts",
     "./.oxlint-plugins/require-stable-snapshot.ts",
@@ -2413,6 +2414,14 @@ export default defineConfig({
       },
     },
     {
+      files: [
+        ".oxlint-plugins/__fixtures__/no-network-await-in-loop.fixture.ts",
+      ],
+      rules: {
+        "no-network-await-in-loop/no-network-await-in-loop": "error",
+      },
+    },
+    {
       // The locale-injecting wrapper around the UI date picker: the one web
       // module that has to import the primitive it wraps. Every other
       // apps/web import restriction still applies, so they are restated here.
@@ -2928,6 +2937,26 @@ export default defineConfig({
       excludeFiles: ["apps/api/src/**/*.test.ts", "apps/api/src/tests/**/*.ts"],
       rules: {
         "no-db-await-in-loop/no-db-await-in-loop": "error",
+      },
+    },
+    {
+      // no-network-await-in-loop flags an awaited HTTP request, AWS SDK
+      // command dispatch, or API-client method lexically inside a loop body:
+      // one round-trip per iteration, growing with the input. Scoped to
+      // product source and the repo scripts; tests drive upstreams by hand
+      // and their sequencing is the assertion.
+      files: [
+        "apps/*/src/**/*.{ts,tsx}",
+        "packages/*/src/**/*.{ts,tsx}",
+        "scripts/**/*.ts",
+      ],
+      excludeFiles: [
+        "**/*.test.{ts,tsx}",
+        "**/*.spec.{ts,tsx}",
+        "**/tests/**/*.{ts,tsx}",
+      ],
+      rules: {
+        "no-network-await-in-loop/no-network-await-in-loop": "error",
       },
     },
     {
