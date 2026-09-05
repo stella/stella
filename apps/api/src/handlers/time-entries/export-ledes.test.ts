@@ -141,6 +141,31 @@ describe("exportLedesHandler billing integrity", () => {
     expect(secondFields[12]).toBe("300.00");
   });
 
+  test("scales rate, line total, and invoice total by the currency's own exponent", async () => {
+    // JPY has no minor unit: 10,000 stored units are 10,000 yen, not 100.00.
+    // An hour at that rate is a 10,000 yen line and a 10,000 yen batch.
+    const output = await runExport([
+      timeEntryRow({ currency: "JPY", rateAtEntry: 10_000, narrative: "Yen" }),
+    ]);
+
+    const line = output
+      .split("\n")
+      .find(
+        (row) =>
+          row.endsWith("[]") &&
+          !row.startsWith("LEDES1998B") &&
+          !row.startsWith("INVOICE_DATE"),
+      );
+    if (line === undefined) {
+      throw new TypeError("Expected one LEDES line item");
+    }
+    const fields = line.replace(/\[\]$/u, "").split("|");
+
+    expect(fields.at(4)).toBe("10000"); // INVOICE_TOTAL
+    expect(fields.at(12)).toBe("10000"); // LINE_ITEM_TOTAL
+    expect(fields.at(20)).toBe("10000"); // LINE_ITEM_UNIT_COST
+  });
+
   test("fails fast on a mixed-currency batch instead of emitting a cross-currency total", async () => {
     // LEDES 1998B has no currency field: a batch spanning USD and EUR has
     // no representable INVOICE_TOTAL, so the export must refuse outright.

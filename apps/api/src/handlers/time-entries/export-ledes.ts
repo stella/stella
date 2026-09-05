@@ -10,6 +10,7 @@ import { member, user } from "@/api/db/auth-schema";
 import { timeEntryStatusSchema } from "@/api/db/billing-validators";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
+import { exportAmountText } from "@/api/handlers/time-entries/export-amount";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
@@ -234,8 +235,12 @@ export const exportLedesHandler = async ({
       }),
     );
   }
-  const invoiceTotalCents = totalsEntries.at(0)?.amountCents ?? 0;
-  const invoiceTotalFormatted = (invoiceTotalCents / 100).toFixed(2);
+  // One currency for the whole batch, enforced above, so the invoice total
+  // scales by that currency's exponent like every line does.
+  const invoiceTotal = totalsEntries.at(0);
+  const invoiceTotalFormatted = invoiceTotal
+    ? exportAmountText(invoiceTotal.amountCents, invoiceTotal.currency)
+    : "0.00";
   const billingStartFormatted = billingStart.replace(/-/gu, "");
   const billingEndFormatted = billingEnd.replace(/-/gu, "");
 
@@ -266,7 +271,7 @@ export const exportLedesHandler = async ({
         "F", // FEE type
         item.hours.toFixed(2),
         "0.00", // ADJUSTMENT
-        (item.totalCents / 100).toFixed(2),
+        exportAmountText(item.totalCents, item.currency),
         dateFormatted,
         item.taskCode,
         "", // EXPENSE_CODE
@@ -274,7 +279,7 @@ export const exportLedesHandler = async ({
         item.userId,
         item.narrative,
         "", // LAW_FIRM_ID
-        (item.rateAtEntry / 100).toFixed(2),
+        exportAmountText(item.rateAtEntry, item.currency),
         item.userName,
         "", // TASK_DESCRIPTION
         "", // ACTIVITY_DESCRIPTION
