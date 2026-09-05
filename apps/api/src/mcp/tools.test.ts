@@ -251,8 +251,8 @@ const expectValidationMessage = (
   expect(error["message"]).toBe(message);
 };
 
-const FEATURE_DISABLED_HINT =
-  "This deployment or organization has this feature turned off; it cannot be enabled from the client.";
+const featureDisabledHint = (feature: string): string =>
+  `This deployment has ${feature} turned off; a server operator enables it by setting ${feature}=true. It cannot be enabled from the client.`;
 
 const createReadDecisionResult = () => ({
   analysis: null,
@@ -1341,7 +1341,7 @@ describe("OpenAI-compatible MCP tools", () => {
       expectErrorEnvelope(result, {
         code: "feature_disabled",
         message: "This feature is not enabled on this deployment",
-        hint: FEATURE_DISABLED_HINT,
+        hint: featureDisabledHint("FEATURE_PUBLIC_LAW"),
       });
       // The gate short-circuits before the backing handler runs, so guessing
       // the tool name cannot reach the corpus.
@@ -4463,7 +4463,7 @@ describe("OpenAI-compatible MCP tools", () => {
         expectErrorEnvelope(result, {
           code: "feature_disabled",
           message: "This feature is not enabled on this deployment",
-          hint: FEATURE_DISABLED_HINT,
+          hint: featureDisabledHint("FEATURE_TIME_BILLING"),
         });
         // The gate short-circuits before the backing handler runs, so no audit
         // row is written by guessing the tool name.
@@ -4493,7 +4493,7 @@ describe("OpenAI-compatible MCP tools", () => {
         expectErrorEnvelope(result, {
           code: "feature_disabled",
           message: "This feature is not enabled on this deployment",
-          hint: FEATURE_DISABLED_HINT,
+          hint: featureDisabledHint("FEATURE_USAGE"),
         });
       },
     );

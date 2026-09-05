@@ -63,6 +63,8 @@ import {
   parseRequiredString,
   stringProp,
   structuredErrorResult,
+  FEATURE_DISABLED_MESSAGE,
+  featureDisabledHint,
 } from "@/api/mcp/tool-utils";
 import { resolveUploadPurposeRequirement } from "@/api/mcp/upload-purpose-gate";
 
@@ -790,11 +792,13 @@ const notFoundWithHint = (id: string): InternalToolErrorResult =>
  * as the static-tool dispatch guard (tools.ts) so agents see one behavior for
  * gated-off surface, tool or capability.
  */
-const featureDisabledResult = (): InternalToolErrorResult =>
+const featureDisabledResult = (
+  feature: string | undefined,
+): InternalToolErrorResult =>
   structuredErrorResult({
     code: "feature_disabled",
-    message: "This feature is not enabled on this deployment",
-    hint: "This deployment or organization has this feature turned off; it cannot be enabled from the client.",
+    message: FEATURE_DISABLED_MESSAGE,
+    hint: featureDisabledHint(feature),
   });
 
 const hintForUnknownId = (id: string): string => {
@@ -862,7 +866,7 @@ const describeCapabilityHandler = async ({
   // AND rejected on direct dispatch, so describing a gated-off capability is
   // refused too (never leak a disabled feature's schema by direct id).
   if (!contextFeatureEnabled(entry.feature, context)) {
-    return featureDisabledResult();
+    return featureDisabledResult(entry.feature);
   }
 
   const loaded = await loadEndpointGuarded(id, "describe_capability");
@@ -1162,7 +1166,7 @@ const invokeCapabilityHandler = async ({
   // guess-the-id bypass. Runs before every other gate (validateOnly included)
   // so a disabled feature leaks nothing about its capabilities.
   if (!contextFeatureEnabled(entry.feature, context)) {
-    return featureDisabledResult();
+    return featureDisabledResult(entry.feature);
   }
 
   // 3. Disposition / fidelity. token/public capabilities self-authorize from a

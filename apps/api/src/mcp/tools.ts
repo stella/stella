@@ -41,6 +41,8 @@ import {
   MCP_INTERNAL_ERROR_HINT,
   serializeToolResult,
   structuredErrorResult,
+  FEATURE_DISABLED_MESSAGE,
+  featureDisabledHint,
 } from "@/api/mcp/tool-utils";
 
 const MCP_TOOL_HANDLERS = new Map<string, McpToolHandler>(
@@ -214,8 +216,8 @@ export const handleMcpToolCall = async ({
     return serializeToolResult(
       structuredErrorResult({
         code: "feature_disabled",
-        message: "This feature is not enabled on this deployment",
-        hint: "This deployment or organization has this feature turned off; it cannot be enabled from the client.",
+        message: FEATURE_DISABLED_MESSAGE,
+        hint: featureDisabledHint(staticTool.feature),
       }),
     );
   }
