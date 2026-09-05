@@ -1,5 +1,20 @@
 # @stll/cli
 
+## 0.10.1
+
+### Patch Changes
+
+- [#2947](https://github.com/stella/stella/pull/2947) [`6f86823`](https://github.com/stella/stella/commit/6f86823e5e9eb4f2b2a8027a021063b909ca44e3) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Exhaustiveness checks panic instead of returning the unhandled value, and a
+  fallback after the assertion counts as returning it.
+
+- [#2948](https://github.com/stella/stella/pull/2948) [`ff290f9`](https://github.com/stella/stella/commit/ff290f9ac184d94bf739c508ef1e766e7459f388) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Cursor parameters on list capabilities carry the shared helper's description.
+
+- [#2966](https://github.com/stella/stella/pull/2966) [`b65402c`](https://github.com/stella/stella/commit/b65402c1275643db5739fdfaab6156fe5e7524f5) Thanks [@jan-kubica](https://github.com/jan-kubica)! - The registry cache fingerprints tool schemas through `@stll/stable-stringify` instead of a private copy. Key order and output are unchanged, so cached deltas stay valid.
+
+- [#2972](https://github.com/stella/stella/pull/2972) [`58951e1`](https://github.com/stella/stella/commit/58951e13fa4c181473e19b3ec2d35d19f3fa9bda) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Remove suppression directives for a retired lint rule; no runtime change.
+- Updated dependencies [[`b65402c`](https://github.com/stella/stella/commit/b65402c1275643db5739fdfaab6156fe5e7524f5)]:
+  - @stll/stable-stringify@0.2.0
+
 ## 0.10.0
 
 ### Minor Changes

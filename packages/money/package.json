@@ -1,6 +1,6 @@
 {
   "name": "@stll/money",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Branded minor-unit monetary amounts and currency-safe billing arithmetic.",
   "keywords": [
     "billing",

@@ -1,5 +1,37 @@
 # @stll/workspace-ui
 
+## 0.10.0
+
+### Minor Changes
+
+- [#2967](https://github.com/stella/stella/pull/2967) [`5d79253`](https://github.com/stella/stella/commit/5d79253451d8227af942bf0c4883548977531490) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Converting between major and minor units asks the currency. `toMinorUnits({
+amount, currency })` and `toMajorUnits({ amountCents, currency })` scale by the
+  currency's own exponent (100 for USD, 1 for JPY, 1000 for KWD), and
+  `formatMoneyCents` takes an optional `fractionDigits` for a rounded summary.
+
+  `toMinorUnits` accepts the decimal TEXT a form holds as well as a number, and
+  scales it by moving digits rather than multiplying a float: `1.005` in USD is
+  101, where `1.005 * 100` is 100.49999999999999 and rounds to 100. It panics on
+  an amount it cannot store; `tryToMinorUnits` returns null instead, for callers
+  holding text nobody has vouched for yet.
+
+  BREAKING: `cents()` now rejects an integer outside the safe range, where `x + 1
+=== x` and a running total silently stops moving. `@stll/workspace-ui` no
+  longer re-exports `currencyMinorUnitDigits`, `formatMoneyCents`, or
+  `FormatMoneyCentsParams`; import them from `@stll/money`.
+
+### Patch Changes
+
+- [#2939](https://github.com/stella/stella/pull/2939) [`b36e13f`](https://github.com/stella/stella/commit/b36e13ff49aef6d4fbfd2f476fbad4f3307e975e) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Align workspace view tabs with their toolbar and keep action space stable while switching views. Use the subtle scrollbar treatment for inspector content and rail scrolling.
+
+- [#2947](https://github.com/stella/stella/pull/2947) [`6f86823`](https://github.com/stella/stella/commit/6f86823e5e9eb4f2b2a8027a021063b909ca44e3) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Exhaustiveness checks panic instead of returning the unhandled value, and a
+  fallback after the assertion counts as returning it.
+- Updated dependencies [[`b36e13f`](https://github.com/stella/stella/commit/b36e13ff49aef6d4fbfd2f476fbad4f3307e975e), [`6f86823`](https://github.com/stella/stella/commit/6f86823e5e9eb4f2b2a8027a021063b909ca44e3), [`dd9e048`](https://github.com/stella/stella/commit/dd9e0482f49ef8bda3a19e6a14f26595d5dd7c83), [`2ad98a4`](https://github.com/stella/stella/commit/2ad98a402e65877a433eb5061a05f4338b807b38), [`5d79253`](https://github.com/stella/stella/commit/5d79253451d8227af942bf0c4883548977531490)]:
+  - @stll/ui@0.25.1
+  - @stll/calculations@0.1.1
+  - @stll/conditions@0.3.1
+  - @stll/money@0.2.0
+
 ## 0.9.1
 
 ### Patch Changes
