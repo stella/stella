@@ -1122,8 +1122,21 @@
     }
   },
   "duplicate-token-blocks": {
-    "count": 111,
+    "count": 129,
     "files": {
+      ".oxlint-plugins/no-ambient-nondeterminism.ts": 1,
+      ".oxlint-plugins/no-auth-token-in-web-storage.ts": 1,
+      ".oxlint-plugins/no-native-s3-object-read.ts": 1,
+      ".oxlint-plugins/no-native-s3-object-write.ts": 1,
+      ".oxlint-plugins/no-object-url-leak.ts": 1,
+      ".oxlint-plugins/require-cn-for-classname-composition.ts": 2,
+      ".oxlint-plugins/require-custom-jsonb-column.ts": 2,
+      ".oxlint-plugins/require-query-signal.ts": 1,
+      ".oxlint-plugins/require-safe-window-open.ts": 2,
+      ".oxlint-plugins/require-stable-snapshot.ts": 1,
+      ".oxlint-plugins/require-stream-reader-disposal.ts": 2,
+      ".oxlint-plugins/require-timestamptz-column.ts": 2,
+      ".oxlint-plugins/require-use-shallow.ts": 1,
       "apps/api/scripts/seed-dev.ts": 2,
       "apps/api/scripts/seed-templates.ts": 2,
       "apps/api/src/db/schema.ts": 1,
