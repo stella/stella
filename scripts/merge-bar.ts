@@ -129,8 +129,6 @@ const PULL_REQUEST_STATES = ["OPEN", "CLOSED", "MERGED"] as const;
 const MERGEABLE_STATES = ["MERGEABLE", "CONFLICTING", "UNKNOWN"] as const;
 
 type PullRequestSnapshot = {
-  // The GraphQL node id, which the auto-merge mutation addresses.
-  id: string;
   number: number;
   state: (typeof PULL_REQUEST_STATES)[number];
   isDraft: boolean;
@@ -431,13 +429,10 @@ type GitHubGateway = {
   // Both writes pin the head every gate was evaluated against, so GitHub
   // rejects them server-side if it moved since: the head-stability assertion
   // is enforced by the write itself, not by the gap between the last read and
-  // it. `merge` returns the squash commit; `armMergeWhenReady` returns when
-  // GitHub recorded the arming.
+  // it. `merge` returns the squash commit; `armMergeWhenReady` returns what
+  // GitHub did: enabled auto-merge, or added the pull request to the queue.
   merge: (input: { expectedHeadSha: string }) => string;
-  armMergeWhenReady: (input: {
-    pullRequestId: string;
-    expectedHeadSha: string;
-  }) => string;
+  armMergeWhenReady: (input: { expectedHeadSha: string }) => string;
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -505,15 +500,6 @@ query($owner: String!, $name: String!, $number: Int!, $cursor: String) {
   }
 }`;
 
-const ARM_MERGE_WHEN_READY_MUTATION = `
-mutation($id: ID!, $head: GitObjectID!) {
-  enablePullRequestAutoMerge(
-    input: { pullRequestId: $id, mergeMethod: SQUASH, expectedHeadOid: $head }
-  ) {
-    pullRequest { autoMergeRequest { enabledAt } }
-  }
-}`;
-
 const createGhGateway = ({
   repo,
   pullNumber,
@@ -546,7 +532,7 @@ const createGhGateway = ({
           "view",
           ...prArgs,
           "--json",
-          "id,number,state,isDraft,mergeable,autoMergeRequest,headRefOid",
+          "number,state,isDraft,mergeable,autoMergeRequest,headRefOid",
         ]),
         "pr view",
       );
@@ -556,7 +542,6 @@ const createGhGateway = ({
       }
       const autoMergeRequest = raw["autoMergeRequest"];
       return {
-        id: readString(raw, "id"),
         number,
         state: readMember(
           PULL_REQUEST_STATES,
@@ -746,25 +731,20 @@ const createGhGateway = ({
       );
     },
 
-    armMergeWhenReady: ({ pullRequestId, expectedHeadSha }) =>
-      readString(
-        readRecord(
-          runGhJson([
-            "api",
-            "graphql",
-            "-f",
-            `query=${ARM_MERGE_WHEN_READY_MUTATION}`,
-            "-F",
-            `id=${pullRequestId}`,
-            "-F",
-            `head=${expectedHeadSha}`,
-            "--jq",
-            ".data.enablePullRequestAutoMerge.pullRequest.autoMergeRequest",
-          ]),
-          "autoMergeRequest",
-        ),
-        "enabledAt",
-      ),
+    // `gh` picks the operation the queue accepts for the pull request's
+    // current state: auto-merge while required checks are still running,
+    // a direct enqueue once they have passed (GitHub refuses auto-merge on
+    // an already-clean pull request). Both carry the head pin.
+    armMergeWhenReady: ({ expectedHeadSha }) =>
+      runGh([
+        "pr",
+        "merge",
+        ...prArgs,
+        "--squash",
+        "--auto",
+        "--match-head-commit",
+        expectedHeadSha,
+      ]).trim(),
   };
 };
 
@@ -900,13 +880,12 @@ if (import.meta.main) {
         );
         break;
       }
-      const enabledAt = gateway.armMergeWhenReady({
-        pullRequestId: pullRequest.id,
+      const outcome = gateway.armMergeWhenReady({
         expectedHeadSha: snapshot.headShaBeforeMerge,
       });
       console.log(
-        `\nverdict: ARMED — merge when ready since ${enabledAt}; the queue ` +
-          `merges ${snapshot.headShaBeforeMerge} once its checks pass`,
+        `\nverdict: ARMED — ${outcome}; the queue merges ` +
+          `${snapshot.headShaBeforeMerge} once its checks pass`,
       );
       break;
     }

@@ -13,7 +13,6 @@ const passingSnapshot = (
   overrides: Partial<MergeBarSnapshot> = {},
 ): MergeBarSnapshot => ({
   pullRequest: {
-    id: "PR_kwDOabcdef",
     number: 2137,
     state: "OPEN",
     isDraft: false,

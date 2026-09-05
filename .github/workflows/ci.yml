@@ -42,6 +42,9 @@ jobs:
     timeout-minutes: 5
     permissions:
       contents: read
+      # The merge-group trust check reads the queued pull request's head
+      # repository.
+      pull-requests: read
     outputs:
       trusted: ${{ steps.check.outputs.trusted }}
       agent_sandbox_docker_required: ${{ steps.changed-files.outputs.agent_sandbox_docker_required }}
@@ -68,17 +71,33 @@ jobs:
         id: check
         env:
           EVENT_NAME: ${{ github.event_name }}
+          GH_TOKEN: ${{ github.token }}
           HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
           BASE_REPO: ${{ github.repository }}
           HAS_RUN_CI_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'run-ci') }}
+          MERGE_GROUP_HEAD_REF: ${{ github.event.merge_group.head_ref }}
         run: |
           # Same-repo PRs are trusted: the author has write access
           # to push branches. Fork PRs need a maintainer to add
-          # the "run-ci" label after reviewing the code. A merge
-          # group only ever holds a pull request that already passed
-          # this gate, so it inherits the trust.
+          # the "run-ci" label after reviewing the code.
+          #
+          # A merge group runs with the base repository's secrets, and
+          # the "run-ci" label survives pushes made after the reviewed
+          # commit, so the label cannot vouch for it. Only a same-repo
+          # pull request is trusted there; the group's head ref names
+          # it as gh-readonly-queue/<base>/pr-<number>-<sha>.
           if [[ "$EVENT_NAME" == "merge_group" ]]; then
-            echo "trusted=true" >> "$GITHUB_OUTPUT"
+            if [[ "$MERGE_GROUP_HEAD_REF" =~ /pr-([0-9]+)-[0-9a-f]+$ ]]; then
+              queued_head_repo=$(gh api "repos/$BASE_REPO/pulls/${BASH_REMATCH[1]}" --jq '.head.repo.full_name')
+            else
+              queued_head_repo=""
+            fi
+            if [[ "$queued_head_repo" == "$BASE_REPO" ]]; then
+              echo "trusted=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "trusted=false" >> "$GITHUB_OUTPUT"
+              echo "::error::Merge group for a fork pull request (head ${queued_head_repo:-unknown}). Land fork changes from a same-repo branch."
+            fi
           elif [[ "$HEAD_REPO" == "$BASE_REPO" ]]; then
             echo "trusted=true" >> "$GITHUB_OUTPUT"
           elif [[ "$HAS_RUN_CI_LABEL" == "true" ]]; then

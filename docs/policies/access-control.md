@@ -60,12 +60,11 @@ operations runbook (private).
    GitHub ruleset (`.github/branch-protection/ruleset-main.json`)
    that enforces:
    - No direct pushes; all changes via pull request.
-   - At least one approval; matching sensitive paths additionally
-     require their code owner.
-   - Stale reviews dismissed on new pushes.
-   - Last-push approval required (author cannot self-approve).
    - All review threads resolved before merge.
    - Required status checks: `ci-result`, `dependency-review`.
+   - A merge queue: each pull request is rebuilt on the current
+     `main` and the required checks must pass on that commit
+     before it lands, one pull request at a time.
    - Signed commits required.
    - No force pushes or branch deletion.
 
