@@ -8,19 +8,49 @@
   "accessUpdateFailed": {
     "message": "Chrome ei saanud veebisaitide juurdepääsu muuta."
   },
-  "checkingAccess": { "message": "Veebisaitide juurdepääsu kontrollimine…" },
-  "connectTab": { "message": "Ühenda praegune stella vahekaart" },
+  "adoptTab": {
+    "message": "Kasuta seda vahekaarti stellaga"
+  },
+  "adoptUnsupported": {
+    "message": "stellaga saab kasutada ainult avalikke HTTPS-lehti."
+  },
+  "adoptedTab": {
+    "message": "stella saab nüüd sellel vahekaardil lugeda saiti $ORIGIN$. Küsi selle kohta vestluses.",
+    "placeholders": {
+      "origin": {
+        "content": "$1"
+      }
+    }
+  },
+  "checkingAccess": {
+    "message": "Veebisaitide juurdepääsu kontrollimine…"
+  },
+  "connectTab": {
+    "message": "Ühenda praegune stella vahekaart"
+  },
   "controllerReady": {
     "message": "Ühendatud: $ORIGIN$. Iga toiming vajab endiselt stellas kinnitamist.",
-    "placeholders": { "origin": { "content": "$1" } }
+    "placeholders": {
+      "origin": {
+        "content": "$1"
+      }
+    }
   },
-  "disconnectTab": { "message": "Katkesta vahekaardi ühendus" },
+  "disconnectTab": {
+    "message": "Katkesta vahekaardi ühendus"
+  },
   "extensionDescription": {
     "message": "Lubab stellal pärast sinu nõusolekut juhtida eraldi Chrome’i vahekaarti."
   },
-  "extensionName": { "message": "stella brauser" },
-  "grantAccess": { "message": "Luba kõik veebisaidid" },
-  "revokeAccess": { "message": "Eemalda veebisaitide juurdepääs" },
+  "extensionName": {
+    "message": "stella brauser"
+  },
+  "grantAccess": {
+    "message": "Luba kõik veebisaidid"
+  },
+  "revokeAccess": {
+    "message": "Eemalda veebisaitide juurdepääs"
+  },
   "unsupportedTab": {
     "message": "Ava stella rakenduse vahekaart ja proovi uuesti."
   }

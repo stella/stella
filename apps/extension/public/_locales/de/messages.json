@@ -8,19 +8,49 @@
   "accessUpdateFailed": {
     "message": "Chrome konnte den Websitezugriff nicht aktualisieren."
   },
-  "checkingAccess": { "message": "Websitezugriff wird geprüft…" },
-  "connectTab": { "message": "Aktuellen stella-Tab verbinden" },
+  "adoptTab": {
+    "message": "Diesen Tab mit stella verwenden"
+  },
+  "adoptUnsupported": {
+    "message": "Mit stella lassen sich nur öffentliche HTTPS-Seiten verwenden."
+  },
+  "adoptedTab": {
+    "message": "stella kann $ORIGIN$ in diesem Tab jetzt lesen. Fragen Sie im Chat danach.",
+    "placeholders": {
+      "origin": {
+        "content": "$1"
+      }
+    }
+  },
+  "checkingAccess": {
+    "message": "Websitezugriff wird geprüft…"
+  },
+  "connectTab": {
+    "message": "Aktuellen stella-Tab verbinden"
+  },
   "controllerReady": {
     "message": "Mit $ORIGIN$ verbunden. Jede Aktion muss weiterhin in stella genehmigt werden.",
-    "placeholders": { "origin": { "content": "$1" } }
+    "placeholders": {
+      "origin": {
+        "content": "$1"
+      }
+    }
   },
-  "disconnectTab": { "message": "Tab trennen" },
+  "disconnectTab": {
+    "message": "Tab trennen"
+  },
   "extensionDescription": {
     "message": "Ermöglicht stella nach deiner Freigabe die Steuerung eines eigenen Chrome-Tabs."
   },
-  "extensionName": { "message": "stella Browser" },
-  "grantAccess": { "message": "Alle Websites erlauben" },
-  "revokeAccess": { "message": "Websitezugriff entfernen" },
+  "extensionName": {
+    "message": "stella Browser"
+  },
+  "grantAccess": {
+    "message": "Alle Websites erlauben"
+  },
+  "revokeAccess": {
+    "message": "Websitezugriff entfernen"
+  },
   "unsupportedTab": {
     "message": "Öffne einen stella-App-Tab und versuche es erneut."
   }

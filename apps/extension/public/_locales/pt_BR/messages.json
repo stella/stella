@@ -8,19 +8,49 @@
   "accessUpdateFailed": {
     "message": "O Chrome não conseguiu alterar o acesso a sites."
   },
-  "checkingAccess": { "message": "Verificando o acesso a sites…" },
-  "connectTab": { "message": "Conectar a guia atual da stella" },
+  "adoptTab": {
+    "message": "Usar esta aba com a stella"
+  },
+  "adoptUnsupported": {
+    "message": "Com a stella só é possível usar páginas HTTPS públicas."
+  },
+  "adoptedTab": {
+    "message": "A stella agora pode ler $ORIGIN$ nesta aba. Pergunte sobre ela no chat.",
+    "placeholders": {
+      "origin": {
+        "content": "$1"
+      }
+    }
+  },
+  "checkingAccess": {
+    "message": "Verificando o acesso a sites…"
+  },
+  "connectTab": {
+    "message": "Conectar a guia atual da stella"
+  },
   "controllerReady": {
     "message": "Conectado a $ORIGIN$. Cada ação ainda precisa de aprovação na stella.",
-    "placeholders": { "origin": { "content": "$1" } }
+    "placeholders": {
+      "origin": {
+        "content": "$1"
+      }
+    }
   },
-  "disconnectTab": { "message": "Desconectar guia" },
+  "disconnectTab": {
+    "message": "Desconectar guia"
+  },
   "extensionDescription": {
     "message": "Permite que a stella controle uma guia dedicada do Chrome após sua autorização."
   },
-  "extensionName": { "message": "Navegador da stella" },
-  "grantAccess": { "message": "Permitir todos os sites" },
-  "revokeAccess": { "message": "Remover acesso a sites" },
+  "extensionName": {
+    "message": "Navegador da stella"
+  },
+  "grantAccess": {
+    "message": "Permitir todos os sites"
+  },
+  "revokeAccess": {
+    "message": "Remover acesso a sites"
+  },
   "unsupportedTab": {
     "message": "Abra uma guia do aplicativo stella e tente novamente."
   }

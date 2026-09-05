@@ -169,7 +169,7 @@ export const activeExternalSchema = t.Object({
   url: t.String(),
 });
 
-export const browserClientSchema = t.Object(
+const browserClientSchema = t.Object(
   {
     protocolVersion: t.Literal(BROWSER_CONTROL_PROTOCOL_VERSION),
   },

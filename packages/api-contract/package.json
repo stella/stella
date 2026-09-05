@@ -38,8 +38,8 @@
   "dependencies": {
     "@stll/anonymize-chat": "workspace:*",
     "@stll/template-conditions": "workspace:*",
-    "better-result": "catalog:",
     "@valibot/to-json-schema": "^1.7.1",
+    "better-result": "catalog:",
     "valibot": "catalog:"
   },
   "devDependencies": {

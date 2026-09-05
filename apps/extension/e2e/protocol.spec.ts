@@ -47,7 +47,7 @@ const prepareGrantedExtension = async (): Promise<string> => {
   );
   await cp(builtExtensionPath, directory, { recursive: true });
   const manifestPath = path.join(directory, "manifest.json");
-  const manifest: unknown = JSON.parse(await readFile(manifestPath, "utf8"));
+  const manifest: unknown = JSON.parse(await readFile(manifestPath, "utf-8"));
   if (typeof manifest !== "object" || manifest === null) {
     throw new TypeError("Built manifest is not an object");
   }
@@ -72,31 +72,13 @@ const createCommandSender = (stella: Page) => {
   let sequence = 0;
   return async (
     command: BrowserControlCommand,
-    toolCallId?: string,
+    replayToolCallId?: string,
   ): Promise<BrowserControlResult> => {
     sequence += 1;
     const requestId = `request-${sequence}`;
     await stella.evaluate(
-      ({
-        command,
-        controllerId,
-        protocolVersion,
-        requestId,
-        source,
-        toolCallId,
-      }) => {
-        window.postMessage(
-          {
-            command,
-            controllerId,
-            protocolVersion,
-            requestId,
-            source,
-            toolCallId,
-            type: "command",
-          },
-          window.location.origin,
-        );
+      (request) => {
+        window.postMessage(request, window.location.origin);
       },
       {
         command,
@@ -104,7 +86,8 @@ const createCommandSender = (stella: Page) => {
         protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
         requestId,
         source: BROWSER_EXTENSION_MESSAGE_SOURCE.web,
-        toolCallId: toolCallId ?? `tool-${sequence}`,
+        toolCallId: replayToolCallId ?? `tool-${sequence}`,
+        type: "command",
       },
     );
     const handle = await stella.waitForFunction(

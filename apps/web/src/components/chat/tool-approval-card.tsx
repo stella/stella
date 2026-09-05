@@ -916,9 +916,7 @@ const ExternalMcpInputSummary = ({
   );
 };
 
-const browserActionTranslationKey = (
-  command: BrowserControlCommand,
-): TranslationKey => {
+const browserActionTranslationKey = (command: BrowserControlCommand) => {
   switch (command.action) {
     case BROWSER_CONTROL_ACTION.click:
       return "chat.approval.browser.actions.click";

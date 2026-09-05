@@ -69,6 +69,16 @@
         "tailwindcss"
       ]
     },
+    // WXT discovers the service worker, content script and popup from
+    // src/entrypoints; knip cannot infer that, so they are listed as entries.
+    "apps/extension": {
+      "entry": [
+        "src/entrypoints/**/*.ts",
+        "scripts/*.ts",
+        "e2e/**/*.ts",
+        "src/**/*.test.ts"
+      ]
+    },
     "apps/landing": {
       "entry": [
         "src/**/*.astro",

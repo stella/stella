@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import {
   BROWSER_CONTROL_ACTION,
   type BrowserControlCommand,
@@ -41,6 +43,6 @@ export const getBrowserApprovalDetails = (
       return [];
     default:
       command satisfies never;
-      return [];
+      return panic("Unhandled browser command action");
   }
 };

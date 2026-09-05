@@ -8,19 +8,49 @@
   "accessUpdateFailed": {
     "message": "Chrome no pudo actualizar el acceso a sitios web."
   },
-  "checkingAccess": { "message": "Comprobando el acceso a sitios web…" },
-  "connectTab": { "message": "Conectar la pestaña actual de stella" },
+  "adoptTab": {
+    "message": "Usar esta pestaña con stella"
+  },
+  "adoptUnsupported": {
+    "message": "Con stella solo se pueden usar páginas públicas HTTPS."
+  },
+  "adoptedTab": {
+    "message": "stella ya puede leer $ORIGIN$ en esta pestaña. Pregunte sobre ella en el chat.",
+    "placeholders": {
+      "origin": {
+        "content": "$1"
+      }
+    }
+  },
+  "checkingAccess": {
+    "message": "Comprobando el acceso a sitios web…"
+  },
+  "connectTab": {
+    "message": "Conectar la pestaña actual de stella"
+  },
   "controllerReady": {
     "message": "Conectado a $ORIGIN$. Cada acción sigue necesitando aprobación en stella.",
-    "placeholders": { "origin": { "content": "$1" } }
+    "placeholders": {
+      "origin": {
+        "content": "$1"
+      }
+    }
   },
-  "disconnectTab": { "message": "Desconectar pestaña" },
+  "disconnectTab": {
+    "message": "Desconectar pestaña"
+  },
   "extensionDescription": {
     "message": "Permite a stella controlar una pestaña dedicada de Chrome después de que concedas acceso."
   },
-  "extensionName": { "message": "Navegador de stella" },
-  "grantAccess": { "message": "Permitir todos los sitios" },
-  "revokeAccess": { "message": "Quitar acceso a sitios web" },
+  "extensionName": {
+    "message": "Navegador de stella"
+  },
+  "grantAccess": {
+    "message": "Permitir todos los sitios"
+  },
+  "revokeAccess": {
+    "message": "Quitar acceso a sitios web"
+  },
   "unsupportedTab": {
     "message": "Abre una pestaña de la aplicación stella y vuelve a intentarlo."
   }

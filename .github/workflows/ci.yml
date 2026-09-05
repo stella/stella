@@ -634,6 +634,28 @@ jobs:
           fi
           echo "required=false" >> "$GITHUB_OUTPUT"
 
+      - name: Check extension browser test scope
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        id: extension-browser-tests
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+          EVENT_NAME: ${{ github.event_name }}
+        # The extension's Playwright specs load the built extension into a
+        # persistent Chromium; they run only when the extension, its protocol
+        # contract, or the browser runtime changed.
+        run: |
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]] || ! git diff --quiet "origin/$BASE_REF"...HEAD -- \
+            .github/actions/setup-playwright/action.yml \
+            .github/workflows/ci.yml \
+            apps/extension \
+            packages/api-contract/src/browser-control.ts \
+            bun.lock \
+            package.json; then
+            echo "required=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "required=false" >> "$GITHUB_OUTPUT"
+
       - name: Check i18n sync
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: bun run i18n:check
@@ -950,7 +972,7 @@ jobs:
           bun run test -- --concurrency=2 "${args[@]}"
 
       - name: Install UI browser test runtime
-        if: steps.ui-browser-tests.outputs.required == 'true'
+        if: steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
         uses: ./.github/actions/setup-playwright
         with:
           dependency-mode: full
@@ -962,6 +984,10 @@ jobs:
       - name: Test UI playground visuals
         if: steps.ui-browser-tests.outputs.required == 'true'
         run: bun --filter @stll/web test:e2e:ui-playground
+
+      - name: Test extension browser boundary
+        if: steps.extension-browser-tests.outputs.required == 'true'
+        run: bun --filter @stll/extension test:e2e
 
       - name: Property-test convention guard
         run: |
