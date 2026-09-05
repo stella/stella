@@ -13,7 +13,12 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import type { RegistryToolListing } from "./route-types.js";
+import {
+  type StableStringifyInput,
+  stableStringify,
+} from "@stll/stable-stringify";
+
+import type { JsonSchema, RegistryToolListing } from "./route-types.js";
 
 // Cache schema version; a bump invalidates every existing cache file. Version 4
 // invalidates deltas computed before feature-omission evidence existed, which
@@ -92,21 +97,41 @@ export const isDeltaEmpty = (delta: RegistryDelta): boolean =>
   delta.removed.length === 0 &&
   delta.changed.length === 0;
 
-/** Deterministic key-sorted stringify, so a re-ordered schema is not a "change". */
-const stableStringify = (value: unknown): string => {
+/**
+ * A `JsonSchema` is parsed JSON, but its type (`Record<string, unknown>`) does
+ * not say so and the fingerprint contract does. Restate the shape the wire
+ * already guarantees. Anything outside it never reaches here; it reads as
+ * `null` rather than serializing through its own keys and colliding with an
+ * unrelated value.
+ */
+const toJsonValue = (value: unknown): StableStringifyInput => {
+  if (
+    value === null ||
+    typeof value === "boolean" ||
+    typeof value === "number" ||
+    typeof value === "string"
+  ) {
+    return value;
+  }
+
   if (Array.isArray(value)) {
-    return `[${value.map(stableStringify).join(",")}]`;
+    return value.map((item: unknown) => toJsonValue(item));
   }
+
   if (isRecord(value)) {
-    const keys = Object.keys(value).sort();
-    return `{${keys
-      .map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`)
-      .join(",")}}`;
+    const jsonObject: Record<string, StableStringifyInput> = {};
+    for (const [key, nested] of Object.entries(value)) {
+      jsonObject[key] = toJsonValue(nested);
+    }
+    return jsonObject;
   }
-  // `value` here is a parsed-JSON primitive (string/number/boolean/null), for
-  // which `JSON.stringify` is always defined.
-  return JSON.stringify(value);
+
+  return null;
 };
+
+/** A schema's fingerprint, so a re-ordered schema is not a "change". */
+const schemaFingerprint = (schema: JsonSchema): string =>
+  stableStringify(toJsonValue(schema));
 
 /**
  * Diff fetched listings against the baked-in listings (spec S5.3): a tool is
@@ -154,8 +179,8 @@ export const computeDelta = ({
       continue;
     }
     if (
-      stableStringify(bakedTool.inputSchema) !==
-      stableStringify(tool.inputSchema)
+      schemaFingerprint(bakedTool.inputSchema) !==
+      schemaFingerprint(tool.inputSchema)
     ) {
       changed.push(tool.name);
     }

@@ -8,12 +8,14 @@
 // allowlist that leaves a subpath out of the tarball all stay invisible until
 // an install fails. This runs the real publish path — build, prepare-publish,
 // `bun pm pack` — and then, with the published manifest in place, resolves
-// every subpath the way a consumer's resolver would and imports what it finds.
+// every subpath the way a consumer's resolver would and imports what it finds
+// in plain Node, the runtime an installed consumer most often uses.
 //
 // usage: bun scripts/check-published-exports.ts <package-dir>
 
 import { panic } from "better-result";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 import {
   distEntryFiles,
@@ -22,6 +24,7 @@ import {
 } from "./publish-manifest";
 import {
   isExpectedPublishedExportResolution,
+  isOwnDistLoadFailure,
   isPublishedTestArtifact,
 } from "./published-export-guards";
 
@@ -40,6 +43,80 @@ const run = async (cmd: string[], cwd: string): Promise<string> => {
     panic(`command failed in ${cwd}: ${cmd.join(" ")}`);
   }
   return stdout;
+};
+
+/**
+ * Load a built module the way an installed consumer does, in plain Node.
+ *
+ * Bun's resolver fills in an omitted relative extension, so importing the same
+ * file from this script would pass on a `./thing` that Node's ESM resolver
+ * rejects outright — the published package would then fail at the consumer's
+ * first import. Node decides this, so Node runs the load.
+ */
+type NodeLoad =
+  | { readonly type: "loaded"; readonly exportCount: number }
+  | { readonly type: "unresolved"; readonly reason: string }
+  | { readonly type: "unreported" };
+
+/** The count travels on its own line so module output cannot be read as one. */
+const EXPORT_COUNT_MARKER = "__stella_export_count__:";
+
+const parseExportCount = (stdout: string): number | undefined => {
+  const marked = stdout
+    .split("\n")
+    .flatMap((line) =>
+      line.startsWith(EXPORT_COUNT_MARKER)
+        ? [Number(line.slice(EXPORT_COUNT_MARKER.length))]
+        : [],
+    );
+  const count = marked.at(0);
+  return marked.length === 1 && count !== undefined && Number.isInteger(count)
+    ? count
+    : undefined;
+};
+
+const loadInNode = async (file: string): Promise<NodeLoad> => {
+  const proc = Bun.spawn({
+    cmd: [
+      "node",
+      "--input-type=module",
+      "-e",
+      // The loaded module owns this stdout too — a banner, a deprecation
+      // notice, a stray console.log — so the count travels on its own marked
+      // line rather than as the whole stream. Report the error, not Node's
+      // internal stack: the frames are all node:internal paths and say
+      // nothing about which import broke.
+      `try {
+         const module = await import(${JSON.stringify(pathToFileURL(file).href)});
+         process.stdout.write(\`\\n${EXPORT_COUNT_MARKER}\${Object.keys(module).length}\\n\`);
+       } catch (error) {
+         process.stderr.write(\`\${error.code ?? "Error"}: \${error.message}\`);
+         process.exit(1);
+       }`,
+    ],
+    cwd: repoRoot,
+    stderr: "pipe",
+    stdout: "pipe",
+  });
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+    proc.exited,
+  ]);
+  if (exitCode !== 0) {
+    return {
+      reason:
+        stderr
+          .split("\n")
+          .find((line) => line.trim().length > 0)
+          ?.trim() ?? `node exited ${exitCode}`,
+      type: "unresolved",
+    };
+  }
+  const exportCount = parseExportCount(stdout);
+  return exportCount === undefined
+    ? { type: "unreported" }
+    : { exportCount, type: "loaded" };
 };
 
 // `bun pm pack --dry-run` lists the tarball contents as "packed <size> <path>",
@@ -153,9 +230,44 @@ try {
       if (!isDistModuleEntry(entry)) {
         return;
       }
-      const loaded: Record<string, unknown> = await import(resolved);
-      if (Object.keys(loaded).length === 0) {
-        failures.push(`${subpath}: loaded from dist but exports nothing`);
+      const loaded = await loadInNode(resolved);
+      switch (loaded.type) {
+        case "loaded": {
+          if (loaded.exportCount === 0) {
+            failures.push(`${subpath}: loaded from dist but exports nothing`);
+          }
+          return;
+        }
+        case "unreported": {
+          failures.push(
+            `${subpath}: Node loaded it but reported no export count`,
+          );
+          return;
+        }
+        case "unresolved": {
+          if (
+            isOwnDistLoadFailure({
+              distDir: path.join(pkgDir, "dist"),
+              reason: loaded.reason,
+            })
+          ) {
+            failures.push(
+              `${subpath}: does not load in Node: ${loaded.reason}`,
+            );
+            return;
+          }
+          // Node could not reach something this tarball does not decide. Bun's
+          // importer still answers whether the entry exports anything.
+          const viaBun: Record<string, unknown> = await import(resolved);
+          if (Object.keys(viaBun).length === 0) {
+            failures.push(`${subpath}: loaded from dist but exports nothing`);
+          }
+          return;
+        }
+        default: {
+          loaded satisfies never;
+          panic(`unhandled Node load result for ${subpath}`);
+        }
       }
     }),
   );
@@ -193,5 +305,5 @@ if (failures.length > 0) {
 }
 
 console.log(
-  `${published.name}@${published.version}: ${Object.keys(published.exports).length} exports resolve and ship; modules load from dist`,
+  `${published.name}@${published.version}: ${Object.keys(published.exports).length} exports resolve and ship; modules load from dist in Node`,
 );

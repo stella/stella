@@ -51,7 +51,7 @@ const isInputArray = (
  */
 export const stableStringify = (
   value: StableStringifyInput,
-  seen = new WeakSet<object>(),
+  seen: WeakSet<object> = new WeakSet<object>(),
 ): string => {
   if (value === null) {
     return "null";

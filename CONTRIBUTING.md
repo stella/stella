@@ -132,10 +132,35 @@ unprefixed global names.
 
 ## Changesets
 
-Touching a published package (`packages/ui`, `packages/conditions`,
-`packages/docx-utils`, `packages/business-registries`,
-`packages/country-codes`, `packages/template-conditions`, `packages/cli`)
-requires a changeset, and CI enforces it:
+Touching one of these published packages requires a changeset, and CI enforces
+it:
+
+<!-- published-packages:start -->
+<!-- Rendered from scripts/changeset-policy.json by `bun scripts/check-published-package-lists.ts --write`. Do not edit by hand. -->
+
+- `@stll/ai-catalog`
+- `@stll/anonymize-chat`
+- `@stll/auth-model`
+- `@stll/business-registries`
+- `@stll/calculations`
+- `@stll/chat`
+- `@stll/cli`
+- `@stll/conditions`
+- `@stll/country-codes`
+- `@stll/docx-utils`
+- `@stll/money`
+- `@stll/ssr-kit`
+- `@stll/ssr-testkit`
+- `@stll/stable-stringify`
+- `@stll/start-runtime`
+- `@stll/template-conditions`
+- `@stll/ui`
+- `@stll/workspace-model`
+- `@stll/workspace-ui`
+
+<!-- published-packages:end -->
+
+Add one with:
 
 ```sh
 bun changeset            # pick the packages and the bump, describe the change

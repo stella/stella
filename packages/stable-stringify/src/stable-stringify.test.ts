@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { type StableStringifyInput, stableStringify } from "./stable-stringify";
+import {
+  type StableStringifyInput,
+  stableStringify,
+} from "./stable-stringify.js";
 
 describe("stableStringify", () => {
   test("is insensitive to the order keys were assembled in", () => {

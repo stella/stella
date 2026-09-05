@@ -330,6 +330,18 @@ jobs:
             echo "POLICY_EOF"
           } >> "$GITHUB_OUTPUT"
 
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Published package lists match the release policy
+        # CONTRIBUTING.md and .changeset/README.md tell contributors which
+        # packages need a changeset. Both are rendered from the same policy
+        # this job gates on, so neither can name a different set. The script
+        # reads only the policy file and needs no dependency install.
+        run: bun scripts/check-published-package-lists.ts --check
+
       - name: Enforce release intent
         # The repository owner publishes this versioned shared contract.
         uses: stella/.github/.github/actions/changeset-policy@5628b97fb3c560c0d961baa60c272c598eddcab5 # v1.7.0
@@ -1018,6 +1030,7 @@ jobs:
           bun scripts/check-published-exports.ts packages/calculations
           bun scripts/check-published-exports.ts packages/workspace-model
           bun scripts/check-published-exports.ts packages/workspace-ui
+          bun scripts/check-published-exports.ts packages/stable-stringify
 
       # Release ordering is a safety property. This test has no workspace
       # dependencies, so it remains runnable when a PR changes only workflows

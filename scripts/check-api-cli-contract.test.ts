@@ -31,6 +31,7 @@ const SHARED_NPM_PACKAGES = [
   "money",
   "ssr-kit",
   "ssr-testkit",
+  "stable-stringify",
   "start-runtime",
   "template-conditions",
   "workspace-model",
