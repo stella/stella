@@ -138,6 +138,7 @@ import type {
 } from "./clipboard-types";
 import { ClipboardImagePreview } from "./ClipboardImagePreview";
 import type { ClipboardImagePreviewStatus } from "./ClipboardImagePreview";
+import { ClipboardSourceIcon } from "./ClipboardSourceIcon";
 import { useRailViewport } from "./use-rail-viewport";
 
 const CLIPBOARD_GROUP_COLORS = [
@@ -415,16 +416,10 @@ const ClipboardCard = ({
   }
   if (sourceLabel) {
     metadataIcon = sourceVisual?.iconDataUrl ? (
-      <img
-        alt=""
-        aria-hidden="true"
-        className={cn(
-          "clipboard-source-icon size-7 shrink-0",
-          // Favicons are plain squares; app icons carry their own shape.
-          item.sourceApp?.page && "rounded-md",
-        )}
-        draggable={false}
-        src={sourceVisual.iconDataUrl}
+      <ClipboardSourceIcon
+        iconDataUrl={sourceVisual.iconDataUrl}
+        kind={item.sourceApp?.page ? "favicon" : "app"}
+        size="card"
       />
     ) : (
       <span
@@ -1777,7 +1772,7 @@ const ClipboardApp = () => {
     }
     if (primaryModifier) {
       const actionItems = resolveActionItems();
-      const quickIndex = quickCopyIndex(event.key, actionItems.length);
+      const quickIndex = quickCopyIndex(event.code, actionItems.length);
       if (quickIndex !== null) {
         event.preventDefault();
         const item = actionItems.at(quickIndex);

@@ -269,9 +269,11 @@ fn show_as(app: &AppHandle, created_kind: ClipboardOpenKind) {
   // Windows, so HTML5 drops (a card onto a group chip) never reach the
   // webview. The window accepts no OS file drops.
   .disable_drag_drop_handler()
+  // Popover is the translucent, blurred material: the desktop and windows
+  // underneath read through it. UnderWindowBackground is close to opaque.
   .effects(
     EffectsBuilder::new()
-      .effect(Effect::UnderWindowBackground)
+      .effect(Effect::Popover)
       .effect(Effect::Acrylic)
       .state(EffectState::Active)
       .radius(CLIPBOARD_WINDOW_RADIUS)

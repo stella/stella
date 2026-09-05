@@ -62,13 +62,11 @@ body:has(.clipboard-editor-window) .font-sans {
   min-height: 100dvh;
   border-radius: 28px;
   color-scheme: inherit;
-  background-color: color-mix(in srgb, var(--background) 34%, transparent);
+  /* The window material (vibrancy) is the surface; a wash of the page
+   * background over it would flatten the glass. */
+  background-color: transparent;
   box-shadow: none;
   isolation: isolate;
-}
-
-.dark .clipboard-window {
-  background-color: color-mix(in srgb, var(--background) 42%, transparent);
 }
 
 .clipboard-groups-rail {
@@ -246,6 +244,14 @@ body:has(.clipboard-editor-window) .font-sans {
 
 .clipboard-card:hover .clipboard-source-icon {
   filter: drop-shadow(0 3px 6px rgb(0 0 0 / 0.36));
+}
+
+/* Favicons are drawn for a light browser tab strip (GitHub's is black on
+ * transparent), so they sit on a white tile like a browser's site tile;
+ * without it they vanish on a dark card. */
+.clipboard-source-favicon {
+  background: var(--color-white);
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.08);
 }
 
 /* Sanitised clipboard HTML keeps only layout (tables, alignment, rules,

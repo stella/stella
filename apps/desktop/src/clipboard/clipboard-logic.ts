@@ -395,11 +395,17 @@ export const adjacentClipboardIndex = (
   return nextIndex < 0 || nextIndex >= itemCount ? null : nextIndex;
 };
 
-export const quickCopyIndex = (key: string, itemCount: number) => {
-  if (!/^[1-9]$/u.test(key)) {
+/**
+ * Quick copy slots follow the physical digit row (`event.code`), not the
+ * produced character: layouts such as Czech or French put symbols on the
+ * unshifted digit keys, so `event.key` would never be a digit there.
+ */
+export const quickCopyIndex = (code: string, itemCount: number) => {
+  const match = /^(?:Digit|Numpad)([1-9])$/u.exec(code);
+  if (!match) {
     return null;
   }
-  const index = Number(key) - 1;
+  const index = Number(match[1]) - 1;
   return index < itemCount ? index : null;
 };
 

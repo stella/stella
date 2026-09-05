@@ -346,10 +346,15 @@ describe("keyboard indexes", () => {
     );
   });
 
-  test("quick copy only accepts visible slots one through nine", () => {
-    expect(quickCopyIndex("2", 2)).toBe(1);
-    expect(quickCopyIndex("3", 2)).toBeNull();
-    expect(quickCopyIndex("0", 10)).toBeNull();
+  test("quick copy follows the physical digit key, not the layout's character", () => {
+    expect(quickCopyIndex("Digit2", 2)).toBe(1);
+    expect(quickCopyIndex("Numpad1", 2)).toBe(0);
+    expect(quickCopyIndex("Digit3", 2)).toBeNull();
+    expect(quickCopyIndex("Digit0", 10)).toBeNull();
+    // Czech layout: the key labelled 2 produces "ě" and the key labelled 1 "+".
+    expect(quickCopyIndex("ě", 10)).toBeNull();
+    expect(quickCopyIndex("+", 10)).toBeNull();
+    expect(quickCopyIndex("2", 10)).toBeNull();
   });
 
   test("copy accepts either platform primary modifier", () => {
