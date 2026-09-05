@@ -1,6 +1,6 @@
 import * as v from "valibot";
 
-export const BROWSER_CONTROL_PROTOCOL_VERSION = 2 as const;
+export const BROWSER_CONTROL_PROTOCOL_VERSION = 3 as const;
 export const BROWSER_CONTROL_TOOL_NAME = "use-browser" as const;
 
 export const BROWSER_CONTROL_CONTENT_TRUST = {
@@ -31,10 +31,16 @@ export const BROWSER_CONTROL_KEYS = [
 
 export const BROWSER_CONTROL_LIMITS = {
   elementNameChars: 500,
-  elements: 200,
+  elements: 300,
   errorMessageChars: 1000,
   executionReceipts: 32,
-  pageTextChars: 40_000,
+  /** Frames read per snapshot, top frame first. */
+  frames: 16,
+  /** Characters of page text returned per snapshot; longer pages are paged with `textOffset`. */
+  pageTextChars: 48_000,
+  /** Characters of page text the extension collects across frames before paging. */
+  pageTextTotalChars: 400_000,
+  referenceChars: 256,
   revisionIdChars: 128,
   requestIdChars: 128,
   selectValueChars: 2000,
@@ -49,13 +55,17 @@ const boundedIdSchema = v.pipe(
   v.maxLength(BROWSER_CONTROL_LIMITS.requestIdChars),
 );
 
-const isElementReference = (value: string): boolean => {
-  if (!value.startsWith("e:")) {
-    return false;
-  }
-  const indexes = value.slice(2).split(".");
-  return indexes.length > 0 && indexes.every(isDecimalIndex);
+/**
+ * An element reference is `e:<frameId>:<path>`. The path walks from the
+ * frame's document element by child index; the segment `s` steps into the
+ * current element's open shadow root. Frame 0 is the top frame.
+ */
+export type ElementReference = {
+  frameId: number;
+  path: string;
 };
+
+export const ELEMENT_REFERENCE_SHADOW_SEGMENT = "s" as const;
 
 const isDecimalIndex = (index: string): boolean => {
   if (index.length === 0) {
@@ -69,10 +79,59 @@ const isDecimalIndex = (index: string): boolean => {
   return true;
 };
 
+const isElementPath = (path: string): boolean => {
+  const segments = path.split(".");
+  const first = segments.at(0);
+  const last = segments.at(-1);
+  if (first === undefined || last === undefined) {
+    return false;
+  }
+  if (!isDecimalIndex(first) || !isDecimalIndex(last)) {
+    return false;
+  }
+  return segments.every(
+    (segment, index) =>
+      isDecimalIndex(segment) ||
+      (segment === ELEMENT_REFERENCE_SHADOW_SEGMENT &&
+        segments[index - 1] !== ELEMENT_REFERENCE_SHADOW_SEGMENT),
+  );
+};
+
+export const parseElementReference = (
+  value: string,
+): ElementReference | null => {
+  if (value.length > BROWSER_CONTROL_LIMITS.referenceChars) {
+    return null;
+  }
+  const [prefix, frame, path, ...rest] = value.split(":");
+  if (
+    prefix !== "e" ||
+    frame === undefined ||
+    path === undefined ||
+    rest.length > 0 ||
+    !isDecimalIndex(frame) ||
+    !isElementPath(path)
+  ) {
+    return null;
+  }
+  return { frameId: Number(frame), path };
+};
+
+export const formatElementReference = ({
+  frameId,
+  path,
+}: ElementReference): string => `e:${frameId}:${path}`;
+
 const referenceSchema = v.pipe(
   v.string(),
   v.startsWith("e:"),
-  v.maxLength(256),
+  v.maxLength(BROWSER_CONTROL_LIMITS.referenceChars),
+);
+
+const urlSchema = v.pipe(
+  v.string(),
+  v.minLength(1),
+  v.maxLength(BROWSER_CONTROL_LIMITS.urlChars),
 );
 
 const pageSchema = v.strictObject({
@@ -81,14 +140,12 @@ const pageSchema = v.strictObject({
     v.minLength(1),
     v.maxLength(BROWSER_CONTROL_LIMITS.revisionIdChars),
   ),
-  url: v.pipe(
-    v.string(),
-    v.minLength(1),
-    v.maxLength(BROWSER_CONTROL_LIMITS.urlChars),
-  ),
+  url: urlSchema,
 });
 
 const targetSchema = v.strictObject({
+  /** Link destination copied from the snapshot; the extension rejects a target whose href changed. */
+  href: v.optional(urlSchema),
   name: v.pipe(
     v.string(),
     v.maxLength(BROWSER_CONTROL_LIMITS.elementNameChars),
@@ -99,15 +156,20 @@ const targetSchema = v.strictObject({
 
 const openActionSchema = v.strictObject({
   action: v.literal(BROWSER_CONTROL_ACTION.open),
-  url: v.pipe(
-    v.string(),
-    v.minLength(1),
-    v.maxLength(BROWSER_CONTROL_LIMITS.urlChars),
-  ),
+  url: urlSchema,
 });
 
 const snapshotActionSchema = v.strictObject({
   action: v.literal(BROWSER_CONTROL_ACTION.snapshot),
+  /** Character offset into the page text; omit to read from the start. */
+  textOffset: v.optional(
+    v.pipe(
+      v.number(),
+      v.integer(),
+      v.minValue(0),
+      v.maxValue(BROWSER_CONTROL_LIMITS.pageTextTotalChars),
+    ),
+  ),
 });
 
 const clickActionSchema = v.strictObject({
@@ -158,7 +220,13 @@ export type BrowserControlCommand = v.InferOutput<
   typeof browserControlCommandSchema
 >;
 
+export type BrowserControlElementCommand = Extract<
+  BrowserControlCommand,
+  { target: unknown }
+>;
+
 const browserControlElementSchema = v.strictObject({
+  href: v.optional(urlSchema),
   name: v.pipe(
     v.string(),
     v.maxLength(BROWSER_CONTROL_LIMITS.elementNameChars),
@@ -170,20 +238,28 @@ const browserControlElementSchema = v.strictObject({
   ),
 });
 
+export type BrowserControlElement = v.InferOutput<
+  typeof browserControlElementSchema
+>;
+
 const browserControlSnapshotSchema = v.strictObject({
   contentTrust: v.literal(BROWSER_CONTROL_CONTENT_TRUST.untrustedWebContent),
   elements: v.pipe(
     v.array(browserControlElementSchema),
     v.maxLength(BROWSER_CONTROL_LIMITS.elements),
   ),
-  text: v.pipe(v.string(), v.maxLength(BROWSER_CONTROL_LIMITS.pageTextChars)),
-  title: v.pipe(v.string(), v.maxLength(BROWSER_CONTROL_LIMITS.titleChars)),
-  url: v.pipe(v.string(), v.maxLength(BROWSER_CONTROL_LIMITS.urlChars)),
   revision: v.pipe(
     v.string(),
     v.minLength(1),
     v.maxLength(BROWSER_CONTROL_LIMITS.revisionIdChars),
   ),
+  text: v.pipe(v.string(), v.maxLength(BROWSER_CONTROL_LIMITS.pageTextChars)),
+  /** Offset of `text` within the collected page text. */
+  textOffset: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  /** Length of the collected page text; read further with `snapshot` and `textOffset`. */
+  textTotalChars: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  title: v.pipe(v.string(), v.maxLength(BROWSER_CONTROL_LIMITS.titleChars)),
+  url: v.pipe(v.string(), v.maxLength(BROWSER_CONTROL_LIMITS.urlChars)),
 });
 
 export type BrowserControlSnapshot = v.InferOutput<
@@ -301,6 +377,25 @@ export type BrowserClientCapability = {
   protocolVersion: typeof BROWSER_CONTROL_PROTOCOL_VERSION;
 };
 
+export const isReadOnlyBrowserCommand = (
+  command: BrowserControlCommand,
+): boolean => {
+  switch (command.action) {
+    case BROWSER_CONTROL_ACTION.goBack:
+    case BROWSER_CONTROL_ACTION.snapshot:
+      return true;
+    case BROWSER_CONTROL_ACTION.click:
+    case BROWSER_CONTROL_ACTION.fill:
+    case BROWSER_CONTROL_ACTION.open:
+    case BROWSER_CONTROL_ACTION.pressKey:
+    case BROWSER_CONTROL_ACTION.select:
+      return false;
+    default:
+      command satisfies never;
+      return false;
+  }
+};
+
 export const parseBrowserControlCommand = (input: unknown) => {
   const result = v.safeParse(browserControlCommandSchema, input);
   if (!result.success) {
@@ -311,7 +406,7 @@ export const parseBrowserControlCommand = (input: unknown) => {
     command.action !== BROWSER_CONTROL_ACTION.open &&
     command.action !== BROWSER_CONTROL_ACTION.snapshot &&
     command.action !== BROWSER_CONTROL_ACTION.goBack &&
-    !isElementReference(command.target.ref)
+    parseElementReference(command.target.ref) === null
   ) {
     return null;
   }
@@ -325,7 +420,9 @@ export const parseBrowserControlResult = (input: unknown) => {
   }
   if (
     result.output.status === "success" &&
-    result.output.snapshot.elements.some(({ ref }) => !isElementReference(ref))
+    result.output.snapshot.elements.some(
+      ({ ref }) => parseElementReference(ref) === null,
+    )
   ) {
     return null;
   }

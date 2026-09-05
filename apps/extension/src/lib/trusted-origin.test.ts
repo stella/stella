@@ -1,6 +1,33 @@
 import { describe, expect, test } from "bun:test";
 
-import { trustedStellaOriginFromUrl } from "./trusted-origin";
+import {
+  parseTrustedOriginList,
+  trustedStellaOriginFromUrl,
+} from "./trusted-origin";
+
+describe("build-time origin list", () => {
+  test("defaults to the hosted origins and accepts exact HTTPS origins", () => {
+    expect(parseTrustedOriginList(undefined)).toEqual([
+      "https://app.stll.app",
+      "https://my.stll.app",
+      "https://staging.stll.app",
+    ]);
+    expect(
+      parseTrustedOriginList(
+        " https://stella.example.org, https://law.example.net ",
+      ),
+    ).toEqual(["https://stella.example.org", "https://law.example.net"]);
+  });
+
+  test("fails the build on non-origin or non-HTTPS entries", () => {
+    expect(() => parseTrustedOriginList("http://stella.example.org")).toThrow(
+      TypeError,
+    );
+    expect(() =>
+      parseTrustedOriginList("https://stella.example.org/app"),
+    ).toThrow(TypeError);
+  });
+});
 
 describe("stella extension origin trust", () => {
   test("accepts only exact hosted app origins", () => {

@@ -1,12 +1,24 @@
 import {
   BROWSER_CONTROL_ACTION,
   type BrowserControlCommand,
+  type BrowserControlElementCommand,
 } from "@stll/api-contract/browser-control";
 
 export type BrowserApprovalDetail = {
-  type: "key" | "target" | "value" | "website";
+  type: "key" | "link" | "target" | "value" | "website";
   value: string;
 };
+
+const targetDetails = ({
+  page,
+  target,
+}: BrowserControlElementCommand): BrowserApprovalDetail[] => [
+  { type: "website", value: page.url },
+  { type: "target", value: `${target.name} (${target.role})` },
+  ...(target.href === undefined
+    ? []
+    : [{ type: "link", value: target.href } satisfies BrowserApprovalDetail]),
+];
 
 export const getBrowserApprovalDetails = (
   command: BrowserControlCommand,
@@ -15,32 +27,15 @@ export const getBrowserApprovalDetails = (
     case BROWSER_CONTROL_ACTION.open:
       return [{ type: "website", value: command.url }];
     case BROWSER_CONTROL_ACTION.click:
-      return [
-        { type: "website", value: command.page.url },
-        {
-          type: "target",
-          value: `${command.target.name} (${command.target.role})`,
-        },
-      ];
+      return targetDetails(command);
     case BROWSER_CONTROL_ACTION.fill:
     case BROWSER_CONTROL_ACTION.select:
       return [
-        { type: "website", value: command.page.url },
-        {
-          type: "target",
-          value: `${command.target.name} (${command.target.role})`,
-        },
+        ...targetDetails(command),
         { type: "value", value: command.value },
       ];
     case BROWSER_CONTROL_ACTION.pressKey:
-      return [
-        { type: "website", value: command.page.url },
-        {
-          type: "target",
-          value: `${command.target.name} (${command.target.role})`,
-        },
-        { type: "key", value: command.key },
-      ];
+      return [...targetDetails(command), { type: "key", value: command.key }];
     case BROWSER_CONTROL_ACTION.goBack:
     case BROWSER_CONTROL_ACTION.snapshot:
       return [];

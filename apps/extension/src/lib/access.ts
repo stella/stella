@@ -1,4 +1,5 @@
-export const ALL_SITE_ORIGINS = ["http://*/*", "https://*/*"] as const;
+/** Only HTTPS: the origin policy refuses plain HTTP, so the grant never needs it. */
+export const ALL_SITE_ORIGINS = ["https://*/*"] as const;
 
 export const hasAllSiteAccess = async (): Promise<boolean> =>
   await chrome.permissions.contains({ origins: [...ALL_SITE_ORIGINS] });

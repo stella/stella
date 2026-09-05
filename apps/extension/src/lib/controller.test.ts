@@ -37,15 +37,21 @@ describe("browser controller lease", () => {
     ).toBe(false);
   });
 
-  test("deletes controller data and execution receipts on disconnect", async () => {
+  test("deletes controller data, receipts and the download block on disconnect", async () => {
     const originalChrome = Object.getOwnPropertyDescriptor(
       globalThis,
       "chrome",
     );
     const removedKeys: unknown[] = [];
+    const removedRuleIds: unknown[] = [];
     Object.defineProperty(globalThis, "chrome", {
       configurable: true,
       value: {
+        declarativeNetRequest: {
+          updateSessionRules: async (options: { removeRuleIds?: number[] }) => {
+            removedRuleIds.push(options.removeRuleIds);
+          },
+        },
         storage: {
           session: {
             get: async () => ({
@@ -68,6 +74,7 @@ describe("browser controller lease", () => {
           "browserExecutionReceipts",
         ],
       ]);
+      expect(removedRuleIds).toEqual([[1]]);
     } finally {
       if (originalChrome) {
         Object.defineProperty(globalThis, "chrome", originalChrome);
