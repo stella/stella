@@ -48,6 +48,7 @@ import {
   entityListCursorCondition,
   entityListTimestampCursorExpr,
 } from "@/api/lib/entities/list-cursor";
+import { ENTITY_PRIORITIES, TASK_STATUSES } from "@/api/lib/entity-constants";
 import { LIMITS } from "@/api/lib/limits";
 import {
   createCursorPage,
@@ -1317,20 +1318,10 @@ const saveTaskArgsSchema = v.pipe(
       ),
     ),
     status: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.maxLength(32),
-        v.description("Task status (e.g. open, in_progress, done)"),
-      ),
+      v.pipe(v.picklist(TASK_STATUSES), v.description("Task status")),
     ),
     priority: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.maxLength(16),
-        v.description("Task priority (e.g. none, low, medium, high)"),
-      ),
+      v.pipe(v.picklist(ENTITY_PRIORITIES), v.description("Task priority")),
     ),
     item_type: v.optional(
       v.pipe(
