@@ -516,9 +516,15 @@ describe("detect-e2e-changes", () => {
     expect(
       workflowStep(jobOf(marketingWorkflow, "check"), "Checkout"),
     ).not.toContain("ref:");
-    expect(workflowStep(update, "Push regenerated baselines")).toContain(
-      `BRANCH: ${githubExpression("inputs.ref || github.ref_name")}`,
+    // The push is an API commit appended to the named branch: GitHub signs
+    // it, so it cannot leave a person's pull request behind the
+    // signed-commits rule.
+    const push = workflowStep(update, "Push regenerated baselines");
+    expect(push).toContain(
+      "uses: stella/.github/.github/actions/signed-commit@",
     );
+    expect(push).toContain("mode: append");
+    expect(push).toContain(`branch: ${githubExpression("inputs.ref")}`);
 
     // Check-mode callers pass no ref and stay on their own triggering ref.
     expect(workflowJob("marketing-screenshots")).not.toContain("ref:");
