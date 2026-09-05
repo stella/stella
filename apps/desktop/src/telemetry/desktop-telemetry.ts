@@ -83,8 +83,21 @@ const MAX_TOKEN_CHARS = 48;
 /** Distinct failures reported per window before further reports are dropped. */
 const MAX_REPORTED_ERRORS = 50;
 
+// Character classes are tested one character at a time: the redaction and the
+// frame parser scan by hand so no pattern can backtrack on a hostile message.
+const isIdentifierChar = (char: string) => /[\w$.]/u.test(char);
+const isCodeIdentifierChar = (char: string) => /[\w$.[\]]/u.test(char);
+const isFrameFileChar = (char: string) => /[\w$.-]/u.test(char);
+const isFrameNameChar = (char: string) => /[\w$.<>]/u.test(char);
+const isDigit = (char: string) => char >= "0" && char <= "9";
+const QUOTES = new Set(['"', "'", "`"]);
+const BUNDLE_SUFFIXES = [".js:", ".mjs:", ".cjs:"];
+
+const everyChar = (value: string, predicate: (char: string) => boolean) =>
+  value.length > 0 && Array.from(value).every(predicate);
+
 const isIdentifier = (value: string, maxChars: number) =>
-  value.length > 0 && value.length <= maxChars && /^[\w$.]+$/u.test(value);
+  value.length <= maxChars && everyChar(value, isIdentifierChar);
 
 /**
  * Error messages quote the data they choked on, so every quoted span becomes
@@ -93,13 +106,28 @@ const isIdentifier = (value: string, maxChars: number) =>
  * native `redact_error_message`, which re-applies the same rules.
  */
 export const redactErrorMessage = (message: string) => {
-  const withoutQuotes = message.replace(
-    /(["'`])(.*?)\1|(["'`]).*$/gsu,
-    (_match, quote: string | undefined, quoted: string | undefined) =>
-      quote === "'" && quoted !== undefined && /^[\w$.[\]]+$/u.test(quoted)
+  let withoutQuotes = "";
+  let index = 0;
+  while (index < message.length) {
+    const char = message.charAt(index);
+    if (!QUOTES.has(char)) {
+      withoutQuotes += char;
+      index += 1;
+      continue;
+    }
+    const end = message.indexOf(char, index + 1);
+    if (end === -1) {
+      // An unterminated quote: everything after it is content.
+      withoutQuotes += '"…"';
+      break;
+    }
+    const quoted = message.slice(index + 1, end);
+    withoutQuotes +=
+      char === "'" && everyChar(quoted, isCodeIdentifierChar)
         ? `'${quoted}'`
-        : '"…"',
-  );
+        : '"…"';
+    index = end + 1;
+  }
   const collapsed = withoutQuotes
     .split(/\s+/u)
     .filter(Boolean)
@@ -115,19 +143,102 @@ export const redactErrorMessage = (message: string) => {
     : collapsed;
 };
 
-/** `function@file:line:col` for the first stack line that names a bundle file. */
+const digitsAt = (text: string, start: number) => {
+  let end = start;
+  while (end < text.length && isDigit(text.charAt(end))) {
+    end += 1;
+  }
+  return end > start ? { end, value: text.slice(start, end) } : null;
+};
+
+/** `function@file:line:col` when a stack line names a bundle file. */
+const frameFromStackLine = (line: string) => {
+  const suffixes = BUNDLE_SUFFIXES.map((suffix) => ({
+    at: line.indexOf(suffix),
+    suffix,
+  })).filter(({ at }) => at !== -1);
+  const marker = suffixes.sort((left, right) => left.at - right.at).at(0);
+  if (!marker) {
+    return null;
+  }
+  const row = digitsAt(line, marker.at + marker.suffix.length);
+  if (!row || line.charAt(row.end) !== ":") {
+    return null;
+  }
+  const column = digitsAt(line, row.end + 1);
+  if (!column) {
+    return null;
+  }
+  let fileStart = marker.at;
+  while (fileStart > 0 && isFrameFileChar(line.charAt(fileStart - 1))) {
+    fileStart -= 1;
+  }
+  const file = line.slice(fileStart, marker.at + marker.suffix.length - 1);
+  // The function name ends at the separator before the URL: `name@url`
+  // (WebKit) or `at name (url` (Chromium); the leading `at` is not a name.
+  const separator = Math.max(
+    line.lastIndexOf("@", marker.at),
+    line.lastIndexOf("(", marker.at),
+  );
+  let nameEnd = Math.max(separator, 0);
+  while (nameEnd > 0 && line.charAt(nameEnd - 1) === " ") {
+    nameEnd -= 1;
+  }
+  let nameStart = nameEnd;
+  while (nameStart > 0 && isFrameNameChar(line.charAt(nameStart - 1))) {
+    nameStart -= 1;
+  }
+  const name = line.slice(nameStart, nameEnd);
+  const fn = name === "at" ? "" : name;
+  return `${fn}@${file}:${row.value}:${column.value}`;
+};
+
+/**
+ * Error classes whose messages the engine writes: they describe code, not
+ * data, once quoted spans are redacted. Every other message (a plain `Error`,
+ * a string rejection, a command failure) is replaced by a digest, so it still
+ * separates failures without carrying text. Mirrors the native allowlist.
+ */
+const ENGINE_ERROR_CLASSES = new Set([
+  "TypeError",
+  "RangeError",
+  "ReferenceError",
+  "SyntaxError",
+  "URIError",
+  "EvalError",
+  "DOMException",
+]);
+
+// A 64-bit polynomial rolling hash over the UTF-8 bytes (FNV's offset and
+// prime, multiply-add instead of xor so no bitwise operators are needed).
+const DIGEST_SEED = 14_695_981_039_346_656_037n;
+const DIGEST_PRIME = 1_099_511_628_211n;
+const DIGEST_MODULUS = 18_446_744_073_709_551_616n;
+const textEncoder = new TextEncoder();
+
+/** 16 hex digits identifying a message without carrying it; the native side computes the same. */
+export const messageDigest = (message: string) => {
+  let hash = DIGEST_SEED;
+  for (const byte of textEncoder.encode(message)) {
+    hash = (hash * DIGEST_PRIME + BigInt(byte)) % DIGEST_MODULUS;
+  }
+  return `poly64:${hash.toString(16).padStart(16, "0")}`;
+};
+
+const reportableMessage = (errorName: string, message: string) =>
+  ENGINE_ERROR_CLASSES.has(errorName)
+    ? redactErrorMessage(message)
+    : messageDigest(message);
+
 const errorFrame = (stack: string | undefined) => {
   if (!stack) {
     return null;
   }
   for (const line of stack.split("\n")) {
-    const location = /([\w$.-]+\.[cm]?js):(\d+):(\d+)/u.exec(line);
-    if (!location) {
-      continue;
+    const frame = frameFromStackLine(line);
+    if (frame) {
+      return frame;
     }
-    const [, file, row, column] = location;
-    const fn = /^\s*(?:at\s+)?([\w$.<>]+)?\s*[@(]/u.exec(line)?.[1] ?? "";
-    return `${fn}@${file}:${row}:${column}`;
   }
   return null;
 };
@@ -138,20 +249,17 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 /** The redacted shape of a thrown or rejected value. */
 export const describeError = (value: unknown): DesktopErrorDetail => {
   if (value instanceof Error) {
+    const errorName = isIdentifier(value.name, MAX_ERROR_NAME_CHARS)
+      ? value.name
+      : "Error";
     return {
-      errorName: isIdentifier(value.name, MAX_ERROR_NAME_CHARS)
-        ? value.name
-        : "Error",
+      errorName,
       frame: errorFrame(value.stack),
-      message: redactErrorMessage(value.message),
+      message: reportableMessage(errorName, value.message),
     };
   }
   if (typeof value === "string") {
-    return {
-      errorName: "string",
-      frame: null,
-      message: redactErrorMessage(value),
-    };
+    return { errorName: "string", frame: null, message: messageDigest(value) };
   }
   if (isRecord(value)) {
     // Native command rejections are `{ kind, message }` records.
@@ -164,7 +272,7 @@ export const describeError = (value: unknown): DesktopErrorDetail => {
     return {
       errorName,
       frame: null,
-      message: typeof message === "string" ? redactErrorMessage(message) : "",
+      message: typeof message === "string" ? messageDigest(message) : "",
     };
   }
   return {
@@ -199,13 +307,15 @@ const reported = new Set<string>();
 
 export const reportDesktopError = (report: DesktopErrorReport) => {
   // Each distinct failure reports once per window; the detail keeps two
-  // different rejections under the same code apart.
+  // different rejections under the same code apart, string rejections by
+  // their digest.
   const key = [
     report.window,
     report.operation,
     report.code,
     report.detail?.errorName ?? "",
     report.detail?.frame ?? "",
+    report.detail?.message ?? "",
   ].join(":");
   if (reported.has(key) || reported.size >= MAX_REPORTED_ERRORS) {
     return;

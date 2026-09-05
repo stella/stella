@@ -159,13 +159,54 @@ pub struct DesktopErrorDetail {
 
 impl DesktopErrorDetail {
   fn sanitized(self) -> Self {
+    let error_name = bounded_identifier(&self.error_name, MAX_ERROR_NAME_CHARS)
+      .unwrap_or_else(|| "unknown".to_string());
+    // Only engine-written messages keep their text; everything else is a
+    // digest, computed here when the webview did not already send one.
+    let message = if ENGINE_ERROR_CLASSES.contains(&error_name.as_str()) {
+      redact_error_message(&self.message)
+    } else if is_message_digest(&self.message) {
+      self.message
+    } else {
+      message_digest(&self.message)
+    };
     Self {
-      error_name: bounded_identifier(&self.error_name, MAX_ERROR_NAME_CHARS)
-        .unwrap_or_else(|| "unknown".to_string()),
-      message: redact_error_message(&self.message),
+      error_name,
+      message,
       frame: self.frame.as_deref().and_then(sanitized_frame),
     }
   }
+}
+
+/// Error classes whose messages the engine writes: they describe code, not
+/// data, once quoted spans are redacted. Mirrors the webview allowlist.
+const ENGINE_ERROR_CLASSES: [&str; 7] = [
+  "TypeError",
+  "RangeError",
+  "ReferenceError",
+  "SyntaxError",
+  "URIError",
+  "EvalError",
+  "DOMException",
+];
+const MESSAGE_DIGEST_PREFIX: &str = "poly64:";
+
+/// A 64-bit polynomial rolling hash over the UTF-8 bytes (FNV's offset and
+/// prime, multiply-add), as 16 hex digits; the webview computes the same.
+fn message_digest(message: &str) -> String {
+  let mut hash: u64 = 14_695_981_039_346_656_037;
+  for byte in message.bytes() {
+    hash = hash
+      .wrapping_mul(1_099_511_628_211)
+      .wrapping_add(u64::from(byte));
+  }
+  format!("{MESSAGE_DIGEST_PREFIX}{hash:016x}")
+}
+
+fn is_message_digest(value: &str) -> bool {
+  value
+    .strip_prefix(MESSAGE_DIGEST_PREFIX)
+    .is_some_and(|hex| hex.len() == 16 && hex.chars().all(|c| c.is_ascii_hexdigit()))
 }
 
 /// Keeps a value made only of identifier characters; anything else is not a
@@ -523,6 +564,10 @@ fn analytics_error_payload(
       fingerprint.push(':');
       fingerprint.push_str(frame);
     }
+    // Two string rejections share a class and have no frame; the message
+    // digest keeps them apart without carrying text.
+    fingerprint.push(':');
+    fingerprint.push_str(&message_digest(&detail.message));
   }
   json!({
     "api_key": config.key,
@@ -733,9 +778,13 @@ mod tests {
     );
     assert_eq!(properties["error_name"], "TypeError");
     assert_eq!(properties["error_frame"], "renderCard@index-3f2a.js:12:34");
+    let digest =
+      message_digest("undefined is not an object (evaluating 'item.sourceApp.name')");
     assert_eq!(
       properties["$exception_fingerprint"],
-      "desktop:clipboard:clipboardHistoryRead:invalidResponse:TypeError:renderCard@index-3f2a.js:12:34"
+      format!(
+        "desktop:clipboard:clipboardHistoryRead:invalidResponse:TypeError:renderCard@index-3f2a.js:12:34:{digest}"
+      )
     );
     // Classification stays the type PostHog filters on.
     assert_eq!(properties["$exception_type"], "invalidResponse");
@@ -809,16 +858,57 @@ mod tests {
 
     assert_eq!(detail.error_name, "unknown");
     assert_eq!(detail.frame, None);
+    let string_rejection = DesktopErrorDetail {
+      error_name: "string".to_string(),
+      message: "clipboard item no longer exists".to_string(),
+      frame: Some("@index-3f2a.js:9:1".to_string()),
+    }
+    .sanitized();
     assert_eq!(
+      string_rejection.frame.as_deref(),
+      Some("@index-3f2a.js:9:1")
+    );
+    // A message the engine did not write never survives as text.
+    assert_eq!(
+      string_rejection.message,
+      message_digest("clipboard item no longer exists")
+    );
+  }
+
+  #[test]
+  fn only_engine_error_messages_keep_their_text() {
+    // Same vector as the webview test, so both sides agree on the digest.
+    assert_eq!(message_digest("a"), "poly64:af63bd4c8601b840");
+    let sanitize = |error_name: &str, message: &str| {
       DesktopErrorDetail {
-        error_name: "string".to_string(),
-        message: "clipboard item no longer exists".to_string(),
-        frame: Some("@index-3f2a.js:9:1".to_string()),
+        error_name: error_name.to_string(),
+        message: message.to_string(),
+        frame: None,
       }
       .sanitized()
-      .frame
-      .as_deref(),
-      Some("@index-3f2a.js:9:1")
+      .message
+    };
+
+    assert_eq!(
+      sanitize("TypeError", "null is not an object (evaluating 'a.b')"),
+      "null is not an object (evaluating 'a.b')"
+    );
+    assert_eq!(
+      sanitize("Error", "Attorney client notes"),
+      message_digest("Attorney client notes")
+    );
+    assert_eq!(
+      sanitize("object.copy", "clipboard write failed"),
+      message_digest("clipboard write failed")
+    );
+    // A digest the webview already computed passes through unchanged.
+    assert_eq!(
+      sanitize("string", "poly64:af63bd4c8601b840"),
+      "poly64:af63bd4c8601b840"
+    );
+    assert_eq!(
+      sanitize("string", "poly64:not-a-digest"),
+      message_digest("poly64:not-a-digest")
     );
   }
 

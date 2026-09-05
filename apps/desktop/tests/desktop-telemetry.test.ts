@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   describeError,
+  messageDigest,
   redactErrorMessage,
 } from "../src/telemetry/desktop-telemetry";
 
@@ -67,12 +68,20 @@ describe("describeError", () => {
     expect(describeError(error).frame).toBe("grow@rail-9b1.js:7:19");
   });
 
-  test("describes native command rejections without exposing content", () => {
+  test("digests every message the engine did not write", () => {
+    // Same vector as the native test, so both sides agree on the digest.
+    expect(messageDigest("a")).toBe("poly64:af63bd4c8601b840");
     expect(describeError("clipboard item no longer exists")).toEqual({
       errorName: "string",
       frame: null,
-      message: "clipboard item no longer exists",
+      message: messageDigest("clipboard item no longer exists"),
     });
+    expect(describeError("Attorney client notes").message).not.toContain(
+      "Attorney",
+    );
+    expect(describeError(new Error("privileged draft text")).message).toBe(
+      messageDigest("privileged draft text"),
+    );
     expect(
       describeError({
         kind: "copy",
@@ -81,7 +90,9 @@ describe("describeError", () => {
     ).toEqual({
       errorName: "object.copy",
       frame: null,
-      message: 'clipboard write failed for "…"',
+      message: messageDigest(
+        'clipboard write failed for "Share purchase agreement"',
+      ),
     });
     expect(describeError(undefined)).toEqual({
       errorName: "undefined",
