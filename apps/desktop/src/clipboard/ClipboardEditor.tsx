@@ -88,6 +88,13 @@ const EDITOR_BLOCK_TAGS = new Set([
   "OL",
   "P",
   "PRE",
+  "TABLE",
+  "TBODY",
+  "TD",
+  "TFOOT",
+  "TH",
+  "THEAD",
+  "TR",
   "UL",
 ]);
 
@@ -471,7 +478,7 @@ const RichTextArea = memo(
         <div
           aria-label={label}
           autoFocus
-          className="clipboard-rich-editor bg-card ring-border focus:ring-ring min-h-0 flex-1 overflow-y-auto rounded-[22px] p-5 text-sm leading-6 ring-1 outline-none ring-inset focus:ring-2"
+          className="clipboard-rich-editor clipboard-html bg-card ring-border focus:ring-ring min-h-0 flex-1 overflow-y-auto rounded-[22px] p-5 text-sm leading-6 tab-4 ring-1 outline-none ring-inset focus:ring-2"
           contentEditable
           dir="auto"
           onInput={onInput}

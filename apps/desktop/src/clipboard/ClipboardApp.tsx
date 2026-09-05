@@ -337,8 +337,8 @@ const ClipboardCard = ({
     "text-foreground line-clamp-[8] text-sm leading-5 text-pretty wrap-break-word",
     // HTML collapses its source whitespace; only plain text (and <pre>) keeps it.
     rendersHtml
-      ? "[&_blockquote]:border-s-2 [&_blockquote]:ps-3 [&_code]:font-mono [&_li]:ms-4 [&_ol]:list-decimal [&_pre]:whitespace-pre-wrap [&_strong]:font-semibold [&_ul]:list-disc"
-      : "whitespace-pre-wrap",
+      ? "clipboard-html [&_blockquote]:border-s-2 [&_blockquote]:ps-3 [&_code]:font-mono [&_li]:ms-4 [&_ol]:list-decimal [&_pre]:whitespace-pre-wrap [&_strong]:font-semibold [&_ul]:list-disc"
+      : "whitespace-pre-wrap tab-4",
   );
   let previewContent: ReactNode;
   if (item.type === "image") {
