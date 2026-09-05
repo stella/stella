@@ -18,7 +18,7 @@ const app = new Elysia()
   .post('/async', ({ body }) => body, { body: v.objectAsync({ name: v.pipeAsync(v.string(), v.checkAsync(async (value) => value.length > 0)) }) });
 const results = [];
 for (const route of ['/sync', '/async']) {
-  for (const body of [{ name: 'ok' }, { name: 42 }]) {
+  for (const body of [{ name: 'ok' }, { name: 42 }, { name: '' }]) {
     const response = await app.handle(new Request('http://localhost' + route, {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
     }));
@@ -57,7 +57,9 @@ process.stdout.write(JSON.stringify(results));
     expect(output).toEqual([
       { route: "/sync", status: 200, body: { name: "ok" } },
       { route: "/sync", status: 422, body: null },
+      { route: "/sync", status: 200, body: { name: "" } },
       { route: "/async", status: 200, body: { name: "ok" } },
+      { route: "/async", status: 422, body: null },
       { route: "/async", status: 422, body: null },
     ]);
   } finally {
