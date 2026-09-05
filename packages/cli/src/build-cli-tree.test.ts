@@ -1,7 +1,7 @@
 import type { Application, Command } from "@stricli/core";
 import { describe, expect, test } from "bun:test";
 
-import { buildApp, buildFlag } from "./build-cli-tree.js";
+import { buildApp, buildFlag, DISABLED_MARKER } from "./build-cli-tree.js";
 import type { Context } from "./context.js";
 import { flagKey } from "./flag-name.js";
 import { generatedRouteMap } from "./generated/route-map.js";
@@ -131,5 +131,40 @@ describe("generated flag parser conformance", () => {
       // requires a letter followed by at least one supported character.
       expect(flagKey(spec)).toMatch(/^[a-z][a-zA-Z0-9]+$/u);
     }
+  });
+});
+
+describe("buildApp: disabled tools", () => {
+  type Target = Application<Context>["root"];
+  const isRouteMap = (
+    target: Target,
+  ): target is Exclude<Target, Command<Context>> => "getAllEntries" in target;
+
+  /** `path -> brief` for every command in the assembled tree. */
+  const briefs = (
+    target: Target,
+    path: readonly string[],
+  ): [string, string][] =>
+    isRouteMap(target)
+      ? target
+          .getAllEntries()
+          .flatMap((entry) =>
+            briefs(entry.target, [...path, entry.name.original]),
+          )
+      : [[path.join(" "), target.brief]];
+
+  test("a server-attested gated-off tool is marked in its --help brief and nowhere else", () => {
+    const marked = new Map(
+      briefs(buildApp(generatedRouteMap, ["list_matters"]).root, []),
+    );
+    expect(marked.get("matter list")).toContain(DISABLED_MARKER);
+    expect(marked.get("matter save")).not.toContain(DISABLED_MARKER);
+  });
+
+  test("without attestation nothing is marked", () => {
+    const all = briefs(buildApp(generatedRouteMap).root, []);
+    expect(all.some(([, brief]) => brief.includes(DISABLED_MARKER))).toBe(
+      false,
+    );
   });
 });

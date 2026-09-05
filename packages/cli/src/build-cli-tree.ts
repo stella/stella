@@ -238,9 +238,17 @@ const fullDescription = ({
   return lines.join("\n");
 };
 
-const buildLeafCommand = (spec: LeafCommandSpec): RoutingTarget => {
+/** The suffix a gated-off command's brief carries in --help and tools list. */
+export const DISABLED_MARKER = "[disabled on this server]";
+
+const buildLeafCommand = (
+  spec: LeafCommandSpec,
+  disabled: ReadonlySet<string>,
+): RoutingTarget => {
   const flags = buildLeafFlags(spec);
-  const brief = leafBrief(spec);
+  const brief = disabled.has(spec.toolName)
+    ? `${leafBrief(spec)} ${DISABLED_MARKER}`
+    : leafBrief(spec);
   const description = fullDescription({
     brief,
     discriminatorInject: spec.discriminatorInject,
@@ -387,16 +395,20 @@ const buildCapabilityLeafCommand = (
   return buildCommand(typedArgs);
 };
 
-const buildRouteNode = (node: RouteNode, brief: string): RoutingTarget => {
+const buildRouteNode = (
+  node: RouteNode,
+  brief: string,
+  disabled: ReadonlySet<string>,
+): RoutingTarget => {
   if (node.kind === "leaf") {
-    return buildLeafCommand(node.spec);
+    return buildLeafCommand(node.spec, disabled);
   }
   if (node.kind === "capability-leaf") {
     return buildCapabilityLeafCommand(node.spec);
   }
   const routes: Record<string, RoutingTarget> = {};
   for (const [name, child] of Object.entries(node.children)) {
-    routes[name] = buildRouteNode(child, routeBrief(name, child));
+    routes[name] = buildRouteNode(child, routeBrief(name, child), disabled);
   }
   return buildRouteMap({ docs: { brief }, routes });
 };
@@ -410,13 +422,14 @@ const routeBrief = (name: string, node: RouteNode): string =>
  */
 const buildGeneratedRoutes = (
   node: RouteNode,
+  disabled: ReadonlySet<string>,
 ): Record<string, RoutingTarget> => {
   if (node.kind !== "route") {
     return {};
   }
   const routes: Record<string, RoutingTarget> = {};
   for (const [name, child] of Object.entries(node.children)) {
-    routes[name] = buildRouteNode(child, routeBrief(name, child));
+    routes[name] = buildRouteNode(child, routeBrief(name, child), disabled);
   }
   return routes;
 };
@@ -483,9 +496,13 @@ const collectLeafPaths = (
   node: RouteNode,
   path: readonly string[],
   lines: string[],
+  disabled: ReadonlySet<string>,
 ): void => {
   if (node.kind === "leaf") {
-    lines.push(`${path.join(" ")}\t(${node.spec.toolName})`);
+    const marker = disabled.has(node.spec.toolName)
+      ? ` ${DISABLED_MARKER}`
+      : "";
+    lines.push(`${path.join(" ")}\t(${node.spec.toolName})${marker}`);
     return;
   }
   if (node.kind === "capability-leaf") {
@@ -495,7 +512,7 @@ const collectLeafPaths = (
     return;
   }
   for (const [name, child] of Object.entries(node.children)) {
-    collectLeafPaths(child, [...path, name], lines);
+    collectLeafPaths(child, [...path, name], lines, disabled);
   }
 };
 
@@ -516,7 +533,10 @@ const HELP_FORMATTING = {
   caseStyle: "convert-camel-to-kebab",
 } as const;
 
-const buildRootRoute = (tree: RouteNode): RouteMap<Context> => {
+const buildRootRoute = (
+  tree: RouteNode,
+  disabled: ReadonlySet<string>,
+): RouteMap<Context> => {
   const toolsListCommand = buildCommand<
     { readonly server: string | undefined },
     [],
@@ -530,7 +550,7 @@ const buildRootRoute = (tree: RouteNode): RouteMap<Context> => {
       const lines: string[] = [];
       // Reflect the ACTIVE tree (the cached-listings tree when the server
       // registry has diverged), not the baked-in one.
-      collectLeafPaths(tree, [], lines);
+      collectLeafPaths(tree, [], lines, disabled);
       this.process.stdout.write(`${lines.sort().join("\n")}\n`);
     },
     parameters: { flags: buildServerFlag() },
@@ -552,7 +572,7 @@ const buildRootRoute = (tree: RouteNode): RouteMap<Context> => {
       upload: uploadCommand,
       tools: toolsRoute,
       reference: buildResourceRoutes(generatedResourceTree),
-      ...buildGeneratedRoutes(tree),
+      ...buildGeneratedRoutes(tree, disabled),
     },
   });
 };
@@ -562,9 +582,12 @@ const buildRootRoute = (tree: RouteNode): RouteMap<Context> => {
  * lives here rather than in `cli.ts` so tests can walk the real route tree the
  * CLI dispatches against instead of a re-wired copy of it.
  */
-export const buildApp = (tree: RouteNode): Application<Context> =>
+export const buildApp = (
+  tree: RouteNode,
+  disabledTools: readonly string[] = [],
+): Application<Context> =>
   buildApplication(
-    buildRootRoute(tree),
+    buildRootRoute(tree, new Set(disabledTools)),
     {
       name: "stella",
       // A hand-written command's returned `CliCommandError` carries its exit

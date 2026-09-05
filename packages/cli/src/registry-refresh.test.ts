@@ -125,12 +125,26 @@ const writeCache = async (
 describe("resolveCommandTree (S5.3)", () => {
   test("no cache -> baked-in tree, no notice", async () => {
     const env = await makeCacheEnv();
-    const { tree, notice } = await resolveCommandTree({
+    const { tree, notice, disabledTools } = await resolveCommandTree({
       serverOrigin: ORIGIN,
       env,
     });
     expect(tree).toBe(generatedRouteMap);
     expect(notice).toBeUndefined();
+    expect(disabledTools).toEqual([]);
+  });
+
+  test("feature-omitted tools are reported as disabled for help and tools list", async () => {
+    const env = await makeCacheEnv();
+    await writeCache(env, {
+      featureOmittedTools: ["search_case_law", "get_usage"],
+    });
+    const { tree, disabledTools } = await resolveCommandTree({
+      serverOrigin: ORIGIN,
+      env,
+    });
+    expect(tree).toBe(generatedRouteMap);
+    expect(disabledTools).toEqual(["search_case_law", "get_usage"]);
   });
 
   test("empty delta -> baked-in tree", async () => {
