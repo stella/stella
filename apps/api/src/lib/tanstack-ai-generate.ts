@@ -26,6 +26,7 @@ import type {
   CachingDecision,
   OrgAIConfig,
 } from "@/api/lib/ai-config";
+import { providerErrorBody } from "@/api/lib/ai-error";
 import type { TanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -536,13 +537,20 @@ const throwIfTanStackRunError = (chunk: PublicStreamChunk): void => {
   throw tanStackRunError(chunk);
 };
 
-const tanStackRunError = (chunk: RunErrorEvent): HandlerError =>
-  new HandlerError({
+// The classifier reads a wrapped provider failure off the cause, so the body
+// has to survive the wrap. `rawEvent` carries it only for the adapters whose
+// SDK exception exposes one; `providerErrorBody` recovers it from the message
+// for the rest, which would otherwise reach the classifier with no status and
+// be named a transient transport outage.
+const tanStackRunError = (chunk: RunErrorEvent): HandlerError => {
+  const cause: unknown = chunk.rawEvent ?? providerErrorBody(chunk.message);
+  return new HandlerError({
     status: 502,
     message: chunk.message,
     ...(chunk.code ? { code: chunk.code } : {}),
-    ...(chunk.rawEvent === undefined ? {} : { cause: chunk.rawEvent }),
+    ...(cause === undefined ? {} : { cause }),
   });
+};
 
 const shouldRetryWithStandardServiceTier = ({
   error,

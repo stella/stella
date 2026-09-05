@@ -54,7 +54,7 @@ type ProviderRun =
       /** Cancels the caller's signal once the provider stream is exhausted. */
       abortAfter?: AbortController | undefined;
     }
-  | { type: "run-error"; code: string; message: string }
+  | { type: "run-error"; code?: string | undefined; message: string }
   | { type: "throw"; error: unknown }
   | { type: "abort-then-throw"; controller: AbortController }
   | { type: "object"; object: unknown; raw: string };
@@ -113,13 +113,19 @@ const abortRejectedRun = (controller: AbortController): ProviderRun => ({
   controller,
 });
 
+// An adapter reports `code` only when its SDK exception exposes a structured
+// body; leave it out to model the ones that stringify the body into the message.
 const runErrorRun = ({
   code,
   message,
 }: {
-  code: string;
+  code?: string | undefined;
   message: string;
-}): ProviderRun => ({ type: "run-error", code, message });
+}): ProviderRun => ({
+  type: "run-error",
+  ...(code === undefined ? {} : { code }),
+  message,
+});
 
 const objectRun = (
   object: unknown,
@@ -222,7 +228,7 @@ const providerAdapter: AnyTextAdapter = {
         } satisfies StreamChunk;
         yield {
           type: EventType.RUN_ERROR,
-          code: run.code,
+          ...(run.code === undefined ? {} : { code: run.code }),
           message: run.message,
           runId: PROVIDER_RUN_ID,
           threadId: PROVIDER_THREAD_ID,
@@ -1136,6 +1142,63 @@ describe("TanStack AI text generation", () => {
 
     expect(caught).toMatchObject({ code: "429", status: 502 });
     expect(classifyAIError(caught)).toBe("quota_exhausted");
+  });
+
+  // An adapter whose SDK exception stringifies the response body into the
+  // message reports the run error with no `code` and no `rawEvent`. The body is
+  // then the only evidence of what the provider answered, so the wrap has to
+  // keep it: without it quota, billing, retired model and outage all read as
+  // one unnamed transport failure.
+  test("classifies a run error whose only detail is the provider body", async () => {
+    queueRun(
+      runErrorRun({
+        message: JSON.stringify({
+          error: {
+            code: 429,
+            message: "Resource has been exhausted.",
+            status: "RESOURCE_EXHAUSTED",
+          },
+        }),
+      }),
+    );
+
+    const caught = await generateTextForTestModel({
+      caching: noCaching,
+      finishPolicy: "allow-incomplete",
+      organizationId: null,
+      orgAIConfig: null,
+      prompt: "Say hello.",
+      role: "chat",
+      serviceTier: "standard",
+      tenantWorkspaceIds: [],
+    }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+
+    expect(caught).toMatchObject({ status: 502 });
+    expect(classifyAIError(caught)).toBe("quota_exhausted");
+  });
+
+  test("leaves a plain-text run error unclassified", async () => {
+    queueRun(runErrorRun({ message: "The model is currently overloaded." }));
+
+    const caught = await generateTextForTestModel({
+      caching: noCaching,
+      finishPolicy: "allow-incomplete",
+      organizationId: null,
+      orgAIConfig: null,
+      prompt: "Say hello.",
+      role: "chat",
+      serviceTier: "standard",
+      tenantWorkspaceIds: [],
+    }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+
+    expect(caught).toMatchObject({ status: 502 });
+    expect(classifyAIError(caught)).toBe("unknown");
   });
 
   test("propagates provider run errors from streaming text", async () => {

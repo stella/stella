@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 
 /**
  * Stable, user-facing classification of AI provider errors.
@@ -133,6 +133,35 @@ const isProviderCredentialRejection = (error: unknown): boolean => {
 const isProviderError = (error: unknown): boolean =>
   isRecord(error) &&
   (providerStatusCode(error) !== null || isProviderCredentialRejection(error));
+
+/**
+ * The provider's structured error body, recovered from a stream error message.
+ *
+ * An adapter forwards that body as the run error's `rawEvent` only when the SDK
+ * exception exposes one. An exception that carries the status as a plain field
+ * and stringifies the response body into its message arrives with neither
+ * `rawEvent` nor `code`, so an error rebuilt from the event holds no status at
+ * all, and every failure from that provider (quota, billing, retired model and
+ * outage alike) falls to `unknown`. Recover the body from the message when the
+ * message is one, and hand it to the classifier as the failure's cause.
+ *
+ * Read for classification only and never logged: a provider message can echo
+ * request content.
+ */
+export const providerErrorBody = (
+  message: string,
+): Record<string, unknown> | undefined => {
+  // `JSON.parse` skips leading whitespace, so the guard must too; otherwise a
+  // body an adapter passed through verbatim would be dropped over a newline.
+  if (!message.trimStart().startsWith("{")) {
+    return undefined;
+  }
+  const parsed = Result.try((): unknown => JSON.parse(message));
+  if (Result.isError(parsed)) {
+    return undefined;
+  }
+  return isRecord(parsed.value) ? parsed.value : undefined;
+};
 
 const errorCause = (error: unknown): unknown => {
   if (!isRecord(error)) {
