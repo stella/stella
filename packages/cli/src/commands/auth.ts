@@ -30,6 +30,28 @@ const requiredStringFlag = (brief: string) =>
 
 const formatDate = (epochMs: number): string => new Date(epochMs).toISOString();
 
+const MINUTE_MS = 60_000;
+const HOUR_MS = 60 * MINUTE_MS;
+const DAY_MS = 24 * HOUR_MS;
+
+/**
+ * How far away an expiry is, for a reader who does not want to subtract UTC
+ * timestamps in their head: "in 12 min", "in 3 h", "in 2 d", or "expired".
+ */
+export const describeExpiry = (expiresAt: number, now: number): string => {
+  const remaining = expiresAt - now;
+  if (remaining <= 0) {
+    return "expired";
+  }
+  if (remaining < HOUR_MS) {
+    return `in ${Math.max(1, Math.round(remaining / MINUTE_MS))} min`;
+  }
+  if (remaining < DAY_MS) {
+    return `in ${Math.round(remaining / HOUR_MS)} h`;
+  }
+  return `in ${Math.round(remaining / DAY_MS)} d`;
+};
+
 type LoginFlags = {
   readonly org: string | undefined;
   readonly scopes: string | undefined;
@@ -183,7 +205,7 @@ export const runWhoami = async ({
     ...(account ? [`Account: ${account}`] : []),
     `Organization: ${info.orgLabel ? `${info.orgLabel} (${info.orgId})` : info.orgId}`,
     `Scopes: ${info.scope}`,
-    `Expires: ${formatDate(info.expiresAt)}${info.isExpired ? " (expired)" : ""}`,
+    `Expires: ${formatDate(info.expiresAt)} (${describeExpiry(info.expiresAt, Date.now())})`,
     `Refresh token: ${info.hasRefreshToken ? "yes" : "no"}`,
   ];
   if (info.claims?.sub) {
