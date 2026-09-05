@@ -51,7 +51,7 @@ const rememberToolInputSchema = v.strictObject({
     v.pipe(
       v.picklist(["user", "workspace"]),
       v.description(
-        "`user` for cross-matter preferences/instructions; `workspace` to scope the memory to the chat's matter (only available in a matter chat).",
+        "`user` for cross-matter preferences/instructions; `workspace` scopes the memory to the chat's matter (only available in a matter chat).",
       ),
     ),
   ),
@@ -92,7 +92,7 @@ export const createRememberTool = ({
   toolDefinition({
     name: REMEMBER_TOOL_NAME,
     description:
-      'Persist a durable memory about the user or this matter so future chats can apply it. Use sparingly for genuinely reusable facts (a stated drafting preference, a recurring instruction, a settled decision about this matter), not for one-off task details. Defaults to a `user` memory; pass `scope: "workspace"` only when the chat is connected to a matter and the memory is matter-specific.',
+      'Persist a durable memory about the user or this matter so future chats can apply it. Use sparingly for genuinely reusable facts (a stated drafting preference, a recurring instruction, a settled decision about this matter), not for one-off task details. Defaults to a `user` memory; pass `scope: "workspace"` (the stored value for the matter scope) only when the chat is connected to a matter and the memory is matter-specific.',
     inputSchema: toTanStackToolSchema(rememberToolInputSchema),
     outputSchema: toTanStackToolSchema(rememberToolOutputSchema),
   }).server(async ({ content, kind, scope }) => {

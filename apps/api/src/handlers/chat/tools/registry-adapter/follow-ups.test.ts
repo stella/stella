@@ -152,7 +152,7 @@ describe("follow-up (a): detail-mode workspace resolution from the fetched row",
     };
 
     const result = await runRegistryReadTool({
-      // No workspace_id: the workspace is unknowable from args and must come from
+      // No matter_id: the workspace is unknowable from args and must come from
       // the fetched row. Before the fix this failed closed at entry.entityId.
       args: { time_entry_id: TE_UUID },
       context: buildContext(tx),

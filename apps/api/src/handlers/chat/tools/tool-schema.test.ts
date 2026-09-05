@@ -32,7 +32,7 @@ import {
   SEARCH_CHAT_HISTORY_TOOL_NAME,
 } from "@/api/handlers/chat/tools/chat-history-tools";
 import { getChatTools as getChatToolsWithPin } from "@/api/handlers/chat/tools/chat-tools";
-import { CREATE_WORKSPACE_DOCUMENT_TOOL_NAME } from "@/api/handlers/chat/tools/create-workspace-document-tools";
+import { CREATE_MATTER_DOCUMENT_TOOL_NAME } from "@/api/handlers/chat/tools/create-workspace-document-tools";
 import { REVIEW_FOLDER_CONSISTENCY_TOOL_NAME } from "@/api/handlers/chat/tools/folder-consistency-review-tool";
 import {
   ADD_COMMENT_TOOL_NAME,
@@ -187,7 +187,7 @@ const suggestChangesOperationTypeEnum = (
 };
 
 // Construct args so every conditional tool group registers: owner role
-// (template use + create, and entity create for create_workspace_document),
+// (template use + create, and entity create for create_matter_document),
 // an active (non-archived) workspace status for that same reason, active
 // docx edit client, web search enabled with a resolved provider, and an
 // editable active skill context. BOE, infosoud, and business-registry tools
@@ -1892,7 +1892,7 @@ describe("chat tool schemas", () => {
   // paths' own `entity: ["create"]` permission check and active-matter
   // status gate rather than relying on `toolWorkspaceIds` alone (which
   // includes archived matters).
-  describe("create_workspace_document authorization", () => {
+  describe("create_matter_document authorization", () => {
     const baseArgs = {
       orgAIConfig: null,
       organizationId,
@@ -1917,50 +1917,50 @@ describe("chat tool schemas", () => {
       }),
     } as const;
 
-    test("registers create_workspace_document for a role with entity:create in an active matter", () => {
+    test("registers create_matter_document for a role with entity:create in an active matter", () => {
       const tools = getChatTools({
         ...baseArgs,
         memberRole: "owner",
         workspaceStatusById: new Map([[workspaceId, "active"]]),
       });
-      expect(tools).toHaveProperty(CREATE_WORKSPACE_DOCUMENT_TOOL_NAME);
+      expect(tools).toHaveProperty(CREATE_MATTER_DOCUMENT_TOOL_NAME);
     });
 
     // `intern` has `chat: ["create", "update", "delete"]` but `entity: []` —
     // chat-capable, but not entitled to create documents. Without the
     // permission gate this role could create workspace documents through
     // chat alone, bypassing `entity:create`.
-    test("does not register create_workspace_document for a role without entity:create", () => {
+    test("does not register create_matter_document for a role without entity:create", () => {
       const tools = getChatTools({
         ...baseArgs,
         memberRole: "intern",
         workspaceStatusById: new Map([[workspaceId, "active"]]),
       });
-      expect(tools).not.toHaveProperty(CREATE_WORKSPACE_DOCUMENT_TOOL_NAME);
+      expect(tools).not.toHaveProperty(CREATE_MATTER_DOCUMENT_TOOL_NAME);
     });
 
     // `toolWorkspaceIds` includes archived matters (only "deleting" is
     // filtered out upstream), so the id-set check alone would let an
     // archived matter stay writable through this tool.
-    test("does not register create_workspace_document for an archived matter", () => {
+    test("does not register create_matter_document for an archived matter", () => {
       const tools = getChatTools({
         ...baseArgs,
         memberRole: "owner",
         workspaceStatusById: new Map([[workspaceId, "archived"]]),
       });
-      expect(tools).not.toHaveProperty(CREATE_WORKSPACE_DOCUMENT_TOOL_NAME);
+      expect(tools).not.toHaveProperty(CREATE_MATTER_DOCUMENT_TOOL_NAME);
     });
 
-    test("does not register create_workspace_document when no workspace status is known", () => {
+    test("does not register create_matter_document when no workspace status is known", () => {
       const tools = getChatTools({
         ...baseArgs,
         memberRole: "owner",
       });
-      expect(tools).not.toHaveProperty(CREATE_WORKSPACE_DOCUMENT_TOOL_NAME);
+      expect(tools).not.toHaveProperty(CREATE_MATTER_DOCUMENT_TOOL_NAME);
     });
   });
 
-  // Regression coverage mirroring `create_workspace_document authorization`
+  // Regression coverage mirroring `create_matter_document authorization`
   // above: in `auto` mode `suggest_changes` is server-executed and writes a
   // new entity version directly (no client review panel in the loop), so it
   // must mirror the same class of explicit authorization mirror -- here

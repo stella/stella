@@ -118,14 +118,14 @@ describe("runRegistryWriteTool (orchestration)", () => {
       applyChatApprovalConfirmation({
         args: {
           action: "remove_member",
-          workspace_id: WS_UUID,
+          matter_id: WS_UUID,
           user_id: "user_2",
         },
         toolName: "manage_organization",
       }),
     ).toEqual({
       action: "remove_member",
-      workspace_id: WS_UUID,
+      matter_id: WS_UUID,
       user_id: "user_2",
       confirm: true,
     });

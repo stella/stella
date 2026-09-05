@@ -13,20 +13,20 @@ describe("createChatToolDefectMemo", () => {
     expect(memo.isKnownDefect("list_matters", { matter_id: "mat_2" })).toBe(
       false,
     );
-    expect(
-      memo.isKnownDefect("list_documents", { workspace_id: "mat_1" }),
-    ).toBe(false);
+    expect(memo.isKnownDefect("list_documents", { matter_id: "mat_1" })).toBe(
+      false,
+    );
     expect(memo.isKnownDefect("list_matters", {})).toBe(false);
   });
 
   test("keying is insensitive to argument object key order", () => {
     const memo = createChatToolDefectMemo();
-    memo.recordDefect("list_tasks", { workspace_id: "mat_1", limit: 10 });
+    memo.recordDefect("list_tasks", { matter_id: "mat_1", limit: 10 });
 
     // The model re-emitting the same call with reordered keys is the same
     // call; a key-order-sensitive memo would let the retry through.
     expect(
-      memo.isKnownDefect("list_tasks", { limit: 10, workspace_id: "mat_1" }),
+      memo.isKnownDefect("list_tasks", { limit: 10, matter_id: "mat_1" }),
     ).toBe(true);
   });
 

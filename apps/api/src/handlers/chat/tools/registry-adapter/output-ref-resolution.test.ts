@@ -6,7 +6,7 @@ import { CHAT_REF_INPUT_STATE } from "@/api/lib/chat/ref-token";
 
 import {
   CREATE_DOCUMENT_TOOL_NAME,
-  CREATE_WORKSPACE_DOCUMENT_TOOL_NAME,
+  CREATE_MATTER_DOCUMENT_TOOL_NAME,
   UPDATE_ENTITY_FIELDS_TOOL_NAME,
 } from "../native-chat-tool-names";
 import {
@@ -178,7 +178,7 @@ describe("registry tool output ref resolution", () => {
     const persistedOutput = resolveRegistryToolOutputRefs({
       output: modelOutput,
       refRegistry: resolvingRegistry,
-      toolName: CREATE_WORKSPACE_DOCUMENT_TOOL_NAME,
+      toolName: CREATE_MATTER_DOCUMENT_TOOL_NAME,
     });
 
     expect(persistedOutput).toEqual({
@@ -190,7 +190,7 @@ describe("registry tool output ref resolution", () => {
         inputState: PERSISTED_REF_INPUT_STATE,
         output: persistedOutput,
         refRegistry: createChatRefRegistry(),
-        toolName: CREATE_WORKSPACE_DOCUMENT_TOOL_NAME,
+        toolName: CREATE_MATTER_DOCUMENT_TOOL_NAME,
       }),
     ).toEqual(modelOutput);
   });

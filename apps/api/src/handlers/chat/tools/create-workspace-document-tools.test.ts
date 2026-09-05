@@ -11,7 +11,7 @@ import {
 } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
 import {
-  CREATE_WORKSPACE_DOCUMENT_TOOL_NAME,
+  CREATE_MATTER_DOCUMENT_TOOL_NAME,
   createCreateWorkspaceDocumentTools,
 } from "@/api/handlers/chat/tools/create-workspace-document-tools";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -134,7 +134,7 @@ describe("createCreateWorkspaceDocumentTools", () => {
     return { tx, getInsertedFileName: () => insertedFileName };
   };
 
-  test("registers a single server-executed create_workspace_document tool", () => {
+  test("registers a single server-executed create_matter_document tool", () => {
     const { tx } = buildTx();
     const { scopedDb } = createScopedDbMock(tx);
     const tools = createCreateWorkspaceDocumentTools({
@@ -147,8 +147,8 @@ describe("createCreateWorkspaceDocumentTools", () => {
       createEntityFromBuffer: createEntityForTest,
     });
 
-    expect(Object.keys(tools)).toEqual([CREATE_WORKSPACE_DOCUMENT_TOOL_NAME]);
-    const tool = tools[CREATE_WORKSPACE_DOCUMENT_TOOL_NAME];
+    expect(Object.keys(tools)).toEqual([CREATE_MATTER_DOCUMENT_TOOL_NAME]);
+    const tool = tools[CREATE_MATTER_DOCUMENT_TOOL_NAME];
     expect(tool.needsApproval).toBeUndefined();
     expect(tool.execute).toBeDefined();
   });
@@ -168,9 +168,9 @@ describe("createCreateWorkspaceDocumentTools", () => {
       refRegistry: createChatRefRegistry(),
       createEntityFromBuffer: createEntityForTest,
     });
-    const execute = tools[CREATE_WORKSPACE_DOCUMENT_TOOL_NAME].execute;
+    const execute = tools[CREATE_MATTER_DOCUMENT_TOOL_NAME].execute;
     if (!execute) {
-      throw new Error("create_workspace_document must be server-executed");
+      throw new Error("create_matter_document must be server-executed");
     }
 
     const result = await execute(
@@ -217,9 +217,9 @@ describe("createCreateWorkspaceDocumentTools", () => {
       refRegistry: createChatRefRegistry(),
       createEntityFromBuffer: createEntityForTest,
     });
-    const execute = tools[CREATE_WORKSPACE_DOCUMENT_TOOL_NAME].execute;
+    const execute = tools[CREATE_MATTER_DOCUMENT_TOOL_NAME].execute;
     if (!execute) {
-      throw new Error("create_workspace_document must be server-executed");
+      throw new Error("create_matter_document must be server-executed");
     }
 
     // bun-types declares `.rejects.toThrow` as void, so awaiting it trips

@@ -531,7 +531,7 @@ const CONTRACT_CORPUS = {
   list_documents: [
     {
       mode: "list",
-      buildArgs: (refRegistry) => ({ workspace_id: matterRef(refRegistry) }),
+      buildArgs: (refRegistry) => ({ matter_id: matterRef(refRegistry) }),
       tx: () => ({
         select: selectQueue([
           [
@@ -693,7 +693,7 @@ const CONTRACT_CORPUS = {
   list_properties: [
     {
       mode: "list",
-      buildArgs: (refRegistry) => ({ workspace_id: matterRef(refRegistry) }),
+      buildArgs: (refRegistry) => ({ matter_id: matterRef(refRegistry) }),
       tx: () => ({
         select: selectQueue([
           [
@@ -713,7 +713,7 @@ const CONTRACT_CORPUS = {
   list_tasks: [
     {
       mode: "list",
-      buildArgs: (refRegistry) => ({ workspace_id: matterRef(refRegistry) }),
+      buildArgs: (refRegistry) => ({ matter_id: matterRef(refRegistry) }),
       tx: () => ({
         select: selectQueue([
           [
@@ -950,7 +950,7 @@ const CONTRACT_CORPUS = {
   list_time_entries: [
     {
       mode: "list",
-      buildArgs: (refRegistry) => ({ workspace_id: matterRef(refRegistry) }),
+      buildArgs: (refRegistry) => ({ matter_id: matterRef(refRegistry) }),
       tx: () => ({
         select: selectQueue([
           [
@@ -977,7 +977,7 @@ const CONTRACT_CORPUS = {
     },
     {
       mode: "list",
-      buildArgs: (refRegistry) => ({ workspace_id: matterRef(refRegistry) }),
+      buildArgs: (refRegistry) => ({ matter_id: matterRef(refRegistry) }),
       tx: () => ({
         select: selectQueue([
           [
@@ -1036,7 +1036,7 @@ const CONTRACT_CORPUS = {
   list_invoices: [
     {
       mode: "list",
-      buildArgs: (refRegistry) => ({ workspace_id: matterRef(refRegistry) }),
+      buildArgs: (refRegistry) => ({ matter_id: matterRef(refRegistry) }),
       tx: () => ({
         select: selectQueue([
           [

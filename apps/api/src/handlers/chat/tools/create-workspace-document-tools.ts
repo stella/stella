@@ -3,7 +3,7 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import type { ScopedDb } from "@/api/db/safe-db";
-import { CREATE_WORKSPACE_DOCUMENT_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
+import { CREATE_MATTER_DOCUMENT_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import { buildCreatedDocumentToolOutput } from "@/api/handlers/chat/tools/workspace-tools";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -17,7 +17,7 @@ import { LIMITS } from "@/api/lib/limits";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
-export { CREATE_WORKSPACE_DOCUMENT_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
+export { CREATE_MATTER_DOCUMENT_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
 
 const createWorkspaceDocumentInputSchema = v.strictObject({
   // Not `v.trim()`: the OpenAI/Anthropic/... adapters' JSON Schema converter
@@ -104,7 +104,7 @@ const toChatToolError = (
       // This tool never sets a parentId (it always creates at the
       // workspace root), so `createEntityFromBuffer` cannot raise this.
       return unreachable(
-        "create_workspace_document never sets a parentId, so InvalidParentError is unreachable",
+        "create_matter_document never sets a parentId, so InvalidParentError is unreachable",
       );
     default:
       return unreachable("Unhandled createEntityFromBuffer error tag");
@@ -112,7 +112,7 @@ const toChatToolError = (
 };
 
 /**
- * Server-executed `create_workspace_document` chat tool: renders a Markdown
+ * Server-executed `create_matter_document` chat tool: renders a Markdown
  * body into a Stella-styled DOCX and creates it as a new entity/version in
  * the caller's active matter, via the same `createEntityFromBuffer` path the
  * upload handler and `create-from-legal-source` REST endpoint use.
@@ -136,8 +136,8 @@ export const createCreateWorkspaceDocumentTools = ({
   refRegistry,
   createEntityFromBuffer: createEntity = createEntityFromBuffer,
 }: CreateWorkspaceDocumentToolsProps) => ({
-  [CREATE_WORKSPACE_DOCUMENT_TOOL_NAME]: toolDefinition({
-    name: CREATE_WORKSPACE_DOCUMENT_TOOL_NAME,
+  [CREATE_MATTER_DOCUMENT_TOOL_NAME]: toolDefinition({
+    name: CREATE_MATTER_DOCUMENT_TOOL_NAME,
     description:
       "Create a brand-new DOCX in the active matter from a Markdown body, " +
       "rendered with stella's house style (fonts, spacing, list numbering). " +
@@ -162,7 +162,7 @@ export const createCreateWorkspaceDocumentTools = ({
     const docxResult = await markdownToStellaDocx(markdown);
     if (Result.isError(docxResult)) {
       captureError(docxResult.error, {
-        source: "create_workspace_document",
+        source: "create_matter_document",
       });
       throw new ChatToolError({
         kind: "server-defect",
