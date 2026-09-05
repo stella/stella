@@ -74,7 +74,9 @@ and inspect the generated delta for drift; do not reread large mechanical
 copies.
 
 Check for accidental files, invalid states, authorization and disclosure
-boundaries, missing generated/i18n synchronization, migration compatibility,
+boundaries, missing generated/i18n synchronization, duplicated capabilities (an
+owner in `docs/module-ownership.md` or `packages/*` that the change bypasses),
+validation of data a boundary already validated, migration compatibility,
 performance, replay safety, and tests that cover real failure modes. Fix
 confirmed defects before publishing.
 
