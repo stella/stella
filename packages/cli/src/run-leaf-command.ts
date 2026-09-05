@@ -16,6 +16,7 @@ import type { Context } from "./context.js";
 import { applyDeprecatedInputAliases } from "./deprecated-input-aliases.js";
 import { flagKey } from "./flag-name.js";
 import { kebabCase } from "./generate-route-map.js";
+import { normalizeInputKeyCasing } from "./input-key-casing.js";
 import { validateAgainstSchema } from "./json-schema-validate.js";
 import {
   callTool,
@@ -1166,7 +1167,21 @@ export const runLeafCommand = async ({
     return;
   }
 
-  const built = await buildArgsFromFlags(spec, flags, aliased.args);
+  // Responses are camelCase and inputs snake_case; a payload handed back from
+  // a list (the natural scripting loop) is accepted under either casing.
+  const cased = normalizeInputKeyCasing({
+    args: aliased.args,
+    inputSchema: spec.inputSchema,
+  });
+  if (cased.status === "conflict") {
+    writers.stderr(
+      `--input invalid: ${cased.camel} and ${cased.snake} name the same field but were supplied with different values\n`,
+    );
+    setExit(context, EXIT_CODES.validation);
+    return;
+  }
+
+  const built = await buildArgsFromFlags(spec, flags, cased.args);
   if (!built.ok) {
     writers.stderr(`${built.message}\n`);
     setExit(context, EXIT_CODES.validation);
