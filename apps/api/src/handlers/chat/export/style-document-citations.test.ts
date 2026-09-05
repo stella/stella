@@ -8,7 +8,7 @@ import {
   styleDocumentCitations,
   styleDocumentCitationsWithCounts,
 } from "@/api/handlers/chat/export/style-document-citations";
-import { markdownToStellaDocument } from "@/api/handlers/chat/tools/markdown-to-stella-docx";
+import { markdownToStellaDocument } from "@/api/lib/docx-authoring/from-markdown";
 
 const collectParagraphContent = (
   blocks: readonly BlockContent[],

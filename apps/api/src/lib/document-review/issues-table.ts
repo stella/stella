@@ -7,15 +7,7 @@
 
 import { panic } from "better-result";
 
-import {
-  createDocx,
-  createEmptyDocument,
-  createStellaStyleDocumentPreset,
-  heading,
-  paragraph,
-  run,
-  table,
-} from "@stll/folio-core/server";
+import { heading, paragraph, run, table } from "@stll/folio-core/server";
 import type { TableCellSpec } from "@stll/folio-core/server";
 
 import { arrayOrEmpty } from "@/api/lib/array";
@@ -30,6 +22,10 @@ import type {
   DocumentReviewFindingPayload,
   DocumentReviewRunBasis,
 } from "@/api/lib/document-review/run-contract";
+import {
+  documentToDocx,
+  stellaDocument,
+} from "@/api/lib/docx-authoring/document";
 import type { PositionSeverity } from "@/api/lib/workflow/playbook-positions";
 import type { VerdictTier } from "@/api/lib/workflow/verdict-tiers";
 
@@ -420,9 +416,7 @@ export const renderIssuesTableDocx = async ({
   basisLine,
   rows,
 }: RenderIssuesTableDocxArgs): Promise<ArrayBuffer> => {
-  const doc = createEmptyDocument({
-    preset: createStellaStyleDocumentPreset(),
-  });
+  const doc = stellaDocument();
   doc.package.document.content = [
     heading({ text: title, level: 1 }),
     paragraph(basisLine),
@@ -442,5 +436,5 @@ export const renderIssuesTableDocx = async ({
     paragraph(NO_VALUE),
   ];
   // A fresh copy owns a plain ArrayBuffer, which is what a Response body takes.
-  return new Uint8Array(await createDocx(doc)).buffer;
+  return new Uint8Array(await documentToDocx(doc)).buffer;
 };

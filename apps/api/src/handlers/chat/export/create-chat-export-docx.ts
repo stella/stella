@@ -2,8 +2,9 @@ import { panic } from "better-result";
 import JSZip from "jszip";
 
 import type { Footnote, ParagraphContent } from "@stll/docx-core/model";
-import { createDocx } from "@stll/folio-core";
 import type { Document } from "@stll/folio-core";
+
+import { documentToDocx } from "@/api/lib/docx-authoring/document";
 
 const CONTENT_TYPES_PATH = "[Content_Types].xml";
 const DOCUMENT_RELATIONSHIPS_PATH = "word/_rels/document.xml.rels";
@@ -107,7 +108,7 @@ const nextRelationshipId = (relationshipsXml: string): string => {
 export const createChatExportDocx = async (
   document: Document,
 ): Promise<ArrayBuffer> => {
-  const bytes = await createDocx(document);
+  const bytes = await documentToDocx(document);
   const footnotes = document.package.footnotes;
   if (footnotes === undefined || footnotes.length === 0) {
     return bytes;

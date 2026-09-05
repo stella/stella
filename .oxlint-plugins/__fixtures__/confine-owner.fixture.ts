@@ -5,6 +5,15 @@
 // suppresses a case the rule MUST flag: if the rule regresses, the directive
 // goes unused and `--report-unused-disable-directives-severity=error` fails.
 
+// oxlint-disable-next-line confine-owner/confine-owner -- fixture proves an aliased import of an owned binding is rejected
+import { compileLegalSourceToDocx as compile } from "@stll/docx-core";
+// oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a named import of an owned binding is rejected
+import { createDocx } from "@stll/folio-core";
+// oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a namespace import reaches every owned binding and is rejected
+import * as folio from "@stll/folio-core/server";
+// Accepted: a sibling export of the same entry point is not an owned binding.
+import { paragraph } from "@stll/folio-core/server";
+
 // oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a static import of an owned module is rejected
 import { createRedisClient } from "@/api/lib/redis-client";
 // oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a type-only import still opens the owned surface and is rejected
@@ -43,4 +52,8 @@ export const readTitle = (page: { clipboard: string }) => page.clipboard;
 
 void loadConnection;
 void createRedisClient;
+void createDocx;
+void compile;
+void folio;
+void paragraph;
 type _Connection = typeof createBullMqConnection;

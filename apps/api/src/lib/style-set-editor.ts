@@ -1,5 +1,4 @@
 import {
-  createDocx,
   createEmptyDocument,
   createStellaStyleDocumentPreset,
   extractDocumentStyleSet,
@@ -8,6 +7,7 @@ import {
 } from "@stll/folio-core/server";
 import type { DocumentPreset, DocumentStyleSet } from "@stll/folio-core/server";
 
+import { documentToDocx } from "@/api/lib/docx-authoring/document";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type {
   StyleSetEditorSettings,
@@ -124,7 +124,7 @@ export const createStyleSetEditorBuffer = async (
 ): Promise<Buffer> =>
   Buffer.from(
     new Uint8Array(
-      await createDocx(
+      await documentToDocx(
         createEmptyDocument({
           preset: applyStyleSetEditorSettings(source, name, settings),
         }),
@@ -176,7 +176,7 @@ export const createStyleSetEditorPreviewBuffer = async ({
     paragraph(content.generalHeading, { styleId: roles.level1.styleId }),
     paragraph(content.generalBody, { styleId: roles.body.styleId }),
   ];
-  return await createDocx(document);
+  return await documentToDocx(document);
 };
 
 const projectStyleSetEditorSettings = (

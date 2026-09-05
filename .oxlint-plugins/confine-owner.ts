@@ -13,7 +13,11 @@
 //
 // Detection boundary: syntax only. An `import` row matches an import source
 // equal to a listed specifier or ending in its final segment (the `@/`, deep
-// relative, and `.ts` spellings of one module). A `global-member` row matches
+// relative, and `.ts` spellings of one module). A row that also lists `names`
+// matches only an import that binds one of them, or a namespace import and a
+// dynamic import, which reach every export; the specifier's other exports stay
+// open, so one package entry point can carry an owned capability next to
+// unrelated ones. A `global-member` row matches
 // the full member chain `<object>.<path...>` on the global, including the
 // optional-chained form and the `window.` / `globalThis.` / `self.` prefixes,
 // so a sibling member of the same object (`navigator.clipboard.readText` next
@@ -25,6 +29,7 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 import type { AstNode } from "./utils.ts";
 import {
   filenameForContext,
+  getImportedName,
   isAstNode,
   isIdentifier,
   isMemberAccess,
@@ -38,6 +43,8 @@ type ImportEntry = {
   owner: string;
   paths: readonly string[];
   specifiers: readonly string[];
+  // `null` confines the whole specifier.
+  names: readonly string[] | null;
 };
 
 type GlobalMemberEntry = {
@@ -104,11 +111,13 @@ const configuredEntries = (context: {
     const kind = Reflect.get(enforcement, "kind");
 
     if (kind === "import") {
+      const names = Reflect.get(enforcement, "names");
       importEntries.push({
         id,
         owner,
         paths,
         specifiers: stringsFrom(Reflect.get(enforcement, "specifiers")),
+        names: names === undefined ? null : stringsFrom(names),
       });
       continue;
     }
@@ -153,6 +162,25 @@ const isOwnedSpecifier = (
     );
   });
 };
+
+// A declaration binds an owned name when it imports it by name, or imports
+// the namespace, through which every export is reachable. A default import
+// is not one of the listed bindings.
+const bindsOwnedName = (
+  specifiers: unknown,
+  names: readonly string[],
+): boolean =>
+  Array.isArray(specifiers) &&
+  specifiers.some((specifier) => {
+    if (!isAstNode(specifier)) {
+      return false;
+    }
+    if (specifier.type === "ImportNamespaceSpecifier") {
+      return true;
+    }
+    const imported = getImportedName(specifier);
+    return imported !== null && names.includes(imported);
+  });
 
 const isGlobalObject = (node: unknown, object: string): boolean =>
   isIdentifier(node, object) ||
@@ -232,13 +260,20 @@ export default eslintCompatPlugin({
           },
           ImportDeclaration(node) {
             for (const entry of activeImports) {
-              if (isOwnedSpecifier(entry.specifiers, node.source.value)) {
-                context.report({
-                  node,
-                  messageId: "unownedUse",
-                  data: { id: entry.id, owner: entry.owner },
-                });
+              if (!isOwnedSpecifier(entry.specifiers, node.source.value)) {
+                continue;
               }
+              if (
+                entry.names !== null &&
+                !bindsOwnedName(node.specifiers, entry.names)
+              ) {
+                continue;
+              }
+              context.report({
+                node,
+                messageId: "unownedUse",
+                data: { id: entry.id, owner: entry.owner },
+              });
             }
           },
           ImportExpression(node) {

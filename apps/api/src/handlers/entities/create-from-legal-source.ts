@@ -6,10 +6,10 @@ import {
   RESOURCE_TYPE,
   toChatResourceHref,
 } from "@stll/api-contract";
-import { compileLegalSourceToDocx } from "@stll/docx-core";
 
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import { legalSourceToDocx } from "@/api/lib/docx-authoring/from-legal-source";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { HandlerError, unreachable } from "@/api/lib/errors/tagged-errors";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
@@ -47,15 +47,13 @@ export default createSafeHandler(
       body: { name, source },
     } = ctx;
 
-    const compiled = await compileLegalSourceToDocx(source, {
-      titleFallback: name,
-    });
-    if (compiled.status !== "ok") {
+    const compiled = await legalSourceToDocx(source, { titleFallback: name });
+    if (Result.isError(compiled)) {
       return Result.err(
         new HandlerError({
           code: CREATE_FROM_LEGAL_SOURCE_ERROR_CODE.structuralRepairRequired,
           status: 422,
-          message: `The document source needs structural repair before a DOCX can be created: ${compiled.errors.map((error) => error.message).join("; ")}`,
+          message: `The document source needs structural repair before a DOCX can be created: ${compiled.error.message}`,
         }),
       );
     }
@@ -69,7 +67,7 @@ export default createSafeHandler(
         workspaceId,
         userId: user.id,
         recordAuditEvent,
-        buffer: compiled.buffer,
+        buffer: compiled.value,
         fileName,
         mimeType: DOCX_MIME_TYPE,
       }).then((r) => Result.mapError(r, toHandlerError)),

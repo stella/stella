@@ -1,7 +1,7 @@
 /**
  * Interpret a {@link ReportSpec} against an assembled report and emit a DOCX
- * through the Folio document model (`createEmptyDocument` → blocks →
- * `createDocx`).
+ * through the Folio document model (`stellaDocument` → blocks →
+ * `documentToDocx`).
  *
  * Rendering never throws for missing data: an absent value renders as an
  * empty string or an omitted paragraph. Narrative sections call the AI
@@ -17,9 +17,6 @@ import { panic, Result } from "better-result";
 
 import { compareByLocale } from "@stll/collation";
 import {
-  createDocx,
-  createEmptyDocument,
-  createStellaStyleDocumentPreset,
   createTableOfContentsField,
   endnote,
   heading,
@@ -54,13 +51,17 @@ import type {
   ReportSpec,
 } from "@/api/handlers/reports/spec/report-spec";
 import { interpolate } from "@/api/handlers/reports/spec/report-spec";
+import {
+  documentToDocx,
+  stellaDocument,
+} from "@/api/lib/docx-authoring/document";
 import type { AiFieldGenerator } from "@/api/lib/docx/resolve-ai-fields";
 import { ConfigurationError } from "@/api/lib/errors/tagged-errors";
 import type { PositionSeverity } from "@/api/lib/workflow/playbook-position-facets";
 import type { VerdictTier } from "@/api/lib/workflow/verdict-tiers";
 import { VERDICT_TIERS } from "@/api/lib/workflow/verdict-tiers";
 
-type Document = ReturnType<typeof createEmptyDocument>;
+type Document = ReturnType<typeof stellaDocument>;
 type Paragraph = ReturnType<typeof paragraph>;
 type Table = ReturnType<typeof table>;
 type Block = Paragraph | Table;
@@ -1062,9 +1063,7 @@ export const renderReportSpec = async ({
   aiNarrative,
   linkBase,
 }: RenderReportSpecOptions): Promise<Result<Buffer, RenderReportError>> => {
-  const doc = createEmptyDocument({
-    preset: createStellaStyleDocumentPreset(),
-  });
+  const doc = stellaDocument();
   doc.package.settings = {
     defaultTabStop: DEFAULT_TAB_STOP,
     ...doc.package.settings,
@@ -1093,7 +1092,7 @@ export const renderReportSpec = async ({
   doc.package.document.content = blocks;
 
   const written = await Result.tryPromise({
-    try: async () => Buffer.from(await createDocx(doc)),
+    try: async () => Buffer.from(await documentToDocx(doc)),
     catch: (cause) =>
       new RenderReportError({
         message: `Failed to write the report DOCX for spec "${spec.name}".`,

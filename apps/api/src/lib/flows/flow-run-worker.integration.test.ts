@@ -26,6 +26,7 @@ import {
 import { asc, eq } from "drizzle-orm";
 
 import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
+import { inspectDocxPackage } from "@stll/folio-core/server";
 
 import { organization, user } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -386,6 +387,17 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
     expect(
       new Bun.CryptoHasher("sha256").update(stored.bytes).digest("hex"),
     ).toBe(fileContent.sha256Hex);
+
+    // The step renders the AI step's Markdown on stella's house preset:
+    // "BodyText" is absent from folio's default style catalog, so its
+    // presence proves the document was composed through the owner rather
+    // than a bare Markdown-to-DOCX conversion.
+    const inspection = await inspectDocxPackage(stored.bytes, {
+      xmlParts: ["word/styles.xml"],
+    });
+    expect(
+      inspection.xmlParts.find((part) => part.path === "word/styles.xml")?.text,
+    ).toContain('w:styleId="BodyText"');
   });
 
   test("rejecting the review gate cancels the run instead of creating a document", async () => {

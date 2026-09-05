@@ -15,7 +15,6 @@ import { Result } from "better-result";
 import { Worker } from "bullmq";
 import { and, asc, eq, inArray, lt, or, sql } from "drizzle-orm";
 
-import { applyFolioAIEditsToBuffer } from "@stll/folio-core/server";
 import { DAY_IN_MS } from "@stll/time";
 
 import { rootDb } from "@/api/db/root";
@@ -55,6 +54,7 @@ import {
 } from "@/api/lib/bullmq-requeue";
 import type { RequeueableQueue } from "@/api/lib/bullmq-requeue";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
+import { applyAiEditsToDocx } from "@/api/lib/docx-authoring/apply-ai-edits";
 import { createEntityVersionFromBuffer } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import { loadEntityVersionDocxBuffer } from "@/api/lib/entity-versions/load-entity-version-docx-buffer";
 import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buffer";
@@ -617,14 +617,7 @@ const executeRun = async (
   }
 
   const operations = buildOperations(rows, translated);
-  const applied = await Result.tryPromise({
-    try: async () =>
-      await applyFolioAIEditsToBuffer(loaded.value.buffer, operations, {
-        author: "Stella",
-        mode: "direct",
-      }),
-    catch: (cause) => cause,
-  });
+  const applied = await applyAiEditsToDocx(loaded.value.buffer, operations);
   if (Result.isError(applied)) {
     captureError(applied.error, {
       runId: actor.runId,

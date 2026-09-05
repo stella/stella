@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
-import { docxToMarkdown, inspectDocxPackage } from "@stll/folio-core/server";
+import { docxToMarkdown } from "@stll/folio-core/server";
 
 import {
   documentCounters,
@@ -13,7 +13,6 @@ import { envBase } from "@/api/env-base";
 import {
   CREATE_WORKSPACE_DOCUMENT_TOOL_NAME,
   createCreateWorkspaceDocumentTools,
-  markdownToStellaDocx,
 } from "@/api/handlers/chat/tools/create-workspace-document-tools";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
@@ -67,73 +66,6 @@ Some **bold** paragraph text.
 1. first
 2. second
 `;
-
-describe("markdownToStellaDocx", () => {
-  test("renders markdown content into a valid, Stella-styled DOCX", async () => {
-    const bytes = await markdownToStellaDocx(markdown);
-    expect(bytes.byteLength).toBeGreaterThan(0);
-
-    // Content survives the round trip.
-    const roundTripped = await docxToMarkdown(bytes);
-    expect(roundTripped).toContain("# Title Heading");
-    expect(roundTripped).toContain("## Section Two");
-    expect(roundTripped).toContain("Some **bold** paragraph text.");
-    expect(roundTripped).toContain("- one");
-    expect(roundTripped).toContain("- two");
-    expect(roundTripped).toContain("1. first");
-    expect(roundTripped).toContain("2. second");
-
-    // Stella's style set (not the default createEmptyDocument() one) was
-    // applied: Stella's A4 page geometry and its "BodyText" style (absent
-    // from the plain default style catalog) are both present.
-    const inspection = await inspectDocxPackage(bytes, {
-      xmlParts: ["word/document.xml", "word/styles.xml", "word/numbering.xml"],
-    });
-    const documentXml = inspection.xmlParts.find(
-      (part) => part.path === "word/document.xml",
-    );
-    const stylesXml = inspection.xmlParts.find(
-      (part) => part.path === "word/styles.xml",
-    );
-    const numberingXml = inspection.xmlParts.find(
-      (part) => part.path === "word/numbering.xml",
-    );
-    const pageSizeTag = documentXml?.text.match(/<w:pgSz\b[^>]*\/>/u)?.[0];
-    expect(pageSizeTag).toContain('w:w="11906"');
-    expect(pageSizeTag).toContain('w:h="16838"');
-    expect(pageSizeTag).toContain('w:orient="portrait"');
-    expect(stylesXml?.text).toContain('w:styleId="BodyText"');
-
-    // Stella's own reserved numId 1-5 definitions are untouched (still
-    // present) — the markdown lists were appended after them, not merged
-    // into or overwriting them.
-    for (const numId of [1, 2, 3, 4, 5]) {
-      expect(numberingXml?.text).toContain(`<w:num w:numId="${numId}">`);
-    }
-    // Two markdown-originated lists (one bullet, one ordered) were appended
-    // as fresh `w:num` instances above the reserved range.
-    expect(numberingXml?.text).toContain('<w:num w:numId="6">');
-    expect(numberingXml?.text).toContain('<w:num w:numId="7">');
-    expect(numberingXml?.text).not.toContain('<w:num w:numId="8">');
-    // A round trip is the real proof the fix works: before the numId remap,
-    // this same markdown rendered as Stella's clause/definitions numbering
-    // ("(a) first" / "(b) second") because the markdown list numIds
-    // collided with Stella's reserved 1-5 range — asserted above via the
-    // plain "- one" / "1. first" content checks.
-  });
-
-  test("is a no-op on numbering when the markdown has no lists", async () => {
-    const bytes = await markdownToStellaDocx("# Just a heading\n\nAnd text.");
-    const inspection = await inspectDocxPackage(bytes, {
-      xmlParts: ["word/numbering.xml"],
-    });
-    const numberingXml = inspection.xmlParts.find(
-      (part) => part.path === "word/numbering.xml",
-    );
-    // Stella's own abstractNum / num definitions, nothing appended.
-    expect(numberingXml?.text).not.toContain('w:numId="6"');
-  });
-});
 
 describe("createCreateWorkspaceDocumentTools", () => {
   beforeEach(() => {
