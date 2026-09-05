@@ -1,6 +1,6 @@
 {
   "name": "@stll/stable-stringify",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "deterministic string form of JSON-shaped values, for fingerprints and cache keys that must agree across environments",
   "keywords": [
     "canonical",

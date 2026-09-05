@@ -1,5 +1,16 @@
 # @stll/template-conditions
 
+## 0.2.2
+
+### Patch Changes
+
+- [#2947](https://github.com/stella/stella/pull/2947) [`6f86823`](https://github.com/stella/stella/commit/6f86823e5e9eb4f2b2a8027a021063b909ca44e3) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Exhaustiveness checks panic instead of returning the unhandled value, and a
+  fallback after the assertion counts as returning it.
+
+- [#2952](https://github.com/stella/stella/pull/2952) [`a652d96`](https://github.com/stella/stella/commit/a652d967f17d7f90e94c16e1b2f50904ec4b78b6) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Document why the path walker's record predicate accepts arrays, and cover dotted paths that index one.
+- Updated dependencies [[`6f86823`](https://github.com/stella/stella/commit/6f86823e5e9eb4f2b2a8027a021063b909ca44e3)]:
+  - @stll/conditions@0.3.1
+
 ## 0.2.1
 
 ### Patch Changes

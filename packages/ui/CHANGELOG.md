@@ -1,5 +1,16 @@
 # @stll/ui
 
+## 0.25.1
+
+### Patch Changes
+
+- [#2939](https://github.com/stella/stella/pull/2939) [`b36e13f`](https://github.com/stella/stella/commit/b36e13ff49aef6d4fbfd2f476fbad4f3307e975e) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Align workspace view tabs with their toolbar and keep action space stable while switching views. Use the subtle scrollbar treatment for inspector content and rail scrolling.
+
+- [#2947](https://github.com/stella/stella/pull/2947) [`6f86823`](https://github.com/stella/stella/commit/6f86823e5e9eb4f2b2a8027a021063b909ca44e3) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Exhaustiveness checks panic instead of returning the unhandled value, and a
+  fallback after the assertion counts as returning it.
+
+- [#2974](https://github.com/stella/stella/pull/2974) [`2ad98a4`](https://github.com/stella/stella/commit/2ad98a402e65877a433eb5061a05f4338b807b38) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Exhaustive switches panic on an impossible state instead of rendering a fallback.
+
 ## 0.25.0
 
 ### Minor Changes

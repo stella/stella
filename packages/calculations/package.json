@@ -1,6 +1,6 @@
 {
   "name": "@stll/calculations",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Typed, unit-safe reducers for workspace column calculations.",
   "keywords": [
     "calculations",

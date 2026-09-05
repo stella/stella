@@ -1,5 +1,11 @@
 # @stll/ai-catalog
 
+## 0.1.8
+
+### Patch Changes
+
+- [#2964](https://github.com/stella/stella/pull/2964) [`1fb4010`](https://github.com/stella/stella/commit/1fb4010246452305e40451d0be55fb47e1bbd955) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Offer GPT-6 Astra directly from OpenAI and through OpenRouter, with sourced rates, reasoning efforts, and document input.
+
 ## 0.1.7
 
 ### Patch Changes

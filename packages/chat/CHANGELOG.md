@@ -1,5 +1,17 @@
 # @stll/chat
 
+## 0.1.15
+
+### Patch Changes
+
+- [#2947](https://github.com/stella/stella/pull/2947) [`6f86823`](https://github.com/stella/stella/commit/6f86823e5e9eb4f2b2a8027a021063b909ca44e3) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Exhaustiveness checks panic instead of returning the unhandled value, and a
+  fallback after the assertion counts as returning it.
+
+- [#2974](https://github.com/stella/stella/pull/2974) [`2ad98a4`](https://github.com/stella/stella/commit/2ad98a402e65877a433eb5061a05f4338b807b38) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Exhaustive switches panic on an impossible state instead of rendering a fallback.
+- Updated dependencies [[`b36e13f`](https://github.com/stella/stella/commit/b36e13ff49aef6d4fbfd2f476fbad4f3307e975e), [`6f86823`](https://github.com/stella/stella/commit/6f86823e5e9eb4f2b2a8027a021063b909ca44e3), [`1fb4010`](https://github.com/stella/stella/commit/1fb4010246452305e40451d0be55fb47e1bbd955), [`2ad98a4`](https://github.com/stella/stella/commit/2ad98a402e65877a433eb5061a05f4338b807b38)]:
+  - @stll/ui@0.25.1
+  - @stll/ai-catalog@0.1.8
+
 ## 0.1.14
 
 ### Patch Changes
