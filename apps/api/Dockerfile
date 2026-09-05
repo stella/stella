@@ -225,6 +225,7 @@ COPY --chown=stella:stella --from=builder /app/better-auth-microsoft-identity-ma
 COPY --chown=stella:stella --from=builder /app/better-auth-17-backfill.js /app/better-auth-17-backfill.js
 COPY --chown=stella:stella --from=builder /app/database-census.js /app/database-census.js
 COPY --chown=stella:stella --from=builder /app/better-auth-sign-in-replay.js /app/better-auth-sign-in-replay.js
+COPY --chown=stella:stella --from=builder /app/replay-case-law-source.js /app/replay-case-law-source.js
 COPY --chown=stella:stella --from=builder /app/document-processing-worker.js /app/document-processing-worker.js
 COPY --chown=stella:stella --from=builder /app/apps/legal-atlas-runner/dist/index.js /app/legal-atlas.js
 # Bundled migration task entrypoint:
