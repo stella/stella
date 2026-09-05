@@ -27,6 +27,7 @@ import {
   DESKTOP_TELEMETRY_ERROR_CODES,
   DESKTOP_TELEMETRY_OPERATIONS,
   DESKTOP_TELEMETRY_WINDOWS,
+  describeError,
   reportDesktopError,
 } from "../telemetry/desktop-telemetry";
 import { clipboardSourceLabel, clipboardSourceTitle } from "./clipboard-logic";
@@ -513,9 +514,10 @@ const ClipboardEditor = () => {
   const [state, setState] = useState<EditorState>({ type: "loading" });
   const loadError = t("errorReadHistory");
   const requestClose = () => {
-    closeEditor().catch(() => {
+    closeEditor().catch((error: unknown) => {
       reportDesktopError({
         code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+        detail: describeError(error),
         operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardEditorClose,
         window: DESKTOP_TELEMETRY_WINDOWS.clipboardEditor,
       });
@@ -573,12 +575,13 @@ const ClipboardEditor = () => {
           });
           return undefined;
         })
-        .catch(() => {
+        .catch((error: unknown) => {
           if (disposed) {
             return;
           }
           reportDesktopError({
             code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+            detail: describeError(error),
             operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardEditorRead,
             window: DESKTOP_TELEMETRY_WINDOWS.clipboardEditor,
           });
@@ -629,9 +632,10 @@ const ClipboardEditor = () => {
         id: item.id,
       })
         .then(closeEditor)
-        .catch(() => {
+        .catch((error: unknown) => {
           reportDesktopError({
             code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+            detail: describeError(error),
             operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardEditorSave,
             window: DESKTOP_TELEMETRY_WINDOWS.clipboardEditor,
           });
@@ -671,9 +675,10 @@ const ClipboardEditor = () => {
       plainText,
     })
       .then(closeEditor)
-      .catch(() => {
+      .catch((error: unknown) => {
         reportDesktopError({
           code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+          detail: describeError(error),
           operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardEditorSave,
           window: DESKTOP_TELEMETRY_WINDOWS.clipboardEditor,
         });

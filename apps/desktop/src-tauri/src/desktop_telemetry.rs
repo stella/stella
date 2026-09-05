@@ -137,6 +137,172 @@ pub struct DesktopErrorReport {
   pub code: DesktopTelemetryErrorCode,
 }
 
+const MAX_ERROR_NAME_CHARS: usize = 64;
+const MAX_ERROR_MESSAGE_CHARS: usize = 200;
+const MAX_ERROR_FRAME_CHARS: usize = 160;
+/// Distinct error events kept per process before further reports are dropped.
+const MAX_REPORTED_ERRORS: usize = 200;
+
+/// What went wrong, without what the user was working on. The webview redacts
+/// before sending; this side is the trust boundary and redacts again, so a
+/// report can never carry clipboard text, search terms or document content
+/// even if the webview's copy of the rules drifts.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize, Serialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct DesktopErrorDetail {
+  /// The thrown value's class (`TypeError`), or its type for non-errors.
+  pub error_name: String,
+  pub message: String,
+  /// `function@file:line:col` of the top frame; bundle file names only.
+  pub frame: Option<String>,
+}
+
+impl DesktopErrorDetail {
+  fn sanitized(self) -> Self {
+    let error_name = bounded_identifier(&self.error_name, MAX_ERROR_NAME_CHARS)
+      .unwrap_or_else(|| "unknown".to_string());
+    // Only engine-written messages keep their text; everything else is a
+    // digest, computed here when the webview did not already send one.
+    let message = if ENGINE_ERROR_CLASSES.contains(&error_name.as_str()) {
+      redact_error_message(&self.message)
+    } else if is_message_digest(&self.message) {
+      self.message
+    } else {
+      message_digest(&self.message)
+    };
+    Self {
+      error_name,
+      message,
+      frame: self.frame.as_deref().and_then(sanitized_frame),
+    }
+  }
+}
+
+/// Error classes whose messages the engine writes: they describe code, not
+/// data, once quoted spans are redacted. Mirrors the webview allowlist.
+const ENGINE_ERROR_CLASSES: [&str; 7] = [
+  "TypeError",
+  "RangeError",
+  "ReferenceError",
+  "SyntaxError",
+  "URIError",
+  "EvalError",
+  "DOMException",
+];
+const MESSAGE_DIGEST_PREFIX: &str = "poly64:";
+
+/// A 64-bit polynomial rolling hash over the UTF-8 bytes (FNV's offset and
+/// prime, multiply-add), as 16 hex digits; the webview computes the same.
+fn message_digest(message: &str) -> String {
+  let mut hash: u64 = 14_695_981_039_346_656_037;
+  for byte in message.bytes() {
+    hash = hash
+      .wrapping_mul(1_099_511_628_211)
+      .wrapping_add(u64::from(byte));
+  }
+  format!("{MESSAGE_DIGEST_PREFIX}{hash:016x}")
+}
+
+fn is_message_digest(value: &str) -> bool {
+  value
+    .strip_prefix(MESSAGE_DIGEST_PREFIX)
+    .is_some_and(|hex| hex.len() == 16 && hex.chars().all(|c| c.is_ascii_hexdigit()))
+}
+
+/// Keeps a value made only of identifier characters; anything else is not a
+/// class name or a frame and is dropped rather than trimmed into one.
+fn bounded_identifier(value: &str, max_chars: usize) -> Option<String> {
+  let value = value.trim();
+  let valid = !value.is_empty()
+    && value.chars().count() <= max_chars
+    && value
+      .chars()
+      .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '$' | '.'));
+  valid.then(|| value.to_string())
+}
+
+fn sanitized_frame(frame: &str) -> Option<String> {
+  let frame = frame.trim();
+  let valid = !frame.is_empty()
+    && frame.chars().count() <= MAX_ERROR_FRAME_CHARS
+    && frame.chars().all(|c| {
+      c.is_ascii_alphanumeric()
+        || matches!(c, '_' | '$' | '.' | ':' | '@' | '-' | '<' | '>')
+    });
+  valid.then(|| frame.to_string())
+}
+
+/// Error messages quote the data they choked on (`Unexpected token 'x', "…" is
+/// not valid JSON`), so every quoted span becomes `"…"`, except single-quoted
+/// code identifiers such as `'item.sourceApp.name'`, which name code, not
+/// content. URLs and long unbroken tokens (blobs, base64) are dropped too.
+pub(crate) fn redact_error_message(message: &str) -> String {
+  let mut output = String::with_capacity(message.len());
+  let mut rest = message;
+  while let Some(start) = rest.find(['"', '\'', '`']) {
+    let quote = rest[start..].chars().next().unwrap_or('"');
+    output.push_str(&rest[..start]);
+    let after = &rest[start + quote.len_utf8()..];
+    let Some(end) = after.find(quote) else {
+      // An unterminated quote: everything after it is content.
+      output.push_str("\"…\"");
+      rest = "";
+      break;
+    };
+    let quoted = &after[..end];
+    let is_code_identifier = quote == '\''
+      && !quoted.is_empty()
+      && quoted
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '$' | '.' | '[' | ']'));
+    if is_code_identifier {
+      output.push('\'');
+      output.push_str(quoted);
+      output.push('\'');
+    } else {
+      output.push_str("\"…\"");
+    }
+    rest = &after[end + quote.len_utf8()..];
+  }
+  output.push_str(rest);
+  let collapsed = output
+    .split_whitespace()
+    .map(|token| {
+      if token.starts_with("http://") || token.starts_with("https://") {
+        "<url>"
+      } else if token.chars().count() > 48 {
+        "…"
+      } else {
+        token
+      }
+    })
+    .collect::<Vec<_>>()
+    .join(" ");
+  let mut bounded: String = collapsed.chars().take(MAX_ERROR_MESSAGE_CHARS).collect();
+  if bounded.chars().count() < collapsed.chars().count() {
+    bounded.push('…');
+  }
+  bounded
+}
+
+/// A webview error report: the allowlisted classification plus optional
+/// redacted detail.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct DesktopFrontendErrorReport {
+  pub window: DesktopTelemetryWindow,
+  pub operation: DesktopTelemetryOperation,
+  pub code: DesktopTelemetryErrorCode,
+  #[serde(default)]
+  pub detail: Option<DesktopErrorDetail>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct DesktopErrorEvent {
+  report: DesktopErrorReport,
+  detail: Option<DesktopErrorDetail>,
+}
+
 /// Startup phases measured on the clipboard path. Spans carry durations and
 /// counts only: never clipboard content, source-app identities, or search text.
 // The `Clipboard` prefix is the wire namespace shared with the frontend
@@ -237,15 +403,15 @@ pub struct DesktopFrontendTimingReport {
   pub duration_ms: u64,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 enum DesktopTelemetryEvent {
-  Error(DesktopErrorReport),
+  Error(DesktopErrorEvent),
   Timing(DesktopTimingReport),
 }
 
 #[derive(Clone)]
 pub struct DesktopTelemetry {
-  reported: Arc<Mutex<HashSet<DesktopErrorReport>>>,
+  reported: Arc<Mutex<HashSet<DesktopErrorEvent>>>,
   sender: Option<mpsc::Sender<DesktopTelemetryEvent>>,
 }
 
@@ -273,21 +439,46 @@ impl DesktopTelemetry {
   }
 
   pub fn capture(&self, report: DesktopErrorReport) {
-    let is_new = self
-      .reported
-      .lock()
-      .is_ok_and(|mut reported| reported.insert(report));
+    self.capture_event(DesktopErrorEvent {
+      report,
+      detail: None,
+    });
+  }
+
+  /// A webview report, with its detail redacted here regardless of what the
+  /// webview did.
+  pub fn capture_frontend(&self, report: DesktopFrontendErrorReport) {
+    self.capture_event(DesktopErrorEvent {
+      report: DesktopErrorReport {
+        window: report.window,
+        operation: report.operation,
+        code: report.code,
+      },
+      detail: report.detail.map(DesktopErrorDetail::sanitized),
+    });
+  }
+
+  fn capture_event(&self, event: DesktopErrorEvent) {
+    // Each distinct failure reports once per process; the cap stops a
+    // rejection loop with a changing message from flooding the sink.
+    let is_new = self.reported.lock().is_ok_and(|mut reported| {
+      reported.len() < MAX_REPORTED_ERRORS && reported.insert(event.clone())
+    });
     if !is_new {
       return;
     }
 
+    let detail = event.detail.as_ref();
     tracing::error!(
-      window = ?report.window,
-      operation = ?report.operation,
-      code = ?report.code,
+      window = ?event.report.window,
+      operation = ?event.report.operation,
+      code = ?event.report.code,
+      error_name = detail.map(|detail| detail.error_name.as_str()),
+      error_message = detail.map(|detail| detail.message.as_str()),
+      error_frame = detail.and_then(|detail| detail.frame.as_deref()),
       "desktop operation failed"
     );
-    self.enqueue(DesktopTelemetryEvent::Error(report));
+    self.enqueue(DesktopTelemetryEvent::Error(event));
   }
 
   pub fn capture_timing(&self, report: DesktopTimingReport) {
@@ -357,20 +548,35 @@ impl AnalyticsSinkConfig {
 
 fn analytics_error_payload(
   config: &AnalyticsSinkConfig,
-  report: DesktopErrorReport,
+  event: &DesktopErrorEvent,
 ) -> Value {
-  let window = report.window.as_str();
-  let operation = report.operation.as_str();
-  let code = report.code.as_str();
-  let fingerprint = format!("desktop:{window}:{operation}:{code}");
+  let window = event.report.window.as_str();
+  let operation = event.report.operation.as_str();
+  let code = event.report.code.as_str();
+  let detail = event.detail.as_ref();
+  // One issue per failure, not per classification: two different rejections
+  // under `runtime/unhandledRejection` must not collapse into one group.
+  let mut fingerprint = format!("desktop:{window}:{operation}:{code}");
+  if let Some(detail) = detail {
+    fingerprint.push(':');
+    fingerprint.push_str(&detail.error_name);
+    if let Some(frame) = &detail.frame {
+      fingerprint.push(':');
+      fingerprint.push_str(frame);
+    }
+    // Two string rejections share a class and have no frame; the message
+    // digest keeps them apart without carrying text.
+    fingerprint.push(':');
+    fingerprint.push_str(&message_digest(&detail.message));
+  }
   json!({
     "api_key": config.key,
     "event": "$exception",
     "properties": {
       "$exception_fingerprint": fingerprint,
       "$exception_list": [{
-        "type": code,
-        "value": "",
+        "type": detail.map_or(code, |detail| detail.error_name.as_str()),
+        "value": detail.map_or("", |detail| detail.message.as_str()),
       }],
       "$exception_type": code,
       "$process_person_profile": false,
@@ -378,7 +584,10 @@ fn analytics_error_payload(
       "app_version": env!("CARGO_PKG_VERSION"),
       "desktop_window": window,
       "distinct_id": config.process_id,
+      "error_frame": detail.and_then(|detail| detail.frame.as_deref()),
+      "error_name": detail.map(|detail| detail.error_name.as_str()),
       "operation": operation,
+      "os": std::env::consts::OS,
       "service_name": "stella-desktop",
     }
   })
@@ -416,7 +625,7 @@ fn analytics_payload(
   event: DesktopTelemetryEvent,
 ) -> Value {
   match event {
-    DesktopTelemetryEvent::Error(report) => analytics_error_payload(config, report),
+    DesktopTelemetryEvent::Error(event) => analytics_error_payload(config, &event),
     DesktopTelemetryEvent::Timing(report) => analytics_timing_payload(config, report),
   }
 }
@@ -449,10 +658,10 @@ async fn run_observability_worker(
 
 #[tauri::command]
 pub fn desktop_report_error(
-  report: DesktopErrorReport,
+  report: DesktopFrontendErrorReport,
   telemetry: State<'_, DesktopTelemetry>,
 ) {
-  telemetry.capture(report);
+  telemetry.capture_frontend(report);
 }
 
 #[tauri::command]
@@ -528,18 +737,207 @@ mod tests {
     assert!(serde_json::from_value::<DesktopErrorReport>(value).is_err());
   }
 
+  fn event(detail: Option<DesktopErrorDetail>) -> DesktopErrorEvent {
+    DesktopErrorEvent {
+      report: report(),
+      detail,
+    }
+  }
+
   #[test]
   fn payload_contains_only_allowlisted_diagnostics() {
-    let payload = analytics_error_payload(&config(), report());
+    let payload = analytics_error_payload(&config(), &event(None));
     let properties = payload["properties"].as_object().unwrap();
 
     assert_eq!(payload["event"], "$exception");
     assert_eq!(properties["desktop_window"], "clipboard");
     assert_eq!(properties["operation"], "clipboardHistoryRead");
     assert_eq!(properties["$exception_type"], "invalidResponse");
+    assert_eq!(properties["$exception_list"][0]["type"], "invalidResponse");
     assert!(!properties.contains_key("clipboardText"));
     assert!(!properties.contains_key("message"));
     assert!(!properties.contains_key("stack"));
+  }
+
+  #[test]
+  fn detail_names_the_failure_and_splits_the_fingerprint() {
+    let detail = DesktopErrorDetail {
+      error_name: "TypeError".to_string(),
+      message: "undefined is not an object (evaluating 'item.sourceApp.name')"
+        .to_string(),
+      frame: Some("renderCard@index-3f2a.js:12:34".to_string()),
+    };
+
+    let payload = analytics_error_payload(&config(), &event(Some(detail)));
+    let properties = payload["properties"].as_object().unwrap();
+
+    assert_eq!(properties["$exception_list"][0]["type"], "TypeError");
+    assert_eq!(
+      properties["$exception_list"][0]["value"],
+      "undefined is not an object (evaluating 'item.sourceApp.name')"
+    );
+    assert_eq!(properties["error_name"], "TypeError");
+    assert_eq!(properties["error_frame"], "renderCard@index-3f2a.js:12:34");
+    let digest =
+      message_digest("undefined is not an object (evaluating 'item.sourceApp.name')");
+    assert_eq!(
+      properties["$exception_fingerprint"],
+      format!(
+        "desktop:clipboard:clipboardHistoryRead:invalidResponse:TypeError:renderCard@index-3f2a.js:12:34:{digest}"
+      )
+    );
+    // Classification stays the type PostHog filters on.
+    assert_eq!(properties["$exception_type"], "invalidResponse");
+  }
+
+  #[test]
+  fn detail_and_frontend_reports_reject_unknown_fields() {
+    let detail = json!({
+      "errorName": "TypeError",
+      "message": "boom",
+      "frame": null,
+      "stack": "must never be accepted",
+    });
+    assert!(serde_json::from_value::<DesktopErrorDetail>(detail).is_err());
+
+    let report = json!({
+      "window": "clipboard",
+      "operation": "runtime",
+      "code": "unhandledRejection",
+      "detail": { "errorName": "TypeError", "message": "boom", "frame": null },
+      "plainText": "must never be accepted",
+    });
+    assert!(serde_json::from_value::<DesktopFrontendErrorReport>(report).is_err());
+  }
+
+  #[test]
+  fn redaction_keeps_the_shape_of_a_message_and_drops_its_content() {
+    assert_eq!(
+      redact_error_message(
+        r#"Unexpected token 'a', "Article 12 of the lease agreement" is not valid JSON"#
+      ),
+      r#"Unexpected token 'a', "…" is not valid JSON"#
+    );
+    assert_eq!(
+      redact_error_message(
+        "undefined is not an object (evaluating 'item.sourceApp.name')"
+      ),
+      "undefined is not an object (evaluating 'item.sourceApp.name')"
+    );
+    assert_eq!(
+      redact_error_message("Cannot read 'Jan Novák' from `notes`"),
+      r#"Cannot read "…" from "…""#
+    );
+    assert_eq!(
+      redact_error_message(
+        "Load failed https://example.org/contracts/42?token=abc now"
+      ),
+      "Load failed <url> now"
+    );
+    assert_eq!(
+      redact_error_message(&format!("blob {} rejected", "A".repeat(80))),
+      "blob … rejected"
+    );
+    assert_eq!(
+      redact_error_message("unterminated \"quote text"),
+      "unterminated \"…\""
+    );
+    let long = redact_error_message(&"word ".repeat(100));
+    assert_eq!(long.chars().count(), MAX_ERROR_MESSAGE_CHARS + 1);
+    assert!(long.ends_with('…'));
+  }
+
+  #[test]
+  fn sanitized_detail_rejects_names_and_frames_that_are_not_identifiers() {
+    let detail = DesktopErrorDetail {
+      error_name: "Type Error; DROP".to_string(),
+      message: "x".to_string(),
+      frame: Some("fn@index.js:1:2 \"quoted\"".to_string()),
+    }
+    .sanitized();
+
+    assert_eq!(detail.error_name, "unknown");
+    assert_eq!(detail.frame, None);
+    let string_rejection = DesktopErrorDetail {
+      error_name: "string".to_string(),
+      message: "clipboard item no longer exists".to_string(),
+      frame: Some("@index-3f2a.js:9:1".to_string()),
+    }
+    .sanitized();
+    assert_eq!(
+      string_rejection.frame.as_deref(),
+      Some("@index-3f2a.js:9:1")
+    );
+    // A message the engine did not write never survives as text.
+    assert_eq!(
+      string_rejection.message,
+      message_digest("clipboard item no longer exists")
+    );
+  }
+
+  #[test]
+  fn only_engine_error_messages_keep_their_text() {
+    // Same vector as the webview test, so both sides agree on the digest.
+    assert_eq!(message_digest("a"), "poly64:af63bd4c8601b840");
+    let sanitize = |error_name: &str, message: &str| {
+      DesktopErrorDetail {
+        error_name: error_name.to_string(),
+        message: message.to_string(),
+        frame: None,
+      }
+      .sanitized()
+      .message
+    };
+
+    assert_eq!(
+      sanitize("TypeError", "null is not an object (evaluating 'a.b')"),
+      "null is not an object (evaluating 'a.b')"
+    );
+    assert_eq!(
+      sanitize("Error", "Attorney client notes"),
+      message_digest("Attorney client notes")
+    );
+    assert_eq!(
+      sanitize("object.copy", "clipboard write failed"),
+      message_digest("clipboard write failed")
+    );
+    // A digest the webview already computed passes through unchanged.
+    assert_eq!(
+      sanitize("string", "poly64:af63bd4c8601b840"),
+      "poly64:af63bd4c8601b840"
+    );
+    assert_eq!(
+      sanitize("string", "poly64:not-a-digest"),
+      message_digest("poly64:not-a-digest")
+    );
+  }
+
+  #[test]
+  fn distinct_details_report_separately_and_the_cap_holds() {
+    let telemetry = DesktopTelemetry {
+      reported: Arc::new(Mutex::new(HashSet::new())),
+      sender: None,
+    };
+    let detail = |message: &str| {
+      Some(DesktopErrorDetail {
+        error_name: "TypeError".to_string(),
+        message: message.to_string(),
+        frame: None,
+      })
+    };
+
+    telemetry.capture_event(event(detail("first")));
+    telemetry.capture_event(event(detail("second")));
+    telemetry.capture_event(event(detail("first")));
+    assert_eq!(telemetry.reported.lock().unwrap().len(), 2);
+
+    for index in 0..MAX_REPORTED_ERRORS {
+      telemetry.capture_event(event(detail(&format!("flood {index}"))));
+    }
+    assert_eq!(
+      telemetry.reported.lock().unwrap().len(),
+      MAX_REPORTED_ERRORS
+    );
   }
 
   #[test]
