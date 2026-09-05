@@ -31,10 +31,12 @@ import { panic } from "better-result";
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
+import { BASELINE_PATHS } from "./baseline-paths";
+
 const SCRIPTS_DIR = import.meta.dir;
 const REPO_ROOT = path.resolve(SCRIPTS_DIR, "..");
-const BASELINE_PATH = path.resolve(SCRIPTS_DIR, "typecheck-baseline.json");
-const BASELINE_REL = "scripts/typecheck-baseline.json";
+const BASELINE_REL = BASELINE_PATHS.typecheck;
+const BASELINE_PATH = path.resolve(REPO_ROOT, BASELINE_REL);
 const TSC_NATIVE = "packages/scripts/src/tsc-native.ts";
 const WRITE_HINT = "bun scripts/typecheck-baseline.ts --write-baseline";
 const COLD_MEASUREMENT_FLAGS = ["--incremental", "false"] as const;

@@ -62,6 +62,7 @@
 import { panic } from "better-result";
 import { readFileSync } from "node:fs";
 
+import { isSeededBaselineFile } from "./baseline-paths";
 import { findMigrationOrderViolation } from "./check-migration-order";
 
 const DEFAULT_REPO = "stella/stella";
@@ -242,17 +243,6 @@ const evaluateMergeable = (pullRequest: PullRequestSnapshot): GateVerdict => {
   }
   return { gate: "mergeable", status: "pass", detail: "MERGEABLE" };
 };
-
-// A committed budget file: counts, sizes, or export lists measured on the head
-// that seeded them. `scripts/*-baseline.json` plus the budgets that predate the
-// suffix.
-const BASELINE_DIRECTORY = "scripts/";
-const BASELINE_FILE_SUFFIX = "-baseline.json";
-const NAMED_BASELINE_FILES = ["scripts/react-compiler-bailouts.json"] as const;
-
-export const isSeededBaselineFile = (file: string): boolean =>
-  NAMED_BASELINE_FILES.some((name) => name === file) ||
-  (file.startsWith(BASELINE_DIRECTORY) && file.endsWith(BASELINE_FILE_SUFFIX));
 
 // GitHub reports one merge state, and several of them mask BEHIND: a pull
 // request held by branch protection reads BLOCKED whether or not its head is

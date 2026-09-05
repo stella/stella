@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
+import { isSeededBaselineFile } from "./baseline-paths";
 import {
   evaluateMergeBar,
-  isSeededBaselineFile,
   mergeBarMigrationDirectory,
   mergeBarRequiredCheckRuns,
   type MergeBarSnapshot,
@@ -266,15 +266,23 @@ describe("merge bar", () => {
     ).toBe("merge");
   });
 
-  test("every committed budget under scripts/ counts as a baseline", () => {
-    expect(isSeededBaselineFile("scripts/ratchet-baseline.json")).toBe(true);
-    expect(isSeededBaselineFile("scripts/typecheck-baseline.json")).toBe(true);
-    expect(isSeededBaselineFile("scripts/bundle-baseline.json")).toBe(true);
-    expect(isSeededBaselineFile("scripts/react-compiler-bailouts.json")).toBe(
+  // The producer-owned baselines are not all under `scripts/`, which is why
+  // the gate reads the enumerated list rather than a path shape.
+  test("a baseline an app owns is gated like the ones under scripts/", () => {
+    expect(
+      failedGate(
+        passingSnapshot({
+          pullRequest: {
+            ...passingSnapshot().pullRequest,
+            mergeStateStatus: "BEHIND",
+          },
+          changedFiles: ["apps/api/mcp-coverage-baseline.json"],
+        }),
+      ),
+    ).toEqual({ decision: "abort", reasons: ["BASELINE_SEEDED_OFF_BASE"] });
+    expect(isSeededBaselineFile("apps/web/e2e/network-baseline.json")).toBe(
       true,
     );
-    expect(isSeededBaselineFile("scripts/migration-baseline.txt")).toBe(false);
-    expect(isSeededBaselineFile("apps/api/src/baseline.json")).toBe(false);
   });
 
   test("a closed pull request is refused", () => {

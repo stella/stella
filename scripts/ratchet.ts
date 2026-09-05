@@ -54,6 +54,7 @@ import { analyse } from "scslre";
 import ts from "typescript";
 
 import { MCP_WRITE_ONLY_RESOURCE_SCOPES } from "../packages/api-contract/src/mcp";
+import { BASELINE_PATHS } from "./baseline-paths";
 import {
   collectLintDirectives,
   isResidualDirective,
@@ -74,8 +75,8 @@ import {
 
 const SCRIPTS_DIR = import.meta.dir;
 const REPO_ROOT = path.resolve(SCRIPTS_DIR, "..");
-const BASELINE_PATH = path.resolve(SCRIPTS_DIR, "ratchet-baseline.json");
-const BASELINE_REL = "scripts/ratchet-baseline.json";
+const BASELINE_REL = BASELINE_PATHS.ratchet;
+const BASELINE_PATH = path.resolve(REPO_ROOT, BASELINE_REL);
 const WRITE_HINT = "bun scripts/ratchet.ts --write";
 const INTERNAL_MODULE_MOCK_LEDGER_REL =
   "scripts/internal-module-mock-ledger.json";
