@@ -44,6 +44,8 @@ export const recordCorpusWithdrawalAuditEvent = async (
     operation: "withdraw",
     status: "succeeded",
     contentHash: null,
-    errorMessage: reason.slice(0, REASON_LIMIT),
+    // `detail`, not `error_message`: the row succeeded, and a reason filed
+    // in the failure column reads as a failure that never happened.
+    detail: reason.slice(0, REASON_LIMIT),
   });
 };

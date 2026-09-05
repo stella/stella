@@ -619,6 +619,7 @@ test("the withdrawal takes the document and keeps the decision", async () => {
       operation: caseLawIndexJobs.operation,
       status: caseLawIndexJobs.status,
       contentHash: caseLawIndexJobs.contentHash,
+      detail: caseLawIndexJobs.detail,
       errorMessage: caseLawIndexJobs.errorMessage,
     })
     .from(caseLawIndexJobs)
@@ -626,7 +627,10 @@ test("the withdrawal takes the document and keeps the decision", async () => {
   expect(audited?.operation).toBe("withdraw");
   expect(audited?.status).toBe("succeeded");
   expect(audited?.contentHash).toBeNull();
-  expect(audited?.errorMessage).toContain("re-parse yielded no document");
+  // The reason is the detail of an operation that succeeded. The failure
+  // column stays clear: a reader takes anything in it as this row's failure.
+  expect(audited?.detail).toContain("re-parse yielded no document");
+  expect(audited?.errorMessage).toBeNull();
 
   // And it converges: the row holds no document to take, so a second run
   // reports the rejection and withdraws nothing.

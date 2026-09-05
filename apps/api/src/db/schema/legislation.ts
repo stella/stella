@@ -267,6 +267,8 @@ export const legislationIndexJobs = p.pgTable(
     status: p.varchar({ length: 16 }).notNull().$type<CorpusIndexJobStatus>(),
     contentHash: p.varchar("content_hash", { length: 64 }),
     errorMessage: p.varchar("error_message", { length: 2048 }),
+    /** Why a succeeded operation was performed; see the case-law twin. */
+    detail: p.varchar("detail", { length: 2048 }),
     createdAt: timestamptz("created_at").defaultNow().notNull(),
   },
   (t) => [

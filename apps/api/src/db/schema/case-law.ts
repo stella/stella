@@ -2038,6 +2038,13 @@ export const caseLawIndexJobs = p.pgTable(
     status: p.varchar({ length: 16 }).notNull().$type<CorpusIndexJobStatus>(),
     contentHash: p.varchar("content_hash", { length: 64 }),
     errorMessage: p.varchar("error_message", { length: 2048 }),
+    /**
+     * Why a succeeded operation was performed, in the caller's own words.
+     * Separate from `error_message`, which a reader takes as the failure of
+     * the row it sits on: a withdrawal's reason filed there reads as an
+     * operation that failed, which it did not.
+     */
+    detail: p.varchar("detail", { length: 2048 }),
     createdAt: timestamptz("created_at").defaultNow().notNull(),
   },
   (t) => [
