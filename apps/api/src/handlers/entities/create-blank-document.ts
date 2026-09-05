@@ -3,8 +3,8 @@ import { t } from "elysia";
 
 import { createBlankDocument } from "@/api/handlers/entities/create-blank-document-service";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import { createTemplateBuffer } from "@/api/lib/create-template-buffer";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { createTemplateBuffer } from "@/api/lib/docx-authoring/create-template-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const bodySchema = t.Object({

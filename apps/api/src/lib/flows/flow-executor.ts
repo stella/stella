@@ -2,7 +2,6 @@ import { panic, Result, TaggedError } from "better-result";
 import { and, asc, eq, inArray, lt } from "drizzle-orm";
 
 import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
-import { compileLegalSourceToDocx } from "@stll/docx-core";
 
 import type { Transaction } from "@/api/db/root";
 import { rootDb } from "@/api/db/root";
@@ -15,6 +14,7 @@ import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditExecutionContext } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent } from "@/api/lib/content-encryption";
+import { markdownToStellaDocx } from "@/api/lib/docx-authoring/from-markdown";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -590,14 +590,11 @@ const runCreateDocumentStep = async ({
     });
   }
 
-  const compiled = await compileLegalSourceToDocx(markdown, {
-    titleFallback: stepDef.documentTitle,
-  });
-  if (compiled.status !== "ok") {
+  const docx = await markdownToStellaDocx(markdown);
+  if (Result.isError(docx)) {
     throw new FlowStepError({
-      message: `The generated content could not be rendered to a document: ${compiled.errors
-        .map((error) => error.message)
-        .join("; ")}`,
+      message: "The generated content could not be rendered to a document.",
+      cause: docx.error,
     });
   }
 
@@ -651,7 +648,7 @@ const runCreateDocumentStep = async ({
     workspaceId: run.workspaceId,
     userId: actorUserId,
     recordAuditEvent,
-    buffer: compiled.buffer,
+    buffer: docx.value,
     // Pass the raw title: `createEntityFromBuffer` sanitizes with
     // `sanitizeFilenamePreservingExtension`, which truncates the base name
     // rather than the extension. Pre-sanitizing with the plain

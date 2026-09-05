@@ -4,7 +4,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import type { SafeDb } from "@/api/db/safe-db";
 import { styleSets } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import { createTemplateBuffer } from "@/api/lib/create-template-buffer";
+import { createTemplateBuffer } from "@/api/lib/docx-authoring/create-template-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";

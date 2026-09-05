@@ -40,12 +40,12 @@ import {
   type PersistedSearchSummarySources,
 } from "@/api/handlers/chat/export/export-shared";
 import { styleDocumentCitationsWithCounts } from "@/api/handlers/chat/export/style-document-citations";
-import { markdownToStellaDocument } from "@/api/handlers/chat/tools/markdown-to-stella-docx";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { markdownToStellaDocument } from "@/api/lib/docx-authoring/from-markdown";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { extractLangFromRequest } from "@/api/lib/locale";
 import { writeS3ObjectWithRetry } from "@/api/lib/s3";

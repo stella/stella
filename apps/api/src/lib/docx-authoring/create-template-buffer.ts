@@ -1,9 +1,10 @@
 import {
-  createDocx,
   createEmptyDocument,
   createStellaStyleDocumentPreset,
   extractDocumentStyleSetFromDocx,
 } from "@stll/folio-core/server";
+
+import { documentToDocx } from "@/api/lib/docx-authoring/document";
 
 type CreateTemplateBufferOptions =
   | { type: "stella" }
@@ -21,6 +22,6 @@ export const createTemplateBuffer = async (
   }
 
   return Buffer.from(
-    new Uint8Array(await createDocx(createEmptyDocument({ preset }))),
+    new Uint8Array(await documentToDocx(createEmptyDocument({ preset }))),
   );
 };

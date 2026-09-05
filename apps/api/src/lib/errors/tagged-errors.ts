@@ -388,12 +388,6 @@ export class OoxmlValidationError extends TaggedError("OoxmlValidationError")<{
   }[];
 }> {}
 
-/** DOCX tracked-changes editing failure. */
-export class DocxEditError extends TaggedError("DocxEditError")<{
-  message: string;
-  cause: unknown;
-}> {}
-
 /** Optimistic-lock failure inside a transaction. */
 export class ConcurrentModificationError extends TaggedError(
   "ConcurrentModificationError",

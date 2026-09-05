@@ -3,7 +3,6 @@ import { type Queue, Worker } from "bullmq";
 import { and, asc, eq, inArray, isNull, lt, sql } from "drizzle-orm";
 
 import {
-  applyFolioAIEditsToBuffer,
   createBilingualDocx,
   readBilingualDocx,
 } from "@stll/folio-core/server";
@@ -95,6 +94,7 @@ import {
   DocxTranslationError,
   extractDocxTranslationSegments,
 } from "@/api/lib/document-translation/segments";
+import { applyAiEditsToDocx } from "@/api/lib/docx-authoring/apply-ai-edits";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buffer";
 import { errorTag } from "@/api/lib/errors/utils";
@@ -1010,14 +1010,7 @@ const translateBilingualWithAI = async (
     rows,
     new Set(formattedTranslations.keys()),
   );
-  const applied = await Result.tryPromise({
-    try: async () =>
-      await applyFolioAIEditsToBuffer(formattedBuffer.value, operations, {
-        author: "Stella",
-        mode: "direct",
-      }),
-    catch: (cause) => cause,
-  });
+  const applied = await applyAiEditsToDocx(formattedBuffer.value, operations);
   if (Result.isError(applied)) {
     captureError(applied.error, { runId: actor.runId });
     return Result.err("format_validation_failed");

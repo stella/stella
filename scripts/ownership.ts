@@ -30,6 +30,11 @@ export type OwnershipEnforcement =
   | {
       readonly kind: "import";
       readonly specifiers: readonly string[];
+      // When set, only an import of one of these bindings (or a namespace
+      // import, which reaches all of them) is confined; the specifiers'
+      // other exports stay open. For a package whose entry points also
+      // carry unrelated exports.
+      readonly names?: readonly string[];
       readonly allowed: readonly AllowedFile[];
     }
   | {
@@ -252,19 +257,40 @@ export const OWNERSHIP = [
     enforcement: { kind: "none" },
   },
   {
-    id: "docx-model-compile",
-    capability: "Compiling a document model into DOCX bytes",
+    id: "docx-authoring",
+    capability:
+      "Producing DOCX bytes from Markdown, legal source, or a document model, and applying AI edits to a DOCX",
     owner: [
-      "apps/api/src/handlers/entities/create-from-legal-source.ts",
-      "apps/api/src/handlers/chat/export/create-chat-export-docx.ts",
+      "apps/api/src/lib/docx-authoring/",
       "apps/web/src/components/chat/create-document-compiler.ts",
     ],
     summary:
-      "The compiler itself is an external package; these are the in-repo entry " +
-      "points that drive it. Model compile serves drafts and exports: it builds " +
-      "a document from a model the caller already holds and never patches an " +
-      "existing template.",
-    enforcement: { kind: "none" },
+      "The compilers and the serialiser are external packages; the owner is the " +
+      "one place that drives them, so every document stella writes carries its " +
+      "house styles and the same edit attribution. Model-written Markdown goes " +
+      "through `markdownToStellaDocx`, a draft in the legal-source markup through " +
+      "`legalSourceToDocx`, a model built in this repository through " +
+      "`stellaDocument` and `documentToDocx`, and AI edits through " +
+      "`applyAiEditsToDocx`. The web owner compiles legal source for the " +
+      "in-browser draft preview. None of this patches an existing template.",
+    enforcement: {
+      kind: "import",
+      specifiers: [
+        "@stll/docx-core",
+        "@stll/folio-core",
+        "@stll/folio-core/markdown",
+        "@stll/folio-core/server",
+      ],
+      names: [
+        "applyFolioAIEditsToBuffer",
+        "compileLegalSourceToDocument",
+        "compileLegalSourceToDocx",
+        "createDocx",
+        "fromMarkdown",
+        "serializeDocumentToDocx",
+      ],
+      allowed: [],
+    },
   },
   {
     id: "docx-template-patch",
@@ -273,7 +299,7 @@ export const OWNERSHIP = [
     summary:
       "Template patching edits the parts of a file a user supplied, preserving " +
       "everything it does not touch. It shares only the zip and namespace " +
-      "helpers with the model compiler. A third DOCX writer is not to be started.",
+      "helpers with `docx-authoring`. A third DOCX writer is not to be started.",
     enforcement: { kind: "none" },
   },
   {
@@ -394,7 +420,10 @@ const enforcementCell = (enforcement: OwnershipEnforcement): string => {
       return "none";
     }
     case "import": {
-      return `import \`${enforcement.specifiers.join("`, `")}\``;
+      const specifiers = enforcement.specifiers.join("`, `");
+      return enforcement.names === undefined
+        ? `import \`${specifiers}\``
+        : `import \`${enforcement.names.join("`, `")}\` from \`${specifiers}\``;
     }
     case "global-member": {
       return `global \`${[enforcement.object, ...enforcement.path].join(".")}\``;

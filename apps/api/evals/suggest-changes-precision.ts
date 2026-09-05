@@ -31,7 +31,7 @@
  */
 import { EventType, chat, maxIterations, toolDefinition } from "@tanstack/ai";
 import type { AnyServerTool, TokenUsage } from "@tanstack/ai";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { writeFile } from "node:fs/promises";
 
 import { DOCX_SUGGEST_CHANGES_AUTO_APPLY_OPTIONS } from "@stll/api-contract/chat-docx-suggestions";
@@ -45,8 +45,8 @@ import type { FolioAgentToolOptions } from "@stll/folio-agents";
 import { FolioDocxReviewer } from "@stll/folio-core/server";
 import type { FolioAIEditSnapshot } from "@stll/folio-core/server";
 
-import { markdownToStellaDocx } from "@/api/handlers/chat/tools/markdown-to-stella-docx";
 import { resolveCaching } from "@/api/lib/ai-config";
+import { markdownToStellaDocx } from "@/api/lib/docx-authoring/from-markdown";
 import {
   mergeGenerationOptions,
   systemPromptsPatch,
@@ -685,7 +685,7 @@ const runTask = async ({
   repeat: number;
 }): Promise<EvalRun> => {
   const reviewer = await FolioDocxReviewer.fromBuffer(
-    await markdownToStellaDocx(task.document),
+    Result.unwrap(await markdownToStellaDocx(task.document)),
     { author: "stella eval" },
   );
   const listing = reviewer.snapshot();

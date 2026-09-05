@@ -13,18 +13,26 @@
 //
 // Detection boundary: syntax only. An `import` row matches an import source
 // equal to a listed specifier or ending in its final segment (the `@/`, deep
-// relative, and `.ts` spellings of one module). A `global-member` row matches
+// relative, and `.ts` spellings of one module), whether it is imported or
+// re-exported: a facade that re-exports the owner's dependency would hand the
+// capability to every consumer without naming it. A row that also lists
+// `names` matches only a declaration that binds one of them, or a namespace
+// import, a star re-export, and a dynamic import, which reach every export; the
+// specifier's other exports stay open, so one package entry point can carry
+// an owned capability next to unrelated ones. A `global-member` row matches
 // the full member chain `<object>.<path...>` on the global, including the
 // optional-chained form and the `window.` / `globalThis.` / `self.` prefixes,
 // so a sibling member of the same object (`navigator.clipboard.readText` next
 // to `navigator.clipboard.writeText`) is untouched. A value reached through an
-// alias, a re-export, or a computed member access is out of scope.
+// alias, a re-export of a local binding, or a computed member access is out of
+// scope.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import type { AstNode } from "./utils.ts";
 import {
   filenameForContext,
+  getImportedName,
   isAstNode,
   isIdentifier,
   isMemberAccess,
@@ -38,6 +46,8 @@ type ImportEntry = {
   owner: string;
   paths: readonly string[];
   specifiers: readonly string[];
+  // `null` confines the whole specifier.
+  names: readonly string[] | null;
 };
 
 type GlobalMemberEntry = {
@@ -104,11 +114,13 @@ const configuredEntries = (context: {
     const kind = Reflect.get(enforcement, "kind");
 
     if (kind === "import") {
+      const names = Reflect.get(enforcement, "names");
       importEntries.push({
         id,
         owner,
         paths,
         specifiers: stringsFrom(Reflect.get(enforcement, "specifiers")),
+        names: names === undefined ? null : stringsFrom(names),
       });
       continue;
     }
@@ -153,6 +165,38 @@ const isOwnedSpecifier = (
     );
   });
 };
+
+// The name a specifier takes from the module: `imported` on an import,
+// `local` on a re-export (`export { local as exported } from "..."`).
+const sourceBindingName = (specifier: AstNode): string | null => {
+  if (specifier.type === "ExportSpecifier") {
+    return isIdentifier(specifier.local)
+      ? specifier.local.name
+      : isStringLiteral(specifier.local)
+        ? specifier.local.value
+        : null;
+  }
+  return getImportedName(specifier);
+};
+
+// A declaration binds an owned name when it takes it by name from the module,
+// or takes the namespace, through which every export is reachable. A default
+// import is not one of the listed bindings.
+const bindsOwnedName = (
+  specifiers: unknown,
+  names: readonly string[],
+): boolean =>
+  Array.isArray(specifiers) &&
+  specifiers.some((specifier) => {
+    if (!isAstNode(specifier)) {
+      return false;
+    }
+    if (specifier.type === "ImportNamespaceSpecifier") {
+      return true;
+    }
+    const name = sourceBindingName(specifier);
+    return name !== null && names.includes(name);
+  });
 
 const isGlobalObject = (node: unknown, object: string): boolean =>
   isIdentifier(node, object) ||
@@ -216,6 +260,32 @@ export default eslintCompatPlugin({
         let activeImports: readonly ImportEntry[] = [];
         let activeGlobalMembers: readonly GlobalMemberEntry[] = [];
 
+        // `specifiers` is `null` when the declaration reaches every export
+        // (a star re-export or a dynamic import), which matches any row.
+        const reportOwnedBinding = (
+          node: NonNullable<Parameters<typeof context.report>[0]["node"]>,
+          source: unknown,
+          specifiers: unknown,
+        ) => {
+          for (const entry of activeImports) {
+            if (!isOwnedSpecifier(entry.specifiers, source)) {
+              continue;
+            }
+            if (
+              entry.names !== null &&
+              specifiers !== null &&
+              !bindsOwnedName(specifiers, entry.names)
+            ) {
+              continue;
+            }
+            context.report({
+              node,
+              messageId: "unownedUse",
+              data: { id: entry.id, owner: entry.owner },
+            });
+          }
+        };
+
         return {
           before() {
             const filename = filenameForContext(context);
@@ -231,29 +301,28 @@ export default eslintCompatPlugin({
             return activeImports.length > 0 || activeGlobalMembers.length > 0;
           },
           ImportDeclaration(node) {
-            for (const entry of activeImports) {
-              if (isOwnedSpecifier(entry.specifiers, node.source.value)) {
-                context.report({
-                  node,
-                  messageId: "unownedUse",
-                  data: { id: entry.id, owner: entry.owner },
-                });
-              }
+            reportOwnedBinding(node, node.source.value, node.specifiers);
+          },
+          // `export { x } from "..."`; a re-export of a local binding has no
+          // source and is out of scope.
+          ExportNamedDeclaration(node) {
+            if (!isAstNode(node.source) || !isStringLiteral(node.source)) {
+              return;
             }
+            reportOwnedBinding(node, node.source.value, node.specifiers);
+          },
+          // `export * from "..."` reaches every export, like a namespace import.
+          ExportAllDeclaration(node) {
+            if (!isAstNode(node.source) || !isStringLiteral(node.source)) {
+              return;
+            }
+            reportOwnedBinding(node, node.source.value, null);
           },
           ImportExpression(node) {
             if (!isAstNode(node.source) || !isStringLiteral(node.source)) {
               return;
             }
-            for (const entry of activeImports) {
-              if (isOwnedSpecifier(entry.specifiers, node.source.value)) {
-                context.report({
-                  node,
-                  messageId: "unownedUse",
-                  data: { id: entry.id, owner: entry.owner },
-                });
-              }
-            }
+            reportOwnedBinding(node, node.source.value, null);
           },
           MemberExpression(node) {
             if (node.computed) {

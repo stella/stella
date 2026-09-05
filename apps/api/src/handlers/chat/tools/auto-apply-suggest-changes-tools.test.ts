@@ -15,10 +15,10 @@ import {
   hasSuggestChangesApprovalResponse,
 } from "@/api/handlers/chat/tools/auto-apply-suggest-changes-tools";
 import type { CreateAutoApplySuggestChangesToolsProps } from "@/api/handlers/chat/tools/auto-apply-suggest-changes-tools";
-import { markdownToStellaDocx } from "@/api/handlers/chat/tools/create-workspace-document-tools";
 import { SUGGEST_CHANGES_TOOL_NAME } from "@/api/handlers/chat/tools/folio-agent-tools";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
+import { markdownToStellaDocx } from "@/api/lib/docx-authoring/from-markdown";
 import { createEntityVersionFromBuffer as createEntityVersionFromBufferWithDependencies } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import type { CreateEntityVersionFromBufferDependencies } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import { writeFileVersion } from "@/api/lib/entity-versions/write-file-version";
@@ -118,7 +118,7 @@ let sourceDocx: ArrayBuffer = new ArrayBuffer(0);
  * any other key misses the store instead of being served the same bytes.
  */
 const seedSourceDocx = async (): Promise<ArrayBuffer> => {
-  const docx = await markdownToStellaDocx(ORIGINAL_TEXT);
+  const docx = Result.unwrap(await markdownToStellaDocx(ORIGINAL_TEXT));
   fake.put(bucket, activeObjectKey, new Uint8Array(docx), DOCX_MIME_TYPE);
   return docx;
 };
