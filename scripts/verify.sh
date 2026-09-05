@@ -128,6 +128,15 @@ run_ratchet_guard() {
   bun scripts/ratchet.ts --check
 }
 
+run_result_boundary_enrolment_guard() {
+  # Joining the better-result boundary convention is the default: every
+  # directory under apps/*/src and packages/*/src is either enabled or carries
+  # a written opt-out reason, and a stale opt-out fails too. The fixture tests
+  # run first so a broken guard cannot pass silently.
+  bun test scripts/check-result-boundary-enrolment.test.ts || return 1
+  bun run check:result-boundary-enrolment
+}
+
 run_module_mock_ledger_guard() {
   # The grandfathered module-mock ledger may only lose members: every line
   # must already exist on the base branch, so a new mock cannot be listed in
@@ -286,6 +295,7 @@ run_step "React Compiler bailout guard" bun scripts/rc-bailouts.ts --check
 run_step "Oxlint override union guard" bun test \
   scripts/oxlint-override-union.test.ts
 run_step "Ratchet guard" run_ratchet_guard
+run_step "Result boundary enrolment" run_result_boundary_enrolment_guard
 run_step "Module ownership" bun run check:module-ownership
 run_step "Dead columns" run_dead_columns_guard
 run_step "Projection totality" run_projection_totality_guard
