@@ -1,0 +1,24 @@
+diff --git a/dist/schema.js b/dist/schema.js
+index 9c4f1e82dcbb5094f6735bdab8ee38c42effd378..f67664910a3d897e7ed80382867ebfb9ef923db9 100644
+--- a/dist/schema.js
++++ b/dist/schema.js
+@@ -298,7 +298,6 @@ const isOptional = (schema) => schema ? schema?.[import_typebox.Kind] === "Impor
+         newValue = (0, import_utils.mergeDeep)(newValue, values[i]);
+       return { value: newValue };
+     };
+-    var Check = Check2, runCheckers = runCheckers2, mergeValues = mergeValues2;
+     const typeboxSubValidator = (schema2) => {
+       let mirror;
+       if (normalize === !0 || normalize === "exactMirror")
+diff --git a/dist/schema.mjs b/dist/schema.mjs
+index fa5bbe9ee1d3919fc222311b44de0a7f6b1dc37a..bb7e6fc323317dfb3dd0fa82b09d6412915fd688 100644
+--- a/dist/schema.mjs
++++ b/dist/schema.mjs
+@@ -280,7 +280,6 @@ const isOptional = (schema) => schema ? schema?.[Kind] === "Import" && schema.Re
+         newValue = mergeDeep(newValue, values[i]);
+       return { value: newValue };
+     };
+-    var Check = Check2, runCheckers = runCheckers2, mergeValues = mergeValues2;
+     const typeboxSubValidator = (schema2) => {
+       let mirror;
+       if (normalize === !0 || normalize === "exactMirror")

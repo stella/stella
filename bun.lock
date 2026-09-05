@@ -990,6 +990,7 @@
     "drizzle-kit@1.0.0-rc.4": "patches/drizzle-kit@1.0.0-rc.4.patch",
     "@astrojs/mdx@7.0.7": "patches/@astrojs__mdx@7.0.7.patch",
     "better-call@1.4.0": "patches/better-call@1.4.0.patch",
+    "elysia@1.4.29": "patches/elysia@1.4.29.patch",
   },
   "overrides": {
     "@atlaskit/pragmatic-drag-and-drop": "3.1.0",
