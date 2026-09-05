@@ -2,6 +2,8 @@ import type { ModelMessage } from "@tanstack/ai";
 
 import { stableStringify } from "@stll/stable-stringify";
 
+import { type JsonValue, toJsonValue } from "@/api/lib/json-value";
+
 const codePointOf = (value: string): number => {
   const code = value.codePointAt(0);
   if (code === undefined) {
@@ -392,9 +394,13 @@ const isMarkdownHeadingLine = (value: string): boolean => {
   );
 };
 
-const parseToolArguments = (value: string): unknown => {
+// The tool-call signature is fingerprinted, so the parse is also where the
+// arguments acquire a JSON shape in the type system: a successful parse
+// yields JSON, and an unparseable payload stays the raw string.
+const parseToolArguments = (value: string): JsonValue => {
   try {
-    return JSON.parse(value);
+    const parsed: unknown = JSON.parse(value);
+    return toJsonValue(parsed);
   } catch {
     return value;
   }

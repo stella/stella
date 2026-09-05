@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { stableStringify } from "./stable-stringify";
+import { type StableStringifyInput, stableStringify } from "./stable-stringify";
 
 describe("stableStringify", () => {
   test("is insensitive to the order keys were assembled in", () => {
@@ -25,12 +25,17 @@ describe("stableStringify", () => {
     );
   });
 
-  test("serializes non-plain objects through their enumerable keys", () => {
-    // The contract is JSON-shaped input; a live Date, Map, or Set carries no
-    // enumerable own keys and reads as an empty object.
-    expect(stableStringify(new Date(0))).toBe("{}");
-    expect(stableStringify(new Map([["a", 1]]))).toBe("{}");
-    expect(stableStringify(new Set([1]))).toBe("{}");
+  test("rejects a live instance at the type level", () => {
+    // A Date, Map, or Set carries no enumerable own keys, so serializing one
+    // would read as `{}` and collide with every other instance. The input
+    // type keeps them off the call site; these lines fail to compile, and the
+    // directive fails the build if they ever start compiling.
+    // @ts-expect-error - a Date is not JSON-shaped input
+    stableStringify(new Date(0));
+    // @ts-expect-error - a Map is not JSON-shaped input
+    stableStringify(new Map([["a", 1]]));
+    // @ts-expect-error - a Set is not JSON-shaped input
+    stableStringify(new Set([1]));
   });
 
   test("keeps an explicitly-undefined key distinguishable from an absent one", () => {
@@ -49,7 +54,7 @@ describe("stableStringify", () => {
   });
 
   test("reports a cycle instead of throwing", () => {
-    const value: Record<string, unknown> = { name: "root" };
+    const value: Record<string, StableStringifyInput> = { name: "root" };
     value["self"] = value;
     expect(stableStringify(value)).toBe('{"name":"root","self":[circular]}');
   });
