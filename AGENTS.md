@@ -279,10 +279,14 @@ in CI. Confirm `ci-result` succeeds on the current PR head before merging.
 
 ## Merging
 
-Merges go through `bun scripts/merge-bar.ts <pr>`: it re-reads PR state, the
-`ci-result` check run on the exact head SHA, and unresolved review threads in one
-invocation, then merges. Raw `gh pr merge` asserts nothing and reads an empty check
-list as green.
+Merges go through `bun scripts/merge-bar.ts <pr>`: it re-reads PR state,
+mergeability, the required checks on the exact head SHA, unresolved review
+threads, and migration ordering against the live base in one invocation, then
+arms "merge when ready" pinned to that head. Main has a merge queue: GitHub
+builds main plus the pull request, runs CI on that commit, and merges only if
+it passes, so nothing needs a rebase to land and nothing lands past a red
+check. Run the bar as soon as the PR is ready; it is idempotent. Raw
+`gh pr merge` asserts nothing and reads an empty check list as green.
 
 ## Documentation Access
 

@@ -3,6 +3,11 @@ name: CI Checks
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review, labeled]
+  # The merge queue builds main plus one pull request and merges only if this
+  # workflow reports `ci-result` success on that commit, so every check below
+  # also runs on the tree that will actually land.
+  merge_group:
+    types: [checks_requested]
   workflow_dispatch:
 
 concurrency:
@@ -62,14 +67,19 @@ jobs:
       - name: Check if PR is trusted
         id: check
         env:
+          EVENT_NAME: ${{ github.event_name }}
           HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
           BASE_REPO: ${{ github.repository }}
           HAS_RUN_CI_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'run-ci') }}
         run: |
           # Same-repo PRs are trusted: the author has write access
           # to push branches. Fork PRs need a maintainer to add
-          # the "run-ci" label after reviewing the code.
-          if [[ "$HEAD_REPO" == "$BASE_REPO" ]]; then
+          # the "run-ci" label after reviewing the code. A merge
+          # group only ever holds a pull request that already passed
+          # this gate, so it inherits the trust.
+          if [[ "$EVENT_NAME" == "merge_group" ]]; then
+            echo "trusted=true" >> "$GITHUB_OUTPUT"
+          elif [[ "$HEAD_REPO" == "$BASE_REPO" ]]; then
             echo "trusted=true" >> "$GITHUB_OUTPUT"
           elif [[ "$HAS_RUN_CI_LABEL" == "true" ]]; then
             echo "trusted=true" >> "$GITHUB_OUTPUT"
@@ -1142,6 +1152,17 @@ jobs:
         run: |
           bun test scripts/check-migration-order.test.ts
           bun test scripts/merge-bar.test.ts
+
+      # The live ordering check, against the branch this run merges into. In a
+      # merge group that is main as it stands at merge time, so a migration
+      # stamped below one that landed after the pull request's own run cannot
+      # reach the default branch; a database that already recorded the higher
+      # timestamp would skip it silently.
+      - name: Check migration ordering against the base branch
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+        run: bun scripts/check-migration-order.ts "origin/$BASE_REF"
 
       # Self-test the dead-columns reference matcher: a regression here
       # would either silently stop flagging genuinely unreferenced columns

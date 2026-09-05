@@ -2,13 +2,13 @@
 //
 // A baseline records counts, sizes, or advisories measured on ONE tree: the
 // head that ran the producer. That makes each of these files merge-order
-// sensitive, which is why `scripts/merge-bar.ts` refuses to merge a pull
-// request carrying one unless its head is current with the base. The merge bar
-// cannot infer the set — two of them live under `apps/`, and one carries no
-// `-baseline` suffix at all — so the paths are enumerated here, each producer
-// reads its own from this map, and `baseline-paths.test.ts` fails when a
-// tracked baseline file is missing from it, or when an entry names a producer
-// that is not in the tree: a budget nothing writes is not a budget.
+// sensitive, which is why the merge queue re-runs every check on main plus
+// the pull request before it lands. The set cannot be inferred — two of them
+// live under `apps/`, and one carries no `-baseline` suffix at all — so the
+// paths are enumerated here, each producer reads its own from this map, and
+// `baseline-paths.test.ts` fails when a tracked baseline file is missing from
+// it, or when an entry names a producer that is not in the tree: a budget
+// nothing writes is not a budget.
 
 export const BASELINE_PATHS = {
   /** scripts/bundle-baseline.ts */
