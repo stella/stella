@@ -685,7 +685,7 @@ type ManifestationDocument = { html: string; url: string };
 type ManifestationLookup =
   | ({ type: "document" } & ManifestationDocument)
   | { type: "exhausted"; statuses: number[] }
-  | { type: "failed"; status: number; url: string };
+  | { type: "failed"; status: number };
 
 type ReadFirstServedOptions = {
   addresses: ManifestationAddress[];
@@ -727,7 +727,7 @@ const readFirstServedAddress = async ({
     return { type: "document", html: read.html, url: address.url };
   }
   if (read.type === "fetch-failed") {
-    return { type: "failed", status: read.status, url: address.url };
+    return { type: "failed", status: read.status };
   }
 
   statuses.push(read.status);
@@ -768,18 +768,14 @@ const fetchManifestation = async ({
       case "document":
         return { html: lookup.html, url: lookup.url };
       case "failed":
-        // The publisher could not answer for this variant, which says nothing
-        // about whether it holds it. Reported apart from the unavailable case
-        // so a throttle or an outage cannot be read as a translation that was
-        // never published.
-        logger.warn("case_law.ingestion.manifestation_fetch_failed", {
+        // Propagate to the caller's retry path instead of reporting missing
+        // content or probing another manifestation during a provider outage.
+        throw new AdapterFetchError({
+          message: `CJEU document request failed: ${lookup.status}`,
           adapterKey: ADAPTER_KEYS.EU_ECJ,
-          celex,
-          language: lang,
+          cursor: null,
           httpStatus: lookup.status,
-          url: lookup.url,
         });
-        return undefined;
       case "exhausted":
         // A variant the listing named and no address on the content stream
         // serves is reported unavailable, and the reconciliation loop retires
@@ -808,7 +804,7 @@ const fetchManifestation = async ({
         }),
       );
     }
-    return undefined;
+    throw error;
   }
 };
 

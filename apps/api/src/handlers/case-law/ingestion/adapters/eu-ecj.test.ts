@@ -1137,22 +1137,39 @@ describe("euEcjAdapter.reconciliation.buildDecision", () => {
     ]);
   });
 
-  test("stops the walk when a refusal is transient, not the address", async () => {
-    // 429 and 5xx say nothing about whether this address can serve the
-    // representation, so walking on would ask a publisher already refusing
-    // load for the same document three more times over.
-    const { fetches } = installStatusMock(429);
+  test.each(
+    [400, 401, 403, 408, 429, 500, 502, 503, 504].flatMap((status) =>
+      [0, 1, 2].map((ordinal) => ({ status, ordinal })),
+    ),
+  )(
+    "propagates HTTP $status at address $ordinal without further probing",
+    async ({ status, ordinal }) => {
+      const { fetches } = installItemOnlyMock(0);
+      const itemFetch = globalThis.fetch;
+      const failedUrl = `https://publications.europa.eu/resource/cellar/${EN_MANIFESTATION_ID}${ordinal === 0 ? "" : `/DOC_${ordinal}`}`;
+      globalThis.fetch = asFetchMock(
+        mock((input: string | URL | Request, init?: RequestInit) => {
+          if (requestUrl(input) === failedUrl) {
+            fetches.push({
+              url: failedUrl,
+              accept: new Headers(init?.headers).get("accept") ?? undefined,
+            });
+            return Promise.resolve(new Response("Unavailable", { status }));
+          }
+          return itemFetch(input, init);
+        }),
+      );
 
-    const outcome = await reconciliation.buildDecision({
-      celex: "62021CJ0128",
-      language: "EN",
-    });
-
-    expect(outcome).toEqual({ type: "detail-unavailable" });
-    expect(fetches).toEqual([
-      `https://publications.europa.eu/resource/cellar/${EN_MANIFESTATION_ID}`,
-    ]);
-  });
+      await expect(
+        reconciliation.buildDecision({
+          celex: "62021CJ0128",
+          language: "EN",
+        }),
+      ).rejects.toThrow(`CJEU document request failed: ${status}`);
+      expect(fetches).toHaveLength(ordinal + 1);
+      expect(fetches.at(-1)?.url).toBe(failedUrl);
+    },
+  );
 
   test("keeps walking when a refusal means this address cannot serve it", async () => {
     // The counterpart to the test above: 404 is what the item walk exists for,
