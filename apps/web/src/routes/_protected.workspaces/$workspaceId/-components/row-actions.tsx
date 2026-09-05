@@ -92,7 +92,7 @@ import {
 } from "@/lib/desktop-edit-formats";
 import { showDesktopEditOpenResultToast } from "@/lib/desktop-edit-status-toast";
 import { detached } from "@/lib/detached";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { isUnauthorizedError } from "@/lib/errors/auth";
 import { ClientOperationError } from "@/lib/errors/client";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
@@ -681,31 +681,33 @@ export const RowActions = ({
     }
 
     if (desktopEditLockState === "locked-by-me") {
-      try {
-        const response = await api
-          .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-          ["desktop-edit-sessions"].release.post({
-            entityId: toSafeId<"entity">(file.entityId),
-            propertyId: toSafeId<"property">(file.propertyId),
-          });
-
-        if (response.error) {
-          throw toAPIError(response.error);
-        }
-
-        await queryClient.invalidateQueries({
-          queryKey: entitiesKeys.all(workspaceId),
-        });
-        return;
-      } catch (error) {
-        analytics.captureError(error);
+      const requested = await Result.tryPromise(async () =>
+        unwrapEden(
+          await api
+            .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+            ["desktop-edit-sessions"].release.post({
+              entityId: toSafeId<"entity">(file.entityId),
+              propertyId: toSafeId<"property">(file.propertyId),
+            }),
+        ),
+      );
+      if (Result.isError(requested)) {
+        analytics.captureError(requested.error);
         stellaToast.add({
-          description: userErrorFromThrown(error, t("common.unexpectedError")),
+          description: userErrorFromThrown(
+            requested.error,
+            t("common.unexpectedError"),
+          ),
           title: t("errors.actionFailed"),
           type: "error",
         });
         return;
       }
+
+      await queryClient.invalidateQueries({
+        queryKey: entitiesKeys.all(workspaceId),
+      });
+      return;
     }
 
     const lockedByName = entity.activeEditBy?.name ?? "";

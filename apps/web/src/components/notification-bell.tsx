@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { Result } from "better-result";
 import { BellIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -104,27 +105,31 @@ export const NotificationBell = () => {
     if (notification.readAt !== null) {
       return;
     }
-    try {
+    const requested = await Result.tryPromise(async () =>
       unwrapEden(
         await api
           .notifications({
             notificationId: toSafeId<"notification">(notification.id),
           })
           .read.patch(),
-      );
-      await refetchFirstNotificationsPage({ organizationId, queryClient });
-    } catch (error) {
-      reportFailure(error);
+      ),
+    );
+    if (Result.isError(requested)) {
+      reportFailure(requested.error);
+      return;
     }
+    await refetchFirstNotificationsPage({ organizationId, queryClient });
   };
 
   const markAllRead = async () => {
-    try {
-      unwrapEden(await api.notifications["read-all"].post());
-      await refetchFirstNotificationsPage({ organizationId, queryClient });
-    } catch (error) {
-      reportFailure(error);
+    const requested = await Result.tryPromise(async () =>
+      unwrapEden(await api.notifications["read-all"].post()),
+    );
+    if (Result.isError(requested)) {
+      reportFailure(requested.error);
+      return;
     }
+    await refetchFirstNotificationsPage({ organizationId, queryClient });
   };
 
   return (

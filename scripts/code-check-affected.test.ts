@@ -66,10 +66,13 @@ describe("changed-file result boundary lint", () => {
         "apps/api/src/lib/document-processing-queue.ts",
         "apps/api/src/lib/document-processing-queue.test.ts",
         "apps/api/src/mcp/generated/capability-dispatch.ts",
-        "apps/web/src/lib/example.ts",
         "packages/start-runtime/src/runtime.ts",
         "packages/ssr-testkit/src/assert-document.ts",
+        // apps/landing is outside RESULT_CONVENTION_SOURCE_GLOBS and carries
+        // an opt-out reason, so its source is not planned for this lint.
+        "apps/landing/src/example.ts",
         "apps/api/src/lib/new-client.ts",
+        "apps/web/src/lib/example.ts",
       ]),
     ).toEqual([
       "bun",
@@ -79,6 +82,7 @@ describe("changed-file result boundary lint", () => {
       "oxlint.result-boundary.config.ts",
       "--deny-warnings",
       "apps/api/src/lib/new-client.ts",
+      "apps/web/src/lib/example.ts",
     ]);
   });
 });

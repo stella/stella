@@ -6,17 +6,20 @@ use clipboard_rs::{
   Clipboard, ClipboardContent, ClipboardContext, ClipboardHandler, ClipboardWatcher,
   ClipboardWatcherContext, ContentFormat, RustImageData,
 };
+use futures_util::StreamExt;
 use image::{
   ExtendedColorType, ImageEncoder, ImageReader, Limits as ImageLimits,
   codecs::png::PngEncoder,
 };
+use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
   collections::{BTreeSet, HashMap, HashSet},
   io::{Cursor, Write},
+  net::IpAddr,
   sync::{Arc, Mutex},
-  time::Instant,
+  time::{Duration as StdDuration, Instant},
 };
 use tauri::{AppHandle, Emitter};
 
@@ -49,7 +52,6 @@ use std::{
   io::BufReader,
   path::{Component, Path, PathBuf},
   sync::mpsc::sync_channel,
-  time::Duration as StdDuration,
 };
 #[cfg(target_os = "windows")]
 use winsafe::{HPROCESS, HVERSIONINFO, HWND, co};
@@ -82,8 +84,19 @@ const MAX_GROUP_NAME_CHARACTERS: usize = 64;
 const MAX_SOURCE_APP_NAME_BYTES: usize = 128;
 const MAX_SOURCE_APP_IDENTIFIER_BYTES: usize = 255;
 const MAX_SOURCE_APP_ICON_DATA_URL_BYTES: usize = 48 * 1024;
-const MAX_SOURCE_APP_VISUALS: usize = 64;
+const MAX_SOURCE_APP_VISUALS: usize = 128;
 const SOURCE_APP_ICON_SIZE: u32 = 48;
+const MAX_SOURCE_PAGE_URL_BYTES: usize = 2048;
+/// Chromium browsers put the copying page's URL on the macOS pasteboard under
+/// this type (`ui::kUTTypeChromiumSourceUrl`).
+#[cfg(target_os = "macos")]
+const CHROMIUM_SOURCE_URL_FORMAT: &str = "org.chromium.source-url";
+/// CF_HTML carries the copying page's URL in its `SourceURL:` header line.
+#[cfg(target_os = "windows")]
+const WINDOWS_HTML_FORMAT: &str = "HTML Format";
+const FAVICON_PATH: &str = "/favicon.ico";
+const FAVICON_TIMEOUT: StdDuration = StdDuration::from_secs(5);
+const MAX_FAVICON_BYTES: usize = 512 * 1024;
 #[cfg(target_os = "linux")]
 const CLIPBOARD_IMAGE_FORMATS: &[&str] = &["image/png"];
 #[cfg(target_os = "macos")]
@@ -146,6 +159,38 @@ define_clipboard_retention! {
 pub struct ClipboardSourceApp {
   pub identifier: Option<String>,
   pub name: String,
+  /// The web page a browser copied from, when the browser advertised it.
+  #[serde(default)]
+  pub page: Option<ClipboardSourcePage>,
+  /// Key of the visual the webview should render for this source, resolved
+  /// by the manager when the item is prepared for the webview (see
+  /// `ClipboardManager::webview_item`). Persisted items carry `None`.
+  #[serde(default)]
+  pub visual_key: Option<String>,
+}
+
+impl ClipboardSourceApp {
+  /// Keys of this source's entries in the visual map, most specific first:
+  /// the page's favicon, then the app's icon.
+  fn visual_keys(&self) -> impl Iterator<Item = &str> {
+    self
+      .page
+      .as_ref()
+      .map(|page| page.origin.as_str())
+      .into_iter()
+      .chain(std::iter::once(
+        self.identifier.as_deref().unwrap_or(&self.name),
+      ))
+  }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClipboardSourcePage {
+  /// Display name; `origin` keys the favicon so ports and schemes stay apart.
+  pub host: String,
+  pub origin: String,
+  pub url: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -425,12 +470,21 @@ impl ClipboardItem {
     }
   }
 
-  /// Key of the item's entry in the source-app visual map; mirrors the
-  /// lookup key built in `frontmost_source_app`.
-  fn source_visual_key(&self) -> Option<&str> {
+  fn source_app_mut(&mut self) -> Option<&mut ClipboardSourceApp> {
+    match self {
+      Self::Text { source_app, .. }
+      | Self::FormattedText { source_app, .. }
+      | Self::Image { source_app, .. } => source_app.as_mut(),
+    }
+  }
+
+  /// Keys of the item's entries in the source visual map; see
+  /// `ClipboardSourceApp::visual_keys`.
+  fn source_visual_keys(&self) -> impl Iterator<Item = &str> {
     self
       .source_app()
-      .map(|source_app| source_app.identifier.as_deref().unwrap_or(&source_app.name))
+      .into_iter()
+      .flat_map(ClipboardSourceApp::visual_keys)
   }
 
   fn set_group_id(&mut self, new_group_id: Option<String>) {
@@ -1047,6 +1101,16 @@ enum ClipboardCapture {
   Text(ClipboardTextCapture),
 }
 
+impl ClipboardCapture {
+  fn source_page(&self) -> Option<&ClipboardSourcePage> {
+    let source_app = match self {
+      Self::Image(capture) => capture.source_app.as_ref(),
+      Self::Text(capture) => capture.source_app.as_ref(),
+    };
+    source_app?.page.as_ref()
+  }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum ClipboardCaptureOutcome {
   Captured,
@@ -1120,7 +1184,7 @@ impl ClipboardManager {
           let referenced_keys: HashSet<&str> = state
             .items
             .iter()
-            .filter_map(ClipboardItem::source_visual_key)
+            .flat_map(ClipboardItem::source_visual_keys)
             .collect();
           self.source_app_visuals = state
             .source_app_visuals
@@ -1148,7 +1212,11 @@ impl ClipboardManager {
     ClipboardSnapshot {
       capture_status: self.capture_status,
       groups: self.groups.clone(),
-      items: self.items.iter().map(ClipboardItem::for_webview).collect(),
+      items: self
+        .items
+        .iter()
+        .map(|item| self.webview_item(item))
+        .collect(),
       persistence: self.persistence.status_with_image_cleanup(
         if self.pending_image_blob_ids.is_empty()
           && self.image_discovery_status == ClipboardImageCleanupStatus::Idle
@@ -1420,7 +1488,21 @@ impl ClipboardManager {
       .items
       .iter()
       .find(|item| item.id() == id)
-      .map(ClipboardItem::for_webview)
+      .map(|item| self.webview_item(item))
+  }
+
+  /// The webview copy of an item, with the visual it should render resolved
+  /// here so the webview never re-derives the key order.
+  fn webview_item(&self, item: &ClipboardItem) -> ClipboardItem {
+    let visual_key = item
+      .source_visual_keys()
+      .find(|key| self.source_app_visuals.contains_key(*key))
+      .map(str::to_string);
+    let mut webview = item.for_webview();
+    if let Some(source_app) = webview.source_app_mut() {
+      source_app.visual_key = visual_key;
+    }
+    webview
   }
 
   pub fn groups(&self) -> &[ClipboardGroup] {
@@ -1432,9 +1514,51 @@ impl ClipboardManager {
     item: &ClipboardItem,
   ) -> Option<ClipboardSourceAppVisual> {
     item
-      .source_visual_key()
-      .and_then(|key| self.source_app_visuals.get(key))
+      .source_visual_keys()
+      .find_map(|key| self.source_app_visuals.get(key))
       .cloned()
+  }
+
+  pub fn has_source_app_visual(&self, key: &str) -> bool {
+    self.source_app_visuals.contains_key(key)
+  }
+
+  /// Records a visual resolved after capture (a fetched favicon). Dropped when
+  /// no item references it any more or the capped map is full.
+  pub fn insert_source_app_visual(
+    &mut self,
+    visual: ClipboardSourceAppVisual,
+  ) -> Result<bool, String> {
+    let referenced = self
+      .items
+      .iter()
+      .flat_map(ClipboardItem::source_visual_keys)
+      .any(|key| key == visual.key);
+    if !referenced {
+      return Ok(false);
+    }
+    let checkpoint = self.checkpoint();
+    if !self.remember_source_app_visual(Some(visual)) {
+      return Ok(false);
+    }
+    self.persist_or_restore(checkpoint)?;
+    Ok(true)
+  }
+
+  fn remember_source_app_visual(
+    &mut self,
+    visual: Option<ClipboardSourceAppVisual>,
+  ) -> bool {
+    let Some(visual) = visual else {
+      return false;
+    };
+    if !self.source_app_visuals.contains_key(&visual.key)
+      && self.source_app_visuals.len() >= MAX_SOURCE_APP_VISUALS
+    {
+      return false;
+    }
+    self.source_app_visuals.insert(visual.key.clone(), visual);
+    true
   }
 
   pub(crate) fn image(&self, id: &str) -> Result<ClipboardImageRead, String> {
@@ -1546,14 +1670,7 @@ impl ClipboardManager {
     let checkpoint = self.checkpoint();
     self.suppressed_content = None;
 
-    if let Some(source_app_visual) = source_app_visual
-      && (self.source_app_visuals.contains_key(&source_app_visual.key)
-        || self.source_app_visuals.len() < MAX_SOURCE_APP_VISUALS)
-    {
-      self
-        .source_app_visuals
-        .insert(source_app_visual.key.clone(), source_app_visual);
-    }
+    self.remember_source_app_visual(source_app_visual);
 
     let preserved_metadata = self
       .items
@@ -1624,14 +1741,7 @@ impl ClipboardManager {
     let checkpoint = self.checkpoint();
     self.suppressed_content = None;
 
-    if let Some(source_app_visual) = source_app_visual
-      && (self.source_app_visuals.contains_key(&source_app_visual.key)
-        || self.source_app_visuals.len() < MAX_SOURCE_APP_VISUALS)
-    {
-      self
-        .source_app_visuals
-        .insert(source_app_visual.key.clone(), source_app_visual);
-    }
+    self.remember_source_app_visual(source_app_visual);
 
     let existing = self
       .items
@@ -1791,7 +1901,7 @@ impl ClipboardManager {
     let referenced_keys: HashSet<&str> = self
       .items
       .iter()
-      .filter_map(ClipboardItem::source_visual_key)
+      .flat_map(ClipboardItem::source_visual_keys)
       .collect();
     self
       .source_app_visuals
@@ -2434,7 +2544,12 @@ fn frontmost_source_app_on_main_thread() -> Option<MacosSourceCapture> {
   let identifier = application.bundleIdentifier().and_then(|bundle_id| {
     bounded_metadata(&bundle_id.to_string(), MAX_SOURCE_APP_IDENTIFIER_BYTES)
   });
-  let app = ClipboardSourceApp { identifier, name };
+  let app = ClipboardSourceApp {
+    identifier,
+    name,
+    page: None,
+    visual_key: None,
+  };
   Some(MacosSourceCapture { app, bundle_path })
 }
 
@@ -2508,6 +2623,8 @@ fn frontmost_source_app(_app: &AppHandle) -> Option<ClipboardSourceCapture> {
   let app = ClipboardSourceApp {
     identifier: executable_name,
     name,
+    page: None,
+    visual_key: None,
   };
   let key = app.identifier.clone().unwrap_or_else(|| app.name.clone());
   let visual = source_app_visual_metadata(key, (icon_data_url, color));
@@ -2519,15 +2636,275 @@ fn frontmost_source_app(_app: &AppHandle) -> Option<ClipboardSourceCapture> {
   None
 }
 
+/// Normalises a browser-advertised page URL into the stored source page. Only
+/// web origins qualify; credentials and fragments never reach the history.
+fn source_page_from_url(raw: &str) -> Option<ClipboardSourcePage> {
+  let mut url = Url::parse(raw.trim()).ok()?;
+  if !matches!(url.scheme(), "http" | "https") {
+    return None;
+  }
+  let host = url.host_str()?.to_string();
+  let origin = url.origin();
+  if !origin.is_tuple() {
+    return None;
+  }
+  url.set_fragment(None);
+  url.set_username("").ok()?;
+  url.set_password(None).ok()?;
+  let url = String::from(url);
+  (url.len() <= MAX_SOURCE_PAGE_URL_BYTES).then_some(ClipboardSourcePage {
+    host,
+    origin: origin.ascii_serialization(),
+    url,
+  })
+}
+
+/// Whether an address may be contacted for a favicon. Loopback, private,
+/// link-local and other non-public ranges are refused so clipboard metadata
+/// cannot steer the app into probing the local network.
+fn is_public_address(address: IpAddr) -> bool {
+  match address {
+    IpAddr::V4(v4) => {
+      !(v4.is_private()
+        || v4.is_loopback()
+        || v4.is_link_local()
+        || v4.is_broadcast()
+        || v4.is_documentation()
+        || v4.is_unspecified()
+        || v4.is_multicast()
+        || v4.octets()[0] == 0
+        // Shared address space (100.64.0.0/10) and benchmarking (198.18.0.0/15).
+        || (v4.octets()[0] == 100 && (64..128).contains(&v4.octets()[1]))
+        || (v4.octets()[0] == 198 && (18..20).contains(&v4.octets()[1])))
+    }
+    IpAddr::V6(v6) => {
+      if let Some(mapped) = v6.to_ipv4_mapped() {
+        return is_public_address(IpAddr::V4(mapped));
+      }
+      !(v6.is_loopback()
+        || v6.is_unspecified()
+        || v6.is_multicast()
+        || v6.is_unique_local()
+        || v6.is_unicast_link_local())
+    }
+  }
+}
+
+/// Extracts the `SourceURL:` header from a CF_HTML payload. Header lines
+/// precede the markup, whose first line opens a tag.
+#[cfg(any(target_os = "windows", test))]
+fn cf_html_source_url(raw: &[u8]) -> Option<&str> {
+  let text = std::str::from_utf8(raw).ok()?;
+  text
+    .lines()
+    .take_while(|line| !line.starts_with('<'))
+    .find_map(|line| line.strip_prefix("SourceURL:"))
+    .map(str::trim)
+}
+
+#[cfg(target_os = "macos")]
+fn clipboard_source_page(
+  clipboard: &ClipboardContext,
+  formats: &[String],
+) -> Option<ClipboardSourcePage> {
+  if !formats
+    .iter()
+    .any(|format| format == CHROMIUM_SOURCE_URL_FORMAT)
+  {
+    return None;
+  }
+  let bytes = clipboard.get_buffer(CHROMIUM_SOURCE_URL_FORMAT).ok()?;
+  source_page_from_url(std::str::from_utf8(&bytes).ok()?)
+}
+
+#[cfg(target_os = "windows")]
+fn clipboard_source_page(
+  clipboard: &ClipboardContext,
+  formats: &[String],
+) -> Option<ClipboardSourcePage> {
+  if !formats
+    .iter()
+    .any(|format| format.eq_ignore_ascii_case(WINDOWS_HTML_FORMAT))
+  {
+    return None;
+  }
+  let bytes = clipboard.get_buffer(WINDOWS_HTML_FORMAT).ok()?;
+  source_page_from_url(cf_html_source_url(&bytes)?)
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+fn clipboard_source_page(
+  _clipboard: &ClipboardContext,
+  _formats: &[String],
+) -> Option<ClipboardSourcePage> {
+  None
+}
+
+/// Resolves page favicons after capture so the watcher never waits on the
+/// network. Each origin is fetched at most once per process; a site without a
+/// reachable favicon keeps the browser's icon.
+#[derive(Clone)]
+struct FaviconFetcher {
+  attempted_origins: Arc<Mutex<HashSet<String>>>,
+  client: reqwest::Client,
+}
+
+impl FaviconFetcher {
+  fn new() -> Self {
+    Self {
+      attempted_origins: Arc::new(Mutex::new(HashSet::new())),
+      // Redirects are refused: the address check below covers the advertised
+      // origin only, and a redirect could point anywhere.
+      client: reqwest::Client::builder()
+        .timeout(FAVICON_TIMEOUT)
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .unwrap_or_else(|_| reqwest::Client::new()),
+    }
+  }
+
+  fn schedule(
+    &self,
+    app: &AppHandle,
+    manager: &ClipboardAppState,
+    telemetry: &DesktopTelemetry,
+    page: ClipboardSourcePage,
+  ) {
+    let already_resolved = manager
+      .lock()
+      .is_ok_and(|manager| manager.has_source_app_visual(&page.origin));
+    if already_resolved {
+      return;
+    }
+    let first_attempt = self
+      .attempted_origins
+      .lock()
+      .is_ok_and(|mut origins| origins.insert(page.origin.clone()));
+    if !first_attempt {
+      return;
+    }
+    let app = app.clone();
+    let client = self.client.clone();
+    let manager = Arc::clone(manager);
+    let telemetry = telemetry.clone();
+    tauri::async_runtime::spawn(async move {
+      let bytes = match fetch_favicon(&client, &page.origin).await {
+        Ok(bytes) => bytes,
+        Err(error) => {
+          tracing::debug!(error = %error, origin = %page.origin, "favicon was not fetched");
+          return;
+        }
+      };
+      let Some(visual) = favicon_visual(page.origin, &bytes) else {
+        return;
+      };
+      let inserted = match manager.lock() {
+        Ok(mut manager) => match manager.insert_source_app_visual(visual) {
+          Ok(inserted) => inserted,
+          Err(error) => {
+            tracing::error!(error = %error, "favicon could not be persisted");
+            telemetry.capture(DesktopErrorReport {
+              window: DesktopTelemetryWindow::Clipboard,
+              operation: DesktopTelemetryOperation::ClipboardWatcherRead,
+              code: DesktopTelemetryErrorCode::PersistenceFailed,
+            });
+            false
+          }
+        },
+        Err(_) => {
+          tracing::error!("clipboard manager lock is poisoned during favicon update");
+          telemetry.capture(DesktopErrorReport {
+            window: DesktopTelemetryWindow::Clipboard,
+            operation: DesktopTelemetryOperation::ClipboardWatcherRead,
+            code: DesktopTelemetryErrorCode::LockPoisoned,
+          });
+          false
+        }
+      };
+      if inserted {
+        let _ = app.emit(HISTORY_EVENT, ());
+      }
+    });
+  }
+}
+
+async fn fetch_favicon(
+  client: &reqwest::Client,
+  origin: &str,
+) -> Result<Vec<u8>, String> {
+  let url = Url::parse(origin)
+    .and_then(|url| url.join(FAVICON_PATH))
+    .map_err(|error| format!("favicon url is invalid: {error}"))?;
+  let host = url
+    .host_str()
+    .ok_or_else(|| "favicon url has no host".to_string())?
+    .to_string();
+  let port = url
+    .port_or_known_default()
+    .ok_or_else(|| "favicon url has no port".to_string())?;
+  let mut addresses = tokio::net::lookup_host((host, port))
+    .await
+    .map_err(|error| format!("favicon host did not resolve: {error}"))?
+    .peekable();
+  if addresses.peek().is_none() {
+    return Err("favicon host did not resolve".to_string());
+  }
+  if !addresses.all(|address| is_public_address(address.ip())) {
+    return Err("favicon host resolves to a non-public address".to_string());
+  }
+  let response = client
+    .get(url)
+    .send()
+    .await
+    .map_err(|error| format!("favicon request failed: {error}"))?;
+  if !response.status().is_success() {
+    return Err(format!("favicon responded with {}", response.status()));
+  }
+  if response
+    .content_length()
+    .is_some_and(|length| length > MAX_FAVICON_BYTES as u64)
+  {
+    return Err("favicon exceeds the size limit".to_string());
+  }
+  let mut bytes = Vec::new();
+  let mut stream = response.bytes_stream();
+  while let Some(chunk) = stream.next().await {
+    let chunk = chunk.map_err(|error| format!("favicon body failed: {error}"))?;
+    if bytes.len() + chunk.len() > MAX_FAVICON_BYTES {
+      return Err("favicon exceeds the size limit".to_string());
+    }
+    bytes.extend_from_slice(&chunk);
+  }
+  Ok(bytes)
+}
+
+fn favicon_visual(origin: String, bytes: &[u8]) -> Option<ClipboardSourceAppVisual> {
+  let mut reader = ImageReader::new(Cursor::new(bytes))
+    .with_guessed_format()
+    .ok()?;
+  reader.limits(source_icon_image_limits());
+  let icon = reader.decode().ok()?.to_rgba8();
+  source_app_visual_metadata(origin, source_app_visual(icon))
+}
+
+fn source_icon_image_limits() -> ImageLimits {
+  let mut limits = ImageLimits::default();
+  limits.max_image_width = Some(1024);
+  limits.max_image_height = Some(1024);
+  limits.max_alloc = Some(16 * 1024 * 1024);
+  limits
+}
+
 struct HistoryClipboardHandler {
   app: AppHandle,
   clipboard: ClipboardContext,
+  favicons: FaviconFetcher,
   manager: ClipboardAppState,
   telemetry: DesktopTelemetry,
 }
 
 enum ClipboardImageCaptureAttempt {
-  Capture(ClipboardImageCapture),
+  Capture(Box<ClipboardImageCapture>),
   ContinueWithText { error: String },
 }
 
@@ -2535,7 +2912,7 @@ fn resolve_clipboard_image_capture(
   attempt: Result<ClipboardImageCapture, String>,
 ) -> ClipboardImageCaptureAttempt {
   match attempt {
-    Ok(capture) => ClipboardImageCaptureAttempt::Capture(capture),
+    Ok(capture) => ClipboardImageCaptureAttempt::Capture(Box::new(capture)),
     Err(error) => ClipboardImageCaptureAttempt::ContinueWithText { error },
   }
 }
@@ -2570,8 +2947,15 @@ impl ClipboardHandler for HistoryClipboardHandler {
     if !windows_clipboard_history_allows_capture(&self.clipboard, &formats) {
       return;
     }
+    let source_page = clipboard_source_page(&self.clipboard, &formats);
     let (source_app, source_app_visual) = frontmost_source_app(&self.app)
-      .map(|source| (Some(source.app), source.visual))
+      .map(|source| {
+        let app = ClipboardSourceApp {
+          page: source_page,
+          ..source.app
+        };
+        (Some(app), source.visual)
+      })
       .unwrap_or((None, None));
     if self.clipboard.has(ContentFormat::Image) {
       match resolve_clipboard_image_capture(
@@ -2580,7 +2964,7 @@ impl ClipboardHandler for HistoryClipboardHandler {
         }),
       ) {
         ClipboardImageCaptureAttempt::Capture(capture) => {
-          match self.capture(ClipboardCapture::Image(capture)) {
+          match self.capture(ClipboardCapture::Image(*capture)) {
             ClipboardCaptureOutcome::Captured | ClipboardCaptureOutcome::Ignored => {
               return;
             }
@@ -2635,6 +3019,7 @@ impl ClipboardHandler for HistoryClipboardHandler {
 
 impl HistoryClipboardHandler {
   fn capture(&self, capture: ClipboardCapture) -> ClipboardCaptureOutcome {
+    let source_page = capture.source_page().cloned();
     let outcome = match self.manager.lock() {
       Ok(mut manager) => match manager.capture(capture) {
         Ok(outcome) => outcome,
@@ -2660,6 +3045,11 @@ impl HistoryClipboardHandler {
     };
     if outcome == ClipboardCaptureOutcome::Captured {
       let _ = self.app.emit(HISTORY_EVENT, ());
+      if let Some(page) = source_page {
+        self
+          .favicons
+          .schedule(&self.app, &self.manager, &self.telemetry, page);
+      }
     }
     outcome
   }
@@ -3031,6 +3421,7 @@ pub fn initialize_and_watch(
   let mut handler = HistoryClipboardHandler {
     app,
     clipboard,
+    favicons: FaviconFetcher::new(),
     manager,
     telemetry: telemetry.clone(),
   };
@@ -3304,6 +3695,185 @@ mod tests {
     let icon_data_url = icon_data_url.unwrap();
     assert!(icon_data_url.starts_with("data:image/png;base64,"));
     assert!(icon_data_url.len() <= MAX_SOURCE_APP_ICON_DATA_URL_BYTES);
+  }
+
+  #[test]
+  fn source_page_keeps_web_origins_without_credentials_or_fragments() {
+    let page = source_page_from_url(
+      " https://user:secret@www.example.org:8443/path?q=1#section \n",
+    )
+    .unwrap();
+
+    assert_eq!(page.host, "www.example.org");
+    assert_eq!(page.origin, "https://www.example.org:8443");
+    assert_eq!(page.url, "https://www.example.org:8443/path?q=1");
+    assert_eq!(
+      source_page_from_url("http://localhost:3000/a")
+        .unwrap()
+        .origin,
+      "http://localhost:3000"
+    );
+    assert!(source_page_from_url("about:blank").is_none());
+    assert!(source_page_from_url("file:///Users/me/notes.html").is_none());
+    assert!(source_page_from_url("chrome://newtab").is_none());
+    let long = format!(
+      "https://example.org/{}",
+      "a".repeat(MAX_SOURCE_PAGE_URL_BYTES)
+    );
+    assert!(source_page_from_url(&long).is_none());
+  }
+
+  #[test]
+  fn favicon_hosts_must_resolve_to_public_addresses() {
+    for blocked in [
+      "127.0.0.1",
+      "10.1.2.3",
+      "172.16.0.9",
+      "192.168.1.1",
+      "169.254.169.254",
+      "100.64.0.1",
+      "0.0.0.0",
+      "::1",
+      "fc00::1",
+      "fe80::1",
+      "::ffff:10.0.0.1",
+    ] {
+      let address: IpAddr = blocked.parse().unwrap();
+      assert!(!is_public_address(address), "{blocked} must be refused");
+    }
+    for allowed in ["93.184.216.34", "2606:2800:220:1:248:1893:25c8:1946"] {
+      let address: IpAddr = allowed.parse().unwrap();
+      assert!(is_public_address(address), "{allowed} must be allowed");
+    }
+  }
+
+  #[test]
+  fn cf_html_source_url_comes_from_the_header_not_the_markup() {
+    let payload = b"Version:0.9\r\nStartHTML:0000000105\r\nEndHTML:0000000200\r\nStartFragment:0000000141\r\nEndFragment:0000000164\r\nSourceURL:https://example.org/a\r\n<html>\r\n<body>\r\n<!--StartFragment-->SourceURL:https://evil.test<!--EndFragment-->\r\n</body>\r\n</html>";
+
+    assert_eq!(cf_html_source_url(payload), Some("https://example.org/a"));
+    assert_eq!(cf_html_source_url(b"Version:0.9\r\n<html></html>"), None);
+  }
+
+  #[test]
+  fn favicon_visual_decodes_ico_payloads_into_a_bounded_png() {
+    let icon = image::RgbaImage::from_pixel(
+      SOURCE_APP_ICON_SIZE,
+      SOURCE_APP_ICON_SIZE,
+      image::Rgba([200, 40, 40, 255]),
+    );
+    let mut ico = Cursor::new(Vec::new());
+    image::DynamicImage::ImageRgba8(icon)
+      .write_to(&mut ico, image::ImageFormat::Ico)
+      .unwrap();
+
+    let visual =
+      favicon_visual("https://example.org".to_string(), &ico.into_inner()).unwrap();
+
+    assert_eq!(visual.key, "https://example.org");
+    assert_eq!(visual.color.as_deref(), Some("#c82828"));
+    assert!(
+      visual
+        .icon_data_url
+        .unwrap()
+        .starts_with("data:image/png;base64,")
+    );
+    assert!(
+      favicon_visual("https://example.org".to_string(), b"<html>404</html>").is_none()
+    );
+  }
+
+  fn page_capture() -> ClipboardCapture {
+    ClipboardCapture::Text(ClipboardTextCapture {
+      copied_at: Utc::now(),
+      html: None,
+      plain_text: "clause".to_string(),
+      rtf: None,
+      source_app: Some(ClipboardSourceApp {
+        identifier: Some("com.google.Chrome".to_string()),
+        name: "Google Chrome".to_string(),
+        page: Some(ClipboardSourcePage {
+          host: "example.org".to_string(),
+          origin: "https://example.org".to_string(),
+          url: "https://example.org/terms".to_string(),
+        }),
+        visual_key: None,
+      }),
+      source_app_visual: Some(ClipboardSourceAppVisual {
+        color: Some("#336699".to_string()),
+        icon_data_url: Some("data:image/png;base64,QUJD".to_string()),
+        key: "com.google.Chrome".to_string(),
+      }),
+    })
+  }
+
+  #[test]
+  fn page_items_fall_back_to_the_browser_icon_until_the_favicon_arrives() {
+    let mut manager = ready_manager();
+    assert_eq!(
+      manager.capture(page_capture()).unwrap(),
+      ClipboardCaptureOutcome::Captured
+    );
+    let item = manager.items[0].clone();
+    assert_eq!(
+      manager.source_app_visual(&item).unwrap().key,
+      "com.google.Chrome"
+    );
+    assert!(!manager.has_source_app_visual("https://example.org"));
+    let webview_key = |manager: &ClipboardManager| {
+      manager
+        .snapshot()
+        .items
+        .remove(0)
+        .source_app()
+        .unwrap()
+        .visual_key
+        .clone()
+    };
+    assert_eq!(webview_key(&manager).as_deref(), Some("com.google.Chrome"));
+
+    let favicon = ClipboardSourceAppVisual {
+      color: Some("#c82828".to_string()),
+      icon_data_url: Some("data:image/png;base64,REVG".to_string()),
+      key: "https://example.org".to_string(),
+    };
+    assert!(manager.insert_source_app_visual(favicon).unwrap());
+
+    assert_eq!(
+      manager.source_app_visual(&item).unwrap().key,
+      "https://example.org"
+    );
+    assert_eq!(
+      webview_key(&manager).as_deref(),
+      Some("https://example.org")
+    );
+    // The resolved key is a webview detail; the stored item keeps none.
+    assert_eq!(manager.items[0].source_app().unwrap().visual_key, None);
+    // Both the page and the browser stay referenced, so neither is collected.
+    let keys = manager
+      .snapshot()
+      .source_app_visuals
+      .into_iter()
+      .map(|visual| visual.key)
+      .collect::<Vec<_>>();
+    assert_eq!(keys, vec!["com.google.Chrome", "https://example.org"]);
+  }
+
+  #[test]
+  fn favicons_for_forgotten_pages_are_dropped() {
+    let mut manager = ready_manager();
+    manager.capture(page_capture()).unwrap();
+    let id = manager.items[0].id().to_string();
+    assert!(manager.delete_item(&id).unwrap());
+
+    let favicon = ClipboardSourceAppVisual {
+      color: None,
+      icon_data_url: Some("data:image/png;base64,REVG".to_string()),
+      key: "https://example.org".to_string(),
+    };
+
+    assert!(!manager.insert_source_app_visual(favicon).unwrap());
+    assert!(manager.source_app_visuals.is_empty());
   }
 
   #[test]
@@ -3999,6 +4569,8 @@ mod tests {
       source_app: Some(ClipboardSourceApp {
         identifier: Some("com.microsoft.Word".to_string()),
         name: "Microsoft Word".to_string(),
+        page: None,
+        visual_key: None,
       }),
     };
     let mut manager = ready_manager();
@@ -4369,6 +4941,8 @@ mod tests {
       source_app: Some(ClipboardSourceApp {
         identifier: Some("com.example.editor".to_string()),
         name: "Editor".to_string(),
+        page: None,
+        visual_key: None,
       }),
       source_app_visual: Some(ClipboardSourceAppVisual {
         color: Some("#336699".to_string()),
@@ -4546,6 +5120,8 @@ mod tests {
       source_app: Some(ClipboardSourceApp {
         identifier: Some("com.apple.TextEdit".to_string()),
         name: "TextEdit".to_string(),
+        page: None,
+        visual_key: None,
       }),
     };
 

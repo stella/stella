@@ -22,12 +22,14 @@ import {
 } from "@stll/ui/select";
 import { cn } from "@stll/ui/utils";
 
+import { subscribeDesktopEvent } from "../shared/desktop-events";
 import {
   DESKTOP_TELEMETRY_ERROR_CODES,
   DESKTOP_TELEMETRY_OPERATIONS,
   DESKTOP_TELEMETRY_WINDOWS,
   reportDesktopError,
 } from "../telemetry/desktop-telemetry";
+import { clipboardSourceLabel, clipboardSourceTitle } from "./clipboard-logic";
 import { CLIPBOARD_GROUP_ACCENTS } from "./clipboard-style";
 import { isClipboardEditorContext } from "./clipboard-types";
 import type { ClipboardEditorContext } from "./clipboard-types";
@@ -518,41 +520,73 @@ const ClipboardEditor = () => {
 
   useEffect(() => {
     let disposed = false;
-    void invoke<unknown>("clipboard_get_editor_context")
-      .then((value) => {
-        if (disposed) {
+    const loadContext = () => {
+      void invoke<unknown>("clipboard_get_editor_context")
+        .then((value) => {
+          if (disposed) {
+            return undefined;
+          }
+          if (!isClipboardEditorContext(value)) {
+            reportDesktopError({
+              code: DESKTOP_TELEMETRY_ERROR_CODES.invalidResponse,
+              operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardEditorRead,
+              window: DESKTOP_TELEMETRY_WINDOWS.clipboardEditor,
+            });
+            setState({ message: loadError, type: "error" });
+            return undefined;
+          }
+          setState((current) => {
+            if (current.type !== "ready") {
+              return {
+                context: value,
+                groupId: value.item.groupId,
+                save: { type: "idle" },
+                type: "ready",
+              };
+            }
+            // A refresh must not touch the text being edited or the user's
+            // group choice; it only takes what resolves underneath an open
+            // editor.
+            return {
+              ...current,
+              context: {
+                ...current.context,
+                groups: value.groups,
+                sourceAppVisual: value.sourceAppVisual,
+              },
+            };
+          });
           return undefined;
-        }
-        if (!isClipboardEditorContext(value)) {
+        })
+        .catch(() => {
+          if (disposed) {
+            return;
+          }
           reportDesktopError({
-            code: DESKTOP_TELEMETRY_ERROR_CODES.invalidResponse,
+            code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
             operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardEditorRead,
             window: DESKTOP_TELEMETRY_WINDOWS.clipboardEditor,
           });
           setState({ message: loadError, type: "error" });
-          return undefined;
-        }
-        setState({
-          context: value,
-          groupId: value.item.groupId,
-          save: { type: "idle" },
-          type: "ready",
         });
-        return undefined;
-      })
-      .catch(() => {
-        if (disposed) {
-          return;
-        }
+    };
+    loadContext();
+    // The source visual can resolve after the editor opened (a favicon fetched
+    // in the background); the history event announces it.
+    const stopListening = subscribeDesktopEvent({
+      event: "clipboard-history-changed",
+      handler: loadContext,
+      onError: () => {
         reportDesktopError({
-          code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+          code: DESKTOP_TELEMETRY_ERROR_CODES.eventSubscriptionFailed,
           operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardEditorRead,
           window: DESKTOP_TELEMETRY_WINDOWS.clipboardEditor,
         });
-        setState({ message: loadError, type: "error" });
-      });
+      },
+    });
     return () => {
       disposed = true;
+      stopListening();
     };
   }, [loadError]);
 
@@ -670,7 +704,12 @@ const ClipboardEditor = () => {
   }
 
   const { item } = state.context;
-  const sourceName = item.sourceApp?.name;
+  const sourceName = item.sourceApp
+    ? clipboardSourceLabel(item.sourceApp)
+    : null;
+  const sourceTitle = item.sourceApp
+    ? clipboardSourceTitle(item.sourceApp)
+    : undefined;
   const sourceVisual = state.context.sourceAppVisual;
   const toolbarItems = [
     { command: "bold", icon: BoldIcon, label: t("bold") },
@@ -706,6 +745,7 @@ const ClipboardEditor = () => {
             <p
               className="text-muted-foreground flex min-w-0 items-center gap-1.5 truncate text-xs"
               data-tauri-drag-region
+              title={sourceTitle}
             >
               {sourceVisual?.iconDataUrl ? (
                 <img

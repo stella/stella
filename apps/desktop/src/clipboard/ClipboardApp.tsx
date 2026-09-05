@@ -98,7 +98,10 @@ import {
   clipboardRailScrollDelta,
   clipboardRailWindow,
   clipboardSearchPreviewText,
+  clipboardSourceIdentity,
+  clipboardSourceLabel,
   clipboardSourceTintIndex,
+  clipboardSourceTitle,
   clipboardTimelineKeyAction,
   filterClipboardItems,
   formatClipboardAge,
@@ -310,9 +313,14 @@ const ClipboardCard = ({
     dateStyle: "full",
     timeStyle: "medium",
   });
-  const sourceAppName = item.sourceApp?.name ?? null;
+  const sourceLabel = item.sourceApp
+    ? clipboardSourceLabel(item.sourceApp)
+    : null;
+  const sourceTitle = item.sourceApp
+    ? clipboardSourceTitle(item.sourceApp)
+    : null;
   const sourceTintIndex = clipboardSourceTintIndex(
-    item.sourceApp?.identifier ?? sourceAppName,
+    item.sourceApp ? clipboardSourceIdentity(item.sourceApp) : null,
   );
   const accent = groupColor
     ? CLIPBOARD_GROUP_ACCENTS[groupColor]
@@ -322,6 +330,9 @@ const ClipboardCard = ({
     : undefined;
   const rendersHtml = item.type === "formattedText" && !query;
   const fallbackName = item.type === "image" ? t("image") : t("unnamedClip");
+  // An unnamed browser copy is named after the page it came from.
+  const untitledName =
+    item.sourceApp?.page && sourceLabel ? sourceLabel : fallbackName;
   const previewClassName = cn(
     "text-foreground line-clamp-[8] text-sm leading-5 text-pretty wrap-break-word",
     // HTML collapses its source whitespace; only plain text (and <pre>) keeps it.
@@ -401,12 +412,16 @@ const ClipboardCard = ({
       <TagsIcon aria-hidden="true" className="text-muted-foreground size-6" />
     );
   }
-  if (sourceAppName) {
+  if (sourceLabel) {
     metadataIcon = sourceVisual?.iconDataUrl ? (
       <img
         alt=""
         aria-hidden="true"
-        className="clipboard-source-icon size-7 shrink-0"
+        className={cn(
+          "clipboard-source-icon size-7 shrink-0",
+          // Favicons are plain squares; app icons carry their own shape.
+          item.sourceApp?.page && "rounded-md",
+        )}
         draggable={false}
         src={sourceVisual.iconDataUrl}
       />
@@ -479,7 +494,7 @@ const ClipboardCard = ({
       <footer className="clipboard-card-footer flex h-12 shrink-0 items-center gap-2 px-4">
         <span
           className="relative flex shrink-0 items-center"
-          title={sourceAppName ?? groupName ?? metadataTitle}
+          title={sourceTitle ?? groupName ?? metadataTitle}
         >
           {metadataIcon}
         </span>
@@ -518,7 +533,7 @@ const ClipboardCard = ({
             type="button"
           >
             <span className="truncate" dir="auto">
-              {item.name ?? fallbackName}
+              {item.name ?? untitledName}
             </span>
             <PencilIcon
               aria-hidden="true"
@@ -2031,10 +2046,9 @@ const ClipboardApp = () => {
                     onSelect={setSelectedIndex}
                     query={filterQuery}
                     sourceVisual={
-                      item.sourceApp
-                        ? (sourceAppVisuals.get(
-                            item.sourceApp.identifier ?? item.sourceApp.name,
-                          ) ?? null)
+                      item.sourceApp?.visualKey
+                        ? (sourceAppVisuals.get(item.sourceApp.visualKey) ??
+                          null)
                         : null
                     }
                   />

@@ -5,9 +5,21 @@ import {
 } from "@stll/text-normalize";
 import type { FoldedSearchText, SearchMatchRange } from "@stll/text-normalize";
 
-import type { ClipboardItem } from "./clipboard-types";
+import type { ClipboardItem, ClipboardSourceApp } from "./clipboard-types";
 
 const CLIPBOARD_SOURCE_TINT_COUNT = 6;
+
+/** What the accent tint is derived from: the page origin, else the app. */
+export const clipboardSourceIdentity = (sourceApp: ClipboardSourceApp) =>
+  sourceApp.page?.origin ?? sourceApp.identifier ?? sourceApp.name;
+
+/** The page's host for browser copies (without a leading `www.`), else the app. */
+export const clipboardSourceLabel = (sourceApp: ClipboardSourceApp) =>
+  sourceApp.page ? sourceApp.page.host.replace(/^www\./u, "") : sourceApp.name;
+
+/** The full page URL for browser copies, else the app name. */
+export const clipboardSourceTitle = (sourceApp: ClipboardSourceApp) =>
+  sourceApp.page?.url ?? sourceApp.name;
 
 export const CLIPBOARD_ITEM_DRAG_TYPE =
   "application/x-stella-clipboard-item-id";
