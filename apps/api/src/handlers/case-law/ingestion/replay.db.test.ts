@@ -20,9 +20,11 @@ import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import {
   CASE_LAW_REPLAY_SCOPE,
   countReplayability,
+  REPLAY_LISTED_PROBLEMS_PER_OUTCOME,
   REPLAY_ROW_OUTCOME,
   replayCaseLawSource,
   selectReplayPage,
+  selectScopeEnd,
 } from "@/api/handlers/case-law/ingestion/replay";
 import type {
   CaseLawReplayScope,
@@ -128,6 +130,14 @@ const walkIds = async (
   pageSize: number,
 ): Promise<SafeId<"caseLawDecision">[]> => {
   const seen: SafeId<"caseLawDecision">[] = [];
+  const until = await selectScopeEnd({
+    scopedDb,
+    sourceId,
+    scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
+  });
+  if (until === null) {
+    return seen;
+  }
   let after: SafeId<"caseLawDecision"> | null = null;
   for (let step = 0; step < WALK_STEP_BUDGET; step += 1) {
     const page = await selectReplayPage({
@@ -135,6 +145,7 @@ const walkIds = async (
       sourceId,
       scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
       after,
+      until,
       limit: pageSize,
     });
     if (page.length === 0) {
@@ -228,12 +239,22 @@ describe("replay walk boundary", () => {
       throw new TypeError("Expected a boundary row");
     }
 
+    const scopeEnd = await selectScopeEnd({
+      scopedDb,
+      sourceId,
+      scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
+    });
+    if (scopeEnd === null) {
+      throw new TypeError("Expected the scope to hold replayable rows");
+    }
+
     // The shape the walk uses: the boundary never leaves the database.
     const exact = await selectReplayPage({
       scopedDb,
       sourceId,
       scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
       after: boundaryId,
+      until: scopeEnd,
       limit: 10,
     });
     expect(exact.map((row) => row.id)).not.toContain(boundaryId);
@@ -524,11 +545,16 @@ describe("replay of a source", () => {
       court,
     } as const satisfies CaseLawReplayScope;
 
+    const courtEnd = await selectScopeEnd({ scopedDb, sourceId, scope });
+    if (courtEnd === null) {
+      throw new TypeError("Expected the court scope to hold a replayable row");
+    }
     const selected = await selectReplayPage({
       scopedDb,
       sourceId,
       scope,
       after: null,
+      until: courtEnd,
       limit: 10,
     });
     expect(selected.map(({ id }) => id)).toEqual([matchingId]);
@@ -742,7 +768,7 @@ describe("replay of a source", () => {
     expect(ran.report.outcomes[REPLAY_ROW_OUTCOME.UNCHANGED]).toBe(0);
   });
 
-  test("every skipped row remains identifiable after the cursor advances", async () => {
+  test("every skipped row is listed or counted, and the listing stays bounded", async () => {
     const sourceId = await createSource();
     const inserted = await Promise.all(
       Array.from({ length: 55 }, async (_, index) => {
@@ -779,11 +805,66 @@ describe("replay of a source", () => {
     if (ran.type !== "ran") {
       throw new TypeError("Expected the capable adapter to run");
     }
-    expect(ran.report.problems).toHaveLength(inserted.length);
-    expect(new Set(ran.report.problems.map(({ id }) => id))).toEqual(
-      new Set(inserted),
+    // The count is exact and every problem row is accounted for, but the
+    // listing is capped: a run over a whole source holds this report in
+    // memory until it ends.
+    expect(ran.report.outcomes[REPLAY_ROW_OUTCOME.REJECTED]).toBe(
+      inserted.length,
     );
+    expect(ran.report.problems).toHaveLength(
+      REPLAY_LISTED_PROBLEMS_PER_OUTCOME,
+    );
+    expect(ran.report.problems.length + ran.report.omittedProblems).toBe(
+      inserted.length,
+    );
+    const listed = new Set(ran.report.problems.map(({ id }) => id));
+    expect(listed.size).toBe(REPLAY_LISTED_PROBLEMS_PER_OUTCOME);
+    expect(inserted.filter((id) => listed.has(id))).toHaveLength(listed.size);
     expect(ran.report.resumeAfter).not.toBeNull();
+  });
+
+  test("a row ingested after the run's end was read is not visited by it", async () => {
+    const sourceId = await createSource();
+    await insertDecision({
+      sourceId,
+      id: createSafeId<"caseLawDecision">(),
+      sub: 300,
+      caseNumber: "C-300/26",
+      storedRaw: true,
+      sourceHash: "stored-hash-300",
+    });
+
+    const until = await selectScopeEnd({
+      scopedDb,
+      sourceId,
+      scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
+    });
+    if (until === null) {
+      throw new TypeError("Expected the scope to hold a replayable row");
+    }
+
+    // What a standing ingestion does while an unleased run walks: without a
+    // frozen end the walk would follow the source as it grows.
+    const arrived = createSafeId<"caseLawDecision">();
+    await insertDecision({
+      sourceId,
+      id: arrived,
+      sub: 301,
+      caseNumber: "C-301/26",
+      storedRaw: true,
+      sourceHash: "stored-hash-301",
+    });
+
+    const page = await selectReplayPage({
+      scopedDb,
+      sourceId,
+      scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
+      after: null,
+      until,
+      limit: 10,
+    });
+    expect(page.map(({ id }) => id)).toEqual([until]);
+    expect(page.map(({ id }) => id)).not.toContain(arrived);
   });
 
   test("an unbounded run visits the whole scope, a bounded one stops at its cap", async () => {

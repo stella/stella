@@ -1,5 +1,14 @@
 import { panic, Result } from "better-result";
-import { and, asc, eq, isNotNull, isNull, sql, type SQL } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  isNotNull,
+  isNull,
+  sql,
+  type SQL,
+} from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -196,22 +205,73 @@ type SelectReplayPageOptions = {
   scope: CaseLawReplayScope;
   /** Boundary row id; the page returns rows strictly after it. */
   after: SafeId<"caseLawDecision"> | null;
+  /** Last row of the run; the page returns nothing past it. */
+  until: SafeId<"caseLawDecision">;
   limit: number;
 };
 
 /**
- * One page of replayable decisions, oldest first.
+ * The rows a replay may visit: this source, this scope, a stored payload to
+ * replay from, and not redacted.
  *
- * A redacted row is excluded: its payload was erased deliberately and a
- * replay must not put text back on it. A row without a stored key is
+ * A redacted row is excluded because its payload was erased deliberately and
+ * a replay must not put text back on it. A row without a stored key is
  * excluded because there is nothing local to replay from; those rows are
- * counted separately by {@link countReplayability}.
+ * counted separately by {@link countReplayability}. Shared by the page query
+ * and the end boundary so the two cannot disagree about what the scope holds.
  */
+const replayableRows = (
+  sourceId: SafeId<"caseLawSource">,
+  scope: CaseLawReplayScope,
+): SQL | undefined =>
+  and(
+    eq(caseLawDecisions.sourceId, sourceId),
+    replayScopePredicate(scope),
+    isNotNull(caseLawDecisions.sourceRawS3Key),
+    isNull(caseLawDecisions.redactedAt),
+  );
+
+type SelectScopeEndOptions = {
+  scopedDb: ScopedDb;
+  sourceId: SafeId<"caseLawSource">;
+  scope: CaseLawReplayScope;
+};
+
+/**
+ * Last row the run will visit, read once before the walk starts.
+ *
+ * An unleased run (every dry run) walks alongside the source's ingestion, so
+ * without a frozen end the scope grows under the walk and rows written after
+ * the run began are replayed by it. Freezing the end also bounds the walk:
+ * it terminates on the rows that existed when it was asked to.
+ *
+ * Null where the scope holds nothing to replay.
+ */
+export const selectScopeEnd = async ({
+  scopedDb,
+  sourceId,
+  scope,
+}: SelectScopeEndOptions): Promise<SafeId<"caseLawDecision"> | null> => {
+  const last = (
+    await scopedDb((tx) =>
+      tx
+        .select({ id: caseLawDecisions.id })
+        .from(caseLawDecisions)
+        .where(replayableRows(sourceId, scope))
+        .orderBy(desc(caseLawDecisions.createdAt), desc(caseLawDecisions.id))
+        .limit(1),
+    )
+  ).at(0);
+  return last?.id ?? null;
+};
+
+/** One page of the run's rows, oldest first, up to its frozen end. */
 export const selectReplayPage = async ({
   scopedDb,
   sourceId,
   scope,
   after,
+  until,
   limit,
 }: SelectReplayPageOptions): Promise<ReplayDecisionRow[]> => {
   const rows = await scopedDb((tx) =>
@@ -238,18 +298,16 @@ export const selectReplayPage = async ({
       .from(caseLawDecisions)
       .where(
         and(
-          eq(caseLawDecisions.sourceId, sourceId),
-          replayScopePredicate(scope),
-          isNotNull(caseLawDecisions.sourceRawS3Key),
-          isNull(caseLawDecisions.redactedAt),
-          // The boundary row's `(created_at, id)` is looked up by id inside
-          // the database, so the comparison stays at the column's microsecond
+          replayableRows(sourceId, scope),
+          // Both boundary rows' `(created_at, id)` are looked up by id inside
+          // the database, so the comparisons stay at the column's microsecond
           // precision. A boundary carried out as a JS `Date` would be
           // truncated to milliseconds, and an ascending keyset over a
           // truncated boundary re-serves the row it stopped on forever.
           after === null
             ? undefined
             : sql`(${caseLawDecisions.createdAt}, ${caseLawDecisions.id}) > (select b.created_at, b.id from case_law_decisions b where b.id = ${after})`,
+          sql`(${caseLawDecisions.createdAt}, ${caseLawDecisions.id}) <= (select e.created_at, e.id from case_law_decisions e where e.id = ${until})`,
         ),
       )
       .orderBy(asc(caseLawDecisions.createdAt), asc(caseLawDecisions.id))
@@ -341,8 +399,14 @@ export type ReplayRunReport = {
   visited: number;
   outcomes: Record<ReplayRowOutcome, number>;
   rejections: Record<StoredRawReparseRejection, number>;
-  /** Every row that produced no result, so advancing is always auditable. */
+  /**
+   * Rows that produced no result, so advancing is auditable, at most
+   * {@link REPLAY_LISTED_PROBLEMS_PER_OUTCOME} per outcome. The counts above
+   * stay exact whatever the run's size.
+   */
   problems: ReplayRowReport[];
+  /** Problem rows the run counted but did not list. */
+  omittedProblems: number;
   /**
    * Id of the last row this run finished, or null when it finished none.
    * Passing it back as `after` resumes exactly where the run stopped, and
@@ -375,6 +439,13 @@ const emptyRejectionCounts = (): Record<StoredRawReparseRejection, number> => ({
   [STORED_RAW_REPARSE_REJECTION.UNSUPPORTED_CONTENT]: 0,
   [STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT]: 0,
 });
+
+/**
+ * Problem rows listed per outcome. A run over a whole source can report
+ * hundreds of thousands of them, and the report is held in memory until the
+ * run ends: the counts carry the size, the listing carries the examples.
+ */
+export const REPLAY_LISTED_PROBLEMS_PER_OUTCOME = 20;
 
 const REPLAY_OUTCOME_DISPOSITION = {
   [REPLAY_ROW_OUTCOME.APPLIED]: "ok",
@@ -1002,6 +1073,8 @@ export const replayCaseLawSource = async ({
   const outcomes = emptyOutcomeCounts();
   const rejections = emptyRejectionCounts();
   const problems: ReplayRowReport[] = [];
+  const listedProblems = emptyOutcomeCounts();
+  let omittedProblems = 0;
   let cursor = after;
   let resumeAfter: SafeId<"caseLawDecision"> | null = null;
   let visited = 0;
@@ -1014,6 +1087,7 @@ export const replayCaseLawSource = async ({
       outcomes,
       rejections,
       problems,
+      omittedProblems,
       resumeAfter,
       haltReason,
     },
@@ -1059,7 +1133,14 @@ export const replayCaseLawSource = async ({
       rejections[rowReport.rejection] += 1;
     }
     if (REPLAY_OUTCOME_DISPOSITION[rowReport.outcome] === "problem") {
-      problems.push(rowReport);
+      if (
+        listedProblems[rowReport.outcome] < REPLAY_LISTED_PROBLEMS_PER_OUTCOME
+      ) {
+        listedProblems[rowReport.outcome] += 1;
+        problems.push(rowReport);
+      } else {
+        omittedProblems += 1;
+      }
     }
     cursor = row.id;
 
@@ -1070,6 +1151,13 @@ export const replayCaseLawSource = async ({
     resumeAfter = row.id;
     return await replayPage(page, index + 1);
   };
+
+  // Read before the first page: the walk visits the rows the scope held when
+  // it was asked to, not the ones an ingestion adds while it runs.
+  const until = await selectScopeEnd({ scopedDb, sourceId, scope });
+  if (until === null) {
+    return ran();
+  }
 
   const walk = async (): Promise<void> => {
     const remaining =
@@ -1084,6 +1172,7 @@ export const replayCaseLawSource = async ({
       sourceId,
       scope,
       after: cursor,
+      until,
       limit: remaining,
     });
     if (page.length === 0) {

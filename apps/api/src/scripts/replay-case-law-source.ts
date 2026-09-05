@@ -238,6 +238,10 @@ for (const problem of report.problems) {
     `${problem.outcome}: ${problem.caseNumber} (${problem.language}) ${problem.id} ${problem.detail ?? ""}`,
   );
 }
+// The outcome counts above cover every row; only the listing is capped.
+if (report.omittedProblems > 0) {
+  console.log(`and ${report.omittedProblems} more problem rows, not listed`);
+}
 console.log(
   `visited:             ${report.visited} of ${bound.type === "all" ? "all" : `at most ${bound.limit}`}`,
 );
