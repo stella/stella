@@ -105,3 +105,8 @@
 - A successful HTTP response is not necessarily completion of the user action that
   issued it. Wait for the product's visible completion state before asserting settled
   UI or navigating away.
+
+## Error Handling
+
+- Web code returns `Result`; `try`/`catch` belongs only to the boundary modules
+  listed in `scripts/result-boundary-globs.ts`.

@@ -716,6 +716,20 @@ jobs:
           bun scripts/ratchet.ts --self-test
           bun scripts/ratchet.ts --check
 
+      - name: Result boundary enrolment
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # Joining the better-result boundary convention is the default. Every
+        # directory under apps/*/src and packages/*/src is either enabled in
+        # RESULT_CONVENTION_ENABLED_GLOBS or carries a written reason in
+        # RESULT_CONVENTION_OPT_OUTS, so a new app, package, or feature
+        # directory cannot skip the convention by being forgotten; an opt-out
+        # for a directory that is now enabled or gone fails too, so the table
+        # can only shrink. The fixture tests run first so a broken guard cannot
+        # pass silently.
+        run: |
+          bun test scripts/check-result-boundary-enrolment.test.ts
+          bun run check:result-boundary-enrolment
+
       - name: Module ownership
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         # scripts/ownership.ts holds one row per owned capability. The

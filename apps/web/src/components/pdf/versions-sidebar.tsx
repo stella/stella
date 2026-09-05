@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
+import { Result } from "better-result";
 import {
   CheckIcon,
   DownloadIcon,
@@ -35,7 +36,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { DOCX_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { filesKeys } from "@/lib/files/queries";
 import { uploadEntityVersion } from "@/lib/files/upload-entity-version";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
@@ -247,18 +248,17 @@ export const VersionsSidebar = ({
     const switchTarget =
       remaining.find((v) => v.id === currentVersionId) ?? remaining.at(0);
 
-    try {
-      const response = await api
-        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .entity({ entityId: toSafeId<"entity">(entityId) })
-        .versions({ versionId: toSafeId<"entityVersion">(versionId) })
-        .delete({});
-
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-    } catch (error) {
-      getAnalytics().captureError(error);
+    const requested = await Result.tryPromise(async () =>
+      unwrapEden(
+        await api
+          .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+          .entity({ entityId: toSafeId<"entity">(entityId) })
+          .versions({ versionId: toSafeId<"entityVersion">(versionId) })
+          .delete({}),
+      ),
+    );
+    if (Result.isError(requested)) {
+      getAnalytics().captureError(requested.error);
       stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
       await invalidateVersions();
       return;
@@ -276,43 +276,41 @@ export const VersionsSidebar = ({
   };
 
   const handleSetLabel = async (versionId: string, label: string | null) => {
-    try {
-      const response = await api
-        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .entity({ entityId: toSafeId<"entity">(entityId) })
-        .versions({ versionId: toSafeId<"entityVersion">(versionId) })
-        .label.patch({
-          label,
-        });
-
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-    } catch (error) {
-      getAnalytics().captureError(error);
+    const requested = await Result.tryPromise(async () =>
+      unwrapEden(
+        await api
+          .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+          .entity({ entityId: toSafeId<"entity">(entityId) })
+          .versions({ versionId: toSafeId<"entityVersion">(versionId) })
+          .label.patch({
+            label,
+          }),
+      ),
+    );
+    if (Result.isError(requested)) {
+      getAnalytics().captureError(requested.error);
       stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
-    } finally {
-      await invalidateVersions();
     }
+
+    await invalidateVersions();
   };
 
   const handleRestore = async (versionId: string) => {
-    try {
-      const response = await api
-        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .entity({ entityId: toSafeId<"entity">(entityId) })
-        .versions({ versionId: toSafeId<"entityVersion">(versionId) })
-        .restore.post({});
-
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-    } catch (error) {
-      getAnalytics().captureError(error);
+    const requested = await Result.tryPromise(async () =>
+      unwrapEden(
+        await api
+          .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+          .entity({ entityId: toSafeId<"entity">(entityId) })
+          .versions({ versionId: toSafeId<"entityVersion">(versionId) })
+          .restore.post({}),
+      ),
+    );
+    if (Result.isError(requested)) {
+      getAnalytics().captureError(requested.error);
       stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
-    } finally {
-      await invalidateVersions();
     }
+
+    await invalidateVersions();
   };
 
   const handleDownload = async (fieldId: string) => {

@@ -71,6 +71,7 @@
     "check:resolutions": "bun scripts/check-resolution-ranges.ts",
     "check:dead-columns": "bun scripts/check-dead-columns.ts",
     "check:projection-totality": "bun scripts/check-projection-totality.ts",
+    "check:result-boundary-enrolment": "bun scripts/check-result-boundary-enrolment.ts",
     "check:knip-exports": "bun scripts/knip-exports-ratchet.ts --check",
     "check:module-ownership": "bun scripts/ownership.ts --check",
     "check:published-package-lists": "bun scripts/check-published-package-lists.ts --check",
