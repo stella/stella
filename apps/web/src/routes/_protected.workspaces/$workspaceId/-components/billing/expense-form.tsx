@@ -5,11 +5,7 @@ import { useSelector } from "@tanstack/react-store";
 import { useTranslations } from "use-intl";
 
 import { EXPENSE_CATEGORIES, type ExpenseCategory } from "@stll/api-contract";
-import {
-  currencyMinorUnitDigits,
-  toMajorUnits,
-  tryToMinorUnits,
-} from "@stll/money";
+import { tryToMinorUnits } from "@stll/money";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { Input } from "@stll/ui/input";
@@ -26,18 +22,9 @@ import { stellaToast } from "@stll/ui/toast";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { detached } from "@/lib/detached";
+import { majorUnitInput } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/amount-input.logic";
 import { DEFAULT_CURRENCY } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-currency";
 import { MatterCombobox } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/matter-combobox";
-
-/**
- * The stored amount as the decimal string the amount input edits, at the
- * number of places the currency counts: a yen amount shows none, a dinar
- * amount three.
- */
-const majorUnitInput = (amountCents: number, currency: string): string =>
-  toMajorUnits({ amountCents, currency }).toFixed(
-    currencyMinorUnitDigits(currency),
-  );
 
 export type ExpenseFormValues = {
   matterId: string;

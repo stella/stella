@@ -5,11 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useSelector } from "@tanstack/react-store";
 import { useTranslations } from "use-intl";
 
-import {
-  currencyMinorUnitDigits,
-  toMajorUnits,
-  toMinorUnits,
-} from "@stll/money";
+import { tryToMinorUnits } from "@stll/money";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { Input } from "@stll/ui/input";
@@ -29,6 +25,10 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
 import { billingCodesOptions } from "@/lib/workspaces/queries/billing-codes";
 import { resolvedRateOptions } from "@/lib/workspaces/queries/rates";
+import {
+  majorUnitInput,
+  submittedRateCents,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/billing/amount-input.logic";
 import { DurationInput } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/duration-input";
 import {
   DEFAULT_CURRENCY,
@@ -36,15 +36,6 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-currency";
 import { MatterCombobox } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/matter-combobox";
 import { TimeEntryNarrativeField } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-narrative-field";
-
-/**
- * The stored amount as the decimal string the rate input edits, at the number
- * of places the currency counts: a yen rate shows none, a dinar rate three.
- */
-const majorUnitInput = (amountCents: number, currency: string): string =>
-  toMajorUnits({ amountCents, currency }).toFixed(
-    currencyMinorUnitDigits(currency),
-  );
 
 export type TimeEntryFormValues = {
   matterId: string;
@@ -125,7 +116,19 @@ export const TimeEntryForm = ({
         });
         return;
       }
-      await onSubmit(value);
+      // The rate input holds MAJOR units and the currency input sits beside
+      // it, so an overridden rate is scaled here, against the currency the
+      // form actually submits: 100 typed under USD and submitted under JPY is
+      // 100 yen. A rate that was never overridden already carries its rate
+      // table's currency, in that currency's minor units.
+      await onSubmit({
+        ...value,
+        rateAtEntry: submittedRateCents({
+          draft: rateOverride ? rateInputValue : null,
+          currency: value.currency,
+          resolvedRateCents: value.rateAtEntry,
+        }),
+      });
     },
   });
 
@@ -220,32 +223,27 @@ export const TimeEntryForm = ({
         </div>
         {rateOverride ? (
           <div className="flex gap-2">
-            <form.Field name="rateAtEntry">
-              {(field) => (
-                <Input
-                  className="flex-1"
-                  dir="ltr"
-                  inputMode="decimal"
-                  onBlur={() => {
-                    const typed = Number.parseFloat(rateInputValue);
-                    if (Number.isNaN(typed)) {
-                      return;
-                    }
-                    // The currency input sits beside this one, so the rate is
-                    // rescaled on every blur against whatever it holds now.
-                    const rate = toMinorUnits({
-                      amount: typed,
-                      currency: currentCurrency,
-                    });
-                    field.handleChange(rate);
-                    setRateInputValue(majorUnitInput(rate, currentCurrency));
-                  }}
-                  onChange={(e) => setRateInputValue(e.currentTarget.value)}
-                  placeholder="350.00"
-                  value={rateInputValue}
-                />
-              )}
-            </form.Field>
+            <Input
+              className="flex-1"
+              dir="ltr"
+              inputMode="decimal"
+              onBlur={() => {
+                // Display only: tidy the draft to the places the currency
+                // counts. The draft stays in major units, and the scaling
+                // that reaches the API waits for submit.
+                const rate = tryToMinorUnits({
+                  amount: rateInputValue,
+                  currency: currentCurrency,
+                });
+                if (rate === null) {
+                  return;
+                }
+                setRateInputValue(majorUnitInput(rate, currentCurrency));
+              }}
+              onChange={(e) => setRateInputValue(e.currentTarget.value)}
+              placeholder="350.00"
+              value={rateInputValue}
+            />
             <form.Field name="currency">
               {(field) => (
                 <Input
