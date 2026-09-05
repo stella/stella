@@ -323,6 +323,9 @@ run_step "Desktop-release-changes self-test" bash scripts/detect-desktop-release
 run_step "Dependabot Bun autofix self-test" bun test \
   scripts/autofix-workflow.test.ts \
   scripts/dependabot-empty-changeset.test.ts
+run_step "Published package list self-test" bun test \
+  scripts/check-published-package-lists.test.ts
+run_step "Published package lists" bun run check:published-package-lists
 run_step "Bridge-version guard" bash scripts/check-bridge-version.sh
 
 echo
