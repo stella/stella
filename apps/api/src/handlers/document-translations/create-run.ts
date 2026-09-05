@@ -136,15 +136,13 @@ const createDocumentTranslationRun = createSafeHandler<
       source.mimeType === DOCX_MIME_TYPE &&
       body.commentPolicy === undefined
     ) {
-      const inspection = await Result.tryPromise({
-        try: async () => {
-          const buffer = Result.unwrap(
-            await readEntityVersionFile(source, organizationId),
-          );
-          return await inspectDocxComments(buffer);
-        },
-        catch: (cause) => cause,
-      });
+      const buffer = await readEntityVersionFile(source, organizationId);
+      const inspection = Result.isError(buffer)
+        ? buffer
+        : await Result.tryPromise({
+            try: async () => await inspectDocxComments(buffer.value),
+            catch: (cause) => cause,
+          });
       if (Result.isError(inspection)) {
         captureError(inspection.error, { entityId: body.entityId });
         return Result.err(

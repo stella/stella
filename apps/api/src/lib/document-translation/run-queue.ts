@@ -93,7 +93,10 @@ import {
 } from "@/api/lib/document-translation/segments";
 import { applyAiEditsToDocx } from "@/api/lib/docx-authoring/apply-ai-edits";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
-import { loadEntityVersionFileBuffer } from "@/api/lib/entity-versions/load-entity-version-file-buffer";
+import {
+  readEntityVersionFile,
+  resolveEntityVersionFile,
+} from "@/api/lib/entity-versions/load-entity-version-file-buffer";
 import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buffer";
 import { errorTag } from "@/api/lib/errors/utils";
 import { getScanWarnings, scanFile } from "@/api/lib/file-scan/scan";
@@ -393,25 +396,27 @@ const loadPinnedSource = async (
   actor: RunActor,
   run: ClaimedRun,
 ): Promise<Result<ArrayBuffer, DocumentTranslationRunErrorCode>> => {
-  const loaded = await loadEntityVersionFileBuffer({
+  const file = await resolveEntityVersionFile({
     safeDb: actor.safeDb,
-    organizationId: actor.organizationId,
     workspaceId: actor.workspaceId,
     entityId: run.entityId,
     fileFieldId: run.fileFieldId,
     allowReadOnly: true,
   });
-  if (Result.isError(loaded)) {
+  if (Result.isError(file)) {
     return Result.err("document_unresolved");
   }
   if (
-    loaded.value.entityVersionId !== run.entityVersionId ||
-    loaded.value.fileId !== run.sourceFileId ||
-    loaded.value.mimeType !== run.sourceMimeType
+    file.value.entityVersionId !== run.entityVersionId ||
+    file.value.fileId !== run.sourceFileId ||
+    file.value.mimeType !== run.sourceMimeType
   ) {
     return Result.err("document_changed");
   }
-  return Result.ok(loaded.value.buffer);
+  const bytes = await readEntityVersionFile(file.value, actor.organizationId);
+  return Result.isError(bytes)
+    ? Result.err("document_unresolved")
+    : Result.ok(bytes.value);
 };
 
 const createAIContext = async (
