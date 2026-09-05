@@ -76,7 +76,14 @@ export const UploadDocumentDialog = ({
   );
 
   return (
-    <Dialog onOpenChange={(open) => !open && onClose()} open>
+    <Dialog
+      onOpenChange={(open) => {
+        if (!open) {
+          onClose();
+        }
+      }}
+      open
+    >
       <DialogPopup className="max-w-lg">
         <DialogHeader>
           <DialogTitle>{t("workspaces.kanban.uploadDocument")}</DialogTitle>
