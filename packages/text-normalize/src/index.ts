@@ -20,3 +20,5 @@ export {
   collapseSpacedLetters,
   spacedLetterRunRegex,
 } from "./spaced-letters.js";
+export { slugify } from "./slug.js";
+export type { SlugCharset, SlugifyOptions, SlugSeparator } from "./slug.js";

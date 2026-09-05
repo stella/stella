@@ -4,6 +4,7 @@ import * as v from "valibot";
 import type { ConditionNode } from "@stll/conditions";
 import { conditionNodeSchema } from "@stll/conditions";
 import { isFieldPath } from "@stll/template-conditions";
+import { slugify as slugifyText } from "@stll/text-normalize";
 
 import { DATE_FORMAT_STYLES } from "@/components/templates/template-date-format";
 import { isLookupRegistry } from "@/components/templates/template-field-manifest";
@@ -39,6 +40,9 @@ export const isInputType = (
 ): value is TemplateEditableField["inputType"] =>
   INPUT_TYPE_VALUES.some((type) => type === value);
 
+/** Words kept from a selection when deriving a field path. */
+const WORDS_IN_FIELD_PATH = 4;
+
 const trimChar = (value: string, ch: string): string => {
   let start = 0;
   let end = value.length;
@@ -63,17 +67,16 @@ export const sanitizeFieldPath = (text: string): string => {
 };
 
 export const slugify = (text: string): string => {
-  const collapsed = text
-    .trim()
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}]+/gu, "_");
   // Long selections make unwieldy paths; the first few words identify the
-  // field just as well (the label carries the rest).
-  const slug = trimChar(collapsed, "_")
-    .split("_")
-    .slice(0, 4)
-    .join("_")
-    .slice(0, 40);
+  // field just as well (the label carries the rest), so the word cap runs
+  // before the character budget.
+  const words = slugifyText(text, {
+    charset: "unicode",
+    separator: "_",
+    maxLength: Number.MAX_SAFE_INTEGER,
+    fallback: "",
+  }).split("_");
+  const slug = words.slice(0, WORDS_IN_FIELD_PATH).join("_").slice(0, 40);
   return slug.length > 0 ? slug : "field";
 };
 

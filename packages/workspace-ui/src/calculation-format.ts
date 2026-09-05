@@ -7,10 +7,18 @@
  * monetary reduction has one line per currency to lay out.
  */
 
-import { Result } from "better-result";
-
 import type { CalculationResult } from "@stll/calculations";
 import type { CentsAmount } from "@stll/money";
+
+// Money display belongs to the package that owns the amounts: the minor-unit
+// question ("how many make a major one?") is a property of the currency, not
+// of this kit. Re-exported here so the subpath consumers already import stays
+// the one they import.
+export {
+  currencyMinorUnitDigits,
+  formatMoneyCents,
+  type FormatMoneyCentsParams,
+} from "@stll/money";
 
 export type CalculationFormatters = {
   number: (value: number) => string;
@@ -73,65 +81,6 @@ export const formatCalculationResult = ({
       return exhaustive;
     }
   }
-};
-
-/**
- * Two, the ISO 4217 default, used when a stored code is one `Intl` will not
- * accept. Validation at the API boundary keeps those out, but a row written
- * before that constraint existed must still render rather than throw.
- */
-const DEFAULT_MINOR_UNIT_DIGITS = 2;
-
-/**
- * How many minor units make a major one, for this currency: 100 for CZK, 1 for
- * JPY, 1000 for KWD. It is a property of the currency and not of the reader, so
- * the lookup is deliberately locale-independent.
- *
- * A malformed code makes the `Intl.NumberFormat` constructor throw, before any
- * `?? 2` on its result could help, so the fallback has to wrap the call.
- */
-export const currencyMinorUnitDigits = (currency: string): number => {
-  const resolved = Result.try(
-    () =>
-      new Intl.NumberFormat("en", {
-        style: "currency",
-        currency,
-      }).resolvedOptions().maximumFractionDigits,
-  );
-
-  if (resolved.isErr()) {
-    return DEFAULT_MINOR_UNIT_DIGITS;
-  }
-  return resolved.value ?? DEFAULT_MINOR_UNIT_DIGITS;
-};
-
-export type FormatMoneyCentsParams = {
-  amountCents: number;
-  currency: string;
-  locale: string;
-};
-
-/**
- * Money is stored in minor units, and how many of them make a major one is a
- * property of the currency. Ask the currency rather than assuming a hundred.
- *
- * A code `Intl` rejects falls back to the amount beside the raw code: a column
- * showing "1500 A1C" is wrong-looking data, which is the truth, where a thrown
- * RangeError would take the whole board down with it.
- */
-export const formatMoneyCents = ({
-  amountCents,
-  currency,
-  locale,
-}: FormatMoneyCentsParams): string => {
-  const major = amountCents / 10 ** currencyMinorUnitDigits(currency);
-  const formatted = Result.try(() =>
-    new Intl.NumberFormat(locale, { style: "currency", currency }).format(
-      major,
-    ),
-  );
-
-  return formatted.isErr() ? `${major} ${currency}` : formatted.value;
 };
 
 const SEPARATOR = " · ";

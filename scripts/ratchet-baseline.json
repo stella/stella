@@ -1218,7 +1218,7 @@
     }
   },
   "api-lib-top-level-entries": {
-    "count": 291,
+    "count": 290,
     "files": {
       "apps/api/src/lib/account-deletion-cleanup-queue.ts": 1,
       "apps/api/src/lib/account-deletion-effect-store.ts": 1,
@@ -1464,7 +1464,6 @@
       "apps/api/src/lib/signals": 1,
       "apps/api/src/lib/signup-abuse.ts": 1,
       "apps/api/src/lib/skills": 1,
-      "apps/api/src/lib/slug.ts": 1,
       "apps/api/src/lib/smoke-session": 1,
       "apps/api/src/lib/sort-deep.ts": 1,
       "apps/api/src/lib/sql-case-expression.ts": 1,
