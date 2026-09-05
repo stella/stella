@@ -1,6 +1,6 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
-import { filenameForContext, isAstNode } from "./utils.ts";
+import { type AstNode, filenameForContext, isAstNode } from "./utils.ts";
 
 // Scaling money by a literal 100 hard-codes an exponent the currency owns.
 //
@@ -50,67 +50,77 @@ const HUNDRED = 100;
 // stays under the rule.
 const OWNING_MODULE = "packages/money/src/index.ts";
 
-const isMoneyName = (name) => {
+/** How deep the operand walk descends before it gives up. */
+const MAX_OPERAND_DEPTH = 12;
+
+/** Keys that lead back up the tree or hold positions rather than children. */
+const NON_CHILD_KEYS = new Set(["parent", "range", "loc"]);
+
+const identifierName = (node: unknown): string | undefined =>
+  isAstNode(node) && node.type === "Identifier" && typeof node.name === "string"
+    ? node.name
+    : undefined;
+
+/** The property of a non-computed member access, `a.b` but not `a[b]`. */
+const memberPropertyName = (node: unknown): string | undefined => {
+  if (
+    !isAstNode(node) ||
+    (node.type !== "MemberExpression" &&
+      node.type !== "OptionalMemberExpression") ||
+    node.computed === true
+  ) {
+    return undefined;
+  }
+  return identifierName(node.property);
+};
+
+const isMoneyName = (name: string): boolean => {
   const lowered = name.toLowerCase();
   return MONEY_NAME_SUFFIXES.some((suffix) => lowered.endsWith(suffix));
 };
 
-const isParseCall = (node) => {
+const isParseCall = (node: AstNode): boolean => {
   if (
     node.type !== "CallExpression" &&
     node.type !== "OptionalCallExpression"
   ) {
     return false;
   }
-  const callee = node.callee;
-  if (callee?.type === "Identifier") {
-    return PARSE_CALL_NAMES.has(callee.name);
-  }
-  if (
-    (callee?.type === "MemberExpression" ||
-      callee?.type === "OptionalMemberExpression") &&
-    !callee.computed &&
-    callee.property?.type === "Identifier"
-  ) {
-    return PARSE_CALL_NAMES.has(callee.property.name);
-  }
-  return false;
+  const calleeName =
+    identifierName(node.callee) ?? memberPropertyName(node.callee);
+  return calleeName !== undefined && PARSE_CALL_NAMES.has(calleeName);
 };
+
+/** The child nodes of `node`, skipping the keys that are not children. */
+const childValues = (node: AstNode): unknown[] =>
+  Object.entries(node)
+    .filter(([key]) => !NON_CHILD_KEYS.has(key))
+    .flatMap(([, value]) => (Array.isArray(value) ? value : [value]));
 
 // A money name anywhere in the operand, or a call that parses the number being
 // scaled. Walks children rather than the source text so a name inside a string
 // or a comment cannot trigger it.
-const isMoneyOperand = (node, depth = 0) => {
-  if (!isAstNode(node) || depth > 12) {
+const isMoneyOperand = (node: unknown, depth = 0): boolean => {
+  if (!isAstNode(node) || depth > MAX_OPERAND_DEPTH) {
     return false;
   }
-  if (node.type === "Identifier") {
-    return isMoneyName(node.name);
-  }
-  if (
-    (node.type === "MemberExpression" ||
-      node.type === "OptionalMemberExpression") &&
-    !node.computed &&
-    node.property?.type === "Identifier" &&
-    isMoneyName(node.property.name)
-  ) {
+  const ownName = identifierName(node) ?? memberPropertyName(node);
+  if (ownName !== undefined && isMoneyName(ownName)) {
     return true;
   }
   if (isParseCall(node)) {
     return true;
   }
-  return Object.entries(node).some(([key, value]) => {
-    if (key === "parent" || key === "range" || key === "loc") {
-      return false;
-    }
-    if (Array.isArray(value)) {
-      return value.some((item) => isMoneyOperand(item, depth + 1));
-    }
-    return isMoneyOperand(value, depth + 1);
-  });
+  // An identifier that is not a money name has no children worth walking, and
+  // a member's object still might (`policy.price.amountCents`).
+  if (node.type === "Identifier") {
+    return false;
+  }
+  return childValues(node).some((child) => isMoneyOperand(child, depth + 1));
 };
 
-const isHundred = (node) => node.type === "Literal" && node.value === HUNDRED;
+const isHundred = (node: unknown): boolean =>
+  isAstNode(node) && node.type === "Literal" && node.value === HUNDRED;
 
 export default eslintCompatPlugin({
   meta: { name: "no-literal-minor-unit-scale" },
