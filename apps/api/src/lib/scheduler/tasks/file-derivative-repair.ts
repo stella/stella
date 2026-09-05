@@ -1,5 +1,6 @@
 import { Result, panic } from "better-result";
 import { and, asc, eq, gt, isNull, lt, sql } from "drizzle-orm";
+import * as v from "valibot";
 
 import { rootDb } from "@/api/db/root";
 import {
@@ -61,35 +62,70 @@ const DERIVATIVE_RETRY_VERDICT = {
 type DerivativeRetryVerdict =
   (typeof DERIVATIVE_RETRY_VERDICT)[keyof typeof DERIVATIVE_RETRY_VERDICT];
 
+const UNRECOGNIZED_STATE = { status: "unrecognized" } as const;
+
 /**
- * Whether this derivative state can still be retried. Absent means `pending`:
- * that is the default every file field is written with. A `failed` state is
+ * The stored shape, parsed. Typing the parser's output as the column's own
+ * union binds the two: a status the parser accepts but the column does not
+ * fails to compile here, and a status added to the column reaches the switch
+ * below without a case.
+ */
+type ReadDerivativeState =
+  | NonNullable<DerivativeState>
+  | typeof UNRECOGNIZED_STATE;
+
+const storedDerivativeStateSchema = v.union([
+  v.object({ status: v.literal("not-required") }),
+  v.object({ status: v.literal("pending") }),
+  v.object({ status: v.literal("ready") }),
+  v.object({
+    status: v.literal("failed"),
+    reason: v.optional(
+      v.picklist([
+        DERIVATIVE_FAILURE_REASON.ENQUEUE,
+        DERIVATIVE_FAILURE_REASON.PROCESSING,
+      ]),
+    ),
+  }),
+]);
+
+/**
+ * `fields.content` is unvalidated JSONB, so a state written by a buggy build
+ * (the bare-`::jsonb` string casts `file-derivative-queue` documents) or a
+ * newer one reaches this sweep as-is, whatever the Drizzle type says. Parse it
+ * here, at the read: what comes back is either a status this build knows or the
+ * `unrecognized` tag, and nothing downstream has to second-guess the column.
+ *
+ * Absent is `pending`: that is the default every file field is written with.
+ */
+const readDerivativeState = (state: DerivativeState): ReadDerivativeState => {
+  if (state === undefined) {
+    return { status: "pending" };
+  }
+  const parsed = v.safeParse(storedDerivativeStateSchema, state);
+  return parsed.success ? parsed.output : UNRECOGNIZED_STATE;
+};
+
+/**
+ * Whether this derivative state can still be retried. A `failed` state is
  * retryable only when the job never entered the queue; once the worker has
  * run and exhausted its attempts the verdict is terminal, and re-adding the
  * job would replay a conversion that has already been proven to fail.
  *
- * `fields.content` is unvalidated JSONB, so a state written by a buggy build
- * (the bare-`::jsonb` string casts `file-derivative-queue` documents) or a
- * newer one reaches this predicate as-is. Such a state is `unrecognized`:
- * this standing sweep must judge it without dying, and replaying a verdict
- * it cannot read is the costlier mistake.
+ * A state the parser above could not read is `unrecognized`: this standing
+ * sweep must judge it without dying, and replaying a verdict it cannot read is
+ * the costlier mistake.
  */
 const derivativeRetryVerdict = (
   state: DerivativeState,
 ): DerivativeRetryVerdict => {
-  if (state === undefined) {
-    return DERIVATIVE_RETRY_VERDICT.RETRYABLE;
-  }
-  const raw: unknown = state;
-  if (typeof raw !== "object" || raw === null) {
-    return DERIVATIVE_RETRY_VERDICT.UNRECOGNIZED;
-  }
-  switch (state.status) {
+  const read = readDerivativeState(state);
+  switch (read.status) {
     case "pending": {
       return DERIVATIVE_RETRY_VERDICT.RETRYABLE;
     }
     case "failed": {
-      return state.reason === DERIVATIVE_FAILURE_REASON.ENQUEUE
+      return read.reason === DERIVATIVE_FAILURE_REASON.ENQUEUE
         ? DERIVATIVE_RETRY_VERDICT.RETRYABLE
         : DERIVATIVE_RETRY_VERDICT.TERMINAL;
     }
@@ -97,9 +133,12 @@ const derivativeRetryVerdict = (
     case "not-required": {
       return DERIVATIVE_RETRY_VERDICT.TERMINAL;
     }
+    case "unrecognized": {
+      return DERIVATIVE_RETRY_VERDICT.UNRECOGNIZED;
+    }
     default: {
-      state satisfies never;
-      return panic(`Unhandled state: ${String(state)}`);
+      read satisfies never;
+      return panic(`Unhandled derivative state: ${String(read)}`);
     }
   }
 };
