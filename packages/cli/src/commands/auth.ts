@@ -14,9 +14,11 @@ import { login } from "../auth/login.js";
 import { logout, switchOrg, whoami } from "../auth/manage.js";
 import { parseScopesFlag } from "../auth/scopes.js";
 import { resolveServerUrl } from "../auth/server-resolution.js";
+import { CliCommandError } from "../cli-exit-code.js";
 import type { Context } from "../context.js";
 import { STELLA_API_KEY } from "../env.js";
 import { fetchMachineIdentity } from "../mcp-client.js";
+import { EXIT_CODES } from "../mcp-constants.js";
 
 const parseString = (input: string): string => input;
 
@@ -58,7 +60,10 @@ const loginCommand = buildCommand<LoginFlags, [], Context>({
     if (flags.scopes) {
       const parsedScopes = parseScopesFlag(flags.scopes);
       if (Result.isError(parsedScopes)) {
-        return new Error(parsedScopes.error.message);
+        return new CliCommandError(
+          parsedScopes.error.message,
+          EXIT_CODES.validation,
+        );
       }
       resourceScopes = parsedScopes.value;
       requiredScopes = parsedScopes.value;
@@ -74,7 +79,7 @@ const loginCommand = buildCommand<LoginFlags, [], Context>({
     });
 
     if (Result.isError(result)) {
-      return new Error(result.error.message);
+      return new CliCommandError(result.error.message, EXIT_CODES.auth);
     }
 
     const lines = [
@@ -129,7 +134,7 @@ export const runWhoami = async ({
     flagValue: serverFlag,
   });
   if (Result.isError(serverUrlResult)) {
-    return new Error(serverUrlResult.error.message);
+    return new CliCommandError(serverUrlResult.error.message, EXIT_CODES.auth);
   }
   const serverUrl = serverUrlResult.value;
 
@@ -142,8 +147,9 @@ export const runWhoami = async ({
   if (apiKey !== undefined && apiKey !== "") {
     const identity = await fetchMachineIdentity({ serverUrl, token: apiKey });
     if (Result.isError(identity)) {
-      return new Error(
+      return new CliCommandError(
         `Machine API key (STELLA_API_KEY) was rejected by ${serverUrl}: ${identity.error.message}. Confirm STELLA_API_KEY is a current, enabled key for this server.`,
+        EXIT_CODES.auth,
       );
     }
     const { organizationId, scopes } = identity.value;
@@ -162,7 +168,7 @@ export const runWhoami = async ({
 
   const result = await whoami(configDir, serverUrl, orgFlag);
   if (Result.isError(result)) {
-    return new Error(result.error.message);
+    return new CliCommandError(result.error.message, EXIT_CODES.auth);
   }
 
   const info = result.value;
@@ -218,7 +224,10 @@ const logoutCommand = buildCommand<ServerOrgFlags, [], Context>({
       flagValue: flags.server,
     });
     if (Result.isError(serverUrlResult)) {
-      return new Error(serverUrlResult.error.message);
+      return new CliCommandError(
+        serverUrlResult.error.message,
+        EXIT_CODES.auth,
+      );
     }
 
     const result = await logout(
@@ -227,7 +236,7 @@ const logoutCommand = buildCommand<ServerOrgFlags, [], Context>({
       flags.org,
     );
     if (Result.isError(result)) {
-      return new Error(result.error.message);
+      return new CliCommandError(result.error.message, EXIT_CODES.auth);
     }
 
     this.process.stdout.write(
@@ -258,7 +267,10 @@ const switchCommand = buildCommand<SwitchFlags, [], Context>({
       flagValue: flags.server,
     });
     if (Result.isError(serverUrlResult)) {
-      return new Error(serverUrlResult.error.message);
+      return new CliCommandError(
+        serverUrlResult.error.message,
+        EXIT_CODES.auth,
+      );
     }
 
     const result = await switchOrg(
@@ -267,7 +279,7 @@ const switchCommand = buildCommand<SwitchFlags, [], Context>({
       flags.org,
     );
     if (Result.isError(result)) {
-      return new Error(result.error.message);
+      return new CliCommandError(result.error.message, EXIT_CODES.auth);
     }
 
     this.process.stdout.write(

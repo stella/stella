@@ -23,6 +23,7 @@ import type {
 } from "@stricli/core";
 
 import packageJson from "../package.json" with { type: "json" };
+import { determineCommandExitCode } from "./cli-exit-code.js";
 import { authRoute } from "./commands/auth.js";
 import { compatibilityRoute } from "./commands/compatibility.js";
 import { uploadCommand } from "./commands/upload.js";
@@ -523,6 +524,10 @@ export const buildApp = (tree: RouteNode): Application<Context> =>
     buildRootRoute(tree),
     {
       name: "stella",
+      // A hand-written command's returned `CliCommandError` carries its exit
+      // class; anything else that escapes is an unexpected error, never 1 by
+      // stricli default.
+      determineExitCode: determineCommandExitCode,
       // Renders (and accepts) multi-word flags as kebab-case, e.g. the
       // `noInput` flag as `--no-input` rather than `--noInput` — matches the
       // documented command surface and every other kebab-case CLI convention

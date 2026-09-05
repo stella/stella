@@ -14,6 +14,7 @@ import { defaultConfigDir } from "./auth/config-dir.js";
 import { resolveAccessToken } from "./auth/resolve-access-token.js";
 import { resolveServerUrl } from "./auth/server-resolution.js";
 import { buildApp } from "./build-cli-tree.js";
+import { normalizeProcessExitCode } from "./cli-exit-code.js";
 import { commandNeedsRegistry } from "./command-locality.js";
 import { HOME, XDG_CACHE_HOME } from "./env.js";
 import { reportFatalError } from "./main-error-boundary.js";
@@ -126,6 +127,10 @@ const main = async (): Promise<void> => {
     forCommand: () => ({ configDir, process, serverUrl, token }),
     process: stricliProcess,
   });
+  // stricli reports its own parse failures (unknown command, bad flag) with
+  // negative codes the OS folds into 251/252; the contract calls them usage
+  // errors (exit 2).
+  process.exitCode = normalizeProcessExitCode(process.exitCode);
 
   // Seed/refresh the cache right after a successful `auth login` (the one
   // explicit-network moment), using the freshly stored credential.
