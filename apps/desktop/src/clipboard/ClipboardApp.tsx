@@ -87,6 +87,7 @@ import {
   DESKTOP_TELEMETRY_ERROR_CODES,
   DESKTOP_TELEMETRY_OPERATIONS,
   DESKTOP_TELEMETRY_WINDOWS,
+  describeError,
   reportDesktopError,
 } from "../telemetry/desktop-telemetry";
 import {
@@ -1095,9 +1096,10 @@ const ClipboardWelcomeDialog = ({ onClose }: ClipboardWelcomeDialogProps) => {
         });
         return undefined;
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         reportDesktopError({
           code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+          detail: describeError(error),
           operation: DESKTOP_TELEMETRY_OPERATIONS.autostartRead,
           window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
         });
@@ -1148,9 +1150,10 @@ const ClipboardWelcomeDialog = ({ onClose }: ClipboardWelcomeDialogProps) => {
         });
         return undefined;
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         reportDesktopError({
           code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+          detail: describeError(error),
           operation: DESKTOP_TELEMETRY_OPERATIONS.autostartUpdate,
           window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
         });
@@ -1337,12 +1340,13 @@ const ClipboardApp = () => {
           setError((current) => (current?.source === "read" ? null : current));
           return undefined;
         })
-        .catch(() => {
+        .catch((error: unknown) => {
           if (disposed || requestId !== snapshotRequestIdRef.current) {
             return;
           }
           reportDesktopError({
             code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+            detail: describeError(error),
             operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardHistoryRead,
             window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
           });
@@ -1427,9 +1431,10 @@ const ClipboardApp = () => {
   });
 
   const requestHide = () => {
-    void invoke("clipboard_hide").catch(() => {
+    void invoke("clipboard_hide").catch((error: unknown) => {
       reportDesktopError({
         code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+        detail: describeError(error),
         operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardWindowHide,
         window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
       });
@@ -1526,9 +1531,10 @@ const ClipboardApp = () => {
           });
           return undefined;
         })
-        .catch(() => {
+        .catch((error: unknown) => {
           reportDesktopError({
             code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+            detail: describeError(error),
             operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardHistoryUpdate,
             window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
           });
@@ -1568,9 +1574,10 @@ const ClipboardApp = () => {
 
   const openEditor = (id: string) => {
     setError((current) => (current?.source === "operation" ? null : current));
-    void invoke("clipboard_open_editor", { id }).catch(() => {
+    void invoke("clipboard_open_editor", { id }).catch((error: unknown) => {
       reportDesktopError({
         code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+        detail: describeError(error),
         operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardHistoryUpdate,
         window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
       });
@@ -2079,9 +2086,10 @@ const ClipboardApp = () => {
               href={STELLA_WEB_APP_URL}
               onClick={(event) => {
                 event.preventDefault();
-                void invoke("clipboard_open_stella").catch(() => {
+                void invoke("clipboard_open_stella").catch((error: unknown) => {
                   reportDesktopError({
                     code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+                    detail: describeError(error),
                     operation:
                       DESKTOP_TELEMETRY_OPERATIONS.clipboardExternalOpen,
                     window: DESKTOP_TELEMETRY_WINDOWS.clipboard,

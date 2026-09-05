@@ -20,6 +20,7 @@ import { useSystemTheme } from "../shared/use-system-theme";
 import {
   DESKTOP_TELEMETRY_ERROR_CODES,
   DESKTOP_TELEMETRY_OPERATIONS,
+  describeError,
   desktopTelemetryWindowFromLabel,
   installDesktopErrorTelemetry,
   reportDesktopError,
@@ -119,23 +120,26 @@ const existingRoot: unknown = Reflect.get(rootElement, REACT_ROOT_KEY);
 const reactRoot = isReactRoot(existingRoot)
   ? existingRoot
   : createRoot(rootElement, {
-      onCaughtError: () => {
+      onCaughtError: (error) => {
         reportDesktopError({
           code: DESKTOP_TELEMETRY_ERROR_CODES.reactCaught,
+          detail: describeError(error),
           operation: DESKTOP_TELEMETRY_OPERATIONS.render,
           window: telemetryWindow,
         });
       },
-      onRecoverableError: () => {
+      onRecoverableError: (error) => {
         reportDesktopError({
           code: DESKTOP_TELEMETRY_ERROR_CODES.reactRecoverable,
+          detail: describeError(error),
           operation: DESKTOP_TELEMETRY_OPERATIONS.render,
           window: telemetryWindow,
         });
       },
-      onUncaughtError: () => {
+      onUncaughtError: (error) => {
         reportDesktopError({
           code: DESKTOP_TELEMETRY_ERROR_CODES.reactUncaught,
+          detail: describeError(error),
           operation: DESKTOP_TELEMETRY_OPERATIONS.render,
           window: telemetryWindow,
         });
