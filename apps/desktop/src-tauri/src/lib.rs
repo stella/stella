@@ -141,9 +141,8 @@ pub fn run() {
         }
       }
 
-      // Paste uses the same default activation shortcut. Registration is
-      // intentionally non-fatal so users can open the timeline from the tray
-      // while another clipboard manager still owns the shortcut.
+      // Registration is intentionally non-fatal: the shortcut may already be
+      // taken, and the timeline stays reachable from the tray.
       {
         use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
         if let Err(error) = app.global_shortcut().on_shortcut(
