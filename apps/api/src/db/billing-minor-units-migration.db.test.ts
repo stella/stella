@@ -106,7 +106,6 @@ beforeAll(async () => {
   for (const statement of statements) {
     // Sequential on purpose: a migration's statements are ordered, and the
     // rescales have to land before the invoice recompute reads them.
-    // eslint-disable-next-line no-await-in-loop -- migration statements are ordered
     await database.exec(statement);
   }
 }, 60_000);
