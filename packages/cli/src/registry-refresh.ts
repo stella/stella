@@ -16,7 +16,7 @@
 // build-time path.
 
 import { Result } from "better-result";
-import { readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 
 import { TOOL_ANNOTATIONS } from "./annotations.js";
 import { loadBakedCapabilityCatalog } from "./capability-catalog-load.js";
@@ -53,6 +53,9 @@ const SNAPSHOT_URL = new URL(
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
+
+const cacheFileExists = async (filePath: string): Promise<boolean> =>
+  Result.isOk(await Result.tryPromise(async () => await access(filePath)));
 
 /** Load the baked-in listings (the committed snapshot) for the delta diff. */
 const loadBakedListings = async (): Promise<readonly RegistryToolListing[]> => {
@@ -272,9 +275,15 @@ export const refreshRegistryCache = async ({
 
   if (!force) {
     if (existing === undefined) {
-      return { status: "skipped", reason: "no-cache" };
-    }
-    if (!isCacheStale(existing, now)) {
+      // Only a genuinely absent cache stays offline-instant (seeded at login).
+      // A file that exists but no longer validates (an older schema version
+      // left behind by an upgrade, or corruption) would otherwise be skipped
+      // forever, freezing the delta notice and the update nudge until the next
+      // login; treat it as stale and rebuild it.
+      if (!(await cacheFileExists(filePath))) {
+        return { status: "skipped", reason: "no-cache" };
+      }
+    } else if (!isCacheStale(existing, now)) {
       return { status: "skipped", reason: "fresh" };
     }
   }
