@@ -8,6 +8,8 @@ use tauri::{
   window::{Effect, EffectState, EffectsBuilder},
 };
 
+use crate::clipboard::ClipboardAppState;
+use crate::clipboard_screen_capture::ClipboardScreenCapture;
 use crate::desktop_telemetry::{
   ClipboardOpenKind, DesktopErrorReport, DesktopTelemetry, DesktopTelemetryErrorCode,
   DesktopTelemetryOperation, DesktopTelemetrySpan, DesktopTelemetryWindow,
@@ -213,6 +215,42 @@ fn park(window: &WebviewWindow) -> bool {
   })
 }
 
+/// Whether the clipboard windows are kept out of screenshots and screen
+/// recordings. Hidden is the safe default whenever the preference cannot be
+/// read.
+fn content_protected(app: &AppHandle) -> bool {
+  let Some(state) = app.try_state::<ClipboardAppState>() else {
+    return true;
+  };
+  let Ok(manager) = state.lock() else {
+    return true;
+  };
+  manager.screen_capture() == ClipboardScreenCapture::Hidden
+}
+
+/// Applies the preference to the windows that already exist; a window created
+/// later reads it from `content_protected`.
+pub fn apply_screen_capture(
+  app: &AppHandle,
+  capture: ClipboardScreenCapture,
+) -> Result<(), String> {
+  let protected = capture == ClipboardScreenCapture::Hidden;
+  let mut failure = None;
+  for label in [CLIPBOARD_WINDOW_LABEL, CLIPBOARD_EDITOR_WINDOW_LABEL] {
+    let Some(window) = app.get_webview_window(label) else {
+      continue;
+    };
+    if let Err(error) = window.set_content_protected(protected)
+      && failure.is_none()
+    {
+      failure = Some(format!(
+        "clipboard window screen recording setting failed: {error}"
+      ));
+    }
+  }
+  failure.map_or(Ok(()), Err)
+}
+
 pub fn show(app: &AppHandle) {
   show_as(app, ClipboardOpenKind::FirstOpen);
 }
@@ -249,12 +287,6 @@ fn show_as(app: &AppHandle, created_kind: ClipboardOpenKind) {
     trace.begin(requested, created_kind);
   }
 
-  #[cfg(debug_assertions)]
-  let content_protected =
-    std::env::var_os("STELLA_ALLOW_CLIPBOARD_SCREEN_CAPTURE").is_none();
-  #[cfg(not(debug_assertions))]
-  let content_protected = true;
-
   let builder = tauri::WebviewWindowBuilder::new(
     app,
     CLIPBOARD_WINDOW_LABEL,
@@ -263,7 +295,7 @@ fn show_as(app: &AppHandle, created_kind: ClipboardOpenKind) {
   .title("stella clipboard")
   .inner_size(1440.0, CLIPBOARD_WINDOW_HEIGHT)
   .always_on_top(true)
-  .content_protected(content_protected)
+  .content_protected(content_protected(app))
   .decorations(false)
   // Tauri's native drag-drop handler consumes every drop on macOS and
   // Windows, so HTML5 drops (a card onto a group chip) never reach the
@@ -409,12 +441,6 @@ pub fn show_editor(app: &AppHandle) -> Result<(), String> {
       });
   }
 
-  #[cfg(debug_assertions)]
-  let content_protected =
-    std::env::var_os("STELLA_ALLOW_CLIPBOARD_SCREEN_CAPTURE").is_none();
-  #[cfg(not(debug_assertions))]
-  let content_protected = true;
-
   let builder = tauri::WebviewWindowBuilder::new(
     app,
     CLIPBOARD_EDITOR_WINDOW_LABEL,
@@ -424,7 +450,7 @@ pub fn show_editor(app: &AppHandle) -> Result<(), String> {
   .inner_size(CLIPBOARD_EDITOR_WIDTH, CLIPBOARD_EDITOR_HEIGHT)
   .min_inner_size(560.0, 420.0)
   .always_on_top(true)
-  .content_protected(content_protected)
+  .content_protected(content_protected(app))
   .resizable(true)
   .visible(false);
   let builder = window_placement::centered_on_target_screen(

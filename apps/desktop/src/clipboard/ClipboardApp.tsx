@@ -43,6 +43,7 @@ import {
   ShieldAlertIcon,
   TagsIcon,
   Trash2Icon,
+  VideoIcon,
   XIcon,
 } from "lucide-react";
 import { useFormatter, useTranslations } from "use-intl";
@@ -69,6 +70,7 @@ import {
 import { Label } from "@stll/ui/label";
 import {
   Menu,
+  MenuCheckboxItem,
   MenuItem,
   MenuPopup,
   MenuRadioGroup,
@@ -204,6 +206,7 @@ const EMPTY_SNAPSHOT = {
   items: [],
   persistence: { status: "initializing" },
   retention: "month",
+  screenCapture: "hidden",
   sourceAppVisuals: [],
   welcomeStatus: "initializing",
 } satisfies ClipboardSnapshot;
@@ -2284,6 +2287,21 @@ const ClipboardApp = () => {
                   </MenuRadioGroup>
                 </MenuSubPopup>
               </MenuSub>
+              <MenuCheckboxItem
+                checked={snapshot.screenCapture === "visible"}
+                className="min-h-11 rounded-xl"
+                onCheckedChange={(checked) => {
+                  applySnapshotCommand("clipboard_set_screen_capture", {
+                    capture: checked ? "visible" : "hidden",
+                  });
+                }}
+                variant="switch"
+              >
+                <span className="flex items-center gap-2">
+                  <VideoIcon />
+                  {t("showInRecordings")}
+                </span>
+              </MenuCheckboxItem>
               <MenuItem
                 className="min-h-11 rounded-xl"
                 disabled={

@@ -87,6 +87,15 @@ export type ClipboardPersistence =
 
 export type ClipboardWelcomeStatus = "initializing" | "pending" | "completed";
 
+export const CLIPBOARD_SCREEN_CAPTURES = ["hidden", "visible"] as const;
+
+export type ClipboardScreenCapture = (typeof CLIPBOARD_SCREEN_CAPTURES)[number];
+
+const isClipboardScreenCapture = (
+  value: unknown,
+): value is ClipboardScreenCapture =>
+  CLIPBOARD_SCREEN_CAPTURES.some((capture) => capture === value);
+
 export const CLIPBOARD_RETENTIONS = ["week", "month", "year"] as const;
 
 export type ClipboardRetention = (typeof CLIPBOARD_RETENTIONS)[number];
@@ -100,6 +109,7 @@ export type ClipboardSnapshot = {
   items: ClipboardItem[];
   persistence: ClipboardPersistence;
   retention: ClipboardRetention;
+  screenCapture: ClipboardScreenCapture;
   sourceAppVisuals: ClipboardSourceAppVisual[];
   welcomeStatus: ClipboardWelcomeStatus;
 };
@@ -256,6 +266,7 @@ export const isClipboardSnapshot = (
     value["items"].every(isClipboardItem) &&
     isPersistence(value["persistence"]) &&
     isClipboardRetention(value["retention"]) &&
+    isClipboardScreenCapture(value["screenCapture"]) &&
     Array.isArray(value["sourceAppVisuals"]) &&
     value["sourceAppVisuals"].every(isClipboardSourceAppVisual) &&
     (value["welcomeStatus"] === "pending" ||

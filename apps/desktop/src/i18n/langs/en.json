@@ -161,6 +161,7 @@
     "save": "Save",
     "search": "Search clipboard history",
     "searchPlaceholder": "Search clipboard history",
+    "showInRecordings": "Show in recordings",
     "timeline": "Clipboard timeline",
     "title": "Clipboard",
     "welcomeCaptureDescription": "Text and images copied in any app appear here automatically.",

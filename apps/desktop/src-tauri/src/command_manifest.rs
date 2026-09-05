@@ -21,6 +21,7 @@ macro_rules! with_stella_commands {
       clipboard_commands::clipboard_complete_welcome => "clipboard_complete_welcome",
       clipboard_commands::clipboard_set_capture_status => "clipboard_set_capture_status",
       clipboard_commands::clipboard_set_retention => "clipboard_set_retention",
+      clipboard_commands::clipboard_set_screen_capture => "clipboard_set_screen_capture",
       clipboard_commands::clipboard_delete_item => "clipboard_delete_item",
       clipboard_commands::clipboard_duplicate_item => "clipboard_duplicate_item",
       clipboard_commands::clipboard_clear_history => "clipboard_clear_history",

@@ -25,6 +25,9 @@ use std::{
 use tauri::{AppHandle, Emitter};
 
 use crate::{
+  clipboard_screen_capture::{
+    ClipboardScreenCapture, ClipboardScreenCapturePreference,
+  },
   clipboard_store::{
     ClipboardImagePersistStatus, ClipboardImageValidation,
     ClipboardImageValidationError, ClipboardStore,
@@ -809,6 +812,7 @@ pub struct ClipboardSnapshot {
   pub items: Vec<ClipboardItem>,
   pub persistence: ClipboardPersistenceStatus,
   pub retention: ClipboardRetention,
+  pub screen_capture: ClipboardScreenCapture,
   pub source_app_visuals: Vec<ClipboardSourceAppVisual>,
   pub welcome_status: ClipboardWelcomeStatus,
 }
@@ -845,6 +849,9 @@ pub struct ClipboardManager {
   pending_image_blob_ids: BTreeSet<String>,
   persistence: ClipboardPersistence,
   retention: ClipboardRetention,
+  /// Kept out of the persisted state and the checkpoint: the marker file
+  /// behind it holds even when history cannot be persisted.
+  screen_capture: ClipboardScreenCapturePreference,
   source_app_visuals: HashMap<String, ClipboardSourceAppVisual>,
   suppressed_content: Option<ClipboardSuppression>,
   welcome: ClipboardWelcome,
@@ -1188,6 +1195,7 @@ impl ClipboardManager {
       pending_image_blob_ids: BTreeSet::new(),
       persistence: ClipboardPersistence::Initializing,
       retention: ClipboardRetention::default(),
+      screen_capture: ClipboardScreenCapturePreference::new(),
       source_app_visuals: HashMap::new(),
       suppressed_content: None,
       welcome: ClipboardWelcome::new(),
@@ -1267,9 +1275,21 @@ impl ClipboardManager {
         },
       ),
       retention: self.retention,
+      screen_capture: self.screen_capture.capture(),
       source_app_visuals,
       welcome_status: self.welcome.status(),
     }
+  }
+
+  pub fn screen_capture(&self) -> ClipboardScreenCapture {
+    self.screen_capture.capture()
+  }
+
+  pub fn set_screen_capture(
+    &mut self,
+    capture: ClipboardScreenCapture,
+  ) -> Result<(), String> {
+    self.screen_capture.set(capture)
   }
 
   pub fn complete_welcome(&mut self) -> Result<(), String> {

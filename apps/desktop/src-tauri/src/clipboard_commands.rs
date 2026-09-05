@@ -12,6 +12,7 @@ use crate::{
     ClipboardGroupDeletionMode, ClipboardItem, ClipboardRetention, ClipboardSnapshot,
     ClipboardSourceAppVisual, write_item,
   },
+  clipboard_screen_capture::ClipboardScreenCapture,
   clipboard_window::{self, ClipboardStartupTrace},
   desktop_telemetry::{
     DesktopTelemetry, DesktopTelemetrySpan, DesktopTelemetryWindow, DesktopTimingReport,
@@ -108,6 +109,21 @@ pub fn clipboard_set_retention(
     manager.snapshot()
   };
   let _ = window.emit(HISTORY_EVENT, ());
+  Ok(snapshot)
+}
+
+#[tauri::command]
+pub fn clipboard_set_screen_capture(
+  capture: ClipboardScreenCapture,
+  state: State<'_, ClipboardAppState>,
+  app: AppHandle,
+) -> Result<ClipboardSnapshot, String> {
+  let snapshot = {
+    let mut manager = state.lock().map_err(|_| lock_error())?;
+    manager.set_screen_capture(capture)?;
+    manager.snapshot()
+  };
+  clipboard_window::apply_screen_capture(&app, capture)?;
   Ok(snapshot)
 }
 

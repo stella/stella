@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   CLIPBOARD_RETENTIONS,
+  CLIPBOARD_SCREEN_CAPTURES,
   isClipboardCopyError,
   isClipboardEditorContext,
   isClipboardImagePreviewDataUrl,
@@ -15,6 +16,7 @@ const snapshotWithWelcomeStatus = (welcomeStatus: unknown) => ({
   items: [],
   persistence: { imageCleanup: "idle", status: "encrypted" },
   retention: "month",
+  screenCapture: "hidden",
   sourceAppVisuals: [],
   welcomeStatus,
 });
@@ -54,6 +56,30 @@ describe("clipboard snapshot retention", () => {
         isClipboardSnapshot({
           ...snapshotWithWelcomeStatus("completed"),
           retention,
+        }),
+      ).toBe(false);
+    }
+  });
+});
+
+describe("clipboard snapshot screen capture", () => {
+  test("accepts every native screen capture state", () => {
+    for (const screenCapture of CLIPBOARD_SCREEN_CAPTURES) {
+      expect(
+        isClipboardSnapshot({
+          ...snapshotWithWelcomeStatus("completed"),
+          screenCapture,
+        }),
+      ).toBe(true);
+    }
+  });
+
+  test("rejects missing and unknown screen capture states", () => {
+    for (const screenCapture of [undefined, "on", true]) {
+      expect(
+        isClipboardSnapshot({
+          ...snapshotWithWelcomeStatus("completed"),
+          screenCapture,
         }),
       ).toBe(false);
     }
