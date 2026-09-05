@@ -7,7 +7,7 @@
 // accepted cases carry no disable, so a false positive would fail the fixture
 // too.
 
-import { panic } from "better-result";
+import { panic, panic as fail } from "better-result";
 
 type Kind = { type: "a" } | { type: "b" };
 
@@ -162,6 +162,38 @@ export const assertsThenThrows = (kind: Kind): string => {
     default:
       kind satisfies never;
       throw new UnhandledKindError(`Unhandled kind: ${String(kind)}`);
+  }
+};
+
+// Accepted: the tail calls better-result's `panic` under an alias.
+export const assertsThenAliasedPanic = (kind: Kind): string => {
+  switch (kind.type) {
+    case "a":
+      return "a";
+    case "b":
+      return "b";
+    default: {
+      kind satisfies never;
+      return fail(`Unhandled kind: ${String(kind)}`);
+    }
+  }
+};
+
+// MUST flag: a local binding takes the name over, so the tail calls what this
+// file wrote rather than the import that stops the miss.
+export const assertsThenShadowedPanic = (kind: Kind): string => {
+  // oxlint-disable-next-line no-shadow -- fixture: the shadowing is the case under test
+  const panic = (message: string): string => message;
+  switch (kind.type) {
+    case "a":
+      return "a";
+    case "b":
+      return "b";
+    default: {
+      kind satisfies never;
+      // oxlint-disable-next-line require-exhaustive-panic/require-exhaustive-panic -- fixture proves a shadowed `panic` is rejected
+      return panic(`Unhandled kind: ${String(kind)}`);
+    }
   }
 };
 
