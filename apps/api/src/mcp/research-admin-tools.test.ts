@@ -124,6 +124,20 @@ describe("list_audit_log", () => {
 
     expect(errorText(result)).toContain('"code":"validation_error"');
   });
+
+  test("rejects a well-shaped bound that is not a real calendar date or time", async () => {
+    for (const from of [
+      "2026-02-31",
+      "2026-13-01T00:00:00Z",
+      "2026-09-05T29:99:00Z",
+    ]) {
+      const result = await RESEARCH_ADMIN_TOOL_HANDLERS.list_audit_log({
+        args: { from },
+        context: createContext("owner"),
+      });
+      expect(errorText(result)).toContain('"code":"validation_error"');
+    }
+  });
 });
 
 describe("search_legislation feature gating", () => {
