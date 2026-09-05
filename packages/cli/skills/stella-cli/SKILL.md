@@ -38,9 +38,11 @@ server, using a loopback listener (`http://127.0.0.1/callback`, ephemeral port)
 to capture the code. Credentials are stored per server origin, so one machine
 can hold sessions for several servers at once. The first login needs
 `--server <url>` (or `STELLA_SERVER_URL`); it then becomes the default, and
-every command accepts `--server <url>` to target another one. Scope the
-session with `--scopes`; the default scopes are
-`openid profile email offline_access stella:read stella:search`.
+every command accepts `--server <url>` to target another one. A default
+login requests the working set of scopes (everything but organization
+administration writes and one-off setup); pass `--scopes` to request an
+explicit set. The
+default scopes are `openid profile email offline_access stella:read stella:search stella:templates stella:documents_write stella:matters_write stella:contacts_write stella:chat stella:knowledge_write stella:billing_write stella:admin_read stella:skills stella:feedback`.
 `stella auth whoami` shows the active session; `stella auth logout` clears it.
 
 ## Conventions every agent must know
@@ -290,8 +292,8 @@ invoke <id> --input '<json>'`, where the JSON is `{ body?, params?, query? }`.
 - **Flags**: each capability command derives flags from its input schema;
   workspace-scoped capabilities take a required `--workspace <id>`. Deep or
   ambiguous payloads use `--input` (the whole `{ body?, params?, query? }`).
-- **Dry run**: `--dry-run` validates the input server-side and returns without
-  executing (maps to `validate_only`).
+- **Dry run**: write capabilities accept `--dry-run`, which validates the input
+  server-side and returns without executing (maps to `validate_only`).
 - **Destructive** capabilities prompt on a TTY and need `--yes` off a TTY; the
   server's per-capability confirm gate is satisfied automatically once confirmed.
 - Exit codes are identical to the curated commands (see above).

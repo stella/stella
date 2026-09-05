@@ -63,11 +63,39 @@ export const CLI_IDENTITY_SCOPES = [
   "offline_access",
 ] as const;
 
-/** Resource scopes requested when `stella auth login` runs without `--scopes`. */
-export const CLI_DEFAULT_RESOURCE_SCOPES = [
+type CliResourceScope = (typeof CLI_REQUIRED_RESOURCE_SCOPES)[number];
+
+/**
+ * Resource scopes requested when `stella auth login` runs without `--scopes`:
+ * the working set a user drives day to day (matters, documents, contacts,
+ * templates, knowledge, billing, chat), so the first write does not fail with a
+ * missing-scope error and a second browser round-trip. The consent screen
+ * approves the bundle as a whole, so this is an explicit list rather than
+ * "everything but": a scope added to the server's catalog is not requested
+ * until someone decides it belongs here (`scopes.test.ts` fails until it is
+ * placed in one of the two lists). `--scopes` selects an explicit set instead.
+ */
+export const CLI_DEFAULT_RESOURCE_SCOPES: readonly CliResourceScope[] = [
   "stella:read",
   "stella:search",
-] as const;
+  "stella:templates",
+  "stella:documents_write",
+  "stella:matters_write",
+  "stella:contacts_write",
+  "stella:chat",
+  "stella:knowledge_write",
+  "stella:billing_write",
+  "stella:admin_read",
+  "stella:skills",
+  "stella:feedback",
+];
+
+/** Resource scopes a default login leaves out: organization administration and one-off setup. */
+export const CLI_NON_DEFAULT_RESOURCE_SCOPES: readonly CliResourceScope[] = [
+  "stella:admin_write",
+  "stella:onboarding",
+  "stella:external_mcps",
+];
 
 /** Everything a default `stella auth login` asks for. */
 export const CLI_DEFAULT_SCOPES: readonly string[] = [
