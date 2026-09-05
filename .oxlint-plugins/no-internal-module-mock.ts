@@ -33,6 +33,17 @@ import {
 // isolate an external boundary (object storage, a browser, a network SDK);
 // the drift hazard above is bounded by that package's own release contract.
 //
+// Exception to that acceptance: the TanStack AI packages. `chat()` is a
+// runtime, not a boundary: it normalizes every chunk to AG-UI spec shape
+// (non-spec fields such as `finishReason` move into `metadata.tanstack`),
+// runs middleware, and drives the agent loop. A test that replaces it hands
+// the code under test chunks the engine never emits, and the code's reading
+// of those chunks is exactly what needs proving. The provider boundary is
+// the adapter: build a fake `AnyTextAdapter` and inject it through the model
+// resolver seam (`resolveTextModel`), so the real engine runs in every test.
+// Adapter packages are held to the same rule; they map provider events onto
+// the engine's, and a fabricated mapping fabricates the same shape.
+//
 // Migration: give the dependency to the code under test instead of the code
 // finding it. A handler reads its collaborators from its context; a library
 // function takes them as an options parameter; a plain fake stands in for
@@ -64,6 +75,15 @@ export const isWorkspaceSpecifier = (specifier: string): boolean =>
   specifier === "." ||
   specifier === ".." ||
   WORKSPACE_PREFIXES.some((prefix) => specifier.startsWith(prefix));
+
+// The engine package, its subpaths, and its adapter packages
+// (`@tanstack/ai-openai`, `@tanstack/ai-anthropic`, ...).
+const RUNTIME_ENGINE_PACKAGE = "@tanstack/ai";
+
+export const isRuntimeEngineSpecifier = (specifier: string): boolean =>
+  specifier === RUNTIME_ENGINE_PACKAGE ||
+  specifier.startsWith(`${RUNTIME_ENGINE_PACKAGE}/`) ||
+  specifier.startsWith(`${RUNTIME_ENGINE_PACKAGE}-`);
 
 // Ledger entries grouped by the file they belong to, read once per process.
 // The ledger holds repo-relative POSIX paths; the linted filename is absolute,
@@ -202,6 +222,14 @@ export default eslintCompatPlugin({
             "options parameter) and pass a plain fake, or mock the external " +
             "package the module wraps. Only pairs already listed in " +
             `${LEDGER_DISPLAY_PATH} are grandfathered, and that list only shrinks.`,
+          runtimeEngineMock:
+            '`mock.module("{{specifier}}")` replaces the TanStack AI runtime, ' +
+            "so the code under test reads chunks the real engine never emits " +
+            "(it normalizes them to AG-UI spec shape and moves non-spec fields " +
+            "into `metadata.tanstack`). Build a fake `AnyTextAdapter` and " +
+            "inject it through the model resolver seam (`resolveTextModel`) " +
+            "so the real `chat()` runs. There is no grandfathering for this " +
+            "target.",
           unresolvableSpecifier:
             "`mock.module(...)` must name its target with a string literal so " +
             "the rule can tell a workspace module from an external boundary.",
@@ -241,6 +269,14 @@ export default eslintCompatPlugin({
               return;
             }
             const specifier = target.value;
+            if (isRuntimeEngineSpecifier(specifier)) {
+              context.report({
+                node,
+                messageId: "runtimeEngineMock",
+                data: { specifier },
+              });
+              return;
+            }
             if (!isWorkspaceSpecifier(specifier)) {
               return;
             }

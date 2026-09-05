@@ -31,6 +31,16 @@ void bunMock.module("../env.js", () => ({ readEnv: () => ({}) }));
 // oxlint-disable-next-line no-internal-module-mock/no-internal-module-mock -- fixture: non-literal target
 void mock.module(captureTarget, () => ({}));
 
+// MUST flag: the TanStack AI engine is a runtime, not a boundary; the fake
+// hands the code under test chunks the real `chat()` never emits.
+// oxlint-disable-next-line no-internal-module-mock/no-internal-module-mock -- fixture: runtime engine target
+void mock.module("@tanstack/ai", () => ({ chat: () => "fabricated" }));
+
+// MUST flag: an adapter package maps provider events onto the engine's, so a
+// fabricated mapping fabricates the same shape.
+// oxlint-disable-next-line no-internal-module-mock/no-internal-module-mock -- fixture: runtime engine adapter target
+void mock.module("@tanstack/ai-openai", () => ({}));
+
 // Allowed: an npm package is an external boundary.
 void mock.module("bullmq", () => ({ Queue: "fake-queue" }));
 

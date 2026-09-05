@@ -1,13 +1,6 @@
-import * as realTanStackAI from "@tanstack/ai";
-import {
-  afterAll,
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  mock,
-  test,
-} from "bun:test";
+import { EventType, convertSchemaToJsonSchema } from "@tanstack/ai";
+import type { AnyTextAdapter, StreamChunk } from "@tanstack/ai";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import {
@@ -44,47 +37,239 @@ import type {
   RecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
 
-type CapturedChatOptions = {
-  messages?: unknown;
-  modelOptions?: unknown;
-  outputSchema?: unknown;
-  stream?: unknown;
-  systemPrompts?: unknown;
+// The real `chat()` engine runs here; only the provider boundary is faked.
+// Replacing the engine instead lets a fixture invent public chunk shapes the
+// engine never emits (it rewrites `RUN_FINISHED.finishReason` into
+// `metadata.tanstack`), so a caller can stay green against a shape production
+// never sees. Every fixture below is therefore a queued *provider* run,
+// replayed through a plain `AnyTextAdapter`.
+
+type TextRunFinish = "none" | "unreasoned" | "stop" | "length";
+
+type ProviderRun =
+  | {
+      type: "text";
+      deltas: string[];
+      finish: TextRunFinish;
+      /** Cancels the caller's signal once the provider stream is exhausted. */
+      abortAfter?: AbortController | undefined;
+    }
+  | { type: "run-error"; code: string; message: string }
+  | { type: "throw"; error: unknown }
+  | { type: "abort-then-throw"; controller: AbortController }
+  | { type: "object"; object: unknown; raw: string };
+
+type ProviderRequestMethod = "chatStream" | "structuredOutput";
+
+type CapturedProviderRequest = {
+  messages: unknown;
+  method: ProviderRequestMethod;
+  modelOptions: unknown;
+  outputSchema: unknown;
+  systemPrompts: unknown;
 };
 
-const capturedChatOptions: CapturedChatOptions[] = [];
-let nextChatResult: unknown = { answer: "ok" };
-const nextChatResults: unknown[] = [];
-let nextChatError: Error | undefined;
+const providerRequests: CapturedProviderRequest[] = [];
+const queuedRuns: ProviderRun[] = [];
 
-const chat = (options: unknown): unknown => {
-  capturedChatOptions.push(captureChatOptions(options));
-  if (nextChatError !== undefined) {
-    const error = nextChatError;
-    nextChatError = undefined;
-    return rejectChat(error);
+const resetProvider = (): void => {
+  providerRequests.length = 0;
+  queuedRuns.length = 0;
+};
+
+const queueRun = (run: ProviderRun): void => {
+  queuedRuns.push(run);
+};
+
+const takeRun = (): ProviderRun => {
+  const run = queuedRuns.shift();
+  if (!run) {
+    throw new Error("Expected a queued provider run for this request.");
   }
-  const queuedResult = nextChatResults.shift();
-  if (queuedResult !== undefined) {
-    return queuedResult;
+  return run;
+};
+
+const textRun = (
+  deltas: string[],
+  finish: TextRunFinish = "none",
+): ProviderRun => ({
+  type: "text",
+  deltas,
+  finish,
+});
+
+// The provider stream ends and only then does the caller's signal fire: the
+// chat loop leaves a cancelled run through a plain `break`, so the deltas
+// already collected stand and nothing is thrown. A finish models the run
+// reporting completion before the signal fires.
+const cancelledTextRun = (
+  deltas: string[],
+  controller: AbortController,
+  finish: TextRunFinish = "none",
+): ProviderRun => ({ type: "text", deltas, finish, abortAfter: controller });
+
+const abortRejectedRun = (controller: AbortController): ProviderRun => ({
+  type: "abort-then-throw",
+  controller,
+});
+
+const runErrorRun = ({
+  code,
+  message,
+}: {
+  code: string;
+  message: string;
+}): ProviderRun => ({ type: "run-error", code, message });
+
+const objectRun = (
+  object: unknown,
+  raw = JSON.stringify(object),
+): ProviderRun => ({
+  type: "object",
+  object,
+  raw,
+});
+
+const throwingRun = (error: unknown): ProviderRun => ({ type: "throw", error });
+
+const PROVIDER_RUN_ID = "run-1";
+const PROVIDER_THREAD_ID = "thread-1";
+const PROVIDER_MESSAGE_ID = "provider-message-1";
+
+const textRunChunks = async function* (
+  run: Extract<ProviderRun, { type: "text" }>,
+): AsyncIterable<StreamChunk> {
+  yield {
+    type: EventType.RUN_STARTED,
+    runId: PROVIDER_RUN_ID,
+    threadId: PROVIDER_THREAD_ID,
+  } satisfies StreamChunk;
+  yield {
+    type: EventType.TEXT_MESSAGE_START,
+    messageId: PROVIDER_MESSAGE_ID,
+    role: "assistant",
+  } satisfies StreamChunk;
+  for (const delta of run.deltas) {
+    yield {
+      type: EventType.TEXT_MESSAGE_CONTENT,
+      messageId: PROVIDER_MESSAGE_ID,
+      delta,
+    } satisfies StreamChunk;
   }
-  return nextChatResult;
+  yield {
+    type: EventType.TEXT_MESSAGE_END,
+    messageId: PROVIDER_MESSAGE_ID,
+  } satisfies StreamChunk;
+
+  switch (run.finish) {
+    case "none":
+      break;
+    // `RUN_FINISHED` may carry no finish reason at all; the run still finished.
+    case "unreasoned":
+      yield {
+        type: EventType.RUN_FINISHED,
+        runId: PROVIDER_RUN_ID,
+        threadId: PROVIDER_THREAD_ID,
+      } satisfies StreamChunk;
+      break;
+    case "stop":
+    case "length":
+      yield {
+        type: EventType.RUN_FINISHED,
+        finishReason: run.finish,
+        runId: PROVIDER_RUN_ID,
+        threadId: PROVIDER_THREAD_ID,
+      } satisfies StreamChunk;
+      break;
+    default:
+      run.finish satisfies never;
+      throw new TypeError(`Unhandled text run finish: ${String(run.finish)}`);
+  }
+
+  run.abortAfter?.abort();
 };
 
-const rejectChat = async (error: Error): Promise<never> => {
-  throw error;
+const providerAdapter: AnyTextAdapter = {
+  kind: "text",
+  name: "queued",
+  model: "test-model",
+  "~types": {
+    providerOptions: {},
+    inputModalities: ["text"],
+    messageMetadataByModality: {},
+    toolCapabilities: [],
+    toolCallMetadata: {},
+    systemPromptMetadata: undefined,
+  },
+  async *chatStream({ messages, modelOptions, systemPrompts }) {
+    providerRequests.push({
+      messages,
+      method: "chatStream",
+      modelOptions,
+      outputSchema: undefined,
+      systemPrompts,
+    });
+    const run = takeRun();
+    switch (run.type) {
+      case "text":
+        yield* textRunChunks(run);
+        return;
+      case "run-error":
+        yield {
+          type: EventType.RUN_STARTED,
+          runId: PROVIDER_RUN_ID,
+          threadId: PROVIDER_THREAD_ID,
+        } satisfies StreamChunk;
+        yield {
+          type: EventType.RUN_ERROR,
+          code: run.code,
+          message: run.message,
+          runId: PROVIDER_RUN_ID,
+          threadId: PROVIDER_THREAD_ID,
+        } satisfies StreamChunk;
+        return;
+      case "abort-then-throw":
+        run.controller.abort();
+        throw run.controller.signal.reason;
+      case "throw":
+        throw run.error;
+      case "object":
+        throw new TypeError("A structured-output run was queued for text.");
+      default:
+        run satisfies never;
+        throw new TypeError(`Unhandled provider run: ${String(run)}`);
+    }
+  },
+  structuredOutput: async ({ chatOptions, outputSchema }) => {
+    providerRequests.push({
+      messages: chatOptions.messages,
+      method: "structuredOutput",
+      modelOptions: chatOptions.modelOptions,
+      outputSchema,
+      systemPrompts: chatOptions.systemPrompts,
+    });
+    const run = takeRun();
+    switch (run.type) {
+      case "object":
+        return { data: run.object, rawText: run.raw };
+      case "throw":
+        throw run.error;
+      case "text":
+      case "run-error":
+      case "abort-then-throw":
+        throw new TypeError("A text run was queued for structured output.");
+      default:
+        run satisfies never;
+        throw new TypeError(`Unhandled provider run: ${String(run)}`);
+    }
+  },
 };
 
-void mock.module("@tanstack/ai", () => ({
-  ...realTanStackAI,
-  chat,
-}));
-
-// SAFETY: `chat` is replaced at the provider boundary, so this suite never
-// invokes the adapter; it only verifies the options assembled around it.
-// oxlint-disable-next-line typescript/no-unsafe-type-assertion
+// SAFETY: `adapter` is a real `AnyTextAdapter` the engine drives exactly as it
+// drives a provider; the remaining fields are bookkeeping this suite never
+// routes through a provider.
 const testModel = {
-  adapter: {},
+  adapter: providerAdapter,
   keySource: "instance",
   modelId: "test-model",
   modelOptions: {},
@@ -114,6 +299,7 @@ let analytics: RecordingAnalytics;
 let logs: RecordingLogger;
 
 beforeEach(() => {
+  resetProvider();
   analytics = installRecordingAnalytics();
   logs = installRecordingLogger();
 });
@@ -123,17 +309,13 @@ afterEach(() => {
   logs.restore();
 });
 
-afterAll(() => {
-  mock.restore();
-});
-
 describe("TanStack AI structured output generation", () => {
   test("converts Valibot schemas into TanStack JSON-schema-compatible schemas", () => {
     const tanStackSchema = toTanStackValibotSchema(
       v.strictObject({ answer: v.string() }),
     );
 
-    const jsonSchema = realTanStackAI.convertSchemaToJsonSchema(tanStackSchema);
+    const jsonSchema = convertSchemaToJsonSchema(tanStackSchema);
 
     if (!jsonSchema) {
       throw new TypeError("Expected TanStack to convert the schema.");
@@ -148,7 +330,7 @@ describe("TanStack AI structured output generation", () => {
     });
     const tanStackSchema = toTanStackValibotSchema(rawSchema);
 
-    const jsonSchema = realTanStackAI.convertSchemaToJsonSchema(tanStackSchema);
+    const jsonSchema = convertSchemaToJsonSchema(tanStackSchema);
 
     if (!jsonSchema) {
       throw new TypeError("Expected TanStack to convert the schema.");
@@ -167,9 +349,9 @@ describe("TanStack AI structured output generation", () => {
       v.pipe(v.string(), v.toLowerCase()),
     );
 
-    expect(() =>
-      realTanStackAI.convertSchemaToJsonSchema(tanStackSchema),
-    ).toThrow('The "to_lower_case" action cannot be converted to JSON Schema.');
+    expect(() => convertSchemaToJsonSchema(tanStackSchema)).toThrow(
+      'The "to_lower_case" action cannot be converted to JSON Schema.',
+    );
   });
 
   test("rejects unknown JSON Schema targets instead of silently changing drafts", () => {
@@ -204,8 +386,7 @@ describe("TanStack AI structured output generation", () => {
   });
 
   test("passes converted Valibot schemas to TanStack object generation", async () => {
-    capturedChatOptions.length = 0;
-    nextChatResult = { answer: "ok" };
+    queueRun(objectRun({ answer: "ok" }));
     const rawSchema = v.strictObject({ answer: v.string() });
 
     const result = await generateObjectForTestModel({
@@ -220,19 +401,18 @@ describe("TanStack AI structured output generation", () => {
     });
 
     expect(result).toEqual({ answer: "ok" });
-    const captured = getOnlyCapturedChatOptions();
+    // The engine converts the Standard Schema before the provider sees it, so
+    // conversion is asserted on the JSON Schema the provider is handed rather
+    // than on the wrapper handed to `chat()`.
+    const captured = onlyProviderRequest();
+    expect(captured.method).toBe("structuredOutput");
     expect(captured.outputSchema).not.toBe(rawSchema);
-    expectHasTanStackJsonSchema(captured.outputSchema);
+    expectProviderJsonSchema(captured.outputSchema);
   });
 
   test("passes converted Valibot schemas to TanStack streaming object generation", async () => {
-    capturedChatOptions.length = 0;
     const rawSchema = v.strictObject({ answer: v.string() });
-    nextChatResult = createStructuredOutputStream({
-      object: { answer: "ok" },
-      raw: '{"answer":"ok"}',
-      textDeltas: ['{"answer":"ok"}'],
-    });
+    queueRun(objectRun({ answer: "ok" }, '{"answer":"ok"}'));
 
     const events = [];
     for await (const event of streamObjectForTestModel({
@@ -248,6 +428,9 @@ describe("TanStack AI structured output generation", () => {
       events.push(event);
     }
 
+    // Streaming is not visible at the provider boundary (both structured paths
+    // land on `structuredOutput`); the caller-visible partial/complete pair is
+    // what only the streaming path produces, so it carries that assertion.
     expect(events).toEqual([
       {
         delta: '{"answer":"ok"}',
@@ -261,10 +444,9 @@ describe("TanStack AI structured output generation", () => {
         type: "complete",
       },
     ]);
-    const captured = getOnlyCapturedChatOptions();
-    expect(captured.stream).toBe(true);
+    const captured = onlyProviderRequest();
     expect(captured.outputSchema).not.toBe(rawSchema);
-    expectHasTanStackJsonSchema(captured.outputSchema);
+    expectProviderJsonSchema(captured.outputSchema);
   });
 
   // The test model is an OpenAI one, so the schema has to clear the widest
@@ -285,8 +467,6 @@ describe("TanStack AI structured output generation", () => {
     );
 
   test("refuses an over-budget structured-output schema before it reaches the provider", async () => {
-    capturedChatOptions.length = 0;
-
     const failure = await generateObjectForTestModel({
       caching: noCaching,
       organizationId: null,
@@ -303,12 +483,10 @@ describe("TanStack AI structured output generation", () => {
 
     expect(failure).toBeInstanceOf(StructuredOutputBudgetError);
     expect(String(failure)).toContain("exceeds the openai budget");
-    expect(capturedChatOptions).toHaveLength(0);
+    expect(providerRequests).toHaveLength(0);
   });
 
   test("refuses an over-budget structured-output schema before it starts streaming", async () => {
-    capturedChatOptions.length = 0;
-
     const events: unknown[] = [];
     const drain = async () => {
       for await (const event of streamObjectForTestModel({
@@ -333,12 +511,11 @@ describe("TanStack AI structured output generation", () => {
     expect(failure).toBeInstanceOf(StructuredOutputBudgetError);
     expect(String(failure)).toContain("exceeds the openai budget");
     expect(events).toEqual([]);
-    expect(capturedChatOptions).toHaveLength(0);
+    expect(providerRequests).toHaveLength(0);
   });
 
   test("validates final objects with the original Valibot schema", async () => {
-    capturedChatOptions.length = 0;
-    nextChatResult = { answer: 123 };
+    queueRun(objectRun({ answer: 123 }));
 
     const validationFailure = await generateObjectForTestModel({
       caching: noCaching,
@@ -541,13 +718,17 @@ describe("TanStack AI structured output generation", () => {
     });
   });
 
-  test("retries retryable deferred OpenAI generation with the standard tier", async () => {
-    capturedChatOptions.length = 0;
-    nextChatError = Object.assign(new Error("OpenAI flex tier unavailable"), {
+  // `chat({ outputSchema })` wraps the adapter's error (`new Error(message,
+  // { cause: providerError })`), so the retry predicate has to read the status
+  // one `cause` down. The engine mock this suite used to install returned the
+  // provider error unwrapped, which hid the dead fallback.
+  test("retries a deferred OpenAI object generation the engine wrapped with the standard tier", async () => {
+    const apiError = Object.assign(new Error("OpenAI flex tier unavailable"), {
       isRetryable: true,
       statusCode: 429,
     });
-    nextChatResult = { answer: "ok" };
+    queueRun(throwingRun(apiError));
+    queueRun(objectRun({ answer: "ok" }));
 
     const result = await generateObjectForTestModel({
       caching: noCaching,
@@ -561,23 +742,21 @@ describe("TanStack AI structured output generation", () => {
     });
 
     expect(result).toEqual({ answer: "ok" });
-    expect(capturedChatOptions).toHaveLength(2);
-    expect(capturedChatOptions[0]?.modelOptions).toMatchObject({
+    expect(providerRequests).toHaveLength(2);
+    expect(providerRequests[0]?.modelOptions).toMatchObject({
       service_tier: "flex",
     });
-    expect(capturedChatOptions[1]?.modelOptions).toMatchObject({
+    expect(providerRequests[1]?.modelOptions).toMatchObject({
       service_tier: "default",
     });
   });
 
   test("does not retry non-retryable deferred OpenAI generation errors", async () => {
-    capturedChatOptions.length = 0;
-    nextChatResults.length = 0;
     const apiError = Object.assign(new Error("OpenAI request rejected"), {
       isRetryable: false,
       statusCode: 400,
     });
-    nextChatError = apiError;
+    queueRun(throwingRun(apiError));
 
     const caught = await generateObjectForTestModel({
       caching: noCaching,
@@ -593,25 +772,22 @@ describe("TanStack AI structured output generation", () => {
       (error: unknown) => error,
     );
 
-    expect(caught).toBe(apiError);
-    expect(capturedChatOptions).toHaveLength(1);
+    // The engine hands the caller a wrapper, so the provider's own error is
+    // reachable through `cause` rather than by identity.
+    expect(caught).toHaveProperty("cause", apiError);
+    expect(providerRequests).toHaveLength(1);
   });
 
   test("retries deferred structured streams after control-only chunks", async () => {
-    capturedChatOptions.length = 0;
-    nextChatResults.length = 0;
-    const apiError = Object.assign(new Error("OpenAI flex tier unavailable"), {
-      isRetryable: true,
-      statusCode: 429,
-    });
-    nextChatResults.push(
-      createFailingControlOnlyStream(apiError),
-      createStructuredOutputStream({
-        object: { answer: "ok" },
-        raw: '{"answer":"ok"}',
-        textDeltas: ['{"answer":"ok"}'],
-      }),
+    queueRun(
+      throwingRun(
+        Object.assign(new Error("OpenAI flex tier unavailable"), {
+          isRetryable: true,
+          statusCode: 429,
+        }),
+      ),
     );
+    queueRun(objectRun({ answer: "ok" }, '{"answer":"ok"}'));
 
     const events = [];
     for await (const event of streamObjectForTestModel({
@@ -640,11 +816,11 @@ describe("TanStack AI structured output generation", () => {
         type: "complete",
       },
     ]);
-    expect(capturedChatOptions).toHaveLength(2);
-    expect(capturedChatOptions[0]?.modelOptions).toMatchObject({
+    expect(providerRequests).toHaveLength(2);
+    expect(providerRequests[0]?.modelOptions).toMatchObject({
       service_tier: "flex",
     });
-    expect(capturedChatOptions[1]?.modelOptions).toMatchObject({
+    expect(providerRequests[1]?.modelOptions).toMatchObject({
       service_tier: "default",
     });
   });
@@ -652,7 +828,7 @@ describe("TanStack AI structured output generation", () => {
 
 // Every non-chat model call in the API dispatches through this module, so the
 // guard has to run here rather than at each of the ~25 call sites. These pin
-// the wiring against the real guard: the provider stub records exactly what a
+// the wiring against the real guard: the fake adapter records exactly what a
 // provider would have received.
 describe("TanStack AI model-ingress guard", () => {
   const tenantWorkspaceId = toSafeId<"workspace">(
@@ -661,8 +837,7 @@ describe("TanStack AI model-ingress guard", () => {
   const publicDecisionId = "7c0f7d51-70a4-4d64-9f0e-0a4d64e9911b";
 
   test("redacts tenant ids out of the dispatched messages", async () => {
-    capturedChatOptions.length = 0;
-    nextChatResult = createTextStream(["ok"]);
+    queueRun(textRun(["ok"]));
 
     await generateTextForTestModel({
       caching: noCaching,
@@ -675,7 +850,7 @@ describe("TanStack AI model-ingress guard", () => {
       tenantWorkspaceIds: [tenantWorkspaceId],
     });
 
-    const dispatched = JSON.stringify(getOnlyCapturedChatOptions().messages);
+    const dispatched = JSON.stringify(onlyProviderRequest().messages);
     expect(dispatched).not.toContain(tenantWorkspaceId);
     expect(dispatched).toContain("[internal-id-removed]");
     // Membership-exact: a public decision id is not a tenant id.
@@ -693,8 +868,7 @@ describe("TanStack AI model-ingress guard", () => {
   });
 
   test("leaves a request without tenant ids untouched and silent", async () => {
-    capturedChatOptions.length = 0;
-    nextChatResult = createTextStream(["ok"]);
+    queueRun(textRun(["ok"]));
 
     await generateTextForTestModel({
       caching: noCaching,
@@ -708,7 +882,7 @@ describe("TanStack AI model-ingress guard", () => {
       tenantWorkspaceIds: [tenantWorkspaceId],
     });
 
-    const captured = getOnlyCapturedChatOptions();
+    const captured = onlyProviderRequest();
     expect(JSON.stringify(captured.messages)).toContain(publicDecisionId);
     expect(JSON.stringify(captured.messages)).not.toContain(
       "[internal-id-removed]",
@@ -719,8 +893,7 @@ describe("TanStack AI model-ingress guard", () => {
   });
 
   test("redacts an untrusted-embedding system prompt, fails closed on a server-built one", async () => {
-    capturedChatOptions.length = 0;
-    nextChatResult = createTextStream(["ok"]);
+    queueRun(textRun(["ok"]));
 
     await generateTextForTestModel({
       caching: noCaching,
@@ -734,7 +907,7 @@ describe("TanStack AI model-ingress guard", () => {
       tenantWorkspaceIds: [tenantWorkspaceId],
     });
 
-    expect(getOnlyCapturedChatOptions().systemPrompts).toEqual([
+    expect(onlyProviderRequest().systemPrompts).toEqual([
       "Document context: workspace [internal-id-removed]",
     ]);
     // Routine redaction hits log; only server-built surfaces still capture.
@@ -751,8 +924,8 @@ describe("TanStack AI model-ingress guard", () => {
       },
     ]);
 
-    capturedChatOptions.length = 0;
-    nextChatResult = createTextStream(["ok"]);
+    resetProvider();
+    queueRun(textRun(["ok"]));
     const serverBuiltFailure = await generateTextForTestModel({
       caching: noCaching,
       finishPolicy: "allow-incomplete",
@@ -771,7 +944,7 @@ describe("TanStack AI model-ingress guard", () => {
 
     // Fail closed: the request never reached the provider.
     expect(serverBuiltFailure).toBeDefined();
-    expect(capturedChatOptions).toHaveLength(0);
+    expect(providerRequests).toHaveLength(0);
     // A server-built surface embedding a tenant id is a defect, so it is
     // captured under the guard's source rather than only logged.
     expect(
@@ -788,8 +961,7 @@ describe("TanStack AI model-ingress guard", () => {
 
 describe("TanStack AI text generation", () => {
   test("rejects incomplete output when complete generation is required", async () => {
-    capturedChatOptions.length = 0;
-    nextChatResult = createTextStream(["partial"], "length");
+    queueRun(textRun(["partial"], "length"));
 
     const caught = await generateTextForTestModel({
       caching: noCaching,
@@ -809,9 +981,8 @@ describe("TanStack AI text generation", () => {
   });
 
   test("rejects a cancelled run instead of returning its truncated text", async () => {
-    capturedChatOptions.length = 0;
     const controller = new AbortController();
-    nextChatResult = createCancelledTextStream(["half an ans"], controller);
+    queueRun(cancelledTextRun(["half an ans"], controller));
 
     const caught = await generateTextForTestModel({
       abortSignal: controller.signal,
@@ -835,9 +1006,8 @@ describe("TanStack AI text generation", () => {
   });
 
   test("classifies an abort rejection from a cancelled run as anticipated", async () => {
-    capturedChatOptions.length = 0;
     const controller = new AbortController();
-    nextChatResult = createAbortRejectedTextStream(controller);
+    queueRun(abortRejectedRun(controller));
 
     const caught = await generateTextForTestModel({
       abortSignal: controller.signal,
@@ -859,13 +1029,8 @@ describe("TanStack AI text generation", () => {
   });
 
   test("keeps the output of a run that finished before the cancellation", async () => {
-    capturedChatOptions.length = 0;
     const controller = new AbortController();
-    nextChatResult = createCancelledTextStream(
-      ["a whole answer"],
-      controller,
-      "stop",
-    );
+    queueRun(cancelledTextRun(["a whole answer"], controller, "stop"));
 
     const output = await generateTextForTestModel({
       abortSignal: controller.signal,
@@ -883,12 +1048,8 @@ describe("TanStack AI text generation", () => {
   });
 
   test("keeps the output of a run that finished without a reason before the cancellation", async () => {
-    capturedChatOptions.length = 0;
     const controller = new AbortController();
-    nextChatResult = createCancelledUnreasonedFinishStream(
-      ["a whole answer"],
-      controller,
-    );
+    queueRun(cancelledTextRun(["a whole answer"], controller, "unreasoned"));
 
     const output = await generateTextForTestModel({
       abortSignal: controller.signal,
@@ -906,8 +1067,7 @@ describe("TanStack AI text generation", () => {
   });
 
   test("collects text through the error-aware streaming boundary", async () => {
-    capturedChatOptions.length = 0;
-    nextChatResult = createTextStream(["hello", " world"]);
+    queueRun(textRun(["hello", " world"]));
 
     const output = await generateTextForTestModel({
       caching: noCaching,
@@ -921,15 +1081,18 @@ describe("TanStack AI text generation", () => {
     });
 
     expect(output).toBe("hello world");
-    expect(getOnlyCapturedChatOptions().stream).toBeUndefined();
+    // Collected text still comes off a streamed provider run: the engine
+    // reaches the adapter through `chatStream`, never a blocking call.
+    expect(onlyProviderRequest().method).toBe("chatStream");
   });
 
   test("propagates provider run errors from collected text", async () => {
-    capturedChatOptions.length = 0;
-    nextChatResult = createRunErrorStream({
-      code: "invalid_request_error",
-      message: "OpenAI rejected the request.",
-    });
+    queueRun(
+      runErrorRun({
+        code: "invalid_request_error",
+        message: "OpenAI rejected the request.",
+      }),
+    );
 
     const caught = await generateTextForTestModel({
       caching: noCaching,
@@ -953,11 +1116,9 @@ describe("TanStack AI text generation", () => {
   });
 
   test("classifies provider statuses after the run-error boundary", async () => {
-    capturedChatOptions.length = 0;
-    nextChatResult = createRunErrorStream({
-      code: "429",
-      message: "OpenAI rate limit exceeded.",
-    });
+    queueRun(
+      runErrorRun({ code: "429", message: "OpenAI rate limit exceeded." }),
+    );
 
     const caught = await generateTextForTestModel({
       caching: noCaching,
@@ -978,11 +1139,12 @@ describe("TanStack AI text generation", () => {
   });
 
   test("propagates provider run errors from streaming text", async () => {
-    capturedChatOptions.length = 0;
-    nextChatResult = createRunErrorStream({
-      code: "rate_limit_exceeded",
-      message: "OpenAI rate limit exceeded.",
-    });
+    queueRun(
+      runErrorRun({
+        code: "rate_limit_exceeded",
+        message: "OpenAI rate limit exceeded.",
+      }),
+    );
 
     const consume = async (): Promise<void> => {
       for await (const _delta of streamTextForTestModel({
@@ -1072,129 +1234,20 @@ describe("Anthropic extended-thinking budgets", () => {
   });
 });
 
-const captureChatOptions = (options: unknown): CapturedChatOptions => {
-  if (!isRecord(options)) {
-    throw new TypeError("Expected TanStack chat options object.");
-  }
-
-  return {
-    messages: options["messages"],
-    modelOptions: options["modelOptions"],
-    outputSchema: options["outputSchema"],
-    stream: options["stream"],
-    systemPrompts: options["systemPrompts"],
-  };
-};
-
-const getOnlyCapturedChatOptions = (): CapturedChatOptions => {
-  const captured = capturedChatOptions.at(0);
-  if (!captured || capturedChatOptions.length !== 1) {
-    throw new Error("Expected exactly one TanStack chat call.");
+const onlyProviderRequest = (): CapturedProviderRequest => {
+  const captured = providerRequests.at(0);
+  if (!captured || providerRequests.length !== 1) {
+    throw new Error("Expected exactly one provider request.");
   }
   return captured;
 };
 
-const expectHasTanStackJsonSchema = (schema: unknown): void => {
+const expectProviderJsonSchema = (schema: unknown): void => {
   if (!isRecord(schema)) {
-    throw new TypeError("Expected a TanStack Standard JSON Schema object.");
+    throw new TypeError("Expected the provider to receive a JSON Schema.");
   }
-  const standard = schema["~standard"];
-  if (!isRecord(standard)) {
-    throw new TypeError("Expected schema to expose Standard Schema metadata.");
-  }
-  expect(standard["jsonSchema"]).toBeDefined();
-};
-
-const createStructuredOutputStream = async function* ({
-  object,
-  raw,
-  textDeltas = [],
-}: {
-  object: unknown;
-  raw: string;
-  textDeltas?: string[];
-}) {
-  for (const delta of textDeltas) {
-    yield {
-      delta,
-      type: realTanStackAI.EventType.TEXT_MESSAGE_CONTENT,
-    };
-  }
-
-  yield {
-    name: "structured-output.complete",
-    type: realTanStackAI.EventType.CUSTOM,
-    value: { object, raw },
-  };
-};
-
-const createTextStream = async function* (
-  deltas: string[],
-  finishReason?: "stop" | "length",
-) {
-  for (const delta of deltas) {
-    yield {
-      delta,
-      type: realTanStackAI.EventType.TEXT_MESSAGE_CONTENT,
-    };
-  }
-  if (finishReason) {
-    yield {
-      type: realTanStackAI.EventType.RUN_FINISHED,
-      finishReason,
-    };
-  }
-};
-
-// The chat loop's cancellation shape: it breaks out of the provider stream on
-// the next chunk, so the deltas already collected stand, no `RUN_FINISHED`
-// follows, and nothing is thrown. Pass a finish reason to model the run
-// reporting completion before the signal fires.
-const createCancelledTextStream = async function* (
-  deltas: string[],
-  controller: AbortController,
-  finishReason?: "stop" | "length",
-) {
-  yield* createTextStream(deltas, finishReason);
-  controller.abort();
-};
-
-const createAbortRejectedTextStream = async function* (
-  controller: AbortController,
-) {
-  controller.abort();
-  throw controller.signal.reason;
-};
-
-// `RUN_FINISHED` may carry no finish reason at all; the run still finished.
-const createCancelledUnreasonedFinishStream = async function* (
-  deltas: string[],
-  controller: AbortController,
-) {
-  yield* createTextStream(deltas);
-  yield { type: realTanStackAI.EventType.RUN_FINISHED };
-  controller.abort();
-};
-
-const createRunErrorStream = async function* ({
-  code,
-  message,
-}: {
-  code: string;
-  message: string;
-}) {
-  yield {
-    code,
-    message,
-    type: realTanStackAI.EventType.RUN_ERROR,
-  };
-};
-
-const createFailingControlOnlyStream = async function* (error: Error) {
-  yield {
-    type: realTanStackAI.EventType.RUN_STARTED,
-  };
-  throw error;
+  expect(schema["type"]).toBe("object");
+  expect(schema["properties"]).toHaveProperty("answer");
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
