@@ -23,6 +23,10 @@ name: Dependency Review
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
+  # `dependency-review` is a required check, and the merge queue only merges a
+  # group whose required checks reported on the group's own commit.
+  merge_group:
+    types: [checks_requested]
 
 permissions:
   contents: read
@@ -43,6 +47,10 @@ jobs:
       - name: Dependency Review
         uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
         with:
+          # The action derives both refs from a pull_request payload on its own;
+          # a merge group carries them under its own event key.
+          base-ref: ${{ github.event.merge_group.base_sha || '' }}
+          head-ref: ${{ github.event.merge_group.head_sha || '' }}
           fail-on-severity: high
           allow-licenses: >-
             MIT,
@@ -140,4 +148,5 @@ jobs:
             pkg:cargo/filetime,
             pkg:cargo/mac-notification-sys,
             pkg:cargo/webpki-root-certs
-          comment-summary-in-pr: always
+          # A merge group has no pull request to comment on.
+          comment-summary-in-pr: ${{ github.event_name == 'merge_group' && 'never' || 'always' }}

@@ -1,50 +1,38 @@
 #!/usr/bin/env bun
 //
-// Merge bar: the sanctioned way to merge a pull request.
+// Merge bar: the sanctioned way to land a pull request.
 //
 // `gh pr merge` is a single write with no state assertions, so the operator
 // supplies the safety argument from whatever they happened to read earlier.
 // This tool re-reads every input inside one invocation and asserts each gate
-// POSITIVELY before it writes. Three failure classes motivate it:
+// POSITIVELY before it writes. Two failure classes motivate it:
 //
 // (a) Negative-check misreads. "No failing checks" is not "checks passed".
 //     A CONFLICTING pull request produces ZERO check runs, a draft produces
 //     ZERO check runs, and a rollup filtered for failures over an empty list
 //     is empty — all three read as green to a negative predicate. Every gate
-//     here therefore demands a positive observation: the `ci-result` check run
-//     must EXIST on the exact current head SHA with conclusion `success`, and
-//     an empty check-run list fails rather than passes.
+//     here therefore demands a positive observation, and an empty check-run
+//     list is an absent verdict rather than a passing one.
 //
 // (b) Time-of-check to time-of-use. Review threads, reviews, and pushes land
-//     between a state read and the merge call. Gate inputs read minutes ago
+//     between a state read and the write. Gate inputs read minutes ago
 //     describe a pull request that no longer exists. Everything below is
 //     fetched in THIS invocation, the head SHA is re-read immediately before
-//     the merge, and that SHA is passed to `--match-head-commit` so GitHub
-//     rejects the write server-side if head moved in the remaining gap: the
-//     assertion is enforced by the write, not merely checked before it. The
-//     same staleness applies across pull requests:
-//     migration ordering is re-checked against the live default branch,
-//     because a branch's own CI run cannot see a migration that landed on the
-//     default branch after that run finished.
+//     the write, and that SHA is pinned into the write itself so GitHub
+//     rejects it server-side if head moved in the remaining gap.
 //
-// (c) Merge-body file clobbering. `gh pr merge --body-file path` reads the
-//     file at merge time, so a concurrent writer to that path silently
-//     rewrites the commit message. The body is read and inlined here at
-//     startup; the merge call never receives a path.
+// What the write is depends on the repository's landing policy. Where the
+// default branch has a merge queue, the bar arms "merge when ready": GitHub
+// enqueues the pull request once its required checks and thread resolution
+// hold, builds the base branch plus the pull request, runs CI on that commit,
+// and merges only if it passes. Nothing needs a rebase to land, a baseline or
+// lint rule measured on the branch is re-measured on the tree that lands, and
+// migration ordering is checked against the base as it stands at merge time.
+// Where there is no queue, the bar merges directly, and only once the
+// required checks have succeeded on the exact head.
 //
-// (d) Budgets measured off the base. A committed baseline records counts for
-//     the head that seeded it. Merging one seeded below the base branch turns
-//     the default branch red after the write: the check reads a budget for a
-//     tree that never existed. Such a pull request must be current with its
-//     base, which is a property of the commit graph, not of its own CI run.
-//
-// Known boundary. `--match-head-commit` binds the pull request head and
-// nothing else, and `--admin` merges past branch protection by definition, so
-// the review-thread and base-branch gates are client-side assertions with no
-// server-side backstop. Reading them last shrinks their windows to the final
-// two calls; two migration-bearing merges issued simultaneously, or a thread
-// opened inside that window, still slip through. Closing those completely
-// needs a merge queue.
+// The squash commit message is the pull request title and body, which each
+// repository's squash settings select; nothing here composes a message.
 //
 // What this tool deliberately does NOT gate: review depth. Automated review
 // requests are budgeted at two per pull request, because a third round buys
@@ -53,20 +41,13 @@
 // green bar is the merge argument; another review request is not.
 //
 // Usage:
-//   bun scripts/merge-bar.ts <pr-number> [--repo owner/name] [--body-file path]
-//                                        [--admin] [--dry-run]
-//
-// Without --body-file the pull request body read in this invocation becomes
-// the squash body, so the commit message never degrades into a commit list.
+//   bun scripts/merge-bar.ts <pr-number> [--repo owner/name] [--dry-run]
 
 import { panic } from "better-result";
-import { readFileSync } from "node:fs";
 
-import { isSeededBaselineFile } from "./baseline-paths";
 import { findMigrationOrderViolation } from "./check-migration-order";
 
 const DEFAULT_REPO = "stella/stella";
-const MIGRATION_DIRECTORY = "apps/api/drizzle";
 const MERGEABLE_POLL_ATTEMPTS = 8;
 const MERGEABLE_POLL_INTERVAL_MS = 2000;
 const MERGE_COMMIT_POLL_ATTEMPTS = 5;
@@ -74,33 +55,55 @@ const MERGE_COMMIT_POLL_ATTEMPTS = 5;
 const CONTENTS_ENDPOINT_ENTRY_LIMIT = 1000;
 const PULL_NUMBER_PATTERN = /^\d+$/u;
 
-export const mergeBarRequiredCheckRuns = (repo: string): readonly string[] => {
-  const normalizedRepo = repo.toLowerCase();
-  switch (normalizedRepo) {
-    case "stella/stella":
-      return ["ci-result"];
-    case "stella/stella-infra":
-      return ["Lint & Validate", "Plan (production)", "Plan (staging)"];
-    case "stella/stella-plane":
-      return ["Overlay check"];
-    default:
-      return panic(`No merge-bar check policy is registered for ${repo}`);
-  }
+// --- Repository policy --------------------------------------------------------
+
+const LANDINGS = ["merge-when-ready", "merge"] as const;
+type Landing = (typeof LANDINGS)[number];
+
+export type RepositoryPolicy = {
+  requiredCheckRuns: readonly string[];
+  // Where committed migrations live, for repositories that carry any.
+  migrationDirectory: string | null;
+  landing: Landing;
 };
 
-export const mergeBarMigrationDirectory = (repo: string): string | null =>
-  repo.toLowerCase() === DEFAULT_REPO ? MIGRATION_DIRECTORY : null;
+export const mergeBarRepositoryPolicy = (repo: string): RepositoryPolicy => {
+  switch (repo.toLowerCase()) {
+    case "stella/stella":
+      return {
+        requiredCheckRuns: ["ci-result"],
+        migrationDirectory: "apps/api/drizzle",
+        landing: "merge-when-ready",
+      };
+    case "stella/stella-infra":
+      return {
+        requiredCheckRuns: [
+          "Lint & Validate",
+          "Plan (production)",
+          "Plan (staging)",
+        ],
+        migrationDirectory: null,
+        landing: "merge",
+      };
+    case "stella/stella-plane":
+      return {
+        requiredCheckRuns: ["Overlay check"],
+        migrationDirectory: null,
+        landing: "merge",
+      };
+    default:
+      return panic(`No merge-bar policy is registered for ${repo}`);
+  }
+};
 
 // --- Gate model -------------------------------------------------------------
 
 const GATE_IDS = [
   "pull-request-state",
   "mergeable",
-  "baseline-freshness",
   "required-check",
   "review-threads",
   "migration-order",
-  "base-stability",
   "head-stability",
 ] as const;
 type GateId = (typeof GATE_IDS)[number];
@@ -115,11 +118,8 @@ const MERGE_BAR_REASONS = {
   requiredCheckMissing: "REQUIRED_CHECK_MISSING",
   requiredCheckIncomplete: "REQUIRED_CHECK_INCOMPLETE",
   requiredCheckNotSuccessful: "REQUIRED_CHECK_NOT_SUCCESSFUL",
-  baselineNotCurrent: "BASELINE_SEEDED_OFF_BASE",
-  baselineBaseMoved: "BASE_MOVED_UNDER_BASELINE",
   unresolvedReviewThreads: "UNRESOLVED_REVIEW_THREADS",
   migrationOrder: "MIGRATION_ORDER_VIOLATION",
-  baseMoved: "BASE_MOVED_UNDER_ADDED_MIGRATIONS",
   headMoved: "HEAD_MOVED_DURING_CHECKS",
 } as const;
 type MergeBarReason =
@@ -130,20 +130,13 @@ const MERGEABLE_STATES = ["MERGEABLE", "CONFLICTING", "UNKNOWN"] as const;
 
 type PullRequestSnapshot = {
   number: number;
-  title: string;
-  body: string;
   state: (typeof PULL_REQUEST_STATES)[number];
   isDraft: boolean;
   mergeable: (typeof MERGEABLE_STATES)[number];
+  // When "merge when ready" was already armed, the moment it was; arming it
+  // again is neither needed nor accepted by GitHub.
+  autoMergeEnabledAt: string | null;
   headSha: string;
-};
-
-// Where the head stands relative to one exact base commit. `behindBy` counts
-// base commits absent from the head, so zero means the base tip is an ancestor
-// of the head and the head's CI run measured the tree the merge will produce.
-type BaseAncestrySnapshot = {
-  baseSha: string;
-  behindBy: number;
 };
 
 type CheckRunSnapshot = {
@@ -155,31 +148,24 @@ type CheckRunSnapshot = {
 type ReviewThreadSnapshot = { id: string; isResolved: boolean };
 
 type MigrationSnapshot = {
-  // Migration directories present on the default branch right now.
+  // Migration directories present on the base branch right now.
   baseDirectories: readonly string[];
   // Migration directories this pull request adds.
   addedDirectories: readonly string[];
-  // The default-branch commit `baseDirectories` was read from.
-  baseSha: string;
 };
 
 export type MergeBarSnapshot = {
   pullRequest: PullRequestSnapshot;
+  landing: Landing;
   requiredCheckRuns: readonly string[];
   // The SHA the check runs were actually fetched for. Kept separate from
   // `pullRequest.headSha` so a read against a stale commit cannot masquerade
   // as a read against the current one.
   checkRunsHeadSha: string;
   checkRuns: readonly CheckRunSnapshot[];
-  // Every path this pull request touches, whatever the change status.
-  changedFiles: readonly string[];
-  // Read against the base tip as it stood at that moment; the ancestry holds
-  // for that commit and no later one.
-  baseAncestry: BaseAncestrySnapshot;
   reviewThreads: readonly ReviewThreadSnapshot[];
   migrations: MigrationSnapshot;
-  // Both re-read immediately before the merge call.
-  baseShaBeforeMerge: string;
+  // Re-read immediately before the write.
   headShaBeforeMerge: string;
 };
 
@@ -192,7 +178,7 @@ export type MergeBarVerdict = {
   gates: readonly GateVerdict[];
 };
 
-// --- Gates (pure) -----------------------------------------------------------
+// --- Gates ------------------------------------------------------------------
 
 const evaluatePullRequestState = (
   pullRequest: PullRequestSnapshot,
@@ -238,97 +224,21 @@ const evaluateMergeable = (pullRequest: PullRequestSnapshot): GateVerdict => {
   return { gate: "mergeable", status: "pass", detail: "MERGEABLE" };
 };
 
-// A guard definition: a lint rule, the config that enables it, or the table of
-// budgeted suppressions. A rule proves something about the tree it ran on, so a
-// pull request that adds or tightens one is measured off its own head exactly
-// as a baseline is: land it beside a pull request that adds the shape it
-// rejects and both are green alone and red together on the default branch.
-const GUARD_DEFINITION_PATHS = [
-  ".oxlint-plugins/",
-  "oxlint.config.ts",
-  "oxlint.result-boundary.config.ts",
-  "scripts/lint-suppressions.ts",
-] as const;
-
-const isGuardDefinitionFile = (file: string): boolean =>
-  GUARD_DEFINITION_PATHS.some(
-    (guard) => file === guard || file.startsWith(guard),
-  );
-
-// A baseline is measured against the head that seeded it. Merging one that was
-// seeded below the base branch publishes a budget for a tree that never
-// existed: whatever landed in between is unaccounted for, and the check that
-// reads the budget goes red on the default branch after the merge, not before.
-// A guard definition carries the same property from the other direction, so
-// both are held to the same currency requirement.
-//
-// Currency is read from the commit graph, not from GitHub's merge state: that
-// state reports BEHIND only when nothing else blocks, and under branch
-// protection every head an `--admin` merge would take reads BLOCKED, current
-// or not.
-const evaluateBaselineFreshness = ({
-  baseAncestry,
-  baseShaBeforeMerge,
-  changedFiles,
-}: {
-  baseAncestry: BaseAncestrySnapshot;
-  baseShaBeforeMerge: string;
-  changedFiles: readonly string[];
-}): GateVerdict => {
-  const measured = changedFiles.filter(
-    (file) => isSeededBaselineFile(file) || isGuardDefinitionFile(file),
-  );
-  if (measured.length === 0) {
-    return {
-      gate: "baseline-freshness",
-      status: "pass",
-      detail: "no baseline or guard definition in this pull request",
-    };
-  }
-  if (baseAncestry.behindBy !== 0) {
-    return {
-      gate: "baseline-freshness",
-      status: "fail",
-      reason: MERGE_BAR_REASONS.baselineNotCurrent,
-      detail:
-        `head is ${baseAncestry.behindBy} commit(s) behind base ` +
-        `${baseAncestry.baseSha}, and ${measured.join(", ")} only holds for ` +
-        "the head it was measured on; rebase onto the base branch, reseed any " +
-        "baseline, and let CI re-run",
-    };
-  }
-  // The ancestry describes the base commit it was read against. The gates
-  // below it take seconds, and a merge landing in that window puts the base
-  // above the tree the baseline was measured on, which is the same stale
-  // budget the ancestry check just ruled out.
-  if (baseAncestry.baseSha !== baseShaBeforeMerge) {
-    return {
-      gate: "baseline-freshness",
-      status: "fail",
-      reason: MERGE_BAR_REASONS.baselineBaseMoved,
-      detail:
-        `default branch moved ${baseAncestry.baseSha} -> ` +
-        `${baseShaBeforeMerge} after the ancestry was read, and ` +
-        `${measured.join(", ")} was measured below it; rebase onto the base ` +
-        "branch, reseed any baseline, and let CI re-run",
-    };
-  }
-  return {
-    gate: "baseline-freshness",
-    status: "pass",
-    detail: `${measured.length} measured file(s) on a head current with ${baseShaBeforeMerge}`,
-  };
-};
-
+// A direct merge needs every required check to have SUCCEEDED on the head:
+// the write is final. "Merge when ready" needs only that none has FAILED: a
+// check still running, or not yet created for a fresh push, is what GitHub
+// waits on before it enqueues, so refusing it would only add a manual wait.
 const evaluateRequiredCheck = ({
   checkRuns,
   checkRunsHeadSha,
   headSha,
+  landing,
   requiredCheckRuns,
 }: {
   checkRuns: readonly CheckRunSnapshot[];
   checkRunsHeadSha: string;
   headSha: string;
+  landing: Landing;
   requiredCheckRuns: readonly string[];
 }): GateVerdict => {
   if (checkRunsHeadSha !== headSha) {
@@ -347,30 +257,13 @@ const evaluateRequiredCheck = ({
   const missingNames = requiredCheckRuns.filter(
     (name) => !observedNames.has(name),
   );
-  // The load-bearing case: an empty list is an ABSENT verdict, not a passing
-  // one. Filtering a rollup for failures would report "none" here and merge.
-  if (missingNames.length > 0) {
-    return {
-      gate: "required-check",
-      status: "fail",
-      reason: MERGE_BAR_REASONS.requiredCheckMissing,
-      detail:
-        `missing required check run(s) ${missingNames.map((name) => `\`${name}\``).join(", ")} on ${headSha} ` +
-        `(${checkRuns.length} check run(s) present)`,
-    };
-  }
-
   const incomplete = required.filter((run) => run.status !== "completed");
-  if (incomplete.length > 0) {
-    return {
-      gate: "required-check",
-      status: "fail",
-      reason: MERGE_BAR_REASONS.requiredCheckIncomplete,
-      detail: `\`${incomplete.at(0)?.name ?? "required check"}\` is ${incomplete.at(0)?.status ?? "pending"}`,
-    };
-  }
+  const unsuccessful = required.filter(
+    (run) => run.status === "completed" && run.conclusion !== "success",
+  );
+  const quote = (names: readonly string[]): string =>
+    names.map((name) => `\`${name}\``).join(", ");
 
-  const unsuccessful = required.filter((run) => run.conclusion !== "success");
   if (unsuccessful.length > 0) {
     return {
       gate: "required-check",
@@ -380,10 +273,42 @@ const evaluateRequiredCheck = ({
     };
   }
 
+  if (landing === "merge-when-ready") {
+    const pending = [...missingNames, ...incomplete.map(({ name }) => name)];
+    return {
+      gate: "required-check",
+      status: "pass",
+      detail:
+        pending.length === 0
+          ? `${quote(requiredCheckRuns)} success on ${headSha}`
+          : `${quote(pending)} pending on ${headSha}; GitHub merges once they succeed`,
+    };
+  }
+
+  // The load-bearing case: an empty list is an ABSENT verdict, not a passing
+  // one. Filtering a rollup for failures would report "none" here and merge.
+  if (missingNames.length > 0) {
+    return {
+      gate: "required-check",
+      status: "fail",
+      reason: MERGE_BAR_REASONS.requiredCheckMissing,
+      detail:
+        `missing required check run(s) ${quote(missingNames)} on ${headSha} ` +
+        `(${checkRuns.length} check run(s) present)`,
+    };
+  }
+  if (incomplete.length > 0) {
+    return {
+      gate: "required-check",
+      status: "fail",
+      reason: MERGE_BAR_REASONS.requiredCheckIncomplete,
+      detail: `\`${incomplete.at(0)?.name ?? "required check"}\` is ${incomplete.at(0)?.status ?? "pending"}`,
+    };
+  }
   return {
     gate: "required-check",
     status: "pass",
-    detail: `${requiredCheckRuns.map((name) => `\`${name}\``).join(", ")} success on ${headSha}`,
+    detail: `${quote(requiredCheckRuns)} success on ${headSha}`,
   };
 };
 
@@ -408,6 +333,8 @@ const evaluateReviewThreads = (
   };
 };
 
+// Checked here for fast feedback and again by CI on the merge-group commit,
+// where the base is what the pull request actually lands on.
 const evaluateMigrationOrder = (migrations: MigrationSnapshot): GateVerdict => {
   const violation = findMigrationOrderViolation({
     baseDirectories: migrations.baseDirectories,
@@ -435,48 +362,7 @@ const evaluateMigrationOrder = (migrations: MigrationSnapshot): GateVerdict => {
   return {
     gate: "migration-order",
     status: "pass",
-    detail: `${migrations.addedDirectories.length} added migration(s) ordered above the default branch`,
-  };
-};
-
-// `--match-head-commit` binds the pull request head, not the branch being
-// merged into, so nothing server-side notices that the base advanced while the
-// gates ran. That only matters when this pull request adds migrations: another
-// merge landing a higher timestamp in that window would silently put this
-// one's DDL below the maximum an already-migrated database has recorded.
-//
-// Residual boundary: this narrows the window to the merge call itself. Two
-// migration-bearing merges issued in the same instant can still interleave;
-// closing that completely needs a merge queue, not a client-side gate.
-const evaluateBaseStability = ({
-  migrations,
-  baseShaBeforeMerge,
-}: {
-  migrations: MigrationSnapshot;
-  baseShaBeforeMerge: string;
-}): GateVerdict => {
-  if (migrations.addedDirectories.length === 0) {
-    return {
-      gate: "base-stability",
-      status: "pass",
-      detail: "no added migrations; base movement cannot reorder anything",
-    };
-  }
-  if (migrations.baseSha !== baseShaBeforeMerge) {
-    return {
-      gate: "base-stability",
-      status: "fail",
-      reason: MERGE_BAR_REASONS.baseMoved,
-      detail:
-        `default branch moved ${migrations.baseSha} -> ${baseShaBeforeMerge} ` +
-        "while this pull request adds migrations; re-run so ordering is " +
-        "checked against what will actually be merged into",
-    };
-  }
-  return {
-    gate: "base-stability",
-    status: "pass",
-    detail: `default branch steady at ${migrations.baseSha}`,
+    detail: `${migrations.addedDirectories.length} added migration(s) ordered above the base branch`,
   };
 };
 
@@ -509,23 +395,15 @@ export const evaluateMergeBar = (
   const gates = [
     evaluatePullRequestState(snapshot.pullRequest),
     evaluateMergeable(snapshot.pullRequest),
-    evaluateBaselineFreshness({
-      baseAncestry: snapshot.baseAncestry,
-      baseShaBeforeMerge: snapshot.baseShaBeforeMerge,
-      changedFiles: snapshot.changedFiles,
-    }),
     evaluateRequiredCheck({
       checkRuns: snapshot.checkRuns,
       checkRunsHeadSha: snapshot.checkRunsHeadSha,
       headSha: snapshot.pullRequest.headSha,
+      landing: snapshot.landing,
       requiredCheckRuns: snapshot.requiredCheckRuns,
     }),
     evaluateReviewThreads(snapshot.reviewThreads),
     evaluateMigrationOrder(snapshot.migrations),
-    evaluateBaseStability({
-      migrations: snapshot.migrations,
-      baseShaBeforeMerge: snapshot.baseShaBeforeMerge,
-    }),
     evaluateHeadStability({
       headSha: snapshot.pullRequest.headSha,
       headShaBeforeMerge: snapshot.headShaBeforeMerge,
@@ -542,26 +420,19 @@ export const evaluateMergeBar = (
 
 type GitHubGateway = {
   readPullRequest: () => PullRequestSnapshot;
-  // Deliberately separate from `readPullRequest`: the pre-merge re-read only
+  // Deliberately separate from `readPullRequest`: the pre-write re-read only
   // needs the SHA, and a narrow read makes the TOCTOU window smaller.
   readHeadSha: () => string;
-  // Tip of the branch this pull request merges into.
-  readBaseSha: () => string;
-  // Where `headSha` stands relative to the base tip read inside this call.
-  readBaseAncestry: (headSha: string) => BaseAncestrySnapshot;
   readCheckRuns: (headSha: string) => readonly CheckRunSnapshot[];
-  readChangedFiles: () => readonly string[];
   readReviewThreads: () => readonly ReviewThreadSnapshot[];
   readMigrationDirectories: () => MigrationSnapshot;
-  merge: (input: {
-    subject: string;
-    body: string;
-    admin: boolean;
-    // The SHA every gate above was evaluated against. GitHub rejects the merge
-    // if head has moved since, so the head-stability assertion is enforced by
-    // the write itself rather than by the gap between the last read and it.
-    expectedHeadSha: string;
-  }) => string;
+  // Both writes pin the head every gate was evaluated against, so GitHub
+  // rejects them server-side if it moved since: the head-stability assertion
+  // is enforced by the write itself, not by the gap between the last read and
+  // it. `merge` returns the squash commit; `armMergeWhenReady` returns what
+  // GitHub did: enabled auto-merge, or added the pull request to the queue.
+  merge: (input: { expectedHeadSha: string }) => string;
+  armMergeWhenReady: (input: { expectedHeadSha: string }) => string;
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -632,63 +503,17 @@ query($owner: String!, $name: String!, $number: Int!, $cursor: String) {
 const createGhGateway = ({
   repo,
   pullNumber,
+  migrationDirectory,
 }: {
   repo: string;
   pullNumber: number;
+  migrationDirectory: string | null;
 }): GitHubGateway => {
   const [owner, name] = repo.split("/");
   if (owner === undefined || name === undefined || name === "") {
     panic(`--repo must be owner/name, got: ${repo}`);
   }
   const prArgs = [String(pullNumber), "--repo", repo];
-
-  // One paginated listing serves both the baseline gate and the migration read.
-  type PullRequestFile = { filename: string; status: string };
-  let files: readonly PullRequestFile[] | null = null;
-  const readFiles = (): readonly PullRequestFile[] => {
-    files ??= runGh([
-      "api",
-      "--paginate",
-      `repos/${repo}/pulls/${pullNumber}/files`,
-      "--jq",
-      ".[] | [.status, .filename] | @tsv",
-    ])
-      .split("\n")
-      .filter(Boolean)
-      .map((line) => {
-        const [status, filename] = line.split("\t");
-        if (status === undefined || filename === undefined) {
-          panic(`Malformed changed-file row from gh: ${line}`);
-        }
-        return { filename, status };
-      });
-    return files;
-  };
-
-  // The live tip of the base branch, not `baseRefOid`: gh reports that as
-  // the commit the pull request was compared against, which is exactly the
-  // stale value this gate exists to detect.
-  const readBaseSha = (): string => {
-    const baseRefName = readString(
-      readRecord(
-        runGhJson(["pr", "view", ...prArgs, "--json", "baseRefName"]),
-        "pr view",
-      ),
-      "baseRefName",
-    );
-    return readString(
-      readRecord(
-        runGhJson([
-          "api",
-          `repos/${repo}/commits/${baseRefName}`,
-          "--jq",
-          "{sha: .sha}",
-        ]),
-        "base commit",
-      ),
-      "sha",
-    );
-  };
 
   return {
     readHeadSha: () =>
@@ -700,8 +525,6 @@ const createGhGateway = ({
         "headRefOid",
       ),
 
-    readBaseSha,
-
     readPullRequest: () => {
       const raw = readRecord(
         runGhJson([
@@ -709,7 +532,7 @@ const createGhGateway = ({
           "view",
           ...prArgs,
           "--json",
-          "number,title,body,state,isDraft,mergeable,headRefOid",
+          "number,state,isDraft,mergeable,autoMergeRequest,headRefOid",
         ]),
         "pr view",
       );
@@ -717,10 +540,9 @@ const createGhGateway = ({
       if (typeof number !== "number") {
         panic("Expected numeric field `number` in gh response");
       }
+      const autoMergeRequest = raw["autoMergeRequest"];
       return {
         number,
-        title: readString(raw, "title"),
-        body: readString(raw, "body"),
         state: readMember(
           PULL_REQUEST_STATES,
           readString(raw, "state"),
@@ -732,28 +554,11 @@ const createGhGateway = ({
           readString(raw, "mergeable"),
           "mergeable",
         ),
+        autoMergeEnabledAt: isRecord(autoMergeRequest)
+          ? readString(autoMergeRequest, "enabledAt")
+          : null,
         headSha: readString(raw, "headRefOid"),
       };
-    },
-
-    // Compared against one pinned base commit, so `baseSha` provably names
-    // the tip `behindBy` was counted from.
-    readBaseAncestry: (headSha) => {
-      const baseSha = readBaseSha();
-      const comparison = readRecord(
-        runGhJson([
-          "api",
-          `repos/${repo}/compare/${baseSha}...${headSha}`,
-          "--jq",
-          "{behind_by: .behind_by}",
-        ]),
-        "compare",
-      );
-      const behindBy = comparison["behind_by"];
-      if (typeof behindBy !== "number" || !Number.isSafeInteger(behindBy)) {
-        panic("Expected integer field `behind_by` in gh compare response");
-      }
-      return { baseSha, behindBy };
     },
 
     // Read the check runs recorded against one exact commit. `statusCheckRollup`
@@ -784,8 +589,6 @@ const createGhGateway = ({
       }
       return runs;
     },
-
-    readChangedFiles: () => readFiles().map(({ filename }) => filename),
 
     readReviewThreads: () => {
       const threads: ReviewThreadSnapshot[] = [];
@@ -835,9 +638,12 @@ const createGhGateway = ({
     },
 
     // Read both sides from the API rather than the local checkout: the local
-    // clone can be behind the default branch, which is the very staleness this
+    // clone can be behind the base branch, which is the very staleness this
     // gate exists to catch.
     readMigrationDirectories: () => {
+      if (migrationDirectory === null) {
+        return { baseDirectories: [], addedDirectories: [] };
+      }
       const baseRefName = readString(
         readRecord(
           runGhJson(["pr", "view", ...prArgs, "--json", "baseRefName"]),
@@ -845,9 +651,8 @@ const createGhGateway = ({
         ),
         "baseRefName",
       );
-      // Pin the listing to one commit so `baseSha` provably describes the
-      // directories read below, rather than whatever the branch pointed at
-      // between two separate requests.
+      // Pin the listing to one commit so it provably describes one tree rather
+      // than whatever the branch pointed at between two separate requests.
       const baseSha = readString(
         readRecord(
           runGhJson([
@@ -860,10 +665,6 @@ const createGhGateway = ({
         ),
         "sha",
       );
-      const migrationDirectory = mergeBarMigrationDirectory(repo);
-      if (migrationDirectory === null) {
-        return { baseDirectories: [], addedDirectories: [], baseSha };
-      }
       const baseDirectories = runGh([
         "api",
         `repos/${repo}/contents/${migrationDirectory}?ref=${baseSha}`,
@@ -884,37 +685,32 @@ const createGhGateway = ({
         );
       }
 
-      const addedDirectories = readFiles()
+      const addedDirectories = runGh([
+        "api",
+        "--paginate",
+        `repos/${repo}/pulls/${pullNumber}/files`,
+        "--jq",
+        '.[] | select(.status == "added") | .filename',
+      ])
+        .split("\n")
         .filter(
-          ({ filename, status }) =>
-            status === "added" &&
+          (filename) =>
             filename.startsWith(`${migrationDirectory}/`) &&
             filename.endsWith("/migration.sql"),
         )
-        .map(({ filename }) => filename.slice(0, filename.lastIndexOf("/")));
+        .map((filename) => filename.slice(0, filename.lastIndexOf("/")));
 
-      return { baseDirectories, addedDirectories, baseSha };
+      return { baseDirectories, addedDirectories };
     },
 
-    // The body arrives already inlined: no path is passed to gh, so no
-    // concurrent writer can rewrite the commit message between the check and
-    // the merge.
-    merge: ({ subject, body, admin, expectedHeadSha }) => {
+    merge: ({ expectedHeadSha }) => {
       runGh([
         "pr",
         "merge",
         ...prArgs,
         "--squash",
-        // Without this, the head-stability gate is only advisory: a push
-        // landing between the final SHA read and this call would merge a
-        // commit no gate ever saw. GitHub enforces the match server-side.
         "--match-head-commit",
         expectedHeadSha,
-        "--subject",
-        subject,
-        "--body",
-        body,
-        ...(admin ? ["--admin"] : []),
       ]);
       // The merge already happened; the commit SHA just may not be attached to
       // the pull request yet. Retry rather than fail on a reporting lag, which
@@ -934,6 +730,21 @@ const createGhGateway = ({
           `check ${repo}#${pullNumber} manually.`,
       );
     },
+
+    // `gh` picks the operation the queue accepts for the pull request's
+    // current state: auto-merge while required checks are still running,
+    // a direct enqueue once they have passed (GitHub refuses auto-merge on
+    // an already-clean pull request). Both carry the head pin.
+    armMergeWhenReady: ({ expectedHeadSha }) =>
+      runGh([
+        "pr",
+        "merge",
+        ...prArgs,
+        "--squash",
+        "--auto",
+        "--match-head-commit",
+        expectedHeadSha,
+      ]).trim(),
   };
 };
 
@@ -942,16 +753,12 @@ const createGhGateway = ({
 type MergeBarOptions = {
   pullNumber: number;
   repo: string;
-  bodyFile: string | null;
-  admin: boolean;
   dryRun: boolean;
 };
 
 const parseOptions = (argv: readonly string[]): MergeBarOptions => {
   const positional: string[] = [];
   let repo = DEFAULT_REPO;
-  let bodyFile: string | null = null;
-  let admin = false;
   let dryRun = false;
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -959,15 +766,6 @@ const parseOptions = (argv: readonly string[]): MergeBarOptions => {
     if (argument === "--repo") {
       index += 1;
       repo = argv[index] ?? panic("--repo requires a value");
-      continue;
-    }
-    if (argument === "--body-file") {
-      index += 1;
-      bodyFile = argv[index] ?? panic("--body-file requires a value");
-      continue;
-    }
-    if (argument === "--admin") {
-      admin = true;
       continue;
     }
     if (argument === "--dry-run") {
@@ -987,7 +785,7 @@ const parseOptions = (argv: readonly string[]): MergeBarOptions => {
     panic(
       `Expected exactly one PR number, got ${positional.length}. ` +
         "Usage: bun scripts/merge-bar.ts <pr-number> [--repo owner/name] " +
-        "[--body-file path] [--admin] [--dry-run]",
+        "[--dry-run]",
     );
   }
   const rawNumber = positional[0] ?? panic("unreachable: length checked above");
@@ -999,7 +797,7 @@ const parseOptions = (argv: readonly string[]): MergeBarOptions => {
     panic(`PR number must be a positive integer, got: ${rawNumber}`);
   }
 
-  return { pullNumber, repo, bodyFile, admin, dryRun };
+  return { pullNumber, repo, dryRun };
 };
 
 const formatVerdict = (verdict: MergeBarVerdict): string =>
@@ -1032,37 +830,24 @@ const readSettledPullRequest = (
 
 if (import.meta.main) {
   const options = parseOptions(Bun.argv.slice(2));
-  // Read the body FIRST and keep only its contents: after this line the path
-  // is irrelevant, so a concurrent writer cannot reach the merge commit.
-  const bodyOverride =
-    options.bodyFile === null ? null : readFileSync(options.bodyFile, "utf-8");
-
+  const policy = mergeBarRepositoryPolicy(options.repo);
   const gateway = createGhGateway({
     repo: options.repo,
     pullNumber: options.pullNumber,
+    migrationDirectory: policy.migrationDirectory,
   });
 
   const pullRequest = readSettledPullRequest(gateway);
-  // Read order is load-bearing. Each gate's window is the time between its own
-  // read and the merge, so the reads with no server-side enforcement behind
-  // them go LAST. Review threads have none at all: `--admin` merges past
-  // conversation protection by definition, so a thread opened after this read
-  // cannot block the write. Ordering it immediately before the two SHA reads
-  // shrinks that window to those two calls; it does not remove it.
+  // Read order is load-bearing: each gate's window is the time between its
+  // own read and the write, so the head SHA the write pins is read last.
   const snapshot: MergeBarSnapshot = {
     pullRequest,
-    // First read after the pull request, against the base tip of that same
-    // instant; the pre-merge base read then proves nothing landed in between.
-    baseAncestry: gateway.readBaseAncestry(pullRequest.headSha),
-    requiredCheckRuns: mergeBarRequiredCheckRuns(options.repo),
+    landing: policy.landing,
+    requiredCheckRuns: policy.requiredCheckRuns,
     checkRunsHeadSha: pullRequest.headSha,
     checkRuns: gateway.readCheckRuns(pullRequest.headSha),
-    changedFiles: gateway.readChangedFiles(),
     migrations: gateway.readMigrationDirectories(),
     reviewThreads: gateway.readReviewThreads(),
-    baseShaBeforeMerge: gateway.readBaseSha(),
-    // Last, and the one the merge write itself re-asserts through
-    // `--match-head-commit`.
     headShaBeforeMerge: gateway.readHeadSha(),
   };
 
@@ -1080,11 +865,32 @@ if (import.meta.main) {
     process.exit(0);
   }
 
-  const mergeSha = gateway.merge({
-    subject: `${pullRequest.title} (#${pullRequest.number})`,
-    body: bodyOverride ?? pullRequest.body,
-    admin: options.admin,
-    expectedHeadSha: snapshot.headShaBeforeMerge,
-  });
-  console.log(`\nverdict: MERGE — squashed as ${mergeSha}`);
+  switch (policy.landing) {
+    case "merge": {
+      const mergeSha = gateway.merge({
+        expectedHeadSha: snapshot.headShaBeforeMerge,
+      });
+      console.log(`\nverdict: MERGE — squashed as ${mergeSha}`);
+      break;
+    }
+    case "merge-when-ready": {
+      if (pullRequest.autoMergeEnabledAt !== null) {
+        console.log(
+          `\nverdict: ARMED — merge when ready has been on since ${pullRequest.autoMergeEnabledAt}`,
+        );
+        break;
+      }
+      const outcome = gateway.armMergeWhenReady({
+        expectedHeadSha: snapshot.headShaBeforeMerge,
+      });
+      console.log(
+        `\nverdict: ARMED — ${outcome}; the queue merges ` +
+          `${snapshot.headShaBeforeMerge} once its checks pass`,
+      );
+      break;
+    }
+    default:
+      policy.landing satisfies never;
+      panic(`Unhandled landing: ${String(policy.landing)}`);
+  }
 }
