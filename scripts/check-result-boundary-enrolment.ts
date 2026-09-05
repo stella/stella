@@ -78,9 +78,24 @@ export const checkResultBoundaryEnrolment = ({
   isExcluded,
   optOuts,
 }: EnrolmentInput): EnrolmentReport => {
-  const enabled = enabledGlobs.map((glob) => new Bun.Glob(glob));
-  const isEnabled = (file: string): boolean =>
-    enabled.some((glob) => glob.match(file));
+  // Every glob is tested, never short-circuited: an enabled glob that matches
+  // nothing is a directory that was deleted or renamed, and the convention
+  // silently stopped applying to whatever replaced it.
+  const enabled = enabledGlobs.map((pattern) => ({
+    glob: new Bun.Glob(pattern),
+    matched: false,
+    pattern,
+  }));
+  const isEnabled = (file: string): boolean => {
+    let covered = false;
+    for (const entry of enabled) {
+      if (entry.glob.match(file)) {
+        entry.matched = true;
+        covered = true;
+      }
+    }
+    return covered;
+  };
 
   // A unit is enrolled only when the convention covers every file it owns, so
   // a half-covered directory reads as unenrolled rather than as done.
@@ -101,6 +116,16 @@ export const checkResultBoundaryEnrolment = ({
   }
 
   const errors: string[] = [];
+  for (const { matched, pattern } of enabled) {
+    if (!matched) {
+      errors.push(
+        `${GLOBS_MODULE}: enabled glob "${pattern}" matches no source file; ` +
+          `its directory was removed or renamed, so the convention no longer ` +
+          `covers anything there. Point the glob at the new path or delete it.`,
+      );
+    }
+  }
+
   const optedOut = new Map<string, string>();
   for (const { reason, unit } of optOuts) {
     if (optedOut.has(unit)) {

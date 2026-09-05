@@ -78,7 +78,6 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/lib/usage/**/*.ts",
   "apps/api/src/lib/user-files/**/*.ts",
   "apps/api/src/lib/work-obligations/**/*.ts",
-  "apps/api/src/mcp/generated/**/*.ts",
   "apps/web/src/components/ai-elements/**/*.{ts,tsx}",
   "apps/web/src/components/ai-prompt-input/**/*.{ts,tsx}",
   "apps/web/src/components/breadcrumbs/**/*.{ts,tsx}",
@@ -332,6 +331,7 @@ export const RESULT_CONVENTION_OPT_OUTS = [
   { reason: "unreviewed", unit: "packages/business-registries/src" },
   { reason: "unreviewed", unit: "packages/chat/src" },
   { reason: "unreviewed", unit: "packages/cli/src" },
+  { reason: "unreviewed", unit: "packages/collation/src" },
   { reason: "unreviewed", unit: "packages/infosoud/src" },
   { reason: "unreviewed", unit: "packages/legal-ast/src" },
   { reason: "unreviewed", unit: "packages/locales/src" },
@@ -340,8 +340,10 @@ export const RESULT_CONVENTION_OPT_OUTS = [
   { reason: "unreviewed", unit: "packages/scripts/src" },
   { reason: "unreviewed", unit: "packages/skills/src" },
   { reason: "unreviewed", unit: "packages/ssr-kit/src" },
+  { reason: "unreviewed", unit: "packages/stable-stringify/src" },
   { reason: "unreviewed", unit: "packages/template-conditions/src" },
   { reason: "unreviewed", unit: "packages/ui/src" },
+  { reason: "unreviewed", unit: "packages/user-agent/src" },
 ] as const satisfies readonly ResultBoundaryOptOut[];
 
 const resultConventionExcludeGlobs = RESULT_CONVENTION_EXCLUDE_GLOBS.map(

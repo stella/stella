@@ -129,9 +129,36 @@ describe("result boundary enrolment", () => {
     );
   });
 
+  test("fails an enabled glob whose directory was removed", () => {
+    const report = checkResultBoundaryEnrolment({
+      enabledGlobs: [...enabledGlobs, "apps/shop/src/handlers/legacy/**/*.ts"],
+      files,
+      isExcluded,
+      optOuts: seeded,
+    });
+
+    expect(report.errors).toHaveLength(1);
+    expect(report.errors.at(0)).toContain(
+      'enabled glob "apps/shop/src/handlers/legacy/**/*.ts" matches no source file',
+    );
+  });
+
+  test("does not count an excluded file as a glob's only match", () => {
+    const report = checkResultBoundaryEnrolment({
+      enabledGlobs: ["apps/shop/src/handlers/orders/**/*.ts"],
+      files: ["apps/shop/src/handlers/orders/create.test.ts"],
+      isExcluded,
+      optOuts: [],
+    });
+
+    expect(report.errors.at(0)).toContain(
+      'enabled glob "apps/shop/src/handlers/orders/**/*.ts" matches no source file',
+    );
+  });
+
   test("ignores directories whose only files are excluded", () => {
     const report = checkResultBoundaryEnrolment({
-      enabledGlobs,
+      enabledGlobs: [],
       files: ["apps/shop/src/handlers/legacy/a.test.ts"],
       isExcluded,
       optOuts: [],
