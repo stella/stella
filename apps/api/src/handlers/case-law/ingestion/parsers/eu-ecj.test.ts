@@ -204,6 +204,12 @@ describe("parseEcjDecisionHtml", () => {
     // the accepted default.
     expect(blocks.length).toBeGreaterThan(0);
     expect(parsed.fulltext.length).toBeGreaterThan(1000);
+    // Every recording of a real decision is bounded by the converter's own
+    // markers, in every layout the corpus holds — the prefixed vocabulary,
+    // the unprefixed one, and the oldest layout's bare wrapper. The adapter
+    // reads the fallback boundary as "this response is not a decision", so
+    // this is what says no published document can take that path.
+    expect(parsed.boundary).toBe("converter");
     // CONTENT_LOSS and MISSING_WORDS from the shared validator are the
     // real completeness guard: they compare the AST's words against the
     // source document's, so text dropped anywhere shows up here.

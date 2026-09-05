@@ -152,8 +152,23 @@ const czNssRow = (documentId: string) =>
     documentId,
   }) as const satisfies ParsedRow;
 
+/**
+ * A stand-in for the XHTML a manifestation carries, cut down to what this
+ * test needs: which row a document is keyed as, not how it parses.
+ *
+ * It still carries the converter's own classes, on more than one element.
+ * That is what marks a response as the Court's output rather than a page
+ * the site served in its place, and the parse is bounded to the element
+ * holding every marker — with a single marked paragraph, that paragraph is
+ * itself the boundary and the walk finds nothing inside it.
+ */
 const ECJ_MANIFESTATION = new TextEncoder().encode(
-  "<html><body><p>The Court (First Chamber) rules as follows.</p></body></html>",
+  [
+    "<html><body><div>",
+    '<p class="coj-sum-title-1">JUDGMENT OF THE COURT (First Chamber)</p>',
+    '<p class="coj-normal">The Court (First Chamber) rules as follows.</p>',
+    "</div></body></html>",
+  ].join(""),
 );
 
 /** Rebuild one CJEU variant from a stored manifestation, as a re-parse does. */
