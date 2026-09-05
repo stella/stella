@@ -17,6 +17,7 @@ import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
   caseLawDecisions,
 } from "@/api/db/schema";
+import { envBase } from "@/api/env-base";
 import { eraseCorpusObjects } from "@/api/handlers/case-law/erasure";
 import type { CorpusObjectErasure } from "@/api/handlers/case-law/erasure";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -27,6 +28,7 @@ import {
   completeCaseLawCorpusUploadIntentCleanup,
 } from "@/api/lib/legal-search/case-law-corpus-upload-intents";
 import { removeDecisionFromIndex } from "@/api/lib/legal-search/case-law-search-index";
+import { recordCorpusWithdrawalAuditEvent } from "@/api/lib/legal-search/corpus-index-job-audit";
 import {
   CorpusIndexProjectionSubjectMissingError,
   lockActiveCorpusProjectionSourceTx,
@@ -39,7 +41,15 @@ import {
 
 type WithdrawInput = {
   decisionId: SafeId<"caseLawDecision">;
+  /**
+   * Why the document is being taken back, recorded verbatim on the audit
+   * row. The caller states it because only the caller knows: the row
+   * itself cannot say what its payload re-parsed to.
+   */
+  reason: string;
   scopedDb: ScopedDb;
+  /** Generation the audit row is filed under. */
+  generation?: string;
   /** Test seam; production deletes through the corpus bucket client. */
   deleteCorpus?: typeof deleteCorpusDocument;
 };
@@ -49,31 +59,37 @@ export type WithdrawCaseLawDecisionDocumentOutcome =
   /** The row keeps its identity and metadata; its document is gone. */
   | { type: "withdrawn" }
   /**
-   * Every reader is served nothing, but at least one corpus object still
-   * holds the payload. Its pointer columns stay as retry targets.
+   * A corpus object still holds the payload, so nothing was written: the
+   * row keeps its document and the next run retries the whole withdrawal
+   * rather than resuming a half-finished one.
    */
   | { type: "corpus-objects-remain"; error: unknown };
 
-/**
- * What the fencing transaction settled, so the work after it — index
- * removal, object deletion — runs only where the row was really taken.
- */
-type FencedWithdrawal =
+/** What the writing transaction settled. */
+type WithdrawalWrite =
   | {
-      type: "locked";
+      type: "written";
       cancelledIntents: Awaited<
         ReturnType<typeof cancelCaseLawCorpusUploadIntents>
       >;
-      decision: {
-        textS3Key: string | null;
-        normalizedS3Key: string | null;
-        astS3Key: string | null;
-      };
     }
   /** No such row, or none the projection knows: nothing to withdraw. */
   | { type: "missing" }
   /** The fence itself failed, which says nothing about the row. */
   | { type: "lock-failed"; cause: unknown };
+
+type CorpusPointers = {
+  textS3Key: string | null;
+  normalizedS3Key: string | null;
+  astS3Key: string | null;
+};
+
+const holdsCorpusObject = ({
+  textS3Key,
+  normalizedS3Key,
+  astS3Key,
+}: CorpusPointers): boolean =>
+  textS3Key !== null || normalizedS3Key !== null || astS3Key !== null;
 
 /**
  * Take back a decision's stored document, keeping the decision.
@@ -91,15 +107,65 @@ type FencedWithdrawal =
  * raw payload stay exactly as they are, and only the derived document
  * goes. Nulling the content hash is what the projection reads: its
  * descriptor turns a row with no hash into an erase for every generation.
+ *
+ * The corpus objects are deleted before the row stops naming them, and a
+ * deletion that cannot be confirmed abandons the withdrawal with nothing
+ * written. The alternative — empty the row first — reports a document
+ * withdrawn while an object still serves it, and leaves nothing for a
+ * later run to retry, since the row no longer looks withdrawable. The
+ * cost of this order is a short window where the row names objects that
+ * are already gone; a reader in that window is served no payload, which
+ * is what the row is about to say anyway.
  */
 export const withdrawCaseLawDecisionDocument = async ({
   decisionId,
+  reason,
   scopedDb,
+  generation = envBase.LEGAL_SEARCH_INDEX_GENERATION,
   deleteCorpus = deleteCorpusDocument,
 }: WithdrawInput): Promise<
   Result<WithdrawCaseLawDecisionDocumentOutcome, DatabaseError>
 > => {
-  const fenced = await scopedDb(async (tx): Promise<FencedWithdrawal> => {
+  const pointers = (
+    await scopedDb((tx) =>
+      tx
+        .select({
+          textS3Key: caseLawDecisions.textS3Key,
+          normalizedS3Key: caseLawDecisions.normalizedS3Key,
+          astS3Key: caseLawDecisions.astS3Key,
+        })
+        .from(caseLawDecisions)
+        .where(eq(caseLawDecisions.id, decisionId))
+        .limit(1),
+    )
+  ).at(0);
+  if (pointers === undefined) {
+    return Result.ok({ type: "not-found" });
+  }
+
+  let corpusErasure: CorpusObjectErasure = { type: "deleted" };
+  if (holdsCorpusObject(pointers)) {
+    corpusErasure = await eraseCorpusObjects({
+      keys: {
+        textKey: pointers.textS3Key,
+        sectionsKey: pointers.normalizedS3Key,
+        astKey: pointers.astS3Key,
+      },
+      deleteCorpus,
+    });
+  }
+  if (corpusErasure.type === "incomplete") {
+    captureError(corpusErasure.error, {
+      decisionId,
+      step: "withdrawCaseLawDecisionDocument.deleteCorpusDocument",
+    });
+    return Result.ok({
+      type: "corpus-objects-remain",
+      error: corpusErasure.error,
+    });
+  }
+
+  const written = await scopedDb(async (tx): Promise<WithdrawalWrite> => {
     const sourceLock = await Result.tryPromise({
       try: async () =>
         await lockActiveCorpusProjectionSourceTx(tx, {
@@ -120,21 +186,23 @@ export const withdrawCaseLawDecisionDocument = async ({
     }
     const decision = (
       await tx
-        .select({
-          textS3Key: caseLawDecisions.textS3Key,
-          normalizedS3Key: caseLawDecisions.normalizedS3Key,
-          astS3Key: caseLawDecisions.astS3Key,
-        })
+        .select({ id: caseLawDecisions.id })
         .from(caseLawDecisions)
         .where(eq(caseLawDecisions.id, decisionId))
         .for("update")
         .limit(1)
     ).at(0);
-    if (!decision) {
+    if (decision === undefined) {
       return { type: "missing" };
     }
 
-    // audit: skip — withdraws a parser artefact; the replay report records it
+    // The audit row and the columns it describes are written together, so
+    // a withdrawal cannot land without a record of why.
+    await recordCorpusWithdrawalAuditEvent(tx, {
+      decisionId,
+      generation,
+      reason,
+    });
     await tx
       .update(caseLawDecisions)
       .set({
@@ -143,6 +211,9 @@ export const withdrawCaseLawDecisionDocument = async ({
         contentHash: null,
         indexedHash: null,
         indexedAt: null,
+        textS3Key: null,
+        normalizedS3Key: null,
+        astS3Key: null,
       })
       .where(eq(caseLawDecisions.id, decisionId));
     // A mirror write already in flight would otherwise settle the payload
@@ -157,48 +228,25 @@ export const withdrawCaseLawDecisionDocument = async ({
         subject: { family: "case_law", entityId: decisionId },
       });
     }
-    return { type: "locked", cancelledIntents, decision };
+    return { type: "written", cancelledIntents };
   });
 
-  if (fenced.type === "lock-failed") {
+  if (written.type === "lock-failed") {
     return Result.err(
       new DatabaseError({
         message: `Case-law withdrawal could not fence ${decisionId}`,
-        cause: fenced.cause,
+        cause: written.cause,
       }),
     );
   }
-  if (fenced.type === "missing") {
+  if (written.type === "missing") {
     return Result.ok({ type: "not-found" });
   }
-  const { cancelledIntents, decision } = fenced;
 
   await removeDecisionFromIndex(decisionId, scopedDb);
 
-  let corpusErasure: CorpusObjectErasure = { type: "deleted" };
-  if (
-    decision.textS3Key !== null ||
-    decision.normalizedS3Key !== null ||
-    decision.astS3Key !== null
-  ) {
-    corpusErasure = await eraseCorpusObjects({
-      keys: {
-        textKey: decision.textS3Key,
-        sectionsKey: decision.normalizedS3Key,
-        astKey: decision.astS3Key,
-      },
-      deleteCorpus,
-    });
-    if (corpusErasure.type === "incomplete") {
-      captureError(corpusErasure.error, {
-        decisionId,
-        step: "withdrawCaseLawDecisionDocument.deleteCorpusDocument",
-      });
-    }
-  }
-
   const cancelledCleanup = await Promise.allSettled(
-    cancelledIntents.map(async (intent) => {
+    written.cancelledIntents.map(async (intent) => {
       await deleteCorpus({
         textKey: intent.textKey,
         sectionsKey: intent.sectionsKey,
@@ -218,24 +266,6 @@ export const withdrawCaseLawDecisionDocument = async ({
       });
     }
   }
-
-  if (corpusErasure.type === "incomplete") {
-    return Result.ok({
-      type: "corpus-objects-remain",
-      error: corpusErasure.error,
-    });
-  }
-
-  // Pointers are cleared only once the objects are gone, so an incomplete
-  // deletion keeps exact retry targets while every reader already sees a
-  // row with no document.
-  await scopedDb(async (tx) => {
-    // audit: skip — withdraws a parser artefact; the replay report records it
-    await tx
-      .update(caseLawDecisions)
-      .set({ textS3Key: null, normalizedS3Key: null, astS3Key: null })
-      .where(eq(caseLawDecisions.id, decisionId));
-  });
 
   return Result.ok({ type: "withdrawn" });
 };

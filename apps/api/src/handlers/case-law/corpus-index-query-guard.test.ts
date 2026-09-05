@@ -191,31 +191,47 @@ test("a restore racing erasure is durably requeued", async () => {
   );
 });
 
-test("withdrawal clears pointers only once the objects are gone", async () => {
-  // The same ordering the redaction holds to, for the same reason: a
-  // pointer cleared before its object is deleted leaves an object nothing
-  // names and no way to retry the delete. Kept in its own module so this
-  // and the redaction guards each read one function.
+test("withdrawal writes nothing until every corpus object is gone", async () => {
+  // The row is what a later run finds, so it may not be emptied while an
+  // object still serves its payload: a half-withdrawn row reads as already
+  // withdrawn and nothing retries it. The order is therefore read keys,
+  // delete objects, leave on an unconfirmed delete, and only then write.
+  // Kept in its own module so this and the redaction guards each read one
+  // function.
   const source = await Bun.file(caseLawWithdrawalSource).text();
-  const rowFence = source.indexOf('.for("update")');
-  const intentFence = source.indexOf(
-    "cancelCaseLawCorpusUploadIntents",
-    rowFence,
-  );
   const erasure = source.indexOf("corpusErasure = await eraseCorpusObjects({");
   const incompleteReturn = source.indexOf(
     'type: "corpus-objects-remain"',
     erasure,
   );
-  const pointerClear = source.indexOf(
-    ".set({ textS3Key: null, normalizedS3Key: null, astS3Key: null })",
+  const rowFence = source.indexOf('.for("update")', incompleteReturn);
+  const auditRow = source.indexOf(
+    "await recordCorpusWithdrawalAuditEvent(tx, {",
+    rowFence,
+  );
+  const payloadClear = source.indexOf(
+    "...TRIMMED_CORPUS_PAYLOAD_COLUMNS",
+    rowFence,
+  );
+  const intentFence = source.indexOf(
+    "cancelCaseLawCorpusUploadIntents",
+    payloadClear,
   );
 
-  expect(rowFence).toBeGreaterThan(-1);
-  expect(intentFence).toBeGreaterThan(rowFence);
-  expect(erasure).toBeGreaterThan(intentFence);
+  expect(erasure).toBeGreaterThan(-1);
   expect(incompleteReturn).toBeGreaterThan(erasure);
-  expect(pointerClear).toBeGreaterThan(incompleteReturn);
+  expect(rowFence).toBeGreaterThan(incompleteReturn);
+  // The audit row is written under the same fence as the columns it
+  // describes, so a withdrawal cannot land without a record of why.
+  expect(auditRow).toBeGreaterThan(rowFence);
+  expect(payloadClear).toBeGreaterThan(auditRow);
+  expect(intentFence).toBeGreaterThan(payloadClear);
+  // Nothing is written before the objects are gone: no update, insert or
+  // intent cancellation may appear ahead of the erasure.
+  const beforeErasure = source.slice(0, erasure);
+  expect(beforeErasure).not.toContain("tx.update(");
+  expect(beforeErasure).not.toContain("tx.insert(");
+  expect(beforeErasure).not.toContain("cancelCaseLawCorpusUploadIntents(");
   // A withdrawal is not a takedown: the row must keep its tombstone column
   // clear, or the decision could never be replayed into a document again.
   expect(source).not.toContain("redactedAt");

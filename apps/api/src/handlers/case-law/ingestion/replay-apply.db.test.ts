@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -15,6 +16,7 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawCitations,
   caseLawDecisions,
+  caseLawIndexJobs,
   caseLawSources,
   relations,
 } from "@/api/db/schema";
@@ -31,7 +33,10 @@ import {
   REPLAY_ROW_OUTCOME,
   replayCaseLawSource,
 } from "@/api/handlers/case-law/ingestion/replay";
-import type { ReplayRejectionPolicy } from "@/api/handlers/case-law/ingestion/replay";
+import type {
+  ReplayCaseLawSourceOptions,
+  ReplayRejectionPolicy,
+} from "@/api/handlers/case-law/ingestion/replay";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
@@ -440,20 +445,29 @@ type WithdrawFixture = {
   sourceId: SafeId<"caseLawSource">;
 };
 
-const insertRowHoldingAPage = async (
-  label: string,
-): Promise<WithdrawFixture> => {
-  const sourceId = createSafeId<"caseLawSource">();
-  await db.insert(caseLawSources).values({
-    id: sourceId,
-    adapterKey: `replay-${label}-${sourceId}`,
-    name: `replay ${label} fixture`,
-  });
+const insertRowHoldingAPage = async ({
+  label,
+  caseNumber = "C-11/26",
+  intoSource,
+}: {
+  label: string;
+  caseNumber?: string;
+  /** Put the row on an existing source, to walk several in one run. */
+  intoSource?: SafeId<"caseLawSource">;
+}): Promise<WithdrawFixture> => {
+  const sourceId = intoSource ?? createSafeId<"caseLawSource">();
+  if (intoSource === undefined) {
+    await db.insert(caseLawSources).values({
+      id: sourceId,
+      adapterKey: `replay-${label}-${sourceId}`,
+      name: `replay ${label} fixture`,
+    });
+  }
   const id = createSafeId<"caseLawDecision">();
   await db.insert(caseLawDecisions).values({
     id,
     sourceId,
-    caseNumber: "C-11/26",
+    caseNumber,
     court: "Court of Justice",
     country: "EU",
     language: "ga",
@@ -473,10 +487,13 @@ const withdrawingReplay = async ({
   sourceId,
   sourceLease,
   rejectionPolicy,
+  withdraw,
 }: {
   sourceId: SafeId<"caseLawSource">;
   sourceLease: CaseLawSourceIngestionLease | null;
   rejectionPolicy: ReplayRejectionPolicy;
+  /** Stands in for the withdrawal when the branch under test is its result. */
+  withdraw?: ReplayCaseLawSourceOptions["withdraw"];
 }) =>
   await replayCaseLawSource({
     adapter: noDocumentAdapter,
@@ -489,6 +506,7 @@ const withdrawingReplay = async ({
     limit: 10,
     pageSize: 10,
     rejectionPolicy,
+    ...(withdraw === undefined ? {} : { withdraw }),
   });
 
 const storedDocumentOf = async (id: SafeId<"caseLawDecision">) => {
@@ -508,7 +526,7 @@ const storedDocumentOf = async (id: SafeId<"caseLawDecision">) => {
 };
 
 test("a row that re-parses to no document keeps its text unless asked", async () => {
-  const { id, sourceId } = await insertRowHoldingAPage("rejected");
+  const { id, sourceId } = await insertRowHoldingAPage({ label: "rejected" });
   const sourceLease = await acquireCaseLawSourceIngestionLease({
     scopedDb,
     sourceId,
@@ -537,7 +555,7 @@ test("a row that re-parses to no document keeps its text unless asked", async ()
 });
 
 test("the withdrawal takes the document and keeps the decision", async () => {
-  const { id, sourceId } = await insertRowHoldingAPage("withdraw");
+  const { id, sourceId } = await insertRowHoldingAPage({ label: "withdraw" });
 
   // The dry run says what it would do and does none of it, so the count an
   // operator decides on is the one the applying run acts on.
@@ -593,6 +611,23 @@ test("the withdrawal takes the document and keeps the decision", async () => {
     sourceRawS3Key: STORED_KEY_PLACEHOLDER,
   });
 
+  // The row that says a document left the corpus, and why. Written in the
+  // same transaction as the columns above, and not as a redaction: a
+  // redact row is read as a takedown tombstone, which this is not.
+  const [audited] = await db
+    .select({
+      operation: caseLawIndexJobs.operation,
+      status: caseLawIndexJobs.status,
+      contentHash: caseLawIndexJobs.contentHash,
+      errorMessage: caseLawIndexJobs.errorMessage,
+    })
+    .from(caseLawIndexJobs)
+    .where(eq(caseLawIndexJobs.decisionId, id));
+  expect(audited?.operation).toBe("withdraw");
+  expect(audited?.status).toBe("succeeded");
+  expect(audited?.contentHash).toBeNull();
+  expect(audited?.errorMessage).toContain("re-parse yielded no document");
+
   // And it converges: the row holds no document to take, so a second run
   // reports the rejection and withdraws nothing.
   const second = await withdrawingReplay({
@@ -605,6 +640,68 @@ test("the withdrawal takes the document and keeps the decision", async () => {
   }
   expect(second.report.outcomes[REPLAY_ROW_OUTCOME.WITHDRAWN]).toBe(0);
   expect(second.report.outcomes[REPLAY_ROW_OUTCOME.REJECTED]).toBe(1);
+
+  await sourceLease.release();
+});
+
+test("a corpus object that outlives its delete leaves the row alone", async () => {
+  // Both rows sit on one source, so the second also proves the walk went
+  // past the first: an object nobody can delete must not pin every later
+  // row behind it.
+  const first = await insertRowHoldingAPage({ label: "incomplete" });
+  const second = await insertRowHoldingAPage({
+    label: "incomplete",
+    caseNumber: "C-12/26",
+    intoSource: first.sourceId,
+  });
+
+  const sourceLease = await acquireCaseLawSourceIngestionLease({
+    scopedDb,
+    sourceId: first.sourceId,
+  });
+  if (sourceLease === null) {
+    throw new TypeError("Expected the source ingestion lease to be free");
+  }
+
+  const run = await withdrawingReplay({
+    sourceId: first.sourceId,
+    sourceLease,
+    rejectionPolicy: REPLAY_REJECTION_POLICY.WITHDRAW_NO_DOCUMENT,
+    // The withdrawal reports that an object still holds the payload, which
+    // is what it does when a delete cannot be confirmed.
+    withdraw: async () =>
+      await Promise.resolve(
+        Result.ok({
+          type: "corpus-objects-remain",
+          error: new Error("the object store refused the delete"),
+        }),
+      ),
+  });
+  if (run.type !== "ran") {
+    throw new TypeError("Expected the capable adapter to run");
+  }
+
+  expect(run.report.outcomes[REPLAY_ROW_OUTCOME.WITHDRAW_INCOMPLETE]).toBe(2);
+  expect(run.report.outcomes[REPLAY_ROW_OUTCOME.WITHDRAWN]).toBe(0);
+  expect(run.report.haltReason).toBeNull();
+  expect(run.report.resumeAfter).not.toBeNull();
+  expect(
+    run.report.problems.map(({ outcome, detail }) => ({
+      outcome,
+      holds: detail?.includes("a corpus object still holds the payload"),
+    })),
+  ).toEqual([
+    { outcome: REPLAY_ROW_OUTCOME.WITHDRAW_INCOMPLETE, holds: true },
+    { outcome: REPLAY_ROW_OUTCOME.WITHDRAW_INCOMPLETE, holds: true },
+  ]);
+
+  // The point of the branch: both rows still hold their document, so the
+  // next run has something to withdraw rather than a row that reads as
+  // already done.
+  for (const { id } of [first, second]) {
+    // oxlint-disable-next-line no-await-in-loop -- two rows, read in turn
+    expect((await storedDocumentOf(id))?.fulltext).toBe(STORED_PAGE_TEXT);
+  }
 
   await sourceLease.release();
 });

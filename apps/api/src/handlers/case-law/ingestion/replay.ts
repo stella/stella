@@ -94,6 +94,8 @@ export const REPLAY_ROW_OUTCOME = {
   RETRYABLE: "retryable",
   /** The row held a document the re-parse says is not one; it is gone. */
   WITHDRAWN: "withdrawn",
+  /** A corpus object outlived its delete, so the row kept its document. */
+  WITHDRAW_INCOMPLETE: "withdraw-incomplete",
   /** Dry run: the row holds a document the re-parse says is not one. */
   WOULD_WITHDRAW: "would-withdraw",
 } as const;
@@ -157,6 +159,7 @@ export type ReplayRejectionPolicy =
  */
 type WithdrawDocument = (options: {
   decisionId: SafeId<"caseLawDecision">;
+  reason: string;
   scopedDb: ScopedDb;
 }) => Promise<Result<WithdrawCaseLawDecisionDocumentOutcome, DatabaseError>>;
 
@@ -361,6 +364,7 @@ const emptyOutcomeCounts = (): Record<ReplayRowOutcome, number> => ({
   [REPLAY_ROW_OUTCOME.MISSING_PAYLOAD]: 0,
   [REPLAY_ROW_OUTCOME.RETRYABLE]: 0,
   [REPLAY_ROW_OUTCOME.WITHDRAWN]: 0,
+  [REPLAY_ROW_OUTCOME.WITHDRAW_INCOMPLETE]: 0,
   [REPLAY_ROW_OUTCOME.WOULD_WITHDRAW]: 0,
 });
 
@@ -382,6 +386,7 @@ const REPLAY_OUTCOME_DISPOSITION = {
   // A withdrawal is intended, and still a row that lost its text: it is
   // listed so the operator sees which decisions the run emptied.
   [REPLAY_ROW_OUTCOME.WITHDRAWN]: "problem",
+  [REPLAY_ROW_OUTCOME.WITHDRAW_INCOMPLETE]: "problem",
   [REPLAY_ROW_OUTCOME.WOULD_WITHDRAW]: "problem",
 } as const satisfies Record<ReplayRowOutcome, "ok" | "problem">;
 
@@ -502,7 +507,11 @@ const withdrawRejectedRow = async ({
   }
 
   await sourceLease.beforeDatabaseMark();
-  const attempt = await withdraw({ decisionId: row.id, scopedDb });
+  const attempt = await withdraw({
+    decisionId: row.id,
+    reason: `re-parse yielded no document under parser version ${row.parserVersion ?? 0}: ${detail}`,
+    scopedDb,
+  });
   // A withdrawal that could not fence the row says nothing about the row.
   // Reported as retryable, which holds the walk where it is: skipping past
   // it would leave a forward-only traversal with no way back to it.
@@ -519,12 +528,15 @@ const withdrawRejectedRow = async ({
     case "withdrawn":
       return { ...rejected, outcome: REPLAY_ROW_OUTCOME.WITHDRAWN };
     case "corpus-objects-remain":
-      // The row and every reader already hold no document; what is left
-      // is an object the delete did not confirm, kept as a retry target.
+      // Nothing was written: an object the delete did not confirm still
+      // serves the payload, so the row keeps its document and a later run
+      // retries the whole withdrawal. Reported rather than held, because
+      // the walk only moves forward and one undeletable object must not
+      // stop every row behind it from being visited.
       return {
         ...rejected,
-        outcome: REPLAY_ROW_OUTCOME.WITHDRAWN,
-        detail: `${detail}; corpus objects retained for retry`,
+        outcome: REPLAY_ROW_OUTCOME.WITHDRAW_INCOMPLETE,
+        detail: `${detail}; a corpus object still holds the payload`,
       };
     case "not-found":
       return {
