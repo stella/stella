@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Local mirror of the required package checks in .github/workflows/ci.yml:
-# one command that answers "will CI pass?" without reverse-engineering
+# one command for local package validation without reverse-engineering
 # the workflow. Passing here covers package checks, not the entire
 # `ci-result`: final release-image builds/smokes and separate build/e2e
 # jobs still run in CI.

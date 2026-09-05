@@ -54,11 +54,12 @@ architecture and scale, auth and data access, files and external APIs, tests,
 Database deployments use committed migrations via
 `bun --filter @stll/api db:migrate`; `db:push` is local schema sync only.
 
-`bun run verify` runs the same checks as the required CI job
-(`ci-checks` in `.github/workflows/ci.yml`); use it to self-verify a
-branch instead of hand-picking individual checks. Green here means
-green on the `ci-result` status. `--all` checks every package instead
-of only those affected vs `origin/main`.
+`bun run verify` runs the local package checks from `ci-checks` in
+`.github/workflows/ci.yml`; use it before pushing instead of hand-picking
+individual checks. Passing does not certify `ci-result`: release-image
+builds and smokes, service-backed checks, and separate build/e2e jobs run
+in CI. Confirm `ci-result` succeeds on the current PR head before merging.
+`--all` checks every package instead of only those affected vs `origin/main`.
 
 ## Merging
 
