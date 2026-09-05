@@ -77,8 +77,10 @@ INSERT INTO time_entries VALUES
   ('te_jpy_2', 'inv_jpy', 60, 50, 'JPY'),
   ('te_usd', 'inv_usd', 60, 10000, 'USD'),
   ('te_kwd', NULL, 60, 1250, 'KWD'),
-  ('te_lower', NULL, 60, 150000, 'jpy');
+  ('te_lower', NULL, 60, 150000, 'jpy'),
+  ('te_clf_ceiling', NULL, 60, 2147483647, 'CLF');
 INSERT INTO rate_tables VALUES ('rt_jpy', 'JPY'), ('rt_usd', 'USD');
+INSERT INTO contacts VALUES ('ct_jpy', 12345, 'JPY');
 INSERT INTO rate_entries VALUES
   ('re_jpy', 'rt_jpy', 150000),
   ('re_usd', 'rt_usd', 10000);
@@ -188,6 +190,24 @@ test("a lower-case code rescales and is normalized to upper case", async () => {
     "SELECT currency FROM time_entries WHERE id = 'te_lower'",
   );
   expect(codes.rows.at(0)?.currency).toBe("JPY");
+});
+
+test("a contact's default rate never carried the hundredths rule and is left alone", async () => {
+  expect(
+    await scalar(
+      "SELECT default_hourly_rate AS value FROM contacts WHERE id = 'ct_jpy'",
+    ),
+  ).toBe(12_345);
+});
+
+test("a four-exponent rate at the integer ceiling rescales past it", async () => {
+  // 2^31-1 hundredths of a CLF becomes 2^31-1 times a hundred ten-thousandths,
+  // which only the widened column can hold.
+  expect(
+    await scalar(
+      "SELECT rate_at_entry AS value FROM time_entries WHERE id = 'te_clf_ceiling'",
+    ),
+  ).toBe(214_748_364_700);
 });
 
 test("the money columns are widened past the integer ceiling", async () => {

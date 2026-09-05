@@ -43,6 +43,9 @@ const MONEY_NAME_SUFFIXES = ["cents", "amount", "rate", "total", "price"];
 const PARSE_CALL_NAMES = new Set(["parseFloat", "parseInt", "Number"]);
 
 const HUNDRED = 100;
+// A `100n` is a `Literal` whose `value` is a bigint, so the number compare
+// alone would let `amountCents / 100n` through.
+const HUNDRED_BIGINT = 100n;
 
 // `applyMarkupCents` and `prorateHourlyCents` express the markup and proration
 // contracts, where 100 is the percent base and the money operand is the value
@@ -120,7 +123,9 @@ const isMoneyOperand = (node: unknown, depth = 0): boolean => {
 };
 
 const isHundred = (node: unknown): boolean =>
-  isAstNode(node) && node.type === "Literal" && node.value === HUNDRED;
+  isAstNode(node) &&
+  node.type === "Literal" &&
+  (node.value === HUNDRED || node.value === HUNDRED_BIGINT);
 
 export default eslintCompatPlugin({
   meta: { name: "no-literal-minor-unit-scale" },

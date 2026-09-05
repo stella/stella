@@ -94,6 +94,11 @@ describe("toMinorUnits", () => {
     expect(
       tryToMinorUnits({ amount: "99999999999999999", currency: "USD" }),
     ).toBeNull();
+    // An exponent wider than any finite double is declined before it is
+    // expanded, rather than materialising that many zeros and throwing.
+    for (const extreme of ["1e999999999", "1e-999999999", "1e+400", "1e-400"]) {
+      expect(tryToMinorUnits({ amount: extreme, currency: "USD" })).toBeNull();
+    }
     for (const good of ["0", "12", "12.5", ".5", "12.", " 1.005 ", "-3.20"]) {
       expect(tryToMinorUnits({ amount: good, currency: "USD" })).toBe(
         toMinorUnits({ amount: good, currency: "USD" }),

@@ -17,6 +17,8 @@ declare const billedMinutes: number;
 declare const percentage: number;
 declare const scaleFactor: number;
 declare const elapsedMinutes: number;
+declare const bigAmountCents: bigint;
+declare const bigTotal: bigint;
 
 // --- Flagged: a literal hundred standing in for the currency's exponent ---
 
@@ -59,6 +61,11 @@ export const _summed = (row.totalCents + amountCents) / 100;
 // owns it (`packages/money/src/index.ts`), which the rule exempts by name.
 // oxlint-disable-next-line no-literal-minor-unit-scale/no-literal-minor-unit-scale
 export const _markup = (amountCents * (100 + markupPercent) + 50) / 100;
+// A bigint literal carries the same assumption.
+// oxlint-disable-next-line no-literal-minor-unit-scale/no-literal-minor-unit-scale
+export const _majorBigint = bigAmountCents / 100n;
+// oxlint-disable-next-line no-literal-minor-unit-scale/no-literal-minor-unit-scale
+export const _minorBigint = 100n * bigTotal;
 
 // --- Allowed ---
 

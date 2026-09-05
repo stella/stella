@@ -124,8 +124,12 @@ test("the scale reads each row's current value, not one read earlier", async () 
   // before its mutation reproduces exactly that ordering without needing two
   // concurrent transactions.
   //
-  // The table is JPY after the test above, so this converts back to KWD:
-  // three decimals from zero, a shift of +3.
+  // Start from JPY explicitly rather than from whatever the test above left,
+  // so the conversion to KWD is three decimals from zero, a shift of +3.
+  await testDb
+    .update(rateTables)
+    .set({ currency: "JPY" })
+    .where(eq(rateTables.id, rateTableId));
   await testDb
     .update(rateEntries)
     .set({ hourlyRate: cents(7) })

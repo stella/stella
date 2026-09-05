@@ -54,14 +54,25 @@ const DECIMAL_AMOUNT = /^(?<sign>[+-]?)(?<whole>\d*)(?:\.(?<fraction>\d*))?$/u;
 const EXPONENT_AMOUNT =
   /^(?<sign>[+-]?)(?<whole>\d+)(?:\.(?<fraction>\d+))?[eE](?<exponent>[+-]?\d+)$/u;
 
+/**
+ * The widest exponent a finite double prints with (`5e-324`, `1.8e308`).
+ * Text past it names no amount any currency stores, and expanding it would
+ * mean materialising that many zeros.
+ */
+const MAX_EXPONENT_MAGNITUDE = 324;
+
 const expandExponent = (text: string): string | null => {
   const groups = EXPONENT_AMOUNT.exec(text)?.groups;
   if (!groups) {
     return null;
   }
+  const exponent = Number(groups["exponent"]);
+  if (Math.abs(exponent) > MAX_EXPONENT_MAGNITUDE) {
+    return null;
+  }
   const sign = groups["sign"] ?? "";
   const digits = `${groups["whole"] ?? ""}${groups["fraction"] ?? ""}`;
-  const point = (groups["whole"] ?? "").length + Number(groups["exponent"]);
+  const point = (groups["whole"] ?? "").length + exponent;
   if (point <= 0) {
     return `${sign}0.${"0".repeat(-point)}${digits}`;
   }
