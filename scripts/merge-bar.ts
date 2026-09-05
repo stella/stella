@@ -36,7 +36,7 @@
 //     the head that seeded it. Merging one seeded below the base branch turns
 //     the default branch red after the write: the check reads a budget for a
 //     tree that never existed. Such a pull request must be current with its
-//     base, which is a property of the merge state, not of its own CI run.
+//     base, which is a property of the commit graph, not of its own CI run.
 //
 // Known boundary. `--match-head-commit` binds the pull request head and
 // nothing else, and `--admin` merges past branch protection by definition, so
@@ -127,17 +127,6 @@ type MergeBarReason =
 
 const PULL_REQUEST_STATES = ["OPEN", "CLOSED", "MERGED"] as const;
 const MERGEABLE_STATES = ["MERGEABLE", "CONFLICTING", "UNKNOWN"] as const;
-const MERGE_STATE_STATUSES = [
-  "BEHIND",
-  "BLOCKED",
-  "CLEAN",
-  "DIRTY",
-  "DRAFT",
-  "HAS_HOOKS",
-  "UNKNOWN",
-  "UNSTABLE",
-] as const;
-type MergeStateStatus = (typeof MERGE_STATE_STATUSES)[number];
 
 type PullRequestSnapshot = {
   number: number;
@@ -146,10 +135,15 @@ type PullRequestSnapshot = {
   state: (typeof PULL_REQUEST_STATES)[number];
   isDraft: boolean;
   mergeable: (typeof MERGEABLE_STATES)[number];
-  // Coarser than `mergeable`: this is where GitHub reports that the head is
-  // behind the base branch.
-  mergeStateStatus: MergeStateStatus;
   headSha: string;
+};
+
+// Where the head stands relative to one exact base commit. `behindBy` counts
+// base commits absent from the head, so zero means the base tip is an ancestor
+// of the head and the head's CI run measured the tree the merge will produce.
+type BaseAncestrySnapshot = {
+  baseSha: string;
+  behindBy: number;
 };
 
 type CheckRunSnapshot = {
@@ -179,9 +173,9 @@ export type MergeBarSnapshot = {
   checkRuns: readonly CheckRunSnapshot[];
   // Every path this pull request touches, whatever the change status.
   changedFiles: readonly string[];
-  // The base-branch tip as it stood when `mergeStateStatus` was read. The
-  // merge state describes that commit and no later one.
-  mergeStateBaseSha: string;
+  // Read against the base tip as it stood at that moment; the ancestry holds
+  // for that commit and no later one.
+  baseAncestry: BaseAncestrySnapshot;
   reviewThreads: readonly ReviewThreadSnapshot[];
   migrations: MigrationSnapshot;
   // Both re-read immediately before the merge call.
@@ -244,21 +238,6 @@ const evaluateMergeable = (pullRequest: PullRequestSnapshot): GateVerdict => {
   return { gate: "mergeable", status: "pass", detail: "MERGEABLE" };
 };
 
-// GitHub reports one merge state, and several of them mask BEHIND: a pull
-// request held by branch protection reads BLOCKED whether or not its head is
-// current. So this map records which states positively place the head above
-// the base, rather than treating "not BEHIND" as current.
-const MERGE_STATE_PROVES_CURRENT_WITH_BASE = {
-  BEHIND: false,
-  BLOCKED: false,
-  CLEAN: true,
-  DIRTY: false,
-  DRAFT: false,
-  HAS_HOOKS: true,
-  UNKNOWN: false,
-  UNSTABLE: true,
-} as const satisfies Record<MergeStateStatus, boolean>;
-
 // A guard definition: a lint rule, the config that enables it, or the table of
 // budgeted suppressions. A rule proves something about the tree it ran on, so a
 // pull request that adds or tightens one is measured off its own head exactly
@@ -281,16 +260,19 @@ const isGuardDefinitionFile = (file: string): boolean =>
 // reads the budget goes red on the default branch after the merge, not before.
 // A guard definition carries the same property from the other direction, so
 // both are held to the same currency requirement.
+//
+// Currency is read from the commit graph, not from GitHub's merge state: that
+// state reports BEHIND only when nothing else blocks, and under branch
+// protection every head an `--admin` merge would take reads BLOCKED, current
+// or not.
 const evaluateBaselineFreshness = ({
+  baseAncestry,
   baseShaBeforeMerge,
   changedFiles,
-  mergeStateBaseSha,
-  mergeStateStatus,
 }: {
+  baseAncestry: BaseAncestrySnapshot;
   baseShaBeforeMerge: string;
   changedFiles: readonly string[];
-  mergeStateBaseSha: string;
-  mergeStateStatus: MergeStateStatus;
 }): GateVerdict => {
   const measured = changedFiles.filter(
     (file) => isSeededBaselineFile(file) || isGuardDefinitionFile(file),
@@ -302,32 +284,32 @@ const evaluateBaselineFreshness = ({
       detail: "no baseline or guard definition in this pull request",
     };
   }
-  if (!MERGE_STATE_PROVES_CURRENT_WITH_BASE[mergeStateStatus]) {
+  if (baseAncestry.behindBy !== 0) {
     return {
       gate: "baseline-freshness",
       status: "fail",
       reason: MERGE_BAR_REASONS.baselineNotCurrent,
       detail:
-        `merge state ${mergeStateStatus} does not place this head above the ` +
-        `base, and ${measured.join(", ")} only holds for the head it was ` +
-        "measured on; rebase onto the base branch, reseed any baseline, and " +
-        "let CI re-run",
+        `head is ${baseAncestry.behindBy} commit(s) behind base ` +
+        `${baseAncestry.baseSha}, and ${measured.join(", ")} only holds for ` +
+        "the head it was measured on; rebase onto the base branch, reseed any " +
+        "baseline, and let CI re-run",
     };
   }
-  // The merge state describes the base commit it was read against. The gates
+  // The ancestry describes the base commit it was read against. The gates
   // below it take seconds, and a merge landing in that window puts the base
   // above the tree the baseline was measured on, which is the same stale
-  // budget the state check just ruled out.
-  if (mergeStateBaseSha !== baseShaBeforeMerge) {
+  // budget the ancestry check just ruled out.
+  if (baseAncestry.baseSha !== baseShaBeforeMerge) {
     return {
       gate: "baseline-freshness",
       status: "fail",
       reason: MERGE_BAR_REASONS.baselineBaseMoved,
       detail:
-        `default branch moved ${mergeStateBaseSha} -> ${baseShaBeforeMerge} ` +
-        `after the merge state was read, and ${measured.join(", ")} was ` +
-        "measured below it; rebase onto the base branch, reseed any baseline, " +
-        "and let CI re-run",
+        `default branch moved ${baseAncestry.baseSha} -> ` +
+        `${baseShaBeforeMerge} after the ancestry was read, and ` +
+        `${measured.join(", ")} was measured below it; rebase onto the base ` +
+        "branch, reseed any baseline, and let CI re-run",
     };
   }
   return {
@@ -527,10 +509,9 @@ export const evaluateMergeBar = (
     evaluatePullRequestState(snapshot.pullRequest),
     evaluateMergeable(snapshot.pullRequest),
     evaluateBaselineFreshness({
+      baseAncestry: snapshot.baseAncestry,
       baseShaBeforeMerge: snapshot.baseShaBeforeMerge,
       changedFiles: snapshot.changedFiles,
-      mergeStateBaseSha: snapshot.mergeStateBaseSha,
-      mergeStateStatus: snapshot.pullRequest.mergeStateStatus,
     }),
     evaluateRequiredCheck({
       checkRuns: snapshot.checkRuns,
@@ -565,6 +546,8 @@ type GitHubGateway = {
   readHeadSha: () => string;
   // Tip of the branch this pull request merges into.
   readBaseSha: () => string;
+  // Where `headSha` stands relative to the base tip read inside this call.
+  readBaseAncestry: (headSha: string) => BaseAncestrySnapshot;
   readCheckRuns: (headSha: string) => readonly CheckRunSnapshot[];
   readChangedFiles: () => readonly string[];
   readReviewThreads: () => readonly ReviewThreadSnapshot[];
@@ -681,6 +664,31 @@ const createGhGateway = ({
     return files;
   };
 
+  // The live tip of the base branch, not `baseRefOid`: gh reports that as
+  // the commit the pull request was compared against, which is exactly the
+  // stale value this gate exists to detect.
+  const readBaseSha = (): string => {
+    const baseRefName = readString(
+      readRecord(
+        runGhJson(["pr", "view", ...prArgs, "--json", "baseRefName"]),
+        "pr view",
+      ),
+      "baseRefName",
+    );
+    return readString(
+      readRecord(
+        runGhJson([
+          "api",
+          `repos/${repo}/commits/${baseRefName}`,
+          "--jq",
+          "{sha: .sha}",
+        ]),
+        "base commit",
+      ),
+      "sha",
+    );
+  };
+
   return {
     readHeadSha: () =>
       readString(
@@ -691,30 +699,7 @@ const createGhGateway = ({
         "headRefOid",
       ),
 
-    // The live tip of the base branch, not `baseRefOid`: gh reports that as
-    // the commit the pull request was compared against, which is exactly the
-    // stale value this gate exists to detect.
-    readBaseSha: () => {
-      const baseRefName = readString(
-        readRecord(
-          runGhJson(["pr", "view", ...prArgs, "--json", "baseRefName"]),
-          "pr view",
-        ),
-        "baseRefName",
-      );
-      return readString(
-        readRecord(
-          runGhJson([
-            "api",
-            `repos/${repo}/commits/${baseRefName}`,
-            "--jq",
-            "{sha: .sha}",
-          ]),
-          "base commit",
-        ),
-        "sha",
-      );
-    },
+    readBaseSha,
 
     readPullRequest: () => {
       const raw = readRecord(
@@ -723,7 +708,7 @@ const createGhGateway = ({
           "view",
           ...prArgs,
           "--json",
-          "number,title,body,state,isDraft,mergeable,mergeStateStatus,headRefOid",
+          "number,title,body,state,isDraft,mergeable,headRefOid",
         ]),
         "pr view",
       );
@@ -746,13 +731,28 @@ const createGhGateway = ({
           readString(raw, "mergeable"),
           "mergeable",
         ),
-        mergeStateStatus: readMember(
-          MERGE_STATE_STATUSES,
-          readString(raw, "mergeStateStatus"),
-          "mergeStateStatus",
-        ),
         headSha: readString(raw, "headRefOid"),
       };
+    },
+
+    // Compared against one pinned base commit, so `baseSha` provably names
+    // the tip `behindBy` was counted from.
+    readBaseAncestry: (headSha) => {
+      const baseSha = readBaseSha();
+      const comparison = readRecord(
+        runGhJson([
+          "api",
+          `repos/${repo}/compare/${baseSha}...${headSha}`,
+          "--jq",
+          "{behind_by: .behind_by}",
+        ]),
+        "compare",
+      );
+      const behindBy = comparison["behind_by"];
+      if (typeof behindBy !== "number" || !Number.isSafeInteger(behindBy)) {
+        panic("Expected integer field `behind_by` in gh compare response");
+      }
+      return { baseSha, behindBy };
     },
 
     // Read the check runs recorded against one exact commit. `statusCheckRollup`
@@ -1050,10 +1050,9 @@ if (import.meta.main) {
   // shrinks that window to those two calls; it does not remove it.
   const snapshot: MergeBarSnapshot = {
     pullRequest,
-    // First read after the pull request, so the merge state above and this
-    // base commit describe the same instant; the pre-merge base read then
-    // proves nothing landed in between.
-    mergeStateBaseSha: gateway.readBaseSha(),
+    // First read after the pull request, against the base tip of that same
+    // instant; the pre-merge base read then proves nothing landed in between.
+    baseAncestry: gateway.readBaseAncestry(pullRequest.headSha),
     requiredCheckRuns: mergeBarRequiredCheckRuns(options.repo),
     checkRunsHeadSha: pullRequest.headSha,
     checkRuns: gateway.readCheckRuns(pullRequest.headSha),
