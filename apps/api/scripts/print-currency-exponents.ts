@@ -32,5 +32,4 @@ for (const first of LETTERS) {
   }
 }
 
-// eslint-disable-next-line no-console -- printing is this script's whole interface
 console.info(`${rows.join(",\n")}\n-- ${rows.length} codes`);

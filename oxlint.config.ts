@@ -972,6 +972,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-input-dir-auto.ts",
     "./.oxlint-plugins/require-dir-on-rendered-name.ts",
     "./.oxlint-plugins/no-unformatted-number.ts",
+    "./.oxlint-plugins/no-literal-minor-unit-scale.ts",
     "./.oxlint-plugins/no-raw-foreground-opacity.ts",
     "./.oxlint-plugins/no-inline-style-colors.ts",
     "./.oxlint-plugins/no-ambient-hotkey-format.ts",
@@ -2163,6 +2164,20 @@ export default defineConfig({
       ],
       rules: {
         "no-unformatted-number/no-unformatted-number": "error",
+      },
+    },
+    {
+      // How many minor units make a major one is a property of the currency,
+      // so a literal 100 is only right for the currencies that happen to have
+      // two. Every app and package that touches an amount goes through the
+      // conversion helpers in `@stll/money` instead.
+      files: [
+        "apps/*/src/**/*.{ts,tsx}",
+        "packages/*/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-literal-minor-unit-scale.fixture.ts",
+      ],
+      rules: {
+        "no-literal-minor-unit-scale/no-literal-minor-unit-scale": "error",
       },
     },
     {
