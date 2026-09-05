@@ -8,12 +8,14 @@
 // allowlist that leaves a subpath out of the tarball all stay invisible until
 // an install fails. This runs the real publish path — build, prepare-publish,
 // `bun pm pack` — and then, with the published manifest in place, resolves
-// every subpath the way a consumer's resolver would and imports what it finds.
+// every subpath the way a consumer's resolver would and imports what it finds
+// in plain Node, the runtime an installed consumer most often uses.
 //
 // usage: bun scripts/check-published-exports.ts <package-dir>
 
 import { panic } from "better-result";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 import {
   distEntryFiles,
@@ -22,6 +24,7 @@ import {
 } from "./publish-manifest";
 import {
   isExpectedPublishedExportResolution,
+  isOwnDistLoadFailure,
   isPublishedTestArtifact,
 } from "./published-export-guards";
 
@@ -40,6 +43,56 @@ const run = async (cmd: string[], cwd: string): Promise<string> => {
     panic(`command failed in ${cwd}: ${cmd.join(" ")}`);
   }
   return stdout;
+};
+
+/**
+ * Load a built module the way an installed consumer does, in plain Node.
+ *
+ * Bun's resolver fills in an omitted relative extension, so importing the same
+ * file from this script would pass on a `./thing` that Node's ESM resolver
+ * rejects outright — the published package would then fail at the consumer's
+ * first import. Node decides this, so Node runs the load.
+ */
+type NodeLoad =
+  | { readonly type: "loaded"; readonly exportCount: number }
+  | { readonly type: "failed"; readonly reason: string };
+
+const loadInNode = async (file: string): Promise<NodeLoad> => {
+  const proc = Bun.spawn({
+    cmd: [
+      "node",
+      "--input-type=module",
+      "-e",
+      // Report the error, not Node's internal stack: the frames are all
+      // node:internal paths and say nothing about which import broke.
+      `try {
+         const module = await import(${JSON.stringify(pathToFileURL(file).href)});
+         process.stdout.write(String(Object.keys(module).length));
+       } catch (error) {
+         process.stderr.write(\`\${error.code ?? "Error"}: \${error.message}\`);
+         process.exit(1);
+       }`,
+    ],
+    cwd: repoRoot,
+    stderr: "pipe",
+    stdout: "pipe",
+  });
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+    proc.exited,
+  ]);
+  if (exitCode !== 0) {
+    return {
+      reason:
+        stderr
+          .split("\n")
+          .find((line) => line.trim().length > 0)
+          ?.trim() ?? `node exited ${exitCode}`,
+      type: "failed",
+    };
+  }
+  return { exportCount: Number(stdout), type: "loaded" };
 };
 
 // `bun pm pack --dry-run` lists the tarball contents as "packed <size> <path>",
@@ -153,8 +206,26 @@ try {
       if (!isDistModuleEntry(entry)) {
         return;
       }
-      const loaded: Record<string, unknown> = await import(resolved);
-      if (Object.keys(loaded).length === 0) {
+      const loaded = await loadInNode(resolved);
+      if (loaded.type === "failed") {
+        if (
+          isOwnDistLoadFailure({
+            distDir: path.join(pkgDir, "dist"),
+            reason: loaded.reason,
+          })
+        ) {
+          failures.push(`${subpath}: does not load in Node: ${loaded.reason}`);
+          return;
+        }
+        // Node could not reach something this tarball does not decide. Bun's
+        // importer still answers whether the entry exports anything.
+        const viaBun: Record<string, unknown> = await import(resolved);
+        if (Object.keys(viaBun).length === 0) {
+          failures.push(`${subpath}: loaded from dist but exports nothing`);
+        }
+        return;
+      }
+      if (loaded.exportCount === 0) {
         failures.push(`${subpath}: loaded from dist but exports nothing`);
       }
     }),
@@ -193,5 +264,5 @@ if (failures.length > 0) {
 }
 
 console.log(
-  `${published.name}@${published.version}: ${Object.keys(published.exports).length} exports resolve and ship; modules load from dist`,
+  `${published.name}@${published.version}: ${Object.keys(published.exports).length} exports resolve and ship; modules load from dist in Node`,
 );
