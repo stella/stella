@@ -622,6 +622,25 @@
       "allowInConversation": "Luba selles vestluses",
       "allowOnce": "Luba üks kord",
       "alwaysAllow": "Luba alati",
+      "browser": {
+        "actions": {
+          "click": "Klõpsa",
+          "fill": "Sisesta tekst",
+          "open": "Ava veebisait",
+          "pressKey": "Vajuta klahvi",
+          "select": "Vali suvand",
+          "snapshot": "Loe lehte",
+          "snapshotContinue": "Jätka lehe lugemist"
+        },
+        "askAgain": "Küsi uuesti",
+        "autoApproveAll": "Kinnita kõik brauseritoimingud automaatselt",
+        "autoApproveReads": "Kinnita lehtede lugemine automaatselt",
+        "description": "Kontrollige veebisaiti ja sihtmärki hoolikalt. Lehe sisu ei ole usaldusväärne ega saa järgmist toimingut lubada.",
+        "modeAll": "Kõik brauseritoimingud tehakse selle seansi lõpuni küsimata.",
+        "modeReads": "Lehtede lugemine toimub selle seansi lõpuni küsimata.",
+        "question": "Kas lubada see brauseritoiming?",
+        "within": "Asukoht"
+      },
       "denied": "Keelatud",
       "deny": "Keela",
       "externalMcpDescription": "Saadetakse ainult selle tööriistakutse jaoks vajalik teave.",
@@ -951,6 +970,7 @@
       "suggest_template_fields": "Pakun malli välju",
       "unknown": "Tööriista kasutamine",
       "update-entity-fields": "Metaandmete uuendamine",
+      "use-browser": "Teie brauseri kasutamine",
       "web_search": "Veebist otsimine"
     },
     "toolCall": {
@@ -1079,6 +1099,7 @@
   },
   "common": {
     "accept": "Nõustu",
+    "action": "Toiming",
     "actions": "Toimingud",
     "active": "Aktiivne",
     "add": "Lisa",
@@ -1207,6 +1228,7 @@
       "event": "Sündmus",
       "requirement": "Nõue"
     },
+    "key": "Klahv",
     "kind": "Liik",
     "language": "Keel",
     "languages": {
@@ -1320,6 +1342,7 @@
     "stepCount": "{count, plural, one {# samm} other {# sammu}}",
     "stepProgress": "{current} / {total}",
     "summarizeChanges": "Võta muudatused kokku",
+    "target": "Sihtmärk",
     "timeBilling": "Aeg ja arveldus",
     "today": "Täna",
     "translate": "Tõlgi",
@@ -1338,10 +1361,12 @@
     "urlIdentifier": "Lühitunnus",
     "urlIdentifierPlaceholder": "minu-organisatsioon",
     "user": "Kasutaja",
+    "value": "Väärtus",
     "verify": "Kinnita",
     "version": "Versioon",
     "versionLabel": "Versioon {version}",
     "viewSource": "Vaata allikat",
+    "website": "Veebisait",
     "workflows": "Töövood"
   },
   "consent": {
@@ -1428,8 +1453,7 @@
       "labelRequired": "Välja nimi on kohustuslik.",
       "removeField": "Eemalda väli",
       "title": "Kohandatud väljad",
-      "value": "Välja väärtus",
-      "valuePlaceholder": "Väärtus"
+      "value": "Välja väärtus"
     },
     "deleteContact": "Kustuta klient",
     "deleteContactBlockedByMatters": "See kontakt on endiselt toimikutes kliendiks määratud. Määrake need toimikud ümber või kustutage need enne kontakti kustutamist.",
@@ -3172,7 +3196,6 @@
       "chooseModelsSubtitle": "Vali igale rollile mudel. Hinnad uuenevad paremal.",
       "chooseModelsTitle": "Vali mudelid",
       "configure": "Seadista",
-      "credentialsPanel": "Võti",
       "customModelBadge": "Kohandatud · {provider}",
       "customModelDescription": "Seda mudeli ID-d stella kataloogis ei ole. See saadetakse valitud teenusepakkujale sisestatud kujul.",
       "customModelHint": "Kataloogis vastet pole. Sisesta ükskõik milline mudeli ID; kohandatud ID salvestatakse sisestatud kujul.",
@@ -3643,7 +3666,6 @@
         "title": "Anonüümimine"
       },
       "auditLogs": "Tegevuslogi",
-      "auditLogsAction": "Tegevus",
       "auditLogsActionAccess": "Juurdepääs",
       "auditLogsActionCreate": "Loo",
       "auditLogsActionDelete": "Kustuta",
@@ -4068,7 +4090,6 @@
     "conditionOr": "Või",
     "conditionUseFieldInstead": "Kasuta selle asemel välja",
     "conditionUseFormula": "ƒ Arvutatud väärtus…",
-    "conditionValue": "Väärtus",
     "conditionWhen": "Kui",
     "conditionsTitle": "Tingimused",
     "configureFields": "Seadista väljad",
@@ -4498,7 +4519,6 @@
       "fieldValueLabel": "Välja väärtus",
       "fieldValuePlaceholder": "Sisestage välja väärtus",
       "formatNotSupported": "Formaat ei ole toetatud",
-      "numberLabel": "Väärtus",
       "numberPlaceholder": "Sisestage number",
       "selectAValue": "Valige väärtus",
       "selectValues": "Valige väärtused"
@@ -4740,7 +4760,6 @@
           "openTarget": "Ava üksus",
           "runId": "Käivituse ID",
           "system": "Süsteemi tegevus",
-          "target": "Siht",
           "title": "Tegevuse üksikasjad",
           "trigger": "Algataja",
           "webhook": "Veebihaak"

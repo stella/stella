@@ -143,7 +143,7 @@ export const ContactCustomFieldsEditor = ({
             disabled={isPending}
             maxLength={2000}
             onChange={(event) => setValueDraft(event.currentTarget.value)}
-            placeholder={t("contacts.customFields.valuePlaceholder")}
+            placeholder={t("common.value")}
             value={valueDraft}
           />
           <AddCustomFieldSubmitButton

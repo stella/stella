@@ -71,6 +71,7 @@ const BUILT_IN_CHAT_TOOL_ACTIVITY_CATEGORIES = {
   "update-current-skill-body": "mutation",
   "update-current-skill-resource": "mutation",
   "update-entity-fields": "mutation",
+  "use-browser": "research",
   web_search: "research",
 } as const satisfies Record<keyof ChatUITools, ChatToolActivityCategory>;
 

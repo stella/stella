@@ -87,6 +87,7 @@
     "@streamdown/math": "^1.0.2",
     "@streamdown/mermaid": "^1.0.2",
     "@t3-oss/env-core": "catalog:",
+    "@tanstack/ai": "catalog:",
     "@tanstack/ai-client": "catalog:",
     "@tanstack/ai-react": "catalog:",
     "@tanstack/react-devtools": "^0.10.12",

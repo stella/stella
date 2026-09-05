@@ -1,0 +1,57 @@
+{
+  "accessOff": {
+    "message": "Dostęp do witryn jest wyłączony. Przyznaj go raz, aby stella mogła korzystać z witryn, w których jesteś zalogowany."
+  },
+  "accessReady": {
+    "message": "Gotowe. stella może używać osobnej karty, a Twoje sesje logowania pozostaną aktywne."
+  },
+  "accessUpdateFailed": {
+    "message": "Chrome nie mógł zmienić dostępu do witryn."
+  },
+  "adoptTab": {
+    "message": "Użyj tej karty ze stellą"
+  },
+  "adoptUnsupported": {
+    "message": "Ze stellą można używać tylko publicznych stron HTTPS."
+  },
+  "adoptedTab": {
+    "message": "stella może teraz czytać $ORIGIN$ na tej karcie. Zapytaj o nią na czacie.",
+    "placeholders": {
+      "origin": {
+        "content": "$1"
+      }
+    }
+  },
+  "checkingAccess": {
+    "message": "Sprawdzanie dostępu do witryn…"
+  },
+  "connectTab": {
+    "message": "Połącz bieżącą kartę stella"
+  },
+  "controllerReady": {
+    "message": "Połączono z $ORIGIN$. Każde działanie nadal wymaga zatwierdzenia w stella.",
+    "placeholders": {
+      "origin": {
+        "content": "$1"
+      }
+    }
+  },
+  "disconnectTab": {
+    "message": "Odłącz kartę"
+  },
+  "extensionDescription": {
+    "message": "Po udzieleniu zgody pozwala stelli sterować osobną kartą Chrome."
+  },
+  "extensionName": {
+    "message": "Przeglądarka stella"
+  },
+  "grantAccess": {
+    "message": "Zezwól na wszystkie witryny"
+  },
+  "revokeAccess": {
+    "message": "Usuń dostęp do witryn"
+  },
+  "unsupportedTab": {
+    "message": "Otwórz kartę aplikacji stella i spróbuj ponownie."
+  }
+}

@@ -622,6 +622,25 @@
       "allowInConversation": "Povolit v této konverzaci",
       "allowOnce": "Povolit jednou",
       "alwaysAllow": "Vždy povolit",
+      "browser": {
+        "actions": {
+          "click": "Kliknout",
+          "fill": "Zadat text",
+          "open": "Otevřít web",
+          "pressKey": "Stisknout klávesu",
+          "select": "Vybrat možnost",
+          "snapshot": "Přečíst stránku",
+          "snapshotContinue": "Pokračovat ve čtení stránky"
+        },
+        "askAgain": "Znovu se ptát",
+        "autoApproveAll": "Automaticky schvalovat všechny akce v prohlížeči",
+        "autoApproveReads": "Automaticky schvalovat čtení stránek",
+        "description": "Pečlivě zkontrolujte web a cíl. Obsah stránky není důvěryhodný a nemůže schválit další akci.",
+        "modeAll": "Všechny akce v prohlížeči se do konce této relace provádějí bez dotazu.",
+        "modeReads": "Čtení stránek se do konce této relace provádí bez dotazu.",
+        "question": "Povolit tuto akci v prohlížeči?",
+        "within": "V rámci"
+      },
       "denied": "Zamítnuto",
       "deny": "Zamítnout",
       "externalMcpDescription": "Odešlou se jen informace potřebné pro tento dotaz.",
@@ -951,6 +970,7 @@
       "suggest_template_fields": "Navrhuji pole vzoru",
       "unknown": "Použití nástroje",
       "update-entity-fields": "Aktualizace metadat",
+      "use-browser": "Používání vašeho prohlížeče",
       "web_search": "Vyhledávání na webu"
     },
     "toolCall": {
@@ -1079,6 +1099,7 @@
   },
   "common": {
     "accept": "Přijmout",
+    "action": "Akce",
     "actions": "Akce",
     "active": "Aktivní",
     "add": "Přidat",
@@ -1207,6 +1228,7 @@
       "event": "Událost",
       "requirement": "Požadavek"
     },
+    "key": "Klávesa",
     "kind": "Druh",
     "language": "Jazyk",
     "languages": {
@@ -1320,6 +1342,7 @@
     "stepCount": "{count, plural, one {# krok} few {# kroky} many {# kroku} other {# kroků}}",
     "stepProgress": "{current} z {total}",
     "summarizeChanges": "Shrnout změny",
+    "target": "Cíl",
     "timeBilling": "Čas a fakturace",
     "today": "Dnes",
     "translate": "Přeložit",
@@ -1338,10 +1361,12 @@
     "urlIdentifier": "Slug",
     "urlIdentifierPlaceholder": "moje-organizace",
     "user": "Uživatel",
+    "value": "Hodnota",
     "verify": "Ověřit",
     "version": "Verze",
     "versionLabel": "Verze {version}",
     "viewSource": "Zobrazit zdroj",
+    "website": "Web",
     "workflows": "Pracovní postupy"
   },
   "consent": {
@@ -1428,8 +1453,7 @@
       "labelRequired": "Název pole je povinný.",
       "removeField": "Odebrat pole",
       "title": "Vlastní pole",
-      "value": "Hodnota pole",
-      "valuePlaceholder": "Hodnota"
+      "value": "Hodnota pole"
     },
     "deleteContact": "Smazat klienta",
     "deleteContactBlockedByMatters": "Tento kontakt je stále přiřazen jako klient u spisů. Než kontakt smažete, přeřaďte nebo smažte tyto spisy.",
@@ -3172,7 +3196,6 @@
       "chooseModelsSubtitle": "Pro každou roli zvolte model. Ceny se aktualizují vpravo.",
       "chooseModelsTitle": "Vyberte modely",
       "configure": "Konfigurovat",
-      "credentialsPanel": "Klíč",
       "customModelBadge": "Vlastní · {provider}",
       "customModelDescription": "Toto ID modelu není v katalogu stella. Vybranému poskytovateli se předá přesně tak, jak je zadané.",
       "customModelHint": "Žádná shoda v katalogu. Zadejte libovolné ID modelu; vlastní ID se uloží přesně tak, jak je napsané.",
@@ -3643,7 +3666,6 @@
         "title": "Anonymizace"
       },
       "auditLogs": "Záznam všech aktivit",
-      "auditLogsAction": "Akce",
       "auditLogsActionAccess": "Přístup",
       "auditLogsActionCreate": "Vytvoření",
       "auditLogsActionDelete": "Smazání",
@@ -4068,7 +4090,6 @@
     "conditionOr": "Nebo",
     "conditionUseFieldInstead": "Použít místo toho pole",
     "conditionUseFormula": "ƒ Vypočítaná hodnota…",
-    "conditionValue": "Hodnota",
     "conditionWhen": "Když",
     "conditionsTitle": "Podmínky",
     "configureFields": "Nastavit pole",
@@ -4498,7 +4519,6 @@
       "fieldValueLabel": "Hodnota pole",
       "fieldValuePlaceholder": "Zadejte hodnotu pole",
       "formatNotSupported": "Formát není podporován",
-      "numberLabel": "Hodnota",
       "numberPlaceholder": "Zadejte číslo",
       "selectAValue": "Vyberte hodnotu",
       "selectValues": "Vyberte hodnoty"
@@ -4740,7 +4760,6 @@
           "openTarget": "Otevřít položku",
           "runId": "ID běhu",
           "system": "Systémová aktivita",
-          "target": "Cíl",
           "title": "Podrobnosti aktivity",
           "trigger": "Spustil(a)",
           "webhook": "Webové volání"

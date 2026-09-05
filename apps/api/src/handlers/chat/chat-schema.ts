@@ -10,6 +10,7 @@ import {
   CHAT_RICH_PART_LIMITS,
   CHAT_RUN_MODE,
   CHAT_TURN_INTENT,
+  BROWSER_CONTROL_PROTOCOL_VERSION,
   DEFAULT_CHAT_EDIT_APPLY_MODE,
   DEFAULT_DOCX_EDIT_REPRESENTATION,
   DOCX_EDIT_REPRESENTATION,
@@ -168,6 +169,13 @@ export const activeExternalSchema = t.Object({
   url: t.String(),
 });
 
+const browserClientSchema = t.Object(
+  {
+    protocolVersion: t.Literal(BROWSER_CONTROL_PROTOCOL_VERSION),
+  },
+  { additionalProperties: false },
+);
+
 export const activeSkillSchema = t.Object({
   skillId: t.Optional(tSafeId("agentSkill")),
   skillName: t.String({ minLength: 1, maxLength: 64 }),
@@ -234,6 +242,7 @@ const sendMessageCommonProperties = {
   activeDecision: t.Optional(activeDecisionSchema),
   activeExternal: t.Optional(activeExternalSchema),
   activeSkill: t.Optional(activeSkillSchema),
+  browserClient: t.Optional(browserClientSchema),
   /**
    * Which DOCX-edit review mode this turn uses; omitted means
    * `DEFAULT_CHAT_EDIT_APPLY_MODE`. Threaded into `getChatTools`, which
