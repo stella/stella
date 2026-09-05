@@ -21,6 +21,7 @@ import { eraseCorpusObjects } from "@/api/handlers/case-law/erasure";
 import type { CorpusObjectErasure } from "@/api/handlers/case-law/erasure";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import {
   cancelCaseLawCorpusUploadIntents,
   completeCaseLawCorpusUploadIntentCleanup,
@@ -54,6 +55,27 @@ export type WithdrawCaseLawDecisionDocumentOutcome =
   | { type: "corpus-objects-remain"; error: unknown };
 
 /**
+ * What the fencing transaction settled, so the work after it — index
+ * removal, object deletion — runs only where the row was really taken.
+ */
+type FencedWithdrawal =
+  | {
+      type: "locked";
+      cancelledIntents: Awaited<
+        ReturnType<typeof cancelCaseLawCorpusUploadIntents>
+      >;
+      decision: {
+        textS3Key: string | null;
+        normalizedS3Key: string | null;
+        astS3Key: string | null;
+      };
+    }
+  /** No such row, or none the projection knows: nothing to withdraw. */
+  | { type: "missing" }
+  /** The fence itself failed, which says nothing about the row. */
+  | { type: "lock-failed"; cause: unknown };
+
+/**
  * Take back a decision's stored document, keeping the decision.
  *
  * The row's text is what a parser derived, and a parser fix can decide
@@ -74,8 +96,10 @@ export const withdrawCaseLawDecisionDocument = async ({
   decisionId,
   scopedDb,
   deleteCorpus = deleteCorpusDocument,
-}: WithdrawInput): Promise<WithdrawCaseLawDecisionDocumentOutcome> => {
-  const fenced = await scopedDb(async (tx) => {
+}: WithdrawInput): Promise<
+  Result<WithdrawCaseLawDecisionDocumentOutcome, DatabaseError>
+> => {
+  const fenced = await scopedDb(async (tx): Promise<FencedWithdrawal> => {
     const sourceLock = await Result.tryPromise({
       try: async () =>
         await lockActiveCorpusProjectionSourceTx(tx, {
@@ -85,12 +109,14 @@ export const withdrawCaseLawDecisionDocument = async ({
       catch: (cause) => cause,
     });
     if (Result.isError(sourceLock)) {
-      if (
-        sourceLock.error instanceof CorpusIndexProjectionSubjectMissingError
-      ) {
-        return null;
-      }
-      throw sourceLock.error;
+      // A subject the projection does not know is the row not being there,
+      // which is an answer. Anything else — a lock timeout, a dropped
+      // connection — says nothing about the row, and is carried back so the
+      // caller can hold its place and try again.
+      return sourceLock.error instanceof
+        CorpusIndexProjectionSubjectMissingError
+        ? { type: "missing" }
+        : { type: "lock-failed", cause: sourceLock.error };
     }
     const decision = (
       await tx
@@ -105,7 +131,7 @@ export const withdrawCaseLawDecisionDocument = async ({
         .limit(1)
     ).at(0);
     if (!decision) {
-      return null;
+      return { type: "missing" };
     }
 
     // audit: skip — withdraws a parser artefact; the replay report records it
@@ -131,11 +157,19 @@ export const withdrawCaseLawDecisionDocument = async ({
         subject: { family: "case_law", entityId: decisionId },
       });
     }
-    return { cancelledIntents, decision };
+    return { type: "locked", cancelledIntents, decision };
   });
 
-  if (!fenced) {
-    return { type: "not-found" };
+  if (fenced.type === "lock-failed") {
+    return Result.err(
+      new DatabaseError({
+        message: `Case-law withdrawal could not fence ${decisionId}`,
+        cause: fenced.cause,
+      }),
+    );
+  }
+  if (fenced.type === "missing") {
+    return Result.ok({ type: "not-found" });
   }
   const { cancelledIntents, decision } = fenced;
 
@@ -186,20 +220,22 @@ export const withdrawCaseLawDecisionDocument = async ({
   }
 
   if (corpusErasure.type === "incomplete") {
-    return { type: "corpus-objects-remain", error: corpusErasure.error };
+    return Result.ok({
+      type: "corpus-objects-remain",
+      error: corpusErasure.error,
+    });
   }
 
   // Pointers are cleared only once the objects are gone, so an incomplete
   // deletion keeps exact retry targets while every reader already sees a
   // row with no document.
-  // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
-  await scopedDb((tx) => {
+  await scopedDb(async (tx) => {
     // audit: skip — withdraws a parser artefact; the replay report records it
-    return tx
+    await tx
       .update(caseLawDecisions)
       .set({ textS3Key: null, normalizedS3Key: null, astS3Key: null })
       .where(eq(caseLawDecisions.id, decisionId));
   });
 
-  return { type: "withdrawn" };
+  return Result.ok({ type: "withdrawn" });
 };

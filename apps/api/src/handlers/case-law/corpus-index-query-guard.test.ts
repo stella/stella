@@ -204,7 +204,8 @@ test("withdrawal clears pointers only once the objects are gone", async () => {
   );
   const erasure = source.indexOf("corpusErasure = await eraseCorpusObjects({");
   const incompleteReturn = source.indexOf(
-    'return { type: "corpus-objects-remain", error: corpusErasure.error };',
+    'type: "corpus-objects-remain"',
+    erasure,
   );
   const pointerClear = source.indexOf(
     ".set({ textS3Key: null, normalizedS3Key: null, astS3Key: null })",

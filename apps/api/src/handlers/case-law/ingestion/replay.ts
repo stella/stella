@@ -29,6 +29,7 @@ import {
 import { withdrawCaseLawDecisionDocument } from "@/api/handlers/case-law/withdraw-document";
 import type { WithdrawCaseLawDecisionDocumentOutcome } from "@/api/handlers/case-law/withdraw-document";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { corpusContentHash } from "@/api/lib/legal-search/corpus-storage";
 import type { CorpusPayload } from "@/api/lib/legal-search/corpus-storage";
@@ -157,7 +158,7 @@ export type ReplayRejectionPolicy =
 type WithdrawDocument = (options: {
   decisionId: SafeId<"caseLawDecision">;
   scopedDb: ScopedDb;
-}) => Promise<WithdrawCaseLawDecisionDocumentOutcome>;
+}) => Promise<Result<WithdrawCaseLawDecisionDocumentOutcome, DatabaseError>>;
 
 export const CASE_LAW_REPLAY_SCOPE = {
   SOURCE: { type: "source" },
@@ -501,7 +502,19 @@ const withdrawRejectedRow = async ({
   }
 
   await sourceLease.beforeDatabaseMark();
-  const withdrawn = await withdraw({ decisionId: row.id, scopedDb });
+  const attempt = await withdraw({ decisionId: row.id, scopedDb });
+  // A withdrawal that could not fence the row says nothing about the row.
+  // Reported as retryable, which holds the walk where it is: skipping past
+  // it would leave a forward-only traversal with no way back to it.
+  if (Result.isError(attempt)) {
+    return {
+      ...rejected,
+      outcome: REPLAY_ROW_OUTCOME.RETRYABLE,
+      detail: `${detail}; withdrawal failed: ${attempt.error.message}`,
+    };
+  }
+
+  const withdrawn = attempt.value;
   switch (withdrawn.type) {
     case "withdrawn":
       return { ...rejected, outcome: REPLAY_ROW_OUTCOME.WITHDRAWN };
