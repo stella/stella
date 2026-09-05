@@ -89,11 +89,9 @@ export const checkResultBoundaryEnrolment = ({
   const isEnabled = (file: string): boolean => {
     let covered = false;
     for (const entry of enabled) {
-      // oxlint-disable-next-line unicorn/prefer-regexp-test -- Bun.Glob#match, not String#match; the input is a file list, so scanning the filesystem is not an option
-      if (entry.glob.match(file)) {
-        entry.matched = true;
-        covered = true;
-      }
+      const matches = entry.glob.match(file);
+      entry.matched ||= matches;
+      covered ||= matches;
     }
     return covered;
   };
