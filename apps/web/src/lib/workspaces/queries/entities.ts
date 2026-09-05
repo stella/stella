@@ -359,6 +359,7 @@ export const entitySummariesOptions = (workspaceId: string) =>
       const summaries: { id: string; name: string | null }[] = [];
       let cursor: string | undefined;
       do {
+        // oxlint-disable-next-line no-network-await-in-loop/no-network-await-in-loop -- cursor pagination: the next page needs this response's cursor
         const response = await api
           .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
           .summaries.get({
@@ -407,6 +408,7 @@ const fetchAllWorkspaceFolders = async ({
   const folders: WorkspaceFolder[] = [];
   let cursor: string | undefined;
   do {
+    // oxlint-disable-next-line no-network-await-in-loop/no-network-await-in-loop -- cursor pagination: the next page needs this response's cursor
     const response = await api
       .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
       .folders.get({
@@ -460,6 +462,7 @@ const fetchAllWorkspaceFiles = async ({
   const files: WorkspaceFile[] = [];
   let cursor: string | undefined;
   do {
+    // oxlint-disable-next-line no-network-await-in-loop/no-network-await-in-loop -- cursor pagination: the next page needs this response's cursor
     const response = await api
       .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
       .files.get({

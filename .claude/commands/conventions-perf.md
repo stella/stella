@@ -7,7 +7,7 @@ endpoint flagged by the live `bun scripts/perf-hotspots.ts` report.
 
 Stella guards performance the same way it guards schema safety: committed
 baselines, diffed on every run. A regression either fails CI outright or shows
-up as a reviewable diff in the PR. Five guards exist today:
+up as a reviewable diff in the PR. Six guards exist today:
 
 - **Network baseline** (`apps/web/e2e/network-baseline.json`, checked by
   `apps/web/e2e/helpers/network.ts` from `apps/web/e2e/specs/route-smoke.spec.ts`):
@@ -26,6 +26,13 @@ up as a reviewable diff in the PR. Five guards exist today:
   (`.oxlint-plugins/require-loader-prefetch.ts`): static, not baseline-based;
   flags the waterfall pattern the network baseline would otherwise only catch
   after the fact.
+- **Per-iteration I/O rules**: `no-db-await-in-loop` flags a database call
+  awaited once per loop iteration (the N+1), `no-network-await-in-loop` flags
+  an HTTP request, AWS SDK command dispatch, or API-client method awaited the
+  same way (`iterations x RTT`). Both are static and both name the owner, so
+  the fix is concrete: batch the calls, or record in the suppression reason
+  why the sequence is required. There is no generic await-in-loop rule; a
+  sequential await with no I/O behind it costs nothing to guard.
 
 ## The Core Norm
 
@@ -134,7 +141,7 @@ instant are never two levels, so the number is a lower bound on true causal
 depth: a dependent request hiding behind an unrelated slow one is invisible
 to it.
 
-Reading launch times rather than the gap since the previous response *ended* is
+Reading launch times rather than the gap since the previous response _ended_ is
 what buys monotonicity, and it costs sensitivity: a dependent request whose
 parent ran longer than 500ms opens a new sequence instead of counting a level.
 The three properties are not simultaneously satisfiable, because separating a

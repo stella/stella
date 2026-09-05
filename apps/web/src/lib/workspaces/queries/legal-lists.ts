@@ -53,6 +53,7 @@ export const legalListsOptions = (workspaceId: string) =>
       const items = [...firstResponse.data.items];
       let cursor = firstResponse.data.nextCursor ?? undefined;
       while (cursor !== undefined) {
+        // oxlint-disable-next-line no-network-await-in-loop/no-network-await-in-loop -- cursor pagination: the next page needs this response's cursor
         const response = await api
           .lists({ workspaceId: toSafeId<"workspace">(workspaceId) })
           .get({

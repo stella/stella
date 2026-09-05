@@ -1197,6 +1197,7 @@ const waitForHttpReadiness = async ({
 
     while (Date.now() - startedAt < timeoutMs) {
       try {
+        // oxlint-disable-next-line no-network-await-in-loop/no-network-await-in-loop -- readiness poll: each probe observes the service after the previous backoff
         const response = await fetch(url, {
           method: "GET",
           signal: AbortSignal.timeout(DEFAULT_HTTP_PROBE_TIMEOUT_MS),

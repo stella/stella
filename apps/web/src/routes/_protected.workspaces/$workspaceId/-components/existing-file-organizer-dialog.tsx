@@ -428,6 +428,7 @@ export const ExistingFileOrganizerDialog = ({
         );
 
         if (row.parentId !== targetParentId) {
+          // oxlint-disable-next-line no-network-await-in-loop/no-network-await-in-loop -- ordered writes: the move must land before this row's rename, and the first failure stops the run with the remaining rows untouched
           const moveResponse = await api
             .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
             .move.patch({
@@ -444,6 +445,7 @@ export const ExistingFileOrganizerDialog = ({
         }
 
         if (targetName !== row.originalName) {
+          // oxlint-disable-next-line no-network-await-in-loop/no-network-await-in-loop -- ordered writes: the rename follows this row's move; see above
           const renameResponse = await api
             .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
             .rename.patch({
@@ -1552,6 +1554,7 @@ const ensureFolders = async ({
 
       const parentSafeId =
         currentParentId === null ? null : toSafeId<"entity">(currentParentId);
+      // oxlint-disable-next-line no-network-await-in-loop/no-network-await-in-loop -- each folder is created under the id the previous iteration returned
       const response = await api
         .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .put({

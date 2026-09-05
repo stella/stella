@@ -384,6 +384,7 @@ const fetchPreviewUrl = async (
       let currentTarget = target;
 
       for (let redirects = 0; redirects <= MAX_PREVIEW_REDIRECTS; redirects++) {
+        // oxlint-disable-next-line no-network-await-in-loop/no-network-await-in-loop -- redirect chain: the next hop is this response's Location header
         const response = await fetchWithResolvedAddress({
           addresses: currentTarget.addresses,
           headers: {

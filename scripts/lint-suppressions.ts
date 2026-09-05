@@ -156,8 +156,7 @@ export const TRACKED_SUPPRESSION_RULES = [
   {
     rule: "require-buffer-cleanup-intent-status/require-buffer-cleanup-intent-status",
     tier: "security",
-    guards:
-      "cleanup-intent inserts that silently inherit a lifecycle state",
+    guards: "cleanup-intent inserts that silently inherit a lifecycle state",
   },
   {
     rule: "require-query-limit/require-query-limit",
@@ -168,6 +167,11 @@ export const TRACKED_SUPPRESSION_RULES = [
     rule: "no-db-await-in-loop/no-db-await-in-loop",
     tier: "data-volume",
     guards: "per-row database round-trips inside a loop (N+1)",
+  },
+  {
+    rule: "no-network-await-in-loop/no-network-await-in-loop",
+    tier: "data-volume",
+    guards: "per-iteration network round-trips inside a loop",
   },
   {
     rule: "no-raw-use-effect/no-raw-use-effect",

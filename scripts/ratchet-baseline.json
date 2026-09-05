@@ -606,6 +606,17 @@
       "apps/api/src/scripts/corpus-column-trim.ts": 1
     }
   },
+  "no-network-await-in-loop-suppressions": {
+    "count": 10,
+    "files": {
+      "apps/api/src/handlers/external-preview/preview.ts": 1,
+      "apps/web/src/lib/workspaces/queries/entities.ts": 3,
+      "apps/web/src/lib/workspaces/queries/legal-lists.ts": 1,
+      "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx": 1,
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx": 3,
+      "packages/scripts/src/dev-runner.ts": 1
+    }
+  },
   "no-raw-use-effect-suppressions": {
     "count": 0,
     "files": {}

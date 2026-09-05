@@ -540,14 +540,19 @@ const validateAuthorizationServerMetadata = async (
     metadata.registration_endpoint,
   ].filter((url) => url !== undefined);
 
-  for (const url of urls) {
-    const safe = await validateOutboundFetchTarget(url);
-    if (Result.isError(safe)) {
+  // At most four endpoints, each validated independently: resolve them in one
+  // round instead of paying a DNS round-trip per URL. The first unsafe URL
+  // still decides the result.
+  const validations = await Promise.all(
+    urls.map(async (url) => await validateOutboundFetchTarget(url)),
+  );
+  for (const validation of validations) {
+    if (Result.isError(validation)) {
       return Result.err(
         new HandlerError({
           status: 502,
           message: "MCP authorization server metadata contains an unsafe URL",
-          cause: safe.error,
+          cause: validation.error,
         }),
       );
     }

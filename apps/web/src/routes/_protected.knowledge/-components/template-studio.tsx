@@ -1060,6 +1060,7 @@ export const TemplateStudioPage = ({
           // after markSaved() would leave the pending steps stranded with the
           // Save affordance (gated on isDirty) gone.
           try {
+            // oxlint-disable-next-line no-network-await-in-loop/no-network-await-in-loop -- ordered replay: a later rename reuses the slot name an earlier one frees, and the first hard failure must stop the run
             const patched = await api
               .templates({ templateId: toSafeId<"template">(templateId) })
               .clauses({ linkId: toSafeId<"templateClause">(step.linkId) })
