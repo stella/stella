@@ -8,7 +8,6 @@
 import { TaggedError, type TaggedErrorClass } from "better-result";
 
 import { RESERVED_FLAGS, RESERVED_TOP_LEVEL_NAMES } from "./annotations.js";
-import { DEPRECATED_NAME_BY_CANONICAL_INPUT } from "./deprecated-input-aliases.js";
 import { flagKey } from "./flag-name.js";
 import type {
   FlagSpec,
@@ -481,31 +480,6 @@ const resolvePaginationMode = (
   return hasLimit ? "full" : "cursor-only";
 };
 
-/**
- * Resolve a property name the Annotation Table refers to against the schema
- * actually in hand.
- *
- * The table names the CANONICAL field, but this generator also runs at runtime
- * over a `tools/list` refreshed from a self-hosted server that may still be on
- * the pre-rename registry, where the same field carries its deprecated name.
- * Without this fallback a discriminated tool (`save_filled_template`,
- * `manage_organization`) would expose NEITHER name against such a server:
- * `buildFlags` skips the canonical prop as absent, and the deprecated one is
- * not in the include list. Drop it with the alias table.
- */
-const resolveAnnotatedProp = (
-  prop: string,
-  properties: Record<string, PropSchema>,
-): string => {
-  if (prop in properties) {
-    return prop;
-  }
-  const deprecated = DEPRECATED_NAME_BY_CANONICAL_INPUT[prop];
-  return deprecated !== undefined && deprecated in properties
-    ? deprecated
-    : prop;
-};
-
 type BuiltFlags = {
   flags: FlagSpec[];
   inputOnly: string[];
@@ -657,18 +631,11 @@ const leafSpecsForTool = ({
     for (const value of values) {
       const sub = annotation?.discriminator?.subcommands[value];
       const subCommandName = sub?.command ?? kebabCase(value);
-      const subRequired = new Set([
-        ...baseRequired,
-        ...(sub?.required ?? []).map((prop) =>
-          resolveAnnotatedProp(prop, properties),
-        ),
-      ]);
+      const subRequired = new Set([...baseRequired, ...(sub?.required ?? [])]);
       const { flags, inputOnly } = buildFlags({
         properties,
         required: subRequired,
-        includeProps: sub?.include?.map((prop) =>
-          resolveAnnotatedProp(prop, properties),
-        ),
+        includeProps: sub?.include,
         skipProps: skipWithDiscriminator,
       });
       specs.push({

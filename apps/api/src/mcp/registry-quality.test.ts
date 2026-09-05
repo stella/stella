@@ -81,10 +81,9 @@ const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
 // three keyword classes reproduces the previous payload byte for byte, so no
 // description, enum or property grew; the default surface still fits its
 // ceiling unchanged.
-// anonymized bumped 23_403 -> 23_557, exactly the measured growth from naming
-// the scoping input `workspace_id` and stating its deprecated `matter_id` alias
-// in one clause per field. The alias clause comes back out when the
-// deprecation window closes.
+// anonymized bumped 23_403 -> 23_557 when the scoping input was renamed and an
+// alias clause was added per field; the alias is gone, so the payload sits
+// below that again and the ceiling keeps the headroom.
 // default bumped 70_000 -> 70_100 for delete_task plus the uuid format on
 // entity ids and the task status/priority enums: measured 70_059 chars.
 const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {

@@ -221,9 +221,7 @@ const saveMatterArgsSchema = v.pipe(
       v.pipe(
         v.string(),
         v.minLength(1),
-        v.description(
-          "Matter/workspace ID to update; omit to create a new matter",
-        ),
+        v.description("Matter ID to update; omit to create a new matter"),
       ),
     ),
     name: v.optional(
@@ -466,7 +464,7 @@ const deleteMatterArgsSchema = v.strictObject({
   matter_id: v.pipe(
     v.string(),
     v.minLength(1),
-    v.description("Matter/workspace ID to delete"),
+    v.description("Matter ID to delete"),
   ),
   confirm: v.optional(
     v.pipe(
@@ -946,13 +944,12 @@ const resolveTaskWorkspace = async ({
 
 const listTasksArgsSchema = v.pipe(
   v.strictObject({
-    workspace_id: v.optional(
+    matter_id: v.optional(
       v.pipe(
         v.string(),
         v.minLength(1),
         v.description(
-          "Workspace ID to list tasks in; required unless task_id is given. " +
-            "Deprecated input alias: matter_id.",
+          "Matter ID to list tasks in; required unless task_id is given.",
         ),
       ),
     ),
@@ -1011,12 +1008,12 @@ const listTasksArgsSchema = v.pipe(
   // List mode needs a workspace to scope to; detail mode uses task_id alone.
   v.forward(
     v.partialCheck(
-      [["workspace_id"], ["task_id"]],
-      ({ workspace_id, task_id }) =>
-        task_id !== undefined || workspace_id !== undefined,
-      "Provide workspace_id to list tasks, or task_id to read one task",
+      [["matter_id"], ["task_id"]],
+      ({ matter_id, task_id }) =>
+        task_id !== undefined || matter_id !== undefined,
+      "Provide matter_id to list tasks, or task_id to read one task",
     ),
-    ["workspace_id"],
+    ["matter_id"],
   ),
 );
 
@@ -1141,14 +1138,14 @@ const handleListTasksTool: TypedMcpToolHandler<
     if (owner.status !== "ok") {
       return notFoundResult("Task not found or not accessible");
     }
-    // When workspace_id is also supplied it must name the task's own matter;
+    // When matter_id is also supplied it must name the task's own matter;
     // otherwise a task from a different accessible matter would be returned.
     // Mirrors the save_task pairing check.
     if (
-      input.workspace_id !== undefined &&
-      input.workspace_id !== owner.workspaceId
+      input.matter_id !== undefined &&
+      input.matter_id !== owner.workspaceId
     ) {
-      return errorResult("task_id does not belong to workspace_id");
+      return errorResult("task_id does not belong to matter_id");
     }
     const { taskRow, assigneeRows, linkRows } = await readTaskDetail({
       context,
@@ -1211,8 +1208,8 @@ const handleListTasksTool: TypedMcpToolHandler<
     };
   }
 
-  // List mode. workspace_id is guaranteed present by the schema.
-  const requestedWorkspaceId = input.workspace_id ?? "";
+  // List mode. matter_id is guaranteed present by the schema.
+  const requestedWorkspaceId = input.matter_id ?? "";
   const workspaceId = ensureWorkspaceAccess({
     context,
     workspaceId: requestedWorkspaceId,
@@ -1302,13 +1299,12 @@ const saveTaskArgsSchema = v.pipe(
         v.description("Task entity ID to update; omit to create"),
       ),
     ),
-    workspace_id: v.optional(
+    matter_id: v.optional(
       v.pipe(
         v.string(),
         v.minLength(1),
         v.description(
-          "Workspace ID to create the task in; required when creating. " +
-            "Deprecated input alias: matter_id.",
+          "Matter ID to create the task in; required when creating.",
         ),
       ),
     ),
@@ -1374,7 +1370,7 @@ const saveTaskArgsSchema = v.pipe(
         v.string(),
         v.minLength(1),
         v.description(
-          "User ID to assign to the task (must be a workspace member)",
+          "User ID to assign to the task (must be a matter member)",
         ),
       ),
     ),
@@ -1402,15 +1398,15 @@ const saveTaskArgsSchema = v.pipe(
       ),
     ),
   }),
-  // Creating (no task_id) requires workspace_id and name.
+  // Creating (no task_id) requires matter_id and name.
   v.forward(
     v.partialCheck(
-      [["task_id"], ["workspace_id"]],
-      ({ task_id, workspace_id }) =>
-        task_id !== undefined || workspace_id !== undefined,
-      "workspace_id is required to create a task",
+      [["task_id"], ["matter_id"]],
+      ({ task_id, matter_id }) =>
+        task_id !== undefined || matter_id !== undefined,
+      "matter_id is required to create a task",
     ),
-    ["workspace_id"],
+    ["matter_id"],
   ),
   v.forward(
     v.partialCheck(
@@ -1420,7 +1416,7 @@ const saveTaskArgsSchema = v.pipe(
     ),
     ["name"],
   ),
-  // Assignee/link operations and workspace_id only apply to an existing task.
+  // Assignee/link operations and matter_id only apply to an existing task.
   v.partialCheck(
     [
       ["task_id"],
@@ -1428,7 +1424,7 @@ const saveTaskArgsSchema = v.pipe(
       ["remove_assignee_user_id"],
       ["link_entity_id"],
       ["unlink_link_id"],
-      ["workspace_id"],
+      ["matter_id"],
     ],
     (i) =>
       i.task_id !== undefined ||
@@ -1585,7 +1581,7 @@ const validateUnlinkTarget = async ({
 
 /**
  * Validate every failure-capable save_task target up front so no partial
- * mutation can commit before a later step fails. Covers the workspace_id/task_id
+ * mutation can commit before a later step fails. Covers the matter_id/task_id
  * pairing; the task's own read-only state, which every assignee and link
  * handler rejects on; the link target (via validateLinkTarget); assignee
  * membership; and the unlink target (via validateUnlinkTarget). Mirrors every
@@ -1607,9 +1603,9 @@ const validateSaveTaskTargets = async ({
   taskId: SafeId<"entity">;
   workspaceId: SafeId<"workspace">;
 }): Promise<ReturnType<typeof errorResult> | null> => {
-  // workspace_id is optional on update; when given it must name the task's matter.
-  if (input.workspace_id !== undefined && input.workspace_id !== workspaceId) {
-    return errorResult("task_id does not belong to workspace_id");
+  // matter_id is optional on update; when given it must name the task's matter.
+  if (input.matter_id !== undefined && input.matter_id !== workspaceId) {
+    return errorResult("task_id does not belong to matter_id");
   }
 
   // Every assignee/link handler rejects once the task itself is read-only
@@ -1689,7 +1685,7 @@ const handleSaveTaskTool: TypedMcpToolHandler<
     }
     const workspaceId = ensureActiveWorkspace({
       context,
-      workspaceId: input.workspace_id ?? "",
+      workspaceId: input.matter_id ?? "",
     });
     if (typeof workspaceId !== "string") {
       return workspaceId;
@@ -1929,11 +1925,7 @@ const handleDeleteTaskTool: TypedMcpToolHandler<
 
 const linkMatterContactArgsSchema = v.pipe(
   v.strictObject({
-    matter_id: v.pipe(
-      v.string(),
-      v.minLength(1),
-      v.description("Matter/workspace ID"),
-    ),
+    matter_id: v.pipe(v.string(), v.minLength(1), v.description("Matter ID")),
     contact_id: v.optional(
       v.pipe(
         v.string(),
@@ -1952,7 +1944,7 @@ const linkMatterContactArgsSchema = v.pipe(
         ),
       ),
     ),
-    workspace_contact_id: v.optional(
+    matter_contact_id: v.optional(
       v.pipe(
         v.string(),
         v.minLength(1),
@@ -1963,12 +1955,12 @@ const linkMatterContactArgsSchema = v.pipe(
     ),
   }),
   // Exactly one target selector: contact_id (link with role, or unlink the
-  // contact) or workspace_contact_id (unlink one specific link).
+  // contact) or matter_contact_id (unlink one specific link).
   v.partialCheck(
-    [["contact_id"], ["workspace_contact_id"]],
-    ({ contact_id, workspace_contact_id }) =>
-      (contact_id === undefined) !== (workspace_contact_id === undefined),
-    "Provide exactly one of contact_id or workspace_contact_id",
+    [["contact_id"], ["matter_contact_id"]],
+    ({ contact_id, matter_contact_id }) =>
+      (contact_id === undefined) !== (matter_contact_id === undefined),
+    "Provide exactly one of contact_id or matter_contact_id",
   ),
   // role selects the link operation, so it only pairs with contact_id.
   v.forward(
@@ -1982,10 +1974,10 @@ const linkMatterContactArgsSchema = v.pipe(
 );
 
 /**
- * Resolve the matter-contact link to remove. An explicit workspace_contact_id
+ * Resolve the matter-contact link to remove. An explicit matter_contact_id
  * wins; otherwise the (matter, contact) row is looked up. A contact can hold
  * several roles on one matter (several rows), so contact_id alone is ambiguous
- * and the caller is told to pass workspace_contact_id. Returns the resolved id
+ * and the caller is told to pass matter_contact_id. Returns the resolved id
  * or an error result.
  */
 const resolveUnlinkWorkspaceContactId = async ({
@@ -2020,7 +2012,7 @@ const resolveUnlinkWorkspaceContactId = async ({
   }
   if (rows.length > 1) {
     return errorResult(
-      "That contact holds multiple roles on the matter; pass workspace_contact_id to remove one link",
+      "That contact holds multiple roles on the matter; pass matter_contact_id to remove one link",
     );
   }
   return brandPersistedWorkspaceContactId(first.id);
@@ -2053,7 +2045,7 @@ const handleLinkMatterContactTool: TypedMcpToolHandler<
     const workspaceContactId = await resolveUnlinkWorkspaceContactId({
       contactId: input.contact_id,
       context,
-      workspaceContactId: input.workspace_contact_id,
+      workspaceContactId: input.matter_contact_id,
       workspaceId,
     });
     if (typeof workspaceContactId !== "string") {
@@ -2229,9 +2221,9 @@ export const MATTER_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "List tasks in a workspace, or read one task in detail. Pass task_id to " +
+      "List tasks in a matter, or read one task in detail. Pass task_id to " +
       "get a single task's fields, assignees, and linked entities. Otherwise " +
-      "pass workspace_id to list the workspace's tasks, optionally filtered " +
+      "pass matter_id to list the matter's tasks, optionally filtered " +
       "by a due-date range (date_from/date_to, ISO YYYY-MM-DD) and status. " +
       "Returns each item's id, name, item type, status, priority, and due date.",
     inputSchema: listTasksArgsSchema,
@@ -2251,7 +2243,7 @@ export const MATTER_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
     description:
       "Create or update a task, and manage its assignees and entity links. " +
-      "Omit task_id to create a task (workspace_id and name required). Pass " +
+      "Omit task_id to create a task (matter_id and name required). Pass " +
       "task_id to update: set name, item_type, status, priority, or due_date (ISO " +
       "YYYY-MM-DD, null to clear); add or remove one assignee " +
       "(add_assignee_user_id / remove_assignee_user_id); link the task to " +
@@ -2295,7 +2287,7 @@ export const MATTER_TOOL_DEFINITIONS = [
       "Link a contact to a matter in a party role (opposing party/counsel, " +
       "co-counsel, witness, expert witness, third party, judge, mediator, or " +
       "other), or remove such a link. Pass contact_id with role to link. To " +
-      "unlink, pass workspace_contact_id (precise, from list_matters) " +
+      "unlink, pass matter_contact_id (precise, from list_matters) " +
       "or contact_id alone; contact_id alone is rejected when the contact " +
       "holds several roles on the matter.",
     inputSchema: linkMatterContactArgsSchema,

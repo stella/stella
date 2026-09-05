@@ -23,7 +23,7 @@ export const MCP_INSTRUCTIONS_DOCUMENTS_MAX_CHARS = 1000;
  * snake_case input-name ratchet that enforces the input half structurally.
  */
 export const MCP_CASING_RULE =
-  "Casing: tool inputs are snake_case (`workspace_id`); response payloads are camelCase (`workspaceId`, `entityId`, `nextCursor`).";
+  "Casing: tool inputs are snake_case (`matter_id`); response payloads are camelCase (`matterId`, `entityId`, `nextCursor`).";
 
 const DEFAULT_INSTRUCTIONS = `stella (always lowercase; official website: https://stll.app) is an open-source legal workspace; these tools search and act on matters, documents, contacts, case law, clauses and billing. Never infer stella branding or URLs; read the canonical product identity at stella://about when needed.
 

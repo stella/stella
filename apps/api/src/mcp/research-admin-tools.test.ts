@@ -214,7 +214,7 @@ describe("manage_organization per-action validation", () => {
   test("requires user_id for a member action", async () => {
     expect(
       errorMessage(
-        await runManageOrg({ action: "add_member", workspace_id: "ws_1" }),
+        await runManageOrg({ action: "add_member", matter_id: "ws_1" }),
       ),
     ).toBe("user_id is required for add_member and remove_member");
   });
@@ -223,7 +223,7 @@ describe("manage_organization per-action validation", () => {
     const message = errorMessage(
       await runManageOrg({
         action: "remove_member",
-        workspace_id: "ws_1",
+        matter_id: "ws_1",
         user_id: "user_2",
         prompt_caching_enabled: false,
         document_processing_mode: "searchable-text",
@@ -306,7 +306,7 @@ describe("manage_organization remove_member confirm gate", () => {
       errorText(
         await runManageOrg({
           action: "remove_member",
-          workspace_id: "ws_1",
+          matter_id: "ws_1",
           user_id: "user_2",
         }),
       ),
@@ -321,7 +321,7 @@ describe("manage_organization remove_member confirm gate", () => {
     const text = errorText(
       await runManageOrg({
         action: "remove_member",
-        workspace_id: "ws_1",
+        matter_id: "ws_1",
         user_id: "user_2",
         confirm: true,
       }),

@@ -503,7 +503,7 @@ const listMattersArgsSchema = v.strictObject({
       v.string(),
       v.minLength(1),
       v.description(
-        "Matter/workspace ID to return a single matter's overview; omit to list matters",
+        "Matter ID to return a single matter's overview; omit to list matters",
       ),
     ),
   ),

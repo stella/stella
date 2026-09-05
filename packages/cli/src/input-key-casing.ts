@@ -9,7 +9,7 @@ import { isDeepStrictEqual } from "node:util";
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-/** camelCase -> snake_case (`workspaceId` -> `workspace_id`). */
+/** camelCase -> snake_case (`matterId` -> `matter_id`). */
 export const snakeCase = (key: string): string =>
   key
     .replace(/(?<lower>[a-z0-9])(?<upper>[A-Z])/gu, "$<lower>_$<upper>")

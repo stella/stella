@@ -729,7 +729,7 @@ describe("MCP anonymization canary corpus", () => {
     const context = buildContext({ tx });
 
     const response = await DOCUMENT_TOOL_HANDLERS.list_documents({
-      args: { workspace_id: "ws_1" },
+      args: { matter_id: "ws_1" },
       context,
     });
     const result = await finalize(context, response);
@@ -947,7 +947,7 @@ describe("MCP anonymization canary corpus", () => {
       const context = buildContext({ tx });
 
       const response = await DOCUMENT_TOOL_HANDLERS.list_properties({
-        args: { workspace_id: "ws_1" },
+        args: { matter_id: "ws_1" },
         context,
       });
       const result = await finalize(context, response);
@@ -979,7 +979,7 @@ describe("MCP anonymization canary corpus", () => {
     const context = buildContext({ tx });
 
     const response = await MATTER_TOOL_HANDLERS.list_tasks({
-      args: { workspace_id: "ws_1" },
+      args: { matter_id: "ws_1" },
       context,
     });
     const result = await finalize(context, response);
@@ -1181,7 +1181,7 @@ describe("MCP anonymization canary corpus", () => {
       const context = buildContext({ tx });
 
       const response = await BILLING_TOOL_HANDLERS.list_time_entries({
-        args: { workspace_id: "ws_1" },
+        args: { matter_id: "ws_1" },
         context,
       });
       const result = await finalize(context, response);
@@ -1264,7 +1264,7 @@ describe("MCP anonymization canary corpus", () => {
       const context = buildContext({ tx });
 
       const response = await BILLING_TOOL_HANDLERS.list_invoices({
-        args: { workspace_id: "ws_1" },
+        args: { matter_id: "ws_1" },
         context,
       });
       const result = await finalize(context, response);
