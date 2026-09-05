@@ -80,7 +80,9 @@ const storedDerivativeStateSchema = v.union([
   v.object({ status: v.literal("ready") }),
   v.object({
     status: v.literal("failed"),
-    reason: v.optional(
+    // `exactOptional`, not `optional`: the column's type has no `undefined` in
+    // the property, and under exactOptionalPropertyTypes the two differ.
+    reason: v.exactOptional(
       v.picklist([
         DERIVATIVE_FAILURE_REASON.ENQUEUE,
         DERIVATIVE_FAILURE_REASON.PROCESSING,

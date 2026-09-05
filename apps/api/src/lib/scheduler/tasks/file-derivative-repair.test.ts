@@ -433,9 +433,10 @@ describe("file derivative repair", () => {
     expect(reported.map((properties) => properties["fieldId"])).toEqual([
       unknownStatus,
     ]);
-    expect(await readDerivativeStatus(unknownStatus)).toEqual({
-      status: "converting",
-    });
+    // Read as `unknown`: the column's type cannot describe a status this build
+    // does not know, which is the whole point of the row.
+    const stored: unknown = await readDerivativeStatus(unknownStatus);
+    expect(stored).toEqual({ status: "converting" });
   });
 
   // A row whose repair throws stops the tick (the queue may be down), but the
