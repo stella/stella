@@ -40,7 +40,7 @@ describe("toMinorUnits", () => {
 
   test("refuses an amount that cannot become an exact integer", () => {
     expect(() => toMinorUnits({ amount: Number.NaN, currency: "USD" })).toThrow(
-      TypeError,
+      "integer minor units",
     );
   });
 });

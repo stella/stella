@@ -19,6 +19,8 @@
  * responsibility.
  */
 
+import { panic } from "better-result";
+
 import { type CentsAmount, cents } from "./cents";
 
 export { type CentsAmount, cents, unsafeCents } from "./cents";
@@ -55,7 +57,7 @@ export const applyMarkupCents = ({
 
 function assertNonNegativeInteger(name: string, value: number) {
   if (!Number.isFinite(value) || !Number.isInteger(value) || value < 0) {
-    throw new TypeError(`${name} must be a finite non-negative integer`);
+    panic(`${name} must be a finite non-negative integer`);
   }
 }
 
@@ -88,7 +90,7 @@ export const currencyCents = <C extends string>(
   amount: number,
 ): CurrencyCents<C> => {
   if (!currency) {
-    throw new TypeError("currencyCents(): currency must be a non-empty code");
+    return panic("currencyCents(): currency must be a non-empty code");
   }
   // SAFETY: cents() validates the minor-unit integer; the currency brand
   // is nominal and carried only at the type level.
@@ -184,9 +186,7 @@ export class MoneyTotals {
   /** Add `amountCents` to the running total for `currency`. */
   add(currency: string, amountCents: CentsAmount): void {
     if (!currency) {
-      throw new TypeError(
-        "MoneyTotals.add(): currency must be a non-empty code",
-      );
+      panic("MoneyTotals.add(): currency must be a non-empty code");
     }
     const running = this.#totals.get(currency) ?? cents(0);
     this.#totals.set(currency, cents(running + amountCents));

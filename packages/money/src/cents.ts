@@ -6,6 +6,8 @@
  * entry re-exports cannot import back from that entry without a cycle.
  */
 
+import { panic } from "better-result";
+
 declare const __cents: unique symbol;
 
 export type CentsAmount = number & {
@@ -18,14 +20,12 @@ export type CentsAmount = number & {
  * minor-unit value (e.g. after Elysia `t.Integer({ minimum: 0 })` or
  * after scaling a typed major-unit amount by the currency's exponent).
  *
- * Throws on non-integer input — money math at the minor-unit level must
- * be exact.
+ * A non-integer input is a caller defect, not a runtime condition: money
+ * math at the minor-unit level must be exact, so it panics.
  */
 export const cents = (value: number): CentsAmount => {
   if (!Number.isInteger(value)) {
-    throw new TypeError(
-      `cents(${value}): money values must be integer minor units`,
-    );
+    return panic(`cents(${value}): money values must be integer minor units`);
   }
   // SAFETY: validated to be an integer; brand is nominal so the
   // assertion is sound at runtime.
