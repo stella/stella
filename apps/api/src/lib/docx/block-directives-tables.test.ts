@@ -491,6 +491,64 @@ describe("processBlockDirectives — table-row conditionals", () => {
     expect(bodyTexts(body)).toEqual(["Intro", "Outro"]);
   });
 
+  test("a sibling block in a removed row never prunes content after the table", () => {
+    // Two sequential blocks share the row. The later one loses, so the row —
+    // and with it the earlier block's paragraphs — is removed. The earlier
+    // block is still queued for this pass: it must resolve to those removed
+    // paragraphs, not to whatever now occupies their old positions.
+    const xml = WRAP(
+      TBL(
+        TR(
+          TC(
+            P("{{#if scope.analysis}}"),
+            P("Analiza"),
+            P("{{/if}}"),
+            P("{{#if scope.litigation}}"),
+            P("Spory"),
+            P("{{/if}}"),
+          ),
+        ),
+      ) +
+        P("After 1") +
+        P("After 2") +
+        P("After 3"),
+    );
+    const body = parseBody(xml);
+    const { errors } = processBlockDirectives(body, {
+      scope: { analysis: true, litigation: false },
+    });
+
+    expect(errors).toEqual([]);
+    expect(tableCount(body)).toBe(0);
+    expect(bodyTexts(body)).toEqual(["After 1", "After 2", "After 3"]);
+  });
+
+  test("a row behind a content-control wrapper takes its table with it", () => {
+    // Word wraps a row-level content control as `w:tbl > w:sdt > w:sdtContent >
+    // w:tr`, so the emptied table is an ancestor of the removed row, not its
+    // parent.
+    const wrappedRow = (row: string) =>
+      `<w:sdt><w:sdtContent>${row}</w:sdtContent></w:sdt>`;
+    const xml = WRAP(
+      P("Intro") +
+        TBL(
+          wrappedRow(
+            TR(TC(P("{{#if scope.analysis}}"), P("Analiza"), P("{{/if}}"))),
+          ),
+        ) +
+        P("Outro"),
+    );
+    const body = parseBody(xml);
+    const { errors } = processBlockDirectives(body, {
+      scope: { analysis: false },
+    });
+
+    expect(errors).toEqual([]);
+    expect(tableCount(body)).toBe(0);
+    expect(emptyTableCount(body)).toBe(0);
+    expect(bodyTexts(body)).toEqual(["Intro", "Outro"]);
+  });
+
   test("markers Word split across runs still bind to the row", () => {
     // Word splits a marker into several `w:r` runs after an edit or a
     // spell-check pass. The scanner joins a paragraph's run text, so the block

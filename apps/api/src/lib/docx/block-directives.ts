@@ -205,15 +205,28 @@ const KIND_MAP: Record<string, BlockDirectiveKind> = {
   "/each": "endeach",
 };
 
+/** A body's paragraphs, in document order, as a stable snapshot. */
+const bodyParagraphs = (body: slimdom.Element): slimdom.Element[] => [
+  ...body.getElementsByTagNameNS(W_NS, "p"),
+];
+
 /**
  * Extract block directives from body paragraphs.
  * Returns directives in document order.
  */
-export const scanBlockDirectives = (
-  body: slimdom.Element,
+export const scanBlockDirectives = (body: slimdom.Element): BlockDirective[] =>
+  scanDirectivesInParagraphs(bodyParagraphs(body));
+
+/**
+ * Extract block directives from an ordered paragraph list. Every
+ * `paragraphIndex` addresses THAT list, so a caller resolving indices must hold
+ * the same array for the whole pass: a block that deletes a table row shifts
+ * document positions, while the snapshot's element references stay valid.
+ */
+const scanDirectivesInParagraphs = (
+  paragraphs: readonly slimdom.Element[],
 ): BlockDirective[] => {
   const directives: BlockDirective[] = [];
-  const paragraphs = body.getElementsByTagNameNS(W_NS, "p");
 
   for (const [i, p] of paragraphs.entries()) {
     const text = paragraphText(p);
@@ -555,18 +568,18 @@ const removeBlockUnit = (unit: slimdom.Node): void => {
   if (!parent) {
     return;
   }
-  const cell = ancestorByLocalName(unit, TAG.cell);
+  // Resolve the containers to repair from the PARENT, not the direct
+  // parent-child relation: a row-level content control wraps its `w:tr` in
+  // `w:sdt`/`w:sdtContent`, so the enclosing table is an ancestor rather than
+  // the row's parent, and a table-shell check on `parent` alone would miss it.
+  const cell = ancestorByLocalName(parent, TAG.cell);
+  const table = ancestorByLocalName(parent, TAG.table);
   parent.removeChild(unit);
 
   // The last row left the table: drop the shell, then repair whatever cell the
   // table itself lived in.
-  if (
-    isElement(parent) &&
-    parent.localName === TAG.table &&
-    parent.namespaceURI === W_NS &&
-    parent.getElementsByTagNameNS(W_NS, TAG.row).length === 0
-  ) {
-    removeBlockUnit(parent);
+  if (table && table.getElementsByTagNameNS(W_NS, TAG.row).length === 0) {
+    removeBlockUnit(table);
     return;
   }
 
@@ -762,7 +775,17 @@ export const processBlockDirectives = (
     // inside a kept branch become top-level in the next pass.
     const MAX_PASSES = 20;
     for (let pass = 0; pass < MAX_PASSES; pass++) {
-      const directives = scanBlockDirectives(bodyEl);
+      // One snapshot per pass, shared by the scan and every block parsed from
+      // it. Re-fetching per block would resolve a block's indices against a
+      // list a SIBLING block already mutated: a row-confined block removes a
+      // whole row (a false `{{#if}}`, a zero-item row repeat), which deletes
+      // paragraphs the pass had already indexed and shifts every later
+      // position, so the next block's stale indices would land on unrelated
+      // content after the table. Element references survive that: a sibling
+      // whose paragraphs went with the row resolves to detached nodes, where
+      // its removals change nothing.
+      const paragraphs = bodyParagraphs(bodyEl);
+      const directives = scanDirectivesInParagraphs(paragraphs);
       if (directives.length === 0) {
         return;
       }
@@ -774,8 +797,8 @@ export const processBlockDirectives = (
         return;
       }
 
-      // Process blocks in reverse order to preserve paragraph
-      // indices
+      // Process blocks in reverse document order so an expansion's inserted
+      // paragraphs never sit between an earlier block's markers.
       const sortedBlocks = [...blocks].toSorted((a, b) => {
         const aStart = a.directiveParagraphs[0] ?? 0;
         const bStart = b.directiveParagraphs[0] ?? 0;
@@ -783,13 +806,10 @@ export const processBlockDirectives = (
       });
 
       for (const block of sortedBlocks) {
-        // Re-fetch paragraphs after each mutation
-        const ps = bodyEl.getElementsByTagNameNS(W_NS, "p");
-
         if (block.kind === "if") {
-          processIfBlock(ps, block, contextData, namedConditions);
+          processIfBlock(paragraphs, block, contextData, namedConditions);
         } else {
-          processEachBlock(bodyEl, ps, block, contextData);
+          processEachBlock(bodyEl, paragraphs, block, contextData);
         }
       }
     }
@@ -809,7 +829,7 @@ export const processBlockDirectives = (
   };
 
   const processIfBlock = (
-    paragraphs: slimdom.Element[],
+    paragraphs: readonly slimdom.Element[],
     block: IfBlock,
     contextData: Record<string, unknown>,
     conditions?: NamedCondition[],
@@ -1351,7 +1371,7 @@ export const processBlockDirectives = (
 
   const processEachBlock = (
     bodyEl: slimdom.Element,
-    paragraphs: slimdom.Element[],
+    paragraphs: readonly slimdom.Element[],
     block: EachBlock,
     contextData: Record<string, unknown>,
   ): void => {
