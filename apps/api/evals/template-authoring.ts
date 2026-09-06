@@ -1178,7 +1178,7 @@ const WRITE_DOCX_DESCRIPTION =
   "it expands to the file's base64 bytes at the boundary.";
 
 type ToolTrace = { name: string; input: unknown };
-type WrittenDocx = { blocks: AuthoredBlock[]; buffer: Buffer };
+type WrittenDocx = { ref: string; blocks: AuthoredBlock[]; buffer: Buffer };
 
 const createAuthoringTools = ({
   trace,
@@ -1212,7 +1212,7 @@ const createAuthoringTools = ({
         : { type: "table", rows: block.rows },
     );
     const buffer = await buildDocx(authored);
-    writeCalls.push({ blocks: authored, buffer });
+    writeCalls.push({ ref, blocks: authored, buffer });
     written.set(ref, buffer);
     return { docx_ref: ref, bytes: buffer.byteLength };
   });
@@ -1514,7 +1514,12 @@ const buildUnsavedAttempt = async ({
       overlay: [],
       booleanInputPaths: task.booleanInputPaths,
     }),
-    overlayIssues,
+    overlayIssues: [
+      ...overlayIssues,
+      ...discovered.structureErrors.map(
+        (error) => `${error.directive}: ${error.message}`,
+      ),
+    ],
     fidelity: checkSourceFidelity({
       authored: authoredParagraphs(blocks),
       preservedPhrases: task.preservedPhrases,
@@ -1571,7 +1576,19 @@ const runAuthoringTask = async ({
         : parsed.success
           ? ["save_template call never reached the handler"]
           : validationIssues(parsed.issues);
-    const authored = writeCalls.at(-1);
+    // A rejected raw save can name an earlier write. Score that exact
+    // document; using the most recent write would attach its diagnostics to a
+    // different attempted save. With no save attempt, the last authored
+    // document remains the only available partial evidence.
+    const authored =
+      last === undefined
+        ? writeCalls.at(-1)
+        : parsed?.success
+          ? writeCalls.findLast(
+              (written) =>
+                written.ref === parsed.output.docx_base64.trim(),
+            )
+          : undefined;
     const attempt: SaveAttempt | null =
       authored === undefined
         ? parsed === null
@@ -1687,7 +1704,12 @@ const runSyntaxQuiz = async ({
 // ── Report ────────────────────────────────────────────────
 
 const cell = (values: readonly string[]): string =>
-  values.length === 0 ? "-" : values.join("; ").replaceAll("|", "\\|");
+  values.length === 0
+    ? "-"
+    : values
+        .join("; ")
+        .replaceAll(/\r\n|\r|\n/gu, "<br>")
+        .replaceAll("|", "\\|");
 
 const trapsCell = (traps: GrammarTrapCounts): string =>
   cell(
