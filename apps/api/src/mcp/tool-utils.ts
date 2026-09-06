@@ -10,6 +10,7 @@ import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { getAppBaseUrl } from "@/api/lib/mcp-connectors/app-urls";
 import { getCurrentRequestId } from "@/api/lib/observability/request-context";
 import {
   decodePaginationCursor,
@@ -86,8 +87,6 @@ export const MCP_TOOL_EXECUTION_OPTIONS: LocalToolExecutionOptions = {
   messages: [],
   toolCallId: "mcp",
 };
-
-export const getAppBaseUrl = () => env.FRONTEND_URL.replace(/\/$/u, "");
 
 export const stringProp = (
   description: string,

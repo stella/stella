@@ -120,6 +120,9 @@ const KIND_VALUES = ["all", "skill", "mcp"] as const;
 
 const searchSchema = v.object({
   kind: v.optional(v.picklist(KIND_VALUES)),
+  /** Catalogue slug to open on load, e.g. `?slug=krs` from an API refusal that
+   *  names where the tool is enabled. */
+  slug: v.optional(v.string()),
 });
 
 // Per-tab flag so we POST /skills/seed at most once per browser
@@ -200,6 +203,9 @@ function ToolsPage() {
   const initialKind = Route.useSearch({
     select: (s): CatalogueBrowserFilterKind | undefined => s.kind,
   });
+  const initialSlug = Route.useSearch({
+    select: (s): string | undefined => s.slug,
+  });
   const routeData = Route.useLoaderData({
     select: ({
       canImportSkills,
@@ -250,6 +256,7 @@ function ToolsPage() {
           canImportSkills={routeData.canImportSkills}
           canManageCustomTools={routeData.canManageCustomTools}
           initialKind={initialKind}
+          initialSlug={initialSlug}
           key={initialKind ?? "all"}
           organizationId={organizationId}
           practiceJurisdictions={routeData.practiceJurisdictions}

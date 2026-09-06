@@ -38,6 +38,7 @@ import type {
 import {
   BUSINESS_REGISTRY_DISPATCH,
   executeRegistryLookup,
+  registryDisabledForOrgRefusal,
 } from "@/api/lib/business-registries/dispatch";
 
 import { replaceResolvedValue } from "./composite-fields";
@@ -76,20 +77,11 @@ const LOOKUP_VALUE_VALIDATORS: Record<
   vies: validateVatFormat,
 };
 
-/** Human-readable registry names for error messages. */
-export const LOOKUP_REGISTRY_NAMES: Record<LookupRegistry, string> = {
-  ares: "ARES",
-  brreg: "BRREG",
-  "companies-house": "Companies House",
-  denue: "INEGI DENUE",
-  edgar: "SEC EDGAR",
-  gcis: "GCIS",
-  krs: "KRS",
-  orsr: "ORSR",
-  prh: "PRH",
-  "recherche-entreprises": "RNE",
-  vies: "VIES",
-};
+/** Human-readable registry name for error messages, from the dispatch table
+ *  that owns it — a second list here could name a registry the dispatch has
+ *  since renamed. */
+export const lookupRegistryName = (registry: LookupRegistry): string =>
+  BUSINESS_REGISTRY_DISPATCH[registry].displayName;
 
 /** True when the submitted value has the shape of the registry's canonical
  *  number (whitespace-tolerant; semantic existence is checked by the lookup). */
@@ -164,7 +156,7 @@ export const createDispatchLookupResolver =
     if (isRegistryEnabledForOrg && !(await isRegistryEnabledForOrg(registry))) {
       return {
         type: "error",
-        message: `The ${registry} registry is disabled for this organization.`,
+        message: registryDisabledForOrgRefusal(registry).message,
       };
     }
     const response = await executeRegistryLookup({ handler, query });
@@ -533,7 +525,7 @@ const resolveLookupValue = async ({
     return;
   }
 
-  const registryName = LOOKUP_REGISTRY_NAMES[lookup.registry];
+  const registryName = lookupRegistryName(lookup.registry);
   if (!isPlausibleLookupValue(lookup.registry, incoming)) {
     errors.push({
       path,

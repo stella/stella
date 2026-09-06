@@ -196,6 +196,7 @@ import {
   FILE_SIZE_LIMITS,
   LIMITS,
 } from "@/api/lib/limits";
+import { getAppBaseUrl } from "@/api/lib/mcp-connectors/app-urls";
 import { getDisabledNativeToolSlugs } from "@/api/lib/mcp-connectors/catalog-metadata";
 import { resolveMemorySourceWorkspaceIds } from "@/api/lib/memory/memory-provenance";
 import { sanitizeForPrompt, untrustedText } from "@/api/lib/prompt-safety";
@@ -209,7 +210,6 @@ import {
 } from "@/api/lib/tanstack-ai-models";
 import type { UsageLaneDecision } from "@/api/lib/usage/lane-routing";
 import { loadWebSearchProvidersForOrg } from "@/api/lib/web-search/load-org-keys";
-import { getAppBaseUrl } from "@/api/mcp/tool-utils";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 /**

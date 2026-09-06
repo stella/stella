@@ -48,6 +48,7 @@ import {
 } from "@/api/lib/document-content-provenance";
 import { createFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
+import { getAppBaseUrl } from "@/api/lib/mcp-connectors/app-urls";
 import {
   createCursorPage,
   decodePaginationCursor,
@@ -88,7 +89,6 @@ import {
   DEFAULT_SEARCH_LIMIT,
   ensureWorkspaceAccess,
   errorResult,
-  getAppBaseUrl,
   MAX_CURSOR_LENGTH,
   MAX_LIST_LIMIT,
   MAX_SEARCH_LIMIT,

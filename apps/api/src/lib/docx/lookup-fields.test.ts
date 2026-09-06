@@ -571,6 +571,14 @@ describe("engine substitution of formatted lookup values", () => {
   });
 });
 
+/** The one refusal text the dispatch layer builds (registry proper name, slug,
+ *  and both ways an admin enables it), asserted verbatim because it is what a
+ *  person filling a template and an agent both read. */
+const KRS_DISABLED_MESSAGE =
+  "The KRS registry is disabled for this organization. An organization admin " +
+  "can enable it at http://localhost:3000/knowledge/tools?slug=krs, or add " +
+  "Poland to the practice jurisdictions.";
+
 describe("createDispatchLookupResolver — mocked dispatch", () => {
   // The resolver's dispatch is now keyed by every supported registry; spread
   // the real table and override only the krs handler these tests exercise.
@@ -626,7 +634,7 @@ describe("createDispatchLookupResolver — mocked dispatch", () => {
     const outcome = await resolver({ registry: "krs", query: "0000592109" });
     expect(outcome).toEqual({
       type: "error",
-      message: "The krs registry is disabled for this organization.",
+      message: KRS_DISABLED_MESSAGE,
     });
     // The disabled registry is refused before any upstream call.
     expect(lookupCalls).toBe(0);
@@ -655,7 +663,7 @@ describe("createDispatchLookupResolver — mocked dispatch", () => {
     const outcome = await resolver({ registry: "krs", query: "0000592109" });
     expect(outcome).toEqual({
       type: "error",
-      message: "The krs registry is disabled for this organization.",
+      message: KRS_DISABLED_MESSAGE,
     });
     expect(lookupCalls).toBe(0);
   });
@@ -741,7 +749,7 @@ describe("applyLookupFields — fill flow over a mocked dispatch", () => {
       },
     );
     expect(error).toBe(
-      'Field "buyer_krs": KRS lookup failed: The krs registry is disabled for this organization.',
+      `Field "buyer_krs": KRS lookup failed: ${KRS_DISABLED_MESSAGE}`,
     );
     // The registry was never called; the submitted number is left untouched.
     expect(lookupCalls).toBe(0);

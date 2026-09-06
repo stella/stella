@@ -3,10 +3,11 @@ import { t } from "elysia";
 
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { registryDisabledForOrgRefusal } from "@/api/lib/business-registries/dispatch";
 import {
   createDispatchLookupResolver,
   isPlausibleLookupValue,
-  LOOKUP_REGISTRY_NAMES,
+  lookupRegistryName,
   renderLookupOutput,
 } from "@/api/lib/docx/lookup-fields";
 import { buildIsRegistryEnabledForOrg } from "@/api/lib/docx/registry-org-gate";
@@ -51,7 +52,7 @@ const lookupPreview = createSafeRootHandler(
   async function* ({ body, scopedDb, session }) {
     const { registry, format } = body;
     const number = body.number.trim();
-    const registryName = LOOKUP_REGISTRY_NAMES[registry];
+    const registryName = lookupRegistryName(registry);
 
     if (!isPlausibleLookupValue(registry, number)) {
       return Result.err(
@@ -84,7 +85,7 @@ const lookupPreview = createSafeRootHandler(
       return Result.err(
         new HandlerError({
           status: 403,
-          message: `The ${registryName} registry is disabled for this organization.`,
+          message: registryDisabledForOrgRefusal(registry).message,
         }),
       );
     }

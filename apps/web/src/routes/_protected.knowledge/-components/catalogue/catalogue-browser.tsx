@@ -41,6 +41,7 @@ import {
   ResponsiveActionToolbar,
   ResponsiveActionToolbarItem,
 } from "@/components/responsive-action-toolbar";
+import { useMountEffect } from "@/hooks/use-effect";
 import { useLocale } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";
@@ -78,6 +79,9 @@ type CatalogueBrowserProps = {
   organizationId: string;
   /** Initial kind filter (e.g. from `?kind=mcp` on the unified surface). */
   initialKind?: CatalogueBrowserFilterKind | undefined;
+  /** Catalogue slug whose detail panel opens on mount (`?slug=krs`), so a link
+   *  from elsewhere in the product lands on the entry it names. */
+  initialSlug?: string | undefined;
   /**
    * When true, render the "Add custom" dropdown in the toolbar. Disabled
    * for the onboarding flow.
@@ -115,6 +119,7 @@ const toRowDisplay = (entry: CatalogueEntry): CatalogueRowDisplay => ({
 export const CatalogueBrowser = ({
   organizationId,
   initialKind,
+  initialSlug,
   showAddCustom = true,
   canImportSkills,
   canManageCustomTools,
@@ -232,6 +237,19 @@ export const CatalogueBrowser = ({
       ownerRouteId: "/_protected/knowledge/tools",
     });
   };
+
+  // A deep link naming an entry opens its detail panel once the catalogue is
+  // loaded (it already is: `catalogueOptions` is a suspense query). Mount-only,
+  // so closing the panel does not fight the link on the next render.
+  useMountEffect(() => {
+    if (initialSlug === undefined) {
+      return;
+    }
+    const linked = entries.find((entry) => entry.slug === initialSlug);
+    if (linked) {
+      onRowFocus(linked);
+    }
+  });
 
   const queryClient = useQueryClient();
   const onSkillSheetChanged = () => {
@@ -621,6 +639,7 @@ type CatalogueBrowserWithRouteDataProps = {
   canManageCustomTools: boolean;
   organizationId: string;
   initialKind?: CatalogueBrowserFilterKind | undefined;
+  initialSlug?: string | undefined;
   practiceJurisdictions: readonly PracticeJurisdiction[];
 };
 
@@ -629,12 +648,14 @@ export const CatalogueBrowserWithRouteData = ({
   canManageCustomTools,
   organizationId,
   initialKind,
+  initialSlug,
   practiceJurisdictions,
 }: CatalogueBrowserWithRouteDataProps) => (
   <CatalogueBrowser
     canImportSkills={canImportSkills}
     canManageCustomTools={canManageCustomTools}
     initialKind={initialKind}
+    initialSlug={initialSlug}
     organizationId={organizationId}
     practiceJurisdictions={practiceJurisdictions}
   />

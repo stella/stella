@@ -29,7 +29,10 @@ import { createWorkspaceContactHandler } from "@/api/handlers/workspaces/workspa
 import { deleteWorkspaceContactHandler } from "@/api/handlers/workspaces/workspace-contacts-delete";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
-import { BUSINESS_REGISTRY_SLUGS } from "@/api/lib/business-registries/dispatch";
+import {
+  BUSINESS_REGISTRY_SLUGS,
+  RegistryDisabledForOrgError,
+} from "@/api/lib/business-registries/dispatch";
 import type {
   AssertNoExtraFields,
   DELETED_TRUE_PROJECTION,
@@ -874,7 +877,19 @@ const handleLookupBusinessRegistryTool: TypedMcpToolHandler<
     q: parsed.output.query,
   });
   if (Result.isError(result)) {
-    return internalFailureResult(result.error);
+    const { error } = result;
+    // The args schema accepts every registry in the dispatch table, not just
+    // the ones tools/list advertises for this org, so an agent that asks for a
+    // disabled registry gets the enablement path instead of an enum
+    // validation error that explains nothing.
+    if (RegistryDisabledForOrgError.is(error)) {
+      return structuredErrorResult({
+        code: "feature_disabled",
+        message: error.message,
+        hint: error.hint,
+      });
+    }
+    return internalFailureResult(error);
   }
   // Passthrough: the output is public business-register data and the query is
   // caller-supplied, so no tenant-authored text needs redaction. Forwarded
