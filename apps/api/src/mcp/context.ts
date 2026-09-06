@@ -47,6 +47,7 @@ import {
   brandActorSessionIdentity,
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
+import type { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 import type { getSearchProvider } from "@/api/lib/search/provider";
 import type { createStoredTemplate } from "@/api/lib/templates/create-template";
 import type {
@@ -120,6 +121,7 @@ export type McpRequestContext = {
     fillStoredTemplateWithText?: typeof fillStoredTemplateWithText;
     fillStoredTemplateWithTextStrict?: typeof fillStoredTemplateWithTextStrict;
     createStoredTemplate?: typeof createStoredTemplate;
+    safeOutboundFetchBytes?: typeof safeOutboundFetchBytes;
     recordTemplateFill?: typeof recordTemplateFill;
     recordTemplateUse?: typeof recordTemplateUse;
     claimTemplatePersistenceRequest?: typeof claimTemplatePersistenceRequest;

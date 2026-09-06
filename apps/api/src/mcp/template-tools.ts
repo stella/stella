@@ -50,6 +50,7 @@ import {
   brandPersistedEntityId,
   brandPersistedTemplateId,
 } from "@/api/lib/safe-id-boundaries";
+import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 import { DOCX_EXT_RE, sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
 import { createStoredTemplate } from "@/api/lib/templates/create-template";
@@ -78,6 +79,7 @@ import {
 } from "@/api/lib/templates/template-fill-service";
 import { withTimeout } from "@/api/lib/with-timeout";
 import type { McpRequestContext } from "@/api/mcp/context";
+import { OPENAI_FILE_REFERENCE_SCHEMA } from "@/api/mcp/document-file-upload";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import {
   readTemplateFieldsInput,
@@ -101,6 +103,7 @@ import {
   runTextFieldSpecs,
 } from "@/api/mcp/text-field-spec";
 import type {
+  InternalToolErrorResult,
   InternalToolResult,
   McpTextFieldSpec,
   McpToolDefinition,
@@ -193,11 +196,13 @@ const saveTemplateArgsSchema = v.pipe(
         v.minLength(1),
         v.maxLength(MAX_DOCX_BASE64_LENGTH),
         v.description(
-          "Original .docx bytes, base64-encoded verbatim; required when " +
-            "creating. Never strip parts out of the file to shrink it.",
+          "Original .docx bytes, base64-encoded verbatim; the fallback for " +
+            "creating when the host cannot supply 'file'. Never strip parts " +
+            "out of the file to shrink it.",
         ),
       ),
     ),
+    file: v.optional(OPENAI_FILE_REFERENCE_SCHEMA),
     fields: v.optional(
       v.pipe(
         v.array(templateFieldInputSchema),
@@ -208,16 +213,26 @@ const saveTemplateArgsSchema = v.pipe(
     ),
   }),
   v.partialCheck(
-    [["template_id"], ["docx_base64"]],
-    ({ template_id, docx_base64 }) =>
-      (template_id === undefined) !== (docx_base64 === undefined),
-    "Provide docx_base64 to create a template, or template_id to configure an existing template's fields",
+    [["template_id"], ["docx_base64"], ["file"]],
+    ({ template_id, docx_base64, file }) =>
+      (template_id === undefined) !==
+      (docx_base64 === undefined && file === undefined),
+    "Provide file or docx_base64 to create a template, or template_id to configure an existing template's fields",
   ),
   v.forward(
     v.partialCheck(
-      [["docx_base64"], ["name"]],
-      ({ docx_base64, name }) =>
-        docx_base64 === undefined || name !== undefined,
+      [["docx_base64"], ["file"]],
+      ({ docx_base64, file }) =>
+        docx_base64 === undefined || file === undefined,
+      "Provide either file or docx_base64, not both",
+    ),
+    ["file"],
+  ),
+  v.forward(
+    v.partialCheck(
+      [["docx_base64"], ["file"], ["name"]],
+      ({ docx_base64, file, name }) =>
+        (docx_base64 === undefined && file === undefined) || name !== undefined,
       "name is required to create a template",
     ),
     ["name"],
@@ -489,14 +504,19 @@ const buildTemplateDetailTextFieldSpecs = (
 ];
 
 const SAVE_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
+  _meta: {
+    "openai/fileParams": ["file"],
+  },
   description:
-    "Create a template from a DOCX, or configure its fields. To create, pass " +
-    `the original .docx bytes as docx_base64 (max ${MAX_DOCX_MEGABYTES} MB ` +
-    "decoded) and a name; never retype the file or strip parts out to fit. " +
-    "Its {{field}} markers become fillable fields; fields can configure " +
-    "them in the same call. To configure an existing template, pass " +
-    "template_id with fields and no docx_base64; this changes only the " +
-    "manifest, not its {{markers}}. Read " +
+    "Create a template from a DOCX, or configure an existing template's " +
+    "fields. To create, pass a name and the .docx: prefer file (a host file " +
+    "reference), else docx_base64 (base64-encoded Office Open XML bytes, " +
+    `max ${MAX_DOCX_MEGABYTES} MB decoded). The file's {{field}} markers ` +
+    "become the fillable fields, and fields can configure them in the same " +
+    "call. docx_base64 must carry the original bytes verbatim: never retype " +
+    "the file or strip parts out to fit. To configure an existing template, " +
+    "pass template_id with fields and no document; only the manifest " +
+    "changes, the document's {{markers}} stay untouched. Read " +
     `${TEMPLATE_MARKER_REFERENCE_URI} before authoring a DOCX and ` +
     `${TEMPLATE_FIELD_REFERENCE_URI} before configuring fields. Returns the ` +
     "template id and field count when creating, or the updated fields when " +
@@ -1781,12 +1801,12 @@ const templateAuthoringWarnings = async ({
 /**
  * What to tell the caller for each structural DOCX failure on the base64 path.
  *
- * `unreadable-archive` is the failure a model-driven client actually hits: the
- * only way to reach this tool with a DOCX today is to emit the whole archive as
- * base64 token by token, and a payload that drifted by one character decodes to
- * bytes that are no longer a readable ZIP. The generic "make sure it is a valid
- * .docx" advice invites the agent to shrink the file until it fits, which
- * destroys the document, so name the real cause instead.
+ * `unreadable-archive` is the failure a model-driven client actually hits on
+ * this path: a client whose host cannot supply a file reference emits the whole
+ * archive as base64 token by token, and a payload that drifted by one character
+ * decodes to bytes that are no longer a readable ZIP. The generic "make sure it
+ * is a valid .docx" advice invites the agent to shrink the file until it fits,
+ * which destroys the document, so name the real cause instead.
  *
  * Total over the failure union: a new structural check has to decide what the
  * caller should do about it.
@@ -1812,19 +1832,151 @@ const DOCX_BASE64_FAILURE_HINT = {
     "Send the original .docx unmodified; do not edit its XML by hand.",
 } as const satisfies Record<DocxValidationFailure, string>;
 
+/**
+ * What to tell the caller for each structural DOCX failure on the host-file
+ * path. The bytes were never retyped here, so the archive is broken at the
+ * source: point at the attachment, not at the encoding.
+ */
+const DOCX_FILE_FAILURE_HINT = {
+  "unreadable-archive":
+    "The attached file is not a readable .docx archive. Attach the original " +
+    "document rather than a renamed or re-exported copy.",
+  "missing-document-xml":
+    "The attached archive has no 'word/document.xml'. Attach the original " +
+    ".docx unmodified; do not rebuild or repackage it.",
+  "malformed-document-xml":
+    "The attached archive's 'word/document.xml' is not well-formed XML. " +
+    "Attach the original .docx unmodified.",
+} as const satisfies Record<DocxValidationFailure, string>;
+
+/** How the caller supplied the DOCX bytes for the create branch. */
+type TemplateDocxSource =
+  | { type: "base64"; docxBase64: string }
+  | { type: "file"; file: v.InferOutput<typeof OPENAI_FILE_REFERENCE_SCHEMA> };
+
+/** The input field each source's validation issues point back at. */
+const DOCX_SOURCE_ISSUE_PATH = {
+  base64: "docx_base64",
+  file: "file",
+} as const satisfies Record<TemplateDocxSource["type"], string>;
+
+const DOCX_SOURCE_FAILURE_HINT = {
+  base64: DOCX_BASE64_FAILURE_HINT,
+  file: DOCX_FILE_FAILURE_HINT,
+} as const satisfies Record<
+  TemplateDocxSource["type"],
+  Record<DocxValidationFailure, string>
+>;
+
+const HOST_FILE_DOWNLOAD_TIMEOUT_MS = 60_000;
+
+type ResolvedTemplateDocx =
+  | { status: "ok"; buffer: Buffer }
+  | { status: "error"; result: InternalToolErrorResult };
+
+const decodeBase64Docx = (docxBase64: string): ResolvedTemplateDocx => {
+  const buffer = Buffer.from(docxBase64, "base64");
+  // base64 silently drops invalid characters; an empty decode means the input
+  // was not valid base64 at all.
+  if (buffer.byteLength === 0) {
+    return {
+      status: "error",
+      result: structuredErrorResult({
+        code: "validation_error",
+        message: "Invalid input: docx_base64 is not valid base64",
+        issues: [
+          { path: "docx_base64", message: "docx_base64 is not valid base64" },
+        ],
+        hint: "Base64-encode the raw DOCX bytes and pass the result as 'docx_base64'.",
+      }),
+    };
+  }
+  return { status: "ok", buffer };
+};
+
+/**
+ * Pull the bytes behind a host file reference. The same SSRF-vetted outbound
+ * fetch and byte ceiling `upload_document_version` uses: the reference is
+ * caller-supplied, so the URL is resolved and pinned before any connection and
+ * the body is cut off at the document size limit.
+ */
+const downloadHostFileDocx = async ({
+  context,
+  file,
+}: {
+  context: McpRequestContext;
+  file: v.InferOutput<typeof OPENAI_FILE_REFERENCE_SCHEMA>;
+}): Promise<ResolvedTemplateDocx> => {
+  const downloaded = await (
+    context.testDependencies?.safeOutboundFetchBytes ?? safeOutboundFetchBytes
+  )({
+    maxBytes: FILE_SIZE_LIMIT_BYTES.document,
+    timeoutMs: HOST_FILE_DOWNLOAD_TIMEOUT_MS,
+    url: file.download_url,
+  });
+  if (Result.isError(downloaded) || !downloaded.value.ok) {
+    return {
+      status: "error",
+      result: structuredErrorResult({
+        code: "validation_error",
+        message: "The attached file could not be downloaded",
+        issues: [
+          {
+            path: "file",
+            message: "The attached file could not be downloaded",
+          },
+        ],
+        hint:
+          `Attach a .docx no larger than ${MAX_DOCX_MEGABYTES} MB and retry ` +
+          "before its temporary download URL expires.",
+      }),
+    };
+  }
+  if (downloaded.value.body.byteLength === 0) {
+    return {
+      status: "error",
+      result: structuredErrorResult({
+        code: "validation_error",
+        message: "The attached file is empty",
+        issues: [{ path: "file", message: "The attached file is empty" }],
+      }),
+    };
+  }
+  return { status: "ok", buffer: Buffer.from(downloaded.value.body) };
+};
+
+const resolveTemplateDocx = async ({
+  context,
+  source,
+}: {
+  context: McpRequestContext;
+  source: TemplateDocxSource;
+}): Promise<ResolvedTemplateDocx> => {
+  switch (source.type) {
+    case "base64":
+      return decodeBase64Docx(source.docxBase64);
+    case "file":
+      return await downloadHostFileDocx({ context, file: source.file });
+    default: {
+      source satisfies never;
+      return panic(`Unhandled template DOCX source: ${String(source)}`);
+    }
+  }
+};
+
 // Create branch of save_template: a new template from an uploaded DOCX, with an
 // optional field-configuration overlay. Reused from the former create_template
 // tool.
 const createTemplateFromDocx = async ({
   context,
-  docxBase64,
   fields,
   name,
+  source,
 }: {
   context: McpRequestContext;
-  docxBase64: string;
   fields: FieldMeta[] | undefined;
   name: string;
+  source: TemplateDocxSource;
 }): Promise<
   InternalToolResult<v.InferInput<typeof SAVE_TEMPLATE_PROJECTION>>
 > => {
@@ -1840,26 +1992,20 @@ const createTemplateFromDocx = async ({
     clientManifest = { fields };
   }
 
-  const buffer = Buffer.from(docxBase64, "base64");
-  // base64 silently drops invalid characters; an empty decode means the input
-  // was not valid base64 at all.
-  if (buffer.byteLength === 0) {
-    return structuredErrorResult({
-      code: "validation_error",
-      message: "Invalid input: docx_base64 is not valid base64",
-      issues: [
-        { path: "docx_base64", message: "docx_base64 is not valid base64" },
-      ],
-      hint: "Base64-encode the raw DOCX bytes and pass the result as 'docx_base64'.",
-    });
+  const resolved = await resolveTemplateDocx({ context, source });
+  if (resolved.status === "error") {
+    return resolved.result;
   }
+  const { buffer } = resolved;
+  const issuePath = DOCX_SOURCE_ISSUE_PATH[source.type];
+
   if (buffer.byteLength > FILE_SIZE_LIMIT_BYTES.document) {
     return structuredErrorResult({
       code: "validation_error",
       message: "DOCX exceeds the maximum allowed size",
       issues: [
         {
-          path: "docx_base64",
+          path: issuePath,
           message: "DOCX exceeds the maximum allowed size",
         },
       ],
@@ -1877,8 +2023,8 @@ const createTemplateFromDocx = async ({
     return structuredErrorResult({
       code: "validation_error",
       message: `Invalid DOCX file: ${validation.error}`,
-      issues: [{ path: "docx_base64", message: validation.error }],
-      hint: DOCX_BASE64_FAILURE_HINT[validation.reason],
+      issues: [{ path: issuePath, message: validation.error }],
+      hint: DOCX_SOURCE_FAILURE_HINT[source.type][validation.reason],
     });
   }
 
@@ -2000,15 +2146,24 @@ const handleSaveTemplateTool: TypedMcpToolHandler<
     });
   }
 
-  // Create branch: docx_base64 and name are guaranteed present by the schema.
+  // Create branch: name and exactly one of file / docx_base64 are guaranteed
+  // present by the schema.
   return await createTemplateFromDocx({
     context,
-    docxBase64:
-      input.docx_base64 ??
-      panic("save_template create branch reached without docx_base64"),
     fields,
     name:
       input.name ?? panic("save_template create branch reached without name"),
+    source:
+      input.file === undefined
+        ? {
+            type: "base64",
+            docxBase64:
+              input.docx_base64 ??
+              panic(
+                "save_template create branch reached without a DOCX source",
+              ),
+          }
+        : { type: "file", file: input.file },
   });
 };
 

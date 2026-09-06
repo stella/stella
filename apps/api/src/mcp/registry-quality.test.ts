@@ -86,13 +86,18 @@ const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
 // below that again and the ceiling keeps the headroom.
 // default bumped 70_000 -> 70_100 for delete_task plus the uuid format on
 // entity ids and the task status/priority enums: measured 70_059 chars.
+// default bumped 70_100 -> 70_200 when save_template gained the host file
+// reference (the same four-property object upload_document_version
+// advertises): measured 70_171 chars, and the tool description shrank to pay
+// part of it back.
 const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 70_100,
+  default: 70_200,
   anonymized: 23_557,
 };
 
 // Longest description measured after plan 047: save_template at 724 chars
-// (~180 tokens). Ceiling sits ~12% above.
+// (~180 tokens), 807 after it documented the file transport. Ceiling keeps a
+// little headroom above that.
 const TOOL_DESCRIPTION_CHAR_CEILING = 810;
 
 // verb_noun style: lowercase words joined by single underscores.

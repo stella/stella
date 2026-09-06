@@ -237,7 +237,7 @@ are omitted here.
 - `stella template list`
   - optional: --template-id
 - `stella template save`
-  - optional: --template-id, --name, --docx-base64
+  - optional: --template-id, --name, --docx-base64, --file.download-url, --file.file-id, --file.mime-type, --file.file-name
 - `stella template save-filled new-document`
   - `--template-id` — Template id, as returned by list_templates (string)
   - `--matter-id` — Matter receiving the filled DOCX. (string)

@@ -2277,7 +2277,7 @@ export const generatedRouteMap: RouteNode = {
             commandPath: ["template", "fill"],
             toolName: "fill_template",
             description:
-              "Fill a template and return the rendered text; pass output_mode='docx' to also get the DOCX as base64.",
+              "Fill a template and return text plus the DOCX as base64.",
             flags: [
               {
                 flag: "--template-id",
@@ -2304,16 +2304,6 @@ export const generatedRouteMap: RouteNode = {
                 repeatable: false,
                 description:
                   "Require every placeholder by default; use allow_partial only for an intentionally incomplete document.",
-                required: false,
-              },
-              {
-                flag: "--output-mode",
-                prop: "output_mode",
-                kind: "enum",
-                enum: ["text", "docx"],
-                repeatable: false,
-                description:
-                  "text returns the rendered paragraphs and cells; docx adds the base64 archive, which is large.",
                 required: false,
               },
             ],
@@ -2345,13 +2335,6 @@ export const generatedRouteMap: RouteNode = {
                   description:
                     "Require every placeholder by default; use allow_partial only for an intentionally incomplete document.",
                   default: "require_complete",
-                },
-                output_mode: {
-                  type: "string",
-                  enum: ["text", "docx"],
-                  description:
-                    "text returns the rendered paragraphs and cells; docx adds the base64 archive, which is large.",
-                  default: "text",
                 },
               },
               required: ["template_id", "values"],
@@ -2416,16 +2399,6 @@ export const generatedRouteMap: RouteNode = {
                       "Optional DOCX file name; defaults to the template file name",
                     required: false,
                   },
-                  {
-                    flag: "--completion-mode",
-                    prop: "completion_mode",
-                    kind: "enum",
-                    enum: ["require_complete", "allow_partial"],
-                    repeatable: false,
-                    description:
-                      "Require every placeholder by default; use allow_partial only for an intentionally incomplete document.",
-                    required: false,
-                  },
                 ],
                 inputOnly: ["values"],
                 paginated: false,
@@ -2476,13 +2449,6 @@ export const generatedRouteMap: RouteNode = {
                       type: "object",
                       description: "Map of template field path to value",
                       additionalProperties: true,
-                    },
-                    completion_mode: {
-                      type: "string",
-                      enum: ["require_complete", "allow_partial"],
-                      description:
-                        "Require every placeholder by default; use allow_partial only for an intentionally incomplete document.",
-                      default: "require_complete",
                     },
                   },
                   required: [
@@ -2550,16 +2516,6 @@ export const generatedRouteMap: RouteNode = {
                       "Optional DOCX file name; defaults to the template file name",
                     required: false,
                   },
-                  {
-                    flag: "--completion-mode",
-                    prop: "completion_mode",
-                    kind: "enum",
-                    enum: ["require_complete", "allow_partial"],
-                    repeatable: false,
-                    description:
-                      "Require every placeholder by default; use allow_partial only for an intentionally incomplete document.",
-                    required: false,
-                  },
                 ],
                 inputOnly: ["values"],
                 paginated: false,
@@ -2611,13 +2567,6 @@ export const generatedRouteMap: RouteNode = {
                       description: "Map of template field path to value",
                       additionalProperties: true,
                     },
-                    completion_mode: {
-                      type: "string",
-                      enum: ["require_complete", "allow_partial"],
-                      description:
-                        "Require every placeholder by default; use allow_partial only for an intentionally incomplete document.",
-                      default: "require_complete",
-                    },
                   },
                   required: [
                     "action",
@@ -2638,7 +2587,7 @@ export const generatedRouteMap: RouteNode = {
             commandPath: ["template", "save"],
             toolName: "save_template",
             description:
-              "Create a template from a DOCX, or configure its fields.",
+              "Create a template from a DOCX, or configure an existing template's fields.",
             flags: [
               {
                 flag: "--template-id",
@@ -2662,7 +2611,40 @@ export const generatedRouteMap: RouteNode = {
                 kind: "string",
                 repeatable: false,
                 description:
-                  "Original .docx bytes, base64-encoded verbatim; required when creating. Never strip parts out of the file to shrink it.",
+                  "Original .docx bytes, base64-encoded verbatim; the fallback for creating when the host cannot supply 'file'. Never strip parts out of the file to shrink it.",
+                required: false,
+              },
+              {
+                flag: "--file.download-url",
+                prop: "file.download_url",
+                kind: "string",
+                repeatable: false,
+                description:
+                  "Temporary URL supplied by the host for downloading the file",
+                required: false,
+              },
+              {
+                flag: "--file.file-id",
+                prop: "file.file_id",
+                kind: "string",
+                repeatable: false,
+                description: "Host-assigned identifier for the attached file",
+                required: false,
+              },
+              {
+                flag: "--file.mime-type",
+                prop: "file.mime_type",
+                kind: "string",
+                repeatable: false,
+                description: "MIME type reported by the host",
+                required: false,
+              },
+              {
+                flag: "--file.file-name",
+                prop: "file.file_name",
+                kind: "string",
+                repeatable: false,
+                description: "Original file name reported by the host",
                 required: false,
               },
             ],
@@ -2692,7 +2674,34 @@ export const generatedRouteMap: RouteNode = {
                   minLength: 1,
                   maxLength: 69905068,
                   description:
-                    "Original .docx bytes, base64-encoded verbatim; required when creating. Never strip parts out of the file to shrink it.",
+                    "Original .docx bytes, base64-encoded verbatim; the fallback for creating when the host cannot supply 'file'. Never strip parts out of the file to shrink it.",
+                },
+                file: {
+                  type: "object",
+                  properties: {
+                    download_url: {
+                      type: "string",
+                      description:
+                        "Temporary URL supplied by the host for downloading the file",
+                    },
+                    file_id: {
+                      type: "string",
+                      description:
+                        "Host-assigned identifier for the attached file",
+                    },
+                    mime_type: {
+                      type: "string",
+                      description: "MIME type reported by the host",
+                    },
+                    file_name: {
+                      type: "string",
+                      description: "Original file name reported by the host",
+                    },
+                  },
+                  required: ["download_url", "file_id"],
+                  additionalProperties: false,
+                  description:
+                    "File reference supplied by a compatible MCP host",
                 },
                 fields: {
                   type: "array",
@@ -37919,7 +37928,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "templates", "fill-preview"],
                 capabilityId: "templates.fill-preview",
                 description:
-                  "Run the full fill of a stored template with the given values and return text instead of a file: the filled paragraphs, the character count, placeholders no value matched, values no marker used, and any structural errors. It does the same work as a real fill, AI-drafted fields included, so it is not a cheap dry run. values is an object mapping each field path to its value. Use templates.fill-by-id to download the document.",
+                  "Run the full fill of a stored template with the given values and return text instead of a file: the filled paragraphs, the character count, placeholders no value matched, values no marker used, and any structural errors. It does the same work as a real fill, AI-drafted fields included, so it is not a cheap dry run. Use templates.fill-by-id to download the document.",
                 access: "read",
                 flags: [
                   {
@@ -37931,8 +37940,17 @@ export const generatedRouteMap: RouteNode = {
                     part: "params",
                     partPath: "templateId",
                   },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--values",
+                    prop: "values",
+                    required: true,
+                    part: "body",
+                    partPath: "values",
+                  },
                 ],
-                inputOnly: ["body.values"],
+                inputOnly: [],
                 paginated: false,
                 destructive: false,
                 scope: "templates",
@@ -37945,10 +37963,7 @@ export const generatedRouteMap: RouteNode = {
                       required: ["values"],
                       properties: {
                         values: {
-                          type: "object",
-                          patternProperties: {
-                            "^(.*)$": {},
-                          },
+                          type: "string",
                         },
                       },
                     },

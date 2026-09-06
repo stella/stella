@@ -31,6 +31,7 @@ const fillStoredTemplateWithTextStrictMock = mock();
 const createEntityFromBufferMock = mock();
 const createEntityVersionFromBufferMock = mock();
 const createStoredTemplateMock = mock();
+const safeOutboundFetchBytesMock = mock();
 const recordTemplateFillMock = mock();
 const recordTemplateUseMock = mock();
 const claimTemplatePersistenceRequestMock = mock();
@@ -216,6 +217,7 @@ const createContext = ({
     fillStoredTemplateWithText: fillStoredTemplateWithTextMock,
     fillStoredTemplateWithTextStrict: fillStoredTemplateWithTextStrictMock,
     createStoredTemplate: createStoredTemplateMock,
+    safeOutboundFetchBytes: safeOutboundFetchBytesMock,
     recordTemplateFill: recordTemplateFillMock,
     recordTemplateUse: recordTemplateUseMock,
     claimTemplatePersistenceRequest: claimTemplatePersistenceRequestMock,
@@ -247,9 +249,9 @@ const fakeTransaction = asTestRaw<Transaction>({});
 /** A real, minimal valid DOCX (well-formed word/document.xml) as base64, so
  *  save_template (create) exercises the real validateDocxBuffer — no module mock to
  *  leak across test files. */
-const makeValidDocxBase64 = async (
+const makeValidDocxBytes = async (
   paragraphs: readonly string[] = ["{{name}}"],
-): Promise<string> => {
+): Promise<Uint8Array> => {
   const zip = new JSZip();
   const body = paragraphs
     .map((text) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`)
@@ -259,8 +261,32 @@ const makeValidDocxBase64 = async (
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
       `<w:document xmlns:w="${W_NS}"><w:body>${body}</w:body></w:document>`,
   );
-  const bytes = await zip.generateAsync({ type: "uint8array" });
-  return Buffer.from(bytes).toString("base64");
+  return await zip.generateAsync({ type: "uint8array" });
+};
+
+const makeValidDocxBase64 = async (
+  paragraphs: readonly string[] = ["{{name}}"],
+): Promise<string> =>
+  Buffer.from(await makeValidDocxBytes(paragraphs)).toString("base64");
+
+/** A host file reference pointing at `bytes`, as an MCP host would supply. */
+const hostFileResponse = (bytes: Uint8Array) =>
+  Result.ok({
+    body: bytes.buffer.slice(
+      bytes.byteOffset,
+      bytes.byteOffset + bytes.byteLength,
+    ),
+    headers: new Headers(),
+    ok: true,
+    status: 200,
+  });
+
+const HOST_FILE_REFERENCE = {
+  download_url: "https://files.example/nda.docx",
+  file_id: "file_nda",
+  file_name: "nda.docx",
+  mime_type:
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 };
 
 /** A real DOCX carrying the given paragraphs, so a fill whose result is read
@@ -289,6 +315,7 @@ describe("MCP template tools", () => {
     createEntityFromBufferMock.mockReset();
     createEntityVersionFromBufferMock.mockReset();
     createStoredTemplateMock.mockReset();
+    safeOutboundFetchBytesMock.mockReset();
     recordTemplateFillMock.mockReset();
     recordTemplateUseMock.mockReset();
     claimTemplatePersistenceRequestMock.mockReset();
@@ -2172,6 +2199,85 @@ describe("MCP template tools", () => {
     });
   });
 
+  test("save_template (create) reads the DOCX from a host file reference", async () => {
+    createStoredTemplateMock.mockImplementation(async function* () {
+      yield* [];
+      return Result.ok({ id: "tmpl_hosted", name: "NDA", fieldCount: 1 });
+    });
+    const bytes = await makeValidDocxBytes();
+    safeOutboundFetchBytesMock.mockResolvedValue(hostFileResponse(bytes));
+
+    const result = await handleMcpToolCall({
+      args: { name: "NDA", file: HOST_FILE_REFERENCE },
+      context: createContext(),
+      toolName: "save_template",
+    });
+
+    // Same SSRF-vetted fetch and byte ceiling the document upload uses.
+    expect(safeOutboundFetchBytesMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        maxBytes: FILE_SIZE_LIMIT_BYTES.document,
+        url: HOST_FILE_REFERENCE.download_url,
+      }),
+    );
+    // The downloaded bytes reach the same create path the base64 branch uses.
+    expect(createStoredTemplateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "NDA",
+        fileName: "NDA.docx",
+        buffer: Buffer.from(bytes),
+      }),
+    );
+    expect(parseToolPayload(result)).toEqual({
+      templateId: "tmpl_hosted",
+      name: "NDA",
+      fieldCount: 1,
+    });
+  });
+
+  test("save_template (create) rejects host-file bytes that are not a DOCX", async () => {
+    safeOutboundFetchBytesMock.mockResolvedValue(
+      hostFileResponse(new TextEncoder().encode("not a docx")),
+    );
+
+    const result = await handleMcpToolCall({
+      args: { name: "NDA", file: HOST_FILE_REFERENCE },
+      context: createContext(),
+      toolName: "save_template",
+    });
+
+    expect(result.isError).toBe(true);
+    const error = validationEnvelope(result);
+    expect(error["code"]).toBe("validation_error");
+    expect(error["issues"]).toEqual([
+      { path: "file", message: expect.any(String) },
+    ]);
+    // The bytes were never retyped, so the hint points at the attachment
+    // rather than at base64 encoding.
+    expect(error["hint"]).toContain("attached file");
+    expect(createStoredTemplateMock).not.toHaveBeenCalled();
+  });
+
+  test("save_template (create) reports a host file it cannot download", async () => {
+    safeOutboundFetchBytesMock.mockResolvedValue(
+      Result.err(new Error("blocked")),
+    );
+
+    const result = await handleMcpToolCall({
+      args: { name: "NDA", file: HOST_FILE_REFERENCE },
+      context: createContext(),
+      toolName: "save_template",
+    });
+
+    expect(result.isError).toBe(true);
+    const error = validationEnvelope(result);
+    expect(error["message"]).toBe("The attached file could not be downloaded");
+    expect(error["issues"]).toEqual([
+      { path: "file", message: "The attached file could not be downloaded" },
+    ]);
+    expect(createStoredTemplateMock).not.toHaveBeenCalled();
+  });
+
   test("save_template (create) rejects an invalid DOCX before inserting", async () => {
     const result = await handleMcpToolCall({
       args: {
@@ -2681,7 +2787,7 @@ describe("MCP template tools", () => {
     expect(describeStoredTemplateMock).not.toHaveBeenCalled();
   });
 
-  test("save_template rejects a request with neither docx_base64 nor template_id", async () => {
+  test("save_template rejects a request with no DOCX source and no template_id", async () => {
     const result = await handleMcpToolCall({
       args: { name: "NDA" },
       context: createContext(),
@@ -2692,9 +2798,59 @@ describe("MCP template tools", () => {
     const error = validationEnvelope(result);
     expect(error["code"]).toBe("validation_error");
     expect(error["message"]).toBe(
-      "Provide docx_base64 to create a template, or template_id to configure an existing template's fields",
+      "Provide file or docx_base64 to create a template, or template_id to configure an existing template's fields",
     );
     expect(createStoredTemplateMock).not.toHaveBeenCalled();
     expect(configureTemplateFieldsMock).not.toHaveBeenCalled();
+  });
+
+  test("save_template rejects a request carrying both DOCX sources", async () => {
+    const result = await handleMcpToolCall({
+      args: {
+        name: "NDA",
+        docx_base64: await makeValidDocxBase64(),
+        file: HOST_FILE_REFERENCE,
+      },
+      context: createContext(),
+      toolName: "save_template",
+    });
+
+    expect(result.isError).toBe(true);
+    const error = validationEnvelope(result);
+    expect(error["code"]).toBe("validation_error");
+    expect(error["message"]).toBe(
+      "Provide either file or docx_base64, not both",
+    );
+    expect(error["issues"]).toEqual([
+      { path: "file", message: "Provide either file or docx_base64, not both" },
+    ]);
+    expect(safeOutboundFetchBytesMock).not.toHaveBeenCalled();
+    expect(createStoredTemplateMock).not.toHaveBeenCalled();
+  });
+
+  test("save_template advertises file as a host file parameter", async () => {
+    const saveTemplate = (await listMcpTools(createContext())).find(
+      ({ name }) => name === "save_template",
+    );
+
+    expect(saveTemplate?._meta).toMatchObject({
+      "openai/fileParams": ["file"],
+    });
+    expect(saveTemplate?.inputSchema).toMatchObject({
+      properties: {
+        file: {
+          required: ["download_url", "file_id"],
+          properties: {
+            download_url: { type: "string" },
+            file_id: { type: "string" },
+            mime_type: { type: "string" },
+            file_name: { type: "string" },
+          },
+        },
+      },
+    });
+    // Neither source is required at the schema level; the partial checks pick
+    // exactly one at parse time.
+    expect(saveTemplate?.inputSchema.required).toEqual([]);
   });
 });
