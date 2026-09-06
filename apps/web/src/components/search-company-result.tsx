@@ -19,11 +19,11 @@ import {
   resolveExpandedRegistryCountries,
 } from "@/components/search-company-result.logic";
 import type { RegistryHit } from "@/components/templates/registry-autofill";
+import { businessRegistryConfigurationOptions } from "@/components/templates/registry-configuration-queries";
 import { LOOKUP_REGISTRY_OPTIONS } from "@/components/templates/registry-options";
+import { businessRegistryQueryOptions } from "@/components/templates/registry-queries";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { businessRegistryConfigurationOptions } from "@/lib/business-registries/configuration";
-import { businessRegistryQueryOptions } from "@/lib/business-registries/queries";
 import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
@@ -52,7 +52,9 @@ export const useCompanyRegistrySearch = (
     registry: RegistryHit["registry"];
     id: string;
   } | null>(null);
-  const jurisdictions = settings.data?.practiceJurisdictions ?? [];
+  const jurisdictions = settings.data
+    ? settings.data.practiceJurisdictions
+    : [];
   const preferredCountry =
     jurisdictions.find((entry) => entry.isPrimary)?.countryCode ??
     jurisdictions.at(0)?.countryCode ??

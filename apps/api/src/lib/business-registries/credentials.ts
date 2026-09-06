@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { createHash } from "node:crypto";
 
 import {
@@ -23,13 +24,22 @@ export const encryptRegistryCredential = async (
   credential: string,
 ) => {
   if (!envDocumentProcessingWorker.CONTENT_ENCRYPTION_KEY) {
-    throw new HandlerError({
-      status: 503,
-      code: "registry_secret_storage_unavailable",
-      message: "Secure credential storage is not configured on this server",
-    });
+    return Result.err(
+      new HandlerError({
+        status: 503,
+        code: "registry_secret_storage_unavailable",
+        message: "Secure credential storage is not configured on this server",
+      }),
+    );
   }
-  return await encryptContent(organizationId, credential);
+  return await Result.tryPromise({
+    try: async () => await encryptContent(organizationId, credential),
+    catch: () =>
+      new HandlerError({
+        status: 500,
+        message: "Could not secure registry credentials",
+      }),
+  });
 };
 
 export const bindRegistryCredential = (
@@ -109,6 +119,14 @@ export const getOrganizationRegistryHandler = async ({
   }
   const dispatch = await getOrganizationRegistryDispatch(context);
   return dispatch[registry];
+};
+
+export const getOrganizationRegistryAvailability = async (
+  context: OrganizationRegistryOptions,
+) => {
+  const dispatch = await getOrganizationRegistryDispatch(context);
+  return (registry: BusinessRegistrySlug) =>
+    dispatch[registry].isDeployAvailable();
 };
 
 export const registryConfigurationStatus = (

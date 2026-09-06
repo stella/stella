@@ -91,8 +91,8 @@ const SearchCaseLawResults = ({
     }),
   );
   const hits =
-    ready && !result.isPlaceholderData
-      ? (result.data?.pages.flatMap((page) => page.hits) ?? [])
+    ready && !result.isPlaceholderData && result.data
+      ? result.data.pages.flatMap((page) => page.hits)
       : [];
 
   return (

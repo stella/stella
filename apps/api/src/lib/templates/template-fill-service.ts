@@ -14,7 +14,10 @@ import { panic } from "better-result";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import type { SafeId } from "@/api/lib/branded-types";
-import { getOrganizationRegistryDispatch } from "@/api/lib/business-registries/credentials";
+import {
+  getOrganizationRegistryAvailability,
+  getOrganizationRegistryDispatch,
+} from "@/api/lib/business-registries/credentials";
 import { clauseBodyToRichPatch } from "@/api/lib/clauses/clause-to-patch";
 import type { ClauseBody } from "@/api/lib/clauses/types";
 import {
@@ -286,7 +289,7 @@ export type DescribeTemplateResult =
 
 /** Marker warnings from discovery, plus the ones only the configured fields
  *  can reveal (a `condition` on a path the document also prints, a lookup
- *  whose registry the organization has not enabled). */
+ *  whose registry is missing required configuration). */
 const describedWarnings = async ({
   discovered,
   fields,
@@ -304,13 +307,8 @@ const describedWarnings = async ({
       conditionPaths: discovered.conditionPaths,
       fields,
       placeholderPaths: discovered.placeholders.map(({ name }) => name),
-      registryGate: async () => {
-        const dispatch = await getOrganizationRegistryDispatch({
-          organizationId,
-          scopedDb,
-        });
-        return (registry) => dispatch[registry].isDeployAvailable();
-      },
+      loadRegistryAvailability: async () =>
+        await getOrganizationRegistryAvailability({ organizationId, scopedDb }),
     })),
   ]);
 

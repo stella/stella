@@ -18,6 +18,11 @@ import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
+import {
+  MEDIUM_DATE_FORMAT,
+  MEDIUM_DATE_SHORT_TIME_FORMAT,
+  UTC_MEDIUM_DATE_FORMAT,
+} from "@/lib/relative-time";
 import { workspaceOptions, workspacesKeys } from "@/lib/workspaces/queries";
 
 export const SearchMatterPreview = ({
@@ -63,16 +68,16 @@ export const SearchMatterPreview = ({
     {
       label: "workspaces.views.calendar.createdAt",
       value: data
-        ? format.dateTime(new Date(data.createdAt), { dateStyle: "medium" })
+        ? format.dateTime(new Date(data.createdAt), MEDIUM_DATE_FORMAT)
         : undefined,
     },
     {
       label: "workspaces.overview.recentActivity",
       value: data
-        ? format.dateTime(new Date(data.lastActivityAt), {
-            dateStyle: "medium",
-            timeStyle: "short",
-          })
+        ? format.dateTime(
+            new Date(data.lastActivityAt),
+            MEDIUM_DATE_SHORT_TIME_FORMAT,
+          )
         : undefined,
     },
   ] satisfies { label: TranslationKey; value: string | undefined }[];
@@ -153,10 +158,7 @@ const MatterPreviewActivity = ({ workspaceId }: { workspaceId: string }) => {
       items: data?.upcomingAgenda.map((item) => ({
         id: item.id,
         name: item.name,
-        date: format.dateTime(new Date(item.dueDate), {
-          dateStyle: "medium",
-          timeZone: "UTC",
-        }),
+        date: format.dateTime(new Date(item.dueDate), UTC_MEDIUM_DATE_FORMAT),
       })),
     },
     {
@@ -165,9 +167,7 @@ const MatterPreviewActivity = ({ workspaceId }: { workspaceId: string }) => {
       items: data?.recentDocuments.map((item) => ({
         id: item.id,
         name: item.name,
-        date: format.dateTime(new Date(item.updatedAt), {
-          dateStyle: "medium",
-        }),
+        date: format.dateTime(new Date(item.updatedAt), MEDIUM_DATE_FORMAT),
       })),
     },
   ] satisfies {

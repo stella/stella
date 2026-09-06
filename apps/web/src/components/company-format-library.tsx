@@ -82,7 +82,9 @@ export const useCompanyFormatLibrary = ({
     getNextPageParam: (page) => page.nextCursor ?? undefined,
   });
   const defaultFormat = saved.data?.pages.at(0)?.defaultFormat ?? null;
-  const pageFormats = saved.data?.pages.flatMap((page) => page.items) ?? [];
+  const pageFormats = saved.data
+    ? saved.data.pages.flatMap((page) => page.items)
+    : [];
   const formats = defaultFormat
     ? [
         defaultFormat,
@@ -222,20 +224,21 @@ export const CompanyFormatLibrary = ({
       <p className="text-muted-foreground text-xs">
         {t("templates.lookupFormatsSharedHint")}
       </p>
-      {library.canUpdate && (library.selected || library.builtIn) && (
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={isDefault || library.setDefault.isPending}
-          onClick={() =>
-            library.setDefault.mutate(library.selected?.id ?? null)
-          }
-        >
-          {isDefault
-            ? t("templates.defaultLookupFormat")
-            : t("billing.rates.setAsDefault")}
-        </Button>
-      )}
+      {library.canUpdate &&
+        (library.selected !== undefined || library.builtIn) && (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={isDefault || library.setDefault.isPending}
+            onClick={() =>
+              library.setDefault.mutate(library.selected?.id ?? null)
+            }
+          >
+            {isDefault
+              ? t("templates.defaultLookupFormat")
+              : t("billing.rates.setAsDefault")}
+          </Button>
+        )}
       {library.canCreate && (
         <div className="flex items-end gap-2">
           <Field className="min-w-0 flex-1">

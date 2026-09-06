@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   BUSINESS_REGISTRY_CREDENTIAL_SLUGS,
@@ -82,7 +83,12 @@ export const saveBusinessRegistryCredential = createSafeRootHandler(
         }),
       );
     }
-    if (body.registry === "edgar" && !/\S+@\S+\.\S+/u.test(credential)) {
+    if (
+      body.registry === "edgar" &&
+      !credential
+        .split(/\s+/u)
+        .some((part) => v.is(v.pipe(v.string(), v.email()), part))
+    ) {
       return Result.err(
         new HandlerError({
           status: 400,
@@ -91,20 +97,7 @@ export const saveBusinessRegistryCredential = createSafeRootHandler(
       );
     }
     const encrypted = yield* Result.await(
-      Result.tryPromise({
-        try: async () =>
-          await encryptRegistryCredential(
-            session.activeOrganizationId,
-            credential,
-          ),
-        catch: (cause) =>
-          HandlerError.is(cause)
-            ? cause
-            : new HandlerError({
-                status: 500,
-                message: "Could not secure registry credentials",
-              }),
-      }),
+      encryptRegistryCredential(session.activeOrganizationId, credential),
     );
     const probe = await executeRegistryLookup({
       handler: bindRegistryCredential(

@@ -25,12 +25,10 @@ import fillTemplatePreview from "@/api/handlers/templates/fill-preview";
 import fillTemplateToWorkspace from "@/api/handlers/templates/fill-to-workspace";
 import getTemplate from "@/api/handlers/templates/get";
 import listTemplates from "@/api/handlers/templates/list";
-import {
-  createLookupFormat,
-  deleteLookupFormat,
-  listLookupFormats,
-  setDefaultLookupFormat,
-} from "@/api/handlers/templates/lookup-formats";
+import createLookupFormat from "@/api/handlers/templates/lookup-formats/create";
+import setDefaultLookupFormat from "@/api/handlers/templates/lookup-formats/default/update";
+import deleteLookupFormat from "@/api/handlers/templates/lookup-formats/delete";
+import listLookupFormats from "@/api/handlers/templates/lookup-formats/list";
 import lookupPreview from "@/api/handlers/templates/lookup-preview";
 import manifestTemplate from "@/api/handlers/templates/manifest";
 import prefillTemplate from "@/api/handlers/templates/prefill";

@@ -33,7 +33,7 @@ export const TEMPLATE_WARNING_CODES = [
   "this_prefix",
   "split_marker",
   "condition_removes_input",
-  "registry_disabled",
+  "registry_configuration_required",
   "unmatched_lookup_format",
   ...MARKER_DEFECT_KINDS,
 ] as const;
@@ -210,11 +210,11 @@ const hasLookup = (field: OverlayField): field is LookupOverlayField =>
   field.lookup !== undefined;
 
 /**
- * Resolves the org's registry-enablement predicate. Awaited only when a field
- * actually declares a lookup, so a template without one costs no settings
+ * Resolves registry availability from organization and deployment credentials.
+ * Awaited only when a field declares a lookup, so other templates need no
  * read.
  */
-export type RegistryGate = () => Promise<
+export type RegistryAvailabilityLoader = () => Promise<
   (registry: BusinessRegistrySlug) => boolean
 >;
 
@@ -225,7 +225,7 @@ type FieldOverlayWarningOptions = {
   placeholderPaths: readonly string[];
   /** The manifest fields as configured (create overlay or stored manifest). */
   fields: readonly OverlayField[];
-  registryGate: RegistryGate;
+  loadRegistryAvailability: RegistryAvailabilityLoader;
 };
 
 /**
@@ -306,7 +306,7 @@ export const fieldOverlayWarnings = async ({
   conditionPaths,
   fields,
   placeholderPaths,
-  registryGate,
+  loadRegistryAvailability,
 }: FieldOverlayWarningOptions): Promise<TemplateWarning[]> => {
   const conditionDriven = new Set(conditionPaths);
   const valueMarkers = new Set(placeholderPaths);
@@ -327,21 +327,18 @@ export const fieldOverlayWarnings = async ({
     }
   }
 
-  // A registry the organization has not enabled is refused by the resolver at
-  // every fill, and until now only there: the save that introduced it reported
-  // nothing.
   const lookupFields = fields.filter(hasLookup);
   if (lookupFields.length > 0) {
-    const isRegistryEnabled = await registryGate();
+    const isRegistryAvailable = await loadRegistryAvailability();
     for (const { lookup, path } of lookupFields) {
-      if (isRegistryEnabled(lookup.registry)) {
+      if (isRegistryAvailable(lookup.registry)) {
         continue;
       }
       warnings.push({
-        code: "registry_disabled",
+        code: "registry_configuration_required",
         path,
-        message: `Lookup field "${path}" resolves from the ${lookup.registry} registry, which is not enabled for this organization, so every fill of the field fails at lookup time.`,
-        hint: `Enable that registry in the organization's tool settings, or replace the lookup on "${path}" with a plain input.`,
+        message: `Lookup field "${path}" resolves from the ${lookup.registry} registry, which is missing required configuration, so the field cannot be resolved at fill time.`,
+        hint: `Configure credentials for that registry, or replace the lookup on "${path}" with a plain input.`,
       });
     }
   }

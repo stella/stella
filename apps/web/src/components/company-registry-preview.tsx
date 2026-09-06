@@ -23,9 +23,9 @@ import { CompanySpecification } from "@/components/company-specification";
 import { RegistryCredentialSetup } from "@/components/registry-credential-setup";
 import type { RegistryHit } from "@/components/templates/registry-autofill";
 import type { LookupRegistryOption } from "@/components/templates/registry-options";
+import { businessRegistryQueryOptions } from "@/components/templates/registry-queries";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { businessRegistryQueryOptions } from "@/lib/business-registries/queries";
 import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
@@ -155,37 +155,37 @@ const CompanyIdentity = ({
 
 type RegistryDetailsValue = NonNullable<RegistryHit["details"]>;
 
-const REGISTRY_DATE_FIELDS = new Set([
-  "ceasedAt",
-  "ceasedOn",
-  "closedAt",
-  "createdAt",
-  "dateEstablished",
-  "dateOfCessation",
-  "dateOfCreation",
-  "dateRegistered",
-  "deletedAt",
-  "dissolvedAt",
-  "effectiveFrom",
-  "endedAt",
-  "establishedAt",
-  "filingDate",
-  "from",
-  "lastChangeDate",
-  "lastEntryAt",
-  "lastFilingDate",
-  "lastMadeUpTo",
-  "nextDue",
-  "nextMadeUpTo",
-  "openedAt",
-  "registeredAt",
-  "reportDate",
-  "requestDate",
-  "setupDate",
-  "since",
-  "terminatedAt",
-  "to",
-]);
+const REGISTRY_DATE_FIELDS = {
+  ceasedAt: true,
+  ceasedOn: true,
+  closedAt: true,
+  createdAt: true,
+  dateEstablished: true,
+  dateOfCessation: true,
+  dateOfCreation: true,
+  dateRegistered: true,
+  deletedAt: true,
+  dissolvedAt: true,
+  effectiveFrom: true,
+  endedAt: true,
+  establishedAt: true,
+  filingDate: true,
+  from: true,
+  lastChangeDate: true,
+  lastEntryAt: true,
+  lastFilingDate: true,
+  lastMadeUpTo: true,
+  nextDue: true,
+  nextMadeUpTo: true,
+  openedAt: true,
+  registeredAt: true,
+  reportDate: true,
+  requestDate: true,
+  setupDate: true,
+  since: true,
+  terminatedAt: true,
+  to: true,
+} as const;
 
 const getRegistryRecord = (details: RegistryDetailsValue) => {
   switch (details.registry) {
@@ -356,7 +356,7 @@ const RegistryDetailValue = ({
     if (registry === "ares" && detailKey === "legalForm") {
       return <bdi>{getAresLegalFormName(value) ?? value}</bdi>;
     }
-    const date = REGISTRY_DATE_FIELDS.has(detailKey)
+    const date = Object.hasOwn(REGISTRY_DATE_FIELDS, detailKey)
       ? parseIsoDateLocal(value)
       : null;
     if (date) {

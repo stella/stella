@@ -13,6 +13,7 @@ import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack
 import { assertUsageAvailableForHandler } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
+import { getOrganizationRegistryAvailability } from "@/api/lib/business-registries/credentials";
 import type {
   AssertNoExtraFields,
   LIST_TEMPLATES_LIST_PROJECTION,
@@ -28,7 +29,6 @@ import {
 } from "@/api/lib/docx/ai-field-generator";
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
 import { extractTextForPreview } from "@/api/lib/docx/extract-text";
-import { buildResolveRegistryDisabledReason } from "@/api/lib/docx/registry-org-gate";
 import type { AiFieldError } from "@/api/lib/docx/resolve-ai-fields";
 import { readManifest } from "@/api/lib/docx/template-manifest";
 import {
@@ -1805,13 +1805,11 @@ const templateAuthoringWarnings = async ({
       conditionPaths: discovered.conditionPaths,
       fields: savedManifest.fields,
       placeholderPaths: discovered.placeholders.map(({ name }) => name),
-      registryGate: async () => {
-        const resolveDisabledReason = await buildResolveRegistryDisabledReason({
+      loadRegistryAvailability: async () =>
+        await getOrganizationRegistryAvailability({
           organizationId: context.organizationId,
           scopedDb: context.scopedDb,
-        });
-        return (registry) => resolveDisabledReason(registry) === null;
-      },
+        }),
     })),
   ]);
 };

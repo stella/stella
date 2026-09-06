@@ -4,12 +4,10 @@ import { eq } from "drizzle-orm";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { templateLookupFormats } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
-import {
-  createLookupFormat,
-  deleteLookupFormat,
-  listLookupFormats,
-  setDefaultLookupFormat,
-} from "@/api/handlers/templates/lookup-formats";
+import createLookupFormat from "@/api/handlers/templates/lookup-formats/create";
+import setDefaultLookupFormat from "@/api/handlers/templates/lookup-formats/default/update";
+import deleteLookupFormat from "@/api/handlers/templates/lookup-formats/delete";
+import listLookupFormats from "@/api/handlers/templates/lookup-formats/list";
 import { createSafeId } from "@/api/lib/branded-types";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -66,11 +64,11 @@ describe("organization company format isolation", () => {
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userA1 },
     };
-    const setDefault = (
+    const setDefault = async (
       formatId: typeof formatA | null,
       registry: "ares" | "krs" = "ares",
     ) =>
-      setDefaultLookupFormat.handler(
+      await setDefaultLookupFormat.handler(
         createTestHandlerContext<
           Parameters<typeof setDefaultLookupFormat.handler>[0]
         >({ ...context, body: { registry, formatId } }),

@@ -4,5 +4,5 @@ export const CLI_SUPPORTED_API_PROTOCOLS = [1] as const;
 export const CLI_MINIMUM_SERVER_REVISION = 2;
 export const CLI_REQUIRED_CAPABILITIES = {
   "document-version-upload": 1,
-  "mcp-v2-transport": 1,
+  "mcp-v2-transport": 1
 } as const;

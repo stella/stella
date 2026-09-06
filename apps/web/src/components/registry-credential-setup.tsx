@@ -12,10 +12,10 @@ import { stellaToast } from "@stll/ui/toast";
 
 import { companySpecificationRegistryKey } from "@/components/company-specification.logic";
 import { SecretInput } from "@/components/secret-input";
+import { businessRegistryConfigurationKeys } from "@/components/templates/registry-configuration-queries";
 import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { businessRegistryConfigurationKeys } from "@/lib/business-registries/configuration";
 import { contactsKeys } from "@/lib/contacts/queries";
 import { unwrapEden } from "@/lib/errors/api";
 
