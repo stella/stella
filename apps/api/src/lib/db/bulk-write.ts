@@ -13,10 +13,15 @@ const DB_INSERT_BATCH_SIZE = 500;
  * A caller that inserts one row per loop iteration pays a round trip per row.
  * The fix is a multi-row insert, but a set with no upper bound cannot be one
  * statement: past the bind-parameter cap PostgreSQL refuses it. So the write is
- * chunked, and chunking means a loop with an await in it — which is the shape
- * `no-db-await-in-loop` exists to find. Putting that loop here means the
- * codebase holds one such suppression instead of one per call site, and the
- * batch size is one named constant rather than a number each caller remembers.
+ * chunked, and chunking means a loop with an await in it. Putting that loop
+ * here means it is written and reviewed once, and the batch size is one named
+ * constant rather than a number each caller re-derives from its table's width.
+ *
+ * Note for reviewers: `no-db-await-in-loop` does not fire on the loop below,
+ * because what is awaited is a callback parameter rather than a database
+ * handle. The rule therefore stops seeing a chunked write once it routes
+ * through here — which is the point, but it means this loop is guarded by
+ * review rather than by the rule.
  *
  * The writer is passed in rather than the table, so `values()` is still written
  * where the table is statically known and drizzle's inference for the row type
@@ -37,7 +42,6 @@ export const insertInChunks = async <TRow>(
   write: (batch: TRow[]) => Promise<unknown>,
 ): Promise<void> => {
   for (const batch of chunked(rows, DB_INSERT_BATCH_SIZE)) {
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- the one chunked-insert loop in the codebase; the bind-parameter cap forbids a single statement and every batch is already one insert
     await write(batch);
   }
 };
