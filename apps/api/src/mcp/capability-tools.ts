@@ -528,7 +528,9 @@ type PartValidation =
 /**
  * Validate one input part (`body`/`params`/`query`) against the live handler
  * config's TypeBox schema, mirroring what the Elysia route boundary hands the
- * handler: Default -> Convert -> Clean -> Check. The Clean step matches
+ * handler: Default -> Convert -> Clean -> Check, over a value a strict
+ * tool-schema client's nulls have first been read out of (see
+ * {@link withNullOptionalsOmitted}). The Clean step matches
  * Elysia's default input normalization, verified empirically on this repo's
  * Elysia (1.4.29): unknown keys on a schema'd part are STRIPPED before
  * validation — for closed (`additionalProperties: false`) schemas too, which
@@ -566,6 +568,90 @@ const schemaWithoutField = (
   return { ...schema, properties };
 };
 
+/**
+ * Keywords that constrain what a schema accepts. A schema carrying none of
+ * them (`t.Any()`, `t.Unknown()`) accepts every value, null included.
+ */
+const CONSTRAINING_KEYWORDS = [
+  "type",
+  "anyOf",
+  "oneOf",
+  "allOf",
+  "enum",
+  "const",
+  "$ref",
+] as const;
+
+/** True when the schema accepts an explicit null: `t.Null()`, a union with a
+ * null branch, a `type` list including "null", or an unconstrained schema. */
+const admitsNull = (schema: unknown): boolean => {
+  if (!isRecord(schema)) {
+    return true;
+  }
+  const type = schema["type"];
+  if (type === "null" || (isUnknownArray(type) && type.includes("null"))) {
+    return true;
+  }
+  for (const keyword of ["anyOf", "oneOf"] as const) {
+    const branches = schema[keyword];
+    if (isUnknownArray(branches) && branches.some(admitsNull)) {
+      return true;
+    }
+  }
+  return CONSTRAINING_KEYWORDS.every((keyword) => !(keyword in schema));
+};
+
+/**
+ * Read one input part with `null` under a declared optional property meaning
+ * absence, the rule `nullAsAbsent` applies to native tool inputs. A strict
+ * tool-schema client must send every property a schema declares, so it sends
+ * null for the ones it is not setting, and null is not a value here.
+ *
+ * The rule comes off the schema, never a list: a property qualifies when the
+ * schema lets it be omitted (it is not in `required`) and does not itself admit
+ * null. A "pass null to clear" nullable therefore keeps its null, a required
+ * property set to null still fails Check, and a null under an undeclared key is
+ * left for Clean to strip exactly as before. Nested objects and arrays of
+ * objects are read the same way; a union branch is not, because which branch a
+ * value belongs to is not decided yet.
+ *
+ * Exported so the registry-wide guard can run it over the committed catalog,
+ * whose part schemas are the same `advertisedSchemas` projection this validates
+ * against. Reading JSON Schema keywords rather than TypeBox's `Kind` symbols is
+ * what lets one function serve both.
+ */
+export const withNullOptionalsOmitted = (
+  schema: unknown,
+  value: unknown,
+): unknown => {
+  if (!isRecord(schema)) {
+    return value;
+  }
+  const items = schema["items"];
+  if (items !== undefined && isUnknownArray(value)) {
+    return value.map((entry) => withNullOptionalsOmitted(items, entry));
+  }
+  const properties = schema["properties"];
+  if (!isRecord(properties) || !isRecord(value)) {
+    return value;
+  }
+  const required = schema["required"];
+  const requiredNames = new Set(isUnknownArray(required) ? required : []);
+  const present: Record<string, unknown> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    const property = properties[key];
+    if (property === undefined) {
+      present[key] = entry;
+      continue;
+    }
+    if (entry === null && !requiredNames.has(key) && !admitsNull(property)) {
+      continue;
+    }
+    present[key] = withNullOptionalsOmitted(property, entry);
+  }
+  return present;
+};
+
 const validatePart = (
   part: "body" | "params" | "query",
   schema: TSchema | undefined,
@@ -577,7 +663,13 @@ const validatePart = (
   // Object schemas are the norm; default an absent value to `{}` so required
   // fields surface as issues rather than a whole-object "expected object" error.
   const base = value === undefined ? {} : structuredClone(value);
-  const withDefaults = Value.Default(schema, base);
+  // Ahead of the chain, not just ahead of Check: a dropped null must take the
+  // property's declared default and must never reach Convert, so the part reads
+  // exactly as it would from a client that omitted the property.
+  const withDefaults = Value.Default(
+    schema,
+    withNullOptionalsOmitted(schema, base),
+  );
   const coerced = Value.Convert(schema, withDefaults);
   const cleaned = Value.Clean(schema, coerced);
   if (Value.Check(schema, cleaned)) {

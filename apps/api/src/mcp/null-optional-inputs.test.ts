@@ -3,6 +3,9 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import * as v from "valibot";
 
+import capabilityCatalog from "@stll/cli/capability-catalog.json";
+
+import { withNullOptionalsOmitted } from "@/api/mcp/capability-tools";
 import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 
 /**
@@ -43,20 +46,25 @@ const advertisesNull = (schema: unknown): boolean => {
 
 /** Advertised properties a client may omit and that carry no meaning for
  * null: exactly the ones a strict client will send as null. */
-const optionalProperties = (definition: {
-  inputSchema: { properties?: Record<string, unknown>; required?: unknown };
-}): string[] => {
-  const { properties, required } = definition.inputSchema;
+const optionalProperties = (schema: unknown): string[] => {
+  if (!isRecord(schema)) {
+    return [];
+  }
+  const properties = schema["properties"];
+  const required = schema["required"];
   const requiredNames = new Set(
     Array.isArray(required)
       ? required.filter((name) => typeof name === "string")
       : [],
   );
-  return Object.entries(properties ?? {})
-    .filter(
-      ([name, schema]) => !requiredNames.has(name) && !advertisesNull(schema),
-    )
-    .map(([name]) => name);
+  return isRecord(properties)
+    ? Object.entries(properties)
+        .filter(
+          ([name, property]) =>
+            !requiredNames.has(name) && !advertisesNull(property),
+        )
+        .map(([name]) => name)
+    : [];
 };
 
 describe("MCP tool inputs read null as an omitted optional property", () => {
@@ -96,7 +104,7 @@ describe("MCP tool inputs read null as an omitted optional property", () => {
     const divergent: string[] = [];
     for (const definition of definitionsWithRuntimeSchema) {
       const omitted = parseOutcome(definition.inputSchemaSource, {});
-      for (const property of optionalProperties(definition)) {
+      for (const property of optionalProperties(definition.inputSchema)) {
         const withNull = parseOutcome(definition.inputSchemaSource, {
           [property]: null,
         });
@@ -109,6 +117,66 @@ describe("MCP tool inputs read null as an omitted optional property", () => {
     expect(
       divergent,
       `Setting these optional properties to null does not read as omitting them, so a strict tool-schema client that must send every property cannot call the tool: ${divergent.join(", ")}.`,
+    ).toEqual([]);
+  });
+
+  /**
+   * A property a client can read as accepting anything: it advertises no type
+   * and no branches, so `t.Any()` / `t.Unknown()` land here and their null is a
+   * value the handler asked for, not an unset property.
+   */
+  const acceptsAnything = (schema: unknown): boolean =>
+    isRecord(schema) &&
+    !("type" in schema) &&
+    !("anyOf" in schema) &&
+    !("oneOf" in schema);
+
+  /**
+   * Unlike the native tools, the capability path runs one chain for every
+   * capability, so there is no per-capability opt-in to forget. What this buys
+   * is coverage: `withNullOptionalsOmitted` is run over every part schema the
+   * committed catalog carries (the same `advertisedSchemas` projection
+   * `invoke_capability` validates against), so a schema shape it mishandles
+   * shows up as a property it rewrote or one whose null it carried through.
+   */
+  test("every optional capability property reads null as omission", () => {
+    const rewritten: string[] = [];
+    const carriedThrough: string[] = [];
+    for (const entry of capabilityCatalog) {
+      const schema: unknown = entry.inputSchema;
+      if (!isRecord(schema)) {
+        continue;
+      }
+      for (const part of ["body", "params", "query"] as const) {
+        const partSchema = schema[part];
+        if (!isRecord(partSchema) || !isRecord(partSchema["properties"])) {
+          continue;
+        }
+        const properties = partSchema["properties"];
+        for (const property of optionalProperties(partSchema)) {
+          const label = `${entry.id}.${part}.${property}`;
+          const read = JSON.stringify(
+            withNullOptionalsOmitted(partSchema, { [property]: null }),
+          );
+          if (read === "{}") {
+            continue;
+          }
+          if (read !== JSON.stringify({ [property]: null })) {
+            rewritten.push(label);
+          } else if (!acceptsAnything(properties[property])) {
+            carriedThrough.push(label);
+          }
+        }
+      }
+    }
+
+    expect(
+      rewritten,
+      `Reading a null under these capability properties rewrote the input instead of dropping the property: ${rewritten.join(", ")}.`,
+    ).toEqual([]);
+    expect(
+      carriedThrough,
+      `These capability properties are optional and constrain their value without admitting null, yet their null reaches validation as a value: ${carriedThrough.join(", ")}.`,
     ).toEqual([]);
   });
 

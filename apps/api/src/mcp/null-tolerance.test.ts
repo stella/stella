@@ -19,21 +19,20 @@ import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
  *    Elysia-parity TypeBox chain Default -> Convert -> Clean -> Check over the
  *    live handler config schemas.
  *
- * Pinned behavior, which differs between the two paths:
- *  - Static curated tools read null on a PLAIN optional field as the omission
- *    a strict tool-schema client means by it: the property is dropped before
- *    validation, so the call behaves exactly as if it had been left out. A
- *    strict client must send every declared property, so rejecting the null
- *    would make those tools uncallable.
- *  - The capability invoke path still REJECTS null on a plain optional field
- *    with a `validation_error` envelope carrying `issues:[{path,message}]`.
- *    Its input is a nested `input` object the model composes deliberately,
- *    not the tool's own declared property set.
- *  - On BOTH paths, null on a NULLABLE field (declared `type: ["string","null"]`
- *    / `v.optional(v.nullable(...))` / a TypeBox null-union, the "pass null to
+ * One rule, pinned identically on both:
+ *  - null on a PLAIN optional field (no null in its type) is ABSENCE. The
+ *    property is dropped before validation, so the call behaves exactly as if
+ *    it had been left out and takes the field's declared default. A strict
+ *    client must send every property a schema declares, so reading its null as
+ *    a value would make those surfaces uncallable.
+ *  - null on a NULLABLE field (declared `type: ["string","null"]` /
+ *    `v.optional(v.nullable(...))` / a TypeBox null-union, the "pass null to
  *    clear" convention) is ACCEPTED and passes through as a real null.
+ *  - null never reaches a handler as the value of a plain optional field.
  *
- * On neither path does an unexpected null leak past validation into a handler.
+ * Only DECLARED optional properties are read this way, so a required field set
+ * to null still fails, and a null under a key the schema does not declare is
+ * handled exactly as any other value under that key.
  */
 
 const emptyScopedDb = asTestRaw<McpRequestContext["scopedDb"]>(
@@ -271,53 +270,111 @@ describe("static tools accept explicit null on nullable ('pass null to clear') f
 
 // --- Path 2: capability invoke path (TypeBox Default->Convert->Clean->Check) --
 
-describe("invoke_capability rejects explicit null on plain optional fields", () => {
-  // Each case sets one plain (non-nullable) optional field to null; the TypeBox
-  // Check fails and the envelope carries a dot-path issue an agent can place.
+describe("invoke_capability reads explicit null on plain optional fields as omission", () => {
+  // A contact body with everything the schema requires, so each case below
+  // differs from its omitted twin in exactly the one null under test.
+  const contact = {
+    id: "0d0d3b3c-3a55-4f9d-9d3f-2c9b1c9a8f10",
+    type: "person",
+    displayName: "Ada Lovelace",
+  };
+
   const cases: {
     label: string;
     capability: string;
-    input: Record<string, unknown>;
-    pathPrefix: string;
+    withNull: Record<string, unknown>;
+    omitted: Record<string, unknown>;
   }[] = [
     {
       label: "time-entries.export-csv query.status",
       capability: "time-entries.export-csv",
-      input: { params: { matterId: "ws_1" }, query: { status: null } },
-      pathPrefix: "query.status",
+      withNull: { params: { matterId: "ws_1" }, query: { status: null } },
+      omitted: { params: { matterId: "ws_1" }, query: {} },
     },
     {
       label: "clauses.categories-create body.parentId",
       capability: "clauses.categories-create",
-      input: { body: { name: "X", parentId: null } },
-      pathPrefix: "body.parentId",
+      withNull: { body: { name: "X", parentId: null } },
+      omitted: { body: { name: "X" } },
     },
+    // One level down: a nested object property, read the same way as the part
+    // root so a strict client's nulls do not have to stop at the top level.
     {
-      label: "tasks.calendar body.datePropertyIds",
-      capability: "tasks.calendar",
-      input: {
+      label: "contacts.create body.billingAddress.city",
+      capability: "contacts.create",
+      withNull: {
+        body: {
+          ...contact,
+          billingAddress: { line1: "1 Main St", city: null },
+        },
+      },
+      omitted: {
+        body: { ...contact, billingAddress: { line1: "1 Main St" } },
+      },
+    },
+    // And inside an array of objects.
+    {
+      label: "contacts.create body.emails[].label",
+      capability: "contacts.create",
+      withNull: {
+        body: {
+          ...contact,
+          emails: [
+            {
+              type: "work",
+              address: "ada@example.com",
+              isPrimary: true,
+              label: null,
+            },
+          ],
+        },
+      },
+      omitted: {
+        body: {
+          ...contact,
+          emails: [
+            { type: "work", address: "ada@example.com", isPrimary: true },
+          ],
+        },
+      },
+    },
+  ];
+
+  for (const { label, capability, withNull, omitted } of cases) {
+    test(`${label}: null reads exactly as omitting it`, async () => {
+      const result = await invokeValidateOnly(capability, withNull);
+      // Asserting validity, not only equality, keeps the case from passing
+      // because both calls failed for some unrelated reason.
+      expect(parsePayload(result)).toEqual({ valid: true, capability });
+      expect(JSON.stringify(result)).toBe(
+        JSON.stringify(await invokeValidateOnly(capability, omitted)),
+      );
+    });
+  }
+
+  // A required property is not optional, so its null is still a value the
+  // schema rejects, with a dot-path issue an agent can place.
+  test("tasks.calendar body.datePropertyIds: null on a required field still fails", async () => {
+    const error = errorEnvelope(
+      await invokeValidateOnly("tasks.calendar", {
         params: { matterId: "ws_1" },
         body: {
           dateFrom: "2026-01-01T00:00:00.000Z",
           dateTo: "2026-01-31T00:00:00.000Z",
           datePropertyIds: null,
         },
-      },
-      pathPrefix: "body.datePropertyIds",
-    },
-  ];
+      }),
+    );
 
-  for (const { label, capability, input, pathPrefix } of cases) {
-    test(`${label}: null -> validation_error with a dot-path issue`, async () => {
-      const error = errorEnvelope(await invokeValidateOnly(capability, input));
-      expect(error?.code).toBe("validation_error");
-      expect(
-        error?.issues.some((issue) => issue.path.startsWith(pathPrefix)),
-      ).toBe(true);
-      // Refused at validation, before any execution/org-settings load.
-      expect(loadOrgSettingsMock).not.toHaveBeenCalled();
-    });
-  }
+    expect(error?.code).toBe("validation_error");
+    expect(
+      error?.issues.some((issue) =>
+        issue.path.startsWith("body.datePropertyIds"),
+      ),
+    ).toBe(true);
+    // Refused at validation, before any execution/org-settings load.
+    expect(loadOrgSettingsMock).not.toHaveBeenCalled();
+  });
 });
 
 describe("invoke_capability accepts explicit null on nullable fields", () => {
