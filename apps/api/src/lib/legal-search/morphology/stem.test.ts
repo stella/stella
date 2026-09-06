@@ -338,6 +338,27 @@ describe("remembered stems", () => {
     }
   });
 
+  test("a term too long to remember still stems like the algorithm", () => {
+    // Tokenisation caps no length, so a malformed payload can hand the module
+    // a token of any size. Those are not memoized (the memo's key ceiling),
+    // which must cost the caller nothing but a recomputation.
+    const stemmer = new CzechStemmer();
+    for (const length of [8, 66, 67, 5000]) {
+      const term = `${"rozhodnut".repeat(length)}ími`.slice(0, length);
+      const normalized = term.normalize("NFC").toLowerCase();
+      const expected = stemmer.stem(normalized);
+
+      expect<[number, string]>([length, stemLegalTerm(term, "cs")]).toEqual([
+        length,
+        expected === "" ? normalized : expected,
+      ]);
+      expect<[number, string]>([length, stemLegalTerm(term, "cs")]).toEqual([
+        length,
+        expected === "" ? normalized : expected,
+      ]);
+    }
+  });
+
   test("one term stems the same under every language that reads it", () => {
     // The shared memo is keyed by language as well as term; a key collision
     // would make whichever language asked first answer for the rest.

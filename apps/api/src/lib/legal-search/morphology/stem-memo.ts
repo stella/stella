@@ -14,6 +14,11 @@
  * use when the young generation fills is promoted out of the old one instead
  * of being lost at the rotation boundary, so a working set that fits the
  * ceiling survives rotations.
+ *
+ * The ceiling is on entries *and* on key length. Counting entries alone
+ * bounds memory only if entries are of bounded size, which is not something a
+ * memo can assume of its caller's keys: one pathological key would otherwise
+ * stay resident until tens of thousands of ordinary ones displaced it.
  */
 
 export type BoundedMemo = {
@@ -27,12 +32,29 @@ export type BoundedMemo = {
   size: () => number;
 };
 
-/**
- * @param maxEntries Entries the young generation holds before it rotates.
- * Live entries are bounded by twice this, since the previous generation is
- * retained until the next rotation.
- */
-export const createBoundedMemo = (maxEntries: number): BoundedMemo => {
+type BoundedMemoOptions = {
+  /**
+   * Entries the young generation holds before it rotates. Live entries are
+   * bounded by twice this, since the previous generation is retained until
+   * the next rotation.
+   */
+  maxEntries: number;
+  /**
+   * Longest key the memo will retain. A key past it is computed and returned
+   * but never stored, so the resident bytes are bounded by the entry ceiling
+   * times this rather than by the entry ceiling alone.
+   *
+   * The two ceilings are not interchangeable, and only together do they bound
+   * memory: a caller whose keys have no natural length limit can otherwise
+   * pin arbitrarily many bytes in a structure that counts only entries.
+   */
+  maxKeyLength: number;
+};
+
+export const createBoundedMemo = ({
+  maxEntries,
+  maxKeyLength,
+}: BoundedMemoOptions): BoundedMemo => {
   let young = new Map<string, string>();
   let old = new Map<string, string>();
   const remember = (key: string, value: string): string => {
@@ -45,6 +67,9 @@ export const createBoundedMemo = (maxEntries: number): BoundedMemo => {
   };
   return {
     get: (key, compute) => {
+      if (key.length > maxKeyLength) {
+        return compute();
+      }
       const fresh = young.get(key);
       if (fresh !== undefined) {
         return fresh;

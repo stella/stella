@@ -125,11 +125,32 @@ const STEMMERS = {
  * Sized against one indexing batch rather than the corpus: a batch of a few
  * hundred documents carries a few hundred thousand tokens over tens of
  * thousands of distinct terms, so a ceiling in this range answers nearly
- * every repeat inside a batch while the retained entries (at most twice this,
- * across both generations) stay a few megabytes. A larger ceiling would buy
- * hits only across batches, where the term distribution has already moved.
+ * every repeat inside a batch. A larger ceiling would buy hits only across
+ * batches, where the term distribution has already moved. Retained entries
+ * are at most twice this across both generations, each bounded in size by
+ * {@link STEM_MEMO_MAX_KEY_LENGTH}; the two ceilings together are what put a
+ * number on the memory.
  */
 const STEM_MEMO_MAX_ENTRIES = 50_000;
+
+/**
+ * Longest memo key: 64 characters of term, plus the two-character language
+ * prefix.
+ *
+ * Tokenisation splits on anything that is not a letter or a digit but caps no
+ * length, and a corpus payload may be tens of millions of characters, so a
+ * single malformed document can hand this module a token of arbitrary size.
+ * Counting entries would then bound the memo's population but not its bytes,
+ * and one such token would stay resident until tens of thousands of ordinary
+ * terms displaced it. Past the ceiling a term is still stemmed, just not
+ * remembered — it is a term that occurs once, which is precisely the case a
+ * memo cannot pay for.
+ *
+ * 64 clears every word any of these algorithms is written for, German and
+ * Finnish compounds included, by a wide margin. A stem never grows past its
+ * term (see stem.property.test.ts), so bounding the key bounds the value too.
+ */
+const STEM_MEMO_MAX_KEY_LENGTH = 66;
 
 /**
  * Stems already computed, across every language.
@@ -147,7 +168,10 @@ const STEM_MEMO_MAX_ENTRIES = 50_000;
  * can spell its way into another language's entry (`stem.test.ts` holds the
  * language list to that width).
  */
-const stemMemo = createBoundedMemo(STEM_MEMO_MAX_ENTRIES);
+const stemMemo = createBoundedMemo({
+  maxEntries: STEM_MEMO_MAX_ENTRIES,
+  maxKeyLength: STEM_MEMO_MAX_KEY_LENGTH,
+});
 
 /**
  * Reduce a term to its stem for the given language.
