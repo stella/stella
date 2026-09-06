@@ -80,6 +80,9 @@ const createMiddlewareContext = ({
   iteration,
   chunkIndex: 0,
   abort: () => undefined,
+  // The engine pushes CUSTOM chunks onto the stream through this; the
+  // analytics callbacks under test only read the context.
+  emitCustomEvent: () => undefined,
   context: undefined,
   defer: (promise) => {
     deferred.push(promise);
