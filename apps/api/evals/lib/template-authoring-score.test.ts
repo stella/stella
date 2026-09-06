@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import type { AuthoredBlock, SaveAttempt } from "./template-authoring-score";
 import {
+  checkSourceFidelity,
   cleanRoundTrip,
   comparePaths,
   detectGrammarTraps,
@@ -70,6 +71,19 @@ describe("detectGrammarTraps", () => {
     expect(counts.block_marker_inline).toBe(1);
   });
 
+  test("two block directives in one paragraph share it, even with no other text", () => {
+    expect(traps([paragraph("{{#if penalty}}{{/if}}")]).block_marker_inline).toBe(
+      1,
+    );
+    expect(
+      traps([
+        paragraph("{{#if penalty}}"),
+        paragraph("A penalty applies."),
+        paragraph("{{/if}}"),
+      ]).block_marker_inline,
+    ).toBe(0);
+  });
+
   test("per-language paths for one value collapse to a language_variant_path", () => {
     const counts = traps([
       paragraph("Podpisano {{signing_date_pl}}"),
@@ -136,6 +150,31 @@ describe("detectGrammarTraps", () => {
   });
 });
 
+describe("checkSourceFidelity", () => {
+  const preserved = ["DOHODA O MLČENLIVOSTI", "se řídí právem"];
+
+  test("wording that survives around the markers passes, whitespace aside", () => {
+    expect(
+      checkSourceFidelity({
+        authored: [
+          "DOHODA   O MLČENLIVOSTI",
+          "Tato dohoda se řídí\nprávem {{rozhodne_pravo}}.",
+        ],
+        preservedPhrases: preserved,
+      }),
+    ).toEqual([]);
+  });
+
+  test("a skeleton of bare markers reports every dropped phrase", () => {
+    expect(
+      checkSourceFidelity({
+        authored: ["{{strana_a}}", "{{rozhodne_pravo}}"],
+        preservedPhrases: preserved,
+      }),
+    ).toEqual(['dropped "DOHODA O MLČENLIVOSTI"', 'dropped "se řídí právem"']);
+  });
+});
+
 describe("comparePaths", () => {
   test("reports what the brief asked for and what the model added", () => {
     expect(comparePaths(["a", "b"], ["b", "c"])).toEqual({
@@ -158,6 +197,7 @@ describe("scoreAuthoringRun", () => {
     }),
     overlayIssues: [],
     configDefects: [],
+    fidelity: [],
     roundTrip: cleanRoundTrip(),
   });
 
@@ -184,6 +224,12 @@ describe("scoreAuthoringRun", () => {
           ...savedAttempt(),
           roundTrip: { ...cleanRoundTrip(), conditionalRowKept: true },
         },
+      }).outcome,
+    ).toBe("partial");
+    expect(
+      scoreAuthoringRun({
+        turnError: null,
+        attempt: { ...savedAttempt(), fidelity: ['dropped "MIETVERTRAG"'] },
       }).outcome,
     ).toBe("partial");
   });

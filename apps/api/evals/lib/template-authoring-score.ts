@@ -51,7 +51,7 @@ export const GRAMMAR_TRAP_CODES = [
   "bracket_index",
   /** One value given a per-language path (`date_pl` beside `date_en`). */
   "language_variant_path",
-  /** A block directive sharing its paragraph with other text or markers. */
+  /** A block directive sharing its paragraph with text or another directive. */
   "block_marker_inline",
   /** A lookup declared per leaf (`company.krs`) instead of one parent with formats. */
   "lookup_not_parent",
@@ -208,7 +208,9 @@ export const detectGrammarTraps = ({
         remainder =
           remainder.slice(0, marker.start) + remainder.slice(marker.end);
       }
-      if (remainder.trim() !== "") {
+      // Two block directives in one paragraph (`{{#if x}}{{/if}}`) leave an
+      // empty remainder, yet neither occupies a paragraph of its own.
+      if (remainder.trim() !== "" || blockMarkers.length > 1) {
         counts.block_marker_inline += 1;
       }
     }
@@ -271,6 +273,31 @@ export const detectGrammarTraps = ({
   return counts;
 };
 
+/** Whitespace differences are formatting, not lost wording. */
+const normalizeWording = (text: string): string =>
+  text.replaceAll(/\s+/gu, " ").trim();
+
+/**
+ * Source wording the authored template failed to carry over. Markers replace
+ * the values a template makes fillable; everything else, headings and clauses
+ * included, has to survive, or a model could earn a pass by emitting a
+ * skeleton of bare markers.
+ */
+export const checkSourceFidelity = ({
+  authored,
+  preservedPhrases,
+}: {
+  /** Every paragraph of the authored document, cells included. */
+  authored: readonly string[];
+  /** Source wording that no marker replaces, so it must appear verbatim. */
+  preservedPhrases: readonly string[];
+}): string[] => {
+  const text = normalizeWording(authored.join("\n"));
+  return preservedPhrases
+    .filter((phrase) => !text.includes(normalizeWording(phrase)))
+    .map((phrase) => `dropped "${phrase}"`);
+};
+
 type PathComparison = {
   missing: string[];
   extra: string[];
@@ -293,9 +320,10 @@ export const comparePaths = (
 export type RoundTripDefects = {
   /** A literal `{{` left in the rendered text. */
   leftoverMarkers: number;
-  /** Repeated rows rendered with an empty cell where a value belongs. */
+  /** Repeated units that did not render exactly once with all their values:
+   *  missing, blank, or duplicated. */
   blankRepeatedRows: number;
-  /** A `{{#if}}` row whose flag is false that is still in the table. */
+  /** A `{{#if}}` block whose flag is false whose content is still present. */
   conditionalRowKept: boolean;
   /** A date field rendered outside the locale and style it asked for. */
   dateLocaleMismatch: boolean;
@@ -329,6 +357,9 @@ export type SaveAttempt =
       traps: GrammarTrapCounts;
       overlayIssues: readonly string[];
       configDefects: readonly string[];
+      /** Source wording the template dropped: marking values fillable must
+       *  not licence rewriting or deleting the rest of the document. */
+      fidelity: readonly string[];
       roundTrip: RoundTripDefects;
     };
 
@@ -345,6 +376,7 @@ export type AuthoringRunScore = {
   traps: GrammarTrapCounts;
   overlayIssues: readonly string[];
   configDefects: readonly string[];
+  fidelity: readonly string[];
   roundTrip: RoundTripDefects;
   /** Why the run is not a `pass`, when the reason is not a defect list. */
   note: string | null;
@@ -362,6 +394,7 @@ const emptyScore = (): Omit<AuthoringRunScore, "outcome" | "note"> => ({
   traps: zeroTrapCounts(),
   overlayIssues: [],
   configDefects: [],
+  fidelity: [],
   roundTrip: cleanRoundTrip(),
 });
 
@@ -406,6 +439,7 @@ export const scoreAuthoringRun = ({
         Object.values(attempt.traps).every((count) => count === 0) &&
         attempt.overlayIssues.length === 0 &&
         attempt.configDefects.length === 0 &&
+        attempt.fidelity.length === 0 &&
         !hasRoundTripDefect(attempt.roundTrip);
       return {
         outcome: clean ? "pass" : "partial",
@@ -413,6 +447,7 @@ export const scoreAuthoringRun = ({
         traps: attempt.traps,
         overlayIssues: attempt.overlayIssues,
         configDefects: attempt.configDefects,
+        fidelity: attempt.fidelity,
         roundTrip: attempt.roundTrip,
         note: null,
       };

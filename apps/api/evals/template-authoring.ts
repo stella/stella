@@ -34,6 +34,7 @@
  *   overlay       production validation issues (schema, mutually exclusive
  *                 derived sources, a `path` matching no marker)
  *   config        field configuration the brief asked for and did not get
+ *   fidelity      source wording the template dropped instead of keeping
  *   round trip    leftover `{{`, blank repeated rows, a conditional row that
  *                 was not dropped, a date outside its requested locale
  *   tokens, ms
@@ -42,11 +43,17 @@
  * JSON object, scored exactly. Its wrong answers are reported in the
  * `missing` column.
  *
- * Some traps are expected to fail until the engine PRs land: a row-mode
- * `{{#if}}` is not dropped today, save time emits no marker warnings, and a
- * lookup parent's format markers only fold away once the manifest declares
- * them. The eval measures the contract, not today's code, so those columns
- * are a backlog, not a regression.
+ * Two tasks cannot pass on today's engine, by design: the eval measures the
+ * contract, not the current code, so these columns are a backlog rather than
+ * a regression.
+ *   - `pl-en-poa`: discovery reports a marker with dotted children
+ *     (`{{company}}` beside `{{company.address}}`) as kind `object`, and the
+ *     merge drops object parents, so `company` is not a configurable path and
+ *     the overlay is rejected. One lookup parent with named formats needs
+ *     that parent discoverable first.
+ *   - `en-sow-table`: a row-mode `{{#if}}` has its paragraphs stripped but
+ *     its row left in the table, so the row is never dropped.
+ * Save time also emits no marker warnings yet.
  *
  * Registry lookups and contact bindings are neutralized before the fill: the
  * eval has no matter and must not call a business registry, so those fields
@@ -113,6 +120,7 @@ import type {
   SaveAttempt,
 } from "./lib/template-authoring-score";
 import {
+  checkSourceFidelity,
   cleanRoundTrip,
   comparePaths,
   detectGrammarTraps,
@@ -142,7 +150,7 @@ const SAVE_TEMPLATE_TOOL_NAME = "save_template";
 const WRITE_DOCX_TOOL_NAME = "write_docx";
 const ANSWER_SYNTAX_TOOL_NAME = "answer_syntax_questions";
 
-const SYSTEM_PROMPT = [
+const AUTHORING_SYSTEM_PROMPT = [
   "You are stella, a drafting assistant for lawyers. The user gives you a",
   "source document and asks for a reusable template. Mark the fillable",
   `values with {{markers}}, write the file with ${WRITE_DOCX_TOOL_NAME}, then`,
@@ -151,6 +159,16 @@ const SYSTEM_PROMPT = [
   "the document's wording exactly as given; only replace the values that",
   "become fields. The two reference resources below are the complete",
   "grammar and configuration contract; follow them literally.",
+].join(" ");
+
+// The quiz executes no authoring tool, so it must not be told to call them:
+// a prompt naming unavailable tools would score prompt/tool mismatch rather
+// than grammar comprehension.
+const QUIZ_SYSTEM_PROMPT = [
+  "You are stella, a drafting assistant for lawyers. Answer the user's",
+  `questions about the template marker grammar by calling the one tool you`,
+  "have. The two reference resources below are the complete grammar and",
+  "configuration contract; answer from them literally.",
 ].join(" ");
 
 const REFERENCE_RESOURCES = [
@@ -259,6 +277,14 @@ const readDocxBlocks = async (buffer: Buffer): Promise<AuthoredBlock[]> => {
   }
   return blocks;
 };
+
+/** Every paragraph of a document, table cells included, in order. */
+const authoredParagraphs = (blocks: readonly AuthoredBlock[]): string[] =>
+  blocks.flatMap((block) =>
+    block.type === "paragraph"
+      ? [block.text]
+      : block.rows.flatMap((row) => [...row]),
+  );
 
 /** The document as the model reads it: one line per paragraph, a table
  *  rendered as pipe-separated rows so its shape survives into the prompt. */
@@ -558,6 +584,9 @@ type EvalTask = {
   /** Paths a person answers as a yes/no question: a `condition` on one of
    *  them is the tick-box confusion, not a rule. */
   booleanInputPaths: readonly string[];
+  /** Source wording no marker replaces, so the template must keep it
+   *  verbatim. Without this a bare skeleton of markers would score a pass. */
+  preservedPhrases: readonly string[];
   /** Fixed values for the round trip, keyed by the paths the brief names. */
   fillValues: Record<string, unknown>;
   /** Configuration the brief asked for, checked on the saved manifest. */
@@ -625,6 +654,10 @@ const POA_SOURCE: AuthoredBlock[] = [
   },
 ];
 
+const NDA_PENALTY_CLAUSE =
+  "Za každé porušení povinnosti mlčenlivosti se sjednává smluvní pokuta ve " +
+  "výši 100 000 Kč.";
+
 const NDA_SOURCE: AuthoredBlock[] = [
   { type: "paragraph", text: "DOHODA O MLČENLIVOSTI" },
   {
@@ -634,12 +667,7 @@ const NDA_SOURCE: AuthoredBlock[] = [
       "společností Bohemia Data a.s.",
   },
   { type: "paragraph", text: "Dohoda nabývá účinnosti dne 1. dubna 2026." },
-  {
-    type: "paragraph",
-    text:
-      "Za každé porušení povinnosti mlčenlivosti se sjednává smluvní pokuta " +
-      "ve výši 100 000 Kč.",
-  },
+  { type: "paragraph", text: NDA_PENALTY_CLAUSE },
   { type: "paragraph", text: "Tato dohoda se řídí právem České republiky." },
 ];
 
@@ -725,6 +753,16 @@ const TASKS: EvalTask[] = [
       "scope",
     ],
     booleanInputPaths: [],
+    preservedPhrases: [
+      "PEŁNOMOCNICTWO / POWER OF ATTORNEY",
+      "wpisana do Krajowego Rejestru Sądowego pod numerem KRS",
+      "entered in the National Court Register under KRS number",
+      "niniejszym ustanawia pełnomocnikami",
+      "hereby appoints as its attorneys",
+      "Zakres pełnomocnictwa",
+      "Scope of this power of attorney",
+      "Warszawa, dnia",
+    ],
     fillValues: {
       company: "Wektor Logistyka sp. z o.o.",
       "company.address": "ul. Prosta 51, 00-838 Warszawa",
@@ -804,12 +842,22 @@ const TASKS: EvalTask[] = [
       "smluvni_pokuta",
     ],
     booleanInputPaths: ["smluvni_pokuta"],
+    preservedPhrases: [
+      "DOHODA O MLČENLIVOSTI",
+      "Tato dohoda se uzavírá mezi společností",
+      "Dohoda nabývá účinnosti dne",
+      NDA_PENALTY_CLAUSE,
+      "Tato dohoda se řídí právem",
+    ],
     fillValues: {
       strana_a: "Aurea Systems s.r.o.",
       strana_b: "Bohemia Data a.s.",
       ucinnost_od: "2026-04-01",
       rozhodne_pravo: "České republiky",
-      smluvni_pokuta: true,
+      // Filled false on purpose: a penalty clause left outside an `{{#if}}`
+      // survives the fill, which is the only way to tell a real conditional
+      // from an ordinary paragraph the model happened not to touch.
+      smluvni_pokuta: false,
     },
     checkConfig: (fields) => {
       const defects: string[] = [];
@@ -836,9 +884,10 @@ const TASKS: EvalTask[] = [
       return defects;
     },
     checkRoundTrip: ({ text }) => ({
-      // The penalty flag is true, so the clause must survive the {{#if}}.
-      blankRepeatedRows: digitsOf(text).includes("100000") ? 0 : 1,
-      conditionalRowKept: false,
+      blankRepeatedRows: 0,
+      // The flag is false, so an `{{#if}}`-wrapped clause is gone; an
+      // unconditional paragraph is still here.
+      conditionalRowKept: digitsOf(text).includes("100000"),
       dateLocaleMismatch: false,
     }),
   },
@@ -861,6 +910,14 @@ const TASKS: EvalTask[] = [
     ].join("\n"),
     expectedPaths: ["client_name", "deliverables", "expenses_reimbursed"],
     booleanInputPaths: ["expenses_reimbursed"],
+    preservedPhrases: [
+      "STATEMENT OF WORK",
+      "Statement of Work for",
+      "Deliverable",
+      "Due date",
+      "Fee (EUR)",
+      "Fees are invoiced monthly in arrears.",
+    ],
     fillValues: {
       client_name: "Riverside Logistics a.s.",
       deliverables: SOW_DELIVERABLES,
@@ -883,11 +940,16 @@ const TASKS: EvalTask[] = [
         SOW_DELIVERABLES.some((deliverable) =>
           (row.at(0) ?? "").includes(deliverable.item),
         );
+      // Exactly one row per deliverable, with every cell filled. Matching a
+      // single row would pass a table that kept the literal source rows
+      // alongside the repeated ones, or expanded the repeat twice.
       const blankRepeatedRows = SOW_DELIVERABLES.filter((deliverable) => {
-        const row = rows.find((candidate) =>
+        const matches = rows.filter((candidate) =>
           (candidate.at(0) ?? "").includes(deliverable.item),
         );
+        const row = matches.at(0);
         return (
+          matches.length !== 1 ||
           row === undefined ||
           row.slice(0, 3).some((cell) => cell.trim() === "")
         );
@@ -928,6 +990,14 @@ const TASKS: EvalTask[] = [
       "annual_rent",
     ],
     booleanInputPaths: [],
+    preservedPhrases: [
+      "MIETVERTRAG",
+      "Vermieterin:",
+      "Mieter:",
+      "Mietobjekt:",
+      "Die monatliche Kaltmiete beträgt",
+      "Die Jahresmiete beträgt",
+    ],
     fillValues: {
       landlord_name: "Ingrid Baumann",
       tenant_name: "Lukas Vogt",
@@ -1284,10 +1354,13 @@ type ModelTurn = {
 const runModelTurn = async ({
   model,
   prompt,
+  systemPrompt,
   tools,
 }: {
   model: ResolvedTanStackTextModel;
   prompt: string;
+  /** Must describe only the tools this turn actually registers. */
+  systemPrompt: string;
   tools: AnyServerTool[];
 }): Promise<ModelTurn> => {
   const caching = resolveCaching({
@@ -1295,7 +1368,7 @@ const runModelTurn = async ({
     role: "fast",
     scopeKey: null,
   });
-  const system = `${SYSTEM_PROMPT}\n\n${REFERENCE_RESOURCES}`;
+  const system = `${systemPrompt}\n\n${REFERENCE_RESOURCES}`;
   const rawCalls: ToolTrace[] = [];
   const callNames = new Map<string, string>();
   let finalText = "";
@@ -1397,6 +1470,10 @@ const buildAttempt = async ({
         ...(roundTrip.error === null ? [] : [`fill: ${roundTrip.error}`]),
       ],
       configDefects: task.checkConfig(outcome.manifest.fields),
+      fidelity: checkSourceFidelity({
+        authored: authoredParagraphs(call.blocks),
+        preservedPhrases: task.preservedPhrases,
+      }),
       roundTrip: roundTrip.defects,
     },
     renderedText: roundTrip.text,
@@ -1426,7 +1503,12 @@ const runAuthoringTask = async ({
     renderBlocks(await readDocxBlocks(sourceDocx)),
   ].join("\n");
 
-  const turn = await runModelTurn({ model, prompt, tools });
+  const turn = await runModelTurn({
+    model,
+    prompt,
+    systemPrompt: AUTHORING_SYSTEM_PROMPT,
+    tools,
+  });
   const call = saveCalls.at(-1);
   if (call === undefined) {
     // A call the advertised schema rejected never reaches the handler; the
@@ -1500,6 +1582,7 @@ const runSyntaxQuiz = async ({
   const turn = await runModelTurn({
     model,
     prompt: SYNTAX_QUIZ_PROMPT,
+    systemPrompt: QUIZ_SYSTEM_PROMPT,
     tools,
   });
   const quiz = scoreSyntaxQuiz(answers.at(-1) ?? null, SYNTAX_QUIZ_EXPECTED);
@@ -1524,6 +1607,7 @@ const runSyntaxQuiz = async ({
     }),
     overlayIssues: [],
     configDefects: [],
+    fidelity: [],
     roundTrip: cleanRoundTrip(),
     note: turn.error,
   };
@@ -1575,8 +1659,8 @@ const renderReport = (runs: readonly EvalRun[]): string => {
     const modelRuns = runs.filter((run) => run.modelId === modelId);
     lines.push(`\n### ${modelId}\n`);
     lines.push(
-      "| task | run | outcome | calls | missing | extra | traps | overlay | config | round trip | tokens | ms |",
-      "| --- | ---: | --- | ---: | --- | --- | --- | --- | --- | --- | ---: | ---: |",
+      "| task | run | outcome | calls | missing | extra | traps | overlay | config | fidelity | round trip | tokens | ms |",
+      "| --- | ---: | --- | ---: | --- | --- | --- | --- | --- | --- | --- | ---: | ---: |",
     );
     for (const run of modelRuns) {
       const { score } = run;
@@ -1591,6 +1675,7 @@ const renderReport = (runs: readonly EvalRun[]): string => {
           trapsCell(score.traps),
           cell(score.overlayIssues),
           cell(score.configDefects),
+          cell(score.fidelity),
           roundTripCell(score.roundTrip),
           tokensCell(run.usage),
           `${String(run.latencyMs)} |`,
