@@ -9,22 +9,35 @@
  * Templates without block directives skip all processing
  * (fast-path check via regex on raw XML).
  *
- * `{{#each}}` loop bodies clone block-level units, not just
- * paragraphs. Placement decides what a loop repeats:
+ * Placement decides what a block directive acts on. Both families
+ * ({{#if}} and {{#each}}) read a table row as one unit:
  *   - ROW REPEAT: when the opener `{{#each}}` and its matching
  *     `{{/each}}` are paragraphs confined to the SAME table row
  *     (`w:tr`), the whole row is cloned once per item and the two
- *     marker paragraphs are stripped from the output rows (a cell
- *     left with no paragraph is backfilled with an empty one so
- *     the row stays valid OOXML). Zero items removes the row.
- *   - BLOCK REPEAT: when the opener and closer are block-level
- *     siblings (typically direct children of `w:body`), every
- *     block child between them — paragraphs AND whole tables
- *     (`w:tbl`) — is cloned as a unit per item.
+ *     marker paragraphs are stripped from the output rows. Zero
+ *     items removes the row.
+ *   - ROW CONDITION: when an `{{#if}}` block's directive paragraphs
+ *     (including its `{{#elseif}}`/`{{#else}}` branches) are
+ *     confined to one `w:tr`, the row is the unit: no winning
+ *     branch removes the whole row, and a winning branch keeps the
+ *     row with the directive and losing-branch paragraphs removed.
+ *     A block spanning several cells of the row (opener in the
+ *     first cell, closer in the last) therefore conditions the
+ *     row's whole content, which is what a bilingual
+ *     "Polish | English" row needs.
+ *   - BLOCK REPEAT / BLOCK CONDITION: when the opener and closer
+ *     are block-level siblings (typically direct children of
+ *     `w:body`), every block child between them — paragraphs AND
+ *     whole tables (`w:tbl`) — is cloned or pruned as a unit.
  * A marker pair that straddles a table boundary (opener in a row,
  * closer outside it, or the two in different rows) is ambiguous:
  * it is reported as a {@link TemplateStructureError} and its
  * markers are neutralized rather than producing corrupt XML.
+ *
+ * Every removal goes through {@link removeBlockUnit}, which repairs
+ * the containers a removal can invalidate: a `w:tc` must keep at
+ * least one `w:p` and a `w:tbl` at least one `w:tr`, or Word
+ * reports the file as corrupt.
  *
  * Nested loops resolve through per-item recursion: an inner
  * `{{#each outer.sub}}` keeps its path and is expanded against the
@@ -530,17 +543,39 @@ const paragraphsInUnits = (
 ): slimdom.Element[] => units.flatMap(paragraphsInUnit);
 
 /**
- * Remove a stripped `{{#each}}`/`{{/each}}` marker paragraph from a cloned row,
- * backfilling an empty paragraph when its cell would otherwise be left without
- * one (a `w:tc` must contain at least one block-level child).
+ * Remove one block-level unit (a paragraph, a row, or a whole table) and repair
+ * the containers the removal would leave invalid: a `w:tc` must keep at least
+ * one `w:p`, and a `w:tbl` at least one `w:tr` — Word reports a document
+ * violating either as corrupt. Every directive removal path routes through
+ * here (marker stripping, branch pruning, row removal, and the paragraph-index
+ * fallback), so no path can invent a new way to empty a cell.
  */
-const stripRowMarkerParagraph = (
-  paragraph: slimdom.Element,
-  doc: slimdom.Document,
-): void => {
-  const cell = ancestorByLocalName(paragraph, TAG.cell);
-  paragraph.parentNode?.removeChild(paragraph);
-  if (cell?.getElementsByTagNameNS(W_NS, TAG.paragraph).length === 0) {
+const removeBlockUnit = (unit: slimdom.Node): void => {
+  const parent = unit.parentNode;
+  if (!parent) {
+    return;
+  }
+  const cell = ancestorByLocalName(unit, TAG.cell);
+  parent.removeChild(unit);
+
+  // The last row left the table: drop the shell, then repair whatever cell the
+  // table itself lived in.
+  if (
+    isElement(parent) &&
+    parent.localName === TAG.table &&
+    parent.namespaceURI === W_NS &&
+    parent.getElementsByTagNameNS(W_NS, TAG.row).length === 0
+  ) {
+    removeBlockUnit(parent);
+    return;
+  }
+
+  const doc = cell?.ownerDocument;
+  if (
+    cell &&
+    doc &&
+    cell.getElementsByTagNameNS(W_NS, TAG.paragraph).length === 0
+  ) {
     cell.append(doc.createElementNS(W_NS, "w:p"));
   }
 };
@@ -601,9 +636,54 @@ const pruneIfBlockUnits = (
     }
   }
   for (const n of toRemove) {
-    parent.removeChild(n);
+    removeBlockUnit(n);
   }
   return true;
+};
+
+type PruneIfRowOptions = {
+  firstDirective: number;
+  lastDirective: number;
+  paragraphs: readonly slimdom.Element[];
+  row: slimdom.Element;
+  winningBranch: IfBranch | null;
+};
+
+/**
+ * Prune an `{{#if}}` block whose directive paragraphs are confined to one
+ * `w:tr`, mirroring the each row-repeat: the ROW is the unit. With no winning
+ * branch the whole row goes, including cells the markers do not span — an
+ * author who conditions a row conditions the row, not a fragment of it, which
+ * is what a bilingual row (one scope item per row, one language per cell)
+ * means. A winning branch keeps the row and removes every paragraph of the
+ * block that is not its content, wherever in the row it sits: the directive
+ * paragraphs and the losing branches. Paragraphs between the opener's cell and
+ * the closer's cell belong to the block by document order, so an opener in the
+ * first cell and a closer in the last condition the row's whole content.
+ */
+const pruneIfRow = ({
+  firstDirective,
+  lastDirective,
+  paragraphs,
+  row,
+  winningBranch,
+}: PruneIfRowOptions): void => {
+  if (!winningBranch) {
+    removeBlockUnit(row);
+    return;
+  }
+  // `contentStart` is the first paragraph after the winning branch's opening
+  // directive; `contentEnd` is its closing directive (the next
+  // elseif/else/endif), so the kept range is half-open.
+  for (let j = lastDirective; j >= firstDirective; j--) {
+    if (j >= winningBranch.contentStart && j < winningBranch.contentEnd) {
+      continue;
+    }
+    const p = paragraphs[j];
+    if (p) {
+      removeBlockUnit(p);
+    }
+  }
 };
 
 // ── Main processor ───────────────────────────────────────
@@ -753,22 +833,53 @@ export const processBlockDirectives = (
     // directiveParagraphs always has opening + closing entries
     const lastDirective = block.directiveParagraphs.at(-1) ?? 0;
 
-    // Preferred path: when the block's directive paragraphs are block-level
-    // siblings (share one parent), prune by block-level UNIT so a losing
-    // branch's whole tables (`w:tbl`) are removed too, not just its paragraphs.
-    // This mirrors the each-loop's block-unit treatment (see expandBlock);
-    // without it a two-table `{{#if}}/{{#else}}` variant would leave the losing
-    // branch's empty table shell behind. Falls through to the paragraph-index
-    // removal below for a degenerate placement where the directive paragraphs do
-    // not share a block-level parent (e.g. straddling a table boundary).
     const firstP = paragraphs[firstDirective];
     const lastP = paragraphs[lastDirective];
-    if (
-      firstP &&
-      lastP &&
-      pruneIfBlockUnits(paragraphs, firstP, lastP, winningBranch)
-    ) {
-      return;
+
+    if (firstP && lastP) {
+      const openerRow = ancestorByLocalName(firstP, TAG.row);
+      const closerRow = ancestorByLocalName(lastP, TAG.row);
+
+      // Row condition: every directive paragraph sits in one `w:tr` (the
+      // paragraphs between opener and closer are inside that row by document
+      // order), so the row is the unit.
+      if (openerRow && openerRow === closerRow) {
+        pruneIfRow({
+          firstDirective,
+          lastDirective,
+          paragraphs,
+          row: openerRow,
+          winningBranch,
+        });
+        return;
+      }
+
+      // Ambiguous: one marker inside a row and the other outside it, or the two
+      // in different rows. Reject rather than emit corrupt XML, exactly as the
+      // each family does.
+      if (openerRow || closerRow) {
+        reportAmbiguousPlacement({
+          directive: `{{#if ${block.branches[0]?.condition ?? ""}}}`,
+          markerParagraphs: block.directiveParagraphs.flatMap(
+            (index) => paragraphs[index] ?? [],
+          ),
+          markers: "{{#if}} and {{/if}}",
+          paragraphIndex: firstDirective,
+        });
+        return;
+      }
+
+      // Preferred path outside tables: when the block's directive paragraphs are
+      // block-level siblings (share one parent), prune by block-level UNIT so a
+      // losing branch's whole tables (`w:tbl`) are removed too, not just its
+      // paragraphs. This mirrors the each-loop's block-unit treatment (see
+      // expandBlock); without it a two-table `{{#if}}/{{#else}}` variant would
+      // leave the losing branch's empty table shell behind. Falls through to the
+      // paragraph-index removal below for a degenerate placement where the
+      // directive paragraphs do not share a block-level parent.
+      if (pruneIfBlockUnits(paragraphs, firstP, lastP, winningBranch)) {
+        return;
+      }
     }
 
     // We need to remove everything from firstDirective to
@@ -783,7 +894,7 @@ export const processBlockDirectives = (
       for (let j = lastDirective; j >= keepEnd; j--) {
         const p = paragraphs[j];
         if (p) {
-          p.parentNode?.removeChild(p);
+          removeBlockUnit(p);
         }
       }
 
@@ -791,7 +902,7 @@ export const processBlockDirectives = (
       for (let j = keepStart - 1; j >= firstDirective; j--) {
         const p = paragraphs[j];
         if (p) {
-          p.parentNode?.removeChild(p);
+          removeBlockUnit(p);
         }
       }
     } else {
@@ -799,7 +910,7 @@ export const processBlockDirectives = (
       for (let j = lastDirective; j >= firstDirective; j--) {
         const p = paragraphs[j];
         if (p) {
-          p.parentNode?.removeChild(p);
+          removeBlockUnit(p);
         }
       }
     }
@@ -973,21 +1084,31 @@ export const processBlockDirectives = (
     }
   };
 
-  // Clear a straddling marker's text so the scanner stops treating it as a
+  type ReportAmbiguousPlacementOptions = {
+    /** The opening directive, verbatim, for the error record. */
+    directive: string;
+    /** Every marker paragraph of the block, including inner branches. */
+    markerParagraphs: readonly slimdom.Element[];
+    /** The marker pair named in the message, e.g. `{{#if}} and {{/if}}`. */
+    markers: string;
+    paragraphIndex: number;
+  };
+
+  // Clear a straddling block's marker text so the scanner stops treating it as a
   // directive (avoids an unresolved-directive loop), then report the error.
-  const reportAmbiguousPlacement = (
-    openerP: slimdom.Element,
-    closerP: slimdom.Element,
-    block: EachBlock,
-    openingIdx: number,
-  ): void => {
-    rewriteTextNodes(openerP, () => "");
-    rewriteTextNodes(closerP, () => "");
+  const reportAmbiguousPlacement = ({
+    directive,
+    markerParagraphs,
+    markers,
+    paragraphIndex,
+  }: ReportAmbiguousPlacementOptions): void => {
+    for (const marker of markerParagraphs) {
+      rewriteTextNodes(marker, () => "");
+    }
     allErrors.push({
-      message:
-        "{{#each}} and {{/each}} must sit in the same table row or share a block-level parent; a marker pair that straddles a table boundary is not supported",
-      paragraphIndex: openingIdx,
-      directive: `{{#each ${block.arrayPath}}}`,
+      message: `${markers} must sit in the same table row or share a block-level parent; a marker pair that straddles a table boundary is not supported`,
+      paragraphIndex,
+      directive,
     });
   };
 
@@ -1043,10 +1164,10 @@ export const processBlockDirectives = (
       const openerClone = clonedParas[openerOrdinal];
       const closerClone = clonedParas[closerOrdinal];
       if (openerClone) {
-        stripRowMarkerParagraph(openerClone, doc);
+        removeBlockUnit(openerClone);
       }
       if (closerClone && closerClone !== openerClone) {
-        stripRowMarkerParagraph(closerClone, doc);
+        removeBlockUnit(closerClone);
       }
 
       rewriteEachPlaceholders(clonedRow, {
@@ -1099,15 +1220,13 @@ export const processBlockDirectives = (
       }
     }
 
-    const insertionRef = row.nextSibling;
-    tbl.removeChild(row);
+    // Insert before the template row, then drop it through the shared removal:
+    // zero items leaves the table without rows, and a `w:tbl` with no `w:tr` is
+    // as invalid as an empty `w:tc`.
     for (const r of finalRows) {
-      if (insertionRef) {
-        tbl.insertBefore(r, insertionRef);
-      } else {
-        tbl.append(r);
-      }
+      tbl.insertBefore(r, row);
     }
+    removeBlockUnit(row);
   };
 
   // Block repeat: opener/closer are block-level siblings. Clone every block
@@ -1277,7 +1396,12 @@ export const processBlockDirectives = (
     // different rows, or non-sibling block-level markers. Reject rather than
     // emit corrupt XML.
     if (openerRow || closerRow || openerP.parentNode !== closerP.parentNode) {
-      reportAmbiguousPlacement(openerP, closerP, block, openingIdx);
+      reportAmbiguousPlacement({
+        directive: `{{#each ${block.arrayPath}}}`,
+        markerParagraphs: [openerP, closerP],
+        markers: "{{#each}} and {{/each}}",
+        paragraphIndex: openingIdx,
+      });
       return;
     }
 

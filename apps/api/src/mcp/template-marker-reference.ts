@@ -118,6 +118,14 @@ const NON_DIRECTIVE_RULES = [
       "rendering (`{{company.address}}`).",
   },
   {
+    title: "Block markers in a table",
+    detail:
+      "A block marker pair (`#if` or `#each` family) confined to ONE table row " +
+      "acts on the whole row: the row repeats per item, or is dropped when no " +
+      "branch wins. Opening and closing markers must not straddle a row " +
+      "boundary.",
+  },
+  {
     title: "Bilingual / multi-column documents",
     detail:
       "Mark every language or column occurrence of the same value with the " +
