@@ -67,11 +67,16 @@ const SETTLEMENT_SCAN_TIMEOUT_MS = 60_000;
  * Postgres, and the row is then neither missing nor stale, so nothing
  * ever selects it again. `wait_for` holds the response until the split
  * is published, which makes the acceptance mean durability.
+ *
+ * A caller that persists an `auto` acceptance therefore owes two things:
+ * a census that can still find documents the commit window lost, and a
+ * publish fence, because the documents stay invisible to search and to
+ * delete-by-query until the engine's own commit timer fires.
  */
 export const CORPUS_INDEX_COMMIT = {
-  /** Buffered for indexing. Bulk paths only, with a census behind them. */
+  /** Buffered for indexing. Needs a census and a publish fence behind it. */
   auto: "auto",
-  /** Published as a split. Required wherever acceptance is persisted. */
+  /** Published as a split. Acceptance means durability at that instant. */
   waitFor: "wait_for",
 } as const;
 
@@ -165,6 +170,15 @@ export type CorpusIndexClient = {
   ) => Promise<Result<void, CorpusIndexError>>;
   /** Final-generation append: durable commit plus an exact V2 receipt. */
   ingestCommittedBatch: (
+    indexId: string,
+    ndjson: string,
+  ) => Promise<Result<void, CorpusIndexError>>;
+  /**
+   * Final-generation append that returns on acceptance instead of on the
+   * commit, with the same exact V2 receipt. Throughput path only: the
+   * caller owns the publish fence every observer of the acceptance needs.
+   */
+  ingestQueuedBatch: (
     indexId: string,
     ndjson: string,
   ) => Promise<Result<void, CorpusIndexError>>;
@@ -652,6 +666,15 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
       indexId,
       ndjson,
       commit: CORPUS_INDEX_COMMIT.waitFor,
+      receiptMode: "exact-v2",
+    }),
+
+  ingestQueuedBatch: async (indexId, ndjson) =>
+    await ingestBatch({
+      baseUrl: mutationBaseUrl(cluster),
+      indexId,
+      ndjson,
+      commit: CORPUS_INDEX_COMMIT.auto,
       receiptMode: "exact-v2",
     }),
 

@@ -1,10 +1,15 @@
+import { Result } from "better-result";
 import { expect, test } from "bun:test";
 
 import { PayloadBudgetError } from "@/api/lib/compression";
-import { CORPUS_PROJECTION_APPEND_MAX_REQUEST_BYTES } from "@/api/lib/legal-search/corpus-index-projection-engine";
+import {
+  CORPUS_PROJECTION_APPEND_COMMIT_MODE,
+  CORPUS_PROJECTION_APPEND_MAX_REQUEST_BYTES,
+} from "@/api/lib/legal-search/corpus-index-projection-engine";
 import {
   advanceCorpusProjectionAppendTails,
   classifyCorpusProjectionPayloadReadFailure,
+  ingestCorpusProjectionRequest,
 } from "@/api/lib/legal-search/corpus-index-projection-executor";
 import { S3ObjectBudgetError } from "@/api/lib/s3";
 
@@ -128,4 +133,34 @@ test("append tails flush before crossing the physical request budget", () => {
   expect(
     result.tails.get("case_law_v5_cs_sk")?.entries.map(({ ndjson }) => ndjson),
   ).toEqual(["cs-2"]);
+});
+
+test("the commit mode picks the ingest the request runs through", async () => {
+  const calls: string[] = [];
+  const client = {
+    ingestCommittedBatch: async () => {
+      calls.push(CORPUS_PROJECTION_APPEND_COMMIT_MODE.published);
+      return Result.ok(undefined);
+    },
+    ingestQueuedBatch: async () => {
+      calls.push(CORPUS_PROJECTION_APPEND_COMMIT_MODE.queued);
+      return Result.ok(undefined);
+    },
+  };
+
+  for (const commitMode of Object.values(
+    CORPUS_PROJECTION_APPEND_COMMIT_MODE,
+  )) {
+    expect(
+      (
+        await ingestCorpusProjectionRequest(client, {
+          commitMode,
+          indexId: "case_law_v5_cs_sk",
+          ndjson: '{"document_id":"a"}',
+        })
+      ).isOk(),
+    ).toBe(true);
+  }
+
+  expect(calls).toEqual(Object.values(CORPUS_PROJECTION_APPEND_COMMIT_MODE));
 });

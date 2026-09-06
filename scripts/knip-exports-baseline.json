@@ -1,6 +1,6 @@
 {
   "apps/api": {
-    "count": 780,
+    "count": 779,
     "files": {
       "apps/api/scripts/lib/capability-catalog.ts": 9,
       "apps/api/scripts/lib/enumerate-safe-handlers.ts": 7,
@@ -234,7 +234,7 @@
       "apps/api/src/lib/legal-search/corpus-index-projection-desired-state.ts": 2,
       "apps/api/src/lib/legal-search/corpus-index-projection-engine.ts": 3,
       "apps/api/src/lib/legal-search/corpus-index-projection-erasure-store.ts": 1,
-      "apps/api/src/lib/legal-search/corpus-index-projection-executor.ts": 3,
+      "apps/api/src/lib/legal-search/corpus-index-projection-executor.ts": 2,
       "apps/api/src/lib/legal-search/corpus-index-projection-materials.ts": 1,
       "apps/api/src/lib/legal-search/corpus-index-projection-scope.ts": 1,
       "apps/api/src/lib/legal-search/corpus-location.ts": 1,

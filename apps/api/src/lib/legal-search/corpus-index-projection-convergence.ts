@@ -8,6 +8,8 @@ import {
 } from "@/api/db/schema";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import { CORPUS_INDEX_LAUNCH_BLOCKING_INTENT_STATUSES } from "@/api/lib/legal-search/corpus-index-projection-contract";
+import { readRegisteredCorpusProjectionManifestForCleanup } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
+import { corpusProjectionAppendIsPublished } from "@/api/lib/legal-search/corpus-index-projection-publish-fence";
 import {
   corpusIndexProjectionIsBlocked,
   corpusIndexProjectionNeedsWork,
@@ -19,6 +21,12 @@ export const CORPUS_INDEX_PROJECTION_CONVERGENCE_STATUS = {
   blocked: "blocked",
   pending: "pending",
   intentOutstanding: "intent_outstanding",
+  /**
+   * Every revision is applied, but the engine has not certainly published
+   * the most recent ones. A census run now would inspect a strict subset of
+   * the generation and still read as complete, so the proof waits.
+   */
+  publishPending: "publish_pending",
   readyForCensus: "ready_for_census",
 } as const;
 
@@ -49,7 +57,11 @@ const rowsOf = (result: unknown): unknown[] => {
   return [];
 };
 
-/** Constant-time PostgreSQL precondition for a fresh zero-drift engine census. */
+/**
+ * Constant-time PostgreSQL precondition for a fresh zero-drift engine census.
+ * The publish probe runs only once the queue is otherwise converged, so the
+ * common answer still costs one round trip.
+ */
 export const readCorpusIndexProjectionConvergenceTx = async (
   tx: Transaction,
   target: CorpusIndexProjectionConvergenceTarget,
@@ -118,7 +130,26 @@ export const readCorpusIndexProjectionConvergenceTx = async (
   if (observation["hasPendingState"]) {
     return CORPUS_INDEX_PROJECTION_CONVERGENCE_STATUS.pending;
   }
-  return observation["hasOutstandingIntent"]
-    ? CORPUS_INDEX_PROJECTION_CONVERGENCE_STATUS.intentOutstanding
-    : CORPUS_INDEX_PROJECTION_CONVERGENCE_STATUS.readyForCensus;
+  if (observation["hasOutstandingIntent"]) {
+    return CORPUS_INDEX_PROJECTION_CONVERGENCE_STATUS.intentOutstanding;
+  }
+  const manifest = await readRegisteredCorpusProjectionManifestForCleanup(
+    tx,
+    target.family,
+    target.generation,
+  );
+  const unpublished = await tx
+    .select({ id: corpusIndexProjectionIntents.id })
+    .from(corpusIndexProjectionIntents)
+    .where(
+      and(
+        intentScope,
+        eq(corpusIndexProjectionIntents.status, "applied"),
+        sql`NOT ${corpusProjectionAppendIsPublished(manifest)}`,
+      ),
+    )
+    .limit(1);
+  return unpublished.length === 0
+    ? CORPUS_INDEX_PROJECTION_CONVERGENCE_STATUS.readyForCensus
+    : CORPUS_INDEX_PROJECTION_CONVERGENCE_STATUS.publishPending;
 };

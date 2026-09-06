@@ -18,6 +18,10 @@ import {
   CORPUS_PROJECTION_APPEND_MAX_REVISIONS,
   corpusIndexUnknownAppendBarrierAt,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
+import {
+  corpusProjectionAcceptedAppendCleanupFence,
+  corpusProjectionUnrecordedAppendCleanupFence,
+} from "@/api/lib/legal-search/corpus-index-projection-publish-fence";
 import { lockCorpusIndexProjectionMutationsTx } from "@/api/lib/legal-search/corpus-index-projection-revision";
 import {
   CORPUS_PROJECTION_GENERATION_SCOPE,
@@ -416,8 +420,7 @@ export const prepareCorpusProjectionReplacementsTx = async <
       status: "cleanup_pending",
       leaseToken: null,
       leaseExpiresAt: null,
-      appendPublishBarrierAt: sql`${corpusIndexProjectionIntents.appendCommittedAt}`,
-      cleanupNotBefore: transitionAt,
+      ...corpusProjectionAcceptedAppendCleanupFence(manifest, transitionAt),
       lastError: null,
       updatedAt: transitionAt,
     })
@@ -785,9 +788,9 @@ export type CommitCorpusProjectionAppendResult =
   | { status: "lease_lost" };
 
 /**
- * Finalize a successful wait_for append and its authoritative state in one
- * transaction. A desired-state race cannot publish: the exact new revision is
- * redirected to cleanup instead.
+ * Finalize an accepted append and its authoritative state in one transaction.
+ * A desired-state race cannot publish: the exact new revision is redirected to
+ * cleanup instead, behind the barrier that makes that cleanup exact.
  */
 export const commitCorpusProjectionAppendTx = async (
   tx: Transaction,
@@ -814,7 +817,7 @@ export const commitCorpusProjectionAppendTx = async (
   if (identity === undefined) {
     return { status: "lease_lost" };
   }
-  await lockRegisteredCorpusProjectionManifestForMutation(
+  const manifest = await lockRegisteredCorpusProjectionManifestForMutation(
     tx,
     identity.family,
     identity.generation,
@@ -875,8 +878,9 @@ export const commitCorpusProjectionAppendTx = async (
         status: "cleanup_pending",
         leaseToken: null,
         leaseExpiresAt: null,
-        appendPublishBarrierAt: transitionAt,
-        cleanupNotBefore: transitionAt,
+        ...(intent.appendCommittedAt === null
+          ? corpusProjectionUnrecordedAppendCleanupFence(manifest, transitionAt)
+          : corpusProjectionAcceptedAppendCleanupFence(manifest, transitionAt)),
         expectedDocumentCount: documentCount,
         lastError: "projection desired state changed after append committed",
         updatedAt: transitionAt,

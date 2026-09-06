@@ -11,6 +11,7 @@ import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-cont
 import { CORPUS_INDEX_APPEND_PRODUCING_INTENT_STATUSES } from "@/api/lib/legal-search/corpus-index-projection-contract";
 import { lockRegisteredCorpusProjectionManifestForMutation } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { corpusIndexUnknownAppendBarrierAt } from "@/api/lib/legal-search/corpus-index-projection-engine";
+import { corpusProjectionAcceptedAppendCleanupFence } from "@/api/lib/legal-search/corpus-index-projection-publish-fence";
 import {
   CORPUS_PROJECTION_GENERATION_SCOPE,
   entityIdsForCorpusProjectionWorkScope,
@@ -243,8 +244,7 @@ export const advanceCorpusProjectionErasuresTx = async <
         status: "cleanup_pending",
         leaseToken: null,
         leaseExpiresAt: null,
-        appendPublishBarrierAt: sql`${corpusIndexProjectionIntents.appendCommittedAt}`,
-        cleanupNotBefore: transitionAt,
+        ...corpusProjectionAcceptedAppendCleanupFence(manifest, transitionAt),
         lastError: "projection revision scheduled by erasure",
         updatedAt: transitionAt,
       })

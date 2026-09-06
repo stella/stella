@@ -8,10 +8,12 @@ import { settleBoth } from "@/api/lib/corpus-index/core";
 import type { CorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
 import { buildCorpusProjectionDocuments } from "@/api/lib/legal-search/corpus-index-projection-builder";
 import {
+  CORPUS_PROJECTION_APPEND_COMMIT_MODE,
   CORPUS_PROJECTION_APPEND_MAX_REQUEST_BYTES,
   CORPUS_PROJECTION_APPEND_MAX_REVISIONS,
   CORPUS_PROJECTION_UNKNOWN_APPEND_MARGIN_MS,
   planCorpusProjectionAppendRequests,
+  type CorpusProjectionAppendCommitMode,
   type CorpusProjectionAppendEntry,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import {
@@ -44,7 +46,48 @@ import type { IngestionTransactionRunner } from "@/api/lib/replay-safe-ingestion
 import { S3ObjectBudgetError } from "@/api/lib/s3";
 
 type ProjectionTransactionRunner = IngestionTransactionRunner<Transaction>;
-type ProjectionAppendClient = Pick<CorpusIndexClient, "ingestCommittedBatch">;
+type ProjectionAppendClient = Pick<
+  CorpusIndexClient,
+  "ingestCommittedBatch" | "ingestQueuedBatch"
+>;
+
+/**
+ * The cycle's only mode-dependent step. Everything after it (the batch start,
+ * the commit, the abandon on an unknown outcome) reads the same durable
+ * state either way, so a queued cycle settles exactly like a published one.
+ */
+export const ingestCorpusProjectionRequest = async (
+  client: ProjectionAppendClient,
+  {
+    commitMode,
+    indexId,
+    ndjson,
+  }: {
+    commitMode: CorpusProjectionAppendCommitMode;
+    indexId: string;
+    ndjson: string;
+  },
+) => {
+  switch (commitMode) {
+    case CORPUS_PROJECTION_APPEND_COMMIT_MODE.published:
+      return await client.ingestCommittedBatch(indexId, ndjson);
+    case CORPUS_PROJECTION_APPEND_COMMIT_MODE.queued:
+      return await client.ingestQueuedBatch(indexId, ndjson);
+    default:
+      commitMode satisfies never;
+      return panic(`Unhandled append commit mode: ${String(commitMode)}`);
+  }
+};
+
+const measured = async <Value>(
+  operation: () => Promise<Value>,
+  record: (elapsedMs: number) => void,
+): Promise<Value> => {
+  const startedAt = Date.now();
+  const value = await operation();
+  record(Date.now() - startedAt);
+  return value;
+};
 
 const mapSequentially = async <Input, Output>(
   values: readonly Input[],
@@ -68,11 +111,26 @@ type ExecuteCorpusProjectionAppendCycleOptions<
   runInTransaction: ProjectionTransactionRunner;
   client: ProjectionAppendClient;
   generation: string;
+  /**
+   * Required, like the client's own `commit`: the two modes differ in what
+   * the persisted acceptance means, and a default would let a caller inherit
+   * the wrong one silently.
+   */
+  commitMode: CorpusProjectionAppendCommitMode;
   limit: number;
   leaseMs: number;
   payloadReadConcurrency: number;
   retryDelayMs: number;
   payloadRetryLimit: number;
+};
+
+/** Wall-clock milliseconds per phase, summed over the cycle, for the caller's logs. */
+export type CorpusProjectionAppendCycleTiming = {
+  reservationMs: number;
+  materialReadMs: number;
+  payloadLoadMs: number;
+  ingestMs: number;
+  storeCommitMs: number;
 };
 
 export type CorpusProjectionAppendCycleResult = {
@@ -88,13 +146,16 @@ export type CorpusProjectionAppendCycleResult = {
   retryScheduled: number;
   blocked: number;
   requestCount: number;
+  timing: CorpusProjectionAppendCycleTiming;
 };
 
 const emptyResult = (
   replacementCleanupScheduled: number,
+  timing: CorpusProjectionAppendCycleTiming,
 ): CorpusProjectionAppendCycleResult => ({
   status: "idle",
   replacementCleanupScheduled,
+  timing,
   reserved: 0,
   applied: 0,
   staleCleanupPending: 0,
@@ -465,6 +526,7 @@ const addCancellation = (
 type ProcessPreparedRequestsOptions = {
   runInTransaction: ProjectionTransactionRunner;
   client: ProjectionAppendClient;
+  commitMode: CorpusProjectionAppendCommitMode;
   requests: readonly PreparedProjectionRequest[];
   requestIndex: number;
   unattemptedLeases: readonly CorpusProjectionIntentLease[];
@@ -474,6 +536,7 @@ type ProcessPreparedRequestsOptions = {
 const processPreparedRequests = async ({
   runInTransaction,
   client,
+  commitMode,
   requests,
   requestIndex,
   unattemptedLeases,
@@ -486,11 +549,17 @@ const processPreparedRequests = async ({
   // Start one physical request as a batch. Its shared timestamp is read from
   // PostgreSQL only after all state locks are held, immediately before
   // external I/O; crash recovery cannot settle ahead of a late append.
-  const starts = await runInTransaction(
-    async (tx) =>
-      await startCorpusProjectionAppendBatchTx(tx, {
-        leases: request.entries.map(({ material }) => material.lease),
-      }),
+  const starts = await measured(
+    async () =>
+      await runInTransaction(
+        async (tx) =>
+          await startCorpusProjectionAppendBatchTx(tx, {
+            leases: request.entries.map(({ material }) => material.lease),
+          }),
+      ),
+    (elapsedMs) => {
+      result.timing.storeCommitMs += elapsedMs;
+    },
   );
   result.cancelled += starts.filter(
     ({ status }) => status === "stale_cancelled",
@@ -514,6 +583,7 @@ const processPreparedRequests = async ({
     return await processPreparedRequests({
       runInTransaction,
       client,
+      commitMode,
       requests,
       requestIndex: requestIndex + 1,
       unattemptedLeases,
@@ -521,9 +591,16 @@ const processPreparedRequests = async ({
     });
   }
   result.requestCount += 1;
-  const appended = await client.ingestCommittedBatch(
-    request.indexId,
-    started.map(({ ndjson }) => ndjson).join("\n"),
+  const appended = await measured(
+    async () =>
+      await ingestCorpusProjectionRequest(client, {
+        commitMode,
+        indexId: request.indexId,
+        ndjson: started.map(({ ndjson }) => ndjson).join("\n"),
+      }),
+    (elapsedMs) => {
+      result.timing.ingestMs += elapsedMs;
+    },
   );
   if (appended.isErr()) {
     const abandoned = await runInTransaction(async (tx) => {
@@ -566,41 +643,48 @@ const processPreparedRequests = async ({
     return "append_unknown";
   }
 
-  const committed = await runInTransaction(async (tx) => {
-    const outcomes = await mapSequentially(
-      started,
-      async (preparedEntry) =>
-        await commitCorpusProjectionAppendTx(tx, {
-          intentId: preparedEntry.material.lease.intentId,
-          leaseToken: preparedEntry.material.lease.leaseToken,
-          documentCount: preparedEntry.documentCount,
-        }),
-    );
-    const counts = { applied: 0, staleCleanupPending: 0, leaseLost: 0 };
-    for (const outcome of outcomes) {
-      switch (outcome.status) {
-        case "applied":
-          counts.applied += 1;
-          break;
-        case "stale_cleanup_pending":
-          counts.staleCleanupPending += 1;
-          break;
-        case "lease_lost":
-          counts.leaseLost += 1;
-          break;
-        default:
-          outcome satisfies never;
-          panic(`Unhandled outcome: ${String(outcome)}`);
-      }
-    }
-    return counts;
-  });
+  const committed = await measured(
+    async () =>
+      await runInTransaction(async (tx) => {
+        const outcomes = await mapSequentially(
+          started,
+          async (preparedEntry) =>
+            await commitCorpusProjectionAppendTx(tx, {
+              intentId: preparedEntry.material.lease.intentId,
+              leaseToken: preparedEntry.material.lease.leaseToken,
+              documentCount: preparedEntry.documentCount,
+            }),
+        );
+        const counts = { applied: 0, staleCleanupPending: 0, leaseLost: 0 };
+        for (const outcome of outcomes) {
+          switch (outcome.status) {
+            case "applied":
+              counts.applied += 1;
+              break;
+            case "stale_cleanup_pending":
+              counts.staleCleanupPending += 1;
+              break;
+            case "lease_lost":
+              counts.leaseLost += 1;
+              break;
+            default:
+              outcome satisfies never;
+              panic(`Unhandled outcome: ${String(outcome)}`);
+          }
+        }
+        return counts;
+      }),
+    (elapsedMs) => {
+      result.timing.storeCommitMs += elapsedMs;
+    },
+  );
   result.applied += committed.applied;
   result.staleCleanupPending += committed.staleCleanupPending;
   result.leaseLost += committed.leaseLost;
   return await processPreparedRequests({
     runInTransaction,
     client,
+    commitMode,
     requests,
     requestIndex: requestIndex + 1,
     unattemptedLeases,
@@ -611,6 +695,7 @@ const processPreparedRequests = async ({
 type ProcessPreparedWindowsOptions = {
   runInTransaction: ProjectionTransactionRunner;
   client: ProjectionAppendClient;
+  commitMode: CorpusProjectionAppendCommitMode;
   materialsReady: readonly CorpusProjectionMaterial[];
   tails: Map<string, ProjectionAppendTail<PreparedProjectionEntry>>;
   windowStart: number;
@@ -623,6 +708,7 @@ type ProcessPreparedWindowsOptions = {
 const processPreparedWindows = async ({
   runInTransaction,
   client,
+  commitMode,
   materialsReady,
   tails,
   windowStart,
@@ -641,6 +727,7 @@ const processPreparedWindows = async ({
     return await processPreparedRequests({
       runInTransaction,
       client,
+      commitMode,
       requests: final.flush,
       requestIndex: 0,
       unattemptedLeases: [],
@@ -655,11 +742,17 @@ const processPreparedWindows = async ({
     materialsReady.length,
   );
   const window = materialsReady.slice(windowStart, windowEnd);
-  const loaded = await Promise.all(
-    window.map(async (material) => ({
-      material,
-      loaded: await buildPreparedEntry(runInTransaction, material),
-    })),
+  const loaded = await measured(
+    async () =>
+      await Promise.all(
+        window.map(async (material) => ({
+          material,
+          loaded: await buildPreparedEntry(runInTransaction, material),
+        })),
+      ),
+    (elapsedMs) => {
+      result.timing.payloadLoadMs += elapsedMs;
+    },
   );
   const preparationFailures: ReservationFailure[] = [];
   const prepared: PreparedProjectionEntry[] = [];
@@ -718,6 +811,7 @@ const processPreparedWindows = async ({
   const requestStatus = await processPreparedRequests({
     runInTransaction,
     client,
+    commitMode,
     requests: advanced.flush,
     requestIndex: 0,
     unattemptedLeases,
@@ -729,6 +823,7 @@ const processPreparedWindows = async ({
   return await processPreparedWindows({
     runInTransaction,
     client,
+    commitMode,
     materialsReady,
     tails: advanced.tails,
     windowStart: windowEnd,
@@ -740,14 +835,18 @@ const processPreparedWindows = async ({
 };
 
 /**
- * Execute one bounded append cycle. Plane chooses scope, cadence, limits, and
- * concurrency; this primitive owns durable ordering and exact outcomes.
+ * Execute one bounded append cycle. Plane chooses scope, cadence, limits,
+ * concurrency, and what an acceptance means; this primitive owns durable
+ * ordering and exact outcomes. A queued cycle no longer waits a commit period
+ * per request, so a backlog is bounded by payload and index throughput rather
+ * than by in-flight requests times the commit period.
  */
 export const executeCorpusProjectionAppendCycle = async <
   Family extends CorpusProjectionIntentLease["family"],
 >({
   runInTransaction,
   client,
+  commitMode,
   family,
   generation,
   scope,
@@ -762,31 +861,51 @@ export const executeCorpusProjectionAppendCycle = async <
     retryDelayMs,
     payloadRetryLimit,
   );
-  const { replacements, leases } = await runInTransaction(async (tx) => ({
-    replacements: await prepareCorpusProjectionReplacementsTx(tx, {
-      family,
-      generation,
-      scope,
-      limit,
-    }),
-    leases: await reserveCorpusProjectionIntentsTx(tx, {
-      family,
-      generation,
-      scope,
-      limit,
-      leaseMs,
-    }),
-  }));
+  const timing: CorpusProjectionAppendCycleTiming = {
+    reservationMs: 0,
+    materialReadMs: 0,
+    payloadLoadMs: 0,
+    ingestMs: 0,
+    storeCommitMs: 0,
+  };
+  const { replacements, leases } = await measured(
+    async () =>
+      await runInTransaction(async (tx) => ({
+        replacements: await prepareCorpusProjectionReplacementsTx(tx, {
+          family,
+          generation,
+          scope,
+          limit,
+        }),
+        leases: await reserveCorpusProjectionIntentsTx(tx, {
+          family,
+          generation,
+          scope,
+          limit,
+          leaseMs,
+        }),
+      })),
+    (elapsedMs) => {
+      timing.reservationMs += elapsedMs;
+    },
+  );
   if (leases.length === 0) {
-    return emptyResult(replacements.length);
+    return emptyResult(replacements.length, timing);
   }
   const result: CorpusProjectionAppendCycleResult = {
-    ...emptyResult(replacements.length),
+    ...emptyResult(replacements.length, timing),
     status: "completed",
     reserved: leases.length,
   };
-  const materials = await runInTransaction(
-    async (tx) => await readReservedCorpusProjectionMaterialsTx(tx, { leases }),
+  const materials = await measured(
+    async () =>
+      await runInTransaction(
+        async (tx) =>
+          await readReservedCorpusProjectionMaterialsTx(tx, { leases }),
+      ),
+    (elapsedMs) => {
+      result.timing.materialReadMs += elapsedMs;
+    },
   );
   const rejectedLeases = materials.rejected
     .filter(({ status }) => status === "stale")
@@ -827,6 +946,7 @@ export const executeCorpusProjectionAppendCycle = async <
   await processPreparedWindows({
     runInTransaction,
     client,
+    commitMode,
     materialsReady: materials.ready,
     tails: new Map(),
     windowStart: 0,

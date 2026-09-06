@@ -9,7 +9,12 @@ import {
   corpusIndexProjectionStates,
 } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
+import {
+  CORPUS_INDEX_MANIFESTS,
+  corpusIndexManifestDigest,
+} from "@/api/lib/legal-search/corpus-index-manifest";
 import { readCorpusIndexProjectionConvergenceTx } from "@/api/lib/legal-search/corpus-index-projection-convergence";
+import { corpusIndexAppendPublishDelayMs } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -49,7 +54,9 @@ beforeAll(async () => {
   await db.insert(corpusIndexGenerations).values({
     ...TARGET,
     cluster: "q09",
-    manifestDigest: "a".repeat(64),
+    manifestDigest: corpusIndexManifestDigest(
+      CORPUS_INDEX_MANIFESTS.case_law_v5,
+    ),
     status: "building",
   });
 });
@@ -167,4 +174,40 @@ test("the launch probe requires populated current state before census", async ()
     cleanupNotBefore: NOW,
   });
   expect(await readStatus()).toBe("intent_outstanding");
+});
+
+test("the launch probe waits out the engine publish delay", async () => {
+  await db
+    .delete(corpusIndexProjectionIntents)
+    .where(eq(corpusIndexProjectionIntents.id, CLEANUP_INTENT_ID));
+  expect(await readStatus()).toBe("ready_for_census");
+
+  const acceptedAt = new Date();
+  await db
+    .update(corpusIndexProjectionIntents)
+    .set({
+      appendStartedAt: acceptedAt,
+      appendCommittedAt: acceptedAt,
+      appliedAt: acceptedAt,
+    })
+    .where(eq(corpusIndexProjectionIntents.id, APPLIED_INTENT_ID));
+  // Every revision is applied, but a queued one is not searchable yet. A
+  // census run now would inspect a strict subset and still read as complete,
+  // which is a proof of nothing.
+  expect(await readStatus()).toBe("publish_pending");
+
+  const published = new Date(
+    Date.now() -
+      corpusIndexAppendPublishDelayMs(CORPUS_INDEX_MANIFESTS.case_law_v5) -
+      1000,
+  );
+  await db
+    .update(corpusIndexProjectionIntents)
+    .set({
+      appendStartedAt: published,
+      appendCommittedAt: published,
+      appliedAt: published,
+    })
+    .where(eq(corpusIndexProjectionIntents.id, APPLIED_INTENT_ID));
+  expect(await readStatus()).toBe("ready_for_census");
 });

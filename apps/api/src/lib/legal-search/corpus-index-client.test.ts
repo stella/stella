@@ -810,6 +810,46 @@ test("final-generation ingest requires the exact committed V2 receipt", async ()
   expect(requests.at(0)?.search).toBe("?commit=wait_for");
 });
 
+test("the two final-generation ingests differ only in their commit mode", async () => {
+  responseBody = {
+    num_docs_for_processing: 2,
+    num_ingested_docs: 2,
+    num_rejected_docs: 0,
+  };
+  const client = getCorpusIndexClient("q08");
+  const ndjson = '{"document_id":"a"}\n{"document_id":"b"}';
+
+  expect(
+    (await client.ingestCommittedBatch("case_law_v5_cs_sk", ndjson)).isOk(),
+  ).toBe(true);
+  expect(
+    (await client.ingestQueuedBatch("case_law_v5_cs_sk", ndjson)).isOk(),
+  ).toBe(true);
+
+  // Both persist their acceptance, so both demand the exact receipt; only
+  // when that acceptance becomes visible differs, and that is the commit
+  // value. A queued call sent as `wait_for` would silently be the slow path.
+  expect(requests.map(({ search }) => search)).toEqual([
+    `?commit=${CORPUS_INDEX_COMMIT.waitFor}`,
+    `?commit=${CORPUS_INDEX_COMMIT.auto}`,
+  ]);
+});
+
+test("queued ingest rejects a partial V2 receipt", async () => {
+  responseBody = {
+    num_docs_for_processing: 2,
+    num_ingested_docs: 1,
+    num_rejected_docs: 0,
+  };
+
+  const result = await getCorpusIndexClient("q08").ingestQueuedBatch(
+    "case_law_v5_cs_sk",
+    '{"document_id":"a"}\n{"document_id":"b"}',
+  );
+
+  expect(result.isErr()).toBe(true);
+});
+
 test("final-generation ingest rejects missing or partial V2 counters", async () => {
   for (const receipt of [
     { num_docs_for_processing: 2, num_rejected_docs: 0 },

@@ -26,6 +26,31 @@ export const CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES =
 export const CORPUS_PROJECTION_DELETE_MAX_REVISIONS = 128;
 export const CORPUS_PROJECTION_UNKNOWN_APPEND_MARGIN_MS = 5000;
 
+/**
+ * What an accepted append is allowed to mean for the store row behind it.
+ *
+ * `published` waits for the split, so a revision the store marks applied is
+ * searchable the instant it is applied. `queued` returns on acceptance, so a
+ * catch-up generation can keep more than one request in flight per commit
+ * period instead of paying a wall-clock commit for each one, and its
+ * documents stay invisible to search and to delete-by-query until the
+ * engine's own commit timer fires.
+ *
+ * Nothing persists which mode wrote a revision, and nothing should: the mode
+ * is a per-cycle choice, several cycles can append into one generation, and a
+ * reader that guessed wrong would delete documents that are not there yet or
+ * read absence as drift. Every observer of an accepted revision instead
+ * fences on `corpusIndexAppendPublishDelayMs`, which holds for both modes:
+ * a published append has already spent that delay inside the ingest call.
+ */
+export const CORPUS_PROJECTION_APPEND_COMMIT_MODE = {
+  published: "published",
+  queued: "queued",
+} as const;
+
+export type CorpusProjectionAppendCommitMode =
+  (typeof CORPUS_PROJECTION_APPEND_COMMIT_MODE)[keyof typeof CORPUS_PROJECTION_APPEND_COMMIT_MODE];
+
 export type CorpusProjectionAppendEntry = {
   revision: ProjectionRevision;
   documents: readonly Record<string, unknown>[];
@@ -425,6 +450,18 @@ export const corpusIndexUnknownAppendBarrierAt = (
 
 export const corpusIndexUnknownAppendBarrierDelayMs = (
   manifest: CorpusIndexManifest,
+): number =>
+  CORPUS_INDEX_INGEST_TIMEOUT_MS + corpusIndexAppendPublishDelayMs(manifest);
+
+/**
+ * Milliseconds after the engine accepts an append when its documents are
+ * guaranteed observable: committed by the engine's own commit timer and
+ * published as a split. Under `published` the ingest call has already spent
+ * this delay; under `queued` the caller still owes all of it, so search,
+ * census, convergence, and delete-by-query all fence on it.
+ */
+export const corpusIndexAppendPublishDelayMs = (
+  manifest: CorpusIndexManifest,
 ): number => {
   const commitTimeoutSecs =
     manifest.engine.indexConfig.indexing_settings.commit_timeout_secs;
@@ -435,9 +472,5 @@ export const corpusIndexUnknownAppendBarrierDelayMs = (
   ) {
     return panic("Corpus projection append barrier contract is invalid");
   }
-  return (
-    CORPUS_INDEX_INGEST_TIMEOUT_MS +
-    commitTimeoutSecs * 1000 +
-    CORPUS_PROJECTION_UNKNOWN_APPEND_MARGIN_MS
-  );
+  return commitTimeoutSecs * 1000 + CORPUS_PROJECTION_UNKNOWN_APPEND_MARGIN_MS;
 };

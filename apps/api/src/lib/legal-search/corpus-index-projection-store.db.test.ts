@@ -35,7 +35,10 @@ import {
   settleCorpusProjectionCleanupTx,
 } from "@/api/lib/legal-search/corpus-index-projection-cleanup-store";
 import { advanceCorpusProjectionDesiredStateTx } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
-import { corpusIndexUnknownAppendBarrierAt } from "@/api/lib/legal-search/corpus-index-projection-engine";
+import {
+  corpusIndexAppendPublishDelayMs,
+  corpusIndexUnknownAppendBarrierAt,
+} from "@/api/lib/legal-search/corpus-index-projection-engine";
 import {
   advanceCorpusProjectionErasuresTx,
   CORPUS_PROJECTION_ERASURE_MAX_REVISIONS,
@@ -1303,12 +1306,22 @@ test("replacement deletes and settles the old revision before reserving the new 
   );
   expect(first).toHaveLength(1);
   const firstLease = first.at(0) ?? panic("Expected first projection lease");
+  // The census and the cleanup below both observe the index, and neither may
+  // run inside the engine's commit window, so this append is accepted far
+  // enough in the past to be published. The fence itself is proven in the
+  // publish-fence test.
+  const acceptedAt = new Date(
+    Date.now() -
+      corpusIndexAppendPublishDelayMs(CORPUS_INDEX_MANIFESTS.case_law_v5) -
+      1000,
+  );
   expect(
     await db.transaction(
       async (tx) =>
         await startCorpusProjectionAppendTx(asTestRaw<Transaction>(tx), {
           intentId: firstLease.intentId,
           leaseToken: firstLease.leaseToken,
+          testNow: acceptedAt,
         }),
     ),
   ).toBe("started");
@@ -1319,6 +1332,7 @@ test("replacement deletes and settles the old revision before reserving the new 
           intentId: firstLease.intentId,
           leaseToken: firstLease.leaseToken,
           documentCount: 1,
+          testNow: acceptedAt,
         }),
     ),
   ).toMatchObject({ status: "applied", entityId: DECISION_ID });
@@ -1812,6 +1826,14 @@ test("production transitions preserve PostgreSQL clock ordering under process sk
       );
     }),
   ).toEqual({ epoch: 3n, generationCount: 1 });
+  // Cleanup deletes by query, so it starts only once the engine has
+  // certainly published what it is deleting.
+  const publishedAt = new Date(
+    databaseNow.getTime() +
+      corpusIndexAppendPublishDelayMs(CORPUS_INDEX_MANIFESTS.case_law_v5),
+  );
+  const cleanupNow = new Date(publishedAt.getTime() + 1000);
+  await setDatabaseClock(cleanupNow);
   const cleanup = await withDatabaseClock(
     async (tx) =>
       await claimCorpusProjectionCleanupTx(tx, {
@@ -1926,7 +1948,7 @@ test("production transitions preserve PostgreSQL clock ordering under process sk
     ),
   ).toHaveLength(1);
 
-  const recoveryNow = new Date(databaseNow.getTime() + 2 * 60_000);
+  const recoveryNow = new Date(cleanupNow.getTime() + 2 * 60_000);
   await setDatabaseClock(recoveryNow);
   expect(
     await withDatabaseClock(
@@ -1960,8 +1982,8 @@ test("production transitions preserve PostgreSQL clock ordering under process sk
       appendStartedAt: databaseNow,
       appendCommittedAt: databaseNow,
       appliedAt: databaseNow,
-      appendPublishBarrierAt: databaseNow,
-      cleanupNotBefore: databaseNow,
+      appendPublishBarrierAt: publishedAt,
+      cleanupNotBefore: cleanupNow,
       cleanupStartedAt: null,
       settledAt: null,
       updatedAt: recoveryNow,

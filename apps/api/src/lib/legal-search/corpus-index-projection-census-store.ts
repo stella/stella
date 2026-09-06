@@ -14,6 +14,10 @@ import {
   readRegisteredCorpusProjectionManifestForCleanup,
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { CORPUS_PROJECTION_DELETE_MAX_REVISIONS } from "@/api/lib/legal-search/corpus-index-projection-engine";
+import {
+  corpusProjectionAcceptedAppendCleanupFence,
+  corpusProjectionAppendIsPublished,
+} from "@/api/lib/legal-search/corpus-index-projection-publish-fence";
 import { brandValidatedCorpusIndexProjectionIntentId } from "@/api/lib/safe-id-boundaries";
 
 type ProjectionRevision = SafeId<"corpusIndexProjectionIntent">;
@@ -92,7 +96,11 @@ const requireAppliedCandidateDocumentCount = ({
   return { entityId, revision, expectedDocumentCount };
 };
 
-/** Bounded authoritative revisions that the engine must currently contain. */
+/**
+ * Bounded authoritative revisions that the engine must currently contain.
+ * A revision the engine has accepted but not yet published is not one of
+ * them: reading it now would report a queued append as drift.
+ */
 export const readAppliedCorpusProjectionCensusPageTx = async (
   tx: Transaction,
   options: CorpusProjectionCensusPageOptions,
@@ -100,7 +108,7 @@ export const readAppliedCorpusProjectionCensusPageTx = async (
   CorpusProjectionCensusPage<AppliedCorpusProjectionCensusCandidate>
 > => {
   validateCensusPage(options);
-  await readRegisteredCorpusProjectionManifestForCleanup(
+  const manifest = await readRegisteredCorpusProjectionManifestForCleanup(
     tx,
     options.family,
     options.generation,
@@ -127,6 +135,7 @@ export const readAppliedCorpusProjectionCensusPageTx = async (
         eq(corpusIndexProjectionStates.appliedIndexId, options.indexId),
         isNotNull(corpusIndexProjectionStates.appliedRevision),
         eq(corpusIndexProjectionIntents.status, "applied"),
+        corpusProjectionAppendIsPublished(manifest),
         options.after === null
           ? undefined
           : gt(corpusIndexProjectionStates.entityId, options.after),
@@ -211,7 +220,7 @@ export const repairAppliedCorpusProjectionDriftTx = async (
   ) {
     return panic("Corpus projection census repair batch is invalid");
   }
-  await lockRegisteredCorpusProjectionManifestForMutation(
+  const manifest = await lockRegisteredCorpusProjectionManifestForMutation(
     tx,
     options.family,
     options.generation,
@@ -276,8 +285,7 @@ export const repairAppliedCorpusProjectionDriftTx = async (
     .update(corpusIndexProjectionIntents)
     .set({
       status: "cleanup_pending",
-      appendPublishBarrierAt: corpusIndexProjectionIntents.appendCommittedAt,
-      cleanupNotBefore: repairAt,
+      ...corpusProjectionAcceptedAppendCleanupFence(manifest, repairAt),
       lastError: "applied census observed engine drift",
       updatedAt: repairAt,
     })
