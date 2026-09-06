@@ -64,7 +64,9 @@ export const getInspectorTabGroupId = (
 };
 
 type InspectorTabDropOptions = {
-  state: Pick<InspectorTabsState, "tabs" | "groupAssignments">;
+  state: Pick<InspectorTabsState, "groupAssignments"> & {
+    tabs: readonly InspectorTab[];
+  };
   sourceId: string;
   targetId: string;
 };
