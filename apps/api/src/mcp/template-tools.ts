@@ -1587,6 +1587,11 @@ const DOCX_BASE64_FAILURE_HINT = {
     "that destroys the document's formatting and still leaves an unreadable " +
     "archive. Re-encode the original .docx bytes verbatim, or have the file " +
     "attached through the host's file transport instead of inlining it.",
+  "archive-limit-exceeded":
+    "The archive opened, but it is outside the bounds stella will unpack " +
+    "(entry count or decompressed size). Re-sending the same bytes will not " +
+    "change that. Ask the user for a smaller .docx rather than repackaging " +
+    "this one.",
   "missing-document-xml":
     "The archive decoded but has no 'word/document.xml'. Send the original " +
     ".docx unmodified; do not rebuild or repackage it.",

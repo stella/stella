@@ -1,17 +1,38 @@
 import * as slimdom from "slimdom";
 
-import { loadDocxArchive } from "@/api/lib/docx-archive";
+import { DocxArchiveError, loadDocxArchive } from "@/api/lib/docx-archive";
 
 /**
  * Which structural check failed. Callers branch on this instead of matching the
  * message: `unreadable-archive` is the only failure a caller can attribute to
  * the bytes never having arrived intact, which is the advice a base64 payload
- * needs and a stored file does not.
+ * needs and a stored file does not. An archive that parses but breaks a
+ * bounded-decompression limit is `archive-limit-exceeded`, because re-sending
+ * the same bytes cannot fix it.
  */
 export type DocxValidationFailure =
   | "unreadable-archive"
+  | "archive-limit-exceeded"
   | "missing-document-xml"
   | "malformed-document-xml";
+
+/**
+ * Total over the archive loader's reasons, so a new one has to decide whether
+ * it means the bytes never arrived intact or the archive itself is out of
+ * bounds. A throw that is not a `DocxArchiveError` is a parse failure.
+ */
+const FAILURE_BY_ARCHIVE_REASON = {
+  "load-failed": "unreadable-archive",
+  "too-many-entries": "archive-limit-exceeded",
+  "entry-too-large": "archive-limit-exceeded",
+  "total-too-large": "archive-limit-exceeded",
+} as const satisfies Record<
+  DocxArchiveError["reason"],
+  Extract<
+    DocxValidationFailure,
+    "unreadable-archive" | "archive-limit-exceeded"
+  >
+>;
 
 export type ValidateDocxBufferResult =
   | { valid: true }
@@ -64,7 +85,10 @@ export const validateDocxBuffer = async (
   } catch (error) {
     return {
       valid: false,
-      reason: "unreadable-archive",
+      reason:
+        error instanceof DocxArchiveError
+          ? FAILURE_BY_ARCHIVE_REASON[error.reason]
+          : "unreadable-archive",
       error: error instanceof Error ? error.message : "unknown error",
     };
   }

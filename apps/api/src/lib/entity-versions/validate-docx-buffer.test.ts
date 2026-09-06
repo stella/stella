@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
+import { DOCX_MAX_ENTRIES } from "@/api/lib/docx-archive";
+
 import { validateDocxBuffer } from "./validate-docx-buffer";
 
 const W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
@@ -64,6 +66,24 @@ describe("DOCX buffer validation", () => {
       // Callers embed `error` in their own sentence, so it must not repeat a
       // prefix of its own.
       expect(result.error).not.toContain("Invalid DOCX");
+    }
+  });
+
+  test("separates an archive that breaks a decompression bound from one that will not open", async () => {
+    const zip = new JSZip();
+    zip.file("word/document.xml", `<w:document xmlns:w="${W_NS}"/>`);
+    for (let index = 0; index < DOCX_MAX_ENTRIES; index += 1) {
+      zip.file(`word/media/${String(index)}.bin`, "x");
+    }
+    const overBound = await zip.generateAsync({ type: "arraybuffer" });
+
+    const result = await validateDocxBuffer(overBound);
+
+    expect(result.valid).toBe(false);
+    if (!result.valid) {
+      // These bytes arrived intact, so telling the caller to re-encode them
+      // would send it after a fault that is not there.
+      expect(result.reason).toBe("archive-limit-exceeded");
     }
   });
 });
