@@ -190,7 +190,7 @@ describe("required-fields rejection is identical at every enforcing fill boundar
             organizationId,
             userId,
             templateId,
-            body: { values: "{}" },
+            body: { values: {} },
             query: {},
             recordAuditEvent,
           }),

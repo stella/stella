@@ -3,13 +3,11 @@ import { t } from "elysia";
 
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { tJsonObject, tSafeId } from "@/api/lib/custom-schema";
 import { fillPreviewLogic } from "@/api/lib/templates/fill-preview-logic";
 
-// `values` is a real object, not a JSON-encoded string: this route carries no
-// file part, so nothing forces multipart encoding on it.
 const fillPreviewBodySchema = t.Object({
-  values: t.Record(t.String(), t.Unknown()),
+  values: tJsonObject,
 });
 
 const fillPreviewParamsSchema = t.Object({
