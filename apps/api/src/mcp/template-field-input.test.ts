@@ -233,19 +233,22 @@ describe("template field input schema", () => {
     const parsed = parseFieldsOverlay([wireField]);
 
     expect(parsed.success).toBe(true);
-    expect(parsed.output?.fields).toEqual([
-      {
-        path: "company",
-        input_type: "text",
-        required: false,
-        lookup: {
-          registry: "krs",
-          formats: [{ key: "default", template: "[name]" }],
+    expect(parsed.output).toEqual({
+      template_id: TEMPLATE_ID,
+      fields: [
+        {
+          path: "company",
+          input_type: "text",
+          required: false,
+          lookup: {
+            registry: "krs",
+            formats: [{ key: "default", template: "[name]" }],
+          },
+          ai_sees_document: false,
+          ai_adapt: false,
         },
-        ai_sees_document: false,
-        ai_adapt: false,
-      },
-    ]);
+      ],
+    });
   });
 
   test("rejects the persisted camelCase spellings", () => {
@@ -286,7 +289,7 @@ describe("template field input schema", () => {
         const withNull = parseFieldsOverlay([{ path: "company", [key]: null }]);
         const omitted = parseFieldsOverlay([{ path: "company" }]);
         expect(withNull.success).toBe(omitted.success);
-        expect(withNull.output?.fields).toEqual(omitted.output?.fields);
+        expect(withNull.output).toEqual(omitted.output);
       });
     }
 
@@ -298,9 +301,10 @@ describe("template field input schema", () => {
           { path: "company", validation: { [key]: null } },
         ]);
         expect(withNull.success).toBe(true);
-        expect(withNull.output?.fields).toEqual([
-          { path: "company", validation: {} },
-        ]);
+        expect(withNull.output).toEqual({
+          template_id: TEMPLATE_ID,
+          fields: [{ path: "company", validation: {} }],
+        });
       });
     }
 

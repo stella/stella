@@ -97,6 +97,18 @@ export type NullAsAbsentInputSchema = v.GenericSchema & {
   readonly advertisedSchema: ToolObjectInputSchema;
 };
 
+/**
+ * The wrapper's type for one declared object. Written out rather than inferred
+ * from the `v.pipe(...)` expression: every tool input schema in this directory
+ * goes through {@link nullAsAbsent}, so an inferred `SchemaWithPipe` over a
+ * three-item tuple would be instantiated at each of them and carried into every
+ * handler that reads `parsed.output`. This says the same thing in two nodes.
+ */
+type NullAsAbsentSchema<TSchema extends ToolObjectInputSchema> =
+  v.GenericSchema<unknown, v.InferOutput<TSchema>> & {
+    readonly advertisedSchema: TSchema;
+  };
+
 /** One object or array level of a declared input, as far as null-dropping
  * cares: which properties carry null as absence, and where to recurse. */
 type NullAsAbsentPlan =
@@ -203,7 +215,7 @@ const applyNullAsAbsent = (value: unknown, plan: NullAsAbsentPlan): unknown => {
  */
 export const nullAsAbsent = <TSchema extends ToolObjectInputSchema>(
   advertisedSchema: TSchema,
-) => {
+): NullAsAbsentSchema<TSchema> => {
   const plan =
     nullAsAbsentPlan(advertisedSchema) ??
     panic("A tool input schema must declare object properties");
