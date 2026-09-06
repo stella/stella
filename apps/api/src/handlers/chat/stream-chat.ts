@@ -1686,6 +1686,14 @@ export const processServerChatStream = async function* ({
     for (const chunk of finalRunFinishedChunks) {
       processor.processChunk(chunk);
     }
+    // The source is drained, so the turn is over. A finish that reports
+    // `tool_calls` leaves the processor waiting for the next iteration of the
+    // agent loop, and an iteration that never comes would leave the assistant
+    // message unfinalized and `onStreamEnd` unfired: the turn a client tool or
+    // an approval is waiting on would read as an empty completion. Finalizing
+    // is what ends the message; it is the same call the SDK makes when it
+    // drives the stream itself, and repeating it later is a no-op.
+    processor.finalizeStream();
     const awaitingUserInteraction =
       getAwaitingUserInteraction(getResponseMessage());
     // A client-resolved call whose input never finished (no TOOL_CALL_END)

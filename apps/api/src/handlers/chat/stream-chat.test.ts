@@ -1374,6 +1374,9 @@ describe("outgoing chat stream message ids", () => {
     for (const chunk of chunks) {
       clientProcessor.processChunk(chunk);
     }
+    // The SDK finalizes when it drives the stream itself; a replay that feeds
+    // chunks one by one ends the turn here, as the client does.
+    clientProcessor.finalizeStream();
 
     expect(chunks.map((chunk) => chunk.type)).toEqual([
       EventType.RUN_STARTED,
