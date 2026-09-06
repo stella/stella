@@ -163,8 +163,10 @@ const splitEntry = createSafeHandler(
           durationMinutes: number;
           billedMinutes: number;
         }[] = [];
+        const successorRows: (typeof timeEntries.$inferInsert)[] = [];
 
-        // Create split entries
+        // Ids are minted here, so the successors go in as one insert and the
+        // audit events below need nothing read back.
         for (let i = 0; i < body.splits.length; i++) {
           const split = body.splits[i];
           const durationMinutes = durations[i];
@@ -172,44 +174,44 @@ const splitEntry = createSafeHandler(
             continue;
           }
           const billedMinutes = roundToBillingIncrement(durationMinutes);
+          const entryId = createSafeId<"timeEntry">();
 
-          // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- sequential inserts create ordered successor rows for the split entry
-          const [entry] = await tx
-            .insert(timeEntries)
-            .values({
-              organizationId: original.organizationId,
-              workspaceId,
-              userId: original.userId,
-              workItemId: split.workItemId,
-              dateWorked: original.dateWorked,
-              timezoneId: original.timezoneId,
-              durationMinutes,
-              billedMinutes,
-              rateAtEntry: original.rateAtEntry,
-              currency: original.currency,
-              narrative: original.narrative,
-              invoiceNarrative: original.invoiceNarrative,
-              billable: original.billable,
-              noCharge: original.noCharge,
-              status: original.status,
-              source: original.source,
-              taskCode: original.taskCode,
-              activityCode: original.activityCode,
-              splitGroupId,
-              createdAt: now,
-              updatedAt: now,
-            })
-            .returning({ id: timeEntries.id });
+          successorRows.push({
+            id: entryId,
+            organizationId: original.organizationId,
+            workspaceId,
+            userId: original.userId,
+            workItemId: split.workItemId,
+            dateWorked: original.dateWorked,
+            timezoneId: original.timezoneId,
+            durationMinutes,
+            billedMinutes,
+            rateAtEntry: original.rateAtEntry,
+            currency: original.currency,
+            narrative: original.narrative,
+            invoiceNarrative: original.invoiceNarrative,
+            billable: original.billable,
+            noCharge: original.noCharge,
+            status: original.status,
+            source: original.source,
+            taskCode: original.taskCode,
+            activityCode: original.activityCode,
+            splitGroupId,
+            createdAt: now,
+            updatedAt: now,
+          });
 
-          if (entry) {
-            newEntryIds.push(entry.id);
-            createdEntries.push({
-              id: entry.id,
-              workItemId: split.workItemId,
-              durationMinutes,
-              billedMinutes,
-            });
-          }
+          newEntryIds.push(entryId);
+          createdEntries.push({
+            id: entryId,
+            workItemId: split.workItemId,
+            durationMinutes,
+            billedMinutes,
+          });
+        }
+
+        if (successorRows.length > 0) {
+          await tx.insert(timeEntries).values(successorRows);
         }
 
         const events: AuditEvent[] = [

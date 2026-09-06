@@ -268,7 +268,11 @@ test("batched column creation keeps ids paired with their template columns", asy
     .select({ id: properties.id, name: properties.name })
     .from(properties)
     .where(eq(properties.workspaceId, workspaceId));
-  const nameById = new Map(persisted.map((row) => [row.id, row.name]));
+  // Widened to `string` because the resolver hands back the branded and the
+  // unbranded id types on different paths; only the name matters here.
+  const nameById = new Map<string, string>(
+    persisted.map((row) => [row.id, row.name]),
+  );
 
   expect(outcome.value.propertyIds.map((id) => nameById.get(id))).toEqual([
     "Counterparty",
