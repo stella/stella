@@ -13976,7 +13976,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "entities", "read-window"],
                 capabilityId: "entities.read-window",
                 description:
-                  "Read a window of a matter's documents, folders, and tasks with the same filters, sorts, search, and field selection as entities.list, but with the page bounds the virtualized table scrolls by (200 rows by default). Prefer entities.list unless you are filling a table viewport.",
+                  "Read a window of a matter's documents, folders, and tasks with the same filters, sorts, search, and field selection as entities.list, plus the find filter, but with the page bounds the virtualized table scrolls by (200 rows by default). Prefer entities.list unless you are filling a table viewport.",
                 access: "read",
                 flags: [
                   {
@@ -13991,20 +13991,13 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
+                    description:
+                      "Rank rows by relevance against the asynchronous document-title index, and sort by that relevance. For a literal substring filter over the rendered rows, use `find`.",
                     flag: "--search",
                     prop: "search",
                     required: false,
                     part: "body",
                     partPath: "search",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--find",
-                    prop: "find",
-                    required: false,
-                    part: "body",
-                    partPath: "find",
                   },
                   {
                     kind: "enum-array",
@@ -14047,7 +14040,7 @@ export const generatedRouteMap: RouteNode = {
                 inputOnly: [
                   "body.filters",
                   "body.sorts",
-                  "body.findScope",
+                  "body.find",
                   "body.fieldMode",
                 ],
                 paginated: true,
@@ -14381,31 +14374,48 @@ export const generatedRouteMap: RouteNode = {
                         },
                         search: {
                           maxLength: 500,
+                          description:
+                            "Rank rows by relevance against the asynchronous document-title index, and sort by that relevance. For a literal substring filter over the rendered rows, use `find`.",
                           type: "string",
                         },
                         find: {
-                          maxLength: 500,
-                          type: "string",
-                        },
-                        findScope: {
+                          description:
+                            "Filter rows to those whose displayed name or chosen columns contain this literal substring. Not `search`: that ranks an asynchronous index of document titles, this filters exactly what the grid renders and adds no sort keys. `scope.type` `all` also matches the name, `columns` matches only `scope.propertyIds`.",
                           type: "object",
-                          required: ["propertyIds", "type"],
+                          required: ["scope", "term"],
                           properties: {
-                            propertyIds: {
-                              maxItems: 300,
-                              type: "array",
-                              items: {
-                                minLength: 36,
-                                maxLength: 36,
-                                pattern:
-                                  "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                                type: "string",
+                            scope: {
+                              type: "object",
+                              required: ["propertyIds", "type"],
+                              properties: {
+                                propertyIds: {
+                                  maxItems: 300,
+                                  type: "array",
+                                  items: {
+                                    minLength: 36,
+                                    maxLength: 36,
+                                    pattern:
+                                      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                                    type: "string",
+                                  },
+                                },
+                                type: {
+                                  anyOf: [
+                                    {
+                                      const: "all",
+                                      type: "string",
+                                    },
+                                    {
+                                      const: "columns",
+                                      type: "string",
+                                    },
+                                  ],
+                                },
                               },
                             },
-                            type: {
-                              default: "all",
+                            term: {
+                              maxLength: 500,
                               type: "string",
-                              enum: ["all", "columns"],
                             },
                           },
                         },
