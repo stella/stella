@@ -4,7 +4,11 @@ import JSZip from "jszip";
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
 import type { FieldMeta } from "@/api/lib/docx/types";
 
-import { applyFieldOverlay, validateFieldOverlay } from "./field-overlay";
+import {
+  applyFieldOverlay,
+  resolveTemplateFieldOverlay,
+  validateFieldOverlay,
+} from "./field-overlay";
 
 const P = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
 
@@ -178,9 +182,90 @@ describe("validateFieldOverlay", () => {
       }),
     ).toEqual([]);
   });
+
+  test("lookup ownership is enforced across every split of existing and incoming configuration", async () => {
+    const discovered = await discoverTemplate(
+      await makeDocx("{{company.name}}"),
+    );
+    const owner = { path: "company", lookup: krsLookup("name") };
+    const child = { path: "company.name", label: "Legal name" };
+    for (const { configured, overlay } of [
+      { configured: [owner], overlay: [child] },
+      { configured: [child], overlay: [owner] },
+      { configured: [], overlay: [owner, child] },
+      { configured: [], overlay: [child, owner] },
+    ]) {
+      const issues = validateFieldOverlay({ configured, discovered, overlay });
+      expect(new Set(issues.map(({ path }) => path))).toEqual(
+        new Set(overlay.map((_, index) => `fields.${index}`)),
+      );
+      for (const { message } of issues) {
+        expect(message).toContain('"company"');
+        expect(message).toContain('"company.name"');
+      }
+    }
+  });
+
+  test("an existing lookup can be relabelled or release a previously owned format", async () => {
+    const discovered = await discoverTemplate(
+      await makeDocx("{{company.name}}", "{{company.full}}"),
+    );
+    const configured = [{ path: "company", lookup: krsLookup("name") }];
+    for (const overlay of [
+      [{ path: "company", label: "Legal entity" }],
+      [
+        { path: "company", lookup: krsLookup("full") },
+        { path: "company.name", label: "Separate name" },
+      ],
+    ]) {
+      expect(validateFieldOverlay({ configured, discovered, overlay })).toEqual(
+        [],
+      );
+    }
+  });
+
+  test("duplicate overlay paths are rejected whether the field already exists or is newly discovered", async () => {
+    const discovered = await discoverTemplate(
+      await makeDocx("{{company.name}}"),
+    );
+    const field = { path: "company", lookup: krsLookup("name") };
+    for (const configured of [[], [field]]) {
+      const issues = validateFieldOverlay({
+        configured,
+        discovered,
+        overlay: [field, field],
+      });
+      expect(issues).toEqual([
+        expect.objectContaining({
+          path: "fields.1",
+          message: expect.stringContaining("duplicate"),
+        }),
+      ]);
+    }
+  });
 });
 
 describe("applyFieldOverlay", () => {
+  test("new and embedded lookup configurations resolve the same manifest for storage and diagnostics", async () => {
+    const discovered = await discoverTemplate(
+      await makeDocx("{{company.name}}"),
+    );
+    const lookup = { path: "company", lookup: krsLookup("name") };
+    const incoming = resolveTemplateFieldOverlay({
+      discovered,
+      manifest: null,
+      overlay: [lookup],
+    });
+    const embedded = resolveTemplateFieldOverlay({
+      discovered,
+      manifest: incoming,
+      overlay: undefined,
+    });
+    expect(incoming).toEqual(embedded);
+    expect(incoming.fields).toEqual([expect.objectContaining(lookup)]);
+    expect(incoming.fields.map(({ path }) => path)).toEqual(["company"]);
+  });
+
   test("merges by path and appends a path the manifest does not carry", () => {
     const manifest = {
       version: 1,

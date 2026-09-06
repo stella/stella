@@ -28,19 +28,14 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
-import {
-  manifestFieldsFromMerge,
-  mergeManifestWithDiscovery,
-  readManifest,
-  writeManifest,
-} from "@/api/lib/docx/template-manifest";
+import { readManifest, writeManifest } from "@/api/lib/docx/template-manifest";
 import type { FieldMeta, TemplateManifest } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { getS3, writeS3ObjectWithRetry } from "@/api/lib/s3";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import {
-  applyFieldOverlay,
+  resolveTemplateFieldOverlay,
   fieldOverlayError,
   validateFieldOverlay,
 } from "@/api/lib/templates/field-overlay";
@@ -155,15 +150,11 @@ export const createStoredTemplate = async function* ({
       }
     }
 
-    const baseManifest = clientManifest
-      ? applyFieldOverlay(existingManifest, clientManifest.fields)
-      : existingManifest;
-    const fields = mergeManifestWithDiscovery(baseManifest, discovered);
-
-    resolvedManifest = {
-      version: baseManifest?.version ?? 1,
-      fields: manifestFieldsFromMerge(fields, baseManifest),
-    };
+    resolvedManifest = resolveTemplateFieldOverlay({
+      discovered,
+      manifest: existingManifest,
+      overlay: clientManifest?.fields,
+    });
   }
 
   const fieldCount = resolvedManifest.fields.length;

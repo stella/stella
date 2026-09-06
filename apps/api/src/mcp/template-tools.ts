@@ -29,16 +29,13 @@ import { discoverTemplate } from "@/api/lib/docx/discover-template";
 import { extractTextForPreview } from "@/api/lib/docx/extract-text";
 import { buildIsRegistryEnabledForOrg } from "@/api/lib/docx/registry-org-gate";
 import type { AiFieldError } from "@/api/lib/docx/resolve-ai-fields";
-import {
-  mergeManifestWithDiscovery,
-  readManifest,
-} from "@/api/lib/docx/template-manifest";
+import { readManifest } from "@/api/lib/docx/template-manifest";
 import {
   boundTemplateWarnings,
   fieldOverlayWarnings,
   type TemplateWarning,
 } from "@/api/lib/docx/template-warnings";
-import type { FieldMeta, FieldPart } from "@/api/lib/docx/types";
+import type { FieldMeta } from "@/api/lib/docx/types";
 import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buffer";
 import type { DocxValidationFailure } from "@/api/lib/entity-versions/validate-docx-buffer";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
@@ -55,6 +52,7 @@ import {
 import { DOCX_EXT_RE, sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
 import { createStoredTemplate } from "@/api/lib/templates/create-template";
+import { resolveTemplateFieldOverlay } from "@/api/lib/templates/field-overlay";
 import {
   recordTemplateFill,
   recordTemplateUse,
@@ -84,6 +82,7 @@ import {
   readTemplateFieldsInput,
   templateFieldInputSchema,
   toFieldMetaToolInput,
+  toTemplateFieldWireInput,
 } from "@/api/mcp/template-field-input";
 import { TEMPLATE_FIELD_REFERENCE_URI } from "@/api/mcp/template-field-reference";
 import { TEMPLATE_MARKER_REFERENCE_URI } from "@/api/mcp/template-marker-reference";
@@ -321,10 +320,20 @@ type TemplateDetailSuccess = Extract<
   DescribeTemplateResult,
   { fields: unknown[] }
 >;
-type TemplateDetailField = TemplateDetailSuccess["fields"][number];
+
+const toTemplateDetailPayload = (payload: TemplateDetailSuccess) => ({
+  ...payload,
+  fields: payload.fields.map(toTemplateFieldWireInput),
+});
+
+type TemplateDetailPayload = ReturnType<typeof toTemplateDetailPayload>;
+type TemplateDetailField = TemplateDetailPayload["fields"][number];
+type TemplateDetailFieldPart = NonNullable<
+  TemplateDetailField["parts"]
+>[number];
 
 const templateFieldOptionItems = (
-  payload: TemplateDetailSuccess,
+  payload: TemplateDetailPayload,
 ): readonly { index: number; options: string[] }[] =>
   payload.fields.flatMap((field) => {
     const options = field.options;
@@ -332,12 +341,12 @@ const templateFieldOptionItems = (
   });
 
 const templateFieldPartItems = (
-  payload: TemplateDetailSuccess,
-): readonly FieldPart[] =>
+  payload: TemplateDetailPayload,
+): readonly TemplateDetailFieldPart[] =>
   payload.fields.flatMap((field) => compact(field.parts));
 
 const templateFieldPartOptionItems = (
-  payload: TemplateDetailSuccess,
+  payload: TemplateDetailPayload,
 ): readonly { index: number; options: string[] }[] =>
   templateFieldPartItems(payload).flatMap((part) => {
     const options = part.options;
@@ -345,7 +354,7 @@ const templateFieldPartOptionItems = (
   });
 
 const templateFieldFormatItems = (
-  payload: TemplateDetailSuccess,
+  payload: TemplateDetailPayload,
 ): readonly { key: string; template: string }[] =>
   payload.fields.flatMap((field) => field.lookup?.formats ?? []);
 
@@ -360,19 +369,19 @@ const compact = <T>(
 
 const buildTemplateDetailTextFieldSpecs = (
   organizationId: string,
-): readonly McpTextFieldSpec<TemplateDetailSuccess>[] => [
+): readonly McpTextFieldSpec<TemplateDetailPayload>[] => [
   defineTextFieldSpec({
     path: "name",
-    items: (payload: TemplateDetailSuccess) => [payload],
+    items: (payload: TemplateDetailPayload) => [payload],
     scope: () => organizationId,
-    read: (payload: TemplateDetailSuccess) => payload.name,
-    apply: (payload: TemplateDetailSuccess, value) => {
+    read: (payload: TemplateDetailPayload) => payload.name,
+    apply: (payload: TemplateDetailPayload, value) => {
       payload.name = value;
     },
   }),
   defineTextFieldSpec({
     path: "fields[].label",
-    items: (payload: TemplateDetailSuccess) => payload.fields,
+    items: (payload: TemplateDetailPayload) => payload.fields,
     scope: () => organizationId,
     read: (field: TemplateDetailField) => field.label,
     apply: (field: TemplateDetailField, value) => {
@@ -381,7 +390,7 @@ const buildTemplateDetailTextFieldSpecs = (
   }),
   defineTextFieldSpec({
     path: "fields[].hint",
-    items: (payload: TemplateDetailSuccess) => payload.fields,
+    items: (payload: TemplateDetailPayload) => payload.fields,
     scope: () => organizationId,
     read: (field: TemplateDetailField) => field.hint,
     apply: (field: TemplateDetailField, value) => {
@@ -389,12 +398,12 @@ const buildTemplateDetailTextFieldSpecs = (
     },
   }),
   defineTextFieldSpec({
-    path: "fields[].aiPrompt",
-    items: (payload: TemplateDetailSuccess) => payload.fields,
+    path: "fields[].ai_prompt",
+    items: (payload: TemplateDetailPayload) => payload.fields,
     scope: () => organizationId,
-    read: (field: TemplateDetailField) => field.aiPrompt,
+    read: (field: TemplateDetailField) => field.ai_prompt,
     apply: (field: TemplateDetailField, value) => {
-      field.aiPrompt = value;
+      field.ai_prompt = value;
     },
   }),
   defineTextFieldSpec({
@@ -411,8 +420,8 @@ const buildTemplateDetailTextFieldSpecs = (
     path: "fields[].parts[].label",
     items: templateFieldPartItems,
     scope: () => organizationId,
-    read: (part: FieldPart) => part.label,
-    apply: (part: FieldPart, value) => {
+    read: (part: TemplateDetailFieldPart) => part.label,
+    apply: (part: TemplateDetailFieldPart, value) => {
       part.label = value;
     },
   }),
@@ -433,6 +442,33 @@ const buildTemplateDetailTextFieldSpecs = (
     read: (format: { key: string; template: string }) => format.template,
     apply: (format: { key: string; template: string }, value) => {
       format.template = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: "warnings[].path",
+    items: (payload: TemplateDetailPayload) => payload.warnings ?? [],
+    scope: () => organizationId,
+    read: (warning: TemplateWarning) => warning.path,
+    apply: (warning: TemplateWarning, value) => {
+      warning.path = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: "warnings[].message",
+    items: (payload: TemplateDetailPayload) => payload.warnings ?? [],
+    scope: () => organizationId,
+    read: (warning: TemplateWarning) => warning.message,
+    apply: (warning: TemplateWarning, value) => {
+      warning.message = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: "warnings[].hint",
+    items: (payload: TemplateDetailPayload) => payload.warnings ?? [],
+    scope: () => organizationId,
+    read: (warning: TemplateWarning) => warning.hint,
+    apply: (warning: TemplateWarning, value) => {
+      warning.hint = value;
     },
   }),
 ];
@@ -779,23 +815,25 @@ const describeTemplateDetail: TypedMcpToolHandler<
     return errorResult(result.error);
   }
 
+  const payload = toTemplateDetailPayload(result);
+
   // Redact the org-authored template name and each field's label/hint/aiPrompt;
   // field paths, input types, options, and condition/formula expressions are
   // structural and pass through. Template = org scope.
   const textFields = runTextFieldSpecs(
     buildTemplateDetailTextFieldSpecs(context.organizationId),
-    result,
+    payload,
   );
 
   // `describeStoredTemplate` builds the describe payload, so there is no
   // literal for excess-property checking to guard; tie its return type instead.
   type TemplateDescribePayload = AssertNoExtraFields<
-    typeof result,
+    typeof payload,
     v.InferInput<typeof TEMPLATE_DESCRIBE_PROJECTION>
   >;
   return {
     egress: "structured",
-    payload: result satisfies TemplateDescribePayload,
+    payload: payload satisfies TemplateDescribePayload,
     textFields,
   };
 };
@@ -1704,27 +1742,17 @@ const templateAuthoringWarnings = async ({
     readManifest(buffer),
   ]);
 
-  // The saved manifest is what `createStoredTemplate` writes: any manifest the
-  // DOCX already embeds, merged with discovery, then the request overlay
-  // applied per path. Warning on the request overlay alone would let an
-  // embedded condition or lookup be persisted unreported, and the next
-  // list_templates describe would then disagree with this response.
-  const overlayByPath = new Map<string, FieldMeta>();
-  if (fields !== undefined) {
-    for (const field of fields) {
-      overlayByPath.set(field.path, field);
-    }
-  }
-  const savedFields = mergeManifestWithDiscovery(
-    embeddedManifest,
+  const savedManifest = resolveTemplateFieldOverlay({
     discovered,
-  ).map((field) => overlayByPath.get(field.path) ?? field);
+    manifest: embeddedManifest,
+    overlay: fields,
+  });
 
   return boundTemplateWarnings([
     ...discovered.warnings,
     ...(await fieldOverlayWarnings({
       conditionPaths: discovered.conditionPaths,
-      fields: savedFields,
+      fields: savedManifest.fields,
       placeholderPaths: discovered.placeholders.map(({ name }) => name),
       registryGate: async () =>
         await buildIsRegistryEnabledForOrg({
@@ -1921,11 +1949,13 @@ const configureExistingTemplate = async ({
     return errorResult(described.error);
   }
 
+  const payload = toTemplateDetailPayload(described);
+
   type ConfiguredTemplatePayload = AssertNoExtraFields<
-    typeof described,
+    typeof payload,
     v.InferInput<typeof TEMPLATE_DESCRIBE_PROJECTION>
   >;
-  return toolDataResult(described satisfies ConfiguredTemplatePayload);
+  return toolDataResult(payload satisfies ConfiguredTemplatePayload);
 };
 
 const handleSaveTemplateTool: TypedMcpToolHandler<

@@ -14,6 +14,10 @@
 
 import { panic } from "better-result";
 
+import {
+  manifestFieldsFromMerge,
+  mergeManifestWithDiscovery,
+} from "@/api/lib/docx/template-manifest";
 import type {
   DiscoveredField,
   DiscoveredTemplate,
@@ -104,9 +108,25 @@ export const validateFieldOverlay = ({
   const overlayIndexByPath = new Map(
     overlay.map((field, index) => [field.path, index] as const),
   );
+  const effectiveFields = applyFieldOverlay(
+    { version: 1, fields: [...configured] },
+    overlay,
+  ).fields;
+  const effectiveByPath = new Map(
+    effectiveFields.map((field) => [field.path, field]),
+  );
+  const seenPaths = new Set<string>();
 
   for (const [index, field] of overlay.entries()) {
     const issuePath = `fields.${index}`;
+    if (seenPaths.has(field.path)) {
+      issues.push({
+        path: issuePath,
+        message: `"${field.path}" is a duplicate field path. Send each path once.`,
+      });
+      continue;
+    }
+    seenPaths.add(field.path);
     const children = roots.has(field.path)
       ? []
       : childMarkers(field.path, declared);
@@ -114,7 +134,7 @@ export const validateFieldOverlay = ({
     if (children.length > 0) {
       // A namespace parent is structural — unless a lookup makes it the one
       // real input, with the markers under it as its named renderings.
-      if (field.lookup === undefined) {
+      if (effectiveByPath.get(field.path)?.lookup === undefined) {
         issues.push({
           path: issuePath,
           message:
@@ -134,7 +154,11 @@ export const validateFieldOverlay = ({
       });
       continue;
     }
+  }
 
+  // Validate the resulting ownership graph, so lookup owners and children are
+  // checked identically whether they came from the document or this overlay.
+  for (const field of effectiveFields) {
     if (field.lookup === undefined) {
       continue;
     }
@@ -145,13 +169,8 @@ export const validateFieldOverlay = ({
     // configurations are refused together rather than one silently winning.
     for (const format of field.lookup.formats) {
       const childPath = `${field.path}.${format.key}`;
-      const overlayChild = overlay.find(
-        (entry) => entry.path === childPath && carriesConfiguration(entry),
-      );
-      const configuredChild = configured.find(
-        (entry) => entry.path === childPath && carriesConfiguration(entry),
-      );
-      if (!overlayChild && !configuredChild) {
+      const child = effectiveByPath.get(childPath);
+      if (!child || !carriesConfiguration(child)) {
         continue;
       }
       const message =
@@ -159,10 +178,11 @@ export const validateFieldOverlay = ({
         `renders {{${childPath}}}, but "${childPath}" is configured as its ` +
         "own field. Drop one of the two: rename the format key, or remove " +
         `the "${childPath}" configuration.`;
-      issues.push({ path: issuePath, message });
-      const childIndex = overlayChild
-        ? overlayIndexByPath.get(childPath)
-        : undefined;
+      const ownerIndex = overlayIndexByPath.get(field.path);
+      if (ownerIndex !== undefined) {
+        issues.push({ path: `fields.${ownerIndex}`, message });
+      }
+      const childIndex = overlayIndexByPath.get(childPath);
       if (childIndex !== undefined) {
         issues.push({ path: `fields.${childIndex}`, message });
       }
@@ -188,12 +208,33 @@ export const applyFieldOverlay = (
     return override ? { ...field, ...override } : field;
   });
   const existingPaths = new Set(existing.map((field) => field.path));
-  for (const field of overlay) {
+  for (const field of overlayByPath.values()) {
     if (!existingPaths.has(field.path)) {
       merged.push(field);
     }
   }
   return { version: manifest?.version ?? 1, fields: merged };
+};
+
+type ResolveTemplateFieldOverlayOptions = {
+  discovered: DiscoveredTemplate;
+  manifest: TemplateManifest | null;
+  overlay: readonly FieldMeta[] | undefined;
+};
+
+/** Creation and its diagnostics must classify paths from the same final configuration. */
+export const resolveTemplateFieldOverlay = ({
+  discovered,
+  manifest,
+  overlay,
+}: ResolveTemplateFieldOverlayOptions): TemplateManifest => {
+  const baseManifest =
+    overlay === undefined ? manifest : applyFieldOverlay(manifest, overlay);
+  const fields = mergeManifestWithDiscovery(baseManifest, discovered);
+  return {
+    version: baseManifest?.version ?? 1,
+    fields: manifestFieldsFromMerge(fields, baseManifest),
+  };
 };
 
 /**

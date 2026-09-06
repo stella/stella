@@ -82,37 +82,49 @@ const templateFieldInputObjectSchema = v.strictObject({
  * themselves so {@link readTemplateFieldsInput} cannot drift from what the
  * surface accepts.
  */
-const DECLARED_PROPERTIES: readonly ReadonlySet<string>[] = [
-  new Set(Object.keys(templateFieldInputObjectSchema.entries)),
-  new Set(Object.keys(templateFieldValidationInputSchema.entries)),
-  new Set(Object.keys(templateFieldPartInputSchema.entries)),
-];
-
-const isDeclaredProperty = (key: string): boolean =>
-  DECLARED_PROPERTIES.some((properties) => properties.has(key));
+const FIELD_PROPERTIES = new Set(
+  Object.keys(templateFieldInputObjectSchema.entries),
+);
+const VALIDATION_PROPERTIES = new Set(
+  Object.keys(templateFieldValidationInputSchema.entries),
+);
+const PART_PROPERTIES = new Set(
+  Object.keys(templateFieldPartInputSchema.entries),
+);
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-/** Drop declared properties carrying `null`, one level deep into `validation`
- *  and `parts[]` entries, whose declared keys are in the same inventory. */
-const withoutNullProperties = (entry: Record<string, unknown>): unknown =>
+const withoutDeclaredNullProperties = (
+  entry: Record<string, unknown>,
+  declaredProperties: ReadonlySet<string>,
+): Record<string, unknown> =>
   Object.fromEntries(
-    Object.entries(entry).flatMap(([key, value]) => {
-      if (value === null && isDeclaredProperty(key)) {
-        return [];
-      }
-      if (isRecord(value)) {
-        return [[key, withoutNullProperties(value)]];
-      }
-      if (Array.isArray(value)) {
-        return [
-          [key, value.map((item) => (isRecord(item) ? withoutNullProperties(item) : item))],
-        ];
-      }
-      return [[key, value]];
-    }),
+    Object.entries(entry).filter(
+      ([key, value]) => value !== null || !declaredProperties.has(key),
+    ),
   );
+
+/** Drop null only at the three schema levels where it means an omitted
+ * optional field. Nested lookup/source/date-format objects keep their values,
+ * so strict validation still reports a misplaced key even when it is null. */
+const withoutNullProperties = (entry: Record<string, unknown>): unknown => {
+  const field = withoutDeclaredNullProperties(entry, FIELD_PROPERTIES);
+  if (isRecord(field["validation"])) {
+    field["validation"] = withoutDeclaredNullProperties(
+      field["validation"],
+      VALIDATION_PROPERTIES,
+    );
+  }
+  if (Array.isArray(field["parts"])) {
+    field["parts"] = field["parts"].map((part) =>
+      isRecord(part)
+        ? withoutDeclaredNullProperties(part, PART_PROPERTIES)
+        : part,
+    );
+  }
+  return field;
+};
 
 /**
  * Normalise a raw `fields` argument before validation: GPT-family clients send
@@ -142,7 +154,10 @@ export const templateFieldInputSchema = v.pipe(
     (field: v.InferOutput<typeof templateFieldInputObjectSchema>) =>
       hasCompatibleDerivedSources(toDerivedSourceFields(field)),
     (issue) =>
-      describeDerivedSourceConflict(toDerivedSourceFields(issue.input), "snake"),
+      describeDerivedSourceConflict(
+        toDerivedSourceFields(issue.input),
+        "snake",
+      ),
   ),
 );
 
@@ -177,64 +192,255 @@ type TemplateFieldValidationInput = v.InferOutput<
   typeof templateFieldValidationInputSchema
 >;
 
+type PersistedFieldInput = v.InferOutput<typeof fieldMetaToolInputSchema>;
+
+const FIELD_WIRE_KEYS = {
+  path: "path",
+  label: "label",
+  hint: "hint",
+  inputType: "input_type",
+  options: "options",
+  validation: "validation",
+  required: "required",
+  aiPrompt: "ai_prompt",
+  aiAdapt: "ai_adapt",
+  aiSeesDocument: "ai_sees_document",
+  parts: "parts",
+  format: "format",
+  optionsFrom: "options_from",
+  lookup: "lookup",
+  source: "source",
+  formula: "formula",
+  condition: "condition",
+  dateFormat: "date_format",
+} as const satisfies Record<
+  keyof PersistedFieldInput,
+  keyof TemplateFieldInput
+>;
+
+const VALIDATION_WIRE_KEYS = {
+  required: "required",
+  minLength: "min_length",
+  maxLength: "max_length",
+  min: "min",
+  max: "max",
+  pattern: "pattern",
+  minItems: "min_items",
+  maxItems: "max_items",
+} as const satisfies Record<
+  keyof FieldValidation,
+  keyof TemplateFieldValidationInput
+>;
+
+const PART_WIRE_KEYS = {
+  key: "key",
+  label: "label",
+  inputType: "input_type",
+  options: "options",
+  pattern: "pattern",
+} as const satisfies Record<keyof FieldPart, keyof TemplateFieldPartInput>;
+
+/** Camel-case field data returned by the template service. Describe uses
+ * `null` for absent values, while save_template treats null as absence. */
+type DescribedFieldInput = {
+  [Key in keyof PersistedFieldInput]?: PersistedFieldInput[Key] | null;
+} & { path: string };
+
 const toFieldPart = (part: TemplateFieldPartInput): FieldPart => ({
-  key: part.key,
-  ...(part.label === undefined ? {} : { label: part.label }),
-  inputType: part.input_type,
-  ...(part.options === undefined ? {} : { options: part.options }),
-  ...(part.pattern === undefined ? {} : { pattern: part.pattern }),
+  key: part[PART_WIRE_KEYS.key],
+  ...(part[PART_WIRE_KEYS.label] === undefined
+    ? {}
+    : { label: part[PART_WIRE_KEYS.label] }),
+  inputType: part[PART_WIRE_KEYS.inputType],
+  ...(part[PART_WIRE_KEYS.options] === undefined
+    ? {}
+    : { options: part[PART_WIRE_KEYS.options] }),
+  ...(part[PART_WIRE_KEYS.pattern] === undefined
+    ? {}
+    : { pattern: part[PART_WIRE_KEYS.pattern] }),
 });
 
 const toFieldValidation = (
   validation: TemplateFieldValidationInput,
 ): FieldValidation => ({
-  ...(validation.required === undefined
+  ...(validation[VALIDATION_WIRE_KEYS.required] === undefined
     ? {}
-    : { required: validation.required }),
-  ...(validation.min_length === undefined
+    : { required: validation[VALIDATION_WIRE_KEYS.required] }),
+  ...(validation[VALIDATION_WIRE_KEYS.minLength] === undefined
     ? {}
-    : { minLength: validation.min_length }),
-  ...(validation.max_length === undefined
+    : { minLength: validation[VALIDATION_WIRE_KEYS.minLength] }),
+  ...(validation[VALIDATION_WIRE_KEYS.maxLength] === undefined
     ? {}
-    : { maxLength: validation.max_length }),
-  ...(validation.min === undefined ? {} : { min: validation.min }),
-  ...(validation.max === undefined ? {} : { max: validation.max }),
-  ...(validation.pattern === undefined ? {} : { pattern: validation.pattern }),
-  ...(validation.min_items === undefined
+    : { maxLength: validation[VALIDATION_WIRE_KEYS.maxLength] }),
+  ...(validation[VALIDATION_WIRE_KEYS.min] === undefined
     ? {}
-    : { minItems: validation.min_items }),
-  ...(validation.max_items === undefined
+    : { min: validation[VALIDATION_WIRE_KEYS.min] }),
+  ...(validation[VALIDATION_WIRE_KEYS.max] === undefined
     ? {}
-    : { maxItems: validation.max_items }),
+    : { max: validation[VALIDATION_WIRE_KEYS.max] }),
+  ...(validation[VALIDATION_WIRE_KEYS.pattern] === undefined
+    ? {}
+    : { pattern: validation[VALIDATION_WIRE_KEYS.pattern] }),
+  ...(validation[VALIDATION_WIRE_KEYS.minItems] === undefined
+    ? {}
+    : { minItems: validation[VALIDATION_WIRE_KEYS.minItems] }),
+  ...(validation[VALIDATION_WIRE_KEYS.maxItems] === undefined
+    ? {}
+    : { maxItems: validation[VALIDATION_WIRE_KEYS.maxItems] }),
 });
 
-/** The declared return type is the drift guard: a key added to the persisted
- *  tool input has no snake_case source here until it is mapped. */
+const toTemplateFieldValidationInput = (
+  validation: FieldValidation,
+): TemplateFieldValidationInput => ({
+  ...(validation.required === undefined
+    ? {}
+    : { [VALIDATION_WIRE_KEYS.required]: validation.required }),
+  ...(validation.minLength === undefined
+    ? {}
+    : { [VALIDATION_WIRE_KEYS.minLength]: validation.minLength }),
+  ...(validation.maxLength === undefined
+    ? {}
+    : { [VALIDATION_WIRE_KEYS.maxLength]: validation.maxLength }),
+  ...(validation.min === undefined
+    ? {}
+    : { [VALIDATION_WIRE_KEYS.min]: validation.min }),
+  ...(validation.max === undefined
+    ? {}
+    : { [VALIDATION_WIRE_KEYS.max]: validation.max }),
+  ...(validation.pattern === undefined
+    ? {}
+    : { [VALIDATION_WIRE_KEYS.pattern]: validation.pattern }),
+  ...(validation.minItems === undefined
+    ? {}
+    : { [VALIDATION_WIRE_KEYS.minItems]: validation.minItems }),
+  ...(validation.maxItems === undefined
+    ? {}
+    : { [VALIDATION_WIRE_KEYS.maxItems]: validation.maxItems }),
+});
+
+/** Serialize a persisted/describe field onto save_template's snake_case wire
+ * contract. Null describe values are omitted, producing an object the strict
+ * overlay schema accepts without client-side key translation. */
+export const toTemplateFieldWireInput = (
+  field: DescribedFieldInput,
+): TemplateFieldInput => ({
+  [FIELD_WIRE_KEYS.path]: field.path,
+  ...(field.label == null ? {} : { [FIELD_WIRE_KEYS.label]: field.label }),
+  ...(field.hint == null ? {} : { [FIELD_WIRE_KEYS.hint]: field.hint }),
+  ...(field.inputType == null
+    ? {}
+    : { [FIELD_WIRE_KEYS.inputType]: field.inputType }),
+  ...(field.options == null
+    ? {}
+    : { [FIELD_WIRE_KEYS.options]: field.options }),
+  ...(field.validation == null
+    ? {}
+    : {
+        [FIELD_WIRE_KEYS.validation]: toTemplateFieldValidationInput(
+          field.validation,
+        ),
+      }),
+  ...(field.required == null
+    ? {}
+    : { [FIELD_WIRE_KEYS.required]: field.required }),
+  ...(field.aiPrompt == null
+    ? {}
+    : { [FIELD_WIRE_KEYS.aiPrompt]: field.aiPrompt }),
+  ...(field.aiAdapt == null
+    ? {}
+    : { [FIELD_WIRE_KEYS.aiAdapt]: field.aiAdapt }),
+  ...(field.aiSeesDocument == null
+    ? {}
+    : { [FIELD_WIRE_KEYS.aiSeesDocument]: field.aiSeesDocument }),
+  ...(field.parts == null
+    ? {}
+    : {
+        [FIELD_WIRE_KEYS.parts]: field.parts.map((part) => ({
+          [PART_WIRE_KEYS.key]: part.key,
+          ...(part.label === undefined
+            ? {}
+            : { [PART_WIRE_KEYS.label]: part.label }),
+          [PART_WIRE_KEYS.inputType]: part.inputType,
+          ...(part.options === undefined
+            ? {}
+            : { [PART_WIRE_KEYS.options]: part.options }),
+          ...(part.pattern === undefined
+            ? {}
+            : { [PART_WIRE_KEYS.pattern]: part.pattern }),
+        })),
+      }),
+  ...(field.format == null ? {} : { [FIELD_WIRE_KEYS.format]: field.format }),
+  ...(field.optionsFrom == null
+    ? {}
+    : { [FIELD_WIRE_KEYS.optionsFrom]: field.optionsFrom }),
+  ...(field.lookup == null ? {} : { [FIELD_WIRE_KEYS.lookup]: field.lookup }),
+  ...(field.source == null ? {} : { [FIELD_WIRE_KEYS.source]: field.source }),
+  ...(field.formula == null
+    ? {}
+    : { [FIELD_WIRE_KEYS.formula]: field.formula }),
+  ...(field.condition == null
+    ? {}
+    : { [FIELD_WIRE_KEYS.condition]: field.condition }),
+  ...(field.dateFormat == null
+    ? {}
+    : { [FIELD_WIRE_KEYS.dateFormat]: field.dateFormat }),
+});
+
+/** Deserialize save_template's wire field through the same total key map used
+ * by the describe serializer. */
 export const toFieldMetaToolInput = (
   field: TemplateFieldInput,
 ): v.InferOutput<typeof fieldMetaToolInputSchema> => ({
-  path: field.path,
-  ...(field.label === undefined ? {} : { label: field.label }),
-  ...(field.hint === undefined ? {} : { hint: field.hint }),
-  ...(field.input_type === undefined ? {} : { inputType: field.input_type }),
-  ...(field.options === undefined ? {} : { options: field.options }),
-  ...(field.validation === undefined
+  path: field[FIELD_WIRE_KEYS.path],
+  ...(field[FIELD_WIRE_KEYS.label] === undefined
     ? {}
-    : { validation: toFieldValidation(field.validation) }),
-  ...(field.required === undefined ? {} : { required: field.required }),
-  ...(field.ai_prompt === undefined ? {} : { aiPrompt: field.ai_prompt }),
-  ...(field.ai_adapt === undefined ? {} : { aiAdapt: field.ai_adapt }),
-  ...(field.ai_sees_document === undefined
+    : { label: field[FIELD_WIRE_KEYS.label] }),
+  ...(field[FIELD_WIRE_KEYS.hint] === undefined
     ? {}
-    : { aiSeesDocument: field.ai_sees_document }),
-  ...(field.parts === undefined ? {} : { parts: field.parts.map(toFieldPart) }),
-  ...(field.format === undefined ? {} : { format: field.format }),
-  ...(field.options_from === undefined
+    : { hint: field[FIELD_WIRE_KEYS.hint] }),
+  ...(field[FIELD_WIRE_KEYS.inputType] === undefined
     ? {}
-    : { optionsFrom: field.options_from }),
-  ...(field.lookup === undefined ? {} : { lookup: field.lookup }),
-  ...(field.source === undefined ? {} : { source: field.source }),
-  ...(field.formula === undefined ? {} : { formula: field.formula }),
-  ...(field.condition === undefined ? {} : { condition: field.condition }),
-  ...(field.date_format === undefined ? {} : { dateFormat: field.date_format }),
+    : { inputType: field[FIELD_WIRE_KEYS.inputType] }),
+  ...(field[FIELD_WIRE_KEYS.options] === undefined
+    ? {}
+    : { options: field[FIELD_WIRE_KEYS.options] }),
+  ...(field[FIELD_WIRE_KEYS.validation] === undefined
+    ? {}
+    : { validation: toFieldValidation(field[FIELD_WIRE_KEYS.validation]) }),
+  ...(field[FIELD_WIRE_KEYS.required] === undefined
+    ? {}
+    : { required: field[FIELD_WIRE_KEYS.required] }),
+  ...(field[FIELD_WIRE_KEYS.aiPrompt] === undefined
+    ? {}
+    : { aiPrompt: field[FIELD_WIRE_KEYS.aiPrompt] }),
+  ...(field[FIELD_WIRE_KEYS.aiAdapt] === undefined
+    ? {}
+    : { aiAdapt: field[FIELD_WIRE_KEYS.aiAdapt] }),
+  ...(field[FIELD_WIRE_KEYS.aiSeesDocument] === undefined
+    ? {}
+    : { aiSeesDocument: field[FIELD_WIRE_KEYS.aiSeesDocument] }),
+  ...(field[FIELD_WIRE_KEYS.parts] === undefined
+    ? {}
+    : { parts: field[FIELD_WIRE_KEYS.parts].map(toFieldPart) }),
+  ...(field[FIELD_WIRE_KEYS.format] === undefined
+    ? {}
+    : { format: field[FIELD_WIRE_KEYS.format] }),
+  ...(field[FIELD_WIRE_KEYS.optionsFrom] === undefined
+    ? {}
+    : { optionsFrom: field[FIELD_WIRE_KEYS.optionsFrom] }),
+  ...(field[FIELD_WIRE_KEYS.lookup] === undefined
+    ? {}
+    : { lookup: field[FIELD_WIRE_KEYS.lookup] }),
+  ...(field[FIELD_WIRE_KEYS.source] === undefined
+    ? {}
+    : { source: field[FIELD_WIRE_KEYS.source] }),
+  ...(field[FIELD_WIRE_KEYS.formula] === undefined
+    ? {}
+    : { formula: field[FIELD_WIRE_KEYS.formula] }),
+  ...(field[FIELD_WIRE_KEYS.condition] === undefined
+    ? {}
+    : { condition: field[FIELD_WIRE_KEYS.condition] }),
+  ...(field[FIELD_WIRE_KEYS.dateFormat] === undefined
+    ? {}
+    : { dateFormat: field[FIELD_WIRE_KEYS.dateFormat] }),
 });

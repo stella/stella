@@ -1118,7 +1118,11 @@ export const mergeManifestWithDiscovery = (
     if (lookupFormatMarkers.has(f.path)) {
       return false;
     }
-    if (f.lookup !== undefined || f.kind === "array" || markerPaths.has(f.path)) {
+    if (
+      f.lookup !== undefined ||
+      f.kind === "array" ||
+      markerPaths.has(f.path)
+    ) {
       return true;
     }
     return !paths.some((p) => p !== f.path && p.startsWith(`${f.path}.`));

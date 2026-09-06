@@ -578,6 +578,7 @@ describe("MCP template tools", () => {
       conditions: [{ path: "isCorp", condition: "type == 'corp'" }],
       computed: [{ path: "total", formula: "rent * 12" }],
       arrays: [{ path: "deliverables", itemFieldPaths: ["name", "due_date"] }],
+      warnings: [],
     });
 
     const result = await handleMcpToolCall({
@@ -603,12 +604,12 @@ describe("MCP template tools", () => {
           validation: { required: true },
         }),
         expect.objectContaining({
-          aiPrompt: "Draft the scope of this power of attorney",
-          aiSeesDocument: true,
+          ai_prompt: "Draft the scope of this power of attorney",
+          ai_sees_document: true,
         }),
         expect.objectContaining({
           options: ["director", "proxy"],
-          optionsFrom: "parties",
+          options_from: "parties",
           source: { kind: "party", role: "counterparty", field: "name" },
         }),
       ],
@@ -646,9 +647,17 @@ describe("MCP template tools", () => {
       ],
       conditions: [],
       computed: [],
+      warnings: [
+        {
+          code: "split_marker",
+          path: "{{Smith.name}}",
+          message: "{{Smith.name}} is split across runs.",
+          hint: "Retype {{Smith.name}} in one run.",
+        },
+      ],
     });
     anonymizeTextFieldsMock.mockResolvedValue({
-      entityCount: 6,
+      entityCount: 9,
       fields: [
         "[PERSON_1] POA",
         "[PERSON_1] role",
@@ -656,6 +665,9 @@ describe("MCP template tools", () => {
         "[PERSON_1] capacity",
         "[PERSON_1] signatory",
         "[company name], [PERSON_1] registry",
+        "{{[PERSON_1].name}}",
+        "{{[PERSON_1].name}} is split across runs.",
+        "Retype {{[PERSON_1].name}} in one run.",
       ],
     });
 
@@ -687,6 +699,13 @@ describe("MCP template tools", () => {
           },
         },
       ],
+      warnings: [
+        {
+          path: "{{[PERSON_1].name}}",
+          message: "{{[PERSON_1].name}} is split across runs.",
+          hint: "Retype {{[PERSON_1].name}} in one run.",
+        },
+      ],
     });
     expect(anonymizeTextFieldsMock.mock.calls.at(0)?.[0]).toMatchObject({
       fields: [
@@ -696,6 +715,9 @@ describe("MCP template tools", () => {
         "Smith capacity",
         "Smith signatory",
         "[company name], Smith registry",
+        "{{Smith.name}}",
+        "{{Smith.name}} is split across runs.",
+        "Retype {{Smith.name}} in one run.",
       ],
       workspaceId: "org_1",
     });
@@ -2506,7 +2528,7 @@ describe("MCP template tools", () => {
     // entry it sent — not as one line of bare prose it would have to parse.
     const error = validationEnvelope(result);
     expect(error["message"]).toContain("ghost");
-    expect(asTestRaw<{ path: string }[]>(error["issues"])).toEqual([
+    expect(error["issues"]).toEqual([
       { path: "fields.0", message: "No marker {{ghost}} in the DOCX." },
     ]);
   });
@@ -2619,7 +2641,7 @@ describe("MCP template tools", () => {
     expect(describeStoredTemplateMock).not.toHaveBeenCalled();
     const error = validationEnvelope(result);
     expect(error["message"]).toContain("ghost");
-    expect(asTestRaw<{ path: string }[]>(error["issues"])).toEqual([
+    expect(error["issues"]).toEqual([
       { path: "fields.0", message: "No marker {{ghost}} in the DOCX." },
     ]);
   });

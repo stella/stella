@@ -26,6 +26,7 @@ import { panic } from "better-result";
  */
 export type CapabilityTransportAlternative =
   | { type: "none"; reason: string }
+  | { type: "mcp-tool"; name: string; note: string }
   | {
       /** Another capability achieves the same end result entirely over JSON. */
       type: "complete";
@@ -214,6 +215,8 @@ export const describeTransportAlternative = (
   switch (alternative.type) {
     case "none":
       return `No JSON-transport alternative: ${alternative.reason}`;
+    case "mcp-tool":
+      return `Call the ${alternative.name} MCP tool directly: ${alternative.note}`;
     case "complete":
       return `Use ${alternative.via.join(" then ")} instead: ${alternative.note}`;
     case "partial":

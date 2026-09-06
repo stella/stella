@@ -403,7 +403,10 @@ export const DERIVED_SOURCE_PROPERTIES = {
   lookup: { camel: "lookup", snake: "lookup" },
   parts: { camel: "parts", snake: "parts" },
   source: { camel: "source", snake: "source" },
-} as const satisfies Record<DerivedSourceMode, { camel: string; snake: string }>;
+} as const satisfies Record<
+  DerivedSourceMode,
+  { camel: string; snake: string }
+>;
 
 type DerivedSourceMode =
   | "ai-adapt"

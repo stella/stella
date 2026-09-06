@@ -175,7 +175,7 @@ describe("lookup field warnings", () => {
     ).toEqual([]);
   });
 
-  test("the first format is addressed by the bare marker or its .value alias", async () => {
+  test("the first format is addressed by the bare marker or its declared key", async () => {
     const placed = async (placeholderPaths: readonly string[]) =>
       await fieldOverlayWarnings({
         conditionPaths: [],

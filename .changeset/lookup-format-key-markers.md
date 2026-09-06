@@ -1,5 +1,5 @@
 ---
-"@stll/api": patch
+"@stll/cli": patch
 ---
 
 A registry lookup field addresses every one of its output formats by

@@ -292,12 +292,11 @@ const lookupFormatWarnings = (
       continue;
     }
     warnings.push({
-            code: "unmatched_lookup_format",
-            path: marker,
-            message: `{{${marker}}} names no format of lookup field "${path}", so it is left unfilled.`,
-            hint: `Add a "${key}" format to the field's formats, or remove the marker.`,
-          },
-    );
+      code: "unmatched_lookup_format",
+      path: marker,
+      message: `{{${marker}}} names no format of lookup field "${path}", so it is left unfilled.`,
+      hint: `Add a "${key}" format to the field's formats, or remove the marker.`,
+    });
   }
 
   return warnings;
