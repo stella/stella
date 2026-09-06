@@ -112,19 +112,31 @@ pub fn clipboard_set_retention(
   Ok(snapshot)
 }
 
+/// The open windows change first, and the preference is recorded only once they
+/// all hold the new protection. A failed transition rolls the windows back, so
+/// the snapshot never reports a visibility that a window does not have and a
+/// window created later never disagrees with the ones already open.
 #[tauri::command]
 pub fn clipboard_set_screen_capture(
   capture: ClipboardScreenCapture,
   state: State<'_, ClipboardAppState>,
   app: AppHandle,
 ) -> Result<ClipboardSnapshot, String> {
-  let snapshot = {
-    let mut manager = state.lock().map_err(|_| lock_error())?;
-    manager.set_screen_capture(capture)?;
-    manager.snapshot()
+  let previous = state.lock().map_err(|_| lock_error())?.screen_capture();
+  let rollback = || {
+    let _ = clipboard_window::apply_screen_capture(&app, previous);
   };
-  clipboard_window::apply_screen_capture(&app, capture)?;
-  Ok(snapshot)
+  if let Err(error) = clipboard_window::apply_screen_capture(&app, capture) {
+    rollback();
+    return Err(error);
+  }
+  let stored = {
+    let mut manager = state.lock().map_err(|_| lock_error())?;
+    manager
+      .set_screen_capture(capture)
+      .map(|()| manager.snapshot())
+  };
+  stored.inspect_err(|_| rollback())
 }
 
 #[tauri::command]
