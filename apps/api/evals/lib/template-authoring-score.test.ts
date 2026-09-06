@@ -72,9 +72,9 @@ describe("detectGrammarTraps", () => {
   });
 
   test("two block directives in one paragraph share it, even with no other text", () => {
-    expect(traps([paragraph("{{#if penalty}}{{/if}}")]).block_marker_inline).toBe(
-      1,
-    );
+    expect(
+      traps([paragraph("{{#if penalty}}{{/if}}")]).block_marker_inline,
+    ).toBe(1);
     expect(
       traps([
         paragraph("{{#if penalty}}"),
