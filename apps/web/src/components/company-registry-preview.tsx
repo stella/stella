@@ -127,7 +127,7 @@ const CompanyIdentity = ({
             {t(
               registry === "ares"
                 ? "contacts.create.icoPlaceholder"
-                : "search.registryDetails.identifier",
+                : "contacts.fields.registrationNumber",
             )}
             : <bdi>{hit.id}</bdi>
           </p>
@@ -220,7 +220,9 @@ const RegistryDetails = ({ details }: { details: RegistryDetailsValue }) => {
       key !== "name" &&
       key !== "registryUrl" &&
       key !== "vrEnrichmentStatus" &&
-      registryDetailLabel(key) !== "search.registryDetails.industryCodes" &&
+      !["activityCode", "czNace", "industryCodes", "sic", "sicCodes"].includes(
+        key,
+      ) &&
       !(
         details.registry === "ares" &&
         (key === "statutoryBodies" || key === "actingClause")
@@ -246,7 +248,10 @@ const RegistryDetails = ({ details }: { details: RegistryDetailsValue }) => {
                 scope="row"
                 className="h-auto w-2/5 px-0 py-3 pe-4 align-baseline text-xs leading-5 font-normal wrap-break-word whitespace-normal"
               >
-                <RegistryDetailLabel detailKey={key} />
+                <RegistryDetailLabel
+                  registry={details.registry}
+                  detailKey={key}
+                />
               </TableHead>
               <TableCell className="px-0 py-3 align-baseline text-sm leading-5 wrap-break-word whitespace-normal select-text">
                 <RegistryDetailValue
@@ -266,77 +271,74 @@ const RegistryDetails = ({ details }: { details: RegistryDetailsValue }) => {
   );
 };
 
-const AresGovernance = ({ company }: { company: AresCompany }) => {
-  const t = useTranslations();
-  return (
-    <div className="space-y-6">
-      {company.actingClause ? (
-        <section className="space-y-2">
-          <h3 className="text-sm font-medium">
-            {t("search.registryDetails.actingClause")}
-          </h3>
-          <p
-            className="text-sm leading-6 whitespace-pre-line select-text"
-            dir="auto"
-          >
-            {company.actingClause}
-          </p>
-        </section>
-      ) : null}
-      {company.statutoryBodies.length > 0 ? (
-        <section className="space-y-4">
-          <h3 className="text-sm font-medium">
-            {t("search.registryDetails.statutoryBodies")}
-          </h3>
-          {company.statutoryBodies.map((body) => (
-            <div className="space-y-2" key={body.organName}>
-              <h4
-                className="text-muted-foreground text-xs font-medium"
-                dir="auto"
-              >
-                {body.organName}
-              </h4>
-              <ul className="divide-y">
-                {body.members.map((member) => (
-                  <li
-                    className="space-y-1 py-3 first:pt-0"
-                    key={JSON.stringify(member)}
-                  >
-                    <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-sm">
-                      <span className="font-medium" dir="auto">
-                        {member.name}
+const AresGovernance = ({ company }: { company: AresCompany }) => (
+  <div className="space-y-6">
+    {company.actingClause ? (
+      <section className="space-y-2">
+        <h3 className="text-sm font-medium">
+          <RegistryDetailLabel registry="ares" detailKey="actingClause" />
+        </h3>
+        <p
+          className="text-sm leading-6 whitespace-pre-line select-text"
+          dir="auto"
+        >
+          {company.actingClause}
+        </p>
+      </section>
+    ) : null}
+    {company.statutoryBodies.length > 0 ? (
+      <section className="space-y-4">
+        <h3 className="text-sm font-medium">
+          <RegistryDetailLabel registry="ares" detailKey="statutoryBodies" />
+        </h3>
+        {company.statutoryBodies.map((body) => (
+          <div className="space-y-2" key={body.organName}>
+            <h4
+              className="text-muted-foreground text-xs font-medium"
+              dir="auto"
+            >
+              {body.organName}
+            </h4>
+            <ul className="divide-y">
+              {body.members.map((member) => (
+                <li
+                  className="space-y-1 py-3 first:pt-0"
+                  key={JSON.stringify(member)}
+                >
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-sm">
+                    <span className="font-medium" dir="auto">
+                      {member.name}
+                    </span>
+                    {member.role ? (
+                      <span className="text-muted-foreground" dir="auto">
+                        {member.role}
                       </span>
-                      {member.role ? (
-                        <span className="text-muted-foreground" dir="auto">
-                          {member.role}
-                        </span>
-                      ) : null}
-                    </div>
-                    {member.address ? (
-                      <p className="text-sm leading-6" dir="auto">
-                        {member.address}
-                      </p>
                     ) : null}
-                    {member.since ? (
-                      <p className="text-muted-foreground text-xs leading-5">
-                        {t("billing.rates.effectiveFrom")}:{" "}
-                        <RegistryDetailValue
-                          registry="ares"
-                          detailKey="since"
-                          value={member.since}
-                        />
-                      </p>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </section>
-      ) : null}
-    </div>
-  );
-};
+                  </div>
+                  {member.address ? (
+                    <p className="text-sm leading-6" dir="auto">
+                      {member.address}
+                    </p>
+                  ) : null}
+                  {member.since ? (
+                    <p className="text-muted-foreground text-xs leading-5">
+                      <RegistryDetailLabel registry="ares" detailKey="since" />:{" "}
+                      <RegistryDetailValue
+                        registry="ares"
+                        detailKey="since"
+                        value={member.since}
+                      />
+                    </p>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </section>
+    ) : null}
+  </div>
+);
 
 const RegistryDetailValue = ({
   value,
@@ -410,7 +412,7 @@ const RegistryDetailValue = ({
                 scope="row"
                 className="h-auto w-2/5 px-0 py-1 pe-2 align-baseline text-xs leading-5 font-normal wrap-break-word whitespace-normal"
               >
-                <RegistryDetailLabel detailKey={key} />
+                <RegistryDetailLabel registry={registry} detailKey={key} />
               </TableHead>
               <TableCell className="px-0 py-1 align-baseline leading-5 wrap-break-word whitespace-normal">
                 <RegistryDetailValue
@@ -427,10 +429,13 @@ const RegistryDetailValue = ({
   );
 };
 
-const RegistryDetailLabel = ({ detailKey }: { detailKey: string }) => {
-  const t = useTranslations();
-  return t(registryDetailLabel(detailKey));
-};
+const RegistryDetailLabel = ({
+  detailKey,
+  registry,
+}: {
+  detailKey: string;
+  registry: RegistryDetailsValue["registry"];
+}) => <bdi>{registryDetailLabel({ registry, key: detailKey })}</bdi>;
 
 const registryDetailEntries = (value: object): [string, unknown][] =>
   Object.entries(value);

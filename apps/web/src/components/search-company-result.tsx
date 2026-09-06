@@ -25,7 +25,6 @@ import { businessRegistryQueryOptions } from "@/components/templates/registry-qu
 import { useFormatter } from "@/i18n/formatting-context";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { APIError } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { organizationSettingsOptions } from "@/lib/organization/settings-queries";
 
@@ -393,9 +392,7 @@ const RegistrySearchError = ({
   return (
     <div role="alert" className="space-y-2 py-2">
       <p className="text-muted-foreground text-sm">
-        {APIError.is(error) && error.status === 403
-          ? t("search.registryAccessDenied")
-          : userErrorFromThrown(error, t("common.somethingWentWrong"))}
+        {userErrorFromThrown(error, t("common.somethingWentWrong"))}
       </p>
       <Button variant="ghost" onClick={onRetry}>
         {t("common.retry")}
