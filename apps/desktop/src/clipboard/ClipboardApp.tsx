@@ -2031,17 +2031,7 @@ const ClipboardApp = () => {
           }
         />
       )}
-      <Button
-        aria-label={t("close")}
-        className="bg-background/80 absolute end-1 top-1 z-10 size-11 rounded-full backdrop-blur-sm"
-        onClick={requestHide}
-        size="icon"
-        title={t("close")}
-        variant="ghost"
-      >
-        <XIcon aria-hidden="true" className="size-4" />
-      </Button>
-      <main className="relative me-14 min-h-0 flex-1">
+      <main className="relative min-h-0 flex-1">
         {feedback}
 
         {filteredItems.length === 0 ? (
@@ -2141,7 +2131,7 @@ const ClipboardApp = () => {
         )}
       </main>
 
-      <footer className="clipboard-controls grid h-14 shrink-0 grid-cols-[auto_minmax(8rem,22rem)_auto_minmax(0,1fr)] items-center gap-2 px-3">
+      <footer className="clipboard-controls grid h-14 shrink-0 grid-cols-[auto_minmax(8rem,22rem)_auto_minmax(0,1fr)_auto] items-center gap-2 px-3">
         <div className="flex shrink-0 items-center gap-0.5">
           <a
             aria-label="Stella"
@@ -2406,6 +2396,16 @@ const ClipboardApp = () => {
             );
           })}
         </nav>
+        <Button
+          aria-label={t("close")}
+          className="size-11 shrink-0 rounded-full"
+          onClick={requestHide}
+          size="icon"
+          title={t("close")}
+          variant="ghost"
+        >
+          <XIcon aria-hidden="true" className="size-4" />
+        </Button>
       </footer>
     </div>
   );
