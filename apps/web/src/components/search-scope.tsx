@@ -51,7 +51,7 @@ export const SearchScopeFilter = ({
             title={t("search.scopeFilter")}
             size="icon-sm"
             variant={scope === "all" ? "ghost" : "secondary"}
-            className="size-8 shrink-0"
+            className="size-11 shrink-0"
           />
         }
       >
@@ -112,7 +112,7 @@ export const SearchScopeInput = ({
               scope: (chunks) => (
                 <button
                   type="button"
-                  className="hover:text-foreground pointer-events-auto underline underline-offset-4 focus-visible:outline-2"
+                  className="hover:text-foreground pointer-events-auto inline-flex min-h-11 min-w-11 items-center justify-center underline underline-offset-4 focus-visible:outline-2"
                   onClick={onOpenFilter}
                 >
                   {chunks}
