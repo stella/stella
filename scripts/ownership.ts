@@ -225,6 +225,19 @@ export const OWNERSHIP = [
     enforcement: { kind: "none" },
   },
   {
+    id: "bulk-row-insert",
+    capability: "Inserting a row set whose size has no natural upper bound",
+    owner: ["apps/api/src/lib/db/bulk-write.ts"],
+    summary:
+      "`insertInChunks` owns the batch size that keeps a multi-row insert under " +
+      "PostgreSQL's 65,535 bind-parameter cap, and owns the one chunking loop " +
+      "the codebase suppresses `no-db-await-in-loop` for. A caller that writes " +
+      "its own loop pays a round trip per row or re-derives the cap per table; " +
+      "callers pass the writer, so `values()` stays where the table is known and " +
+      "drizzle's row inference is untouched.",
+    enforcement: { kind: "none" },
+  },
+  {
     id: "object-storage",
     capability: "Object storage reads, writes, and presigned uploads",
     owner: ["apps/api/src/lib/s3.ts", "apps/api/src/lib/s3-presign.ts"],
