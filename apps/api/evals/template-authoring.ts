@@ -1580,29 +1580,26 @@ const runAuthoringTask = async ({
     // document; using the most recent write would attach its diagnostics to a
     // different attempted save. With no save attempt, the last authored
     // document remains the only available partial evidence.
-    const authored =
-      last === undefined
-        ? writeCalls.at(-1)
-        : parsed?.success
-          ? writeCalls.findLast(
-              (written) =>
-                written.ref === parsed.output.docx_base64.trim(),
-            )
-          : undefined;
-    const attempt: SaveAttempt | null =
-      authored === undefined
-        ? parsed === null
-          ? null
-          : {
-              status: "rejected",
-              overlayIssues,
-            }
-        : await buildUnsavedAttempt({
-            blocks: authored.blocks,
-            buffer: authored.buffer,
-            task,
-            overlayIssues,
-          });
+    let authored: WrittenDocx | undefined;
+    if (last === undefined) {
+      authored = writeCalls.at(-1);
+    } else if (parsed?.success) {
+      authored = writeCalls.findLast(
+        (written) => written.ref === parsed.output.docx_base64.trim(),
+      );
+    }
+
+    let attempt: SaveAttempt | null;
+    if (authored === undefined) {
+      attempt = parsed === null ? null : { status: "rejected", overlayIssues };
+    } else {
+      attempt = await buildUnsavedAttempt({
+        blocks: authored.blocks,
+        buffer: authored.buffer,
+        task,
+        overlayIssues,
+      });
+    }
     return {
       modelId,
       taskId: task.id,
