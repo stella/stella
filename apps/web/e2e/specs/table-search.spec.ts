@@ -216,4 +216,92 @@ test.describe("find in table", () => {
       "untouched",
     );
   });
+
+  // The same contract against the real vendor, which the stand-in above
+  // cannot prove: Folio's find binding is bubble-phase today, and an upgrade
+  // that moved it to capture would leave the stand-in green while the second
+  // bar came back.
+  test("a DOCX docked in the inspector adds no second find bar", async ({
+    page,
+    request,
+  }) => {
+    test.slow();
+
+    const testWorkspace = workspace;
+    if (testWorkspace === null) {
+      throw new Error("Test workspace was not created");
+    }
+
+    const rowName = `alpha-lease-${randomUUID().slice(0, 8)}.docx`;
+    await apiUploadDocx(
+      request,
+      testWorkspace.id,
+      testWorkspace.filePropertyId,
+      { name: rowName, mimeType: DOCX_MIME, buffer: await readFile(DOCX_PATH) },
+    );
+
+    const { cookies } = await request.storageState();
+    await page.context().addCookies(cookies);
+    await expect
+      .poll(
+        async () =>
+          await apiStatus(page.request, `/workspaces/${testWorkspace.id}`),
+        {
+          message: "browser context can read the created workspace",
+          timeout: 10_000,
+        },
+      )
+      .toBe(200);
+
+    await page.goto(`/workspaces/${testWorkspace.id}/${testWorkspace.viewId}`, {
+      waitUntil: "domcontentloaded",
+    });
+
+    const tableTab = page.getByRole("tab", { exact: true, name: "Table" });
+    await expect(tableTab).toBeVisible({ timeout: 30_000 });
+    await tableTab.click();
+
+    const row = page.getByRole("button", { exact: true, name: rowName });
+    await expect(row).toBeVisible({ timeout: 30_000 });
+    await row.click({ button: "right" });
+    const preview = page.getByRole("menuitem", {
+      exact: true,
+      name: "Preview",
+    });
+    await expect(preview).toBeVisible();
+    await preview.click();
+
+    // Generous: the Folio chunk compiles cold and the DOCX is fetched and
+    // parsed before anything paints.
+    await expect(
+      page.locator(".layout-run-text", {
+        hasText: "Stella E2E test document.",
+      }),
+    ).toBeVisible({ timeout: 45_000 });
+
+    const folioDialog = page.locator(".docx-find-replace-dialog-overlay");
+
+    // The reported repro: nothing focused, so the press falls to the table by
+    // precedence while the document pane is on screen.
+    await page.evaluate(() => {
+      const active = document.activeElement;
+      if (active instanceof HTMLElement) {
+        active.blur();
+      }
+    });
+    await page.keyboard.press("ControlOrMeta+f");
+    await expect(page.getByRole("searchbox").first()).toBeFocused();
+    await expect(folioDialog).toHaveCount(0);
+
+    await page.keyboard.press("Escape");
+
+    // The inverse: a press inside the pane opens the document's own bar, and
+    // still not Folio's.
+    await page.locator('[contenteditable="true"]').first().focus();
+    await page.keyboard.press("ControlOrMeta+f");
+    await expect(
+      page.getByRole("searchbox", { name: "Find text" }),
+    ).toBeVisible();
+    await expect(folioDialog).toHaveCount(0);
+  });
 });
