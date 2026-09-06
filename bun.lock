@@ -86,6 +86,7 @@
         "@stll/chat-limits": "workspace:*",
         "@stll/cli": "workspace:*",
         "@stll/collation": "workspace:*",
+        "@stll/concurrency": "workspace:*",
         "@stll/conditions": "workspace:*",
         "@stll/country-codes": "workspace:*",
         "@stll/docx-core": "catalog:",
@@ -648,6 +649,17 @@
     "packages/collation": {
       "name": "@stll/collation",
       "version": "0.0.0",
+      "devDependencies": {
+        "@stll/typescript-config": "workspace:*",
+        "bun-types": "catalog:",
+      },
+    },
+    "packages/concurrency": {
+      "name": "@stll/concurrency",
+      "version": "0.0.0",
+      "dependencies": {
+        "better-result": "catalog:",
+      },
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
@@ -2536,6 +2548,8 @@
     "@stll/collab": ["@stll/collab@workspace:apps/collab"],
 
     "@stll/collation": ["@stll/collation@workspace:packages/collation"],
+
+    "@stll/concurrency": ["@stll/concurrency@workspace:packages/concurrency"],
 
     "@stll/conditions": ["@stll/conditions@workspace:packages/conditions"],
 

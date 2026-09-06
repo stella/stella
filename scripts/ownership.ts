@@ -461,6 +461,24 @@ export const OWNERSHIP = [
       "the web client, so a new browser family is recognised in both at once.",
     enforcement: { kind: "none" },
   },
+  {
+    id: "bounded-concurrency",
+    capability:
+      "Running an async operation over a list with a bounded number in flight",
+    owner: ["packages/concurrency/"],
+    summary:
+      "A windowed `Promise.all` over slices is the shape everyone reaches for " +
+      "and it is not a concurrency bound: the window refills only once its " +
+      "slowest member settles, so effective concurrency decays to each slice's " +
+      "tail and drops to zero for whatever the caller does between slices. " +
+      "`mapWithConcurrency` returns every result; `streamWithConcurrency` " +
+      "yields each result in input order as it is ready and states its " +
+      "look-ahead, so a caller that works per result overlaps that work with " +
+      "the operations still running. Both keep the pool full, and the stream " +
+      "settles results at the pool so a rejection behind a slower item cannot " +
+      "surface as an unhandled rejection.",
+    enforcement: { kind: "none" },
+  },
 ] as const satisfies readonly OwnershipEntry[];
 
 const REPO_ROOT = fileURLToPath(new URL("..", import.meta.url));

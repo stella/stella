@@ -88,7 +88,7 @@
     "files": {}
   },
   "throw-outside-boundary": {
-    "count": 1116,
+    "count": 1110,
     "files": {
       "apps/api/src/handlers/case-law/corpus-index.ts": 12,
       "apps/api/src/handlers/case-law/decisions/latest.ts": 3,
@@ -168,8 +168,6 @@
       "apps/api/src/handlers/skills/proposals/update.ts": 3,
       "apps/api/src/handlers/skills/revisions/get.ts": 1,
       "apps/api/src/handlers/style-sets/delete.ts": 2,
-      "apps/api/src/handlers/templates/save-document.ts": 3,
-      "apps/api/src/handlers/templates/update.ts": 3,
       "apps/api/src/handlers/time-entries/create.ts": 2,
       "apps/api/src/handlers/view-templates/create.ts": 2,
       "apps/api/src/handlers/views/create.ts": 3,
@@ -1388,7 +1386,7 @@
     }
   },
   "duplicate-token-blocks": {
-    "count": 129,
+    "count": 125,
     "files": {
       ".oxlint-plugins/no-ambient-nondeterminism.ts": 1,
       ".oxlint-plugins/no-auth-token-in-web-storage.ts": 1,
@@ -1433,8 +1431,6 @@
       "apps/api/src/handlers/skills/resources/update.ts": 1,
       "apps/api/src/handlers/skills/resources/upload.ts": 1,
       "apps/api/src/handlers/skills/update.ts": 1,
-      "apps/api/src/handlers/templates/save-document.ts": 1,
-      "apps/api/src/handlers/templates/update.ts": 1,
       "apps/api/src/handlers/templates/versions-summarize.ts": 1,
       "apps/api/src/handlers/time-entries/export-csv.ts": 1,
       "apps/api/src/handlers/time-entries/export-ledes.ts": 2,
@@ -1452,8 +1448,6 @@
       "apps/api/src/lib/markdown/chat-message.ts": 1,
       "apps/api/src/lib/tasks/create-task-entity.ts": 2,
       "apps/api/src/lib/tasks/update-task.ts": 2,
-      "apps/api/src/lib/templates/fill-by-id-logic.ts": 1,
-      "apps/api/src/lib/templates/fill-preview-logic.ts": 1,
       "apps/api/src/mcp/billing-tools.ts": 1,
       "apps/api/src/scripts/cz-regional-repair.ts": 1,
       "apps/api/src/scripts/eu-ecj-refetch.ts": 1,

@@ -131,52 +131,6 @@ export const uniquePath = (seen: Set<string>, path: string): string => {
   return unique;
 };
 
-/**
- * Run `worker` over `items` with at most `concurrency` calls in flight,
- * yielding results in input order. A new worker starts only when the
- * consumer pulls a result, so look-ahead — and memory — stay bounded by
- * `concurrency` even when the consumer is slower than the workers.
- *
- * `worker` must not reject: a rejection surfaces from the generator and
- * breaks the consuming stream. Callers wrap failures into the result.
- *
- * @yields {R} each worker result, in the order of `items`.
- */
-export const mapOrderedConcurrent = async function* <T, R>(
-  items: Iterable<T>,
-  concurrency: number,
-  worker: (item: T) => Promise<R>,
-): AsyncGenerator<R> {
-  const limit = Math.max(1, concurrency);
-  const iterator = items[Symbol.iterator]();
-  const inFlight: Promise<R>[] = [];
-
-  const startNext = (): boolean => {
-    const next = iterator.next();
-    if (next.done === true) {
-      return false;
-    }
-    inFlight.push(worker(next.value));
-    return true;
-  };
-
-  while (inFlight.length < limit) {
-    if (!startNext()) {
-      break;
-    }
-  }
-
-  while (inFlight.length > 0) {
-    const head = inFlight.shift();
-    if (head === undefined) {
-      break;
-    }
-    const result = await head;
-    startNext();
-    yield result;
-  }
-};
-
 /** An uploaded file held by a document descendant. */
 export type ArchiveFileContent = {
   fileId: string;

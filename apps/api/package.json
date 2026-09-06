@@ -92,6 +92,7 @@
     "@stll/chat-limits": "workspace:*",
     "@stll/cli": "workspace:*",
     "@stll/collation": "workspace:*",
+    "@stll/concurrency": "workspace:*",
     "@stll/conditions": "workspace:*",
     "@stll/country-codes": "workspace:*",
     "@stll/docx-core": "catalog:",

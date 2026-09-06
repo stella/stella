@@ -10,7 +10,6 @@ import {
   DOCUMENT_PROCESSING_RECONCILIATION_PHASE_FEEDS,
   DOCUMENT_PROCESSING_RECONCILIATION_PHASES,
   indexDocumentProjectionAtJobBoundary,
-  mapWithConcurrency,
   readRepairScanCursor,
   RECONCILE_BATCH_SIZE,
   reconciliationLeftWorkBehind,
@@ -875,24 +874,6 @@ describe("bounded search-index replay", () => {
         });
       }),
     );
-  });
-
-  test("does not execute more than its concurrency limit", async () => {
-    let active = 0;
-    let peakActive = 0;
-    const values = await mapWithConcurrency({
-      items: [1, 2, 3, 4, 5],
-      limit: 2,
-      operation: async (value) => {
-        active += 1;
-        peakActive = Math.max(peakActive, active);
-        await Promise.resolve();
-        active -= 1;
-        return value;
-      },
-    });
-    expect(values).toEqual([1, 2, 3, 4, 5]);
-    expect(peakActive).toBe(2);
   });
 });
 

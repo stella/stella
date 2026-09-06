@@ -20,6 +20,7 @@ import { alias } from "drizzle-orm/pg-core";
 
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 import { SCOUT_KEY } from "@stll/api-contract/signals";
+import { mapWithConcurrency } from "@stll/concurrency";
 
 import { rootDb } from "@/api/db/root";
 import {
@@ -2140,33 +2141,6 @@ const searchIndexProjectionSourceFields = alias(
   fields,
   "document_processing_search_index_projection_source_fields",
 );
-
-export const mapWithConcurrency = async <Item, Value>({
-  items,
-  limit,
-  operation,
-}: {
-  items: Item[];
-  limit: number;
-  operation: (item: Item) => Promise<Value>;
-}): Promise<Value[]> => {
-  const values: Value[] = [];
-  let nextIndex = 0;
-  const run = async (): Promise<void> => {
-    const index = nextIndex;
-    nextIndex += 1;
-    const item = items.at(index);
-    if (item === undefined) {
-      return;
-    }
-    values[index] = await operation(item);
-    await run();
-  };
-  await Promise.all(
-    Array.from({ length: Math.min(Math.max(limit, 1), items.length) }, run),
-  );
-  return values;
-};
 
 export const runSearchIndexReplayAttempt = async ({
   indexEntity,

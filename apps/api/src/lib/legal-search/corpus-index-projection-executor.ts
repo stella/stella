@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { Buffer } from "node:buffer";
 
 import type { Transaction } from "@/api/db/root";
+import { streamWithConcurrency } from "@/api/lib/bounded-concurrency";
 import { PayloadBudgetError } from "@/api/lib/compression";
 import { ChunkBudgetError } from "@/api/lib/corpus-index/chunking";
 import { settleBoth } from "@/api/lib/corpus-index/core";
@@ -129,20 +130,24 @@ export type CorpusProjectionAppendCycleTiming = {
   reservationMs: number;
   materialReadMs: number;
   /**
-   * The payload window end to end: object reads, which run concurrently, and
-   * the document build for each revision, which does not.
+   * How long the cycle waited on the payload pool: the time between asking
+   * for the next revision and having it, summed over the revisions.
+   *
+   * This is stall, not work. Reads and builds run inside a pool that keeps
+   * refilling while the cycle appends, so a pool that keeps up reports close
+   * to zero however much I/O it did, and a rising number means the reads
+   * cannot feed the appends.
    */
   payloadLoadMs: number;
   /**
-   * The build's share of `payloadLoadMs`: parsing a payload into documents and
-   * serializing them, summed over the revisions.
+   * Parsing a payload into documents and serializing them, summed over the
+   * revisions.
    *
-   * Measured apart from the window it sits inside because the two answer
-   * opposite questions. The window is wall clock over concurrent reads, so it
-   * says nothing about where the time went; this is synchronous work on one
-   * thread, so it adds up to real elapsed time and a cycle whose window is
-   * mostly build is CPU-bound, not I/O-bound. Without the split the phase
-   * reads as object-storage latency however it is actually spent.
+   * Measured apart from `payloadLoadMs` because the two answer opposite
+   * questions. This is synchronous work on one thread, so it adds up to real
+   * elapsed time and a cycle spending most of it here is CPU-bound, not
+   * I/O-bound. Without the split the phase reads as object-storage latency
+   * however it is actually spent.
    */
   documentBuildMs: number;
   ingestMs: number;
@@ -731,150 +736,155 @@ const processPreparedRequests = async ({
   });
 };
 
-type ProcessPreparedWindowsOptions = {
+type ProcessPreparedStreamOptions = {
   runInTransaction: ProjectionTransactionRunner;
   client: ProjectionAppendClient;
   commitMode: CorpusProjectionAppendCommitMode;
   materialsReady: readonly CorpusProjectionMaterial[];
-  tails: Map<string, ProjectionAppendTail<PreparedProjectionEntry>>;
-  windowStart: number;
   payloadReadConcurrency: number;
   retryDelayMs: number;
   payloadRetryLimit: number;
   result: CorpusProjectionAppendCycleResult;
 };
 
-const processPreparedWindows = async ({
+/**
+ * Load payloads through a pool that refills as each read completes, and hand
+ * each revision to the append machinery the moment its turn arrives.
+ *
+ * The pool replaces a window of concurrent reads. A window refilled only
+ * once its slowest member settled and only after everything the window fed
+ * had been appended, so effective read concurrency decayed to each window's
+ * tail and fell to zero for the length of every append request. Reads now
+ * continue through both. Look-ahead is capped at the same concurrency, so at
+ * most that many payloads are in flight while that many prepared revisions
+ * wait — the pair a window already held at its own peak.
+ *
+ * Revisions are still consumed in material order, so each physical index's
+ * tail receives the same revisions in the same order and the appended ndjson
+ * is unchanged. Failed reads are classified in one transaction per append
+ * rather than one per revision.
+ */
+const processPreparedStream = async ({
   runInTransaction,
   client,
   commitMode,
   materialsReady,
-  tails,
-  windowStart,
   payloadReadConcurrency,
   retryDelayMs,
   payloadRetryLimit,
   result,
-}: ProcessPreparedWindowsOptions): Promise<"completed" | "append_unknown"> => {
-  if (windowStart >= materialsReady.length) {
-    const final = advanceCorpusProjectionAppendTails({
-      tails,
-      entries: [],
-      mode: "flush-all",
-      nowMs: Date.now(),
-    });
-    return await processPreparedRequests({
-      runInTransaction,
-      client,
-      commitMode,
-      requests: final.flush,
-      requestIndex: 0,
-      unattemptedLeases: [],
-      result,
-    });
-  }
-  // Payload I/O stays bounded by this window. Prepared entries then collect
-  // only until the byte planner emits a full request; at most one request-
-  // sized tail per physical index survives into the next window.
-  const windowEnd = Math.min(
-    windowStart + payloadReadConcurrency,
-    materialsReady.length,
-  );
-  const window = materialsReady.slice(windowStart, windowEnd);
-  const loaded = await measured(
-    async () =>
-      await Promise.all(
-        window.map(async (material) => ({
-          material,
-          loaded: await buildPreparedEntry({
-            runInTransaction,
-            material,
-            recordBuildMs: (elapsedMs) => {
-              result.timing.documentBuildMs += elapsedMs;
-            },
-          }),
-        })),
-      ),
-    (elapsedMs) => {
-      result.timing.payloadLoadMs += elapsedMs;
-    },
-  );
-  const preparationFailures: ReservationFailure[] = [];
-  const prepared: PreparedProjectionEntry[] = [];
-  for (const item of loaded) {
-    if (item.loaded.isOk()) {
-      prepared.push(item.loaded.value);
-      continue;
+}: ProcessPreparedStreamOptions): Promise<"completed" | "append_unknown"> => {
+  let tails = new Map<string, ProjectionAppendTail<PreparedProjectionEntry>>();
+  const pendingFailures: ReservationFailure[] = [];
+  let consumed = 0;
+
+  const classifyPendingFailures = async (): Promise<void> => {
+    if (pendingFailures.length === 0) {
+      return;
     }
-    const failure = item.loaded.error;
-    if (failure.kind === "payload_unavailable") {
+    const classified = await classifyReservationFailures({
+      runInTransaction,
+      failures: pendingFailures.splice(0),
+    });
+    result.retryScheduled += classified.retryScheduled;
+    result.blocked += classified.blocked;
+    result.cancelled += classified.staleCancelled;
+    result.leaseLost += classified.leaseLost;
+  };
+
+  const payloads = streamWithConcurrency({
+    items: materialsReady,
+    limit: payloadReadConcurrency,
+    lookAhead: payloadReadConcurrency,
+    operation: async (material) => ({
+      material,
+      prepared: await buildPreparedEntry({
+        runInTransaction,
+        material,
+        recordBuildMs: (elapsedMs) => {
+          result.timing.documentBuildMs += elapsedMs;
+        },
+      }),
+    }),
+  });
+
+  let waitingSince = Date.now();
+  for await (const { material, prepared } of payloads) {
+    result.timing.payloadLoadMs += Date.now() - waitingSince;
+    consumed += 1;
+    const entries: PreparedProjectionEntry[] = [];
+    if (prepared.isOk()) {
+      entries.push(prepared.value);
+    } else if (prepared.error.kind === "payload_unavailable") {
       result.unread += 1;
-      preparationFailures.push({
-        lease: item.material.lease,
+      pendingFailures.push({
+        lease: material.lease,
         failure: {
           status: "retry_scheduled",
-          kind: failure.kind,
+          kind: prepared.error.kind,
           retryDelayMs,
           maxAttempts: payloadRetryLimit,
-          message: failure.message,
+          message: prepared.error.message,
         },
       });
-      continue;
+    } else {
+      pendingFailures.push({
+        lease: material.lease,
+        failure: {
+          status: "blocked",
+          kind: prepared.error.kind,
+          message: prepared.error.message,
+        },
+      });
     }
-    preparationFailures.push({
-      lease: item.material.lease,
-      failure: {
-        status: "blocked",
-        kind: failure.kind,
-        message: failure.message,
-      },
-    });
-  }
-  const classified = await classifyReservationFailures({
-    runInTransaction,
-    failures: preparationFailures,
-  });
-  result.retryScheduled += classified.retryScheduled;
-  result.blocked += classified.blocked;
-  result.cancelled += classified.staleCancelled;
-  result.leaseLost += classified.leaseLost;
 
-  const advanced = advanceCorpusProjectionAppendTails({
+    const advanced = advanceCorpusProjectionAppendTails({
+      tails,
+      entries,
+      mode: "buffer",
+      nowMs: Date.now(),
+    });
+    tails = advanced.tails;
+    if (advanced.flush.length > 0) {
+      await classifyPendingFailures();
+      const unattemptedLeases = [...tails.values()].flatMap(
+        ({ entries: tailEntries }) =>
+          tailEntries.map(({ material: tailMaterial }) => tailMaterial.lease),
+      );
+      for (const { lease } of materialsReady.slice(consumed)) {
+        unattemptedLeases.push(lease);
+      }
+      const requestStatus = await processPreparedRequests({
+        runInTransaction,
+        client,
+        commitMode,
+        requests: advanced.flush,
+        requestIndex: 0,
+        unattemptedLeases,
+        result,
+      });
+      if (requestStatus === "append_unknown") {
+        return requestStatus;
+      }
+    }
+    waitingSince = Date.now();
+  }
+  result.timing.payloadLoadMs += Date.now() - waitingSince;
+
+  await classifyPendingFailures();
+  const final = advanceCorpusProjectionAppendTails({
     tails,
-    entries: prepared,
-    mode: "buffer",
+    entries: [],
+    mode: "flush-all",
     nowMs: Date.now(),
   });
-  const unattemptedLeases = [...advanced.tails.values()].flatMap(
-    ({ entries: tailEntries }) =>
-      tailEntries.map(({ material }) => material.lease),
-  );
-  for (const { lease } of materialsReady.slice(windowEnd)) {
-    unattemptedLeases.push(lease);
-  }
-
-  const requestStatus = await processPreparedRequests({
+  return await processPreparedRequests({
     runInTransaction,
     client,
     commitMode,
-    requests: advanced.flush,
+    requests: final.flush,
     requestIndex: 0,
-    unattemptedLeases,
-    result,
-  });
-  if (requestStatus === "append_unknown") {
-    return requestStatus;
-  }
-  return await processPreparedWindows({
-    runInTransaction,
-    client,
-    commitMode,
-    materialsReady,
-    tails: advanced.tails,
-    windowStart: windowEnd,
-    payloadReadConcurrency,
-    retryDelayMs,
-    payloadRetryLimit,
+    unattemptedLeases: [],
     result,
   });
 };
@@ -989,13 +999,11 @@ export const executeCorpusProjectionAppendCycle = async <
   result.cancelled += materialRetries.staleCancelled;
   result.leaseLost += materialRetries.leaseLost;
 
-  await processPreparedWindows({
+  await processPreparedStream({
     runInTransaction,
     client,
     commitMode,
     materialsReady: materials.ready,
-    tails: new Map(),
-    windowStart: 0,
     payloadReadConcurrency,
     retryDelayMs,
     payloadRetryLimit,

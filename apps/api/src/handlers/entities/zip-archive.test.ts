@@ -4,73 +4,9 @@ import {
   buildArchivePaths,
   buildErrorManifest,
   groupFileContentsByEntityId,
-  mapOrderedConcurrent,
   uniquePath,
 } from "./zip-archive";
 import type { ArchiveNode } from "./zip-archive";
-
-const delay = async (ms: number): Promise<void> => {
-  await new Promise<void>((resolve) => {
-    setTimeout(resolve, ms);
-  });
-};
-
-describe("mapOrderedConcurrent", () => {
-  test("yields results in input order despite out-of-order completion", async () => {
-    // Later items resolve sooner, so completion order is reversed.
-    const worker = async (n: number) => {
-      await delay((8 - n) * 5);
-      return n;
-    };
-    const results: number[] = [];
-    for await (const r of mapOrderedConcurrent([1, 2, 3, 4, 5], 5, worker)) {
-      results.push(r);
-    }
-    expect(results).toEqual([1, 2, 3, 4, 5]);
-  });
-
-  test("never exceeds the concurrency limit", async () => {
-    let active = 0;
-    let maxActive = 0;
-    const worker = async (n: number) => {
-      active++;
-      maxActive = Math.max(maxActive, active);
-      await delay(5);
-      active--;
-      return n;
-    };
-    const results: number[] = [];
-    for await (const r of mapOrderedConcurrent(
-      [1, 2, 3, 4, 5, 6, 7, 8, 9],
-      3,
-      worker,
-    )) {
-      results.push(r);
-    }
-    expect(maxActive).toBeLessThanOrEqual(3);
-    expect(results).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
-  });
-
-  test("handles empty input", async () => {
-    const results: number[] = [];
-    for await (const r of mapOrderedConcurrent<number, number>(
-      [],
-      3,
-      async (n) => n,
-    )) {
-      results.push(r);
-    }
-    expect(results).toEqual([]);
-  });
-
-  test("treats a concurrency below 1 as 1", async () => {
-    const results: number[] = [];
-    for await (const r of mapOrderedConcurrent([1, 2, 3], 0, async (n) => n)) {
-      results.push(r);
-    }
-    expect(results).toEqual([1, 2, 3]);
-  });
-});
 
 describe("uniquePath", () => {
   test("returns the path unchanged when unseen", () => {

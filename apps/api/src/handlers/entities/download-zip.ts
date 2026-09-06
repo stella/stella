@@ -3,6 +3,7 @@ import { makeZip } from "client-zip";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { compareCodeUnit } from "@stll/collation";
+import { streamWithConcurrency } from "@stll/concurrency";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { entities, entityVersions, fields } from "@/api/db/schema";
@@ -10,7 +11,6 @@ import {
   buildArchivePaths,
   buildErrorManifest,
   groupFileContentsByEntityId,
-  mapOrderedConcurrent,
   uniquePath,
 } from "@/api/handlers/entities/zip-archive";
 import type {
@@ -285,11 +285,11 @@ const downloadZipHandler = async function* ({
 
     const failedPaths: string[] = [];
     const failedFileIds: string[] = [];
-    for await (const result of mapOrderedConcurrent(
-      files,
-      FETCH_CONCURRENCY,
-      fetchFile,
-    )) {
+    for await (const result of streamWithConcurrency({
+      items: files,
+      limit: FETCH_CONCURRENCY,
+      operation: fetchFile,
+    })) {
       if (result.type === "error") {
         failedPaths.push(result.path);
         failedFileIds.push(result.fileId);

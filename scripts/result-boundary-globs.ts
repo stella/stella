@@ -107,6 +107,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "packages/catalogue/src/**/*.ts",
   "packages/chat-limits/src/**/*.ts",
   "packages/clipboard/src/**/*.ts",
+  "packages/concurrency/src/**/*.ts",
   "packages/conditions/src/**/*.ts",
   "packages/country-codes/src/**/*.ts",
   "packages/docx-utils/src/**/*.ts",

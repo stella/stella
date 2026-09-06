@@ -164,3 +164,67 @@ test("the commit mode picks the ingest the request runs through", async () => {
 
   expect(calls).toEqual(Object.values(CORPUS_PROJECTION_APPEND_COMMIT_MODE));
 });
+
+/**
+ * The payload pool hands revisions to the tails one at a time, where the read
+ * window handed over up to a window at once. Every physical index has to see
+ * the same revisions, in the same order, packed into the same requests: the
+ * appended bytes are the contract, and batching is not part of it.
+ */
+test("append requests do not depend on how many revisions arrive at once", () => {
+  const entryBytes = Math.floor(CORPUS_PROJECTION_APPEND_MAX_REQUEST_BYTES / 4);
+  const entries = Array.from({ length: 40 }, (_unused, index) => ({
+    indexId: index % 3 === 0 ? "case_law_v5_cs_sk" : "case_law_v6_cs_sk",
+    ndjson: `revision-${index}`,
+    ndjsonBytes: entryBytes,
+    leaseExpiresAtMs: 600_000,
+  }));
+
+  const requestsPerIndex = (batchSize: number): Map<string, string[][]> => {
+    let tails = new Map<
+      string,
+      {
+        indexId: string;
+        entries: (typeof entries)[number][];
+        ndjsonBytes: number;
+        earliestLeaseExpiresAtMs: number;
+      }
+    >();
+    const requests = new Map<string, string[][]>();
+    const record = (
+      flush: { indexId: string; entries: (typeof entries)[number][] }[],
+    ): void => {
+      for (const tail of flush) {
+        const perIndex = requests.get(tail.indexId) ?? [];
+        perIndex.push(tail.entries.map(({ ndjson }) => ndjson));
+        requests.set(tail.indexId, perIndex);
+      }
+    };
+    for (let start = 0; start < entries.length; start += batchSize) {
+      const advanced = advanceCorpusProjectionAppendTails({
+        tails,
+        entries: entries.slice(start, start + batchSize),
+        mode: "buffer",
+        nowMs: 0,
+      });
+      tails = advanced.tails;
+      record(advanced.flush);
+    }
+    record(
+      advanceCorpusProjectionAppendTails({
+        tails,
+        entries: [],
+        mode: "flush-all",
+        nowMs: 0,
+      }).flush,
+    );
+    return requests;
+  };
+
+  const streamed = requestsPerIndex(1);
+  expect(streamed.size).toBe(2);
+  expect([...streamed.values()].every((perIndex) => perIndex.length > 1)).toBe(
+    true,
+  );
+  expect(streamed).toEqual(requestsPerIndex(32));
+});

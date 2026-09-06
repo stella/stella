@@ -89,6 +89,9 @@
     "packages/collation": {
       "entry": ["src/index.ts", "src/**/*.test.ts"]
     },
+    "packages/concurrency": {
+      "entry": ["src/index.ts", "src/**/*.test.ts"]
+    },
     "packages/legal-atlas": {
       "entry": ["src/index.ts", "src/**/*.test.ts"]
     },
