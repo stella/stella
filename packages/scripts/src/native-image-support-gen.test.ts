@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { hasNativeImageProbeSupport } from "@stll/ai-catalog";
@@ -24,6 +25,18 @@ const report = (records: NativeImageProbeRecord[]) => ({
   records,
 });
 
+const expectImportError = (
+  result: ReturnType<typeof mergeNativeImageProbeReports>,
+  message: string,
+): void => {
+  expect(Result.isError(result)).toBe(true);
+  if (!Result.isError(result)) {
+    return;
+  }
+  expect(NativeImageProbeImportError.is(result.error)).toBe(true);
+  expect(result.error.message).toContain(message);
+};
+
 describe("native image canary evidence import", () => {
   test("CI detects effective support drift while ignoring refreshed provenance", () => {
     const current = report([record]);
@@ -35,7 +48,7 @@ describe("native image canary evidence import", () => {
     const unchanged = mergeNativeImageProbeReports({
       current,
       incoming: report([refreshed]),
-    });
+    }).unwrap();
     expect(hasNativeImageSupportChanged({ current, incoming: unchanged })).toBe(
       false,
     );
@@ -43,7 +56,7 @@ describe("native image canary evidence import", () => {
       const revoked = mergeNativeImageProbeReports({
         current,
         incoming: report([{ ...refreshed, status }]),
-      });
+      }).unwrap();
       expect(hasNativeImageSupportChanged({ current, incoming: revoked })).toBe(
         true,
       );
@@ -75,7 +88,7 @@ describe("native image canary evidence import", () => {
     const merged = mergeNativeImageProbeReports({
       current,
       incoming: report([record]),
-    });
+    }).unwrap();
     expect(merged.records).toContainEqual(newer);
     expect(merged.records).toContainEqual(record);
   });
@@ -91,7 +104,7 @@ describe("native image canary evidence import", () => {
       const merged = mergeNativeImageProbeReports({
         current,
         incoming: report([latest]),
-      });
+      }).unwrap();
       expect(merged.records).toEqual([latest]);
       expect(hasNativeImageProbeSupport(merged.records, record)).toBe(false);
     }
@@ -102,47 +115,51 @@ describe("native image canary evidence import", () => {
     const first = mergeNativeImageProbeReports({
       current: report([]),
       incoming: report([record, other]),
-    });
+    }).unwrap();
     const reverse = mergeNativeImageProbeReports({
       current: report([]),
       incoming: report([other, record]),
-    });
+    }).unwrap();
     expect(first).toEqual(reverse);
     expect(
       mergeNativeImageProbeReports({
         current: first,
         incoming: report([other, record]),
-      }),
+      }).unwrap(),
     ).toEqual(first);
   });
 
   test("rejects duplicate, stale and conflicting evidence", () => {
-    expect(() =>
+    expectImportError(
       mergeNativeImageProbeReports({
         current: report([]),
         incoming: report([record, record]),
       }),
-    ).toThrow(NativeImageProbeImportError);
-    expect(() =>
+      "Duplicate native image probe",
+    );
+    expectImportError(
       mergeNativeImageProbeReports({
         current: report([record, record]),
         incoming: report([]),
       }),
-    ).toThrow(NativeImageProbeImportError);
-    expect(() =>
+      "Duplicate native image probe",
+    );
+    expectImportError(
       mergeNativeImageProbeReports({
         current: report([record]),
         incoming: report([
           { ...record, checkedAt: "2026-09-05T12:00:00.000Z" },
         ]),
       }),
-    ).toThrow("Stale native image probe");
-    expect(() =>
+      "Stale native image probe",
+    );
+    expectImportError(
       mergeNativeImageProbeReports({
         current: report([record]),
         incoming: report([{ ...record, status: "unsupported" }]),
       }),
-    ).toThrow("Conflicting native image probe");
+      "Conflicting native image probe",
+    );
   });
 
   test("validates the report before importing any evidence", () => {
@@ -162,9 +179,10 @@ describe("native image canary evidence import", () => {
         records: [{ ...record, error: "unbounded provider output" }],
       },
     ]) {
-      expect(() =>
+      expectImportError(
         mergeNativeImageProbeReports({ current: report([]), incoming }),
-      ).toThrow("Invalid");
+        "Invalid",
+      );
     }
   });
 });
