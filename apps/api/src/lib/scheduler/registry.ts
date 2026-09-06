@@ -20,6 +20,10 @@ import {
   compactChatThreads,
 } from "@/api/lib/scheduler/tasks/chat-thread-compactor";
 import {
+  BACKFILL_CORPUS_INDEX_JOB_DETAIL_TASK,
+  backfillCorpusIndexJobDetail,
+} from "@/api/lib/scheduler/tasks/corpus-index-job-detail-backfill";
+import {
   EXPIRE_DESKTOP_EDIT_SESSIONS_TASK,
   expireDesktopEditSessions,
 } from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry";
@@ -109,6 +113,7 @@ const SCHEDULER_TASKS = {
   [FLOW_RUN_TASK]: runScheduledFlow,
   [BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK]:
     backfillCaseLawRedactionTombstones,
+  [BACKFILL_CORPUS_INDEX_JOB_DETAIL_TASK]: backfillCorpusIndexJobDetail,
   [RECONCILE_CASE_LAW_CORPUS_UPLOAD_INTENTS_TASK]:
     reconcileCaseLawCorpusUploadIntentsTask,
   [RECONCILE_BUFFER_INTENTS_TASK]: reconcileBufferIntents,

@@ -33,16 +33,19 @@ export const REHEARSAL_ROWS_PER_DECISION = {
   case_law_citations: 5,
   case_law_decision_identifiers: 1,
   case_law_decisions: 1,
+  case_law_index_jobs: 1,
   case_law_provision_citations: 2,
   case_law_search_document_preview_passages: 2,
   case_law_search_documents: 1,
   corpus_index_projection_intents: 1,
   corpus_index_projection_states: 1,
+  legislation_index_jobs: 1,
 } as const satisfies Record<HighVolumeTable, number>;
 
 const SOURCE_ID = "0b4f7d84-2f5e-4d8c-9a1a-6c8b7e2d5f01";
 const PREVIEW_GENERATION = "0b4f7d84-2f5e-4d8c-9a1a-6c8b7e2d5f02";
 const CORPUS_GENERATION = "case_law_v999";
+const LEGISLATION_GENERATION = "legislation_v999";
 const CORPUS_INDEX_ID = "rehearsal_cze";
 const ZERO_DIGEST = "repeat('0', 64)";
 /**
@@ -218,6 +221,21 @@ export const REHEARSAL_SEEDERS = {
     SELECT 'case_law', '${CORPUS_GENERATION}', d.id, 'upsert', ${PROJECTION_EPOCH},
            ${ZERO_DIGEST}, '${CORPUS_INDEX_ID}'
     FROM rehearsal_decisions d`,
+  case_law_index_jobs: () => `
+    INSERT INTO case_law_index_jobs
+      (id, decision_id, generation, operation, status, content_hash)
+    SELECT gen_random_uuid(), d.id, '${CORPUS_GENERATION}', 'index', 'succeeded',
+           ${ZERO_DIGEST}
+    FROM rehearsal_decisions d`,
+  // The rehearsal seeds no legislation documents, so these are the rows the
+  // trail keeps for a whole-index operation, which carry no document. The
+  // volume is what a migration meets; the shape of the trail is the same.
+  legislation_index_jobs: () => `
+    INSERT INTO legislation_index_jobs
+      (id, document_id, generation, operation, status, content_hash)
+    SELECT gen_random_uuid(), NULL, '${LEGISLATION_GENERATION}', 'rebuild',
+           'succeeded', ${ZERO_DIGEST}
+    FROM rehearsal_decisions d`,
 } as const satisfies Record<HighVolumeTable, Seeder>;
 
 /**
@@ -236,6 +254,8 @@ export const REHEARSAL_SEED_ORDER = [
   "case_law_search_document_preview_passages",
   "corpus_index_projection_states",
   "corpus_index_projection_intents",
+  "case_law_index_jobs",
+  "legislation_index_jobs",
 ] as const satisfies readonly HighVolumeTable[];
 
 export type RehearsalSeedStep = {

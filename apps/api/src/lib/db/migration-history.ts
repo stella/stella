@@ -326,6 +326,21 @@ const rewrittenMigrationHistories = {
     ],
     requiredIndexes: [],
   },
+  // The first file moved every withdrawal's reason into the new column with
+  // one UPDATE per index-job table, and neither table has an index for that
+  // predicate: the scan exceeded the statement budget and took the whole
+  // migration down with it. The current file keeps only DDL and leaves the
+  // rows to the `corpusIndex.backfillJobDetail` scheduler task, which walks
+  // the primary key in bounded pages. The schema effect is the same either
+  // way, and the task finds nothing to do where the first file ran.
+  "20260905200000_corpus_index_job_detail": {
+    currentHash:
+      "fe62e3944fef31f98fd578e7521dcfbed6a35e6c9cc40bfdf1da5ca0dabb3788",
+    priorHashes: [
+      "66eb1a83964f86bedcebcbf9cd8dd01f436c5142a16d427c944540947471d76a",
+    ],
+    requiredIndexes: [],
+  },
 } as const satisfies Readonly<Record<string, RewrittenMigrationHistory>>;
 
 export const REWRITTEN_MIGRATION_HISTORIES: Readonly<

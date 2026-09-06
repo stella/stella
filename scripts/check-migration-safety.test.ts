@@ -762,6 +762,29 @@ describe("check-migration-safety", () => {
       );
     });
 
+    it("rejects the index-job backfill that outran the migration budget", () => {
+      // The trail carries one row per document per index operation and has no
+      // index on `operation`, so this filtered UPDATE scans it whole. It is
+      // registered now; the repair belongs to a bounded online pass.
+      const result = runChecker(`
+        UPDATE "case_law_index_jobs"
+          SET "detail" = "error_message", "error_message" = NULL
+          WHERE "operation" = 'withdraw'
+            AND "status" = 'succeeded'
+            AND "error_message" IS NOT NULL;
+      `);
+
+      expectFinding(result, "high-volume-table-dml");
+      expectFinding(
+        runChecker(`
+          UPDATE "legislation_index_jobs"
+            SET "detail" = "error_message", "error_message" = NULL
+            WHERE "operation" = 'withdraw';
+        `),
+        "high-volume-table-dml",
+      );
+    });
+
     it("ignores the table name inside comments, strings and routine bodies", () => {
       expectClean(
         runChecker(`
