@@ -136,7 +136,7 @@ export const FilterChips = ({
   };
 
   // One picker element, rendered alone when there are no filters and after the
-  // chips when there are; it had been two identical copies.
+  // chips when there are.
   const addFilterPicker = (
     <AddFilterPicker
       fields={pickerFields}
