@@ -777,9 +777,12 @@
     }
   },
   "no-db-await-in-loop-suppressions": {
-    "count": 116,
+    "count": 127,
     "files": {
-      "apps/api/scripts/classify-citations.ts": 2,
+      "apps/api/scripts/backfill-image-thumbnails.ts": 3,
+      "apps/api/scripts/backfill-search-previews.ts": 1,
+      "apps/api/scripts/classify-citations.ts": 3,
+      "apps/api/scripts/ingestion-status.ts": 6,
       "apps/api/scripts/seed-case-law.ts": 1,
       "apps/api/scripts/seed-matter-activity.ts": 1,
       "apps/api/scripts/seed-usage-policies.ts": 1,

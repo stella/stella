@@ -27,6 +27,7 @@ const main = async (): Promise<void> => {
 
   for (;;) {
     const organizationRows: Iterable<OrganizationRow> =
+      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- keyset page per iteration; the page is the batch
       await rootDb.execute<OrganizationRow>(sql`
         SELECT id
         FROM organization

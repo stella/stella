@@ -2967,6 +2967,10 @@ export default defineConfig({
         "apps/api/src/tests/**/*.ts",
         "**/*.test.{ts,tsx}",
         "**/*.spec.{ts,tsx}",
+        // Development seeds write fixture data once into a local database;
+        // their loop lengths are the fixture's, not a tenant's, so the query
+        // count is not a scaling property there.
+        "apps/api/scripts/seed-*.ts",
       ],
       rules: {
         "no-db-await-in-loop/no-db-await-in-loop": "error",

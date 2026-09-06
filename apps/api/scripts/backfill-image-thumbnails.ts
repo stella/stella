@@ -74,6 +74,7 @@ const backfillEntityFields = async (): Promise<number> => {
   for (;;) {
     // Sequential keyset pagination: the next page cursor depends on this batch.
     const batch: Iterable<EntityFieldRow> =
+      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- keyset page per iteration; the page is the batch
       await rootDb.execute<EntityFieldRow>(sql`
       SELECT
         f.id AS field_id,
@@ -135,6 +136,7 @@ const backfillChatFiles = async (): Promise<number> => {
   let generated = 0;
 
   for (;;) {
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- keyset page per iteration; the page is the batch
     const rows = await rootDb
       .select({
         id: userFiles.id,
@@ -186,6 +188,7 @@ const backfillChatFiles = async (): Promise<number> => {
       });
       const updatedRows = await Result.tryPromise({
         try: async () =>
+          // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- one write per generated thumbnail so progress survives a stop
           await rootDb
             .update(userFiles)
             .set({ thumbnailFileId, placeholder: thumbnail.value.placeholder })
