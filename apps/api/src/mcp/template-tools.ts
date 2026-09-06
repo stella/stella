@@ -122,10 +122,7 @@ import { defineValibotMcpTool } from "@/api/mcp/valibot-tool-definition";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 type TemplateToolName =
-  | "list_templates"
-  | "fill_template"
-  | "save_filled_template"
-  | "save_template";
+  "list_templates" | "fill_template" | "save_filled_template" | "save_template";
 
 /** Max assembled-text length returned inline; full bytes ride along as base64. */
 const TEMPLATE_FILL_TEXT_MAX_CHARS = 16_000;
@@ -411,20 +408,17 @@ const buildTemplateDetailTextFieldSpecs = (
 
 const SAVE_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
   description:
-    "Create a document template from a DOCX, or configure an existing " +
-    "template's fields. To create, pass docx_base64 (base64-encoded .docx / " +
-    `Office Open XML bytes, max ${MAX_DOCX_MEGABYTES} MB decoded) and a name; ` +
-    "the {{field}} markers in the file become the template's fillable fields, " +
-    "and fields can configure them in the same call. docx_base64 must carry " +
-    "the original bytes verbatim: never retype the file or strip parts out to " +
-    "fit. To configure an existing template, pass template_id with fields and " +
-    "no docx_base64; only the manifest changes, the document's {{markers}} " +
-    "stay untouched. Read " +
+    "Create a template from a DOCX, or configure its fields. To create, pass " +
+    `the original .docx bytes as docx_base64 (max ${MAX_DOCX_MEGABYTES} MB ` +
+    "decoded) and a name; never retype the file or strip parts out to fit. " +
+    "Its {{field}} markers become fillable fields; fields can configure " +
+    "them in the same call. To configure an existing template, pass " +
+    "template_id with fields and no docx_base64; this changes only the " +
+    "manifest, not its {{markers}}. Read " +
     `${TEMPLATE_MARKER_REFERENCE_URI} before authoring a DOCX and ` +
     `${TEMPLATE_FIELD_REFERENCE_URI} before configuring fields. Returns the ` +
-    "template id and field count when creating, or the updated field list " +
-    "when configuring, plus a warnings list of marker authoring mistakes to " +
-    "fix before filling.",
+    "template id and field count when creating, or the updated fields when " +
+    "configuring, plus marker-authoring warnings to fix before filling.",
   inputSchema: saveTemplateArgsSchema,
   jsonSchemaProjectionWaiver: {
     ignoreActions: ["check", "finite", "partial_check"],
