@@ -1060,7 +1060,7 @@
     "fast-uri": "3.1.6",
     "fast-xml-parser": "5.10.1",
     "ip-address": "10.7.0",
-    "lucide-react": "1.30.0",
+    "lucide-react": "1.39.0",
     "nanoid": "3.3.18",
     "postcss": "8.5.25",
     "prosemirror-model": "1.25.11",
@@ -1122,7 +1122,7 @@
     "fast-check": "^4.9.0",
     "franc": "6.2.0",
     "jszip": "3.10.1",
-    "lucide-react": "1.30.0",
+    "lucide-react": "1.39.0",
     "oxc-transform-react": "0.145.0",
     "oxfmt": "0.62.0",
     "oxlint": "1.81.0",
@@ -4209,7 +4209,7 @@
 
     "lru-cache": ["lru-cache@11.5.2", "", {}, "sha512-4pfM1Ff0x50o0tQwb5ucw/RzNyD0/YJME6IVcStalZuMWxdt3sR3huStTtxz4PUmvZfRguvDejasvQ2kifR11g=="],
 
-    "lucide-react": ["lucide-react@1.30.0", "", { "peerDependencies": { "react": "^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0" } }, "sha512-tUIr2jXLbWpCkdtH8XP7P7YppM9ueWgTky99lpWDY6z5REs6B+O6ZQ3U5tHkUUY59ANyOv/PBcs8E4Fe3KO3eA=="],
+    "lucide-react": ["lucide-react@1.39.0", "", { "peerDependencies": { "react": "^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0" } }, "sha512-y8nXoEwvqqIsF927NBWXODa4bfMrcUeEb/9sgpwFqg0gUjgn3j5Hznk+v7STmPgZ2iQ11JKlbQGdFRuTOwvYkA=="],
 
     "luxon": ["luxon@3.7.2", "", {}, "sha512-vtEhXh/gNjI9Yg1u4jX/0YVPMvxzHuGgCm6tC5kZyb08yjGWGnqAjGJvcXbqQR2P3MyMEFnRbpcdFS6PBcLqew=="],
 
