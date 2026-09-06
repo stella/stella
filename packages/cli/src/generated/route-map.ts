@@ -2587,7 +2587,7 @@ export const generatedRouteMap: RouteNode = {
             commandPath: ["template", "save"],
             toolName: "save_template",
             description:
-              "Create a document template from a DOCX, or configure an existing template's fields.",
+              "Create a template from a DOCX, or configure its fields.",
             flags: [
               {
                 flag: "--template-id",
