@@ -1570,12 +1570,14 @@ const runAuthoringTask = async ({
       last === undefined
         ? null
         : v.safeParse(SAVE_TEMPLATE_DEFINITION.inputSchemaSource, last.input);
-    const overlayIssues =
-      parsed === null
-        ? []
-        : parsed.success
-          ? ["save_template call never reached the handler"]
-          : validationIssues(parsed.issues);
+    let overlayIssues: string[];
+    if (parsed === null) {
+      overlayIssues = [];
+    } else if (parsed.success) {
+      overlayIssues = ["save_template call never reached the handler"];
+    } else {
+      overlayIssues = validationIssues(parsed.issues);
+    }
     // A rejected raw save can name an earlier write. Score that exact
     // document; using the most recent write would attach its diagnostics to a
     // different attempted save. With no save attempt, the last authored
