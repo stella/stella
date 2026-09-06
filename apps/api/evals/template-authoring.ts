@@ -1586,9 +1586,10 @@ const runAuthoringTask = async ({
     if (last === undefined) {
       authored = writeCalls.at(-1);
     } else if (parsed?.success) {
-      authored = writeCalls.findLast(
-        (written) => written.ref === parsed.output.docx_base64.trim(),
-      );
+      const ref = parsed.output.docx_base64;
+      if (ref !== undefined) {
+        authored = writeCalls.findLast((written) => written.ref === ref.trim());
+      }
     }
 
     let attempt: SaveAttempt | null;
