@@ -54,11 +54,13 @@ const BATCH_STATEMENT_TIMEOUT = "30s";
 /**
  * VALIDATE takes SHARE UPDATE EXCLUSIVE, which lets writers through but queues
  * behind an autovacuum of the table until that vacuum yields, so the wait is
- * longer than a page's. Its own scan is bounded only by the size of the trail,
- * which is why it runs with no statement budget at all.
+ * longer than a page's. Its scan reads the trail once, which is far more than a
+ * page does and still finite: the budget is sized for that scan rather than
+ * lifted, so a validation that is not making progress is cancelled and tried
+ * again on the next tick instead of holding its connection indefinitely.
  */
 const VALIDATE_LOCK_TIMEOUT = "1min";
-const VALIDATE_STATEMENT_TIMEOUT = "0";
+const VALIDATE_STATEMENT_TIMEOUT = "30min";
 
 type TransactionBudget = { lockTimeout: string; statementTimeout: string };
 
@@ -265,25 +267,51 @@ class CorpusIndexJobDetailBackfillError extends TaggedError(
   "CorpusIndexJobDetailBackfillError",
 )<{ message: string; cause?: unknown }> {}
 
+/** The two steps a run takes, which give up on different terms. */
+export type BackfillStep = "page" | "validate";
+
+/**
+ * What a step may lose to and still be tried again, by step.
+ *
+ * A page is refused a lock or it commits, and its statement budget is sized
+ * for a bounded write: a page cancelled by that budget is a page that is not
+ * doing what it says, which the runner should record. A validation gives up on
+ * both terms — the lock it waits for and the scan it runs — and neither leaves
+ * anything behind, so the next tick simply asks again.
+ */
+const BACKFILL_RETRY_CODES = {
+  page: [PG_ERROR.LOCK_NOT_AVAILABLE],
+  validate: [PG_ERROR.LOCK_NOT_AVAILABLE, PG_ERROR.QUERY_CANCELED],
+} as const satisfies Record<BackfillStep, readonly string[]>;
+
+/** True when the step gave up without committing, so running it again converges. */
+export const isRetriableBackfillFailure = (
+  failure: unknown,
+  step: BackfillStep,
+): boolean =>
+  BACKFILL_RETRY_CODES[step].some((code) => isPgError(failure, code));
+
 type BackfillFailureReport = {
   event: string;
   family: CorpusIndexJobDetailFamily;
   logger: SchedulerTaskContext["logger"];
+  step: BackfillStep;
 };
 
 /**
  * What a step that did not commit means for the sweep.
  *
- * A step refused a lock is not a failure: it moved nothing and checkpointed
- * nothing, so the next tick asks for the same range again and the repair still
- * converges. Anything else is the runner's to record, and a scheduler task
- * reports that through the promise it returns, the way a readiness probe does.
+ * A step that gave up on its own budget is not a failure: it moved nothing and
+ * checkpointed nothing, so the next tick asks for the same range again and the
+ * repair still converges. Anything else is the runner's to record, and a
+ * scheduler task reports that through the promise it returns, the way a
+ * readiness probe does.
  */
 const reportBackfillFailure = async (
   failure: CorpusIndexJobDetailBackfillError,
-  { event, family, logger }: BackfillFailureReport,
+  { event, family, logger, step }: BackfillFailureReport,
 ): Promise<void> => {
-  if (!isPgError(failure, PG_ERROR.LOCK_NOT_AVAILABLE)) {
+  if (!isRetriableBackfillFailure(failure, step)) {
     await Promise.reject(failure);
     return;
   }
@@ -380,6 +408,7 @@ export const backfillCorpusIndexJobDetail: SchedulerTask = async ({
       event: "scheduler.corpus_index_job_detail_contended",
       family,
       logger,
+      step: "page",
     });
   }
 
@@ -427,6 +456,7 @@ export const backfillCorpusIndexJobDetail: SchedulerTask = async ({
       event: "scheduler.corpus_index_job_detail_validation_contended",
       family,
       logger,
+      step: "validate",
     });
   }
 

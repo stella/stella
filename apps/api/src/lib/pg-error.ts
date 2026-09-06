@@ -186,6 +186,8 @@ export const PG_ERROR = {
   DEADLOCK_DETECTED: "40P01",
   /** A statement gave up waiting for a lock it asked for with `lock_timeout`. */
   LOCK_NOT_AVAILABLE: "55P03",
+  /** A statement was cancelled: `statement_timeout` expired, or an operator said so. */
+  QUERY_CANCELED: "57014",
   FOREIGN_KEY_VIOLATION: "23503",
   SERIALIZATION_FAILURE: "40001",
   UNIQUE_VIOLATION: "23505",
