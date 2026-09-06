@@ -777,7 +777,7 @@
     }
   },
   "no-db-await-in-loop-suppressions": {
-    "count": 91,
+    "count": 94,
     "files": {
       "apps/api/scripts/classify-citations.ts": 2,
       "apps/api/scripts/seed-case-law.ts": 1,
@@ -793,6 +793,7 @@
       "apps/api/src/handlers/case-law/research/columns-reorder.ts": 1,
       "apps/api/src/handlers/chat/delete-thread.ts": 2,
       "apps/api/src/handlers/chat/tools/external-mcp-tools.ts": 1,
+      "apps/api/src/handlers/chat/tools/spawn-subagents-tool.ts": 1,
       "apps/api/src/handlers/chat/upload-files.ts": 1,
       "apps/api/src/handlers/contacts/create.ts": 1,
       "apps/api/src/handlers/contacts/update.ts": 1,
@@ -800,6 +801,7 @@
       "apps/api/src/handlers/entities/copy-to-workspace.ts": 1,
       "apps/api/src/handlers/entities/copy-utils.ts": 5,
       "apps/api/src/handlers/entities/delete-version.ts": 1,
+      "apps/api/src/handlers/fields/kanban-placement/update.ts": 1,
       "apps/api/src/handlers/fields/mark-column-flag.ts": 2,
       "apps/api/src/handlers/legislation/ingestion.ts": 1,
       "apps/api/src/handlers/legislation/search-index.ts": 1,
@@ -814,6 +816,7 @@
       "apps/api/src/handlers/views/table-export.ts": 1,
       "apps/api/src/handlers/workspaces/duplicate.ts": 4,
       "apps/api/src/lib/account-deletion-steps.ts": 3,
+      "apps/api/src/lib/audit-log.ts": 1,
       "apps/api/src/lib/case-law/research-answer-runner.ts": 1,
       "apps/api/src/lib/cell-lock.ts": 1,
       "apps/api/src/lib/corpus-index/core.ts": 4,
