@@ -7,6 +7,7 @@ import {
   MCP_INSTRUCTIONS_DEFAULT_MAX_CHARS,
   MCP_INSTRUCTIONS_DOCUMENTS_MAX_CHARS,
 } from "@/api/mcp/instructions";
+import { TEMPLATE_WORKFLOW_REFERENCE_URI } from "@/api/mcp/template-workflow-reference";
 
 // The server `instructions` ride on every initialize response, so they are a
 // per-session token cost. These budgets are hard ceilings: growth past them
@@ -46,6 +47,12 @@ describe("MCP server instructions", () => {
       expect(instructions).toContain("stella://about");
       expect(instructions).toContain("Never infer stella branding or URLs");
     }
+  });
+
+  test("the default surface points at the template workflow resource", () => {
+    // The resource is listed, but an agent that never calls resources/list
+    // starts at save_template and rediscovers the order by trial.
+    expect(MCP_INSTRUCTIONS.default).toContain(TEMPLATE_WORKFLOW_REFERENCE_URI);
   });
 
   test("the anonymized surface omits the write-only feedback tool", () => {

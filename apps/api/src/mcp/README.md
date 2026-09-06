@@ -27,9 +27,12 @@ The server exposes two MCP endpoints:
   gateway are not exposed.
 
 Both endpoints expose static MCP resources through `resources/list` and
-`resources/read`, including `stella://about` for canonical product identity and
-official URLs, and `stella://reference/template-markers` for the DOCX template
-marker grammar.
+`resources/read`: `stella://about` for canonical product identity and official
+URLs, `stella://reference/template-markers` for the DOCX template marker
+grammar, `stella://reference/template-fields` for the `save_template` field
+overlay, and `stella://reference/template-workflow` for the order those two are
+used in (author, create, read the discovered paths back, configure, preview,
+persist).
 
 OAuth protected-resource discovery is served from:
 

@@ -35,7 +35,7 @@ Errors: a failed tool returns a single text content of \`{"error":{"code","messa
 
 Destructive tools (delete_*) refuse to run unless you pass \`confirm: true\`, and you must only set it after a human user has approved the irreversible action.
 
-Static reference documents are available via \`resources/list\` then \`resources/read\`.
+Static reference documents are available via \`resources/list\` then \`resources/read\`; driving templates end to end starts at stella://reference/template-workflow.
 
 Hit a bug or a gap? File it with the send_feedback tool.`;
 
