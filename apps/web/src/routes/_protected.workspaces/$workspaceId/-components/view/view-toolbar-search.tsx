@@ -11,7 +11,7 @@ import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { cn } from "@stll/ui/utils";
 
 import { PropertyIcon } from "@/components/workspaces/property-helpers";
-import { useOwnsFind } from "@/lib/find-owner";
+import { ownsFindKeyEvent, useFindSurface } from "@/lib/find-owner";
 import type { WorkspaceProperty, WorkspaceView } from "@/lib/types";
 import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
 import {
@@ -50,6 +50,7 @@ export const ViewToolbarSearch = ({
   const commitFind = useTableStore((state) => state.commitFind);
   const setFindScope = useTableStore((state) => state.setFindScope);
   const inputRef = useRef<HTMLInputElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   // The column picker lives inside this popover rather than in a menu of its
   // own: a nested popup counts as an outside press and closed the bar.
   const [columnsShown, setColumnsShown] = useState(false);
@@ -58,14 +59,26 @@ export const ViewToolbarSearch = ({
     commitFind(view.id);
   }, FIND_DEBOUNCE_MS);
 
-  const ownsFind = useOwnsFind("table", true);
+  useFindSurface({
+    enabled: true,
+    owner: "table",
+    root: triggerRef,
+    scope: "app",
+  });
   useHotkey(
     useEffectiveHotkey("findInTable"),
-    () => {
+    (event) => {
+      if (!ownsFindKeyEvent("table", event)) {
+        return;
+      }
+      // The registration does not suppress the browser's find for us: a press
+      // another bar owns, or one aimed at a dialog on top, has to reach the
+      // browser untouched.
+      event.preventDefault();
       openFind(view.id);
       inputRef.current?.focus();
     },
-    { enabled: ownsFind },
+    { preventDefault: false, stopPropagation: false },
   );
 
   const searchable = searchableColumnIds(columns);
@@ -87,6 +100,7 @@ export const ViewToolbarSearch = ({
     >
       <PopoverTrigger
         aria-label={t("workspaces.views.findInTable")}
+        ref={triggerRef}
         render={<Button className="relative" size="icon-xs" variant="ghost" />}
         title={t("workspaces.views.findInTable")}
       >

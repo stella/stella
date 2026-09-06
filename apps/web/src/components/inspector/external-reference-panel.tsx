@@ -50,7 +50,7 @@ import { createChatThreadId, toChatThreadId } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 import { APIError, toAPIError } from "@/lib/errors/api";
 import { fetchWithTimeout } from "@/lib/fetch";
-import { useOwnsFind } from "@/lib/find-owner";
+import { ownsFindKeyEvent, useFindSurface } from "@/lib/find-owner";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { PDFPage } from "@/lib/pdf/pdf-page";
@@ -72,6 +72,7 @@ type InspectorFindOptions = {
   contentRef: RefObject<HTMLElement | null>;
   enabled: boolean;
   highlightKey: string;
+  panelRef: RefObject<HTMLElement | null>;
 };
 
 type FindState =
@@ -95,6 +96,7 @@ const useInspectorFind = ({
   contentRef,
   enabled,
   highlightKey,
+  panelRef,
 }: InspectorFindOptions) => {
   const [findState, setFindState] = useState<FindState>(FIND_CLOSED);
   const allHighlightName = `stella-inspector-find-${highlightKey}`;
@@ -154,19 +156,27 @@ const useInspectorFind = ({
   const matchCount = findState.open ? findState.matchCount : 0;
   const activeIndex = findState.open ? findState.activeIndex : 0;
 
-  // A table view binds Cmd/Ctrl+F too. This listener captures and always
-  // prevents the default, so without an owner both bars could open and which
-  // one did was mount-order luck; the inspector wins while it is showing a
-  // document, and stands down otherwise.
-  const ownsFind = useOwnsFind("inspector", enabled);
+  // The DOCX pane and a table view's toolbar bind Cmd/Ctrl+F too, so the press
+  // is arbitrated rather than taken: this panel reaches the whole app while it
+  // is showing a document, and stands down for a pane the press landed inside
+  // or while a modal covers it.
+  useFindSurface({
+    enabled,
+    owner: "inspector",
+    root: panelRef,
+    scope: "app",
+  });
 
   useExternalSyncEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (!ownsFind) {
+      if (!enabled) {
         return;
       }
 
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "f") {
+        if (!ownsFindKeyEvent("inspector", event)) {
+          return;
+        }
         event.preventDefault();
         setFindState((prev) => (prev.open ? prev : FIND_OPENED));
         return;
@@ -182,7 +192,7 @@ const useInspectorFind = ({
     return () => {
       document.removeEventListener("keydown", handleKeyDown, { capture: true });
     };
-  }, [findOpen, ownsFind]);
+  }, [enabled, findOpen]);
 
   useLayoutEffect(() => {
     // eslint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
@@ -669,6 +679,7 @@ const GenericExternalReferencePanel = ({
   );
   const highlightKey = useMemo(() => sanitizeHighlightKey(tab.id), [tab.id]);
   const contentRef = useRef<HTMLElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
   const findInputRef = useRef<HTMLInputElement | null>(null);
   const {
     activeMatchNumber,
@@ -685,6 +696,7 @@ const GenericExternalReferencePanel = ({
     contentRef,
     enabled: previewText !== undefined,
     highlightKey,
+    panelRef,
   });
   const { data: mcpConnectorsData } = useQuery({
     ...mcpConnectorsOptions(activeOrganizationId),
@@ -745,7 +757,10 @@ const GenericExternalReferencePanel = ({
   }, [findOpen]);
 
   return (
-    <div className="bg-background flex min-h-0 flex-1 flex-col overflow-hidden">
+    <div
+      className="bg-background flex min-h-0 flex-1 flex-col overflow-hidden"
+      ref={panelRef}
+    >
       <style>
         {`
           ::highlight(stella-inspector-find-${highlightKey}) {

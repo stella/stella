@@ -9,6 +9,7 @@ import type { DocxEditorRef } from "@stll/folio-react";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { findDocumentSearchResult } from "@/lib/document-search";
+import { ownsFindKeyEvent, useFindSurface } from "@/lib/find-owner";
 import {
   getAdjacentSearchMatchIndex,
   MAX_SEARCH_PREVIEW_MATCHES,
@@ -44,7 +45,7 @@ export type DocxFind = {
 };
 
 type UseDocxFindOptions = {
-  /** Pane root: bounds the visibility gate and the Escape shortcut. */
+  /** Pane root: the registry reads it for "inside" and "on screen". */
   containerRef: RefObject<HTMLElement | null>;
   editorRef: RefObject<DocxEditorRef | null>;
   enabled: boolean;
@@ -180,22 +181,23 @@ export const useDocxFind = ({
 
   const isOpen = state.status === "open";
 
+  // The inspector's external-reference preview and a table view's toolbar bind
+  // Cmd/Ctrl+F too. This pane only claims presses that land inside it, and only
+  // while it is the visible tab, which the shared registry resolves.
+  useFindSurface({
+    enabled,
+    owner: "docx",
+    root: containerRef,
+    scope: "pane",
+  });
+
   useExternalSyncEffect(() => {
     if (!enabled) {
       return undefined;
     }
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      const container = containerRef.current;
-      // `offsetParent` is null while an inspector tab is CSS-hidden, which is
-      // how the pane keeps background tabs mounted. Only the visible editor
-      // may claim the shortcut.
-      if (
-        !container ||
-        container.offsetParent === null ||
-        !(event.target instanceof Node) ||
-        !container.contains(event.target)
-      ) {
+      if (!ownsFindKeyEvent("docx", event)) {
         return;
       }
 
@@ -205,14 +207,6 @@ export const useDocxFind = ({
       }
 
       if (action.type === "closeFind") {
-        // Leave Escape to whatever is layered over the pane (dialogs render
-        // in portals outside it).
-        if (
-          !(event.target instanceof Node) ||
-          !container.contains(event.target)
-        ) {
-          return;
-        }
         event.preventDefault();
         close();
         return;
@@ -256,7 +250,7 @@ export const useDocxFind = ({
     return () => {
       document.removeEventListener("keydown", handleKeyDown, { capture: true });
     };
-  }, [close, containerRef, debouncedSearch, editorRef, enabled, isOpen]);
+  }, [close, debouncedSearch, editorRef, enabled, isOpen]);
 
   return {
     activeIndex: state.status === "open" ? state.activeIndex : 0,

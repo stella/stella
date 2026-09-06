@@ -1,75 +1,94 @@
-import { create } from "zustand";
+import type { RefObject } from "react";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { resolveFindOwner } from "@/lib/find-owner.logic";
+import type {
+  FindCandidate,
+  FindOwner,
+  FindScope,
+} from "@/lib/find-owner.logic";
 
-/**
- * Which find bar Cmd/Ctrl+F belongs to right now.
- *
- * Two can be mounted at once: the inspector's external-reference preview and a
- * table view's. Both bind the shortcut, so without an owner which one opens is
- * mount-order luck and both can open together. Precedence is this array's
- * order, and the inspector leads because it is the surface in front of the
- * reader while it is showing a document.
- */
-export const FIND_OWNERS = ["inspector", "table"] as const;
-
-export type FindOwner = (typeof FIND_OWNERS)[number];
-
-// Counted rather than a flag per surface: a claim is released by an effect
-// cleanup, and React runs a mount/cleanup/mount cycle in development, so a
-// boolean would leave the surface unclaimed between the two mounts.
-type FindClaims = Record<FindOwner, number>;
-
-const NO_CLAIMS: FindClaims = { inspector: 0, table: 0 };
-
-type FindOwnerStore = {
-  claims: FindClaims;
-  claim: (owner: FindOwner) => void;
-  release: (owner: FindOwner) => void;
+type FindSurface = {
+  owner: FindOwner;
+  root: RefObject<HTMLElement | null>;
+  scope: FindScope;
 };
 
-const useFindOwnerStore = create<FindOwnerStore>()((set) => ({
-  claims: NO_CLAIMS,
-  claim: (owner) => {
-    set((state) => ({
-      claims: { ...state.claims, [owner]: state.claims[owner] + 1 },
-    }));
-  },
-  release: (owner) => {
-    set((state) => ({
-      claims: {
-        ...state.claims,
-        [owner]: Math.max(state.claims[owner] - 1, 0),
-      },
-    }));
-  },
-}));
-
-const ownerOf = (claims: FindClaims): FindOwner | null =>
-  FIND_OWNERS.find((owner) => claims[owner] > 0) ?? null;
+// Keyed by the identity handed out at registration rather than by owner: React
+// runs a mount/cleanup/mount cycle in development, and two instances of one
+// surface overlap during a route transition, so a per-owner slot would let the
+// older instance's cleanup delete the live one's registration. Nothing
+// subscribes: ownership is decided per key press, not per render.
+const surfaces = new Map<symbol, FindSurface>();
 
 /**
- * Claim Cmd/Ctrl+F for this surface while `enabled`, and report whether the
- * claim currently wins. Pass the result to `useHotkey`'s `enabled` so the
- * losing bar keeps its registration (and stays visible in devtools) without
- * firing.
+ * `offsetParent` is null while an inspector tab is CSS-hidden, which is how
+ * the pane keeps background tabs mounted; Base UI marks everything outside an
+ * open modal `inert` (`aria-hidden` where `inert` is unsupported). Either way
+ * the surface is not what the user is looking at, so it does not get the key.
  */
-export const useOwnsFind = (
-  candidate: FindOwner,
-  enabled: boolean,
-): boolean => {
-  const claim = useFindOwnerStore((state) => state.claim);
-  const release = useFindOwnerStore((state) => state.release);
+const isOnScreen = (root: HTMLElement | null): boolean =>
+  root !== null &&
+  root.offsetParent !== null &&
+  root.closest("[inert], [aria-hidden='true']") === null;
 
+const toCandidate = (
+  surface: FindSurface,
+  target: EventTarget | null,
+): FindCandidate => {
+  const root = surface.root.current;
+  return {
+    containsTarget:
+      root !== null && target instanceof Node && root.contains(target),
+    owner: surface.owner,
+    reachable: isOnScreen(root),
+    scope: surface.scope,
+  };
+};
+
+/**
+ * Whether this surface's find bar owns the key press. Ask before calling
+ * `preventDefault`: a surface that does not own the press must leave the event
+ * untouched, so the browser's own find still opens when no bar claims it.
+ */
+export const ownsFindKeyEvent = (
+  owner: FindOwner,
+  event: { target: EventTarget | null },
+): boolean =>
+  resolveFindOwner(
+    Array.from(surfaces.values(), (surface) =>
+      toCandidate(surface, event.target),
+    ),
+  ) === owner;
+
+type UseFindSurfaceOptions = {
+  /** While false the surface is not a candidate and its bar cannot open. */
+  enabled: boolean;
+  owner: FindOwner;
+  /** The surface's own pane: bounds both "inside" and "on screen". */
+  root: RefObject<HTMLElement | null>;
+  scope: FindScope;
+};
+
+/**
+ * Register a find bar as a candidate for Cmd/Ctrl+F while `enabled`. Every
+ * surface that binds the shortcut must register, then gate its handler on
+ * {@link ownsFindKeyEvent}.
+ */
+export const useFindSurface = ({
+  enabled,
+  owner,
+  root,
+  scope,
+}: UseFindSurfaceOptions): void => {
   useExternalSyncEffect(() => {
     if (!enabled) {
       return undefined;
     }
-    claim(candidate);
+    const id = Symbol(owner);
+    surfaces.set(id, { owner, root, scope });
     return () => {
-      release(candidate);
+      surfaces.delete(id);
     };
-  }, [candidate, claim, enabled, release]);
-
-  return useFindOwnerStore((state) => ownerOf(state.claims)) === candidate;
+  }, [enabled, owner, root, scope]);
 };
