@@ -32,6 +32,7 @@ export type LookupBusinessRegistryProps = {
   organizationId: SafeId<"organization">;
   registry: BusinessRegistrySlug;
   q: string;
+  executeLookup?: typeof executeRegistryLookup | undefined;
 };
 
 // Native-tool preferences control discovery, not access to public records.
@@ -40,6 +41,7 @@ export const lookupBusinessRegistryShared = async ({
   organizationId,
   registry,
   q,
+  executeLookup = executeRegistryLookup,
 }: LookupBusinessRegistryProps): Promise<
   Result<RegistryLookupResponse, HandlerError>
 > => {
@@ -71,7 +73,7 @@ export const lookupBusinessRegistryShared = async ({
     );
   }
 
-  const result = await executeRegistryLookup({ handler, query: q });
+  const result = await executeLookup({ handler, query: q });
   if (result instanceof HandlerError) {
     return Result.err(result);
   }

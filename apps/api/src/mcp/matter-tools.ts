@@ -892,6 +892,7 @@ const handleLookupBusinessRegistryTool: TypedMcpToolHandler<
     organizationId: context.organizationId,
     registry: parsed.output.registry,
     q: parsed.output.query,
+    executeLookup: context.testDependencies?.executeRegistryLookup,
   });
   if (Result.isError(result)) {
     return internalFailureResult(result.error);
