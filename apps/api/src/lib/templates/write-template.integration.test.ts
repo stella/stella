@@ -290,6 +290,32 @@ test("failed audit rolls back publication and retains recovery ownership", async
   expect(state.intents.at(0)?.status).toBe("writing");
 });
 
+test("an upload with an outstanding timed-out PUT remains quarantined instead of publishing", async () => {
+  const f = await fixture();
+  const result = await Result.gen(() =>
+    writeStoredTemplate({
+      ...f.options,
+      mode: { type: "current-version" },
+      prepare: f.prepare,
+      async writeObject(object) {
+        await f.writeObject(object);
+        return S3_OBJECT_WRITE_CERTAINTY.UNCERTAIN;
+      },
+    }),
+  );
+  expect(
+    Result.isError(result) &&
+      HandlerError.is(result.error) &&
+      result.error.status,
+  ).toBe(503);
+  const state = await f.state();
+  expect(state.current?.s3Key).toBe(f.s3Key);
+  expect(state.versions).toHaveLength(1);
+  expect(state.audits).toHaveLength(0);
+  expect(state.intents).toHaveLength(1);
+  expect(state.intents.at(0)?.status).toBe("writing");
+});
+
 test("storage and preparation never run inside a database transaction", async () => {
   const f = await fixture();
   let active = 0;
@@ -380,6 +406,31 @@ test("cross-tenant writers cannot prepare or upload a hidden template", async ()
       result.error.status,
   ).toBe(404);
   expect(f.objects.size).toBe(1);
+});
+
+test("deletion during preparation returns not found without starting an upload", async () => {
+  const f = await fixture();
+  const result = await Result.gen(() =>
+    writeStoredTemplate({
+      ...f.options,
+      mode: { type: "current-version" },
+      writeObject: f.writeObject,
+      async prepare(snapshot) {
+        await testDb
+          .delete(templates)
+          .where(eq(templates.id, f.options.templateId));
+        return await f.prepare(snapshot);
+      },
+    }),
+  );
+  expect(
+    Result.isError(result) &&
+      HandlerError.is(result.error) &&
+      result.error.status,
+  ).toBe(404);
+  expect(f.objects.size).toBe(1);
+  const state = await f.state();
+  expect(state.intents).toHaveLength(0);
 });
 
 test("the version limit is enforced at publication and leaves the candidate recoverable", async () => {

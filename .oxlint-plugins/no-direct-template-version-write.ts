@@ -8,8 +8,8 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 import {
   filenameForContext,
   getImportedName,
-  getImportLocalName,
   getPropertyName,
+  isAstNode,
   isIdentifier,
   isStringLiteral,
   unwrapExpression,
@@ -34,6 +34,19 @@ const isTestFile = (filename: string): boolean =>
   filename.includes("/__tests__/") ||
   /\.(?:test|spec)\.[cm]?[jt]sx?$/u.test(filename);
 
+type Scope = {
+  set: Map<string, ScopeVariable>;
+  upper: Scope | null;
+};
+
+type ScopeVariable = {
+  defs: {
+    node: unknown;
+    parent: unknown;
+    type: string;
+  }[];
+};
+
 export default eslintCompatPlugin({
   meta: { name: RULE_NAME },
   rules: {
@@ -47,26 +60,66 @@ export default eslintCompatPlugin({
         schema: [],
       },
       createOnce(context) {
-        const directBindings = new Set<string>();
-        const namespaceBindings = new Set<string>();
+        const resolveVariable = (identifier): ScopeVariable | null => {
+          let scope: Scope | null = context.sourceCode.getScope(identifier);
+          while (scope !== null) {
+            const variable = scope.set.get(identifier.name);
+            if (variable !== undefined) {
+              return variable;
+            }
+            scope = scope.upper;
+          }
+          return null;
+        };
+
+        const isSchemaImport = (
+          identifier: unknown,
+          importKind: "named" | "namespace",
+        ): boolean => {
+          if (!isIdentifier(identifier)) {
+            return false;
+          }
+          const variable = resolveVariable(identifier);
+          if (variable === null) {
+            return false;
+          }
+          return variable.defs.some((definition) => {
+            if (
+              definition.type !== "ImportBinding" ||
+              !isAstNode(definition.node) ||
+              !isAstNode(definition.parent) ||
+              definition.parent.type !== "ImportDeclaration" ||
+              definition.parent.importKind === "type" ||
+              !isStringLiteral(definition.parent.source) ||
+              !isSchemaModule(definition.parent.source.value)
+            ) {
+              return false;
+            }
+            if (importKind === "namespace") {
+              return definition.node.type === "ImportNamespaceSpecifier";
+            }
+            return (
+              definition.node.type === "ImportSpecifier" &&
+              definition.node.importKind !== "type" &&
+              getImportedName(definition.node) === TABLE_NAME
+            );
+          });
+        };
 
         const isTemplateVersionsTable = (node: unknown): boolean => {
           const table = unwrapExpression(node);
           if (isIdentifier(table)) {
-            return directBindings.has(table.name);
+            return isSchemaImport(table, "named");
           }
           return (
             table?.type === "MemberExpression" &&
-            isIdentifier(table.object) &&
-            namespaceBindings.has(table.object.name) &&
+            isSchemaImport(table.object, "namespace") &&
             getPropertyName(table.property) === TABLE_NAME
           );
         };
 
         return {
           before() {
-            directBindings.clear();
-            namespaceBindings.clear();
             const filename = filenameForContext(context);
             if (filename.endsWith(FIXTURE_PATH)) {
               return true;
@@ -76,31 +129,6 @@ export default eslintCompatPlugin({
               !OWNER_PATHS.some((ownerPath) => filename.endsWith(ownerPath)) &&
               !isTestFile(filename)
             );
-          },
-          ImportDeclaration(node) {
-            if (
-              !isStringLiteral(node.source) ||
-              !isSchemaModule(node.source.value) ||
-              !Array.isArray(node.specifiers)
-            ) {
-              return;
-            }
-            for (const specifier of node.specifiers) {
-              if (
-                specifier.type === "ImportNamespaceSpecifier" &&
-                isIdentifier(specifier.local)
-              ) {
-                namespaceBindings.add(specifier.local.name);
-                continue;
-              }
-              if (getImportedName(specifier) !== TABLE_NAME) {
-                continue;
-              }
-              const localName = getImportLocalName(specifier);
-              if (localName !== null) {
-                directBindings.add(localName);
-              }
-            }
           },
           CallExpression(node) {
             const callee = unwrapExpression(node.callee);

@@ -16,10 +16,17 @@ const _update = tx.update(schema.templateVersions);
 const _delete = tx.delete(versions);
 
 const _unrelatedInsert = tx.insert(unrelatedTable);
+// oxlint-disable-next-line eslint/no-shadow -- fixture: a local binding that shadows the imported table must remain valid
+const _shadowedInsert = (versions: unknown) => tx.insert(versions);
+// oxlint-disable-next-line eslint/no-shadow -- fixture: a local binding that shadows the schema namespace must remain valid
+const _shadowedNamespaceUpdate = (schema: { templateVersions: unknown }) =>
+  tx.update(schema.templateVersions);
 
 export const __noDirectTemplateVersionWriteFixture = {
   _delete,
   _insert,
+  _shadowedInsert,
+  _shadowedNamespaceUpdate,
   _unrelatedInsert,
   _update,
 };

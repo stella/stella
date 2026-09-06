@@ -125,14 +125,24 @@ const writeTemplateAttempt = async function* ({
     templateId,
     writeId: createSafeId<"templateVersion">(),
   });
-  const intentIds = yield* Result.await(
-    reserveObjectCleanupIntents({
-      objectKey: s3Key,
-      organizationId,
-      safeDb,
-      workspaceIds: [],
-    }),
-  );
+  const reservation = await reserveObjectCleanupIntents({
+    objectKey: s3Key,
+    organizationId,
+    safeDb,
+    workspaceIds: [],
+  });
+  if (Result.isError(reservation)) {
+    // The reservation policy requires a live template. Deletion can win after
+    // preparation but before this insert; preserve the endpoint's 404 contract.
+    const latest = yield* Result.await(readSnapshot());
+    if (!latest) {
+      return Result.err(
+        new HandlerError({ status: 404, message: "Template not found" }),
+      );
+    }
+    return Result.err(reservation.error);
+  }
+  const intentIds = reservation.value;
   // On any uncertain upload or transaction failure, leave the durable intent
   // alone. A lost COMMIT acknowledgement must never delete published bytes.
   const certainty = yield* Result.await(
@@ -145,6 +155,26 @@ const writeTemplateAttempt = async function* ({
         }),
     ),
   );
+  switch (certainty) {
+    case S3_OBJECT_WRITE_CERTAINTY.UNCERTAIN:
+      // An earlier timed-out PUT may still land after this version is later
+      // replaced and erased. Never publish that key: keep its quarantine
+      // intent so recovery can delete late writes, even after this request.
+      return Result.err(
+        new HandlerError({
+          status: 503,
+          message:
+            "Template storage write could not be confirmed. Retry the operation.",
+        }),
+      );
+    case S3_OBJECT_WRITE_CERTAINTY.CONFIRMED:
+      break;
+    default:
+      certainty satisfies never;
+      return panic(
+        `Unhandled template storage certainty: ${String(certainty)}`,
+      );
+  }
   const outcome = yield* Result.await(
     abortableTx(safeDb, async (tx) => {
       await lockOrganizationObjectIntentsForWriter(tx, organizationId);
@@ -167,10 +197,7 @@ const writeTemplateAttempt = async function* ({
         await settleObjectCleanupIntentsAfterWriterInTransaction({
           intentIds,
           tx,
-          objectState:
-            certainty === S3_OBJECT_WRITE_CERTAINTY.CONFIRMED
-              ? "cleanup-required"
-              : "write-uncertain",
+          objectState: "cleanup-required",
         });
         return { type: "retry" as const };
       }
@@ -186,10 +213,9 @@ const writeTemplateAttempt = async function* ({
             ),
           );
           if (count >= LIMITS.templateVersionsPerTemplate) {
-            throw new HandlerError({
-              status: 400,
-              message: "Version limit reached for this template",
-            });
+            // No mutation precedes this rejection; the candidate stays owned
+            // by its cleanup intent without aborting a partially written row.
+            return { type: "version-limit" as const };
           }
           version = locked.currentVersion + 1;
           break;
@@ -314,10 +340,24 @@ const writeTemplateAttempt = async function* ({
       return { type: "published" as const, row };
     }),
   );
-  if (outcome.type === "published") {
-    return Result.ok({ type: "published", row: outcome.row, manifest });
+  switch (outcome.type) {
+    case "published":
+      return Result.ok({ type: "published", row: outcome.row, manifest });
+    case "retry":
+      return Result.ok({ type: "retry" });
+    case "version-limit":
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Version limit reached for this template",
+        }),
+      );
+    default:
+      outcome satisfies never;
+      return panic(
+        `Unhandled template publication outcome: ${String(outcome)}`,
+      );
   }
-  return Result.ok({ type: "retry" });
 };
 
 /** Prepare and upload without a transaction, then publish against the exact
