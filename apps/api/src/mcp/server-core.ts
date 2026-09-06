@@ -812,13 +812,15 @@ export const createMcpHttpRequestHandler = ({
       // runs inside `handleRequest`, so a throwing analytics sink would reject
       // it and answer a valid `initialize` with a 503. Convert the failure to a
       // result and report it rather than swallowing it.
-      const recorded = Result.try(() =>
-        recordMcpSessionInitialized({
-          clientInfo: message.params.clientInfo,
-          mode,
-          session,
-        }),
-      );
+      const recorded = Result.try({
+        try: () =>
+          recordMcpSessionInitialized({
+            clientInfo: message.params.clientInfo,
+            mode,
+            session,
+          }),
+        catch: (cause) => cause,
+      });
       if (recorded.isErr()) {
         captureError(recorded.error, {
           phase: "initialize",
