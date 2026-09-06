@@ -249,8 +249,9 @@ export const loopedPromiseAllMapHelperHandle = async () => {
 
 // `Promise.allSettled` fans out the helper shape exactly like `Promise.all`.
 export const promiseAllSettledMapHelperHandle = async () => {
-  // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, typescript/promise-function-async -- fixture: awaitless per-row helper carrying the handle under allSettled
+  // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- fixture: awaitless per-row helper carrying the handle under allSettled
   await Promise.allSettled(
+    // oxlint-disable-next-line typescript/promise-function-async -- fixture: `async` would only trip require-await
     items.map((item) => persistRow({ tx, id: item.id })),
   );
 };

@@ -64,13 +64,16 @@ export const allocateEntityStamps = async ({
   }
 
   const firstDocSequence = counter.lastValue - count + 1;
-  const matterReference = (
-    await tx.query.workspaces.findFirst({
-      where: { id: { eq: workspaceId } },
-      columns: { reference: true },
-    })
-  )?.reference;
+  const workspace = await tx.query.workspaces.findFirst({
+    where: { id: { eq: workspaceId } },
+    columns: { reference: true },
+  });
+  if (!workspace) {
+    // The counter row references the workspace, so the upsert above proves it.
+    panic("Document counter allocated for a missing workspace");
+  }
 
+  const matterReference = workspace.reference;
   if (!matterReference) {
     return Array.from({ length: count }, (_, index) => ({
       docSequence: firstDocSequence + index,

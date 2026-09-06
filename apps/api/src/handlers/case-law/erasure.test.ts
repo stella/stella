@@ -2,8 +2,10 @@ import { describe, expect, test } from "bun:test";
 
 import {
   CorpusObjectRetainedError,
+  eraseCancelledIntentObjects,
   eraseCorpusObjects,
 } from "@/api/handlers/case-law/erasure";
+import { createSafeId } from "@/api/lib/branded-types";
 import { formatCorpusLocation } from "@/api/lib/legal-search/corpus-location";
 import type { PackedCorpusLocation } from "@/api/lib/legal-search/corpus-location";
 import type { CorpusDeleteOutcome } from "@/api/lib/legal-search/corpus-storage";
@@ -64,5 +66,65 @@ describe("eraseCorpusObjects", () => {
         deleteCorpus: async () => await Promise.reject(cause),
       }),
     ).toEqual({ type: "incomplete", error: cause });
+  });
+});
+
+describe("eraseCancelledIntentObjects", () => {
+  const gone = createSafeId<"caseLawCorpusUploadIntent">();
+  const kept = createSafeId<"caseLawCorpusUploadIntent">();
+  const cancelledIntents = [
+    {
+      id: gone,
+      textKey: objectKey,
+      sectionsKey: null,
+      astKey: null,
+    },
+    {
+      id: kept,
+      textKey: packedAddress,
+      sectionsKey: null,
+      astKey: null,
+    },
+  ];
+
+  test("only an intent whose every object is gone is cleaned", async () => {
+    const deleteCorpus = async (intentKeys: {
+      textKey: string | null;
+    }): Promise<CorpusDeleteOutcome> =>
+      await Promise.resolve(
+        intentKeys.textKey === objectKey
+          ? { type: "deleted", keys: [objectKey] }
+          : {
+              type: "shared-object-retained",
+              deletedKeys: [],
+              retained: [packedLocation],
+            },
+      );
+
+    const erasure = await eraseCancelledIntentObjects({
+      cancelledIntents,
+      deleteCorpus,
+    });
+
+    expect(erasure.cleanedIntentIds).toEqual([gone]);
+    expect(erasure.incomplete).toHaveLength(1);
+    expect(erasure.incomplete.at(0)?.intentId).toBe(kept);
+    expect(erasure.incomplete.at(0)?.error).toBeInstanceOf(
+      CorpusObjectRetainedError,
+    );
+  });
+
+  test("a failed delete keeps the intent on the retry path", async () => {
+    const cause = new Error("delete failed");
+    const erasure = await eraseCancelledIntentObjects({
+      cancelledIntents,
+      deleteCorpus: async () => await Promise.reject(cause),
+    });
+
+    expect(erasure.cleanedIntentIds).toEqual([]);
+    expect(erasure.incomplete.map((entry) => entry.error)).toEqual([
+      cause,
+      cause,
+    ]);
   });
 });

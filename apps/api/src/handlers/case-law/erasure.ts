@@ -22,6 +22,7 @@ import {
   cancelCaseLawCorpusUploadIntents,
   completeCaseLawCorpusUploadIntentCleanups,
 } from "@/api/lib/legal-search/case-law-corpus-upload-intents";
+import type { CancelledCaseLawCorpusUploadIntent } from "@/api/lib/legal-search/case-law-corpus-upload-intents";
 import { removeDecisionFromIndex } from "@/api/lib/legal-search/case-law-search-index";
 import { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
 import {
@@ -52,6 +53,57 @@ import {
  * personal text. `content_hash` is nulled so neither backfill loop
  * re-indexes the body. The erasure is recorded in case_law_index_jobs.
  */
+type EraseCancelledIntentObjectsOptions = {
+  cancelledIntents: readonly CancelledCaseLawCorpusUploadIntent[];
+  deleteCorpus?: typeof deleteCorpusDocument;
+};
+
+type CancelledIntentErasure = {
+  /** Intents whose every object is gone; only these may lose their row. */
+  cleanedIntentIds: SafeId<"caseLawCorpusUploadIntent">[];
+  /** Intents still holding a payload; their rows stay as retry targets. */
+  incomplete: {
+    intentId: SafeId<"caseLawCorpusUploadIntent">;
+    error: unknown;
+  }[];
+};
+
+/**
+ * Erase the objects of every cancelled upload intent and split the intents
+ * by outcome. A retained shared object or a failed DELETE keeps the intent
+ * on the retry path exactly as it keeps a decision's pointer columns.
+ */
+export const eraseCancelledIntentObjects = async ({
+  cancelledIntents,
+  deleteCorpus = deleteCorpusDocument,
+}: EraseCancelledIntentObjectsOptions): Promise<CancelledIntentErasure> => {
+  const erasures = await Promise.all(
+    cancelledIntents.map(async (intent) => ({
+      intentId: intent.id,
+      erasure: await eraseCorpusObjects({
+        keys: {
+          textKey: intent.textKey,
+          sectionsKey: intent.sectionsKey,
+          astKey: intent.astKey,
+        },
+        deleteCorpus,
+      }),
+    })),
+  );
+  const result: CancelledIntentErasure = {
+    cleanedIntentIds: [],
+    incomplete: [],
+  };
+  for (const { intentId, erasure } of erasures) {
+    if (erasure.type === "deleted") {
+      result.cleanedIntentIds.push(intentId);
+      continue;
+    }
+    result.incomplete.push({ intentId, error: erasure.error });
+  }
+  return result;
+};
+
 type RedactInput = {
   decisionId: SafeId<"caseLawDecision">;
   scopedDb: ScopedDb;
@@ -312,32 +364,23 @@ export const redactCaseLawDecision = async ({
     }
   }
 
-  const cancelledCleanup = await Promise.allSettled(
-    cancelledIntents.map(async (intent) => {
-      await deleteCorpusDocument({
-        textKey: intent.textKey,
-        sectionsKey: intent.sectionsKey,
-        astKey: intent.astKey,
-      });
-      return intent.id;
-    }),
-  );
-  const cleanedIntentIds: SafeId<"caseLawCorpusUploadIntent">[] = [];
-  for (const cleanup of cancelledCleanup) {
-    if (cleanup.status === "rejected") {
-      captureError(cleanup.reason, {
-        decisionId,
-        step: "redactCaseLawDecision.deleteReservedCorpusUpload",
-      });
-      continue;
-    }
-    cleanedIntentIds.push(cleanup.value);
+  // Reserved uploads cancelled under the decision lock go the same way as
+  // the decision's own payloads: only an intent whose objects are all gone
+  // loses its row, the rest stay retry targets. The batched row delete is
+  // failure-isolated the way the per-intent deletes it replaced were: a
+  // redaction that has already scrubbed the objects must go on to scrub the
+  // pointers and the index, and a retained cleanup row is a retry target,
+  // not a reason to stop.
+  const { cleanedIntentIds, incomplete } = await eraseCancelledIntentObjects({
+    cancelledIntents,
+    deleteCorpus,
+  });
+  for (const { error } of incomplete) {
+    captureError(error, {
+      decisionId,
+      step: "redactCaseLawDecision.deleteReservedCorpusUpload",
+    });
   }
-  // Only the intents whose objects are gone lose their row; the rest stay
-  // retry targets. The batched delete is failure-isolated the way the
-  // per-intent deletes it replaced were: a redaction that has already scrubbed
-  // S3 must go on to scrub the row and the index, and a retained cleanup row
-  // is a retry target, not a reason to stop.
   const intentCleanup = await Result.tryPromise({
     try: async () =>
       await completeCaseLawCorpusUploadIntentCleanups({
