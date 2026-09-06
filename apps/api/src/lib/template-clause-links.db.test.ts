@@ -1,4 +1,11 @@
-import { afterAll, beforeAll, expect, setDefaultTimeout, test } from "bun:test";
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  expect,
+  setDefaultTimeout,
+  test,
+} from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
 
 import { organization, user } from "@/api/db/auth-schema";
@@ -210,15 +217,39 @@ const pinnedVersionByLinkId = async () => {
   return new Map(rows.map((row) => [row.id, row.clauseVersionId]));
 };
 
-test("one statement repoints every outdated link on the template", async () => {
-  const result = await syncAllClausesHandler({
+const syncTemplate = async () =>
+  await syncAllClausesHandler({
     scopedDb,
     organizationId,
     templateId,
     recordAuditEvent: noAuditRows,
   });
 
-  expect(result).toEqual({ syncedCount: 2 });
+/**
+ * The sync mutates the seeded pins, so each test starts from the same state
+ * rather than from whatever the previous one left. Otherwise a test passes
+ * only in file order and fails when run alone under a name filter.
+ */
+beforeEach(async () => {
+  const stalePins: [SafeId<"templateClause">, SafeId<"clauseVersion">][] = [
+    [linkIds.alphaOutdated, seeded.alpha.staleVersionId],
+    [linkIds.betaOutdated, seeded.beta.staleVersionId],
+    [linkIds.gammaCurrent, seeded.gamma.currentVersionId],
+    [linkIds.alphaOnOtherTemplate, seeded.alpha.staleVersionId],
+  ];
+  await testDb.transaction(async (tx) => {
+    await tx.execute(sql.raw("RESET ROLE"));
+    for (const [linkId, clauseVersionId] of stalePins) {
+      await tx
+        .update(templateClauses)
+        .set({ clauseVersionId })
+        .where(eq(templateClauses.id, linkId));
+    }
+  });
+});
+
+test("one statement repoints every outdated link on the template", async () => {
+  expect(await syncTemplate()).toEqual({ syncedCount: 2 });
 
   const pinned = await pinnedVersionByLinkId();
   expect(pinned.get(linkIds.alphaOutdated)).toBe(seeded.alpha.currentVersionId);
@@ -234,13 +265,14 @@ test("one statement repoints every outdated link on the template", async () => {
   );
 });
 
-test("a second sync finds nothing left to repoint", async () => {
-  const result = await syncAllClausesHandler({
-    scopedDb,
-    organizationId,
-    templateId,
-    recordAuditEvent: noAuditRows,
-  });
+// Idempotence is a property of a sync that follows a sync, so this establishes
+// its own precondition instead of inheriting one from the test above.
+test("a sync after a sync finds nothing left to repoint", async () => {
+  expect(await syncTemplate()).toEqual({ syncedCount: 2 });
 
-  expect(result).toEqual({ syncedCount: 0 });
+  expect(await syncTemplate()).toEqual({ syncedCount: 0 });
+
+  const pinned = await pinnedVersionByLinkId();
+  expect(pinned.get(linkIds.alphaOutdated)).toBe(seeded.alpha.currentVersionId);
+  expect(pinned.get(linkIds.betaOutdated)).toBe(seeded.beta.currentVersionId);
 });
