@@ -108,7 +108,7 @@ import { runEvalModelTurn } from "./lib/model-turn";
 import type {
   AuthoredBlock,
   AuthoringRunScore,
-  GrammarTrapCode,
+  GrammarTrapCounts,
   RoundTripDefects,
   SaveAttempt,
 } from "./lib/template-authoring-score";
@@ -1547,7 +1547,7 @@ const runSyntaxQuiz = async ({
 const cell = (values: readonly string[]): string =>
   values.length === 0 ? "-" : values.join("; ").replaceAll("|", "\\|");
 
-const trapsCell = (traps: Record<GrammarTrapCode, number>): string =>
+const trapsCell = (traps: GrammarTrapCounts): string =>
   cell(
     GRAMMAR_TRAP_CODES.filter((code) => traps[code] > 0).map(
       (code) => `${code}×${String(traps[code])}`,

@@ -29,7 +29,7 @@ export type AuthoredBlock =
 /** The subset of a `fields` overlay entry the trap detectors read. Every
  *  `FieldMeta` satisfies it structurally, so the eval passes its real
  *  overlay and a test can pass a literal. */
-export type OverlayFieldView = {
+type OverlayFieldView = {
   path: string;
   condition?: string | undefined;
   lookup?: { formats?: readonly { key: string }[] | undefined } | undefined;
@@ -59,7 +59,7 @@ export const GRAMMAR_TRAP_CODES = [
   "condition_on_input",
 ] as const;
 
-export type GrammarTrapCode = (typeof GRAMMAR_TRAP_CODES)[number];
+type GrammarTrapCode = (typeof GRAMMAR_TRAP_CODES)[number];
 
 /** Total over {@link GRAMMAR_TRAP_CODES}: a new code has no default. */
 export type GrammarTrapCounts = Record<GrammarTrapCode, number>;
@@ -163,7 +163,7 @@ const isSelfReferentialCondition = (path: string, condition: string): boolean =>
   condition.trim().toLowerCase().replace(TRUTHINESS_TAIL_RE, "").trim() ===
   path.toLowerCase();
 
-export type DetectGrammarTrapsOptions = {
+type DetectGrammarTrapsOptions = {
   /** The document the model authored, in order. */
   blocks: readonly AuthoredBlock[];
   /** The `fields` overlay it passed to `save_template`. */
@@ -271,7 +271,7 @@ export const detectGrammarTraps = ({
   return counts;
 };
 
-export type PathComparison = {
+type PathComparison = {
   missing: string[];
   extra: string[];
 };
@@ -332,7 +332,7 @@ export type SaveAttempt =
       roundTrip: RoundTripDefects;
     };
 
-export type AuthoringOutcome =
+type AuthoringOutcome =
   | "pass"
   | "partial"
   | "invalid-docx"
@@ -350,7 +350,7 @@ export type AuthoringRunScore = {
   note: string | null;
 };
 
-export type ScoreAuthoringRunOptions = {
+type ScoreAuthoringRunOptions = {
   /** The provider's error, when the turn itself failed. */
   turnError: string | null;
   /** The last `save_template` attempt, or null when the model never called it. */
@@ -429,9 +429,9 @@ export const scoreAuthoringRun = ({
 const normalizeMarkerAnswer = (value: string): string =>
   value.replaceAll(/\s+/gu, "");
 
-export type QuizAnswerKey = string;
+type QuizAnswerKey = string;
 
-export type SyntaxQuizScore = {
+type SyntaxQuizScore = {
   correct: number;
   total: number;
   /** Keys of the questions answered wrong, for the report. */
