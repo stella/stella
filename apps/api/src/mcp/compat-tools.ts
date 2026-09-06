@@ -25,6 +25,7 @@ import {
   MAX_CURSOR_LENGTH,
   notFoundResult,
   structuredErrorResult,
+  uuidInputSchema,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
 import { defineValibotMcpTool } from "@/api/mcp/valibot-tool-definition";
@@ -248,7 +249,7 @@ const compatSearchArgsSchema = v.strictObject({
 });
 
 const compatFetchArgsSchema = v.strictObject({
-  id: v.pipe(v.string(), v.minLength(1), v.description("Document/entity ID")),
+  id: uuidInputSchema("Document/entity ID"),
   cursor: v.optional(
     v.pipe(
       v.string(),

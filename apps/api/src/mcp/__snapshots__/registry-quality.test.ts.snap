@@ -53,7 +53,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "properties": {
         "id": {
           "type": "string",
-          "minLength": 1,
+          "format": "uuid",
           "description": "Document/entity ID"
         },
         "cursor": {
@@ -3319,7 +3319,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "properties": {
         "id": {
           "type": "string",
-          "minLength": 1,
+          "format": "uuid",
           "description": "Document/entity ID"
         },
         "cursor": {

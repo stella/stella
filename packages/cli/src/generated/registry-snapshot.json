@@ -47,7 +47,7 @@
       "properties": {
         "id": {
           "type": "string",
-          "minLength": 1,
+          "format": "uuid",
           "description": "Document/entity ID"
         },
         "cursor": {

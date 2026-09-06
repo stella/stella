@@ -1082,6 +1082,25 @@ describe("OpenAI-compatible MCP tools", () => {
     });
   });
 
+  test("fetch rejects a malformed id instead of querying with it", async () => {
+    const scopedDb = createScopedDb(
+      [],
+      createExtractedContentRow({ name: "Share Purchase Agreement" }),
+    );
+
+    const result = await handleMcpToolCall({
+      args: { id: "not-a-uuid" },
+      context: createContext({ scopedDb }),
+      toolName: "fetch",
+    });
+
+    // The id reaches SQL as a uuid column, so a malformed one has to fail
+    // here, naming the field, rather than as a cast failure the caller sees
+    // as an opaque internal error.
+    expect(validationEnvelope(result)["code"]).toBe("validation_error");
+    expect(scopedDb).not.toHaveBeenCalled();
+  });
+
   test("fetch pages long document text via the returned cursor", async () => {
     const longText = "x".repeat(8000) + "y".repeat(1000);
     const context = createContext({
