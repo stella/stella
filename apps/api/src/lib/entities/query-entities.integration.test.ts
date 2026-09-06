@@ -561,8 +561,10 @@ describe("find in table", () => {
   });
 
   const readNames = async (args: {
-    find?: string;
-    findScope?: { propertyIds: SafeId<"property">[]; type: "all" | "columns" };
+    find?: {
+      scope: { propertyIds: SafeId<"property">[]; type: "all" | "columns" };
+      term: string;
+    };
     limit?: number;
     search?: string;
   }): Promise<string[]> => {
@@ -586,8 +588,7 @@ describe("find in table", () => {
 
   test("matches the name a row displays", async () => {
     const names = await readNames({
-      find: TERM,
-      findScope: { type: "all", propertyIds: searchableIds },
+      find: { scope: { type: "all", propertyIds: searchableIds }, term: TERM },
     });
 
     expect(names).toContain(NAMED_ZETA);
@@ -595,8 +596,7 @@ describe("find in table", () => {
 
   test("matches a cell value, and one element of a multi-select", async () => {
     const names = await readNames({
-      find: TERM,
-      findScope: { type: "all", propertyIds: searchableIds },
+      find: { scope: { type: "all", propertyIds: searchableIds }, term: TERM },
     });
 
     expect(names).toContain(CELL_ZETA);
@@ -605,8 +605,10 @@ describe("find in table", () => {
 
   test("a narrowed scope drops the name half", async () => {
     const names = await readNames({
-      find: TERM,
-      findScope: { type: "columns", propertyIds: searchableIds },
+      find: {
+        scope: { type: "columns", propertyIds: searchableIds },
+        term: TERM,
+      },
     });
 
     expect(names).not.toContain(NAMED_ZETA);
@@ -615,8 +617,10 @@ describe("find in table", () => {
 
   test("narrowing to a subset of columns leaves the others out", async () => {
     const names = await readNames({
-      find: TERM,
-      findScope: { type: "columns", propertyIds: [propertyIds.memo] },
+      find: {
+        scope: { type: "columns", propertyIds: [propertyIds.memo] },
+        term: TERM,
+      },
     });
 
     expect(names).toEqual([MEMO_ZETA]);
@@ -625,14 +629,12 @@ describe("find in table", () => {
   test("date, int and money cells never match, whatever ids arrive", async () => {
     expect(
       await readNames({
-        find: "4321",
-        findScope: { type: "all", propertyIds: everyId },
+        find: { scope: { type: "all", propertyIds: everyId }, term: "4321" },
       }),
     ).not.toContain(NUMERIC);
     expect(
       await readNames({
-        find: "2026-01",
-        findScope: { type: "all", propertyIds: everyId },
+        find: { scope: { type: "all", propertyIds: everyId }, term: "2026-01" },
       }),
     ).not.toContain(NUMERIC);
   });
@@ -642,19 +644,21 @@ describe("find in table", () => {
     // state a just-renamed row is in until the indexing queue catches up.
     expect(
       await readNames({
-        find: TERM,
-        findScope: { type: "all", propertyIds: searchableIds },
+        find: {
+          scope: { type: "all", propertyIds: searchableIds },
+          term: TERM,
+        },
       }),
     ).toContain(NAMED_ZETA);
     expect(await readNames({ search: TERM })).not.toContain(NAMED_ZETA);
   });
 
   test("counts built from the same condition agree with the rows", async () => {
-    const findScope = {
-      propertyIds: searchableIds,
-      type: "all" as const,
+    const find = {
+      scope: { propertyIds: searchableIds, type: "all" as const },
+      term: TERM,
     };
-    const names = await readNames({ find: TERM, findScope });
+    const names = await readNames({ find });
 
     // The shape the group-counts handler builds: the same base set, the same
     // builder, no field selection of its own.
@@ -666,7 +670,7 @@ describe("find in table", () => {
           and(
             eq(entities.workspaceId, ids.wsA1),
             isNotNull(entities.currentVersionId),
-            ...buildFindConditions({ find: TERM, findScope }),
+            ...buildFindConditions(find),
           ),
         ),
     );
@@ -678,9 +682,9 @@ describe("find in table", () => {
   });
 
   test("pages past the first cursor with a find applied", async () => {
-    const findScope = {
-      propertyIds: searchableIds,
-      type: "all" as const,
+    const find = {
+      scope: { propertyIds: searchableIds, type: "all" as const },
+      term: TERM,
     };
     const first = await queryEntities({
       safeDb,
@@ -689,8 +693,7 @@ describe("find in table", () => {
       currentOrganizationId: ids.orgA,
       filters: [],
       sorts: [],
-      find: TERM,
-      findScope,
+      find,
       limit: 2,
       fieldMode: "visible",
       fieldIds: [],
@@ -709,8 +712,7 @@ describe("find in table", () => {
       currentOrganizationId: ids.orgA,
       filters: [],
       sorts: [],
-      find: TERM,
-      findScope,
+      find,
       cursor,
       limit: 50,
       fieldMode: "visible",

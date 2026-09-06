@@ -190,44 +190,44 @@ describe("a view's find bar", () => {
     useTableStore.getState().openFind("v1");
 
     expect(useTableStore.getState().find["v1"]).toEqual({
-      draft: "",
       scope: { type: "all" },
-      term: "",
+      submitted: "",
+      typed: "",
     });
   });
 
   test("keeps what was typed when the shortcut fires again", () => {
-    const { openFind, setFindDraft, commitFind } = useTableStore.getState();
+    const { openFind, setFindTyped, submitFind } = useTableStore.getState();
     openFind("v1");
-    setFindDraft("v1", "lease");
-    commitFind("v1");
+    setFindTyped("v1", "lease");
+    submitFind("v1");
 
     openFind("v1");
 
-    expect(useTableStore.getState().find["v1"]?.term).toBe("lease");
+    expect(useTableStore.getState().find["v1"]?.submitted).toBe("lease");
   });
 
-  test("holds the draft back until it is committed", () => {
-    const { openFind, setFindDraft, commitFind } = useTableStore.getState();
+  test("holds what is typed back until it is submitted", () => {
+    const { openFind, setFindTyped, submitFind } = useTableStore.getState();
     openFind("v1");
-    setFindDraft("v1", "lea");
+    setFindTyped("v1", "lea");
 
     expect(useTableStore.getState().find["v1"]).toMatchObject({
-      draft: "lea",
-      term: "",
+      submitted: "",
+      typed: "lea",
     });
 
-    commitFind("v1");
+    submitFind("v1");
 
-    expect(useTableStore.getState().find["v1"]?.term).toBe("lea");
+    expect(useTableStore.getState().find["v1"]?.submitted).toBe("lea");
   });
 
   test("closing resets it, so reopening starts clean", () => {
-    const { openFind, setFindDraft, commitFind, closeFind, setFindScope } =
+    const { openFind, setFindTyped, submitFind, closeFind, setFindScope } =
       useTableStore.getState();
     openFind("v1");
-    setFindDraft("v1", "lease");
-    commitFind("v1");
+    setFindTyped("v1", "lease");
+    submitFind("v1");
     setFindScope("v1", { propertyIds: ["p1"], type: "columns" });
 
     closeFind("v1");
@@ -235,16 +235,16 @@ describe("a view's find bar", () => {
 
     openFind("v1");
     expect(useTableStore.getState().find["v1"]).toEqual({
-      draft: "",
       scope: { type: "all" },
-      term: "",
+      submitted: "",
+      typed: "",
     });
   });
 
   test("edits nothing while the bar is closed", () => {
-    const { setFindDraft, commitFind, setFindScope } = useTableStore.getState();
-    setFindDraft("v1", "lease");
-    commitFind("v1");
+    const { setFindTyped, submitFind, setFindScope } = useTableStore.getState();
+    setFindTyped("v1", "lease");
+    submitFind("v1");
     setFindScope("v1", { propertyIds: ["p1"], type: "columns" });
 
     expect(useTableStore.getState().find["v1"]).toBeUndefined();

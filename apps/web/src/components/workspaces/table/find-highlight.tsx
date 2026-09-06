@@ -6,6 +6,10 @@ import { splitByMatch } from "@/components/workspaces/table/find-highlight.logic
 /**
  * What a cell, a name and a header mark up.
  *
+ * `term` is the find bar's submitted term, never what it currently holds
+ * typed: these marks explain the rows already on screen, and a term the server
+ * has not answered for yet would mark runs in rows fetched for a different one.
+ *
  * `matchesName` follows the scope: once the reader narrows to columns, the
  * search is about those cells, so the row's name and the column headers stop
  * highlighting along with the name half of the query.

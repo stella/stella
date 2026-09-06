@@ -141,6 +141,7 @@ export {
   PROPERTY_FIND_SUPPORT,
 } from "./entity-find";
 export type {
+  EntityFind,
   EntityFindScope,
   EntityFindScopeType,
   PropertyContentType,

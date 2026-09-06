@@ -47,21 +47,23 @@ export type KanbanGroupOptionsInput = QueryOptionsInput<KanbanGroupKey>;
 export type GroupCountsOptionsInput = QueryOptionsInput<GroupCountsKey>;
 
 /**
- * The find fields a request body carries, branded. Absent when the term is
+ * The find field a request body carries, branded. Absent when the term is
  * blank, so a bar that is open but empty sends nothing.
  */
-const findRequestFields = (key: EntitiesFindKey) => {
-  const normalized = normalizeFind(key);
+const findRequestFields = ({ find }: EntitiesFindKey) => {
+  const normalized = normalizeFind(find);
   if (!normalized) {
     return {};
   }
   return {
-    find: normalized.find,
-    findScope: {
-      propertyIds: normalized.findScope.propertyIds.map((propertyId) =>
-        toSafeId<"property">(propertyId),
-      ),
-      type: normalized.findScope.type,
+    find: {
+      scope: {
+        propertyIds: normalized.scope.propertyIds.map((propertyId) =>
+          toSafeId<"property">(propertyId),
+        ),
+        type: normalized.scope.type,
+      },
+      term: normalized.term,
     },
   };
 };

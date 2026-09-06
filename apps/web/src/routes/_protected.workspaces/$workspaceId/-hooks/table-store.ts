@@ -30,15 +30,20 @@ export type TableFindSelection =
 /**
  * An open find bar. Absent from the record means the bar is closed.
  *
- * `draft` is what the input holds; `term` is what the readers have been asked
- * for. They are separate because the bar debounces: keeping only one would
- * either lag the input by a quarter second or refetch on every keystroke, and
- * "flush the pending debounce" (Enter) needs something to flush into.
+ * `typed` is what the input holds this keystroke. `submitted` is what the row
+ * readers have actually been asked for, and so what the rows on screen and
+ * their marks reflect. They are separate because the bar debounces: keeping
+ * one field would either lag the input by a quarter second or refetch on every
+ * keystroke, and "search now" (Enter) needs something to submit early into.
+ *
+ * Only `submitted` may reach a query key or a highlight. Highlighting against
+ * `typed` would mark runs the server has not answered for, so the marks would
+ * run ahead of the rows they are meant to explain.
  */
 export type TableFind = {
-  draft: string;
   scope: TableFindSelection;
-  term: string;
+  submitted: string;
+  typed: string;
 };
 
 const pruneByViewId = <T>(
@@ -168,9 +173,9 @@ type TableStore = {
   find: Record<string, TableFind>;
   openFind: (viewId: string) => void;
   closeFind: (viewId: string) => void;
-  setFindDraft: (viewId: string, draft: string) => void;
-  /** Promote the draft to the term the readers query with. */
-  commitFind: (viewId: string) => void;
+  setFindTyped: (viewId: string, typed: string) => void;
+  /** Submit what is typed: the readers requery it, and the marks follow. */
+  submitFind: (viewId: string) => void;
   setFindScope: (viewId: string, scope: TableFindSelection) => void;
   pruneStaleViews: (activeViewIds: string[]) => void;
 };
@@ -225,12 +230,12 @@ export const useTableStore = create<TableStore>()(
 
       openFind: (viewId) => {
         set((state) => {
-          // Re-opening an open bar keeps the term: the shortcut focuses the
-          // input, it does not start over.
+          // Re-opening an open bar keeps what was typed and submitted: the
+          // shortcut focuses the input, it does not start over.
           state.find[viewId] ??= {
-            draft: "",
             scope: { type: "all" },
-            term: "",
+            submitted: "",
+            typed: "",
           };
         });
       },
@@ -243,20 +248,20 @@ export const useTableStore = create<TableStore>()(
         });
       },
 
-      setFindDraft: (viewId, draft) => {
+      setFindTyped: (viewId, typed) => {
         set((state) => {
           const current = state.find[viewId];
           if (current) {
-            current.draft = draft;
+            current.typed = typed;
           }
         });
       },
 
-      commitFind: (viewId) => {
+      submitFind: (viewId) => {
         set((state) => {
           const current = state.find[viewId];
           if (current) {
-            current.term = current.draft;
+            current.submitted = current.typed;
           }
         });
       },

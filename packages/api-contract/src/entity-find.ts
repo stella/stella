@@ -1,6 +1,6 @@
 /**
- * Find-in-table: the contract shared by the SQL that filters rows and the
- * toolbar that offers columns to search.
+ * Find: the contract shared by the SQL that filters rows and the toolbar that
+ * offers columns to search. A table view and a kanban group both send it.
  *
  * This is not the `search` parameter. `search` is a relevance-ranked typeahead
  * over the asynchronous `search_documents` index; a find is an always-current
@@ -74,4 +74,17 @@ export type EntityFindScopeType = (typeof ENTITY_FIND_SCOPE_TYPES)[number];
 export type EntityFindScope = {
   propertyIds: readonly string[];
   type: EntityFindScopeType;
+};
+
+/**
+ * A find, whole: the term and how wide it reaches, in one object.
+ *
+ * Deliberately not two loose optional fields. A term that arrived without a
+ * scope would be a third behaviour ("the name, and nothing else") that
+ * `ENTITY_FIND_SCOPE_TYPES` does not name and no caller wants; pairing them
+ * structurally makes it unrepresentable rather than documented.
+ */
+export type EntityFind = {
+  scope: EntityFindScope;
+  term: string;
 };

@@ -152,20 +152,19 @@ describe("buildFindConditions", () => {
   const propertyIds = ["p1", "p2"];
 
   test("an empty or whitespace term produces no condition", () => {
-    expect(buildFindConditions({})).toHaveLength(0);
-    expect(buildFindConditions({ find: "" })).toHaveLength(0);
+    expect(buildFindConditions(undefined)).toHaveLength(0);
     expect(
-      buildFindConditions({
-        find: "   ",
-        findScope: { type: "all", propertyIds },
-      }),
+      buildFindConditions({ scope: { type: "all", propertyIds }, term: "" }),
+    ).toHaveLength(0);
+    expect(
+      buildFindConditions({ scope: { type: "all", propertyIds }, term: "   " }),
     ).toHaveLength(0);
   });
 
   test("an unrestricted scope with no columns matches the name only", () => {
     const sql = findSql({
-      find: "lease",
-      findScope: { type: "all", propertyIds: [] },
+      scope: { type: "all", propertyIds: [] },
+      term: "lease",
     });
     expect(sql).toContain("display_name");
     expect(sql).not.toContain("EXISTS");
@@ -173,8 +172,8 @@ describe("buildFindConditions", () => {
 
   test("an unrestricted scope ORs the name with the searched columns", () => {
     const sql = findSql({
-      find: "lease",
-      findScope: { type: "all", propertyIds },
+      scope: { type: "all", propertyIds },
+      term: "lease",
     });
     expect(sql).toContain("display_name");
     expect(sql).toContain(" OR ");
@@ -183,8 +182,8 @@ describe("buildFindConditions", () => {
 
   test("a narrowed scope drops the name half", () => {
     const sql = findSql({
-      find: "lease",
-      findScope: { type: "columns", propertyIds },
+      scope: { type: "columns", propertyIds },
+      term: "lease",
     });
     expect(sql).not.toContain("display_name");
     expect(sql).toContain("EXISTS");
@@ -193,16 +192,16 @@ describe("buildFindConditions", () => {
   test("a narrowed scope with no columns matches nothing", () => {
     expect(
       findSql({
-        find: "lease",
-        findScope: { type: "columns", propertyIds: [] },
+        scope: { type: "columns", propertyIds: [] },
+        term: "lease",
       }),
     ).toContain("false");
   });
 
   test("columns are reached with one ANY list, not a subquery each", () => {
     const sql = findSql({
-      find: "lease",
-      findScope: { type: "all", propertyIds },
+      scope: { type: "all", propertyIds },
+      term: "lease",
     });
     expect(sql).toContain("= ANY(");
     expect(sql.match(/EXISTS/gu)).toHaveLength(2);
@@ -210,8 +209,8 @@ describe("buildFindConditions", () => {
 
   test("a multi-select array matches element-wise, a scalar by substring", () => {
     const sql = findSql({
-      find: "lease",
-      findScope: { type: "columns", propertyIds },
+      scope: { type: "columns", propertyIds },
+      term: "lease",
     });
     expect(sql).toContain("jsonb_array_elements_text");
     expect(sql).toContain("jsonb_typeof");
@@ -221,16 +220,16 @@ describe("buildFindConditions", () => {
   test("the term is trimmed and bound as a literal substring", () => {
     expect(
       findParams({
-        find: "  lease  ",
-        findScope: { type: "all", propertyIds },
+        scope: { type: "all", propertyIds },
+        term: "  lease  ",
       }),
     ).toContain("%lease%");
   });
 
   test("only searchable cell types are reachable", () => {
     const sql = findSql({
-      find: "lease",
-      findScope: { type: "columns", propertyIds },
+      scope: { type: "columns", propertyIds },
+      term: "lease",
     });
     expect(sql).toContain("->>'type' = ANY(");
   });
@@ -249,8 +248,8 @@ describe("buildFindConditions", () => {
     // server's match would return rows with nothing to mark.
     expect(
       findParams({
-        find: "50%_off",
-        findScope: { type: "all", propertyIds: [] },
+        scope: { type: "all", propertyIds: [] },
+        term: "50%_off",
       }),
     ).toContain("%50\\%\\_off%");
   });

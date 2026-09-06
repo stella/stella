@@ -8,7 +8,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { tConditionNode } from "@/api/lib/conditions/contract";
 import { tPaginationCursor, tSafeId } from "@/api/lib/custom-schema";
-import { tFind, tFindScope } from "@/api/lib/entities/find-schema";
+import { tFind } from "@/api/lib/entities/find-schema";
 import { queryEntities } from "@/api/lib/entities/query-entities";
 import {
   decodeEntitiesWindowCursor,
@@ -26,9 +26,16 @@ const readEntitiesWindowBodySchema = t.Object({
   sorts: t.Optional(
     t.Array(tViewSortSchema, { maxItems: LIMITS.viewSortsCount }),
   ),
-  search: t.Optional(t.String({ maxLength: LIMITS.searchQueryMaxLength })),
+  search: t.Optional(
+    t.String({
+      maxLength: LIMITS.searchQueryMaxLength,
+      description:
+        "Rank rows by relevance against the asynchronous document-title " +
+        "index, and sort by that relevance. For a literal substring filter " +
+        "over the rendered rows, use `find`.",
+    }),
+  ),
   find: t.Optional(tFind),
-  findScope: t.Optional(tFindScope),
   limit: t.Optional(
     t.Integer({
       minimum: 1,
@@ -58,9 +65,10 @@ const readEntitiesWindowBodySchema = t.Object({
 const config = {
   description:
     "Read a window of a matter's documents, folders, and tasks with the same " +
-    "filters, sorts, search, and field selection as entities.list, but with " +
-    "the page bounds the virtualized table scrolls by (200 rows by default). " +
-    "Prefer entities.list unless you are filling a table viewport.",
+    "filters, sorts, search, and field selection as entities.list, plus the " +
+    "find filter, but with the page bounds the virtualized table scrolls by " +
+    "(200 rows by default). Prefer entities.list unless you are filling a " +
+    "table viewport.",
   permissions: { workspace: ["read"] },
   mcp: { type: "covered", by: "read_content_across_matters" },
   access: "read",
@@ -85,8 +93,7 @@ const readEntitiesWindow = createSafeHandler(
         filters: arrayOrEmpty(body.filters),
         sorts: arrayOrEmpty(body.sorts),
         ...(body.search !== undefined && { search: body.search }),
-        ...(body.find !== undefined && { find: body.find }),
-        ...(body.findScope !== undefined && { findScope: body.findScope }),
+        find: body.find,
         cursor: cursorResult.value,
         limit: limit + 1,
         fieldMode: body.fieldMode ?? "full",

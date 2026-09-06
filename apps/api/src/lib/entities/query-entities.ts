@@ -13,7 +13,7 @@ import {
 import type { SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
-import type { EntityFindScope, OcrExportStatus } from "@stll/api-contract";
+import type { EntityFind, OcrExportStatus } from "@stll/api-contract";
 import type { ConditionNode } from "@stll/conditions";
 
 import { member, user } from "@/api/db/auth-schema";
@@ -163,8 +163,7 @@ type QueryEntitiesProps = {
   filters: ConditionNode[];
   sorts: ViewSort[];
   search?: string | undefined;
-  find?: string | undefined;
-  findScope?: EntityFindScope | undefined;
+  find?: EntityFind | undefined;
   cursor?: EntitiesWindowCursorValues | null | undefined;
   limit: number;
   fieldMode: QueryEntitiesFieldMode;
@@ -681,7 +680,6 @@ const queryEntitiesGenerator = async function* ({
   sorts,
   search,
   find,
-  findScope,
   cursor,
   limit,
   fieldMode,
@@ -707,7 +705,7 @@ const queryEntitiesGenerator = async function* ({
     workspaceCondition,
     ...filterConditions,
     ...searchConditions,
-    ...buildFindConditions({ find, findScope }),
+    ...buildFindConditions(find),
     ...kindConditions,
     ...previewableConditions,
     ...extraConditions,

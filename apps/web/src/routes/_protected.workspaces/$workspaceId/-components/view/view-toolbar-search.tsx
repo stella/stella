@@ -46,8 +46,8 @@ export const ViewToolbarSearch = ({
   const find = useTableStore((state) => state.find[view.id]);
   const openFind = useTableStore((state) => state.openFind);
   const closeFind = useTableStore((state) => state.closeFind);
-  const setFindDraft = useTableStore((state) => state.setFindDraft);
-  const commitFind = useTableStore((state) => state.commitFind);
+  const setFindTyped = useTableStore((state) => state.setFindTyped);
+  const submitFind = useTableStore((state) => state.submitFind);
   const setFindScope = useTableStore((state) => state.setFindScope);
   const inputRef = useRef<HTMLInputElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -55,8 +55,10 @@ export const ViewToolbarSearch = ({
   // own: a nested popup counts as an outside press and closed the bar.
   const [columnsShown, setColumnsShown] = useState(false);
 
-  const commit = useDebouncedCallback(() => {
-    commitFind(view.id);
+  // Debounced rather than immediate: `submit` is what turns a keystroke into
+  // a row query, so it is the only path from `typed` to `submitted`.
+  const submit = useDebouncedCallback(() => {
+    submitFind(view.id);
   }, FIND_DEBOUNCE_MS);
 
   useFindSurface({
@@ -92,7 +94,7 @@ export const ViewToolbarSearch = ({
           openFind(view.id);
           return;
         }
-        commit.cancel();
+        submit.cancel();
         setColumnsShown(false);
         closeFind(view.id);
       }}
@@ -118,22 +120,23 @@ export const ViewToolbarSearch = ({
             autoFocus
             className="flex-1"
             onChange={(event) => {
-              setFindDraft(view.id, event.target.value);
-              commit();
+              setFindTyped(view.id, event.target.value);
+              submit();
             }}
             onKeyDown={(event) => {
               if (event.key === "Enter") {
                 // Enter means "search now", the way it does in the app's other
-                // find bars; it never submits or closes.
+                // find bars: it submits what is typed ahead of the debounce,
+                // and never submits a form or closes the bar.
                 event.preventDefault();
-                commit.flush();
+                submit.flush();
               }
             }}
             placeholder={t("workspaces.views.findPlaceholder")}
             ref={inputRef}
             size="sm"
             type="search"
-            value={find?.draft ?? ""}
+            value={find?.typed ?? ""}
           />
           <Button
             aria-expanded={columnsShown}

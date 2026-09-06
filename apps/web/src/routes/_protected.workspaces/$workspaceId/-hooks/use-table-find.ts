@@ -17,8 +17,8 @@ type TableFindResult = {
 
 /**
  * One resolution of a view's find bar, read by the toolbar that edits it and by
- * the readers that send it. It reads the committed term rather than the draft,
- * so the rows and their highlights change together.
+ * the readers that send it. It reads `submitted`, never `typed`, so a row query
+ * and the marks drawn over its answer always describe the same term.
  */
 export const useTableFind = ({
   properties,
@@ -34,19 +34,19 @@ export const useTableFind = ({
     hiddenProperties: view.layout.hiddenProperties,
   });
 
-  const term = find?.term.trim() ?? "";
+  const term = find?.submitted.trim() ?? "";
   if (!find || term === "") {
     return { columns, highlight: null, request: {} };
   }
 
-  const findScope = resolveFindScope({ columns, selection: find.scope });
+  const scope = resolveFindScope({ columns, selection: find.scope });
   return {
     columns,
     highlight: {
-      matchesName: findScope.type === "all",
-      propertyIds: new Set(findScope.propertyIds),
+      matchesName: scope.type === "all",
+      propertyIds: new Set(scope.propertyIds),
       term,
     },
-    request: { find: term, findScope },
+    request: { find: { scope, term } },
   };
 };

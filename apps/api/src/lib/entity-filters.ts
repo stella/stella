@@ -3,7 +3,7 @@ import { and, asc, eq, inArray, isNull, ne, not, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import { isEntityKind } from "@stll/api-contract";
-import type { EntityFindScope } from "@stll/api-contract";
+import type { EntityFind } from "@stll/api-contract";
 import { compareByLocale } from "@stll/collation";
 import {
   type CompareNode,
@@ -721,7 +721,7 @@ export const buildFilterConditions = (filters: ConditionNode[]): SQL[] => {
   return conditions;
 };
 
-// -- Find in table --
+// -- Find --
 
 /**
  * The name a row renders. `entities.display_name` is maintained synchronously
@@ -777,15 +777,10 @@ const FINDABLE_FIELD_TYPES_SQL = typedPgArray(
   "text",
 );
 
-type BuildFindConditionsArgs = {
-  find?: string | undefined;
-  findScope?: EntityFindScope | undefined;
-};
-
 /**
- * The find-in-table predicate: one EXISTS over the searched columns, ORed with
- * the displayed name when the scope is unrestricted. Every reader of a table
- * view compiles it here — the row window, each group's window, and the group
+ * The find predicate: one EXISTS over the searched columns, ORed with the
+ * displayed name when the scope is unrestricted. Every reader of a table view
+ * compiles it here — the row window, each group's window, and the group
  * counts — because counts that disagree with rows is the failure this shares
  * one expression to prevent.
  *
@@ -793,25 +788,18 @@ type BuildFindConditionsArgs = {
  * inside a subquery already scoped to an authorized workspace's current entity
  * versions, so a foreign id is inert.
  */
-export const buildFindConditions = ({
-  find,
-  findScope,
-}: BuildFindConditionsArgs): SQL[] => {
-  const term = find?.trim() ?? "";
+export const buildFindConditions = (find: EntityFind | undefined): SQL[] => {
+  if (!find) {
+    return [];
+  }
+  const term = find.term.trim();
   if (term === "") {
     return [];
   }
 
   const pattern = `%${escapeLikePattern(term)}%`;
   const matchesPattern = (valueExpr: SQL) => sql`${valueExpr} ILIKE ${pattern}`;
-  if (!findScope) {
-    // A term with no scope reaches the name and nothing else; the scope is
-    // what names the columns, and there is no server-side default that
-    // group-counts (which takes no field selection) could agree with.
-    return [matchesPattern(displayedNameExpr())];
-  }
-
-  const { propertyIds } = findScope;
+  const { propertyIds } = find.scope;
   const columnsMatch =
     propertyIds.length === 0
       ? null
@@ -824,7 +812,7 @@ export const buildFindConditions = ({
   // "columns" drops the name half, so a row whose name matches but whose chosen
   // columns do not is absent. Narrowed to no columns at all, nothing can match;
   // falling back to every row would read as the find having been ignored.
-  if (findScope.type === "columns") {
+  if (find.scope.type === "columns") {
     return [columnsMatch ?? sql`false`];
   }
 

@@ -1,40 +1,39 @@
-import type { EntityFindScope } from "@stll/api-contract";
+import type { EntityFind } from "@stll/api-contract";
 
 import type { ConditionNode, EntityKind, WorkspaceProperty } from "@/lib/types";
 
 /**
- * Find-in-table, as it travels to the server. Separate from `search`: that one
- * ranks an asynchronous index for the mention picker, this one filters the rows
- * the grid renders. The scope's property list is always explicit, because
- * group-counts takes no field selection and so cannot derive a default that
- * would agree with the rows.
+ * A find, as it travels to the server. `find.term` is the find bar's submitted
+ * term: what is typed never reaches a key, or every keystroke would mint a
+ * cache entry.
+ *
+ * Separate from `search`: that one ranks an asynchronous index for the mention
+ * picker, this one filters the rows the grid renders. The scope's property list
+ * is always explicit, because group-counts takes no field selection and so
+ * cannot derive a default that would agree with the rows.
  */
 export type EntitiesFindKey = {
-  find?: string | undefined;
-  findScope?: EntityFindScope | undefined;
+  find?: EntityFind | undefined;
 };
 
-type NormalizedFind = { find: string; findScope: EntityFindScope };
-
 /**
- * A blank term drops the scope with it, so an open-but-empty find bar costs
+ * A blank term drops the whole find, so an open-but-empty find bar costs
  * neither a cache entry nor a server condition. Property ids sort, so the same
  * selection reached two ways is one cache key.
  */
-export const normalizeFind = ({
-  find,
-  findScope,
-}: EntitiesFindKey): NormalizedFind | null => {
-  const term = find?.trim() ?? "";
-  if (term === "" || !findScope) {
+export const normalizeFind = (
+  find: EntityFind | undefined,
+): EntityFind | null => {
+  const term = find?.term.trim();
+  if (!find || !term) {
     return null;
   }
   return {
-    find: term,
-    findScope: {
-      propertyIds: [...findScope.propertyIds].toSorted(),
-      type: findScope.type,
+    scope: {
+      propertyIds: [...find.scope.propertyIds].toSorted(),
+      type: find.scope.type,
     },
+    term,
   };
 };
 
@@ -148,10 +147,9 @@ export const entitiesKeys = {
     previewableForAi,
     includeAssignees,
     find,
-    findScope,
   }: EntitiesWindowKey) => {
     const normalizedFieldMode = fieldMode ?? "full";
-    const normalizedFind = normalizeFind({ find, findScope });
+    const normalizedFind = normalizeFind(find);
     return [
       ...entitiesKeys.all(workspaceId),
       "window",
@@ -159,10 +157,7 @@ export const entitiesKeys = {
         filters,
         sorts,
         ...(search?.trim() && { search: search.trim() }),
-        ...(normalizedFind && {
-          find: normalizedFind.find,
-          findScope: normalizedFind.findScope,
-        }),
+        ...(normalizedFind && { find: normalizedFind }),
         limit: limit ?? DEFAULT_ENTITY_WINDOW_SIZE,
         fieldMode: normalizedFieldMode,
         fieldIds:
@@ -211,20 +206,16 @@ export const entitiesKeys = {
     groupValue,
     optionValues,
     find,
-    findScope,
   }: KanbanGroupKey) => {
     const normalizedFieldMode = fieldMode ?? "full";
-    const normalizedFind = normalizeFind({ find, findScope });
+    const normalizedFind = normalizeFind(find);
     return [
       ...entitiesKeys.all(workspaceId),
       "kanban-group",
       {
         filters,
         sorts,
-        ...(normalizedFind && {
-          find: normalizedFind.find,
-          findScope: normalizedFind.findScope,
-        }),
+        ...(normalizedFind && { find: normalizedFind }),
         limit: limit ?? DEFAULT_ENTITY_WINDOW_SIZE,
         fieldMode: normalizedFieldMode,
         fieldIds:
@@ -244,9 +235,8 @@ export const entitiesKeys = {
     groupByPropertyId,
     optionValues,
     find,
-    findScope,
   }: GroupCountsKey) => {
-    const normalizedFind = normalizeFind({ find, findScope });
+    const normalizedFind = normalizeFind(find);
     return [
       ...entitiesKeys.all(workspaceId),
       "group-counts",
@@ -254,10 +244,7 @@ export const entitiesKeys = {
         filters,
         groupByPropertyId,
         optionValues: optionValues?.toSorted(),
-        ...(normalizedFind && {
-          find: normalizedFind.find,
-          findScope: normalizedFind.findScope,
-        }),
+        ...(normalizedFind && { find: normalizedFind }),
       },
     ];
   },
