@@ -23,6 +23,7 @@ import {
   hasCompatibleDerivedSources,
   hasCompleteCompositeField,
 } from "@/api/lib/docx/types";
+import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 
 const { entries: fieldEntries } = fieldMetaToolInputObjectSchema;
 const { entries: partEntries } = fieldPartSchema;
@@ -92,9 +93,6 @@ const PART_PROPERTIES = new Set(
   Object.keys(templateFieldPartInputSchema.entries),
 );
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
 const withoutDeclaredNullProperties = (
   entry: Record<string, unknown>,
   declaredProperties: ReadonlySet<string>,
@@ -116,7 +114,7 @@ const withoutNullProperties = (entry: Record<string, unknown>): unknown => {
       VALIDATION_PROPERTIES,
     );
   }
-  if (Array.isArray(field["parts"])) {
+  if (isUnknownArray(field["parts"])) {
     field["parts"] = field["parts"].map((part) =>
       isRecord(part)
         ? withoutDeclaredNullProperties(part, PART_PROPERTIES)
@@ -137,7 +135,7 @@ const withoutNullProperties = (entry: Record<string, unknown>): unknown => {
  * misspelled key whatever value it carries.
  */
 export const readTemplateFieldsInput = (value: unknown): unknown =>
-  Array.isArray(value)
+  isUnknownArray(value)
     ? value.map((entry) =>
         isRecord(entry) ? withoutNullProperties(entry) : entry,
       )
@@ -325,34 +323,38 @@ export const toTemplateFieldWireInput = (
   field: DescribedFieldInput,
 ): TemplateFieldInput => ({
   [FIELD_WIRE_KEYS.path]: field.path,
-  ...(field.label == null ? {} : { [FIELD_WIRE_KEYS.label]: field.label }),
-  ...(field.hint == null ? {} : { [FIELD_WIRE_KEYS.hint]: field.hint }),
-  ...(field.inputType == null
+  ...(field.label === null || field.label === undefined
+    ? {}
+    : { [FIELD_WIRE_KEYS.label]: field.label }),
+  ...(field.hint === null || field.hint === undefined
+    ? {}
+    : { [FIELD_WIRE_KEYS.hint]: field.hint }),
+  ...(field.inputType === null || field.inputType === undefined
     ? {}
     : { [FIELD_WIRE_KEYS.inputType]: field.inputType }),
-  ...(field.options == null
+  ...(field.options === null || field.options === undefined
     ? {}
     : { [FIELD_WIRE_KEYS.options]: field.options }),
-  ...(field.validation == null
+  ...(field.validation === null || field.validation === undefined
     ? {}
     : {
         [FIELD_WIRE_KEYS.validation]: toTemplateFieldValidationInput(
           field.validation,
         ),
       }),
-  ...(field.required == null
+  ...(field.required === null || field.required === undefined
     ? {}
     : { [FIELD_WIRE_KEYS.required]: field.required }),
-  ...(field.aiPrompt == null
+  ...(field.aiPrompt === null || field.aiPrompt === undefined
     ? {}
     : { [FIELD_WIRE_KEYS.aiPrompt]: field.aiPrompt }),
-  ...(field.aiAdapt == null
+  ...(field.aiAdapt === null || field.aiAdapt === undefined
     ? {}
     : { [FIELD_WIRE_KEYS.aiAdapt]: field.aiAdapt }),
-  ...(field.aiSeesDocument == null
+  ...(field.aiSeesDocument === null || field.aiSeesDocument === undefined
     ? {}
     : { [FIELD_WIRE_KEYS.aiSeesDocument]: field.aiSeesDocument }),
-  ...(field.parts == null
+  ...(field.parts === null || field.parts === undefined
     ? {}
     : {
         [FIELD_WIRE_KEYS.parts]: field.parts.map((part) => ({
@@ -369,19 +371,25 @@ export const toTemplateFieldWireInput = (
             : { [PART_WIRE_KEYS.pattern]: part.pattern }),
         })),
       }),
-  ...(field.format == null ? {} : { [FIELD_WIRE_KEYS.format]: field.format }),
-  ...(field.optionsFrom == null
+  ...(field.format === null || field.format === undefined
+    ? {}
+    : { [FIELD_WIRE_KEYS.format]: field.format }),
+  ...(field.optionsFrom === null || field.optionsFrom === undefined
     ? {}
     : { [FIELD_WIRE_KEYS.optionsFrom]: field.optionsFrom }),
-  ...(field.lookup == null ? {} : { [FIELD_WIRE_KEYS.lookup]: field.lookup }),
-  ...(field.source == null ? {} : { [FIELD_WIRE_KEYS.source]: field.source }),
-  ...(field.formula == null
+  ...(field.lookup === null || field.lookup === undefined
+    ? {}
+    : { [FIELD_WIRE_KEYS.lookup]: field.lookup }),
+  ...(field.source === null || field.source === undefined
+    ? {}
+    : { [FIELD_WIRE_KEYS.source]: field.source }),
+  ...(field.formula === null || field.formula === undefined
     ? {}
     : { [FIELD_WIRE_KEYS.formula]: field.formula }),
-  ...(field.condition == null
+  ...(field.condition === null || field.condition === undefined
     ? {}
     : { [FIELD_WIRE_KEYS.condition]: field.condition }),
-  ...(field.dateFormat == null
+  ...(field.dateFormat === null || field.dateFormat === undefined
     ? {}
     : { [FIELD_WIRE_KEYS.dateFormat]: field.dateFormat }),
 });

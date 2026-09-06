@@ -3,8 +3,8 @@ import { expectTypeOf } from "expect-type";
 import * as v from "valibot";
 
 import { fieldMetaToolInputSchema } from "@/api/lib/docx/types";
-import {
-  type FieldSource,
+import type {
+  FieldSource,
   fieldSourceToolInputSchema,
 } from "@/api/lib/template-binding/binding-sources";
 import {

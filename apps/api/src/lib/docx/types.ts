@@ -553,7 +553,7 @@ export const hasCompleteCompositeField = ({
   parts?: readonly unknown[] | undefined;
 }): boolean => (parts === undefined) === (format === undefined);
 
-export const fieldMetaSchema = v.pipe(
+const fieldMetaSchema = v.pipe(
   fieldMetaObjectSchema,
   v.check(
     (field: v.InferOutput<typeof fieldMetaObjectSchema>) =>
