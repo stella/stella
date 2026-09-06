@@ -21,7 +21,6 @@ import {
   loadStoredTemplateSource,
 } from "@/api/lib/templates/template-fill-service";
 import { buildTemplateFillAiWiring } from "@/api/lib/templates/template-fill-usage";
-import { isRecord } from "@/api/lib/type-guards";
 
 export type FillPreviewLogicProps = {
   safeDb: SafeDb;
@@ -29,7 +28,7 @@ export type FillPreviewLogicProps = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   templateId: SafeId<"template">;
-  body: { values: string };
+  body: { values: Record<string, unknown> };
 };
 
 /** What the preview renders: the filled text plus the same diagnostics a
@@ -53,30 +52,10 @@ export const fillPreviewLogic = async ({
   organizationId,
   userId,
   templateId,
-  body: { values: valuesJson },
+  body: { values: parsed },
 }: FillPreviewLogicProps): Promise<
   ResultType<FillPreviewResult, HandlerError<400 | 402 | 404 | 500>>
 > => {
-  const parseResult = Result.try((): unknown => JSON.parse(valuesJson));
-  if (Result.isError(parseResult)) {
-    return Result.err(
-      new HandlerError({
-        status: 400,
-        message: "Invalid JSON in 'values' field.",
-      }),
-    );
-  }
-
-  const parsed = parseResult.value;
-  if (!isRecord(parsed)) {
-    return Result.err(
-      new HandlerError({
-        status: 400,
-        message: "'values' must be a JSON object (not null or array).",
-      }),
-    );
-  }
-
   if (Object.values(parsed).some(containsNull)) {
     return Result.err(
       new HandlerError({

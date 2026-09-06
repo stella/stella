@@ -262,6 +262,20 @@ const makeValidDocxBase64 = async (
   return Buffer.from(bytes).toString("base64");
 };
 
+/** A real DOCX carrying the given paragraphs, so a fill whose result is read
+ *  back through the shared extractor runs the real reader instead of a stub. */
+const makeDocxBuffer = async (paragraphs: string[]): Promise<Buffer> => {
+  const body = paragraphs
+    .map((text) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`)
+    .join("");
+  const zip = new JSZip();
+  zip.file(
+    "word/document.xml",
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="${W_NS}"><w:body>${body}</w:body></w:document>`,
+  );
+  return Buffer.from(await zip.generateAsync({ type: "uint8array" }));
+};
+
 describe("MCP template tools", () => {
   let analytics: RecordingAnalytics;
 
@@ -681,7 +695,7 @@ describe("MCP template tools", () => {
     expect(analytics.exceptions()).toEqual([]);
   });
 
-  test("fill_template returns a complete rendered document plus the DOCX as base64", async () => {
+  test("fill_template returns a complete rendered document plus the DOCX as base64 under output=docx", async () => {
     const docxBytes = Buffer.from("PK filled docx bytes");
     fillStoredTemplateWithTextStrictMock.mockResolvedValue({
       templateName: "Lease",
@@ -700,7 +714,11 @@ describe("MCP template tools", () => {
     });
 
     const result = await handleMcpToolCall({
-      args: { template_id: "t1", values: { "tenant.name": "ACME" } },
+      args: {
+        template_id: "t1",
+        values: { "tenant.name": "ACME" },
+        output_mode: "docx",
+      },
       context: createContext(),
       toolName: "fill_template",
     });
@@ -739,6 +757,42 @@ describe("MCP template tools", () => {
         ],
       }),
     );
+  });
+
+  test("fill_template returns rendered text and no base64 by default", async () => {
+    const docxBytes = await makeDocxBuffer([
+      "Lease between ACME and Tenant.",
+      "Signed in Prague.",
+    ]);
+    fillStoredTemplateWithTextStrictMock.mockResolvedValue({
+      templateName: "Lease",
+      fileName: "lease.docx",
+      buffer: docxBytes,
+      text: "Lease between ACME and Tenant.\nSigned in Prague.",
+      unmatchedPlaceholders: [],
+      unusedValues: [],
+      structureErrors: [],
+    });
+
+    const result = await handleMcpToolCall({
+      args: { template_id: "t1", values: { "tenant.name": "ACME" } },
+      context: createContext(),
+      toolName: "fill_template",
+    });
+
+    // The base64 archive is ~4/3 of the document's byte size; an agent that
+    // only reads the result must not be charged for it.
+    expect(parseToolPayload(result)).toEqual({
+      templateName: "Lease",
+      fileName: "lease.docx",
+      completionStatus: "complete",
+      paragraphs: ["Lease between ACME and Tenant.", "Signed in Prague."],
+      charCount: 47,
+      truncated: false,
+      unmatchedPlaceholders: [],
+      unusedValues: [],
+      structureErrors: [],
+    });
   });
 
   test("fill_template rejects unmatched placeholders by default", async () => {
@@ -807,7 +861,9 @@ describe("MCP template tools", () => {
     fillStoredTemplateWithTextStrictMock.mockResolvedValue({
       templateName: "Lease",
       fileName: "lease.docx",
-      buffer: Buffer.from("partial"),
+      buffer: await makeDocxBuffer([
+        "Lease between ACME and {{landlord.signature}}.",
+      ]),
       text: "Lease between ACME and {{landlord.signature}}.",
       unmatchedPlaceholders: ["landlord.signature"],
       unusedValues: [],
@@ -924,7 +980,7 @@ describe("MCP template tools", () => {
     fillStoredTemplateWithTextMock.mockResolvedValue({
       templateName: "Lease",
       fileName: "lease.docx",
-      buffer: Buffer.from("filled"),
+      buffer: await makeDocxBuffer(["Lease"]),
       text: "Lease",
       unmatchedPlaceholders: [],
       unusedValues: ["intentional"],
@@ -1249,6 +1305,9 @@ describe("MCP template tools", () => {
         idempotency_key: "create-version-1",
         entity_id: ENTITY_ID,
         values: { "tenant.name": "ACME" },
+        // The fixture leaves {{signature}} unfilled, which the default mode
+        // refuses to persist; this test is about the persistence path.
+        completion_mode: "allow_partial",
       },
       context: createContext(),
       toolName: "save_filled_template",
@@ -1287,6 +1346,40 @@ describe("MCP template tools", () => {
       unmatchedPlaceholders: ["signature"],
       unusedValues: [],
     });
+  });
+
+  test("save_filled_template refuses to persist a document with live placeholders", async () => {
+    // The persisting tool cannot be laxer than the transient one: an unfilled
+    // {{placeholder}} would otherwise reach a matter as document text.
+    fillStoredTemplateDocxMock.mockResolvedValue({
+      fileName: "lease",
+      buffer: Buffer.from("filled docx"),
+      unmatchedPlaceholders: ["signature", "landlord.name"],
+      unusedValues: [],
+      structureErrors: [],
+    });
+
+    const result = await handleMcpToolCall({
+      args: {
+        action: "create_version",
+        template_id: TEMPLATE_ID,
+        matter_id: "ws_1",
+        idempotency_key: "incomplete-1",
+        entity_id: ENTITY_ID,
+        values: { "tenant.name": "ACME" },
+      },
+      context: createContext(),
+      toolName: "save_filled_template",
+    });
+
+    expect(validationEnvelope(result)).toMatchObject({
+      code: "validation_error",
+      message:
+        "Template fill incomplete; unmatched placeholders: signature, landlord.name",
+    });
+    expect(createEntityVersionFromBufferMock).not.toHaveBeenCalled();
+    // The key stays reusable: nothing was written under it.
+    expect(releaseTemplatePersistenceClaimMock).toHaveBeenCalled();
   });
 
   test("save_filled_template validates its destination before filling", async () => {

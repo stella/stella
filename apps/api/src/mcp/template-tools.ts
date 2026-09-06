@@ -26,6 +26,7 @@ import {
   buildAiOccurrenceAdapter,
 } from "@/api/lib/docx/ai-field-generator";
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
+import { extractTextForPreview } from "@/api/lib/docx/extract-text";
 import { buildIsRegistryEnabledForOrg } from "@/api/lib/docx/registry-org-gate";
 import {
   mergeManifestWithDiscovery,
@@ -58,10 +59,12 @@ import {
   recordTemplateUse,
 } from "@/api/lib/templates/record-use";
 import { containsNull } from "@/api/lib/templates/template-data";
+import type { TemplateFillCompletionMode } from "@/api/lib/templates/template-fill-completion";
 import {
   decideTemplateFillCompletion,
   DEFAULT_TEMPLATE_FILL_COMPLETION_MODE,
   TEMPLATE_FILL_COMPLETION_MODES,
+  templateFillCompletionModeSchema,
 } from "@/api/lib/templates/template-fill-completion";
 import type {
   DescribeTemplateResult,
@@ -130,6 +133,29 @@ type TemplateToolName =
 /** Max assembled-text length returned inline; full bytes ride along as base64. */
 const TEMPLATE_FILL_TEXT_MAX_CHARS = 16_000;
 const SAVE_FILLED_TEMPLATE_RENDER_TIMEOUT_MS = 300_000;
+
+/**
+ * What `fill_template` sends back. `text` is the rendered preview a caller
+ * reads; `docx` adds the base64 archive, which for a short document runs to
+ * ~100k characters and is worth spending only when the caller keeps the bytes.
+ */
+const TEMPLATE_FILL_OUTPUT_MODES = ["text", "docx"] as const;
+const DEFAULT_TEMPLATE_FILL_OUTPUT_MODE =
+  "text" satisfies (typeof TEMPLATE_FILL_OUTPUT_MODES)[number];
+
+/**
+ * One advertised `completion_mode` property for both fill tools. The
+ * persisting tool writes into a matter, so it cannot be the laxer of the two:
+ * both reject unmatched placeholders unless the caller opts into a partial
+ * document.
+ */
+const TEMPLATE_FILL_COMPLETION_MODE_PROP = {
+  ...enumProp(
+    "Require every placeholder by default; use allow_partial only for an intentionally incomplete document.",
+    TEMPLATE_FILL_COMPLETION_MODES,
+  ),
+  default: DEFAULT_TEMPLATE_FILL_COMPLETION_MODE,
+} as const;
 
 // Base64 encodes 3 bytes per 4 chars, so bound the encoded length to the doc
 // size limit and reject an oversized upload at parse time, before it is decoded
@@ -487,12 +513,13 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
   },
   {
     description:
-      "Fill a template and return text plus the DOCX as base64. First call " +
-      "list_templates with template_id for field paths, then pass values as a " +
-      'path-to-value map (for example, {"tenant.name":"ACME"}). Registry, ' +
-      "composite, formula, and AI fields resolve automatically. Unknown keys " +
-      "fail unless allow_unused_values is true; unfilled placeholders fail " +
-      "unless completion_mode is allow_partial. A required field that is not " +
+      "Fill a template and return the rendered text; pass output_mode='docx' " +
+      "to also get the DOCX as base64. First call list_templates with " +
+      "template_id for field paths, then pass values as a path-to-value map " +
+      '(for example, {"tenant.name":"ACME"}). Registry, composite, formula, ' +
+      "and AI fields resolve automatically. Unknown keys fail unless " +
+      "allow_unused_values is true; unfilled placeholders fail unless " +
+      "completion_mode is allow_partial. A required field that is not " +
       "AI-fillable must be provided: an omitted or empty one fails with the " +
       "exact list of missing fields instead of a guessed value or a raw " +
       "placeholder in the output — ask the user for those values and retry. " +
@@ -511,12 +538,13 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
           description:
             "Allow value keys that do not match template fields. Defaults to false so misspelled field paths fail loudly.",
         },
-        completion_mode: {
+        completion_mode: TEMPLATE_FILL_COMPLETION_MODE_PROP,
+        output_mode: {
           ...enumProp(
-            "Require every placeholder by default; use allow_partial only for an intentionally incomplete document.",
-            TEMPLATE_FILL_COMPLETION_MODES,
+            "text returns the rendered paragraphs and cells; docx adds the base64 archive, which is large.",
+            TEMPLATE_FILL_OUTPUT_MODES,
           ),
-          default: DEFAULT_TEMPLATE_FILL_COMPLETION_MODE,
+          default: DEFAULT_TEMPLATE_FILL_OUTPUT_MODE,
         },
       },
       required: ["template_id", "values"],
@@ -548,8 +576,9 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
       "the field paths and which are required. A required field that is not " +
       "AI-fillable must be provided, or the fill fails with the exact list of " +
       "missing fields; ask the user for those values instead of guessing. " +
-      "Returns the entity and version identifiers plus any unmatched " +
-      "placeholders or unused values.",
+      "Unfilled placeholders fail before anything is written unless " +
+      "completion_mode is allow_partial. Returns the entity and version " +
+      "identifiers plus any unmatched placeholders or unused values.",
     inputSchema: {
       type: "object",
       properties: {
@@ -578,6 +607,7 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
           description: "Map of template field path to value",
           additionalProperties: true,
         },
+        completion_mode: TEMPLATE_FILL_COMPLETION_MODE_PROP,
       },
       required: [
         "action",
@@ -807,6 +837,51 @@ const requiredFieldsRejectionResult = (
   });
 };
 
+type TemplateFillCompletionGate =
+  | { type: "allowed"; completionStatus: "complete" | "partial" }
+  | { type: "rejected"; result: ReturnType<typeof structuredErrorResult> };
+
+/**
+ * The completion gate both fill tools run over renderer diagnostics. Owning it
+ * here is what keeps the transient tool and the persisting one on one policy:
+ * a live `{{placeholder}}` is an error under the default mode whether the
+ * document is handed back or written into a matter.
+ */
+const gateTemplateFillCompletion = ({
+  mode,
+  unmatchedPlaceholders,
+}: {
+  mode: TemplateFillCompletionMode;
+  unmatchedPlaceholders: readonly string[];
+}): TemplateFillCompletionGate => {
+  const completion = decideTemplateFillCompletion({
+    mode,
+    unmatchedPlaceholders,
+  });
+  if (completion.type !== "rejected_partial") {
+    return {
+      type: "allowed",
+      completionStatus: completion.type === "complete" ? "complete" : "partial",
+    };
+  }
+
+  const preview = completion.unmatchedPlaceholders.slice(0, 10);
+  const omitted = completion.unmatchedPlaceholders.length - preview.length;
+  const suffix = omitted > 0 ? ` (${omitted} more omitted)` : "";
+  return {
+    type: "rejected",
+    result: structuredErrorResult({
+      code: "validation_error",
+      message: `Template fill incomplete; unmatched placeholders: ${preview.join(", ")}${suffix}`,
+      issues: completion.unmatchedPlaceholders.map((placeholder) => ({
+        path: `values.${placeholder}`,
+        message: "Template placeholder was not filled",
+      })),
+      hint: "Call list_templates with template_id (CLI: template list --template-id ID) and provide the missing values, or set completion_mode to allow_partial when an incomplete document is intentional.",
+    }),
+  };
+};
+
 /**
  * Read the org AI config at most once, and only when the fill service actually
  * asks for a usage preflight or AI collaborators. A deterministic template
@@ -857,9 +932,10 @@ const fillTemplateArgsSchema = v.strictObject({
   template_id: v.pipe(v.string(), v.minLength(1)),
   values: v.record(v.string(), v.unknown()),
   allow_unused_values: v.optional(v.boolean()),
-  completion_mode: v.optional(
-    v.picklist(TEMPLATE_FILL_COMPLETION_MODES),
-    DEFAULT_TEMPLATE_FILL_COMPLETION_MODE,
+  completion_mode: templateFillCompletionModeSchema,
+  output_mode: v.optional(
+    v.picklist(TEMPLATE_FILL_OUTPUT_MODES),
+    DEFAULT_TEMPLATE_FILL_OUTPUT_MODE,
   ),
 });
 
@@ -981,41 +1057,54 @@ const handleFillTemplateTool: McpToolHandler = async ({ args, context }) => {
     )
     .catch(captureError);
 
-  const completion = decideTemplateFillCompletion({
+  const completion = gateTemplateFillCompletion({
     mode: parsed.output.completion_mode,
     unmatchedPlaceholders: filled.unmatchedPlaceholders,
   });
-  if (completion.type === "rejected_partial") {
-    const preview = completion.unmatchedPlaceholders.slice(0, 10);
-    const omitted = completion.unmatchedPlaceholders.length - preview.length;
-    const suffix = omitted > 0 ? ` (${omitted} more omitted)` : "";
-    return structuredErrorResult({
-      code: "validation_error",
-      message: `Template fill incomplete; unmatched placeholders: ${preview.join(", ")}${suffix}`,
-      issues: completion.unmatchedPlaceholders.map((placeholder) => ({
-        path: `values.${placeholder}`,
-        message: "Template placeholder was not filled",
-      })),
-      hint: "Call list_templates with template_id (CLI: template list --template-id ID) and provide the missing values, or set completion_mode to allow_partial when an incomplete document is intentional.",
+  if (completion.type === "rejected") {
+    return completion.result;
+  }
+
+  if (parsed.output.output_mode === "docx") {
+    const truncated = filled.text.length > TEMPLATE_FILL_TEXT_MAX_CHARS;
+    return toolDataResult({
+      completionStatus: completion.completionStatus,
+      templateName: filled.templateName,
+      fileName: filled.fileName,
+      text: truncated
+        ? filled.text.slice(0, TEMPLATE_FILL_TEXT_MAX_CHARS)
+        : filled.text,
+      truncated,
+      docxBase64: filled.buffer.toString("base64"),
+      unmatchedPlaceholders: filled.unmatchedPlaceholders,
+      unusedValues: filled.unusedValues,
     });
   }
 
-  const completionStatus =
-    completion.type === "complete" ? "complete" : "partial";
-
-  const truncated = filled.text.length > TEMPLATE_FILL_TEXT_MAX_CHARS;
+  // The shared preview reader the template preview routes use: it flattens
+  // table cells into their own entries, so an agent reading the result sees
+  // the same text a human reviewing the preview does.
+  const { paragraphs, charCount } = await extractTextForPreview(filled.buffer);
+  const rendered: string[] = [];
+  let renderedChars = 0;
+  for (const paragraph of paragraphs) {
+    if (renderedChars + paragraph.text.length > TEMPLATE_FILL_TEXT_MAX_CHARS) {
+      break;
+    }
+    rendered.push(paragraph.text);
+    renderedChars += paragraph.text.length;
+  }
 
   return toolDataResult({
-    completionStatus,
+    completionStatus: completion.completionStatus,
     templateName: filled.templateName,
     fileName: filled.fileName,
-    text: truncated
-      ? filled.text.slice(0, TEMPLATE_FILL_TEXT_MAX_CHARS)
-      : filled.text,
-    truncated,
-    docxBase64: filled.buffer.toString("base64"),
+    paragraphs: rendered,
+    charCount,
+    truncated: rendered.length < paragraphs.length,
     unmatchedPlaceholders: filled.unmatchedPlaceholders,
     unusedValues: filled.unusedValues,
+    structureErrors: filled.structureErrors,
   });
 };
 
@@ -1028,6 +1117,7 @@ const saveFilledTemplateArgsSchema = v.strictObject({
   name: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(255))),
   idempotency_key: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
   values: v.record(v.string(), v.unknown()),
+  completion_mode: templateFillCompletionModeSchema,
 });
 
 const resolveFilledDocxName = ({
@@ -1368,6 +1458,17 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
   if ("requiredFieldsRejection" in filled) {
     await releaseClaim();
     return requiredFieldsRejectionResult(filled.requiredFieldsRejection);
+  }
+  // A live `{{placeholder}}` is rejected before the document reaches the
+  // matter, not reported afterwards: this tool persists, so it cannot be
+  // laxer than the transient fill_template.
+  const completion = gateTemplateFillCompletion({
+    mode: input.completion_mode,
+    unmatchedPlaceholders: filled.unmatchedPlaceholders,
+  });
+  if (completion.type === "rejected") {
+    await releaseClaim();
+    return completion.result;
   }
   // Never cross the non-idempotent persistence boundary after either the
   // caller disconnects or the server-owned render deadline expires, even if

@@ -633,7 +633,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "name": "fill_template",
     "scope": "stella:templates",
     "access": "write",
-    "description": "Fill a template and return text plus the DOCX as base64. First call list_templates with template_id for field paths, then pass values as a path-to-value map (for example, {\\"tenant.name\\":\\"ACME\\"}). Registry, composite, formula, and AI fields resolve automatically. Unknown keys fail unless allow_unused_values is true; unfilled placeholders fail unless completion_mode is allow_partial. A required field that is not AI-fillable must be provided: an omitted or empty one fails with the exact list of missing fields instead of a guessed value or a raw placeholder in the output — ask the user for those values and retry. Successful output includes completionStatus.",
+    "description": "Fill a template and return the rendered text; pass output='docx' to also get the DOCX as base64. First call list_templates with template_id for field paths, then pass values as a path-to-value map (for example, {\\"tenant.name\\":\\"ACME\\"}). Registry, composite, formula, and AI fields resolve automatically. Unknown keys fail unless allow_unused_values is true; unfilled placeholders fail unless completion_mode is allow_partial. A required field that is not AI-fillable must be provided: an omitted or empty one fails with the exact list of missing fields instead of a guessed value or a raw placeholder in the output — ask the user for those values and retry. Successful output includes completionStatus.",
     "annotations": {
       "title": "Fill template",
       "idempotentHint": false,
@@ -663,6 +663,15 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           ],
           "description": "Require every placeholder by default; use allow_partial only for an intentionally incomplete document.",
           "default": "require_complete"
+        },
+        "output": {
+          "type": "string",
+          "enum": [
+            "text",
+            "docx"
+          ],
+          "description": "text returns the rendered paragraphs and cells; docx adds the base64 archive, which is large.",
+          "default": "text"
         }
       },
       "required": [
@@ -679,7 +688,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "stella:templates"
     ],
     "access": "write",
-    "description": "Fill a registered template and persist the generated DOCX directly in a matter, without requiring the client to upload bytes. Use action='create_document' to create a new document (optionally inside parent_id), or action='create_version' with entity_id to append a version to an existing document. Call list_templates first to learn the field paths and which are required. A required field that is not AI-fillable must be provided, or the fill fails with the exact list of missing fields; ask the user for those values instead of guessing. Returns the entity and version identifiers plus any unmatched placeholders or unused values.",
+    "description": "Fill a registered template and persist the generated DOCX directly in a matter, without requiring the client to upload bytes. Use action='create_document' to create a new document (optionally inside parent_id), or action='create_version' with entity_id to append a version to an existing document. Call list_templates first to learn the field paths and which are required. A required field that is not AI-fillable must be provided, or the fill fails with the exact list of missing fields; ask the user for those values instead of guessing. Unfilled placeholders fail before anything is written unless completion_mode is allow_partial. Returns the entity and version identifiers plus any unmatched placeholders or unused values.",
     "annotations": {
       "title": "Save filled template",
       "idempotentHint": false,
@@ -726,6 +735,15 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "type": "object",
           "description": "Map of template field path to value",
           "additionalProperties": true
+        },
+        "completion_mode": {
+          "type": "string",
+          "enum": [
+            "require_complete",
+            "allow_partial"
+          ],
+          "description": "Require every placeholder by default; use allow_partial only for an intentionally incomplete document.",
+          "default": "require_complete"
         }
       },
       "required": [

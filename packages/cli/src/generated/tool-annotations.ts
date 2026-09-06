@@ -83,6 +83,7 @@ export const generatedToolAnnotations: Readonly<
             "parent_id",
             "name",
             "values",
+            "completion_mode",
           ],
           required: ["template_id", "matter_id", "idempotency_key", "values"],
         },
@@ -95,6 +96,7 @@ export const generatedToolAnnotations: Readonly<
             "entity_id",
             "name",
             "values",
+            "completion_mode",
           ],
           required: [
             "template_id",

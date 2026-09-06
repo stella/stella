@@ -171,6 +171,7 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
               "parent_id",
               "name",
               "values",
+              "completion_mode",
             ],
             required: ["template_id", "matter_id", "idempotency_key", "values"],
           },
@@ -183,6 +184,7 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
               "entity_id",
               "name",
               "values",
+              "completion_mode",
             ],
             required: [
               "template_id",

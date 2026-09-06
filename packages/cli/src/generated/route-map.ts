@@ -2277,7 +2277,7 @@ export const generatedRouteMap: RouteNode = {
             commandPath: ["template", "fill"],
             toolName: "fill_template",
             description:
-              "Fill a template and return text plus the DOCX as base64.",
+              "Fill a template and return the rendered text; pass output_mode='docx' to also get the DOCX as base64.",
             flags: [
               {
                 flag: "--template-id",
@@ -2304,6 +2304,16 @@ export const generatedRouteMap: RouteNode = {
                 repeatable: false,
                 description:
                   "Require every placeholder by default; use allow_partial only for an intentionally incomplete document.",
+                required: false,
+              },
+              {
+                flag: "--output-mode",
+                prop: "output_mode",
+                kind: "enum",
+                enum: ["text", "docx"],
+                repeatable: false,
+                description:
+                  "text returns the rendered paragraphs and cells; docx adds the base64 archive, which is large.",
                 required: false,
               },
             ],
@@ -2335,6 +2345,13 @@ export const generatedRouteMap: RouteNode = {
                   description:
                     "Require every placeholder by default; use allow_partial only for an intentionally incomplete document.",
                   default: "require_complete",
+                },
+                output_mode: {
+                  type: "string",
+                  enum: ["text", "docx"],
+                  description:
+                    "text returns the rendered paragraphs and cells; docx adds the base64 archive, which is large.",
+                  default: "text",
                 },
               },
               required: ["template_id", "values"],
@@ -2399,6 +2416,16 @@ export const generatedRouteMap: RouteNode = {
                       "Optional DOCX file name; defaults to the template file name",
                     required: false,
                   },
+                  {
+                    flag: "--completion-mode",
+                    prop: "completion_mode",
+                    kind: "enum",
+                    enum: ["require_complete", "allow_partial"],
+                    repeatable: false,
+                    description:
+                      "Require every placeholder by default; use allow_partial only for an intentionally incomplete document.",
+                    required: false,
+                  },
                 ],
                 inputOnly: ["values"],
                 paginated: false,
@@ -2449,6 +2476,13 @@ export const generatedRouteMap: RouteNode = {
                       type: "object",
                       description: "Map of template field path to value",
                       additionalProperties: true,
+                    },
+                    completion_mode: {
+                      type: "string",
+                      enum: ["require_complete", "allow_partial"],
+                      description:
+                        "Require every placeholder by default; use allow_partial only for an intentionally incomplete document.",
+                      default: "require_complete",
                     },
                   },
                   required: [
@@ -2516,6 +2550,16 @@ export const generatedRouteMap: RouteNode = {
                       "Optional DOCX file name; defaults to the template file name",
                     required: false,
                   },
+                  {
+                    flag: "--completion-mode",
+                    prop: "completion_mode",
+                    kind: "enum",
+                    enum: ["require_complete", "allow_partial"],
+                    repeatable: false,
+                    description:
+                      "Require every placeholder by default; use allow_partial only for an intentionally incomplete document.",
+                    required: false,
+                  },
                 ],
                 inputOnly: ["values"],
                 paginated: false,
@@ -2566,6 +2610,13 @@ export const generatedRouteMap: RouteNode = {
                       type: "object",
                       description: "Map of template field path to value",
                       additionalProperties: true,
+                    },
+                    completion_mode: {
+                      type: "string",
+                      enum: ["require_complete", "allow_partial"],
+                      description:
+                        "Require every placeholder by default; use allow_partial only for an intentionally incomplete document.",
+                      default: "require_complete",
                     },
                   },
                   required: [
@@ -37868,7 +37919,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "templates", "fill-preview"],
                 capabilityId: "templates.fill-preview",
                 description:
-                  "Run the full fill of a stored template with the given values and return text instead of a file: the filled paragraphs, the character count, placeholders no value matched, values no marker used, and any structural errors. It does the same work as a real fill, AI-drafted fields included, so it is not a cheap dry run. Use templates.fill-by-id to download the document.",
+                  "Run the full fill of a stored template with the given values and return text instead of a file: the filled paragraphs, the character count, placeholders no value matched, values no marker used, and any structural errors. It does the same work as a real fill, AI-drafted fields included, so it is not a cheap dry run. values is an object mapping each field path to its value. Use templates.fill-by-id to download the document.",
                 access: "read",
                 flags: [
                   {
@@ -37880,17 +37931,8 @@ export const generatedRouteMap: RouteNode = {
                     part: "params",
                     partPath: "templateId",
                   },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--values",
-                    prop: "values",
-                    required: true,
-                    part: "body",
-                    partPath: "values",
-                  },
                 ],
-                inputOnly: [],
+                inputOnly: ["body.values"],
                 paginated: false,
                 destructive: false,
                 scope: "templates",
@@ -37903,7 +37945,10 @@ export const generatedRouteMap: RouteNode = {
                       required: ["values"],
                       properties: {
                         values: {
-                          type: "string",
+                          type: "object",
+                          patternProperties: {
+                            "^(.*)$": {},
+                          },
                         },
                       },
                     },

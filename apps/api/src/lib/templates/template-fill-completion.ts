@@ -1,3 +1,5 @@
+import * as v from "valibot";
+
 export const TEMPLATE_FILL_COMPLETION_MODES = [
   "require_complete",
   "allow_partial",
@@ -8,6 +10,16 @@ export type TemplateFillCompletionMode =
 
 export const DEFAULT_TEMPLATE_FILL_COMPLETION_MODE =
   "require_complete" satisfies TemplateFillCompletionMode;
+
+/**
+ * The `completion_mode` argument every template-rendering tool accepts. One
+ * declaration so a transient fill and a persisting fill cannot drift into
+ * different defaults: an omitted mode is strict on both.
+ */
+export const templateFillCompletionModeSchema = v.optional(
+  v.picklist(TEMPLATE_FILL_COMPLETION_MODES),
+  DEFAULT_TEMPLATE_FILL_COMPLETION_MODE,
+);
 
 type NonEmptyPlaceholders = readonly [string, ...string[]];
 
