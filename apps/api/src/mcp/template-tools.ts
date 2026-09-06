@@ -122,7 +122,10 @@ import { defineValibotMcpTool } from "@/api/mcp/valibot-tool-definition";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 type TemplateToolName =
-  "list_templates" | "fill_template" | "save_filled_template" | "save_template";
+  | "list_templates"
+  | "fill_template"
+  | "save_filled_template"
+  | "save_template";
 
 /** Max assembled-text length returned inline; full bytes ride along as base64. */
 const TEMPLATE_FILL_TEXT_MAX_CHARS = 16_000;
