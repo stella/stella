@@ -324,13 +324,21 @@ type TemplateDetailSuccess = Extract<
 
 const toTemplateDetailPayload = (payload: TemplateDetailSuccess) => ({
   ...payload,
-  fields: payload.fields.map((field) => ({
-    ...toTemplateFieldWireInput(field),
-    input_type: field.inputType,
-    required: field.required,
-    ai_adapt: field.aiAdapt,
-    ai_sees_document: field.aiSeesDocument,
-  })),
+  fields: payload.fields.map((field) => {
+    // Derived expressions belong to the conditions/computed collections below.
+    const {
+      condition: _condition,
+      formula: _formula,
+      ...wireField
+    } = toTemplateFieldWireInput(field);
+    return {
+      ...wireField,
+      input_type: field.inputType,
+      required: field.required,
+      ai_adapt: field.aiAdapt,
+      ai_sees_document: field.aiSeesDocument,
+    };
+  }),
 });
 
 type TemplateDetailPayload = ReturnType<typeof toTemplateDetailPayload>;
