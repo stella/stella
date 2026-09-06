@@ -16,6 +16,8 @@ import { listMcpTools } from "@/api/mcp/tools";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
+const WORKSPACE_ID = "00000000-0000-4000-8000-000000000001";
+
 // A DB accessor that fails the test if any handler reaches it. Every assertion
 // here exercises authorization or input validation, which must reject before
 // the tool touches the database.
@@ -214,7 +216,7 @@ describe("manage_organization per-action validation", () => {
   test("requires user_id for a member action", async () => {
     expect(
       errorMessage(
-        await runManageOrg({ action: "add_member", matter_id: "ws_1" }),
+        await runManageOrg({ action: "add_member", matter_id: WORKSPACE_ID }),
       ),
     ).toBe("user_id is required for add_member and remove_member");
   });
@@ -223,7 +225,7 @@ describe("manage_organization per-action validation", () => {
     const message = errorMessage(
       await runManageOrg({
         action: "remove_member",
-        matter_id: "ws_1",
+        matter_id: WORKSPACE_ID,
         user_id: "user_2",
         prompt_caching_enabled: false,
         document_processing_mode: "searchable-text",
@@ -306,7 +308,7 @@ describe("manage_organization remove_member confirm gate", () => {
       errorText(
         await runManageOrg({
           action: "remove_member",
-          matter_id: "ws_1",
+          matter_id: WORKSPACE_ID,
           user_id: "user_2",
         }),
       ),
@@ -321,7 +323,7 @@ describe("manage_organization remove_member confirm gate", () => {
     const text = errorText(
       await runManageOrg({
         action: "remove_member",
-        matter_id: "ws_1",
+        matter_id: WORKSPACE_ID,
         user_id: "user_2",
         confirm: true,
       }),

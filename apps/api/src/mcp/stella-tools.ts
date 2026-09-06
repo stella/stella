@@ -41,7 +41,6 @@ import type {
   SET_PRACTICE_JURISDICTIONS_PROJECTION,
 } from "@/api/lib/chat/projections";
 import { decryptContent } from "@/api/lib/content-encryption";
-import { isUuid } from "@/api/lib/custom-schema";
 import {
   resolveCurrentFileSourceField,
   selectCurrentExtractedContent,
@@ -499,12 +498,8 @@ const buildContactTextFieldSpecs = (
 
 const listMattersArgsSchema = v.strictObject({
   matter_id: v.optional(
-    v.pipe(
-      v.string(),
-      v.minLength(1),
-      v.description(
-        "Matter ID to return a single matter's overview; omit to list matters",
-      ),
+    uuidInputSchema(
+      "Matter ID to return a single matter's overview; omit to list matters",
     ),
   ),
   status: v.optional(
@@ -605,9 +600,7 @@ const searchCaseLawArgsSchema = v.strictObject({
       v.description("Filter by decision type"),
     ),
   ),
-  source_id: v.optional(
-    v.pipe(v.string(), v.maxLength(36), v.description("Filter by source ID")),
-  ),
+  source_id: v.optional(uuidInputSchema("Filter by source ID")),
   date_from: v.optional(
     v.pipe(
       v.string(),
@@ -639,11 +632,7 @@ const readContentAcrossMattersArgsSchema = v.strictObject({
 });
 
 const readCaseLawDecisionArgsSchema = v.strictObject({
-  decision_id: v.pipe(
-    v.string(),
-    v.minLength(1),
-    v.description("Case-law decision ID"),
-  ),
+  decision_id: uuidInputSchema("Case-law decision ID"),
   cursor: v.optional(
     v.pipe(
       v.string(),
@@ -657,7 +646,7 @@ const readCaseLawDecisionArgsSchema = v.strictObject({
 });
 
 const readContactArgsSchema = v.strictObject({
-  contact_id: v.pipe(v.string(), v.minLength(1), v.description("Contact ID")),
+  contact_id: uuidInputSchema("Contact ID"),
 });
 
 const practiceJurisdictionInputSchema = v.strictObject({
@@ -1657,18 +1646,6 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
   } = parsed.output;
   const limit = parsed.output.limit ?? DEFAULT_SEARCH_LIMIT;
 
-  if (sourceId !== undefined && !isUuid(sourceId)) {
-    return structuredErrorResult({
-      code: "validation_error",
-      message: "Invalid parameter: source_id. Expected a UUID",
-      issues: [
-        {
-          path: "source_id",
-          message: "Invalid parameter: source_id. Expected a UUID",
-        },
-      ],
-    });
-  }
   const dateFromIssue = isoDateIssue("date_from", dateFrom);
   if (dateFromIssue) {
     return dateFromIssue;

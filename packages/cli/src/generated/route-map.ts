@@ -53,7 +53,7 @@ export const generatedRouteMap: RouteNode = {
               properties: {
                 matter_id: {
                   type: "string",
-                  minLength: 1,
+                  format: "uuid",
                   description:
                     "Matter ID to return a single matter's overview; omit to list matters",
                 },
@@ -152,7 +152,7 @@ export const generatedRouteMap: RouteNode = {
               properties: {
                 matter_id: {
                   type: "string",
-                  minLength: 1,
+                  format: "uuid",
                   description:
                     "Matter ID to update; omit to create a new matter",
                 },
@@ -164,7 +164,7 @@ export const generatedRouteMap: RouteNode = {
                 },
                 client_id: {
                   type: "string",
-                  minLength: 1,
+                  format: "uuid",
                   description:
                     "Contact ID to attach in the client role. Only valid when creating a matter.",
                 },
@@ -227,7 +227,7 @@ export const generatedRouteMap: RouteNode = {
               properties: {
                 matter_id: {
                   type: "string",
-                  minLength: 1,
+                  format: "uuid",
                   description: "Matter ID to delete",
                 },
                 confirm: {
@@ -306,12 +306,12 @@ export const generatedRouteMap: RouteNode = {
               properties: {
                 matter_id: {
                   type: "string",
-                  minLength: 1,
+                  format: "uuid",
                   description: "Matter ID",
                 },
                 contact_id: {
                   type: "string",
-                  minLength: 1,
+                  format: "uuid",
                   description:
                     "Contact ID: with role to link the contact, or alone to unlink it from the matter",
                 },
@@ -333,7 +333,7 @@ export const generatedRouteMap: RouteNode = {
                 },
                 matter_contact_id: {
                   type: "string",
-                  minLength: 1,
+                  format: "uuid",
                   description:
                     "Existing matter-contact link ID to remove, from list_matters",
                 },
@@ -525,7 +525,7 @@ export const generatedRouteMap: RouteNode = {
                 },
                 source_id: {
                   type: "string",
-                  maxLength: 36,
+                  format: "uuid",
                   description: "Filter by source ID",
                 },
                 date_from: {
@@ -572,7 +572,7 @@ export const generatedRouteMap: RouteNode = {
               properties: {
                 decision_id: {
                   type: "string",
-                  minLength: 1,
+                  format: "uuid",
                   description: "Case-law decision ID",
                 },
                 cursor: {
@@ -682,7 +682,7 @@ export const generatedRouteMap: RouteNode = {
               properties: {
                 matter_id: {
                   type: "string",
-                  minLength: 1,
+                  format: "uuid",
                   description: "Matter ID to list documents in.",
                 },
                 mode: {
@@ -693,7 +693,7 @@ export const generatedRouteMap: RouteNode = {
                 },
                 parent_id: {
                   type: "string",
-                  minLength: 1,
+                  format: "uuid",
                   description:
                     "Folder entity ID whose direct children to list. Only valid in children mode; supplying it selects children mode when mode is omitted and is rejected together with mode 'flat'.",
                 },
@@ -782,13 +782,13 @@ export const generatedRouteMap: RouteNode = {
                 },
                 version_id: {
                   type: "string",
-                  minLength: 1,
+                  format: "uuid",
                   description:
                     "Return this version's metadata and field values instead of the current version",
                 },
                 compare_with_version_id: {
                   type: "string",
-                  minLength: 1,
+                  format: "uuid",
                   description:
                     "With version_id, return a plain-text line diff of this version (base) against version_id (target)",
                 },
@@ -908,12 +908,12 @@ export const generatedRouteMap: RouteNode = {
               properties: {
                 entity_id: {
                   type: "string",
-                  minLength: 1,
+                  format: "uuid",
                   description: "Document entity ID to update; omit to create",
                 },
                 matter_id: {
                   type: "string",
-                  minLength: 1,
+                  format: "uuid",
                   description:
                     "Matter ID to create the entity in; required when creating.",
                 },
@@ -926,7 +926,7 @@ export const generatedRouteMap: RouteNode = {
                 },
                 parent_id: {
                   type: "string",
-                  minLength: 1,
+                  format: "uuid",
                   description:
                     "Folder entity ID: to place the new entity inside when creating, or to move the document into when updating",
                 },
@@ -943,7 +943,7 @@ export const generatedRouteMap: RouteNode = {
                 },
                 version_id: {
                   type: "string",
-                  minLength: 1,
+                  format: "uuid",
                   description:
                     "Version ID to annotate; required when setting label or description. Only valid when updating.",
                 },
@@ -1022,7 +1022,7 @@ export const generatedRouteMap: RouteNode = {
                 },
                 version_id: {
                   type: "string",
-                  minLength: 1,
+                  format: "uuid",
                   description:
                     "Delete only this version instead of the whole document",
                 },
@@ -1068,7 +1068,7 @@ export const generatedRouteMap: RouteNode = {
                   properties: {
                     matter_id: {
                       type: "string",
-                      minLength: 1,
+                      format: "uuid",
                       description: "Matter ID to list properties for.",
                     },
                     limit: {
@@ -1134,7 +1134,7 @@ export const generatedRouteMap: RouteNode = {
                     },
                     property_id: {
                       type: "string",
-                      minLength: 1,
+                      format: "uuid",
                       description:
                         "Property ID, as returned by list_properties",
                     },
@@ -1306,7 +1306,7 @@ export const generatedRouteMap: RouteNode = {
               properties: {
                 contact_id: {
                   type: "string",
-                  minLength: 1,
+                  format: "uuid",
                   description: "Contact ID",
                 },
               },
@@ -1453,7 +1453,7 @@ export const generatedRouteMap: RouteNode = {
               properties: {
                 contact_id: {
                   type: "string",
-                  minLength: 1,
+                  format: "uuid",
                   description: "Contact ID to update; omit to create",
                 },
                 type: {
@@ -1548,7 +1548,7 @@ export const generatedRouteMap: RouteNode = {
               properties: {
                 contact_id: {
                   type: "string",
-                  minLength: 1,
+                  format: "uuid",
                   description: "Contact ID to delete",
                 },
                 confirm: {
@@ -1983,7 +1983,7 @@ export const generatedRouteMap: RouteNode = {
                 },
                 matter_id: {
                   type: "string",
-                  minLength: 1,
+                  format: "uuid",
                   description: "Matter ID for add_member and remove_member.",
                 },
                 user_id: {
@@ -2070,7 +2070,7 @@ export const generatedRouteMap: RouteNode = {
                 },
                 matter_id: {
                   type: "string",
-                  minLength: 1,
+                  format: "uuid",
                   description: "Matter ID for add_member and remove_member.",
                 },
                 user_id: {
@@ -2180,7 +2180,7 @@ export const generatedRouteMap: RouteNode = {
                 },
                 matter_id: {
                   type: "string",
-                  minLength: 1,
+                  format: "uuid",
                   description: "Matter ID for add_member and remove_member.",
                 },
                 user_id: {
@@ -2257,6 +2257,7 @@ export const generatedRouteMap: RouteNode = {
               properties: {
                 template_id: {
                   type: "string",
+                  format: "uuid",
                   description:
                     "Template id to describe its fields in detail; omit to list templates",
                 },
@@ -2317,6 +2318,7 @@ export const generatedRouteMap: RouteNode = {
               properties: {
                 template_id: {
                   type: "string",
+                  format: "uuid",
                   description: "Template id, as returned by list_templates",
                 },
                 values: {
@@ -2417,19 +2419,23 @@ export const generatedRouteMap: RouteNode = {
                     },
                     template_id: {
                       type: "string",
+                      format: "uuid",
                       description: "Template id, as returned by list_templates",
                     },
                     matter_id: {
                       type: "string",
+                      format: "uuid",
                       description: "Matter receiving the filled DOCX.",
                     },
                     entity_id: {
                       type: "string",
+                      format: "uuid",
                       description:
                         "Existing document entity id; required only for create_version",
                     },
                     parent_id: {
                       type: "string",
+                      format: "uuid",
                       description:
                         "Folder entity id for a new document; valid only for create_document",
                     },
@@ -2534,19 +2540,23 @@ export const generatedRouteMap: RouteNode = {
                     },
                     template_id: {
                       type: "string",
+                      format: "uuid",
                       description: "Template id, as returned by list_templates",
                     },
                     matter_id: {
                       type: "string",
+                      format: "uuid",
                       description: "Matter receiving the filled DOCX.",
                     },
                     entity_id: {
                       type: "string",
+                      format: "uuid",
                       description:
                         "Existing document entity id; required only for create_version",
                     },
                     parent_id: {
                       type: "string",
+                      format: "uuid",
                       description:
                         "Folder entity id for a new document; valid only for create_document",
                     },
@@ -2626,7 +2636,7 @@ export const generatedRouteMap: RouteNode = {
               properties: {
                 template_id: {
                   type: "string",
-                  minLength: 1,
+                  format: "uuid",
                   description: "Template to configure; omit when creating",
                 },
                 name: {
@@ -3062,13 +3072,13 @@ export const generatedRouteMap: RouteNode = {
               properties: {
                 matter_id: {
                   type: "string",
-                  minLength: 1,
+                  format: "uuid",
                   description:
                     "Matter ID to list tasks in; required unless task_id is given.",
                 },
                 task_id: {
                   type: "string",
-                  minLength: 1,
+                  format: "uuid",
                   description: "Task entity ID to read in detail",
                 },
                 date_from: {
@@ -3255,12 +3265,12 @@ export const generatedRouteMap: RouteNode = {
               properties: {
                 task_id: {
                   type: "string",
-                  minLength: 1,
+                  format: "uuid",
                   description: "Task entity ID to update; omit to create",
                 },
                 matter_id: {
                   type: "string",
-                  minLength: 1,
+                  format: "uuid",
                   description:
                     "Matter ID to create the task in; required when creating.",
                 },
@@ -3347,13 +3357,13 @@ export const generatedRouteMap: RouteNode = {
                 },
                 link_entity_id: {
                   type: "string",
-                  minLength: 1,
+                  format: "uuid",
                   description:
                     "Entity ID to link to the task (document, folder, or another task)",
                 },
                 unlink_link_id: {
                   type: "string",
-                  minLength: 1,
+                  format: "uuid",
                   description: "Entity-link ID to remove",
                 },
               },
@@ -3472,18 +3482,18 @@ export const generatedRouteMap: RouteNode = {
               properties: {
                 clause_id: {
                   type: "string",
-                  minLength: 1,
+                  format: "uuid",
                   description: "Clause id to read in detail; omit to list",
                 },
                 version_id: {
                   type: "string",
-                  minLength: 1,
+                  format: "uuid",
                   description:
                     "With clause_id, return this version's body instead of the current clause",
                 },
                 category_id: {
                   type: "string",
-                  minLength: 1,
+                  format: "uuid",
                   description:
                     "List only clauses filed under this category (list mode)",
                 },
@@ -3595,7 +3605,7 @@ export const generatedRouteMap: RouteNode = {
               properties: {
                 clause_id: {
                   type: "string",
-                  minLength: 1,
+                  format: "uuid",
                   description: "Clause id to update; omit to create",
                 },
                 title: {
@@ -3690,7 +3700,7 @@ export const generatedRouteMap: RouteNode = {
                   anyOf: [
                     {
                       type: "string",
-                      minLength: 1,
+                      format: "uuid",
                     },
                     {
                       type: "null",
@@ -3788,7 +3798,7 @@ export const generatedRouteMap: RouteNode = {
               properties: {
                 clause_id: {
                   type: "string",
-                  minLength: 1,
+                  format: "uuid",
                   description: "Clause id to delete",
                 },
                 confirm: {
@@ -3836,7 +3846,7 @@ export const generatedRouteMap: RouteNode = {
               properties: {
                 playbook_id: {
                   type: "string",
-                  minLength: 1,
+                  format: "uuid",
                   description:
                     "Playbook id to read in detail; omit to list playbooks",
                 },
@@ -3892,12 +3902,12 @@ export const generatedRouteMap: RouteNode = {
               properties: {
                 matter_id: {
                   type: "string",
-                  minLength: 1,
+                  format: "uuid",
                   description: "Matter ID to run the playbook over.",
                 },
                 playbook_id: {
                   type: "string",
-                  minLength: 1,
+                  format: "uuid",
                   description: "Playbook id to run",
                 },
               },
@@ -3992,13 +4002,13 @@ export const generatedRouteMap: RouteNode = {
               properties: {
                 matter_id: {
                   type: "string",
-                  minLength: 1,
+                  format: "uuid",
                   description:
                     "Matter ID to list time entries in; required unless time_entry_id is given.",
                 },
                 time_entry_id: {
                   type: "string",
-                  minLength: 1,
+                  format: "uuid",
                   description: "Time entry ID to read in detail",
                 },
                 entity_id: {
@@ -4171,12 +4181,12 @@ export const generatedRouteMap: RouteNode = {
               properties: {
                 time_entry_id: {
                   type: "string",
-                  minLength: 1,
+                  format: "uuid",
                   description: "Time entry ID to update; omit to create",
                 },
                 matter_id: {
                   type: "string",
-                  minLength: 1,
+                  format: "uuid",
                   description:
                     "Matter ID to create the entry in; required when creating.",
                 },
@@ -4298,7 +4308,7 @@ export const generatedRouteMap: RouteNode = {
               properties: {
                 time_entry_id: {
                   type: "string",
-                  minLength: 1,
+                  format: "uuid",
                   description: "Time entry ID to delete or write off",
                 },
                 confirm: {
@@ -4360,7 +4370,7 @@ export const generatedRouteMap: RouteNode = {
               properties: {
                 matter_id: {
                   type: "string",
-                  minLength: 1,
+                  format: "uuid",
                   description: "Matter ID to resolve the rate in.",
                 },
                 user_id: {
@@ -4422,13 +4432,13 @@ export const generatedRouteMap: RouteNode = {
               properties: {
                 matter_id: {
                   type: "string",
-                  minLength: 1,
+                  format: "uuid",
                   description:
                     "Matter ID to list invoices in; required unless invoice_id is given.",
                 },
                 invoice_id: {
                   type: "string",
-                  minLength: 1,
+                  format: "uuid",
                   description: "Invoice ID to read in detail",
                 },
                 limit: {
@@ -4774,7 +4784,7 @@ export const generatedRouteMap: RouteNode = {
               properties: {
                 matter_id: {
                   type: "string",
-                  minLength: 1,
+                  format: "uuid",
                   description: "Only entries scoped to this matter.",
                 },
                 action: {

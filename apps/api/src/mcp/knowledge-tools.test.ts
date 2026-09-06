@@ -28,6 +28,18 @@ const parseToolPayload = (
   return JSON.parse(item.text) as unknown;
 };
 
+// Ids that reach `uuid` columns are validated as UUIDs by the tool input
+// schemas, so the fixtures use well-formed ones. Each id has one value shared by
+// the tool input, the mocked row, and the assertion.
+const MATTER_ID = "00000000-0000-4000-8000-000000000001";
+const CLAUSE_ID = "00000000-0000-4000-8000-000000000002";
+const PLAYBOOK_ID = toSafeId<"playbookDefinition">(
+  "00000000-0000-4000-8000-000000000003",
+);
+const APPROVED_VERSION_ID = toSafeId<"playbookDefinitionVersion">(
+  "00000000-0000-4000-8000-000000000004",
+);
+
 /** A scopedDb whose select chain resolves to the seeded clause rows. */
 const createClauseScopedDb = (rows: unknown[]) =>
   asTestRaw<McpRequestContext["scopedDb"] & ReturnType<typeof mock>>(
@@ -42,9 +54,6 @@ const createClauseScopedDb = (rows: unknown[]) =>
       return await run(builder);
     }),
   );
-
-const PLAYBOOK_ID = toSafeId<"playbookDefinition">("pb_1");
-const APPROVED_VERSION_ID = toSafeId<"playbookDefinitionVersion">("pbv_1");
 
 /**
  * A playbook's positions, tagged by the issue text so the approved snapshot and
@@ -101,7 +110,7 @@ const createClauseWriteScopedDb = () => {
             if (row.body !== undefined) {
               insertedBodies.push(row.body);
             }
-            return { returning: async () => [{ id: "c1" }] };
+            return { returning: async () => [{ id: CLAUSE_ID }] };
           },
         }),
         update: () => ({ set: () => ({ where: async () => undefined }) }),
@@ -132,9 +141,9 @@ const createContext = ({
   memberRole?: McpRequestContext["memberRole"];
   scopedDb?: McpRequestContext["scopedDb"];
 } = {}): McpRequestContext => ({
-  accessibleWorkspaceIds: [toSafeId<"workspace">("ws_1")],
-  accessibleWorkspaceIdSet: new Set(["ws_1"]),
-  accessibleWorkspaceStatusById: new Map([["ws_1", "active"]]),
+  accessibleWorkspaceIds: [toSafeId<"workspace">(MATTER_ID)],
+  accessibleWorkspaceIdSet: new Set([MATTER_ID]),
+  accessibleWorkspaceStatusById: new Map([[MATTER_ID, "active"]]),
   accessibleWorkspaces: [],
   grantedScopes: [],
   memberRole,
@@ -175,7 +184,7 @@ describe("MCP knowledge tools", () => {
   test("list_clauses declares tenant text fields that redact the payload in place", async () => {
     const rows = [
       {
-        id: "c1",
+        id: CLAUSE_ID,
         title: "Governing Law",
         categoryId: null,
         language: "en",
@@ -217,7 +226,7 @@ describe("MCP knowledge tools", () => {
 
   test("list_clauses fails closed when a clause body is unrecognized, leaking nothing", async () => {
     const clause = {
-      id: "c1",
+      id: CLAUSE_ID,
       title: "Governing Law",
       categoryId: null,
       description: null,
@@ -236,7 +245,7 @@ describe("MCP knowledge tools", () => {
     };
 
     const response = await KNOWLEDGE_TOOL_HANDLERS.list_clauses({
-      args: { clause_id: "c1" },
+      args: { clause_id: CLAUSE_ID },
       context: createContext({
         scopedDb: createClauseDetailScopedDb(clause),
       }),
@@ -323,7 +332,7 @@ describe("MCP knowledge tools", () => {
 
   test("save_clause rejects an update that changes nothing", async () => {
     const result = await handleMcpToolCall({
-      args: { clause_id: "c1" },
+      args: { clause_id: CLAUSE_ID },
       context: createContext(),
       toolName: "save_clause",
     });
@@ -361,7 +370,7 @@ describe("MCP knowledge tools", () => {
     startWorkflowMock.mockResolvedValue({ status: "started" });
 
     const result = await handleMcpToolCall({
-      args: { matter_id: "ws_1", playbook_id: "pb_1" },
+      args: { matter_id: MATTER_ID, playbook_id: PLAYBOOK_ID },
       context: createContext({
         scopedDb: createPlaybookScopedDb({
           id: PLAYBOOK_ID,
@@ -389,7 +398,7 @@ describe("MCP knowledge tools", () => {
     // against, projected onto the table the tool materialized into.
     expect(createPlaybookTableRunsMock).toHaveBeenCalledTimes(1);
     expect(createPlaybookTableRunsMock.mock.calls.at(0)?.[0]).toMatchObject({
-      workspaceId: "ws_1",
+      workspaceId: MATTER_ID,
       userId: "user_1",
       projection: "columns",
       docTypeGate: null,
@@ -407,7 +416,7 @@ describe("MCP knowledge tools", () => {
     expect(startWorkflowMock).toHaveBeenCalledTimes(1);
     expect(startWorkflowMock.mock.calls.at(0)?.[0]).toMatchObject({
       propertyIds: [toSafeId<"property">("p1"), toSafeId<"property">("p2")],
-      workspaceId: "ws_1",
+      workspaceId: MATTER_ID,
     });
   });
 
@@ -427,7 +436,7 @@ describe("MCP knowledge tools", () => {
     startWorkflowMock.mockResolvedValue({ status: "failed" });
 
     const result = await handleMcpToolCall({
-      args: { matter_id: "ws_1", playbook_id: "pb_1" },
+      args: { matter_id: MATTER_ID, playbook_id: PLAYBOOK_ID },
       context: createContext({
         scopedDb: createPlaybookScopedDb({
           id: PLAYBOOK_ID,

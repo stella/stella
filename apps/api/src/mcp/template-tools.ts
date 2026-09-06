@@ -104,6 +104,8 @@ import {
   stringProp,
   structuredErrorResult,
   toolDataResult,
+  uuidInputSchema,
+  uuidProp,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
 import { defineValibotMcpTool } from "@/api/mcp/valibot-tool-definition";
@@ -128,11 +130,7 @@ const MAX_DOCX_BASE64_LENGTH =
 const saveTemplateArgsSchema = v.pipe(
   v.strictObject({
     template_id: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.description("Template to configure; omit when creating"),
-      ),
+      uuidInputSchema("Template to configure; omit when creating"),
     ),
     name: v.optional(
       v.pipe(
@@ -442,7 +440,7 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
     inputSchema: {
       type: "object",
       properties: {
-        template_id: stringProp(
+        template_id: uuidProp(
           "Template id to describe its fields in detail; omit to list templates",
         ),
         cursor: stringProp(
@@ -480,7 +478,7 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
     inputSchema: {
       type: "object",
       properties: {
-        template_id: stringProp("Template id, as returned by list_templates"),
+        template_id: uuidProp("Template id, as returned by list_templates"),
         values: {
           type: "object",
           description: "Map of field path to value.",
@@ -537,12 +535,12 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
           "create_document",
           "create_version",
         ]),
-        template_id: stringProp("Template id, as returned by list_templates"),
-        matter_id: stringProp("Matter receiving the filled DOCX."),
-        entity_id: stringProp(
+        template_id: uuidProp("Template id, as returned by list_templates"),
+        matter_id: uuidProp("Matter receiving the filled DOCX."),
+        entity_id: uuidProp(
           "Existing document entity id; required only for create_version",
         ),
-        parent_id: stringProp(
+        parent_id: uuidProp(
           "Folder entity id for a new document; valid only for create_document",
         ),
         name: stringProp(
@@ -702,7 +700,7 @@ const handleListTemplatesTool: TypedMcpToolHandler<
 };
 
 const describeTemplateArgsSchema = v.strictObject({
-  template_id: v.pipe(v.string(), v.minLength(1)),
+  template_id: v.pipe(v.string(), v.uuid()),
 });
 
 // Detail branch of list_templates: one template's field configuration. Reused
@@ -834,7 +832,7 @@ const assertTemplateFillUsage = async ({
 };
 
 const fillTemplateArgsSchema = v.strictObject({
-  template_id: v.pipe(v.string(), v.minLength(1)),
+  template_id: v.pipe(v.string(), v.uuid()),
   values: v.record(v.string(), v.unknown()),
   allow_unused_values: v.optional(v.boolean()),
   completion_mode: v.optional(
@@ -1002,7 +1000,7 @@ const handleFillTemplateTool: McpToolHandler = async ({ args, context }) => {
 const saveFilledTemplateArgsSchema = v.strictObject({
   action: v.picklist(["create_document", "create_version"]),
   template_id: v.pipe(v.string(), v.uuid()),
-  matter_id: v.pipe(v.string(), v.minLength(1)),
+  matter_id: v.pipe(v.string(), v.uuid()),
   entity_id: v.optional(v.pipe(v.string(), v.uuid())),
   parent_id: v.optional(v.pipe(v.string(), v.uuid())),
   name: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(255))),

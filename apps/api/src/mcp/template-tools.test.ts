@@ -193,9 +193,9 @@ const createContext = ({
   scopedDb?: McpRequestContext["scopedDb"];
   workspaceStatus?: "active" | "archived";
 } = {}): McpRequestContext => ({
-  accessibleWorkspaceIds: [toSafeId<"workspace">("ws_1")],
-  accessibleWorkspaceIdSet: new Set(["ws_1"]),
-  accessibleWorkspaceStatusById: new Map([["ws_1", workspaceStatus]]),
+  accessibleWorkspaceIds: [toSafeId<"workspace">(WORKSPACE_ID)],
+  accessibleWorkspaceIdSet: new Set([WORKSPACE_ID]),
+  accessibleWorkspaceStatusById: new Map([[WORKSPACE_ID, workspaceStatus]]),
   accessibleWorkspaces: [],
   grantedScopes: [],
   memberRole,
@@ -238,6 +238,8 @@ const NON_FOLDER_ID = "00000000-0000-4000-8000-000000000004";
 const MISSING_VERSION_ID = "00000000-0000-4000-8000-000000000005";
 const READ_ONLY_VERSION_ID = "00000000-0000-4000-8000-000000000006";
 const NON_FILE_VERSION_ID = "00000000-0000-4000-8000-000000000007";
+const MISSING_TEMPLATE_ID = "00000000-0000-4000-8000-000000000008";
+const WORKSPACE_ID = "00000000-0000-4000-8000-000000000009";
 const fakeTransaction = asTestRaw<Transaction>({});
 
 /** A real, minimal valid DOCX (well-formed word/document.xml) as base64, so
@@ -415,7 +417,7 @@ describe("MCP template tools", () => {
   test("list_templates returns the org's templates", async () => {
     const rows = [
       {
-        id: "t1",
+        id: TEMPLATE_ID,
         name: "NDA",
         fieldCount: 4,
         tags: ["nda"],
@@ -437,7 +439,7 @@ describe("MCP template tools", () => {
   test("list_templates anonymizes template tags in anonymized mode", async () => {
     const rows = [
       {
-        id: "t1",
+        id: TEMPLATE_ID,
         name: "Smith NDA",
         fieldCount: 4,
         tags: ["Smith acquisition"],
@@ -530,13 +532,13 @@ describe("MCP template tools", () => {
     });
 
     const result = await handleMcpToolCall({
-      args: { template_id: "t1" },
+      args: { template_id: TEMPLATE_ID },
       context: createContext(),
       toolName: "list_templates",
     });
 
     expect(describeStoredTemplateMock).toHaveBeenCalledWith(
-      expect.objectContaining({ templateId: "t1" }),
+      expect.objectContaining({ templateId: TEMPLATE_ID }),
     );
     expect(parseToolPayload(result)).toMatchObject({
       name: "Company POA",
@@ -598,7 +600,7 @@ describe("MCP template tools", () => {
     });
 
     const result = await handleMcpToolCall({
-      args: { template_id: "t1" },
+      args: { template_id: TEMPLATE_ID },
       context: createContext(),
       mode: "anonymized",
       toolName: "list_templates",
@@ -643,7 +645,7 @@ describe("MCP template tools", () => {
     });
 
     const result = await handleMcpToolCall({
-      args: { template_id: "missing" },
+      args: { template_id: MISSING_TEMPLATE_ID },
       context: createContext(),
       toolName: "list_templates",
     });
@@ -676,14 +678,14 @@ describe("MCP template tools", () => {
     });
 
     const result = await handleMcpToolCall({
-      args: { template_id: "t1", values: { "tenant.name": "ACME" } },
+      args: { template_id: TEMPLATE_ID, values: { "tenant.name": "ACME" } },
       context: createContext(),
       toolName: "fill_template",
     });
 
     expect(fillStoredTemplateWithTextStrictMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        templateId: "t1",
+        templateId: TEMPLATE_ID,
         values: { "tenant.name": "ACME" },
         organizationId: toSafeId<"organization">("org_1"),
       }),
@@ -701,7 +703,7 @@ describe("MCP template tools", () => {
     // The execution is recorded (fill row + audit) so agent fills are audited.
     expect(recordTemplateFillMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        templateId: "t1",
+        templateId: TEMPLATE_ID,
         organizationId: toSafeId<"organization">("org_1"),
         format: "docx",
         unmatchedCount: 0,
@@ -728,7 +730,7 @@ describe("MCP template tools", () => {
     });
 
     const result = await handleMcpToolCall({
-      args: { template_id: "t1", values: { "tenant.name": "ACME" } },
+      args: { template_id: TEMPLATE_ID, values: { "tenant.name": "ACME" } },
       context: createContext(),
       toolName: "fill_template",
     });
@@ -761,7 +763,7 @@ describe("MCP template tools", () => {
     });
 
     const result = await handleMcpToolCall({
-      args: { template_id: "t1", values: {} },
+      args: { template_id: TEMPLATE_ID, values: {} },
       context: createContext(),
       toolName: "fill_template",
     });
@@ -791,7 +793,7 @@ describe("MCP template tools", () => {
 
     const result = await handleMcpToolCall({
       args: {
-        template_id: "t1",
+        template_id: TEMPLATE_ID,
         values: { "tenant.name": "ACME" },
         completion_mode: "allow_partial",
       },
@@ -817,7 +819,7 @@ describe("MCP template tools", () => {
     });
 
     const result = await handleMcpToolCall({
-      args: { template_id: "t1", values: { first: "value" } },
+      args: { template_id: TEMPLATE_ID, values: { first: "value" } },
       context: createContext(),
       toolName: "fill_template",
     });
@@ -845,7 +847,7 @@ describe("MCP template tools", () => {
     });
 
     const result = await handleMcpToolCall({
-      args: { template_id: "t1", values: { "tenant.name": "ACME" } },
+      args: { template_id: TEMPLATE_ID, values: { "tenant.name": "ACME" } },
       context: createContext(),
       toolName: "fill_template",
     });
@@ -875,7 +877,7 @@ describe("MCP template tools", () => {
     });
 
     const result = await handleMcpToolCall({
-      args: { template_id: "t1", values: {} },
+      args: { template_id: TEMPLATE_ID, values: {} },
       context: createContext(),
       toolName: "fill_template",
     });
@@ -908,7 +910,7 @@ describe("MCP template tools", () => {
 
     const result = await handleMcpToolCall({
       args: {
-        template_id: "t1",
+        template_id: TEMPLATE_ID,
         values: { intentional: "value" },
         allow_unused_values: true,
       },
@@ -936,7 +938,7 @@ describe("MCP template tools", () => {
     });
 
     const result = await handleMcpToolCall({
-      args: { template_id: "t1", values: { "tenant.name": "ACME" } },
+      args: { template_id: TEMPLATE_ID, values: { "tenant.name": "ACME" } },
       context: createContext(),
       toolName: "fill_template",
     });
@@ -969,7 +971,7 @@ describe("MCP template tools", () => {
       args: {
         action: "create_document",
         template_id: TEMPLATE_ID,
-        matter_id: "ws_1",
+        matter_id: WORKSPACE_ID,
         idempotency_key: "create-document-1",
         parent_id: FOLDER_ID,
         name: "Example Lease",
@@ -981,7 +983,7 @@ describe("MCP template tools", () => {
 
     expect(createEntityFromBufferMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        workspaceId: "ws_1",
+        workspaceId: WORKSPACE_ID,
         parentId: FOLDER_ID,
         fileName: "Example Lease.docx",
         afterCreate: expect.any(Function),
@@ -1039,7 +1041,7 @@ describe("MCP template tools", () => {
       args: {
         action: "create_document",
         template_id: TEMPLATE_ID,
-        matter_id: "ws_1",
+        matter_id: WORKSPACE_ID,
         idempotency_key: "create-document-missing-required",
         values: { "tenant.name": "ACME" },
       },
@@ -1077,7 +1079,7 @@ describe("MCP template tools", () => {
       args: {
         action: "create_document",
         template_id: TEMPLATE_ID,
-        matter_id: "ws_1",
+        matter_id: WORKSPACE_ID,
         idempotency_key: "disconnect-1",
         values: { "tenant.name": "ACME" },
       },
@@ -1118,7 +1120,7 @@ describe("MCP template tools", () => {
       args: {
         action: "create_document",
         template_id: TEMPLATE_ID,
-        matter_id: "ws_1",
+        matter_id: WORKSPACE_ID,
         idempotency_key: "create-document-retry",
         values: { "tenant.name": "ACME" },
       },
@@ -1147,7 +1149,7 @@ describe("MCP template tools", () => {
       args: {
         action: "create_document",
         template_id: TEMPLATE_ID,
-        matter_id: "ws_1",
+        matter_id: WORKSPACE_ID,
         idempotency_key: "concurrent-retry",
         values: { "tenant.name": "ACME" },
       },
@@ -1175,7 +1177,7 @@ describe("MCP template tools", () => {
       args: {
         action: "create_document",
         template_id: TEMPLATE_ID,
-        matter_id: "ws_1",
+        matter_id: WORKSPACE_ID,
         idempotency_key: "reused-key",
         values: { "tenant.name": "Different" },
       },
@@ -1221,7 +1223,7 @@ describe("MCP template tools", () => {
       args: {
         action: "create_version",
         template_id: TEMPLATE_ID,
-        matter_id: "ws_1",
+        matter_id: WORKSPACE_ID,
         idempotency_key: "create-version-1",
         entity_id: ENTITY_ID,
         values: { "tenant.name": "ACME" },
@@ -1232,7 +1234,7 @@ describe("MCP template tools", () => {
 
     expect(createEntityVersionFromBufferMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        workspaceId: "ws_1",
+        workspaceId: WORKSPACE_ID,
         entityId: ENTITY_ID,
         fileName: "lease.docx",
         source: null,
@@ -1251,7 +1253,7 @@ describe("MCP template tools", () => {
         ],
         entityId: ENTITY_ID,
         entityVersionId: "version_2",
-        workspaceId: "ws_1",
+        workspaceId: WORKSPACE_ID,
       }),
     );
     expect(parseToolPayload(result)).toEqual({
@@ -1270,7 +1272,7 @@ describe("MCP template tools", () => {
       args: {
         action: "create_version",
         template_id: TEMPLATE_ID,
-        matter_id: "ws_1",
+        matter_id: WORKSPACE_ID,
         idempotency_key: "missing-entity-1",
         values: {},
       },
@@ -1281,7 +1283,7 @@ describe("MCP template tools", () => {
       args: {
         action: "create_document",
         template_id: TEMPLATE_ID,
-        matter_id: "ws_1",
+        matter_id: WORKSPACE_ID,
         idempotency_key: "archived-1",
         values: {},
       },
@@ -1292,7 +1294,7 @@ describe("MCP template tools", () => {
       args: {
         action: "create_document",
         template_id: TEMPLATE_ID,
-        matter_id: "ws_1",
+        matter_id: WORKSPACE_ID,
         idempotency_key: "forbidden-1",
         values: {},
       },
@@ -1303,7 +1305,7 @@ describe("MCP template tools", () => {
       args: {
         action: "create_document",
         template_id: "not-a-uuid",
-        matter_id: "ws_1",
+        matter_id: WORKSPACE_ID,
         idempotency_key: "malformed-template-1",
         values: {},
       },
@@ -1314,7 +1316,7 @@ describe("MCP template tools", () => {
       args: {
         action: "create_document",
         template_id: TEMPLATE_ID,
-        matter_id: "ws_1",
+        matter_id: WORKSPACE_ID,
         idempotency_key: "malformed-parent-1",
         parent_id: "not-a-uuid",
         values: {},
@@ -1326,7 +1328,7 @@ describe("MCP template tools", () => {
       args: {
         action: "create_version",
         template_id: TEMPLATE_ID,
-        matter_id: "ws_1",
+        matter_id: WORKSPACE_ID,
         idempotency_key: "malformed-entity-1",
         entity_id: "not-a-uuid",
         values: {},
@@ -1383,7 +1385,7 @@ describe("MCP template tools", () => {
       args: {
         action: "create_document",
         template_id: TEMPLATE_ID,
-        matter_id: "ws_1",
+        matter_id: WORKSPACE_ID,
         idempotency_key: "missing-parent-1",
         parent_id: MISSING_FOLDER_ID,
         values: {},
@@ -1395,7 +1397,7 @@ describe("MCP template tools", () => {
       args: {
         action: "create_document",
         template_id: TEMPLATE_ID,
-        matter_id: "ws_1",
+        matter_id: WORKSPACE_ID,
         idempotency_key: "non-folder-1",
         parent_id: NON_FOLDER_ID,
         values: {},
@@ -1407,7 +1409,7 @@ describe("MCP template tools", () => {
       args: {
         action: "create_version",
         template_id: TEMPLATE_ID,
-        matter_id: "ws_1",
+        matter_id: WORKSPACE_ID,
         idempotency_key: "missing-version-1",
         entity_id: MISSING_VERSION_ID,
         values: {},
@@ -1419,7 +1421,7 @@ describe("MCP template tools", () => {
       args: {
         action: "create_version",
         template_id: TEMPLATE_ID,
-        matter_id: "ws_1",
+        matter_id: WORKSPACE_ID,
         idempotency_key: "read-only-1",
         entity_id: READ_ONLY_VERSION_ID,
         values: {},
@@ -1431,7 +1433,7 @@ describe("MCP template tools", () => {
       args: {
         action: "create_version",
         template_id: TEMPLATE_ID,
-        matter_id: "ws_1",
+        matter_id: WORKSPACE_ID,
         idempotency_key: "non-file-1",
         entity_id: NON_FILE_VERSION_ID,
         values: {},
@@ -1465,7 +1467,7 @@ describe("MCP template tools", () => {
       args: {
         action: "create_document",
         template_id: TEMPLATE_ID,
-        matter_id: "ws_1",
+        matter_id: WORKSPACE_ID,
         idempotency_key: "full-workspace-1",
         values: {},
       },
@@ -1716,7 +1718,7 @@ describe("MCP template tools", () => {
 
     const result = await handleMcpToolCall({
       args: {
-        template_id: "t1",
+        template_id: TEMPLATE_ID,
         fields: [
           {
             path: "company",
@@ -1734,7 +1736,7 @@ describe("MCP template tools", () => {
     expect(result.isError).toBeFalsy();
     expect(configureTemplateFieldsMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        templateId: "t1",
+        templateId: TEMPLATE_ID,
         organizationId: toSafeId<"organization">("org_1"),
         fields: [
           expect.objectContaining({
@@ -1755,7 +1757,7 @@ describe("MCP template tools", () => {
       ],
     });
     expect(describeStoredTemplateMock).toHaveBeenCalledWith(
-      expect.objectContaining({ templateId: "t1" }),
+      expect.objectContaining({ templateId: TEMPLATE_ID }),
     );
   });
 
@@ -1768,7 +1770,10 @@ describe("MCP template tools", () => {
     });
 
     const result = await handleMcpToolCall({
-      args: { template_id: "t1", fields: [{ path: "ghost", label: "Ghost" }] },
+      args: {
+        template_id: TEMPLATE_ID,
+        fields: [{ path: "ghost", label: "Ghost" }],
+      },
       context: createContext(),
       toolName: "save_template",
     });
@@ -1781,7 +1786,7 @@ describe("MCP template tools", () => {
 
   test("save_template (configure) forbids members without template:create permission", async () => {
     const result = await handleMcpToolCall({
-      args: { template_id: "t1", fields: [{ path: "company" }] },
+      args: { template_id: TEMPLATE_ID, fields: [{ path: "company" }] },
       context: createContext({ memberRole: "intern" }),
       toolName: "save_template",
     });
@@ -1793,7 +1798,7 @@ describe("MCP template tools", () => {
 
   test("list_templates (detail) rejects template_id combined with a cursor", async () => {
     const result = await handleMcpToolCall({
-      args: { template_id: "t1", cursor: "abc" },
+      args: { template_id: TEMPLATE_ID, cursor: "abc" },
       context: createContext(),
       toolName: "list_templates",
     });

@@ -100,6 +100,19 @@ export const stringProp = (
   }) as const;
 
 /**
+ * `uuidInputSchema` as a hand-written JSON Schema property, for the tools whose
+ * advertised schema is still maintained alongside their validator rather than
+ * projected from it. Both sides must move together until the tool migrates to
+ * `defineValibotMcpTool`.
+ */
+export const uuidProp = (description: string) =>
+  ({
+    type: "string",
+    format: "uuid",
+    description,
+  }) as const;
+
+/**
  * A nullable string parameter. Advertises `type: ["string", "null"]` so the MCP
  * JSON schema matches a Valibot field that accepts null (the "pass null to
  * clear" convention); a plain string type would mislead callers into believing
