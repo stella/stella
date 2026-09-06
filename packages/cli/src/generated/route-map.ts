@@ -2610,7 +2610,8 @@ export const generatedRouteMap: RouteNode = {
                 prop: "docx_base64",
                 kind: "string",
                 repeatable: false,
-                description: "Base64 DOCX bytes; required when creating",
+                description:
+                  "Original .docx bytes, base64-encoded verbatim; required when creating. Never strip parts out of the file to shrink it.",
                 required: false,
               },
             ],
@@ -2639,7 +2640,8 @@ export const generatedRouteMap: RouteNode = {
                   type: "string",
                   minLength: 1,
                   maxLength: 69905068,
-                  description: "Base64 DOCX bytes; required when creating",
+                  description:
+                    "Original .docx bytes, base64-encoded verbatim; required when creating. Never strip parts out of the file to shrink it.",
                 },
                 fields: {
                   type: "array",

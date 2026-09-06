@@ -38,6 +38,7 @@ import {
 } from "@/api/lib/docx/template-warnings";
 import type { FieldMeta, FieldPart } from "@/api/lib/docx/types";
 import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buffer";
+import type { DocxValidationFailure } from "@/api/lib/entity-versions/validate-docx-buffer";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import {
   createCursorPage,
@@ -136,6 +137,11 @@ const SAVE_FILLED_TEMPLATE_RENDER_TIMEOUT_MS = 300_000;
 const MAX_DOCX_BASE64_LENGTH =
   Math.ceil(FILE_SIZE_LIMIT_BYTES.document / 3) * 4;
 
+/** Derived so the advertised ceiling cannot drift from the enforced one. */
+const MAX_DOCX_MEGABYTES = Math.floor(
+  FILE_SIZE_LIMIT_BYTES.document / (1024 * 1024),
+);
+
 const saveTemplateArgsSchema = v.pipe(
   v.strictObject({
     template_id: v.optional(
@@ -158,7 +164,10 @@ const saveTemplateArgsSchema = v.pipe(
         v.string(),
         v.minLength(1),
         v.maxLength(MAX_DOCX_BASE64_LENGTH),
-        v.description("Base64 DOCX bytes; required when creating"),
+        v.description(
+          "Original .docx bytes, base64-encoded verbatim; required when " +
+            "creating. Never strip parts out of the file to shrink it.",
+        ),
       ),
     ),
     fields: v.optional(
@@ -404,11 +413,13 @@ const SAVE_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
   description:
     "Create a document template from a DOCX, or configure an existing " +
     "template's fields. To create, pass docx_base64 (base64-encoded .docx / " +
-    "Office Open XML bytes, max ~10 MB decoded) and a name; the {{field}} " +
-    "markers in the file become the template's fillable fields, and fields " +
-    "can configure them in the same call. To configure an existing template, " +
-    "pass template_id with fields and no docx_base64; only the manifest " +
-    "changes, the document's {{markers}} stay untouched. Read " +
+    `Office Open XML bytes, max ${MAX_DOCX_MEGABYTES} MB decoded) and a name; ` +
+    "the {{field}} markers in the file become the template's fillable fields, " +
+    "and fields can configure them in the same call. docx_base64 must carry " +
+    "the original bytes verbatim: never retype the file or strip parts out to " +
+    "fit. To configure an existing template, pass template_id with fields and " +
+    "no docx_base64; only the manifest changes, the document's {{markers}} " +
+    "stay untouched. Read " +
     `${TEMPLATE_MARKER_REFERENCE_URI} before authoring a DOCX and ` +
     `${TEMPLATE_FIELD_REFERENCE_URI} before configuring fields. Returns the ` +
     "template id and field count when creating, or the updated field list " +
@@ -1555,6 +1566,35 @@ const templateAuthoringWarnings = async ({
   ]);
 };
 
+/**
+ * What to tell the caller for each structural DOCX failure on the base64 path.
+ *
+ * `unreadable-archive` is the failure a model-driven client actually hits: the
+ * only way to reach this tool with a DOCX today is to emit the whole archive as
+ * base64 token by token, and a payload that drifted by one character decodes to
+ * bytes that are no longer a readable ZIP. The generic "make sure it is a valid
+ * .docx" advice invites the agent to shrink the file until it fits, which
+ * destroys the document, so name the real cause instead.
+ *
+ * Total over the failure union: a new structural check has to decide what the
+ * caller should do about it.
+ */
+const DOCX_BASE64_FAILURE_HINT = {
+  "unreadable-archive":
+    "The base64 does not decode to the original archive. Do not retype or " +
+    "truncate the file, and do not strip parts out of it (styles.xml, " +
+    "numbering.xml, theme1.xml, settings.xml, rsids) to make it smaller: " +
+    "that destroys the document's formatting and still leaves an unreadable " +
+    "archive. Re-encode the original .docx bytes verbatim, or have the file " +
+    "attached through the host's file transport instead of inlining it.",
+  "missing-document-xml":
+    "The archive decoded but has no 'word/document.xml'. Send the original " +
+    ".docx unmodified; do not rebuild or repackage it.",
+  "malformed-document-xml":
+    "The archive decoded but 'word/document.xml' is not well-formed XML. " +
+    "Send the original .docx unmodified; do not edit its XML by hand.",
+} as const satisfies Record<DocxValidationFailure, string>;
+
 // Create branch of save_template: a new template from an uploaded DOCX, with an
 // optional field-configuration overlay. Reused from the former create_template
 // tool.
@@ -1621,7 +1661,7 @@ const createTemplateFromDocx = async ({
       code: "validation_error",
       message: `Invalid DOCX file: ${validation.error}`,
       issues: [{ path: "docx_base64", message: validation.error }],
-      hint: "Ensure 'docx_base64' decodes to a valid, uncorrupted .docx file.",
+      hint: DOCX_BASE64_FAILURE_HINT[validation.reason],
     });
   }
 

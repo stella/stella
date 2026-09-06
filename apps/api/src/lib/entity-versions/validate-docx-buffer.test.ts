@@ -33,6 +33,7 @@ describe("DOCX buffer validation", () => {
 
     expect(result).toEqual({
       valid: false,
+      reason: "missing-document-xml",
       error: "Missing word/document.xml",
     });
   });
@@ -44,7 +45,25 @@ describe("DOCX buffer validation", () => {
 
     expect(result.valid).toBe(false);
     if (!result.valid) {
+      expect(result.reason).toBe("malformed-document-xml");
       expect(result.error).toContain("Malformed document.xml");
+    }
+  });
+
+  test("reports bytes that are not a readable archive as unreadable, unprefixed", async () => {
+    const truncated = (await makeDocxBuffer(`<w:document xmlns:w="${W_NS}"/>`))
+      // A payload the model retyped or truncated still starts with the ZIP
+      // magic but no longer carries a readable central directory.
+      .slice(0, 24);
+
+    const result = await validateDocxBuffer(truncated);
+
+    expect(result.valid).toBe(false);
+    if (!result.valid) {
+      expect(result.reason).toBe("unreadable-archive");
+      // Callers embed `error` in their own sentence, so it must not repeat a
+      // prefix of its own.
+      expect(result.error).not.toContain("Invalid DOCX");
     }
   });
 });

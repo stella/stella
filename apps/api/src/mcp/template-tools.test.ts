@@ -13,7 +13,8 @@ import JSZip from "jszip";
 import type { Transaction } from "@/api/db/root";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
-import { LIMITS } from "@/api/lib/limits";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import { CONTACT_FIELDS } from "@/api/lib/template-binding/binding-sources";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { TEMPLATE_FIELD_REFERENCE_URI } from "@/api/mcp/template-field-reference";
@@ -365,6 +366,22 @@ describe("MCP template tools", () => {
     expect(saveTemplate?.description).toContain(TEMPLATE_MARKER_REFERENCE_URI);
     expect(saveTemplate?.description).toContain(TEMPLATE_FIELD_REFERENCE_URI);
     expect(saveTemplate?.description).not.toContain("{{@clause:");
+  });
+
+  test("save_template advertises the size limit it enforces, and forbids trimming the file to fit", async () => {
+    const saveTemplate = await getMcpToolDefinition(
+      "save_template",
+      createContext(),
+    );
+    const enforcedMegabytes = Math.floor(
+      FILE_SIZE_LIMIT_BYTES.document / (1024 * 1024),
+    );
+    expect(saveTemplate?.description).toContain(
+      `max ${enforcedMegabytes} MB decoded`,
+    );
+    expect(saveTemplate?.description).toContain(
+      "never retype the file or strip parts out to fit",
+    );
   });
 
   test("list_templates' description points at the field reference instead of listing its keys", async () => {
@@ -1568,6 +1585,58 @@ describe("MCP template tools", () => {
     expect(createStoredTemplateMock).not.toHaveBeenCalled();
   });
 
+  test("save_template (create) blames the encoding, not the file, when the archive will not open", async () => {
+    // The failure a model-driven client actually produces: the payload is
+    // well-formed base64 but decodes to bytes that are no longer a readable
+    // archive.
+    const truncated = Buffer.from(
+      await new JSZip()
+        .file("word/document.xml", `<w:document xmlns:w="${W_NS}"/>`)
+        .generateAsync({ type: "uint8array" }),
+    ).subarray(0, 24);
+
+    const result = await handleMcpToolCall({
+      args: { name: "NDA", docx_base64: truncated.toString("base64") },
+      context: createContext(),
+      toolName: "save_template",
+    });
+
+    const error = validationEnvelope(result);
+    const hint = error["hint"];
+    expect(hint).toContain("does not decode to the original archive");
+    expect(hint).toContain("do not strip parts out of it");
+    // The parts the reproduced failure actually lost.
+    expect(hint).toContain("styles.xml");
+    // The old hint ("ensure it decodes to a valid .docx") is what invited the
+    // agent to shrink the file until the call went through.
+    expect(hint).not.toContain("Ensure 'docx_base64' decodes to a valid");
+    // One prefix, not "Invalid DOCX file: Invalid DOCX: …".
+    expect(String(error["message"]).match(/Invalid DOCX/gu)).toHaveLength(1);
+    expect(createStoredTemplateMock).not.toHaveBeenCalled();
+  });
+
+  test("save_template (create) hints per failure: a readable archive missing the main part is not an encoding problem", async () => {
+    const withoutDocumentXml = Buffer.from(
+      await new JSZip()
+        .file("word/styles.xml", "<styles/>")
+        .generateAsync({ type: "uint8array" }),
+    );
+
+    const result = await handleMcpToolCall({
+      args: {
+        name: "NDA",
+        docx_base64: withoutDocumentXml.toString("base64"),
+      },
+      context: createContext(),
+      toolName: "save_template",
+    });
+
+    const error = validationEnvelope(result);
+    expect(error["hint"]).toContain("no 'word/document.xml'");
+    expect(error["hint"]).not.toContain("does not decode");
+    expect(createStoredTemplateMock).not.toHaveBeenCalled();
+  });
+
   test("save_template (create) forbids members without template:create permission", async () => {
     const result = await handleMcpToolCall({
       args: {
@@ -1742,9 +1811,15 @@ describe("MCP template tools", () => {
   test("save_template (create) surfaces the service's unknown-path rejection", async () => {
     createStoredTemplateMock.mockImplementation(async function* () {
       yield* [];
-      return Result.err({
-        message: 'No field "ghost" was discovered in the DOCX.',
-      });
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "No marker {{ghost}} in the DOCX.",
+          issues: [
+            { path: "fields.0", message: "No marker {{ghost}} in the DOCX." },
+          ],
+        }),
+      );
     });
 
     const result = await handleMcpToolCall({
@@ -1758,8 +1833,13 @@ describe("MCP template tools", () => {
     });
 
     expect(result.isError).toBe(true);
-    const message = result.content.at(0);
-    expect(message?.type === "text" && message.text).toContain("ghost");
+    // The rejection reaches the agent as the structured envelope, naming the
+    // entry it sent — not as one line of bare prose it would have to parse.
+    const error = validationEnvelope(result);
+    expect(error["message"]).toContain("ghost");
+    expect(asTestRaw<{ path: string }[]>(error["issues"])).toEqual([
+      { path: "fields.0", message: "No marker {{ghost}} in the DOCX." },
+    ]);
   });
 
   test("save_template (configure) applies the overlay and returns the updated fields", async () => {
@@ -1840,9 +1920,15 @@ describe("MCP template tools", () => {
   test("save_template (configure) rejects a config whose path is unknown", async () => {
     configureTemplateFieldsMock.mockImplementation(async function* () {
       yield* [];
-      return Result.err({
-        message: 'No field "ghost" in this template.',
-      });
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "No marker {{ghost}} in the DOCX.",
+          issues: [
+            { path: "fields.0", message: "No marker {{ghost}} in the DOCX." },
+          ],
+        }),
+      );
     });
 
     const result = await handleMcpToolCall({
@@ -1853,8 +1939,11 @@ describe("MCP template tools", () => {
 
     expect(result.isError).toBe(true);
     expect(describeStoredTemplateMock).not.toHaveBeenCalled();
-    const message = result.content.at(0);
-    expect(message?.type === "text" && message.text).toContain("ghost");
+    const error = validationEnvelope(result);
+    expect(error["message"]).toContain("ghost");
+    expect(asTestRaw<{ path: string }[]>(error["issues"])).toEqual([
+      { path: "fields.0", message: "No marker {{ghost}} in the DOCX." },
+    ]);
   });
 
   test("save_template (configure) forbids members without template:create permission", async () => {
