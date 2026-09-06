@@ -818,11 +818,11 @@ describe("MCP template tools", () => {
 
     const payload = parseToolPayload(result);
     if (!isRecord(payload) || !Array.isArray(payload["paragraphs"])) {
-      throw new Error("Expected a paragraph preview");
+      throw new TypeError("Expected a paragraph preview");
     }
     const first = payload["paragraphs"].at(0);
     if (typeof first !== "string") {
-      throw new Error("Expected a text paragraph");
+      throw new TypeError("Expected a text paragraph");
     }
     expect(payload["paragraphs"]).toHaveLength(1);
     expect(first.length).toBeGreaterThan(0);
