@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, asc, eq, isNull, lte, or } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, lte, or } from "drizzle-orm";
 import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 
 import { rootDb } from "@/api/db/root";
@@ -7,10 +7,7 @@ import { schedulerJobRuns, schedulerJobs } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { detached } from "@/api/lib/detached";
-import {
-  ConfigurationError,
-  SchedulerJobTimeoutError,
-} from "@/api/lib/errors/tagged-errors";
+import { SchedulerJobTimeoutError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { createSchedulerTaskRegistry } from "@/api/lib/scheduler/registry";
@@ -113,9 +110,10 @@ export const runSchedulerOnce = async ({
       break;
     }
 
-    // Claim immediately before execution. A pass never leases work it cannot
-    // start yet, so another scheduler replica remains free to process it.
-    const job = await acquireNextDueJob({ db, leaseMs, runnerId });
+    // Claim immediately before execution, and only what this build's registry
+    // answers for. A pass never leases work it cannot start yet or cannot run
+    // at all, so another scheduler replica remains free to process it.
+    const job = await acquireNextDueJob({ db, leaseMs, registry, runnerId });
     if (!job) {
       break;
     }
@@ -236,6 +234,7 @@ export const startSchedulerLoop = ({
 
 type AcquireNextDueJobOptions = {
   db: SchedulerDb;
+  registry: SchedulerTaskRegistry;
   runnerId: string;
   leaseMs: number;
 };
@@ -243,19 +242,23 @@ type AcquireNextDueJobOptions = {
 export const acquireNextDueJob = async ({
   db,
   leaseMs,
+  registry,
   runnerId,
 }: AcquireNextDueJobOptions): Promise<SchedulerJob | null> => {
   if (!Number.isInteger(leaseMs) || leaseMs < MIN_LEASE_MS) {
     return panic("Scheduler lease must be at least three poll intervals");
   }
 
+  // Read from the registry this pass will look the handler up in, not from the
+  // module's task list, so the claim and the execution cannot disagree.
+  const runnableTasks = [...registry.keys()];
   const now = new Date();
   const leaseExpiresAt = new Date(now.getTime() + leaseMs);
   return await db.transaction(async (tx) => {
     const [candidate] = await tx
       .select()
       .from(schedulerJobs)
-      .where(dueJobPredicate(now))
+      .where(dueJobPredicate(now, runnableTasks))
       .orderBy(asc(schedulerJobs.nextRunAt), asc(schedulerJobs.id))
       .limit(1)
       .for("update", { skipLocked: true });
@@ -271,16 +274,33 @@ export const acquireNextDueJob = async ({
         lockedBy: leaseToken,
         lockedUntil: leaseExpiresAt,
       })
-      .where(and(eq(schedulerJobs.id, candidate.id), dueJobPredicate(now)))
+      .where(
+        and(
+          eq(schedulerJobs.id, candidate.id),
+          dueJobPredicate(now, runnableTasks),
+        ),
+      )
       .returning();
 
     return job ?? panic("Locked scheduler job disappeared before lease update");
   });
 };
 
-const dueJobPredicate = (now: Date) =>
+/**
+ * Due, free, and answerable by this build.
+ *
+ * The task filter belongs in the predicate rather than after the read: a row
+ * this build has no handler for is not a candidate it should skip, it is a row
+ * it must not order ahead of the work it can run. Filtering after the select
+ * would let the oldest such row take the single candidate slot every pass and
+ * starve the rest. A build carries only the tasks its own code answers for, so
+ * the rows it leaves are the newer build's to claim; the persistent case, a
+ * task no build declares any more, is retired at registration.
+ */
+const dueJobPredicate = (now: Date, runnableTasks: string[]) =>
   and(
     eq(schedulerJobs.enabled, true),
+    inArray(schedulerJobs.task, runnableTasks),
     // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- cutoff read from the caller's clock, never round-tripped through the database
     lte(schedulerJobs.nextRunAt, now),
     // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- cutoff read from the caller's clock, never round-tripped through the database
@@ -411,9 +431,10 @@ const runJob = async ({
 
   try {
     if (!task) {
-      throw new ConfigurationError({
-        message: `No scheduler task registered for ${job.task}`,
-      });
+      // The claim reads the same registry, so a leased job always has a
+      // handler; reaching this is a defect in the claim, not a configuration
+      // a deployment can hold.
+      panic(`No scheduler task registered for ${job.task}`);
     }
 
     // Bound the task's runtime. A JS promise cannot be force-cancelled, so on

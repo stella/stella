@@ -144,11 +144,13 @@ describe("acquireNextDueJob claim exclusivity", () => {
     const first = await acquireNextDueJob({
       db,
       leaseMs: LEASE_MS,
+      registry: noopRegistry,
       runnerId: "runner-a",
     });
     const second = await acquireNextDueJob({
       db,
       leaseMs: LEASE_MS,
+      registry: noopRegistry,
       runnerId: "runner-b",
     });
 
@@ -160,6 +162,45 @@ describe("acquireNextDueJob claim exclusivity", () => {
     // unique suffix), not the bare runnerId.
     expect(job.lockedBy).toMatch(/^runner-a#/u);
     expect(first?.lockedBy).toBe(job.lockedBy);
+  });
+});
+
+describe("acquireNextDueJob task filter", () => {
+  test("a due job whose task the registry does not carry is never leased", async () => {
+    await seedJob({ id: "unregistered.job", task: "test.unregistered" });
+
+    const claimed = await acquireNextDueJob({
+      db,
+      leaseMs: LEASE_MS,
+      registry: noopRegistry,
+      runnerId: "runner-a",
+    });
+
+    expect(claimed).toBeNull();
+    const job = await readJob("unregistered.job");
+    expect(job.lockedBy).toBeNull();
+    expect(job.lockedUntil).toBeNull();
+  });
+
+  test("an unregistered job does not hold the candidate slot ahead of a runnable one", async () => {
+    // Sorts ahead of the runnable job on both ordering keys, so a claim that
+    // filtered after the read would take this row every pass and run nothing.
+    await seedJob({
+      id: "a.unregistered",
+      nextRunAt: new Date(PAST.getTime() - 60_000),
+      task: "test.unregistered",
+    });
+    await seedJob({ id: "b.runnable", task: "test.noop" });
+
+    const claimed = await acquireNextDueJob({
+      db,
+      leaseMs: LEASE_MS,
+      registry: noopRegistry,
+      runnerId: "runner-a",
+    });
+
+    expect(claimed?.id).toBe("b.runnable");
+    expect((await readJob("a.unregistered")).lockedBy).toBeNull();
   });
 });
 
