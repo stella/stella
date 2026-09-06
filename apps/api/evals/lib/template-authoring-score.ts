@@ -352,6 +352,13 @@ export type SaveAttempt =
   | { status: "invalid-docx"; reason: string }
   | { status: "rejected"; overlayIssues: readonly string[] }
   | {
+      status: "unsaved";
+      paths: PathComparison;
+      traps: GrammarTrapCounts;
+      overlayIssues: readonly string[];
+      fidelity: readonly string[];
+    }
+  | {
       status: "saved";
       paths: PathComparison;
       traps: GrammarTrapCounts;
@@ -431,6 +438,16 @@ export const scoreAuthoringRun = ({
         outcome: "partial",
         overlayIssues: attempt.overlayIssues,
         note: "save_template rejected the call",
+      };
+    case "unsaved":
+      return {
+        ...emptyScore(),
+        outcome: "partial",
+        paths: attempt.paths,
+        traps: attempt.traps,
+        overlayIssues: attempt.overlayIssues,
+        fidelity: attempt.fidelity,
+        note: "authored DOCX was not saved",
       };
     case "saved": {
       const clean =

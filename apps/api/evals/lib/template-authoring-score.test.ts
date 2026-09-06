@@ -235,10 +235,12 @@ describe("scoreAuthoringRun", () => {
   });
 
   test("a provider error outranks everything, and no call is its own outcome", () => {
-    expect(
-      scoreAuthoringRun({ turnError: "refused", attempt: savedAttempt() })
-        .outcome,
-    ).toBe("error");
+    const providerError = scoreAuthoringRun({
+      turnError: "provider refused the request",
+      attempt: savedAttempt(),
+    });
+    expect(providerError.outcome).toBe("error");
+    expect(providerError.note).toBe("provider refused the request");
     expect(scoreAuthoringRun({ turnError: null, attempt: null }).outcome).toBe(
       "no-call",
     );
@@ -260,6 +262,28 @@ describe("scoreAuthoringRun", () => {
     });
     expect(rejected.outcome).toBe("partial");
     expect(rejected.overlayIssues).toEqual(['No field "x"']);
+  });
+
+  test("an unsaved document earns partial credit for its authored markers", () => {
+    const score = scoreAuthoringRun({
+      turnError: null,
+      attempt: {
+        status: "unsaved",
+        paths: { missing: [], extra: [] },
+        traps: detectGrammarTraps({
+          blocks: [paragraph("Hello {{name}}")],
+          overlay: [],
+          booleanInputPaths: [],
+        }),
+        overlayIssues: [],
+        fidelity: [],
+      },
+    });
+
+    expect(score.outcome).toBe("partial");
+    expect(score.paths).toEqual({ missing: [], extra: [] });
+    expect(Object.values(score.traps).every((count) => count === 0)).toBe(true);
+    expect(score.note).toBe("authored DOCX was not saved");
   });
 });
 
