@@ -108,6 +108,7 @@ import {
   clipboardTimelineKeyAction,
   filterClipboardItems,
   formatClipboardAge,
+  hasClipboardPrimaryModifier,
   highlightClipboardText,
   isClipboardCopyShortcut,
   isClipboardNameInput,
@@ -1810,7 +1811,13 @@ const ClipboardApp = () => {
     if (dialog.type !== "closed" || welcomeOpen) {
       return;
     }
-    const primaryModifier = event.metaKey || event.ctrlKey;
+    const modifiers = {
+      altGraphKey: event.getModifierState("AltGraph"),
+      altKey: event.altKey,
+      ctrlKey: event.ctrlKey,
+      metaKey: event.metaKey,
+    };
+    const primaryModifier = hasClipboardPrimaryModifier(modifiers);
     if (primaryModifier && event.key.toLocaleLowerCase() === "k") {
       event.preventDefault();
       searchInputRef.current?.focus();
@@ -1847,7 +1854,13 @@ const ClipboardApp = () => {
       }
       return;
     }
-    if (isClipboardCopyShortcut(event)) {
+    if (
+      isClipboardCopyShortcut({
+        ...modifiers,
+        key: event.key,
+        shiftKey: event.shiftKey,
+      })
+    ) {
       const item = resolveActionItem();
       if (item) {
         event.preventDefault();

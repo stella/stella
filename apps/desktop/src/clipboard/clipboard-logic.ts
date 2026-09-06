@@ -31,11 +31,15 @@ export type ClipboardTextSegment = {
   text: string;
 };
 
-type ClipboardCopyShortcut = {
+type ClipboardModifiers = {
+  altGraphKey: boolean;
   altKey: boolean;
   ctrlKey: boolean;
-  key: string;
   metaKey: boolean;
+};
+
+type ClipboardCopyShortcut = ClipboardModifiers & {
+  key: string;
   shiftKey: boolean;
 };
 
@@ -68,9 +72,21 @@ export const shouldReturnToTimelineFromInput = ({
 }: ClipboardInputKey) =>
   !isClipboardNameInput(dataset) && key === "ArrowUp" && !isComposing;
 
+/**
+ * Command, or Control on Windows and Linux. Alt disqualifies the combination:
+ * AltGr reports as Ctrl+Alt there, so a layout that produces a character with
+ * AltGr (`@` on AltGr+2, `ć` on AltGr+C) would otherwise fire a shortcut
+ * instead of typing.
+ */
+export const hasClipboardPrimaryModifier = ({
+  altGraphKey,
+  altKey,
+  ctrlKey,
+  metaKey,
+}: ClipboardModifiers) => (metaKey || ctrlKey) && !altKey && !altGraphKey;
+
 export const isClipboardCopyShortcut = (shortcut: ClipboardCopyShortcut) =>
-  (shortcut.metaKey || shortcut.ctrlKey) &&
-  !shortcut.altKey &&
+  hasClipboardPrimaryModifier(shortcut) &&
   !shortcut.shiftKey &&
   shortcut.key.toLocaleLowerCase() === "c";
 
