@@ -7,7 +7,7 @@
  * mount-order luck and more than one can open together. Every surface that
  * binds the shortcut registers here; none may decide on its own.
  *
- * Two rules decide it, in order:
+ * Two rules decide which surface, in order:
  *
  * 1. A surface the key press happened inside wins. Focus is the most specific
  *    statement of what the reader is looking at, and it is what lets the DOCX
@@ -15,6 +15,9 @@
  * 2. Otherwise the first surface in {@link FIND_OWNERS} that reaches the whole
  *    app wins. The inspector leads the table because it is the surface in
  *    front of the reader while it is showing a document.
+ *
+ * A surface can hold more than one registration at once, so {@link
+ * resolveFindClaim} answers with the registration rather than the owner.
  *
  * An unreachable surface never wins: its pane is CSS-hidden (a background
  * inspector tab) or sits behind a modal. When that leaves no owner the press
@@ -40,6 +43,11 @@ export type FindCandidate = {
   scope: FindScope;
 };
 
+/** One surface's registration, and what it claims for a single key press. */
+type FindClaim = {
+  candidate: FindCandidate;
+};
+
 const firstByPrecedence = (
   candidates: readonly FindCandidate[],
 ): FindOwner | null =>
@@ -47,12 +55,35 @@ const firstByPrecedence = (
     candidates.some((candidate) => candidate.owner === owner),
   ) ?? null;
 
-export const resolveFindOwner = (
+const resolveFindOwner = (
   candidates: readonly FindCandidate[],
 ): FindOwner | null => {
   const live = candidates.filter((candidate) => candidate.reachable);
   return (
     firstByPrecedence(live.filter((candidate) => candidate.containsTarget)) ??
     firstByPrecedence(live.filter((candidate) => candidate.scope === "app"))
+  );
+};
+
+/**
+ * The registration one key press belongs to, or null when it belongs to the
+ * browser.
+ *
+ * Precedence names a surface, not a registration, and one surface can hold two
+ * at once: React's development mount/cleanup/mount cycle, and a route
+ * transition with both instances still on screen. The registration holding the
+ * press wins, so the instance the reader is typing in answers rather than
+ * whichever registered first. A press outside every surface has no such
+ * tie-break and takes the first that reaches the app.
+ */
+export const resolveFindClaim = <T extends FindClaim>(
+  claims: readonly T[],
+): T | null => {
+  const owner = resolveFindOwner(claims.map((claim) => claim.candidate));
+  const held = claims.filter(
+    (claim) => claim.candidate.owner === owner && claim.candidate.reachable,
+  );
+  return (
+    held.find((claim) => claim.candidate.containsTarget) ?? held.at(0) ?? null
   );
 };

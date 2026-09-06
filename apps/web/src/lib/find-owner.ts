@@ -5,7 +5,7 @@ import type { Hotkey } from "@tanstack/react-hotkeys";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
-import { resolveFindOwner } from "@/lib/find-owner.logic";
+import { resolveFindClaim } from "@/lib/find-owner.logic";
 import type {
   FindCandidate,
   FindOwner,
@@ -88,19 +88,17 @@ const handleFindKeyDown = (event: KeyboardEvent) => {
   }
 
   // Candidates stay paired with the surface that produced them: two instances
-  // of one owner overlap during a route transition, and only the one still on
-  // screen may be handed the press.
-  const entries = Array.from(surfaces.values(), (surface) => ({
-    candidate: toCandidate(surface, event.target),
-    surface,
-  }));
-  const owner = resolveFindOwner(entries.map((entry) => entry.candidate));
-  const winner = entries.find(
-    (entry) => entry.candidate.owner === owner && entry.candidate.reachable,
+  // of one owner overlap during a route transition, and the press goes to the
+  // registration that holds it, not to the owner's first registration.
+  const winner = resolveFindClaim(
+    Array.from(surfaces.values(), (surface) => ({
+      candidate: toCandidate(surface, event.target),
+      surface,
+    })),
   );
-  // No owner (`owner` is null, which no candidate carries) leaves the event
-  // untouched: not prevented, not stopped. That is what keeps Cmd/Ctrl+F
-  // opening the browser's own find inside a command palette or a modal input.
+  // No claim leaves the event untouched: not prevented, not stopped. That is
+  // what keeps Cmd/Ctrl+F opening the browser's own find inside a command
+  // palette or a modal input.
   if (!winner) {
     return;
   }
