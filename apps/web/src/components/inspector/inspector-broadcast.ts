@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { v7 as uuidv7 } from "uuid";
 import * as v from "valibot";
 import type { StoreApi } from "zustand";
@@ -119,7 +120,7 @@ const writePersistedMinimized = (
 };
 
 let inspectorBroadcastSession: InspectorBroadcastSession | null = null;
-const failedPersistenceScopes = new Set<string>();
+let failedPersistenceScope: string | null = null;
 const inspectorScopeOwnership = new WeakMap<
   StoreApi<InspectorTabsStore>,
   string
@@ -432,9 +433,7 @@ type PersistedInspectorState = {
   collapsedGroupIds: string[];
 };
 
-const toPersistedInspectorTab = (
-  tab: InspectorTab,
-): InspectorBroadcastTab | null => {
+const toPersistedInspectorTab = (tab: InspectorTab): InspectorTab | null => {
   if (tab.type === "skill-resource") {
     return null;
   }
@@ -468,51 +467,54 @@ const readPersistedInspectorState = (
   if (typeof window === "undefined") {
     return null;
   }
-  try {
-    const value = readStoredJson(
+  const readResult = Result.try(() =>
+    readStoredJson(
       window.localStorage.getItem(getInspectorStateStorageKey(scope)),
       v.unknown(),
-    );
-    if (value === null) {
-      return null;
-    }
-    if (!isRecord(value)) {
-      return empty;
-    }
-    const tabs = value["tabs"];
-    const groups = value["groups"];
-    const groupAssignments = value["groupAssignments"];
-    const activeId = value["activeId"];
-    const collapsedGroupIds = value["collapsedGroupIds"];
-    if (
-      !Array.isArray(tabs) ||
-      !Array.isArray(groups) ||
-      !groups.every(isInspectorTabGroup) ||
-      !isGroupAssignments(groupAssignments) ||
-      (activeId !== null && typeof activeId !== "string") ||
-      !isStringArray(collapsedGroupIds)
-    ) {
-      return empty;
-    }
-    const safeTabs = tabs
-      .filter(isInspectorTab)
-      .map(toPersistedInspectorTab)
-      .filter((tab): tab is InspectorBroadcastTab => tab !== null);
-    const safeTabIds = new Set(safeTabs.map((tab) => tab.id));
-    return {
-      tabs: safeTabs,
-      groups,
-      groupAssignments: normalizeInspectorGroupAssignments(
-        safeTabs.map(normalizeInspectorBroadcastTab),
-        groups,
-        groupAssignments,
-      ),
-      activeId: activeId !== null && safeTabIds.has(activeId) ? activeId : null,
-      collapsedGroupIds,
-    };
-  } catch {
+    ),
+  );
+  if (Result.isError(readResult)) {
     return null;
   }
+  const value = readResult.value;
+  if (value === null) {
+    return null;
+  }
+  if (!isRecord(value)) {
+    return empty;
+  }
+  const tabs = value["tabs"];
+  const groups = value["groups"];
+  const groupAssignments = value["groupAssignments"];
+  const activeId = value["activeId"];
+  const collapsedGroupIds = value["collapsedGroupIds"];
+  if (
+    !Array.isArray(tabs) ||
+    !Array.isArray(groups) ||
+    !groups.every(isInspectorTabGroup) ||
+    !isGroupAssignments(groupAssignments) ||
+    (activeId !== null && typeof activeId !== "string") ||
+    !isStringArray(collapsedGroupIds)
+  ) {
+    return empty;
+  }
+  const safeTabs = tabs
+    .filter(isInspectorTab)
+    .map(normalizeInspectorBroadcastTab)
+    .map(toPersistedInspectorTab)
+    .filter((tab): tab is InspectorTab => tab !== null);
+  const safeTabIds = new Set(safeTabs.map((tab) => tab.id));
+  return {
+    tabs: safeTabs,
+    groups,
+    groupAssignments: normalizeInspectorGroupAssignments(
+      safeTabs,
+      groups,
+      groupAssignments,
+    ),
+    activeId: activeId !== null && safeTabIds.has(activeId) ? activeId : null,
+    collapsedGroupIds,
+  };
 };
 
 const writePersistedInspectorState = (
@@ -524,7 +526,7 @@ const writePersistedInspectorState = (
   }
   const tabs = state.tabs
     .map(toPersistedInspectorTab)
-    .filter((tab): tab is InspectorBroadcastTab => tab !== null);
+    .filter((tab): tab is InspectorTab => tab !== null);
   const tabIds = new Set(tabs.map((tab) => tab.id));
   const groupAssignments = Object.fromEntries(
     Object.entries(state.groupAssignments).filter(([tabId]) =>
@@ -532,7 +534,7 @@ const writePersistedInspectorState = (
     ),
   );
   const storageKey = getInspectorStateStorageKey(scope);
-  try {
+  const writeResult = Result.try(() =>
     window.localStorage.setItem(
       storageKey,
       JSON.stringify({
@@ -542,22 +544,26 @@ const writePersistedInspectorState = (
         activeId: tabIds.has(state.activeId ?? "") ? state.activeId : null,
         collapsedGroupIds: state.collapsedGroupIds,
       }),
-    );
-    failedPersistenceScopes.delete(storageKey);
-  } catch (error) {
-    if (failedPersistenceScopes.has(storageKey)) {
-      return;
+    ),
+  );
+  if (Result.isOk(writeResult)) {
+    if (failedPersistenceScope === storageKey) {
+      failedPersistenceScope = null;
     }
-    failedPersistenceScopes.add(storageKey);
-    getAnalytics().captureError(error, {
-      type: "detached",
-      operation: "inspector-tabs.persist",
-    });
-    stellaToast.add({
-      title: getTranslator()("inspector.groups.saveFailed"),
-      type: "error",
-    });
+    return;
   }
+  if (failedPersistenceScope === storageKey) {
+    return;
+  }
+  failedPersistenceScope = storageKey;
+  getAnalytics().captureError(writeResult.error, {
+    type: "detached",
+    operation: "inspector-tabs.persist",
+  });
+  stellaToast.add({
+    title: getTranslator()("inspector.groups.saveFailed"),
+    type: "error",
+  });
 };
 
 const createInspectorBroadcastSession = (
@@ -660,11 +666,23 @@ const createInspectorBroadcastSession = (
     applyingRemote = true;
     try {
       lastTabsClock = messageClock;
+      let groups: InspectorTabGroup[];
+      if (message.groups === undefined) {
+        groups = [];
+      } else {
+        groups = message.groups;
+      }
+      let groupAssignments: Record<string, string | null>;
+      if (message.groupAssignments === undefined) {
+        groupAssignments = {};
+      } else {
+        groupAssignments = message.groupAssignments;
+      }
       applySharedInspectorTabs(
         store,
         message.tabs.map(normalizeInspectorBroadcastTab),
-        message.groups ?? [],
-        message.groupAssignments ?? {},
+        groups,
+        groupAssignments,
       );
       writePersistedInspectorState(scope, store.getState());
     } finally {
@@ -715,7 +733,7 @@ export const initializeInspectorTabBroadcast = (
     inspectorBroadcastSession !== null &&
     inspectorBroadcastSession.scopeKey !== scopeKey
   ) {
-    inspectorBroadcastSession?.dispose();
+    inspectorBroadcastSession.dispose();
   }
   inspectorScopeOwnership.set(store, scopeKey);
   const persistedMinimized = readPersistedMinimized(scope);
@@ -724,18 +742,27 @@ export const initializeInspectorTabBroadcast = (
   }
   if (inspectorBroadcastSession?.scopeKey !== scopeKey) {
     const persisted = readPersistedInspectorState(scope);
-    if (persisted !== null || switchingScope) {
-      const tabs = (persisted?.tabs ?? []).map(normalizeInspectorBroadcastTab);
+    if (persisted !== null) {
+      const tabs = persisted.tabs.map(normalizeInspectorBroadcastTab);
       store.setState({
         tabs,
-        groups: persisted?.groups ?? [],
-        groupAssignments: persisted?.groupAssignments ?? {},
-        collapsedGroupIds: persisted?.collapsedGroupIds ?? [],
+        groups: persisted.groups,
+        groupAssignments: persisted.groupAssignments,
+        collapsedGroupIds: persisted.collapsedGroupIds,
         activeId:
-          persisted?.activeId !== null &&
-          tabs.some((tab) => tab.id === persisted?.activeId)
-            ? (persisted?.activeId ?? null)
+          persisted.activeId !== null &&
+          tabs.some((tab) => tab.id === persisted.activeId)
+            ? persisted.activeId
             : (tabs.at(0)?.id ?? null),
+        reviveSuggestion: null,
+      });
+    } else if (switchingScope) {
+      store.setState({
+        tabs: [],
+        groups: [],
+        groupAssignments: {},
+        collapsedGroupIds: [],
+        activeId: null,
         reviveSuggestion: null,
       });
     }

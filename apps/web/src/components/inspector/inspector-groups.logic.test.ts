@@ -32,7 +32,7 @@ const matterTabs = [
     pdfFileId: "file-1",
     workspaceId: "workspace-1",
   },
-] satisfies InspectorTab[];
+] as const satisfies readonly InspectorTab[];
 
 const dropTabs = [
   ...matterTabs,
@@ -60,7 +60,7 @@ const dropTabs = [
     mimeType: "text/markdown",
     content: "",
   },
-] satisfies InspectorTab[];
+] as const satisfies readonly InspectorTab[];
 
 describe("inspector tab grouping", () => {
   test("every matter-bearing tab derives the same stable matter group", () => {
@@ -150,7 +150,7 @@ describe("inspector tab grouping", () => {
       ["task-1", "task-1"],
       ["missing", "task-1"],
       ["task-1", "missing"],
-    ]) {
+    ] as const) {
       expect(
         planInspectorTabDrop({
           state: { tabs: dropTabs, groupAssignments: {} },

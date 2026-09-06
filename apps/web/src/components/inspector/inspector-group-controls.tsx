@@ -2,8 +2,9 @@ import { useId, useState } from "react";
 import type { RefObject } from "react";
 
 import { useQuery } from "@tanstack/react-query";
+import { panic } from "better-result";
 import { FolderPlusIcon, ListTreeIcon, UngroupIcon } from "lucide-react";
-import { useTranslations } from "use-intl";
+import { useFormatter, useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
 
 import { Button } from "@stll/ui/button";
@@ -59,15 +60,17 @@ export const useInspectorGroups = () => {
     })),
   );
   const byId = new Map<string, InspectorGroupPresentation>();
-  for (const matter of data?.workspaces ?? []) {
-    const group = {
-      id: `matter:${matter.id}`,
-      type: "matter",
-      workspaceId: matter.id,
-      name: matter.name,
-      color: matter.color ?? getMatterSwatch(matter.id),
-    } as const;
-    byId.set(group.id, group);
+  if (data !== undefined) {
+    for (const matter of data.workspaces) {
+      const group = {
+        id: `matter:${matter.id}`,
+        type: "matter",
+        workspaceId: matter.id,
+        name: matter.name,
+        color: matter.color ?? getMatterSwatch(matter.id),
+      } as const;
+      byId.set(group.id, group);
+    }
   }
   for (const group of state.groups) {
     if (group.type !== "custom") {
@@ -81,16 +84,21 @@ export const useInspectorGroups = () => {
     };
     byId.set(group.id, presentation);
   }
-  const groupedTabs = new Map<string | null, typeof state.tabs>();
+  const groupedTabs = new Map<string, typeof state.tabs>();
+  const ungroupedTabs: typeof state.tabs = [];
   for (const tab of state.tabs) {
     const groupId = getInspectorTabGroupId(state, tab);
+    if (groupId === null) {
+      ungroupedTabs.push(tab);
+      continue;
+    }
     const members = groupedTabs.get(groupId);
     if (members) {
       members.push(tab);
     } else {
       groupedTabs.set(groupId, [tab]);
     }
-    if (groupId?.startsWith("matter:") && !byId.has(groupId)) {
+    if (groupId.startsWith("matter:") && !byId.has(groupId)) {
       const workspaceId = groupId.slice("matter:".length);
       byId.set(groupId, {
         id: groupId,
@@ -101,19 +109,23 @@ export const useInspectorGroups = () => {
       });
     }
   }
-  const visibleGroups: InspectorGroupPresentation[] = [];
-  for (const id of groupedTabs.keys()) {
-    const group = id === null ? undefined : byId.get(id);
-    if (group) {
-      visibleGroups.push(group);
+  const visibleGroups: {
+    group: InspectorGroupPresentation;
+    tabs: typeof state.tabs;
+  }[] = [];
+  for (const [id, tabs] of groupedTabs) {
+    const group = byId.get(id);
+    if (group === undefined) {
+      panic("Inspector tab references a missing group");
     }
+    visibleGroups.push({ group, tabs });
   }
   for (const group of byId.values()) {
     if (group.type === "custom" && !groupedTabs.has(group.id)) {
-      visibleGroups.push(group);
+      visibleGroups.push({ group, tabs: [] });
     }
   }
-  return { visibleGroups, groupedTabs };
+  return { visibleGroups, ungroupedTabs };
 };
 
 export const InspectorGroupIcon = ({
@@ -147,6 +159,7 @@ export const InspectorGroupEditor = ({
 }) => {
   const t = useTranslations();
   const inputId = useId();
+  const format = useFormatter();
   const [name, setName] = useState(target.type === "edit" ? target.name : "");
   const [color, setColor] = useState(
     target.type === "edit" ? target.color : MATTER_SWATCHES[0],
@@ -210,7 +223,7 @@ export const InspectorGroupEditor = ({
                 {MATTER_SWATCHES.map((swatch, index) => (
                   <Button
                     aria-label={t("inspector.groups.colorOption", {
-                      number: index + 1,
+                      number: format.number(index + 1),
                     })}
                     aria-pressed={color === swatch}
                     key={swatch}
@@ -303,15 +316,18 @@ const InspectorGroupDestinations = ({
   const { activeOrganizationId } = useAuthenticatedUser();
   const { data } = useQuery(workspacesRouteOptions(activeOrganizationId));
   const customGroups = useInspectorTabsStore((state) => state.groups);
-  const destinations: InspectorGroupPresentation[] = (
-    data?.workspaces ?? []
-  ).map((matter) => ({
-    id: `matter:${matter.id}`,
-    type: "matter",
-    workspaceId: matter.id,
-    name: matter.name,
-    color: matter.color ?? getMatterSwatch(matter.id),
-  }));
+  const destinations: InspectorGroupPresentation[] = [];
+  if (data !== undefined) {
+    for (const matter of data.workspaces) {
+      destinations.push({
+        id: `matter:${matter.id}`,
+        type: "matter",
+        workspaceId: matter.id,
+        name: matter.name,
+        color: matter.color ?? getMatterSwatch(matter.id),
+      });
+    }
+  }
   for (const group of customGroups) {
     if (group.type === "custom") {
       destinations.push(group);

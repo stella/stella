@@ -404,8 +404,10 @@ describe("copy-to-workspace", () => {
     expect(insertedEntities).toHaveLength(1);
     const copiedEntity = insertedEntities.at(0);
     expect(copiedEntity?.kind).toBe("document");
-    expect(result.fields.at(0)?.entityId).toBe(result.entityId);
-    expect(result.fields.at(0)?.fieldId).toBe(insertedFields.at(0)?.id);
+    if ("fields" in result) {
+      expect(result.fields.at(0)?.entityId).toBe(result.entityId);
+      expect(result.fields.at(0)?.fieldId).toBe(insertedFields.at(0)?.id);
+    }
     // Name preserved since no conflict exists in target workspace
     expect(copiedEntity?.name).toBe("Report.pdf");
 

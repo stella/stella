@@ -77,9 +77,9 @@ export const InspectorRail = ({
     activeSkillCatalogueData?.entries,
   );
   const railContextMenu = useRailContextMenu({ activeSkill, workspaceId });
-  const { visibleGroups, groupedTabs } = useInspectorGroups();
+  const { visibleGroups, ungroupedTabs } = useInspectorGroups();
   const transfer = useInspectorGroupTransfer();
-  const dropOnTab = (sourceId: string, targetId: string) => {
+  const dropOnTab = ({ sourceId, targetId }: InspectorTabDropArgs) => {
     const store = useInspectorTabsStore.getState();
     const plan = planInspectorTabDrop({ state: store, sourceId, targetId });
     switch (plan.type) {
@@ -99,7 +99,7 @@ export const InspectorRail = ({
       }
       default:
         plan satisfies never;
-        return panic("Unhandled Inspector tab drop");
+        panic("Unhandled Inspector tab drop");
     }
   };
   const collapsedGroupIds = useInspectorTabsStore((s) => s.collapsedGroupIds);
@@ -175,15 +175,15 @@ export const InspectorRail = ({
           railContextMenu.openAt(event);
         }}
       >
-        {visibleGroups.map((group) => (
+        {visibleGroups.map(({ group, tabs: groupTabs }) => (
           <InspectorRailGroup
             activeId={activeId}
             collapsed={collapsedGroupIds.includes(group.id)}
             group={group}
             key={group.id}
-            tabs={groupedTabs.get(group.id) ?? []}
+            tabs={groupTabs}
           >
-            {(groupedTabs.get(group.id) ?? []).map((tab) => (
+            {groupTabs.map((tab) => (
               <VerticalTab
                 active={tab.id === activeId}
                 key={tab.id}
@@ -195,7 +195,7 @@ export const InspectorRail = ({
             ))}
           </InspectorRailGroup>
         ))}
-        {(groupedTabs.get(null) ?? []).map((tab) => (
+        {ungroupedTabs.map((tab) => (
           <VerticalTab
             active={tab.id === activeId}
             key={tab.id}
@@ -447,8 +447,10 @@ const SuggestedReviveTabIcon = ({ tab }: { tab: InspectorTab }) => {
   );
 };
 
+type InspectorTabDropArgs = { sourceId: string; targetId: string };
+
 type VerticalTabProps = {
-  onDropTab: (sourceId: string, targetId: string) => void;
+  onDropTab: (args: InspectorTabDropArgs) => void;
   tab: InspectorTab;
   active: boolean;
   onActivate: () => void;
@@ -572,7 +574,7 @@ const VerticalTab = ({
           }
           event.preventDefault();
           event.stopPropagation();
-          onDropTab(sourceId, tab.id);
+          onDropTab({ sourceId, targetId: tab.id });
         }}
         onSelect={onActivate}
         ref={tabRef}

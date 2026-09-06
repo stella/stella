@@ -20,7 +20,6 @@ import { openEntityFileFieldInInspector } from "@/components/chat/entity-open";
 import { planInspectorGroupTransfer } from "@/components/inspector/inspector-group-transfer.logic";
 import { getInspectorTabGroupId } from "@/components/inspector/inspector-groups.logic";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
-import { definedFields } from "@/components/inspector/open-entities.logic";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -132,7 +131,7 @@ export const useInspectorGroupTransfer = (
         return;
       default:
         plan satisfies never;
-        return panic("Unhandled Inspector group transfer plan");
+        panic("Unhandled Inspector group transfer plan");
     }
   }, []);
 
@@ -213,13 +212,7 @@ export const useInspectorGroupTransfer = (
         entityId: result.value.entityId,
         fieldId: mappedField?.fieldId ?? null,
       };
-      const currentScope = getActiveScope();
-      if (
-        !mountedRef.current ||
-        currentScope.activeOrganizationId !==
-          requestScope.activeOrganizationId ||
-        currentScope.userId !== requestScope.userId
-      ) {
+      if (!isCurrentScope(requestScope)) {
         submittingRef.current = false;
         return;
       }
@@ -259,13 +252,7 @@ export const useInspectorGroupTransfer = (
     }
     const copiedEntityId = copiedFile.entityId;
     const copiedFieldId = copiedFile.fieldId;
-    const scopeBeforeRead = getActiveScope();
-    if (
-      !mountedRef.current ||
-      scopeBeforeRead.activeOrganizationId !==
-        requestScope.activeOrganizationId ||
-      scopeBeforeRead.userId !== requestScope.userId
-    ) {
+    if (!isCurrentScope(requestScope)) {
       submittingRef.current = false;
       if (mountedRef.current) {
         setIsSubmitting(false);
@@ -279,19 +266,13 @@ export const useInspectorGroupTransfer = (
         .entity({ entityId: toSafeId<"entity">(copiedEntityId) })
         .get();
       const copiedEntity = unwrapEden(response);
-      const currentScope = getActiveScope();
-      if (
-        !mountedRef.current ||
-        currentScope.activeOrganizationId !==
-          requestScope.activeOrganizationId ||
-        currentScope.userId !== requestScope.userId
-      ) {
+      if (!isCurrentScope(requestScope)) {
         return false;
       }
       return openEntityFileFieldInInspector({
         entityId: copiedEntityId,
         fieldId: copiedFieldId,
-        fields: definedFields(copiedEntity),
+        fields: copiedEntity.fields,
         label: copiedEntity.name,
         workspaceId: pending.workspaceId,
       });
@@ -305,13 +286,7 @@ export const useInspectorGroupTransfer = (
       }
       return;
     }
-    const scopeBeforeCommit = getActiveScope();
-    if (
-      !mountedRef.current ||
-      scopeBeforeCommit.activeOrganizationId !==
-        requestScope.activeOrganizationId ||
-      scopeBeforeCommit.userId !== requestScope.userId
-    ) {
+    if (!isCurrentScope(requestScope)) {
       submittingRef.current = false;
       if (mountedRef.current) {
         setIsSubmitting(false);
@@ -329,18 +304,14 @@ export const useInspectorGroupTransfer = (
     if (!opened || copiedTab?.type !== "pdf") {
       stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
       submittingRef.current = false;
-      if (mountedRef.current) {
-        setIsSubmitting(false);
-      }
+      setIsSubmitting(false);
       return;
     }
 
     useInspectorTabsStore.getState().setTabGroup(copiedTab.id, pending.groupId);
     submittingRef.current = false;
-    if (mountedRef.current) {
-      setIsSubmitting(false);
-      setPending(null);
-    }
+    setIsSubmitting(false);
+    setPending(null);
   };
 
   const tab = useInspectorTabsStore((state) =>
@@ -360,7 +331,14 @@ export const useInspectorGroupTransfer = (
       : "";
 
   const dialog = (
-    <Dialog onOpenChange={(open) => !open && close()} open={pending !== null}>
+    <Dialog
+      onOpenChange={(open) => {
+        if (!open) {
+          close();
+        }
+      }}
+      open={pending !== null}
+    >
       <DialogPopup className="max-w-lg" finalFocus={returnFocus}>
         <DialogHeader>
           <DialogTitle>

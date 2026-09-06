@@ -286,6 +286,7 @@ export const remapFileIds = (
       entity.currentVersion.fields.map((field) => {
         if (field.content.type !== "file") {
           return {
+            id: field.id,
             content: field.content,
             propertyId: field.propertyId,
           };

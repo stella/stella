@@ -13,23 +13,21 @@ beforeEach(() => {
     pendingPdfPageScroll: null,
     pendingDocxEditTabId: null,
   });
-  useInspectorTabsStore.setState({
-    tabs: [],
-    activeId: null,
-    activationSeq: 0,
-    flashTabId: null,
-    flashSeq: 0,
-    minimized: false,
-    reviveSuggestion: null,
-  });
+  useInspectorTabsStore.setState(useInspectorTabsStore.getInitialState(), true);
 });
 
 describe("inspector commands", () => {
   test("a rename request activates its tab and queues one command", () => {
+    const store = useInspectorTabsStore.getState();
+    store.openTask({ taskId: "tab-1", workspaceId: "matter-1" });
+    store.openTask({ taskId: "tab-2", workspaceId: "matter-1" });
+    const activationSeq = useInspectorTabsStore.getState().activationSeq;
     requestInspectorRename("tab-1");
 
     expect(useInspectorTabsStore.getState().activeId).toBe("tab-1");
-    expect(useInspectorTabsStore.getState().activationSeq).toBe(1);
+    expect(useInspectorTabsStore.getState().activationSeq).toBe(
+      activationSeq + 1,
+    );
     expect(useInspectorCommandStore.getState().pendingRenameTabId).toBe(
       "tab-1",
     );
