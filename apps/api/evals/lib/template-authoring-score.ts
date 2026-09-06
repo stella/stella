@@ -406,18 +406,12 @@ const emptyScore = (): Omit<AuthoringRunScore, "outcome" | "note"> => ({
 });
 
 /**
- * Fold one run into an outcome plus its defect lists. A `pass` is a template
+ * Fold one attempt into an outcome plus its defect lists. A `pass` is a template
  * that discovered exactly the expected paths, tripped no grammar trap, passed
  * every production validation, configured every field the brief asked for,
  * and filled cleanly.
  */
-export const scoreAuthoringRun = ({
-  turnError,
-  attempt,
-}: ScoreAuthoringRunOptions): AuthoringRunScore => {
-  if (turnError !== null) {
-    return { ...emptyScore(), outcome: "error", note: turnError };
-  }
+const scoreAttempt = (attempt: SaveAttempt | null): AuthoringRunScore => {
   if (attempt === null) {
     return {
       ...emptyScore(),
@@ -472,6 +466,18 @@ export const scoreAuthoringRun = ({
     default:
       return assertNever(attempt);
   }
+};
+
+/** A turn error overrides completion, but never erases attempt evidence that
+ * was already produced before the provider or stream failed. */
+export const scoreAuthoringRun = ({
+  turnError,
+  attempt,
+}: ScoreAuthoringRunOptions): AuthoringRunScore => {
+  const score = scoreAttempt(attempt);
+  return turnError === null
+    ? score
+    : { ...score, outcome: "error", note: turnError };
 };
 
 // ── Syntax quiz ───────────────────────────────────────────

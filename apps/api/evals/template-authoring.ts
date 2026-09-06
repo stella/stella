@@ -1178,6 +1178,7 @@ const WRITE_DOCX_DESCRIPTION =
   "it expands to the file's base64 bytes at the boundary.";
 
 type ToolTrace = { name: string; input: unknown };
+type WrittenDocx = { blocks: AuthoredBlock[]; buffer: Buffer };
 
 const createAuthoringTools = ({
   trace,
@@ -1186,7 +1187,7 @@ const createAuthoringTools = ({
 }: {
   trace: ToolTrace[];
   saveCalls: SaveCall[];
-  writeCalls: AuthoredBlock[][];
+  writeCalls: WrittenDocx[];
 }): AnyServerTool[] => {
   const written = new Map<string, Buffer>();
 
@@ -1210,8 +1211,8 @@ const createAuthoringTools = ({
         ? { type: "paragraph", text: block.text }
         : { type: "table", rows: block.rows },
     );
-    writeCalls.push(authored);
     const buffer = await buildDocx(authored);
+    writeCalls.push({ blocks: authored, buffer });
     written.set(ref, buffer);
     return { docx_ref: ref, bytes: buffer.byteLength };
   });
@@ -1492,14 +1493,16 @@ const buildAttempt = async ({
 
 const buildUnsavedAttempt = async ({
   blocks,
+  buffer,
   task,
   overlayIssues,
 }: {
   blocks: readonly AuthoredBlock[];
+  buffer: Buffer;
   task: EvalTask;
   overlayIssues: readonly string[];
 }): Promise<SaveAttempt> => {
-  const discovered = await discoverTemplate(await buildDocx(blocks));
+  const discovered = await discoverTemplate(buffer);
   const paths = mergeManifestWithDiscovery(null, discovered).map(
     (field) => field.path,
   );
@@ -1533,7 +1536,7 @@ const runAuthoringTask = async ({
   const organizationId = mintAuthProviderId<"organization">();
   const trace: ToolTrace[] = [];
   const saveCalls: SaveCall[] = [];
-  const writeCalls: AuthoredBlock[][] = [];
+  const writeCalls: WrittenDocx[] = [];
   const tools = createAuthoringTools({ trace, saveCalls, writeCalls });
   const sourceDocx = await buildDocx(task.source);
   const prompt = [
@@ -1577,7 +1580,12 @@ const runAuthoringTask = async ({
               status: "rejected",
               overlayIssues,
             }
-        : await buildUnsavedAttempt({ blocks: authored, task, overlayIssues });
+        : await buildUnsavedAttempt({
+            blocks: authored.blocks,
+            buffer: authored.buffer,
+            task,
+            overlayIssues,
+          });
     return {
       modelId,
       taskId: task.id,
