@@ -7,7 +7,7 @@ services:
     # mounted at /var/lib/postgresql, not /var/lib/postgresql/data.
     # After switching from the old layout, recreate local pgdata with
     # `bun run --cwd apps/api docker:reset-dev`.
-    image: postgres:18.4@sha256:a02db8cac496f15b094798a38254f14d6e00741f709360e5e00bb6668ea31636
+    image: postgres:18.6@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -27,7 +27,7 @@ services:
 
   rustfs:
     profiles: [dev]
-    image: rustfs/rustfs:1.0.0-rc.1@sha256:f53d700fc16809070326f6ab3fb565d48e722364a7bd5a12e47d0a5abe079ce6
+    image: rustfs/rustfs:1.0.0-rc.4@sha256:a9fbb5e5bfce09ccd0869ac9a7b0e39191c6868d75ec4c5d08ebbd5475db5d6b
     command: /data
     environment:
       RUSTFS_ACCESS_KEY: stella-rustfs-dev
@@ -84,7 +84,7 @@ services:
 
   gotenberg:
     profiles: [dev]
-    image: gotenberg/gotenberg:8.35.0@sha256:a16a14e1f18a71405624bc028e90d4ef50ea774c352b303639c10bf7b141f760
+    image: gotenberg/gotenberg:8.36.0@sha256:87c16b9f364279d321bc9772d31fa58aa6abe036423c270698bd636c3a8e9466
     # If you see "context deadline exceeded" or multi-threading errors, add
     # command: ["gotenberg", "--libreoffice-restart-after=1"]. See
     # https://github.com/gotenberg/gotenberg/issues/1452.
@@ -140,7 +140,7 @@ services:
   # CORPUS_INDEX_Q09_ENDPOINT; q08 remains available on port 7280.
   quickwit09-postgres-setup:
     profiles: [quickwit09]
-    image: postgres:18.4@sha256:a02db8cac496f15b094798a38254f14d6e00741f709360e5e00bb6668ea31636
+    image: postgres:18.6@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280
     environment:
       PGPASSWORD: postgres
     depends_on:

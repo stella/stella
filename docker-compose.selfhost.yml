@@ -63,7 +63,7 @@ services:
     cpus: ${STELLA_DOCUMENT_PROCESSING_WORKER_CPUS:-1.0}
 
   gotenberg:
-    image: gotenberg/gotenberg:8.35.0@sha256:a16a14e1f18a71405624bc028e90d4ef50ea774c352b303639c10bf7b141f760
+    image: gotenberg/gotenberg:8.36.0@sha256:87c16b9f364279d321bc9772d31fa58aa6abe036423c270698bd636c3a8e9466
     environment:
       API_ENABLE_BASIC_AUTH: "true"
       GOTENBERG_API_BASIC_AUTH_USERNAME: ${GOTENBERG_USERNAME:?set GOTENBERG_USERNAME in deploy/selfhost/.env}

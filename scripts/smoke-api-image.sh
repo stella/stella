@@ -66,7 +66,7 @@ docker run --detach --name "$postgres" --network "$network" --network-alias smok
   --tmpfs /var/lib/postgresql:rw,size=1g \
   --label "$owner_label=$run_id" \
   --env POSTGRES_USER=postgres --env POSTGRES_PASSWORD=smoke-only --env POSTGRES_DB=stella \
-  postgres:18.4@sha256:a02db8cac496f15b094798a38254f14d6e00741f709360e5e00bb6668ea31636 >/dev/null
+  postgres:18.6@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280 >/dev/null
 docker run --detach --name "$redis" --network "container:$postgres" \
   --label "$owner_label=$run_id" \
   redis:8@sha256:298e5b3bc566bade82f46ad5511777a4a07a294097ce16ada2f6a42be5239df5 >/dev/null
