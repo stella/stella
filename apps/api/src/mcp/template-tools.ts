@@ -28,6 +28,7 @@ import {
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
 import { extractTextForPreview } from "@/api/lib/docx/extract-text";
 import { buildIsRegistryEnabledForOrg } from "@/api/lib/docx/registry-org-gate";
+import type { AiFieldError } from "@/api/lib/docx/resolve-ai-fields";
 import {
   mergeManifestWithDiscovery,
   readManifest,
@@ -37,7 +38,6 @@ import {
   fieldOverlayWarnings,
   type TemplateWarning,
 } from "@/api/lib/docx/template-warnings";
-import type { AiFieldError } from "@/api/lib/docx/resolve-ai-fields";
 import type { FieldMeta, FieldPart } from "@/api/lib/docx/types";
 import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buffer";
 import type { DocxValidationFailure } from "@/api/lib/entity-versions/validate-docx-buffer";
@@ -1540,6 +1540,11 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
     return errorResult("Request cancelled before document persistence");
   }
 
+  const aiFieldErrors = filled.aiFieldErrors.map((error) => ({
+    field: error.valuePath,
+    reason: error.reason,
+    message: error.message,
+  }));
   const fileName = resolveFilledDocxName({
     requested: input.name,
     fallback: filled.fileName,
@@ -1612,6 +1617,7 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
               fileName: persisted.fileName,
               unmatchedPlaceholders: filled.unmatchedPlaceholders,
               unusedValues: filled.unusedValues,
+              ...(aiFieldErrors.length === 0 ? {} : { aiFieldErrors }),
             };
             await recordPersistedFill(tx, result);
           },
@@ -1652,6 +1658,7 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
             fileName,
             unmatchedPlaceholders: filled.unmatchedPlaceholders,
             unusedValues: filled.unusedValues,
+            ...(aiFieldErrors.length === 0 ? {} : { aiFieldErrors }),
             versionNumber: persisted.versionNumber,
           };
           await recordPersistedFill(tx, result);

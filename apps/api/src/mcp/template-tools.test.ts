@@ -740,6 +740,13 @@ describe("MCP template tools", () => {
       docxBase64: docxBytes.toString("base64"),
       unmatchedPlaceholders: [],
       unusedValues: [],
+      structureErrors: [
+        {
+          directive: "#if signature",
+          message: "Missing closing directive",
+          paragraphIndex: 4,
+        },
+      ],
       aiFieldErrors: [],
     });
     // The execution is recorded (fill row + audit) so agent fills are audited.
@@ -773,6 +780,7 @@ describe("MCP template tools", () => {
       text: "Lease between ACME and Tenant.\nSigned in Prague.",
       unmatchedPlaceholders: [],
       unusedValues: [],
+      aiFieldErrors: [],
       structureErrors: [],
     });
 
@@ -794,6 +802,7 @@ describe("MCP template tools", () => {
       unmatchedPlaceholders: [],
       unusedValues: [],
       structureErrors: [],
+      aiFieldErrors: [],
     });
   });
 
@@ -809,6 +818,7 @@ describe("MCP template tools", () => {
       text: oversized,
       unmatchedPlaceholders: [],
       unusedValues: [],
+      aiFieldErrors: [],
       structureErrors: [],
     });
 
@@ -837,7 +847,7 @@ describe("MCP template tools", () => {
     fillStoredTemplateWithTextStrictMock.mockResolvedValue({
       templateName: "Lease",
       fileName: "lease.docx",
-      buffer: Buffer.from("partial"),
+      buffer: await makeDocxBuffer(["Zakres: {{scope}}"]),
       text: "Lease between ACME and {{landlord.signature}}.",
       unmatchedPlaceholders: ["landlord.signature"],
       unusedValues: [],
@@ -973,7 +983,7 @@ describe("MCP template tools", () => {
     fillStoredTemplateWithTextStrictMock.mockResolvedValue({
       templateName: "Power of attorney",
       fileName: "poa.docx",
-      buffer: Buffer.from("partial"),
+      buffer: await makeDocxBuffer(["Zakres: {{scope}}"]),
       text: "Zakres: {{scope}}",
       unmatchedPlaceholders: ["scope"],
       unusedValues: [],
@@ -1267,7 +1277,7 @@ describe("MCP template tools", () => {
     expect(releaseTemplatePersistenceClaimMock).toHaveBeenCalled();
   });
 
-  test("failed optional AI fields cannot be persisted or receipted as complete", async () => {
+  test("save_filled_template rejects failed AI fields by default and releases its claim", async () => {
     fillStoredTemplateDocxMock.mockResolvedValue({
       fileName: "draft.docx",
       buffer: Buffer.from("optional field defaulted to blank"),
@@ -1301,6 +1311,178 @@ describe("MCP template tools", () => {
     expect(createEntityFromBufferMock).not.toHaveBeenCalled();
     expect(recordTemplatePersistenceReceiptMock).not.toHaveBeenCalled();
     expect(releaseTemplatePersistenceClaimMock).toHaveBeenCalled();
+  });
+
+  test("save_filled_template persists and audits failed AI fields only under an explicit partial policy", async () => {
+    const aiFieldErrors = [
+      {
+        fieldPath: "contracts.summary",
+        valuePath: "contracts[0].summary",
+        itemIndex: 1,
+        reason: "generation-failed",
+        message:
+          "AI field generation failed. Retry or provide the value yourself.",
+      },
+    ];
+    fillStoredTemplateDocxMock.mockResolvedValue({
+      fileName: "draft.docx",
+      buffer: Buffer.from("optional field defaulted to blank"),
+      unmatchedPlaceholders: [],
+      unusedValues: [],
+      aiFieldErrors,
+    });
+    createEntityFromBufferMock.mockImplementation(async (input) => {
+      const created = {
+        entityId: "entity_partial",
+        entityVersionId: "version_partial",
+        fieldId: "field_partial",
+        fileName: "draft.docx",
+      };
+      await input.afterCreate(fakeTransaction, created);
+      return Result.ok(created);
+    });
+
+    const result = await handleMcpToolCall({
+      args: {
+        action: "create_document",
+        template_id: TEMPLATE_ID,
+        matter_id: "ws_1",
+        idempotency_key: "failed-ai-partial",
+        values: { contracts: [{}] },
+        completion_mode: "allow_partial",
+      },
+      context: createContext(),
+      toolName: "save_filled_template",
+    });
+
+    const expectedErrors = [
+      {
+        field: "contracts[0].summary",
+        reason: "generation-failed",
+        message:
+          "AI field generation failed. Retry or provide the value yourself.",
+      },
+    ];
+    expect(parseToolPayload(result)).toEqual(
+      expect.objectContaining({ aiFieldErrors: expectedErrors }),
+    );
+    expect(createEntityFromBufferMock).toHaveBeenCalled();
+    expect(recordTemplateFillMock).toHaveBeenCalledWith(
+      expect.objectContaining({ unmatchedCount: 0, aiFieldErrorCount: 1 }),
+    );
+    expect(recordTemplatePersistenceReceiptMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        result: expect.objectContaining({ aiFieldErrors: expectedErrors }),
+      }),
+    );
+    expect(releaseTemplatePersistenceClaimMock).not.toHaveBeenCalled();
+  });
+
+  test("save_filled_template create_version rejects failed AI fields by default before writing", async () => {
+    fillStoredTemplateDocxMock.mockResolvedValue({
+      fileName: "draft.docx",
+      buffer: Buffer.from("optional field defaulted to blank"),
+      unmatchedPlaceholders: [],
+      unusedValues: [],
+      aiFieldErrors: [
+        {
+          fieldPath: "contracts.summary",
+          valuePath: "contracts[0].summary",
+          itemIndex: 1,
+          reason: "truncated",
+          message: "Draft truncated",
+        },
+      ],
+    });
+
+    const result = await handleMcpToolCall({
+      args: {
+        action: "create_version",
+        template_id: TEMPLATE_ID,
+        matter_id: "ws_1",
+        entity_id: ENTITY_ID,
+        idempotency_key: "failed-ai-version",
+        values: { contracts: [{}] },
+      },
+      context: createContext(),
+      toolName: "save_filled_template",
+    });
+
+    expect(validationEnvelope(result)["issues"]).toEqual([
+      { path: "values.contracts[0].summary", message: "Draft truncated" },
+    ]);
+    expect(createEntityVersionFromBufferMock).not.toHaveBeenCalled();
+    expect(recordTemplatePersistenceReceiptMock).not.toHaveBeenCalled();
+    expect(releaseTemplatePersistenceClaimMock).toHaveBeenCalled();
+  });
+
+  test("save_filled_template create_version receipts exact AI errors under an explicit partial policy", async () => {
+    fillStoredTemplateDocxMock.mockResolvedValue({
+      fileName: "draft.docx",
+      buffer: Buffer.from("optional field defaulted to blank"),
+      unmatchedPlaceholders: [],
+      unusedValues: [],
+      aiFieldErrors: [
+        {
+          fieldPath: "contracts.summary",
+          valuePath: "contracts[0].summary",
+          itemIndex: 1,
+          reason: "generation-failed",
+          message:
+            "AI field generation failed. Retry or provide the value yourself.",
+        },
+      ],
+    });
+    createEntityVersionFromBufferMock.mockImplementation(async (input) => {
+      const created = {
+        status: "ok",
+        entityId: ENTITY_ID,
+        entityVersionId: "version_partial",
+        fieldId: "field_partial",
+        fileName: "draft.docx",
+        versionNumber: 3,
+      };
+      await input.afterWrite(fakeTransaction, created);
+      return Result.ok(created);
+    });
+
+    const result = await handleMcpToolCall({
+      args: {
+        action: "create_version",
+        template_id: TEMPLATE_ID,
+        matter_id: "ws_1",
+        entity_id: ENTITY_ID,
+        idempotency_key: "failed-ai-version-partial",
+        values: { contracts: [{}] },
+        completion_mode: "allow_partial",
+      },
+      context: createContext(),
+      toolName: "save_filled_template",
+    });
+
+    const expectedErrors = [
+      {
+        field: "contracts[0].summary",
+        reason: "generation-failed",
+        message:
+          "AI field generation failed. Retry or provide the value yourself.",
+      },
+    ];
+    expect(parseToolPayload(result)).toEqual(
+      expect.objectContaining({
+        action: "create_version",
+        aiFieldErrors: expectedErrors,
+      }),
+    );
+    expect(recordTemplateFillMock).toHaveBeenCalledWith(
+      expect.objectContaining({ aiFieldErrorCount: 1 }),
+    );
+    expect(recordTemplatePersistenceReceiptMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        result: expect.objectContaining({ aiFieldErrors: expectedErrors }),
+      }),
+    );
+    expect(releaseTemplatePersistenceClaimMock).not.toHaveBeenCalled();
   });
 
   test("failed row drafts return indexed value paths and record the AI shortfall", async () => {
@@ -1396,6 +1578,14 @@ describe("MCP template tools", () => {
           fileName: "lease.docx",
           unmatchedPlaceholders: [],
           unusedValues: ["unused"],
+          aiFieldErrors: [
+            {
+              field: "contracts[0].summary",
+              reason: "generation-failed",
+              message:
+                "AI field generation failed. Retry or provide the value yourself.",
+            },
+          ],
         },
       }),
     );
@@ -1419,6 +1609,14 @@ describe("MCP template tools", () => {
       fileName: "lease.docx",
       unmatchedPlaceholders: [],
       unusedValues: ["unused"],
+      aiFieldErrors: [
+        {
+          field: "contracts[0].summary",
+          reason: "generation-failed",
+          message:
+            "AI field generation failed. Retry or provide the value yourself.",
+        },
+      ],
     });
     expect(fillStoredTemplateDocxMock).not.toHaveBeenCalled();
     expect(createEntityFromBufferMock).not.toHaveBeenCalled();
@@ -1565,6 +1763,7 @@ describe("MCP template tools", () => {
       buffer: Buffer.from("filled docx"),
       unmatchedPlaceholders: [],
       unusedValues: [],
+      aiFieldErrors: [],
       structureErrors: [],
     });
     createEntityVersionFromBufferMock.mockImplementation(async (input) => {
@@ -1621,6 +1820,7 @@ describe("MCP template tools", () => {
       buffer: Buffer.from("filled docx"),
       unmatchedPlaceholders: ["signature", "landlord.name"],
       unusedValues: [],
+      aiFieldErrors: [],
       structureErrors: [],
     });
 

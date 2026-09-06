@@ -29,10 +29,17 @@ export const templateFillCompletionModeSchema = v.optional(
  * whose AI draft failed (a truncated draft is reported, never written, so it
  * shows up here rather than as a cut value in the document).
  */
-type TemplateFillShortfall = {
-  unmatchedPlaceholders: readonly string[];
-  aiFieldErrors: readonly AiFieldError[];
-};
+type NonEmptyReadonlyArray<T> = readonly [T, ...T[]];
+
+type TemplateFillShortfall =
+  | {
+      unmatchedPlaceholders: NonEmptyReadonlyArray<string>;
+      aiFieldErrors: readonly AiFieldError[];
+    }
+  | {
+      unmatchedPlaceholders: readonly [];
+      aiFieldErrors: NonEmptyReadonlyArray<AiFieldError>;
+    };
 
 type TemplateFillCompletionDecision =
   | { type: "complete" }
@@ -41,7 +48,9 @@ type TemplateFillCompletionDecision =
 
 type DecideTemplateFillCompletionOptions = {
   mode: TemplateFillCompletionMode;
-} & TemplateFillShortfall;
+  unmatchedPlaceholders: readonly string[];
+  aiFieldErrors: readonly AiFieldError[];
+};
 
 /**
  * Turn fill diagnostics plus the caller's declared policy into a closed
@@ -53,11 +62,25 @@ export const decideTemplateFillCompletion = ({
   unmatchedPlaceholders,
   aiFieldErrors,
 }: DecideTemplateFillCompletionOptions): TemplateFillCompletionDecision => {
-  if (unmatchedPlaceholders.length === 0 && aiFieldErrors.length === 0) {
-    return { type: "complete" };
+  const [firstPlaceholder, ...remainingPlaceholders] = unmatchedPlaceholders;
+  let shortfall: TemplateFillShortfall;
+  if (firstPlaceholder !== undefined) {
+    shortfall = {
+      unmatchedPlaceholders: [firstPlaceholder, ...remainingPlaceholders],
+      aiFieldErrors,
+    };
+  } else {
+    const [firstError, ...remainingErrors] = aiFieldErrors;
+    if (firstError === undefined) {
+      return { type: "complete" };
+    }
+    shortfall = {
+      unmatchedPlaceholders: [],
+      aiFieldErrors: [firstError, ...remainingErrors],
+    };
   }
 
   return mode === "allow_partial"
-    ? { type: "accepted_partial", unmatchedPlaceholders, aiFieldErrors }
-    : { type: "rejected_partial", unmatchedPlaceholders, aiFieldErrors };
+    ? { type: "accepted_partial", ...shortfall }
+    : { type: "rejected_partial", ...shortfall };
 };

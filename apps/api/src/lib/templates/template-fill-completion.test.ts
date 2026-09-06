@@ -22,6 +22,16 @@ const aiFieldErrorArbitrary = fc.record({
   message: fc.string({ minLength: 1 }),
 });
 
+type ExpectedNonemptyShortfall =
+  | {
+      unmatchedPlaceholders: readonly [string, ...string[]];
+      aiFieldErrors: readonly AiFieldError[];
+    }
+  | {
+      unmatchedPlaceholders: readonly [];
+      aiFieldErrors: readonly [AiFieldError, ...AiFieldError[]];
+    };
+
 describe("template fill completion policy", () => {
   test("accepts exactly complete fills by default and partial fills by explicit policy", () => {
     fc.assert(
@@ -50,6 +60,11 @@ describe("template fill completion policy", () => {
           if (decision.type === "complete") {
             throw new Error("a reported shortfall cannot be complete");
           }
+          const staticallyNonempty: ExpectedNonemptyShortfall = decision;
+          expect(
+            staticallyNonempty.unmatchedPlaceholders.length > 0 ||
+              staticallyNonempty.aiFieldErrors.length > 0,
+          ).toBe(true);
           expect([...decision.unmatchedPlaceholders]).toEqual(
             unmatchedPlaceholders,
           );
