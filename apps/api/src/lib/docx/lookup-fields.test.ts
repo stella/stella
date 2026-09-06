@@ -664,7 +664,7 @@ describe("createDispatchLookupResolver — mocked dispatch", () => {
           return KRS_HIT;
         },
       }),
-      resolveRegistryDisabledReason: async () => "jurisdiction_mismatch",
+      resolveRegistryDisabledReason: async () => "jurisdiction_mismatch" as const,
     });
     const outcome = await resolver({ registry: "krs", query: "0000592109" });
     expect(outcome).toEqual({
