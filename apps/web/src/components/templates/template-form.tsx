@@ -2042,14 +2042,13 @@ export const TemplateForm = ({
       setLoading(true);
 
       const submitValues = buildSubmitValues(values, fields, conditions);
-      const valuesJson = JSON.stringify(submitValues);
 
       const fillResponse = async () => {
         if (templateId) {
           return api
             .templates({ templateId })
             .fill.post(
-              { values: valuesJson, clauseOverrides },
+              { values: submitValues, clauseOverrides },
               { query: { format } },
             );
         }
@@ -2059,7 +2058,8 @@ export const TemplateForm = ({
           );
         }
         return api.templates.fill.post(
-          { file, values: valuesJson },
+          // The upload route is multipart, so its values stay JSON-encoded.
+          { file, values: JSON.stringify(submitValues) },
           { query: { format } },
         );
       };
@@ -2181,7 +2181,7 @@ export const TemplateForm = ({
         .templates({ templateId })
         ["fill-to"]({ workspaceId })
         .post({
-          values: JSON.stringify(submitValues),
+          values: submitValues,
           clauseOverrides,
           ...(parentId !== null && {
             parentId: toSafeId<"entity">(parentId),

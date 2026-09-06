@@ -38005,10 +38005,19 @@ export const generatedRouteMap: RouteNode = {
                       required: ["values"],
                       properties: {
                         values: {
-                          type: "object",
-                          patternProperties: {
-                            "^(.*)$": {},
-                          },
+                          allOf: [
+                            {
+                              additionalProperties: true,
+                              type: "object",
+                              properties: {},
+                            },
+                            {
+                              type: "object",
+                              patternProperties: {
+                                "^(.*)$": {},
+                              },
+                            },
+                          ],
                         },
                       },
                     },
@@ -38059,15 +38068,6 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
-                    flag: "--values",
-                    prop: "values",
-                    required: true,
-                    part: "body",
-                    partPath: "values",
-                  },
-                  {
-                    kind: "string",
-                    repeatable: false,
                     flag: "--name",
                     prop: "name",
                     required: false,
@@ -38084,7 +38084,7 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "parentId",
                   },
                 ],
-                inputOnly: ["body.clauseOverrides"],
+                inputOnly: ["body.values", "body.clauseOverrides"],
                 paginated: false,
                 destructive: false,
                 scope: "documents_write",
@@ -38098,7 +38098,19 @@ export const generatedRouteMap: RouteNode = {
                       required: ["values"],
                       properties: {
                         values: {
-                          type: "string",
+                          allOf: [
+                            {
+                              additionalProperties: true,
+                              type: "object",
+                              properties: {},
+                            },
+                            {
+                              type: "object",
+                              patternProperties: {
+                                "^(.*)$": {},
+                              },
+                            },
+                          ],
                         },
                         clauseOverrides: {
                           type: "object",
