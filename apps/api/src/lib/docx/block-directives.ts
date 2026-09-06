@@ -858,11 +858,16 @@ export const processBlockDirectives = (
       // in different rows. Reject rather than emit corrupt XML, exactly as the
       // each family does.
       if (openerRow || closerRow) {
+        const markerParagraphs: slimdom.Element[] = [];
+        for (const index of block.directiveParagraphs) {
+          const marker = paragraphs[index];
+          if (marker) {
+            markerParagraphs.push(marker);
+          }
+        }
         reportAmbiguousPlacement({
           directive: `{{#if ${block.branches[0]?.condition ?? ""}}}`,
-          markerParagraphs: block.directiveParagraphs.flatMap(
-            (index) => paragraphs[index] ?? [],
-          ),
+          markerParagraphs,
           markers: "{{#if}} and {{/if}}",
           paragraphIndex: firstDirective,
         });
