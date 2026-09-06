@@ -2041,7 +2041,7 @@ const ClipboardApp = () => {
       >
         <XIcon aria-hidden="true" className="size-4" />
       </Button>
-      <main className="relative min-h-0 flex-1">
+      <main className="relative me-14 min-h-0 flex-1">
         {feedback}
 
         {filteredItems.length === 0 ? (
