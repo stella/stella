@@ -13,6 +13,7 @@ import JSZip from "jszip";
 import type { Transaction } from "@/api/db/root";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
+import { DOCX_MAX_ENTRIES } from "@/api/lib/docx-archive";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import { CONTACT_FIELDS } from "@/api/lib/template-binding/binding-sources";
 import type { McpRequestContext } from "@/api/mcp/context";
@@ -1633,6 +1634,54 @@ describe("MCP template tools", () => {
     const error = validationEnvelope(result);
     expect(error["hint"]).toContain("no 'word/document.xml'");
     expect(error["hint"]).not.toContain("does not decode");
+    expect(createStoredTemplateMock).not.toHaveBeenCalled();
+  });
+
+  test("save_template (create) hints per failure: an archive past the unpack bounds is not an encoding problem", async () => {
+    const zip = new JSZip();
+    zip.file("word/document.xml", `<w:document xmlns:w="${W_NS}"/>`);
+    for (let index = 0; index < DOCX_MAX_ENTRIES; index += 1) {
+      zip.file(`word/media/${String(index)}.bin`, "x");
+    }
+    const overBound = Buffer.from(
+      await zip.generateAsync({ type: "uint8array" }),
+    );
+
+    const result = await handleMcpToolCall({
+      args: { name: "NDA", docx_base64: overBound.toString("base64") },
+      context: createContext(),
+      toolName: "save_template",
+    });
+
+    const error = validationEnvelope(result);
+    expect(error["hint"]).toContain("outside the bounds stella will unpack");
+    // These bytes arrived intact, so re-encoding advice would send the caller
+    // after a fault that is not there.
+    expect(error["hint"]).not.toContain("does not decode");
+    expect(createStoredTemplateMock).not.toHaveBeenCalled();
+  });
+
+  test("save_template (create) hints per failure: unparseable document XML is not an encoding problem", async () => {
+    const malformed = Buffer.from(
+      await new JSZip()
+        .file(
+          "word/document.xml",
+          `<w:document xmlns:w="${W_NS}"><w:body><w:p></w:document>`,
+        )
+        .generateAsync({ type: "uint8array" }),
+    );
+
+    const result = await handleMcpToolCall({
+      args: { name: "NDA", docx_base64: malformed.toString("base64") },
+      context: createContext(),
+      toolName: "save_template",
+    });
+
+    const error = validationEnvelope(result);
+    expect(error["hint"]).toContain("is not well-formed XML");
+    expect(error["hint"]).toContain("do not edit its XML by hand");
+    expect(error["hint"]).not.toContain("does not decode");
+    expect(String(error["message"])).toContain("Malformed document.xml");
     expect(createStoredTemplateMock).not.toHaveBeenCalled();
   });
 
