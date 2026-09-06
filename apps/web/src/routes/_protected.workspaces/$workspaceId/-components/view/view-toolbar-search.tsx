@@ -172,7 +172,7 @@ export const ViewToolbarSearch = ({
       {/* Escape closes the whole bar, column list and all: the popover owns
           that key, and racing it for a first level would be a shortcut whose
           effect depended on where focus happened to be. */}
-      <PopoverPopup align="end" className="w-72 flex-col gap-1 p-2">
+      <PopoverPopup align="end" className="w-72 flex-col gap-2 p-2">
         <div className="flex items-center gap-1">
           <Input
             autoFocus
