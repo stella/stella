@@ -140,6 +140,20 @@ const selectChatMessages = () => ({
   }),
 });
 
+const withRegistryCredentialQuery = (transaction: unknown): unknown => {
+  if (typeof transaction !== "object" || transaction === null) {
+    return transaction;
+  }
+  const query = "query" in transaction ? transaction.query : undefined;
+  return {
+    ...transaction,
+    query: {
+      businessRegistryCredentials: { findMany: async () => [] },
+      ...(typeof query === "object" && query !== null ? query : {}),
+    },
+  };
+};
+
 const createContext = ({
   contextMatterIds,
   message = {
@@ -169,7 +183,9 @@ const createContext = ({
   turnIntent?: SendMessageInput["turnIntent"];
   transaction?: unknown;
 }): SendMessageCtx => {
-  const { safeDb, scopedDb } = createScopedDbMock(transaction);
+  const { safeDb, scopedDb } = createScopedDbMock(
+    withRegistryCredentialQuery(transaction),
+  );
   const observedSafeDb: SafeDb = async (operation, retry) => {
     onSafeDbTransaction?.();
     return await safeDb(operation, retry);
