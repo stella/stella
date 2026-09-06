@@ -1,4 +1,4 @@
-import type { ComponentType } from "react";
+import type { ComponentType, RefObject } from "react";
 import { Fragment, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -108,11 +108,17 @@ import { useUpdateView } from "@/routes/_protected.workspaces/$workspaceId/-muta
 const protectedRouteApi = getRouteApi("/_protected");
 
 type ViewToolbarProps = {
+  /** The pane this toolbar and its view body share; the find bar's root. */
+  paneRef: RefObject<HTMLElement | null>;
   view: WorkspaceView;
   workspaceId: string;
 };
 
-export const ViewToolbar = ({ view, workspaceId }: ViewToolbarProps) => {
+export const ViewToolbar = ({
+  paneRef,
+  view,
+  workspaceId,
+}: ViewToolbarProps) => {
   const { data: properties = [] } = useQuery(propertiesOptions(workspaceId));
   const updateView = useUpdateView(workspaceId);
   const { filters, sorts, hiddenProperties } = view.layout;
@@ -146,7 +152,11 @@ export const ViewToolbar = ({ view, workspaceId }: ViewToolbarProps) => {
       )}
 
       {isTableView(view) && (
-        <ViewToolbarSearch properties={properties} view={view} />
+        <ViewToolbarSearch
+          paneRef={paneRef}
+          properties={properties}
+          view={view}
+        />
       )}
 
       <FilterChips

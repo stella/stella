@@ -37,6 +37,15 @@ describe("resolveFindOwner", () => {
     expect(resolveFindOwner([INSPECTOR, TABLE])).toBe("inspector");
   });
 
+  test("gives the table a press that landed in its own pane or bar", () => {
+    // A docked inspector outranks the table by precedence alone; a press with
+    // a grid cell focused, or the caret in the table's own find input, is the
+    // table's whatever else is on screen.
+    expect(
+      resolveFindOwner([INSPECTOR, { ...TABLE, containsTarget: true }]),
+    ).toBe("table");
+  });
+
   test("passes over a pane surface the press landed outside", () => {
     expect(resolveFindOwner([DOCX, TABLE])).toBe("table");
   });

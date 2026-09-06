@@ -9,6 +9,7 @@ import type {
 } from "@/lib/find-owner.logic";
 
 type FindSurface = {
+  bar: RefObject<HTMLElement | null> | undefined;
   owner: FindOwner;
   root: RefObject<HTMLElement | null>;
   scope: FindScope;
@@ -32,6 +33,15 @@ const isOnScreen = (root: HTMLElement | null): boolean =>
   root.offsetParent !== null &&
   root.closest("[inert], [aria-hidden='true']") === null;
 
+const contains = (
+  element: HTMLElement | null | undefined,
+  target: EventTarget | null,
+): boolean =>
+  element !== null &&
+  element !== undefined &&
+  target instanceof Node &&
+  element.contains(target);
+
 const toCandidate = (
   surface: FindSurface,
   target: EventTarget | null,
@@ -39,7 +49,7 @@ const toCandidate = (
   const root = surface.root.current;
   return {
     containsTarget:
-      root !== null && target instanceof Node && root.contains(target),
+      contains(root, target) || contains(surface.bar?.current, target),
     owner: surface.owner,
     reachable: isOnScreen(root),
     scope: surface.scope,
@@ -62,6 +72,12 @@ export const ownsFindKeyEvent = (
   ) === owner;
 
 type UseFindSurfaceOptions = {
+  /**
+   * The surface's find bar when it is portaled out of the pane: a press with
+   * the caret already in the bar is inside the surface, wherever the popup
+   * landed in the document.
+   */
+  bar?: RefObject<HTMLElement | null>;
   /** While false the surface is not a candidate and its bar cannot open. */
   enabled: boolean;
   owner: FindOwner;
@@ -76,6 +92,7 @@ type UseFindSurfaceOptions = {
  * {@link ownsFindKeyEvent}.
  */
 export const useFindSurface = ({
+  bar,
   enabled,
   owner,
   root,
@@ -86,9 +103,9 @@ export const useFindSurface = ({
       return undefined;
     }
     const id = Symbol(owner);
-    surfaces.set(id, { owner, root, scope });
+    surfaces.set(id, { bar, owner, root, scope });
     return () => {
       surfaces.delete(id);
     };
-  }, [enabled, owner, root, scope]);
+  }, [bar, enabled, owner, root, scope]);
 };
