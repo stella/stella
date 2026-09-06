@@ -1,9 +1,7 @@
 [
   {
     "cli": {
-      "command": [
-        "search"
-      ],
+      "command": ["search"],
       "excluded": true,
       "scope": "search"
     },
@@ -11,9 +9,7 @@
     "description": "Search knowledge across accessible matters using the OpenAI-compatible search tool shape. Returns results with id, title, and url for follow-up fetch calls.",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "query"
-      ],
+      "required": ["query"],
       "additionalProperties": false,
       "properties": {
         "query": {
@@ -38,9 +34,7 @@
   },
   {
     "cli": {
-      "command": [
-        "fetch"
-      ],
+      "command": ["fetch"],
       "excluded": true,
       "scope": "read"
     },
@@ -48,9 +42,7 @@
     "description": "Fetch a knowledge document by id using the OpenAI-compatible fetch tool shape. Use ids returned by the search tool. Long documents are returned in windows; pass the returned nextCursor back as cursor to read more.",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "id"
-      ],
+      "required": ["id"],
       "additionalProperties": false,
       "properties": {
         "id": {
@@ -74,10 +66,7 @@
   },
   {
     "cli": {
-      "command": [
-        "matter",
-        "list"
-      ],
+      "command": ["matter", "list"],
       "scope": "read",
       "itemsKey": "matters",
       "singleReadWhen": "matter_id"
@@ -95,10 +84,7 @@
           "description": "Matter ID to return a single matter's overview; omit to list matters"
         },
         "status": {
-          "enum": [
-            "active",
-            "all"
-          ],
+          "enum": ["active", "all"],
           "type": "string",
           "description": "Filter by matter status (list mode)"
         },
@@ -124,10 +110,7 @@
   },
   {
     "cli": {
-      "command": [
-        "search",
-        "matters"
-      ],
+      "command": ["search", "matters"],
       "scope": "search",
       "itemsKey": "hits"
     },
@@ -135,9 +118,7 @@
     "description": "Search across all accessible matters. Use this when the user explicitly asks to search outside a single matter or you do not yet know the right matter.",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "query"
-      ],
+      "required": ["query"],
       "additionalProperties": false,
       "properties": {
         "query": {
@@ -168,10 +149,7 @@
   },
   {
     "cli": {
-      "command": [
-        "case-law",
-        "search"
-      ],
+      "command": ["case-law", "search"],
       "scope": "search",
       "itemsKey": "results"
     },
@@ -179,9 +157,7 @@
     "description": "Search the shared case-law corpus. Supports free-text search plus optional filters such as court, country, language, date range, and decision type. Each result includes a route-independent resourceName.",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "query"
-      ],
+      "required": ["query"],
       "additionalProperties": false,
       "properties": {
         "query": {
@@ -246,10 +222,7 @@
   },
   {
     "cli": {
-      "command": [
-        "document",
-        "content"
-      ],
+      "command": ["document", "content"],
       "scope": "read",
       "windowedText": true
     },
@@ -257,9 +230,7 @@
     "description": "Read a document's content, found anywhere in your accessible matters. DOCX files are converted to Markdown with structure preserved (headings, tables, lists); other formats return their extracted plain text. Use after search_across_matters. Long documents are returned in windows; pass the returned nextCursor back as cursor to read more.",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "entity_id"
-      ],
+      "required": ["entity_id"],
       "additionalProperties": false,
       "properties": {
         "entity_id": {
@@ -283,10 +254,7 @@
   },
   {
     "cli": {
-      "command": [
-        "case-law",
-        "read"
-      ],
+      "command": ["case-law", "read"],
       "scope": "read",
       "windowedText": true
     },
@@ -294,9 +262,7 @@
     "description": "Read a single case-law decision by its decision ID. Returns metadata, plain text, citation links, source URLs, and its route-independent resourceName. Long decision text and large citation lists are returned in windows; pass the returned nextCursor back as cursor to read more.",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "decision_id"
-      ],
+      "required": ["decision_id"],
       "additionalProperties": false,
       "properties": {
         "decision_id": {
@@ -320,19 +286,14 @@
   },
   {
     "cli": {
-      "command": [
-        "contact",
-        "read"
-      ],
+      "command": ["contact", "read"],
       "scope": "read"
     },
     "name": "read_contact",
     "description": "Read a contact by ID. Use this after matter overview or entity metadata surfaces a contact the user wants to inspect more closely.",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "contact_id"
-      ],
+      "required": ["contact_id"],
       "additionalProperties": false,
       "properties": {
         "contact_id": {
@@ -350,19 +311,14 @@
   },
   {
     "cli": {
-      "command": [
-        "organization",
-        "set-jurisdictions"
-      ],
+      "command": ["organization", "set-jurisdictions"],
       "scope": "onboarding"
     },
     "name": "set_practice_jurisdictions",
     "description": "Set the practice jurisdictions for the user's stella organization. Call this when the org's practice jurisdictions are empty (e.g., the user signed up via an OAuth client and skipped onboarding). Pass an array of {country_code, is_primary}; exactly one entry should be primary.",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "jurisdictions"
-      ],
+      "required": ["jurisdictions"],
       "additionalProperties": false,
       "properties": {
         "jurisdictions": {
@@ -631,10 +587,7 @@
                 "description": "Whether this is the organization's primary jurisdiction"
               }
             },
-            "required": [
-              "country_code",
-              "is_primary"
-            ],
+            "required": ["country_code", "is_primary"],
             "additionalProperties": false
           },
           "minItems": 1,
@@ -651,10 +604,7 @@
   },
   {
     "cli": {
-      "command": [
-        "template",
-        "list"
-      ],
+      "command": ["template", "list"],
       "scope": "templates",
       "itemsKey": "templates",
       "paginationless": true,
@@ -686,10 +636,7 @@
   },
   {
     "cli": {
-      "command": [
-        "template",
-        "fill"
-      ],
+      "command": ["template", "fill"],
       "scope": "templates"
     },
     "name": "fill_template",
@@ -713,27 +660,18 @@
         },
         "completion_mode": {
           "type": "string",
-          "enum": [
-            "require_complete",
-            "allow_partial"
-          ],
+          "enum": ["require_complete", "allow_partial"],
           "description": "Require every placeholder by default; use allow_partial only for an intentionally incomplete document.",
           "default": "require_complete"
         },
         "output_mode": {
           "type": "string",
-          "enum": [
-            "text",
-            "docx"
-          ],
+          "enum": ["text", "docx"],
           "description": "text returns the rendered paragraphs and cells; docx adds the base64 archive, which is large.",
           "default": "text"
         }
       },
-      "required": [
-        "template_id",
-        "values"
-      ],
+      "required": ["template_id", "values"],
       "additionalProperties": false
     },
     "annotations": {
@@ -744,18 +682,11 @@
   },
   {
     "cli": {
-      "command": [
-        "template",
-        "save-filled"
-      ],
-      "additionalScopes": [
-        "templates"
-      ],
+      "command": ["template", "save-filled"],
+      "additionalScopes": ["templates"],
       "requestTimeoutMs": 330000,
       "scope": "documents_write",
-      "inputOnly": [
-        "values"
-      ],
+      "inputOnly": ["values"],
       "discriminator": {
         "prop": "action",
         "subcommands": {
@@ -806,10 +737,7 @@
       "properties": {
         "action": {
           "type": "string",
-          "enum": [
-            "create_document",
-            "create_version"
-          ],
+          "enum": ["create_document", "create_version"],
           "description": "Persistence destination"
         },
         "template_id": {
@@ -849,10 +777,7 @@
         },
         "completion_mode": {
           "type": "string",
-          "enum": [
-            "require_complete",
-            "allow_partial"
-          ],
+          "enum": ["require_complete", "allow_partial"],
           "description": "Require every placeholder by default; use allow_partial only for an intentionally incomplete document.",
           "default": "require_complete"
         }
@@ -874,10 +799,7 @@
   },
   {
     "cli": {
-      "command": [
-        "template",
-        "save"
-      ],
+      "command": ["template", "save"],
       "scope": "templates"
     },
     "name": "save_template",
@@ -924,10 +846,7 @@
               "description": "Original file name reported by the host"
             }
           },
-          "required": [
-            "download_url",
-            "file_id"
-          ],
+          "required": ["download_url", "file_id"],
           "additionalProperties": false,
           "description": "File reference supplied by a compatible MCP host"
         },
@@ -949,13 +868,7 @@
                 "description": "Fill hint for the person filling"
               },
               "input_type": {
-                "enum": [
-                  "text",
-                  "number",
-                  "boolean",
-                  "date",
-                  "select"
-                ],
+                "enum": ["text", "number", "boolean", "date", "select"],
                 "type": "string",
                 "description": "Input control type"
               },
@@ -1036,10 +949,7 @@
                       "description": "Part label"
                     },
                     "input_type": {
-                      "enum": [
-                        "text",
-                        "select"
-                      ],
+                      "enum": ["text", "select"],
                       "type": "string",
                       "description": "Part input control"
                     },
@@ -1055,10 +965,7 @@
                       "description": "Regex for the whole part value"
                     }
                   },
-                  "required": [
-                    "key",
-                    "input_type"
-                  ],
+                  "required": ["key", "input_type"],
                   "additionalProperties": false
                 },
                 "minItems": 1,
@@ -1107,10 +1014,7 @@
                           "description": "[token] rendering of the registry hit"
                         }
                       },
-                      "required": [
-                        "key",
-                        "template"
-                      ],
+                      "required": ["key", "template"],
                       "additionalProperties": false
                     },
                     "minItems": 1,
@@ -1118,10 +1022,7 @@
                     "description": "Named renderings; the first is the default"
                   }
                 },
-                "required": [
-                  "registry",
-                  "formats"
-                ],
+                "required": ["registry", "formats"],
                 "additionalProperties": false,
                 "description": "Who fills = business-registry lookup"
               },
@@ -1131,9 +1032,7 @@
                     "type": "object",
                     "properties": {
                       "kind": {
-                        "enum": [
-                          "contact"
-                        ],
+                        "enum": ["contact"],
                         "type": "string"
                       },
                       "field": {
@@ -1158,19 +1057,14 @@
                         "type": "string"
                       }
                     },
-                    "required": [
-                      "kind",
-                      "field"
-                    ],
+                    "required": ["kind", "field"],
                     "additionalProperties": false
                   },
                   {
                     "type": "object",
                     "properties": {
                       "kind": {
-                        "enum": [
-                          "party"
-                        ],
+                        "enum": ["party"],
                         "type": "string"
                       },
                       "role": {
@@ -1209,20 +1103,14 @@
                         "type": "string"
                       }
                     },
-                    "required": [
-                      "kind",
-                      "role",
-                      "field"
-                    ],
+                    "required": ["kind", "role", "field"],
                     "additionalProperties": false
                   },
                   {
                     "type": "object",
                     "properties": {
                       "kind": {
-                        "enum": [
-                          "matter"
-                        ],
+                        "enum": ["matter"],
                         "type": "string"
                       },
                       "field": {
@@ -1235,64 +1123,41 @@
                         "type": "string"
                       }
                     },
-                    "required": [
-                      "kind",
-                      "field"
-                    ],
+                    "required": ["kind", "field"],
                     "additionalProperties": false
                   },
                   {
                     "type": "object",
                     "properties": {
                       "kind": {
-                        "enum": [
-                          "attorney"
-                        ],
+                        "enum": ["attorney"],
                         "type": "string"
                       },
                       "ref": {
-                        "enum": [
-                          "responsible",
-                          "originating",
-                          "lead"
-                        ],
+                        "enum": ["responsible", "originating", "lead"],
                         "type": "string"
                       },
                       "field": {
-                        "enum": [
-                          "name",
-                          "email"
-                        ],
+                        "enum": ["name", "email"],
                         "type": "string"
                       }
                     },
-                    "required": [
-                      "kind",
-                      "ref",
-                      "field"
-                    ],
+                    "required": ["kind", "ref", "field"],
                     "additionalProperties": false
                   },
                   {
                     "type": "object",
                     "properties": {
                       "kind": {
-                        "enum": [
-                          "firm"
-                        ],
+                        "enum": ["firm"],
                         "type": "string"
                       },
                       "field": {
-                        "enum": [
-                          "name"
-                        ],
+                        "enum": ["name"],
                         "type": "string"
                       }
                     },
-                    "required": [
-                      "kind",
-                      "field"
-                    ],
+                    "required": ["kind", "field"],
                     "additionalProperties": false
                   }
                 ],
@@ -1314,27 +1179,17 @@
                     "description": "BCP-47 language tag"
                   },
                   "style": {
-                    "enum": [
-                      "long",
-                      "medium",
-                      "short",
-                      "iso"
-                    ],
+                    "enum": ["long", "medium", "short", "iso"],
                     "type": "string",
                     "description": "Date rendering style"
                   }
                 },
-                "required": [
-                  "locale",
-                  "style"
-                ],
+                "required": ["locale", "style"],
                 "additionalProperties": false,
                 "description": "Date rendering config"
               }
             },
-            "required": [
-              "path"
-            ],
+            "required": ["path"],
             "additionalProperties": false
           },
           "description": "Field configuration overlay; see stella://reference/template-fields"
@@ -1349,10 +1204,7 @@
   },
   {
     "cli": {
-      "command": [
-        "document",
-        "list"
-      ],
+      "command": ["document", "list"],
       "scope": "read",
       "itemsKey": "documents"
     },
@@ -1360,9 +1212,7 @@
     "description": "List the documents and folders in a matter. Use 'flat' mode to enumerate every document and folder in the matter, or 'children' mode to walk the folder tree one level at a time (pass parent_id to list a folder's direct children, or omit it for the matter root). Returns each entity's id, name, kind (document or folder), and parentId. Read a document's metadata, fields, or versions with read_document.",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "matter_id"
-      ],
+      "required": ["matter_id"],
       "additionalProperties": false,
       "properties": {
         "matter_id": {
@@ -1371,10 +1221,7 @@
           "description": "Matter ID to list documents in."
         },
         "mode": {
-          "enum": [
-            "flat",
-            "children"
-          ],
+          "enum": ["flat", "children"],
           "type": "string",
           "description": "'flat' lists every document and folder in the matter; 'children' lists only the direct children of parent_id (or the matter root when parent_id is omitted). Defaults to 'flat', or 'children' when parent_id is provided. Passing parent_id with mode 'flat' is rejected."
         },
@@ -1404,19 +1251,14 @@
   },
   {
     "cli": {
-      "command": [
-        "document",
-        "read"
-      ],
+      "command": ["document", "read"],
       "scope": "read"
     },
     "name": "read_document",
     "description": "Read a document's metadata and field values by entity ID. By default returns the current version's name, kind, and field/property values. The default response also reports contentState and searchIndexState, including an actionable remediation or escalation requirement when document text processing is required. Pass version_id to inspect a specific version instead. Pass version_id and compare_with_version_id to get a plain-text line diff between two versions. Pass include_versions to also return the version history. To read the document's extracted text content, use read_content_across_matters.",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "entity_id"
-      ],
+      "required": ["entity_id"],
       "additionalProperties": false,
       "properties": {
         "entity_id": {
@@ -1453,10 +1295,7 @@
   },
   {
     "cli": {
-      "command": [
-        "document",
-        "save"
-      ],
+      "command": ["document", "save"],
       "scope": "documents_write"
     },
     "name": "save_document",
@@ -1488,10 +1327,7 @@
           "description": "Folder entity ID: to place the new entity inside when creating, or to move the document into when updating"
         },
         "kind": {
-          "enum": [
-            "document",
-            "folder"
-          ],
+          "enum": ["document", "folder"],
           "type": "string",
           "description": "Entity kind to create; defaults to 'document'. Only valid when creating."
         },
@@ -1540,24 +1376,16 @@
   },
   {
     "cli": {
-      "command": [
-        "document",
-        "upload-version"
-      ],
+      "command": ["document", "upload-version"],
       "excluded": true,
       "scope": "documents_write",
-      "inputOnly": [
-        "file"
-      ]
+      "inputOnly": ["file"]
     },
     "name": "upload_document_version",
     "description": "Upload an attached host file as a new version of an existing document. Pass entity_id and file. Use open_document_version_upload only when the host cannot supply MCP file parameters. The upload uses stella's standard presigned, checksum-verified, scanned, and audited file-version pipeline.",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "entity_id",
-        "file"
-      ],
+      "required": ["entity_id", "file"],
       "additionalProperties": false,
       "properties": {
         "entity_id": {
@@ -1585,10 +1413,7 @@
               "description": "Original file name reported by the host"
             }
           },
-          "required": [
-            "download_url",
-            "file_id"
-          ],
+          "required": ["download_url", "file_id"],
           "additionalProperties": false,
           "description": "File reference supplied by a compatible MCP host"
         }
@@ -1602,10 +1427,7 @@
   },
   {
     "cli": {
-      "command": [
-        "document",
-        "open-version-upload"
-      ],
+      "command": ["document", "open-version-upload"],
       "excluded": true,
       "scope": "documents_write"
     },
@@ -1613,9 +1435,7 @@
     "description": "Open a portable file picker for uploading a new version of an existing document. Use only when upload_document_version cannot receive a host file reference; do not use when the host already supplied an attached file.",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "entity_id"
-      ],
+      "required": ["entity_id"],
       "additionalProperties": false,
       "properties": {
         "entity_id": {
@@ -1633,19 +1453,14 @@
   },
   {
     "cli": {
-      "command": [
-        "document",
-        "delete"
-      ],
+      "command": ["document", "delete"],
       "scope": "documents_write"
     },
     "name": "delete_document",
     "description": "Delete a document and all its versions, or delete a single version when version_id is provided (the current version is promoted to the next latest; the only remaining version cannot be deleted). This is irreversible.",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "entity_id"
-      ],
+      "required": ["entity_id"],
       "additionalProperties": false,
       "properties": {
         "entity_id": {
@@ -1673,11 +1488,7 @@
   },
   {
     "cli": {
-      "command": [
-        "document",
-        "properties",
-        "list"
-      ],
+      "command": ["document", "properties", "list"],
       "scope": "read",
       "itemsKey": "properties"
     },
@@ -1685,9 +1496,7 @@
     "description": "List the property (column) definitions of a matter. Returns each property's id, name, value type (text, single-select, multi-select, date, int, or file), status, and writeMethod. Use set_field_value for scalar properties. Arbitrary file-property cells are not writable; document upload/version tools replace only a document's primary file.",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "matter_id"
-      ],
+      "required": ["matter_id"],
       "additionalProperties": false,
       "properties": {
         "matter_id": {
@@ -1716,22 +1525,14 @@
   },
   {
     "cli": {
-      "command": [
-        "document",
-        "field",
-        "set"
-      ],
+      "command": ["document", "field", "set"],
       "scope": "documents_write"
     },
     "name": "set_field_value",
     "description": "Set a document's value for a property (a cell in the matter's table). Pass the document entity_id, the property_id (from list_properties), and a content object whose 'type' matches the property's value type: text (value: string), single-select (value: string or null), multi-select (value: array of strings), date (value: ISO YYYY-MM-DD or null), or int (value: integer, optional currency: 3-letter ISO code). An empty value clears the cell.",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "entity_id",
-        "property_id",
-        "content"
-      ],
+      "required": ["entity_id", "property_id", "content"],
       "additionalProperties": false,
       "properties": {
         "entity_id": {
@@ -1751,9 +1552,7 @@
               "type": "object",
               "properties": {
                 "type": {
-                  "enum": [
-                    "text"
-                  ],
+                  "enum": ["text"],
                   "description": "Value type; must match the property's value type",
                   "type": "string"
                 },
@@ -1762,19 +1561,14 @@
                   "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
-              "required": [
-                "type",
-                "value"
-              ],
+              "required": ["type", "value"],
               "additionalProperties": false
             },
             {
               "type": "object",
               "properties": {
                 "type": {
-                  "enum": [
-                    "single-select"
-                  ],
+                  "enum": ["single-select"],
                   "description": "Value type; must match the property's value type",
                   "type": "string"
                 },
@@ -1790,19 +1584,14 @@
                   "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
-              "required": [
-                "type",
-                "value"
-              ],
+              "required": ["type", "value"],
               "additionalProperties": false
             },
             {
               "type": "object",
               "properties": {
                 "type": {
-                  "enum": [
-                    "multi-select"
-                  ],
+                  "enum": ["multi-select"],
                   "description": "Value type; must match the property's value type",
                   "type": "string"
                 },
@@ -1815,19 +1604,14 @@
                   "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
-              "required": [
-                "type",
-                "value"
-              ],
+              "required": ["type", "value"],
               "additionalProperties": false
             },
             {
               "type": "object",
               "properties": {
                 "type": {
-                  "enum": [
-                    "date"
-                  ],
+                  "enum": ["date"],
                   "description": "Value type; must match the property's value type",
                   "type": "string"
                 },
@@ -1844,19 +1628,14 @@
                   "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
-              "required": [
-                "type",
-                "value"
-              ],
+              "required": ["type", "value"],
               "additionalProperties": false
             },
             {
               "type": "object",
               "properties": {
                 "type": {
-                  "enum": [
-                    "int"
-                  ],
+                  "enum": ["int"],
                   "description": "Value type; must match the property's value type",
                   "type": "string"
                 },
@@ -1878,10 +1657,7 @@
                   "description": "For int values only: 3-letter ISO currency code, or null"
                 }
               },
-              "required": [
-                "type",
-                "value"
-              ],
+              "required": ["type", "value"],
               "additionalProperties": false
             }
           ]
@@ -1896,10 +1672,7 @@
   },
   {
     "cli": {
-      "command": [
-        "matter",
-        "save"
-      ],
+      "command": ["matter", "save"],
       "scope": "matters_write"
     },
     "name": "save_matter",
@@ -1944,10 +1717,7 @@
           "description": "Billing reference; pass null to clear. Only valid when updating."
         },
         "status": {
-          "enum": [
-            "active",
-            "archived"
-          ],
+          "enum": ["active", "archived"],
           "type": "string",
           "description": "Set 'archived' to archive the matter or 'active' to unarchive it. Only valid when updating."
         }
@@ -1961,19 +1731,14 @@
   },
   {
     "cli": {
-      "command": [
-        "matter",
-        "delete"
-      ],
+      "command": ["matter", "delete"],
       "scope": "matters_write"
     },
     "name": "delete_matter",
     "description": "Permanently delete a matter and all its documents, tasks, fields, and chat history. This is irreversible.",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "matter_id"
-      ],
+      "required": ["matter_id"],
       "additionalProperties": false,
       "properties": {
         "matter_id": {
@@ -1996,10 +1761,7 @@
   },
   {
     "cli": {
-      "command": [
-        "contact",
-        "list"
-      ],
+      "command": ["contact", "list"],
       "scope": "read",
       "itemsKey": "items"
     },
@@ -2016,10 +1778,7 @@
           "description": "Search contact display names"
         },
         "type": {
-          "enum": [
-            "person",
-            "organization"
-          ],
+          "enum": ["person", "organization"],
           "type": "string",
           "description": "Contact kind"
         },
@@ -2043,10 +1802,7 @@
   },
   {
     "cli": {
-      "command": [
-        "contact",
-        "save"
-      ],
+      "command": ["contact", "save"],
       "scope": "matters_write"
     },
     "name": "save_contact",
@@ -2062,10 +1818,7 @@
           "description": "Contact ID to update; omit to create"
         },
         "type": {
-          "enum": [
-            "person",
-            "organization"
-          ],
+          "enum": ["person", "organization"],
           "type": "string",
           "description": "Contact kind; required when creating"
         },
@@ -2132,19 +1885,14 @@
   },
   {
     "cli": {
-      "command": [
-        "contact",
-        "delete"
-      ],
+      "command": ["contact", "delete"],
       "scope": "matters_write"
     },
     "name": "delete_contact",
     "description": "Permanently delete a contact from the organization address book. Rejected while the contact is still the client of any matter. This is irreversible.",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "contact_id"
-      ],
+      "required": ["contact_id"],
       "additionalProperties": false,
       "properties": {
         "contact_id": {
@@ -2167,20 +1915,14 @@
   },
   {
     "cli": {
-      "command": [
-        "contact",
-        "lookup-registry"
-      ],
+      "command": ["contact", "lookup-registry"],
       "scope": "read"
     },
     "name": "lookup_business_registry",
     "description": "Look up a company in a public business register (ARES, Brreg, Companies House, EDGAR, GCIS, KRS, ORSR, PRH, recherche-entreprises, or VIES). Pass a canonical identifier (company/registration number, VAT number) for an exact match, or a company name to search where the register supports it. Returns registered names, addresses, and registry-specific details. Result IDs belong to the external registry, not stella's contact directory; create a contact with save_contact before using read_contact.",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "registry",
-        "query"
-      ],
+      "required": ["registry", "query"],
       "additionalProperties": false,
       "properties": {
         "registry": {
@@ -2216,10 +1958,7 @@
   },
   {
     "cli": {
-      "command": [
-        "task",
-        "list"
-      ],
+      "command": ["task", "list"],
       "scope": "read",
       "itemsKey": "tasks",
       "singleReadWhen": "task_id"
@@ -2280,10 +2019,7 @@
   },
   {
     "cli": {
-      "command": [
-        "task",
-        "save"
-      ],
+      "command": ["task", "save"],
       "scope": "matters_write"
     },
     "name": "save_task",
@@ -2310,35 +2046,17 @@
           "description": "Task name; required when creating"
         },
         "status": {
-          "enum": [
-            "open",
-            "in_progress",
-            "in_review",
-            "done",
-            "cancelled"
-          ],
+          "enum": ["open", "in_progress", "in_review", "done", "cancelled"],
           "type": "string",
           "description": "Task status"
         },
         "priority": {
-          "enum": [
-            "none",
-            "urgent",
-            "high",
-            "medium",
-            "low"
-          ],
+          "enum": ["none", "urgent", "high", "medium", "low"],
           "type": "string",
           "description": "Task priority"
         },
         "item_type": {
-          "enum": [
-            "task",
-            "fact",
-            "issue",
-            "requirement",
-            "event"
-          ],
+          "enum": ["task", "fact", "issue", "requirement", "event"],
           "type": "string",
           "description": "What the List item represents"
         },
@@ -2413,19 +2131,14 @@
   },
   {
     "cli": {
-      "command": [
-        "task",
-        "delete"
-      ],
+      "command": ["task", "delete"],
       "scope": "matters_write"
     },
     "name": "delete_task",
     "description": "Permanently delete a task from its matter, together with its links, assignees and audit-visible field values. Refused while the matter is archived. This is irreversible.",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "task_id"
-      ],
+      "required": ["task_id"],
       "additionalProperties": false,
       "properties": {
         "task_id": {
@@ -2448,19 +2161,14 @@
   },
   {
     "cli": {
-      "command": [
-        "matter",
-        "link-contact"
-      ],
+      "command": ["matter", "link-contact"],
       "scope": "matters_write"
     },
     "name": "link_matter_contact",
     "description": "Link a contact to a matter in a party role (opposing party/counsel, co-counsel, witness, expert witness, third party, judge, mediator, or other), or remove such a link. Pass contact_id with role to link. To unlink, pass matter_contact_id (precise, from list_matters) or contact_id alone; contact_id alone is rejected when the contact holds several roles on the matter.",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "matter_id"
-      ],
+      "required": ["matter_id"],
       "additionalProperties": false,
       "properties": {
         "matter_id": {
@@ -2503,10 +2211,7 @@
   },
   {
     "cli": {
-      "command": [
-        "clause",
-        "list"
-      ],
+      "command": ["clause", "list"],
       "scope": "read",
       "itemsKey": "clauses",
       "singleReadWhen": "clause_id"
@@ -2563,10 +2268,7 @@
   },
   {
     "cli": {
-      "command": [
-        "clause",
-        "save"
-      ],
+      "command": ["clause", "save"],
       "scope": "knowledge_write"
     },
     "name": "save_clause",
@@ -2622,18 +2324,13 @@
                       "description": "Render the run italic"
                     }
                   },
-                  "required": [
-                    "text"
-                  ],
+                  "required": ["text"],
                   "additionalProperties": false
                 },
                 "description": "Optional inline formatting runs whose text concatenates to the paragraph"
               },
               "list_kind": {
-                "enum": [
-                  "bullet",
-                  "ordered"
-                ],
+                "enum": ["bullet", "ordered"],
                 "type": "string",
                 "description": "List item kind when the paragraph is a list item"
               },
@@ -2646,14 +2343,7 @@
                 "description": "Whether the paragraph is a template directive marker"
               },
               "directive_kind": {
-                "enum": [
-                  "if",
-                  "elseif",
-                  "else",
-                  "endif",
-                  "each",
-                  "endeach"
-                ],
+                "enum": ["if", "elseif", "else", "endif", "each", "endeach"],
                 "type": "string",
                 "description": "Directive kind when is_directive is set"
               },
@@ -2662,9 +2352,7 @@
                 "description": "Directive expression for an if/each directive"
               }
             },
-            "required": [
-              "text"
-            ],
+            "required": ["text"],
             "additionalProperties": false
           },
           "minItems": 1,
@@ -2745,19 +2433,14 @@
   },
   {
     "cli": {
-      "command": [
-        "clause",
-        "delete"
-      ],
+      "command": ["clause", "delete"],
       "scope": "knowledge_write"
     },
     "name": "delete_clause",
     "description": "Permanently delete a clause and all its variants and versions from the organization's clause library. This is irreversible.",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "clause_id"
-      ],
+      "required": ["clause_id"],
       "additionalProperties": false,
       "properties": {
         "clause_id": {
@@ -2780,10 +2463,7 @@
   },
   {
     "cli": {
-      "command": [
-        "playbook",
-        "list"
-      ],
+      "command": ["playbook", "list"],
       "scope": "read",
       "itemsKey": "items",
       "singleReadWhen": "playbook_id"
@@ -2821,20 +2501,14 @@
   },
   {
     "cli": {
-      "command": [
-        "playbook",
-        "run"
-      ],
+      "command": ["playbook", "run"],
       "scope": "knowledge_write"
     },
     "name": "run_playbook",
     "description": "Run a review playbook over a matter's documents. Materializes the playbook's extraction and verdict columns onto the matter's table and starts the AI review; findings populate asynchronously. Pass matter_id and playbook_id. Returns the number of columns queued for review.",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "matter_id",
-        "playbook_id"
-      ],
+      "required": ["matter_id", "playbook_id"],
       "additionalProperties": false,
       "properties": {
         "matter_id": {
@@ -2857,10 +2531,7 @@
   },
   {
     "cli": {
-      "command": [
-        "time-entry",
-        "list"
-      ],
+      "command": ["time-entry", "list"],
       "scope": "read",
       "itemsKey": "entries",
       "singleReadWhen": "time_entry_id"
@@ -2905,12 +2576,7 @@
           "description": "List only entries worked on or before this ISO date (YYYY-MM-DD)"
         },
         "status": {
-          "enum": [
-            "draft",
-            "approved",
-            "billed",
-            "written_off"
-          ],
+          "enum": ["draft", "approved", "billed", "written_off"],
           "type": "string",
           "description": "List only entries with this status"
         },
@@ -2935,10 +2601,7 @@
   },
   {
     "cli": {
-      "command": [
-        "time-entry",
-        "save"
-      ],
+      "command": ["time-entry", "save"],
       "scope": "billing_write"
     },
     "name": "save_time_entry",
@@ -3047,19 +2710,14 @@
   },
   {
     "cli": {
-      "command": [
-        "time-entry",
-        "delete"
-      ],
+      "command": ["time-entry", "delete"],
       "scope": "billing_write"
     },
     "name": "delete_time_entry",
     "description": "Delete a time entry. A draft entry is permanently deleted; an approved entry is written off instead (kept for the audit trail, excluded from billing). A billed entry cannot be deleted until its invoice is reverted. Returns whether the entry was hard-deleted.",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "time_entry_id"
-      ],
+      "required": ["time_entry_id"],
       "additionalProperties": false,
       "properties": {
         "time_entry_id": {
@@ -3082,21 +2740,14 @@
   },
   {
     "cli": {
-      "command": [
-        "rate",
-        "resolve"
-      ],
+      "command": ["rate", "resolve"],
       "scope": "read"
     },
     "name": "resolve_rate",
     "description": "Resolve the effective hourly rate for a user on a given date in a matter, using its default rate table (user-specific rate first, then the table default). Returns the hourly rate in integer minor currency units (e.g. cents) and the currency, or nulls when no rate applies.",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "matter_id",
-        "user_id",
-        "date"
-      ],
+      "required": ["matter_id", "user_id", "date"],
       "additionalProperties": false,
       "properties": {
         "matter_id": {
@@ -3125,10 +2776,7 @@
   },
   {
     "cli": {
-      "command": [
-        "invoice",
-        "list"
-      ],
+      "command": ["invoice", "list"],
       "scope": "read",
       "itemsKey": "invoices",
       "singleReadWhen": "invoice_id"
@@ -3171,10 +2819,7 @@
   },
   {
     "cli": {
-      "command": [
-        "usage",
-        "get"
-      ],
+      "command": ["usage", "get"],
       "scope": "read"
     },
     "name": "get_usage",
@@ -3193,10 +2838,7 @@
   },
   {
     "cli": {
-      "command": [
-        "legislation",
-        "search"
-      ],
+      "command": ["legislation", "search"],
       "scope": "read",
       "itemsKey": "items"
     },
@@ -3269,13 +2911,7 @@
           "description": "With law_id, return this text block's content instead of the whole law"
         },
         "relation_type": {
-          "enum": [
-            "modifies",
-            "modifiedBy",
-            "derogates",
-            "derogatedBy",
-            "all"
-          ],
+          "enum": ["modifies", "modifiedBy", "derogates", "derogatedBy", "all"],
           "type": "string",
           "description": "With law_id, list related laws of this relation kind instead of the law body"
         },
@@ -3293,10 +2929,7 @@
   },
   {
     "cli": {
-      "command": [
-        "audit-log",
-        "list"
-      ],
+      "command": ["audit-log", "list"],
       "scope": "admin_read",
       "itemsKey": "items"
     },
@@ -3364,34 +2997,20 @@
   },
   {
     "cli": {
-      "command": [
-        "organization"
-      ],
+      "command": ["organization"],
       "scope": "admin_write",
       "discriminator": {
         "prop": "action",
         "subcommands": {
           "add_member": {
             "command": "add-member",
-            "include": [
-              "matter_id",
-              "user_id"
-            ],
-            "required": [
-              "matter_id",
-              "user_id"
-            ]
+            "include": ["matter_id", "user_id"],
+            "required": ["matter_id", "user_id"]
           },
           "remove_member": {
             "command": "remove-member",
-            "include": [
-              "matter_id",
-              "user_id"
-            ],
-            "required": [
-              "matter_id",
-              "user_id"
-            ],
+            "include": ["matter_id", "user_id"],
+            "required": ["matter_id", "user_id"],
             "destructive": true
           },
           "update_org_settings": {
@@ -3410,17 +3029,11 @@
     "description": "Manage organization members and non-secret settings. Member actions require matter_id and user_id. update_org_settings controls matter numbering, prompt caching, and document processing. Manage provider secrets in the dashboard.",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "action"
-      ],
+      "required": ["action"],
       "additionalProperties": false,
       "properties": {
         "action": {
-          "enum": [
-            "add_member",
-            "remove_member",
-            "update_org_settings"
-          ],
+          "enum": ["add_member", "remove_member", "update_org_settings"],
           "type": "string",
           "description": "Administrative action to perform"
         },
@@ -3451,10 +3064,7 @@
           "description": "Toggle AI prompt caching for the organization (update_org_settings)"
         },
         "document_processing_mode": {
-          "enum": [
-            "off",
-            "searchable-text"
-          ],
+          "enum": ["off", "searchable-text"],
           "type": "string",
           "description": "Set automatic PDF searchable-text extraction for the organization (update_org_settings)"
         },
@@ -3472,30 +3082,18 @@
   },
   {
     "cli": {
-      "command": [
-        "feedback",
-        "send"
-      ],
+      "command": ["feedback", "send"],
       "scope": "feedback"
     },
     "name": "send_feedback",
     "description": "File a bug, feature request, or docs issue with the stella maintainers. Requires explicit human approval; the tool never publishes anything on its own. It returns a prefilled new-issue URL and a gh command the human opens and submits under their own GitHub account. All content is sanitized server-side (emails, ids, secrets, URLs, IPs are redacted). Never include tenant data, client or matter names, ids, or secrets; describe the problem, reproduction steps, and expected vs actual result.",
     "inputSchema": {
       "type": "object",
-      "required": [
-        "kind",
-        "title",
-        "body"
-      ],
+      "required": ["kind", "title", "body"],
       "additionalProperties": false,
       "properties": {
         "kind": {
-          "enum": [
-            "bug",
-            "feature_request",
-            "docs",
-            "other"
-          ],
+          "enum": ["bug", "feature_request", "docs", "other"],
           "type": "string",
           "description": "Feedback category: bug, feature_request, docs, or other"
         },
@@ -3512,9 +3110,7 @@
           "description": "Markdown details: reproduction steps, expected vs actual behavior, environment. Never include tenant data, client or matter names, ids, or secrets; they are redacted server-side."
         },
         "channel": {
-          "enum": [
-            "github"
-          ],
+          "enum": ["github"],
           "type": "string",
           "description": "Delivery channel. github returns a prefilled issue URL the human submits under their own GitHub account.",
           "default": "github"
@@ -3529,10 +3125,7 @@
   },
   {
     "cli": {
-      "command": [
-        "capability",
-        "list"
-      ],
+      "command": ["capability", "list"],
       "scope": "read",
       "itemsKey": "items"
     },
@@ -3547,11 +3140,7 @@
         },
         "access": {
           "type": "string",
-          "enum": [
-            "all",
-            "read",
-            "write"
-          ],
+          "enum": ["all", "read", "write"],
           "description": "Filter by access level."
         },
         "cursor": {
@@ -3575,10 +3164,7 @@
   },
   {
     "cli": {
-      "command": [
-        "capability",
-        "describe"
-      ],
+      "command": ["capability", "describe"],
       "scope": "read"
     },
     "name": "describe_capability",
@@ -3591,9 +3177,7 @@
           "description": "Capability id to describe, as returned by list_capabilities (e.g. \"time-entries.create\")."
         }
       },
-      "required": [
-        "capability"
-      ],
+      "required": ["capability"],
       "additionalProperties": false
     },
     "annotations": {
@@ -3604,10 +3188,7 @@
   },
   {
     "cli": {
-      "command": [
-        "capability",
-        "invoke"
-      ],
+      "command": ["capability", "invoke"],
       "scope": "read",
       "confirmPassthrough": true
     },
@@ -3651,9 +3232,7 @@
           "description": "Must be true to run a destructive capability. Set it only after a human user approved the irreversible action."
         }
       },
-      "required": [
-        "capability"
-      ],
+      "required": ["capability"],
       "additionalProperties": false
     },
     "annotations": {
