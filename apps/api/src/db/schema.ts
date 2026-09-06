@@ -6,6 +6,7 @@ export * from "./schema/templates";
 export * from "./schema/billing";
 export * from "./schema/workspace-admin";
 export * from "./schema/clauses";
+export * from "./schema/corpus-index-jobs";
 export * from "./schema/case-law";
 export * from "./schema/legislation";
 export * from "./schema/corpus-index-generations";

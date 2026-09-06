@@ -10,19 +10,22 @@
  * both tables are walked.
  */
 
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import { rootDb } from "@/api/db/root";
 import {
+  CORPUS_INDEX_JOB_SUCCEEDED_CHECKS,
   caseLawIndexJobs,
   legislationIndexJobs,
   schedulerJobs,
 } from "@/api/db/schema";
 import { isUuid } from "@/api/lib/custom-schema";
 import type { CorpusIndexProjectionSubject } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
+import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
+import { isRecord } from "@/api/lib/type-guards";
 
 export const BACKFILL_CORPUS_INDEX_JOB_DETAIL_TASK =
   "corpusIndex.backfillJobDetail" as const;
@@ -36,6 +39,40 @@ const BACKFILL_LIMIT = 1000;
 
 /** A page that found work leaves more behind it; the next one follows at once. */
 const CONTINUATION_DELAY_MS = 1000;
+
+/**
+ * Budgets LOCAL to a page's transaction. A page reads and writes a bounded
+ * set of rows by primary key, so it owes nothing to a lock it cannot get at
+ * once: without these a row held by a writer would keep the task, and the
+ * connection under it, past the scheduler lease that says it is still running.
+ */
+const BATCH_LOCK_TIMEOUT = "5s";
+const BATCH_STATEMENT_TIMEOUT = "30s";
+/**
+ * VALIDATE takes SHARE UPDATE EXCLUSIVE, which lets writers through but queues
+ * behind an autovacuum of the table until that vacuum yields, so the wait is
+ * longer than a page's. Its own scan is bounded only by the size of the trail,
+ * which is why it runs with no statement budget at all.
+ */
+const VALIDATE_LOCK_TIMEOUT = "1min";
+const VALIDATE_STATEMENT_TIMEOUT = "0";
+
+type TransactionBudget = { lockTimeout: string; statementTimeout: string };
+
+/**
+ * Both budgets, set LOCAL so they end with the transaction. Written as raw
+ * statements because `SET LOCAL` takes a literal, not a bind parameter; the
+ * values are this module's own constants.
+ */
+const setTransactionBudget = async (
+  tx: Transaction,
+  { lockTimeout, statementTimeout }: TransactionBudget,
+): Promise<void> => {
+  await tx.execute(sql.raw(`SET LOCAL lock_timeout = '${lockTimeout}'`));
+  await tx.execute(
+    sql.raw(`SET LOCAL statement_timeout = '${statementTimeout}'`),
+  );
+};
 
 export type CorpusIndexJobDetailBatch = {
   movedCount: number;
@@ -157,6 +194,63 @@ export const runCorpusIndexJobDetailBatchTx = async (
 ): Promise<CorpusIndexJobDetailBatch> =>
   await CORPUS_INDEX_JOB_DETAIL_BATCHES[family](tx, { cursor, limit });
 
+const CONSTRAINT_STATE_QUERY = (table: string, constraint: string) => sql`
+  SELECT constraint_state.convalidated AS "isValidated"
+  FROM pg_catalog.pg_constraint constraint_state
+  JOIN pg_catalog.pg_class table_relation
+    ON table_relation.oid = constraint_state.conrelid
+  JOIN pg_catalog.pg_namespace table_namespace
+    ON table_namespace.oid = table_relation.relnamespace
+  WHERE table_namespace.nspname = 'public'
+    AND table_relation.relname = ${table}
+    AND constraint_state.conname = ${constraint}
+`;
+
+/** `execute` answers with an array on one driver and `{ rows }` on the other. */
+const executedRows = (result: unknown): Record<string, unknown>[] => {
+  if (Array.isArray(result)) {
+    return result.filter((row: unknown) => isRecord(row));
+  }
+  return isRecord(result) && Array.isArray(result["rows"])
+    ? result["rows"].filter((row: unknown) => isRecord(row))
+    : [];
+};
+
+/**
+ * Check both trails against the rows that predate their constraints.
+ *
+ * The migration added each check NOT VALID, so PostgreSQL enforces it on every
+ * write but has never read the rows already there; until it does,
+ * `pg_constraint.convalidated` stays false and the invariant holds only for
+ * what the new writers wrote. Validating is the last step of the repair and a
+ * no-op once done, which is what makes running it again harmless. It reads the
+ * catalog back rather than trusting the statement: a validation that did not
+ * take must leave the repair unfinished.
+ */
+export const validateCorpusIndexJobChecksTx = async (
+  tx: Transaction,
+): Promise<void> => {
+  // SAFETY: two entries, fixed at compile time — the two trails the corpus
+  // keeps. The statements are DDL, so they cannot be batched into one query.
+  // oxlint-disable no-db-await-in-loop/no-db-await-in-loop -- bounded by the constant map above
+  for (const [table, constraint] of Object.entries(
+    CORPUS_INDEX_JOB_SUCCEEDED_CHECKS,
+  )) {
+    await tx.execute(
+      sql.raw(
+        `ALTER TABLE public."${table}" VALIDATE CONSTRAINT "${constraint}"`,
+      ),
+    );
+    const state = executedRows(
+      await tx.execute(CONSTRAINT_STATE_QUERY(table, constraint)),
+    ).at(0);
+    if (state?.["isValidated"] !== true) {
+      panic(`Constraint ${constraint} on ${table} is not validated`);
+    }
+  }
+  // oxlint-enable no-db-await-in-loop/no-db-await-in-loop
+};
+
 type BackfillPosition = {
   family: CorpusIndexJobDetailFamily;
   cursor: string | null;
@@ -204,46 +298,95 @@ export const backfillCorpusIndexJobDetail: SchedulerTask = async ({
     eq(schedulerJobs.lockedBy, leaseToken),
   );
 
-  const outcome = await rootDb.transaction(async (tx) => {
-    const { movedCount, nextCursor } = await runCorpusIndexJobDetailBatchTx(
-      tx,
-      {
-        cursor,
-        family,
-      },
-    );
-    if (nextCursor !== null) {
-      // Checkpoint last: replaying a page moves nothing a second time, while
-      // advancing first could step over rows the update did not reach.
-      await tx
-        .update(schedulerJobs)
-        .set({ payload: { cursor: nextCursor, family } })
-        .where(leaseFence);
-      return { family, movedCount, status: "progress" as const };
-    }
+  const page = await Result.tryPromise({
+    try: async () =>
+      await rootDb.transaction(async (tx) => {
+        await setTransactionBudget(tx, {
+          lockTimeout: BATCH_LOCK_TIMEOUT,
+          statementTimeout: BATCH_STATEMENT_TIMEOUT,
+        });
+        const { movedCount, nextCursor } = await runCorpusIndexJobDetailBatchTx(
+          tx,
+          { cursor, family },
+        );
+        if (nextCursor !== null) {
+          // Checkpoint last: replaying a page moves nothing a second time,
+          // while advancing first could step over rows the update did not
+          // reach.
+          await tx
+            .update(schedulerJobs)
+            .set({ payload: { cursor: nextCursor, family } })
+            .where(leaseFence);
+          return { family, movedCount, status: "progress" as const };
+        }
 
-    const following = nextFamily(family);
-    if (following !== null) {
-      await tx
-        .update(schedulerJobs)
-        .set({ payload: { cursor: null, family: following } })
-        .where(leaseFence);
-      return { family, movedCount, status: "progress" as const };
-    }
-
-    // audit: skip — retires a versioned one-shot repair; scheduler job runs
-    // retain the operator trail.
-    await tx.update(schedulerJobs).set({ enabled: false }).where(leaseFence);
-    return { family, movedCount, status: "complete" as const };
+        const following = nextFamily(family);
+        if (following === null) {
+          return { family, movedCount, status: "swept" as const };
+        }
+        await tx
+          .update(schedulerJobs)
+          .set({ payload: { cursor: null, family: following } })
+          .where(leaseFence);
+        return { family, movedCount, status: "progress" as const };
+      }),
+    catch: (cause) => cause,
   });
+  if (Result.isError(page)) {
+    // A row this page wanted is held by a writer. The page moved nothing and
+    // checkpointed nothing, so the next tick asks for the same range again;
+    // anything else is a failure of the sweep and is the runner's to record.
+    if (!isPgError(page.error, PG_ERROR.LOCK_NOT_AVAILABLE)) {
+      throw page.error;
+    }
+    logger.info("scheduler.corpus_index_job_detail_contended", {
+      "corpusIndexJobDetail.family": family,
+    });
+    return;
+  }
 
   logger.info("scheduler.corpus_index_job_detail_backfilled", {
-    "corpusIndexJobDetail.family": outcome.family,
-    "corpusIndexJobDetail.moved": outcome.movedCount,
-    "corpusIndexJobDetail.status": outcome.status,
+    "corpusIndexJobDetail.family": page.value.family,
+    "corpusIndexJobDetail.moved": page.value.movedCount,
+    "corpusIndexJobDetail.status": page.value.status,
   });
 
-  if (outcome.status === "progress" && !signal.aborted) {
-    scheduleContinuation(new Date(Date.now() + CONTINUATION_DELAY_MS));
+  if (page.value.status === "progress") {
+    if (!signal.aborted) {
+      scheduleContinuation(new Date(Date.now() + CONTINUATION_DELAY_MS));
+    }
+    return;
   }
+
+  // Both trails are walked, so no row can hold the old shape any more and the
+  // constraints the migration left NOT VALID can be checked against the rows
+  // that predate them. The job retires in the same transaction: a validation
+  // that does not finish leaves the job enabled, and the next tick, finding
+  // nothing left to move, tries again.
+  const validated = await Result.tryPromise({
+    try: async () =>
+      await rootDb.transaction(async (tx) => {
+        await setTransactionBudget(tx, {
+          lockTimeout: VALIDATE_LOCK_TIMEOUT,
+          statementTimeout: VALIDATE_STATEMENT_TIMEOUT,
+        });
+        await validateCorpusIndexJobChecksTx(tx);
+        // audit: skip — retires a versioned one-shot repair; scheduler job
+        // runs retain the operator trail.
+        await tx
+          .update(schedulerJobs)
+          .set({ enabled: false })
+          .where(leaseFence);
+      }),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(validated)) {
+    if (!isPgError(validated.error, PG_ERROR.LOCK_NOT_AVAILABLE)) {
+      throw validated.error;
+    }
+    logger.info("scheduler.corpus_index_job_detail_validation_contended", {});
+    return;
+  }
+
+  logger.info("scheduler.corpus_index_job_detail_validated", {});
 };

@@ -52,3 +52,14 @@ const CORPUS_INDEX_JOB_SUCCEEDED_STATUS =
 export const CORPUS_INDEX_JOB_SUCCEEDED_SQL_VALUE = sql.raw(
   `'${CORPUS_INDEX_JOB_SUCCEEDED_STATUS}'`,
 );
+
+/**
+ * The check each trail carries, by the table that carries it. Named here
+ * because more than the table has to know it: the migration added it NOT
+ * VALID, and the repair that moves the historical rows validates it by name
+ * once none is left.
+ */
+export const CORPUS_INDEX_JOB_SUCCEEDED_CHECKS = {
+  case_law_index_jobs: "case_law_index_jobs_succeeded_error_message",
+  legislation_index_jobs: "legislation_index_jobs_succeeded_error_message",
+} as const;

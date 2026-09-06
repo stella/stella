@@ -184,6 +184,8 @@ export const isTransientPgConnectionError = (error: unknown): boolean =>
 
 export const PG_ERROR = {
   DEADLOCK_DETECTED: "40P01",
+  /** A statement gave up waiting for a lock it asked for with `lock_timeout`. */
+  LOCK_NOT_AVAILABLE: "55P03",
   FOREIGN_KEY_VIOLATION: "23503",
   SERIALIZATION_FAILURE: "40001",
   UNIQUE_VIOLATION: "23505",

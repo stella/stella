@@ -1,6 +1,6 @@
 {
   "apps/api": {
-    "count": 782,
+    "count": 780,
     "files": {
       "apps/api/scripts/lib/capability-catalog.ts": 9,
       "apps/api/scripts/lib/enumerate-safe-handlers.ts": 7,
@@ -11,7 +11,6 @@
       "apps/api/src/db/online-migrations.ts": 1,
       "apps/api/src/db/schema-validators.ts": 7,
       "apps/api/src/db/schema/common.ts": 2,
-      "apps/api/src/db/schema/corpus-index-jobs.ts": 2,
       "apps/api/src/env-base.ts": 1,
       "apps/api/src/handlers/ai-config/validate-provider.ts": 1,
       "apps/api/src/handlers/bilingual-translations/schemas.ts": 2,

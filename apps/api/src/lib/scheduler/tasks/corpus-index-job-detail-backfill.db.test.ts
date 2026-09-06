@@ -5,6 +5,7 @@ import { drizzle } from "drizzle-orm/pglite";
 
 import type { Transaction } from "@/api/db/root";
 import {
+  CORPUS_INDEX_JOB_SUCCEEDED_CHECKS,
   caseLawDecisions,
   caseLawIndexJobs,
   caseLawSources,
@@ -13,7 +14,10 @@ import {
   legislationSources,
 } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
-import { runCorpusIndexJobDetailBatchTx } from "@/api/lib/scheduler/tasks/corpus-index-job-detail-backfill";
+import {
+  runCorpusIndexJobDetailBatchTx,
+  validateCorpusIndexJobChecksTx,
+} from "@/api/lib/scheduler/tasks/corpus-index-job-detail-backfill";
 import type { CorpusIndexJobDetailFamily } from "@/api/lib/scheduler/tasks/corpus-index-job-detail-backfill";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
@@ -72,7 +76,7 @@ const asPreConstraintWriter = async (
 const insertLegacyWithdrawal = async (id: string): Promise<void> => {
   await asPreConstraintWriter(
     "case_law_index_jobs",
-    "case_law_index_jobs_succeeded_error_message",
+    CORPUS_INDEX_JOB_SUCCEEDED_CHECKS.case_law_index_jobs,
     async () => {
       await db.execute(sql`
         INSERT INTO "case_law_index_jobs"
@@ -88,6 +92,39 @@ const insertLegacyWithdrawal = async (id: string): Promise<void> => {
       `);
     },
   );
+};
+
+const insertLegacyLegislationWithdrawal = async (id: string): Promise<void> => {
+  await asPreConstraintWriter(
+    "legislation_index_jobs",
+    CORPUS_INDEX_JOB_SUCCEEDED_CHECKS.legislation_index_jobs,
+    async () => {
+      await db.execute(sql`
+        INSERT INTO "legislation_index_jobs"
+          ("id", "document_id", "generation", "operation", "status", "error_message")
+        VALUES (
+          ${id}::uuid,
+          ${LEGISLATION_DOCUMENT_ID}::uuid,
+          'legislation_v2',
+          'withdraw',
+          'succeeded',
+          ${REASON}
+        )
+      `);
+    },
+  );
+};
+
+type ValidatedRow = { isValidated: boolean };
+
+/** What PostgreSQL says about the check, which is the repair's completion. */
+const isCheckValidated = async (constraint: string): Promise<boolean> => {
+  const { rows } = await db.execute<ValidatedRow>(sql`
+    SELECT convalidated AS "isValidated"
+    FROM pg_catalog.pg_constraint
+    WHERE conname = ${constraint}
+  `);
+  return rows.at(0)?.isValidated ?? panic(`No constraint named ${constraint}`);
 };
 
 const caseLawRows = async () =>
@@ -245,24 +282,7 @@ test("the walk resumes from its cursor across pages", async () => {
 
 test("legislation is walked the same way", async () => {
   const id = "0198e331-e578-7000-8000-000000000421";
-  await asPreConstraintWriter(
-    "legislation_index_jobs",
-    "legislation_index_jobs_succeeded_error_message",
-    async () => {
-      await db.execute(sql`
-        INSERT INTO "legislation_index_jobs"
-          ("id", "document_id", "generation", "operation", "status", "error_message")
-        VALUES (
-          ${id}::uuid,
-          ${LEGISLATION_DOCUMENT_ID}::uuid,
-          'legislation_v2',
-          'withdraw',
-          'succeeded',
-          ${REASON}
-        )
-      `);
-    },
-  );
+  await insertLegacyLegislationWithdrawal(id);
 
   expect(await runBatch({ cursor: null, family: "legislation" })).toEqual({
     movedCount: 1,
@@ -277,4 +297,49 @@ test("legislation is walked the same way", async () => {
       .from(legislationIndexJobs)
       .where(eq(legislationIndexJobs.documentId, LEGISLATION_DOCUMENT_ID)),
   ).toEqual([{ detail: REASON, errorMessage: null }]);
+});
+
+test("the walked trails end with both checks validated", async () => {
+  await insertLegacyWithdrawal("0198e331-e578-7000-8000-000000000431");
+  await insertLegacyLegislationWithdrawal(
+    "0198e331-e578-7000-8000-000000000432",
+  );
+  // The rows exist, so the checks stand unvalidated: PostgreSQL enforces them
+  // on every write and has never read what was already there.
+  expect([
+    await isCheckValidated(
+      CORPUS_INDEX_JOB_SUCCEEDED_CHECKS.case_law_index_jobs,
+    ),
+    await isCheckValidated(
+      CORPUS_INDEX_JOB_SUCCEEDED_CHECKS.legislation_index_jobs,
+    ),
+  ]).toEqual([false, false]);
+
+  await runBatch({ cursor: null, family: "case_law" });
+  await runBatch({ cursor: null, family: "legislation" });
+  await db.transaction(
+    async (tx) =>
+      await validateCorpusIndexJobChecksTx(asTestRaw<Transaction>(tx)),
+  );
+
+  expect([
+    await isCheckValidated(
+      CORPUS_INDEX_JOB_SUCCEEDED_CHECKS.case_law_index_jobs,
+    ),
+    await isCheckValidated(
+      CORPUS_INDEX_JOB_SUCCEEDED_CHECKS.legislation_index_jobs,
+    ),
+  ]).toEqual([true, true]);
+
+  // Validating again is what lets the repair be retried: a validated check is
+  // a no-op, not a second scan or an error.
+  await db.transaction(
+    async (tx) =>
+      await validateCorpusIndexJobChecksTx(asTestRaw<Transaction>(tx)),
+  );
+  expect(
+    await isCheckValidated(
+      CORPUS_INDEX_JOB_SUCCEEDED_CHECKS.case_law_index_jobs,
+    ),
+  ).toBe(true);
 });

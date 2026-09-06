@@ -25,6 +25,7 @@ import type {
 import {
   CORPUS_INDEX_JOB_OPERATION_SQL_VALUES,
   CORPUS_INDEX_JOB_STATUS_SQL_VALUES,
+  CORPUS_INDEX_JOB_SUCCEEDED_CHECKS,
   CORPUS_INDEX_JOB_SUCCEEDED_SQL_VALUE,
 } from "./corpus-index-jobs";
 import type {
@@ -286,7 +287,7 @@ export const legislationIndexJobs = p.pgTable(
     // The case-law twin's invariant, on the same declaration: a succeeded row
     // carries no failure.
     p.check(
-      "legislation_index_jobs_succeeded_error_message",
+      CORPUS_INDEX_JOB_SUCCEEDED_CHECKS.legislation_index_jobs,
       sql`${t.status} <> ${CORPUS_INDEX_JOB_SUCCEEDED_SQL_VALUE} OR ${t.errorMessage} IS NULL`,
     ),
     ...globalCaseLawPolicies(),
