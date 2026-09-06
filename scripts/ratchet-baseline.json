@@ -777,7 +777,7 @@
     }
   },
   "no-db-await-in-loop-suppressions": {
-    "count": 124,
+    "count": 116,
     "files": {
       "apps/api/scripts/backfill-image-thumbnails.ts": 3,
       "apps/api/scripts/backfill-search-previews.ts": 1,
@@ -789,7 +789,6 @@
       "apps/api/src/handlers/case-law/ingestion/decision-identifier-backfill.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/pipeline.ts": 2,
       "apps/api/src/handlers/case-law/ingestion/reconciliation-engine.ts": 2,
-      "apps/api/src/handlers/case-law/ingestion/status.ts": 8,
       "apps/api/src/handlers/case-law/research/columns-reorder.ts": 1,
       "apps/api/src/handlers/chat/delete-thread.ts": 2,
       "apps/api/src/handlers/chat/tools/external-mcp-tools.ts": 1,
