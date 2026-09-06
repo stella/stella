@@ -2,6 +2,7 @@ import { Result, UnhandledException } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
+import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   auditLogs,
@@ -100,8 +101,9 @@ const fixture = async () => {
     Parameters<typeof writeStoredTemplate>[0]["writeObject"]
   > = async ({ key, data }) => {
     expect(typeof data).not.toBe("string");
-    if (typeof data === "string")
+    if (typeof data === "string") {
       throw new HandlerError({ status: 500, message: "Expected bytes" });
+    }
     expect(objects.has(key)).toBe(false);
     objects.set(key, data);
     return S3_OBJECT_WRITE_CERTAINTY.CONFIRMED;
@@ -180,11 +182,12 @@ test.each(
     for (const version of state.versions) {
       const stored = f.objects.get(version.s3Key);
       expect(stored).toBeDefined();
-      if (!stored)
+      if (!stored) {
         throw new HandlerError({
           status: 500,
           message: "Published bytes missing",
         });
+      }
       const embedded: unknown = JSON.parse(new TextDecoder().decode(stored));
       expect(embedded).toEqual(version.manifest);
       expect(
@@ -351,7 +354,7 @@ test("a reclaimed upload cannot publish after its writer ownership expires", asy
     await Result.tryPromise(
       async () =>
         await testDb.transaction(
-          asTestRaw<Parameters<typeof testDb.transaction>[0]>(callback),
+          async (tx) => await callback(asTestRaw<Transaction>(tx)),
         ),
     );
   const result = await Result.gen(() =>

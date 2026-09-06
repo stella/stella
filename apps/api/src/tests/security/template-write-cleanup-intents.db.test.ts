@@ -10,7 +10,6 @@ import type { SafeDb } from "@/api/db/safe-db";
 import { bufferObjectCleanupIntents, templates } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
-import type { SafeId } from "@/api/lib/branded-types";
 import {
   reserveObjectCleanupIntents,
   settleObjectCleanupIntentsAfterWriter,
@@ -160,7 +159,7 @@ beforeAll(async () => {
     ),
   );
   schemaPolicyExpression = await readInsertPolicyExpression();
-  const migration = readFileSync(migrationPath, "utf8");
+  const migration = readFileSync(migrationPath, "utf-8");
   for (const source of migration.split("--> statement-breakpoint")) {
     const statement = source.trim();
     if (statement.length > 0) {

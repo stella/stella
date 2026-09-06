@@ -319,10 +319,10 @@ const writeTemplateAttempt = async function* ({
       const changes: Record<string, { old: unknown; new: unknown }> = {
         s3Key: { old: locked.s3Key, new: s3Key },
         fieldCount: { old: null, new: manifest.fields.length },
+        ...(mode.type === "new-version"
+          ? { currentVersion: { old: locked.currentVersion, new: version } }
+          : {}),
       };
-      if (mode.type === "new-version") {
-        changes.currentVersion = { old: locked.currentVersion, new: version };
-      }
       for (const [key, value] of Object.entries(metadata ?? {})) {
         changes[key] = { old: null, new: value };
       }
