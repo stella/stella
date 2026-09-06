@@ -1,6 +1,7 @@
 /** Shared template-clause link operations used by the clause and template slices. */
 import { panic } from "better-result";
 import { and, eq, or, sql } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
@@ -717,6 +718,7 @@ export const syncAllClausesHandler = async ({
     // One bulk sync is one audit group: the events are recorded together
     // after the loop so they share a single groupId.
     const auditEvents: AuditEvent[] = [];
+    const repointed: SQL[] = [];
 
     for (const link of links) {
       if (!isOutdatedLink(link) || !link.clauseId || !link.clause) {
@@ -729,16 +731,7 @@ export const syncAllClausesHandler = async ({
         continue;
       }
 
-      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- sequential: this update runs inside the one bulk-sync transaction after its findFirst
-      await tx
-        .update(templateClauses)
-        .set({ clauseVersionId: latestVersion.id })
-        .where(
-          and(
-            eq(templateClauses.id, link.id),
-            eq(templateClauses.templateId, templateId),
-          ),
-        );
+      repointed.push(sql`(${link.id}::uuid, ${latestVersion.id}::uuid)`);
 
       auditEvents.push({
         action: AUDIT_ACTION.UPDATE,
@@ -754,6 +747,20 @@ export const syncAllClausesHandler = async ({
       });
 
       synced.push(link.id);
+    }
+
+    // Every outdated link is repointed by one statement: the new version ids
+    // are already in hand, so a values join carries them in rather than the
+    // sync costing a round trip per link. The template check stays on the
+    // statement, so a link id from another template updates nothing.
+    if (repointed.length > 0) {
+      await tx.execute(sql`
+        UPDATE ${templateClauses} AS target
+           SET clause_version_id = repoint.clause_version_id
+          FROM (VALUES ${sql.join(repointed, sql`, `)})
+               AS repoint(link_id, clause_version_id)
+         WHERE target.id = repoint.link_id
+           AND target.template_id = ${templateId}`);
     }
 
     if (auditEvents.length > 0) {

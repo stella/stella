@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import type { Static } from "elysia";
 import { t } from "elysia";
 
@@ -518,14 +518,13 @@ const copyToWorkspaceHandler = async function* ({
       dependencies,
     });
 
-    // For move operations, delete source entities in the same transaction
+    // For move operations, delete source entities in the same transaction.
     if (deleteSource) {
-      // Delete in reverse order (children first) to respect FK constraints.
-      // The cascade will handle versions and fields.
-      for (const id of sourceEntityIds.toReversed()) {
-        // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- sequential deletes in reverse (children-first) order respect FK constraints within the transaction
-        await tx.delete(entities).where(eq(entities.id, id));
-      }
+      // The whole moved subtree goes in one statement. Ordering the deletes
+      // bought nothing: `entities.parent_id` is ON DELETE SET NULL, so no
+      // child is ever left referencing a removed parent, and every child is
+      // in this set anyway. Versions and fields still cascade.
+      await tx.delete(entities).where(inArray(entities.id, sourceEntityIds));
 
       await tx
         .update(workspaces)

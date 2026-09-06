@@ -777,7 +777,7 @@
     }
   },
   "no-db-await-in-loop-suppressions": {
-    "count": 110,
+    "count": 108,
     "files": {
       "apps/api/scripts/backfill-image-thumbnails.ts": 3,
       "apps/api/scripts/backfill-search-previews.ts": 1,
@@ -797,7 +797,6 @@
       "apps/api/src/handlers/contacts/create.ts": 1,
       "apps/api/src/handlers/contacts/update.ts": 1,
       "apps/api/src/handlers/document-reviews/propose-positions-stream.ts": 1,
-      "apps/api/src/handlers/entities/copy-to-workspace.ts": 1,
       "apps/api/src/handlers/entities/copy-utils.ts": 5,
       "apps/api/src/handlers/entities/delete-version.ts": 1,
       "apps/api/src/handlers/fields/kanban-placement/update.ts": 1,
@@ -829,7 +828,6 @@
       "apps/api/src/lib/scouts/work-attention.ts": 1,
       "apps/api/src/lib/search/index-global.ts": 2,
       "apps/api/src/lib/search/pg-fts-provider.ts": 1,
-      "apps/api/src/lib/template-clause-links.ts": 1,
       "apps/api/src/lib/workflow-queue.ts": 2,
       "apps/api/src/lib/workflow-target-queries.ts": 2,
       "apps/api/src/lib/workflow/route-playbooks.ts": 1,
