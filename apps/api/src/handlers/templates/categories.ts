@@ -10,8 +10,66 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import { LIMITS } from "@/api/lib/limits";
 import { pickDefined } from "@/api/lib/pick-defined";
+import { isRecord } from "@/api/lib/type-guards";
+
+// ── Hierarchy ───────────────────────────────────────
+
+/**
+ * Would re-parenting `categoryId` under `parentId` close a loop?
+ *
+ * One recursive walk up the chain inside the database, rather than a read per
+ * level: the depth is a property of the caller's data, so a per-level read made
+ * the round trips grow with how deeply a firm nests its categories.
+ *
+ * `path` carries the ids already seen so the walk also terminates on a cycle
+ * that is already stored — a state this endpoint cannot create but must not
+ * hang on — and reports it, which is what the per-level walk's `visited` set
+ * did. Every row is confined to the caller's organization at both the seed and
+ * the step, so a category from another firm can neither be reached nor make
+ * this answer differ.
+ */
+const parentChainWouldCycle = async ({
+  categoryId,
+  organizationId,
+  parentId,
+  scopedDb,
+}: {
+  categoryId: SafeId<"templateCategory">;
+  organizationId: SafeId<"organization">;
+  parentId: SafeId<"templateCategory">;
+  scopedDb: ScopedDb;
+}): Promise<boolean> => {
+  const rows = await scopedDb((tx) =>
+    tx.execute(sql`
+      WITH RECURSIVE ancestor AS (
+        SELECT seed.id, seed.parent_id, ARRAY[seed.id] AS path, false AS looped
+          FROM ${templateCategories} AS seed
+         WHERE seed.id = ${parentId}
+           AND seed.organization_id = ${organizationId}
+        UNION ALL
+        SELECT step.id,
+               step.parent_id,
+               ancestor.path || step.id,
+               step.id = ANY(ancestor.path)
+          FROM ${templateCategories} AS step
+          JOIN ancestor ON step.id = ancestor.parent_id
+         WHERE step.organization_id = ${organizationId}
+           AND NOT ancestor.looped
+      )
+      SELECT coalesce(
+               bool_or(ancestor.looped OR ancestor.id = ${categoryId}),
+               false
+             ) AS cycle
+        FROM ancestor
+    `),
+  );
+
+  const row = executedRows(rows).at(0);
+  return isRecord(row) && row["cycle"] === true;
+};
 
 // ── Schemas ─────────────────────────────────────────
 
@@ -199,30 +257,17 @@ export const updateTemplateCategoryHandler = async ({
       });
     }
 
-    // Walk the ancestor chain to detect cycles
-    const visited = new Set([categoryId]);
-    let checkId: SafeId<"templateCategory"> | null = parentId;
-    while (checkId) {
-      if (visited.has(checkId)) {
-        return status(400, {
-          message: "Cannot create circular category hierarchy",
-        });
-      }
-      visited.add(checkId);
-      const currentId: SafeId<"templateCategory"> = checkId;
-      const ancestor:
-        | { parentId: SafeId<"templateCategory"> | null }
-        // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- walks the parent chain one read per level; a recursive CTE is the batch shape
-        | undefined = await scopedDb((tx) =>
-        tx.query.templateCategories.findFirst({
-          where: {
-            id: { eq: currentId },
-            organizationId: { eq: organizationId },
-          },
-          columns: { parentId: true },
-        }),
-      );
-      checkId = ancestor?.parentId ?? null;
+    if (
+      await parentChainWouldCycle({
+        categoryId,
+        organizationId,
+        parentId,
+        scopedDb,
+      })
+    ) {
+      return status(400, {
+        message: "Cannot create circular category hierarchy",
+      });
     }
   }
 

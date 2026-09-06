@@ -137,18 +137,25 @@ export const buildClaimMemoryExtractionQueueQuery = ({
 type BuildSettleMemoryExtractionQueueQueryOptions = {
   leaseExpiresAt: Date;
   now: Date;
-  organizationId: SafeId<"organization">;
+  organizationIds: readonly SafeId<"organization">[];
 };
 
 /**
- * Release one claimed tenant with compare-and-set semantics. A compaction
- * trigger that wakes the tenant while work is in flight changes scheduled_at,
- * causing this stale settlement to no-op instead of erasing the wakeup.
+ * Release every claimed tenant of one pass with compare-and-set semantics. A
+ * compaction trigger that wakes a tenant while work is in flight changes its
+ * scheduled_at, causing this stale settlement to no-op for that tenant instead
+ * of erasing the wakeup; the CAS is per row, so one statement settles the whole
+ * batch without any tenant borrowing another's outcome.
+ *
+ * The ids go in as a single array parameter rather than a list of binds, so the
+ * statement's shape does not change with the batch size. `sql.param` is
+ * load-bearing: a bare array is expanded into one bind per element, which would
+ * put the cast on the last one alone.
  */
 export const buildSettleMemoryExtractionQueueQuery = ({
   leaseExpiresAt,
   now,
-  organizationId,
+  organizationIds,
 }: BuildSettleMemoryExtractionQueueQueryOptions) => sql`
   UPDATE organization_settings AS settings
   SET memory_extraction_scheduled_at = CASE
@@ -164,7 +171,7 @@ export const buildSettleMemoryExtractionQueueQuery = ({
     ) THEN ${now}
     ELSE NULL
   END
-  WHERE settings.organization_id = ${organizationId}
+  WHERE settings.organization_id = ANY(${sql.param([...organizationIds])}::text[])
     AND settings.memory_extraction_enabled = true
     AND settings.memory_extraction_enabled_at IS NOT NULL
     AND settings.memory_extraction_scheduled_at = ${leaseExpiresAt}::timestamptz

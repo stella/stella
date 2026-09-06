@@ -91,7 +91,7 @@ describe("memory extraction tenant queue", () => {
       buildSettleMemoryExtractionQueueQuery({
         leaseExpiresAt,
         now: new Date("2026-07-31T00:10:00.000Z"),
-        organizationId,
+        organizationIds: [organizationId],
       }),
     );
 
@@ -103,8 +103,44 @@ describe("memory extraction tenant queue", () => {
       "compaction.memory_extraction_consent_at = settings.memory_extraction_enabled_at",
     );
     expect(query.sql).toContain("LIMIT 1");
-    expect(query.params).toContain(organizationId);
+    expect(query.params).toContainEqual([organizationId]);
     expect(query.params).toContain(leaseExpiresAt);
+  });
+
+  // The ids ride in as one array parameter, so the statement a two-tenant pass
+  // sends is character-for-character the statement a one-tenant pass sends.
+  // A bare array would be expanded into one bind per id, putting `::text[]` on
+  // the last of them and changing the shape with the batch.
+  test("settles a whole claimed batch with one statement shape", () => {
+    const leaseExpiresAt = new Date("2026-07-31T00:30:00.000Z");
+    const now = new Date("2026-07-31T00:10:00.000Z");
+    const organizationIds = [
+      safeId<"organization">(1),
+      safeId<"organization">(2),
+    ];
+
+    const batch = dialect.sqlToQuery(
+      buildSettleMemoryExtractionQueueQuery({
+        leaseExpiresAt,
+        now,
+        organizationIds,
+      }),
+    );
+    const single = dialect.sqlToQuery(
+      buildSettleMemoryExtractionQueueQuery({
+        leaseExpiresAt,
+        now,
+        organizationIds: [organizationIds[0] ?? safeId<"organization">(1)],
+      }),
+    );
+
+    expect(batch.sql).toBe(single.sql);
+    expect(batch.sql).toContain("settings.organization_id = ANY(");
+    expect(batch.sql).toContain("::text[])");
+    // The compare-and-set stays per row, so one tenant's stale lease cannot
+    // settle another's.
+    expect(batch.sql).toContain("settings.memory_extraction_scheduled_at = $3");
+    expect(batch.params).toContainEqual(organizationIds);
   });
 });
 

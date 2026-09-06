@@ -272,18 +272,17 @@ const settleMemoryExtractionBatch = async ({
   leaseExpiresAt,
   organizations,
 }: ClaimedMemoryExtractionBatch): Promise<void> => {
-  const now = new Date();
-  // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- one settle statement per claimed organization; a single VALUES join is the batch shape
-  await Promise.all(
-    organizations.map((organization) =>
-      rootDb.execute(
-        buildSettleMemoryExtractionQueueQuery({
-          leaseExpiresAt,
-          now,
-          organizationId: organization.organizationId,
-        }),
+  if (organizations.length === 0) {
+    return;
+  }
+  await rootDb.execute(
+    buildSettleMemoryExtractionQueueQuery({
+      leaseExpiresAt,
+      now: new Date(),
+      organizationIds: organizations.map(
+        (organization) => organization.organizationId,
       ),
-    ),
+    }),
   );
 };
 
