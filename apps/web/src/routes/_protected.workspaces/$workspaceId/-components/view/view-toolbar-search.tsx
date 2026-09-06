@@ -1,11 +1,11 @@
 import { useRef, useState } from "react";
+import type { RefObject } from "react";
 
 import { useHotkey } from "@tanstack/react-hotkeys";
 import { Columns3Icon, SearchIcon, XIcon } from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
-import type { EntityFindScope } from "@stll/api-contract";
 import { Button } from "@stll/ui/button";
 import { Input } from "@stll/ui/input";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
@@ -31,6 +31,8 @@ import { useTableFind } from "@/routes/_protected.workspaces/$workspaceId/-hooks
 const FIND_DEBOUNCE_MS = 250;
 
 type ViewToolbarSearchProps = {
+  /** The view pane, toolbar and grid: what a key press inside belongs to. */
+  paneRef: RefObject<HTMLElement | null>;
   properties: WorkspaceProperty[];
   view: WorkspaceView<"table">;
 };
@@ -44,11 +46,12 @@ type ViewToolbarSearchProps = {
  * the rows that stay narrowed after the popover closes are still explained.
  */
 export const ViewToolbarSearch = ({
+  paneRef,
   properties,
   view,
 }: ViewToolbarSearchProps) => {
   const t = useTranslations();
-  const { columns, request } = useTableFind({ properties, view });
+  const { columns, request, selection } = useTableFind({ properties, view });
   const find = useTableStore((state) => state.find[view.id]);
   const openFind = useTableStore((state) => state.openFind);
   const closeFind = useTableStore((state) => state.closeFind);
@@ -57,7 +60,7 @@ export const ViewToolbarSearch = ({
   const submitFind = useTableStore((state) => state.submitFind);
   const setFindScope = useTableStore((state) => state.setFindScope);
   const inputRef = useRef<HTMLInputElement>(null);
-  const triggerRef = useRef<HTMLButtonElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
   // The column picker lives inside this popover rather than in a menu of its
   // own: a nested popup counts as an outside press and closed the bar.
   const [columnsShown, setColumnsShown] = useState(false);
@@ -68,10 +71,14 @@ export const ViewToolbarSearch = ({
     submitFind(view.id);
   }, FIND_DEBOUNCE_MS);
 
+  // The pane is the root, not this button: a press with a grid cell focused
+  // has to count as inside the table, or a docked inspector takes it. The
+  // popup is portaled, so it is named separately.
   useFindSurface({
+    bar: popupRef,
     enabled: true,
     owner: "table",
-    root: triggerRef,
+    root: paneRef,
     scope: "app",
   });
   useHotkey(
@@ -91,12 +98,12 @@ export const ViewToolbarSearch = ({
   );
 
   const searchable = searchableColumnIds(columns);
-  const selection = find?.scope ?? { type: "all" };
   const narrowed = selection.type === "columns";
   const open = find?.status === "open";
 
-  // What the rows on screen were asked for, so the chip cannot name a term or
-  // a scope the query has not been sent.
+  // What the rows on screen were asked for, so the chip cannot name a term
+  // the query has not been sent; the selection it shows resolved in the same
+  // pass as the request.
   const applied = request.find;
 
   // Reopening on a term means "search again", so the next keystroke replaces
@@ -137,7 +144,6 @@ export const ViewToolbarSearch = ({
           // The chip names itself with the term it applied; only the bare icon
           // needs a label of its own.
           aria-label={applied ? undefined : t("workspaces.views.findInTable")}
-          ref={triggerRef}
           render={
             <Button
               className={cn(applied && "font-normal")}
@@ -151,7 +157,7 @@ export const ViewToolbarSearch = ({
           {applied && (
             <FindChipLabel
               columns={columns}
-              scope={applied.scope}
+              selection={selection}
               term={applied.term}
             />
           )}
@@ -172,7 +178,11 @@ export const ViewToolbarSearch = ({
       {/* Escape closes the whole bar, column list and all: the popover owns
           that key, and racing it for a first level would be a shortcut whose
           effect depended on where focus happened to be. */}
-      <PopoverPopup align="end" className="w-72 flex-col gap-2 p-2">
+      <PopoverPopup
+        align="end"
+        className="w-72 flex-col gap-2 p-2"
+        ref={popupRef}
+      >
         <div className="flex items-center gap-1">
           <Input
             autoFocus
@@ -226,18 +236,19 @@ export const ViewToolbarSearch = ({
 
 type FindChipLabelProps = {
   columns: TableFindColumn[];
-  scope: EntityFindScope;
+  selection: TableFindSelection;
   term: string;
 };
 
 /**
  * The applied term, in the row where filters and sorts show theirs. A narrowed
- * scope rides along, since a term is read differently depending on where it was
- * looked for.
+ * selection rides along, since a term is read differently depending on where
+ * it was looked for.
  */
-const FindChipLabel = ({ columns, scope, term }: FindChipLabelProps) => {
+const FindChipLabel = ({ columns, selection, term }: FindChipLabelProps) => {
   const t = useTranslations();
-  const narrowedTo = scope.type === "columns" ? scope.propertyIds : null;
+  const narrowedTo =
+    selection.type === "columns" ? selection.propertyIds : null;
   const soleColumn =
     narrowedTo?.length === 1
       ? columns.find((column) => column.id === narrowedTo[0])

@@ -1,24 +1,22 @@
-import type { TableFindHighlight } from "@/components/workspaces/table/find-highlight";
-import type { WorkspaceProperty, WorkspaceView } from "@/lib/types";
-import type { EntitiesFindKey } from "@/lib/workspaces/queries/entities.logic";
-import { useWorkspaceTableSchema } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-columns";
-import {
-  resolveFindScope,
-  toFindColumns,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-find.logic";
-import type { TableFindColumn } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-find.logic";
-import { useTableStore } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
+import { useMemo } from "react";
 
-type TableFindResult = {
-  columns: TableFindColumn[];
-  highlight: TableFindHighlight | null;
-  request: EntitiesFindKey;
-};
+import type { WorkspaceProperty, WorkspaceView } from "@/lib/types";
+import {
+  resolveTableFind,
+  UNRESTRICTED_FIND,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-find.logic";
+import type { TableFindResolution } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-find.logic";
+import { useTableStore } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
 
 /**
  * One resolution of a view's find bar, read by the toolbar that edits it and by
  * the readers that send it. It reads `submitted`, never `typed`, so a row query
  * and the marks drawn over its answer always describe the same term.
+ *
+ * Subscribed to `submitted` and `scope` separately rather than to the find as
+ * a whole: a keystroke changes only `typed`, and the layouts under this hook
+ * re-render every mounted cell when it returns a new object. The result is
+ * memoized for the same reason, and so the layouts can defer it.
  */
 export const useTableFind = ({
   properties,
@@ -26,27 +24,15 @@ export const useTableFind = ({
 }: {
   properties: WorkspaceProperty[];
   view: WorkspaceView<"table">;
-}): TableFindResult => {
-  const schema = useWorkspaceTableSchema({ properties, view });
-  const find = useTableStore((state) => state.find[view.id]);
-  const columns = toFindColumns({
-    columns: schema.columns,
-    hiddenProperties: view.layout.hiddenProperties,
-  });
+}): TableFindResolution => {
+  const term = useTableStore((state) => state.find[view.id]?.submitted ?? "");
+  const selection = useTableStore(
+    (state) => state.find[view.id]?.scope ?? UNRESTRICTED_FIND,
+  );
+  const { layout } = view;
 
-  const term = find?.submitted.trim() ?? "";
-  if (!find || term === "") {
-    return { columns, highlight: null, request: {} };
-  }
-
-  const scope = resolveFindScope({ columns, selection: find.scope });
-  return {
-    columns,
-    highlight: {
-      matchesName: scope.type === "all",
-      propertyIds: new Set(scope.propertyIds),
-      term,
-    },
-    request: { find: { scope, term } },
-  };
+  return useMemo(
+    () => resolveTableFind({ layout, properties, selection, term }),
+    [layout, properties, selection, term],
+  );
 };
