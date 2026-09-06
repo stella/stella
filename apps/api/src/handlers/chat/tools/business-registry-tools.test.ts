@@ -96,7 +96,10 @@ describe("createBusinessRegistryTools", () => {
     const execute =
       tool.execute ?? panic("Expected an executable registry tool");
 
-    const result = await execute({ jurisdiction: "GB", query: "12345678" }, {});
+    const result = await execute(
+      { jurisdiction: "GB", query: "12345678" },
+      { emitCustomEvent: () => undefined },
+    );
 
     expect(lookupCalls).toBe(1);
     expect(result).toEqual({

@@ -1142,9 +1142,9 @@ describe("chat tool schemas", () => {
     const businessRegistrySchema = convertSchemaToJsonSchema(
       businessRegistryLookup.inputSchema,
     );
-    expect(businessRegistrySchema.properties?.["jurisdiction"]?.enum).toContain(
-      "GB",
-    );
+    expect(
+      businessRegistrySchema?.properties?.["jurisdiction"]?.enum,
+    ).toContain("GB");
     expect(getChatToolPolicy(businessRegistryLookup)).toEqual({
       kind: "public_official",
       needsApproval: false,
