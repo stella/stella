@@ -169,7 +169,7 @@ const hostFileName = (value: unknown): string | null => {
   if (!isRecord(value)) {
     return null;
   }
-  const name = value["file_name"] ?? value["file_id"];
+  const name = value["file_name"];
   return typeof name === "string" && name.length > 0 ? name : null;
 };
 

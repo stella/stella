@@ -783,7 +783,7 @@
       "scope": "templates"
     },
     "name": "save_template",
-    "description": "Create a template from a DOCX, or configure an existing template's fields. To create, pass a name and the .docx: prefer file (a host file reference), else docx_base64 (base64-encoded Office Open XML bytes, max 50 MB decoded). The file's {{field}} markers become the fillable fields, and fields can configure them in the same call. docx_base64 must carry the original bytes verbatim: never retype the file or strip parts out to fit. To configure an existing template, pass template_id with fields and no document; only the manifest changes, the document's {{markers}} stay untouched. Read stella://reference/template-markers before authoring a DOCX and stella://reference/template-fields before configuring fields. Returns the template id and field count when creating, or the updated fields when configuring.",
+    "description": "Create a template from a DOCX, or configure an existing template's fields. To create, pass a name and the .docx: prefer file (a host file reference, up to 50 MB), else docx_base64 (base64-encoded Office Open XML bytes, max 196608 bytes decoded within the 524288-byte MCP request frame). The file's {{field}} markers become the fillable fields, and fields can configure them in the same call. docx_base64 must carry the original bytes verbatim: never retype the file or strip parts out to fit. To configure an existing template, pass template_id with fields and no document; only the manifest changes, the document's {{markers}} stay untouched. Read stella://reference/template-markers before authoring a DOCX and stella://reference/template-fields before configuring fields. Returns the template id and field count when creating, or the updated fields when configuring.",
     "inputSchema": {
       "type": "object",
       "required": [],
@@ -803,7 +803,7 @@
         "docx_base64": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 69905068,
+          "maxLength": 262144,
           "description": "Original .docx bytes, base64-encoded verbatim; the fallback for creating when the host cannot supply 'file'. Never strip parts out of the file to shrink it."
         },
         "file": {

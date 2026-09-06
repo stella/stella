@@ -16,6 +16,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import { CONTACT_FIELDS } from "@/api/lib/template-binding/binding-sources";
+import { MCP_MAX_REQUEST_BODY_BYTES } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { TEMPLATE_FIELD_REFERENCE_URI } from "@/api/mcp/template-field-reference";
 import { TEMPLATE_MARKER_REFERENCE_URI } from "@/api/mcp/template-marker-reference";
@@ -409,7 +410,7 @@ describe("MCP template tools", () => {
     expect(saveTemplate?.description).not.toContain("{{@clause:");
   });
 
-  test("save_template advertises the size limit it enforces, and forbids trimming the file to fit", async () => {
+  test("save_template advertises its host-file and inline limits, and forbids trimming the file to fit", async () => {
     const saveTemplate = await getMcpToolDefinition(
       "save_template",
       createContext(),
@@ -417,8 +418,14 @@ describe("MCP template tools", () => {
     const enforcedMegabytes = Math.floor(
       FILE_SIZE_LIMIT_BYTES.document / (1024 * 1024),
     );
+    const inlineDocxBytes = Math.floor(
+      (Math.floor(MCP_MAX_REQUEST_BODY_BYTES / 2) / 4) * 3,
+    );
     expect(saveTemplate?.description).toContain(
-      `max ${enforcedMegabytes} MB decoded`,
+      `up to ${enforcedMegabytes} MB`,
+    );
+    expect(saveTemplate?.description).toContain(
+      `max ${inlineDocxBytes} bytes decoded within the ${MCP_MAX_REQUEST_BODY_BYTES}-byte MCP request frame`,
     );
     expect(saveTemplate?.description).toContain(
       "never retype the file or strip parts out to fit",
@@ -2634,6 +2641,7 @@ describe("MCP template tools", () => {
     // entry it sent — not as one line of bare prose it would have to parse.
     const error = validationEnvelope(result);
     expect(error["message"]).toContain("ghost");
+    expect(error["code"]).toBe("validation_error");
     expect(error["issues"]).toEqual([
       { path: "fields.0", message: "No marker {{ghost}} in the DOCX." },
     ]);
@@ -2747,6 +2755,7 @@ describe("MCP template tools", () => {
     expect(describeStoredTemplateMock).not.toHaveBeenCalled();
     const error = validationEnvelope(result);
     expect(error["message"]).toContain("ghost");
+    expect(error["code"]).toBe("validation_error");
     expect(error["issues"]).toEqual([
       { path: "fields.0", message: "No marker {{ghost}} in the DOCX." },
     ]);

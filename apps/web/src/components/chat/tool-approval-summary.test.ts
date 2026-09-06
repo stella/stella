@@ -73,7 +73,10 @@ describe("buildRegistryWriteSummaryRows", () => {
   test("save_template falls back to the placeholder for an unnamed host file", () => {
     const rows = build("save_template", {
       name: "NDA",
-      file: { download_url: "https://files.example/signed" },
+      file: {
+        download_url: "https://files.example/signed",
+        file_id: "file_123",
+      },
     });
     const byKey = Object.fromEntries(rows.map((row) => [row.key, row.value]));
     expect(byKey["file"]).toBe(UPLOAD_PLACEHOLDER);

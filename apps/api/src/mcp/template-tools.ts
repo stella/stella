@@ -78,6 +78,7 @@ import {
   fillStoredTemplateWithTextStrict,
 } from "@/api/lib/templates/template-fill-service";
 import { withTimeout } from "@/api/lib/with-timeout";
+import { MCP_MAX_REQUEST_BODY_BYTES } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { OPENAI_FILE_REFERENCE_SCHEMA } from "@/api/mcp/document-file-upload";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
@@ -168,6 +169,17 @@ const TEMPLATE_FILL_COMPLETION_MODE_PROP = {
 const MAX_DOCX_BASE64_LENGTH =
   Math.ceil(FILE_SIZE_LIMIT_BYTES.document / 3) * 4;
 
+// A JSON-RPC request has a 512 KiB transport cap. Reserve half for the
+// envelope and the remaining tool arguments, then derive the base64 payload
+// ceiling from the part that can safely reach this validator.
+const MAX_INLINE_DOCX_BASE64_LENGTH = Math.floor(
+  MCP_MAX_REQUEST_BODY_BYTES / 2,
+);
+
+const MAX_INLINE_DOCX_BYTES = Math.floor(
+  (MAX_INLINE_DOCX_BASE64_LENGTH / 4) * 3,
+);
+
 /** Derived so the advertised ceiling cannot drift from the enforced one. */
 const MAX_DOCX_MEGABYTES = Math.floor(
   FILE_SIZE_LIMIT_BYTES.document / (1024 * 1024),
@@ -194,7 +206,7 @@ const saveTemplateArgsSchema = v.pipe(
       v.pipe(
         v.string(),
         v.minLength(1),
-        v.maxLength(MAX_DOCX_BASE64_LENGTH),
+        v.maxLength(MAX_INLINE_DOCX_BASE64_LENGTH),
         v.description(
           "Original .docx bytes, base64-encoded verbatim; the fallback for " +
             "creating when the host cannot supply 'file'. Never strip parts " +
@@ -510,8 +522,11 @@ const SAVE_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
   description:
     "Create a template from a DOCX, or configure an existing template's " +
     "fields. To create, pass a name and the .docx: prefer file (a host file " +
-    "reference), else docx_base64 (base64-encoded Office Open XML bytes, " +
-    `max ${MAX_DOCX_MEGABYTES} MB decoded). The file's {{field}} markers ` +
+    "reference, up to " +
+    `${MAX_DOCX_MEGABYTES} MB), else docx_base64 (base64-encoded Office ` +
+    `Open XML bytes, max ${MAX_INLINE_DOCX_BYTES} bytes decoded within the ` +
+    `${MCP_MAX_REQUEST_BODY_BYTES}-byte MCP request frame). The file's ` +
+    "{{field}} markers " +
     "become the fillable fields, and fields can configure them in the same " +
     "call. docx_base64 must carry the original bytes verbatim: never retype " +
     "the file or strip parts out to fit. To configure an existing template, " +
@@ -2013,12 +2028,7 @@ const createTemplateFromDocx = async ({
     });
   }
 
-  const validation = await validateDocxBuffer(
-    buffer.buffer.slice(
-      buffer.byteOffset,
-      buffer.byteOffset + buffer.byteLength,
-    ),
-  );
+  const validation = await validateDocxBuffer(new Uint8Array(buffer).buffer);
   if (!validation.valid) {
     return structuredErrorResult({
       code: "validation_error",

@@ -2672,7 +2672,7 @@ export const generatedRouteMap: RouteNode = {
                 docx_base64: {
                   type: "string",
                   minLength: 1,
-                  maxLength: 69905068,
+                  maxLength: 262144,
                   description:
                     "Original .docx bytes, base64-encoded verbatim; the fallback for creating when the host cannot supply 'file'. Never strip parts out of the file to shrink it.",
                 },

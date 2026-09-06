@@ -31,7 +31,6 @@ import {
   SAVE_DOCUMENT_PROJECTION,
   SAVE_MATTER_PROJECTION,
   SAVE_TASK_PROJECTION,
-  SAVE_TEMPLATE_PROJECTION,
   SAVE_TIME_ENTRY_PROJECTION,
   SEARCH_ACROSS_MATTERS_PROJECTION,
   SEARCH_CASE_LAW_PROJECTION,
@@ -450,12 +449,10 @@ export const WRITE_TOOL_REF_FIELD_MAP = {
   // cannot PUT bytes. Chat already has first-class template/document flows;
   // projecting this would duplicate that surface and its approval UX.
   save_filled_template: { chatProjectable: false },
-  save_template: {
-    chatProjectable: true,
-    // `template_id` is an org template handle, not a chat ref: passes through.
-    inputRefs: [],
-    projection: SAVE_TEMPLATE_PROJECTION,
-  },
+  // save_template accepts an MCP-host file reference. Chat has no attachment
+  // adapter that can resolve that host-only input, so advertising the shared
+  // schema would promise a call it cannot execute.
+  save_template: { chatProjectable: false },
 
   // --- Feedback -------------------------------------------------------------
   // `send_feedback` is an agent/MCP tool that reports bugs to the maintainers
