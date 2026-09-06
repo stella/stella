@@ -795,6 +795,39 @@ describe("MCP template tools", () => {
     });
   });
 
+  test("fill_template keeps the prefix of a paragraph larger than the text budget", async () => {
+    // A document that is one long paragraph must still render: spending the
+    // budget on its prefix beats returning an empty preview. Sized well past
+    // any plausible budget so the assertion does not restate the constant.
+    const oversized = "x".repeat(100_000);
+    fillStoredTemplateWithTextStrictMock.mockResolvedValue({
+      templateName: "Lease",
+      fileName: "lease.docx",
+      buffer: await makeDocxBuffer([oversized, "Trailing paragraph."]),
+      text: oversized,
+      unmatchedPlaceholders: [],
+      unusedValues: [],
+      structureErrors: [],
+    });
+
+    const result = await handleMcpToolCall({
+      args: { template_id: "t1", values: { "tenant.name": "ACME" } },
+      context: createContext(),
+      toolName: "fill_template",
+    });
+
+    const payload = parseToolPayload(result) as {
+      paragraphs: string[];
+      truncated: boolean;
+    };
+    const [first] = payload.paragraphs;
+    expect(payload.paragraphs).toHaveLength(1);
+    expect(first?.length).toBeGreaterThan(0);
+    expect(first?.length).toBeLessThan(oversized.length);
+    expect(first).toBe("x".repeat(first?.length ?? 0));
+    expect(payload.truncated).toBe(true);
+  });
+
   test("fill_template rejects unmatched placeholders by default", async () => {
     fillStoredTemplateWithTextStrictMock.mockResolvedValue({
       templateName: "Lease",
@@ -1346,6 +1379,60 @@ describe("MCP template tools", () => {
       unmatchedPlaceholders: ["signature"],
       unusedValues: [],
     });
+  });
+
+  test("save_filled_template fingerprints every argument except the idempotency key", async () => {
+    // The fingerprint decides whether a reused key replays a receipt or
+    // reports a conflict, so it must cover the whole request. A field left out
+    // of it lets a key answer a question it was never asked: an allow_partial
+    // save replaying as success for a later require_complete retry.
+    fillStoredTemplateDocxMock.mockResolvedValue({
+      fileName: "lease",
+      buffer: Buffer.from("filled docx"),
+      unmatchedPlaceholders: [],
+      unusedValues: [],
+      structureErrors: [],
+    });
+    createEntityVersionFromBufferMock.mockImplementation(async (input) => {
+      const created = {
+        status: "ok",
+        entityId: ENTITY_ID,
+        entityVersionId: "version_3",
+        fieldId: "field_3",
+        fileName: "lease.docx",
+        versionNumber: 3,
+      };
+      await input.afterWrite(fakeTransaction, created);
+      return Result.ok(created);
+    });
+
+    const args = {
+      action: "create_version",
+      template_id: TEMPLATE_ID,
+      matter_id: "ws_1",
+      idempotency_key: "fingerprint-1",
+      entity_id: ENTITY_ID,
+      values: { "tenant.name": "ACME" },
+      completion_mode: "allow_partial",
+    } as const;
+    await handleMcpToolCall({
+      args,
+      context: createContext(),
+      toolName: "save_filled_template",
+    });
+
+    const fingerprinted = fingerprintTemplatePersistenceRequestMock.mock
+      .calls[0]?.[0] as Record<string, unknown>;
+    // Both directions: every argument but the key is fingerprinted, and the
+    // key itself never is (it is the lookup, not part of the identity).
+    expect(
+      Object.keys(args)
+        .filter((key) => key !== "idempotency_key")
+        .sort()
+        .every((key) => key in fingerprinted),
+    ).toBe(true);
+    expect("idempotency_key" in fingerprinted).toBe(false);
+    expect(fingerprinted["completion_mode"]).toBe("allow_partial");
   });
 
   test("save_filled_template refuses to persist a document with live placeholders", async () => {

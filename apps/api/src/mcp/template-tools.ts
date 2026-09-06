@@ -1087,8 +1087,17 @@ const handleFillTemplateTool: McpToolHandler = async ({ args, context }) => {
   const { paragraphs, charCount } = await extractTextForPreview(filled.buffer);
   const rendered: string[] = [];
   let renderedChars = 0;
+  let truncated = false;
   for (const paragraph of paragraphs) {
-    if (renderedChars + paragraph.text.length > TEMPLATE_FILL_TEXT_MAX_CHARS) {
+    const remaining = TEMPLATE_FILL_TEXT_MAX_CHARS - renderedChars;
+    if (paragraph.text.length > remaining) {
+      // Spend the remaining budget on this paragraph's prefix rather than
+      // dropping it whole: one oversized paragraph (or a document that is a
+      // single long one) must not render the preview empty.
+      if (remaining > 0) {
+        rendered.push(paragraph.text.slice(0, remaining));
+      }
+      truncated = true;
       break;
     }
     rendered.push(paragraph.text);
@@ -1101,7 +1110,7 @@ const handleFillTemplateTool: McpToolHandler = async ({ args, context }) => {
     fileName: filled.fileName,
     paragraphs: rendered,
     charCount,
-    truncated: rendered.length < paragraphs.length,
+    truncated,
     unmatchedPlaceholders: filled.unmatchedPlaceholders,
     unusedValues: filled.unusedValues,
     structureErrors: filled.structureErrors,
@@ -1278,17 +1287,18 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
   const recordAuditEvent = bindWorkspaceRecorder(context, workspaceId);
   const templateId = brandPersistedTemplateId(input.template_id);
 
+  // Everything the caller sent except the key itself identifies the request,
+  // so a rest spread keeps the fingerprint total: a future argument joins it
+  // without anyone remembering to, and a key replayed under different
+  // arguments (a different completion_mode included) reports a conflict
+  // instead of replaying a receipt that answered a different question.
+  const { idempotency_key: _idempotencyKey, ...fingerprintedInput } = input;
   const requestFingerprint = (
     context.testDependencies?.fingerprintTemplatePersistenceRequest ??
     fingerprintTemplatePersistenceRequest
   )({
-    action: input.action,
-    templateId: input.template_id,
+    ...fingerprintedInput,
     workspaceId,
-    entityId: input.entity_id,
-    parentId: input.parent_id,
-    name: input.name,
-    values: input.values,
   });
   const claim = await (
     context.testDependencies?.claimTemplatePersistenceRequest ??
