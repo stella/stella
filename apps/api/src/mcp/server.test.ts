@@ -18,6 +18,12 @@ import { panic } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import {
+  resetAnalyticsForTesting,
+  setAnalyticsForTesting,
+} from "@/api/lib/analytics/client";
+import type { ServerAnalyticsCaptureParams } from "@/api/lib/analytics/types";
+import { recordMcpSessionInitialized } from "@/api/mcp/client-identity";
+import {
   MCP_ALL_RESOURCE_SCOPES,
   MCP_MAX_REQUEST_BODY_BYTES,
   MCP_STATELESS_ALLOW_HEADER,
@@ -71,6 +77,10 @@ const handleMcpHttpRequest = createMcpHttpRequestHandler({
   listMcpResources: listMcpResourcesMock,
   listMcpTools: listMcpToolsMock,
   readMcpResource: readMcpResourceMock,
+  // The real recorder, so the assertions below cover the sanitization it
+  // applies rather than a fake's idea of it; its analytics sink is replaced
+  // per test through the module's own seam.
+  recordMcpSessionInitialized,
   resolveMcpSessionContext: resolveMcpSessionContextMock,
 });
 
@@ -180,6 +190,7 @@ describe("handleMcpHttpRequest", () => {
     readMcpResourceMock.mockReset();
     readMcpResourceMock.mockImplementation(() => ({ contents: [] }));
     resolveMcpSessionContextMock.mockReset();
+    resetAnalyticsForTesting();
   });
 
   test("returns a generic 401 for token validation failures", async () => {
@@ -593,6 +604,100 @@ describe("handleMcpHttpRequest", () => {
     expect(response.status).toBe(401);
     expect(response.headers.get("WWW-Authenticate")).not.toBeNull();
     expect(authenticateMcpRequestMock).not.toHaveBeenCalled();
+  });
+
+  test("records the initializing client once, under a capped identity", async () => {
+    const captured: ServerAnalyticsCaptureParams[] = [];
+    setAnalyticsForTesting({
+      capture: (params) => {
+        captured.push(params);
+      },
+      identifyOrganizationGroup: () => undefined,
+      flush: async () => await Promise.resolve(),
+    });
+    authenticateMcpRequestMock.mockResolvedValue({
+      credential: { clientId: "client_1", type: "oauth_client" },
+      organizationId: "org_1",
+      scopes: ["stella:read"],
+      userId: "user_1",
+    });
+    resolveMcpSessionContextMock.mockResolvedValue({ type: "mcp-context" });
+
+    const response = await handleMcpHttpRequest(
+      createMcpRequest({
+        id: 1,
+        jsonrpc: "2.0",
+        method: "initialize",
+        params: {
+          capabilities: {},
+          clientInfo: { name: `  ${"n".repeat(200)}  `, version: "1.2.3" },
+          protocolVersion: "2025-06-18",
+        },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(captured).toEqual([
+      {
+        distinctId: "user_1",
+        event: "mcp_session_initialized",
+        groups: { organization: "org_1" },
+        properties: {
+          client_name: "n".repeat(128),
+          client_version: "1.2.3",
+          credential_type: "oauth_client",
+          mode: "default",
+        },
+      },
+    ]);
+
+    // One event per handshake, not per request: a later call on the same
+    // credentials carries no new client identity to record.
+    await handleMcpHttpRequest(
+      createMcpRequest({ id: 2, jsonrpc: "2.0", method: "tools/list" }),
+    );
+
+    expect(captured).toHaveLength(1);
+  });
+
+  test("serves the handshake when the analytics sink throws", async () => {
+    const sinkFailure = new Error("analytics sink unavailable");
+    setAnalyticsForTesting({
+      capture: () => {
+        throw sinkFailure;
+      },
+      identifyOrganizationGroup: () => undefined,
+      flush: async () => await Promise.resolve(),
+    });
+    authenticateMcpRequestMock.mockResolvedValue({
+      credential: { clientId: "client_1", type: "oauth_client" },
+      organizationId: "org_1",
+      scopes: ["stella:read"],
+      userId: "user_1",
+    });
+    resolveMcpSessionContextMock.mockResolvedValue({ type: "mcp-context" });
+
+    const response = await handleMcpHttpRequest(
+      createMcpRequest({
+        id: 1,
+        jsonrpc: "2.0",
+        method: "initialize",
+        params: {
+          capabilities: {},
+          clientInfo: { name: "claude-ai", version: "1.2.3" },
+          protocolVersion: "2025-06-18",
+        },
+      }),
+    );
+
+    // Telemetry is not part of the protocol contract: a failed capture is
+    // reported, and the client still completes its handshake.
+    expect(response.status).toBe(200);
+    expect(captureErrorMock).toHaveBeenCalledWith(sinkFailure, {
+      mode: "default",
+      phase: "initialize",
+      source: "mcp",
+    });
   });
 
   test("keeps POST buffered and DELETE non-streaming", async () => {

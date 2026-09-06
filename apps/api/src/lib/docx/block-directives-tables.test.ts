@@ -1,6 +1,13 @@
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
 import JSZip from "jszip";
 import * as slimdom from "slimdom";
+
+import {
+  propertyConfig,
+  propertySeed,
+  propertyTestTimeout,
+} from "@stll/property-testing";
 
 import { processBlockDirectives } from "./block-directives";
 import { paragraphText, W_NS } from "./ooxml";
@@ -35,6 +42,22 @@ const rowCount = (body: slimdom.Element): number =>
 
 const tableCount = (body: slimdom.Element): number =>
   body.getElementsByTagNameNS(W_NS, "tbl").length;
+
+/**
+ * Cells left without a `w:p`. OOXML requires every `w:tc` to carry at least one
+ * block-level child; Word reports a document that breaks this as corrupt, so
+ * the count must stay 0 after any directive pruning.
+ */
+const emptyCellCount = (body: slimdom.Element): number =>
+  [...body.getElementsByTagNameNS(W_NS, "tc")].filter(
+    (tc) => tc.getElementsByTagNameNS(W_NS, "p").length === 0,
+  ).length;
+
+/** Tables left without a `w:tr` — the same corruption one level up. */
+const emptyTableCount = (body: slimdom.Element): number =>
+  [...body.getElementsByTagNameNS(W_NS, "tbl")].filter(
+    (tbl) => tbl.getElementsByTagNameNS(W_NS, "tr").length === 0,
+  ).length;
 
 // A minimal DOCX ZIP for end-to-end fillTemplate coverage.
 const makeDocx = async (documentXml: string): Promise<Buffer> => {
@@ -189,6 +212,83 @@ describe("processBlockDirectives — malformed table placement", () => {
     expect(errors.length).toBeGreaterThan(0);
     expect(errors[0]?.message).toContain("table");
   });
+
+  test("{{#if}} opening in a row and closing outside the table → structure error", () => {
+    const xml = WRAP(
+      TBL(TR(TC(P("{{#if flag}}")))) + P("Body text") + P("{{/if}}"),
+    );
+    const body = parseBody(xml);
+    const { errors } = processBlockDirectives(body, { flag: true });
+
+    expect(errors.length).toBeGreaterThan(0);
+    expect(errors[0]?.message).toContain("table");
+    expect(errors[0]?.directive).toBe("{{#if flag}}");
+    // Markers neutralized: nothing left for the scanner to re-open.
+    const texts = bodyTexts(body);
+    expect(texts).not.toContain("{{#if flag}}");
+    expect(texts).not.toContain("{{/if}}");
+    expect(emptyCellCount(body)).toBe(0);
+  });
+
+  test("{{#if}} spanning two rows → structure error, every branch marker cleared", () => {
+    const xml = WRAP(
+      TBL(
+        TR(TC(P("{{#if flag}}"), P("Yes"))),
+        TR(TC(P("{{#else}}"), P("No"), P("{{/if}}"))),
+      ),
+    );
+    const body = parseBody(xml);
+    const { errors } = processBlockDirectives(body, { flag: false });
+
+    expect(errors.length).toBeGreaterThan(0);
+    expect(errors[0]?.message).toContain("table");
+    const texts = bodyTexts(body);
+    expect(texts).not.toContain("{{#if flag}}");
+    expect(texts).not.toContain("{{#else}}");
+    expect(texts).not.toContain("{{/if}}");
+  });
+
+  test.each([
+    ["else", "{{#else}}"],
+    ["elseif", "{{#elseif fallback}}"],
+  ])(
+    "a nested-row %s marker rejects the outer-row conditional without pruning content",
+    (_kind, branchMarker) => {
+      const xml = WRAP(
+        TBL(
+          TR(
+            TC(
+              P("{{#if flag}}"),
+              P("Outer before"),
+              TBL(TR(TC(P(branchMarker), P("Nested content")))),
+              P("Outer after"),
+              P("{{/if}}"),
+            ),
+          ),
+        ),
+      );
+      const body = parseBody(xml);
+      const { errors } = processBlockDirectives(body, {
+        fallback: true,
+        flag: false,
+      });
+
+      expect(errors.length).toBeGreaterThan(0);
+      expect(errors[0]?.message).toContain("table");
+      expect(rowCount(body)).toBe(2);
+      expect(tableCount(body)).toBe(2);
+      expect(emptyCellCount(body)).toBe(0);
+      expect(emptyTableCount(body)).toBe(0);
+      expect(bodyTexts(body)).toEqual([
+        "",
+        "Outer before",
+        "",
+        "Nested content",
+        "Outer after",
+        "",
+      ]);
+    },
+  );
 });
 
 // ── Table cloning in body-level loops ────────────────────
@@ -284,6 +384,275 @@ describe("processBlockDirectives — if-branch table pruning", () => {
   });
 });
 
+// ── {{#if}} confined to a table row ──────────────────────
+
+// A bilingual scope table: one scope item per row, Polish cell | English cell,
+// the whole row wrapped in a conditional that opens in the first cell and
+// closes in the last.
+const bilingualScopeRow = TR(
+  TC(P("{{#if scope.analysis}}"), P("Analiza umowy")),
+  TC(P("Contract analysis"), P("{{/if}}")),
+);
+const bilingualScopeTable = TBL(
+  TR(TC(P("Zakres")), TC(P("Scope"))),
+  bilingualScopeRow,
+);
+
+describe("processBlockDirectives — table-row conditionals", () => {
+  test("a false condition removes the whole row", () => {
+    const body = parseBody(WRAP(bilingualScopeTable));
+    const { errors } = processBlockDirectives(body, {
+      scope: { analysis: false },
+    });
+
+    expect(errors).toEqual([]);
+    expect(rowCount(body)).toBe(1);
+    expect(bodyTexts(body)).toEqual(["Zakres", "Scope"]);
+    expect(emptyCellCount(body)).toBe(0);
+  });
+
+  test("a true condition keeps the row and strips the marker paragraphs", () => {
+    const body = parseBody(WRAP(bilingualScopeTable));
+    const { errors } = processBlockDirectives(body, {
+      scope: { analysis: true },
+    });
+
+    expect(errors).toEqual([]);
+    expect(rowCount(body)).toBe(2);
+    expect(bodyTexts(body)).toEqual([
+      "Zakres",
+      "Scope",
+      "Analiza umowy",
+      "Contract analysis",
+    ]);
+    expect(emptyCellCount(body)).toBe(0);
+  });
+
+  test("markers inside one cell still condition the whole row", () => {
+    const xml = WRAP(
+      TBL(
+        TR(TC(P("Zakres")), TC(P("Scope"))),
+        TR(
+          TC(P("Analiza umowy")),
+          TC(P("{{#if scope.analysis}}"), P("Contract analysis"), P("{{/if}}")),
+        ),
+      ),
+    );
+    const body = parseBody(xml);
+    const { errors } = processBlockDirectives(body, {
+      scope: { analysis: false },
+    });
+
+    expect(errors).toEqual([]);
+    // The row is the unit: the Polish cell goes with it.
+    expect(rowCount(body)).toBe(1);
+    expect(bodyTexts(body)).toEqual(["Zakres", "Scope"]);
+  });
+
+  test("an {{#else}} branch inside a row keeps the row and the else content", () => {
+    const xml = WRAP(
+      TBL(
+        TR(
+          TC(P("{{#if scope.analysis}}"), P("Analiza umowy")),
+          TC(P("Contract analysis"), P("{{#else}}")),
+          TC(P("Brak"), P("None"), P("{{/if}}")),
+        ),
+      ),
+    );
+    const body = parseBody(xml);
+    const { errors } = processBlockDirectives(body, {
+      scope: { analysis: false },
+    });
+
+    expect(errors).toEqual([]);
+    expect(rowCount(body)).toBe(1);
+    // The two cells the losing branch occupied are emptied but keep a
+    // paragraph each, so the row stays valid OOXML.
+    expect(bodyTexts(body)).toEqual(["", "", "Brak", "None"]);
+    expect(emptyCellCount(body)).toBe(0);
+  });
+
+  test("a cell left with no paragraph is backfilled with an empty one", () => {
+    const xml = WRAP(
+      TBL(
+        TR(
+          TC(P("{{#if scope.analysis}}")),
+          TC(P("Analiza umowy")),
+          TC(P("Contract analysis"), P("{{/if}}")),
+        ),
+      ),
+    );
+    const body = parseBody(xml);
+    const { errors } = processBlockDirectives(body, {
+      scope: { analysis: true },
+    });
+
+    expect(errors).toEqual([]);
+    expect(rowCount(body)).toBe(1);
+    // Three cells survive; the marker-only cell keeps an empty paragraph.
+    expect(body.getElementsByTagNameNS(W_NS, "tc").length).toBe(3);
+    expect(emptyCellCount(body)).toBe(0);
+    expect(bodyTexts(body)).toEqual(["", "Analiza umowy", "Contract analysis"]);
+  });
+
+  test("content in cells between the markers belongs to the block", () => {
+    const xml = WRAP(
+      TBL(
+        TR(
+          TC(P("{{#if scope.analysis}}")),
+          TC(P("Analiza umowy")),
+          TC(P("Contract analysis"), P("{{/if}}")),
+        ),
+      ),
+    );
+    const body = parseBody(xml);
+    const { errors } = processBlockDirectives(body, {
+      scope: { analysis: false },
+    });
+
+    expect(errors).toEqual([]);
+    // Row gone, and with it the table that had no other row.
+    expect(rowCount(body)).toBe(0);
+    expect(bodyTexts(body)).toEqual([]);
+  });
+
+  test("a false condition in a single-row table removes the table shell", () => {
+    const xml = WRAP(
+      P("Intro") +
+        TBL(TR(TC(P("{{#if scope.analysis}}"), P("Analiza"), P("{{/if}}")))) +
+        P("Outro"),
+    );
+    const body = parseBody(xml);
+    const { errors } = processBlockDirectives(body, {
+      scope: { analysis: false },
+    });
+
+    expect(errors).toEqual([]);
+    expect(tableCount(body)).toBe(0);
+    expect(emptyTableCount(body)).toBe(0);
+    expect(bodyTexts(body)).toEqual(["Intro", "Outro"]);
+  });
+
+  test("a sibling block in a removed row never prunes content after the table", () => {
+    // Two sequential blocks share the row. The later one loses, so the row —
+    // and with it the earlier block's paragraphs — is removed. The earlier
+    // block is still queued for this pass: it must resolve to those removed
+    // paragraphs, not to whatever now occupies their old positions.
+    const xml = WRAP(
+      TBL(
+        TR(
+          TC(
+            P("{{#if scope.analysis}}"),
+            P("Analiza"),
+            P("{{/if}}"),
+            P("{{#if scope.litigation}}"),
+            P("Spory"),
+            P("{{/if}}"),
+          ),
+        ),
+      ) +
+        P("After 1") +
+        P("After 2") +
+        P("After 3"),
+    );
+    const body = parseBody(xml);
+    const { errors } = processBlockDirectives(body, {
+      scope: { analysis: true, litigation: false },
+    });
+
+    expect(errors).toEqual([]);
+    expect(tableCount(body)).toBe(0);
+    expect(bodyTexts(body)).toEqual(["After 1", "After 2", "After 3"]);
+  });
+
+  test("a row behind a content-control wrapper takes its table with it", () => {
+    // Word wraps a row-level content control as `w:tbl > w:sdt > w:sdtContent >
+    // w:tr`, so the emptied table is an ancestor of the removed row, not its
+    // parent.
+    const wrappedRow = (row: string) =>
+      `<w:sdt><w:sdtContent>${row}</w:sdtContent></w:sdt>`;
+    const xml = WRAP(
+      P("Intro") +
+        TBL(
+          wrappedRow(
+            TR(TC(P("{{#if scope.analysis}}"), P("Analiza"), P("{{/if}}"))),
+          ),
+        ) +
+        P("Outro"),
+    );
+    const body = parseBody(xml);
+    const { errors } = processBlockDirectives(body, {
+      scope: { analysis: false },
+    });
+
+    expect(errors).toEqual([]);
+    expect(tableCount(body)).toBe(0);
+    expect(emptyTableCount(body)).toBe(0);
+    expect(bodyTexts(body)).toEqual(["Intro", "Outro"]);
+  });
+
+  test("markers Word split across runs still bind to the row", () => {
+    // Word splits a marker into several `w:r` runs after an edit or a
+    // spell-check pass. The scanner joins a paragraph's run text, so the block
+    // is recognized and the row is still the unit.
+    const splitOpener =
+      "<w:p><w:r><w:t>{{#if </w:t></w:r><w:r><w:t>scope.analysis}}</w:t></w:r></w:p>";
+    const splitCloser =
+      "<w:p><w:r><w:t>{{/</w:t></w:r><w:r><w:t>if}}</w:t></w:r></w:p>";
+    const xml = WRAP(
+      TBL(
+        TR(TC(P("Zakres")), TC(P("Scope"))),
+        TR(
+          TC(splitOpener, P("Analiza umowy")),
+          TC(P("Contract analysis"), splitCloser),
+        ),
+      ),
+    );
+    const body = parseBody(xml);
+    const { errors } = processBlockDirectives(body, {
+      scope: { analysis: false },
+    });
+
+    expect(errors).toEqual([]);
+    expect(rowCount(body)).toBe(1);
+    expect(bodyTexts(body)).toEqual(["Zakres", "Scope"]);
+  });
+
+  test("a nested row conditional inside a row-repeat drops only its own rows", () => {
+    const xml = WRAP(
+      TBL(
+        TR(TC(P("Zakres")), TC(P("Scope"))),
+        TR(
+          TC(
+            P("{{#each items}}"),
+            P("{{#if items.include}}"),
+            P("{{items.pl}}"),
+          ),
+          TC(P("{{items.en}}"), P("{{/if}}"), P("{{/each}}")),
+        ),
+      ),
+    );
+    const body = parseBody(xml);
+    const { errors } = processBlockDirectives(body, {
+      items: [
+        { include: true, pl: "Analiza", en: "Analysis" },
+        { include: false, pl: "Ukryte", en: "Hidden" },
+        { include: true, pl: "Doradztwo", en: "Advisory" },
+      ],
+    });
+
+    expect(errors).toEqual([]);
+    // Header + the two rows whose item passed the condition.
+    expect(rowCount(body)).toBe(3);
+    expect(emptyCellCount(body)).toBe(0);
+    const texts = bodyTexts(body);
+    expect(texts).toContain("{{__each_items_0_pl}}");
+    expect(texts).toContain("{{__each_items_2_en}}");
+    expect(texts).not.toContain("{{__each_items_1_pl}}");
+    expect(texts.join("|")).not.toContain("{{#if");
+  });
+});
+
 // ── Nested: contracts → fields (DD acceptance shape) ─────
 
 describe("processBlockDirectives — nested each (contracts → fields)", () => {
@@ -371,6 +740,47 @@ describe("fillTemplate — tables", () => {
     expect(reopened.file("word/document.xml")).not.toBeNull();
   });
 
+  test("a bilingual scope table keeps only the rows whose condition holds", async () => {
+    const docx = await makeDocx(
+      WRAP(
+        TBL(
+          TR(TC(P("Zakres")), TC(P("Scope"))),
+          TR(
+            TC(P("{{#if scope.analysis}}"), P("Analiza umowy")),
+            TC(P("Contract analysis"), P("{{/if}}")),
+          ),
+          TR(
+            TC(P("{{#if scope.litigation}}"), P("Spory sądowe")),
+            TC(P("Litigation"), P("{{/if}}")),
+          ),
+        ),
+      ),
+    );
+    const { buffer, unmatchedPlaceholders, structureErrors } =
+      await fillTemplate(docx, {
+        scope: { analysis: true, litigation: false },
+      });
+
+    expect(structureErrors).toEqual([]);
+    expect(unmatchedPlaceholders).toEqual([]);
+
+    const text = await documentText(buffer);
+    expect(text).toContain("Analiza umowy");
+    expect(text).toContain("Contract analysis");
+    expect(text).not.toContain("Spory sądowe");
+    expect(text).not.toContain("Litigation");
+    expect(text).not.toContain("{{");
+
+    // The filled package still parses, and no cell lost its paragraph.
+    const reopened = await JSZip.loadAsync(buffer);
+    const filledXml =
+      (await reopened.file("word/document.xml")?.async("string")) ?? "";
+    const filledBody = parseBody(filledXml);
+    expect(rowCount(filledBody)).toBe(2);
+    expect(emptyCellCount(filledBody)).toBe(0);
+    expect(emptyTableCount(filledBody)).toBe(0);
+  });
+
   test("nested contracts → fields fills end-to-end", async () => {
     const docx = await makeDocx(
       WRAP(
@@ -421,4 +831,81 @@ describe("fillTemplate — tables", () => {
     }
     expect(text).not.toContain("{{");
   });
+});
+
+// ── Property: a row conditional never corrupts the table ─
+
+describe("property: {{#if}} markers placed anywhere inside one row", () => {
+  test(
+    "no cell is left without a paragraph and no table without a row",
+    () => {
+      const placement = fc.record({
+        cellPicks: fc.array(fc.integer({ min: 0, max: 2 }), {
+          minLength: 7,
+          maxLength: 7,
+        }),
+        flag: fc.boolean(),
+        withElse: fc.boolean(),
+      });
+
+      fc.assert(
+        fc.property(placement, ({ cellPicks, flag, withElse }) => {
+          const tokens = withElse
+            ? [
+                "{{#if flag}}",
+                "PL",
+                "EN",
+                "{{#else}}",
+                "PL alt",
+                "EN alt",
+                "{{/if}}",
+              ]
+            : ["{{#if flag}}", "PL", "EN", "{{/if}}"];
+          // A non-decreasing cell index keeps each cell's paragraphs contiguous
+          // in document order, the only shape a real row can have.
+          const picks = cellPicks
+            .slice(0, tokens.length)
+            .toSorted((a, b) => a - b);
+          const byCell = new Map<number, string[]>();
+          for (const [i, token] of tokens.entries()) {
+            const cell = picks[i] ?? 0;
+            const paragraphs = byCell.get(cell);
+            if (paragraphs) {
+              paragraphs.push(token);
+            } else {
+              byCell.set(cell, [token]);
+            }
+          }
+          const cells = [...byCell.keys()]
+            .toSorted((a, b) => a - b)
+            .map((key) => TC(...(byCell.get(key) ?? []).map(P)));
+
+          // The label cell sits outside the marker span: the row is the unit,
+          // so it lives or dies with the conditional.
+          const body = parseBody(WRAP(TBL(TR(TC(P("Label")), ...cells))));
+          const { errors } = processBlockDirectives(body, { flag });
+
+          expect(errors).toEqual([]);
+          expect(emptyCellCount(body)).toBe(0);
+          expect(emptyTableCount(body)).toBe(0);
+
+          const texts = bodyTexts(body);
+          expect(texts.join("|")).not.toContain("{{");
+          if (flag) {
+            expect(texts).toContain("PL");
+            expect(texts).toContain("EN");
+            expect(texts).not.toContain("PL alt");
+          } else if (withElse) {
+            expect(texts).toContain("PL alt");
+            expect(texts).not.toContain("PL");
+          } else {
+            // The row was the block and the table's only row: both are gone.
+            expect(texts).toEqual([]);
+          }
+        }),
+        propertyConfig({ numRuns: 200, seed: propertySeed() }),
+      );
+    },
+    propertyTestTimeout(15_000),
+  );
 });

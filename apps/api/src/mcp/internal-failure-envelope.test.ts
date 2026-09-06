@@ -37,6 +37,10 @@ const { internalFailureResult, MCP_INTERNAL_ERROR_HINT, serializeToolResult } =
 // checks it is absent from the serialized tool result.
 const DB_INTERNAL_LEAK_TOKEN = "PGDRIVER_INTERNAL_DETAIL_9f3a";
 
+// Matter ids are advertised and validated as uuids, so a placeholder would be
+// rejected before the handler reaches the DB seam these assertions exercise.
+const WORKSPACE_ID = "00000000-0000-4000-8000-0000000a0001";
+
 // Every DB seam throws, standing in for a driver/ORM failure. `toSafeDbMock`
 // funnels the throw into a `Result.err`, so the backing handler returns a
 // failed `Result` exactly as it would on a real outage; the tool site then
@@ -52,9 +56,9 @@ const createRecordAuditEventMock = () =>
 // workspace-access pre-checks pass and each handler advances to its first DB
 // call (the only thing that fails here).
 const createFailingDbContext = (): McpRequestContext => ({
-  accessibleWorkspaceIds: [toSafeId<"workspace">("ws_1")],
-  accessibleWorkspaceIdSet: new Set(["ws_1"]),
-  accessibleWorkspaceStatusById: new Map([["ws_1", "active"]]),
+  accessibleWorkspaceIds: [toSafeId<"workspace">(WORKSPACE_ID)],
+  accessibleWorkspaceIdSet: new Set([WORKSPACE_ID]),
+  accessibleWorkspaceStatusById: new Map([[WORKSPACE_ID, "active"]]),
   accessibleWorkspaces: [],
   grantedScopes: [],
   memberRole: "owner",
@@ -124,12 +128,12 @@ const REPRESENTATIVE_DB_FAILURES: {
   {
     file: "billing-tools.ts",
     handler: BILLING_TOOL_HANDLERS.resolve_rate,
-    args: { matter_id: "ws_1", user_id: "user_2", date: "2024-01-01" },
+    args: { matter_id: WORKSPACE_ID, user_id: "user_2", date: "2024-01-01" },
   },
   {
     file: "document-tools.ts",
     handler: DOCUMENT_TOOL_HANDLERS.save_document,
-    args: { matter_id: "ws_1", kind: "document", name: "Doc" },
+    args: { matter_id: WORKSPACE_ID, kind: "document", name: "Doc" },
   },
   {
     file: "knowledge-tools.ts",
@@ -142,7 +146,7 @@ const REPRESENTATIVE_DB_FAILURES: {
   {
     file: "research-admin-tools.ts",
     handler: RESEARCH_ADMIN_TOOL_HANDLERS.manage_organization,
-    args: { action: "add_member", matter_id: "ws_1", user_id: "user_2" },
+    args: { action: "add_member", matter_id: WORKSPACE_ID, user_id: "user_2" },
   },
 ];
 
@@ -279,7 +283,7 @@ describe("internalFailureResult preserves expected handler errors", () => {
 // 5xx must not.
 describe("save_time_entry threads backing handler errors correctly", () => {
   const TIME_ENTRY_CREATE_ARGS = {
-    matter_id: "ws_1",
+    matter_id: WORKSPACE_ID,
     entity_id: "00000000-0000-4000-8000-0000000e0001",
     date_worked: "2024-01-01",
     timezone_id: "Europe/Prague",

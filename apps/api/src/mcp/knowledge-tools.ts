@@ -79,6 +79,7 @@ import {
   MCP_INTERNAL_ERROR_HINT,
   structuredErrorResult,
   toolDataResult,
+  uuidInputSchema,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
 import { defineValibotMcpTool } from "@/api/mcp/valibot-tool-definition";
@@ -592,28 +593,16 @@ const playbookDetailTextFieldSpecs = (
 const listClausesArgsSchema = v.pipe(
   v.strictObject({
     clause_id: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.description("Clause id to read in detail; omit to list"),
-      ),
+      uuidInputSchema("Clause id to read in detail; omit to list"),
     ),
     version_id: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.description(
-          "With clause_id, return this version's body instead of the current clause",
-        ),
+      uuidInputSchema(
+        "With clause_id, return this version's body instead of the current clause",
       ),
     ),
     category_id: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.description(
-          "List only clauses filed under this category (list mode)",
-        ),
+      uuidInputSchema(
+        "List only clauses filed under this category (list mode)",
       ),
     ),
     query: v.optional(
@@ -1023,11 +1012,7 @@ const clauseBodyArgSchema = v.pipe(
 const saveClauseArgsSchema = v.pipe(
   v.strictObject({
     clause_id: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.description("Clause id to update; omit to create"),
-      ),
+      uuidInputSchema("Clause id to update; omit to create"),
     ),
     title: v.optional(
       v.pipe(
@@ -1040,7 +1025,7 @@ const saveClauseArgsSchema = v.pipe(
     body: v.optional(clauseBodyArgSchema),
     category_id: v.optional(
       v.pipe(
-        v.nullable(v.pipe(v.string(), v.minLength(1))),
+        v.nullable(v.pipe(v.string(), v.uuid())),
         v.description(
           "Category id to file the clause under; pass null to clear",
         ),
@@ -1255,11 +1240,7 @@ const handleSaveClauseTool: TypedMcpToolHandler<
 // --- delete_clause ------------------------------------------------------
 
 const deleteClauseArgsSchema = v.strictObject({
-  clause_id: v.pipe(
-    v.string(),
-    v.minLength(1),
-    v.description("Clause id to delete"),
-  ),
+  clause_id: uuidInputSchema("Clause id to delete"),
   confirm: v.optional(
     v.pipe(
       v.boolean(),
@@ -1304,11 +1285,7 @@ const handleDeleteClauseTool: TypedMcpToolHandler<
 const listPlaybooksArgsSchema = v.pipe(
   v.strictObject({
     playbook_id: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.description("Playbook id to read in detail; omit to list playbooks"),
-      ),
+      uuidInputSchema("Playbook id to read in detail; omit to list playbooks"),
     ),
     limit: v.optional(
       v.pipe(
@@ -1424,16 +1401,8 @@ const handleListPlaybooksTool: TypedMcpToolHandler<
 // --- run_playbook -------------------------------------------------------
 
 const runPlaybookArgsSchema = v.strictObject({
-  matter_id: v.pipe(
-    v.string(),
-    v.minLength(1),
-    v.description("Matter ID to run the playbook over."),
-  ),
-  playbook_id: v.pipe(
-    v.string(),
-    v.minLength(1),
-    v.description("Playbook id to run"),
-  ),
+  matter_id: uuidInputSchema("Matter ID to run the playbook over."),
+  playbook_id: uuidInputSchema("Playbook id to run"),
 });
 
 /**

@@ -29,7 +29,10 @@ import { createWorkspaceContactHandler } from "@/api/handlers/workspaces/workspa
 import { deleteWorkspaceContactHandler } from "@/api/handlers/workspaces/workspace-contacts-delete";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
-import { BUSINESS_REGISTRY_SLUGS } from "@/api/lib/business-registries/dispatch";
+import {
+  BUSINESS_REGISTRY_SLUGS,
+  RegistryDisabledForOrgError,
+} from "@/api/lib/business-registries/dispatch";
 import type {
   AssertNoExtraFields,
   DELETED_TRUE_PROJECTION,
@@ -218,11 +221,7 @@ const TASK_DETAIL_TEXT_FIELD_PATHS = deriveTextFieldPaths(
 const saveMatterArgsSchema = v.pipe(
   v.strictObject({
     matter_id: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.description("Matter ID to update; omit to create a new matter"),
-      ),
+      uuidInputSchema("Matter ID to update; omit to create a new matter"),
     ),
     name: v.optional(
       v.pipe(
@@ -233,12 +232,8 @@ const saveMatterArgsSchema = v.pipe(
       ),
     ),
     client_id: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.description(
-          "Contact ID to attach in the client role. Only valid when creating a matter.",
-        ),
+      uuidInputSchema(
+        "Contact ID to attach in the client role. Only valid when creating a matter.",
       ),
     ),
     reference: v.optional(
@@ -461,11 +456,7 @@ const handleSaveMatterTool: TypedMcpToolHandler<
 // --- delete_matter ------------------------------------------------------
 
 const deleteMatterArgsSchema = v.strictObject({
-  matter_id: v.pipe(
-    v.string(),
-    v.minLength(1),
-    v.description("Matter ID to delete"),
-  ),
+  matter_id: uuidInputSchema("Matter ID to delete"),
   confirm: v.optional(
     v.pipe(
       v.boolean(),
@@ -625,11 +616,7 @@ export const deriveContactDisplayName = ({
 const saveContactArgsSchema = v.pipe(
   v.strictObject({
     contact_id: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.description("Contact ID to update; omit to create"),
-      ),
+      uuidInputSchema("Contact ID to update; omit to create"),
     ),
     type: v.optional(
       v.pipe(
@@ -814,11 +801,7 @@ const handleSaveContactTool: TypedMcpToolHandler<
 // --- delete_contact -----------------------------------------------------
 
 const deleteContactArgsSchema = v.strictObject({
-  contact_id: v.pipe(
-    v.string(),
-    v.minLength(1),
-    v.description("Contact ID to delete"),
-  ),
+  contact_id: uuidInputSchema("Contact ID to delete"),
   confirm: v.optional(
     v.pipe(
       v.boolean(),
@@ -894,7 +877,19 @@ const handleLookupBusinessRegistryTool: TypedMcpToolHandler<
     q: parsed.output.query,
   });
   if (Result.isError(result)) {
-    return internalFailureResult(result.error);
+    const { error } = result;
+    // The args schema accepts every registry in the dispatch table, not just
+    // the ones tools/list advertises for this org, so an agent that asks for a
+    // disabled registry gets the enablement path instead of an enum
+    // validation error that explains nothing.
+    if (RegistryDisabledForOrgError.is(error)) {
+      return structuredErrorResult({
+        code: "feature_disabled",
+        message: error.message,
+        hint: error.hint,
+      });
+    }
+    return internalFailureResult(error);
   }
   // Passthrough: the output is public business-register data and the query is
   // caller-supplied, so no tenant-authored text needs redaction. Forwarded
@@ -945,21 +940,11 @@ const resolveTaskWorkspace = async ({
 const listTasksArgsSchema = v.pipe(
   v.strictObject({
     matter_id: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.description(
-          "Matter ID to list tasks in; required unless task_id is given.",
-        ),
+      uuidInputSchema(
+        "Matter ID to list tasks in; required unless task_id is given.",
       ),
     ),
-    task_id: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.description("Task entity ID to read in detail"),
-      ),
-    ),
+    task_id: v.optional(uuidInputSchema("Task entity ID to read in detail")),
     date_from: v.optional(
       v.pipe(
         ISO_DATE_SCHEMA,
@@ -1293,19 +1278,11 @@ const handleListTasksTool: TypedMcpToolHandler<
 const saveTaskArgsSchema = v.pipe(
   v.strictObject({
     task_id: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.description("Task entity ID to update; omit to create"),
-      ),
+      uuidInputSchema("Task entity ID to update; omit to create"),
     ),
     matter_id: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.description(
-          "Matter ID to create the task in; required when creating.",
-        ),
+      uuidInputSchema(
+        "Matter ID to create the task in; required when creating.",
       ),
     ),
     name: v.optional(
@@ -1329,19 +1306,11 @@ const saveTaskArgsSchema = v.pipe(
       ),
     ),
     list_id: v.optional(
-      v.pipe(
-        v.string(),
-        v.uuid(),
-        v.description("List ID to create the item in (creating only)"),
-      ),
+      uuidInputSchema("List ID to create the item in (creating only)"),
     ),
     list_section_id: v.optional(
-      v.pipe(
-        v.string(),
-        v.uuid(),
-        v.description(
-          "Section of list_id to create the item under (creating only)",
-        ),
+      uuidInputSchema(
+        "Section of list_id to create the item under (creating only)",
       ),
     ),
     list_description: v.optional(
@@ -1382,21 +1351,11 @@ const saveTaskArgsSchema = v.pipe(
       ),
     ),
     link_entity_id: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.description(
-          "Entity ID to link to the task (document, folder, or another task)",
-        ),
+      uuidInputSchema(
+        "Entity ID to link to the task (document, folder, or another task)",
       ),
     ),
-    unlink_link_id: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.description("Entity-link ID to remove"),
-      ),
-    ),
+    unlink_link_id: v.optional(uuidInputSchema("Entity-link ID to remove")),
   }),
   // Creating (no task_id) requires matter_id and name.
   v.forward(
@@ -1925,15 +1884,11 @@ const handleDeleteTaskTool: TypedMcpToolHandler<
 
 const linkMatterContactArgsSchema = v.pipe(
   v.strictObject({
-    matter_id: v.pipe(v.string(), v.minLength(1), v.description("Matter ID")),
+    matter_id: uuidInputSchema("Matter ID"),
     contact_id: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.description(
-          "Contact ID: with role to link the contact, or alone to unlink it " +
-            "from the matter",
-        ),
+      uuidInputSchema(
+        "Contact ID: with role to link the contact, or alone to unlink it " +
+          "from the matter",
       ),
     ),
     role: v.optional(
@@ -1945,12 +1900,8 @@ const linkMatterContactArgsSchema = v.pipe(
       ),
     ),
     matter_contact_id: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.description(
-          "Existing matter-contact link ID to remove, from list_matters",
-        ),
+      uuidInputSchema(
+        "Existing matter-contact link ID to remove, from list_matters",
       ),
     ),
   }),

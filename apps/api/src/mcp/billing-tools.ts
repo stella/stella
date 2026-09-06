@@ -67,6 +67,7 @@ import {
   notFoundResult,
   structuredErrorResult,
   toolDataResult,
+  uuidInputSchema,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
 import { defineValibotMcpTool } from "@/api/mcp/valibot-tool-definition";
@@ -370,21 +371,13 @@ const loadUserNames = async ({
 const listTimeEntriesArgsSchema = v.pipe(
   v.strictObject({
     matter_id: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.description(
-          "Matter ID to list time entries in; required unless " +
-            "time_entry_id is given.",
-        ),
+      uuidInputSchema(
+        "Matter ID to list time entries in; required unless " +
+          "time_entry_id is given.",
       ),
     ),
     time_entry_id: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.description("Time entry ID to read in detail"),
-      ),
+      uuidInputSchema("Time entry ID to read in detail"),
     ),
     entity_id: v.optional(
       v.pipe(
@@ -704,19 +697,11 @@ const handleListTimeEntriesTool: TypedMcpToolHandler<
 const saveTimeEntryArgsSchema = v.pipe(
   v.strictObject({
     time_entry_id: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.description("Time entry ID to update; omit to create"),
-      ),
+      uuidInputSchema("Time entry ID to update; omit to create"),
     ),
     matter_id: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.description(
-          "Matter ID to create the entry in; required when creating.",
-        ),
+      uuidInputSchema(
+        "Matter ID to create the entry in; required when creating.",
       ),
     ),
     entity_id: v.optional(
@@ -1008,11 +993,7 @@ const handleSaveTimeEntryTool: TypedMcpToolHandler<
 // --- delete_time_entry --------------------------------------------------
 
 const deleteTimeEntryArgsSchema = v.strictObject({
-  time_entry_id: v.pipe(
-    v.string(),
-    v.minLength(1),
-    v.description("Time entry ID to delete or write off"),
-  ),
+  time_entry_id: uuidInputSchema("Time entry ID to delete or write off"),
   confirm: v.optional(
     v.pipe(
       v.boolean(),
@@ -1069,11 +1050,7 @@ const handleDeleteTimeEntryTool: TypedMcpToolHandler<
 // --- resolve_rate -------------------------------------------------------
 
 const resolveRateArgsSchema = v.strictObject({
-  matter_id: v.pipe(
-    v.string(),
-    v.minLength(1),
-    v.description("Matter ID to resolve the rate in."),
-  ),
+  matter_id: uuidInputSchema("Matter ID to resolve the rate in."),
   user_id: v.pipe(
     v.string(),
     v.minLength(1),
@@ -1148,22 +1125,12 @@ const handleResolveRateTool: McpToolHandler = async ({ args, context }) => {
 const listInvoicesArgsSchema = v.pipe(
   v.strictObject({
     matter_id: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.description(
-          "Matter ID to list invoices in; required unless invoice_id is " +
-            "given.",
-        ),
+      uuidInputSchema(
+        "Matter ID to list invoices in; required unless invoice_id is " +
+          "given.",
       ),
     ),
-    invoice_id: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.description("Invoice ID to read in detail"),
-      ),
-    ),
+    invoice_id: v.optional(uuidInputSchema("Invoice ID to read in detail")),
     limit: v.optional(
       v.pipe(
         v.number(),

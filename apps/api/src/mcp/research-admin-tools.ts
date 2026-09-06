@@ -51,6 +51,7 @@ import {
   internalFailureResult,
   structuredErrorResult,
   toolDataResult,
+  uuidInputSchema,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
 import { defineValibotMcpTool } from "@/api/mcp/valibot-tool-definition";
@@ -125,11 +126,7 @@ const widenDateOnlyBound = (bound: string, edge: "start" | "end"): string =>
 const listAuditLogArgsSchema = v.pipe(
   v.strictObject({
     matter_id: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.description("Only entries scoped to this matter."),
-      ),
+      uuidInputSchema("Only entries scoped to this matter."),
     ),
     action: v.optional(
       v.pipe(
@@ -653,11 +650,7 @@ const manageOrganizationArgsSchema = v.pipe(
       v.description("Administrative action to perform"),
     ),
     matter_id: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.description("Matter ID for add_member and remove_member."),
-      ),
+      uuidInputSchema("Matter ID for add_member and remove_member."),
     ),
     user_id: v.optional(
       v.pipe(

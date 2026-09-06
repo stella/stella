@@ -40,7 +40,6 @@ import type {
   SAVE_DOCUMENT_UPDATE_PROJECTION,
   SET_FIELD_VALUE_PROJECTION,
 } from "@/api/lib/chat/projections";
-import { isUuid } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { selectCurrentExtractedContent } from "@/api/lib/document-content-provenance";
 import {
@@ -611,11 +610,7 @@ const decodeEntityPageCursor = (
 
 const listDocumentsArgsSchema = v.pipe(
   v.strictObject({
-    matter_id: v.pipe(
-      v.string(),
-      v.minLength(1),
-      v.description("Matter ID to list documents in."),
-    ),
+    matter_id: uuidInputSchema("Matter ID to list documents in."),
     mode: v.optional(
       v.pipe(
         v.picklist(["flat", "children"]),
@@ -629,14 +624,10 @@ const listDocumentsArgsSchema = v.pipe(
       ),
     ),
     parent_id: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.description(
-          "Folder entity ID whose direct children to list. Only valid in " +
-            "children mode; supplying it selects children mode when mode is " +
-            "omitted and is rejected together with mode 'flat'.",
-        ),
+      uuidInputSchema(
+        "Folder entity ID whose direct children to list. Only valid in " +
+          "children mode; supplying it selects children mode when mode is " +
+          "omitted and is rejected together with mode 'flat'.",
       ),
     ),
     limit: v.optional(
@@ -805,21 +796,13 @@ const readDocumentArgsSchema = v.pipe(
   v.strictObject({
     entity_id: uuidInputSchema("Document entity ID"),
     version_id: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.description(
-          "Return this version's metadata and field values instead of the current version",
-        ),
+      uuidInputSchema(
+        "Return this version's metadata and field values instead of the current version",
       ),
     ),
     compare_with_version_id: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.description(
-          "With version_id, return a plain-text line diff of this version (base) against version_id (target)",
-        ),
+      uuidInputSchema(
+        "With version_id, return a plain-text line diff of this version (base) against version_id (target)",
       ),
     ),
     include_versions: v.optional(
@@ -1591,19 +1574,11 @@ const handleReadDocumentTool: TypedMcpToolHandler<
 const saveDocumentArgsSchema = v.pipe(
   v.strictObject({
     entity_id: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.description("Document entity ID to update; omit to create"),
-      ),
+      uuidInputSchema("Document entity ID to update; omit to create"),
     ),
     matter_id: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.description(
-          "Matter ID to create the entity in; required when creating.",
-        ),
+      uuidInputSchema(
+        "Matter ID to create the entity in; required when creating.",
       ),
     ),
     name: v.optional(
@@ -1617,13 +1592,9 @@ const saveDocumentArgsSchema = v.pipe(
       ),
     ),
     parent_id: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.description(
-          "Folder entity ID: to place the new entity inside when creating, or to " +
-            "move the document into when updating",
-        ),
+      uuidInputSchema(
+        "Folder entity ID: to place the new entity inside when creating, or to " +
+          "move the document into when updating",
       ),
     ),
     kind: v.optional(
@@ -1643,12 +1614,8 @@ const saveDocumentArgsSchema = v.pipe(
       ),
     ),
     version_id: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.description(
-          "Version ID to annotate; required when setting label or description. Only valid when updating.",
-        ),
+      uuidInputSchema(
+        "Version ID to annotate; required when setting label or description. Only valid when updating.",
       ),
     ),
     label: v.optional(
@@ -2150,11 +2117,7 @@ const handleOpenDocumentVersionUploadTool: McpToolHandler = async ({
 const deleteDocumentArgsSchema = v.strictObject({
   entity_id: uuidInputSchema("Document entity ID to delete"),
   version_id: v.optional(
-    v.pipe(
-      v.string(),
-      v.minLength(1),
-      v.description("Delete only this version instead of the whole document"),
-    ),
+    uuidInputSchema("Delete only this version instead of the whole document"),
   ),
   confirm: v.optional(
     v.pipe(
@@ -2235,11 +2198,7 @@ const handleDeleteDocumentTool: TypedMcpToolHandler<
 };
 
 const listPropertiesArgsSchema = v.strictObject({
-  matter_id: v.pipe(
-    v.string(),
-    v.minLength(1),
-    v.description("Matter ID to list properties for."),
-  ),
+  matter_id: uuidInputSchema("Matter ID to list properties for."),
   limit: v.optional(
     v.pipe(
       v.number(),
@@ -2420,11 +2379,7 @@ const setFieldValueContentSchema = v.variant("type", [
 
 const setFieldValueArgsSchema = v.strictObject({
   entity_id: uuidInputSchema("Document entity ID whose cell to set"),
-  property_id: v.pipe(
-    v.string(),
-    v.minLength(1),
-    v.description("Property ID, as returned by list_properties"),
-  ),
+  property_id: uuidInputSchema("Property ID, as returned by list_properties"),
   content: v.pipe(
     setFieldValueContentSchema,
     v.description("The value to set; 'type' must match the property."),
@@ -2487,13 +2442,6 @@ const handleSetFieldValueTool: TypedMcpToolHandler<
   const parsed = v.safeParse(setFieldValueArgsSchema, args);
   if (!parsed.success) {
     return validationErrorResult(parsed.issues);
-  }
-  if (!isUuid(parsed.output.property_id)) {
-    return structuredErrorResult({
-      code: "validation_error",
-      issues: [{ path: "property_id", message: "property_id must be a UUID" }],
-      message: "Invalid input: property_id must be a UUID",
-    });
   }
 
   const entityId = brandPersistedEntityId(parsed.output.entity_id);

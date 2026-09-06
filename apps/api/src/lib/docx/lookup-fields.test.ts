@@ -3,6 +3,7 @@ import JSZip from "jszip";
 
 import { KrsValidationError } from "@stll/business-registries/krs";
 
+import { env } from "@/api/env";
 import type {
   BusinessRegistryHit,
   RegistryHandler,
@@ -569,6 +570,18 @@ describe("engine substitution of formatted lookup values", () => {
   });
 });
 
+/** The refusal links into this deployment's frontend, so the expectation reads
+ *  the same origin the builder does rather than assuming the test default. */
+const APP_BASE_URL = env.FRONTEND_URL.replace(/\/$/u, "");
+
+/** The one refusal text the dispatch layer builds (registry proper name, slug,
+ *  and both ways an admin enables it), asserted verbatim because it is what a
+ *  person filling a template and an agent both read. */
+const KRS_DISABLED_MESSAGE =
+  "The KRS registry is disabled for this organization. An organization admin " +
+  `can enable it at ${APP_BASE_URL}/knowledge/tools?slug=krs, or add Poland ` +
+  "to the practice jurisdictions.";
+
 describe("createDispatchLookupResolver — mocked dispatch", () => {
   // The resolver's dispatch is now keyed by every supported registry; spread
   // the real table and override only the krs handler these tests exercise.
@@ -619,12 +632,13 @@ describe("createDispatchLookupResolver — mocked dispatch", () => {
           return KRS_HIT;
         },
       }),
-      isRegistryEnabledForOrg: (registry) => registry !== "krs",
+      resolveRegistryDisabledReason: (registry) =>
+        registry === "krs" ? "jurisdiction_mismatch" : null,
     });
     const outcome = await resolver({ registry: "krs", query: "0000592109" });
     expect(outcome).toEqual({
       type: "error",
-      message: "The krs registry is disabled for this organization.",
+      message: KRS_DISABLED_MESSAGE,
     });
     // The disabled registry is refused before any upstream call.
     expect(lookupCalls).toBe(0);
@@ -633,7 +647,7 @@ describe("createDispatchLookupResolver — mocked dispatch", () => {
   test("resolves a registry the org has enabled", async () => {
     const resolver = createDispatchLookupResolver({
       dispatch: stubDispatch({ lookup: async () => KRS_HIT }),
-      isRegistryEnabledForOrg: () => true,
+      resolveRegistryDisabledReason: () => null,
     });
     const outcome = await resolver({ registry: "krs", query: "0000592109" });
     expect(outcome).toEqual({ type: "hit", hit: KRS_HIT });
@@ -648,12 +662,13 @@ describe("createDispatchLookupResolver — mocked dispatch", () => {
           return KRS_HIT;
         },
       }),
-      isRegistryEnabledForOrg: async () => false,
+      resolveRegistryDisabledReason: async () =>
+        "jurisdiction_mismatch" as const,
     });
     const outcome = await resolver({ registry: "krs", query: "0000592109" });
     expect(outcome).toEqual({
       type: "error",
-      message: "The krs registry is disabled for this organization.",
+      message: KRS_DISABLED_MESSAGE,
     });
     expect(lookupCalls).toBe(0);
   });
@@ -734,12 +749,12 @@ describe("applyLookupFields — fill flow over a mocked dispatch", () => {
             },
           },
           // krs is deployed (isDeployAvailable: always) but disabled for the org.
-          isRegistryEnabledForOrg: () => false,
+          resolveRegistryDisabledReason: () => "jurisdiction_mismatch",
         }),
       },
     );
     expect(error).toBe(
-      'Field "buyer_krs": KRS lookup failed: The krs registry is disabled for this organization.',
+      `Field "buyer_krs": KRS lookup failed: ${KRS_DISABLED_MESSAGE}`,
     );
     // The registry was never called; the submitted number is left untouched.
     expect(lookupCalls).toBe(0);
@@ -760,7 +775,7 @@ describe("applyLookupFields — fill flow over a mocked dispatch", () => {
               lookup: async () => KRS_HIT,
             },
           },
-          isRegistryEnabledForOrg: () => true,
+          resolveRegistryDisabledReason: () => null,
         }),
       },
     );

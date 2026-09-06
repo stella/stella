@@ -7,6 +7,8 @@
 // `executeRegistryLookup` so the two surfaces never drift in error
 // mapping, normalisation, or shape detection.
 
+import { TaggedError } from "better-result";
+
 import type { BusinessRegistrySlug } from "@stll/api-contract";
 import {
   AresAPIError,
@@ -125,6 +127,9 @@ import type { CountryCode } from "@stll/country-codes";
 
 import { captureError } from "@/api/lib/analytics/capture";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { buildCatalogueEntryUrl } from "@/api/lib/mcp-connectors/app-urls";
+import { nativeToolRecommendedJurisdictions } from "@/api/lib/mcp-connectors/catalog-metadata";
+import type { NativeToolDisabledReason } from "@/api/lib/mcp-connectors/catalog-metadata";
 
 export { BUSINESS_REGISTRY_SLUGS } from "@stll/api-contract";
 export type { BusinessRegistrySlug } from "@stll/api-contract";
@@ -229,6 +234,12 @@ export type RegistryLookupResponse =
 export type RegistryHandler = {
   /** Slug as it appears in the catalogue + the REST `?registry=` param. */
   slug: BusinessRegistrySlug;
+  /**
+   * Registry proper name for messages that a person or an agent reads
+   * ("ARES", "Companies House"). Not translatable UI copy: these are the
+   * registers' own names.
+   */
+  displayName: string;
   /**
    * Jurisdiction the registry covers. The chat tool uses this to
    * route a user-supplied jurisdiction to the right adapter
@@ -384,6 +395,7 @@ const mapAresError = (error: unknown): HandlerError | null => {
 
 const ARES_HANDLER: RegistryHandler = {
   slug: "ares",
+  displayName: "ARES",
   country: "CZ",
   nativeToolSlug: "ares",
   isCanonicalId: (input) => /^\d{8}$/u.test(normalizeIco(input)),
@@ -480,6 +492,7 @@ const mapBrregError = (error: unknown): HandlerError | null => {
 
 const BRREG_HANDLER: RegistryHandler = {
   slug: "brreg",
+  displayName: "BRREG",
   country: "NO",
   nativeToolSlug: "brreg",
   isCanonicalId: (input) => /^\d{9}$/u.test(normalizeOrgnr(input)),
@@ -617,6 +630,7 @@ const requireCompaniesHouseApiKey = (): string => {
 
 const COMPANIES_HOUSE_HANDLER: RegistryHandler = {
   slug: "companies-house",
+  displayName: "Companies House",
   country: "GB",
   nativeToolSlug: "companies-house",
   // SHAPE-only: matches numeric CRNs (E&W), two-letter-prefix CRNs
@@ -743,6 +757,7 @@ const requireDenueApiToken = (): string => {
 
 const DENUE_HANDLER = {
   slug: "denue",
+  displayName: "INEGI DENUE",
   country: "MX",
   nativeToolSlug: "denue",
   // Shape check only: DENUE establishment Ids are numeric. Full
@@ -851,6 +866,7 @@ const requireEdgarUserAgent = (): string => {
 
 const EDGAR_HANDLER: RegistryHandler = {
   slug: "edgar",
+  displayName: "SEC EDGAR",
   country: "US",
   nativeToolSlug: "edgar",
   // SHAPE-only: 1-10 digits after stripping the optional zero
@@ -951,6 +967,7 @@ const mapGcisError = (error: unknown): HandlerError | null => {
 
 const GCIS_HANDLER: RegistryHandler = {
   slug: "gcis",
+  displayName: "GCIS",
   country: "TW",
   nativeToolSlug: "gcis",
   // Shape check only — full MoF-checksum validation runs in
@@ -1050,6 +1067,7 @@ const mapOrsrError = (error: unknown): HandlerError | null => {
 
 const ORSR_HANDLER: RegistryHandler = {
   slug: "orsr",
+  displayName: "ORSR",
   country: "SK",
   nativeToolSlug: "orsr",
   // Shape check only — full MOD-11 validation happens in lookupByIco
@@ -1122,6 +1140,7 @@ const mapKrsError = (error: unknown): HandlerError | null => {
 
 const KRS_HANDLER: RegistryHandler = {
   slug: "krs",
+  displayName: "KRS",
   country: "PL",
   nativeToolSlug: "krs",
   // Shape check only — full 10-digit validation happens in
@@ -1290,6 +1309,7 @@ const mapViesError = (error: unknown): HandlerError | null => {
 
 const PRH_HANDLER: RegistryHandler = {
   slug: "prh",
+  displayName: "PRH",
   country: "FI",
   nativeToolSlug: "prh",
   // Shape check only — full MOD-11 validation happens in lookupByBusinessId
@@ -1311,6 +1331,7 @@ const PRH_HANDLER: RegistryHandler = {
 
 const VIES_HANDLER: RegistryHandler = {
   slug: "vies",
+  displayName: "VIES",
   country: EU_PSEUDO_JURISDICTION,
   nativeToolSlug: "vies",
   // Shape check only — accept inputs whose prefix matches a known
@@ -1424,6 +1445,7 @@ const mapRechercheEntreprisesError = (error: unknown): HandlerError | null => {
 
 const RECHERCHE_ENTREPRISES_HANDLER: RegistryHandler = {
   slug: "recherche-entreprises",
+  displayName: "RNE",
   country: "FR",
   nativeToolSlug: "recherche-entreprises",
   // Shape check only — Luhn validation happens in lookupBy{Siren,Siret}
@@ -1475,6 +1497,76 @@ export const getDeployAvailableRegistryHandlers = (): RegistryHandler[] =>
   Object.values(BUSINESS_REGISTRY_DISPATCH).filter((handler) =>
     handler.isDeployAvailable(),
   );
+
+// ---------------------------------------------------------------------------
+// Org-disabled refusal
+// ---------------------------------------------------------------------------
+
+const REGION_DISPLAY_NAMES = new Intl.DisplayNames(["en"], {
+  type: "region",
+});
+
+/** The jurisdictions that would turn this registry on, as country names rather
+ *  than codes, read from the same catalogue recommendation the enablement gate
+ *  reads. "EU" is a catalogue pseudo-jurisdiction matched by any member state,
+ *  never a practice-jurisdiction row of its own. */
+const enablingJurisdictions = (nativeToolSlug: string): string[] =>
+  nativeToolRecommendedJurisdictions(nativeToolSlug).map((code) =>
+    code === EU_PSEUDO_JURISDICTION
+      ? "an EU member state"
+      : (REGION_DISPLAY_NAMES.of(code) ?? code),
+  );
+
+export type RegistryDisabledForOrgRefusal = {
+  message: string;
+  /** Next step for an agent client, per the MCP error contract. */
+  hint: string;
+};
+
+/**
+ * The one refusal text for a registry the organization has not enabled, used
+ * by every surface that can hit the gate (contacts lookup, template fill,
+ * lookup preview, MCP tools). It names the refused registry and links to the
+ * catalogue entry that turns it on; on a jurisdiction miss it also names the
+ * jurisdiction that enables the tool for the whole org, and on an explicit
+ * per-slug override it does not, because adding a jurisdiction would not clear
+ * that override. Tenant-neutral by design: never what the org has enabled.
+ */
+export const registryDisabledForOrgRefusal = ({
+  registry,
+  reason,
+}: {
+  registry: BusinessRegistrySlug;
+  reason: NativeToolDisabledReason;
+}): RegistryDisabledForOrgRefusal => {
+  const { displayName, nativeToolSlug } = BUSINESS_REGISTRY_DISPATCH[registry];
+  const url = buildCatalogueEntryUrl(nativeToolSlug);
+  const jurisdictions =
+    reason === "jurisdiction_mismatch"
+      ? enablingJurisdictions(nativeToolSlug)
+      : [];
+  if (jurisdictions.length === 0) {
+    return {
+      message: `The ${displayName} registry is disabled for this organization. An organization admin can enable it at ${url}.`,
+      hint: `Ask an organization admin to enable ${displayName} at ${url}. It cannot be enabled from the client.`,
+    };
+  }
+  const jurisdictionList = jurisdictions.join(" or ");
+  return {
+    message: `The ${displayName} registry is disabled for this organization. An organization admin can enable it at ${url}, or add ${jurisdictionList} to the practice jurisdictions.`,
+    hint: `Ask an organization admin to enable ${displayName} at ${url}, or to add ${jurisdictionList} to the practice jurisdictions. It cannot be enabled from the client.`,
+  };
+};
+
+/**
+ * A lookup refused because the organization has the registry's native tool
+ * disabled. Distinct from {@link HandlerError} so each surface maps it on its
+ * own terms: HTTP answers 403, MCP answers the `feature_disabled` envelope
+ * with the enablement hint — neither has to match on message text.
+ */
+export class RegistryDisabledForOrgError extends TaggedError(
+  "RegistryDisabledForOrgError",
+)<RegistryDisabledForOrgRefusal> {}
 
 /**
  * Registry handlers this organization may actually call: shipped on this

@@ -120,6 +120,22 @@ const NON_DIRECTIVE_RULES = [
       "the one field the person filling enters a registry number into.",
   },
   {
+    title: "Block markers in a table",
+    detail:
+      "A block marker pair (`#if` or `#each` family) confined to ONE table row " +
+      "acts on the whole row: the row repeats per item, or is dropped when no " +
+      "branch wins. Opening and closing markers must not straddle a row " +
+      "boundary.",
+  },
+  {
+    title: "Markers Word splits into runs",
+    detail:
+      "Word often splits a marker across several runs (`w:r`) inside one " +
+      "paragraph; discovery and fill join a paragraph's run text before " +
+      "scanning, so a split marker still resolves. A marker must never span " +
+      "two paragraphs or two table cells.",
+  },
+  {
     title: "Bilingual / multi-column documents",
     detail:
       "Mark every language or column occurrence of the same value with the " +

@@ -1,11 +1,14 @@
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ResolvedTanStackTextModelInfo } from "@/api/lib/tanstack-ai-models";
+import type { McpCredentialType } from "@/api/mcp/auth";
+import type { McpMode } from "@/api/mcp/constants";
 
 export const SERVER_ANALYTICS_EVENTS = {
   aiGeneration: "$ai_generation",
   aiGenerationCompleted: "ai_generation_completed",
   aiGenerationFailed: "ai_generation_failed",
   exception: "$exception",
+  mcpSessionInitialized: "mcp_session_initialized",
 } as const;
 
 export type AnalyticsPrimitive = boolean | number | string;
@@ -72,6 +75,20 @@ export type AIGenerationFailedProperties = SafeAIAnalyticsMetadata & {
   region?: string;
 };
 
+/**
+ * Which client opened an MCP session, from the `initialize` handshake. The
+ * name and version are caller-reported, so they are capped and type-checked
+ * before they reach telemetry (see `mcp/client-identity.ts`). Every event
+ * carries a name, falling back to `unspecified`, so the count of events is the
+ * count of handshakes; an unreported version is left out rather than invented.
+ */
+export type McpSessionInitializedProperties = {
+  client_name: string;
+  client_version?: string;
+  credential_type: McpCredentialType | "unspecified";
+  mode: McpMode;
+};
+
 export type ExceptionListEntry = {
   mechanism: { handled: boolean; synthetic: boolean; type: string };
   type: string;
@@ -118,6 +135,10 @@ export type ServerAnalyticsCaptureParams = ServerAnalyticsCaptureBase &
     | {
         event: typeof SERVER_ANALYTICS_EVENTS.exception;
         properties: ExceptionProperties;
+      }
+    | {
+        event: typeof SERVER_ANALYTICS_EVENTS.mcpSessionInitialized;
+        properties: McpSessionInitializedProperties;
       }
   );
 

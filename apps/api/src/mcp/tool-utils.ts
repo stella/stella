@@ -10,6 +10,7 @@ import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { getAppBaseUrl } from "@/api/lib/mcp-connectors/app-urls";
 import { getCurrentRequestId } from "@/api/lib/observability/request-context";
 import {
   decodePaginationCursor,
@@ -87,8 +88,6 @@ export const MCP_TOOL_EXECUTION_OPTIONS: LocalToolExecutionOptions = {
   toolCallId: "mcp",
 };
 
-export const getAppBaseUrl = () => env.FRONTEND_URL.replace(/\/$/u, "");
-
 export const stringProp = (
   description: string,
   opts?: { maxLength?: number },
@@ -97,6 +96,19 @@ export const stringProp = (
     type: "string",
     description,
     ...(opts?.maxLength === undefined ? {} : { maxLength: opts.maxLength }),
+  }) as const;
+
+/**
+ * `uuidInputSchema` as a hand-written JSON Schema property, for the tools whose
+ * advertised schema is still maintained alongside their validator rather than
+ * projected from it. Both sides must move together until the tool migrates to
+ * `defineValibotMcpTool`.
+ */
+export const uuidProp = (description: string) =>
+  ({
+    type: "string",
+    format: "uuid",
+    description,
   }) as const;
 
 /**

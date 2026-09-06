@@ -2031,7 +2031,17 @@ const ClipboardApp = () => {
           }
         />
       )}
-      <main className="relative min-h-0 flex-1">
+      <Button
+        aria-label={t("close")}
+        className="bg-background/80 absolute end-1 top-1 z-10 size-11 rounded-full backdrop-blur-sm"
+        onClick={requestHide}
+        size="icon"
+        title={t("close")}
+        variant="ghost"
+      >
+        <XIcon aria-hidden="true" className="size-4" />
+      </Button>
+      <main className="relative me-14 min-h-0 flex-1">
         {feedback}
 
         {filteredItems.length === 0 ? (
@@ -2131,138 +2141,59 @@ const ClipboardApp = () => {
         )}
       </main>
 
-      <footer className="clipboard-controls grid h-14 shrink-0 grid-cols-[minmax(0,1fr)_minmax(12rem,22rem)_minmax(0,1fr)] items-center gap-2 px-3">
-        <div className="flex min-w-0 items-center gap-2">
-          <div className="flex shrink-0 items-center gap-0.5">
-            <a
-              aria-label="Stella"
-              className="text-foreground grid size-11 place-items-center"
-              href={STELLA_WEB_APP_URL}
-              onClick={(event) => {
-                event.preventDefault();
-                void invoke("clipboard_open_stella").catch((error: unknown) => {
-                  reportDesktopError({
-                    code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
-                    detail: describeError(error),
-                    operation:
-                      DESKTOP_TELEMETRY_OPERATIONS.clipboardExternalOpen,
-                    window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
-                  });
-                  setError({
-                    message: t("errorOpenStella"),
-                    source: "operation",
-                  });
+      <footer className="clipboard-controls grid h-14 shrink-0 grid-cols-[auto_minmax(8rem,22rem)_auto_minmax(0,1fr)] items-center gap-2 px-3">
+        <div className="flex shrink-0 items-center gap-0.5">
+          <a
+            aria-label="Stella"
+            className="text-foreground grid size-11 place-items-center"
+            href={STELLA_WEB_APP_URL}
+            onClick={(event) => {
+              event.preventDefault();
+              void invoke("clipboard_open_stella").catch((error: unknown) => {
+                reportDesktopError({
+                  code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+                  detail: describeError(error),
+                  operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardExternalOpen,
+                  window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
+                });
+                setError({
+                  message: t("errorOpenStella"),
+                  source: "operation",
+                });
+              });
+            }}
+            title="Stella"
+          >
+            <StellaMark className="size-5" />
+          </a>
+          {snapshot.captureStatus === "paused" ? (
+            <Button
+              aria-label={t("resume")}
+              className="size-11 shrink-0 rounded-full text-(--option-orange)"
+              onClick={() => {
+                applySnapshotCommand("clipboard_set_capture_status", {
+                  status: "active",
                 });
               }}
-              title="Stella"
-            >
-              <StellaMark className="size-5" />
-            </a>
-            {snapshot.persistence.status === "memoryOnly" ||
-            snapshot.persistence.status === "deletionOnly" ||
-            imageCleanupPending ? (
-              <span
-                aria-label={persistenceWarningLabel}
-                className="bg-warning/12 text-warning grid size-7 place-items-center rounded-full"
-                role="status"
-                title={persistenceWarningLabel}
-              >
-                <ShieldAlertIcon aria-hidden="true" className="size-3.5" />
-              </span>
-            ) : null}
-            <Button
-              aria-label={t("createGroup")}
-              className="size-11 shrink-0 rounded-full"
-              disabled={snapshot.groups.length >= 24}
-              onClick={() =>
-                setDialog({
-                  color: nextGroupColor,
-                  name: "",
-                  type: "createGroup",
-                })
-              }
               size="icon"
-              title={t("createGroup")}
+              title={t("resume")}
               variant="ghost"
             >
-              <FolderPlusIcon aria-hidden="true" className="size-4" />
+              <PauseIcon aria-hidden="true" className="size-4" />
             </Button>
-          </div>
-
-          <nav
-            aria-label={t("groups")}
-            className="clipboard-groups-rail flex min-w-0 flex-1 scrollbar-none items-center gap-1 overflow-x-auto"
-          >
-            <Button
-              aria-pressed={activeGroupId === null}
-              className="h-11 shrink-0 rounded-full px-3 text-xs"
-              data-clipboard-group-id={CLIPBOARD_NO_GROUP_DROP_ID}
-              data-drop-target={isDropTarget(null) ? "" : undefined}
-              onClick={() => {
-                setSelectedGroupId(null);
-                setSelectedIndex(0);
-              }}
-              variant={activeGroupId === null ? "secondary" : "ghost"}
+          ) : null}
+          {snapshot.persistence.status === "memoryOnly" ||
+          snapshot.persistence.status === "deletionOnly" ||
+          imageCleanupPending ? (
+            <span
+              aria-label={persistenceWarningLabel}
+              className="bg-warning/12 text-warning grid size-7 place-items-center rounded-full"
+              role="status"
+              title={persistenceWarningLabel}
             >
-              {t("allClips")}
-            </Button>
-            {snapshot.groups.map((group) => {
-              const groupStyle: ClipboardGroupStyle = {
-                "--clipboard-group-accent": group.color,
-              };
-              return (
-                <ContextMenu
-                  actions={[
-                    {
-                      icon: <PencilIcon aria-hidden="true" />,
-                      label: t("editGroup"),
-                      onClick: () =>
-                        setDialog({
-                          color: group.color,
-                          groupId: group.id,
-                          name: group.name,
-                          type: "editGroup",
-                        }),
-                    },
-                    {
-                      icon: <Trash2Icon aria-hidden="true" />,
-                      label: t("deleteGroup"),
-                      onClick: () =>
-                        setDialog({
-                          groupId: group.id,
-                          groupName: group.name,
-                          mode: "keepClips",
-                          type: "deleteGroup",
-                        }),
-                      separatorBefore: true,
-                      variant: "destructive",
-                    },
-                  ]}
-                  key={group.id}
-                >
-                  <Button
-                    aria-pressed={activeGroupId === group.id}
-                    className="clipboard-group-chip h-11 shrink-0 rounded-full px-3 text-xs"
-                    data-clipboard-group-id={group.id}
-                    data-drop-target={isDropTarget(group.id) ? "" : undefined}
-                    data-group-chip=""
-                    onClick={() => {
-                      setSelectedGroupId(group.id);
-                      setSelectedIndex(0);
-                    }}
-                    style={groupStyle}
-                    variant="ghost"
-                  >
-                    <span
-                      aria-hidden="true"
-                      className="clipboard-group-chip-dot size-2 shrink-0 rounded-full"
-                    />
-                    {group.name}
-                  </Button>
-                </ContextMenu>
-              );
-            })}
-          </nav>
+              <ShieldAlertIcon aria-hidden="true" className="size-3.5" />
+            </span>
+          ) : null}
         </div>
 
         <InputGroup className="clipboard-search h-11 w-full rounded-full">
@@ -2383,17 +2314,98 @@ const ClipboardApp = () => {
               </MenuItem>
             </MenuPopup>
           </Menu>
+        </div>
+        <nav
+          aria-label={t("groups")}
+          className="clipboard-groups-rail border-border flex min-w-0 scrollbar-none items-center gap-1 overflow-x-auto border-s ps-2"
+        >
           <Button
-            aria-label={t("close")}
-            className="size-11 rounded-full"
-            onClick={requestHide}
+            aria-pressed={activeGroupId === null}
+            className="h-11 shrink-0 rounded-full px-3 text-xs"
+            data-clipboard-group-id={CLIPBOARD_NO_GROUP_DROP_ID}
+            data-drop-target={isDropTarget(null) ? "" : undefined}
+            onClick={() => {
+              setSelectedGroupId(null);
+              setSelectedIndex(0);
+            }}
+            variant={activeGroupId === null ? "secondary" : "ghost"}
+          >
+            {t("allClips")}
+          </Button>
+          <Button
+            aria-label={t("createGroup")}
+            className="bg-background/80 sticky start-0 z-10 size-11 shrink-0 rounded-full backdrop-blur-sm"
+            disabled={snapshot.groups.length >= 24}
+            onClick={() =>
+              setDialog({
+                color: nextGroupColor,
+                name: "",
+                type: "createGroup",
+              })
+            }
             size="icon"
-            title={t("close")}
+            title={t("createGroup")}
             variant="ghost"
           >
-            <XIcon aria-hidden="true" className="size-4" />
+            <FolderPlusIcon aria-hidden="true" className="size-4" />
           </Button>
-        </div>
+          {snapshot.groups.map((group) => {
+            const groupStyle: ClipboardGroupStyle = {
+              "--clipboard-group-accent": group.color,
+            };
+            return (
+              <ContextMenu
+                actions={[
+                  {
+                    icon: <PencilIcon aria-hidden="true" />,
+                    label: t("editGroup"),
+                    onClick: () =>
+                      setDialog({
+                        color: group.color,
+                        groupId: group.id,
+                        name: group.name,
+                        type: "editGroup",
+                      }),
+                  },
+                  {
+                    icon: <Trash2Icon aria-hidden="true" />,
+                    label: t("deleteGroup"),
+                    onClick: () =>
+                      setDialog({
+                        groupId: group.id,
+                        groupName: group.name,
+                        mode: "keepClips",
+                        type: "deleteGroup",
+                      }),
+                    separatorBefore: true,
+                    variant: "destructive",
+                  },
+                ]}
+                key={group.id}
+              >
+                <Button
+                  aria-pressed={activeGroupId === group.id}
+                  className="clipboard-group-chip h-11 shrink-0 rounded-full px-3 text-xs"
+                  data-clipboard-group-id={group.id}
+                  data-drop-target={isDropTarget(group.id) ? "" : undefined}
+                  data-group-chip=""
+                  onClick={() => {
+                    setSelectedGroupId(group.id);
+                    setSelectedIndex(0);
+                  }}
+                  style={groupStyle}
+                  variant="ghost"
+                >
+                  <span
+                    aria-hidden="true"
+                    className="clipboard-group-chip-dot size-2 shrink-0 rounded-full"
+                  />
+                  {group.name}
+                </Button>
+              </ContextMenu>
+            );
+          })}
+        </nav>
       </footer>
     </div>
   );

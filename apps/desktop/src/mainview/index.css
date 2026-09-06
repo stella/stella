@@ -296,10 +296,25 @@ body:has(.clipboard-editor-window) .font-sans {
   content: none;
 }
 
-.clipboard-search-input::placeholder {
+.clipboard-search-input input::placeholder {
   color: var(--clipboard-search-placeholder) !important;
   opacity: 1;
   -webkit-text-fill-color: var(--clipboard-search-placeholder) !important;
+}
+
+.clipboard-search:focus-within::after {
+  position: absolute;
+  inset: -1px;
+  border: 2px solid var(--option-blue);
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px
+    color-mix(in srgb, var(--color-white) 34%, transparent);
+  pointer-events: none;
+  content: "";
+}
+
+.clipboard-search-input input:focus::placeholder {
+  opacity: 0;
 }
 
 .clipboard-rich-editor blockquote {

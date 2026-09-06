@@ -9,13 +9,15 @@ import {
   BUSINESS_REGISTRY_DISPATCH,
   BUSINESS_REGISTRY_SLUGS,
   executeRegistryLookup,
+  registryDisabledForOrgRefusal,
+  RegistryDisabledForOrgError,
 } from "@/api/lib/business-registries/dispatch";
 import type {
   BusinessRegistrySlug,
   RegistryLookupResponse,
 } from "@/api/lib/business-registries/dispatch";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { isNativeToolEnabledForOrg } from "@/api/lib/mcp-connectors/catalog-metadata";
+import { nativeToolDisabledReasonForOrg } from "@/api/lib/mcp-connectors/catalog-metadata";
 
 const querySchema = t.Object({
   registry: t.UnionEnum(BUSINESS_REGISTRY_SLUGS, {
@@ -45,7 +47,10 @@ export const lookupBusinessRegistryShared = async ({
   registry,
   q,
 }: LookupBusinessRegistryProps): Promise<
-  Result<RegistryLookupResponse, HandlerError | SafeDbError>
+  Result<
+    RegistryLookupResponse,
+    HandlerError | RegistryDisabledForOrgError | SafeDbError
+  >
 > => {
   const handler = BUSINESS_REGISTRY_DISPATCH[registry];
   if (!handler.isDeployAvailable()) {
@@ -71,23 +76,23 @@ export const lookupBusinessRegistryShared = async ({
   }
   const settings = settingsResult.value;
 
-  const enabled = isNativeToolEnabledForOrg({
+  const disabledReason = nativeToolDisabledReasonForOrg({
     slug: handler.nativeToolSlug,
     practiceJurisdictions: arrayOrEmpty(settings?.practiceJurisdictions),
     nativeToolOverrides: settings?.nativeToolOverrides ?? {},
   });
-  if (!enabled) {
-    // Tenant-neutral denial: do NOT enumerate the org's enabled registries.
-    // This handler is shared by the anonymized MCP surface, whose tools/list is
-    // deliberately tenant-neutral; naming the enabled set here would leak the
-    // org's practice-jurisdiction / native-tool settings through tools/call.
-    // The default surface's narrowed tools/list already steers the agent to
-    // reachable registries.
+  if (disabledReason) {
+    // Tenant-neutral denial: the shared refusal names the refused registry and
+    // both ways to enable it, and does NOT enumerate the org's enabled
+    // registries. This handler is shared by the anonymized MCP surface, whose
+    // tools/list is deliberately tenant-neutral; naming the enabled set here
+    // would leak the org's practice-jurisdiction / native-tool settings through
+    // tools/call. The default surface's narrowed tools/list already steers the
+    // agent to reachable registries.
     return Result.err(
-      new HandlerError({
-        status: 403,
-        message: `Registry '${registry}' is disabled for this organization`,
-      }),
+      new RegistryDisabledForOrgError(
+        registryDisabledForOrgRefusal({ registry, reason: disabledReason }),
+      ),
     );
   }
 
@@ -120,7 +125,13 @@ const businessRegistriesLookup = createSafeRootHandler(
       q: query.q,
     });
     if (Result.isError(result)) {
-      return yield* Result.err(result.error);
+      const { error } = result;
+      if (RegistryDisabledForOrgError.is(error)) {
+        return yield* Result.err(
+          new HandlerError({ status: 403, message: error.message }),
+        );
+      }
+      return yield* Result.err(error);
     }
     return Result.ok(result.value);
   },

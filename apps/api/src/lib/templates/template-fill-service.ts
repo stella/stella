@@ -30,7 +30,7 @@ import { createDispatchLookupResolver } from "@/api/lib/docx/lookup-fields";
 import { manifestNamedConditions } from "@/api/lib/docx/manifest-conditions";
 import { applyManifestFillSteps } from "@/api/lib/docx/manifest-fill-steps";
 import { fillTemplate } from "@/api/lib/docx/patch-template";
-import { buildIsRegistryEnabledForOrg } from "@/api/lib/docx/registry-org-gate";
+import { buildResolveRegistryDisabledReason } from "@/api/lib/docx/registry-org-gate";
 import {
   type AiConditionDecider,
   resolveAiConditions,
@@ -304,8 +304,13 @@ const describedWarnings = async ({
       conditionPaths: discovered.conditionPaths,
       fields,
       placeholderPaths: discovered.placeholders.map(({ name }) => name),
-      registryGate: async () =>
-        await buildIsRegistryEnabledForOrg({ organizationId, scopedDb }),
+      registryGate: async () => {
+        const resolveDisabledReason = await buildResolveRegistryDisabledReason({
+          organizationId,
+          scopedDb,
+        });
+        return (registry) => resolveDisabledReason(registry) === null;
+      },
     })),
   ]);
 
@@ -673,10 +678,12 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
       values: record,
       manifest,
       resolveLookup: createDispatchLookupResolver({
-        isRegistryEnabledForOrg: await buildIsRegistryEnabledForOrg({
-          organizationId,
-          scopedDb,
-        }),
+        resolveRegistryDisabledReason: await buildResolveRegistryDisabledReason(
+          {
+            organizationId,
+            scopedDb,
+          },
+        ),
       }),
       bindingContext,
     });

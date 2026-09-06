@@ -909,7 +909,7 @@ describe("help surfaces --input for inputOnly tools", () => {
     expect(result.stdout).toContain("require_complete");
     expect(result.stdout).toContain("allow_partial");
     expect(result.stdout).toContain(
-      `--input '{"template_id":"xxxxx","values":{"key":"value"}}'`,
+      `--input '{"template_id":"00000000-0000-4000-8000-000000000000","values":{"key":"value"}}'`,
     );
   });
 
@@ -993,7 +993,7 @@ describe("template fill strictness policies", () => {
         "template",
         "fill",
         "--template-id",
-        "template-1",
+        "11111111-1111-4111-8111-111111111111",
         "--input",
         '{"values":{"typo":"value"}}',
       ],
@@ -1019,7 +1019,7 @@ describe("template fill strictness policies", () => {
         "template",
         "fill",
         "--template-id",
-        "template-1",
+        "11111111-1111-4111-8111-111111111111",
         "--input",
         '{"values":{"intentional":"value"}}',
         "--allow-unused-values",
@@ -1032,7 +1032,7 @@ describe("template fill strictness policies", () => {
     expect(result.exitCode).toBe(0);
     expect(JSON.parse(result.stdout)).toEqual(fillPayload);
     expect(server.requests.at(0)?.params.arguments).toEqual({
-      template_id: "template-1",
+      template_id: "11111111-1111-4111-8111-111111111111",
       values: { intentional: "value" },
       allow_unused_values: true,
     });
@@ -1050,7 +1050,7 @@ describe("template fill strictness policies", () => {
         "template",
         "fill",
         "--template-id",
-        "template-1",
+        "11111111-1111-4111-8111-111111111111",
         "--input",
         '{"values":{"name":"ACME"}}',
         "--completion-mode",
@@ -1063,7 +1063,7 @@ describe("template fill strictness policies", () => {
 
     expect(result.exitCode).toBe(0);
     expect(server.requests.at(0)?.params.arguments).toEqual({
-      template_id: "template-1",
+      template_id: "11111111-1111-4111-8111-111111111111",
       values: { name: "ACME" },
       completion_mode: "allow_partial",
     });
@@ -1073,7 +1073,10 @@ describe("template fill strictness policies", () => {
 describe("template persistence discriminator split", () => {
   test("requires template consent as well as document-write consent", async () => {
     const server = startMockServer(() => ({
-      toolPayload: { entityId: "entity_1", versionNumber: 2 },
+      toolPayload: {
+        entityId: "33333333-3333-4333-8333-333333333333",
+        versionNumber: 2,
+      },
     }));
     const result = await runCli({
       args: [
@@ -1081,11 +1084,11 @@ describe("template persistence discriminator split", () => {
         "save-filled",
         "new-version",
         "--template-id",
-        "template_1",
+        "11111111-1111-4111-8111-111111111111",
         "--matter-id",
-        "workspace_1",
+        "22222222-2222-4222-8222-222222222222",
         "--entity-id",
-        "entity_1",
+        "33333333-3333-4333-8333-333333333333",
         "--idempotency-key",
         "retry_1",
         "--input",
@@ -1106,7 +1109,10 @@ describe("template persistence discriminator split", () => {
 
   test("new-version injects the destination and forwards values through --input", async () => {
     const server = startMockServer(() => ({
-      toolPayload: { entityId: "entity_1", versionNumber: 2 },
+      toolPayload: {
+        entityId: "33333333-3333-4333-8333-333333333333",
+        versionNumber: 2,
+      },
     }));
     const result = await runCli({
       args: [
@@ -1114,11 +1120,11 @@ describe("template persistence discriminator split", () => {
         "save-filled",
         "new-version",
         "--template-id",
-        "template_1",
+        "11111111-1111-4111-8111-111111111111",
         "--matter-id",
-        "workspace_1",
+        "22222222-2222-4222-8222-222222222222",
         "--entity-id",
-        "entity_1",
+        "33333333-3333-4333-8333-333333333333",
         "--idempotency-key",
         "retry_1",
         "--input",
@@ -1133,9 +1139,9 @@ describe("template persistence discriminator split", () => {
     expect(server.requests.at(0)?.params.name).toBe("save_filled_template");
     expect(server.requests.at(0)?.params.arguments).toEqual({
       action: "create_version",
-      template_id: "template_1",
-      matter_id: "workspace_1",
-      entity_id: "entity_1",
+      template_id: "11111111-1111-4111-8111-111111111111",
+      matter_id: "22222222-2222-4222-8222-222222222222",
+      entity_id: "33333333-3333-4333-8333-333333333333",
       idempotency_key: "retry_1",
       values: { "tenant.name": "ACME" },
     });

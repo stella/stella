@@ -1,5 +1,6 @@
 import { captureError } from "@/api/lib/analytics/capture";
 import { authenticateMcpRequest } from "@/api/mcp/auth";
+import { recordMcpSessionInitialized } from "@/api/mcp/client-identity";
 import { resolveMcpSessionContext } from "@/api/mcp/context";
 import { listMcpResources, readMcpResource } from "@/api/mcp/resources";
 import { createMcpHttpRequestHandler } from "@/api/mcp/server-core";
@@ -19,5 +20,6 @@ export const handleMcpHttpRequest = createMcpHttpRequestHandler({
   listMcpResources,
   listMcpTools,
   readMcpResource,
+  recordMcpSessionInitialized,
   resolveMcpSessionContext,
 });
