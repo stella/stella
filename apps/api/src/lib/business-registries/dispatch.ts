@@ -138,7 +138,7 @@ export type { BusinessRegistrySlug } from "@stll/api-contract";
 // `CountryCode` (which is structurally the ISO 3166-1 alpha-2 set).
 // ---------------------------------------------------------------------------
 
-export const EU_PSEUDO_JURISDICTION = "EU" as const;
+const EU_PSEUDO_JURISDICTION = "EU" as const;
 export type RegistryJurisdictionCode =
   | CountryCode
   | typeof EU_PSEUDO_JURISDICTION;
@@ -1500,11 +1500,6 @@ export const BUSINESS_REGISTRY_DISPATCH: Record<
   vies: VIES_HANDLER,
 };
 
-export const getDeployAvailableRegistryHandlers = (): RegistryHandler[] =>
-  Object.values(BUSINESS_REGISTRY_DISPATCH).filter((handler) =>
-    handler.isDeployAvailable(),
-  );
-
 export const isBusinessRegistryNativeToolDeployAvailable = (
   nativeToolSlug: string,
 ): boolean => {
@@ -1543,7 +1538,7 @@ export const getRegistryHandlerByCountry = (
   return handler;
 };
 
-export const getRegistryHandlerDefinitionByCountry = (
+const getRegistryHandlerDefinitionByCountry = (
   country: RegistryJurisdictionCode,
 ): RegistryHandler | undefined => HANDLERS_BY_JURISDICTION.get(country);
 

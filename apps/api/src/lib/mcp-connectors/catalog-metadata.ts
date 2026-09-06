@@ -197,45 +197,6 @@ export const isNativeToolEnabledForOrg = ({
     nativeToolOverrides,
   );
 
-/**
- * The disablement reason behind {@link isNativeToolEnabledForOrg}, for callers
- * that must tell the user what would turn the tool on. Same inputs, same
- * precedence: an explicit per-slug override wins over the jurisdiction default.
- */
-export const nativeToolDisabledReasonForOrg = ({
-  slug,
-  practiceJurisdictions,
-  nativeToolOverrides,
-}: {
-  slug: string;
-  practiceJurisdictions: readonly PracticeJurisdiction[];
-  nativeToolOverrides: Readonly<Record<string, boolean>>;
-}): NativeToolDisabledReason | null =>
-  nativeToolDisabledReasonForCodes(
-    slug,
-    toPracticeCountryCodeSet(practiceJurisdictions),
-    nativeToolOverrides,
-  );
-
-/**
- * The jurisdictions that make a native tool default-on, straight from the
- * catalogue recommendation the gate reads. Recovery advice derives from this
- * rather than from a second per-tool jurisdiction list, so advice cannot name a
- * jurisdiction that would not enable the tool. Empty means the tool is
- * jurisdiction-independent (default-on everywhere).
- */
-export const nativeToolRecommendedJurisdictions = (
-  slug: string,
-): readonly RecommendedJurisdictionCode[] => {
-  const tool = NATIVE_TOOL_CATALOG.find((entry) => entry.slug === slug);
-  if (tool === undefined) {
-    // Same treatment the enablement default gives an unknown slug (off), so
-    // the advice cannot contradict the gate.
-    return [];
-  }
-  return tool.recommendedJurisdictions;
-};
-
 export const getDisabledNativeToolSlugs = ({
   practiceJurisdictions,
   nativeToolOverrides,
