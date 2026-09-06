@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { anonymizationBlacklistEntries } from "@/api/db/schema";
@@ -98,48 +98,40 @@ const updateAnonymizationBlacklist = createSafeRootHandler(
 
         const now = new Date();
 
-        for (const entry of entries.value) {
-          const existing = existingByCanonical.get(
-            entry.canonical.toLocaleLowerCase(),
-          );
+        // One upsert for the whole list. A term already on it keeps its row:
+        // the id comes from the read above, so the conflict target is the
+        // primary key and `createdBy` survives. A new term gets a fresh id.
+        // `setWhere` repeats the tenant scope the per-row update carried, so a
+        // row outside this organization's org-wide set stays unreachable.
+        const rows = entries.value.map((entry) => ({
+          id:
+            existingByCanonical.get(entry.canonical.toLocaleLowerCase())?.id ??
+            createSafeId<"anonymizationBlacklistEntry">(),
+          organizationId: session.activeOrganizationId,
+          label: entry.label,
+          canonical: entry.canonical,
+          variants: entry.variants,
+          enabled: entry.enabled,
+          createdBy: user.id,
+          updatedBy: user.id,
+        }));
 
-          if (existing) {
-            // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- sequential by design: sequential blacklist upserts inside one transaction
-            await tx
-              .update(anonymizationBlacklistEntries)
-              .set({
-                label: entry.label,
-                canonical: entry.canonical,
-                variants: entry.variants,
-                enabled: entry.enabled,
-                updatedBy: user.id,
-                updatedAt: now,
-              })
-              .where(
-                and(
-                  eq(anonymizationBlacklistEntries.id, existing.id),
-                  eq(
-                    anonymizationBlacklistEntries.organizationId,
-                    session.activeOrganizationId,
-                  ),
-                  isNull(anonymizationBlacklistEntries.workspaceId),
-                ),
-              );
-            continue;
-          }
-
-          // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- sequential blacklist upserts inside one transaction
-          await tx.insert(anonymizationBlacklistEntries).values({
-            id: createSafeId<"anonymizationBlacklistEntry">(),
-            organizationId: session.activeOrganizationId,
-            label: entry.label,
-            canonical: entry.canonical,
-            variants: entry.variants,
-            enabled: entry.enabled,
-            createdBy: user.id,
-            updatedBy: user.id,
+        await tx
+          .insert(anonymizationBlacklistEntries)
+          .values(rows)
+          .onConflictDoUpdate({
+            target: anonymizationBlacklistEntries.id,
+            set: {
+              label: sql`excluded.label`,
+              canonical: sql`excluded.canonical`,
+              variants: sql`excluded.variants`,
+              enabled: sql`excluded.enabled`,
+              updatedBy: sql`excluded.updated_by`,
+              updatedAt: now,
+            },
+            setWhere: sql`${anonymizationBlacklistEntries.organizationId} = ${session.activeOrganizationId}
+              AND ${anonymizationBlacklistEntries.workspaceId} IS NULL`,
           });
-        }
 
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.UPDATE,

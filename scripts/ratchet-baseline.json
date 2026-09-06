@@ -777,7 +777,7 @@
     }
   },
   "no-db-await-in-loop-suppressions": {
-    "count": 112,
+    "count": 110,
     "files": {
       "apps/api/scripts/backfill-image-thumbnails.ts": 3,
       "apps/api/scripts/backfill-search-previews.ts": 1,
@@ -805,7 +805,6 @@
       "apps/api/src/handlers/legislation/ingestion.ts": 1,
       "apps/api/src/handlers/legislation/search-index.ts": 1,
       "apps/api/src/handlers/mcp-connectors/create-connector.ts": 1,
-      "apps/api/src/handlers/organization-settings/update-anonymization-blacklist.ts": 2,
       "apps/api/src/handlers/playbooks/auto-run.ts": 1,
       "apps/api/src/handlers/reports/build-report-data.ts": 1,
       "apps/api/src/handlers/search/ai.ts": 2,
