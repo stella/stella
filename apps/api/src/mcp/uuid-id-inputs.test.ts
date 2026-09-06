@@ -196,7 +196,10 @@ describe("MCP id inputs are validated as UUIDs", () => {
       collectIdProperties(tool.inputSchema, toolName, advertised);
       for (const { path, schema } of advertised) {
         const key = path.slice(`${toolName}.`.length);
-        if (declaresUuid(schema) !== validatorEnforcesUuid(validator.entries[key])) {
+        const validatorEntry = Object.entries(validator.entries)
+          .find(([name]) => name === key)
+          ?.at(1);
+        if (declaresUuid(schema) !== validatorEnforcesUuid(validatorEntry)) {
           mismatches.push(path);
         }
       }
