@@ -777,15 +777,12 @@
     }
   },
   "no-db-await-in-loop-suppressions": {
-    "count": 127,
+    "count": 124,
     "files": {
       "apps/api/scripts/backfill-image-thumbnails.ts": 3,
       "apps/api/scripts/backfill-search-previews.ts": 1,
       "apps/api/scripts/classify-citations.ts": 3,
       "apps/api/scripts/ingestion-status.ts": 6,
-      "apps/api/scripts/seed-case-law.ts": 1,
-      "apps/api/scripts/seed-matter-activity.ts": 1,
-      "apps/api/scripts/seed-usage-policies.ts": 1,
       "apps/api/src/handlers/case-law/decisions/sitemap.ts": 1,
       "apps/api/src/handlers/case-law/decisions/slug-backfill.ts": 3,
       "apps/api/src/handlers/case-law/erasure.ts": 2,

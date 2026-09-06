@@ -103,7 +103,6 @@ const seed = async (): Promise<void> => {
       // Upsert by policyKey so edits to the config (display name, units,
       // or a newly created hostedPolicyRef) propagate to the existing row
       // instead of being skipped.
-      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- SAFETY: `seeds` is the compile-time policy catalog, not tenant data, and one transaction connection runs one statement at a time
       await tx
         .insert(usagePolicies)
         .values({

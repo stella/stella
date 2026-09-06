@@ -274,7 +274,6 @@ export const seedMatterActivity = async () => {
       },
     ] as const;
 
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- SAFETY: `rows` is the fixed nine-event seed list, and each row carries its own conflict target, so the upserts stay per row
     await Promise.all(
       rows.map((row) =>
         tx

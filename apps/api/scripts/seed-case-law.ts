@@ -280,7 +280,6 @@ export async function seedCaseLaw() {
       // A failure here (e.g. local schema drift in `case_law_search_documents`)
       // must not abort the loop and leave the remaining decisions unseeded.
       try {
-        // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- local seed over committed fixtures; the per-document tsvector upsert has no batched form
         await indexDecision(decisionId, ingestionDb);
       } catch (error) {
         console.warn(
