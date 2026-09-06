@@ -36,10 +36,11 @@
     "files": {}
   },
   "module-level-mutable-collections": {
-    "count": 3,
+    "count": 4,
     "files": {
       "apps/web/src/boot-prefetch.ts": 1,
       "apps/web/src/components/ai-suggestions/use-review-actions.ts": 1,
+      "apps/web/src/lib/find-owner.ts": 1,
       "apps/web/src/lib/relative-time.ts": 1
     }
   },
@@ -1344,7 +1345,7 @@
     }
   },
   "cross-workspace-duplicate-export-names": {
-    "count": 60,
+    "count": 61,
     "files": {
       "apps/web/src/lib/analytics/noop.ts": 1,
       "apps/web/src/lib/analytics/posthog.ts": 1,
@@ -1364,6 +1365,7 @@
       "apps/web/src/lib/user-files.ts": 1,
       "apps/web/src/lib/workspaces/queries/entities.logic.ts": 1,
       "packages/api-contract/src/desktop-edit-file-types.ts": 1,
+      "packages/api-contract/src/entity-find.ts": 1,
       "packages/api-contract/src/safe-id.ts": 2,
       "packages/api-contract/src/view-layout.ts": 1,
       "packages/business-registries/src/shared/guards.ts": 1,
@@ -1386,7 +1388,7 @@
     }
   },
   "duplicate-token-blocks": {
-    "count": 125,
+    "count": 123,
     "files": {
       ".oxlint-plugins/no-ambient-nondeterminism.ts": 1,
       ".oxlint-plugins/no-auth-token-in-web-storage.ts": 1,
@@ -1458,7 +1460,7 @@
       "apps/web/src/components/document-icon.tsx": 4,
       "apps/web/src/components/inspector/chat-tab-panel.tsx": 1,
       "apps/web/src/components/require-ai-key.tsx": 1,
-      "apps/web/src/components/workspaces/field-value.tsx": 3,
+      "apps/web/src/components/workspaces/field-value.tsx": 2,
       "apps/web/src/components/workspaces/matter-context-menu.tsx": 1,
       "apps/web/src/components/workspaces/members-section.tsx": 1,
       "apps/web/src/lib/types.ts": 1,
@@ -1472,7 +1474,7 @@
       "apps/web/src/routes/law/$country/cases/$court/$slug.tsx": 1,
       "packages/locales/src/languages.ts": 7,
       "packages/ui/src/index.ts": 1,
-      "packages/workspace-ui/src/field-value.tsx": 3,
+      "packages/workspace-ui/src/field-value.tsx": 2,
       "scripts/result-boundary-globs.ts": 2
     }
   },
@@ -1770,7 +1772,7 @@
     }
   },
   "web-lib-top-level-entries": {
-    "count": 138,
+    "count": 140,
     "files": {
       "apps/web/src/lib/account": 1,
       "apps/web/src/lib/analytics": 1,
@@ -1830,6 +1832,8 @@
       "apps/web/src/lib/file-open.logic.ts": 1,
       "apps/web/src/lib/file-size.ts": 1,
       "apps/web/src/lib/files": 1,
+      "apps/web/src/lib/find-owner.logic.ts": 1,
+      "apps/web/src/lib/find-owner.ts": 1,
       "apps/web/src/lib/folio-scroll-event.ts": 1,
       "apps/web/src/lib/folio-ui-components.ts": 1,
       "apps/web/src/lib/get-display-name.ts": 1,
