@@ -1,8 +1,8 @@
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import type { RefObject } from "react";
 
 import { useHotkey } from "@tanstack/react-hotkeys";
-import { Columns3Icon, SearchIcon, XIcon } from "lucide-react";
+import { Columns3Icon, InfoIcon, SearchIcon, XIcon } from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
@@ -12,13 +12,14 @@ import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { cn } from "@stll/ui/utils";
 
 import { PropertyIcon } from "@/components/workspaces/property-helpers";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { ownsFindKeyEvent, useFindSurface } from "@/lib/find-owner";
 import type { WorkspaceProperty, WorkspaceView } from "@/lib/types";
 import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
+import { useWorkspaceTableSchema } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-columns";
 import {
   searchableColumnIds,
   toggleFindColumn,
+  toPickerFindColumns,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-find.logic";
 import type { TableFindColumn } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-find.logic";
 import { useTableStore } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
@@ -52,6 +53,13 @@ export const ViewToolbarSearch = ({
 }: ViewToolbarSearchProps) => {
   const t = useTranslations();
   const { columns, request, selection } = useTableFind({ properties, view });
+  // The picker also lists the metadata columns, disabled. They are read off the
+  // rendered schema so the list cannot drift from the grid.
+  const schema = useWorkspaceTableSchema({ properties, view });
+  const pickerColumns = toPickerFindColumns({
+    findColumns: columns,
+    schemaColumns: schema.columns,
+  });
   const find = useTableStore((state) => state.find[view.id]);
   const openFind = useTableStore((state) => state.openFind);
   const closeFind = useTableStore((state) => state.closeFind);
@@ -108,11 +116,18 @@ export const ViewToolbarSearch = ({
 
   // Reopening on a term means "search again", so the next keystroke replaces
   // it. `autoFocus` puts the caret in, it does not select what is there.
-  useExternalSyncEffect(() => {
-    if (open) {
-      inputRef.current?.select();
-    }
-  }, [open]);
+  //
+  // Selecting from the ref callback rather than an effect keyed on `open`: the
+  // popup mounts on the commit that opens it, so `inputRef.current` is still
+  // null when such an effect runs and the selection is lost to the race. The
+  // callback runs exactly when the node attaches, which is the moment there is
+  // something to select. Its identity has to be stable: React detaches and
+  // reattaches a ref callback that changes, which would re-select the term
+  // under a caret the reader had placed mid-word.
+  const bindInput = useCallback((node: HTMLInputElement | null) => {
+    inputRef.current = node;
+    node?.select();
+  }, []);
 
   return (
     <Popover
@@ -201,7 +216,7 @@ export const ViewToolbarSearch = ({
               }
             }}
             placeholder={t("workspaces.views.findPlaceholder")}
-            ref={inputRef}
+            ref={bindInput}
             size="sm"
             type="search"
             value={find?.typed ?? ""}
@@ -221,7 +236,7 @@ export const ViewToolbarSearch = ({
         </div>
         {columnsShown && (
           <FindColumnList
-            columns={columns}
+            columns={pickerColumns}
             onChange={(next) => {
               setFindScope(view.id, next);
             }}
@@ -304,6 +319,18 @@ const FindColumnList = ({
         }}
       />
       {columns.map((column) => {
+        if (column.kind === "metadata") {
+          return (
+            <FindColumnRow
+              checked={false}
+              disabled
+              icon={<InfoIcon className="size-3.5 opacity-70" />}
+              key={column.id}
+              label={column.label}
+              title={t("workspaces.views.findColumnMetadataNotSearchable")}
+            />
+          );
+        }
         const excluded = column.support === "excluded";
         return (
           <FindColumnRow
@@ -338,7 +365,8 @@ type FindColumnRowProps = {
   disabled?: boolean;
   icon?: React.ReactNode;
   label: string;
-  onClick: () => void;
+  /** Absent on a row that is always disabled, which can never fire it. */
+  onClick?: (() => void) | undefined;
   title?: string | undefined;
 };
 
