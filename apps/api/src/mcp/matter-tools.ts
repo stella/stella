@@ -891,7 +891,7 @@ const handleLookupBusinessRegistryTool: TypedMcpToolHandler<
   }
 
   const result = await lookupBusinessRegistryShared({
-    safeDb: context.safeDb,
+    scopedDb: context.scopedDb,
     organizationId: context.organizationId,
     registry: parsed.output.registry,
     q: parsed.output.query,

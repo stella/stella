@@ -10,6 +10,7 @@ import type {
   NormalizedRegistryKeyPeopleGroup,
   NormalizedRegistrySearchResult,
 } from "../shared/normalized.js";
+import { getAresLegalFormName } from "./legal-forms.js";
 import type { AresAddress, AresCompany, AresSearchResult } from "./types.js";
 import { validateIco } from "./validation.js";
 
@@ -71,7 +72,12 @@ export const toNormalizedEntity = (
     name: company.name,
     nameWithoutLegalForm: unsupportedField(),
     legalForm: availableField(
-      company.legalForm ? { code: company.legalForm, label: null } : null,
+      company.legalForm
+        ? {
+            code: company.legalForm,
+            label: getAresLegalFormName(company.legalForm),
+          }
+        : null,
     ),
     status: unsupportedField(),
     statusDetail: company.status,

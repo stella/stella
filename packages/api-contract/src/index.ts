@@ -24,9 +24,15 @@ export type {
 } from "./billing";
 export {
   BUSINESS_REGISTRY_SLUGS,
+  BUSINESS_REGISTRY_CONFIGURATION,
+  BUSINESS_REGISTRY_CREDENTIAL_SLUGS,
+  isBusinessRegistryCredentialSlug,
   isBusinessRegistrySlug,
 } from "./business-registries";
-export type { BusinessRegistrySlug } from "./business-registries";
+export type {
+  BusinessRegistrySlug,
+  BusinessRegistryCredentialSlug,
+} from "./business-registries";
 export {
   CHAT_RUN_MODE,
   CHAT_THREAD_ORIGIN,

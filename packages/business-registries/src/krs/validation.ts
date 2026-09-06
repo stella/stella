@@ -19,13 +19,7 @@ import {
   validate as validateRegonStdnum,
 } from "@stll/stdnum/pl/regon";
 
-export const normalizeKrsNumber = (input: string): string =>
-  input.trim().replaceAll(/\s/gu, "");
-
-export const validateKrsNumber = (input: string): boolean => {
-  const compact = normalizeKrsNumber(input);
-  return /^\d{10}$/u.test(compact);
-};
+export { normalizeKrsNumber, validateKrsNumber } from "./number.js";
 
 export const validateNip = (input: string): boolean =>
   validateNipStdnum(input).valid;

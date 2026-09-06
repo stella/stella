@@ -1,23 +1,19 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
-import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
+import { getOrganizationRegistryHandler } from "@/api/lib/business-registries/credentials";
 import {
-  BUSINESS_REGISTRY_DISPATCH,
   BUSINESS_REGISTRY_SLUGS,
   executeRegistryLookup,
-  registryDisabledForOrgRefusal,
-  RegistryDisabledForOrgError,
 } from "@/api/lib/business-registries/dispatch";
 import type {
   BusinessRegistrySlug,
   RegistryLookupResponse,
 } from "@/api/lib/business-registries/dispatch";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { nativeToolDisabledReasonForOrg } from "@/api/lib/mcp-connectors/catalog-metadata";
 
 const querySchema = t.Object({
   registry: t.UnionEnum(BUSINESS_REGISTRY_SLUGS, {
@@ -32,67 +28,46 @@ const querySchema = t.Object({
 });
 
 export type LookupBusinessRegistryProps = {
-  safeDb: SafeDb;
+  scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   registry: BusinessRegistrySlug;
   q: string;
 };
 
-// Shared business-registry lookup logic reused by the HTTP handler and
-// the `lookup_business_registry` MCP tool, so both apply identical
-// deployment and per-organization gating.
+// Native-tool preferences control discovery, not access to public records.
 export const lookupBusinessRegistryShared = async ({
-  safeDb,
+  scopedDb,
   organizationId,
   registry,
   q,
 }: LookupBusinessRegistryProps): Promise<
-  Result<
-    RegistryLookupResponse,
-    HandlerError | RegistryDisabledForOrgError | SafeDbError
-  >
+  Result<RegistryLookupResponse, HandlerError>
 > => {
-  const handler = BUSINESS_REGISTRY_DISPATCH[registry];
+  const configured = await Result.tryPromise({
+    try: async () =>
+      await getOrganizationRegistryHandler({
+        scopedDb,
+        organizationId,
+        registry,
+      }),
+    catch: (cause) =>
+      new HandlerError({
+        status: 500,
+        message: "Could not load registry configuration",
+        cause,
+      }),
+  });
+  if (configured.isErr()) {
+    return Result.err(configured.error);
+  }
+  const handler = configured.value;
   if (!handler.isDeployAvailable()) {
     return Result.err(
       new HandlerError({
-        status: 500,
-        message: `Registry '${registry}' is not configured for this deployment`,
+        status: 428,
+        code: "registry_configuration_required",
+        message: `Configure credentials for the '${registry}' registry before searching`,
       }),
-    );
-  }
-
-  const settingsResult = await safeDb((tx) =>
-    tx.query.organizationSettings.findFirst({
-      where: { organizationId: { eq: organizationId } },
-      columns: {
-        practiceJurisdictions: true,
-        nativeToolOverrides: true,
-      },
-    }),
-  );
-  if (Result.isError(settingsResult)) {
-    return Result.err(settingsResult.error);
-  }
-  const settings = settingsResult.value;
-
-  const disabledReason = nativeToolDisabledReasonForOrg({
-    slug: handler.nativeToolSlug,
-    practiceJurisdictions: arrayOrEmpty(settings?.practiceJurisdictions),
-    nativeToolOverrides: settings?.nativeToolOverrides ?? {},
-  });
-  if (disabledReason) {
-    // Tenant-neutral denial: the shared refusal names the refused registry and
-    // both ways to enable it, and does NOT enumerate the org's enabled
-    // registries. This handler is shared by the anonymized MCP surface, whose
-    // tools/list is deliberately tenant-neutral; naming the enabled set here
-    // would leak the org's practice-jurisdiction / native-tool settings through
-    // tools/call. The default surface's narrowed tools/list already steers the
-    // agent to reachable registries.
-    return Result.err(
-      new RegistryDisabledForOrgError(
-        registryDisabledForOrgRefusal({ registry, reason: disabledReason }),
-      ),
     );
   }
 
@@ -117,21 +92,15 @@ const businessRegistriesLookup = createSafeRootHandler(
     access: "read",
     query: querySchema,
   },
-  async function* ({ query, safeDb, session }) {
+  async function* ({ query, scopedDb, session }) {
     const result = await lookupBusinessRegistryShared({
-      safeDb,
+      scopedDb,
       organizationId: session.activeOrganizationId,
       registry: query.registry,
       q: query.q,
     });
     if (Result.isError(result)) {
-      const { error } = result;
-      if (RegistryDisabledForOrgError.is(error)) {
-        return yield* Result.err(
-          new HandlerError({ status: 403, message: error.message }),
-        );
-      }
-      return yield* Result.err(error);
+      return yield* Result.err(result.error);
     }
     return Result.ok(result.value);
   },

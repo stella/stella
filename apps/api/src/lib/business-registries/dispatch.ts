@@ -232,6 +232,8 @@ export type RegistryLookupResponse =
 // ---------------------------------------------------------------------------
 
 export type RegistryHandler = {
+  /** Changes on credential rotation so cached preview failures cannot survive it. */
+  cacheVersion?: string;
   /** Slug as it appears in the catalogue + the REST `?registry=` param. */
   slug: BusinessRegistrySlug;
   /**
@@ -265,7 +267,10 @@ export type RegistryHandler = {
    */
   isCanonicalId: (input: string) => boolean;
   /** Lookup by canonical ID. */
-  lookup: (input: string) => Promise<BusinessRegistryHit | null>;
+  lookup: (
+    input: string,
+    credential?: string,
+  ) => Promise<BusinessRegistryHit | null>;
   /**
    * Search by name. `null` when the upstream registry has no
    * name-search endpoint (e.g. KRS). Callers attempting name search
@@ -276,11 +281,11 @@ export type RegistryHandler = {
   search:
     | ((
         input: string,
-        options?: { limit?: number },
+        options?: { limit?: number; credential?: string },
       ) => Promise<BusinessRegistryHit[]>)
     | null;
   /** Deployment-level gate for adapters that require server config. */
-  isDeployAvailable: () => boolean;
+  isDeployAvailable: (credential?: string) => boolean;
   /** Translate per-registry tagged errors into HandlerError. */
   mapError: (error: unknown) => HandlerError | null;
 };
@@ -615,11 +620,14 @@ const mapCompaniesHouseError = (error: unknown): HandlerError | null => {
 // validates it like the rest of config.
 const COMPANIES_HOUSE_API_KEY_ENV_VAR = "COMPANIES_HOUSE_API_KEY";
 
-export const isCompaniesHouseDeployAvailable = (): boolean =>
-  Boolean(process.env[COMPANIES_HOUSE_API_KEY_ENV_VAR]?.trim());
+export const isCompaniesHouseDeployAvailable = (credential?: string): boolean =>
+  Boolean(
+    credential?.trim() || process.env[COMPANIES_HOUSE_API_KEY_ENV_VAR]?.trim(),
+  );
 
-const requireCompaniesHouseApiKey = (): string => {
-  const apiKey = process.env[COMPANIES_HOUSE_API_KEY_ENV_VAR]?.trim();
+const requireCompaniesHouseApiKey = (credential?: string): string => {
+  const apiKey =
+    credential?.trim() || process.env[COMPANIES_HOUSE_API_KEY_ENV_VAR]?.trim();
   if (!apiKey) {
     throw new CompaniesHouseAuthError(
       "COMPANIES_HOUSE_API_KEY is not configured. Get a free API key at https://developer.company-information.service.gov.uk and set the env var.",
@@ -640,16 +648,16 @@ const COMPANIES_HOUSE_HANDLER: RegistryHandler = {
   // as CompaniesHouseValidationError → HTTP 400.
   isCanonicalId: (input) =>
     /^(?:R0\d{6}|[A-Z]{2}\d{6}|\d{8})$/u.test(normalizeCompanyNumber(input)),
-  lookup: async (input) => {
+  lookup: async (input, credential) => {
     const company = await lookupByCompanyNumber(input, {
-      apiKey: requireCompaniesHouseApiKey(),
+      apiKey: requireCompaniesHouseApiKey(credential),
     });
     return company ? companiesHouseCompanyToHit(company) : null;
   },
   search: async (input, options) => {
     const results = await searchCompaniesHouseByName(
       input,
-      { apiKey: requireCompaniesHouseApiKey() },
+      { apiKey: requireCompaniesHouseApiKey(options?.credential) },
       options,
     );
     return results.map(companiesHouseSearchResultToHit);
@@ -742,11 +750,14 @@ const mapDenueError = (error: unknown): HandlerError | null => {
 // worker/test contexts that do not run full env validation.
 const INEGI_DENUE_API_TOKEN_ENV_VAR = "INEGI_DENUE_API_TOKEN";
 
-export const isDenueDeployAvailable = (): boolean =>
-  Boolean(process.env[INEGI_DENUE_API_TOKEN_ENV_VAR]?.trim());
+export const isDenueDeployAvailable = (credential?: string): boolean =>
+  Boolean(
+    credential?.trim() || process.env[INEGI_DENUE_API_TOKEN_ENV_VAR]?.trim(),
+  );
 
-const requireDenueApiToken = (): string => {
-  const token = process.env[INEGI_DENUE_API_TOKEN_ENV_VAR]?.trim();
+const requireDenueApiToken = (credential?: string): string => {
+  const token =
+    credential?.trim() || process.env[INEGI_DENUE_API_TOKEN_ENV_VAR]?.trim();
   if (!token) {
     throw new DenueAuthError(
       "INEGI_DENUE_API_TOKEN is not configured. Get a token at https://www.inegi.org.mx/app/api/denue/v1/tokenVerify.aspx and set the env var.",
@@ -764,16 +775,16 @@ const DENUE_HANDLER = {
   // validation lives in lookupByEstablishmentId and surfaces as
   // DenueValidationError -> HTTP 400.
   isCanonicalId: (input) => /^\d{1,12}$/u.test(normalizeEstablishmentId(input)),
-  lookup: async (input) => {
+  lookup: async (input, credential) => {
     const establishment = await lookupByEstablishmentId(input, {
-      token: requireDenueApiToken(),
+      token: requireDenueApiToken(credential),
     });
     return establishment ? denueEstablishmentToHit(establishment) : null;
   },
   search: async (input, options) => {
     const results = await searchDenueByName(
       input,
-      { token: requireDenueApiToken() },
+      { token: requireDenueApiToken(options?.credential) },
       options,
     );
     return results.map(denueSearchResultToHit);
@@ -851,11 +862,12 @@ const mapEdgarError = (error: unknown): HandlerError | null => {
 // API server boot path validates it like the rest of config.
 const EDGAR_USER_AGENT_ENV_VAR = "EDGAR_USER_AGENT";
 
-export const isEdgarDeployAvailable = (): boolean =>
-  Boolean(process.env[EDGAR_USER_AGENT_ENV_VAR]?.trim());
+export const isEdgarDeployAvailable = (credential?: string): boolean =>
+  Boolean(credential?.trim() || process.env[EDGAR_USER_AGENT_ENV_VAR]?.trim());
 
-const requireEdgarUserAgent = (): string => {
-  const userAgent = process.env[EDGAR_USER_AGENT_ENV_VAR]?.trim();
+const requireEdgarUserAgent = (credential?: string): string => {
+  const userAgent =
+    credential?.trim() || process.env[EDGAR_USER_AGENT_ENV_VAR]?.trim();
   if (!userAgent) {
     throw new EdgarValidationError(
       "EDGAR_USER_AGENT is not configured. Set it to '<App name> <contact@email>'; the SEC returns 403 without one.",
@@ -873,9 +885,9 @@ const EDGAR_HANDLER: RegistryHandler = {
   // padding. Semantic validation (e.g. the reserved zero CIK) lives
   // in the adapter and surfaces as EdgarValidationError -> HTTP 400.
   isCanonicalId: (input) => /^\d{1,10}$/u.test(normalizeCik(input)),
-  lookup: async (input) => {
+  lookup: async (input, credential) => {
     const company = await lookupByCik(input, {
-      userAgent: requireEdgarUserAgent(),
+      userAgent: requireEdgarUserAgent(credential),
     });
     return company ? edgarCompanyToHit(company) : null;
   },

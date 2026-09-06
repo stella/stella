@@ -28,6 +28,7 @@ import readWorkspaceNavigation from "@/api/handlers/workspaces/read-navigation";
 import { readOverviewHandler } from "@/api/handlers/workspaces/read-overview";
 import readOverviewActivity from "@/api/handlers/workspaces/read-overview-activity";
 import readOverviewActivityActors from "@/api/handlers/workspaces/read-overview-activity-actors";
+import readSearchPreview from "@/api/handlers/workspaces/read-search-preview";
 import readWorkflow from "@/api/handlers/workspaces/read-workflow-status";
 import workflowTargetCount from "@/api/handlers/workspaces/read-workflow-target-count";
 import unarchiveWorkspace from "@/api/handlers/workspaces/unarchive";
@@ -228,6 +229,9 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
         })
         .get("/overview", readOverview.handler, {
           permissions: readOverview.config.permissions,
+        })
+        .get("/search-preview", readSearchPreview.handler, {
+          permissions: readSearchPreview.config.permissions,
         })
         .get("/overview/activity", readOverviewActivity.handler, {
           permissions: readOverviewActivity.config.permissions,

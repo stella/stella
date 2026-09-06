@@ -14,6 +14,7 @@ import { panic } from "better-result";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import type { SafeId } from "@/api/lib/branded-types";
+import { getOrganizationRegistryDispatch } from "@/api/lib/business-registries/credentials";
 import { clauseBodyToRichPatch } from "@/api/lib/clauses/clause-to-patch";
 import type { ClauseBody } from "@/api/lib/clauses/types";
 import {
@@ -30,7 +31,6 @@ import { createDispatchLookupResolver } from "@/api/lib/docx/lookup-fields";
 import { manifestNamedConditions } from "@/api/lib/docx/manifest-conditions";
 import { applyManifestFillSteps } from "@/api/lib/docx/manifest-fill-steps";
 import { fillTemplate } from "@/api/lib/docx/patch-template";
-import { buildResolveRegistryDisabledReason } from "@/api/lib/docx/registry-org-gate";
 import {
   type AiConditionDecider,
   resolveAiConditions,
@@ -305,11 +305,11 @@ const describedWarnings = async ({
       fields,
       placeholderPaths: discovered.placeholders.map(({ name }) => name),
       registryGate: async () => {
-        const resolveDisabledReason = await buildResolveRegistryDisabledReason({
+        const dispatch = await getOrganizationRegistryDispatch({
           organizationId,
           scopedDb,
         });
-        return (registry) => resolveDisabledReason(registry) === null;
+        return (registry) => dispatch[registry].isDeployAvailable();
       },
     })),
   ]);
@@ -678,12 +678,10 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
       values: record,
       manifest,
       resolveLookup: createDispatchLookupResolver({
-        resolveRegistryDisabledReason: await buildResolveRegistryDisabledReason(
-          {
-            organizationId,
-            scopedDb,
-          },
-        ),
+        dispatch: await getOrganizationRegistryDispatch({
+          scopedDb,
+          organizationId,
+        }),
       }),
       bindingContext,
     });

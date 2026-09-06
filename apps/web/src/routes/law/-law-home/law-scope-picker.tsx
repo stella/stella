@@ -50,7 +50,7 @@ export const LawScopePicker = ({
 
   return (
     <ComposerPicker
-      ariaLabel={t("lawHome.scopeLabel")}
+      ariaLabel={t("common.searchIn")}
       icon={<ListFilterIcon />}
       onChange={onScopeChange}
       options={scopes.map((option) => ({

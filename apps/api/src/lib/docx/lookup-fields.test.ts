@@ -1,14 +1,17 @@
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
+import { parseResRecord } from "@stll/business-registries/ares";
 import { KrsValidationError } from "@stll/business-registries/krs";
 
-import { env } from "@/api/env";
 import type {
   BusinessRegistryHit,
   RegistryHandler,
 } from "@/api/lib/business-registries/dispatch";
-import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispatch";
+import {
+  BUSINESS_REGISTRY_DISPATCH,
+  BUSINESS_REGISTRY_SLUGS,
+} from "@/api/lib/business-registries/dispatch";
 
 import { discoverTemplate } from "./discover-template";
 import {
@@ -98,6 +101,50 @@ describe("renderLookupHit", () => {
 });
 
 describe("renderLookupOutput", () => {
+  test("renders ARES output tokens as readable company particulars", () => {
+    const company = {
+      ...parseResRecord({
+        ico: "12345678",
+        obchodniJmeno: "Example s.r.o.",
+        pravniForma: "112",
+        datumZapisu: "2020-09-05",
+        primarniZaznam: true,
+      }),
+      shareCapital: "50 000,- Kč",
+      actingClause:
+        "Jednatel jedná samostatně.\n\nPodepisuje se za společnost.",
+      statutoryBodies: [
+        {
+          organName: "Statutární orgán",
+          members: [
+            {
+              name: "Jan Novák",
+              role: "jednatel",
+              address: "Dlouhá 1, Praha",
+              since: "2020-09-05",
+            },
+          ],
+        },
+      ],
+    };
+    const hit = {
+      registry: "ares",
+      id: company.ico,
+      name: company.name,
+      legalForm: company.legalForm,
+      address: null,
+      registryUrl: company.registryUrl,
+      details: { registry: "ares", company },
+    } satisfies BusinessRegistryHit;
+    expect(
+      renderLookupOutput(
+        "[legal form]\n[share capital]\n[registered on]\n[acting clause]\n[statutory bodies]",
+        hit,
+      ),
+    ).toBe(
+      "Společnost s ručením omezeným\n50 000,- Kč\n5. 9. 2020\nJednatel jedná samostatně.\n\nPodepisuje se za společnost.\nStatutární orgán\nJan Novák, jednatel, Dlouhá 1, Praha, od 5. 9. 2020",
+    );
+  });
   test("renders the format template with its formatting markers intact", () => {
     expect(
       renderLookupOutput("**[company name]**, seat in *[seat]*", KRS_HIT),
@@ -570,18 +617,6 @@ describe("engine substitution of formatted lookup values", () => {
   });
 });
 
-/** The refusal links into this deployment's frontend, so the expectation reads
- *  the same origin the builder does rather than assuming the test default. */
-const APP_BASE_URL = env.FRONTEND_URL.replace(/\/$/u, "");
-
-/** The one refusal text the dispatch layer builds (registry proper name, slug,
- *  and both ways an admin enables it), asserted verbatim because it is what a
- *  person filling a template and an agent both read. */
-const KRS_DISABLED_MESSAGE =
-  "The KRS registry is disabled for this organization. An organization admin " +
-  `can enable it at ${APP_BASE_URL}/knowledge/tools?slug=krs, or add Poland ` +
-  "to the practice jurisdictions.";
-
 describe("createDispatchLookupResolver — mocked dispatch", () => {
   // The resolver's dispatch is now keyed by every supported registry; spread
   // the real table and override only the krs handler these tests exercise.
@@ -623,55 +658,49 @@ describe("createDispatchLookupResolver — mocked dispatch", () => {
     });
   });
 
-  test("refuses a registry the org has disabled without calling it", async () => {
+  test("refuses an unconfigured registry without calling it", async () => {
     let lookupCalls = 0;
     const resolver = createDispatchLookupResolver({
       dispatch: stubDispatch({
+        isDeployAvailable: () => false,
         lookup: async () => {
           lookupCalls += 1;
           return KRS_HIT;
         },
       }),
-      resolveRegistryDisabledReason: (registry) =>
-        registry === "krs" ? "jurisdiction_mismatch" : null,
     });
     const outcome = await resolver({ registry: "krs", query: "0000592109" });
     expect(outcome).toEqual({
       type: "error",
-      message: KRS_DISABLED_MESSAGE,
+      message: "The krs registry is not available in this deployment.",
     });
-    // The disabled registry is refused before any upstream call.
     expect(lookupCalls).toBe(0);
   });
 
-  test("resolves a registry the org has enabled", async () => {
-    const resolver = createDispatchLookupResolver({
-      dispatch: stubDispatch({ lookup: async () => KRS_HIT }),
-      resolveRegistryDisabledReason: () => null,
-    });
-    const outcome = await resolver({ registry: "krs", query: "0000592109" });
-    expect(outcome).toEqual({ type: "hit", hit: KRS_HIT });
-  });
-
-  test("awaits an async org-enabled predicate", async () => {
-    let lookupCalls = 0;
-    const resolver = createDispatchLookupResolver({
-      dispatch: stubDispatch({
-        lookup: async () => {
-          lookupCalls += 1;
-          return KRS_HIT;
+  test.each([...BUSINESS_REGISTRY_SLUGS])(
+    "resolves deployed %s without jurisdiction preferences",
+    async (registry) => {
+      let lookupCalls = 0;
+      const hit = { ...KRS_HIT, registry };
+      const resolver = createDispatchLookupResolver({
+        dispatch: {
+          ...BUSINESS_REGISTRY_DISPATCH,
+          [registry]: {
+            ...BUSINESS_REGISTRY_DISPATCH[registry],
+            isDeployAvailable: () => true,
+            isCanonicalId: () => true,
+            lookup: async () => {
+              lookupCalls += 1;
+              return hit;
+            },
+          },
         },
-      }),
-      resolveRegistryDisabledReason: async () =>
-        "jurisdiction_mismatch" as const,
-    });
-    const outcome = await resolver({ registry: "krs", query: "0000592109" });
-    expect(outcome).toEqual({
-      type: "error",
-      message: KRS_DISABLED_MESSAGE,
-    });
-    expect(lookupCalls).toBe(0);
-  });
+      });
+      const outcome = await resolver({ registry, query: hit.id });
+      expect(outcome).toEqual({ type: "hit", hit });
+      expect(lookupCalls).toBe(1);
+    },
+  );
 });
 
 describe("applyLookupFields — fill flow over a mocked dispatch", () => {
@@ -730,7 +759,7 @@ describe("applyLookupFields — fill flow over a mocked dispatch", () => {
     expect(values["buyer_krs"]).toBe("0000592109");
   });
 
-  test("refuses a deployed-but-disabled registry without calling it", async () => {
+  test("refuses an unconfigured registry during fill without calling it", async () => {
     let lookupCalls = 0;
     const values: Record<string, unknown> = { buyer_krs: "0000592109" };
     const error = await applyLookupFields(
@@ -742,26 +771,25 @@ describe("applyLookupFields — fill flow over a mocked dispatch", () => {
             ...BUSINESS_REGISTRY_DISPATCH,
             krs: {
               ...BUSINESS_REGISTRY_DISPATCH.krs,
+              isDeployAvailable: () => false,
               lookup: async () => {
                 lookupCalls += 1;
                 return KRS_HIT;
               },
             },
           },
-          // krs is deployed (isDeployAvailable: always) but disabled for the org.
-          resolveRegistryDisabledReason: () => "jurisdiction_mismatch",
         }),
       },
     );
     expect(error).toBe(
-      `Field "buyer_krs": KRS lookup failed: ${KRS_DISABLED_MESSAGE}`,
+      'Field "buyer_krs": KRS lookup failed: The krs registry is not available in this deployment.',
     );
     // The registry was never called; the submitted number is left untouched.
     expect(lookupCalls).toBe(0);
     expect(values["buyer_krs"]).toBe("0000592109");
   });
 
-  test("resolves a deployed + enabled registry through the fill flow", async () => {
+  test("resolves a deployed registry through fill without jurisdiction preferences", async () => {
     const values: Record<string, unknown> = { buyer_krs: "0000592109" };
     const error = await applyLookupFields(
       values,
@@ -772,10 +800,10 @@ describe("applyLookupFields — fill flow over a mocked dispatch", () => {
             ...BUSINESS_REGISTRY_DISPATCH,
             krs: {
               ...BUSINESS_REGISTRY_DISPATCH.krs,
+              isDeployAvailable: () => true,
               lookup: async () => KRS_HIT,
             },
           },
-          resolveRegistryDisabledReason: () => null,
         }),
       },
     );
