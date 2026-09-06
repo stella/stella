@@ -38621,7 +38621,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "templates", "update"],
                 capabilityId: "templates.update",
                 description:
-                  "Change a template's record: name, category, tags, languages, whenToUse and whenNotToUse guidance, or the embedded manifest supplied as a JSON string. Only the fields you pass are written. The stored DOCX itself is untouched: store a new document body with templates.save-document.",
+                  "Change a template's record: name, category, tags, languages, whenToUse and whenNotToUse guidance, or the embedded manifest supplied as a JSON string. Only the fields you pass are written. A manifest update creates a new version with that manifest embedded; store a new document body with templates.save-document.",
                 access: "write",
                 flags: [
                   {

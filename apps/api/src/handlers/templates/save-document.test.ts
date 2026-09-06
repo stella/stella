@@ -2,9 +2,17 @@ import { describe, expect, test } from "bun:test";
 
 import type { ConditionNode } from "@stll/conditions";
 
-import type { FieldMeta } from "@/api/lib/docx/types";
+import type {
+  DiscoveredTemplate,
+  FieldMeta,
+  TemplateManifest,
+} from "@/api/lib/docx/types";
 
-import { hasDerivedValueSource, hasLiveMarker } from "./save-document";
+import {
+  hasDerivedValueSource,
+  hasLiveMarker,
+  savedManifestFromDiscovery,
+} from "./save-document";
 
 // The save handler prunes a manifest field when discovery no longer finds a
 // live `{{marker}}` for it (a Studio edit can delete the marker without a
@@ -101,4 +109,61 @@ describe("hasLiveMarker", () => {
     const field = lookupField("companies.krs", ["output_1", "full"]);
     expect(hasLiveMarker(field, new Set(["companies"]))).toBe(false);
   });
+});
+
+test("save manifest resolution retains source and nested AI metadata", () => {
+  const discovered: DiscoveredTemplate = {
+    placeholders: [
+      { name: "client_name", count: 1 },
+      { name: "attorneys.name", count: 1 },
+      { name: "attorneys.bio", count: 1 },
+    ],
+    fields: [
+      { path: "client_name", kind: "string", count: 1 },
+      {
+        path: "attorneys",
+        kind: "array",
+        count: 1,
+        itemFields: [
+          { path: "name", kind: "string", count: 1 },
+          { path: "bio", kind: "string", count: 1 },
+        ],
+      },
+    ],
+    structureErrors: [],
+    warnings: [],
+    conditionPaths: [],
+  };
+  const manifest: TemplateManifest = {
+    version: 1,
+    fields: [
+      {
+        path: "client_name",
+        source: { kind: "contact", field: "displayName" },
+      },
+      {
+        path: "attorneys.name",
+        aiPrompt: "Draft the attorney name",
+        aiSeesDocument: true,
+      },
+      { path: "attorneys.bio", aiAdapt: true },
+    ],
+  };
+
+  const savedFields = savedManifestFromDiscovery({
+    manifest,
+    discovered,
+  }).fields;
+  expect(
+    savedFields.find((field) => field.path === "client_name")?.source,
+  ).toEqual({ kind: "contact", field: "displayName" });
+  expect(
+    savedFields.find((field) => field.path === "attorneys.name"),
+  ).toMatchObject({
+    aiPrompt: "Draft the attorney name",
+    aiSeesDocument: true,
+  });
+  expect(
+    savedFields.find((field) => field.path === "attorneys.bio"),
+  ).toMatchObject({ aiAdapt: true });
 });

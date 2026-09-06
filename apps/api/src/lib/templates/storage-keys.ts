@@ -2,9 +2,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 
 /**
  * Single home for template DOCX object keys so the current file and its
- * immutable per-version snapshots stay on the same addressing scheme. Both
- * keys share the `${organizationId}/templates/${templateId}` prefix: the base
- * key is the live document, and each version appends `/v${version}.docx`.
+ * immutable snapshots stay under the same organization/template prefix.
+ * Readers use persisted keys, including older version-counter keys.
  */
 const templateKeyPrefix = (
   organizationId: SafeId<"organization">,
@@ -17,39 +16,20 @@ export const buildTemplateS3Key = (
   templateId: SafeId<"template">,
 ) => `${templateKeyPrefix(organizationId, templateId)}.docx`;
 
-/** Immutable per-version object key so historical snapshots stay downloadable. */
-export const buildTemplateVersionS3Key = (
-  organizationId: SafeId<"organization">,
-  templateId: SafeId<"template">,
-  version: number,
-) => `${templateKeyPrefix(organizationId, templateId)}/v${version}.docx`;
-
-type TemplateRevisionKeyOptions = {
-  contents: Uint8Array;
+type TemplateWriteKeyOptions = {
   organizationId: SafeId<"organization">;
   templateId: SafeId<"template">;
-  version: number;
+  writeId: SafeId<"templateVersion">;
 };
 
 /**
- * Object key for re-embedded bytes of a version that already exists (a manifest
- * overlay that adds no version). The writer stores them here and repoints the
- * rows in the same transaction rather than overwriting the object those rows
- * still reference, so a transaction that rolls back after the write leaves an
- * unreferenced object instead of bytes the rows disagree with.
- *
- * The key is the digest of the bytes it holds, so re-applying an overlay that
- * produces an identical document rewrites one key instead of adding another.
+ * One exact key per write attempt, stable across its transport retries but
+ * never shared with competing attempts (even when their bytes are identical).
+ * Recovery can therefore delete a losing candidate without touching a winner.
  */
-export const buildTemplateRevisionS3Key = ({
-  contents,
+export const buildTemplateWriteS3Key = ({
   organizationId,
   templateId,
-  version,
-}: TemplateRevisionKeyOptions): string => {
-  const digest = new Bun.CryptoHasher("sha256")
-    .update(contents)
-    .digest("hex")
-    .slice(0, 16);
-  return `${templateKeyPrefix(organizationId, templateId)}/v${version}-${digest}.docx`;
-};
+  writeId,
+}: TemplateWriteKeyOptions): string =>
+  `${templateKeyPrefix(organizationId, templateId)}/write-${writeId}.docx`;
