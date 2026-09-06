@@ -145,7 +145,14 @@ describe("runRegistryWriteTool (orchestration)", () => {
         testDependencies: {
           createStoredTemplate: async function* () {
             yield* [];
-            return Result.ok({ fieldCount: 0, id: "template_1", name: "NDA" });
+            return Result.ok({
+              createdAt: new Date("2026-01-01T00:00:00.000Z"),
+              fieldCount: 0,
+              fileName: "nda.docx",
+              id: "template_1",
+              name: "NDA",
+              sizeBytes: 0,
+            });
           },
         },
       },
