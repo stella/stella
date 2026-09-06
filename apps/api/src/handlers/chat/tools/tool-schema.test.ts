@@ -2211,6 +2211,28 @@ describe("registry write tool approval policy", () => {
     }
   });
 
+  test("save_template exposes its executable inline and configure modes, not host files", () => {
+    const tool = buildToolsWithWorkspace()["save_template"];
+    if (!tool?.inputSchema) {
+      throw new Error("Expected save_template to be registered");
+    }
+    const schema = requireRecord(
+      convertSchemaToJsonSchema(tool.inputSchema),
+      "save_template input schema",
+    );
+    const properties = requireRecord(
+      schema["properties"],
+      "save_template input properties",
+    );
+
+    expect(properties["file"]).toBeUndefined();
+    expect(properties["docx_base64"]).toBeDefined();
+    expect(properties["template_id"]).toBeDefined();
+    expect(tool.description).toContain("docx_base64");
+    expect(tool.description).toContain("template_id");
+    expect(tool.description).not.toContain("host file");
+  });
+
   test("no write tools are registered when the workspace set is empty", () => {
     const tools = getChatTools({
       orgAIConfig: null,

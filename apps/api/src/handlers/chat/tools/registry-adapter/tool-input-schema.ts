@@ -28,10 +28,21 @@ const copyJsonValue = (value: unknown): unknown => {
   return value;
 };
 
-export const toToolInputSchema = (schema: McpToolInputSchema): JSONSchema => {
+export const toToolInputSchema = (
+  schema: McpToolInputSchema,
+  excludedTopLevelProperties: readonly string[] = [],
+): JSONSchema => {
   const converted: JSONSchema = {};
   for (const [key, value] of Object.entries(schema)) {
     converted[key] = copyJsonValue(value);
+  }
+  for (const property of excludedTopLevelProperties) {
+    delete converted.properties?.[property];
+    if (converted.required !== undefined) {
+      converted.required = converted.required.filter(
+        (required) => required !== property,
+      );
+    }
   }
   return converted;
 };

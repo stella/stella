@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import JSZip from "jszip";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
@@ -77,6 +78,84 @@ describe("runRegistryWriteTool (orchestration)", () => {
     expect(Result.isError(result)).toBe(true);
     if (Result.isError(result)) {
       expect(result.error.message).toContain("not available in chat");
+    }
+  });
+
+  test("refuses a host-only template file before dispatching the handler", async () => {
+    const result = await runRegistryWriteTool({
+      args: {
+        file: {
+          download_url: "https://files.example/template.docx",
+          file_id: "file_123",
+        },
+        name: "NDA",
+      },
+      context: buildContext(),
+      refRegistry: createChatRefRegistry(),
+      toolName: "save_template",
+    });
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error.kind).toBe("invalid-input");
+      expect(result.error.message).toContain("file");
+    }
+  });
+
+  test("executes the template configure mode through the chat projection", async () => {
+    const result = await runRegistryWriteTool({
+      args: { fields: [], template_id: "template_1" },
+      context: {
+        ...buildContext(),
+        testDependencies: {
+          configureTemplateFields: async function* () {
+            yield* [];
+            return Result.ok({ manifest: { fields: [], version: 1 } });
+          },
+          describeStoredTemplate: async () => ({
+            arrays: [],
+            computed: [],
+            conditions: [],
+            fields: [],
+            name: "NDA",
+          }),
+        },
+      },
+      refRegistry: createChatRefRegistry(),
+      toolName: "save_template",
+    });
+
+    expect(Result.isError(result)).toBe(false);
+    if (!Result.isError(result)) {
+      expect(result.value).toMatchObject({ name: "NDA" });
+    }
+  });
+
+  test("executes the template inline-DOCX mode through the chat projection", async () => {
+    const zip = new JSZip();
+    zip.file(
+      "word/document.xml",
+      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body/></w:document>',
+    );
+    const docxBase64 = await zip.generateAsync({ type: "base64" });
+    const result = await runRegistryWriteTool({
+      args: { docx_base64: docxBase64, name: "NDA" },
+      context: {
+        ...buildContext(),
+        testDependencies: {
+          createStoredTemplate: async function* () {
+            yield* [];
+            return Result.ok({ fieldCount: 0, id: "template_1", name: "NDA" });
+          },
+        },
+      },
+      refRegistry: createChatRefRegistry(),
+      toolName: "save_template",
+    });
+
+    expect(Result.isError(result)).toBe(false);
+    if (!Result.isError(result)) {
+      expect(result.value).toMatchObject({ name: "NDA" });
     }
   });
 

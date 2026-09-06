@@ -30,6 +30,7 @@ import {
   SAVE_CONTACT_PROJECTION,
   SAVE_DOCUMENT_PROJECTION,
   SAVE_MATTER_PROJECTION,
+  SAVE_TEMPLATE_PROJECTION,
   SAVE_TASK_PROJECTION,
   SAVE_TIME_ENTRY_PROJECTION,
   SEARCH_ACROSS_MATTERS_PROJECTION,
@@ -84,10 +85,20 @@ export type InputRefParam = { kind: RegistryRefKind; param: string };
  * deliberately unrepresentable here: there is no field to put them in, so a
  * new tool cannot reintroduce the hand-maintained mirror this map used to be.
  */
+type ChatInputProjection =
+  | {
+      unavailableInputParams?: undefined;
+      chatDescription?: undefined;
+    }
+  | {
+      unavailableInputParams: readonly [string, ...string[]];
+      chatDescription: string;
+    };
+
 export type RefMediationEntry = {
   inputRefs: readonly InputRefParam[];
   projection: ChatProjectionSchema;
-};
+} & ChatInputProjection;
 
 /**
  * Per-tool chat decision. `chatProjectable: false` marks a tool deliberately
@@ -449,10 +460,19 @@ export const WRITE_TOOL_REF_FIELD_MAP = {
   // cannot PUT bytes. Chat already has first-class template/document flows;
   // projecting this would duplicate that surface and its approval UX.
   save_filled_template: { chatProjectable: false },
-  // save_template accepts an MCP-host file reference. Chat has no attachment
-  // adapter that can resolve that host-only input, so advertising the shared
-  // schema would promise a call it cannot execute.
-  save_template: { chatProjectable: false },
+  save_template: {
+    chatProjectable: true,
+    // `template_id` is an org template handle, not a chat ref: passes through.
+    inputRefs: [],
+    projection: SAVE_TEMPLATE_PROJECTION,
+    // Chat can configure a template or create one from inline bytes, but it
+    // has no adapter for an MCP host's transient file reference.
+    unavailableInputParams: ["file"],
+    chatDescription:
+      "Create a template from inline base64 DOCX bytes, or configure an " +
+      "existing template's fields. To create, pass name and docx_base64; " +
+      "to configure, pass template_id with fields and no document.",
+  },
 
   // --- Feedback -------------------------------------------------------------
   // `send_feedback` is an agent/MCP tool that reports bugs to the maintainers

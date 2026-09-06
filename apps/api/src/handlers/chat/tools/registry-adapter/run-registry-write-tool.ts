@@ -175,6 +175,17 @@ export const runRegistryWriteTool = async (
   }
   const entry = WRITE_TOOL_REF_FIELD_MAP[toolName];
 
+  for (const param of entry.unavailableInputParams ?? []) {
+    if (param in args) {
+      return Result.err(
+        new ChatToolError({
+          kind: "invalid-input",
+          message: `Input ${param} is not available in chat.`,
+        }),
+      );
+    }
+  }
+
   const staticDefinition =
     getStaticMcpToolDefinition(toolName) ??
     panic(`Write tool ${toolName} is missing from the static registry`);

@@ -46,4 +46,26 @@ describe("toToolInputSchema", () => {
     expect(schema.required).toEqual(["query"]);
     expect(schema.properties.query.enum).toEqual(["one", "two"]);
   });
+
+  test("omits unavailable top-level properties without changing the source schema", () => {
+    const schema = {
+      properties: {
+        docx_base64: { type: "string" },
+        file: { type: "object" },
+        template_id: { type: "string" },
+      },
+      required: ["file", "template_id"],
+      type: "object",
+    } as const satisfies JsonSchema;
+
+    const projected = toToolInputSchema(schema, ["file"]);
+
+    expect(projected.properties?.["file"]).toBeUndefined();
+    expect(projected.required).toEqual(["template_id"]);
+    expect(projected.properties?.["docx_base64"]).toEqual({
+      type: "string",
+    });
+    expect(schema.properties.file).toEqual({ type: "object" });
+    expect(schema.required).toEqual(["file", "template_id"]);
+  });
 });

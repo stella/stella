@@ -92,14 +92,18 @@ export const buildChatWriteTools = (
 
   const tools: ChatToolMap = {};
   for (const toolName of projectedWriteToolNames()) {
+    const entry = WRITE_TOOL_REF_FIELD_MAP[toolName];
     const definition =
       getStaticMcpToolDefinition(toolName) ??
       panic(`Chat write tool ${toolName} is missing from the static registry`);
 
     tools[toolName] = toolDefinition({
       name: toolName,
-      description: definition.description,
-      inputSchema: toToolInputSchema(definition.inputSchema),
+      description: entry.chatDescription ?? definition.description,
+      inputSchema: toToolInputSchema(
+        definition.inputSchema,
+        entry.unavailableInputParams,
+      ),
     }).server(async (args: unknown) => {
       const toolArgs = isRecord(args) ? args : {};
       // Same mechanical retry policy as the code-mode read runner: a call
