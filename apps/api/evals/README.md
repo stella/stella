@@ -41,6 +41,11 @@ the default provider chain (see `getTanStackTextModelById`).
 - `template-fill.ts`: can a model fill a DOCX template through the
   `fill_template` contract: correct field paths and types, ISO and locale
   date handling, and asking rather than inventing a missing required value?
+- `template-authoring.ts`: the other half of the template contract; can a
+  model turn a source document into a template through `save_template`:
+  the right `{{markers}}` in the right paragraphs, a `fields` overlay that
+  configures each one, and no grammar trap (unprefixed item paths, `this.`,
+  bracket indexing, per-language path variants, inline block markers)?
 - `extraction.ts`: does the structured-extraction path (`generateWorkflowData`)
   match ground truth across text, date, int, and select fields, and does it
   answer a question the source never states?
