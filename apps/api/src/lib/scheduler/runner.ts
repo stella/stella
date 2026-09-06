@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, asc, eq, isNull, lte, or } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, lte, or } from "drizzle-orm";
 import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 
 import { rootDb } from "@/api/db/root";
@@ -116,7 +116,7 @@ export const runSchedulerOnce = async ({
     // Claim immediately before execution. A pass never leases work it cannot
     // start yet, so another scheduler replica remains free to process it.
     // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- claims one job immediately before running it so replicas can take the rest
-    const job = await acquireNextDueJob({ db, leaseMs, runnerId });
+    const job = await acquireNextDueJob({ db, leaseMs, registry, runnerId });
     if (!job) {
       break;
     }
@@ -240,15 +240,24 @@ type AcquireNextDueJobOptions = {
   db: SchedulerDb;
   runnerId: string;
   leaseMs: number;
+  registry: SchedulerTaskRegistry;
 };
 
 export const acquireNextDueJob = async ({
   db,
   leaseMs,
+  registry,
   runnerId,
 }: AcquireNextDueJobOptions): Promise<SchedulerJob | null> => {
   if (!Number.isInteger(leaseMs) || leaseMs < MIN_LEASE_MS) {
     return panic("Scheduler lease must be at least three poll intervals");
+  }
+
+  // The claim filter is derived from the very registry `runJob` resolves the
+  // task against, so the two can never disagree about what this build can run.
+  const runnableTasks = [...registry.keys()];
+  if (runnableTasks.length === 0) {
+    return null;
   }
 
   const now = new Date();
@@ -257,7 +266,7 @@ export const acquireNextDueJob = async ({
     const [candidate] = await tx
       .select()
       .from(schedulerJobs)
-      .where(dueJobPredicate(now))
+      .where(dueJobPredicate(now, runnableTasks))
       .orderBy(asc(schedulerJobs.nextRunAt), asc(schedulerJobs.id))
       .limit(1)
       .for("update", { skipLocked: true });
@@ -273,15 +282,27 @@ export const acquireNextDueJob = async ({
         lockedBy: leaseToken,
         lockedUntil: leaseExpiresAt,
       })
-      .where(and(eq(schedulerJobs.id, candidate.id), dueJobPredicate(now)))
+      .where(
+        and(
+          eq(schedulerJobs.id, candidate.id),
+          dueJobPredicate(now, runnableTasks),
+        ),
+      )
       .returning();
 
     return job ?? panic("Locked scheduler job disappeared before lease update");
   });
 };
 
-const dueJobPredicate = (now: Date) =>
+// A row whose task this build has no handler for is not claimable work: running
+// it can only raise `ConfigurationError`, and the failure would still consume
+// the row's schedule slot by advancing `nextRunAt`, delaying the replica that
+// can run it. Registration retires such rows, but only at startup, so a build
+// that declares a new task leaves every older replica able to claim it until
+// they stop; the claim itself has to hold the line.
+const dueJobPredicate = (now: Date, runnableTasks: string[]) =>
   and(
+    inArray(schedulerJobs.task, runnableTasks),
     eq(schedulerJobs.enabled, true),
     // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- cutoff read from the caller's clock, never round-tripped through the database
     lte(schedulerJobs.nextRunAt, now),

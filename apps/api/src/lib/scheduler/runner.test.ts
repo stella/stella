@@ -144,11 +144,13 @@ describe("acquireNextDueJob claim exclusivity", () => {
     const first = await acquireNextDueJob({
       db,
       leaseMs: LEASE_MS,
+      registry: noopRegistry,
       runnerId: "runner-a",
     });
     const second = await acquireNextDueJob({
       db,
       leaseMs: LEASE_MS,
+      registry: noopRegistry,
       runnerId: "runner-b",
     });
 
@@ -160,6 +162,66 @@ describe("acquireNextDueJob claim exclusivity", () => {
     // unique suffix), not the bare runnerId.
     expect(job.lockedBy).toMatch(/^runner-a#/u);
     expect(first?.lockedBy).toBe(job.lockedBy);
+  });
+});
+
+describe("acquireNextDueJob task registration", () => {
+  test("leaves a due job this build has no handler for untouched", async () => {
+    await seedJob({ id: "foreign.job", task: "test.unregistered" });
+
+    const claimed = await acquireNextDueJob({
+      db,
+      leaseMs: LEASE_MS,
+      registry: noopRegistry,
+      runnerId: "runner-a",
+    });
+
+    expect(claimed).toBeNull();
+    // Unlocked and still due, so a replica that registers the task can run it
+    // on its own schedule rather than inheriting a pushed-out nextRunAt.
+    const job = await readJob("foreign.job");
+    expect(job.lockedBy).toBeNull();
+    expect(job.lockedUntil).toBeNull();
+    expect(job.nextRunAt).toEqual(PAST);
+    expect(job.lastError).toBeNull();
+  });
+
+  test("an unrunnable job does not shadow a runnable one behind it", async () => {
+    await seedJob({
+      id: "foreign.job",
+      nextRunAt: new Date(PAST.getTime() - 60_000),
+      task: "test.unregistered",
+    });
+    await seedJob({ id: "own.job", task: "test.noop" });
+
+    const claimed = await acquireNextDueJob({
+      db,
+      leaseMs: LEASE_MS,
+      registry: noopRegistry,
+      runnerId: "runner-a",
+    });
+
+    expect(claimed?.id).toBe("own.job");
+  });
+
+  test("a sweep records no run for a job it cannot execute", async () => {
+    await seedJob({ id: "foreign.job", task: "test.unregistered" });
+
+    const result = await runSchedulerOnce({
+      db,
+      leaseMs: LEASE_MS,
+      registry: noopRegistry,
+      runnerId: "runner-a",
+    });
+
+    expect(result.acquired).toBe(0);
+    expect(result.failed).toBe(0);
+    expect(
+      await testDb
+        .select()
+        .from(schedulerJobRuns)
+        .where(eq(schedulerJobRuns.jobId, "foreign.job")),
+    ).toHaveLength(0);
   });
 });
 
