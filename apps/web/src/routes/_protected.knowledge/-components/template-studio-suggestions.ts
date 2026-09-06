@@ -194,13 +194,22 @@ export const toTemplateEditOperation = (
         ...(operation.comment !== undefined && { comment: operation.comment }),
         type: operation.type,
       };
+    // Outside the Studio subset: it renders a suggestion as a text
+    // replacement inside one block, and none of these is one. A structural
+    // edit (a paragraph split or joined, a table added or removed, a
+    // paragraph restyled) has no in-block replacement to show.
     case "replaceRange":
     case "commentOnRange":
     case "formatRange":
+    case "setBlockParagraphProperties":
     case "insertAfterBlock":
     case "insertBeforeBlock":
+    case "splitBlock":
+    case "mergeBlockWithNext":
     case "commentOnBlock":
     case "insertSignatureTable":
+    case "insertTable":
+    case "deleteTable":
     case "insertTableRow":
     case "deleteTableRow":
     case "insertTableColumn":

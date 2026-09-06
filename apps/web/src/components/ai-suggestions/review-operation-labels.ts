@@ -44,8 +44,13 @@ const SUMMARY_KEYS = {
   pageBreakAfter: "docxReview.summary.pageBreakAfter",
   pageBreakBefore: "docxReview.summary.pageBreakBefore",
   deleteParagraph: "docxReview.summary.deleteParagraph",
+  splitParagraph: "docxReview.summary.splitParagraph",
+  mergeParagraphs: "docxReview.summary.mergeParagraphs",
+  formatParagraph: "docxReview.summary.formatParagraph",
   commentOnParagraph: "docxReview.summary.commentOnParagraph",
   insertSignatureBlock: "docxReview.summary.insertSignatureBlock",
+  insertTable: "docxReview.summary.insertTable",
+  deleteTable: "docxReview.summary.deleteTable",
   insertTableRow: "docxReview.summary.insertTableRow",
   deleteTableRow: "docxReview.summary.deleteTableRow",
   insertTableColumn: "docxReview.summary.insertTableColumn",
@@ -130,6 +135,14 @@ export const describeOperationSummary = (
     }
     case "deleteBlock":
       return { key: SUMMARY_KEYS.deleteParagraph, values: { label } };
+    case "splitBlock":
+      return { key: SUMMARY_KEYS.splitParagraph, values: { label } };
+    case "mergeBlockWithNext":
+      return { key: SUMMARY_KEYS.mergeParagraphs, values: { label } };
+    // A style or a list level, never words: "reformat" is the same verb the
+    // inline formatting change uses, at paragraph scope.
+    case "setBlockParagraphProperties":
+      return { key: SUMMARY_KEYS.formatParagraph, values: { label } };
     case "commentOnBlock":
       return { key: SUMMARY_KEYS.commentOnParagraph, values: { label } };
     case "insertSignatureTable":
@@ -141,6 +154,10 @@ export const describeOperationSummary = (
             .join(", "),
         },
       };
+    case "insertTable":
+      return { key: SUMMARY_KEYS.insertTable, values: {} };
+    case "deleteTable":
+      return { key: SUMMARY_KEYS.deleteTable, values: {} };
     case "insertTableRow":
       return { key: SUMMARY_KEYS.insertTableRow, values: {} };
     case "deleteTableRow":
@@ -221,6 +238,15 @@ export const describeSuggestionChange = (
       const text = condenseChangeText(names, CHANGE_TEXT_CHARS);
       return text.length === 0 ? null : { type: "text", text };
     }
+    // Nothing to quote under the label. A structural edit is named in full by
+    // the summary line above, and the wording it would put in the document is
+    // either nothing (a break, a table removed, a restyled paragraph) or a
+    // grid the one-line bar cannot show (an inserted table's cells).
+    case "splitBlock":
+    case "mergeBlockWithNext":
+    case "setBlockParagraphProperties":
+    case "insertTable":
+    case "deleteTable":
     case "insertTableRow":
     case "deleteTableRow":
     case "insertTableColumn":

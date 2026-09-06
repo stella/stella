@@ -28,13 +28,23 @@ export const isNoopReviewOperation = (
       );
       return selected !== undefined && selected === operation.replace;
     }
+    // Never a no-op against a text snapshot. A structural edit changes the
+    // document's shape rather than a block's words, and `formatRange` /
+    // `setBlockParagraphProperties` change formatting the snapshot does not
+    // carry: it holds each block's text and style id, not its inline runs or
+    // list level, so a comparison here could only ever be half of one.
     case "commentOnBlock":
     case "commentOnRange":
     case "deleteBlock":
+    case "splitBlock":
+    case "mergeBlockWithNext":
     case "formatRange":
+    case "setBlockParagraphProperties":
     case "insertAfterBlock":
     case "insertBeforeBlock":
     case "insertSignatureTable":
+    case "insertTable":
+    case "deleteTable":
     case "insertTableRow":
     case "deleteTableRow":
     case "insertTableColumn":

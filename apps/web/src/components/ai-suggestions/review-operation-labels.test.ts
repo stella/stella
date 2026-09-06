@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { createTranslator } from "use-intl/core";
 
+import { FOLIO_DOCUMENT_OPERATION_TYPES } from "@stll/folio-core";
 import type { FolioAIEditOperation } from "@stll/folio-react";
 
 import en from "@/i18n/langs/en.json";
@@ -102,12 +103,38 @@ const OPERATIONS: readonly FolioAIEditOperation[] = [
     range: range(BLOCK_ID),
     formatting: { bold: true },
   },
+  { id: "18", type: "splitBlock", blockId: BLOCK_ID, offset: 5 },
+  { id: "19", type: "mergeBlockWithNext", blockId: BLOCK_ID },
+  {
+    id: "20",
+    type: "setBlockParagraphProperties",
+    blockId: BLOCK_ID,
+    properties: { listLevel: 1 },
+  },
+  {
+    id: "21",
+    type: "insertTable",
+    blockId: BLOCK_ID,
+    rows: [["Milestone", "Fee"]],
+  },
+  { id: "22", type: "deleteTable", blockId: BLOCK_ID },
 ];
 
 // A folio block handle is 8 hex characters, or `seq-NNNN` for a positional id.
 const BLOCK_ID_PATTERN = /\b(?:[0-9A-F]{8}|seq-\d{2,})\b/u;
 
 describe("operation summaries", () => {
+  test("covers every operation folio's contract declares", () => {
+    // The fixture above mirrors folio's operation union, and a mirror kept by
+    // hand drifts: a release that adds an operation must fail here rather
+    // than leave the new summary untested.
+    const staged = new Set(OPERATIONS.map((operation) => operation.type));
+    const missing = FOLIO_DOCUMENT_OPERATION_TYPES.filter(
+      (type) => !staged.has(type),
+    );
+    expect(missing).toEqual([]);
+  });
+
   test("never put a block id in front of the reader", () => {
     for (const operation of OPERATIONS) {
       expect(render(operation)).not.toMatch(BLOCK_ID_PATTERN);

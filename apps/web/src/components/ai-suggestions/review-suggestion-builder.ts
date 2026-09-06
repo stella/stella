@@ -229,11 +229,16 @@ export const buildPreview = (
           anchorEnd: Math.min(blockText.length, PREVIEW_ANCHOR_CHARS),
         }),
       };
-    // Folio applies table ops natively; stella only anchors and labels
-    // them, so there is no find/replace text diff to render. Show a
-    // neutral anchor excerpt of the targeted block (same shape as an
+    // Folio applies structural and table ops natively; stella only anchors
+    // and labels them, so there is no find/replace text diff to render. Show
+    // a neutral anchor excerpt of the targeted block (same shape as an
     // unquoted commentOnBlock preview). The card's summary line carries
-    // the specific action ("Insert table row", ...).
+    // the specific action ("Insert table row", "Split paragraph 2.1", ...).
+    case "splitBlock":
+    case "mergeBlockWithNext":
+    case "setBlockParagraphProperties":
+    case "insertTable":
+    case "deleteTable":
     case "insertTableRow":
     case "deleteTableRow":
     case "insertTableColumn":

@@ -322,13 +322,28 @@ const normalizeQueuedOperation = (
         }),
       };
     }
+    // Cell texts are model-written prose like an inserted paragraph, so the
+    // same directive markers can reach them.
+    case "insertTable":
+      return {
+        ...operation,
+        rows: operation.rows.map((row) => row.map(cleanDirectiveText)),
+      };
+    // Queued as parsed. A `splitBlock` / `mergeBlockWithNext` separator is the
+    // whitespace the paragraph break stood in for, not prose: stripping it
+    // through `cleanDirectiveText` would trim away the one space the join is
+    // there to insert.
     case "replaceInBlock":
     case "replaceRange":
     case "commentOnRange":
     case "formatRange":
+    case "setBlockParagraphProperties":
     case "deleteBlock":
+    case "splitBlock":
+    case "mergeBlockWithNext":
     case "commentOnBlock":
     case "insertSignatureTable":
+    case "deleteTable":
     case "insertTableRow":
     case "deleteTableRow":
     case "insertTableColumn":

@@ -178,12 +178,22 @@ const resolveTextualSuggestion = (
         suggestedText: "",
       };
     }
+    // No inline diff to draw. A paragraph break moved or removed
+    // (`splitBlock`, `mergeBlockWithNext`), a whole table, and a paragraph's
+    // style or list level are edits to the document's structure, not to the
+    // words of one block: rendering them as a text replacement would tell the
+    // reviewer that Accept rewrites text it does not touch.
     case "commentOnRange":
     case "formatRange":
+    case "setBlockParagraphProperties":
     case "commentOnBlock":
+    case "splitBlock":
+    case "mergeBlockWithNext":
     case "insertAfterBlock":
     case "insertBeforeBlock":
     case "insertSignatureTable":
+    case "insertTable":
+    case "deleteTable":
     case "insertTableRow":
     case "deleteTableRow":
     case "insertTableColumn":
