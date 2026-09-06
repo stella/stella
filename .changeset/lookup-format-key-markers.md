@@ -14,4 +14,7 @@ colliding with a separately configured field at the same path is refused naming
 both, and a field naming two derived sources says which two. The
 `list_templates` detail payload echoes the whole field configuration —
 registry, validation, binding source, `aiSeesDocument`, and the derived rules
-keyed the way the `fields` overlay names them.
+keyed the way the `fields` overlay names them. A loop item's configuration
+(`attorneys.name`) is kept as its own manifest field instead of being dropped
+with the array root it folds into, and a declared property sent as `null` is
+read as unset rather than as a value.

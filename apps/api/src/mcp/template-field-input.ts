@@ -77,6 +77,60 @@ const templateFieldInputObjectSchema = v.strictObject({
   date_format: fieldEntries.dateFormat,
 });
 
+/**
+ * Declared property names per level of a `fields` entry, read off the schemas
+ * themselves so {@link readTemplateFieldsInput} cannot drift from what the
+ * surface accepts.
+ */
+const DECLARED_PROPERTIES: readonly ReadonlySet<string>[] = [
+  new Set(Object.keys(templateFieldInputObjectSchema.entries)),
+  new Set(Object.keys(templateFieldValidationInputSchema.entries)),
+  new Set(Object.keys(templateFieldPartInputSchema.entries)),
+];
+
+const isDeclaredProperty = (key: string): boolean =>
+  DECLARED_PROPERTIES.some((properties) => properties.has(key));
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+/** Drop declared properties carrying `null`, one level deep into `validation`
+ *  and `parts[]` entries, whose declared keys are in the same inventory. */
+const withoutNullProperties = (entry: Record<string, unknown>): unknown =>
+  Object.fromEntries(
+    Object.entries(entry).flatMap(([key, value]) => {
+      if (value === null && isDeclaredProperty(key)) {
+        return [];
+      }
+      if (isRecord(value)) {
+        return [[key, withoutNullProperties(value)]];
+      }
+      if (Array.isArray(value)) {
+        return [
+          [key, value.map((item) => (isRecord(item) ? withoutNullProperties(item) : item))],
+        ];
+      }
+      return [[key, value]];
+    }),
+  );
+
+/**
+ * Normalise a raw `fields` argument before validation: GPT-family clients send
+ * `null` for an optional property they are not setting, and null is absence on
+ * this surface. Without this, `ai_prompt: null` reads as an AI-drafted field
+ * and collides with every other derived source, and `options_from: null` fails
+ * the field-path check — a request that set none of them.
+ *
+ * Only DECLARED properties are dropped, so `strictObject` still rejects a
+ * misspelled key whatever value it carries.
+ */
+export const readTemplateFieldsInput = (value: unknown): unknown =>
+  Array.isArray(value)
+    ? value.map((entry) =>
+        isRecord(entry) ? withoutNullProperties(entry) : entry,
+      )
+    : value;
+
 export const templateFieldInputSchema = v.pipe(
   templateFieldInputObjectSchema,
   v.check(

@@ -966,6 +966,67 @@ export const lookupFormatMarkerPaths = (
   return markers;
 };
 
+/** The manifest properties a resolved field carries back. Named so the
+ *  projection below stays one list, not one per caller. */
+const toFieldMeta = (field: ResolvedField): FieldMeta => ({
+  path: field.path,
+  label: field.label,
+  hint: field.hint,
+  inputType: field.inputType,
+  options: field.options,
+  validation: field.validation,
+  required: field.required,
+  aiPrompt: field.aiPrompt,
+  aiAdapt: field.aiAdapt,
+  aiSeesDocument: field.aiSeesDocument,
+  parts: field.parts,
+  format: field.format,
+  optionsFrom: field.optionsFrom,
+  lookup: field.lookup,
+  source: field.source,
+  formula: field.formula,
+  condition: field.condition,
+  conditionAst: field.conditionAst,
+  dateFormat: field.dateFormat,
+});
+
+/**
+ * The manifest field list a merge produces: one entry per resolved field, plus
+ * the loop-item entries the merge folded into their array root's `itemFields`.
+ * A loop item (`attorneys.name`) is a manifest field in its own right — the
+ * fill form asks it once per row and the field reference documents it as such
+ * — but it is never a top-level `ResolvedField`, so building the manifest from
+ * the resolved list alone silently discarded every item-field configuration.
+ *
+ * Format markers of a lookup are excluded: those are renderings of the one
+ * resolved hit, not fields (see {@link lookupFormatMarkerPaths}).
+ */
+export const manifestFieldsFromMerge = (
+  resolved: readonly ResolvedField[],
+  manifest: TemplateManifest | null,
+): FieldMeta[] => {
+  const fields = resolved.map(toFieldMeta);
+  const arrayRoots = new Set(
+    resolved.filter((field) => field.kind === "array").map(({ path }) => path),
+  );
+  const formatMarkers = lookupFormatMarkerPaths(manifest?.fields ?? []);
+  const claimed = new Set(fields.map(({ path }) => path));
+  for (const field of manifest?.fields ?? []) {
+    const root = field.path.split(".").at(0);
+    if (
+      claimed.has(field.path) ||
+      formatMarkers.has(field.path) ||
+      root === undefined ||
+      root === field.path ||
+      !arrayRoots.has(root)
+    ) {
+      continue;
+    }
+    fields.push(field);
+  }
+  return fields;
+};
+
 /**
  * Merge manifest field metadata with auto-discovered fields
  * to produce a fully resolved schema. Manifest metadata takes

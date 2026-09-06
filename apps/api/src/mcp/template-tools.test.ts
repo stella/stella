@@ -2381,6 +2381,84 @@ describe("MCP template tools", () => {
     expect(conflict?.message).toContain('"company"');
   });
 
+  test("save_template reads a null-padded field entry as a plain text field", async () => {
+    // GPT-family clients send `null` for every optional property they are not
+    // setting. Null is absence here: without that, this entry reads as an
+    // AI-drafted, conditioned, computed, looked-up, composite, bound field all
+    // at once and is refused for conflicting derived sources.
+    createStoredTemplateMock.mockImplementation(async function* () {
+      yield* [];
+      return Result.ok({ id: "tmpl_new", name: "NDA", fieldCount: 1 });
+    });
+
+    const result = await handleMcpToolCall({
+      args: {
+        name: "NDA",
+        docx_base64: await makeValidDocxBase64(),
+        fields: [
+          {
+            path: "name",
+            label: "Client name",
+            hint: null,
+            input_type: null,
+            options: null,
+            validation: { required: true, min_length: null, pattern: null },
+            required: null,
+            ai_prompt: null,
+            ai_adapt: null,
+            ai_sees_document: null,
+            parts: null,
+            format: null,
+            options_from: null,
+            lookup: null,
+            source: null,
+            formula: null,
+            condition: null,
+            date_format: null,
+          },
+        ],
+      },
+      context: createContext(),
+      toolName: "save_template",
+    });
+
+    expect(result.isError).not.toBe(true);
+    expect(createStoredTemplateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        clientManifest: {
+          fields: [
+            {
+              path: "name",
+              label: "Client name",
+              validation: { required: true },
+            },
+          ],
+        },
+      }),
+    );
+  });
+
+  test("save_template still rejects a misspelled key that carries null", async () => {
+    // Null is absence only for a property the surface declares: dropping it
+    // for any key would turn `lable: null` into a silently accepted typo.
+    const result = await handleMcpToolCall({
+      args: {
+        name: "NDA",
+        docx_base64: await makeValidDocxBase64(),
+        fields: [{ path: "name", lable: null }],
+      },
+      context: createContext(),
+      toolName: "save_template",
+    });
+
+    expect(result.isError).toBe(true);
+    expect(createStoredTemplateMock).not.toHaveBeenCalled();
+    const issues = asTestRaw<{ path: string }[]>(
+      validationEnvelope(result)["issues"],
+    );
+    expect(issues.some(({ path }) => path === "fields.0.lable")).toBe(true);
+  });
+
   test("save_template rejects unknown field metadata keys before inserting", async () => {
     const result = await handleMcpToolCall({
       args: {

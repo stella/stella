@@ -81,6 +81,7 @@ import { withTimeout } from "@/api/lib/with-timeout";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import {
+  readTemplateFieldsInput,
   templateFieldInputSchema,
   toFieldMetaToolInput,
 } from "@/api/mcp/template-field-input";
@@ -1930,10 +1931,10 @@ const configureExistingTemplate = async ({
 const handleSaveTemplateTool: TypedMcpToolHandler<
   v.InferInput<typeof SAVE_TEMPLATE_PROJECTION>
 > = async ({ args, context }) => {
-  const parsed = v.safeParse(
-    SAVE_TEMPLATE_TOOL_DEFINITION.inputSchemaSource,
-    args,
-  );
+  const parsed = v.safeParse(SAVE_TEMPLATE_TOOL_DEFINITION.inputSchemaSource, {
+    ...args,
+    fields: readTemplateFieldsInput(args["fields"]),
+  });
   if (!parsed.success) {
     return validationErrorResult(parsed.issues);
   }

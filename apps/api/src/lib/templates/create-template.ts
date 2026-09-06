@@ -29,6 +29,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
 import {
+  manifestFieldsFromMerge,
   mergeManifestWithDiscovery,
   readManifest,
   writeManifest,
@@ -159,30 +160,9 @@ export const createStoredTemplate = async function* ({
       : existingManifest;
     const fields = mergeManifestWithDiscovery(baseManifest, discovered);
 
-    const fieldMetas: FieldMeta[] = fields.map((f) => ({
-      path: f.path,
-      label: f.label,
-      hint: f.hint,
-      inputType: f.inputType,
-      options: f.options,
-      validation: f.validation,
-      required: f.required,
-      aiPrompt: f.aiPrompt,
-      aiAdapt: f.aiAdapt,
-      aiSeesDocument: f.aiSeesDocument,
-      parts: f.parts,
-      format: f.format,
-      optionsFrom: f.optionsFrom,
-      lookup: f.lookup,
-      formula: f.formula,
-      condition: f.condition,
-      conditionAst: f.conditionAst,
-      dateFormat: f.dateFormat,
-    }));
-
     resolvedManifest = {
       version: baseManifest?.version ?? 1,
-      fields: fieldMetas,
+      fields: manifestFieldsFromMerge(fields, baseManifest),
     };
   }
 

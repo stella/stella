@@ -84,6 +84,30 @@ describe("validateFieldOverlay", () => {
     expect(issues.at(0)?.message).toContain("{{company.krs}}");
   });
 
+  test("accepts a repeat's root and the item paths inside it", async () => {
+    const discovered = await discoverTemplate(
+      await makeDocx(
+        "{{#each attorneys}}",
+        "{{attorneys.name}} of {{attorneys.firm}}",
+        "{{/each}}",
+      ),
+    );
+
+    // The array root is a value-bearing input (min_items, max_items), and each
+    // item path is a field the fill form asks once per row.
+    expect(
+      validateFieldOverlay({
+        configured: [],
+        discovered,
+        overlay: [
+          { path: "attorneys", validation: { minItems: 1 } },
+          { path: "attorneys.name", label: "Attorney name", required: true },
+          { path: "attorneys.firm", inputType: "text" },
+        ],
+      }),
+    ).toEqual([]);
+  });
+
   test("rejects a path with no marker at all", async () => {
     const discovered = await discoverTemplate(await makeDocx("{{company}}"));
 
