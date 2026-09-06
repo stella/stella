@@ -777,7 +777,7 @@
     }
   },
   "no-db-await-in-loop-suppressions": {
-    "count": 106,
+    "count": 105,
     "files": {
       "apps/api/scripts/backfill-image-thumbnails.ts": 3,
       "apps/api/scripts/backfill-search-previews.ts": 1,
@@ -814,7 +814,6 @@
       "apps/api/src/lib/case-law/research-answer-runner.ts": 1,
       "apps/api/src/lib/cell-lock.ts": 1,
       "apps/api/src/lib/corpus-index/core.ts": 5,
-      "apps/api/src/lib/db/bulk-write.ts": 1,
       "apps/api/src/lib/entity-cap-lock.ts": 1,
       "apps/api/src/lib/flows/flow-executor.ts": 1,
       "apps/api/src/lib/legal-search/case-law-search-index.ts": 1,
