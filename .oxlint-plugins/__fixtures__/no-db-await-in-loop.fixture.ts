@@ -283,6 +283,16 @@ export const forOfLoopAwaitContextRunner = async () => {
   }
 };
 
+export const forOfLoopAwaitBackfillRunner = async () => {
+  for (const item of items) {
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- fixture: one transaction per row through the bounded runner
+    await context.backfillDb(async (scopedTx: typeof tx) => {
+      const inserted = await scopedTx.insert(itemsTable).values(item);
+      return inserted;
+    });
+  }
+};
+
 // A chain rooted at the root client is a query like one rooted at `db`.
 export const forOfLoopAwaitRootDbChain = async () => {
   for (const item of items) {

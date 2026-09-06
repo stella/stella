@@ -142,47 +142,38 @@ const FUNCTION_TYPES = new Set([
   "ArrowFunctionExpression",
 ]);
 
-// Every identifier the codebase uses for a database handle: the Drizzle
-// client (`db`, `rootDb`), a transaction (`tx`), and the scoped or bounded
-// runners that take a callback (`safeDb`, `scopedDb`, `ingestionDb`,
-// `backfillDb`). One list, so the chain roots below and the argument scan
-// cannot drift apart.
-const DB_HANDLE_NAMES = [
-  "db",
-  "tx",
-  "safeDb",
-  "scopedDb",
-  "rootDb",
-  "ingestionDb",
-  "backfillDb",
-] as const;
+// Every identifier the codebase uses for a database handle, keyed by how a
+// query reaches it. A chain root is written on directly (`db.select()...`,
+// `tx.query...`, `rootDb.transaction(...)`); a runner takes a callback and
+// never roots a chain (`scopedDb((tx) => ...)`), so it is matched as a callee
+// and as an argument instead. One map, so a handle cannot be listed without
+// a kind, and the three name sets below cannot drift apart.
+const DB_HANDLE_KIND = {
+  db: "chain-root",
+  tx: "chain-root",
+  rootDb: "chain-root",
+  safeDb: "runner",
+  scopedDb: "runner",
+  ingestionDb: "runner",
+  backfillDb: "runner",
+} as const;
 
-type DbHandleName = (typeof DB_HANDLE_NAMES)[number];
+type DbHandleKind = (typeof DB_HANDLE_KIND)[keyof typeof DB_HANDLE_KIND];
 
-const DB_HANDLE_NAME_SET: ReadonlySet<string> = new Set(DB_HANDLE_NAMES);
-
-// The handles a query chain is written directly on. The runner handles take a
-// callback (`scopedDb((tx) => ...)`) and never root a chain, so they are
-// matched as callees and as arguments instead. `satisfies` binds both subsets
-// to the list above: a rename there fails to compile here.
-const DB_CHAIN_ROOT_NAMES = [
-  "db",
-  "tx",
-  "rootDb",
-] as const satisfies readonly DbHandleName[];
-
-const DB_CHAIN_ROOT_NAME_SET: ReadonlySet<string> = new Set(
-  DB_CHAIN_ROOT_NAMES,
+const DB_HANDLE_NAME_SET: ReadonlySet<string> = new Set(
+  Object.keys(DB_HANDLE_KIND),
 );
 
-const DB_RUNNER_NAMES = [
-  "safeDb",
-  "scopedDb",
-  "ingestionDb",
-  "backfillDb",
-] as const satisfies readonly DbHandleName[];
+const dbHandleNamesOfKind = (kind: DbHandleKind): ReadonlySet<string> =>
+  new Set(
+    Object.entries(DB_HANDLE_KIND)
+      .filter(([, handleKind]) => handleKind === kind)
+      .map(([name]) => name),
+  );
 
-const DB_RUNNER_NAME_SET: ReadonlySet<string> = new Set(DB_RUNNER_NAMES);
+const DB_CHAIN_ROOT_NAME_SET = dbHandleNamesOfKind("chain-root");
+
+const DB_RUNNER_NAME_SET = dbHandleNamesOfKind("runner");
 
 const MAP_LIKE_METHOD_NAMES = new Set(["map", "forEach", "flatMap"]);
 
