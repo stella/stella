@@ -517,7 +517,7 @@ export const reassignActiveTaskAssignmentsAndDropMemberships = async ({
     // the enforced LIMITS.accountDeletionTaskAssignmentsMax check above
     // (throws before reaching here if exceeded), not unbounded tenant
     // data.
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- bounded fan-out: one deleted user's reassignments, capped by LIMITS.accountDeletionTaskAssignmentsMax
     await Promise.all(
       updates.map((item) =>
         tx
@@ -607,7 +607,7 @@ export const reassignActiveTaskAssignmentsAndDropMemberships = async ({
     const now = new Date();
     // SAFETY: one deleted user's mutable obligations, bounded by the enforced
     // accountDeletionTaskAssignmentsMax check immediately above.
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- bounded fan-out: one deleted user's obligations, capped by LIMITS.accountDeletionTaskAssignmentsMax; each row takes a different owner
     await Promise.all(
       ownedMutableWork.map((work) => {
         const nextOwnerUserId =
