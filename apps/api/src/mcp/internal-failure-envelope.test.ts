@@ -337,19 +337,11 @@ describe("save_time_entry threads backing handler errors correctly", () => {
 // error message straight into a plain-text `errorResult`, which would leak the
 // internal text, drop the `error.code` the CLI branches on, and omit the request
 // receipt. `internalFailureResult(x.error)` is the sanctioned replacement.
-//
-// `template-tools.ts` is the one sanctioned exception: its fill/configure
-// services return curated `{ message }` domain rejections (e.g. an unknown field
-// path in the template manifest) that the MCP schema cannot pre-check, and those
-// messages are meant to reach the agent (pinned by template-tools.test.ts). It
-// keeps `errorResult(x.error.message)` deliberately.
 describe("no tool file leaks a Result error message into errorResult", () => {
   // Match the raw-message pattern including optional-chaining variants
   // (`x?.error?.message`, `x.error?.message`, `x?.error.message`) so the guard
   // cannot be dodged by threading the unwrap through `?.`.
   const LEAK_PATTERN = /errorResult\(\s*\w+\??\.error\??\.message\s*\)/u;
-  const SURFACES_CURATED_SERVICE_MESSAGES = new Set(["template-tools.ts"]);
-
   const toolFiles = readdirSync(import.meta.dir).filter(
     (name) => name.endsWith("-tools.ts") && !name.endsWith(".test.ts"),
   );
@@ -360,15 +352,8 @@ describe("no tool file leaks a Result error message into errorResult", () => {
   });
 
   for (const file of toolFiles) {
-    const isException = SURFACES_CURATED_SERVICE_MESSAGES.has(file);
-    test(`${file} ${isException ? "keeps its curated service-message exception" : "routes DB failures through internalFailureResult"}`, () => {
+    test(`${file} routes DB failures through internalFailureResult`, () => {
       const source = readFileSync(`${import.meta.dir}/${file}`, "utf-8");
-      if (isException) {
-        // Pin the exception: if the leak pattern ever disappears here, revisit
-        // whether the allowlist entry is still warranted.
-        expect(source).toMatch(LEAK_PATTERN);
-        return;
-      }
       expect(source).not.toMatch(LEAK_PATTERN);
     });
   }
