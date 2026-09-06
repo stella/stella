@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import nodePath from "node:path";
 import * as v from "valibot";
 
 import capabilityCatalog from "@stll/cli/capability-catalog.json";
@@ -194,7 +194,7 @@ describe("MCP tool inputs read null as an omitted optional property", () => {
     );
     const offenders: string[] = [];
     for (const file of sources) {
-      const source = readFileSync(join(directory, file), "utf8");
+      const source = readFileSync(nodePath.join(directory, file), "utf-8");
       for (const match of source.matchAll(
         /v\.safeParse\(\s*([\w.]+)\s*,\s*args\s*,?\s*\)/gu,
       )) {
