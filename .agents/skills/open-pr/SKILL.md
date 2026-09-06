@@ -19,12 +19,17 @@ defaults to the fork and would miss an upstream PR:
 git branch --show-current
 git status --short
 gh pr list --repo "$BASE_REPO" --head "$(git branch --show-current)" \
-  --state all --json number,state,isDraft,headRefName,baseRefName,url
+  --state all \
+  --json number,state,isDraft,headRefName,headRepositoryOwner,baseRefName,url
 ```
 
-An empty PR list means no PR exists. Authentication, network, or repository
-errors must remain visible and stop the workflow before history changes or
-publication.
+An empty PR list means no PR exists. `--head` filters by branch name alone, so
+in a fork workflow the list can hold another contributor's PR from a branch of
+the same name: treat a result as this checkout's PR only when its
+`headRepositoryOwner` is the owner your head remote pushes to.
+
+Authentication, network, or repository errors must remain visible and stop the
+workflow before history changes or publication.
 
 Never prepare a PR in a dirty shared checkout. If the checkout is on the
 default branch, detached, has unrelated changes, or spans repositories or

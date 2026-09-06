@@ -37,7 +37,10 @@ comment:
 - **Push back**: incorrect, stale, speculative, or contrary to documented
   constraints.
 - **Defer**: accepted, but landing in a named follow-up PR because the enclosing
-  workflow's review budget is spent. Only with the follow-up PR's URL.
+  workflow's review budget is spent. Only with the follow-up PR's URL, and every
+  defer in one run names the same PR. Never for a verified release-blocking
+  defect (security, authorization, data loss, corruption): those are fixed on the
+  current head.
 
 Read the cited code and applicable instructions before deciding. Treat security,
 authorization, data loss, and compatibility claims as hypotheses to verify, not
@@ -70,10 +73,11 @@ Follow repository attribution rules for GitHub comments. Do not claim a check
 passed unless it ran successfully on the reported head.
 
 After replying, resolve only review threads whose every participant is a
-confirmed allowed bot and that are implemented, already addressed, answered
-with a supported pushback, or deferred to a named follow-up PR. Leave human, mixed-participant, and uncertain threads
-open. Top-level comments have no thread-resolution state; do not minimize bot
-summaries by default.
+confirmed allowed bot and that are implemented, already addressed, answered with
+a supported pushback, or deferred to a named follow-up PR. Leave human,
+mixed-participant, and uncertain threads open. Top-level comments have no
+thread-resolution state: a reply naming the follow-up PR is the whole disposition
+there. Do not minimize bot summaries by default.
 
 ## 5. Recheck the Current Head
 
@@ -81,7 +85,10 @@ Refresh the PR after the push and report one status:
 
 - `clean`: all current-head automated reviewers are terminal, required checks
   are green, and no actionable automated finding remains in a review thread or
-  top-level comment
+  top-level comment. A top-level finding answered with a defer reply carrying the
+  follow-up PR's URL is no longer actionable on later rounds, unless it names a
+  verified release-blocking defect: no defer makes one of those non-actionable,
+  and the status stays `needs_changes` until it is fixed on the current head
 - `pending_bots`: this round pushed the current head, or a current-head
   automated review or required check is still running
 - `needs_changes`: actionable automated feedback remains
