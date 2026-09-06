@@ -24,7 +24,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 
 export const DEFAULT_LIMIT = 100;
-export const DEFAULT_PAGE_SIZE = 25;
+const DEFAULT_PAGE_SIZE = 25;
 export const DEFAULT_LEASE_WAIT_MINUTES = 30;
 
 export const REPLAY_USAGE = `Usage: bun run src/scripts/replay-case-law-source.ts --adapter <key> [options]
@@ -76,13 +76,20 @@ const readValue = (
   argv: readonly string[],
   name: string,
 ): Result<string | undefined, ReplayArgumentsError> => {
-  const index = argv.indexOf(`--${name}`);
+  const flag = `--${name}`;
+  const index = argv.indexOf(flag);
   if (index === -1) {
     return Result.ok(undefined);
   }
+  // Taking the first occurrence would let the later one through unread, so
+  // `--limit 20 --limit 20rows` would run under a bound the operator did not
+  // write and never hear about the one they did.
+  if (argv.includes(flag, index + 1)) {
+    return invalid(`${flag} was given more than once`);
+  }
   const value = argv[index + 1];
   if (value === undefined || value.startsWith("--")) {
-    return invalid(`--${name} requires a value`);
+    return invalid(`${flag} requires a value`);
   }
   return Result.ok(value);
 };

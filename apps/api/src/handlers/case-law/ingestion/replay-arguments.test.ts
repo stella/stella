@@ -134,4 +134,15 @@ describe("the rest of a replay's command line", () => {
   test("no adapter is a usage error", () => {
     expect(rejection("--limit", "20")).toBe(REPLAY_USAGE);
   });
+
+  // Reading the first occurrence and stopping would let the second one
+  // through unread: the run would use a bound the operator did not write,
+  // and an invalid repeat would never be reported at all.
+  test.each([
+    [["--adapter", "eu-ecj", "--limit", "20", "--limit", "20rows"], "--limit"],
+    [["--adapter", "eu-ecj", "--adapter", "cz-nss"], "--adapter"],
+    [["--adapter", "eu-ecj", "--court", "A", "--court", "B"], "--court"],
+  ])("a value flag given twice is refused (%p)", (argv, flag) => {
+    expect(rejection(...argv)).toBe(`${flag} was given more than once`);
+  });
 });
