@@ -3,6 +3,7 @@ import { panic } from "better-result";
 import { ExternalLinkIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { isBusinessRegistryCredentialSlug } from "@stll/api-contract";
 import { getAresCourtName } from "@stll/business-registries/ares";
 import type { AresCompany } from "@stll/business-registries/ares";
 import { getAresLegalFormName } from "@stll/business-registries/ares/legal-forms";
@@ -19,12 +20,14 @@ import {
 
 import { registryDetailLabel } from "@/components/company-registry-labels";
 import { CompanySpecification } from "@/components/company-specification";
+import { RegistryCredentialSetup } from "@/components/registry-credential-setup";
 import type { RegistryHit } from "@/components/templates/registry-autofill";
 import type { LookupRegistryOption } from "@/components/templates/registry-options";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { businessRegistryQueryOptions } from "@/lib/business-registries/queries";
 import { detached } from "@/lib/detached";
+import { APIError } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { CALENDAR_DATE_FORMAT } from "@/lib/relative-time";
 import { sanitizeHref } from "@/lib/sanitize-href";
@@ -58,6 +61,19 @@ export const CompanyRegistryPreview = ({
   }
 
   if (error) {
+    if (
+      APIError.is(error) &&
+      error.code === "registry_configuration_required" &&
+      isBusinessRegistryCredentialSlug(registry)
+    ) {
+      return (
+        <RegistryCredentialSetup
+          key={`${organizationId}:${registry}`}
+          registry={registry}
+          source={null}
+        />
+      );
+    }
     return (
       <div className="flex min-h-48 flex-col items-center justify-center gap-3 p-6">
         <p className="text-muted-foreground text-center text-sm" role="alert">
