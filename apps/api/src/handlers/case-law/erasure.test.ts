@@ -76,14 +76,14 @@ describe("eraseCancelledIntentObjects", () => {
     {
       id: gone,
       textKey: objectKey,
-      sectionsKey: null,
-      astKey: null,
+      sectionsKey: objectKey,
+      astKey: objectKey,
     },
     {
       id: kept,
       textKey: packedAddress,
-      sectionsKey: null,
-      astKey: null,
+      sectionsKey: packedAddress,
+      astKey: packedAddress,
     },
   ];
 
