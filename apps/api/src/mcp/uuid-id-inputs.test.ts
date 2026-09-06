@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
 import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
+import {
+  describeTemplateArgsSchema,
+  fillTemplateArgsSchema,
+  saveFilledTemplateArgsSchema,
+} from "@/api/mcp/template-tools";
 
 /**
  * Every id a tool accepts is either a UUID this codebase mints or one of the
@@ -15,9 +20,12 @@ import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions"
  * property named `id` or ending in `_id`. For a `defineValibotMcpTool` tool
  * the advertised schema is projected from the `v.strictObject` its handler
  * parses, so the assertion binds the runtime validator, not a mirror of it.
- * The remaining hand-written schemas (the decreasing legacy list in
- * `static-tool-definitions.ts`) must keep their validator in step by hand
- * until they migrate.
+ *
+ * The tools on the decreasing legacy list in `static-tool-definitions.ts` still
+ * advertise a hand-written schema alongside that validator, so the advertised
+ * side alone would let a one-sided edit ship a contract the handler does not
+ * enforce. `LEGACY_MANUAL_INPUT_VALIDATORS` binds the two, in both directions,
+ * until those tools migrate.
  */
 const NON_UUID_ID_INPUTS: Record<string, string> = {
   // Auth-provider (better-auth) user ids are alphanumeric text, and the
@@ -80,6 +88,36 @@ const declaresUuid = (schema: unknown): boolean => {
   return false;
 };
 
+/**
+ * The validator each legacy tool's handler actually parses, keyed by tool name.
+ * `list_templates` reaches its detail branch through `describeTemplateArgsSchema`.
+ */
+const LEGACY_MANUAL_INPUT_VALIDATORS = {
+  list_templates: describeTemplateArgsSchema,
+  fill_template: fillTemplateArgsSchema,
+  save_filled_template: saveFilledTemplateArgsSchema,
+};
+
+/**
+ * True when a Valibot schema enforces a uuid on the value it accepts: a `uuid`
+ * action anywhere in its pipe, through any `optional`/`nullable` wrapper. This
+ * reads the schema the handler runs, so it is evidence of enforcement rather
+ * than of what the tool advertises.
+ */
+const validatorEnforcesUuid = (schema: unknown): boolean => {
+  if (!isRecord(schema)) {
+    return false;
+  }
+  if (schema["kind"] === "validation" && schema["type"] === "uuid") {
+    return true;
+  }
+  const pipe = schema["pipe"];
+  if (Array.isArray(pipe) && pipe.some(validatorEnforcesUuid)) {
+    return true;
+  }
+  return validatorEnforcesUuid(schema["wrapped"]);
+};
+
 /** Every id-named property in an advertised schema, at any nesting depth. */
 const collectIdProperties = (
   schema: unknown,
@@ -140,6 +178,47 @@ describe("MCP id inputs are validated as UUIDs", () => {
     expect(
       stale,
       `These NON_UUID_ID_INPUTS entries name inputs the registry no longer advertises: ${stale.join(", ")}. Remove them so the exception list cannot outlive its reason.`,
+    ).toEqual([]);
+  });
+
+  test("a hand-written schema cannot advertise a uuid its validator omits", () => {
+    const mismatches: string[] = [];
+    for (const [toolName, validator] of Object.entries(
+      LEGACY_MANUAL_INPUT_VALIDATORS,
+    )) {
+      const tool = DEFAULT_MCP_TOOL_DEFINITIONS.find(
+        ({ name }) => name === toolName,
+      );
+      if (tool === undefined) {
+        throw new Error(`${toolName} is no longer a registered tool`);
+      }
+      const advertised: { path: string; schema: unknown }[] = [];
+      collectIdProperties(tool.inputSchema, toolName, advertised);
+      for (const { path, schema } of advertised) {
+        const key = path.slice(`${toolName}.`.length);
+        if (declaresUuid(schema) !== validatorEnforcesUuid(validator.entries[key])) {
+          mismatches.push(path);
+        }
+      }
+    }
+
+    expect(
+      mismatches,
+      `The advertised schema and the validator its handler parses disagree on whether these ids are uuids: ${mismatches.join(", ")}. Both sides are hand-written for these tools, so change them together, or move the tool to defineValibotMcpTool so the advertised schema is projected from the validator.`,
+    ).toEqual([]);
+  });
+
+  test("every hand-written schema carrying an id is bound to its validator", () => {
+    const unbound = DEFAULT_MCP_TOOL_DEFINITIONS.filter(
+      (tool) =>
+        !("inputSchemaSource" in tool) &&
+        !(tool.name in LEGACY_MANUAL_INPUT_VALIDATORS) &&
+        idProperties.some(({ path }) => path.startsWith(`${tool.name}.`)),
+    ).map(({ name }) => name);
+
+    expect(
+      unbound,
+      `These tools advertise a hand-written schema with an id input but no validator to bind it to: ${unbound.join(", ")}. Add the validator to LEGACY_MANUAL_INPUT_VALIDATORS, or define the tool with defineValibotMcpTool.`,
     ).toEqual([]);
   });
 

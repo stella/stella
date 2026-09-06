@@ -699,7 +699,15 @@ const handleListTemplatesTool: TypedMcpToolHandler<
   return { egress: "structured", payload, textFields };
 };
 
-const describeTemplateArgsSchema = v.strictObject({
+/**
+ * Exported, with the two validators below, only so `uuid-id-inputs.test.ts` can
+ * bind it to the hand-written `inputSchema` these three tools still advertise:
+ * a one-sided edit to either representation fails there instead of shipping a
+ * `tools/list` contract the handler does not enforce. The binding retires with
+ * the schema, once the tool moves to `defineValibotMcpTool` and its advertised
+ * schema is projected from this one.
+ */
+export const describeTemplateArgsSchema = v.strictObject({
   template_id: v.pipe(v.string(), v.uuid()),
 });
 
@@ -831,7 +839,7 @@ const assertTemplateFillUsage = async ({
   });
 };
 
-const fillTemplateArgsSchema = v.strictObject({
+export const fillTemplateArgsSchema = v.strictObject({
   template_id: v.pipe(v.string(), v.uuid()),
   values: v.record(v.string(), v.unknown()),
   allow_unused_values: v.optional(v.boolean()),
@@ -997,7 +1005,7 @@ const handleFillTemplateTool: McpToolHandler = async ({ args, context }) => {
   });
 };
 
-const saveFilledTemplateArgsSchema = v.strictObject({
+export const saveFilledTemplateArgsSchema = v.strictObject({
   action: v.picklist(["create_document", "create_version"]),
   template_id: v.pipe(v.string(), v.uuid()),
   matter_id: v.pipe(v.string(), v.uuid()),
