@@ -26,6 +26,9 @@ const WRAP = (body: string) =>
 <w:body>${body}</w:body></w:document>`;
 
 const P = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
+const TC = (...paragraphs: string[]) => `<w:tc>${paragraphs.join("")}</w:tc>`;
+const TR = (...cells: string[]) => `<w:tr>${cells.join("")}</w:tr>`;
+const TBL = (...rows: string[]) => `<w:tbl>${rows.join("")}</w:tbl>`;
 
 // ── Tests ────────────────────────────────────────────────
 
@@ -697,5 +700,67 @@ describe("template authoring warnings", () => {
     const result = await discoverTemplate(await makeDocx(xml));
 
     expect(result.conditionPaths).toEqual(["has_guarantor"]);
+  });
+});
+
+describe("row-form block markers", () => {
+  test("a loop opened and closed across one row's cells is discovered whole", async () => {
+    const rowForm = WRAP(
+      TBL(
+        TR(TC(P("Deliverable")), TC(P("Fee"))),
+        TR(
+          TC(P("{{#each deliverables}}{{deliverables.item}}")),
+          TC(P("{{deliverables.fee}}{{/each}}")),
+        ),
+      ),
+    );
+    const ownParagraphForm = WRAP(
+      TBL(
+        TR(TC(P("Deliverable")), TC(P("Fee"))),
+        TR(
+          TC(P("{{#each deliverables}}"), P("{{deliverables.item}}")),
+          TC(P("{{deliverables.fee}}"), P("{{/each}}")),
+        ),
+      ),
+    );
+    const result = await discoverTemplate(await makeDocx(rowForm));
+
+    expect(result.structureErrors).toEqual([]);
+    expect(result.warnings).toEqual([]);
+    expect(
+      result.fields.find((field) => field.path === "deliverables"),
+    ).toEqual({
+      path: "deliverables",
+      kind: "array",
+      count: 2,
+      itemFields: [
+        { path: "fee", kind: "string", count: 1 },
+        { path: "item", kind: "string", count: 1 },
+      ],
+    });
+    // The two placements are the same template, so they discover the same schema.
+    expect(result).toEqual(
+      await discoverTemplate(await makeDocx(ownParagraphForm)),
+    );
+  });
+
+  test("a row condition across one row's cells discovers its driver", async () => {
+    const xml = WRAP(
+      TBL(
+        TR(
+          TC(P("{{#if penalty}}Late fee")),
+          TC(P("{{penalty_amount}}{{/if}}")),
+        ),
+      ),
+    );
+    const result = await discoverTemplate(await makeDocx(xml));
+
+    expect(result.structureErrors).toEqual([]);
+    expect(result.warnings).toEqual([]);
+    expect(result.conditionPaths).toEqual(["penalty"]);
+    expect(
+      result.fields.find((field) => field.path === "penalty_amount")
+        ?.visibleWhen,
+    ).toBe("penalty");
   });
 });

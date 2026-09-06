@@ -26,6 +26,7 @@ import {
   templateContentPartPaths,
   W_NS,
 } from "./ooxml";
+import { normalizeRowBlockMarkers } from "./row-block-markers";
 import {
   boundTemplateWarnings,
   collectParagraphWarnings,
@@ -701,6 +702,10 @@ const collectParagraphPlaceholders = ({
  * extract field information from its paragraphs.
  */
 const analyzeContainer = (body: slimdom.Element): AnalysisResult => {
+  // Same rewrite the fill pipeline applies, so a row-form loop is discovered
+  // with its item paths and warns exactly as the own-paragraph form does.
+  normalizeRowBlockMarkers(body);
+
   const fields: FieldAccumulator = new Map();
   const placeholderCounts = new Map<string, number>();
   const errors: TemplateStructureError[] = [];
@@ -832,6 +837,9 @@ const analyzeHeadersAndFooters = async (
 
     const source = hdr ? "header" : "footer";
     const offset = source === "header" ? headerParaCount : footerParaCount;
+    // Count before analysis: normalizing a row-form marker adds a paragraph of
+    // its own, and the running offset must keep counting the authored file.
+    const paraCount = container.getElementsByTagNameNS(W_NS, "p").length;
     const analysis = analyzeContainer(container);
 
     // Tag errors with their source and offset indices to
@@ -841,7 +849,6 @@ const analyzeHeadersAndFooters = async (
       err.paragraphIndex += offset;
     }
 
-    const paraCount = container.getElementsByTagNameNS(W_NS, "p").length;
     if (source === "header") {
       headerParaCount += paraCount;
     } else {

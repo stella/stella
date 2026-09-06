@@ -15,6 +15,11 @@ const paragraph = (text: string): AuthoredBlock => ({
   text,
 });
 
+const table = (...rows: readonly string[][]): AuthoredBlock => ({
+  type: "table",
+  rows,
+});
+
 const traps = (
   blocks: readonly AuthoredBlock[],
   overlay = [],
@@ -82,6 +87,35 @@ describe("detectGrammarTraps", () => {
         paragraph("{{/if}}"),
       ]).block_marker_inline,
     ).toBe(0);
+  });
+
+  test("a row block opened and closed across one row's cells is a placement, not a trap", () => {
+    const counts = traps([
+      table(
+        ["Deliverable", "Fee"],
+        [
+          "{{#each deliverables}}{{deliverables.item}}",
+          "{{deliverables.fee}}{{/each}}",
+        ],
+      ),
+      table(["{{#if penalty}}Late fee", "{{penalty_amount}}{{/if}}"]),
+    ]);
+    expect(counts.block_marker_inline).toBe(0);
+    expect(counts.unprefixed_item_path).toBe(0);
+  });
+
+  test("an unclosed block marker in a plain paragraph is still a trap", () => {
+    expect(
+      traps([paragraph("{{#if penalty}}A penalty applies.")])
+        .block_marker_inline,
+    ).toBe(1);
+  });
+
+  test("a row whose opener has no closer is still a trap", () => {
+    expect(
+      traps([table(["{{#each deliverables}}{{deliverables.item}}", "Fee"])])
+        .block_marker_inline,
+    ).toBe(1);
   });
 
   test("per-language paths for one value collapse to a language_variant_path", () => {

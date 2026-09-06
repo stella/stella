@@ -237,3 +237,8 @@ export type {
   MarkerMeta,
   ScannedMarker,
 } from "./markers.js";
+
+// Row-form block placement — shared by the fill/discovery pipeline and the
+// authoring eval so both agree on what a table row declares.
+export { detectRowBlockPair } from "./row-blocks.js";
+export type { RowBlockMarker, RowBlockPair } from "./row-blocks.js";

@@ -187,13 +187,16 @@ const AUTHORING_RULES = [
       `${LIST_TEMPLATES} reports under \`arrays\`.`,
   },
   {
-    title: "Block markers own their paragraph",
+    title: "Block markers own their paragraph, or wrap a table row",
     detail:
       "Each `{{#if}}` / `{{#each}}` opener and closer sits alone in its own " +
       "paragraph, and a pair either shares a block-level parent or is " +
-      "confined to a single table row (which repeats the row). A pair that " +
-      "straddles a table boundary is ambiguous: it is refused as a structure " +
-      "error and its markers are neutralized instead of expanding.",
+      "confined to a single table row (which repeats the row). Within one row " +
+      "the pair may instead prefix a cell's text and suffix a later cell's " +
+      "text — `{{#each deliverables}}{{deliverables.item}}` in one cell and " +
+      "`{{deliverables.fee}}{{/each}}` in another act on the whole row. A " +
+      "pair that straddles a table boundary is ambiguous: it is refused as a " +
+      "structure error and its markers are neutralized instead of expanding.",
   },
 ] as const;
 

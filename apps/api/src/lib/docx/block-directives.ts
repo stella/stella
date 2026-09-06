@@ -77,6 +77,7 @@ import type {
 } from "@stll/template-conditions";
 
 import { ancestorByLocalName, isElement, paragraphText, W_NS } from "./ooxml";
+import { normalizeRowBlockMarkers } from "./row-block-markers";
 import type {
   Block,
   BlockDirective,
@@ -750,6 +751,12 @@ export const processBlockDirectives = (
 ): ProcessResult => {
   const patchValues: Record<string, RichPatchValue> = {};
   const allErrors: TemplateStructureError[] = [];
+
+  // Row-form markers become own-paragraph markers before anything scans, so
+  // every rule below (row repeat, row condition, straddling errors) sees one
+  // placement. Discovery normalizes the same way, so the two agree on what a
+  // table row declares.
+  normalizeRowBlockMarkers(body);
 
   // Flatten top-level nested objects for value substitution.
   Object.assign(patchValues, flattenTemplateData(data));

@@ -12,6 +12,7 @@
 
 import {
   assertNever,
+  detectRowBlockPair,
   isBlockDirectiveKind,
   scanInvalidMarkers,
   scanMarkers,
@@ -19,8 +20,9 @@ import {
 
 /**
  * One block of the document the model authored. A table cell holds a
- * paragraph, so `block_marker_inline` is decided per cell exactly as it is
- * per body paragraph.
+ * paragraph, so `block_marker_inline` is decided per cell exactly as it is per
+ * body paragraph — except for the row block a row's cells may declare between
+ * them, which is a supported placement (see {@link detectRowBlockPair}).
  */
 export type AuthoredBlock =
   | { type: "paragraph"; text: string }
@@ -75,14 +77,56 @@ const zeroTrapCounts = (): GrammarTrapCounts => ({
   condition_on_input: 0,
 });
 
+/**
+ * One paragraph as the trap detectors read it. `rowBlockStarts` holds the
+ * offsets of the block markers that open or close a ROW block — a pair that
+ * prefixes one cell of a table row and suffixes another — which is a supported
+ * placement, not a marker crowded into a paragraph.
+ */
+type ScannedParagraph = {
+  text: string;
+  rowBlockStarts: ReadonlySet<number>;
+};
+
+const NO_ROW_BLOCK: ReadonlySet<number> = new Set<number>();
+
+/**
+ * One table row's paragraphs, with the row block its cells declare (if any)
+ * marked. Cells are split on newlines because a newline inside a cell starts a
+ * new paragraph, exactly as it does in the body.
+ */
+const rowParagraphs = (row: readonly string[]): ScannedParagraph[] => {
+  const cells = row.map((cell) => cell.split("\n"));
+  const pair = detectRowBlockPair(cells);
+  const startsAt = (cellIndex: number, paragraphIndex: number): number[] =>
+    pair === null
+      ? []
+      : [pair.open, pair.close]
+          .filter(
+            (end) =>
+              end.cellIndex === cellIndex &&
+              end.paragraphIndex === paragraphIndex,
+          )
+          .map(({ marker }) => marker.start);
+
+  return cells.flatMap((paragraphs, cellIndex) =>
+    paragraphs.map((text, paragraphIndex) => {
+      const starts = startsAt(cellIndex, paragraphIndex);
+      return {
+        text,
+        rowBlockStarts: starts.length === 0 ? NO_ROW_BLOCK : new Set(starts),
+      };
+    }),
+  );
+};
+
 /** Every paragraph in document order, which the `{{#each}}` nesting walk
- *  depends on. A newline inside a table cell starts a new paragraph there, so
- *  `block_marker_inline` is judged per paragraph inside cells too. */
-const paragraphsOf = (blocks: readonly AuthoredBlock[]): string[] =>
+ *  depends on. */
+const paragraphsOf = (blocks: readonly AuthoredBlock[]): ScannedParagraph[] =>
   blocks.flatMap((block) =>
     block.type === "paragraph"
-      ? [block.text]
-      : block.rows.flatMap((row) => row.flatMap((cell) => cell.split("\n"))),
+      ? [{ text: block.text, rowBlockStarts: NO_ROW_BLOCK }]
+      : block.rows.flatMap(rowParagraphs),
   );
 
 const DIRECTIVE_SHAPED_RE = /^[#/@]/u;
@@ -188,7 +232,7 @@ export const detectGrammarTraps = ({
   const placeholderPaths: string[] = [];
   const arrayPaths = new Set<string>();
 
-  for (const text of paragraphsOf(blocks)) {
+  for (const { rowBlockStarts, text } of paragraphsOf(blocks)) {
     for (const invalid of scanInvalidMarkers(text)) {
       if (DIRECTIVE_SHAPED_RE.test(invalid.inner)) {
         counts.unknown_directive += 1;
@@ -199,8 +243,13 @@ export const detectGrammarTraps = ({
     }
 
     const markers = scanMarkers(text);
-    const blockMarkers = markers.filter((marker) =>
-      isBlockDirectiveKind(marker.meta.kind),
+    // A row block's two markers are placed as the grammar allows: the opener
+    // in front of one cell's text, the closer behind another's. Only markers
+    // that genuinely share a paragraph with other content are the trap.
+    const blockMarkers = markers.filter(
+      (marker) =>
+        isBlockDirectiveKind(marker.meta.kind) &&
+        !rowBlockStarts.has(marker.start),
     );
     if (blockMarkers.length > 0) {
       let remainder = text;

@@ -43,7 +43,8 @@ const DIRECTIVE_DESCRIPTIONS = {
     title: "Conditional block (open)",
     detail:
       "Include the enclosed paragraphs only when the condition holds. Block " +
-      "markers must each occupy their own paragraph.",
+      "markers each occupy their own paragraph, except in a table row (see " +
+      "the table rule below).",
     example: "{{#if is_company}} … {{/if}}",
   },
   elseif: {
@@ -124,8 +125,15 @@ const NON_DIRECTIVE_RULES = [
     detail:
       "A block marker pair (`#if` or `#each` family) confined to ONE table row " +
       "acts on the whole row: the row repeats per item, or is dropped when no " +
-      "branch wins. Opening and closing markers must not straddle a row " +
-      "boundary.",
+      "branch wins. Inside such a row the pair may either own its paragraphs " +
+      "or hug the row's text — the opener directly in FRONT of one cell's " +
+      "text and the closer directly BEHIND a later cell's text, which keeps " +
+      "the row readable as a table. A repeating row: first cell " +
+      "`{{#each deliverables}}{{deliverables.item}}`, last cell " +
+      "`{{deliverables.fee}}{{/each}}`. A conditional row: first cell " +
+      "`{{#if penalty}}Late fee`, last cell `{{penalty_amount}}{{/if}}`. " +
+      "Nothing may precede the opener or follow the closer in those cells, " +
+      "one pair per row only, and the pair must not straddle a row boundary.",
   },
   {
     title: "Markers Word splits into runs",
@@ -175,7 +183,8 @@ export const buildMarkerReference = (): string => {
     "Write a normal DOCX and embed these markers as literal text. Inline " +
       "markers (fillable values, clause slots, numbering) sit within a " +
       "paragraph; block markers (#if / #each families) each occupy their own " +
-      "paragraph.",
+      "paragraph, except in a table row, where a pair may wrap the row's own " +
+      "text (see the table rule).",
     "",
     "Marker kinds:",
     directiveLines,
