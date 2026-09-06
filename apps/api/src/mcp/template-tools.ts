@@ -880,7 +880,7 @@ const gateTemplateFillCompletion = ({
           message: "Template placeholder was not filled",
         })),
         ...completion.aiFieldErrors.map((error) => ({
-          path: `values.${aiFieldErrorPath(error)}`,
+          path: `values.${error.valuePath}`,
           message: error.message,
         })),
       ],
@@ -888,12 +888,6 @@ const gateTemplateFillCompletion = ({
     }),
   };
 };
-
-/** How a failed AI draft is addressed in `values`: the field path, plus the
- *  1-based row index when the field is drafted once per array row. */
-const aiFieldErrorPath = ({ fieldPath, itemIndex }: AiFieldError): string =>
-  itemIndex === null ? fieldPath : `${fieldPath}[${String(itemIndex)}]`;
-
 /** Summary line for a fill that is not complete. Both shortfalls are named
  *  when both are present: an agent retrying needs to know a placeholder was
  *  never filled AND that a drafted field came back unusable. */
@@ -910,7 +904,7 @@ const describeFillShortfall = ({
   }
   if (aiFieldErrors.length > 0) {
     parts.push(
-      `AI-drafted fields that failed: ${previewList(aiFieldErrors.map(aiFieldErrorPath))}`,
+      `AI-drafted fields that failed: ${previewList(aiFieldErrors.map(({ valuePath }) => valuePath))}`,
     );
   }
   return parts.join("; ");
@@ -1092,6 +1086,7 @@ const handleFillTemplateTool: McpToolHandler = async ({ args, context }) => {
           userId: context.userId,
           format: "docx",
           unmatchedCount: filled.unmatchedPlaceholders.length,
+          aiFieldErrorCount: filled.aiFieldErrors.length,
           unusedCount: filled.unusedValues.length,
           structureErrors: filled.structureErrors,
           recordAuditEvent: context.recordAuditEvent,
@@ -1123,7 +1118,7 @@ const handleFillTemplateTool: McpToolHandler = async ({ args, context }) => {
       unusedValues: filled.unusedValues,
       structureErrors: filled.structureErrors,
       aiFieldErrors: filled.aiFieldErrors.map((error) => ({
-        field: aiFieldErrorPath(error),
+        field: error.valuePath,
         reason: error.reason,
         message: error.message,
       })),
@@ -1166,7 +1161,7 @@ const handleFillTemplateTool: McpToolHandler = async ({ args, context }) => {
     // Fields whose AI draft failed: they are unfilled in the document above,
     // so an agent must supply them itself rather than treat the fill as done.
     aiFieldErrors: filled.aiFieldErrors.map((error) => ({
-      field: aiFieldErrorPath(error),
+      field: error.valuePath,
       reason: error.reason,
       message: error.message,
     })),
@@ -1564,6 +1559,7 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
       userId: context.userId,
       format: "docx",
       unmatchedCount: filled.unmatchedPlaceholders.length,
+      aiFieldErrorCount: filled.aiFieldErrors.length,
       unusedCount: filled.unusedValues.length,
       structureErrors: filled.structureErrors,
       workspaceId,

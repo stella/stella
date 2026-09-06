@@ -187,11 +187,6 @@ export const streamChatChunks = (
   options: StreamChatChunksOptions,
 ): AsyncIterable<PublicStreamChunk> => chat(options);
 
-/** The awaited text form: the run's collected assistant text. */
-export const generateChatText = async (
-  options: StreamChatChunksOptions,
-): Promise<string> => await chat({ ...options, stream: false });
-
 export type ChatObjectOptions = StreamChatChunksOptions & {
   outputSchema: SchemaInput;
 };

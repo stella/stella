@@ -69,7 +69,10 @@ import type {
   StructureError,
 } from "@/components/templates/template-discover-types";
 import type { LookupRegistry } from "@/components/templates/template-field-manifest";
-import { runLeadingSingleFlight } from "@/components/templates/template-form.logic";
+import {
+  readAiFieldErrorPaths,
+  runLeadingSingleFlight,
+} from "@/components/templates/template-form.logic";
 import Tooltip from "@/components/tooltip";
 import { useMountEffect } from "@/hooks/use-effect";
 import { useLocale } from "@/i18n/formatting-context";
@@ -2090,6 +2093,22 @@ export const TemplateForm = ({
           ? `filled-${DOCX_EXT_RE.test(baseName) ? baseName.replace(DOCX_EXT_RE, ".pdf") : `${baseName}.pdf`}`
           : `filled-${baseName}`;
       downloadFile(blob, filename);
+
+      const aiFieldPaths = readAiFieldErrorPaths(response.response.headers);
+      if (Result.isError(aiFieldPaths)) {
+        getAnalytics().captureError(aiFieldPaths.error);
+        stellaToast.add({
+          type: "warning",
+          title: t("common.unexpectedError"),
+        });
+      } else if (aiFieldPaths.value.length > 0) {
+        stellaToast.add({
+          type: "warning",
+          title: t("templates.aiFieldsNotDrafted", {
+            list: aiFieldPaths.value.join(", "),
+          }),
+        });
+      }
 
       onDone(filename);
     },

@@ -183,6 +183,14 @@ export const fillByIdLogic = async function* ({
 
   const baseName = result.fileName;
 
+  const additionalHeaders = new Headers();
+  if (result.aiFieldErrors.length > 0) {
+    additionalHeaders.set(
+      "X-Ai-Field-Errors",
+      encodeURIComponent(JSON.stringify(result.aiFieldErrors)),
+    );
+  }
+
   // PDF conversion via Gotenberg
   if (format === "pdf") {
     const docxBytes = new Uint8Array(result.buffer);
@@ -222,6 +230,7 @@ export const fillByIdLogic = async function* ({
     // source for that call, so returning the ready-made Response from here
     // instead would make its declared file-response transport look stale.
     return Result.ok({
+      additionalHeaders,
       body: new Uint8Array(pdfResult.value.buffer),
       // Octet-stream, not application/pdf: see OCTET_STREAM_MIME_TYPE.
       contentType: OCTET_STREAM_MIME_TYPE,
@@ -229,8 +238,6 @@ export const fillByIdLogic = async function* ({
       fileName: sanitizeFilename(pdfName),
     } satisfies SecureDocumentResponseOptions);
   }
-
-  const additionalHeaders = new Headers();
 
   if (result.unmatchedPlaceholders.length > 0) {
     additionalHeaders.set(
@@ -252,13 +259,6 @@ export const fillByIdLogic = async function* ({
       JSON.stringify(result.structureErrors),
     );
   }
-  if (result.aiFieldErrors.length > 0) {
-    additionalHeaders.set(
-      "X-Ai-Field-Errors",
-      encodeURIComponent(JSON.stringify(result.aiFieldErrors)),
-    );
-  }
-
   return Result.ok({
     additionalHeaders,
     body: new Uint8Array(result.buffer),

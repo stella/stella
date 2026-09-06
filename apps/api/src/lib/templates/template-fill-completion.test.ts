@@ -11,6 +11,7 @@ import {
 
 const aiFieldErrorArbitrary = fc.record({
   fieldPath: fc.string({ minLength: 1 }),
+  valuePath: fc.string({ minLength: 1 }),
   itemIndex: fc.option(fc.integer({ min: 1, max: 20 }), { nil: null }),
   reason: fc.constantFrom<AiFieldError["reason"]>(
     "empty",
@@ -63,6 +64,7 @@ describe("template fill completion policy", () => {
     const aiFieldErrors: AiFieldError[] = [
       {
         fieldPath: "scope",
+        valuePath: "scope",
         itemIndex: null,
         reason: "truncated",
         message: "The model reached its output limit before finishing.",

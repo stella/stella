@@ -404,6 +404,18 @@ describe("buildAiFieldGenerator truncated output", () => {
     expect(draft).toEqual({ type: "drafted", value: DRAFTED_VALUE });
     expect(capturedRequests).toHaveLength(1);
   });
+
+  test("provider exceptions cannot disclose request content in field diagnostics", async () => {
+    const draft = await draftField(() => {
+      throw new Error("Provider echoed confidential document contents");
+    });
+    expect(draft).toEqual({
+      type: "failed",
+      reason: "generation-failed",
+      message:
+        "AI field generation failed. Retry or provide the value yourself.",
+    });
+  });
 });
 
 describe("output budgets are sized from the work asked for", () => {

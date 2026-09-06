@@ -285,6 +285,7 @@ describe("fillTemplateDocx required-field rejection", () => {
     expect(result.aiFieldErrors).toEqual([
       {
         fieldPath: "governing_law",
+        valuePath: "governing_law",
         itemIndex: null,
         reason: "truncated",
         message: "The model reached its output limit before finishing.",

@@ -786,6 +786,31 @@ describe("renderReportSpec", () => {
     ]);
   });
 
+  test("a failed requested narrative fails the report instead of omitting its section", async () => {
+    for (const reason of [
+      "empty",
+      "generation-failed",
+      "interrupted",
+      "truncated",
+    ] as const) {
+      const rendered = await renderReportSpec({
+        spec: spec([{ kind: "narrative", prompt: { text: "Summarize." } }]),
+        report: report(),
+        prompts: new Map(),
+        aiNarrative: true,
+        generateAiValue: async () => ({
+          type: "failed",
+          reason,
+          message: "Draft unavailable",
+        }),
+      });
+      expect(Result.isError(rendered)).toBe(true);
+      if (Result.isError(rendered)) {
+        expect(rendered.error.message).toContain(`narrative.1: ${reason}`);
+      }
+    }
+  });
+
   test("findings parts and inline citations", async () => {
     const parsed = await render([
       {

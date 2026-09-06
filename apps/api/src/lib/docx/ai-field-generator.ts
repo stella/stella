@@ -38,6 +38,7 @@ import {
   type SkillToolsContext,
 } from "@/api/lib/docx/ai-skill-tools";
 import type { AiConditionDecider } from "@/api/lib/docx/resolve-ai-conditions";
+import { AI_FIELD_GENERATION_FAILURE_MESSAGE } from "@/api/lib/docx/resolve-ai-fields";
 import type {
   AiFieldDraft,
   AiFieldGenerator,
@@ -86,11 +87,11 @@ const OUTPUT_TOKENS_PER_EXPECTED_CHAR = 1;
 const OUTPUT_CEILING_RETRY_FACTOR = 2;
 /** Ceiling on any single generation, so a large or hostile manifest cannot
  *  turn one fill into an unbounded model spend. */
-const OUTPUT_MAX_TOKENS = 8_000;
+const OUTPUT_MAX_TOKENS = 8000;
 
 /** Value length assumed for a field whose manifest declares no maxLength:
  *  a drafted clause or scope paragraph, not a one-line answer. */
-const AI_FIELD_DEFAULT_EXPECTED_CHARS = 1_500;
+const AI_FIELD_DEFAULT_EXPECTED_CHARS = 1500;
 
 const outputTokenBudget = (expectedChars: number): number =>
   Math.min(
@@ -378,7 +379,7 @@ Reply with only the text for this field — no preamble, no quotes, no markdown.
       return {
         type: "failed",
         reason: "generation-failed",
-        message: error instanceof Error ? error.message : String(error),
+        message: AI_FIELD_GENERATION_FAILURE_MESSAGE,
       };
     }
   };

@@ -112,6 +112,7 @@ describe("resolveAiFields", () => {
     expect(result.errors).toEqual([
       {
         fieldPath: "scope",
+        valuePath: "scope",
         itemIndex: null,
         reason: "truncated",
         message: "The model reached its output limit before finishing.",
@@ -382,9 +383,11 @@ describe("resolveAiFields — array-scoped (per-item) fields", () => {
     expect(result.errors).toEqual([
       {
         fieldPath: "contracts.summary",
+        valuePath: "contracts[1].summary",
         itemIndex: 2,
         reason: "generation-failed",
-        message: "model exploded",
+        message:
+          "AI field generation failed. Retry or provide the value yourself.",
       },
     ]);
   });
@@ -404,9 +407,40 @@ describe("resolveAiFields — array-scoped (per-item) fields", () => {
     expect(result.errors).toEqual([
       {
         fieldPath: "contracts.summary",
+        valuePath: "contracts[0].summary",
         itemIndex: 1,
         reason: "truncated",
         message: "The model reached its output limit before finishing.",
+      },
+    ]);
+  });
+
+  test("failed nested array drafts carry their exact value address", async () => {
+    const result = await resolveAiFields({
+      values: {
+        client: {
+          contracts: ["Not an object row", { summary: "Provided" }, {}],
+        },
+      },
+      fields: [
+        {
+          path: "client.contracts.summary",
+          aiPrompt: "Summarize",
+        },
+      ],
+      generate: async () => ({
+        type: "failed",
+        reason: "truncated",
+        message: "Draft truncated",
+      }),
+    });
+    expect(result.errors).toEqual([
+      {
+        fieldPath: "client.contracts.summary",
+        valuePath: "client.contracts[2].summary",
+        itemIndex: 3,
+        reason: "truncated",
+        message: "Draft truncated",
       },
     ]);
   });

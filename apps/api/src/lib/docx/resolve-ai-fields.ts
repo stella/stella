@@ -21,6 +21,7 @@
 
 import { isSafeFieldPath, resolvePath } from "@stll/template-conditions";
 
+import { captureError } from "@/api/lib/analytics/capture";
 import { isRecord } from "@/api/lib/type-guards";
 
 import { omitSourceBoundValues } from "./ai-visible-values";
@@ -33,11 +34,14 @@ import type { FieldMeta } from "./types";
  * is silent about the cut. `interrupted` is a run that ended without
  * reporting a finish at all (a cancelled fill, a lifecycle regression).
  */
-export type AiFieldFailureReason =
+type AiFieldFailureReason =
   | "empty"
   | "generation-failed"
   | "interrupted"
   | "truncated";
+
+export const AI_FIELD_GENERATION_FAILURE_MESSAGE =
+  "AI field generation failed. Retry or provide the value yourself.";
 
 /**
  * The generator's answer for one field. A failed draft is reported, never
@@ -51,6 +55,8 @@ export type AiFieldDraft =
  *  boundary reports it rather than shipping the document as if complete. */
 export type AiFieldError = {
   fieldPath: string;
+  /** Exact value location, with zero-based indices at each array boundary. */
+  valuePath: string;
   /** 1-based row index for an array-scoped draft; null for a top-level field. */
   itemIndex: number | null;
   reason: AiFieldFailureReason;
@@ -170,6 +176,7 @@ export const resolveAiFields = async ({
     errors.push({
       fieldPath: field.path,
       itemIndex: null,
+      valuePath: field.path,
       reason: draft.reason,
       message: draft.message,
     });
@@ -178,8 +185,8 @@ export const resolveAiFields = async ({
 };
 
 type ArrayBoundary = {
-  /** Object rows of the (single) array the path crosses. */
-  rows: Record<string, unknown>[];
+  /** Preserve original positions, including rows that cannot carry fields. */
+  rows: unknown[];
   /** Path segment(s) after the array, resolved against each row. */
   remainder: string;
   /** Path to the array itself, used to make field paths row-relative. */
@@ -206,7 +213,7 @@ const findArrayBoundary = (
       continue;
     }
     return {
-      rows: value.filter(isRecord),
+      rows: value,
       remainder: segments.slice(i).join("."),
       scopePath: segments.slice(0, i).join("."),
     };
@@ -276,7 +283,7 @@ const resolveArrayField = async ({
   maxLength,
   generate,
 }: {
-  rows: Record<string, unknown>[];
+  rows: unknown[];
   fields: readonly FieldMeta[];
   scopePath: string;
   remainder: string;
@@ -286,13 +293,18 @@ const resolveArrayField = async ({
   maxLength: number | undefined;
   generate: AiFieldGenerator;
 }): Promise<AiFieldError[]> => {
-  if (rows.some((row) => remainderCrossesArray(remainder, row))) {
+  if (
+    rows.some((row) => isRecord(row) && remainderCrossesArray(remainder, row))
+  ) {
     return []; // double-array path: unsupported in v1, leave unfilled
   }
 
   const count = rows.length;
   const pending: { row: Record<string, unknown>; index: number }[] = [];
   for (const [index, row] of rows.entries()) {
+    if (!isRecord(row)) {
+      continue;
+    }
     const existing = resolvePath(remainder, row);
     if (existing === undefined || existing === "") {
       pending.push({ row, index });
@@ -333,6 +345,7 @@ const resolveArrayField = async ({
       errors.push({
         fieldPath,
         itemIndex: task.index + 1,
+        valuePath: `${scopePath}[${String(task.index)}].${remainder}`,
         reason: draft.reason,
         message: draft.message,
       });
@@ -377,10 +390,11 @@ const draftRow = async ({
       maxLength,
     });
   } catch (error) {
+    captureError(error);
     return {
       type: "failed",
       reason: "generation-failed",
-      message: error instanceof Error ? error.message : String(error),
+      message: AI_FIELD_GENERATION_FAILURE_MESSAGE,
     };
   }
 };

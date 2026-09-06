@@ -188,6 +188,14 @@ export const fillHandler = async ({
     });
   });
 
+  const additionalHeaders = new Headers();
+  if (result.aiFieldErrors.length > 0) {
+    additionalHeaders.set(
+      "X-Ai-Field-Errors",
+      encodeURIComponent(JSON.stringify(result.aiFieldErrors)),
+    );
+  }
+
   // PDF conversion via Gotenberg
   if (format === "pdf") {
     const docxBytes = new Uint8Array(result.buffer);
@@ -224,6 +232,7 @@ export const fillHandler = async ({
       ? sourceName.replace(DOCX_EXT_RE, ".pdf")
       : `${sourceName}.pdf`;
     return secureDocumentResponse({
+      additionalHeaders,
       body: new Uint8Array(pdfResult.value.buffer),
       // Octet-stream, not application/pdf: see OCTET_STREAM_MIME_TYPE.
       contentType: OCTET_STREAM_MIME_TYPE,
@@ -231,8 +240,6 @@ export const fillHandler = async ({
       fileName: sanitizeFilename(pdfName),
     });
   }
-
-  const additionalHeaders = new Headers();
 
   if (result.unmatchedPlaceholders.length > 0) {
     additionalHeaders.set(
@@ -254,13 +261,6 @@ export const fillHandler = async ({
       JSON.stringify(result.structureErrors),
     );
   }
-  if (result.aiFieldErrors.length > 0) {
-    additionalHeaders.set(
-      "X-Ai-Field-Errors",
-      encodeURIComponent(JSON.stringify(result.aiFieldErrors)),
-    );
-  }
-
   return secureDocumentResponse({
     additionalHeaders,
     body: new Uint8Array(result.buffer),

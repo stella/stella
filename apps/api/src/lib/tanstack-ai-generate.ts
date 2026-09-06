@@ -193,7 +193,7 @@ const isAbortRejection = ({
 // stream that closed without a `RUN_FINISHED` at all (a cancellation, or a
 // lifecycle regression); `finished` carries the provider's reason, which the
 // event leaves optional, so `null` there means the provider reported none.
-export type TextRunFinish =
+type TextRunFinish =
   | { kind: "finished"; reason: TanStackTextFinishReason }
   | { kind: "unfinished" };
 
@@ -417,7 +417,7 @@ export type TanStackTextRun = {
 
 /**
  * Run a text chat to completion and keep both halves of the answer: the
- * collected text and how the run ended. `generateChatText` drops the finish,
+ * collected text and how the run ended. Collecting only the text drops the finish,
  * which leaves a caller unable to tell a whole answer from one cut at the
  * output ceiling — for a drafted document field that difference is the
  * difference between a value and a sentence ending mid-word.

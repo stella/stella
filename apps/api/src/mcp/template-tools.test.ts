@@ -942,6 +942,7 @@ describe("MCP template tools", () => {
       aiFieldErrors: [
         {
           fieldPath: "scope",
+          valuePath: "scope",
           itemIndex: null,
           reason: "truncated",
           message:
@@ -979,6 +980,7 @@ describe("MCP template tools", () => {
       aiFieldErrors: [
         {
           fieldPath: "scope",
+          valuePath: "scope",
           itemIndex: null,
           reason: "truncated",
           message:
@@ -1263,6 +1265,82 @@ describe("MCP template tools", () => {
     );
     expect(createEntityFromBufferMock).not.toHaveBeenCalled();
     expect(releaseTemplatePersistenceClaimMock).toHaveBeenCalled();
+  });
+
+  test("failed optional AI fields cannot be persisted or receipted as complete", async () => {
+    fillStoredTemplateDocxMock.mockResolvedValue({
+      fileName: "draft.docx",
+      buffer: Buffer.from("optional field defaulted to blank"),
+      unmatchedPlaceholders: [],
+      unusedValues: [],
+      aiFieldErrors: [
+        {
+          fieldPath: "scope",
+          valuePath: "scope",
+          itemIndex: null,
+          reason: "truncated",
+          message: "Draft truncated",
+        },
+      ],
+    });
+    const result = await handleMcpToolCall({
+      args: {
+        action: "create_document",
+        template_id: TEMPLATE_ID,
+        matter_id: "ws_1",
+        idempotency_key: "failed-ai",
+        values: {},
+      },
+      context: createContext(),
+      toolName: "save_filled_template",
+    });
+    expect(result.isError).toBe(true);
+    expect(validationEnvelope(result)["issues"]).toEqual([
+      { path: "values.scope", message: "Draft truncated" },
+    ]);
+    expect(createEntityFromBufferMock).not.toHaveBeenCalled();
+    expect(recordTemplatePersistenceReceiptMock).not.toHaveBeenCalled();
+    expect(releaseTemplatePersistenceClaimMock).toHaveBeenCalled();
+  });
+
+  test("failed row drafts return indexed value paths and record the AI shortfall", async () => {
+    for (const fieldPath of ["contracts.summary", "client.contracts.summary"]) {
+      fillStoredTemplateWithTextStrictMock.mockResolvedValue({
+        templateName: "Summary",
+        fileName: "summary.docx",
+        buffer: Buffer.from("blank optional value"),
+        text: "Summary:",
+        unmatchedPlaceholders: [],
+        unusedValues: [],
+        aiFieldErrors: [
+          {
+            fieldPath,
+            valuePath: fieldPath.replace(".summary", "[1].summary"),
+            itemIndex: 2,
+            reason: "truncated",
+            message: "Draft truncated",
+          },
+        ],
+      });
+      const values = fieldPath.startsWith("client.")
+        ? { client: { contracts: [{}, {}] } }
+        : { contracts: [{}, {}] };
+      const result = await handleMcpToolCall({
+        args: { template_id: "t1", values },
+        context: createContext(),
+        toolName: "fill_template",
+      });
+      expect(result.isError).toBe(true);
+      expect(validationEnvelope(result)["issues"]).toEqual([
+        {
+          path: `values.${fieldPath.replace(".summary", "[1].summary")}`,
+          message: "Draft truncated",
+        },
+      ]);
+      expect(recordTemplateFillMock).toHaveBeenCalledWith(
+        expect.objectContaining({ unmatchedCount: 0, aiFieldErrorCount: 1 }),
+      );
+    }
   });
 
   test("save_filled_template does not persist after its caller disconnects", async () => {
