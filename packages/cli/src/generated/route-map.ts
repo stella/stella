@@ -2277,7 +2277,7 @@ export const generatedRouteMap: RouteNode = {
             commandPath: ["template", "fill"],
             toolName: "fill_template",
             description:
-              "Fill a template and return text plus the DOCX as base64.",
+              "Fill a template and return the rendered text; pass output_mode='docx' for base64 bytes.",
             flags: [
               {
                 flag: "--template-id",
@@ -2304,6 +2304,16 @@ export const generatedRouteMap: RouteNode = {
                 repeatable: false,
                 description:
                   "Require every placeholder by default; use allow_partial only for an intentionally incomplete document.",
+                required: false,
+              },
+              {
+                flag: "--output-mode",
+                prop: "output_mode",
+                kind: "enum",
+                enum: ["text", "docx"],
+                repeatable: false,
+                description:
+                  "text returns the rendered paragraphs and cells; docx adds the base64 archive, which is large.",
                 required: false,
               },
             ],
@@ -2336,6 +2346,13 @@ export const generatedRouteMap: RouteNode = {
                     "Require every placeholder by default; use allow_partial only for an intentionally incomplete document.",
                   default: "require_complete",
                 },
+                output_mode: {
+                  type: "string",
+                  enum: ["text", "docx"],
+                  description:
+                    "text returns the rendered paragraphs and cells; docx adds the base64 archive, which is large.",
+                  default: "text",
+                },
               },
               required: ["template_id", "values"],
               additionalProperties: false,
@@ -2351,7 +2368,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["template", "save-filled", "new-document"],
                 toolName: "save_filled_template",
                 description:
-                  "Fill a registered template and persist the generated DOCX directly in a matter, without requiring the client to upload bytes.",
+                  "Fill a registered template and persist its DOCX in a matter.",
                 discriminatorInject: {
                   action: "create_document",
                 },
@@ -2399,121 +2416,14 @@ export const generatedRouteMap: RouteNode = {
                       "Optional DOCX file name; defaults to the template file name",
                     required: false,
                   },
-                ],
-                inputOnly: ["values"],
-                paginated: false,
-                windowedText: false,
-                destructive: false,
-                additionalScopes: ["templates"],
-                requestTimeoutMs: 330000,
-                scope: "documents_write",
-                inputSchema: {
-                  type: "object",
-                  properties: {
-                    action: {
-                      type: "string",
-                      enum: ["create_document", "create_version"],
-                      description: "Persistence destination",
-                    },
-                    template_id: {
-                      type: "string",
-                      description: "Template id, as returned by list_templates",
-                    },
-                    matter_id: {
-                      type: "string",
-                      description: "Matter receiving the filled DOCX.",
-                    },
-                    entity_id: {
-                      type: "string",
-                      description:
-                        "Existing document entity id; required only for create_version",
-                    },
-                    parent_id: {
-                      type: "string",
-                      description:
-                        "Folder entity id for a new document; valid only for create_document",
-                    },
-                    name: {
-                      type: "string",
-                      description:
-                        "Optional DOCX file name; defaults to the template file name",
-                      maxLength: 255,
-                    },
-                    idempotency_key: {
-                      type: "string",
-                      description:
-                        "Unique retry key for this save operation; reuse it only to recover the same timed-out request",
-                      maxLength: 128,
-                    },
-                    values: {
-                      type: "object",
-                      description: "Map of template field path to value",
-                      additionalProperties: true,
-                    },
-                  },
-                  required: [
-                    "action",
-                    "template_id",
-                    "matter_id",
-                    "idempotency_key",
-                    "values",
-                  ],
-                  additionalProperties: false,
-                },
-              },
-            },
-            "new-version": {
-              kind: "leaf",
-              spec: {
-                commandPath: ["template", "save-filled", "new-version"],
-                toolName: "save_filled_template",
-                description:
-                  "Fill a registered template and persist the generated DOCX directly in a matter, without requiring the client to upload bytes.",
-                discriminatorInject: {
-                  action: "create_version",
-                },
-                flags: [
                   {
-                    flag: "--template-id",
-                    prop: "template_id",
-                    kind: "string",
-                    repeatable: false,
-                    description: "Template id, as returned by list_templates",
-                    required: true,
-                  },
-                  {
-                    flag: "--matter-id",
-                    prop: "matter_id",
-                    kind: "string",
-                    repeatable: false,
-                    description: "Matter receiving the filled DOCX.",
-                    required: true,
-                  },
-                  {
-                    flag: "--idempotency-key",
-                    prop: "idempotency_key",
-                    kind: "string",
+                    flag: "--completion-mode",
+                    prop: "completion_mode",
+                    kind: "enum",
+                    enum: ["require_complete", "allow_partial"],
                     repeatable: false,
                     description:
-                      "Unique retry key for this save operation; reuse it only to recover the same timed-out request",
-                    required: true,
-                  },
-                  {
-                    flag: "--entity-id",
-                    prop: "entity_id",
-                    kind: "string",
-                    repeatable: false,
-                    description:
-                      "Existing document entity id; required only for create_version",
-                    required: true,
-                  },
-                  {
-                    flag: "--name",
-                    prop: "name",
-                    kind: "string",
-                    repeatable: false,
-                    description:
-                      "Optional DOCX file name; defaults to the template file name",
+                      "Require every placeholder by default; use allow_partial only for an intentionally incomplete document.",
                     required: false,
                   },
                 ],
@@ -2567,6 +2477,147 @@ export const generatedRouteMap: RouteNode = {
                       description: "Map of template field path to value",
                       additionalProperties: true,
                     },
+                    completion_mode: {
+                      type: "string",
+                      enum: ["require_complete", "allow_partial"],
+                      description:
+                        "Require every placeholder by default; use allow_partial only for an intentionally incomplete document.",
+                      default: "require_complete",
+                    },
+                  },
+                  required: [
+                    "action",
+                    "template_id",
+                    "matter_id",
+                    "idempotency_key",
+                    "values",
+                  ],
+                  additionalProperties: false,
+                },
+              },
+            },
+            "new-version": {
+              kind: "leaf",
+              spec: {
+                commandPath: ["template", "save-filled", "new-version"],
+                toolName: "save_filled_template",
+                description:
+                  "Fill a registered template and persist its DOCX in a matter.",
+                discriminatorInject: {
+                  action: "create_version",
+                },
+                flags: [
+                  {
+                    flag: "--template-id",
+                    prop: "template_id",
+                    kind: "string",
+                    repeatable: false,
+                    description: "Template id, as returned by list_templates",
+                    required: true,
+                  },
+                  {
+                    flag: "--matter-id",
+                    prop: "matter_id",
+                    kind: "string",
+                    repeatable: false,
+                    description: "Matter receiving the filled DOCX.",
+                    required: true,
+                  },
+                  {
+                    flag: "--idempotency-key",
+                    prop: "idempotency_key",
+                    kind: "string",
+                    repeatable: false,
+                    description:
+                      "Unique retry key for this save operation; reuse it only to recover the same timed-out request",
+                    required: true,
+                  },
+                  {
+                    flag: "--entity-id",
+                    prop: "entity_id",
+                    kind: "string",
+                    repeatable: false,
+                    description:
+                      "Existing document entity id; required only for create_version",
+                    required: true,
+                  },
+                  {
+                    flag: "--name",
+                    prop: "name",
+                    kind: "string",
+                    repeatable: false,
+                    description:
+                      "Optional DOCX file name; defaults to the template file name",
+                    required: false,
+                  },
+                  {
+                    flag: "--completion-mode",
+                    prop: "completion_mode",
+                    kind: "enum",
+                    enum: ["require_complete", "allow_partial"],
+                    repeatable: false,
+                    description:
+                      "Require every placeholder by default; use allow_partial only for an intentionally incomplete document.",
+                    required: false,
+                  },
+                ],
+                inputOnly: ["values"],
+                paginated: false,
+                windowedText: false,
+                destructive: false,
+                additionalScopes: ["templates"],
+                requestTimeoutMs: 330000,
+                scope: "documents_write",
+                inputSchema: {
+                  type: "object",
+                  properties: {
+                    action: {
+                      type: "string",
+                      enum: ["create_document", "create_version"],
+                      description: "Persistence destination",
+                    },
+                    template_id: {
+                      type: "string",
+                      description: "Template id, as returned by list_templates",
+                    },
+                    matter_id: {
+                      type: "string",
+                      description: "Matter receiving the filled DOCX.",
+                    },
+                    entity_id: {
+                      type: "string",
+                      description:
+                        "Existing document entity id; required only for create_version",
+                    },
+                    parent_id: {
+                      type: "string",
+                      description:
+                        "Folder entity id for a new document; valid only for create_document",
+                    },
+                    name: {
+                      type: "string",
+                      description:
+                        "Optional DOCX file name; defaults to the template file name",
+                      maxLength: 255,
+                    },
+                    idempotency_key: {
+                      type: "string",
+                      description:
+                        "Unique retry key for this save operation; reuse it only to recover the same timed-out request",
+                      maxLength: 128,
+                    },
+                    values: {
+                      type: "object",
+                      description: "Map of template field path to value",
+                      additionalProperties: true,
+                    },
+                    completion_mode: {
+                      type: "string",
+                      enum: ["require_complete", "allow_partial"],
+                      description:
+                        "Require every placeholder by default; use allow_partial only for an intentionally incomplete document.",
+                      default: "require_complete",
+                    },
                   },
                   required: [
                     "action",
@@ -2587,7 +2638,7 @@ export const generatedRouteMap: RouteNode = {
             commandPath: ["template", "save"],
             toolName: "save_template",
             description:
-              "Create a template from a DOCX, or configure an existing template's fields.",
+              "Create a template from a DOCX or configure its fields.",
             flags: [
               {
                 flag: "--template-id",
@@ -37928,7 +37979,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "templates", "fill-preview"],
                 capabilityId: "templates.fill-preview",
                 description:
-                  "Run the full fill of a stored template with the given values and return text instead of a file: the filled paragraphs, the character count, placeholders no value matched, values no marker used, and any structural errors. It does the same work as a real fill, AI-drafted fields included, so it is not a cheap dry run. Use templates.fill-by-id to download the document.",
+                  "Run the full fill of a stored template with the given values and return text instead of a file: the filled paragraphs, the character count, placeholders no value matched, values no marker used, and any structural errors. It does the same work as a real fill, AI-drafted fields included, so it is not a cheap dry run. values is an object mapping each field path to its value. Use templates.fill-by-id to download the document.",
                 access: "read",
                 flags: [
                   {
@@ -37940,17 +37991,8 @@ export const generatedRouteMap: RouteNode = {
                     part: "params",
                     partPath: "templateId",
                   },
-                  {
-                    kind: "string",
-                    repeatable: false,
-                    flag: "--values",
-                    prop: "values",
-                    required: true,
-                    part: "body",
-                    partPath: "values",
-                  },
                 ],
-                inputOnly: [],
+                inputOnly: ["body.values"],
                 paginated: false,
                 destructive: false,
                 scope: "templates",
@@ -37963,7 +38005,10 @@ export const generatedRouteMap: RouteNode = {
                       required: ["values"],
                       properties: {
                         values: {
-                          type: "string",
+                          type: "object",
+                          patternProperties: {
+                            "^(.*)$": {},
+                          },
                         },
                       },
                     },

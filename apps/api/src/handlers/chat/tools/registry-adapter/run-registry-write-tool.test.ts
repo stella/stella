@@ -118,6 +118,7 @@ describe("runRegistryWriteTool (orchestration)", () => {
             conditions: [],
             fields: [],
             name: "NDA",
+            warnings: [],
           }),
         },
       },

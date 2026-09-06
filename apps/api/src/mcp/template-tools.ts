@@ -163,12 +163,6 @@ const TEMPLATE_FILL_COMPLETION_MODE_PROP = {
   default: DEFAULT_TEMPLATE_FILL_COMPLETION_MODE,
 } as const;
 
-// Base64 encodes 3 bytes per 4 chars, so bound the encoded length to the doc
-// size limit and reject an oversized upload at parse time, before it is decoded
-// into a Buffer.
-const MAX_DOCX_BASE64_LENGTH =
-  Math.ceil(FILE_SIZE_LIMIT_BYTES.document / 3) * 4;
-
 // A JSON-RPC request has a 512 KiB transport cap. Reserve half for the
 // envelope and the remaining tool arguments, then derive the base64 payload
 // ceiling from the part that can safely reach this validator.
@@ -520,22 +514,15 @@ const SAVE_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
     "openai/fileParams": ["file"],
   },
   description:
-    "Create a template from a DOCX, or configure an existing template's " +
-    "fields. To create, pass a name and the .docx: prefer file (a host file " +
-    "reference, up to " +
-    `${MAX_DOCX_MEGABYTES} MB), else docx_base64 (base64-encoded Office ` +
-    `Open XML bytes, max ${MAX_INLINE_DOCX_BYTES} bytes decoded within the ` +
-    `${MCP_MAX_REQUEST_BODY_BYTES}-byte MCP request frame). The file's ` +
-    "{{field}} markers " +
-    "become the fillable fields, and fields can configure them in the same " +
-    "call. docx_base64 must carry the original bytes verbatim: never retype " +
-    "the file or strip parts out to fit. To configure an existing template, " +
-    "pass template_id with fields and no document; only the manifest " +
-    "changes, the document's {{markers}} stay untouched. Read " +
+    "Create a template from a DOCX or configure its fields. For creation, pass " +
+    `a name and file (preferred, up to ${MAX_DOCX_MEGABYTES} MB) or original ` +
+    `bytes as docx_base64 (max ${MAX_INLINE_DOCX_BYTES} bytes decoded within ` +
+    `the ${MCP_MAX_REQUEST_BODY_BYTES}-byte MCP request frame); never retype the ` +
+    "file or strip parts out to fit. {{field}} markers become fillable. For configuration, pass " +
+    "template_id and fields without a document; markers stay intact. Read " +
     `${TEMPLATE_MARKER_REFERENCE_URI} before authoring a DOCX and ` +
     `${TEMPLATE_FIELD_REFERENCE_URI} before configuring fields. Returns the ` +
-    "template id and field count when creating, or the updated fields when " +
-    "configuring, plus marker-authoring warnings to fix before filling.",
+    "created or updated fields plus marker-authoring warnings.",
   inputSchema: saveTemplateArgsSchema,
   jsonSchemaProjectionWaiver: {
     ignoreActions: ["check", "finite", "partial_check"],
@@ -602,16 +589,12 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
   {
     description:
       "Fill a template and return the rendered text; pass output_mode='docx' " +
-      "to also get the DOCX as base64. First call list_templates with " +
-      "template_id for field paths, then pass values as a path-to-value map " +
-      '(for example, {"tenant.name":"ACME"}). Registry, composite, formula, ' +
-      "and AI fields resolve automatically. Unknown keys fail unless " +
-      "allow_unused_values is true; unfilled placeholders fail unless " +
-      "completion_mode is allow_partial. A required field that is not " +
-      "AI-fillable must be provided: an omitted or empty one fails with the " +
-      "exact list of missing fields instead of a guessed value or a raw " +
-      "placeholder in the output — ask the user for those values and retry. " +
-      "Successful output includes completionStatus.",
+      "for base64 bytes. Call list_templates first, then pass its field paths " +
+      "in values. Registry, composite, formula, and AI fields resolve " +
+      "automatically. Unknown keys fail unless allow_unused_values is true. " +
+      "Missing required values and unfilled placeholders fail with their exact " +
+      "paths unless completion_mode is allow_partial. Never guess required " +
+      "values. Output includes completionStatus.",
     inputSchema: {
       type: "object",
       properties: {
@@ -656,17 +639,12 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
   },
   {
     description:
-      "Fill a registered template and persist the generated DOCX directly in " +
-      "a matter, without requiring the client to upload bytes. Use " +
-      "action='create_document' to create a new document (optionally inside " +
-      "parent_id), or action='create_version' with entity_id to append a " +
-      "version to an existing document. Call list_templates first to learn " +
-      "the field paths and which are required. A required field that is not " +
-      "AI-fillable must be provided, or the fill fails with the exact list of " +
-      "missing fields; ask the user for those values instead of guessing. " +
-      "Unfilled placeholders fail before anything is written unless " +
-      "completion_mode is allow_partial. Returns the entity and version " +
-      "identifiers plus any unmatched placeholders or unused values.",
+      "Fill a registered template and persist its DOCX in a matter. Use " +
+      "create_document (optionally with parent_id) or create_version with " +
+      "entity_id. Call list_templates for field paths; never guess required " +
+      "values. Missing required values and unfilled placeholders fail before " +
+      "writes unless completion_mode is allow_partial. Returns entity and " +
+      "version ids plus unmatched placeholders or unused values.",
     inputSchema: {
       type: "object",
       properties: {
@@ -1856,6 +1834,9 @@ const DOCX_FILE_FAILURE_HINT = {
   "unreadable-archive":
     "The attached file is not a readable .docx archive. Attach the original " +
     "document rather than a renamed or re-exported copy.",
+  "archive-limit-exceeded":
+    "The attached archive exceeds the entry-count or decompressed-size limit. " +
+    "Ask the user for a smaller .docx; reattaching the same file will not help.",
   "missing-document-xml":
     "The attached archive has no 'word/document.xml'. Attach the original " +
     ".docx unmodified; do not rebuild or repackage it.",

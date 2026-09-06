@@ -2239,6 +2239,7 @@ describe("MCP template tools", () => {
       templateId: "tmpl_hosted",
       name: "NDA",
       fieldCount: 1,
+      warnings: [],
     });
   });
 
