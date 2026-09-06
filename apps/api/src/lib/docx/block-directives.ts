@@ -578,7 +578,7 @@ const removeBlockUnit = (unit: slimdom.Node): void => {
 
   // The last row left the table: drop the shell, then repair whatever cell the
   // table itself lived in.
-  if (table && table.getElementsByTagNameNS(W_NS, TAG.row).length === 0) {
+  if (table?.getElementsByTagNameNS(W_NS, TAG.row).length === 0) {
     removeBlockUnit(table);
     return;
   }
