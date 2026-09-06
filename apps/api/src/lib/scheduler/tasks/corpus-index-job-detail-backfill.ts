@@ -10,7 +10,7 @@
  * both tables are walked.
  */
 
-import { panic, Result } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
@@ -24,7 +24,10 @@ import {
 import { isUuid } from "@/api/lib/custom-schema";
 import type { CorpusIndexProjectionSubject } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
-import type { SchedulerTask } from "@/api/lib/scheduler/types";
+import type {
+  SchedulerTask,
+  SchedulerTaskContext,
+} from "@/api/lib/scheduler/types";
 import { isRecord } from "@/api/lib/type-guards";
 
 export const BACKFILL_CORPUS_INDEX_JOB_DETAIL_TASK =
@@ -216,6 +219,30 @@ const executedRows = (result: unknown): Record<string, unknown>[] => {
     : [];
 };
 
+type IndexJobTable = keyof typeof CORPUS_INDEX_JOB_SUCCEEDED_CHECKS;
+
+/**
+ * One trail's check, read back from the catalog rather than assumed: a
+ * validation that did not take must leave the repair unfinished.
+ */
+const validateCheck = async (
+  tx: Transaction,
+  table: IndexJobTable,
+): Promise<void> => {
+  const constraint = CORPUS_INDEX_JOB_SUCCEEDED_CHECKS[table];
+  await tx.execute(
+    sql.raw(
+      `ALTER TABLE public."${table}" VALIDATE CONSTRAINT "${constraint}"`,
+    ),
+  );
+  const state = executedRows(
+    await tx.execute(CONSTRAINT_STATE_QUERY(table, constraint)),
+  ).at(0);
+  if (state?.["isValidated"] !== true) {
+    panic(`Constraint ${constraint} on ${table} is not validated`);
+  }
+};
+
 /**
  * Check both trails against the rows that predate their constraints.
  *
@@ -223,32 +250,44 @@ const executedRows = (result: unknown): Record<string, unknown>[] => {
  * write but has never read the rows already there; until it does,
  * `pg_constraint.convalidated` stays false and the invariant holds only for
  * what the new writers wrote. Validating is the last step of the repair and a
- * no-op once done, which is what makes running it again harmless. It reads the
- * catalog back rather than trusting the statement: a validation that did not
- * take must leave the repair unfinished.
+ * no-op once done, which is what makes running it again harmless.
  */
 export const validateCorpusIndexJobChecksTx = async (
   tx: Transaction,
 ): Promise<void> => {
-  // SAFETY: two entries, fixed at compile time — the two trails the corpus
-  // keeps. The statements are DDL, so they cannot be batched into one query.
-  // oxlint-disable no-db-await-in-loop/no-db-await-in-loop -- bounded by the constant map above
-  for (const [table, constraint] of Object.entries(
-    CORPUS_INDEX_JOB_SUCCEEDED_CHECKS,
-  )) {
-    await tx.execute(
-      sql.raw(
-        `ALTER TABLE public."${table}" VALIDATE CONSTRAINT "${constraint}"`,
-      ),
-    );
-    const state = executedRows(
-      await tx.execute(CONSTRAINT_STATE_QUERY(table, constraint)),
-    ).at(0);
-    if (state?.["isValidated"] !== true) {
-      panic(`Constraint ${constraint} on ${table} is not validated`);
-    }
+  // Both trails, named rather than iterated: DDL cannot be batched, and each
+  // statement waits on its own table's lock.
+  await validateCheck(tx, "case_law_index_jobs");
+  await validateCheck(tx, "legislation_index_jobs");
+};
+
+class CorpusIndexJobDetailBackfillError extends TaggedError(
+  "CorpusIndexJobDetailBackfillError",
+)<{ message: string; cause?: unknown }> {}
+
+type BackfillFailureReport = {
+  event: string;
+  family: CorpusIndexJobDetailFamily;
+  logger: SchedulerTaskContext["logger"];
+};
+
+/**
+ * What a step that did not commit means for the sweep.
+ *
+ * A step refused a lock is not a failure: it moved nothing and checkpointed
+ * nothing, so the next tick asks for the same range again and the repair still
+ * converges. Anything else is the runner's to record, and a scheduler task
+ * reports that through the promise it returns, the way a readiness probe does.
+ */
+const reportBackfillFailure = async (
+  failure: CorpusIndexJobDetailBackfillError,
+  { event, family, logger }: BackfillFailureReport,
+): Promise<void> => {
+  if (!isPgError(failure, PG_ERROR.LOCK_NOT_AVAILABLE)) {
+    await Promise.reject(failure);
+    return;
   }
-  // oxlint-enable no-db-await-in-loop/no-db-await-in-loop
+  logger.info(event, { "corpusIndexJobDetail.family": family });
 };
 
 type BackfillPosition = {
@@ -330,19 +369,18 @@ export const backfillCorpusIndexJobDetail: SchedulerTask = async ({
           .where(leaseFence);
         return { family, movedCount, status: "progress" as const };
       }),
-    catch: (cause) => cause,
+    catch: (cause) =>
+      new CorpusIndexJobDetailBackfillError({
+        message: "A corpus index-job detail page did not commit",
+        cause,
+      }),
   });
   if (Result.isError(page)) {
-    // A row this page wanted is held by a writer. The page moved nothing and
-    // checkpointed nothing, so the next tick asks for the same range again;
-    // anything else is a failure of the sweep and is the runner's to record.
-    if (!isPgError(page.error, PG_ERROR.LOCK_NOT_AVAILABLE)) {
-      throw page.error;
-    }
-    logger.info("scheduler.corpus_index_job_detail_contended", {
-      "corpusIndexJobDetail.family": family,
+    return await reportBackfillFailure(page.error, {
+      event: "scheduler.corpus_index_job_detail_contended",
+      family,
+      logger,
     });
-    return;
   }
 
   logger.info("scheduler.corpus_index_job_detail_backfilled", {
@@ -378,14 +416,18 @@ export const backfillCorpusIndexJobDetail: SchedulerTask = async ({
           .set({ enabled: false })
           .where(leaseFence);
       }),
-    catch: (cause) => cause,
+    catch: (cause) =>
+      new CorpusIndexJobDetailBackfillError({
+        message: "The corpus index-job checks were not validated",
+        cause,
+      }),
   });
   if (Result.isError(validated)) {
-    if (!isPgError(validated.error, PG_ERROR.LOCK_NOT_AVAILABLE)) {
-      throw validated.error;
-    }
-    logger.info("scheduler.corpus_index_job_detail_validation_contended", {});
-    return;
+    return await reportBackfillFailure(validated.error, {
+      event: "scheduler.corpus_index_job_detail_validation_contended",
+      family,
+      logger,
+    });
   }
 
   logger.info("scheduler.corpus_index_job_detail_validated", {});
