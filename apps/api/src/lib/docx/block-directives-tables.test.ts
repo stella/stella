@@ -247,6 +247,48 @@ describe("processBlockDirectives — malformed table placement", () => {
     expect(texts).not.toContain("{{#else}}");
     expect(texts).not.toContain("{{/if}}");
   });
+
+  test.each([
+    ["else", "{{#else}}"],
+    ["elseif", "{{#elseif fallback}}"],
+  ])(
+    "a nested-row %s marker rejects the outer-row conditional without pruning content",
+    (_kind, branchMarker) => {
+      const xml = WRAP(
+        TBL(
+          TR(
+            TC(
+              P("{{#if flag}}"),
+              P("Outer before"),
+              TBL(TR(TC(P(branchMarker), P("Nested content")))),
+              P("Outer after"),
+              P("{{/if}}"),
+            ),
+          ),
+        ),
+      );
+      const body = parseBody(xml);
+      const { errors } = processBlockDirectives(body, {
+        fallback: true,
+        flag: false,
+      });
+
+      expect(errors.length).toBeGreaterThan(0);
+      expect(errors[0]?.message).toContain("table");
+      expect(rowCount(body)).toBe(2);
+      expect(tableCount(body)).toBe(2);
+      expect(emptyCellCount(body)).toBe(0);
+      expect(emptyTableCount(body)).toBe(0);
+      expect(bodyTexts(body)).toEqual([
+        "",
+        "Outer before",
+        "",
+        "Nested content",
+        "Outer after",
+        "",
+      ]);
+    },
+  );
 });
 
 // ── Table cloning in body-level loops ────────────────────

@@ -859,11 +859,23 @@ export const processBlockDirectives = (
     if (firstP && lastP) {
       const openerRow = ancestorByLocalName(firstP, TAG.row);
       const closerRow = ancestorByLocalName(lastP, TAG.row);
+      const markerParagraphs: slimdom.Element[] = [];
+      for (const index of block.directiveParagraphs) {
+        const marker = paragraphs[index];
+        if (marker) {
+          markerParagraphs.push(marker);
+        }
+      }
+      const allMarkersShareOpenerRow =
+        markerParagraphs.length === block.directiveParagraphs.length &&
+        markerParagraphs.every(
+          (marker) => ancestorByLocalName(marker, TAG.row) === openerRow,
+        );
 
-      // Row condition: every directive paragraph sits in one `w:tr` (the
-      // paragraphs between opener and closer are inside that row by document
-      // order), so the row is the unit.
-      if (openerRow && openerRow === closerRow) {
+      // Row condition: every directive paragraph sits in one `w:tr`, so the
+      // row is the unit. A nested table may place a branch marker between the
+      // opener and closer in document order while its nearest row differs.
+      if (openerRow && openerRow === closerRow && allMarkersShareOpenerRow) {
         pruneIfRow({
           firstDirective,
           lastDirective,
@@ -878,13 +890,6 @@ export const processBlockDirectives = (
       // in different rows. Reject rather than emit corrupt XML, exactly as the
       // each family does.
       if (openerRow || closerRow) {
-        const markerParagraphs: slimdom.Element[] = [];
-        for (const index of block.directiveParagraphs) {
-          const marker = paragraphs[index];
-          if (marker) {
-            markerParagraphs.push(marker);
-          }
-        }
         reportAmbiguousPlacement({
           directive: `{{#if ${block.branches[0]?.condition ?? ""}}}`,
           markerParagraphs,
