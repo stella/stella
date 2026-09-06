@@ -104,7 +104,7 @@ describe("runRegistryWriteTool (orchestration)", () => {
 
   test("executes the template configure mode through the chat projection", async () => {
     const result = await runRegistryWriteTool({
-      args: { fields: [], template_id: "template_1" },
+      args: { fields: [], template_id: "00000000-0000-4000-8000-000000000001" },
       context: {
         ...buildContext(),
         testDependencies: {
