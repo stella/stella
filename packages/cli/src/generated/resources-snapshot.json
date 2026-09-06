@@ -19,5 +19,12 @@
     "title": "Template field configuration",
     "description": "How save_template's fields overlay configures each template field: input types, validation, composite parts, registry lookups, contact and matter bindings, and who fills the field. Read this before passing fields.",
     "mimeType": "text/markdown"
+  },
+  {
+    "uri": "stella://reference/template-workflow",
+    "name": "template-workflow",
+    "title": "Template workflow",
+    "description": "The order to drive stella's templates in: author markers, create the template, read the discovered paths back, configure fields, preview the fill, persist it into a matter. Read this before the first save_template call.",
+    "mimeType": "text/markdown"
   }
 ]
