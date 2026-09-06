@@ -284,8 +284,13 @@ const describedWarnings = async ({
       conditionPaths: discovered.conditionPaths,
       fields,
       placeholderPaths: discovered.placeholders.map(({ name }) => name),
-      registryGate: async () =>
-        await buildIsRegistryEnabledForOrg({ organizationId, scopedDb }),
+      registryGate: async () => {
+        const resolveDisabledReason = await buildResolveRegistryDisabledReason({
+          organizationId,
+          scopedDb,
+        });
+        return (registry) => resolveDisabledReason(registry) === null;
+      },
     })),
   ]);
 
