@@ -1,4 +1,8 @@
 import type { McpToolName } from "@/api/lib/api-handlers";
+import {
+  MAX_DOCX_MEGABYTES,
+  MAX_INLINE_DOCX_BYTES,
+} from "@/api/mcp/template-docx-limits";
 import { TEMPLATE_FIELD_REFERENCE_URI } from "@/api/mcp/template-field-reference";
 import { TEMPLATE_MARKER_REFERENCE_URI } from "@/api/mcp/template-marker-reference";
 
@@ -35,6 +39,7 @@ const TOOL = {
   fillTemplate: "fill_template",
   saveFilledTemplate: "save_filled_template",
   sendFeedback: "send_feedback",
+  uploadDocumentVersion: "upload_document_version",
 } as const satisfies Record<string, McpToolName>;
 
 export const TEMPLATE_WORKFLOW_TOOL_NAMES = Object.values(TOOL);
@@ -46,6 +51,7 @@ const {
   saveTemplate: SAVE_TEMPLATE,
   sendFeedback: SEND_FEEDBACK,
   setPracticeJurisdictions: SET_PRACTICE_JURISDICTIONS,
+  uploadDocumentVersion: UPLOAD_DOCUMENT_VERSION,
 } = TOOL;
 
 type WorkflowStep = {
@@ -69,15 +75,24 @@ const WORKFLOW_STEPS: readonly WorkflowStep[] = [
       "Add markers as literal text to the .docx the user gave you and send " +
       "those bytes back verbatim. Never rebuild, re-render, or strip parts: " +
       "macros, ActiveX, OLE objects, embedded fonts, and tracked changes all " +
-      "stay, and a .docm stays a .docm.",
+      "survive the save. The stored template and every document filled from " +
+      "it are named and typed as .docx whatever the source file was called, " +
+      "so a macro-enabled package keeps its parts but not its .docm name.",
   },
   {
     title: "Create the template",
     detail:
-      `${SAVE_TEMPLATE} with \`name\` and \`docx_base64\` (base64 of the raw ` +
-      "DOCX bytes, max ~10 MB decoded) and no `fields`. Returns " +
-      "`templateId`, `name`, `fieldCount`. Discovery decides which paths " +
-      "exist, so configure in a second call rather than guessing paths here.",
+      `${SAVE_TEMPLATE} with \`name\`, the DOCX, and no \`fields\`. Two ways ` +
+      `to send it: \`file\`, a host file reference (the shape ` +
+      `${UPLOAD_DOCUMENT_VERSION} takes), up to ${MAX_DOCX_MEGABYTES} MB; or ` +
+      "`docx_base64`, base64 of the raw bytes, for a small document only " +
+      `(at most ${MAX_INLINE_DOCX_BYTES} bytes decoded), because the whole ` +
+      "call must fit one MCP request frame. Never strip parts out to fit " +
+      "that; use `file`. Returns `templateId`, `name`, `fieldCount` and " +
+      "`warnings[]` (`code`, `path`, `message`, `hint`): markers the save " +
+      "accepted that will not do what you meant. Fix them in the DOCX and " +
+      "create again before configuring. Discovery decides which paths exist, " +
+      "so configure in a second call rather than guessing paths here.",
   },
   {
     title: "Read the discovered paths back",
@@ -86,8 +101,9 @@ const WORKFLOW_STEPS: readonly WorkflowStep[] = [
       "`label`, `inputType`, `required`, `hint`, `options`, `optionsFrom`, " +
       "`formats`, `aiPrompt`, `aiAdapt`, `parts`, `format`, `dateFormat`), " +
       "`arrays[]` (one entry per `{{#each}}` loop: its `path` plus the " +
-      "`itemFieldPaths` it repeats), `conditions[]` and `computed[]` " +
-      "(`name` + `expression`). Compare `fields[].path` against the markers " +
+      "`itemFieldPaths` it repeats), `conditions[]`, `computed[]` " +
+      "(`name` + `expression`) and the same `warnings[]`. Compare " +
+      "`fields[].path` against the markers " +
       "you wrote: a path you expected and do not see was not discovered. Fix " +
       "the document and create the template again before configuring — " +
       "configuration cannot add a field the DOCX does not contain.",
@@ -101,7 +117,10 @@ const WORKFLOW_STEPS: readonly WorkflowStep[] = [
       "overlay decides who fills each field (person, AI, registry lookup, " +
       "matter or contact binding, formula) — see " +
       `${TEMPLATE_FIELD_REFERENCE_URI}. The response echoes the full ` +
-      `configuration in the ${LIST_TEMPLATES} detail shape. A \`lookup\` ` +
+      `configuration in the ${LIST_TEMPLATES} detail shape, \`warnings[]\` ` +
+      "included: the overlay recomputes them, so a condition that removes " +
+      "its own input or a lookup on a disabled registry shows up here. A " +
+      "`lookup` " +
       "field resolves at fill time only for a registry the organization has " +
       'enabled; a disabled one fails the fill with "The <registry> registry ' +
       'is disabled for this organization." Registries are enabled by the ' +
@@ -114,7 +133,10 @@ const WORKFLOW_STEPS: readonly WorkflowStep[] = [
     detail:
       `${FILL_TEMPLATE} with \`template_id\` and \`values\`, a path-to-value ` +
       'map (`{"tenant.name":"ACME"}`). An `arrays[]` path takes an array of ' +
-      "objects, not flat dotted keys. Nothing is persisted. `output_mode` " +
+      "objects, not flat dotted keys. No document is created, but the fill " +
+      "is recorded: a fill row and an EXECUTE audit event are written before " +
+      "the completion gate runs, so a preview that is then rejected as " +
+      "incomplete still appears in the audit log. `output_mode` " +
       "defaults to `text`: `paragraphs` (the rendered paragraphs and table " +
       "cells), `charCount`, `truncated`, `completionStatus` (`complete` or " +
       "`partial`), `templateName`, `fileName`, `unmatchedPlaceholders`, " +
@@ -138,11 +160,16 @@ const WORKFLOW_STEPS: readonly WorkflowStep[] = [
 
 const COMPLETION_GATE_NOTE =
   `Completion gate: both ${FILL_TEMPLATE} and ${SAVE_FILLED_TEMPLATE} take ` +
-  "`completion_mode` (default `require_complete`) and run one gate. An " +
-  "unfilled placeholder is a `validation_error` naming every missing path, " +
-  "and the persisting tool refuses before anything is written. Set " +
-  "`allow_partial` only when a document with live `{{markers}}` is what the " +
-  "user asked for; otherwise collect the missing values and retry.";
+  "`completion_mode` (default `require_complete`) and run one gate. Under " +
+  "the default, an unfilled placeholder or a failed AI draft is a " +
+  "`validation_error` naming every offending path, and the persisting tool " +
+  "refuses before anything is written. `allow_partial` lets the same fill " +
+  `through instead: ${FILL_TEMPLATE} reports \`completionStatus: "partial"\` ` +
+  `and ${SAVE_FILLED_TEMPLATE} writes the document with the shortfall in ` +
+  "`unmatchedPlaceholders` and `aiFieldErrors`. Set it only when a document " +
+  "with live `{{markers}}` is what the user asked for; otherwise collect the " +
+  "missing values and retry. A missing required value is refused in either " +
+  "mode, before the gate.";
 
 const AUTHORING_RULES = [
   {

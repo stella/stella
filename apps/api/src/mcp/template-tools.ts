@@ -83,6 +83,11 @@ import type { McpRequestContext } from "@/api/mcp/context";
 import { OPENAI_FILE_REFERENCE_SCHEMA } from "@/api/mcp/document-file-upload";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import {
+  MAX_DOCX_MEGABYTES,
+  MAX_INLINE_DOCX_BASE64_LENGTH,
+  MAX_INLINE_DOCX_BYTES,
+} from "@/api/mcp/template-docx-limits";
+import {
   readTemplateFieldsInput,
   templateFieldInputSchema,
   toFieldMetaToolInput,
@@ -162,22 +167,6 @@ const TEMPLATE_FILL_COMPLETION_MODE_PROP = {
   ),
   default: DEFAULT_TEMPLATE_FILL_COMPLETION_MODE,
 } as const;
-
-// A JSON-RPC request has a 512 KiB transport cap. Reserve half for the
-// envelope and the remaining tool arguments, then derive the base64 payload
-// ceiling from the part that can safely reach this validator.
-const MAX_INLINE_DOCX_BASE64_LENGTH = Math.floor(
-  MCP_MAX_REQUEST_BODY_BYTES / 2,
-);
-
-const MAX_INLINE_DOCX_BYTES = Math.floor(
-  (MAX_INLINE_DOCX_BASE64_LENGTH / 4) * 3,
-);
-
-/** Derived so the advertised ceiling cannot drift from the enforced one. */
-const MAX_DOCX_MEGABYTES = Math.floor(
-  FILE_SIZE_LIMIT_BYTES.document / (1024 * 1024),
-);
 
 const saveTemplateArgsSchema = v.pipe(
   v.strictObject({
