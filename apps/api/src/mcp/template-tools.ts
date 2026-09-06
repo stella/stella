@@ -26,7 +26,7 @@ import {
   buildAiOccurrenceAdapter,
 } from "@/api/lib/docx/ai-field-generator";
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
-import { buildIsRegistryEnabledForOrg } from "@/api/lib/docx/registry-org-gate";
+import { buildResolveRegistryDisabledReason } from "@/api/lib/docx/registry-org-gate";
 import {
   mergeManifestWithDiscovery,
   readManifest,
@@ -1552,11 +1552,13 @@ const templateAuthoringWarnings = async ({
       conditionPaths: discovered.conditionPaths,
       fields: savedFields,
       placeholderPaths: discovered.placeholders.map(({ name }) => name),
-      registryGate: async () =>
-        await buildIsRegistryEnabledForOrg({
+      registryGate: async () => {
+        const resolveDisabledReason = await buildResolveRegistryDisabledReason({
           organizationId: context.organizationId,
           scopedDb: context.scopedDb,
-        }),
+        });
+        return (registry) => resolveDisabledReason(registry) === null;
+      },
     })),
   ]);
 };
