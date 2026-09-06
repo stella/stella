@@ -805,12 +805,22 @@ export const createMcpHttpRequestHandler = ({
     const observeHandshake: NonNullable<typeof transport.onmessage> = (
       message,
     ) => {
-      if (isInitializeRequest(message)) {
+      if (!isInitializeRequest(message)) {
+        return;
+      }
+      // Telemetry does not decide whether a handshake succeeds. This callback
+      // runs inside `handleRequest`, so a throwing analytics sink would reject
+      // it and answer a valid `initialize` with a 503. The catch sits on a
+      // framework callback boundary and reports the failure rather than
+      // swallowing it.
+      try {
         recordMcpSessionInitialized({
           clientInfo: message.params.clientInfo,
           mode,
           session,
         });
+      } catch (error) {
+        captureError(error, { phase: "initialize", mode, source: "mcp" });
       }
     };
     Reflect.set(transport, "onmessage", observeHandshake);

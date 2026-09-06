@@ -78,8 +78,9 @@ export type AIGenerationFailedProperties = SafeAIAnalyticsMetadata & {
 /**
  * Which client opened an MCP session, from the `initialize` handshake. The
  * name and version are caller-reported, so they are capped and type-checked
- * before they reach telemetry (see `mcp/client-identity.ts`); `unspecified`
- * stands in for a handshake that named neither.
+ * before they reach telemetry (see `mcp/client-identity.ts`). Every event
+ * carries a name, falling back to `unspecified`, so the count of events is the
+ * count of handshakes; an unreported version is left out rather than invented.
  */
 export type McpSessionInitializedProperties = {
   client_name: string;

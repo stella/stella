@@ -660,6 +660,46 @@ describe("handleMcpHttpRequest", () => {
     expect(captured).toHaveLength(1);
   });
 
+  test("serves the handshake when the analytics sink throws", async () => {
+    const sinkFailure = new Error("analytics sink unavailable");
+    setAnalyticsForTesting({
+      capture: () => {
+        throw sinkFailure;
+      },
+      identifyOrganizationGroup: () => undefined,
+      flush: async () => await Promise.resolve(),
+    });
+    authenticateMcpRequestMock.mockResolvedValue({
+      credential: { clientId: "client_1", type: "oauth_client" },
+      organizationId: "org_1",
+      scopes: ["stella:read"],
+      userId: "user_1",
+    });
+    resolveMcpSessionContextMock.mockResolvedValue({ type: "mcp-context" });
+
+    const response = await handleMcpHttpRequest(
+      createMcpRequest({
+        id: 1,
+        jsonrpc: "2.0",
+        method: "initialize",
+        params: {
+          capabilities: {},
+          clientInfo: { name: "claude-ai", version: "1.2.3" },
+          protocolVersion: "2025-06-18",
+        },
+      }),
+    );
+
+    // Telemetry is not part of the protocol contract: a failed capture is
+    // reported, and the client still completes its handshake.
+    expect(response.status).toBe(200);
+    expect(captureErrorMock).toHaveBeenCalledWith(sinkFailure, {
+      mode: "default",
+      phase: "initialize",
+      source: "mcp",
+    });
+  });
+
   test("keeps POST buffered and DELETE non-streaming", async () => {
     authenticateMcpRequestMock.mockResolvedValue({
       organizationId: "org_1",

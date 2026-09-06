@@ -34,6 +34,12 @@ describe("sanitizeMcpClientIdentity", () => {
     });
   });
 
+  test("leaves an unreported version out rather than inventing one", () => {
+    expect(sanitizeMcpClientIdentity({ name: "claude-ai" })).toEqual({
+      clientName: "claude-ai",
+    });
+  });
+
   test("treats a blank name as unreported", () => {
     expect(sanitizeMcpClientIdentity({ name: "   ", version: "  " })).toEqual({
       clientName: "unspecified",
