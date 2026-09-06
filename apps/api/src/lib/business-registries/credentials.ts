@@ -16,13 +16,14 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispatch";
 import type { RegistryHandler } from "@/api/lib/business-registries/dispatch";
 import { decryptContent, encryptContent } from "@/api/lib/content-encryption";
+import type { EncryptedContent } from "@/api/lib/content-encryption";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 // Provider secrets must never use content-encryption's local plaintext envelope.
 export const encryptRegistryCredential = async (
   organizationId: SafeId<"organization">,
   credential: string,
-) => {
+): Promise<Result<EncryptedContent, HandlerError>> => {
   if (!envDocumentProcessingWorker.CONTENT_ENCRYPTION_KEY) {
     return Result.err(
       new HandlerError({
