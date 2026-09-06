@@ -1,8 +1,9 @@
 import { panic, Result } from "better-result";
 import { Buffer } from "node:buffer";
 
+import { streamWithConcurrency } from "@stll/concurrency";
+
 import type { Transaction } from "@/api/db/root";
-import { streamWithConcurrency } from "@/api/lib/bounded-concurrency";
 import { PayloadBudgetError } from "@/api/lib/compression";
 import { ChunkBudgetError } from "@/api/lib/corpus-index/chunking";
 import { settleBoth } from "@/api/lib/corpus-index/core";
