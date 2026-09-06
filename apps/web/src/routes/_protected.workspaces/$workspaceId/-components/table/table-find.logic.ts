@@ -15,15 +15,34 @@ import type { PropertyContentType } from "@/lib/api-contract";
 import type { ViewLayout, WorkspaceProperty } from "@/lib/types";
 import { pairPlaybookVerdicts } from "@/lib/workspaces/playbook-verdicts";
 import type { EntitiesFindKey } from "@/lib/workspaces/queries/entities.logic";
+import type { WorkspaceColumnDescriptor } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-schema";
 import { includesListItems } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
 import type { TableFindSelection } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
 
-export type TableFindColumn = {
-  contentType: PropertyContentType;
-  id: string;
-  label: string;
-  support: (typeof PROPERTY_FIND_SUPPORT)[PropertyContentType];
-};
+/**
+ * A row in the find bar's column picker.
+ *
+ * Metadata columns (Author, Last updated, Version) can never be searched: a
+ * find runs over the row's name and its property cells, and a metadata column
+ * is neither. They are listed anyway, disabled and explained, for the same
+ * reason an unsearchable property type is: a column the reader can see in the
+ * grid that is silently missing from the picker reads as a bug, and searching
+ * an author name that is visible in every row is an obvious thing to try.
+ */
+export type TableFindColumn = { id: string; label: string } & (
+  | {
+      contentType: PropertyContentType;
+      kind: "property";
+      support: (typeof PROPERTY_FIND_SUPPORT)[PropertyContentType];
+    }
+  | { kind: "metadata" }
+);
+
+/** The half of the picker a find can actually be narrowed to. */
+export type TableFindPropertyColumn = Extract<
+  TableFindColumn,
+  { kind: "property" }
+>;
 
 /**
  * The property columns a find can offer, in column order.
@@ -42,9 +61,9 @@ export const toFindColumns = ({
 }: {
   hiddenProperties: readonly string[];
   properties: readonly WorkspaceProperty[];
-}): TableFindColumn[] => {
+}): TableFindPropertyColumn[] => {
   const hidden = new Set(hiddenProperties);
-  const findColumns: TableFindColumn[] = [];
+  const findColumns: TableFindPropertyColumn[] = [];
   for (const { property } of pairPlaybookVerdicts(properties)) {
     if (hidden.has(property.id)) {
       continue;
@@ -53,6 +72,7 @@ export const toFindColumns = ({
     findColumns.push({
       contentType,
       id: property.id,
+      kind: "property",
       label: property.name,
       support: PROPERTY_FIND_SUPPORT[contentType],
     });
@@ -64,8 +84,37 @@ export const searchableColumnIds = (
   columns: readonly TableFindColumn[],
 ): string[] =>
   columns
-    .filter((column) => column.support === "searchable")
+    .filter(
+      (column) => column.kind === "property" && column.support === "searchable",
+    )
     .map((column) => column.id);
+
+/**
+ * The picker's rows: the property columns a find can reach, then the metadata
+ * columns it cannot.
+ *
+ * The metadata half is read off the rendered schema rather than listed here,
+ * so a metadata column added to the grid appears in the picker without anyone
+ * remembering to add it. Only the picker needs this; the route loader resolves
+ * its request from {@link toFindColumns} alone, since a column that can never
+ * be searched can never narrow a scope.
+ */
+export const toPickerFindColumns = ({
+  findColumns,
+  schemaColumns,
+}: {
+  findColumns: readonly TableFindPropertyColumn[];
+  schemaColumns: readonly WorkspaceColumnDescriptor[];
+}): TableFindColumn[] => [
+  ...findColumns,
+  ...schemaColumns
+    .filter((column) => column.emphasis === "metadata")
+    .map((column) => ({
+      id: column.id,
+      kind: "metadata" as const,
+      label: column.label,
+    })),
+];
 
 /**
  * The picker's selection after the columns it named are re-intersected with
@@ -158,7 +207,7 @@ export const toggleFindColumn = ({
 export const UNRESTRICTED_FIND: TableFindSelection = { type: "all" };
 
 export type TableFindResolution = {
-  columns: TableFindColumn[];
+  columns: TableFindPropertyColumn[];
   highlight: TableFindHighlight | null;
   request: EntitiesFindKey;
   /** The picker's selection, with columns that left the view dropped. */

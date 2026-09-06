@@ -5149,6 +5149,7 @@
       "filterByPlaceholder": "Filtreeri välja järgi…",
       "filtersWithCount": "{count, plural, one {# filter} other {# filtrit}}",
       "findAllColumns": "Kõik veerud",
+      "findColumnMetadataNotSearchable": "Sordi seda veergu, ära otsi sellest",
       "findColumnNotSearchable": "Filtreeri seda veergu, ära otsi sellest",
       "findColumns": "Otsitavad veerud",
       "findInTable": "Otsi tabelist",

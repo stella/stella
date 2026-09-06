@@ -5149,6 +5149,7 @@
       "filterByPlaceholder": "Filtrer par…",
       "filtersWithCount": "{count, plural, one {# filtre} other {# filtres}}",
       "findAllColumns": "Toutes les colonnes",
+      "findColumnMetadataNotSearchable": "Triez cette colonne au lieu d’y rechercher",
       "findColumnNotSearchable": "Filtrez cette colonne au lieu d’y rechercher",
       "findColumns": "Colonnes à rechercher",
       "findInTable": "Rechercher dans le tableau",

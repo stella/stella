@@ -11,8 +11,9 @@ import {
   searchableColumnIds,
   toFindColumns,
   toggleFindColumn,
+  toPickerFindColumns,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-find.logic";
-import type { TableFindColumn } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-find.logic";
+import type { WorkspaceColumnDescriptor } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-schema";
 import type { TableFindSelection } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
 
 const property = (
@@ -46,8 +47,7 @@ const properties = [
 
 const hiddenProperties = ["hidden"];
 
-const findColumns = (): TableFindColumn[] =>
-  toFindColumns({ hiddenProperties, properties });
+const findColumns = () => toFindColumns({ hiddenProperties, properties });
 
 // A view admitting tasks renders a name column; one of documents alone does
 // not.
@@ -89,6 +89,56 @@ describe("the columns a find offers", () => {
 
   test("only the searchable ones can be reached", () => {
     expect(searchableColumnIds(findColumns())).toEqual(["text", "tags"]);
+  });
+});
+
+describe("the rows the picker shows", () => {
+  // Read off the rendered schema rather than listed, so a metadata column
+  // added to the grid cannot go missing from the picker.
+  const schemaColumn = (
+    id: string,
+    label: string,
+    emphasis: WorkspaceColumnDescriptor["emphasis"],
+    render: WorkspaceColumnDescriptor["render"],
+  ): WorkspaceColumnDescriptor => ({
+    capabilities: { sort: true, hide: true, resize: true, pin: true },
+    emphasis,
+    id,
+    label,
+    render,
+    size: 120,
+  });
+
+  const schemaColumns = [
+    schemaColumn("_created-by", "Author", "metadata", { type: "created-by" }),
+    schemaColumn("text", "TEXT", "content", { type: "name" }),
+    schemaColumn("_select", "", "utility", { type: "select" }),
+  ];
+
+  const pickerColumns = () =>
+    toPickerFindColumns({ findColumns: findColumns(), schemaColumns });
+
+  test("appends the metadata columns after the property ones", () => {
+    expect(pickerColumns().map((column) => column.id)).toEqual([
+      "text",
+      "tags",
+      "signed",
+      "fee",
+      "_created-by",
+    ]);
+  });
+
+  test("takes only the metadata half of the schema", () => {
+    // A content column is already in the property half, and a utility column
+    // (the checkbox, the add-property gutter) is not a column a reader would
+    // think to search.
+    expect(
+      pickerColumns().filter((column) => column.kind === "metadata"),
+    ).toEqual([{ id: "_created-by", kind: "metadata", label: "Author" }]);
+  });
+
+  test("leaves a metadata column out of reach of a find", () => {
+    expect(searchableColumnIds(pickerColumns())).toEqual(["text", "tags"]);
   });
 });
 

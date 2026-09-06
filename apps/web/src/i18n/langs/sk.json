@@ -5149,6 +5149,7 @@
       "filterByPlaceholder": "Filtrovať podľa…",
       "filtersWithCount": "{count, plural, one {# filter} few {# filtre} other {# filtrov}}",
       "findAllColumns": "Všetky stĺpce",
+      "findColumnMetadataNotSearchable": "Tento stĺpec radšej zoraďte, než v ňom hľadajte",
       "findColumnNotSearchable": "Tento stĺpec radšej filtrujte, než v ňom hľadajte",
       "findColumns": "Stĺpce na prehľadanie",
       "findInTable": "Nájsť v tabuľke",

@@ -5149,6 +5149,7 @@
       "filterByPlaceholder": "Filtrovat podle…",
       "filtersWithCount": "{count, plural, one {# filtr} few {# filtry} other {# filtrů}}",
       "findAllColumns": "Všechny sloupce",
+      "findColumnMetadataNotSearchable": "Tento sloupec místo hledání seřaďte",
       "findColumnNotSearchable": "Tento sloupec místo hledání filtrujte",
       "findColumns": "Sloupce k prohledání",
       "findInTable": "Najít v tabulce",

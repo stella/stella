@@ -5152,6 +5152,7 @@ type Messages = {
       "filterByPlaceholder": "Filter by…";
       "filtersWithCount": "{count, plural, one {# filter} other {# filters}}";
       "findAllColumns": "All columns";
+      "findColumnMetadataNotSearchable": "Sort this column instead of searching it";
       "findColumnNotSearchable": "Filter this column instead of searching it";
       "findColumns": "Columns to search";
       "findInTable": "Find in table";
