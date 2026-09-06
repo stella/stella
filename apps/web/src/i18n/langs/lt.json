@@ -4015,6 +4015,7 @@
     "addPart": "Pridėti dalį",
     "addTag": "Pridėti žymą",
     "aiAdaptHint": "DI pritaikys šią formuluotę kiekvienai dokumento vietai, kurioje ji pasirodo.",
+    "aiFieldsNotDrafted": "DI nepavyko parengti šių laukų: {list}",
     "allTemplates": "Visi šablonai",
     "backToList": "Grįžti prie šablonų",
     "binding": {

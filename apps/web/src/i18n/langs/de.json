@@ -4015,6 +4015,7 @@
     "addPart": "Teil hinzufügen",
     "addTag": "Schlagwort hinzufügen",
     "aiAdaptHint": "Die KI passt diese Formulierung an jede Stelle im Dokument an, an der sie vorkommt.",
+    "aiFieldsNotDrafted": "Die KI konnte diese Felder nicht entwerfen: {list}",
     "allTemplates": "Alle Vorlagen",
     "backToList": "Zurück zu Vorlagen",
     "binding": {

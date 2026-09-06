@@ -424,7 +424,7 @@ describe("renderReportSpec", () => {
 
     const parsed = await render(Object.values(oneOfEach), {
       aiNarrative: true,
-      generateAiValue: async () => "Drafted.",
+      generateAiValue: async () => ({ type: "drafted", value: "Drafted." }),
     });
     expect(parsed.package.document.content.length).toBeGreaterThan(0);
   });
@@ -704,7 +704,7 @@ describe("renderReportSpec", () => {
     const calls: string[] = [];
     const generator: AiFieldGenerator = async ({ prompt }) => {
       calls.push(prompt);
-      return "Should not appear.";
+      return { type: "drafted", value: "Should not appear." };
     };
     const parsed = await render(
       [
@@ -728,7 +728,10 @@ describe("renderReportSpec", () => {
     const calls: { prompt: string; values: Record<string, unknown> }[] = [];
     const generator: AiFieldGenerator = async ({ prompt, values }) => {
       calls.push({ prompt, values });
-      return `Drafted: ${prompt}\n\nSecond paragraph.`;
+      return {
+        type: "drafted",
+        value: `Drafted: ${prompt}\n\nSecond paragraph.`,
+      };
     };
     const parsed = await render(
       [

@@ -136,8 +136,12 @@ export const fillByIdLogic = async function* ({
   }
 
   const { unusedValues } = result;
+  // A failed AI draft leaves its field unfilled, so it counts against the
+  // fill the same way an unmatched placeholder does.
   const fillStatus =
-    result.unmatchedPlaceholders.length > 0 ? "partial" : "success";
+    result.unmatchedPlaceholders.length > 0 || result.aiFieldErrors.length > 0
+      ? "partial"
+      : "success";
 
   yield* Result.await(
     Result.tryPromise({
@@ -246,6 +250,12 @@ export const fillByIdLogic = async function* ({
     additionalHeaders.set(
       "X-Structure-Errors",
       JSON.stringify(result.structureErrors),
+    );
+  }
+  if (result.aiFieldErrors.length > 0) {
+    additionalHeaders.set(
+      "X-Ai-Field-Errors",
+      encodeURIComponent(JSON.stringify(result.aiFieldErrors)),
     );
   }
 

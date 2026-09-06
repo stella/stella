@@ -4015,6 +4015,7 @@
     "addPart": "Přidat část",
     "addTag": "Přidat štítek",
     "aiAdaptHint": "AI přizpůsobí tuto formulaci každému místu v dokumentu, kde se objeví.",
+    "aiFieldsNotDrafted": "AI nedokázala vytvořit návrh těchto polí: {list}",
     "allTemplates": "Všechny vzory",
     "backToList": "Zpět na vzory",
     "binding": {

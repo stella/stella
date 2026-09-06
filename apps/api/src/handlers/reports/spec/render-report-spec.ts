@@ -452,17 +452,19 @@ const renderNarrative = async (
     return [];
   }
   ctx.narrativeCount += 1;
-  const text = await ctx.generateAiValue({
+  const draft = await ctx.generateAiValue({
     prompt,
     fieldPath: `narrative.${ctx.narrativeCount}`,
     values: scopeAiValues(ctx, scope),
   });
-  if (text === undefined || text.trim().length === 0) {
+  // A failed draft (a run cut at the output ceiling included) omits the
+  // narrative rather than printing a paragraph that stops mid-sentence.
+  if (draft.type === "failed") {
     return [];
   }
   return [
     ...optionalHeading(section.heading, section.level ?? scope.headingLevel),
-    ...proseParagraphs(text),
+    ...proseParagraphs(draft.value),
   ];
 };
 

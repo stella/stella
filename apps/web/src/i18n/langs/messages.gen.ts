@@ -4018,6 +4018,7 @@ type Messages = {
     "addPart": "Add part";
     "addTag": "Add tag";
     "aiAdaptHint": "AI adapts this wording to fit each place it appears in the document.";
+    "aiFieldsNotDrafted": "AI could not draft these fields: {list}";
     "allTemplates": "All templates";
     "backToList": "Back to templates";
     "binding": {

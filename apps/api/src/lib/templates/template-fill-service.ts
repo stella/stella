@@ -36,6 +36,7 @@ import {
   resolveAiConditions,
 } from "@/api/lib/docx/resolve-ai-conditions";
 import {
+  type AiFieldError,
   type AiFieldGenerator,
   resolveAiFields,
 } from "@/api/lib/docx/resolve-ai-fields";
@@ -463,6 +464,10 @@ type FilledDocx = {
   unmatchedPlaceholders: string[];
   unusedValues: string[];
   structureErrors: Awaited<ReturnType<typeof fillTemplate>>["structureErrors"];
+  /** AI-drafted fields the model could not complete. A truncated or failed
+   *  draft is never written, so these fields left the fill unfilled and every
+   *  boundary reports them instead of presenting the document as complete. */
+  aiFieldErrors: AiFieldError[];
 };
 
 type FillDocxOptions<TRejection = never> = Omit<
@@ -599,6 +604,7 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
   // Draft AI-fillable fields (manifest fields with an aiPrompt) before fill.
   let fillBuffer = loaded.buffer;
   let adaptedPaths: readonly string[] = [];
+  let aiFieldErrors: AiFieldError[] = [];
   if (manifest) {
     // Gate the AI usage preflight and the collaborator build on a model call
     // actually running: both cost the caller quota or an org AI config read,
@@ -654,12 +660,14 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
       new Uint8Array(loaded.buffer),
       manifest.fields,
     );
-    record = await resolveAiFields({
+    const drafted = await resolveAiFields({
       values: record,
       fields: manifest.fields,
       documentText,
       generate: generateAiValue,
     });
+    record = drafted.values;
+    aiFieldErrors = drafted.errors;
     // Decide AI-decided boolean conditions (a boolean field with an aiPrompt)
     // before substitution so its {{#if field_path}} block resolves correctly.
     record = await resolveAiConditions({
@@ -718,6 +726,7 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
         !optionalDefaults.defaultedPaths.includes(name),
     ),
     structureErrors: result.structureErrors,
+    aiFieldErrors,
   };
 };
 
@@ -774,7 +783,13 @@ export const fillStoredTemplateDocx = async <TRejection = never>({
 };
 
 export type FillTemplateResult =
-  | { text: string; unmatchedPlaceholders: string[]; unusedValues: string[] }
+  | {
+      text: string;
+      unmatchedPlaceholders: string[];
+      unusedValues: string[];
+      /** AI-drafted fields the model could not complete; unfilled above. */
+      aiFieldErrors: AiFieldError[];
+    }
   | { error: string }
   | { requiredFieldsRejection: MissingRequiredField[] };
 
@@ -792,6 +807,7 @@ export type FillTemplateWithDocxResult =
       unmatchedPlaceholders: string[];
       unusedValues: string[];
       structureErrors: FilledDocx["structureErrors"];
+      aiFieldErrors: AiFieldError[];
     }
   | { error: string };
 
@@ -815,6 +831,7 @@ const withExtractedText = async (
     unmatchedPlaceholders: filled.unmatchedPlaceholders,
     unusedValues: filled.unusedValues,
     structureErrors: filled.structureErrors,
+    aiFieldErrors: filled.aiFieldErrors,
   };
 };
 
@@ -896,5 +913,6 @@ export const fillStoredTemplate = async (
       .trim(),
     unmatchedPlaceholders: filled.unmatchedPlaceholders,
     unusedValues: filled.unusedValues,
+    aiFieldErrors: filled.aiFieldErrors,
   };
 };

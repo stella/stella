@@ -37,6 +37,7 @@ import {
   fieldOverlayWarnings,
   type TemplateWarning,
 } from "@/api/lib/docx/template-warnings";
+import type { AiFieldError } from "@/api/lib/docx/resolve-ai-fields";
 import type { FieldMeta, FieldPart } from "@/api/lib/docx/types";
 import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buffer";
 import type { DocxValidationFailure } from "@/api/lib/entity-versions/validate-docx-buffer";
@@ -850,13 +851,16 @@ type TemplateFillCompletionGate =
 const gateTemplateFillCompletion = ({
   mode,
   unmatchedPlaceholders,
+  aiFieldErrors,
 }: {
   mode: TemplateFillCompletionMode;
   unmatchedPlaceholders: readonly string[];
+  aiFieldErrors: readonly AiFieldError[];
 }): TemplateFillCompletionGate => {
   const completion = decideTemplateFillCompletion({
     mode,
     unmatchedPlaceholders,
+    aiFieldErrors,
   });
   if (completion.type !== "rejected_partial") {
     return {
@@ -865,21 +869,59 @@ const gateTemplateFillCompletion = ({
     };
   }
 
-  const preview = completion.unmatchedPlaceholders.slice(0, 10);
-  const omitted = completion.unmatchedPlaceholders.length - preview.length;
-  const suffix = omitted > 0 ? ` (${omitted} more omitted)` : "";
   return {
     type: "rejected",
     result: structuredErrorResult({
       code: "validation_error",
-      message: `Template fill incomplete; unmatched placeholders: ${preview.join(", ")}${suffix}`,
-      issues: completion.unmatchedPlaceholders.map((placeholder) => ({
-        path: `values.${placeholder}`,
-        message: "Template placeholder was not filled",
-      })),
-      hint: "Call list_templates with template_id (CLI: template list --template-id ID) and provide the missing values, or set completion_mode to allow_partial when an incomplete document is intentional.",
+      message: `Template fill incomplete; ${describeFillShortfall(completion)}`,
+      issues: [
+        ...completion.unmatchedPlaceholders.map((placeholder) => ({
+          path: `values.${placeholder}`,
+          message: "Template placeholder was not filled",
+        })),
+        ...completion.aiFieldErrors.map((error) => ({
+          path: `values.${aiFieldErrorPath(error)}`,
+          message: error.message,
+        })),
+      ],
+      hint: "Call list_templates with template_id (CLI: template list --template-id ID) and provide the missing values yourself, or set completion_mode to allow_partial when an incomplete document is intentional.",
     }),
   };
+};
+
+/** How a failed AI draft is addressed in `values`: the field path, plus the
+ *  1-based row index when the field is drafted once per array row. */
+const aiFieldErrorPath = ({ fieldPath, itemIndex }: AiFieldError): string =>
+  itemIndex === null ? fieldPath : `${fieldPath}[${String(itemIndex)}]`;
+
+/** Summary line for a fill that is not complete. Both shortfalls are named
+ *  when both are present: an agent retrying needs to know a placeholder was
+ *  never filled AND that a drafted field came back unusable. */
+const describeFillShortfall = ({
+  unmatchedPlaceholders,
+  aiFieldErrors,
+}: {
+  unmatchedPlaceholders: readonly string[];
+  aiFieldErrors: readonly AiFieldError[];
+}): string => {
+  const parts: string[] = [];
+  if (unmatchedPlaceholders.length > 0) {
+    parts.push(`unmatched placeholders: ${previewList(unmatchedPlaceholders)}`);
+  }
+  if (aiFieldErrors.length > 0) {
+    parts.push(
+      `AI-drafted fields that failed: ${previewList(aiFieldErrors.map(aiFieldErrorPath))}`,
+    );
+  }
+  return parts.join("; ");
+};
+
+/** The summary `message` stays short; the full set always travels in `issues`
+ *  so one retry can address every item. */
+const previewList = (items: readonly string[]): string => {
+  const preview = items.slice(0, 10);
+  const omitted = items.length - preview.length;
+  return `${preview.join(", ")}${omitted > 0 ? ` (${omitted} more omitted)` : ""}`;
 };
 
 /**
@@ -1060,6 +1102,7 @@ const handleFillTemplateTool: McpToolHandler = async ({ args, context }) => {
   const completion = gateTemplateFillCompletion({
     mode: parsed.output.completion_mode,
     unmatchedPlaceholders: filled.unmatchedPlaceholders,
+    aiFieldErrors: filled.aiFieldErrors,
   });
   if (completion.type === "rejected") {
     return completion.result;
@@ -1078,6 +1121,12 @@ const handleFillTemplateTool: McpToolHandler = async ({ args, context }) => {
       docxBase64: filled.buffer.toString("base64"),
       unmatchedPlaceholders: filled.unmatchedPlaceholders,
       unusedValues: filled.unusedValues,
+      structureErrors: filled.structureErrors,
+      aiFieldErrors: filled.aiFieldErrors.map((error) => ({
+        field: aiFieldErrorPath(error),
+        reason: error.reason,
+        message: error.message,
+      })),
     });
   }
 
@@ -1114,6 +1163,13 @@ const handleFillTemplateTool: McpToolHandler = async ({ args, context }) => {
     unmatchedPlaceholders: filled.unmatchedPlaceholders,
     unusedValues: filled.unusedValues,
     structureErrors: filled.structureErrors,
+    // Fields whose AI draft failed: they are unfilled in the document above,
+    // so an agent must supply them itself rather than treat the fill as done.
+    aiFieldErrors: filled.aiFieldErrors.map((error) => ({
+      field: aiFieldErrorPath(error),
+      reason: error.reason,
+      message: error.message,
+    })),
   });
 };
 
@@ -1475,6 +1531,7 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
   const completion = gateTemplateFillCompletion({
     mode: input.completion_mode,
     unmatchedPlaceholders: filled.unmatchedPlaceholders,
+    aiFieldErrors: filled.aiFieldErrors,
   });
   if (completion.type === "rejected") {
     await releaseClaim();

@@ -4015,6 +4015,7 @@
     "addPart": "Lisa osa",
     "addTag": "Lisa silt",
     "aiAdaptHint": "AI kohandab seda sõnastust dokumendi iga koha järgi, kus see esineb.",
+    "aiFieldsNotDrafted": "AI ei suutnud neid välju koostada: {list}",
     "allTemplates": "Kõik mallid",
     "backToList": "Tagasi mallide juurde",
     "binding": {

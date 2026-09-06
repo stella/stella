@@ -2194,6 +2194,19 @@ export const TemplateForm = ({
           }),
         });
       }
+      // A field whose draft failed is unfilled, so it is already listed above
+      // as an unmatched placeholder; this names the ones the model could not
+      // write, which the person filling the template has to write instead.
+      if (created.aiFieldErrors.length > 0) {
+        stellaToast.add({
+          type: "warning",
+          title: t("templates.aiFieldsNotDrafted", {
+            list: created.aiFieldErrors
+              .map((fieldError) => fieldError.fieldPath)
+              .join(", "),
+          }),
+        });
+      }
 
       setMatterDialogOpen(false);
       const destinationResult = await Result.tryPromise(async () =>

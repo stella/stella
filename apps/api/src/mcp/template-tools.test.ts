@@ -704,6 +704,7 @@ describe("MCP template tools", () => {
       text: "Lease between ACME and Tenant.",
       unmatchedPlaceholders: [],
       unusedValues: [],
+      aiFieldErrors: [],
       structureErrors: [
         {
           directive: "#if signature",
@@ -739,6 +740,7 @@ describe("MCP template tools", () => {
       docxBase64: docxBytes.toString("base64"),
       unmatchedPlaceholders: [],
       unusedValues: [],
+      aiFieldErrors: [],
     });
     // The execution is recorded (fill row + audit) so agent fills are audited.
     expect(recordTemplateFillMock).toHaveBeenCalledWith(
@@ -839,6 +841,7 @@ describe("MCP template tools", () => {
       text: "Lease between ACME and {{landlord.signature}}.",
       unmatchedPlaceholders: ["landlord.signature"],
       unusedValues: [],
+      aiFieldErrors: [],
     });
 
     const result = await handleMcpToolCall({
@@ -872,6 +875,7 @@ describe("MCP template tools", () => {
       text: "Partial lease",
       unmatchedPlaceholders,
       unusedValues: [],
+      aiFieldErrors: [],
     });
 
     const result = await handleMcpToolCall({
@@ -903,6 +907,7 @@ describe("MCP template tools", () => {
       text: "Lease between ACME and {{landlord.signature}}.",
       unmatchedPlaceholders: ["landlord.signature"],
       unusedValues: [],
+      aiFieldErrors: [],
     });
 
     const result = await handleMcpToolCall({
@@ -920,6 +925,90 @@ describe("MCP template tools", () => {
       expect.objectContaining({
         completionStatus: "partial",
         unmatchedPlaceholders: ["landlord.signature"],
+      }),
+    );
+  });
+
+  test("fill_template rejects a fill whose AI field could not be drafted", async () => {
+    // The field is unfilled rather than carrying a value the model stopped
+    // writing mid-word, and the tool must not report that fill as complete.
+    fillStoredTemplateWithTextStrictMock.mockResolvedValue({
+      templateName: "Power of attorney",
+      fileName: "poa.docx",
+      buffer: Buffer.from("partial"),
+      text: "Zakres: {{scope}}",
+      unmatchedPlaceholders: ["scope"],
+      unusedValues: [],
+      aiFieldErrors: [
+        {
+          fieldPath: "scope",
+          itemIndex: null,
+          reason: "truncated",
+          message:
+            "The model reached its output limit before finishing this field.",
+        },
+      ],
+    });
+
+    const result = await handleMcpToolCall({
+      args: { template_id: "t1", values: {} },
+      context: createContext(),
+      toolName: "fill_template",
+    });
+
+    expect(result.isError).toBe(true);
+    const error = validationEnvelope(result);
+    expect(error["message"]).toContain("AI-drafted fields that failed: scope");
+    expect(
+      asTestRaw<{ path: string; message: string }[]>(error["issues"]),
+    ).toContainEqual({
+      path: "values.scope",
+      message:
+        "The model reached its output limit before finishing this field.",
+    });
+  });
+
+  test("fill_template reports a failed AI draft under an explicit partial policy", async () => {
+    fillStoredTemplateWithTextStrictMock.mockResolvedValue({
+      templateName: "Power of attorney",
+      fileName: "poa.docx",
+      buffer: Buffer.from("partial"),
+      text: "Zakres: {{scope}}",
+      unmatchedPlaceholders: ["scope"],
+      unusedValues: [],
+      aiFieldErrors: [
+        {
+          fieldPath: "scope",
+          itemIndex: null,
+          reason: "truncated",
+          message:
+            "The model reached its output limit before finishing this field.",
+        },
+      ],
+    });
+
+    const result = await handleMcpToolCall({
+      args: {
+        template_id: "t1",
+        values: {},
+        completion_mode: "allow_partial",
+      },
+      context: createContext(),
+      toolName: "fill_template",
+    });
+
+    expect(result.isError).not.toBe(true);
+    expect(parseToolPayload(result)).toEqual(
+      expect.objectContaining({
+        completionStatus: "partial",
+        aiFieldErrors: [
+          {
+            field: "scope",
+            reason: "truncated",
+            message:
+              "The model reached its output limit before finishing this field.",
+          },
+        ],
       }),
     );
   });
@@ -1020,6 +1109,7 @@ describe("MCP template tools", () => {
       text: "Lease",
       unmatchedPlaceholders: [],
       unusedValues: ["intentional"],
+      aiFieldErrors: [],
     });
 
     const result = await handleMcpToolCall({
@@ -1069,6 +1159,7 @@ describe("MCP template tools", () => {
       buffer: Buffer.from("filled docx"),
       unmatchedPlaceholders: [],
       unusedValues: ["unused"],
+      aiFieldErrors: [],
     });
     createEntityFromBufferMock.mockImplementation(async (input) => {
       const created = {
@@ -1186,6 +1277,7 @@ describe("MCP template tools", () => {
         buffer: Buffer.from("filled docx"),
         unmatchedPlaceholders: [],
         unusedValues: [],
+        aiFieldErrors: [],
       };
     });
 
@@ -1312,6 +1404,7 @@ describe("MCP template tools", () => {
       buffer: Buffer.from("filled docx v2"),
       unmatchedPlaceholders: ["signature"],
       unusedValues: [],
+      aiFieldErrors: [],
       structureErrors: [
         {
           directive: "#if signature",

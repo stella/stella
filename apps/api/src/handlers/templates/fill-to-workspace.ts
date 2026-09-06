@@ -282,8 +282,12 @@ const fillTemplateToWorkspace = createSafeHandler(
 
     const entityId = created.value.entityId;
 
+    // A failed AI draft leaves its field unfilled, so it counts against the
+    // fill the same way an unmatched placeholder does.
     const fillStatus =
-      filled.unmatchedPlaceholders.length > 0 ? "partial" : "success";
+      filled.unmatchedPlaceholders.length > 0 || filled.aiFieldErrors.length > 0
+        ? "partial"
+        : "success";
 
     yield* Result.await(
       Result.tryPromise({
@@ -329,6 +333,9 @@ const fillTemplateToWorkspace = createSafeHandler(
       fileName: created.value.fileName,
       unmatchedPlaceholders: filled.unmatchedPlaceholders,
       unusedValues: filled.unusedValues,
+      // Fields whose AI draft failed: unfilled in the saved document, so the
+      // person who filled the template has to write them.
+      aiFieldErrors: filled.aiFieldErrors,
     });
   },
 );
