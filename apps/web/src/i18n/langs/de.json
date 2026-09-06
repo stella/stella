@@ -1197,6 +1197,7 @@
       "title": "Nachricht speichern"
     },
     "filter": "Filtern",
+    "find": "Suchen",
     "formula": "Formel",
     "goBack": "Zurück",
     "goBackToEditing": "Zurück zur Bearbeitung",
@@ -2025,7 +2026,6 @@
     "editSessionTakenOver": "Diese Bearbeitungssitzung wurde an anderer Stelle übernommen.",
     "findReplace": {
       "close": "Suche schließen",
-      "find": "Suchen",
       "findAndReplace": "Suchen und ersetzen",
       "findPlaceholder": "Dokument durchsuchen...",
       "findText": "Suchtext",

@@ -1197,6 +1197,7 @@
       "title": "Uložiť správu"
     },
     "filter": "Filtrovať",
+    "find": "Nájsť",
     "formula": "Vzorec",
     "goBack": "Späť",
     "goBackToEditing": "Späť k úpravám",
@@ -2025,7 +2026,6 @@
     "editSessionTakenOver": "Túto reláciu úprav prevzalo iné okno.",
     "findReplace": {
       "close": "Zavrieť hľadanie",
-      "find": "Nájsť",
       "findAndReplace": "Nájsť a nahradiť",
       "findPlaceholder": "Hľadať v dokumente...",
       "findText": "Hľadaný text",

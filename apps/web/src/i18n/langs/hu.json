@@ -1197,6 +1197,7 @@
       "title": "Üzenet mentése"
     },
     "filter": "Szűrő",
+    "find": "Keresés",
     "formula": "Képlet",
     "goBack": "Vissza",
     "goBackToEditing": "Vissza a szerkesztéshez",
@@ -2025,7 +2026,6 @@
     "editSessionTakenOver": "Ezt a szerkesztési munkamenetet máshol vették át.",
     "findReplace": {
       "close": "Keresés bezárása",
-      "find": "Keresés",
       "findAndReplace": "Keresés és csere",
       "findPlaceholder": "Keresés a dokumentumban…",
       "findText": "Keresett szöveg",

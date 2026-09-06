@@ -1200,6 +1200,7 @@ type Messages = {
       "title": "Save message";
     };
     "filter": "Filter";
+    "find": "Find";
     "formula": "Formula";
     "goBack": "Go back";
     "goBackToEditing": "Go back to editing";
@@ -2028,7 +2029,6 @@ type Messages = {
     "editSessionTakenOver": "Another tab, window, or device opened this document for editing, so this session was released. Unsaved local changes are preserved — reopen the doc to continue.";
     "findReplace": {
       "close": "Close search";
-      "find": "Find";
       "findAndReplace": "Find and replace";
       "findPlaceholder": "Search document...";
       "findText": "Find text";

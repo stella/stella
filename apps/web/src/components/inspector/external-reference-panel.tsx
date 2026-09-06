@@ -778,14 +778,14 @@ const GenericExternalReferencePanel = ({
           <div className="flex items-center gap-1">
             {previewText && (
               <Button
-                aria-label={t("folio.findReplace.find")}
+                aria-label={t("common.find")}
                 onClick={openFind}
                 size="xs"
                 title="Cmd+F"
                 variant="ghost"
               >
                 <SearchIcon className="size-3.5" />
-                {t("folio.findReplace.find")}
+                {t("common.find")}
               </Button>
             )}
             {canPreview && (

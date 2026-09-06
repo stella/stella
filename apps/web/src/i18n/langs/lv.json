@@ -1197,6 +1197,7 @@
       "title": "Saglabāt ziņojumu"
     },
     "filter": "Filtrs",
+    "find": "Meklēt",
     "formula": "Formula",
     "goBack": "Atpakaļ",
     "goBackToEditing": "Atpakaļ pie rediģēšanas",
@@ -2025,7 +2026,6 @@
     "editSessionTakenOver": "Šo rediģēšanas sesiju pārņēma citur.",
     "findReplace": {
       "close": "Aizvērt meklēšanu",
-      "find": "Meklēt",
       "findAndReplace": "Meklēt un aizstāt",
       "findPlaceholder": "Meklēt dokumentā…",
       "findText": "Meklējamais teksts",

@@ -90,7 +90,7 @@ export const ViewToolbarSearch = ({
     scope: "app",
   });
   useHotkey(
-    useEffectiveHotkey("findInTable"),
+    useEffectiveHotkey("find"),
     (event) => {
       if (!ownsFindKeyEvent("table", event)) {
         return;

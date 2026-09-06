@@ -1197,6 +1197,7 @@
       "title": "Uložit zprávu"
     },
     "filter": "Filtr",
+    "find": "Najít",
     "formula": "Vzorec",
     "goBack": "Zpět",
     "goBackToEditing": "Zpět k úpravám",
@@ -2025,7 +2026,6 @@
     "editSessionTakenOver": "Tento dokument byl otevřen k úpravám v jiné kartě, okně nebo zařízení, takže byla tato relace ukončena. Neuložené místní změny zůstávají zachovány — otevřete dokument znovu a pokračujte.",
     "findReplace": {
       "close": "Zavřít hledání",
-      "find": "Najít",
       "findAndReplace": "Najít a nahradit",
       "findPlaceholder": "Hledat v dokumentu...",
       "findText": "Hledaný text",

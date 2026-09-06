@@ -1197,6 +1197,7 @@
       "title": "Zapisz wiadomość"
     },
     "filter": "Filtr",
+    "find": "Znajdź",
     "formula": "Formuła",
     "goBack": "Wróć",
     "goBackToEditing": "Wróć do edycji",
@@ -2025,7 +2026,6 @@
     "editSessionTakenOver": "Ta sesja edycji została przejęta gdzie indziej.",
     "findReplace": {
       "close": "Zamknij wyszukiwanie",
-      "find": "Znajdź",
       "findAndReplace": "Znajdź i zamień",
       "findPlaceholder": "Szukaj w dokumencie...",
       "findText": "Szukany tekst",

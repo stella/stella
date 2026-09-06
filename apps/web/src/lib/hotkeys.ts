@@ -10,7 +10,7 @@ export const HOTKEYS = {
   NEW_CHAT: "Mod+Shift+J",
   NEW_MATTER: "Mod+Shift+E",
   SELECT_ALL: "Mod+A",
-  FIND_IN_TABLE: "Mod+F",
+  FIND: "Mod+F",
   ACCEPT_SUGGESTION: "Alt+Enter",
   REJECT_SUGGESTION: "Alt+Shift+Enter",
   NEXT_SUGGESTION: "Alt+ArrowDown",
@@ -62,13 +62,13 @@ export type ShortcutLabelKey = Extract<
   | "navigation.toggleChat"
   | "navigation.showShortcuts"
   | "common.newMatter"
+  | "common.find"
   | "common.accept"
   | "common.previous"
   | "common.next"
   | "chat.newChat"
   | "folio.selectAll"
   | "docxReview.reject"
-  | "workspaces.views.findInTable"
 >;
 
 type ShortcutDescriptorShape = {
@@ -137,9 +137,9 @@ export const SHORTCUT_GROUPS = [
         contexts: ["workspace"],
       },
       {
-        id: "findInTable",
-        binding: { type: "hotkey", hotkey: HOTKEYS.FIND_IN_TABLE },
-        labelKey: "workspaces.views.findInTable",
+        id: "find",
+        binding: { type: "hotkey", hotkey: HOTKEYS.FIND },
+        labelKey: "common.find",
         contexts: ["workspace"],
       },
     ],

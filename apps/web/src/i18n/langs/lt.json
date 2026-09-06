@@ -1197,6 +1197,7 @@
       "title": "Išsaugoti žinutę"
     },
     "filter": "Filtras",
+    "find": "Ieškoti",
     "formula": "Formulė",
     "goBack": "Grįžti atgal",
     "goBackToEditing": "Grįžti į redagavimą",
@@ -2025,7 +2026,6 @@
     "editSessionTakenOver": "Ši redagavimo sesija buvo perimta kitur.",
     "findReplace": {
       "close": "Uždaryti paiešką",
-      "find": "Ieškoti",
       "findAndReplace": "Rasti ir pakeisti",
       "findPlaceholder": "Ieškoti dokumente…",
       "findText": "Ieškomas tekstas",

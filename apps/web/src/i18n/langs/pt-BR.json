@@ -1197,6 +1197,7 @@
       "title": "Salvar mensagem"
     },
     "filter": "Filtro",
+    "find": "Localizar",
     "formula": "Fórmula",
     "goBack": "Voltar",
     "goBackToEditing": "Voltar a editar",
@@ -2025,7 +2026,6 @@
     "editSessionTakenOver": "Esta sessão de edição foi assumida em outro lugar.",
     "findReplace": {
       "close": "Fechar pesquisa",
-      "find": "Localizar",
       "findAndReplace": "Localizar e substituir",
       "findPlaceholder": "Pesquisar documento...",
       "findText": "Encontrar texto",

@@ -1197,6 +1197,7 @@
       "title": "Salvesta sõnum"
     },
     "filter": "Filter",
+    "find": "Leia",
     "formula": "Valem",
     "goBack": "Mine tagasi",
     "goBackToEditing": "Tagasi muutma",
@@ -2025,7 +2026,6 @@
     "editSessionTakenOver": "See muutmisseanss võeti mujal üle.",
     "findReplace": {
       "close": "Sulge otsing",
-      "find": "Leia",
       "findAndReplace": "Leia ja asenda",
       "findPlaceholder": "Otsi dokumendist…",
       "findText": "Otsitav tekst",
