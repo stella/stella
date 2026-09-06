@@ -249,3 +249,44 @@ test("the resolver rejects an invalid template before writing anything", async (
     dependencies: 0,
   });
 });
+
+// The columns go in as one multi-row insert, so nothing but the assembly order
+// decides which id belongs to which template column. This pins that the ids the
+// caller is handed name the rows the template asked for, in its order, and that
+// the dependency edge connects the right two of them.
+test("batched column creation keeps ids paired with their template columns", async () => {
+  const workspaceId = await seedWorkspace();
+
+  const outcome = await runResolve(workspaceId, "commit");
+
+  expect(Result.isOk(outcome)).toBe(true);
+  if (!Result.isOk(outcome)) {
+    throw new TypeError("Expected the resolver to commit");
+  }
+
+  const persisted = await testDb
+    .select({ id: properties.id, name: properties.name })
+    .from(properties)
+    .where(eq(properties.workspaceId, workspaceId));
+  const nameById = new Map(persisted.map((row) => [row.id, row.name]));
+
+  expect(outcome.value.propertyIds.map((id) => nameById.get(id))).toEqual([
+    "Counterparty",
+    "Summary",
+  ]);
+
+  const edges = await testDb
+    .select({
+      propertyId: propertyDependencies.propertyId,
+      dependsOnPropertyId: propertyDependencies.dependsOnPropertyId,
+    })
+    .from(propertyDependencies)
+    .where(eq(propertyDependencies.workspaceId, workspaceId));
+
+  expect(
+    edges.map((edge) => [
+      nameById.get(edge.propertyId),
+      nameById.get(edge.dependsOnPropertyId),
+    ]),
+  ).toEqual([["Summary", "Counterparty"]]);
+});

@@ -8,6 +8,7 @@ import { properties, propertyDependencies } from "@/api/db/schema";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
+import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   collectNodePropertyIds,
@@ -335,38 +336,34 @@ export const resolveTemplateProperties = async ({
   }
 
   const auditEvents: AuditEvent[] = [];
+  const propertyRows: (typeof properties.$inferInsert)[] = [];
 
+  // Ids are minted here rather than read back from `returning`: the source-id
+  // mapping and the audit rows then need nothing from the database, so the
+  // whole set of new columns goes in as one statement. Column order still
+  // comes from `templatePropertiesToCreate`, which is what `nextPropertyIds`
+  // records.
   for (const templateProperty of templatePropertiesToCreate) {
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- sequential inserts preserve column order and feed the source-id mapping
-    const [inserted] = await tx
-      .insert(properties)
-      .values({
-        workspaceId,
-        name: templateProperty.name,
-        content: templateProperty.content,
-        tool: sanitizeTemplatePropertyTool(templateProperty.tool),
-        kinds: propertyKindsForTool(templateProperty.tool),
-        role: resolveTemplatePropertyRole(templateProperty, roleResolution),
-        status: templateProperty.tool.type === "ai-model" ? "stale" : "fresh",
-      })
-      .returning({ id: properties.id });
+    const propertyId = createSafeId<"property">();
 
-    if (!inserted) {
-      // Earlier iterations already inserted their columns and audit rows, so
-      // returning here would commit them behind the error.
-      throw new HandlerError({
-        status: 400,
-        message: "Failed to create template column",
-      });
-    }
+    propertyRows.push({
+      id: propertyId,
+      workspaceId,
+      name: templateProperty.name,
+      content: templateProperty.content,
+      tool: sanitizeTemplatePropertyTool(templateProperty.tool),
+      kinds: propertyKindsForTool(templateProperty.tool),
+      role: resolveTemplatePropertyRole(templateProperty, roleResolution),
+      status: templateProperty.tool.type === "ai-model" ? "stale" : "fresh",
+    });
 
-    propertyIdBySourceId.set(templateProperty.sourceId, inserted.id);
-    nextPropertyIds.push(inserted.id);
+    propertyIdBySourceId.set(templateProperty.sourceId, propertyId);
+    nextPropertyIds.push(propertyId);
 
     auditEvents.push({
       action: AUDIT_ACTION.CREATE,
       resourceType: AUDIT_RESOURCE_TYPE.PROPERTY,
-      resourceId: inserted.id,
+      resourceId: propertyId,
       changes: {
         createdFromViewTemplate: {
           old: null,
@@ -380,8 +377,11 @@ export const resolveTemplateProperties = async ({
     });
   }
 
-  // Column order comes from the inserts above; the audit rows carry it in
-  // their own order and go in as one statement.
+  if (propertyRows.length > 0) {
+    await tx.insert(properties).values(propertyRows);
+  }
+
+  // The audit rows carry the same order and go in as one statement.
   if (auditEvents.length > 0) {
     await recordAuditEvent(tx, auditEvents);
   }

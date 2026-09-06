@@ -8,6 +8,7 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
+import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -121,55 +122,46 @@ const createPropertiesBatch = createSafeHandler(
           }
         }
 
-        const insertedIds: string[] = [];
+        const propertyRows: (typeof properties.$inferInsert)[] = [];
+        const dependencyRows: (typeof propertyDependencies.$inferInsert)[] = [];
+        const insertedIds: SafeId<"property">[] = [];
         const auditEvents: AuditEvent[] = [];
 
+        // Ids are minted here rather than read back from `returning`, so the
+        // rows, their dependency rows and their audit events can be assembled
+        // in full before anything is written: three statements for the batch
+        // instead of two per item.
         for (const { name, built } of builtItems) {
           if ("status" in built) {
             continue;
           }
           const { content, tool, dependencies, role } = built;
-          const initialStatus = tool.type === "ai-model" ? "stale" : "fresh";
+          const propertyId = createSafeId<"property">();
 
-          // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- sequential property inserts in one transaction; each row's id feeds its dependency rows and audit event
-          const [inserted] = await tx
-            .insert(properties)
-            .values({
+          propertyRows.push({
+            id: propertyId,
+            workspaceId,
+            name,
+            content,
+            tool,
+            kinds: propertyKindsForTool(tool),
+            role,
+            status: tool.type === "ai-model" ? "stale" : "fresh",
+          });
+
+          for (const { dependsOnPropertyId, condition } of dependencies) {
+            dependencyRows.push({
               workspaceId,
-              name,
-              content,
-              tool,
-              kinds: propertyKindsForTool(tool),
-              role,
-              status: initialStatus,
-            })
-            .returning({ id: properties.id });
-
-          if (!inserted) {
-            // Earlier iterations of this loop already inserted properties,
-            // dependency rows, and audit events that would otherwise commit.
-            throw new HandlerError({
-              status: 500,
-              message: "Failed to create property",
+              propertyId,
+              dependsOnPropertyId,
+              condition,
             });
-          }
-
-          if (dependencies.length > 0) {
-            // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- dependency rows reference the property id just inserted above in this iteration
-            await tx.insert(propertyDependencies).values(
-              dependencies.map(({ dependsOnPropertyId, condition }) => ({
-                workspaceId,
-                propertyId: inserted.id,
-                dependsOnPropertyId,
-                condition,
-              })),
-            );
           }
 
           auditEvents.push({
             action: AUDIT_ACTION.CREATE,
             resourceType: AUDIT_RESOURCE_TYPE.PROPERTY,
-            resourceId: inserted.id,
+            resourceId: propertyId,
             changes: {
               created: {
                 old: null,
@@ -182,7 +174,14 @@ const createPropertiesBatch = createSafeHandler(
             },
           });
 
-          insertedIds.push(inserted.id);
+          insertedIds.push(propertyId);
+        }
+
+        if (propertyRows.length > 0) {
+          await tx.insert(properties).values(propertyRows);
+        }
+        if (dependencyRows.length > 0) {
+          await tx.insert(propertyDependencies).values(dependencyRows);
         }
 
         // The recorder inserts an array in one statement, and one request is
