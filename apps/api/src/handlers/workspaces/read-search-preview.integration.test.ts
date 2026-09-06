@@ -62,6 +62,7 @@ describe("matter search preview", () => {
     const thirdTaskId = entityId();
     const omittedTaskId = entityId();
     const completedTaskId = entityId();
+    const overdueTaskIds = [entityId(), entityId(), entityId()];
     const recentDocumentId = entityId();
     const olderDocumentId = entityId();
     const legacyDocumentId = entityId();
@@ -74,7 +75,7 @@ describe("matter search preview", () => {
         workspaceId: ids.wsA1,
         kind: "task",
         name: "Preview first deadline",
-        dueDate: "1900-01-01",
+        dueDate: "2999-01-01",
         status: "open",
       },
       {
@@ -82,7 +83,7 @@ describe("matter search preview", () => {
         workspaceId: ids.wsA1,
         kind: "task",
         name: "Preview second deadline",
-        dueDate: "1900-01-02",
+        dueDate: "2999-01-02",
         status: null,
       },
       {
@@ -90,7 +91,7 @@ describe("matter search preview", () => {
         workspaceId: ids.wsA1,
         kind: "task",
         name: "Preview third deadline",
-        dueDate: "1900-01-03",
+        dueDate: "2999-01-03",
         status: "in_progress",
       },
       {
@@ -98,7 +99,7 @@ describe("matter search preview", () => {
         workspaceId: ids.wsA1,
         kind: "task",
         name: "Preview fourth deadline",
-        dueDate: "1900-01-04",
+        dueDate: "2999-01-04",
         status: "open",
       },
       {
@@ -106,9 +107,17 @@ describe("matter search preview", () => {
         workspaceId: ids.wsA1,
         kind: "task",
         name: "Preview completed deadline",
-        dueDate: "1899-01-01",
+        dueDate: "2998-01-01",
         status: "done",
       },
+      ...overdueTaskIds.map((id, index) => ({
+        id,
+        workspaceId: ids.wsA1,
+        kind: "task" as const,
+        name: `Overdue deadline ${index + 1}`,
+        dueDate: `1900-01-0${index + 1}`,
+        status: "open",
+      })),
       {
         id: legacyDocumentId,
         workspaceId: ids.wsA1,
@@ -136,7 +145,7 @@ describe("matter search preview", () => {
         workspaceId: ids.wsB1,
         kind: "task",
         name: "Other matter deadline",
-        dueDate: "1800-01-01",
+        dueDate: "2998-01-01",
         status: "open",
       },
       {
@@ -180,6 +189,9 @@ describe("matter search preview", () => {
     ]);
     expect(
       result.upcomingAgenda.some(({ id }) => id === otherMatterTaskId),
+    ).toBe(false);
+    expect(
+      result.upcomingAgenda.some(({ id }) => overdueTaskIds.includes(id)),
     ).toBe(false);
     expect(
       result.recentDocuments.some(({ id }) => id === otherMatterDocumentId),

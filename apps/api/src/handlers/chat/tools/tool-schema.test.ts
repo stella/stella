@@ -107,14 +107,21 @@ const noopAuditRecorder: AuditRecorder = async () => undefined;
 const getChatTools = (
   props: Omit<
     Parameters<typeof getChatToolsWithPin>[0],
-    "pinServerValidatedWorkspaceId"
-  >,
-) =>
-  getChatToolsWithPin({
-    ...props,
+    "pinServerValidatedWorkspaceId" | "registryAvailability"
+  > & {
+    registryAvailability?: Parameters<
+      typeof getChatToolsWithPin
+    >[0]["registryAvailability"];
+  },
+) => {
+  const { registryAvailability = () => true, ...rest } = props;
+  return getChatToolsWithPin({
+    ...rest,
     memoryEnabled: props.memoryEnabled ?? true,
     pinServerValidatedWorkspaceId: () => true,
+    registryAvailability,
   });
+};
 
 const editableActiveSkillContext: ActiveChatSkillContext = {
   body: "# Instructions\nUse the checklist.",
@@ -1100,6 +1107,7 @@ describe("chat tool schemas", () => {
       docxSuggestionSurface: "template-studio",
       webSearchEnabled: false,
       webSearchProviders: { webSearchProvider: null, urlFetcher: null },
+      registryAvailability: (registry) => registry === "companies-house",
     });
 
     const businessRegistryLookup = tools["business_registry_lookup"];
@@ -1124,6 +1132,12 @@ describe("chat tool schemas", () => {
     }
 
     expect(businessRegistryLookup.needsApproval).toBeUndefined();
+    const businessRegistrySchema = convertSchemaToJsonSchema(
+      businessRegistryLookup.inputSchema,
+    );
+    expect(businessRegistrySchema.properties?.["jurisdiction"]?.enum).toEqual([
+      "GB",
+    ]);
     expect(getChatToolPolicy(businessRegistryLookup)).toEqual({
       kind: "public_official",
       needsApproval: false,

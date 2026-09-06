@@ -4,10 +4,12 @@ import {
   asc,
   desc,
   eq,
+  gte,
   isNotNull,
   isNull,
   notInArray,
   or,
+  sql,
 } from "drizzle-orm";
 
 import { TASK_STATUS } from "@stll/api-contract";
@@ -116,6 +118,7 @@ export const readSearchPreviewHandler = async ({
               eq(entities.workspaceId, workspaceId),
               eq(entities.kind, "task"),
               isNotNull(entities.dueDate),
+              gte(entities.dueDate, sql`CURRENT_DATE`),
               or(
                 isNull(entities.status),
                 notInArray(entities.status, [

@@ -7,8 +7,6 @@
 // `executeRegistryLookup` so the two surfaces never drift in error
 // mapping, normalisation, or shape detection.
 
-import { TaggedError } from "better-result";
-
 import type { BusinessRegistrySlug } from "@stll/api-contract";
 import {
   AresAPIError,
@@ -127,9 +125,6 @@ import type { CountryCode } from "@stll/country-codes";
 
 import { captureError } from "@/api/lib/analytics/capture";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { buildCatalogueEntryUrl } from "@/api/lib/mcp-connectors/app-urls";
-import { nativeToolRecommendedJurisdictions } from "@/api/lib/mcp-connectors/catalog-metadata";
-import type { NativeToolDisabledReason } from "@/api/lib/mcp-connectors/catalog-metadata";
 
 export { BUSINESS_REGISTRY_SLUGS } from "@stll/api-contract";
 export type { BusinessRegistrySlug } from "@stll/api-contract";
@@ -1508,95 +1503,6 @@ export const BUSINESS_REGISTRY_DISPATCH: Record<
 export const getDeployAvailableRegistryHandlers = (): RegistryHandler[] =>
   Object.values(BUSINESS_REGISTRY_DISPATCH).filter((handler) =>
     handler.isDeployAvailable(),
-  );
-
-// ---------------------------------------------------------------------------
-// Org-disabled refusal
-// ---------------------------------------------------------------------------
-
-const REGION_DISPLAY_NAMES = new Intl.DisplayNames(["en"], {
-  type: "region",
-});
-
-/** The jurisdictions that would turn this registry on, as country names rather
- *  than codes, read from the same catalogue recommendation the enablement gate
- *  reads. "EU" is a catalogue pseudo-jurisdiction matched by any member state,
- *  never a practice-jurisdiction row of its own. */
-const enablingJurisdictions = (nativeToolSlug: string): string[] =>
-  nativeToolRecommendedJurisdictions(nativeToolSlug).map((code) =>
-    code === EU_PSEUDO_JURISDICTION
-      ? "an EU member state"
-      : (REGION_DISPLAY_NAMES.of(code) ?? code),
-  );
-
-export type RegistryDisabledForOrgRefusal = {
-  message: string;
-  /** Next step for an agent client, per the MCP error contract. */
-  hint: string;
-};
-
-/**
- * The one refusal text for a registry the organization has not enabled, used
- * by every surface that can hit the gate (contacts lookup, template fill,
- * lookup preview, MCP tools). It names the refused registry and links to the
- * catalogue entry that turns it on; on a jurisdiction miss it also names the
- * jurisdiction that enables the tool for the whole org, and on an explicit
- * per-slug override it does not, because adding a jurisdiction would not clear
- * that override. Tenant-neutral by design: never what the org has enabled.
- */
-export const registryDisabledForOrgRefusal = ({
-  registry,
-  reason,
-}: {
-  registry: BusinessRegistrySlug;
-  reason: NativeToolDisabledReason;
-}): RegistryDisabledForOrgRefusal => {
-  const { displayName, nativeToolSlug } = BUSINESS_REGISTRY_DISPATCH[registry];
-  const url = buildCatalogueEntryUrl(nativeToolSlug);
-  const jurisdictions =
-    reason === "jurisdiction_mismatch"
-      ? enablingJurisdictions(nativeToolSlug)
-      : [];
-  if (jurisdictions.length === 0) {
-    return {
-      message: `The ${displayName} registry is disabled for this organization. An organization admin can enable it at ${url}.`,
-      hint: `Ask an organization admin to enable ${displayName} at ${url}. It cannot be enabled from the client.`,
-    };
-  }
-  const jurisdictionList = jurisdictions.join(" or ");
-  return {
-    message: `The ${displayName} registry is disabled for this organization. An organization admin can enable it at ${url}, or add ${jurisdictionList} to the practice jurisdictions.`,
-    hint: `Ask an organization admin to enable ${displayName} at ${url}, or to add ${jurisdictionList} to the practice jurisdictions. It cannot be enabled from the client.`,
-  };
-};
-
-/**
- * A lookup refused because the organization has the registry's native tool
- * disabled. Distinct from {@link HandlerError} so each surface maps it on its
- * own terms: HTTP answers 403, MCP answers the `feature_disabled` envelope
- * with the enablement hint — neither has to match on message text.
- */
-export class RegistryDisabledForOrgError extends TaggedError(
-  "RegistryDisabledForOrgError",
-)<RegistryDisabledForOrgRefusal> {}
-
-/**
- * Registry handlers this organization may actually call: shipped on this
- * deployment AND enabled for the org (per-adapter native-tool enablement,
- * expressed here as the set of *disabled* native-tool slugs the caller has
- * already resolved from `organization_settings`).
- *
- * Both advertisement surfaces derive their options from this single source:
- * the in-app chat tool's `jurisdiction` enum (via `handler.country`) and the
- * external MCP tool's `registry` enum (via `handler.slug`). Neither can then
- * advertise a registry the call-time gate would reject with a 403.
- */
-export const enabledRegistryHandlersForOrg = (
-  disabledNativeToolSlugs: readonly string[] | undefined,
-): RegistryHandler[] =>
-  getDeployAvailableRegistryHandlers().filter(
-    (handler) =>
-      !(disabledNativeToolSlugs?.includes(handler.nativeToolSlug) ?? false),
   );
 
 export const isBusinessRegistryNativeToolDeployAvailable = (

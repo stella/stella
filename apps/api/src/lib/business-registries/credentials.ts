@@ -130,6 +130,19 @@ export const getOrganizationRegistryAvailability = async (
     dispatch[registry].isDeployAvailable();
 };
 
+export const availableRegistryHandlersForOrg = ({
+  disabledNativeToolSlugs,
+  isRegistryAvailable,
+}: {
+  disabledNativeToolSlugs: readonly string[] | undefined;
+  isRegistryAvailable: (registry: BusinessRegistrySlug) => boolean;
+}): readonly RegistryHandler[] =>
+  Object.values(BUSINESS_REGISTRY_DISPATCH).filter(
+    (handler) =>
+      !(disabledNativeToolSlugs?.includes(handler.nativeToolSlug) ?? false) &&
+      isRegistryAvailable(handler.slug),
+  );
+
 export const registryConfigurationStatus = (
   registry: BusinessRegistrySlug,
   organizationConfigured: boolean,

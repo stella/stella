@@ -34,9 +34,12 @@ import { resolveMemberAuthorization } from "@/api/lib/auth";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  enabledRegistryHandlersForOrg,
-  type BusinessRegistrySlug,
-  type executeRegistryLookup,
+  availableRegistryHandlersForOrg,
+  getOrganizationRegistryAvailability,
+} from "@/api/lib/business-registries/credentials";
+import type {
+  BusinessRegistrySlug,
+  executeRegistryLookup,
 } from "@/api/lib/business-registries/dispatch";
 import type { loadLatestApprovedVersion } from "@/api/lib/document-review/approved-playbook-versions";
 import type { createPlaybookTableRuns } from "@/api/lib/document-review/table-run-create";
@@ -166,11 +169,12 @@ export type McpRequestContext = {
    */
   grantedScopes: readonly string[];
   /**
-   * Registry slugs this org may actually call (deployment-shipped AND enabled
-   * for the org). The `lookup_business_registry` list projection narrows its
+   * Registry slugs this org may actually call (credential/deployment available
+   * AND enabled for the org). The `lookup_business_registry` list projection narrows its
    * `registry` enum to these and drops the tool when empty, mirroring the
    * in-app chat tool so the MCP surface never advertises a registry the
-   * call-time gate would 403. Computed once here from `organization_settings`.
+   * call cannot execute. Computed once from organization settings and registry
+   * credential availability.
    *
    * `undefined` means "not resolved" (a synthetic/test context, or a settings
    * read fault): the projection then leaves the full enum advertised and the
@@ -369,20 +373,27 @@ export const resolveMcpSessionContext = async (
   // Resolve the org's reachable registries once, so the tools/list projection
   // can narrow the `lookup_business_registry` enum synchronously. On a read
   // fault, leave it unresolved (undefined) rather than dropping the tool.
-  const settingsResult = await requestDatabaseScope.safeDb((tx) =>
-    tx.query.organizationSettings.findFirst({
-      where: { organizationId: { eq: organizationId } },
-      columns: { practiceJurisdictions: true, nativeToolOverrides: true },
+  const [settingsResult, isRegistryAvailable] = await Promise.all([
+    requestDatabaseScope.safeDb((tx) =>
+      tx.query.organizationSettings.findFirst({
+        where: { organizationId: { eq: organizationId } },
+        columns: { practiceJurisdictions: true, nativeToolOverrides: true },
+      }),
+    ),
+    getOrganizationRegistryAvailability({
+      organizationId,
+      scopedDb: requestDatabaseScope.scopedDb,
     }),
-  );
+  ]);
   const enabledRegistrySlugs: readonly BusinessRegistrySlug[] | undefined =
     Result.isError(settingsResult)
       ? undefined
-      : enabledRegistryHandlersForOrg(
-          getDisabledNativeToolSlugsFromSettingsRow(
+      : availableRegistryHandlersForOrg({
+          disabledNativeToolSlugs: getDisabledNativeToolSlugsFromSettingsRow(
             settingsResult.value ?? undefined,
           ),
-        ).map((handler) => handler.slug);
+          isRegistryAvailable,
+        }).map((handler) => handler.slug);
 
   return {
     ...(auditExecution ? { auditExecution } : {}),

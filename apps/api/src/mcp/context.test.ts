@@ -10,6 +10,7 @@ import {
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { createScopedDb } from "@/api/db/scoped";
+import { availableRegistryHandlersForOrg } from "@/api/lib/business-registries/credentials";
 import {
   bindApprovedMcpAuditContext,
   loadAccessibleMcpWorkspaces,
@@ -56,6 +57,26 @@ describe("MCP workspace enumeration", () => {
     });
 
     expect(workspaces.map((workspace) => workspace.id)).toEqual([ids.wsA1]);
+  });
+});
+
+describe("MCP registry discovery", () => {
+  test("includes an organization-credential registry unavailable to the deployment", () => {
+    const enabled = availableRegistryHandlersForOrg({
+      disabledNativeToolSlugs: [],
+      isRegistryAvailable: (registry) => registry === "companies-house",
+    }).map((handler) => handler.slug);
+
+    expect(enabled).toEqual(["companies-house"]);
+  });
+
+  test("keeps native-tool preferences as a discovery restriction", () => {
+    const enabled = availableRegistryHandlersForOrg({
+      disabledNativeToolSlugs: ["companies-house"],
+      isRegistryAvailable: (registry) => registry === "companies-house",
+    }).map((handler) => handler.slug);
+
+    expect(enabled).toEqual([]);
   });
 });
 
