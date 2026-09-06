@@ -24,6 +24,7 @@ import {
   getRecentFilePreviewDateVisibility,
   getRecentFilePreviewHit,
   isLazySearchGroupActive,
+  resolveRegistryResultsPane,
   rememberSelectedFacetLabels,
   resolveEntityDocumentRoute,
   resolveEagerSearchTypes,
@@ -33,6 +34,41 @@ import {
 type ChatGlobalSearchHit = Extract<GlobalSearchHit, { type: "chat" }>;
 
 describe("lazy search groups", () => {
+  test("gives the results pane to an expanded registry group only in All scope", () => {
+    for (const scope of ["all", "matters", "registries"] as const) {
+      for (const expanded of [false, true]) {
+        const visible = true;
+        expect(
+          resolveRegistryResultsPane({
+            scope,
+            expanded,
+            visible,
+            registryVisible: scope === "registries",
+            caseLawEnabled: true,
+          }),
+        ).toEqual({
+          active: scope === "all" && expanded,
+          hideMatterChrome:
+            scope === "registries" || (scope === "all" && expanded),
+          caseLawEnabled: !(scope === "all" && expanded),
+        });
+      }
+    }
+    expect(
+      resolveRegistryResultsPane({
+        scope: "all",
+        expanded: true,
+        visible: false,
+        registryVisible: false,
+        caseLawEnabled: true,
+      }),
+    ).toEqual({
+      active: false,
+      hideMatterChrome: false,
+      caseLawEnabled: true,
+    });
+  });
+
   test("defers only case law in All browse searches while preserving every other type and its order", () => {
     const modes = ["browse", "pick"] as const;
     const scopes = ["all", "matters", "registries"] as const;

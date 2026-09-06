@@ -91,6 +91,7 @@ import {
   getChatHitRoute,
   getCompanySearchQuery,
   isLazySearchGroupActive,
+  resolveRegistryResultsPane,
   getEntityLocationRoute,
   getEntityWorkspaceRoute,
   getRecentFileRoute,
@@ -334,6 +335,12 @@ type SupplementalPreview =
   | { type: "internal" }
   | { type: "registry" }
   | { type: "case-law"; query: string; hit: GlobalSearchHit };
+
+const registryExpansionPreview = (expanded: boolean): SupplementalPreview =>
+  expanded ? { type: "registry" } : { type: "internal" };
+
+const responsiveFacetVisibility = (showPreview: boolean) =>
+  showPreview ? "xl:block" : "sm:block";
 
 const resolveSupplementalPreview = ({
   searchScope,
@@ -663,6 +670,13 @@ export const SearchDialog = ({
   const hasActiveSearch = scopeVisibility.activeSearch;
   const showLazySearchGroups = scopeVisibility.lazyGroups;
   const registryGroupActive = scopeVisibility.registryGroupActive;
+  const registryResultsPane = resolveRegistryResultsPane({
+    scope: searchScope,
+    expanded: registryExpanded,
+    visible: showLazySearchGroups,
+    registryVisible: scopeVisibility.registryVisible,
+    caseLawEnabled: publicLawPreviewEnabled,
+  });
   const companySearch = useCompanyRegistrySearch(
     scopeVisibility.companyQuery,
     scopeVisibility.companySearchVisible,
@@ -1743,6 +1757,8 @@ export const SearchDialog = ({
                     setFilters(initialFiltersForMode(mode, initialWorkspaceId));
                     setHighlightedHitId(null);
                     setRecentPreviewFile(null);
+                    setRegistryExpanded(false);
+                    setSupplementalPreview({ type: "internal" });
                   }}
                 />
                 <SavedSearches
@@ -1769,7 +1785,7 @@ export const SearchDialog = ({
               {/* Content area */}
               <div
                 className="group/search-content flex min-h-0 flex-1 overflow-hidden"
-                data-registry-search={scopeVisibility.registryVisible}
+                data-registry-search={registryResultsPane.hideMatterChrome}
                 ref={contentAreaRef}
                 style={columnsStyle}
               >
@@ -1777,7 +1793,7 @@ export const SearchDialog = ({
                 <div
                   className={cn(
                     "hidden w-[var(--search-facets-w,14rem)] shrink-0 overflow-y-auto border-e px-3 py-3 group-data-[registry-search=true]/search-content:hidden",
-                    showPreview ? "xl:block" : "sm:block",
+                    responsiveFacetVisibility(showPreview),
                   )}
                 >
                   <SearchFacetsBody
@@ -1797,7 +1813,7 @@ export const SearchDialog = ({
                 <SearchColumnResizeHandle
                   className={cn(
                     "hidden group-data-[registry-search=true]/search-content:hidden",
-                    showPreview ? "xl:block" : "sm:block",
+                    responsiveFacetVisibility(showPreview),
                   )}
                   label={t("search.resizeFilters")}
                   max={SEARCH_FACETS_MAX_WIDTH}
@@ -1808,102 +1824,107 @@ export const SearchDialog = ({
 
                 {/* Results */}
                 <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-                  <CommandList
-                    className={cn(
-                      "max-h-none min-w-0 flex-1 group-data-[registry-search=true]/search-content:hidden",
-                      hasVisibleSearch
-                        ? "overflow-y-auto"
-                        : "flex min-h-0 flex-col overflow-hidden",
-                    )}
-                    onKeyDown={handleEmptyScreenListKeyDown}
-                    ref={setResultsElement}
-                  >
-                    <div
-                      className="min-h-0 flex-1 overflow-y-auto"
-                      hidden={!scopeVisibility.recents}
+                  {!registryResultsPane.hideMatterChrome && (
+                    <CommandList
+                      className={cn(
+                        "max-h-none min-w-0 flex-1 group-data-[registry-search=true]/search-content:hidden",
+                        hasVisibleSearch
+                          ? "overflow-y-auto"
+                          : "flex min-h-0 flex-col overflow-hidden",
+                      )}
+                      onKeyDown={handleEmptyScreenListKeyDown}
+                      ref={setResultsElement}
                     >
-                      <SearchRecentsScreen
-                        filters={filters}
-                        onApplySavedSearch={applySavedSearch}
-                        onFileClick={openRecentFile}
-                        onFilePreview={setRecentPreviewFile}
-                        onSearchClick={applyRecentSearch}
-                        open={open}
-                        previewedFileId={displayedRecentFile?.entityId ?? null}
-                        query={query}
-                        recentFiles={recentFiles}
-                        recentSearches={recentSearches}
-                        visible={scopeVisibility.recents}
-                      />
-                    </div>
-                    {scopeVisibility.actions && filteredActions.length > 0 && (
-                      <section className="shrink-0 px-4 py-4">
-                        <h3 className="text-muted-foreground mb-2 text-xs font-medium">
-                          {t("common.actions")}
-                        </h3>
-                        <div className="space-y-1">
-                          {actionEntries.map((entry, index) => (
-                            <CommandActionItem
-                              entry={entry}
-                              navigation={
-                                hasVisibleSearch
-                                  ? { type: "command", index }
-                                  : { type: "button" }
-                              }
-                              key={entry.action.id}
-                              onSelect={handleActionSelect}
-                            />
-                          ))}
-                        </div>
-                      </section>
-                    )}
-                    <SearchResultsContent
-                      onRetry={() => {
-                        detached(
-                          refetchSearch(),
-                          "search-dialog.refetch-search",
-                        );
-                      }}
-                      status={resultsStatus}
-                    >
-                      <SearchHitResults
-                        commandIndexOffset={commandActions.length}
-                        measureContainer={(element) => {
-                          if (element && resultsElement) {
-                            // Actions and the result heading precede the virtual rows.
-                            setHitsScrollMargin(
-                              element.getBoundingClientRect().top -
-                                resultsElement.getBoundingClientRect().top +
-                                resultsElement.scrollTop,
-                            );
+                      <div
+                        className="min-h-0 flex-1 overflow-y-auto"
+                        hidden={!scopeVisibility.recents}
+                      >
+                        <SearchRecentsScreen
+                          filters={filters}
+                          onApplySavedSearch={applySavedSearch}
+                          onFileClick={openRecentFile}
+                          onFilePreview={setRecentPreviewFile}
+                          onSearchClick={applyRecentSearch}
+                          open={open}
+                          previewedFileId={
+                            displayedRecentFile?.entityId ?? null
                           }
+                          query={query}
+                          recentFiles={recentFiles}
+                          recentSearches={recentSearches}
+                          visible={scopeVisibility.recents}
+                        />
+                      </div>
+                      {scopeVisibility.actions &&
+                        filteredActions.length > 0 && (
+                          <section className="shrink-0 px-4 py-4">
+                            <h3 className="text-muted-foreground mb-2 text-xs font-medium">
+                              {t("common.actions")}
+                            </h3>
+                            <div className="space-y-1">
+                              {actionEntries.map((entry, index) => (
+                                <CommandActionItem
+                                  entry={entry}
+                                  navigation={
+                                    hasVisibleSearch
+                                      ? { type: "command", index }
+                                      : { type: "button" }
+                                  }
+                                  key={entry.action.id}
+                                  onSelect={handleActionSelect}
+                                />
+                              ))}
+                            </div>
+                          </section>
+                        )}
+                      <SearchResultsContent
+                        onRetry={() => {
+                          detached(
+                            refetchSearch(),
+                            "search-dialog.refetch-search",
+                          );
                         }}
-                        hits={allHits}
-                        onOpenResult={openSearchResult}
-                        pagination={{
-                          fetchNextPage,
-                          hasNextPage,
-                          isFetchNextPageError,
-                          isFetchingNextPage,
-                          loadMoreRef,
-                        }}
-                        summary={{
-                          isOpeningChat: createSummaryChatMutation.isPending,
-                          onOpenChat: handleOpenSummaryChat,
-                          onSummarize: handleSummarizeResults,
-                          summarizeMutation: summarizeSearchMutation,
-                          visible: showSearchSummary,
-                        }}
-                        totalCount={totalCount}
-                        virtual={{
-                          items: virtualHits,
-                          measureElement: hitVirtualizer.measureElement,
-                          totalSize: hitVirtualizer.getTotalSize(),
-                          scrollMargin: hitsScrollMargin,
-                        }}
-                      />
-                    </SearchResultsContent>
-                  </CommandList>
+                        status={resultsStatus}
+                      >
+                        <SearchHitResults
+                          commandIndexOffset={commandActions.length}
+                          measureContainer={(element) => {
+                            if (element && resultsElement) {
+                              // Actions and the result heading precede the virtual rows.
+                              setHitsScrollMargin(
+                                element.getBoundingClientRect().top -
+                                  resultsElement.getBoundingClientRect().top +
+                                  resultsElement.scrollTop,
+                              );
+                            }
+                          }}
+                          hits={allHits}
+                          onOpenResult={openSearchResult}
+                          pagination={{
+                            fetchNextPage,
+                            hasNextPage,
+                            isFetchNextPageError,
+                            isFetchingNextPage,
+                            loadMoreRef,
+                          }}
+                          summary={{
+                            isOpeningChat: createSummaryChatMutation.isPending,
+                            onOpenChat: handleOpenSummaryChat,
+                            onSummarize: handleSummarizeResults,
+                            summarizeMutation: summarizeSearchMutation,
+                            visible: showSearchSummary,
+                          }}
+                          totalCount={totalCount}
+                          virtual={{
+                            items: virtualHits,
+                            measureElement: hitVirtualizer.measureElement,
+                            totalSize: hitVirtualizer.getTotalSize(),
+                            scrollMargin: hitsScrollMargin,
+                          }}
+                        />
+                      </SearchResultsContent>
+                    </CommandList>
+                  )}
                   <div className="bg-background max-h-[60%] min-h-0 shrink-0 overflow-y-auto overscroll-contain group-data-[registry-search=true]/search-content:max-h-none group-data-[registry-search=true]/search-content:flex-1">
                     <SearchSupplementalGroups
                       visible={showLazySearchGroups}
@@ -1912,12 +1933,14 @@ export const SearchDialog = ({
                       registryExpanded={registryExpanded}
                       onRegistryExpandedChange={(expanded) => {
                         setRegistryExpanded(expanded);
-                        setSupplementalPreview({ type: "registry" });
+                        setSupplementalPreview(
+                          registryExpansionPreview(expanded),
+                        );
                       }}
                       onRegistrySelect={() =>
                         setSupplementalPreview({ type: "registry" })
                       }
-                      caseLawEnabled={publicLawPreviewEnabled}
+                      caseLawEnabled={registryResultsPane.caseLawEnabled}
                       caseLawProps={{
                         expanded: caseLawExpanded,
                         onExpandedChange: (expanded) => {

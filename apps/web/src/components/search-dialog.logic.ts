@@ -56,6 +56,25 @@ export const isLazySearchGroupActive = ({
   expanded &&
   query.trim().length > 0;
 
+export const resolveRegistryResultsPane = ({
+  scope,
+  expanded,
+  visible,
+  registryVisible,
+  caseLawEnabled,
+}: Pick<LazySearchGroupOptions, "scope" | "expanded"> & {
+  registryVisible: boolean;
+  caseLawEnabled: boolean;
+  visible: boolean;
+}) => {
+  const active = scope === "all" && expanded && visible;
+  return {
+    active,
+    hideMatterChrome: registryVisible || active,
+    caseLawEnabled: caseLawEnabled && !active,
+  };
+};
+
 export const getCompanySearchQuery = ({
   open,
   mode,
