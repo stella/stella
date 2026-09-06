@@ -88,7 +88,7 @@
     "files": {}
   },
   "throw-outside-boundary": {
-    "count": 1118,
+    "count": 1116,
     "files": {
       "apps/api/src/handlers/case-law/corpus-index.ts": 12,
       "apps/api/src/handlers/case-law/decisions/latest.ts": 3,
@@ -149,7 +149,7 @@
       "apps/api/src/handlers/legislation/search-index.ts": 1,
       "apps/api/src/handlers/lists/generation-candidates/acceptance/create.ts": 1,
       "apps/api/src/handlers/mcp-connectors/create-connector.ts": 1,
-      "apps/api/src/handlers/properties/create-batch.ts": 4,
+      "apps/api/src/handlers/properties/create-batch.ts": 3,
       "apps/api/src/handlers/properties/create.ts": 4,
       "apps/api/src/handlers/rates/create.ts": 2,
       "apps/api/src/handlers/rates/entries-create.ts": 3,
@@ -247,7 +247,7 @@
       "apps/api/src/lib/tasks/update-task.ts": 3,
       "apps/api/src/lib/two-factor.ts": 1,
       "apps/api/src/lib/user-shortcuts.ts": 1,
-      "apps/api/src/lib/views/template-properties.ts": 11,
+      "apps/api/src/lib/views/template-properties.ts": 10,
       "apps/api/src/lib/web-search/jina.ts": 2,
       "apps/api/src/lib/web-search/tavily.ts": 2,
       "apps/api/src/lib/workflow/ai-generate-batch.ts": 1,
@@ -777,7 +777,7 @@
     }
   },
   "no-db-await-in-loop-suppressions": {
-    "count": 116,
+    "count": 112,
     "files": {
       "apps/api/scripts/backfill-image-thumbnails.ts": 3,
       "apps/api/scripts/backfill-search-previews.ts": 1,
@@ -807,11 +807,9 @@
       "apps/api/src/handlers/mcp-connectors/create-connector.ts": 1,
       "apps/api/src/handlers/organization-settings/update-anonymization-blacklist.ts": 2,
       "apps/api/src/handlers/playbooks/auto-run.ts": 1,
-      "apps/api/src/handlers/properties/create-batch.ts": 2,
       "apps/api/src/handlers/reports/build-report-data.ts": 1,
       "apps/api/src/handlers/search/ai.ts": 2,
       "apps/api/src/handlers/templates/categories.ts": 1,
-      "apps/api/src/handlers/time-entries/split.ts": 1,
       "apps/api/src/handlers/uploads/entity-create-tree.ts": 4,
       "apps/api/src/handlers/views/table-export.ts": 1,
       "apps/api/src/handlers/workspaces/duplicate.ts": 4,
@@ -833,7 +831,6 @@
       "apps/api/src/lib/search/index-global.ts": 2,
       "apps/api/src/lib/search/pg-fts-provider.ts": 1,
       "apps/api/src/lib/template-clause-links.ts": 1,
-      "apps/api/src/lib/views/template-properties.ts": 1,
       "apps/api/src/lib/workflow-queue.ts": 2,
       "apps/api/src/lib/workflow-target-queries.ts": 2,
       "apps/api/src/lib/workflow/route-playbooks.ts": 1,

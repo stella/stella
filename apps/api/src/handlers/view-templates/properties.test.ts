@@ -78,11 +78,9 @@ const createTemplatePropertyValidationTx = () => {
 };
 
 const createTemplateDependencyTx = () => {
-  const createdPropertyIds = ["created_a", "created_b"];
-  const returningMock = mock(async () => [{ id: createdPropertyIds.shift() }]);
-  const propertyValuesMock = mock(() => ({
-    returning: returningMock,
-  }));
+  const propertyValuesMock = mock(
+    (_rows: (typeof properties.$inferInsert)[]) => undefined,
+  );
   const dependencyValuesMock = mock(() => ({
     onConflictDoNothing: mock(async () => undefined),
   }));
@@ -120,7 +118,7 @@ const createTemplateDependencyTx = () => {
   return {
     dependencyValuesMock,
     executeMock,
-    returningMock,
+    propertyValuesMock,
     tx: asTestRaw<Transaction>(tx),
   };
 };
@@ -152,10 +150,9 @@ const createTemplateReuseTx = (
   const existingProperties = Array.isArray(existingProperty)
     ? existingProperty
     : [existingProperty];
-  const returningMock = mock(async () => [{ id: "created_property" }]);
-  const propertyValuesMock = mock((_row: typeof properties.$inferInsert) => ({
-    returning: returningMock,
-  }));
+  const propertyValuesMock = mock(
+    (_rows: (typeof properties.$inferInsert)[]) => undefined,
+  );
   const dependencyValuesMock = mock(() => ({
     onConflictDoNothing: mock(async () => undefined),
   }));
@@ -198,9 +195,22 @@ const createTemplateReuseTx = (
     insert: insertMock,
   };
 
+  /** Every column row the resolver wrote, in insert order. */
+  const createdPropertyRows = (): (typeof properties.$inferInsert)[] =>
+    propertyValuesMock.mock.calls.flatMap(([rows]) => rows);
+
+  // The resolver mints column ids before writing, so the id it hands back is
+  // only correct if it is the id it inserted. Reading the ids off the insert
+  // is what pins that; a fixture id would pin the fixture instead.
+  const createdPropertyIds = (): string[] =>
+    createdPropertyRows().map((row) =>
+      typeof row.id === "string" ? row.id : "",
+    );
+
   return {
+    createdPropertyIds,
+    createdPropertyRows,
     propertyValuesMock,
-    returningMock,
     tx: asTestRaw<Transaction>(tx),
   };
 };
@@ -555,7 +565,7 @@ describe("resolveTemplateProperties", () => {
   });
 
   test("rejects cyclic dependencies between newly created template columns", async () => {
-    const { dependencyValuesMock, executeMock, returningMock, tx } =
+    const { dependencyValuesMock, executeMock, propertyValuesMock, tx } =
       createTemplateDependencyTx();
     const propertyA = {
       version: 1,
@@ -590,12 +600,12 @@ describe("resolveTemplateProperties", () => {
     expect(rejection.status).toBe(422);
     expect(rejection.message).toBe("Circular template dependency detected");
     expect(executeMock).toHaveBeenCalledTimes(1);
-    expect(returningMock).not.toHaveBeenCalled();
+    expect(propertyValuesMock).not.toHaveBeenCalled();
     expect(dependencyValuesMock).not.toHaveBeenCalled();
   });
 
   test("reuses existing shape matches only once", async () => {
-    const { returningMock, tx } = createTemplateReuseTx();
+    const { createdPropertyIds, tx } = createTemplateReuseTx();
     const firstProperty = {
       version: 1,
       sourceId: "source_a",
@@ -628,18 +638,22 @@ describe("resolveTemplateProperties", () => {
       recordAuditEvent: noopAuditRecorder,
     });
 
+    expect(createdPropertyIds()).toHaveLength(1);
+    const [createdId] = createdPropertyIds();
+    if (createdId === undefined) {
+      throw new TypeError("Expected the resolver to create one column");
+    }
     expect(result).toEqual({
       layout: {
         ...layout,
-        columnOrder: ["existing_property", "created_property"],
+        columnOrder: ["existing_property", createdId],
       },
-      propertyIds: ["existing_property", "created_property"],
+      propertyIds: ["existing_property", createdId],
     });
-    expect(returningMock).toHaveBeenCalledTimes(1);
   });
 
   test("does not reuse AI shape matches when either side has dependencies", async () => {
-    const { returningMock, tx } = createTemplateReuseTx(
+    const { createdPropertyIds, tx } = createTemplateReuseTx(
       {
         id: "existing_property",
         name: "Summary",
@@ -676,23 +690,28 @@ describe("resolveTemplateProperties", () => {
       recordAuditEvent: noopAuditRecorder,
     });
 
+    expect(createdPropertyIds()).toHaveLength(1);
+    const [createdId] = createdPropertyIds();
+    if (createdId === undefined) {
+      throw new TypeError("Expected the resolver to create one column");
+    }
     expect(result).toEqual({
       layout: {
         ...layout,
-        columnOrder: ["created_property"],
+        columnOrder: [createdId],
       },
-      propertyIds: ["existing_property", "created_property"],
+      propertyIds: ["existing_property", createdId],
     });
-    expect(returningMock).toHaveBeenCalledTimes(1);
   });
 
   test("sanitizes AI prompt markup before persisting template-created columns", async () => {
-    const { propertyValuesMock, returningMock, tx } = createTemplateReuseTx({
-      id: "existing_property",
-      name: "Other",
-      content: { version: 1, type: "text" },
-      tool: { version: 1, type: "manual-input" },
-    });
+    const { createdPropertyIds, createdPropertyRows, tx } =
+      createTemplateReuseTx({
+        id: "existing_property",
+        name: "Other",
+        content: { version: 1, type: "text" },
+        tool: { version: 1, type: "manual-input" },
+      });
     const templateProperty = {
       version: 1,
       sourceId: "source_unsafe_ai",
@@ -715,8 +734,8 @@ describe("resolveTemplateProperties", () => {
       recordAuditEvent: noopAuditRecorder,
     });
 
-    expect(returningMock).toHaveBeenCalledTimes(1);
-    const persistedTool = propertyValuesMock.mock.calls[0]?.[0].tool;
+    expect(createdPropertyIds()).toHaveLength(1);
+    const persistedTool = createdPropertyRows().at(0)?.tool;
     expect(persistedTool?.type).toBe("ai-model");
     const prompt =
       persistedTool?.type === "ai-model" ? persistedTool.prompt : "";
@@ -736,13 +755,14 @@ describe("resolveTemplateProperties", () => {
       type: "ai-model",
       prompt: "Classify the document type.",
     } satisfies ViewTemplateProperty["tool"];
-    const { propertyValuesMock, returningMock, tx } = createTemplateReuseTx({
-      id: "existing_property",
-      name: "Type de document",
-      content,
-      tool,
-      role: null,
-    });
+    const { createdPropertyIds, createdPropertyRows, tx } =
+      createTemplateReuseTx({
+        id: "existing_property",
+        name: "Type de document",
+        content,
+        tool,
+        role: null,
+      });
     const templateProperty = {
       version: 1,
       sourceId: "source_document_type",
@@ -762,8 +782,8 @@ describe("resolveTemplateProperties", () => {
       recordAuditEvent: noopAuditRecorder,
     });
 
-    expect(returningMock).toHaveBeenCalledTimes(1);
-    expect(propertyValuesMock.mock.calls[0]?.[0]).toEqual(
+    expect(createdPropertyIds()).toHaveLength(1);
+    expect(createdPropertyRows().at(0)).toEqual(
       expect.objectContaining({
         role: DOCUMENT_TYPE_CLASSIFIER_ROLE,
       }),
@@ -771,7 +791,7 @@ describe("resolveTemplateProperties", () => {
   });
 
   test("rejects structural roles on non-classifier templates", async () => {
-    const { returningMock, tx } = createTemplateReuseTx();
+    const { propertyValuesMock, tx } = createTemplateReuseTx();
     const templateProperty = {
       version: 1,
       sourceId: "source_notes",
@@ -797,7 +817,7 @@ describe("resolveTemplateProperties", () => {
     expect(rejection.message).toBe(
       "Document type classifier templates must be AI single-select columns",
     );
-    expect(returningMock).not.toHaveBeenCalled();
+    expect(propertyValuesMock).not.toHaveBeenCalled();
   });
 
   test("rejects duplicate classifier roles in one template payload", async () => {
@@ -855,7 +875,7 @@ describe("resolveTemplateProperties", () => {
       options: [{ color: "blue", value: "Contract" }],
       fallback: null,
     } satisfies ViewTemplateProperty["content"];
-    const { returningMock, tx } = createTemplateReuseTx({
+    const { propertyValuesMock, tx } = createTemplateReuseTx({
       id: "existing_property",
       name: "Dokumenttyp",
       content: {
@@ -899,7 +919,7 @@ describe("resolveTemplateProperties", () => {
       layout: tableLayout("existing_property"),
       propertyIds: ["existing_property"],
     });
-    expect(returningMock).not.toHaveBeenCalled();
+    expect(propertyValuesMock).not.toHaveBeenCalled();
   });
 
   test("falls through exact-id reuse for stale role-bearing templates", async () => {
@@ -909,7 +929,7 @@ describe("resolveTemplateProperties", () => {
       options: [{ color: "blue", value: "Contract" }],
       fallback: null,
     } satisfies ViewTemplateProperty["content"];
-    const { returningMock, tx } = createTemplateReuseTx([
+    const { propertyValuesMock, tx } = createTemplateReuseTx([
       {
         id: "source_document_type",
         name: "Document Type",
@@ -956,7 +976,7 @@ describe("resolveTemplateProperties", () => {
       layout: tableLayout("tagged_classifier"),
       propertyIds: ["source_document_type", "tagged_classifier"],
     });
-    expect(returningMock).not.toHaveBeenCalled();
+    expect(propertyValuesMock).not.toHaveBeenCalled();
   });
 
   test("falls through exact-id reuse for stale inferred legacy classifiers", async () => {
@@ -966,7 +986,7 @@ describe("resolveTemplateProperties", () => {
       options: [{ color: "blue", value: "Contract" }],
       fallback: null,
     } satisfies ViewTemplateProperty["content"];
-    const { returningMock, tx } = createTemplateReuseTx([
+    const { propertyValuesMock, tx } = createTemplateReuseTx([
       {
         id: "source_document_type",
         name: "Document Type",
@@ -1012,7 +1032,7 @@ describe("resolveTemplateProperties", () => {
       layout: tableLayout("tagged_classifier"),
       propertyIds: ["source_document_type", "tagged_classifier"],
     });
-    expect(returningMock).not.toHaveBeenCalled();
+    expect(propertyValuesMock).not.toHaveBeenCalled();
   });
 
   test("reuses legacy classifiers for explicit role templates", async () => {
@@ -1022,7 +1042,7 @@ describe("resolveTemplateProperties", () => {
       options: [{ color: "blue", value: "Contract" }],
       fallback: null,
     } satisfies ViewTemplateProperty["content"];
-    const { returningMock, tx } = createTemplateReuseTx({
+    const { propertyValuesMock, tx } = createTemplateReuseTx({
       id: "existing_property",
       name: "Document Type",
       content: templateContent,
@@ -1060,7 +1080,7 @@ describe("resolveTemplateProperties", () => {
       layout: tableLayout("existing_property"),
       propertyIds: ["existing_property"],
     });
-    expect(returningMock).not.toHaveBeenCalled();
+    expect(propertyValuesMock).not.toHaveBeenCalled();
   });
 
   test("rejects malformed structural role matches", async () => {
@@ -1070,7 +1090,7 @@ describe("resolveTemplateProperties", () => {
       options: [{ color: "blue", value: "Contract" }],
       fallback: null,
     } satisfies ViewTemplateProperty["content"];
-    const { returningMock, tx } = createTemplateReuseTx({
+    const { propertyValuesMock, tx } = createTemplateReuseTx({
       id: "existing_property",
       name: "Document Type",
       content: { version: 1, type: "text" },
@@ -1106,7 +1126,7 @@ describe("resolveTemplateProperties", () => {
     expect(rejection.message).toBe(
       "Document type classifier role is attached to an incompatible column",
     );
-    expect(returningMock).not.toHaveBeenCalled();
+    expect(propertyValuesMock).not.toHaveBeenCalled();
   });
 
   test("reuses role-tagged classifiers for legacy roleless templates", async () => {
@@ -1116,7 +1136,7 @@ describe("resolveTemplateProperties", () => {
       options: [{ color: "blue", value: "Contract" }],
       fallback: null,
     } satisfies ViewTemplateProperty["content"];
-    const { returningMock, tx } = createTemplateReuseTx({
+    const { propertyValuesMock, tx } = createTemplateReuseTx({
       id: "existing_property",
       name: "Type de document",
       content: templateContent,
@@ -1153,7 +1173,7 @@ describe("resolveTemplateProperties", () => {
       layout: tableLayout("existing_property"),
       propertyIds: ["existing_property"],
     });
-    expect(returningMock).not.toHaveBeenCalled();
+    expect(propertyValuesMock).not.toHaveBeenCalled();
   });
 
   test("reuses roleless legacy classifiers for legacy roleless templates", async () => {
@@ -1168,7 +1188,7 @@ describe("resolveTemplateProperties", () => {
       type: "ai-model",
       prompt: "Classify the document type.",
     } satisfies ViewTemplateProperty["tool"];
-    const { returningMock, tx } = createTemplateReuseTx({
+    const { propertyValuesMock, tx } = createTemplateReuseTx({
       id: "existing_property",
       name: "Document Type",
       content: templateContent,
@@ -1197,7 +1217,7 @@ describe("resolveTemplateProperties", () => {
       layout: tableLayout("existing_property"),
       propertyIds: ["existing_property"],
     });
-    expect(returningMock).not.toHaveBeenCalled();
+    expect(propertyValuesMock).not.toHaveBeenCalled();
   });
 
   test("tags legacy roleless classifier templates when creating", async () => {
@@ -1207,7 +1227,8 @@ describe("resolveTemplateProperties", () => {
       options: [{ color: "blue", value: "Contract" }],
       fallback: null,
     } satisfies ViewTemplateProperty["content"];
-    const { propertyValuesMock, returningMock, tx } = createTemplateReuseTx();
+    const { createdPropertyIds, createdPropertyRows, tx } =
+      createTemplateReuseTx();
     const templateProperty = {
       version: 1,
       sourceId: "source_document_type",
@@ -1230,8 +1251,8 @@ describe("resolveTemplateProperties", () => {
       recordAuditEvent: noopAuditRecorder,
     });
 
-    expect(returningMock).toHaveBeenCalledTimes(1);
-    expect(propertyValuesMock.mock.calls[0]?.[0]).toEqual(
+    expect(createdPropertyIds()).toHaveLength(1);
+    expect(createdPropertyRows().at(0)).toEqual(
       expect.objectContaining({
         role: DOCUMENT_TYPE_CLASSIFIER_ROLE,
       }),
@@ -1245,7 +1266,8 @@ describe("resolveTemplateProperties", () => {
       options: [{ color: "blue", value: "Contract" }],
       fallback: null,
     } satisfies ViewTemplateProperty["content"];
-    const { propertyValuesMock, returningMock, tx } = createTemplateReuseTx();
+    const { createdPropertyIds, createdPropertyRows, tx } =
+      createTemplateReuseTx();
     const templateProperty = {
       version: 1,
       sourceId: "source_document_type",
@@ -1269,8 +1291,8 @@ describe("resolveTemplateProperties", () => {
       recordAuditEvent: noopAuditRecorder,
     });
 
-    expect(returningMock).toHaveBeenCalledTimes(1);
-    expect(propertyValuesMock.mock.calls[0]?.[0]).toEqual(
+    expect(createdPropertyIds()).toHaveLength(1);
+    expect(createdPropertyRows().at(0)).toEqual(
       expect.objectContaining({
         role: null,
       }),
@@ -1278,7 +1300,8 @@ describe("resolveTemplateProperties", () => {
   });
 
   test("allows explicit roleless ordinary templates when creating", async () => {
-    const { propertyValuesMock, returningMock, tx } = createTemplateReuseTx();
+    const { createdPropertyIds, createdPropertyRows, tx } =
+      createTemplateReuseTx();
     const templateProperty = {
       version: 1,
       sourceId: "source_notes",
@@ -1298,8 +1321,8 @@ describe("resolveTemplateProperties", () => {
       recordAuditEvent: noopAuditRecorder,
     });
 
-    expect(returningMock).toHaveBeenCalledTimes(1);
-    expect(propertyValuesMock.mock.calls[0]?.[0]).toEqual(
+    expect(createdPropertyIds()).toHaveLength(1);
+    expect(createdPropertyRows().at(0)).toEqual(
       expect.objectContaining({
         role: null,
       }),
@@ -1313,7 +1336,8 @@ describe("resolveTemplateProperties", () => {
       options: [{ color: "blue", value: "Contract" }],
       fallback: null,
     } satisfies ViewTemplateProperty["content"];
-    const { propertyValuesMock, returningMock, tx } = createTemplateReuseTx();
+    const { createdPropertyIds, createdPropertyRows, tx } =
+      createTemplateReuseTx();
     const explicitClassifier = {
       version: 1,
       sourceId: "source_document_type_tagged",
@@ -1359,19 +1383,15 @@ describe("resolveTemplateProperties", () => {
       recordAuditEvent: noopAuditRecorder,
     });
 
-    expect(returningMock).toHaveBeenCalledTimes(2);
-    const insertedRows = propertyValuesMock.mock.calls.flatMap((call) => {
-      const row = call.at(0);
-      return row ? [row] : [];
-    });
-    expect(insertedRows.map(({ role }) => role)).toEqual([
+    expect(createdPropertyIds()).toHaveLength(2);
+    expect(createdPropertyRows().map(({ role }) => role)).toEqual([
       DOCUMENT_TYPE_CLASSIFIER_ROLE,
       null,
     ]);
   });
 
   test("does not reuse shape matches with different config", async () => {
-    const { returningMock, tx } = createTemplateReuseTx({
+    const { createdPropertyIds, tx } = createTemplateReuseTx({
       id: "existing_property",
       name: "Status",
       content: {
@@ -1415,13 +1435,17 @@ describe("resolveTemplateProperties", () => {
       recordAuditEvent: noopAuditRecorder,
     });
 
+    expect(createdPropertyIds()).toHaveLength(1);
+    const [createdId] = createdPropertyIds();
+    if (createdId === undefined) {
+      throw new TypeError("Expected the resolver to create one column");
+    }
     expect(result).toEqual({
       layout: {
         ...layout,
-        columnOrder: ["created_property"],
+        columnOrder: [createdId],
       },
-      propertyIds: ["existing_property", "created_property"],
+      propertyIds: ["existing_property", createdId],
     });
-    expect(returningMock).toHaveBeenCalledTimes(1);
   });
 });
