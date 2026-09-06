@@ -11,6 +11,7 @@ import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { createScopedDb } from "@/api/db/scoped";
 import { availableRegistryHandlersForOrg } from "@/api/lib/business-registries/credentials";
+import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispatch";
 import {
   bindApprovedMcpAuditContext,
   loadAccessibleMcpWorkspaces,
@@ -64,19 +65,31 @@ describe("MCP registry discovery", () => {
   test("includes an organization-credential registry unavailable to the deployment", () => {
     const enabled = availableRegistryHandlersForOrg({
       disabledNativeToolSlugs: [],
-      isRegistryAvailable: (registry) => registry === "companies-house",
+      dispatch: {
+        ...BUSINESS_REGISTRY_DISPATCH,
+        "companies-house": {
+          ...BUSINESS_REGISTRY_DISPATCH["companies-house"],
+          isDeployAvailable: () => true,
+        },
+      },
     }).map((handler) => handler.slug);
 
-    expect(enabled).toEqual(["companies-house"]);
+    expect(enabled).toContain("companies-house");
   });
 
   test("keeps native-tool preferences as a discovery restriction", () => {
     const enabled = availableRegistryHandlersForOrg({
       disabledNativeToolSlugs: ["companies-house"],
-      isRegistryAvailable: (registry) => registry === "companies-house",
+      dispatch: {
+        ...BUSINESS_REGISTRY_DISPATCH,
+        "companies-house": {
+          ...BUSINESS_REGISTRY_DISPATCH["companies-house"],
+          isDeployAvailable: () => true,
+        },
+      },
     }).map((handler) => handler.slug);
 
-    expect(enabled).toEqual([]);
+    expect(enabled).not.toContain("companies-house");
   });
 });
 

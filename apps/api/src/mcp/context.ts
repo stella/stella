@@ -35,7 +35,7 @@ import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   availableRegistryHandlersForOrg,
-  getOrganizationRegistryAvailability,
+  getOrganizationRegistryDispatch,
 } from "@/api/lib/business-registries/credentials";
 import type {
   BusinessRegistrySlug,
@@ -373,14 +373,14 @@ export const resolveMcpSessionContext = async (
   // Resolve the org's reachable registries once, so the tools/list projection
   // can narrow the `lookup_business_registry` enum synchronously. On a read
   // fault, leave it unresolved (undefined) rather than dropping the tool.
-  const [settingsResult, isRegistryAvailable] = await Promise.all([
+  const [settingsResult, registryDispatch] = await Promise.all([
     requestDatabaseScope.safeDb((tx) =>
       tx.query.organizationSettings.findFirst({
         where: { organizationId: { eq: organizationId } },
         columns: { practiceJurisdictions: true, nativeToolOverrides: true },
       }),
     ),
-    getOrganizationRegistryAvailability({
+    getOrganizationRegistryDispatch({
       organizationId,
       scopedDb: requestDatabaseScope.scopedDb,
     }),
@@ -392,7 +392,7 @@ export const resolveMcpSessionContext = async (
           disabledNativeToolSlugs: getDisabledNativeToolSlugsFromSettingsRow(
             settingsResult.value ?? undefined,
           ),
-          isRegistryAvailable,
+          dispatch: registryDispatch,
         }).map((handler) => handler.slug);
 
   return {
