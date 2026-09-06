@@ -210,6 +210,7 @@ export {
   BLOCK_DIRECTIVE_KINDS,
   blockDirectiveLinePattern,
   classifyMarker,
+  classifyMarkerDefect,
   clauseSlotPattern,
   countPattern,
   DIRECTIVE_KINDS,
@@ -220,6 +221,7 @@ export {
   isClauseSlotName,
   isFieldPath,
   isSafeFieldPath,
+  MARKER_DEFECT_KINDS,
   markerPattern,
   numPattern,
   placeholderPattern,
@@ -231,6 +233,7 @@ export type {
   BlockDirectiveKind,
   DirectiveKind,
   InvalidMarker,
+  MarkerDefectKind,
   MarkerMeta,
   ScannedMarker,
 } from "./markers.js";

@@ -41,9 +41,16 @@ import {
 } from "@/api/lib/docx/resolve-ai-fields";
 import { resolveClauseSlots } from "@/api/lib/docx/resolve-clause-slots";
 import { readManifest } from "@/api/lib/docx/template-manifest";
+import {
+  boundTemplateWarnings,
+  fieldOverlayWarnings,
+  type TemplateWarning,
+} from "@/api/lib/docx/template-warnings";
 import type {
   DiscoveredField,
+  DiscoveredTemplate,
   FieldDateFormat,
+  FieldMeta,
   FieldPart,
   InputType,
 } from "@/api/lib/docx/types";
@@ -250,8 +257,37 @@ export type DescribeTemplateResult =
       conditions: { name: string; expression: string }[];
       computed: { name: string; expression: string }[];
       arrays: DescribedArrayGroup[];
+      /** Marker authoring mistakes found in the stored DOCX plus the ones its
+       *  field configuration introduces. Advisory: the template is served
+       *  either way. */
+      warnings: TemplateWarning[];
     }
   | { error: string };
+
+/** Marker warnings from discovery, plus the ones only the configured fields
+ *  can reveal (a `condition` on a path the document also prints, a lookup
+ *  whose registry the organization has not enabled). */
+const describedWarnings = async ({
+  discovered,
+  fields,
+  organizationId,
+  scopedDb,
+}: {
+  discovered: DiscoveredTemplate;
+  fields: readonly FieldMeta[];
+  organizationId: SafeId<"organization">;
+  scopedDb: ScopedDb;
+}): Promise<TemplateWarning[]> =>
+  boundTemplateWarnings([
+    ...discovered.warnings,
+    ...(await fieldOverlayWarnings({
+      conditionPaths: discovered.conditionPaths,
+      fields,
+      placeholderPaths: discovered.placeholders.map(({ name }) => name),
+      registryGate: async () =>
+        await buildIsRegistryEnabledForOrg({ organizationId, scopedDb }),
+    })),
+  ]);
 
 export const describeStoredTemplate = async ({
   templateId,
@@ -284,6 +320,12 @@ export const describeStoredTemplate = async ({
     return {
       name: loaded.name,
       arrays,
+      warnings: await describedWarnings({
+        discovered,
+        fields: manifest.fields,
+        organizationId,
+        scopedDb,
+      }),
       fields: manifest.fields
         .filter(isFillableTemplateInputField)
         .map((field) => ({
@@ -325,6 +367,12 @@ export const describeStoredTemplate = async ({
   return {
     name: loaded.name,
     arrays,
+    warnings: await describedWarnings({
+      discovered,
+      fields: [],
+      organizationId,
+      scopedDb,
+    }),
     fields: discovered.fields.map((field) => ({
       path: field.path,
       label: null,

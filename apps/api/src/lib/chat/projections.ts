@@ -8,6 +8,7 @@ import {
   DOCUMENT_PROCESSING_KIND,
   DOCUMENT_PROCESSING_REQUIRED_STATUS,
 } from "@/api/lib/document-processing-contract";
+import { TEMPLATE_WARNING_CODES } from "@/api/lib/docx/template-warnings";
 
 import {
   chatEntityRef,
@@ -1490,6 +1491,17 @@ export const LOOKUP_BUSINESS_REGISTRY_PROJECTION = v.variant("type", [
   ),
 ]);
 
+const TEMPLATE_WARNINGS_PROJECTION = v.array(
+  v.strictObject({
+    // Tied to the producer's catalog: a code the warning module does not
+    // declare fails this schema's strict parse instead of reaching the model.
+    code: v.picklist(TEMPLATE_WARNING_CODES),
+    path: v.optional(v.string()),
+    message: v.string(),
+    hint: v.string(),
+  }),
+);
+
 /**
  * The describe shape (`DescribeTemplateResult` success variant,
  * `lib/templates/template-fill-service.ts`) served by list_templates' detail
@@ -1547,6 +1559,10 @@ export const TEMPLATE_DESCRIBE_PROJECTION = v.strictObject({
       itemFieldPaths: v.array(v.string()),
     }),
   ),
+  // Authoring warnings about the DOCX markers: a closed code, the marker or
+  // field path it names, and fixed guidance text. Structural, like the field
+  // paths above; no document prose is echoed.
+  warnings: TEMPLATE_WARNINGS_PROJECTION,
 });
 
 /**
@@ -1713,14 +1729,15 @@ export const SET_PRACTICE_JURISDICTIONS_PROJECTION = v.strictObject({
 });
 
 /**
- * save_template: create returns `{ templateId, name, fieldCount }` (template
- * handle); configure echoes the same describe shape list_templates' detail
- * mode serves, so the agent sees exactly what is now configured.
+ * save_template: create returns `{ templateId, name, fieldCount, warnings }`
+ * (template handle); configure echoes the same describe shape list_templates'
+ * detail mode serves, so the agent sees exactly what is now configured.
  */
 export const SAVE_TEMPLATE_CREATE_PROJECTION = v.strictObject({
   templateId: passthroughId(),
   name: v.string(),
   fieldCount: v.number(),
+  warnings: TEMPLATE_WARNINGS_PROJECTION,
 });
 
 export const SAVE_TEMPLATE_PROJECTION = v.union([

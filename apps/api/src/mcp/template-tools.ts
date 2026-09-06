@@ -25,6 +25,17 @@ import {
   buildAiFieldGenerator,
   buildAiOccurrenceAdapter,
 } from "@/api/lib/docx/ai-field-generator";
+import { discoverTemplate } from "@/api/lib/docx/discover-template";
+import { buildIsRegistryEnabledForOrg } from "@/api/lib/docx/registry-org-gate";
+import {
+  mergeManifestWithDiscovery,
+  readManifest,
+} from "@/api/lib/docx/template-manifest";
+import {
+  boundTemplateWarnings,
+  fieldOverlayWarnings,
+  type TemplateWarning,
+} from "@/api/lib/docx/template-warnings";
 import type { FieldMeta, FieldPart } from "@/api/lib/docx/types";
 import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buffer";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
@@ -401,7 +412,8 @@ const SAVE_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
     `${TEMPLATE_MARKER_REFERENCE_URI} before authoring a DOCX and ` +
     `${TEMPLATE_FIELD_REFERENCE_URI} before configuring fields. Returns the ` +
     "template id and field count when creating, or the updated field list " +
-    "when configuring.",
+    "when configuring, plus a warnings list of marker authoring mistakes to " +
+    "fix before filling.",
   inputSchema: saveTemplateArgsSchema,
   jsonSchemaProjectionWaiver: {
     ignoreActions: ["check", "finite", "partial_check"],
@@ -1495,6 +1507,54 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
   return toolDataResult(persistence.value.value);
 };
 
+/** Marker mistakes in the uploaded DOCX plus the ones the field overlay
+ *  introduces, reported with the new template so the author fixes them before
+ *  the first fill. Never blocks the save. */
+const templateAuthoringWarnings = async ({
+  buffer,
+  context,
+  fields,
+}: {
+  buffer: Buffer;
+  context: McpRequestContext;
+  fields: FieldMeta[] | undefined;
+}): Promise<TemplateWarning[]> => {
+  const [discovered, embeddedManifest] = await Promise.all([
+    discoverTemplate(buffer),
+    readManifest(buffer),
+  ]);
+
+  // The saved manifest is what `createStoredTemplate` writes: any manifest the
+  // DOCX already embeds, merged with discovery, then the request overlay
+  // applied per path. Warning on the request overlay alone would let an
+  // embedded condition or lookup be persisted unreported, and the next
+  // list_templates describe would then disagree with this response.
+  const overlayByPath = new Map<string, FieldMeta>();
+  if (fields !== undefined) {
+    for (const field of fields) {
+      overlayByPath.set(field.path, field);
+    }
+  }
+  const savedFields = mergeManifestWithDiscovery(
+    embeddedManifest,
+    discovered,
+  ).map((field) => overlayByPath.get(field.path) ?? field);
+
+  return boundTemplateWarnings([
+    ...discovered.warnings,
+    ...(await fieldOverlayWarnings({
+      conditionPaths: discovered.conditionPaths,
+      fields: savedFields,
+      placeholderPaths: discovered.placeholders.map(({ name }) => name),
+      registryGate: async () =>
+        await buildIsRegistryEnabledForOrg({
+          organizationId: context.organizationId,
+          scopedDb: context.scopedDb,
+        }),
+    })),
+  ]);
+};
+
 // Create branch of save_template: a new template from an uploaded DOCX, with an
 // optional field-configuration overlay. Reused from the former create_template
 // tool.
@@ -1565,6 +1625,12 @@ const createTemplateFromDocx = async ({
     });
   }
 
+  // Discovery runs again here rather than riding out of `createStoredTemplate`:
+  // that recipe also serves the built-in report clones, which embed a
+  // pre-built manifest and never discover at all. One extra parse per template
+  // creation buys every create branch the same warning list.
+  const warnings = await templateAuthoringWarnings({ buffer, context, fields });
+
   const created = await Result.gen(() =>
     (context.testDependencies?.createStoredTemplate ?? createStoredTemplate)({
       safeDb: context.safeDb,
@@ -1585,6 +1651,7 @@ const createTemplateFromDocx = async ({
     templateId: created.value.id,
     name: created.value.name,
     fieldCount: created.value.fieldCount,
+    warnings,
   } satisfies v.InferInput<typeof SAVE_TEMPLATE_CREATE_PROJECTION>);
 };
 

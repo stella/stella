@@ -179,6 +179,9 @@ const createScopedDb = (
             },
           },
           templates: { findMany: async () => templates },
+          // No settings row: a brand-new org with no practice jurisdictions,
+          // which is exactly when a registry lookup is not enabled.
+          organizationSettings: { findFirst: async () => undefined },
         },
       });
     }),
@@ -243,12 +246,17 @@ const fakeTransaction = asTestRaw<Transaction>({});
 /** A real, minimal valid DOCX (well-formed word/document.xml) as base64, so
  *  save_template (create) exercises the real validateDocxBuffer — no module mock to
  *  leak across test files. */
-const makeValidDocxBase64 = async (): Promise<string> => {
+const makeValidDocxBase64 = async (
+  paragraphs: readonly string[] = ["{{name}}"],
+): Promise<string> => {
   const zip = new JSZip();
+  const body = paragraphs
+    .map((text) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`)
+    .join("");
   zip.file(
     "word/document.xml",
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
-      `<w:document xmlns:w="${W_NS}"><w:body><w:p><w:r><w:t>{{name}}</w:t></w:r></w:p></w:body></w:document>`,
+      `<w:document xmlns:w="${W_NS}"><w:body>${body}</w:body></w:document>`,
   );
   const bytes = await zip.generateAsync({ type: "uint8array" });
   return Buffer.from(bytes).toString("base64");
@@ -1508,6 +1516,37 @@ describe("MCP template tools", () => {
       templateId: "tmpl_new",
       name: "NDA",
       fieldCount: 3,
+      warnings: [],
+    });
+  });
+
+  test("save_template (create) reports marker authoring warnings with the saved template", async () => {
+    createStoredTemplateMock.mockImplementation(async function* () {
+      yield* [];
+      return Result.ok({ id: "tmpl_new", name: "POA", fieldCount: 2 });
+    });
+
+    const result = await handleMcpToolCall({
+      args: {
+        name: "POA",
+        docx_base64: await makeValidDocxBase64([
+          "{{#each attorneys}}",
+          "{{name}}",
+          "{{#endeach}}",
+        ]),
+      },
+      context: createContext(),
+      toolName: "save_template",
+    });
+
+    // The save still happens: warnings advise, they never block.
+    expect(createStoredTemplateMock).toHaveBeenCalledTimes(1);
+    expect(parseToolPayload(result)).toMatchObject({
+      templateId: "tmpl_new",
+      warnings: [
+        { code: "unprefixed_item_path", path: "name" },
+        { code: "unknown_directive", path: "{{#endeach}}" },
+      ],
     });
   });
 
@@ -1593,6 +1632,45 @@ describe("MCP template tools", () => {
         },
       }),
     );
+  });
+
+  test("save_template (create) reports a lookup the org cannot resolve and a format with no marker", async () => {
+    createStoredTemplateMock.mockImplementation(async function* () {
+      yield* [];
+      return Result.ok({ id: "tmpl_new", name: "Company POA", fieldCount: 1 });
+    });
+
+    const result = await handleMcpToolCall({
+      args: {
+        name: "Company POA",
+        // {{company}} places the default format; nothing places `address`.
+        docx_base64: await makeValidDocxBase64(["{{company}}"]),
+        fields: [
+          {
+            path: "company",
+            input_type: "text",
+            lookup: {
+              registry: "krs",
+              formats: [
+                { key: "default", template: "[name], KRS [krs]" },
+                { key: "address", template: "[seat]" },
+              ],
+            },
+          },
+        ],
+      },
+      context: createContext(),
+      toolName: "save_template",
+    });
+
+    // The config is still saved: the org can enable the registry later.
+    expect(createStoredTemplateMock).toHaveBeenCalledTimes(1);
+    expect(parseToolPayload(result)).toMatchObject({
+      warnings: [
+        { code: "unmatched_lookup_format", path: "company.address" },
+        { code: "registry_disabled", path: "company" },
+      ],
+    });
   });
 
   test("save_template (create) rejects a malformed field config before inserting", async () => {

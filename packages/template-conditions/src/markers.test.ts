@@ -3,6 +3,8 @@ import { describe, expect, test } from "bun:test";
 import {
   blockDirectiveLinePattern,
   classifyMarker,
+  classifyMarkerDefect,
+  DIRECTIVE_KINDS,
   isBlockDirectiveKind,
   isFieldPath,
   isSafeFieldPath,
@@ -163,5 +165,49 @@ describe("isBlockDirectiveKind", () => {
   test("distinguishes block directives from inline markers", () => {
     expect(isBlockDirectiveKind("if")).toBe(true);
     expect(isBlockDirectiveKind("placeholder")).toBe(false);
+  });
+});
+
+describe("classifyMarkerDefect", () => {
+  test("names the mistake behind a span the grammar rejects", () => {
+    expect(classifyMarkerDefect("#endeach")).toBe("unknown_directive");
+    expect(classifyMarkerDefect("/endif")).toBe("unknown_directive");
+    expect(classifyMarkerDefect("attorneys[0].name")).toBe("bracket_index");
+  });
+
+  // The grammar is the authority: anything classifyMarker accepts is not a
+  // defect, so a directive added there stops being reported with no list to
+  // update here.
+  test("every directive the grammar recognizes is not a defect", () => {
+    const recognized = [
+      "client.name",
+      "@clause:Indemnity",
+      "@num:scope",
+      "@ref:scope",
+      "@index",
+      "@count",
+      "#if signed",
+      "#elseif pending",
+      "#else",
+      "/if",
+      "#each attorneys",
+      "/each",
+    ];
+
+    expect(
+      new Set(
+        recognized.flatMap((inner) => {
+          const meta = classifyMarker(inner);
+          return meta ? [meta.kind] : [];
+        }),
+      ).size,
+    ).toBe(DIRECTIVE_KINDS.length);
+    expect(recognized.map(classifyMarkerDefect)).toEqual(
+      recognized.map(() => null),
+    );
+  });
+
+  test("a near-miss with no specific diagnosis stays unclassified", () => {
+    expect(classifyMarkerDefect("my field")).toBeNull();
   });
 });

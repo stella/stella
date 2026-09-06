@@ -14,6 +14,7 @@ import {
   isFieldPath,
 } from "@stll/template-conditions";
 
+import type { TemplateWarning } from "@/api/lib/docx/template-warnings";
 import {
   fieldSourceSchema,
   fieldSourceToolInputSchema,
@@ -192,6 +193,14 @@ export type DiscoveredTemplate = {
   placeholders: DiscoveredPlaceholder[];
   fields: DiscoveredField[];
   structureErrors: TemplateStructureError[];
+  /** Marker mistakes that parse but almost certainly do not do what the author
+   *  meant. Never blocks a save; reported so it is fixed before the first
+   *  fill. */
+  warnings: TemplateWarning[];
+  /** Paths a `{{#if}}` / `{{#elseif}}` expression reads, sorted. Distinguishes
+   *  a condition driver from a value marker, which the field list alone
+   *  cannot: a path can be both. */
+  conditionPaths: string[];
 };
 
 // ── Custom XML Manifest ─────────────────────────────────

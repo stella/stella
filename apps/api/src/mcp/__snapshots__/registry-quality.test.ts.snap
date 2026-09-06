@@ -742,7 +742,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "name": "save_template",
     "scope": "stella:templates",
     "access": "write",
-    "description": "Create a document template from a DOCX, or configure an existing template's fields. To create, pass docx_base64 (base64-encoded .docx / Office Open XML bytes, max ~10 MB decoded) and a name; the {{field}} markers in the file become the template's fillable fields, and fields can configure them in the same call. To configure an existing template, pass template_id with fields and no docx_base64; only the manifest changes, the document's {{markers}} stay untouched. Read stella://reference/template-markers before authoring a DOCX and stella://reference/template-fields before configuring fields. Returns the template id and field count when creating, or the updated field list when configuring.",
+    "description": "Create a document template from a DOCX, or configure an existing template's fields. To create, pass docx_base64 (base64-encoded .docx / Office Open XML bytes, max ~10 MB decoded) and a name; the {{field}} markers in the file become the template's fillable fields, and fields can configure them in the same call. To configure an existing template, pass template_id with fields and no docx_base64; only the manifest changes, the document's {{markers}} stay untouched. Read stella://reference/template-markers before authoring a DOCX and stella://reference/template-fields before configuring fields. Returns the template id and field count when creating, or the updated field list when configuring, plus a warnings list of marker authoring mistakes to fix before filling.",
     "annotations": {
       "title": "Save template",
       "idempotentHint": false,

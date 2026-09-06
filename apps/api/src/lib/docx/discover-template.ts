@@ -5,7 +5,9 @@
  *
  * Returns backward-compatible `DiscoveredPlaceholder[]` plus
  * `DiscoveredField[]` with inferred kinds (string, boolean,
- * array, object) and `structureErrors` for mismatched blocks.
+ * array, object), `structureErrors` for mismatched blocks, and
+ * `warnings` for markers that parse but do not mean what the
+ * author wrote (see `template-warnings.ts`).
  */
 
 import { panic } from "better-result";
@@ -24,6 +26,11 @@ import {
   templateContentPartPaths,
   W_NS,
 } from "./ooxml";
+import {
+  boundTemplateWarnings,
+  collectParagraphWarnings,
+  type TemplateWarning,
+} from "./template-warnings";
 import type {
   DiscoveredField,
   DiscoveredPlaceholder,
@@ -78,11 +85,20 @@ const kindPriority = (kind: TemplateFieldKind): number => {
   }
 };
 
-const registerConditionFields = (
-  fields: FieldAccumulator,
-  condition: string,
-  rowPaths: readonly string[] = [],
-): void => {
+type ConditionFieldOptions = {
+  fields: FieldAccumulator;
+  /** Every path the expression reads, accumulated across containers. */
+  conditionPaths: Set<string>;
+  condition: string;
+  rowPaths?: readonly string[];
+};
+
+const registerConditionFields = ({
+  condition,
+  conditionPaths,
+  fields,
+  rowPaths = [],
+}: ConditionFieldOptions): void => {
   const root = parseCondition(condition);
   if (!root) {
     return;
@@ -90,6 +106,7 @@ const registerConditionFields = (
 
   const registerPath = (path: string, kind: "boolean" | "string"): void => {
     registerField(fields, path, kind);
+    conditionPaths.add(path);
 
     const isQualifiedRowPath = rowPaths.some(
       (rowPath) => path === rowPath || path.startsWith(`${rowPath}.`),
@@ -395,13 +412,25 @@ type AnalysisResult = {
   errors: TemplateStructureError[];
   placeholderCounts: Map<string, number>;
   fieldConditions: Map<string, string | null>;
+  warnings: TemplateWarning[];
+  conditionPaths: Set<string>;
 };
 
-const collectContainerStructure = (
-  body: slimdom.Element,
-  fields: FieldAccumulator,
-  errors: TemplateStructureError[],
-) => {
+type ContainerStructureOptions = {
+  body: slimdom.Element;
+  conditionPaths: Set<string>;
+  errors: TemplateStructureError[];
+  fields: FieldAccumulator;
+  warnings: TemplateWarning[];
+};
+
+const collectContainerStructure = ({
+  body,
+  conditionPaths,
+  errors,
+  fields,
+  warnings,
+}: ContainerStructureOptions) => {
   const paragraphs = body.getElementsByTagNameNS(W_NS, "p");
   const directives = scanBlockDirectives(body);
   const { blocks, errors: parseErrors } = parseBlockTree(directives);
@@ -417,11 +446,12 @@ const collectContainerStructure = (
       activeArrays.pop();
     }
     if (directive?.kind === "if" || directive?.kind === "elseif") {
-      registerConditionFields(
+      registerConditionFields({
+        condition: directive.expression,
+        conditionPaths,
         fields,
-        directive.expression,
-        rowScopePaths(activeArrays),
-      );
+        rowPaths: rowScopePaths(activeArrays),
+      });
     }
     if (directive?.kind === "each") {
       const scopedPath = qualifyRowScopedPath(
@@ -435,6 +465,17 @@ const collectContainerStructure = (
       });
     }
     arrayScopes.set(i, [...activeArrays]);
+
+    const paragraph = paragraphs[i];
+    if (paragraph) {
+      warnings.push(
+        ...collectParagraphWarnings({
+          loops: activeArrays,
+          paragraphIndex: i,
+          text: paragraphText(paragraph),
+        }),
+      );
+    }
   }
   const directiveIndices = new Set<number>();
   for (const d of directives) {
@@ -497,6 +538,7 @@ const collectLoopItemFields = ({
 const collectParagraphPlaceholders = ({
   arrayScopes,
   conditionMap,
+  conditionPaths,
   directiveIndices,
   errors,
   fieldConditions,
@@ -562,11 +604,12 @@ const collectParagraphPlaceholders = ({
 
         const priorConditions: string[] = [];
         for (const branch of group.branches) {
-          registerConditionFields(
+          registerConditionFields({
+            condition: branch.condition,
+            conditionPaths,
             fields,
-            branch.condition,
-            rowScopePaths(requireRowScopes(arrayScopes, i)),
-          );
+            rowPaths: rowScopePaths(requireRowScopes(arrayScopes, i)),
+          });
           const branchCondition =
             branch.condition === ""
               ? priorConditions.map(negateExpr).join(" and ")
@@ -662,17 +705,34 @@ const analyzeContainer = (body: slimdom.Element): AnalysisResult => {
   const placeholderCounts = new Map<string, number>();
   const errors: TemplateStructureError[] = [];
   const fieldConditions = new Map<string, string | null>();
-  const structure = collectContainerStructure(body, fields, errors);
+  const warnings: TemplateWarning[] = [];
+  const conditionPaths = new Set<string>();
+  const structure = collectContainerStructure({
+    body,
+    conditionPaths,
+    errors,
+    fields,
+    warnings,
+  });
   collectLoopItemFields({ ...structure, fields });
   collectParagraphPlaceholders({
     ...structure,
+    conditionPaths,
     errors,
     fieldConditions,
     fields,
     placeholderCounts,
+    warnings,
   });
 
-  return { fields, errors, placeholderCounts, fieldConditions };
+  return {
+    fields,
+    errors,
+    placeholderCounts,
+    fieldConditions,
+    warnings,
+    conditionPaths,
+  };
 };
 
 // ── Merge helpers ────────────────────────────────────────
@@ -700,6 +760,10 @@ const mergeAnalysis = (
   }
 
   primary.errors.push(...secondary.errors);
+  primary.warnings.push(...secondary.warnings);
+  for (const path of secondary.conditionPaths) {
+    primary.conditionPaths.add(path);
+  }
 
   for (const [name, count] of secondary.placeholderCounts) {
     primary.placeholderCounts.set(
@@ -729,15 +793,13 @@ const mergeAnalysis = (
 const analyzeHeadersAndFooters = async (
   zip: JSZip,
 ): Promise<AnalysisResult> => {
-  const fields: FieldAccumulator = new Map();
-  const errors: TemplateStructureError[] = [];
-  const placeholderCounts = new Map<string, number>();
-  const fieldConditions = new Map<string, string | null>();
   const result: AnalysisResult = {
-    fields,
-    errors,
-    placeholderCounts,
-    fieldConditions,
+    fields: new Map(),
+    errors: [],
+    placeholderCounts: new Map(),
+    fieldConditions: new Map(),
+    warnings: [],
+    conditionPaths: new Set(),
   };
 
   // Sort entries alphabetically to match the order used by
@@ -802,6 +864,8 @@ export const discoverTemplate = async (
     placeholders: [],
     fields: [],
     structureErrors: [],
+    warnings: [],
+    conditionPaths: [],
   };
 
   const docEntry = zip.file(MAIN_DOCUMENT_PART_PATH);
@@ -829,6 +893,7 @@ export const discoverTemplate = async (
   mergeAnalysis(primary, hfAnalysis);
 
   const { fields, errors, placeholderCounts, fieldConditions } = primary;
+  const conditionPaths = [...primary.conditionPaths].toSorted(compareCodeUnit);
 
   // Build DiscoveredPlaceholder[] (backward-compat)
   const placeholders: DiscoveredPlaceholder[] = [...placeholderCounts.entries()]
@@ -887,5 +952,7 @@ export const discoverTemplate = async (
     placeholders,
     fields: discoveredFields,
     structureErrors: errors,
+    warnings: boundTemplateWarnings(primary.warnings),
+    conditionPaths,
   };
 };

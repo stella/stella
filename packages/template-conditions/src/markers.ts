@@ -334,6 +334,58 @@ export const scanInvalidMarkers = (text: string): InvalidMarker[] => {
   return out;
 };
 
+// ── Defect classification ────────────────────────────────
+
+/**
+ * Why a `{{...}}` span misses the grammar in a way that names the authoring
+ * mistake rather than merely failing to classify. Consumers derive their own
+ * warning codes from {@link MARKER_DEFECT_KINDS} so the two never drift.
+ */
+export type MarkerDefectKind = "unknown_directive" | "bracket_index";
+
+const MARKER_DEFECT_KIND_VALUES = [
+  "unknown_directive",
+  "bracket_index",
+] as const satisfies readonly MarkerDefectKind[];
+
+type MissingMarkerDefectKind = Exclude<
+  MarkerDefectKind,
+  (typeof MARKER_DEFECT_KIND_VALUES)[number]
+>;
+
+true satisfies MissingMarkerDefectKind extends never ? true : never;
+
+export const MARKER_DEFECT_KINDS = MARKER_DEFECT_KIND_VALUES;
+
+/** A `{{#...}}` / `{{/...}}` shape: an author reaching for a block directive. */
+const DIRECTIVE_SHAPE_RE = /^[#/]/u;
+/** Bracket indexing (`items[0].name`), which no directive kind admits. */
+const BRACKET_INDEX_RE = /[[\]]/u;
+
+/**
+ * Name the authoring mistake behind one marker's inner text, or `null` when the
+ * text is a recognized directive ({@link classifyMarker} accepts it) or an
+ * unrecognizable span with no specific diagnosis (`{{my field}}`). The
+ * recognized-directive check is what makes `DIRECTIVE_KINDS` the single
+ * authority on which `{{#...}}` tokens exist: adding a directive to the grammar
+ * stops it being reported here, with no list to update.
+ */
+export const classifyMarkerDefect = (
+  innerRaw: string,
+): MarkerDefectKind | null => {
+  const inner = innerRaw.trim();
+  if (classifyMarker(inner) !== null) {
+    return null;
+  }
+  if (DIRECTIVE_SHAPE_RE.test(inner)) {
+    return "unknown_directive";
+  }
+  if (BRACKET_INDEX_RE.test(inner)) {
+    return "bracket_index";
+  }
+  return null;
+};
+
 /** Exhaustiveness guard — pass the discriminant in a `switch` default branch. */
 export const assertNever = (value: never): never =>
   panic(`Unhandled template directive: ${JSON.stringify(value)}`);

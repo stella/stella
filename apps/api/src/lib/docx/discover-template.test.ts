@@ -556,3 +556,146 @@ describe("discoverTemplate", () => {
     expect(otherField?.visibleWhen).toBe("!isUK and !isDE");
   });
 });
+
+describe("template authoring warnings", () => {
+  const codesOf = (warnings: readonly { code: string }[]): string[] =>
+    warnings.map(({ code }) => code);
+
+  test("a loop placeholder written without its item prefix is reported", async () => {
+    const xml = WRAP(
+      [P("{{#each attorneys}}"), P("{{name}}"), P("{{/each}}")].join(""),
+    );
+    const result = await discoverTemplate(await makeDocx(xml));
+
+    // The fault the warning is about: `name` lands as a top-level scalar and
+    // the loop learns no item field, so every repeated row fills blank.
+    expect(result.fields.find((f) => f.path === "name")?.kind).toBe("string");
+    expect(
+      result.fields.find((f) => f.path === "attorneys")?.itemFields,
+    ).toBeUndefined();
+
+    expect(result.warnings).toEqual([
+      {
+        code: "unprefixed_item_path",
+        path: "name",
+        message: expect.stringContaining("{{#each attorneys}}"),
+        hint: "Write {{attorneys.name}} to fill it from each attorneys item.",
+      },
+    ]);
+  });
+
+  test("an inline loop scopes its own placeholders", async () => {
+    const unprefixed = WRAP(P("{{#each attorneys}} {{name}} {{/each}}"));
+    const prefixed = WRAP(
+      P("{{#each attorneys}} {{attorneys.name}} {{/each}}"),
+    );
+
+    expect(
+      codesOf((await discoverTemplate(await makeDocx(unprefixed))).warnings),
+    ).toEqual(["unprefixed_item_path"]);
+    expect((await discoverTemplate(await makeDocx(prefixed))).warnings).toEqual(
+      [],
+    );
+  });
+
+  test("a nested loop accepts either the declared or the qualified path", async () => {
+    const xml = WRAP(
+      [
+        P("{{#each contracts}}"),
+        P("{{#each items}}"),
+        P("{{contracts.items.name}}"),
+        P("{{/each}}"),
+        P("{{/each}}"),
+      ].join(""),
+    );
+    const result = await discoverTemplate(await makeDocx(xml));
+
+    expect(result.warnings).toEqual([]);
+  });
+
+  test("a placeholder outside every loop is not an item-path warning", async () => {
+    const xml = WRAP(
+      [P("{{client.name}}"), P("{{#each attorneys}}"), P("{{/each}}")].join(""),
+    );
+    const result = await discoverTemplate(await makeDocx(xml));
+
+    expect(result.warnings).toEqual([]);
+  });
+
+  test("a this-prefixed placeholder is reported", async () => {
+    const xml = WRAP(
+      [P("{{#each attorneys}}"), P("{{this.name}}"), P("{{/each}}")].join(""),
+    );
+    const result = await discoverTemplate(await makeDocx(xml));
+
+    expect(result.warnings).toEqual([
+      {
+        code: "this_prefix",
+        path: "this.name",
+        message: expect.stringContaining("{{this.name}}"),
+        hint: "Inside {{#each items}} write the loop path: {{items.name}}.",
+      },
+    ]);
+  });
+
+  test("block tokens outside the grammar are reported as unknown directives", async () => {
+    const xml = WRAP(
+      [
+        P("{{#each attorneys}}"),
+        P("{{attorneys.name}}"),
+        P("{{#endeach}}"),
+        P("{{/endif}}"),
+      ].join(""),
+    );
+    const result = await discoverTemplate(await makeDocx(xml));
+
+    expect(codesOf(result.warnings)).toEqual([
+      "unknown_directive",
+      "unknown_directive",
+    ]);
+    expect(result.warnings.map(({ path }) => path)).toEqual([
+      "{{#endeach}}",
+      "{{/endif}}",
+    ]);
+  });
+
+  test("bracket indexing is reported", async () => {
+    const xml = WRAP(P("{{attorneys[0].name}}"));
+    const result = await discoverTemplate(await makeDocx(xml));
+
+    // Bracket syntax is not a placeholder at all: it survives into the filled
+    // document verbatim, which is what the warning is for.
+    expect(result.placeholders).toEqual([]);
+    expect(result.warnings).toEqual([
+      {
+        code: "bracket_index",
+        path: "{{attorneys[0].name}}",
+        message: expect.stringContaining("brackets"),
+        hint: expect.stringContaining("{{#each items}}"),
+      },
+    ]);
+  });
+
+  test("a marker split across paragraphs is reported", async () => {
+    const split = WRAP([P("Name: {{name"), P("}}")].join(""));
+    const whole = WRAP(P("Name: {{name}}"));
+
+    expect(
+      codesOf((await discoverTemplate(await makeDocx(split))).warnings),
+    ).toEqual(["split_marker", "split_marker"]);
+    expect((await discoverTemplate(await makeDocx(whole))).warnings).toEqual(
+      [],
+    );
+  });
+
+  test("condition expressions expose the paths they read", async () => {
+    const xml = WRAP(
+      [P("{{#if has_guarantor}}"), P("{{guarantor.name}}"), P("{{/if}}")].join(
+        "",
+      ),
+    );
+    const result = await discoverTemplate(await makeDocx(xml));
+
+    expect(result.conditionPaths).toEqual(["has_guarantor"]);
+  });
+});
