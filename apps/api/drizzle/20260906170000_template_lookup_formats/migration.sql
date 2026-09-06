@@ -4,7 +4,7 @@ SET statement_timeout = '30s';
 --> statement-breakpoint
 CREATE TABLE "template_lookup_formats" (
   "id" uuid PRIMARY KEY NOT NULL,
-  "organization_id" text NOT NULL REFERENCES "organization"("id") ON DELETE CASCADE,
+  "organization_id" varchar(128) NOT NULL REFERENCES "organization"("id") ON DELETE CASCADE,
   "registry" text NOT NULL,
   "name" varchar(120) NOT NULL,
   "format" varchar(2000) NOT NULL,

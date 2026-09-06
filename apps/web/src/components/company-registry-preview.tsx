@@ -4,8 +4,8 @@ import { ExternalLinkIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { isBusinessRegistryCredentialSlug } from "@stll/api-contract";
-import { getAresCourtName } from "@stll/business-registries/ares";
 import type { AresCompany } from "@stll/business-registries/ares";
+import { getAresCourtName } from "@stll/business-registries/ares/court-names";
 import { getAresLegalFormName } from "@stll/business-registries/ares/legal-forms";
 import { parseIsoDateLocal } from "@stll/time";
 import { Button } from "@stll/ui/button";

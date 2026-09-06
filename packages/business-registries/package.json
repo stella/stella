@@ -48,6 +48,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./ares": "./src/ares/index.ts",
+    "./ares/court-names": "./src/ares/court-names.ts",
     "./ares/legal-forms": "./src/ares/legal-forms.ts",
     "./browser": "./src/browser.ts",
     "./brreg": "./src/brreg/index.ts",

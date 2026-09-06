@@ -3,7 +3,7 @@ SET lock_timeout = '5s';
 SET statement_timeout = '30s';
 --> statement-breakpoint
 CREATE TABLE "business_registry_credentials" (
-  "organization_id" text NOT NULL REFERENCES "organization"("id") ON DELETE CASCADE,
+  "organization_id" varchar(128) NOT NULL REFERENCES "organization"("id") ON DELETE CASCADE,
   "registry" text NOT NULL,
   "ciphertext" bytea NOT NULL,
   "iv" bytea NOT NULL,
