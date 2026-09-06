@@ -763,6 +763,21 @@ describe("environment doctor output", () => {
 });
 
 describe("environment usage auditing", () => {
+  test("audits source files but excludes workspace build output", () => {
+    for (const parent of ["apps", "packages"]) {
+      for (const extension of ["js", "mjs", "ts"]) {
+        expect(
+          isIgnoredAuditPath(
+            `${parent}/example/dist/assets/vendor.${extension}`,
+          ),
+        ).toBe(true);
+        expect(
+          isIgnoredAuditPath(`${parent}/example/src/dist/reader.${extension}`),
+        ).toBe(false);
+      }
+    }
+  });
+
   test("finds static runtime, Vite, and deployment references", () => {
     const usages = findEnvUsages(
       ".github/workflows/example.yml",
