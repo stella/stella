@@ -60,7 +60,16 @@ export const redisClientOptions = (
   maxRetries: RECONNECT_ATTEMPT_LIMIT,
 });
 
-class ConfiguredRedisClient extends RedisClient implements BunRedisRawClient {
+// `duplicate` is left out of the claim: BullMQ types it `Promise<this>`, and
+// Bun's inherited `duplicate()` resolves to a plain `RedisClient`, which no
+// subclass-typed promise can satisfy. BullMQ only uses the result as a raw
+// client (`_duplicateRaw`), and Bun's clone keeps the options this class was
+// constructed with, so the reconnect policy above survives a duplicate. Every
+// other member of the contract is still checked here.
+class ConfiguredRedisClient
+  extends RedisClient
+  implements Omit<BunRedisRawClient, "duplicate">
+{
   readonly #closeHandlers = new Set<() => void>();
   readonly #connectHandlers = new Set<() => void>();
 
