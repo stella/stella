@@ -55,12 +55,21 @@ import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 // --- Shared anonymization/backing-handler mocks -----------------------
 
 type AnonymizeTextFieldsInput = {
+  catalogs?: unknown;
   fields: readonly string[];
-  gazetteerEntries?: unknown;
   organizationId?: unknown;
-  scopedDb?: unknown;
   workspaceId?: unknown;
 };
+
+/** Empty catalogs, one entry per requested id, like the real loaders. */
+const emptyCatalogsByWorkspace = async ({
+  workspaceIds,
+}: {
+  workspaceIds: readonly string[];
+}) =>
+  await Promise.resolve(
+    new Map(workspaceIds.map((workspaceId) => [workspaceId, []])),
+  );
 
 const anonymizeTextFieldsMock = mock(
   async ({ fields }: AnonymizeTextFieldsInput) => ({
@@ -101,6 +110,8 @@ const finalizeMcpEgress = async (
   serializeToolResult(
     await finalizeToolEgress(options, {
       anonymizeTextFields: anonymizeTextFieldsMock,
+      loadAnonymizationAllowlistCanonicalsByWorkspace: emptyCatalogsByWorkspace,
+      loadAnonymizationGazetteerEntriesByWorkspace: emptyCatalogsByWorkspace,
     }),
   );
 const { ANONYMIZED_MCP_TOOL_DEFINITIONS } =

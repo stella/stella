@@ -7,6 +7,7 @@ import { properties, propertyDependencies } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import type { AuditEvent } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -121,6 +122,7 @@ const createPropertiesBatch = createSafeHandler(
         }
 
         const insertedIds: string[] = [];
+        const auditEvents: AuditEvent[] = [];
 
         for (const { name, built } of builtItems) {
           if ("status" in built) {
@@ -164,7 +166,7 @@ const createPropertiesBatch = createSafeHandler(
             );
           }
 
-          await recordAuditEvent(tx, {
+          auditEvents.push({
             action: AUDIT_ACTION.CREATE,
             resourceType: AUDIT_RESOURCE_TYPE.PROPERTY,
             resourceId: inserted.id,
@@ -181,6 +183,12 @@ const createPropertiesBatch = createSafeHandler(
           });
 
           insertedIds.push(inserted.id);
+        }
+
+        // The recorder inserts an array in one statement, and one request is
+        // one audit group.
+        if (auditEvents.length > 0) {
+          await recordAuditEvent(tx, auditEvents);
         }
 
         return { ids: insertedIds };

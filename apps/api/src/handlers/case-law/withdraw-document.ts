@@ -25,7 +25,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import {
   cancelCaseLawCorpusUploadIntents,
-  completeCaseLawCorpusUploadIntentCleanup,
+  completeCaseLawCorpusUploadIntentCleanups,
 } from "@/api/lib/legal-search/case-law-corpus-upload-intents";
 import { removeDecisionFromIndex } from "@/api/lib/legal-search/case-law-search-index";
 import { recordCorpusWithdrawalAuditEvent } from "@/api/lib/legal-search/corpus-index-job-audit";
@@ -252,20 +252,26 @@ export const withdrawCaseLawDecisionDocument = async ({
         sectionsKey: intent.sectionsKey,
         astKey: intent.astKey,
       });
-      await completeCaseLawCorpusUploadIntentCleanup({
-        intentId: intent.id,
-        scopedDb,
-      });
+      return intent.id;
     }),
   );
+  const cleanedIntentIds: SafeId<"caseLawCorpusUploadIntent">[] = [];
   for (const cleanup of cancelledCleanup) {
     if (cleanup.status === "rejected") {
       captureError(cleanup.reason, {
         decisionId,
         step: "withdrawCaseLawDecisionDocument.deleteReservedCorpusUpload",
       });
+      continue;
     }
+    cleanedIntentIds.push(cleanup.value);
   }
+  // Only the intents whose objects are gone lose their row; the rest stay
+  // retry targets.
+  await completeCaseLawCorpusUploadIntentCleanups({
+    intentIds: cleanedIntentIds,
+    scopedDb,
+  });
 
   return Result.ok({ type: "withdrawn" });
 };

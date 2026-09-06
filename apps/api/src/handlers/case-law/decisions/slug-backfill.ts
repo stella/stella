@@ -119,6 +119,7 @@ export const backfillCaseLawSlugs = async (
 
     for (const row of rows) {
       try {
+        // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- per-row unique-index compare-and-set; one collision must not abort the batch
         const wrote = await assignSlug(db, row);
         if (wrote) {
           written += 1;

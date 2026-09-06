@@ -393,6 +393,7 @@ export const listSitemapShardDecisionsHandler = async (
       languageGroupKeys,
       SITEMAP_LANGUAGE_ALTERNATE_GROUP_BATCH_SIZE,
     )) {
+      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- chunk loop: each iteration is already one inArray read over a whole key chunk
       const batchRows = await readSitemapDecisionAlternates(tx, groupKeyBatch);
       if (batchRows.length === SITEMAP_LANGUAGE_ALTERNATE_ROW_LIMIT) {
         logger.warn("case_law.sitemap.language_alternate_overflow", {

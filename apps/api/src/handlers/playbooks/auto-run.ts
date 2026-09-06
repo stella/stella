@@ -107,6 +107,7 @@ export const createAutoRunPlaybooks = (
           let documentRunCount = 0;
 
           for (const definition of applicable) {
+            // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- each playbook's materialization consumes the shared property cap the next one checks
             const opened = await dependencies.openPlaybookRun({
               tx,
               workspaceId,

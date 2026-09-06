@@ -20,7 +20,7 @@ import { settleAll, settleAllCleanup } from "@/api/lib/corpus-index/core";
 import { ConcurrentModificationError } from "@/api/lib/errors/tagged-errors";
 import {
   cancelCaseLawCorpusUploadIntents,
-  completeCaseLawCorpusUploadIntentCleanup,
+  completeCaseLawCorpusUploadIntentCleanups,
 } from "@/api/lib/legal-search/case-law-corpus-upload-intents";
 import { removeDecisionFromIndex } from "@/api/lib/legal-search/case-law-search-index";
 import { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
@@ -319,20 +319,26 @@ export const redactCaseLawDecision = async ({
         sectionsKey: intent.sectionsKey,
         astKey: intent.astKey,
       });
-      await completeCaseLawCorpusUploadIntentCleanup({
-        intentId: intent.id,
-        scopedDb,
-      });
+      return intent.id;
     }),
   );
+  const cleanedIntentIds: SafeId<"caseLawCorpusUploadIntent">[] = [];
   for (const cleanup of cancelledCleanup) {
     if (cleanup.status === "rejected") {
       captureError(cleanup.reason, {
         decisionId,
         step: "redactCaseLawDecision.deleteReservedCorpusUpload",
       });
+      continue;
     }
+    cleanedIntentIds.push(cleanup.value);
   }
+  // Only the intents whose objects are gone lose their row; the rest stay
+  // retry targets.
+  await completeCaseLawCorpusUploadIntentCleanups({
+    intentIds: cleanedIntentIds,
+    scopedDb,
+  });
 
   // Clear pointers only once every object is gone; an incomplete erasure
   // retains exact retry targets while the tombstone already blocks every
@@ -407,6 +413,7 @@ export const redactCaseLawDecision = async ({
     try {
       const claimOutcomes = await Promise.allSettled(
         [...targets.keys()].sort().map(async (targetGeneration) => ({
+          // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- bounded fan-out: one lease per corpus generation, each with its own fencing token
           lease: await acquireCaseLawCorpusGenerationLease({
             generation: targetGeneration,
             scopedDb,
@@ -496,6 +503,7 @@ export const redactCaseLawDecision = async ({
       }
       await scopedDb(async (tx) => {
         for (const lease of leases.values()) {
+          // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- each lease renews under its own fencing token before the shared database mark
           await lease.beforeDatabaseMark(tx);
         }
         const stillErased = (

@@ -1,3 +1,7 @@
+import { panic } from "better-result";
+
+import { loadAnonymizationAllowlistCanonicalsByWorkspace } from "@/api/lib/anonymization-allowlist";
+import { loadAnonymizationGazetteerEntriesByWorkspace } from "@/api/lib/anonymization-blacklist";
 import { anonymizeTextFields } from "@/api/mcp/anonymization";
 import type { McpMode } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
@@ -52,6 +56,12 @@ type FinalizeToolEgressOptions<TResponse extends McpToolResponse> = {
 type EgressDependencies = {
   /** Provider boundary for anonymizing tenant-authored text. */
   anonymizeTextFields?: typeof anonymizeTextFields | undefined;
+  loadAnonymizationAllowlistCanonicalsByWorkspace?:
+    | typeof loadAnonymizationAllowlistCanonicalsByWorkspace
+    | undefined;
+  loadAnonymizationGazetteerEntriesByWorkspace?:
+    | typeof loadAnonymizationGazetteerEntriesByWorkspace
+    | undefined;
 };
 
 export function finalizeToolEgress<TData>(
@@ -66,15 +76,21 @@ export async function finalizeToolEgress(
   { context, mode, response }: FinalizeToolEgressOptions<McpToolResponse>,
   {
     anonymizeTextFields: anonymize = anonymizeTextFields,
+    loadAnonymizationAllowlistCanonicalsByWorkspace:
+      loadAllowlist = loadAnonymizationAllowlistCanonicalsByWorkspace,
+    loadAnonymizationGazetteerEntriesByWorkspace:
+      loadGazetteer = loadAnonymizationGazetteerEntriesByWorkspace,
   }: EgressDependencies = {},
 ): Promise<InternalToolResult> {
   if (!isMcpEgressPlan(response)) {
     return response;
   }
 
+  const anonymizer = { anonymize, loadAllowlist, loadGazetteer };
+
   if (response.egress === "compatSearch") {
     return await finalizeCompatSearch({
-      anonymize,
+      anonymizer,
       context,
       mode,
       plan: response,
@@ -83,15 +99,41 @@ export async function finalizeToolEgress(
 
   if (response.egress === "compatFetch") {
     return await finalizeCompatFetch({
-      anonymize,
+      anonymizer,
       context,
       mode,
       plan: response,
     });
   }
 
-  return await finalizeStructured({ anonymize, context, mode, plan: response });
+  return await finalizeStructured({
+    anonymizer,
+    context,
+    mode,
+    plan: response,
+  });
 }
+
+type EgressAnonymizer = {
+  anonymize: typeof anonymizeTextFields;
+  loadAllowlist: typeof loadAnonymizationAllowlistCanonicalsByWorkspace;
+  loadGazetteer: typeof loadAnonymizationGazetteerEntriesByWorkspace;
+};
+
+/** Both loaders answer for every id they are handed, so a miss is a defect. */
+const catalogFor = <TCatalog>(
+  catalogs: ReadonlyMap<string, TCatalog>,
+  workspaceId: string,
+): TCatalog => {
+  const catalog = catalogs.get(workspaceId);
+  if (catalog === undefined) {
+    return panic(
+      "Anonymization catalog missing for a workspace the payload names",
+      { workspaceId },
+    );
+  }
+  return catalog;
+};
 
 /**
  * Anonymize a flat list of text fields grouped by their `workspaceId` scope.
@@ -101,17 +143,18 @@ export async function finalizeToolEgress(
  * back to `[REDACTED]` rather than leaking the original. Shared by
  * `compatSearch` and the generic `structured` variant.
  *
- * The gazetteer is deliberately left to `anonymizeTextFields`, which loads it
- * per group: the deny-list is org-wide terms plus the *group's* workspace
- * terms, so one payload-wide load would hold every group to the firm-wide half
- * alone and drop workspace-scoped terms.
+ * Both catalogs are read once here, for exactly the workspaces the payload
+ * names, and handed to each call pre-resolved: two queries for the payload
+ * rather than two per workspace. Each group still gets its own tier — org-wide
+ * terms plus that workspace's own — so nothing is held to the firm-wide half
+ * alone, and the per-workspace loop holds no database handle.
  */
 const anonymizeTextFieldsByWorkspace = async ({
-  anonymize,
+  anonymizer: { anonymize, loadAllowlist, loadGazetteer },
   context,
   fields,
 }: {
-  anonymize: typeof anonymizeTextFields;
+  anonymizer: EgressAnonymizer;
   context: McpRequestContext;
   fields: readonly McpStructuredTextField[];
 }): Promise<void> => {
@@ -129,11 +172,36 @@ const anonymizeTextFieldsByWorkspace = async ({
     byWorkspace.set(field.workspaceId, [field]);
   }
 
+  // Exactly the workspaces the loop would have queried one by one: the
+  // handlers established access to each of them when they attributed a field
+  // to it, and nothing here widens that set.
+  const workspaceIds = [...byWorkspace.keys()];
+  const [gazetteerByWorkspace, excludedCanonicalsByWorkspace] =
+    await Promise.all([
+      loadGazetteer({
+        organizationId: context.organizationId,
+        scopedDb: context.scopedDb,
+        workspaceIds,
+      }),
+      loadAllowlist({
+        organizationId: context.organizationId,
+        scopedDb: context.scopedDb,
+        workspaceIds,
+      }),
+    ]);
+
   for (const [workspaceId, group] of byWorkspace) {
     const anonymized = await anonymize({
+      catalogs: {
+        type: "preloaded",
+        excludedCanonicals: catalogFor(
+          excludedCanonicalsByWorkspace,
+          workspaceId,
+        ),
+        gazetteerEntries: catalogFor(gazetteerByWorkspace, workspaceId),
+      },
       fields: group.map((field) => field.value),
       organizationId: context.organizationId,
-      scopedDb: context.scopedDb,
       workspaceId,
     });
 
@@ -151,12 +219,12 @@ const anonymizeTextFieldsByWorkspace = async ({
 };
 
 const finalizeStructured = async ({
-  anonymize,
+  anonymizer,
   context,
   mode,
   plan,
 }: {
-  anonymize: typeof anonymizeTextFields;
+  anonymizer: EgressAnonymizer;
   context: McpRequestContext;
   mode: McpMode;
   plan: Extract<McpEgressPlan, { egress: "structured" }>;
@@ -166,7 +234,7 @@ const finalizeStructured = async ({
   // and placeholders stay stable across windows of one field.
   if (mode === "anonymized") {
     await anonymizeTextFieldsByWorkspace({
-      anonymize,
+      anonymizer,
       context,
       fields: plan.textFields,
     });
@@ -188,12 +256,12 @@ const finalizeStructured = async ({
 };
 
 const finalizeCompatSearch = async ({
-  anonymize,
+  anonymizer,
   context,
   mode,
   plan,
 }: {
-  anonymize: typeof anonymizeTextFields;
+  anonymizer: EgressAnonymizer;
   context: McpRequestContext;
   mode: McpMode;
   plan: Extract<McpEgressPlan, { egress: "compatSearch" }>;
@@ -210,7 +278,7 @@ const finalizeCompatSearch = async ({
   // leave Stella for the AI client.
   if (mode === "anonymized") {
     await anonymizeTextFieldsByWorkspace({
-      anonymize,
+      anonymizer,
       context,
       fields: plan.results.map((hit, index) => ({
         apply: (value) => {
@@ -229,12 +297,12 @@ const finalizeCompatSearch = async ({
 };
 
 const finalizeCompatFetch = async ({
-  anonymize,
+  anonymizer,
   context,
   mode,
   plan,
 }: {
-  anonymize: typeof anonymizeTextFields;
+  anonymizer: EgressAnonymizer;
   context: McpRequestContext;
   mode: McpMode;
   plan: Extract<McpEgressPlan, { egress: "compatFetch" }>;
@@ -245,7 +313,7 @@ const finalizeCompatFetch = async ({
     // Anonymize the whole document first, then window the redacted text so no
     // entity name is split across a window edge.
     const anonymized = await anonymizeCompatFetchPayload({
-      anonymize,
+      anonymize: anonymizer.anonymize,
       context,
       text: plan.text,
       title: plan.title,
@@ -316,9 +384,9 @@ const anonymizeCompatFetchPayload = async ({
   workspaceId: string;
 }) => {
   const anonymized = await anonymize({
+    catalogs: { type: "database", scopedDb: context.scopedDb },
     fields: [title, text],
     organizationId: context.organizationId,
-    scopedDb: context.scopedDb,
     workspaceId,
   });
 

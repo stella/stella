@@ -115,12 +115,14 @@ export const runSchedulerOnce = async ({
 
     // Claim immediately before execution. A pass never leases work it cannot
     // start yet, so another scheduler replica remains free to process it.
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- claims one job immediately before running it so replicas can take the rest
     const job = await acquireNextDueJob({ db, leaseMs, runnerId });
     if (!job) {
       break;
     }
     result.acquired += 1;
 
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- executes the job just leased; the next claim depends on this run finishing
     const status = await runJob({
       db,
       job,

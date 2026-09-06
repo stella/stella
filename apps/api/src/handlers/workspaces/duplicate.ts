@@ -28,7 +28,7 @@ import {
   remapDependencyRefs,
   remapNodePropertyIds,
 } from "@/api/lib/conditions/ast-utils";
-import { allocateEntityStamp } from "@/api/lib/document-counter";
+import { allocateEntityStamps } from "@/api/lib/document-counter";
 import { enqueueDocumentProcessingRun } from "@/api/lib/document-processing-enqueue";
 import { handoffCommittedDocumentProcessingRuns } from "@/api/lib/document-processing-handoff";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -804,6 +804,20 @@ export const createDuplicateWorkspace = (
         );
 
         if (includeContent && entitiesToDuplicate.length > 0) {
+          // The document rows are known before the duplicate starts, so the
+          // whole run of sequence numbers is allocated in one counter upsert
+          // plus one reference read instead of two statements per document.
+          // The filter keeps duplicate order, so each document consumes the
+          // stamp for its own position.
+          const documentStamps = await allocateEntityStamps({
+            tx,
+            workspaceId: targetWorkspaceId,
+            count: entitiesToDuplicate.filter(
+              (source) => source.kind === "document",
+            ).length,
+          });
+          let nextStampIndex = 0;
+
           for (const source of entitiesToDuplicate) {
             if (!source.currentVersion) {
               throw new HandlerError({
@@ -816,7 +830,10 @@ export const createDuplicateWorkspace = (
             const newVersionId = createSafeId<"entityVersion">();
             const entityStamp =
               source.kind === "document"
-                ? await allocateEntityStamp(tx, targetWorkspaceId)
+                ? (documentStamps.at(nextStampIndex++) ??
+                  panic(
+                    "Fewer document stamps allocated than documents copied",
+                  ))
                 : null;
             const newParentId = source.parentId
               ? (entityIdMap.get(source.parentId) ?? null)

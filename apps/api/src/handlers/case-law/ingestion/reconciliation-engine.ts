@@ -46,7 +46,7 @@ import {
 import {
   recordSliceCoverage,
   recordSliceWalkFailure,
-  touchSliceCoverage,
+  touchSliceCoverages,
 } from "@/api/handlers/case-law/ingestion/coverage-ledger";
 import {
   allocateSourceObservationOrder,
@@ -971,6 +971,7 @@ const walkSlice = async ({
       summary.deferred += fillable.length - index;
       break;
     }
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- paced publisher fetch per item, under a lease and a wall-clock budget
     await ingestListedItem({
       adapterKey,
       item,
@@ -1089,6 +1090,7 @@ const retryParkedItems = async ({
       break;
     }
     fetched += 1;
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- paced publisher fetch per due item, under a lease and a clock budget
     await ingestListedItem({
       adapterKey,
       item,
@@ -1199,16 +1201,17 @@ export const runReconciliationWorkUnit = async ({
   // row forever. The candidate read is a bounded oldest-first window, so
   // enough settled rows fill it completely and the unsettled slices behind
   // them are never selected again: priority 3 dies silently while the loop
-  // still looks busy. Re-stamping the row with its own counts costs one upsert
-  // and puts it back at the young end of the window, so a settled backlog is
-  // paged through a window at a time instead of blocking the queue.
+  // still looks busy. Every settled row takes the same stamp, so the whole
+  // window costs one update and lands back at its young end, and a settled
+  // backlog is paged through a window at a time instead of blocking the queue.
   //
   // Not a work unit: touching is bookkeeping, and selection continues over
   // whatever is genuinely owed in the same iteration. Outside the lease, like
   // the crawl's own ledger writes.
-  for (const { slice } of settled) {
-    await touchSliceCoverage(scopedDb, { sourceId, slice });
-  }
+  await touchSliceCoverages(scopedDb, {
+    sourceId,
+    slices: settled.map(({ slice }) => slice),
+  });
 
   // The sweep frontier: the oldest slice with any row, bounded above by the
   // tip window's own start so a source with only tip rows still sweeps.

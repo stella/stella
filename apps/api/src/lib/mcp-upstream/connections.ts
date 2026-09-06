@@ -258,6 +258,7 @@ const normalizeConnectionRows = async ({
 }): Promise<LoadedMcpConnection[]> => {
   const normalizedRows = await Promise.all(
     rows.map(
+      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- pure row mapping; only a repair write when an OAuth row is malformed
       async (rawRow) => await normalizeMcpConnectionRow({ rawRow, safeDb }),
     ),
   );

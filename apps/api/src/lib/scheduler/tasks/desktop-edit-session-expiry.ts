@@ -143,6 +143,7 @@ export const expireDesktopEditSessions: SchedulerTask = async ({
           workspaceId: null,
           userId: firstEvent.userId,
         });
+        // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- one batched audit insert per actor; the recorder binds organization and user
         await recordAuditEvent(
           tx,
           actorEvents.map(({ event }) => event),

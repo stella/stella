@@ -151,6 +151,7 @@ export const collectFullWorkflowTargetIds = async ({
   let lastCursor: FullWorkflowTargetCursor | null = null;
 
   while (true) {
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- keyset page walk: each page's cursor is the previous page's last row
     const rows = await fetchFullWorkflowTargetBatch({
       createdAtCutoff,
       lastCursor,

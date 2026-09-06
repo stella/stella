@@ -19,7 +19,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import type { AuditRecorder } from "@/api/lib/audit-log";
+import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
@@ -380,6 +380,7 @@ const createDirectoryRows = async ({
 > => {
   const directoryIdsByKey = new Map<string, SafeId<"entity">>();
   const createdDirectories: { key: string; entityId: SafeId<"entity"> }[] = [];
+  const auditEvents: AuditEvent[] = [];
 
   for (const directory of directories) {
     let parentId = rootParentId;
@@ -416,7 +417,7 @@ const createDirectoryRows = async ({
       .set({ currentVersionId: entityVersionId })
       .where(eq(entities.id, entityId));
 
-    await recordAuditEvent(tx, {
+    auditEvents.push({
       action: AUDIT_ACTION.CREATE,
       resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
       resourceId: entityId,
@@ -434,6 +435,13 @@ const createDirectoryRows = async ({
 
     directoryIdsByKey.set(directory.key, entityId);
     createdDirectories.push({ key: directory.key, entityId });
+  }
+
+  // The folder rows have to go in one at a time (a child needs its parent's
+  // id), but their audit rows do not: the recorder writes an array in one
+  // statement.
+  if (auditEvents.length > 0) {
+    await recordAuditEvent(tx, auditEvents);
   }
 
   return Result.ok({ directoryIdsByKey, createdDirectories });

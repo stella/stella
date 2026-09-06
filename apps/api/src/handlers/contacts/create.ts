@@ -209,6 +209,7 @@ export const createContactHandler = async function* ({
       if (attorneyIds.length > 0) {
         const uniqueAttorneyIds = [...new Set(attorneyIds)];
         for (const attorneyId of uniqueAttorneyIds) {
+          // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- bounded: at most two attorney ids per request, deduplicated
           const validAttorneyId = await validateOrgUserId(
             tx,
             brandPersistedUserId(attorneyId),

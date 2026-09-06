@@ -16,30 +16,41 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
 import { buildFieldMarkers } from "@/api/mcp/field-markers";
 
+/**
+ * Where one call's deny-list and allowlist come from.
+ *
+ * `database` reads both catalogs for this call's workspace through
+ * `scopedDb`. `preloaded` carries them already resolved and holds no database
+ * handle at all, which is how a caller anonymizing several workspaces reads
+ * both catalogs once for the whole set instead of twice per workspace.
+ *
+ * The branches are exclusive by construction: a preloaded call cannot fall
+ * back to a per-call read, and a database-backed call cannot supply half a
+ * catalog and silently redact against the other half's default.
+ */
+export type AnonymizationCatalogSource =
+  | {
+      type: "database";
+      /**
+       * Document the text belongs to, when the caller knows it (MCP
+       * search results, file-aware tool outputs). When set, the
+       * allowlist loader pulls doc-scoped ignores in addition to the
+       * workspace + org tiers, so a "ignore on this file" override
+       * applies to server anonymization too — not just the inspector
+       * overlay. Chat boundaries leave this undefined.
+       */
+      entityId?: SafeId<"entity"> | undefined;
+      scopedDb: ScopedDb;
+    }
+  | {
+      type: "preloaded";
+      /** Canonicals the user has flagged as false positives. */
+      excludedCanonicals: readonly string[];
+      gazetteerEntries: GazetteerEntry[];
+    };
+
 export type AnonymizeTextFieldsInput = {
-  fields: string[];
-  /** Exact identifiers or terms that must be redacted in this batch. */
-  forcedSensitiveValues?: readonly string[] | undefined;
-  gazetteerEntries?: GazetteerEntry[] | undefined;
-  /**
-   * Canonicals the user has flagged as false positives. The
-   * dependency loader fills this in from the allowlist table
-   * when omitted, so callers that already resolved the list
-   * (test seams, batch jobs) can pass it directly.
-   */
-  excludedCanonicals?: readonly string[] | undefined;
-  organizationId: SafeId<"organization">;
-  scopedDb: ScopedDb;
-  workspaceId: string;
-  /**
-   * Document the text belongs to, when the caller knows it (MCP
-   * search results, file-aware tool outputs). When set, the
-   * allowlist loader pulls doc-scoped ignores in addition to the
-   * workspace + org tiers, so a "ignore on this file" override
-   * applies to server anonymization too — not just the inspector
-   * overlay. Chat boundaries leave this undefined.
-   */
-  entityId?: SafeId<"entity"> | undefined;
+  catalogs: AnonymizationCatalogSource;
   /**
    * Optional shared `PipelineContext`. It caches prepared native
    * pipeline packages, but native placeholder numbering still starts
@@ -48,6 +59,11 @@ export type AnonymizeTextFieldsInput = {
    * Omitted callers (one-shot anonymizations) get a fresh context.
    */
   context?: PipelineContext | undefined;
+  fields: string[];
+  /** Exact identifiers or terms that must be redacted in this batch. */
+  forcedSensitiveValues?: readonly string[] | undefined;
+  organizationId: SafeId<"organization">;
+  workspaceId: string;
 };
 
 export type AnonymizeTextFieldsDependencies = ChatAnonRuntime<
@@ -117,16 +133,66 @@ const splitRedactedFields = ({
   return fields;
 };
 
+type ResolvedAnonymizationCatalogs = {
+  excludedCanonicals: readonly string[];
+  gazetteerEntries: GazetteerEntry[];
+};
+
+const resolveAnonymizationCatalogs = async ({
+  catalogs,
+  dependencies,
+  organizationId,
+  workspaceId,
+}: {
+  catalogs: AnonymizationCatalogSource;
+  dependencies: AnonymizeTextFieldsDependencies;
+  organizationId: SafeId<"organization">;
+  workspaceId: string;
+}): Promise<ResolvedAnonymizationCatalogs> => {
+  switch (catalogs.type) {
+    case "preloaded":
+      return {
+        excludedCanonicals: catalogs.excludedCanonicals,
+        gazetteerEntries: catalogs.gazetteerEntries,
+      };
+    case "database": {
+      const entries = await dependencies.loadAnonymizationGazetteerEntries({
+        organizationId,
+        scope:
+          workspaceId === organizationId
+            ? { type: "organization" }
+            : {
+                type: "workspace",
+                workspaceId: brandPersistedWorkspaceId(workspaceId),
+              },
+        scopedDb: catalogs.scopedDb,
+      });
+      const allowlist = await dependencies.loadAnonymizationAllowlistCanonicals(
+        {
+          organizationId,
+          scopeId: workspaceId,
+          entityId: catalogs.entityId,
+          scopedDb: catalogs.scopedDb,
+        },
+      );
+      return { excludedCanonicals: allowlist, gazetteerEntries: entries };
+    }
+    default: {
+      catalogs satisfies never;
+      return panic(
+        `Unhandled anonymization catalog source: ${String(catalogs)}`,
+      );
+    }
+  }
+};
+
 export const anonymizeTextFieldsWithDependencies = async ({
+  catalogs,
   dependencies,
   fields,
   forcedSensitiveValues,
-  gazetteerEntries,
-  excludedCanonicals,
   organizationId,
-  scopedDb,
   workspaceId,
-  entityId,
   context: providedContext,
 }: AnonymizeTextFieldsInput & {
   dependencies: AnonymizeTextFieldsDependencies;
@@ -148,27 +214,13 @@ export const anonymizeTextFieldsWithDependencies = async ({
     .map((field, index) => `${markers[index]}${field}`)
     .join("");
 
-  const entries =
-    gazetteerEntries ??
-    (await dependencies.loadAnonymizationGazetteerEntries({
+  const { excludedCanonicals, gazetteerEntries } =
+    await resolveAnonymizationCatalogs({
+      catalogs,
+      dependencies,
       organizationId,
-      scope:
-        workspaceId === organizationId
-          ? { type: "organization" }
-          : {
-              type: "workspace",
-              workspaceId: brandPersistedWorkspaceId(workspaceId),
-            },
-      scopedDb,
-    }));
-  const allowlist =
-    excludedCanonicals ??
-    (await dependencies.loadAnonymizationAllowlistCanonicals({
-      organizationId,
-      scopeId: workspaceId,
-      entityId,
-      scopedDb,
-    }));
+      workspaceId,
+    });
   const dictionaries = await dependencies.loadNameDictionaries();
 
   const result = await runChatAnonPipeline({
@@ -177,8 +229,8 @@ export const anonymizeTextFieldsWithDependencies = async ({
     text: combinedText,
     workspaceId,
     forcedSensitiveValues,
-    gazetteerEntries: entries,
-    excludedCanonicals: allowlist,
+    gazetteerEntries,
+    excludedCanonicals,
     context,
   });
 

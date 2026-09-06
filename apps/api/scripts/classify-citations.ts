@@ -195,6 +195,7 @@ const main = async () => {
     }
 
     try {
+      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- rules load once into the caller-owned cache; the model tier is rate-limited
       const result = await classifyCitation({
         context,
         citationText: citation.citationText,
@@ -213,6 +214,7 @@ const main = async () => {
       }
 
       if (!args.dryRun && result.source !== "fallback") {
+        // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- each classification is persisted before the next model call, so a crash keeps finished work
         await persistPolarity(citation.id, result, scopedDb);
       }
 

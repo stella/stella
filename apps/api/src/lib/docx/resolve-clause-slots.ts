@@ -5,13 +5,18 @@
  * clauseVersion.
  */
 
+import { panic } from "better-result";
+import { and, eq, inArray, or } from "drizzle-orm";
+
 import type { ScopedDb } from "@/api/db/safe-db";
+import { clauseVersions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   clauseBodyToPlainText,
   clauseBodyToRichPatch,
 } from "@/api/lib/clauses/clause-to-patch";
 import type { ClauseBody } from "@/api/lib/clauses/types";
+import { LIMITS } from "@/api/lib/limits";
 import { isVariantDeleted } from "@/api/lib/template-clause-links";
 
 import type { ClauseSlot } from "./discover-clause-slots";
@@ -39,19 +44,17 @@ export const resolveClauseSlots = async (
   scopedDb: ScopedDb,
   organizationId: SafeId<"organization">,
 ): Promise<Record<string, RichPatchValue>> => {
-  if (slots.length === 0) {
-    return {};
-  }
+  const bodies = await resolveSlotBodies(
+    templateId,
+    slots,
+    scopedDb,
+    organizationId,
+  );
 
   const patches: Record<string, RichPatchValue> = {};
 
   for (const slot of slots) {
-    const body = await resolveSlotBody(
-      templateId,
-      slot,
-      scopedDb,
-      organizationId,
-    );
+    const body = bodies.get(slot.patchKey);
     if (body) {
       patches[slot.patchKey] = clauseBodyToRichPatch(body);
     }
@@ -71,15 +74,17 @@ export const resolveClauseSlotBodies = async (
   scopedDb: ScopedDb,
   organizationId: SafeId<"organization">,
 ): Promise<Record<string, ClauseBody>> => {
+  const resolved = await resolveSlotBodies(
+    templateId,
+    slots,
+    scopedDb,
+    organizationId,
+  );
+
   const bodies: Record<string, ClauseBody> = {};
 
   for (const slot of slots) {
-    const body = await resolveSlotBody(
-      templateId,
-      slot,
-      scopedDb,
-      organizationId,
-    );
+    const body = resolved.get(slot.patchKey);
     if (body) {
       bodies[slot.patchKey] = body;
     }
@@ -106,19 +111,17 @@ export const resolveClauseSlotTexts = async (
   scopedDb: ScopedDb,
   organizationId: SafeId<"organization">,
 ): Promise<Record<string, string>> => {
-  if (slots.length === 0) {
-    return {};
-  }
+  const bodies = await resolveSlotBodies(
+    templateId,
+    slots,
+    scopedDb,
+    organizationId,
+  );
 
   const texts: Record<string, string> = {};
 
   for (const slot of slots) {
-    const body = await resolveSlotBody(
-      templateId,
-      slot,
-      scopedDb,
-      organizationId,
-    );
+    const body = bodies.get(slot.patchKey);
     if (body) {
       // Flatten paragraph breaks so the clause flows as one inline run in the
       // preview (wraps within the column); the actual fill inserts the full
@@ -132,35 +135,33 @@ export const resolveClauseSlotTexts = async (
   return texts;
 };
 
-/**
- * Look up the clause linked to a slot and resolve its body via the
- * version/variant rules. Returns undefined when the slot is unlinked,
- * its variant is deleted (without an explicit modifier), or the target
- * version cannot be found.
- */
-const resolveSlotBody = async (
-  templateId: SafeId<"template">,
-  slot: ClauseSlot,
-  scopedDb: ScopedDb,
-  organizationId: SafeId<"organization">,
-): Promise<ClauseBody | undefined> => {
-  const link = await scopedDb((tx) =>
-    tx.query.templateClauses.findFirst({
-      where: {
-        templateId: { eq: templateId },
-        slotName: slot.name,
-        organizationId: { eq: organizationId },
-      },
-      columns: {
-        clauseId: true,
-        clauseVariantId: true,
-        clauseVariantLabel: true,
-        clauseVersionId: true,
-      },
-    }),
-  );
+// ── Batched resolution ───────────────────────────────
 
-  if (!link || !link.clauseId) {
+/** The body a slot's link points at, before any row is read. */
+type SlotTarget =
+  | { type: "variant"; variantId: SafeId<"clauseVariant"> }
+  | { type: "pinnedVersion"; versionId: SafeId<"clauseVersion"> }
+  | { type: "clauseVersion"; clauseId: SafeId<"clause">; version: number }
+  | { type: "currentVersion"; clauseId: SafeId<"clause"> };
+
+type SlotLink = {
+  clauseId: SafeId<"clause"> | null;
+  clauseVariantId: SafeId<"clauseVariant"> | null;
+  clauseVariantLabel: string | null;
+  clauseVersionId: SafeId<"clauseVersion"> | null;
+};
+
+/**
+ * Which body a slot resolves to, from the link row alone. Returns undefined
+ * when the slot is unlinked or its variant is deleted (without an explicit
+ * modifier).
+ */
+const planSlotTarget = (
+  slot: ClauseSlot,
+  link: SlotLink,
+): SlotTarget | undefined => {
+  const clauseId = link.clauseId;
+  if (!clauseId) {
     return undefined;
   }
 
@@ -173,137 +174,257 @@ const resolveSlotBody = async (
     return undefined;
   }
 
-  const versionRow = await resolveVersion({
-    clauseId: link.clauseId,
-    variantId: link.clauseVariantId,
-    pinnedVersionId: link.clauseVersionId,
-    modifier: slot.versionModifier,
-    scopedDb,
-    organizationId,
-  });
-
-  return versionRow?.body;
-};
-
-// ── Helpers ──────────────────────────────────────────
-
-type VersionRow = {
-  body: Parameters<typeof clauseBodyToRichPatch>[0];
-};
-
-type ResolveVersionOptions = {
-  clauseId: SafeId<"clause">;
-  variantId: SafeId<"clauseVariant"> | null;
-  pinnedVersionId: SafeId<"clauseVersion"> | null;
-  modifier: string | undefined;
-  scopedDb: ScopedDb;
-  organizationId: SafeId<"organization">;
-};
-
-const resolveVersion = async ({
-  clauseId,
-  variantId,
-  pinnedVersionId,
-  modifier,
-  scopedDb,
-  organizationId,
-}: ResolveVersionOptions): Promise<VersionRow | undefined> => {
   // :latest — always use the clause's current version
-  if (modifier === "latest") {
-    const clause = await scopedDb((tx) =>
-      tx.query.clauses.findFirst({
-        where: {
-          id: { eq: clauseId },
-          organizationId: { eq: organizationId },
-        },
-        columns: { currentVersion: true },
-      }),
-    );
-
-    if (!clause) {
-      return undefined;
-    }
-
-    return scopedDb((tx) =>
-      tx.query.clauseVersions.findFirst({
-        where: {
-          clauseId: { eq: clauseId },
-          version: clause.currentVersion,
-          organizationId: { eq: organizationId },
-        },
-        columns: { body: true },
-      }),
-    );
+  if (slot.versionModifier === "latest") {
+    return { type: "currentVersion", clauseId };
   }
 
   // :vN — use a specific version number
-  const vMatch = modifier?.match(VERSION_NUM_RE);
+  const vMatch = slot.versionModifier?.match(VERSION_NUM_RE);
   if (vMatch) {
-    const version = Number.parseInt(vMatch.groups?.["num"] ?? "0", 10);
-    return scopedDb((tx) =>
-      tx.query.clauseVersions.findFirst({
-        where: {
-          clauseId: { eq: clauseId },
-          version,
-          organizationId: { eq: organizationId },
-        },
-        columns: { body: true },
-      }),
-    );
+    return {
+      type: "clauseVersion",
+      clauseId,
+      version: Number.parseInt(vMatch.groups?.["num"] ?? "0", 10),
+    };
   }
 
   // A linked variant is an author-chosen alternative body (not a
   // version). It wins over the pinned/current version, but an explicit
   // slot modifier (:latest / :vN, handled above) still takes precedence
   // — that marker targets the clause's main versions, not the variant.
-  if (variantId) {
-    return scopedDb((tx) =>
-      tx.query.clauseVariants.findFirst({
-        where: {
-          id: { eq: variantId },
-          organizationId: { eq: organizationId },
-        },
-        columns: { body: true },
-      }),
-    );
+  if (link.clauseVariantId) {
+    return { type: "variant", variantId: link.clauseVariantId };
   }
 
   // No modifier — use the pinned version from the link
-  if (pinnedVersionId) {
-    return scopedDb((tx) =>
-      tx.query.clauseVersions.findFirst({
+  if (link.clauseVersionId) {
+    return { type: "pinnedVersion", versionId: link.clauseVersionId };
+  }
+
+  return { type: "currentVersion", clauseId };
+};
+
+/** `clause_versions` is unique on (clauseId, version); key its bodies the same. */
+const clauseVersionKey = (
+  clauseId: SafeId<"clause">,
+  version: number,
+): string => `${clauseId}:${version}`;
+
+type TargetBodies = {
+  currentVersionByClauseId: ReadonlyMap<SafeId<"clause">, number>;
+  bodyByClauseVersion: ReadonlyMap<string, ClauseBody>;
+  bodyByVersionId: ReadonlyMap<SafeId<"clauseVersion">, ClauseBody>;
+  bodyByVariantId: ReadonlyMap<SafeId<"clauseVariant">, ClauseBody>;
+};
+
+const targetBody = (
+  target: SlotTarget,
+  bodies: TargetBodies,
+): ClauseBody | undefined => {
+  switch (target.type) {
+    case "variant":
+      return bodies.bodyByVariantId.get(target.variantId);
+    case "pinnedVersion":
+      return bodies.bodyByVersionId.get(target.versionId);
+    case "clauseVersion":
+      return bodies.bodyByClauseVersion.get(
+        clauseVersionKey(target.clauseId, target.version),
+      );
+    case "currentVersion": {
+      const version = bodies.currentVersionByClauseId.get(target.clauseId);
+      return version === undefined
+        ? undefined
+        : bodies.bodyByClauseVersion.get(
+            clauseVersionKey(target.clauseId, version),
+          );
+    }
+    default:
+      target satisfies never;
+      return panic(`Unhandled clause slot target: ${String(target)}`);
+  }
+};
+
+/**
+ * Resolve every slot's clause body in a fixed number of reads, whatever the
+ * slot count: one `templateClauses` read for the whole slot set, one `clauses`
+ * read for the clause ids whose current version is needed, one `clauseVersions`
+ * read over the (clauseId, version) and pinned-id targets, and one
+ * `clauseVariants` read over the linked variants. Reads past the first are
+ * skipped when nothing targets them.
+ *
+ * Keyed by patch key, not slot name: two markers can name the same slot with
+ * different version modifiers (`{{@clause:X}}` and `{{@clause:X:v2}}`) and
+ * resolve to different bodies.
+ */
+const resolveSlotBodies = async (
+  templateId: SafeId<"template">,
+  slots: ClauseSlot[],
+  scopedDb: ScopedDb,
+  organizationId: SafeId<"organization">,
+): Promise<Map<string, ClauseBody>> => {
+  if (slots.length === 0) {
+    return new Map();
+  }
+
+  const slotNames = [...new Set(slots.map((slot) => slot.name))];
+
+  return scopedDb(async (tx) => {
+    const links = await tx.query.templateClauses.findMany({
+      where: {
+        templateId: { eq: templateId },
+        organizationId: { eq: organizationId },
+        slotName: { in: slotNames },
+      },
+      columns: {
+        slotName: true,
+        clauseId: true,
+        clauseVariantId: true,
+        clauseVariantLabel: true,
+        clauseVersionId: true,
+      },
+      // A template holds at most this many links, so the bound never truncates
+      // a slot set the markers could legitimately match.
+      limit: LIMITS.templateClausesPerTemplate,
+    });
+
+    const linkBySlotName = new Map(links.map((link) => [link.slotName, link]));
+
+    const targets = new Map<string, SlotTarget>();
+    for (const slot of slots) {
+      const link = linkBySlotName.get(slot.name);
+      if (!link) {
+        continue;
+      }
+      const target = planSlotTarget(slot, link);
+      if (target) {
+        targets.set(slot.patchKey, target);
+      }
+    }
+
+    const currentVersionClauseIds = new Set<SafeId<"clause">>();
+    const pinnedVersionIds = new Set<SafeId<"clauseVersion">>();
+    const variantIds = new Set<SafeId<"clauseVariant">>();
+    const versionPairs = new Map<
+      string,
+      { clauseId: SafeId<"clause">; version: number }
+    >();
+
+    for (const target of targets.values()) {
+      switch (target.type) {
+        case "variant":
+          variantIds.add(target.variantId);
+          break;
+        case "pinnedVersion":
+          pinnedVersionIds.add(target.versionId);
+          break;
+        case "clauseVersion":
+          versionPairs.set(
+            clauseVersionKey(target.clauseId, target.version),
+            target,
+          );
+          break;
+        case "currentVersion":
+          currentVersionClauseIds.add(target.clauseId);
+          break;
+        default:
+          target satisfies never;
+          return panic(`Unhandled clause slot target: ${String(target)}`);
+      }
+    }
+
+    const currentVersionByClauseId = new Map<SafeId<"clause">, number>();
+    if (currentVersionClauseIds.size > 0) {
+      const clauseRows = await tx.query.clauses.findMany({
         where: {
-          id: { eq: pinnedVersionId },
+          id: { in: [...currentVersionClauseIds] },
           organizationId: { eq: organizationId },
         },
-        columns: { body: true },
-      }),
+        columns: { id: true, currentVersion: true },
+        limit: currentVersionClauseIds.size,
+      });
+
+      for (const clause of clauseRows) {
+        currentVersionByClauseId.set(clause.id, clause.currentVersion);
+        versionPairs.set(clauseVersionKey(clause.id, clause.currentVersion), {
+          clauseId: clause.id,
+          version: clause.currentVersion,
+        });
+      }
+    }
+
+    const versionPredicates = [...versionPairs.values()].map(
+      ({ clauseId, version }) =>
+        and(
+          eq(clauseVersions.clauseId, clauseId),
+          eq(clauseVersions.version, version),
+        ),
     );
-  }
+    if (pinnedVersionIds.size > 0) {
+      versionPredicates.push(inArray(clauseVersions.id, [...pinnedVersionIds]));
+    }
 
-  // Fallback: use the clause's current version
-  const clause = await scopedDb((tx) =>
-    tx.query.clauses.findFirst({
-      where: {
-        id: { eq: clauseId },
-        organizationId: { eq: organizationId },
-      },
-      columns: { currentVersion: true },
-    }),
-  );
+    const bodyByVersionId = new Map<SafeId<"clauseVersion">, ClauseBody>();
+    const bodyByClauseVersion = new Map<string, ClauseBody>();
+    if (versionPredicates.length > 0) {
+      const versionRows = await tx
+        .select({
+          id: clauseVersions.id,
+          clauseId: clauseVersions.clauseId,
+          version: clauseVersions.version,
+          body: clauseVersions.body,
+        })
+        .from(clauseVersions)
+        .where(
+          and(
+            eq(clauseVersions.organizationId, organizationId),
+            or(...versionPredicates),
+          ),
+        )
+        .limit(versionPairs.size + pinnedVersionIds.size);
 
-  if (!clause) {
-    return undefined;
-  }
+      for (const row of versionRows) {
+        bodyByVersionId.set(row.id, row.body);
+        bodyByClauseVersion.set(
+          clauseVersionKey(row.clauseId, row.version),
+          row.body,
+        );
+      }
+    }
 
-  return scopedDb((tx) =>
-    tx.query.clauseVersions.findFirst({
-      where: {
-        clauseId: { eq: clauseId },
-        version: clause.currentVersion,
-        organizationId: { eq: organizationId },
-      },
-      columns: { body: true },
-    }),
-  );
+    const bodyByVariantId = new Map<SafeId<"clauseVariant">, ClauseBody>();
+    if (variantIds.size > 0) {
+      const variantRows = await tx.query.clauseVariants.findMany({
+        where: {
+          id: { in: [...variantIds] },
+          organizationId: { eq: organizationId },
+        },
+        columns: { id: true, body: true },
+        limit: variantIds.size,
+      });
+
+      for (const variant of variantRows) {
+        bodyByVariantId.set(variant.id, variant.body);
+      }
+    }
+
+    const bodies = new Map<string, ClauseBody>();
+    for (const slot of slots) {
+      const target = targets.get(slot.patchKey);
+      if (!target) {
+        continue;
+      }
+      const body = targetBody(target, {
+        currentVersionByClauseId,
+        bodyByClauseVersion,
+        bodyByVersionId,
+        bodyByVariantId,
+      });
+      if (body) {
+        bodies.set(slot.patchKey, body);
+      }
+    }
+
+    return bodies;
+  });
 };

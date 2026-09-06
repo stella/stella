@@ -1,4 +1,5 @@
-import { and, eq, isNull, or } from "drizzle-orm";
+import { panic } from "better-result";
+import { and, eq, inArray, isNull, or } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { anonymizationAllowlistEntries } from "@/api/db/schema";
@@ -29,9 +30,11 @@ const ALLOWLIST_ORG_WIDE_ALLOWANCE = 1000;
  * row exists — on the list endpoint and, worse, on the masking loader, where
  * a failed read is a document that goes out unmasked.
  */
-export const ALLOWLIST_READ_BOUND =
-  LIMITS.anonymizationAllowlistEntriesPerWorkspace +
+const allowlistReadBound = (workspaceCount: number): number =>
+  LIMITS.anonymizationAllowlistEntriesPerWorkspace * workspaceCount +
   ALLOWLIST_ORG_WIDE_ALLOWANCE;
+
+export const ALLOWLIST_READ_BOUND = allowlistReadBound(1);
 
 export const ALLOWLIST_READ_INVARIANT =
   "LIMITS.anonymizationAllowlistEntriesPerWorkspace (enforced by the create endpoint) plus ALLOWLIST_ORG_WIDE_ALLOWANCE (capacity allowance; org-wide rows have no writer yet)";
@@ -118,4 +121,94 @@ export const loadAnonymizationAllowlistCanonicals = async ({
   );
 
   return rows.map((row) => row.canonical);
+};
+
+/**
+ * The same allowlist as {@link loadAnonymizationAllowlistCanonicals}, resolved
+ * for a whole set of workspaces in one read.
+ *
+ * Two of the three scopes apply here: org-wide (workspace_id IS NULL) and
+ * workspace-wide. The document scope is deliberately absent, exactly as it is
+ * for a single-scope read with no `entityId`: a caller batching several
+ * workspaces is anonymizing a payload, not one entity's text.
+ *
+ * The returned map has an entry for every requested id, so a lookup that
+ * misses is a bug rather than a workspace with nothing allowlisted.
+ */
+export const loadAnonymizationAllowlistCanonicalsByWorkspace = async ({
+  organizationId,
+  scopedDb,
+  workspaceIds,
+}: {
+  organizationId: SafeId<"organization">;
+  scopedDb: ScopedDb;
+  /**
+   * Plain strings at the seam, like `scopeId` above. An id that names no
+   * workspace row (a chat thread id, or the organization's own id, which is
+   * how the redactor spells the org-wide scope) collapses to the org-wide
+   * branch, so it is kept out of the workspace predicate.
+   */
+  workspaceIds: readonly string[];
+}): Promise<Map<string, string[]>> => {
+  const requestedIds = [...new Set(workspaceIds)];
+  const scopedIds = requestedIds
+    .filter((scopeId) => scopeId !== organizationId)
+    .map(brandPersistedWorkspaceId);
+  const scopeMatch =
+    scopedIds.length > 0
+      ? or(
+          isNull(anonymizationAllowlistEntries.workspaceId),
+          inArray(anonymizationAllowlistEntries.workspaceId, scopedIds),
+        )
+      : isNull(anonymizationAllowlistEntries.workspaceId);
+
+  const rows = await scopedDb(
+    async (tx) =>
+      await boundedAll({
+        invariant: ALLOWLIST_READ_INVARIANT,
+        max: allowlistReadBound(scopedIds.length),
+        table: "anonymization_allowlist_entries",
+        query: (limit) =>
+          tx
+            .select({
+              canonical: anonymizationAllowlistEntries.canonical,
+              workspaceId: anonymizationAllowlistEntries.workspaceId,
+            })
+            .from(anonymizationAllowlistEntries)
+            .where(
+              and(
+                eq(
+                  anonymizationAllowlistEntries.organizationId,
+                  organizationId,
+                ),
+                isNull(anonymizationAllowlistEntries.entityId),
+                scopeMatch,
+              ),
+            )
+            .limit(limit),
+      }),
+  );
+
+  const byWorkspace = new Map<string, string[]>(
+    requestedIds.map((scopeId) => [scopeId, []]),
+  );
+  for (const row of rows) {
+    if (row.workspaceId === null) {
+      for (const canonicals of byWorkspace.values()) {
+        canonicals.push(row.canonical);
+      }
+      continue;
+    }
+
+    const canonicals = byWorkspace.get(row.workspaceId);
+    if (canonicals === undefined) {
+      return panic(
+        "Allowlist row outside the requested workspace set; the read predicate and the grouping disagree",
+        { table: "anonymization_allowlist_entries" },
+      );
+    }
+    canonicals.push(row.canonical);
+  }
+
+  return byWorkspace;
 };

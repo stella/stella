@@ -1484,6 +1484,7 @@ export const cancelFlowRun = async ({
           if (step.reviewTaskEntityId === null) {
             continue;
           }
+          // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- each review task takes its own work-obligation row lock inside the transaction
           await settleReviewTask({
             tx,
             taskEntityId: step.reviewTaskEntityId,

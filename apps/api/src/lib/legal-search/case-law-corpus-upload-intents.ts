@@ -444,20 +444,27 @@ export const enqueueCaseLawCorpusUploadIntentCleanup = async ({
   });
 };
 
-/** Remove a cancelled intent only after its exact-key delete succeeded. */
-export const completeCaseLawCorpusUploadIntentCleanup = async ({
-  intentId,
+/**
+ * Remove cancelled intents only after their exact-key deletes succeeded. The
+ * caller passes the intents whose objects are gone, so an intent whose delete
+ * failed keeps its row and stays a retry target.
+ */
+export const completeCaseLawCorpusUploadIntentCleanups = async ({
+  intentIds,
   scopedDb,
 }: {
-  intentId: SafeId<"caseLawCorpusUploadIntent">;
+  intentIds: readonly SafeId<"caseLawCorpusUploadIntent">[];
   scopedDb: ScopedDb;
 }): Promise<void> => {
+  if (intentIds.length === 0) {
+    return;
+  }
   await scopedDb(async (tx) => {
     await tx
       .delete(caseLawCorpusUploadIntents)
       .where(
         and(
-          eq(caseLawCorpusUploadIntents.id, intentId),
+          inArray(caseLawCorpusUploadIntents.id, [...intentIds]),
           eq(
             caseLawCorpusUploadIntents.status,
             CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.CLEANUP,

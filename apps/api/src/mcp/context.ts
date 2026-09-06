@@ -26,7 +26,8 @@ import type {
   loadOrgAIConfig,
   loadOrgSettingsForAuth,
 } from "@/api/lib/ai-config-loader";
-import type { loadAnonymizationGazetteerEntries } from "@/api/lib/anonymization-blacklist";
+import type { loadAnonymizationAllowlistCanonicalsByWorkspace } from "@/api/lib/anonymization-allowlist";
+import type { loadAnonymizationGazetteerEntriesByWorkspace } from "@/api/lib/anonymization-blacklist";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
 import { resolveMemberAuthorization } from "@/api/lib/auth";
@@ -113,7 +114,8 @@ export type McpRequestContext = {
     getLawTextBlock?: typeof getLawTextBlock;
     withTimeout?: typeof withTimeout;
     anonymizeTextFields?: typeof anonymizeTextFields;
-    loadAnonymizationGazetteerEntries?: typeof loadAnonymizationGazetteerEntries;
+    loadAnonymizationAllowlistCanonicalsByWorkspace?: typeof loadAnonymizationAllowlistCanonicalsByWorkspace;
+    loadAnonymizationGazetteerEntriesByWorkspace?: typeof loadAnonymizationGazetteerEntriesByWorkspace;
     fillStoredTemplateDocx?: typeof fillStoredTemplateDocx;
     fillStoredTemplateWithText?: typeof fillStoredTemplateWithText;
     fillStoredTemplateWithTextStrict?: typeof fillStoredTemplateWithTextStrict;

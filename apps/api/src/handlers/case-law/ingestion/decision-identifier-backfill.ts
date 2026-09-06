@@ -978,6 +978,7 @@ export const runDecisionIdentifierBackfill = async (
           verification: result.verification,
         });
         if (result.verification.status === "backfill-required") {
+          // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- bounded restart: one checkpoint reset per retry, capped at three
           await restartCompletedBackfill(rootDb, result.verification);
         }
         break;

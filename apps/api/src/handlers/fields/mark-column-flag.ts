@@ -191,6 +191,7 @@ const processColumnFlagBatch = async ({
     }
 
     for (const target of targets) {
+      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- ordered advisory-lock acquisition; a single statement guarantees no evaluation order
       await acquireCellLock({
         tx,
         entityVersionId: target.entityVersionId,
@@ -281,6 +282,7 @@ const markColumnFlag = createSafeHandler(
     const addedAt = new Date().toISOString();
 
     while (true) {
+      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- cursor page loop: each batch's nextCursor is the next iteration's input
       const txResult: MarkColumnFlagBatchResult = yield* Result.await<
         MarkColumnFlagBatchResult,
         SafeDbError

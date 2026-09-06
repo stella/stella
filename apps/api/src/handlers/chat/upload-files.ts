@@ -157,6 +157,7 @@ export const uploadMessageFiles = async ({
       return await fail(parsedPart.error);
     }
 
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- an upload must land before the next; a failure rolls the earlier ones back
     const uploadedFile = await uploadUserFile({
       ...(dependencies === undefined ? {} : { dependencies }),
       file: parsedPart.value,

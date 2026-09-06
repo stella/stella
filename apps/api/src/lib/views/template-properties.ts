@@ -7,7 +7,7 @@ import type { Transaction } from "@/api/db/root";
 import { properties, propertyDependencies } from "@/api/db/schema";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import type { AuditRecorder } from "@/api/lib/audit-log";
+import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   collectNodePropertyIds,
@@ -334,6 +334,8 @@ export const resolveTemplateProperties = async ({
     });
   }
 
+  const auditEvents: AuditEvent[] = [];
+
   for (const templateProperty of templatePropertiesToCreate) {
     // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- sequential inserts preserve column order and feed the source-id mapping
     const [inserted] = await tx
@@ -361,7 +363,7 @@ export const resolveTemplateProperties = async ({
     propertyIdBySourceId.set(templateProperty.sourceId, inserted.id);
     nextPropertyIds.push(inserted.id);
 
-    await recordAuditEvent(tx, {
+    auditEvents.push({
       action: AUDIT_ACTION.CREATE,
       resourceType: AUDIT_RESOURCE_TYPE.PROPERTY,
       resourceId: inserted.id,
@@ -376,6 +378,12 @@ export const resolveTemplateProperties = async ({
         },
       },
     });
+  }
+
+  // Column order comes from the inserts above; the audit rows carry it in
+  // their own order and go in as one statement.
+  if (auditEvents.length > 0) {
+    await recordAuditEvent(tx, auditEvents);
   }
 
   await recreateTemplateDependencies({

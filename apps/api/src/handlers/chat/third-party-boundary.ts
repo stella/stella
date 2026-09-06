@@ -79,7 +79,6 @@ export type ChatThirdPartyBoundary =
        * is "replace", which is reversible.
        */
       redactionMap: Map<string, string>;
-      scopedDb: ScopedDb;
       type: "anonymized";
     };
 
@@ -132,7 +131,6 @@ export const createChatThirdPartyBoundary = ({
         placeholderOffsets: new Map<string, number>(),
         literalPlaceholderAliases: new Map<string, string>(),
         redactionMap: new Map<string, string>(),
-        scopedDb,
         sourcePlaceholders: new Set<string>(),
       }
     : { type: "raw" };
@@ -615,10 +613,12 @@ export const prepareTextForThirdParty = async ({
         context: boundary.pipelineContext,
         fields: protectedInput.fields,
         forcedSensitiveValues: forcedSensitiveValuesForFields(boundary, [text]),
-        gazetteerEntries: await boundary.gazetteerEntries,
-        excludedCanonicals: await boundary.excludedCanonicals,
+        catalogs: {
+          type: "preloaded",
+          excludedCanonicals: await boundary.excludedCanonicals,
+          gazetteerEntries: await boundary.gazetteerEntries,
+        },
         organizationId: boundary.organizationId,
-        scopedDb: boundary.scopedDb,
         workspaceId: boundary.anonymizationScopeId,
       }),
     catch: (cause) =>
@@ -659,10 +659,12 @@ const prepareTextBatchForThirdParty = async ({
         context: boundary.pipelineContext,
         fields: protectedInput.fields,
         forcedSensitiveValues: forcedSensitiveValuesForFields(boundary, fields),
-        gazetteerEntries: await boundary.gazetteerEntries,
-        excludedCanonicals: await boundary.excludedCanonicals,
+        catalogs: {
+          type: "preloaded",
+          excludedCanonicals: await boundary.excludedCanonicals,
+          gazetteerEntries: await boundary.gazetteerEntries,
+        },
         organizationId: boundary.organizationId,
-        scopedDb: boundary.scopedDb,
         workspaceId: boundary.anonymizationScopeId,
       }),
     catch: (cause) =>

@@ -211,6 +211,7 @@ const recordMemoryLifecycleAuditEvents = async (
       workspaceId: null,
       userId: MEMORY_CURATOR_AUDIT_ACTOR,
     });
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- one batched audit insert per organization; the recorder binds it at construction
     await recordAuditEvent(
       tx,
       organizationRows.map((row) => ({

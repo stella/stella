@@ -545,15 +545,18 @@ const runPersistMessage = async ({
             ),
           );
 
-        for (const deletedMessageId of deleteMessageIds) {
-          await recordAuditEvent(tx, {
+        // One truncation is one audit group: the deletions are recorded
+        // together so they share a single groupId.
+        await recordAuditEvent(
+          tx,
+          deleteMessageIds.map((deletedMessageId) => ({
             action: AUDIT_ACTION.DELETE,
             resourceType: AUDIT_RESOURCE_TYPE.CHAT_MESSAGE,
             resourceId: deletedMessageId,
             workspaceId,
             metadata: { threadId, reason: "truncate_for_replay" },
-          });
-        }
+          })),
+        );
       }
 
       if (

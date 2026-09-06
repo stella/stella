@@ -12,7 +12,7 @@
  * describes the latest attempt.
  */
 
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawCoverageSlices } from "@/api/db/schema";
@@ -53,23 +53,26 @@ export const recordSliceCoverage = async (
   });
 };
 
-export type TouchSliceCoverageInput = {
+export type TouchSliceCoveragesInput = {
   sourceId: SafeId<"caseLawSource">;
-  slice: string;
+  slices: readonly string[];
 };
 
 /**
- * Re-stamp a counted row's `checkedAt` without touching what it says.
+ * Re-stamp counted rows' `checkedAt` without touching what they say.
  *
  * Bookkeeping outside the source lease, so it must not overwrite what a
- * leased walk on another replica may have recorded since the row was read:
+ * leased walk on another replica may have recorded since the rows were read:
  * the counts stay, and a row that has meanwhile failed is left to the retry
  * arm rather than quietly restored to counted.
  */
-export const touchSliceCoverage = async (
+export const touchSliceCoverages = async (
   scopedDb: ScopedDb,
-  { slice, sourceId }: TouchSliceCoverageInput,
+  { slices, sourceId }: TouchSliceCoveragesInput,
 ): Promise<void> => {
+  if (slices.length === 0) {
+    return;
+  }
   await scopedDb(async (tx) => {
     // audit: skip — crawl bookkeeping, not a user action
     await tx
@@ -78,7 +81,7 @@ export const touchSliceCoverage = async (
       .where(
         and(
           eq(caseLawCoverageSlices.sourceId, sourceId),
-          eq(caseLawCoverageSlices.slice, slice),
+          inArray(caseLawCoverageSlices.slice, [...slices]),
           isNull(caseLawCoverageSlices.walkError),
         ),
       );

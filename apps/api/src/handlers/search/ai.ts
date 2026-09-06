@@ -424,6 +424,7 @@ export const refineSearchQuery = async ({
       continue;
     }
 
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- bounded retry: the next attempt's prompt depends on this validation failure
     const postgresValidation = await validateSearchQueryWithPostgres({
       query: refinedQuery,
       scopedDb,
@@ -966,6 +967,7 @@ const buildSearchResultContexts = async ({
       continue;
     }
 
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- the content budget spent per hit decides the next read; the schema caps hits at five
     const content = await loadSearchHitContent({
       hit,
       organizationId,

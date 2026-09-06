@@ -934,6 +934,7 @@ export const createCorpusIndexer = <
       }
     }
     for (const [indexId, jobs] of failuresByIndex) {
+      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- one batched insert per index; the iteration count is index groups, not rows
       await adapter.recordJobs(scopedDb, jobs, indexId);
     }
   };
@@ -1445,6 +1446,7 @@ export const createCorpusIndexer = <
         const removeStartedAt = performance.now();
         for (const unit of deleteUnits) {
           timing.engineRequests += 1;
+          // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- each unit is already one chunked delete task per index; stops at the first error
           const removed = await removeManyWithOptions({
             ...(options.type === "incremental"
               ? {}
@@ -1583,20 +1585,22 @@ export const createCorpusIndexer = <
           // them, so delete the unrecorded copies now; the refreshed row is
           // re-indexed by a later cycle.
           const missedStartedAt = performance.now();
-          for (const missedId of casMissed) {
-            const removed = await removeWithOptions({
+          for (const chunk of deleteQueryChunks([...casMissed])) {
+            timing.engineRequests += 1;
+            // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- each chunk is already one batched delete task for this index
+            const removed = await removeManyWithOptions({
               ...(options.type === "incremental"
                 ? {}
                 : {
                     beforeRemoteEffect: options.beforeRemoteEffect,
                     onLeaseLost: async () =>
                       await options.recoverRemoteEffectLeaseLoss({
-                        entityIds: [missedId],
+                        entityIds: chunk,
                         indexId,
                       }),
                   }),
               client,
-              entityId: missedId,
+              entityIds: chunk,
               indexId,
               operation: "delete",
               scopedDb,
@@ -1606,7 +1610,6 @@ export const createCorpusIndexer = <
             }
           }
           timing.removeMs += elapsedSince(missedStartedAt);
-          timing.engineRequests += casMissed.size;
           indexed += entries.length - casMissed.size;
           refreshed += casMissed.size;
         }
@@ -1616,6 +1619,7 @@ export const createCorpusIndexer = <
         // place; a row that is neither indexed nor recorded failed is
         // invisible.
         if (groupFailures.length > 0) {
+          // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- one batched insert per index group, written in that group's own finally
           await adapter.recordJobs(scopedDb, groupFailures, indexId);
         }
       }

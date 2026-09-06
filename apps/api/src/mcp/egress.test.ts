@@ -11,7 +11,8 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 const anonymizeTextFieldsMock = mock();
-const loadAnonymizationGazetteerEntriesMock = mock();
+const loadGazetteerByWorkspaceMock = mock();
+const loadAllowlistByWorkspaceMock = mock();
 // SAFETY: This suite configures the anonymizer with production-shaped inputs
 // and outputs; Bun's mock type cannot express that external function contract.
 const anonymizeTextFieldsForTest =
@@ -21,32 +22,33 @@ const { finalizeToolEgress } = await import("@/api/mcp/egress");
 /** Deny-list term stored against `ws_2` only, never against the org tier. */
 const WORKSPACE_TERM = "Aurora Holdings";
 
-/**
- * Stand-in redactor holding the same gazetteer contract as the real one: a
- * caller-supplied gazetteer wins, otherwise it loads the one belonging to the
- * workspace being anonymized, and it blanks every term that gazetteer names.
- * Text reaching it under a payload-wide gazetteer would therefore be measured
- * against the firm-wide half alone.
- */
-const redactGazetteerTerms = async ({
-  fields,
-  gazetteerEntries,
-  organizationId,
-  scopedDb,
-  workspaceId,
-}: AnonymizeTextFieldsInput) => {
-  const entries =
-    gazetteerEntries ??
-    (await loadAnonymizationGazetteerEntriesMock({
-      organizationId,
-      scope: { type: "workspace", workspaceId },
-      scopedDb,
-    }));
-  const canonicals = asTestRaw<{ canonical: string }[]>(entries).map(
-    (entry) => entry.canonical,
+/** Empty catalogs, one entry per requested id, like the real loaders. */
+const emptyCatalogsByWorkspace = async ({
+  workspaceIds,
+}: {
+  workspaceIds: readonly string[];
+}) =>
+  await Promise.resolve(
+    new Map(workspaceIds.map((workspaceId) => [workspaceId, []])),
   );
 
-  return {
+/**
+ * Stand-in redactor holding the same catalog contract as the real one: it
+ * blanks every term the gazetteer it was handed names. A payload-wide
+ * gazetteer would therefore show up as a workspace-scoped term left standing.
+ */
+const redactGazetteerTerms = async ({
+  catalogs,
+  fields,
+}: AnonymizeTextFieldsInput) => {
+  if (catalogs.type !== "preloaded") {
+    throw new Error("Expected the egress pipeline to preload both catalogs");
+  }
+  const canonicals = asTestRaw<{ canonical: string }[]>(
+    catalogs.gazetteerEntries,
+  ).map((entry) => entry.canonical);
+
+  return await Promise.resolve({
     entityCount: canonicals.length,
     fields: fields.map((field) => {
       let redacted = field;
@@ -55,18 +57,21 @@ const redactGazetteerTerms = async ({
       }
       return redacted;
     }),
-  };
+  });
 };
 
 /** The `ws_2` gazetteer carries the term; the firm-wide catalog does not. */
 const givenWorkspaceScopedTerm = (): void => {
   anonymizeTextFieldsMock.mockImplementation(redactGazetteerTerms);
-  loadAnonymizationGazetteerEntriesMock.mockImplementation(
-    async ({ scope }: { scope: { type: string; workspaceId?: string } }) =>
+  loadGazetteerByWorkspaceMock.mockImplementation(
+    async ({ workspaceIds }: { workspaceIds: readonly string[] }) =>
       await Promise.resolve(
-        scope.type === "workspace" && scope.workspaceId === "ws_2"
-          ? [{ canonical: WORKSPACE_TERM }]
-          : [],
+        new Map(
+          workspaceIds.map((workspaceId) => [
+            workspaceId,
+            workspaceId === "ws_2" ? [{ canonical: WORKSPACE_TERM }] : [],
+          ]),
+        ),
       ),
   );
 };
@@ -77,6 +82,10 @@ const finalizeMcpEgress = async (
   serializeToolResult(
     await finalizeToolEgress(options, {
       anonymizeTextFields: anonymizeTextFieldsForTest,
+      loadAnonymizationAllowlistCanonicalsByWorkspace:
+        loadAllowlistByWorkspaceMock,
+      loadAnonymizationGazetteerEntriesByWorkspace:
+        loadGazetteerByWorkspaceMock,
     }),
   );
 
@@ -120,8 +129,10 @@ describe("finalizeMcpEgress", () => {
 
   beforeEach(() => {
     anonymizeTextFieldsMock.mockReset();
-    loadAnonymizationGazetteerEntriesMock.mockReset();
-    loadAnonymizationGazetteerEntriesMock.mockResolvedValue([]);
+    loadGazetteerByWorkspaceMock.mockReset();
+    loadGazetteerByWorkspaceMock.mockImplementation(emptyCatalogsByWorkspace);
+    loadAllowlistByWorkspaceMock.mockReset();
+    loadAllowlistByWorkspaceMock.mockImplementation(emptyCatalogsByWorkspace);
   });
 
   test("returns a finished internal result untouched", async () => {
@@ -201,6 +212,9 @@ describe("finalizeMcpEgress", () => {
     // Anonymization ran exactly once, on the whole raw title + text.
     expect(anonymizeTextFieldsMock).toHaveBeenCalledTimes(1);
     expect(anonymizeTextFieldsMock.mock.calls.at(0)?.[0]).toMatchObject({
+      // One document, one workspace: the redactor reads the catalogs itself,
+      // which is already a single pair of queries.
+      catalogs: { type: "database" },
       fields: [basePlan.title, basePlan.text],
       workspaceId: "ws_1",
     });
@@ -435,14 +449,100 @@ describe("finalizeMcpEgress", () => {
     expect(payload.matters[1]?.name).toBe("[ORG_1] GmbH");
     // The term is not on the firm-wide catalog, so `ws_1` keeps it.
     expect(payload.matters[0]?.name).toBe(`${WORKSPACE_TERM} Ltd`);
+    // One read for the payload, naming both workspaces, and each group is
+    // redacted against its own tier of the result.
+    expect(loadGazetteerByWorkspaceMock).toHaveBeenCalledTimes(1);
+    expect(loadGazetteerByWorkspaceMock.mock.calls.at(0)?.[0]).toMatchObject({
+      workspaceIds: ["ws_1", "ws_2"],
+    });
+    const preloadedCanonicals = anonymizeTextFieldsMock.mock.calls.map(
+      (call) => {
+        const { catalogs } = asTestRaw<[AnonymizeTextFieldsInput]>(call)[0];
+        if (catalogs.type !== "preloaded") {
+          throw new Error("Expected the egress pipeline to preload catalogs");
+        }
+        return asTestRaw<{ canonical: string }[]>(
+          catalogs.gazetteerEntries,
+        ).map((entry) => entry.canonical);
+      },
+    );
+    expect(preloadedCanonicals).toEqual([[], [WORKSPACE_TERM]]);
+  });
+
+  test("reads both catalogs once for the whole payload, not once per workspace", async () => {
+    // Three workspaces, one anonymization call each, but a fixed two reads:
+    // the query count must not scale with the number of workspaces.
+    const matters = [
+      { id: "ws_1", name: "John Smith Ltd" },
+      { id: "ws_2", name: "Jane Doe GmbH" },
+      { id: "ws_3", name: "Erika Mustermann AG" },
+    ];
+    anonymizeTextFieldsMock.mockResolvedValue({
+      entityCount: 1,
+      fields: ["[PERSON_1]"],
+    });
+
+    await finalizeMcpEgress({
+      context: createContext(),
+      mode: "anonymized",
+      response: {
+        egress: "structured",
+        payload: { matters },
+        textFields: matters.map((matter) => ({
+          apply: (value: string) => {
+            matter.name = value;
+          },
+          value: matter.name,
+          workspaceId: matter.id,
+        })),
+      },
+    });
+
+    expect(anonymizeTextFieldsMock).toHaveBeenCalledTimes(3);
+    expect(loadGazetteerByWorkspaceMock).toHaveBeenCalledTimes(1);
+    expect(loadAllowlistByWorkspaceMock).toHaveBeenCalledTimes(1);
+    for (const loader of [
+      loadGazetteerByWorkspaceMock,
+      loadAllowlistByWorkspaceMock,
+    ]) {
+      expect(loader.mock.calls.at(0)?.[0]).toMatchObject({
+        organizationId: toSafeId<"organization">("org_1"),
+        workspaceIds: ["ws_1", "ws_2", "ws_3"],
+      });
+    }
+  });
+
+  test("refuses to anonymize a workspace the catalogs do not answer for", async () => {
+    // A loader that skips a requested id would otherwise hand that workspace
+    // an empty deny-list and ship its terms unredacted.
+    loadGazetteerByWorkspaceMock.mockResolvedValue(new Map());
+
+    // bun-types declares `.rejects.toThrow` as void, so awaiting it trips
+    // type-aware lint; capture the rejection explicitly instead.
+    const rejection: unknown = await finalizeMcpEgress({
+      context: createContext(),
+      mode: "anonymized",
+      response: {
+        egress: "structured",
+        payload: {},
+        textFields: [
+          {
+            apply: () => undefined,
+            value: "John Smith Ltd",
+            workspaceId: "ws_1",
+          },
+        ],
+      },
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(rejection).toBeInstanceOf(Error);
     expect(
-      loadAnonymizationGazetteerEntriesMock.mock.calls.map(
-        (call) => asTestRaw<[{ scope: unknown }]>(call)[0].scope,
-      ),
-    ).toEqual([
-      { type: "workspace", workspaceId: "ws_1" },
-      { type: "workspace", workspaceId: "ws_2" },
-    ]);
+      rejection instanceof Error ? rejection.message : String(rejection),
+    ).toMatch(/Anonymization catalog missing/u);
+    expect(anonymizeTextFieldsMock).not.toHaveBeenCalled();
   });
 
   test("compatSearch redacts a term the deny-list holds against one workspace only", async () => {

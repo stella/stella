@@ -63,6 +63,7 @@ console.log(`=== BUILD CORPUS INDEX: generation ${generation} ===`);
 let total = 0;
 while (true) {
   await pacer.beforeBatch();
+  // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- durable page walk: each page's cursor comes from the previous page's commit
   const result = await backfillCorpusIndexGenerationPage(
     ingestionDb,
     LIMITS.corpusIndexBatchSize,

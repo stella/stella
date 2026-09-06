@@ -290,11 +290,13 @@ try {
       for (const result of results) {
         counts.variantsFetched += 1;
         await sourceLease.beforeDatabaseMark();
+        // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- lease-guarded counter: every write needs its own monotonic observation order
         const observationOrder = await allocateSourceObservationOrder({
           leaseToken: sourceLease.leaseToken,
           scopedDb: ingestionDb,
           sourceId: source.id,
         });
+        // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- per-decision ingest pipeline, ordered by the observation number allocated just above
         const processed = await processDecision({
           input: result,
           sourceId: source.id,

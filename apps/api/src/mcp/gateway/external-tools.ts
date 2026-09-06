@@ -322,6 +322,7 @@ const refreshMissingCachedTools = async ({
   await Promise.all(
     missingRows.map(
       async (row) =>
+        // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- per-connector upstream discovery drives each refresh; no cross-connection batch exists
         await dependencies.refreshCachedMcpToolsForConnection({
           connectionId: row.userConnectionId,
           organizationId: context.organizationId,

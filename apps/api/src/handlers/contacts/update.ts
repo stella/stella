@@ -99,6 +99,7 @@ export const updateContactHandler = async function* ({
     const hasInvalidAttorney = yield* Result.await(
       safeDb(async (tx) => {
         for (const attorneyId of uniqueAttorneyIds) {
+          // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- bounded: at most two attorney ids per request, deduplicated
           const validAttorneyId = await validateOrgUserId(
             tx,
             brandPersistedUserId(attorneyId),

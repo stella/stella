@@ -8,7 +8,7 @@ import { isClauseSlotName } from "@stll/template-conditions";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { clauseVersions, templateClauses } from "@/api/db/schema";
-import type { AuditRecorder } from "@/api/lib/audit-log";
+import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -714,6 +714,9 @@ export const syncAllClausesHandler = async ({
     );
 
     const synced: SafeId<"templateClause">[] = [];
+    // One bulk sync is one audit group: the events are recorded together
+    // after the loop so they share a single groupId.
+    const auditEvents: AuditEvent[] = [];
 
     for (const link of links) {
       if (!isOutdatedLink(link) || !link.clauseId || !link.clause) {
@@ -737,7 +740,7 @@ export const syncAllClausesHandler = async ({
           ),
         );
 
-      await recordAuditEvent(tx, {
+      auditEvents.push({
         action: AUDIT_ACTION.UPDATE,
         resourceType: AUDIT_RESOURCE_TYPE.CLAUSE_TEMPLATE_LINK,
         resourceId: link.id,
@@ -751,6 +754,10 @@ export const syncAllClausesHandler = async ({
       });
 
       synced.push(link.id);
+    }
+
+    if (auditEvents.length > 0) {
+      await recordAuditEvent(tx, auditEvents);
     }
 
     return synced;

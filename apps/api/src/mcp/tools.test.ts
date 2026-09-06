@@ -128,7 +128,17 @@ const withTimeoutMock = mock(
 const withTimeoutDependency = asTestRaw<typeof withTimeout>(withTimeoutMock);
 
 const anonymizeTextFieldsMock = mock();
-const loadAnonymizationGazetteerEntriesMock = mock();
+/** Empty catalogs, one entry per requested id, like the real loaders. */
+const emptyCatalogsByWorkspace = async ({
+  workspaceIds,
+}: {
+  workspaceIds: readonly string[];
+}) =>
+  await Promise.resolve(
+    new Map(workspaceIds.map((workspaceId) => [workspaceId, []])),
+  );
+const loadGazetteerByWorkspaceMock = mock(emptyCatalogsByWorkspace);
+const loadAllowlistByWorkspaceMock = mock(emptyCatalogsByWorkspace);
 const searchAcrossMattersExecute = mock();
 const readContentAcrossMattersExecute = mock();
 const readContactExecute = mock();
@@ -678,7 +688,9 @@ const createContext = ({
       ...pgFtsProvider,
       search: searchProviderSearchMock,
     }),
-    loadAnonymizationGazetteerEntries: loadAnonymizationGazetteerEntriesMock,
+    loadAnonymizationAllowlistCanonicalsByWorkspace:
+      loadAllowlistByWorkspaceMock,
+    loadAnonymizationGazetteerEntriesByWorkspace: loadGazetteerByWorkspaceMock,
     readGatedDecisionWithDocument: readGatedDecisionMock,
     readOverviewHandler: readOverviewHandlerMock,
     readWorkspaceContactsHandler: readWorkspaceContactsHandlerMock,
@@ -696,8 +708,10 @@ describe("OpenAI-compatible MCP tools", () => {
   beforeEach(() => {
     analytics = installRecordingAnalytics();
     anonymizeTextFieldsMock.mockReset();
-    loadAnonymizationGazetteerEntriesMock.mockReset();
-    loadAnonymizationGazetteerEntriesMock.mockResolvedValue([]);
+    loadGazetteerByWorkspaceMock.mockReset();
+    loadGazetteerByWorkspaceMock.mockImplementation(emptyCatalogsByWorkspace);
+    loadAllowlistByWorkspaceMock.mockReset();
+    loadAllowlistByWorkspaceMock.mockImplementation(emptyCatalogsByWorkspace);
     searchAcrossMattersExecute.mockReset();
     searchProviderSearchMock.mockClear();
     readContentAcrossMattersExecute.mockReset();
@@ -2232,11 +2246,18 @@ describe("OpenAI-compatible MCP tools", () => {
       organizationId: toSafeId<"organization">("org_1"),
       workspaceId: "ws_1",
     });
-    expect(anonymizeInput?.scopedDb).toBeTypeOf("function");
-    // The redactor resolves the deny-list itself, from the workspace it is
-    // handed, so the egress path passes no gazetteer of its own.
-    expect(anonymizeInput?.gazetteerEntries).toBeUndefined();
-    expect(loadAnonymizationGazetteerEntriesMock).not.toHaveBeenCalled();
+    // The egress pipeline resolves both catalogs for the workspaces its
+    // payload names and hands them over pre-resolved, so the redactor holds
+    // no database handle and issues no read of its own.
+    expect(anonymizeInput?.catalogs).toEqual({
+      type: "preloaded",
+      excludedCanonicals: [],
+      gazetteerEntries: [],
+    });
+    expect(loadGazetteerByWorkspaceMock).toHaveBeenCalledTimes(1);
+    expect(loadGazetteerByWorkspaceMock.mock.calls.at(0)?.[0]).toMatchObject({
+      workspaceIds: ["ws_1"],
+    });
   });
 
   test("search batches anonymized titles by workspace", async () => {

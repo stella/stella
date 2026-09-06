@@ -39,6 +39,15 @@ const fingerprintTemplatePersistenceRequestMock = mock();
 const configureTemplateFieldsMock = mock();
 const loadOrgAIConfigMock = mock();
 const anonymizeTextFieldsMock = mock();
+/** Empty catalogs, one entry per requested id, like the real loaders. */
+const emptyCatalogsByWorkspace = async ({
+  workspaceIds,
+}: {
+  workspaceIds: readonly string[];
+}) =>
+  await Promise.resolve(
+    new Map(workspaceIds.map((workspaceId) => [workspaceId, []])),
+  );
 // Stubbed so the fill handler never reaches the real (DB-backed) config
 // loader or AI model chain; a null config makes AI fields a no-op.
 // A null org AI config (the mock returns undefined) makes the real
@@ -215,6 +224,8 @@ const createContext = ({
     configureTemplateFields: configureTemplateFieldsMock,
     loadOrgAIConfig: loadOrgAIConfigMock,
     anonymizeTextFields: anonymizeTextFieldsMock,
+    loadAnonymizationAllowlistCanonicalsByWorkspace: emptyCatalogsByWorkspace,
+    loadAnonymizationGazetteerEntriesByWorkspace: emptyCatalogsByWorkspace,
   },
 });
 

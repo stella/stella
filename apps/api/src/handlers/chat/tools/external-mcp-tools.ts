@@ -90,6 +90,7 @@ export const loadExternalMcpToolsForUser = async ({
   const results = await Promise.all(
     rows.map(
       async (row) =>
+        // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- per-connector client, credentials and upstream tool discovery; nothing to batch
         await loadConnectorTools({
           nullUnionStrategy,
           organizationId,

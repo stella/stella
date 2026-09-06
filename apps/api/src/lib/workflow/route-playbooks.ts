@@ -296,6 +296,7 @@ export const routeClassifiedDocuments = async ({
 
     const ids: SafeId<"property">[] = [];
     for (const definition of applicable) {
+      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- each playbook materializes its own columns and table runs; not one query
       const result = await openPlaybookRun({
         tx,
         workspaceId,

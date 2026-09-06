@@ -9,7 +9,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { allocateEntityStamp } from "@/api/lib/document-counter";
+import { allocateEntityStamps } from "@/api/lib/document-counter";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
@@ -624,6 +624,16 @@ export const copyEntities = async ({
   };
   const nativeExtractionRequests: NativeExtractionRunRequest[] = [];
   const fileFields: CopiedFileField[] = [];
+  // The document rows are known before the copy starts, so the whole run of
+  // sequence numbers is allocated in one counter upsert plus one reference
+  // read instead of two statements per copied document. The filter keeps
+  // source order, so each document consumes the stamp for its own position.
+  const documentStamps = await allocateEntityStamps({
+    tx,
+    workspaceId: targetWorkspaceId,
+    count: sourceEntities.filter((source) => source.kind === "document").length,
+  });
+  let nextStampIndex = 0;
 
   for (const source of sourceEntities) {
     if (!source.currentVersion) {
@@ -653,7 +663,8 @@ export const copyEntities = async ({
 
     const copyName =
       source.id === sourceEntityId
-        ? await resolveEntityName({
+        ? // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- runs for the copy root only, once per call, not per row
+          await resolveEntityName({
             tx,
             workspaceId: targetWorkspaceId,
             parentId: newParentId ?? null,
@@ -663,7 +674,8 @@ export const copyEntities = async ({
 
     const entityStamp =
       source.kind === "document"
-        ? await allocateEntityStamp(tx, targetWorkspaceId)
+        ? (documentStamps.at(nextStampIndex++) ??
+          panic("Fewer document stamps allocated than documents copied"))
         : null;
 
     // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- sequential by design: same DB transaction client; children reference parent IDs created in earlier iterations, and the version insert/currentVersionId update just below depend on this row

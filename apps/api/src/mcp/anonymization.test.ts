@@ -98,10 +98,10 @@ describe("anonymizeTextFields", () => {
     };
 
     await anonymizeTextFieldsWithDependencies({
+      catalogs: { type: "database", scopedDb },
       dependencies,
       fields: ["Alice Novak"],
       organizationId: toSafeId<"organization">("org_test"),
-      scopedDb,
       workspaceId: "00000000-0000-4000-8000-000000000001",
     });
 
@@ -115,10 +115,10 @@ describe("anonymizeTextFields", () => {
 
     gazetteerScope = "not-called";
     await anonymizeTextFieldsWithDependencies({
+      catalogs: { type: "database", scopedDb },
       dependencies,
       fields: ["Alice Novak"],
       organizationId: toSafeId<"organization">("org_test"),
-      scopedDb,
       workspaceId: "org_test",
     });
 
