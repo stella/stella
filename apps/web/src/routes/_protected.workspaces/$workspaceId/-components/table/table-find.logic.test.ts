@@ -6,9 +6,11 @@ import {
   resolveFindScope,
   searchableColumnIds,
   toFindColumns,
+  toggleFindColumn,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-find.logic";
 import type { TableFindColumn } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-find.logic";
 import type { WorkspaceColumnDescriptor } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-schema";
+import type { TableFindSelection } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
 
 const property = (
   id: string,
@@ -128,5 +130,43 @@ describe("the scope a find is sent with", () => {
         },
       }),
     ).toEqual({ propertyIds: ["tags"], type: "columns" });
+  });
+});
+
+describe("clicking a column in the picker", () => {
+  const searchable = ["text", "tags"];
+  const toggle = (columnId: string, selection: TableFindSelection) =>
+    toggleFindColumn({ columnId, searchable, selection });
+
+  test("the first click narrows to that column alone", () => {
+    // Not "every column except this one": under `all` nothing is ticked, so
+    // the click is what the reader means by it.
+    expect(toggle("tags", { type: "all" })).toEqual({
+      propertyIds: ["tags"],
+      type: "columns",
+    });
+  });
+
+  test("a further click adds, in column order", () => {
+    expect(toggle("text", { propertyIds: ["tags"], type: "columns" })).toEqual({
+      propertyIds: ["text", "tags"],
+      type: "columns",
+    });
+  });
+
+  test("ticking every column is still a narrowed scope", () => {
+    // `all` also matches the row's name, so "every cell and nothing else" is a
+    // scope of its own, and the only one a single-column view can narrow to.
+    expect(toggle("tags", { propertyIds: ["text"], type: "columns" })).toEqual({
+      propertyIds: ["text", "tags"],
+      type: "columns",
+    });
+  });
+
+  test("clearing the last tick returns to unrestricted", () => {
+    // A search of no columns is one nothing can satisfy.
+    expect(toggle("tags", { propertyIds: ["tags"], type: "columns" })).toEqual({
+      type: "all",
+    });
   });
 });

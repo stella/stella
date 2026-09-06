@@ -82,3 +82,36 @@ export const resolveFindScope = ({
     type: "columns",
   };
 };
+
+/**
+ * The picker's selection after one column row is clicked.
+ *
+ * `all` is the unrestricted state, not the full list ticked, so under it the
+ * columns show unticked and the first click narrows to exactly the column
+ * clicked. Ticking every column stays `columns`: it is the only scope that
+ * searches every cell without also matching the row's name, and on a view with
+ * a single searchable column it is the only way to narrow at all. Clearing the
+ * last tick is the way back, because a search of no columns is one nothing can
+ * satisfy.
+ */
+export const toggleFindColumn = ({
+  columnId,
+  searchable,
+  selection,
+}: {
+  columnId: string;
+  searchable: readonly string[];
+  selection: TableFindSelection;
+}): TableFindSelection => {
+  const chosen = new Set(selection.type === "all" ? [] : selection.propertyIds);
+  if (chosen.has(columnId)) {
+    chosen.delete(columnId);
+  } else {
+    chosen.add(columnId);
+  }
+  const propertyIds = searchable.filter((id) => chosen.has(id));
+  if (propertyIds.length === 0) {
+    return { type: "all" };
+  }
+  return { propertyIds, type: "columns" };
+};

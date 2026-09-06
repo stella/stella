@@ -14,7 +14,10 @@ import { PropertyIcon } from "@/components/workspaces/property-helpers";
 import { useOwnsFind } from "@/lib/find-owner";
 import type { WorkspaceProperty, WorkspaceView } from "@/lib/types";
 import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
-import { searchableColumnIds } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-find.logic";
+import {
+  searchableColumnIds,
+  toggleFindColumn,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-find.logic";
 import type { TableFindColumn } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-find.logic";
 import { useTableStore } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
 import type { TableFindSelection } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
@@ -156,8 +159,9 @@ type FindColumnListProps = {
 /**
  * Which columns the find reaches. "All columns" is not the full list ticked: it
  * is the unrestricted state, which also matches the row's name and marks
- * matching headers. Columns whose type cannot be searched stay listed, disabled
- * and explained, so a missing column never reads as a bug.
+ * matching headers, so under it the columns below show unticked and the first
+ * click narrows to that one column. Columns whose type cannot be searched stay
+ * listed, disabled and explained, so a missing column never reads as a bug.
  */
 const FindColumnList = ({
   columns,
@@ -166,29 +170,7 @@ const FindColumnList = ({
   selection,
 }: FindColumnListProps) => {
   const t = useTranslations();
-  const chosen =
-    selection.type === "all"
-      ? new Set(searchable)
-      : new Set(selection.propertyIds);
-
-  const toggle = (columnId: string) => {
-    const next = new Set(chosen);
-    if (next.has(columnId)) {
-      next.delete(columnId);
-    } else {
-      next.add(columnId);
-    }
-    // Deselecting the last column would ask for a search nothing can satisfy,
-    // and ticking them all is the unrestricted state by another name.
-    if (next.size === 0 || next.size === searchable.length) {
-      onChange({ type: "all" });
-      return;
-    }
-    onChange({
-      propertyIds: searchable.filter((id) => next.has(id)),
-      type: "columns",
-    });
-  };
+  const chosen = new Set(selection.type === "all" ? [] : selection.propertyIds);
 
   return (
     <div className="flex max-h-56 flex-col overflow-y-auto">
@@ -209,7 +191,13 @@ const FindColumnList = ({
             key={column.id}
             label={column.label}
             onClick={() => {
-              toggle(column.id);
+              onChange(
+                toggleFindColumn({
+                  columnId: column.id,
+                  searchable,
+                  selection,
+                }),
+              );
             }}
             title={
               excluded
