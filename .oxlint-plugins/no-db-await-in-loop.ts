@@ -14,6 +14,22 @@
 //     call whose callee resolves to `safeDb` — bare (`safeDb(cb)`, common in
 //     `createSafeHandler` generators) or as a property access
 //     (`ctx.safeDb(cb)`, `context.safeDb(cb)`).
+//   - A HANDLE await is an `AwaitExpression` whose argument is any other call
+//     that receives a database handle (`db`, `tx`, `safeDb`, `scopedDb`,
+//     `rootDb`, `ingestionDb`, `backfillDb`) as an argument: a bare identifier
+//     (`upsertRow(tx, row)`), a member access landing on or rooted at one
+//     (`upsertRow(ctx.tx, row)`), or an object-literal property carrying one
+//     by key, shorthand, or value (`helper({ tx, id })`,
+//     `helper({ database: tx })`), including through nested object literals.
+//     The query lives behind the helper, so no chain is rooted at the handle
+//     here — the handle in the argument list is the evidence. Function
+//     arguments are deliberately not scanned: a handle used inside a callback
+//     body runs wherever that callback runs, so
+//     `for (const r of rows) enqueue(() => save(tx, r))` enqueues rather than
+//     queries. The two shapes report distinct messages. Inside a
+//     `Promise.all(...)` / `Promise.allSettled(...)` fan-out the handle shape
+//     yields to the fan-out check below whenever that check already reports
+//     the same call, so one fan-out never costs two reports.
 //   - Safe handlers express the same operation as
 //     `yield* Result.await(safeDb(...))`; delegated `YieldExpression` nodes
 //     with that shape are treated as DB awaits too.
@@ -117,7 +133,37 @@ const FUNCTION_TYPES = new Set([
   "ArrowFunctionExpression",
 ]);
 
-const DB_ROOT_NAMES = new Set(["db", "tx"]);
+// Every identifier the codebase uses for a database handle: the Drizzle
+// client (`db`, `rootDb`), a transaction (`tx`), and the scoped or bounded
+// runners that take a callback (`safeDb`, `scopedDb`, `ingestionDb`,
+// `backfillDb`). One list, so the chain roots below and the argument scan
+// cannot drift apart.
+const DB_HANDLE_NAMES = [
+  "db",
+  "tx",
+  "safeDb",
+  "scopedDb",
+  "rootDb",
+  "ingestionDb",
+  "backfillDb",
+] as const;
+
+type DbHandleName = (typeof DB_HANDLE_NAMES)[number];
+
+const DB_HANDLE_NAME_SET: ReadonlySet<string> = new Set(DB_HANDLE_NAMES);
+
+// The handles a query chain is written directly on. The runner handles take a
+// callback (`scopedDb((tx) => ...)`) and never root a chain, so they are
+// matched as arguments instead. `satisfies` binds this subset to the list
+// above: a rename there fails to compile here.
+const DB_CHAIN_ROOT_NAMES = [
+  "db",
+  "tx",
+] as const satisfies readonly DbHandleName[];
+
+const DB_CHAIN_ROOT_NAME_SET: ReadonlySet<string> = new Set(
+  DB_CHAIN_ROOT_NAMES,
+);
 
 const MAP_LIKE_METHOD_NAMES = new Set(["map", "forEach", "flatMap"]);
 
@@ -169,7 +215,69 @@ const isDbAwaitCall = (node: unknown): boolean => {
     return true;
   }
   const root = resolveChainRootName(node);
-  return root !== null && DB_ROOT_NAMES.has(root);
+  return root !== null && DB_CHAIN_ROOT_NAME_SET.has(root);
+};
+
+// The database handle an argument carries, or null. Identifiers, member
+// accesses, and object literals are followed; functions are not (see the
+// header for why a handle inside a callback body is the call site's question,
+// not this one's).
+const findDbHandleInValue = (node: unknown): string | null => {
+  const value = unwrapExpression(node);
+  if (value === null) {
+    return null;
+  }
+  if (isIdentifier(value)) {
+    return DB_HANDLE_NAME_SET.has(value.name) ? value.name : null;
+  }
+  if (value.type === "MemberExpression") {
+    const propertyName = getPropertyName(getField(value, "property"));
+    if (propertyName !== null && DB_HANDLE_NAME_SET.has(propertyName)) {
+      return propertyName;
+    }
+    return findDbHandleInValue(getField(value, "object"));
+  }
+  if (value.type !== "ObjectExpression") {
+    return null;
+  }
+  const properties = getField(value, "properties");
+  if (!Array.isArray(properties)) {
+    return null;
+  }
+  for (const property of properties) {
+    if (getType(property) !== "Property") {
+      continue;
+    }
+    const keyName = isComputed(property)
+      ? null
+      : getPropertyName(getField(property, "key"));
+    if (keyName !== null && DB_HANDLE_NAME_SET.has(keyName)) {
+      return keyName;
+    }
+    const fromValue = findDbHandleInValue(getField(property, "value"));
+    if (fromValue !== null) {
+      return fromValue;
+    }
+  }
+  return null;
+};
+
+// The database handle a call receives, or null when it receives none.
+const findDbHandleArgument = (node: unknown): string | null => {
+  if (getType(node) !== "CallExpression") {
+    return null;
+  }
+  const args = getField(node, "arguments");
+  if (!Array.isArray(args)) {
+    return null;
+  }
+  for (const argument of args) {
+    const handle = findDbHandleInValue(argument);
+    if (handle !== null) {
+      return handle;
+    }
+  }
+  return null;
 };
 
 const getResultAwaitArgument = (node: unknown): unknown => {
@@ -432,6 +540,23 @@ const isPromiseAllMapFanOutWithDbCallback = (node: unknown): boolean => {
   return false;
 };
 
+// The `Promise.all(...)` / `Promise.allSettled(...)` call whose `.map()`
+// callback lexically encloses `node`, or null when no such callback does. Used
+// to hand a fan-out back to the check that owns it.
+const enclosingFanOutCall = (node: unknown): unknown => {
+  let current = getField(node, "parent");
+  while (current !== null && current !== undefined) {
+    const type = getType(current);
+    if (type !== null && FUNCTION_TYPES.has(type)) {
+      return isPromiseAllMapCallback(current)
+        ? getField(getField(current, "parent"), "parent")
+        : null;
+    }
+    current = getField(current, "parent");
+  }
+  return null;
+};
+
 // Walk up from an `AwaitExpression`, stopping at the first loop body or
 // function boundary. Returns why the await is disallowed, or `null` when
 // it is not lexically inside a flagged loop/fan-out shape.
@@ -480,6 +605,13 @@ export default eslintCompatPlugin({
             "outside the loop. If the loop is genuinely bounded (a small " +
             "compile-time constant list), disable with a `// SAFETY:` note " +
             "explaining the bound.",
+          noDbHandleAwaitInLoop:
+            "Awaited call receives the database handle `{{handle}}` inside a " +
+            "loop, so the query behind it runs once per iteration (N+1). " +
+            "Hand the whole set (ids, rows) to a batched helper that issues " +
+            "one statement, or await once outside the loop. If the iteration " +
+            "is inherently sequential (a cursor walk, a page loop, an ordered " +
+            "write), disable with a `-- <reason>` note saying why.",
         },
       },
       createOnce(context) {
@@ -495,7 +627,30 @@ export default eslintCompatPlugin({
           }
           if (isPromiseAllMapFanOutWithDbCallback(argument)) {
             context.report({ node, messageId: "noDbAwaitInLoop" });
+            return;
           }
+          const handle = findDbHandleArgument(argument);
+          if (handle === null) {
+            return;
+          }
+          const loopContext = findLoopOrMapContext(node);
+          if (loopContext === null) {
+            return;
+          }
+          if (
+            loopContext === "promise-all-map" &&
+            isPromiseAllMapFanOutWithDbCallback(enclosingFanOutCall(node))
+          ) {
+            // The fan-out check above already reports this `Promise.all(...)`
+            // on its own await. Reporting here too would name one fan-out
+            // twice and cost it two suppressions.
+            return;
+          }
+          context.report({
+            node,
+            messageId: "noDbHandleAwaitInLoop",
+            data: { handle },
+          });
         };
 
         return {
