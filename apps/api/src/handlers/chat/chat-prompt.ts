@@ -17,6 +17,7 @@ import {
   DOCX_SUGGESTION_SURFACE,
 } from "@stll/api-contract/chat-docx-suggestions";
 import { describeSuggestChangesCapabilities } from "@stll/folio-agents";
+import { isFolioAIContentBlock } from "@stll/folio-core/server";
 import type { SkillMetadata } from "@stll/skills";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
@@ -1253,11 +1254,15 @@ type ActiveDocxEditSnapshot = NonNullable<
  * truncation notice (null when nothing was cut).
  */
 const buildEditableBlocksPromptParts = (snapshot: ActiveDocxEditSnapshot) => {
+  // The snapshot carries every paragraph, blank ones included, so an operation
+  // can address them. A listing read by a model wants the paragraphs that
+  // carry text; folio's own helper decides what counts as content.
+  const contentBlocks = snapshot.blocks.filter(isFolioAIContentBlock);
   const truncatedBlockCount = Math.max(
     0,
-    snapshot.blocks.length - ACTIVE_DOCX_EDIT_BLOCKS_MAX_COUNT,
+    contentBlocks.length - ACTIVE_DOCX_EDIT_BLOCKS_MAX_COUNT,
   );
-  const blocks = snapshot.blocks
+  const blocks = contentBlocks
     .slice(0, ACTIVE_DOCX_EDIT_BLOCKS_MAX_COUNT)
     .map((block) => {
       const promptBlock: {
@@ -1294,7 +1299,7 @@ const buildEditableBlocksPromptParts = (snapshot: ActiveDocxEditSnapshot) => {
 
   const truncationNotice =
     truncatedBlockCount > 0
-      ? `NOTE: This document is large; only the first ${String(ACTIVE_DOCX_EDIT_BLOCKS_MAX_COUNT)} blocks (of ${String(snapshot.blocks.length)}) are listed below. Operations targeting blocks past that cutoff cannot be referenced by id and will be skipped.`
+      ? `NOTE: This document is large; only the first ${String(ACTIVE_DOCX_EDIT_BLOCKS_MAX_COUNT)} blocks (of ${String(contentBlocks.length)}) are listed below. Operations targeting blocks past that cutoff cannot be referenced by id and will be skipped.`
       : null;
 
   return { blocks, truncationNotice };

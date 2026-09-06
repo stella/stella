@@ -1,7 +1,10 @@
 import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
-import { FolioDocxReviewer } from "@stll/folio-core/server";
+import {
+  FolioDocxReviewer,
+  isFolioAIContentBlock,
+} from "@stll/folio-core/server";
 
 import {
   entityVersions,
@@ -128,10 +131,14 @@ const requestKeys = (method: "DELETE" | "GET" | "PUT"): string[] =>
     request.method === method ? [request.key] : [],
   );
 
+/**
+ * The first block that carries text. The snapshot lists every paragraph, and
+ * the preset the fixture is authored from opens with a blank one.
+ */
 const firstBlock = async (buffer: ArrayBuffer) => {
   const reviewer = await FolioDocxReviewer.fromBuffer(buffer);
   const snapshot = reviewer.snapshot();
-  const block = snapshot.blocks.at(0);
+  const block = snapshot.blocks.find(isFolioAIContentBlock);
   if (!block) {
     throw new Error("Expected the fixture DOCX to have at least one block");
   }

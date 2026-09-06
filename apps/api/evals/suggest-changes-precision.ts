@@ -42,7 +42,10 @@ import {
   getFolioToolDefinitions,
 } from "@stll/folio-agents";
 import type { FolioAgentToolOptions } from "@stll/folio-agents";
-import { FolioDocxReviewer } from "@stll/folio-core/server";
+import {
+  FolioDocxReviewer,
+  isFolioAIContentBlock,
+} from "@stll/folio-core/server";
 import type { FolioAIEditSnapshot } from "@stll/folio-core/server";
 
 import { resolveCaching } from "@/api/lib/ai-config";
@@ -378,7 +381,7 @@ const createEvalTools = ({ trace, bridge }: ToolContext): AnyServerTool[] =>
 
 const renderEditableBlocks = (snapshot: FolioAIEditSnapshot): string =>
   JSON.stringify(
-    snapshot.blocks.map((block) => ({
+    snapshot.blocks.filter(isFolioAIContentBlock).map((block) => ({
       blockId: block.id,
       kind: block.kind,
       headingLevel: block.headingLevel,

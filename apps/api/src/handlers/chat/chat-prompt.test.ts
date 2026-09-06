@@ -587,6 +587,31 @@ describe("chat prompt builders", () => {
     expect(editableBlocksJson).not.toContain("blockTextHash");
   });
 
+  test("leaves blank paragraphs out of the editable-blocks JSON", () => {
+    const prompt = buildActiveFileSection({
+      activeFile: {
+        docxEditSnapshot: {
+          blocks: [
+            { id: "b-blank", kind: "paragraph", text: "   " },
+            { id: "b-1", kind: "paragraph", text: "Some clause text" },
+          ],
+        },
+        entityId: toSafeId<"entity">("entity_docx"),
+        fileName: "Kupni smlouva.docx",
+        supportsDocxEdits: true,
+      },
+      entityExists: true,
+      refRegistry: createChatRefRegistry(),
+      workspaceId: WORKSPACE_ID,
+    });
+
+    const editableBlocksJson =
+      /Editable DOCX blocks:\n```json\n(?<json>.+)\n```/u.exec(prompt)
+        ?.groups?.["json"];
+    expect(editableBlocksJson).toContain('"blockId":"b-1"');
+    expect(editableBlocksJson).not.toContain("b-blank");
+  });
+
   test("omits the folio-agents doc-tool guidance when those tools are not registered for this turn", () => {
     const refRegistry = createChatRefRegistry();
 
