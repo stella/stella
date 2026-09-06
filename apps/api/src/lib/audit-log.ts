@@ -9,6 +9,7 @@ import type {
 } from "@/api/db/schema";
 import { auditLogs } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { chunked } from "@/api/lib/chunked";
 import { resolveClientIp } from "@/api/lib/client-ip";
 
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "./audit-log.constants";
@@ -307,6 +308,31 @@ const baseRequestMetadata = (
 });
 
 /**
+ * Rows per audit INSERT. A single statement can carry at most 65,535 bind
+ * parameters and an audit row spends more than a dozen, so a recorder handed an
+ * array with no natural upper bound (a folder-tree upload commits up to
+ * `LIMITS.entitiesCount` creations in one transaction) would otherwise build a
+ * statement PostgreSQL refuses.
+ */
+const AUDIT_INSERT_BATCH_SIZE = 500;
+
+/**
+ * Write one recorder call's rows. Chunking is a bind-parameter detail, not a
+ * change of meaning: the caller's `groupId` spans every batch, so a call is one
+ * audit group however many statements it takes. Every array caller goes through
+ * here, so no call site has to remember the cap.
+ */
+const insertAuditRows = async (
+  tx: Transaction,
+  rows: readonly (typeof auditLogs.$inferInsert)[],
+): Promise<void> => {
+  for (const batch of chunked(rows, AUDIT_INSERT_BATCH_SIZE)) {
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- each batch is already one insert; the bind-parameter cap forbids a single statement
+    await tx.insert(auditLogs).values(batch);
+  }
+};
+
+/**
  * Audit recorder for background jobs (BullMQ workers) that run without an HTTP
  * request. Same insert shape as {@link createAuditRecorder}, but with no
  * request-derived metadata (IP, UA, forwarded-for) since there is no request.
@@ -341,7 +367,7 @@ export const createBackgroundAuditRecorder =
       groupId,
       runId: runIdForEvent(e, execution),
     });
-    await tx.insert(auditLogs).values(events.map(toRow));
+    await insertAuditRows(tx, events.map(toRow));
   };
 
 export const createAuditRecorder = (
@@ -372,6 +398,6 @@ export const createAuditRecorder = (
       groupId,
       runId: runIdForEvent(e, execution),
     });
-    await tx.insert(auditLogs).values(events.map(toRow));
+    await insertAuditRows(tx, events.map(toRow));
   };
 };

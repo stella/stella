@@ -453,6 +453,7 @@ export const createSpawnSubagentsTool = (
         return { results };
       }
 
+      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- bounded fan-out: MAX_SUBAGENTS_PER_CALL independent model runs per call
       const results = await Promise.all(subagents.map(runOneSubagent));
 
       return { results };

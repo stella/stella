@@ -2576,7 +2576,13 @@ export const runIngestionPipeline = async ({
         // `break` or a throw, and a `finally` still records what the page
         // collected. It runs before the cursor advance below, so a timeout
         // writing these rows still holds the cursor.
-        haltReason ??= await flushIngestionFailures(pageFailures);
+        //
+        // Flush unconditionally. `haltReason ??= await flush(...)` would skip
+        // the flush entirely once the page had halted, dropping exactly the
+        // failures a halted page most needs recorded; an existing halt reason
+        // still wins over the flush's own.
+        const flushHaltReason = await flushIngestionFailures(pageFailures);
+        haltReason ??= flushHaltReason;
       }
 
       const pageInserted = inserted - insertedBefore;

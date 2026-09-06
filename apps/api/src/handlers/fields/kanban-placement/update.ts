@@ -77,6 +77,7 @@ const updateKanbanPlacement = createSafeHandler(
           }
         }
 
+        // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- bounded: the request schema caps a kanban move at two field assignments
         const fieldResults = await Promise.all(
           body.fields.map(
             async (field) =>

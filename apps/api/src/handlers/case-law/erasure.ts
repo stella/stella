@@ -334,11 +334,24 @@ export const redactCaseLawDecision = async ({
     cleanedIntentIds.push(cleanup.value);
   }
   // Only the intents whose objects are gone lose their row; the rest stay
-  // retry targets.
-  await completeCaseLawCorpusUploadIntentCleanups({
-    intentIds: cleanedIntentIds,
-    scopedDb,
+  // retry targets. The batched delete is failure-isolated the way the
+  // per-intent deletes it replaced were: a redaction that has already scrubbed
+  // S3 must go on to scrub the row and the index, and a retained cleanup row
+  // is a retry target, not a reason to stop.
+  const intentCleanup = await Result.tryPromise({
+    try: async () =>
+      await completeCaseLawCorpusUploadIntentCleanups({
+        intentIds: cleanedIntentIds,
+        scopedDb,
+      }),
+    catch: (cause) => cause,
   });
+  if (Result.isError(intentCleanup)) {
+    captureError(intentCleanup.error, {
+      decisionId,
+      step: "redactCaseLawDecision.completeReservedCorpusUploadCleanup",
+    });
+  }
 
   // Clear pointers only once every object is gone; an incomplete erasure
   // retains exact retry targets while the tombstone already blocks every

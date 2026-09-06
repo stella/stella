@@ -231,6 +231,30 @@ export const promiseAllMapHelperHandleReportedOnce = async () => {
   );
 };
 
+// The callback returns a per-row helper carrying the handle and never awaits
+// it, so no inner `AwaitExpression` exists for the walk-up path to find: the
+// fan-out scan is the only thing that can see this shape.
+export const promiseAllMapHelperHandleAwaitless = async () => {
+  // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, typescript/promise-function-async -- fixture: awaitless per-row helper carrying the handle; `async` would only trip require-await
+  await Promise.all(items.map((item) => upsertRow(tx, item)));
+};
+
+// The same fan-out nested in a loop: still one report, on the fan-out.
+export const loopedPromiseAllMapHelperHandle = async () => {
+  for (const group of groups) {
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, typescript/promise-function-async -- fixture: per-loop fan-out over a per-row helper carrying the handle
+    await Promise.all(group.items.map((item) => upsertRow(tx, item)));
+  }
+};
+
+// `Promise.allSettled` fans out the helper shape exactly like `Promise.all`.
+export const promiseAllSettledMapHelperHandle = async () => {
+  // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, typescript/promise-function-async -- fixture: awaitless per-row helper carrying the handle under allSettled
+  await Promise.allSettled(
+    items.map((item) => persistRow({ tx, id: item.id })),
+  );
+};
+
 // --- Cases the rule MUST NOT flag ---
 
 // A single DB await outside any loop.
@@ -378,4 +402,24 @@ export const loopHelperWithoutHandle = async () => {
   for (const item of items) {
     await computeRow(item);
   }
+};
+
+// A fan-out whose callback calls a helper with no database handle is an
+// ordinary parallel transform.
+export const promiseAllMapHelperWithoutHandle = async () => {
+  await Promise.all(items.map(async (item) => await computeRow(item)));
+};
+
+// The same per-row helper, mapped but never awaited as a fan-out: `.map()`
+// alone starts nothing this rule is about.
+export const mapHelperHandleWithoutFanOut = () => {
+  // oxlint-disable-next-line typescript/promise-function-async -- fixture: the callback must stay awaitless so the mapped array is the only product
+  const pending = items.map((item) => upsertRow(tx, item));
+  return pending.length;
+};
+
+// A literal array is fixed at author time, so it is bounded by construction.
+export const promiseAllLiteralArrayHelperHandle = async () => {
+  const first = items[0] ?? { id: "" };
+  await Promise.all([upsertRow(tx, first), upsertRow(ctx.tx, first)]);
 };

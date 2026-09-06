@@ -56,9 +56,15 @@
 //     argument does *not* match the rule above: is it `Promise.all(...)` /
 //     `Promise.allSettled(...)` wrapping a single `.map()` / `.forEach()` /
 //     `.flatMap()` call? If so, resolve that call's callback and look for a
-//     DB-rooted call chain *inside* it, without requiring an explicit
-//     `await` on it (a `Promise.all([...]).then` or bare-return callback
-//     still issues one query per item):
+//     database call *inside* it -- a DB-rooted chain, or a helper carrying a
+//     handle -- without requiring an explicit `await` on it (a
+//     `Promise.all([...]).then` or bare-return callback still issues one
+//     query per item, and `items.map((item) => upsertRow(tx, item))` has no
+//     inner await for the walk-up path to find at all). The fan-out reports
+//     whichever of the two messages matched. A literal array argument
+//     (`Promise.all([saveA(tx), saveB(tx)])`) is not matched: its length is
+//     fixed at author time, which is the bounded case the escape hatch is
+//     for.
 //       - Inline callback (`items.map((item) => tx.insert(...))`): scan its
 //         body for a DB-rooted call that is *not* already the direct
 //         argument of an `await` — that shape is already caught by rule #1
@@ -89,6 +95,7 @@
 //   await Promise.all(items.map(async (item) => { await tx.select()...; }));
 //   await Promise.allSettled(items.map(async (item) => { await tx...; }));
 //   await Promise.all(items.map((item) => tx.insert(t).values(item))); // no await in the callback
+//   await Promise.all(items.map((item) => upsertRow(tx, item)));        // handle behind a helper
 //   const indexRow = async (row) => { await tx.insert(t).values(row); };
 //   await Promise.all(chunk.map(indexRow));                             // named callback
 //
@@ -433,54 +440,75 @@ const resolveLocalFunctionByName = (
   return null;
 };
 
-// Recursively scan `node` for a DB-rooted call chain. `canResolveFurther`
+// Which shape a database call inside a fan-out callback matched. A boolean
+// would lose the handle name the handle message reports, and the two shapes
+// are exactly the two messages this rule emits.
+type DatabaseCallMatch =
+  | { readonly kind: "chain" }
+  | { readonly kind: "handle"; readonly handle: string };
+
+const CHAIN_MATCH: DatabaseCallMatch = { kind: "chain" };
+
+// Recursively scan `node` for a database call: a DB-rooted call chain, or a
+// call carrying a database handle in its arguments. `canResolveFurther`
 // allows exactly one more hop through a bare function-call callee that
 // resolves to a same-file local definition (see `resolveLocalFunctionByName`
 // above); the hop is spent immediately so nested calls found through it
 // cannot chain into further hops. `viaResolution` marks that `node` was
 // already reached through such a hop (or is a resolved named `.map()`
-// callback's own body): once true, a DB-rooted call counts whether or not
+// callback's own body): once true, a database call counts whether or not
 // it is awaited, since no other check in this rule could have already
 // flagged it. When false (still scanning an inline callback's own body),
-// only a *bare* (non-awaited) DB-rooted call counts, so the existing
+// only a *bare* (non-awaited) call counts, so the existing
 // `AwaitExpression`-walk-up path keeps sole ownership of directly awaited
-// calls and the same fan-out isn't reported twice.
-const containsDbRootedCall = (
+// calls and the same fan-out isn't reported twice. `items.map((item) =>
+// upsertRow(tx, item))` has no inner await at all, so the fan-out scan is
+// the only thing that can see it.
+const findDatabaseCall = (
   node: unknown,
   canResolveFurther: boolean,
   viaResolution: boolean,
-): boolean => {
+): DatabaseCallMatch | null => {
   if (Array.isArray(node)) {
-    return node.some((child) =>
-      containsDbRootedCall(child, canResolveFurther, viaResolution),
-    );
+    for (const child of node) {
+      const match = findDatabaseCall(child, canResolveFurther, viaResolution);
+      if (match !== null) {
+        return match;
+      }
+    }
+    return null;
   }
   if (typeof node !== "object" || node === null) {
-    return false;
+    return null;
   }
   const type = getType(node);
   if (type === null) {
-    return false;
+    return null;
   }
 
-  if (type === "CallExpression") {
-    if (isDbAwaitCall(node) && isChainRoot(node)) {
-      if (viaResolution || !isAwaitArgument(node)) {
-        return true;
-      }
-      // A direct `await dbCall()` at the unresolved level belongs to the
-      // `AwaitExpression` visitor's own `isDbAwaitCall` check -- skip it
-      // here rather than reporting the same fan-out twice.
-    } else if (canResolveFurther) {
-      const callee = getField(node, "callee");
-      if (isIdentifier(callee)) {
-        const resolved = resolveLocalFunctionByName(node, callee.name);
-        if (
-          resolved !== null &&
-          containsDbRootedCall(getField(resolved, "body"), false, true)
-        ) {
-          return true;
-        }
+  if (type === "CallExpression" && isChainRoot(node)) {
+    const isChainCall = isDbAwaitCall(node);
+    const handle = isChainCall ? null : findDbHandleArgument(node);
+    // A direct `await dbCall()` / `await helper(tx, row)` at the unresolved
+    // level belongs to the `AwaitExpression` visitor -- skipping it here is
+    // what keeps one fan-out from being reported twice.
+    if (
+      (isChainCall || handle !== null) &&
+      (viaResolution || !isAwaitArgument(node))
+    ) {
+      return handle === null ? CHAIN_MATCH : { kind: "handle", handle };
+    }
+  }
+  if (type === "CallExpression" && canResolveFurther) {
+    const callee = getField(node, "callee");
+    if (isIdentifier(callee)) {
+      const resolved = resolveLocalFunctionByName(node, callee.name);
+      const match =
+        resolved === null
+          ? null
+          : findDatabaseCall(getField(resolved, "body"), false, true);
+      if (match !== null) {
+        return match;
       }
     }
   }
@@ -489,55 +517,61 @@ const containsDbRootedCall = (
     if (key === "parent") {
       continue;
     }
-    if (
-      containsDbRootedCall(
-        Reflect.get(node, key),
-        canResolveFurther,
-        viaResolution,
-      )
-    ) {
-      return true;
+    const match = findDatabaseCall(
+      Reflect.get(node, key),
+      canResolveFurther,
+      viaResolution,
+    );
+    if (match !== null) {
+      return match;
     }
   }
-  return false;
+  return null;
 };
 
 // Is `node` a `Promise.all(...)` / `Promise.allSettled(...)` call wrapping
 // a single `.map()` / `.forEach()` / `.flatMap()` call whose callback
 // (inline, or a same-file named function resolved by identifier) reaches a
-// DB-rooted call chain?
-const isPromiseAllMapFanOutWithDbCallback = (node: unknown): boolean => {
+// database call -- a DB-rooted chain, or a helper carrying a handle? Returns
+// the shape that matched, so the fan-out reports the same message the loop
+// path would.
+//
+// A literal array (`Promise.all([saveA(tx), saveB(tx)])`) is deliberately not
+// matched: its length is fixed at author time, which is the bounded case this
+// rule's escape hatch exists for.
+const findPromiseAllMapFanOutDatabaseCall = (
+  node: unknown,
+): DatabaseCallMatch | null => {
   if (!isPromiseAllLikeCall(node)) {
-    return false;
+    return null;
   }
   const args = getField(node, "arguments");
   if (!Array.isArray(args) || args.length !== 1) {
-    return false;
+    return null;
   }
   const mapCall = unwrapExpression(args[0]);
   if (!isMapLikeCall(mapCall)) {
-    return false;
+    return null;
   }
 
   const mapArgs = getField(mapCall, "arguments");
   if (!Array.isArray(mapArgs) || mapArgs.length === 0) {
-    return false;
+    return null;
   }
   const callback = unwrapExpression(mapArgs.at(-1));
 
   if (isFunctionNode(callback)) {
-    return containsDbRootedCall(getField(callback, "body"), true, false);
+    return findDatabaseCall(getField(callback, "body"), true, false);
   }
 
   if (isIdentifier(callback)) {
     const resolved = resolveLocalFunctionByName(mapCall, callback.name);
-    if (resolved === null) {
-      return false;
-    }
-    return containsDbRootedCall(getField(resolved, "body"), true, true);
+    return resolved === null
+      ? null
+      : findDatabaseCall(getField(resolved, "body"), true, true);
   }
 
-  return false;
+  return null;
 };
 
 // The `Promise.all(...)` / `Promise.allSettled(...)` call whose `.map()`
@@ -625,8 +659,17 @@ export default eslintCompatPlugin({
             }
             return;
           }
-          if (isPromiseAllMapFanOutWithDbCallback(argument)) {
-            context.report({ node, messageId: "noDbAwaitInLoop" });
+          const fanOut = findPromiseAllMapFanOutDatabaseCall(argument);
+          if (fanOut !== null) {
+            context.report(
+              fanOut.kind === "handle"
+                ? {
+                    node,
+                    messageId: "noDbHandleAwaitInLoop",
+                    data: { handle: fanOut.handle },
+                  }
+                : { node, messageId: "noDbAwaitInLoop" },
+            );
             return;
           }
           const handle = findDbHandleArgument(argument);
@@ -639,7 +682,8 @@ export default eslintCompatPlugin({
           }
           if (
             loopContext === "promise-all-map" &&
-            isPromiseAllMapFanOutWithDbCallback(enclosingFanOutCall(node))
+            findPromiseAllMapFanOutDatabaseCall(enclosingFanOutCall(node)) !==
+              null
           ) {
             // The fan-out check above already reports this `Promise.all(...)`
             // on its own await. Reporting here too would name one fan-out

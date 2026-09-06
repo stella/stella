@@ -87,10 +87,10 @@ export const loadExternalMcpToolsForUser = async ({
   // way a sequential loop would. A per-connector failure — including a
   // timeout — degrades to "no tools from that connector" rather than
   // failing the whole load; see `loadConnectorTools`.
+  // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- per-connector client, credentials and upstream tool discovery; nothing to batch
   const results = await Promise.all(
     rows.map(
       async (row) =>
-        // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- per-connector client, credentials and upstream tool discovery; nothing to batch
         await loadConnectorTools({
           nullUnionStrategy,
           organizationId,
