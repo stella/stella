@@ -403,12 +403,7 @@ export const createInspectorTabsSlice = (
   }) =>
     set((state) => {
       const id: ExternalTabId = `external:${url}`;
-      let fallbackLabel = url;
-      try {
-        fallbackLabel = new URL(url).hostname;
-      } catch {
-        // Keep the raw URL as a last-resort tab label.
-      }
+      const fallbackLabel = URL.canParse(url) ? new URL(url).hostname : url;
       const existing = state.tabs.find((tab) => tab.id === id);
       if (!existing) {
         state.tabs.push({
