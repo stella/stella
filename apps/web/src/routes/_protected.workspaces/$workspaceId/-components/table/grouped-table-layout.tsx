@@ -13,7 +13,12 @@ import {
   useSuspenseQuery,
 } from "@tanstack/react-query";
 import { useTable } from "@tanstack/react-table";
-import { ChevronDownIcon, ChevronRightIcon, TableIcon } from "lucide-react";
+import {
+  ChevronDownIcon,
+  ChevronRightIcon,
+  SearchXIcon,
+  TableIcon,
+} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { ENTITY_KINDS, VIEW_SORTS_MAX } from "@stll/api-contract";
@@ -326,6 +331,26 @@ export const GroupedTableLayout = ({
   const eagerGroupValues = countsLoaded
     ? getEagerGroupValues(groups, countByValue)
     : null;
+
+  // A find that matches nothing gets the same answer here as in the flat
+  // layout. Left to the sections, a grouped view says it with a column of
+  // "0 items" headers and no term in sight, so the same search reads as two
+  // different outcomes depending on how the view happens to be grouped.
+  if (
+    find.highlight &&
+    countsLoaded &&
+    groups.every((group) => (countByValue.get(group.value) ?? 0) === 0)
+  ) {
+    return (
+      <EmptyState
+        hint={t("workspaces.views.noFindResultsHint")}
+        icon={SearchXIcon}
+        message={t("workspaces.views.noFindResults", {
+          term: find.highlight.term,
+        })}
+      />
+    );
+  }
 
   return (
     // Flex column so empty categories can sink below populated ones via
