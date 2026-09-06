@@ -1,8 +1,12 @@
 import { describe, expect, test } from "bun:test";
+import { expectTypeOf } from "expect-type";
 import * as v from "valibot";
 
 import { fieldMetaToolInputSchema } from "@/api/lib/docx/types";
-import { fieldSourceToolInputSchema } from "@/api/lib/template-binding/binding-sources";
+import {
+  type FieldSource,
+  fieldSourceToolInputSchema,
+} from "@/api/lib/template-binding/binding-sources";
 import {
   readTemplateFieldsInput,
   templateFieldInputSchema,
@@ -24,6 +28,12 @@ const advertised = templateFieldInputSchema.pipe[0].entries;
 const persisted = fieldMetaToolInputSchema.pipe[0].entries;
 
 describe("template field input schema", () => {
+  test("preserves the persisted source union in the portable schema", () => {
+    expectTypeOf<
+      v.InferOutput<typeof fieldSourceToolInputSchema>
+    >().toEqualTypeOf<FieldSource>();
+  });
+
   test("advertises the persisted tool-input keys in snake_case", () => {
     expect(sortedCamelKeys(advertised)).toEqual(sortedKeys(persisted));
   });
@@ -76,13 +86,10 @@ describe("template field input schema", () => {
         registry: "krs",
         formats: [{ key: "default", template: "[name]" }],
       },
-      // Parsed rather than written inline: the advertised source union is a
-      // provider-portable `anyOf`, so a bare literal has no discriminant to
-      // narrow against.
-      source: v.parse(fieldSourceToolInputSchema, {
+      source: {
         kind: "contact",
         field: "displayName",
-      }),
+      },
       formula: "rent * 12",
       condition: "type == 'corp'",
       date_format: { locale: "cs", style: "long" },
@@ -173,10 +180,10 @@ describe("template field input schema", () => {
         registry: "krs",
         formats: [{ key: "default", template: "[name]" }],
       },
-      source: v.parse(fieldSourceToolInputSchema, {
+      source: {
         kind: "contact",
         field: "displayName",
-      }),
+      },
       formula: "rent * 12",
       condition: "type == 'corp'",
     });

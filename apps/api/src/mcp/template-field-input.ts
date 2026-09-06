@@ -388,9 +388,11 @@ export const toTemplateFieldWireInput = (
 
 /** Deserialize save_template's wire field through the same total key map used
  * by the describe serializer. */
-export const toFieldMetaToolInput = (
-  field: TemplateFieldInput,
-): v.InferOutput<typeof fieldMetaToolInputSchema> => ({
+export const toFieldMetaToolInput = ({
+  [FIELD_WIRE_KEYS.validation]: validation,
+  [FIELD_WIRE_KEYS.parts]: parts,
+  ...field
+}: TemplateFieldInput): v.InferOutput<typeof fieldMetaToolInputSchema> => ({
   path: field[FIELD_WIRE_KEYS.path],
   ...(field[FIELD_WIRE_KEYS.label] === undefined
     ? {}
@@ -404,9 +406,9 @@ export const toFieldMetaToolInput = (
   ...(field[FIELD_WIRE_KEYS.options] === undefined
     ? {}
     : { options: field[FIELD_WIRE_KEYS.options] }),
-  ...(field[FIELD_WIRE_KEYS.validation] === undefined
+  ...(validation === undefined
     ? {}
-    : { validation: toFieldValidation(field[FIELD_WIRE_KEYS.validation]) }),
+    : { validation: toFieldValidation(validation) }),
   ...(field[FIELD_WIRE_KEYS.required] === undefined
     ? {}
     : { required: field[FIELD_WIRE_KEYS.required] }),
@@ -419,9 +421,7 @@ export const toFieldMetaToolInput = (
   ...(field[FIELD_WIRE_KEYS.aiSeesDocument] === undefined
     ? {}
     : { aiSeesDocument: field[FIELD_WIRE_KEYS.aiSeesDocument] }),
-  ...(field[FIELD_WIRE_KEYS.parts] === undefined
-    ? {}
-    : { parts: field[FIELD_WIRE_KEYS.parts].map(toFieldPart) }),
+  ...(parts === undefined ? {} : { parts: parts.map(toFieldPart) }),
   ...(field[FIELD_WIRE_KEYS.format] === undefined
     ? {}
     : { format: field[FIELD_WIRE_KEYS.format] }),

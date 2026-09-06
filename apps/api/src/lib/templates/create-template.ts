@@ -23,6 +23,7 @@ import {
 import type { TemplateKind, TemplateOrigin } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeHandlerGenerator } from "@/api/lib/api-handlers";
+import { arrayOrEmpty } from "@/api/lib/array";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -141,7 +142,7 @@ export const createStoredTemplate = async function* ({
     // be visible to the merge that classifies those paths.
     if (clientManifest) {
       const issues = validateFieldOverlay({
-        configured: existingManifest?.fields ?? [],
+        configured: arrayOrEmpty(existingManifest?.fields),
         discovered,
         overlay: clientManifest.fields,
       });

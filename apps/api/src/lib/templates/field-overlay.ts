@@ -14,6 +14,7 @@
 
 import { panic } from "better-result";
 
+import { arrayOrEmpty } from "@/api/lib/array";
 import {
   manifestFieldsFromMerge,
   mergeManifestWithDiscovery,
@@ -62,7 +63,7 @@ const declaredPaths = (discovered: DiscoveredTemplate): DeclaredPaths => {
     if (field.kind === "array") {
       roots.add(path);
     }
-    for (const item of field.itemFields ?? []) {
+    for (const item of arrayOrEmpty(field.itemFields)) {
       visit(item, path);
     }
   };
@@ -202,7 +203,7 @@ export const applyFieldOverlay = (
   overlay: readonly FieldMeta[],
 ): TemplateManifest => {
   const overlayByPath = new Map(overlay.map((field) => [field.path, field]));
-  const existing = manifest?.fields ?? [];
+  const existing = arrayOrEmpty(manifest?.fields);
   const merged: FieldMeta[] = existing.map((field) => {
     const override = overlayByPath.get(field.path);
     return override ? { ...field, ...override } : field;

@@ -1009,9 +1009,9 @@ export const manifestFieldsFromMerge = (
   const arrayRoots = new Set(
     resolved.filter((field) => field.kind === "array").map(({ path }) => path),
   );
-  const formatMarkers = lookupFormatMarkerPaths(manifest?.fields ?? []);
+  const formatMarkers = lookupFormatMarkerPaths(arrayOrEmpty(manifest?.fields));
   const claimed = new Set(fields.map(({ path }) => path));
-  for (const field of manifest?.fields ?? []) {
+  for (const field of arrayOrEmpty(manifest?.fields)) {
     const root = field.path.split(".").at(0);
     if (
       claimed.has(field.path) ||
@@ -1039,7 +1039,9 @@ export const mergeManifestWithDiscovery = (
 ): ResolvedField[] => {
   // Index manifest fields by path
   const metaByPath = new Map<string, FieldMeta>();
-  const lookupFormatMarkers = lookupFormatMarkerPaths(manifest?.fields ?? []);
+  const lookupFormatMarkers = lookupFormatMarkerPaths(
+    arrayOrEmpty(manifest?.fields),
+  );
   if (manifest) {
     for (const f of manifest.fields) {
       metaByPath.set(f.path, f);

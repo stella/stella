@@ -11,6 +11,7 @@ import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { assertUsageAvailableForHandler } from "@/api/lib/api-handlers";
+import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
   AssertNoExtraFields,
@@ -323,7 +324,13 @@ type TemplateDetailSuccess = Extract<
 
 const toTemplateDetailPayload = (payload: TemplateDetailSuccess) => ({
   ...payload,
-  fields: payload.fields.map(toTemplateFieldWireInput),
+  fields: payload.fields.map((field) => ({
+    ...toTemplateFieldWireInput(field),
+    input_type: field.inputType,
+    required: field.required,
+    ai_adapt: field.aiAdapt,
+    ai_sees_document: field.aiSeesDocument,
+  })),
 });
 
 type TemplateDetailPayload = ReturnType<typeof toTemplateDetailPayload>;
@@ -356,7 +363,7 @@ const templateFieldPartOptionItems = (
 const templateFieldFormatItems = (
   payload: TemplateDetailPayload,
 ): readonly { key: string; template: string }[] =>
-  payload.fields.flatMap((field) => field.lookup?.formats ?? []);
+  payload.fields.flatMap((field) => arrayOrEmpty(field.lookup?.formats));
 
 const compact = <T>(
   items: readonly (T | null)[] | null | undefined,
@@ -446,7 +453,7 @@ const buildTemplateDetailTextFieldSpecs = (
   }),
   defineTextFieldSpec({
     path: "warnings[].path",
-    items: (payload: TemplateDetailPayload) => payload.warnings ?? [],
+    items: (payload: TemplateDetailPayload) => arrayOrEmpty(payload.warnings),
     scope: () => organizationId,
     read: (warning: TemplateWarning) => warning.path,
     apply: (warning: TemplateWarning, value) => {
@@ -455,7 +462,7 @@ const buildTemplateDetailTextFieldSpecs = (
   }),
   defineTextFieldSpec({
     path: "warnings[].message",
-    items: (payload: TemplateDetailPayload) => payload.warnings ?? [],
+    items: (payload: TemplateDetailPayload) => arrayOrEmpty(payload.warnings),
     scope: () => organizationId,
     read: (warning: TemplateWarning) => warning.message,
     apply: (warning: TemplateWarning, value) => {
@@ -464,7 +471,7 @@ const buildTemplateDetailTextFieldSpecs = (
   }),
   defineTextFieldSpec({
     path: "warnings[].hint",
-    items: (payload: TemplateDetailPayload) => payload.warnings ?? [],
+    items: (payload: TemplateDetailPayload) => arrayOrEmpty(payload.warnings),
     scope: () => organizationId,
     read: (warning: TemplateWarning) => warning.hint,
     apply: (warning: TemplateWarning, value) => {
