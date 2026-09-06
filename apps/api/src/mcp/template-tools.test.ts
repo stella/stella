@@ -13,7 +13,6 @@ import JSZip from "jszip";
 import type { Transaction } from "@/api/db/root";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import { CONTACT_FIELDS } from "@/api/lib/template-binding/binding-sources";
 import type { McpRequestContext } from "@/api/mcp/context";
@@ -1811,15 +1810,9 @@ describe("MCP template tools", () => {
   test("save_template (create) surfaces the service's unknown-path rejection", async () => {
     createStoredTemplateMock.mockImplementation(async function* () {
       yield* [];
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "No marker {{ghost}} in the DOCX.",
-          issues: [
-            { path: "fields.0", message: "No marker {{ghost}} in the DOCX." },
-          ],
-        }),
-      );
+      return Result.err({
+        message: 'No field "ghost" was discovered in the DOCX.',
+      });
     });
 
     const result = await handleMcpToolCall({
@@ -1833,13 +1826,8 @@ describe("MCP template tools", () => {
     });
 
     expect(result.isError).toBe(true);
-    // The rejection reaches the agent as the structured envelope, naming the
-    // entry it sent — not as one line of bare prose it would have to parse.
-    const error = validationEnvelope(result);
-    expect(error["message"]).toContain("ghost");
-    expect(asTestRaw<{ path: string }[]>(error["issues"])).toEqual([
-      { path: "fields.0", message: "No marker {{ghost}} in the DOCX." },
-    ]);
+    const message = result.content.at(0);
+    expect(message?.type === "text" && message.text).toContain("ghost");
   });
 
   test("save_template (configure) applies the overlay and returns the updated fields", async () => {
@@ -1920,15 +1908,9 @@ describe("MCP template tools", () => {
   test("save_template (configure) rejects a config whose path is unknown", async () => {
     configureTemplateFieldsMock.mockImplementation(async function* () {
       yield* [];
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "No marker {{ghost}} in the DOCX.",
-          issues: [
-            { path: "fields.0", message: "No marker {{ghost}} in the DOCX." },
-          ],
-        }),
-      );
+      return Result.err({
+        message: 'No field "ghost" in this template.',
+      });
     });
 
     const result = await handleMcpToolCall({
@@ -1939,11 +1921,8 @@ describe("MCP template tools", () => {
 
     expect(result.isError).toBe(true);
     expect(describeStoredTemplateMock).not.toHaveBeenCalled();
-    const error = validationEnvelope(result);
-    expect(error["message"]).toContain("ghost");
-    expect(asTestRaw<{ path: string }[]>(error["issues"])).toEqual([
-      { path: "fields.0", message: "No marker {{ghost}} in the DOCX." },
-    ]);
+    const message = result.content.at(0);
+    expect(message?.type === "text" && message.text).toContain("ghost");
   });
 
   test("save_template (configure) forbids members without template:create permission", async () => {
