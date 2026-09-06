@@ -30,7 +30,11 @@ import {
   describeError,
   reportDesktopError,
 } from "../telemetry/desktop-telemetry";
-import { clipboardSourceLabel, clipboardSourceTitle } from "./clipboard-logic";
+import {
+  clipboardSourceLabel,
+  clipboardSourceTitle,
+  hasClipboardPrimaryModifier,
+} from "./clipboard-logic";
 import { isClipboardEditorContext } from "./clipboard-types";
 import type { ClipboardEditorContext } from "./clipboard-types";
 import { ClipboardImagePreview } from "./ClipboardImagePreview";
@@ -700,7 +704,13 @@ const ClipboardEditor = () => {
       requestClose();
       return;
     }
-    if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+    const primaryModifier = hasClipboardPrimaryModifier({
+      altGraphKey: event.getModifierState("AltGraph"),
+      altKey: event.altKey,
+      ctrlKey: event.ctrlKey,
+      metaKey: event.metaKey,
+    });
+    if (primaryModifier && event.key === "Enter") {
       event.preventDefault();
       save();
     }

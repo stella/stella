@@ -1885,13 +1885,10 @@ const ClipboardApp = () => {
     if (cardTrigger && event.key === " ") {
       return;
     }
-    if (
-      event.key.length === 1 &&
-      !event.isComposing &&
-      !event.metaKey &&
-      !event.ctrlKey &&
-      !event.altKey
-    ) {
+    // A single character reaches the search field whatever produced it, Alt
+    // and AltGr included (`€` on Option+2, `@` on Spanish AltGr+2). Only the
+    // shortcut modifier holds a keystroke back.
+    if (event.key.length === 1 && !event.isComposing && !primaryModifier) {
       event.preventDefault();
       setQuery((currentQuery) => currentQuery + event.key);
       setSelectedIndex(0);
