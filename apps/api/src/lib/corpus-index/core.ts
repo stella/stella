@@ -1527,6 +1527,7 @@ export const createCorpusIndexer = <
 
           const casMissed = new Set<SafeId<TBrand>>();
           const markStartedAt = performance.now();
+          // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- one transaction per job group under the index lock; the group is the batch
           await scopedDb(async (tx) => {
             // audit: skip — search index maintenance; rebuilds derived state
             if (options.type !== "incremental") {

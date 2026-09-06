@@ -86,6 +86,7 @@ let recomputed = 0;
 let cited = 0;
 
 while (true) {
+  // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- bounded batch per iteration under the graph lock
   const batch = await rootDb.transaction(
     async (tx) =>
       await recomputeCitationAuthorityBatch(tx, {

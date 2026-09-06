@@ -30,6 +30,7 @@ const { rootDb } = await enterCaseLawMaintenanceLane();
 console.log(`Seeding ${SEED_RULES.length} polarity rules...`);
 
 for (const rule of SEED_RULES) {
+  // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- constant seed list
   await rootDb.transaction(async (tx) => {
     await tx
       .insert(caseLawPolarityRules)

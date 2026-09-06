@@ -177,6 +177,7 @@ const backfillAdapter = async (config: BackfillConfig) => {
   let failed = 0;
 
   while (true) {
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- keyset page per iteration; the page is the batch
     const batch = await rootDb.transaction(
       async (tx) =>
         await tx
@@ -204,6 +205,7 @@ const backfillAdapter = async (config: BackfillConfig) => {
 
       if (!url) {
         // No URL available — mark as empty to prevent re-query
+        // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- one write per fetched row so progress survives a stop
         await rootDb.transaction(async (tx) => {
           await tx
             .update(caseLawDecisions)
@@ -220,6 +222,7 @@ const backfillAdapter = async (config: BackfillConfig) => {
       // Always update the row — set empty string on failure so
       // the NULL check no longer matches and we don't re-query
       // this row forever.
+      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- one write per fetched row so progress survives a stop
       await rootDb.transaction(async (tx) => {
         await tx
           .update(caseLawDecisions)

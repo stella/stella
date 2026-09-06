@@ -10,10 +10,12 @@
 // Detection is intentionally simple and lexical:
 //   - A DB await is an `AwaitExpression` whose argument is a call chain
 //     rooted at the identifier `db` or `tx` (e.g. `db.insert(...).values(...)`,
-//     `tx.query.foo.findMany()`, `db.transaction(async (tx) => ...)`), OR a
-//     call whose callee resolves to `safeDb` — bare (`safeDb(cb)`, common in
-//     `createSafeHandler` generators) or as a property access
-//     (`ctx.safeDb(cb)`, `context.safeDb(cb)`).
+//     `tx.query.foo.findMany()`, `db.transaction(async (tx) => ...)`,
+//     `rootDb.select()...`), OR a call whose callee resolves to a runner
+//     handle (`safeDb`, `scopedDb`, `ingestionDb`, `backfillDb`) — bare
+//     (`safeDb(cb)`, common in `createSafeHandler` generators; `scopedDb(cb)`
+//     destructured from a handler context) or as a property access
+//     (`ctx.safeDb(cb)`, `context.scopedDb(cb)`).
 //   - A HANDLE await is an `AwaitExpression` whose argument is any other call
 //     that receives a database handle (`db`, `tx`, `safeDb`, `scopedDb`,
 //     `rootDb`, `ingestionDb`, `backfillDb`) as an argument: a bare identifier
@@ -161,16 +163,26 @@ const DB_HANDLE_NAME_SET: ReadonlySet<string> = new Set(DB_HANDLE_NAMES);
 
 // The handles a query chain is written directly on. The runner handles take a
 // callback (`scopedDb((tx) => ...)`) and never root a chain, so they are
-// matched as arguments instead. `satisfies` binds this subset to the list
-// above: a rename there fails to compile here.
+// matched as callees and as arguments instead. `satisfies` binds both subsets
+// to the list above: a rename there fails to compile here.
 const DB_CHAIN_ROOT_NAMES = [
   "db",
   "tx",
+  "rootDb",
 ] as const satisfies readonly DbHandleName[];
 
 const DB_CHAIN_ROOT_NAME_SET: ReadonlySet<string> = new Set(
   DB_CHAIN_ROOT_NAMES,
 );
+
+const DB_RUNNER_NAMES = [
+  "safeDb",
+  "scopedDb",
+  "ingestionDb",
+  "backfillDb",
+] as const satisfies readonly DbHandleName[];
+
+const DB_RUNNER_NAME_SET: ReadonlySet<string> = new Set(DB_RUNNER_NAMES);
 
 const MAP_LIKE_METHOD_NAMES = new Set(["map", "forEach", "flatMap"]);
 
@@ -200,25 +212,27 @@ const isFunctionNode = (node: unknown): boolean => {
   return type !== null && FUNCTION_TYPES.has(type);
 };
 
-// `safeDb(cb)` (bare, destructured from handler context) or `ctx.safeDb(cb)`
-// / `context.safeDb(cb)` / `actor.safeDb(cb)` (property access on whatever
-// the caller named the handler context).
-const isSafeDbCallee = (callee: unknown): boolean => {
-  if (isIdentifier(callee, "safeDb")) {
+// A runner handle invoked with its callback: `safeDb(cb)` / `scopedDb(cb)`
+// (bare, destructured from a handler or job context) or `ctx.safeDb(cb)` /
+// `context.scopedDb(cb)` / `actor.safeDb(cb)` (property access on whatever
+// the caller named the context). The callback runs one transaction per
+// invocation, so the invocation is the query.
+const isDbRunnerCallee = (callee: unknown): boolean => {
+  if (isIdentifier(callee) && DB_RUNNER_NAME_SET.has(callee.name)) {
     return true;
   }
-  return (
-    getType(callee) === "MemberExpression" &&
-    !isComputed(callee) &&
-    isIdentifier(getField(callee, "property"), "safeDb")
-  );
+  if (getType(callee) !== "MemberExpression" || isComputed(callee)) {
+    return false;
+  }
+  const property = getField(callee, "property");
+  return isIdentifier(property) && DB_RUNNER_NAME_SET.has(property.name);
 };
 
 const isDbAwaitCall = (node: unknown): boolean => {
   if (getType(node) !== "CallExpression") {
     return false;
   }
-  if (isSafeDbCallee(getField(node, "callee"))) {
+  if (isDbRunnerCallee(getField(node, "callee"))) {
     return true;
   }
   const root = resolveChainRootName(node);

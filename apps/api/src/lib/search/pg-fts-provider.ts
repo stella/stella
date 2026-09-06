@@ -317,6 +317,7 @@ const rebuildIndex = async (orgId: SafeId<"organization">): Promise<void> => {
     let hasMore = true;
     while (hasMore) {
       // Keyset pagination: O(1) per batch vs O(N) for offset
+      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- keyset page per iteration; the page is the batch
       const batch = await rootDb
         .select({ id: entities.id })
         .from(entities)

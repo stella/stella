@@ -34,6 +34,11 @@ declare const rootDb: {
   query: { items: { findFirst: (args: unknown) => Promise<unknown> } };
 };
 declare const ctx: { tx: typeof tx };
+declare const scopedDb: typeof safeDb;
+declare const context: {
+  ingestionDb: typeof safeDb;
+  backfillDb: typeof safeDb;
+};
 declare const tables: Record<string, unknown>;
 declare const items: { id: string }[];
 declare const groups: { items: { id: string }[] }[];
@@ -256,7 +261,45 @@ export const promiseAllSettledMapHelperHandle = async () => {
   );
 };
 
+// A runner handle other than `safeDb` invoked with its callback: bare, and
+// as a property of whatever the caller named its context.
+export const forOfLoopAwaitScopedDbRunner = async () => {
+  for (const item of items) {
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- fixture: one transaction per row through the scoped runner
+    await scopedDb(async (scopedTx: typeof tx) => {
+      const inserted = await scopedTx.insert(itemsTable).values(item);
+      return inserted;
+    });
+  }
+};
+
+export const forOfLoopAwaitContextRunner = async () => {
+  for (const item of items) {
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- fixture: one transaction per row through the context's runner
+    await context.ingestionDb(async (scopedTx: typeof tx) => {
+      const inserted = await scopedTx.insert(itemsTable).values(item);
+      return inserted;
+    });
+  }
+};
+
+// A chain rooted at the root client is a query like one rooted at `db`.
+export const forOfLoopAwaitRootDbChain = async () => {
+  for (const item of items) {
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- fixture: per-row read on the root client
+    await rootDb.query.items.findFirst({ where: item.id });
+  }
+};
+
 // --- Cases the rule MUST NOT flag ---
+
+// A runner invoked once, outside any loop.
+export const singleScopedDbOutsideLoop = async () => {
+  await scopedDb(async (scopedTx: typeof tx) => {
+    const inserted = await scopedTx.insert(itemsTable).values(items);
+    return inserted;
+  });
+};
 
 // A single DB await outside any loop.
 export const singleAwaitOutsideLoop = async () => {

@@ -65,6 +65,7 @@ export const syncInfoSoudTrackedCases: SchedulerTask = async ({
           continue;
         }
 
+        // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- one transaction per tracked case keeps a failed import isolated
         const importResult = await rootDb.transaction(async (tx) => {
           const workspace = await tx.query.workspaces.findFirst({
             where: { id: { eq: trackedCase.workspaceId } },

@@ -39,6 +39,7 @@ export const expireDesktopEditSessions: SchedulerTask = async ({
   let expired = 0;
 
   while (!signal.aborted) {
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- keyset page per iteration; the page is the batch
     const unnotifiedExpiredSessions = await rootDb
       .select({
         id: desktopEditSessions.id,
@@ -63,6 +64,7 @@ export const expireDesktopEditSessions: SchedulerTask = async ({
     // Mirror authorizeDesktopEditSession's liveness check: a session past
     // tokenExpiresAt has no connected desktop stream refreshing it.
     const now = new Date();
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- keyset page per iteration; the page is the batch
     const batch = await rootDb
       .select({
         id: desktopEditSessions.id,
@@ -87,6 +89,7 @@ export const expireDesktopEditSessions: SchedulerTask = async ({
 
     const batchIds = batch.map((session) => session.id);
 
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- one transition per swept page
     const expiredSessions = await rootDb.transaction(async (tx) => {
       const transitioned = await tx
         .update(desktopEditSessions)

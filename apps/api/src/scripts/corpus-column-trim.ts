@@ -423,6 +423,7 @@ for (const [index, range] of ranges.entries()) {
       columnTrimPageRange({ range, cursor: lastId }),
     );
 
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- keyset page per iteration; the page is the batch
     const rows: TrimRow[] = await ingestionDb((tx) =>
       tx
         .select({

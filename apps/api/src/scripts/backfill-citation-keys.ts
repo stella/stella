@@ -53,6 +53,7 @@ const backfillTable = async (
   let after: string | null = null;
 
   while (true) {
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- keyset page per iteration; the page is the batch
     const result: unknown = await rootDb.execute(
       sql`SELECT id, ${sql.raw(sourceColumn)} AS text
             FROM ${sql.raw(table)}
@@ -89,6 +90,7 @@ const backfillTable = async (
       //
       // Only for decisions. A citation gaining a key was `pending` all along —
       // it was excluded from the walk by having no key, and now it is not.
+      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- bounded batch per iteration under the graph lock
       await rootDb.transaction(async (tx) => {
         await tx.execute(
           sql`WITH v(id, key) AS (VALUES ${values})

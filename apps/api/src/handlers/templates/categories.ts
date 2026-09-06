@@ -212,6 +212,7 @@ export const updateTemplateCategoryHandler = async ({
       const currentId: SafeId<"templateCategory"> = checkId;
       const ancestor:
         | { parentId: SafeId<"templateCategory"> | null }
+        // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- walks the parent chain one read per level; a recursive CTE is the batch shape
         | undefined = await scopedDb((tx) =>
         tx.query.templateCategories.findFirst({
           where: {

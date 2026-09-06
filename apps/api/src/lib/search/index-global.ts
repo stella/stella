@@ -1799,6 +1799,7 @@ export const rebuildSupplementalSearchIndex = async (
   let hasMoreContacts = true;
 
   while (hasMoreContacts) {
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- keyset page per iteration; the page is the batch
     const batch = await rootDb
       .select({ id: contacts.id })
       .from(contacts)
@@ -1825,6 +1826,7 @@ export const rebuildSupplementalSearchIndex = async (
   let hasMoreWorkspaces = true;
 
   while (hasMoreWorkspaces) {
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- keyset page per iteration; the page is the batch
     const batch = await rootDb
       .select({ id: workspaces.id })
       .from(workspaces)
