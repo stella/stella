@@ -1,13 +1,14 @@
 import { expect, test } from "bun:test";
 
-import { createSafeId, toSafeId } from "@/api/lib/branded-types";
+import { createSafeId } from "@/api/lib/branded-types";
 import {
   buildTemplateS3Key,
   buildTemplateWriteS3Key,
 } from "@/api/lib/templates/storage-keys";
+import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 
 test("attempt keys are stable for retries and disjoint across writers and owners", () => {
-  const organizationId = toSafeId<"organization">(Bun.randomUUIDv7());
+  const organizationId = mintAuthProviderId<"organization">();
   const templateId = createSafeId<"template">();
   const writeId = createSafeId<"templateVersion">();
   const options = { organizationId, templateId, writeId };
@@ -20,7 +21,7 @@ test("attempt keys are stable for retries and disjoint across writers and owners
     { ...options, templateId: createSafeId<"template">() },
     {
       ...options,
-      organizationId: toSafeId<"organization">(Bun.randomUUIDv7()),
+      organizationId: mintAuthProviderId<"organization">(),
     },
   ]) {
     expect(buildTemplateWriteS3Key(other)).not.toBe(key);
