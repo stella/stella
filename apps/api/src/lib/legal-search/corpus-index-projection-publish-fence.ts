@@ -9,6 +9,15 @@ import { corpusIndexAppendPublishDelayMs } from "@/api/lib/legal-search/corpus-i
  * from "the engine published it". Every reader and every delete that
  * observes an accepted revision goes through here, so a queued append
  * cannot be read as drift by one caller and deleted early by another.
+ *
+ * The barrier schedules, it does not prove: the commit policy bounds the
+ * engine's own commit window, not the queueing in front of it, so a
+ * backlogged or restarting engine can still publish later than this. What
+ * proves the two observations behind it is exact, and repairs them when the
+ * engine was late, is unchanged: a cleanup settles only once published
+ * splits cross its delete opstamp and a revision query observes zero
+ * remaining documents, and a census that inspects a revision too early
+ * reports drift, which repairs the entity rather than losing it.
  */
 const publishBarrierFrom = (
   acceptedAt: SQL,
