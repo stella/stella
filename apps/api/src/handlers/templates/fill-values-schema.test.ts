@@ -1,5 +1,5 @@
-import { describe, expect, test } from "bun:test";
 import type { TSchema } from "@sinclair/typebox";
+import { describe, expect, test } from "bun:test";
 import Elysia, { t } from "elysia";
 
 import fillTemplateById from "@/api/handlers/templates/fill-by-id";
@@ -10,7 +10,7 @@ const invalidValues = [
   "arbitrary string",
   42,
   false,
-  "{\"client.name\":\"Ada\"}",
+  '{"client.name":"Ada"}',
   null,
   [],
 ];
@@ -56,16 +56,19 @@ describe("stored-template fill value boundaries", () => {
     }
   });
 
-  test.each(storedFillSchemas)("%s preserves nested values", async (_name, schema) => {
-    const values = {
-      "client.name": { display: "Ada" },
-      signatories: [{ name: "Ada" }],
-    };
-    const response = await validateBody({ values }, schema);
+  test.each(storedFillSchemas)(
+    "%s preserves nested values",
+    async (_name, schema) => {
+      const values = {
+        "client.name": { display: "Ada" },
+        signatories: [{ name: "Ada" }],
+      };
+      const response = await validateBody({ values }, schema);
 
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual(values);
-  });
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual(values);
+    },
+  );
 
   test.each(storedFillSchemas)(
     "%s rejects every non-object values form",

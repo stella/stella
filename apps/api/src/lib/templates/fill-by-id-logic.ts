@@ -32,7 +32,10 @@ export type FillByIdLogicProps = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   templateId: SafeId<"template">;
-  body: { values: Record<string, unknown>; clauseOverrides?: Record<string, ClauseBody> };
+  body: {
+    values: Record<string, unknown>;
+    clauseOverrides?: Record<string, ClauseBody>;
+  };
   query: { format?: "docx" | "pdf" };
   recordAuditEvent: AuditRecorder;
 };

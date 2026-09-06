@@ -10,11 +10,7 @@ import {
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { clauseBodySchema } from "@/api/lib/clauses/body-schema";
-import {
-  tJsonObject,
-  tSafeId,
-  workspaceParams,
-} from "@/api/lib/custom-schema";
+import { tJsonObject, tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import {
   buildAiConditionDecider,
   buildAiFieldGenerator,
