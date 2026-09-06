@@ -40,6 +40,8 @@ import {
   SET_PRACTICE_JURISDICTIONS_PROJECTION,
 } from "@/api/lib/chat/projections";
 import type { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
+import { TEMPLATE_FIELD_REFERENCE_URI } from "@/api/mcp/template-field-reference";
+import { TEMPLATE_MARKER_REFERENCE_URI } from "@/api/mcp/template-marker-reference";
 
 /**
  * The read-only slice of the MCP registry, derived structurally from the single
@@ -471,7 +473,15 @@ export const WRITE_TOOL_REF_FIELD_MAP = {
     chatDescription:
       "Create a template from inline base64 DOCX bytes, or configure an " +
       "existing template's fields. To create, pass name and docx_base64; " +
-      "to configure, pass template_id with fields and no document.",
+      "the DOCX's {{field}} markers become fillable fields, and fields can " +
+      "configure them in the same call. docx_base64 must carry the original " +
+      "bytes verbatim: never retype the file or strip parts out to fit. To " +
+      "configure, pass template_id with fields and no document; only the " +
+      "manifest changes, the document's {{markers}} stay untouched. Read " +
+      `${TEMPLATE_MARKER_REFERENCE_URI} before authoring a DOCX and ` +
+      `${TEMPLATE_FIELD_REFERENCE_URI} before configuring fields. Returns the ` +
+      "template id and field count when creating, or the updated fields when " +
+      "configuring.",
   },
 
   // --- Feedback -------------------------------------------------------------

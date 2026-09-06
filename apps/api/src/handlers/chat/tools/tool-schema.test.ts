@@ -69,6 +69,8 @@ import {
 import { projectSchemaInputJsonSchema } from "@/api/lib/tanstack-ai-schema";
 import type { UrlFetcher, WebSearchProvider } from "@/api/lib/web-search/types";
 import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
+import { TEMPLATE_FIELD_REFERENCE_URI } from "@/api/mcp/template-field-reference";
+import { TEMPLATE_MARKER_REFERENCE_URI } from "@/api/mcp/template-marker-reference";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import { createOrgTools } from "./org-tools";
@@ -2230,6 +2232,8 @@ describe("registry write tool approval policy", () => {
     expect(properties["template_id"]).toBeDefined();
     expect(tool.description).toContain("docx_base64");
     expect(tool.description).toContain("template_id");
+    expect(tool.description).toContain(TEMPLATE_MARKER_REFERENCE_URI);
+    expect(tool.description).toContain(TEMPLATE_FIELD_REFERENCE_URI);
     expect(tool.description).not.toContain("host file");
   });
 

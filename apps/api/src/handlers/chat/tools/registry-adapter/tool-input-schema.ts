@@ -30,11 +30,14 @@ const copyJsonValue = (value: unknown): unknown => {
 
 export const toToolInputSchema = (
   schema: McpToolInputSchema,
-  excludedTopLevelProperties: readonly string[] = [],
+  excludedTopLevelProperties?: readonly string[],
 ): JSONSchema => {
   const converted: JSONSchema = {};
   for (const [key, value] of Object.entries(schema)) {
     converted[key] = copyJsonValue(value);
+  }
+  if (excludedTopLevelProperties === undefined) {
+    return converted;
   }
   for (const property of excludedTopLevelProperties) {
     delete converted.properties?.[property];
