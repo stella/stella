@@ -17,6 +17,7 @@ import {
   entityIdsForCorpusProjectionWorkScope,
   type CorpusProjectionScopedWorkOptions,
 } from "@/api/lib/legal-search/corpus-index-projection-scope";
+import { corpusIndexProjectionIntentIsOutstanding } from "@/api/lib/legal-search/corpus-index-projection-sql";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 
 export const CORPUS_PROJECTION_ERASURE_MAX_BATCH_SIZE = 256;
@@ -286,7 +287,7 @@ export const advanceCorpusProjectionErasuresTx = async <
             AND outstanding.generation = ${corpusIndexProjectionStates.generation}
             AND outstanding.entity_id = ${corpusIndexProjectionStates.entityId}
             AND outstanding.epoch <= ${corpusIndexProjectionStates.desiredEpoch}
-            AND outstanding.status NOT IN ('settled', 'cancelled')
+            AND ${corpusIndexProjectionIntentIsOutstanding(sql`outstanding.status`)}
         )`,
       ),
     )

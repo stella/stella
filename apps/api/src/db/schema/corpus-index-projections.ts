@@ -10,6 +10,7 @@ import {
   CORPUS_INDEX_PROJECTION_WORK_STATUSES,
 } from "@/api/lib/legal-search/corpus-index-projection-contract";
 import {
+  corpusIndexProjectionIntentIsOutstanding,
   corpusIndexProjectionIsBlocked,
   corpusIndexProjectionNeedsWork,
   corpusIndexProjectionProducesAppend,
@@ -108,6 +109,14 @@ export const corpusIndexProjectionIntents = p.pgTable(
     p
       .index("corpus_index_projection_intents_entity_idx")
       .on(t.family, t.generation, t.entityId, t.createdAt),
+    // The append and erasure queues ask whether an entity still owes the index
+    // an exact action. Keyed on the identity they probe and partial on the
+    // answer, so the probe reads the outstanding revisions alone instead of
+    // walking a revision history that only ever grows.
+    p
+      .index("corpus_index_projection_intents_outstanding_idx")
+      .on(t.family, t.generation, t.entityId, t.epoch)
+      .where(corpusIndexProjectionIntentIsOutstanding(t.status)),
     p
       .index("corpus_index_projection_intents_expired_lease_idx")
       .on(t.family, t.generation, t.status, t.leaseExpiresAt)

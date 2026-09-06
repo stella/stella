@@ -1,6 +1,6 @@
 {
   "apps/api": {
-    "count": 779,
+    "count": 778,
     "files": {
       "apps/api/scripts/lib/capability-catalog.ts": 9,
       "apps/api/scripts/lib/enumerate-safe-handlers.ts": 7,
@@ -229,7 +229,7 @@
       "apps/api/src/lib/legal-search/corpus-index-projection-bootstrap.ts": 1,
       "apps/api/src/lib/legal-search/corpus-index-projection-census.ts": 1,
       "apps/api/src/lib/legal-search/corpus-index-projection-cleanup-store.ts": 1,
-      "apps/api/src/lib/legal-search/corpus-index-projection-contract.ts": 5,
+      "apps/api/src/lib/legal-search/corpus-index-projection-contract.ts": 4,
       "apps/api/src/lib/legal-search/corpus-index-projection-convergence.ts": 1,
       "apps/api/src/lib/legal-search/corpus-index-projection-desired-state.ts": 2,
       "apps/api/src/lib/legal-search/corpus-index-projection-engine.ts": 3,

@@ -30,6 +30,7 @@ import {
   type CorpusProjectionAppendScopedWorkOptions,
 } from "@/api/lib/legal-search/corpus-index-projection-scope";
 import {
+  corpusIndexProjectionIntentIsOutstanding,
   corpusIndexProjectionNeedsWork,
   corpusIndexProjectionProducesAppend,
 } from "@/api/lib/legal-search/corpus-index-projection-sql";
@@ -121,45 +122,38 @@ const noOutstandingIntent = sql`NOT EXISTS (
       WHERE outstanding.family = ${corpusIndexProjectionStates.family}
         AND outstanding.generation = ${corpusIndexProjectionStates.generation}
         AND outstanding.entity_id = ${corpusIndexProjectionStates.entityId}
-        AND outstanding.status NOT IN ('settled', 'cancelled')
+        AND ${corpusIndexProjectionIntentIsOutstanding(sql`outstanding.status`)}
     )`;
 
+type CorpusProjectionReservationQueueOptions = {
+  family: CorpusFamily;
+  generation: string;
+  limit: number;
+  eligibilityAt: Date;
+  scopedEntityIds: readonly string[] | null;
+  scopedIndexId: string | null;
+};
+
 /**
- * Reserve exact append attempts only after every earlier revision for the
- * entity is terminal. This enforces delete-old, settle, then append-new; Plane
- * controls how often and how broadly this bounded primitive runs.
+ * The reservation queue read. Exported so the plan guard explains the exact
+ * statement the append cycle issues rather than a copy of it.
  */
-export const reserveCorpusProjectionIntentsTx = async <
-  Family extends CorpusFamily,
->(
+export const corpusProjectionReservationQueue = (
   tx: Transaction,
   {
     family,
     generation,
-    limit: requestedLimit,
-    leaseMs: requestedLeaseMs,
-    scope = CORPUS_PROJECTION_GENERATION_SCOPE,
-    testNow,
-    newIntentId = () => createSafeId<"corpusIndexProjectionIntent">(),
-    newLeaseToken = () => Bun.randomUUIDv7(),
-  }: ReserveCorpusProjectionIntentsOptions<Family>,
-): Promise<CorpusProjectionIntentLease[]> => {
-  const limit = validateBatchSize(requestedLimit);
-  const leaseMs = validateLeaseMs(requestedLeaseMs);
-  const scopedEntityIds = entityIdsForCorpusProjectionWorkScope(scope);
-  const manifest = await lockActiveCorpusProjectionManifestForMutation(
-    tx,
-    family,
-    generation,
-  );
-  const scopedIndexId = indexIdForCorpusProjectionWorkScope(scope, manifest);
-  const eligibilityAt = testNow ?? (await readPostgresClock(tx));
+    limit,
+    eligibilityAt,
+    scopedEntityIds,
+    scopedIndexId,
+  }: CorpusProjectionReservationQueueOptions,
+) => {
   const runnableAt = sql<Date>`coalesce(
     ${corpusIndexProjectionStates.retryNotBefore},
     ${corpusIndexProjectionStates.updatedAt}
   )`;
-
-  const candidates = await tx
+  return tx
     .select({
       entityId: corpusIndexProjectionStates.entityId,
       epoch: corpusIndexProjectionStates.desiredEpoch,
@@ -205,6 +199,46 @@ export const reserveCorpusProjectionIntentsTx = async <
       of: corpusIndexProjectionStates,
       skipLocked: true,
     });
+};
+
+/**
+ * Reserve exact append attempts only after every earlier revision for the
+ * entity is terminal. This enforces delete-old, settle, then append-new; Plane
+ * controls how often and how broadly this bounded primitive runs.
+ */
+export const reserveCorpusProjectionIntentsTx = async <
+  Family extends CorpusFamily,
+>(
+  tx: Transaction,
+  {
+    family,
+    generation,
+    limit: requestedLimit,
+    leaseMs: requestedLeaseMs,
+    scope = CORPUS_PROJECTION_GENERATION_SCOPE,
+    testNow,
+    newIntentId = () => createSafeId<"corpusIndexProjectionIntent">(),
+    newLeaseToken = () => Bun.randomUUIDv7(),
+  }: ReserveCorpusProjectionIntentsOptions<Family>,
+): Promise<CorpusProjectionIntentLease[]> => {
+  const limit = validateBatchSize(requestedLimit);
+  const leaseMs = validateLeaseMs(requestedLeaseMs);
+  const scopedEntityIds = entityIdsForCorpusProjectionWorkScope(scope);
+  const manifest = await lockActiveCorpusProjectionManifestForMutation(
+    tx,
+    family,
+    generation,
+  );
+  const scopedIndexId = indexIdForCorpusProjectionWorkScope(scope, manifest);
+  const eligibilityAt = testNow ?? (await readPostgresClock(tx));
+  const candidates = await corpusProjectionReservationQueue(tx, {
+    family,
+    generation,
+    limit,
+    eligibilityAt,
+    scopedEntityIds,
+    scopedIndexId,
+  });
 
   if (candidates.length === 0) {
     return [];
