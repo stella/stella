@@ -5156,6 +5156,7 @@ type Messages = {
       "findColumns": "Columns to search";
       "findInTable": "Find in table";
       "findPlaceholder": "Find in rows…";
+      "findScopeColumns": "{count, plural, one {# column} other {# columns}}";
       "group": "Group";
       "groupBy": "Group by:";
       "groupItemCount": "{count, plural, one {# item} other {# items}}";

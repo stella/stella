@@ -191,6 +191,7 @@ describe("a view's find bar", () => {
 
     expect(useTableStore.getState().find["v1"]).toEqual({
       scope: { type: "all" },
+      status: "open",
       submitted: "",
       typed: "",
     });
@@ -222,7 +223,7 @@ describe("a view's find bar", () => {
     expect(useTableStore.getState().find["v1"]?.submitted).toBe("lea");
   });
 
-  test("closing resets it, so reopening starts clean", () => {
+  test("closing hides the bar and keeps the find, so the rows stay narrowed", () => {
     const { openFind, setFindTyped, submitFind, closeFind, setFindScope } =
       useTableStore.getState();
     openFind("v1");
@@ -231,17 +232,36 @@ describe("a view's find bar", () => {
     setFindScope("v1", { propertyIds: ["p1"], type: "columns" });
 
     closeFind("v1");
-    expect(useTableStore.getState().find["v1"]).toBeUndefined();
+    expect(useTableStore.getState().find["v1"]).toEqual({
+      scope: { propertyIds: ["p1"], type: "columns" },
+      status: "closed",
+      submitted: "lease",
+      typed: "lease",
+    });
 
     openFind("v1");
     expect(useTableStore.getState().find["v1"]).toEqual({
-      scope: { type: "all" },
-      submitted: "",
-      typed: "",
+      scope: { propertyIds: ["p1"], type: "columns" },
+      status: "open",
+      submitted: "lease",
+      typed: "lease",
     });
   });
 
-  test("edits nothing while the bar is closed", () => {
+  test("clearing is the only thing that ends a find", () => {
+    const { openFind, setFindTyped, submitFind, closeFind, clearFind } =
+      useTableStore.getState();
+    openFind("v1");
+    setFindTyped("v1", "lease");
+    submitFind("v1");
+    closeFind("v1");
+
+    clearFind("v1");
+
+    expect(useTableStore.getState().find["v1"]).toBeUndefined();
+  });
+
+  test("edits nothing for a view with no find", () => {
     const { setFindTyped, submitFind, setFindScope } = useTableStore.getState();
     setFindTyped("v1", "lease");
     submitFind("v1");

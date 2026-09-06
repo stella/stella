@@ -1,16 +1,18 @@
 import { useRef, useState } from "react";
 
 import { useHotkey } from "@tanstack/react-hotkeys";
-import { Columns3Icon, SearchIcon } from "lucide-react";
+import { Columns3Icon, SearchIcon, XIcon } from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
+import type { EntityFindScope } from "@stll/api-contract";
 import { Button } from "@stll/ui/button";
 import { Input } from "@stll/ui/input";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { cn } from "@stll/ui/utils";
 
 import { PropertyIcon } from "@/components/workspaces/property-helpers";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { ownsFindKeyEvent, useFindSurface } from "@/lib/find-owner";
 import type { WorkspaceProperty, WorkspaceView } from "@/lib/types";
 import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
@@ -36,16 +38,21 @@ type ViewToolbarSearchProps = {
 /**
  * Find-in-table: the toolbar half. It owns the term and the column scope; the
  * table layouts read both from the store and turn them into row queries.
+ *
+ * The bar is an editor for a find that outlives it. Once a term is submitted
+ * the control becomes a chip naming it, the way a filter or a sort does, so
+ * the rows that stay narrowed after the popover closes are still explained.
  */
 export const ViewToolbarSearch = ({
   properties,
   view,
 }: ViewToolbarSearchProps) => {
   const t = useTranslations();
-  const { columns } = useTableFind({ properties, view });
+  const { columns, request } = useTableFind({ properties, view });
   const find = useTableStore((state) => state.find[view.id]);
   const openFind = useTableStore((state) => state.openFind);
   const closeFind = useTableStore((state) => state.closeFind);
+  const clearFind = useTableStore((state) => state.clearFind);
   const setFindTyped = useTableStore((state) => state.setFindTyped);
   const submitFind = useTableStore((state) => state.submitFind);
   const setFindScope = useTableStore((state) => state.setFindScope);
@@ -86,31 +93,82 @@ export const ViewToolbarSearch = ({
   const searchable = searchableColumnIds(columns);
   const selection = find?.scope ?? { type: "all" };
   const narrowed = selection.type === "columns";
+  const open = find?.status === "open";
+
+  // What the rows on screen were asked for, so the chip cannot name a term or
+  // a scope the query has not been sent.
+  const applied = request.find;
+
+  // Reopening on a term means "search again", so the next keystroke replaces
+  // it. `autoFocus` puts the caret in, it does not select what is there.
+  useExternalSyncEffect(() => {
+    if (open) {
+      inputRef.current?.select();
+    }
+  }, [open]);
 
   return (
     <Popover
-      onOpenChange={(open) => {
-        if (open) {
+      onOpenChange={(nextOpen) => {
+        if (nextOpen) {
           openFind(view.id);
           return;
         }
-        submit.cancel();
+        // Flush rather than cancel: the last keystrokes were only waiting out
+        // the debounce, and the find they belong to survives this close.
+        submit.flush();
         setColumnsShown(false);
         closeFind(view.id);
       }}
-      open={find !== undefined}
+      open={open}
     >
-      <PopoverTrigger
-        aria-label={t("workspaces.views.findInTable")}
-        ref={triggerRef}
-        render={<Button className="relative" size="icon-xs" variant="ghost" />}
-        title={t("workspaces.views.findInTable")}
-      >
-        <SearchIcon className="size-3.5" />
-        {narrowed && (
-          <span className="bg-primary absolute end-0.5 top-0.5 size-1.5 rounded-full" />
+      {/* One trigger element for both shapes. Swapping triggers while the
+          popover is open leaves the positioner anchored to a node that is no
+          longer in the document, and the panel lands in the top-left corner
+          of the screen: the term is applied mid-typing, so the swap happens
+          under an open bar every time. */}
+      <div
+        className={cn(
+          "flex items-center",
+          applied && "bg-muted/50 rounded-md border",
         )}
-      </PopoverTrigger>
+      >
+        <PopoverTrigger
+          // The chip names itself with the term it applied; only the bare icon
+          // needs a label of its own.
+          aria-label={applied ? undefined : t("workspaces.views.findInTable")}
+          ref={triggerRef}
+          render={
+            <Button
+              className={cn(applied && "font-normal")}
+              size={applied ? "xs" : "icon-xs"}
+              variant="ghost"
+            />
+          }
+          title={t("workspaces.views.findInTable")}
+        >
+          <SearchIcon className="size-3.5" />
+          {applied && (
+            <FindChipLabel
+              columns={columns}
+              scope={applied.scope}
+              term={applied.term}
+            />
+          )}
+        </PopoverTrigger>
+        {applied && (
+          <Button
+            aria-label={t("common.remove")}
+            onClick={() => {
+              clearFind(view.id);
+            }}
+            size="icon-xs"
+            variant="ghost"
+          >
+            <XIcon className="size-3.5" />
+          </Button>
+        )}
+      </div>
       {/* Escape closes the whole bar, column list and all: the popover owns
           that key, and racing it for a first level would be a shortcut whose
           effect depended on where focus happened to be. */}
@@ -163,6 +221,42 @@ export const ViewToolbarSearch = ({
         )}
       </PopoverPopup>
     </Popover>
+  );
+};
+
+type FindChipLabelProps = {
+  columns: TableFindColumn[];
+  scope: EntityFindScope;
+  term: string;
+};
+
+/**
+ * The applied term, in the row where filters and sorts show theirs. A narrowed
+ * scope rides along, since a term is read differently depending on where it was
+ * looked for.
+ */
+const FindChipLabel = ({ columns, scope, term }: FindChipLabelProps) => {
+  const t = useTranslations();
+  const narrowedTo = scope.type === "columns" ? scope.propertyIds : null;
+  const soleColumn =
+    narrowedTo?.length === 1
+      ? columns.find((column) => column.id === narrowedTo[0])
+      : undefined;
+
+  return (
+    <>
+      {/* User text, and a case name is long: it truncates rather than pushing
+          the rest of the toolbar off screen. */}
+      <span className="max-w-48 truncate">{term}</span>
+      {narrowedTo !== null && (
+        <span className="text-muted-foreground">
+          {soleColumn?.label ??
+            t("workspaces.views.findScopeColumns", {
+              count: narrowedTo.length,
+            })}
+        </span>
+      )}
+    </>
   );
 };
 

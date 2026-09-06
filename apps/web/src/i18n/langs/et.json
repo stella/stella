@@ -5153,6 +5153,7 @@
       "findColumns": "Otsitavad veerud",
       "findInTable": "Otsi tabelist",
       "findPlaceholder": "Otsi ridadest…",
+      "findScopeColumns": "{count, plural, one {# veerg} other {# veergu}}",
       "group": "Rühm",
       "groupBy": "Rühmita:",
       "groupItemCount": "{count, plural, one {# üksus} other {# üksust}}",

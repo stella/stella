@@ -5153,6 +5153,7 @@
       "findColumns": "Colunas a pesquisar",
       "findInTable": "Localizar na tabela",
       "findPlaceholder": "Localizar nas linhas…",
+      "findScopeColumns": "{count, plural, one {# coluna} other {# colunas}}",
       "group": "Grupo",
       "groupBy": "Agrupar por:",
       "groupItemCount": "{count, plural, one {# item} other {# itens}}",

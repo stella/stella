@@ -5153,6 +5153,7 @@
       "findColumns": "Stulpeliai, kuriuose ieškoti",
       "findInTable": "Ieškoti lentelėje",
       "findPlaceholder": "Ieškoti eilutėse…",
+      "findScopeColumns": "{count, plural, one {# stulpelis} few {# stulpeliai} many {# stulpelio} other {# stulpelių}}",
       "group": "Grupė",
       "groupBy": "Grupuoti pagal:",
       "groupItemCount": "{count, plural, one {# elementas} few {# elementai} many {# elemento} other {# elementų}}",

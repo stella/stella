@@ -5153,6 +5153,7 @@
       "findColumns": "Stĺpce na prehľadanie",
       "findInTable": "Nájsť v tabuľke",
       "findPlaceholder": "Hľadať v riadkoch…",
+      "findScopeColumns": "{count, plural, one {# stĺpec} few {# stĺpce} other {# stĺpcov}}",
       "group": "Skupina",
       "groupBy": "Zoskupiť podľa:",
       "groupItemCount": "{count, plural, one {# položka} few {# položky} other {# položiek}}",

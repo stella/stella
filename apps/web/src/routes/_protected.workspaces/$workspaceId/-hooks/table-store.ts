@@ -18,7 +18,7 @@ const TABLE_CONTENT_MODES = ["tight", "fit-content"] as const;
 export type TableContentMode = (typeof TABLE_CONTENT_MODES)[number];
 
 /**
- * How wide an open find bar reaches. `all` is the state the bar opens in: no
+ * How wide a find reaches. `all` is the state the bar opens in: no
  * column chosen, so the row's name counts too. Narrowing to columns is a
  * different question, not a shorter list, which is why it is a branch rather
  * than an empty array.
@@ -28,7 +28,10 @@ export type TableFindSelection =
   | { propertyIds: string[]; type: "columns" };
 
 /**
- * An open find bar. Absent from the record means the bar is closed.
+ * A view's find. Absent from the record means there is no find at all; the
+ * bar's own visibility is `status` alone, because a find outlives its editor.
+ * Closing the popover leaves the rows narrowed and the toolbar chip explaining
+ * why, and `clearFind` is the only thing that ends it.
  *
  * `typed` is what the input holds this keystroke. `submitted` is what the row
  * readers have actually been asked for, and so what the rows on screen and
@@ -42,6 +45,7 @@ export type TableFindSelection =
  */
 export type TableFind = {
   scope: TableFindSelection;
+  status: "closed" | "open";
   submitted: string;
   typed: string;
 };
@@ -166,13 +170,16 @@ type TableStore = {
   preservableRowIds: Record<string, string[]>;
   setPreservableRowIds: (viewId: string, rowIds: string[]) => void;
   /**
-   * The open find bar per view. Never persisted: a find is a question about
-   * the rows in front of you, not a saved view setting, so it does not
-   * survive a reload the way column widths do.
+   * The find per view. Never persisted: a find is a question about the rows in
+   * front of you, not a saved view setting, so it does not survive a reload
+   * the way column widths do.
    */
   find: Record<string, TableFind>;
   openFind: (viewId: string) => void;
+  /** Hide the bar and keep the term: the rows stay narrowed. */
   closeFind: (viewId: string) => void;
+  /** End the find. The only way back to every row. */
+  clearFind: (viewId: string) => void;
   setFindTyped: (viewId: string, typed: string) => void;
   /** Submit what is typed: the readers requery it, and the marks follow. */
   submitFind: (viewId: string) => void;
@@ -230,10 +237,16 @@ export const useTableStore = create<TableStore>()(
 
       openFind: (viewId) => {
         set((state) => {
-          // Re-opening an open bar keeps what was typed and submitted: the
-          // shortcut focuses the input, it does not start over.
-          state.find[viewId] ??= {
+          const current = state.find[viewId];
+          if (current) {
+            // Reopening keeps what was typed and submitted: the shortcut and
+            // the chip both show the running find, they do not start over.
+            current.status = "open";
+            return;
+          }
+          state.find[viewId] = {
             scope: { type: "all" },
+            status: "open",
             submitted: "",
             typed: "",
           };
@@ -241,6 +254,15 @@ export const useTableStore = create<TableStore>()(
       },
 
       closeFind: (viewId) => {
+        set((state) => {
+          const current = state.find[viewId];
+          if (current) {
+            current.status = "closed";
+          }
+        });
+      },
+
+      clearFind: (viewId) => {
         set((state) => {
           state.find = Object.fromEntries(
             Object.entries(state.find).filter(([id]) => id !== viewId),

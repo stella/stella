@@ -5153,6 +5153,7 @@
       "findColumns": "Meklējamās kolonnas",
       "findInTable": "Meklēt tabulā",
       "findPlaceholder": "Meklēt rindās…",
+      "findScopeColumns": "{count, plural, zero {# kolonnu} one {# kolonna} other {# kolonnas}}",
       "group": "Grupa",
       "groupBy": "Grupēt pēc:",
       "groupItemCount": "{count, plural, zero {# vienumu} one {# vienums} other {# vienumi}}",

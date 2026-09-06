@@ -5153,6 +5153,7 @@
       "findColumns": "Keresendő oszlopok",
       "findInTable": "Keresés a táblázatban",
       "findPlaceholder": "Keresés a sorokban…",
+      "findScopeColumns": "{count, plural, one {# oszlop} other {# oszlop}}",
       "group": "Csoport",
       "groupBy": "Csoportosítás:",
       "groupItemCount": "{count, plural, one {# elem} other {# elem}}",

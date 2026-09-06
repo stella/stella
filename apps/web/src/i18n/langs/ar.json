@@ -5153,6 +5153,7 @@
       "findColumns": "الأعمدة المشمولة بالبحث",
       "findInTable": "البحث في الجدول",
       "findPlaceholder": "ابحث في الصفوف…",
+      "findScopeColumns": "{count, plural, zero {لا أعمدة} one {عمود واحد} two {عمودان} few {# أعمدة} many {# عمودًا} other {# عمود}}",
       "group": "المجموعة",
       "groupBy": "التجميع حسب:",
       "groupItemCount": "{count, plural, zero {لا عناصر} one {عنصر واحد} two {عنصران} few {# عناصر} many {# عنصرًا} other {# عنصر}}",

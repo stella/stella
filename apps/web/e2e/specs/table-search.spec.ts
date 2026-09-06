@@ -97,8 +97,31 @@ test.describe("find in table", () => {
     await expect(matchingRow).toBeVisible();
     await expect(page.locator("mark").first()).toHaveText("alpha");
 
+    // Escape closes the bar, not the find: the rows stay narrowed and the
+    // chip is what now says why.
     await findInput.press("Escape");
     await expect(findInput).toBeHidden();
+    const findChip = page.getByRole("button", { exact: true, name: "alpha" });
+    await expect(findChip).toBeVisible();
+    await expect(otherRow).toBeHidden();
+    await expect(page.locator("mark").first()).toHaveText("alpha");
+
+    // The chip reopens the bar on the term it applied.
+    await findChip.click();
+    await expect(findInput).toHaveValue("alpha");
+
+    // An outside press is the same story: Base UI closes the popover on any
+    // click elsewhere, which is how opening a matched row used to drop it.
+    await tableTab.click();
+    await expect(findInput).toBeHidden();
+    await expect(otherRow).toBeHidden();
+    await expect(page.locator("mark").first()).toHaveText("alpha");
+
+    await findChip
+      .locator("xpath=..")
+      .getByRole("button", { exact: true, name: "Remove" })
+      .click();
+    await expect(findChip).toBeHidden();
     await expect(otherRow).toBeVisible({ timeout: 15_000 });
     await expect(page.locator("mark")).toHaveCount(0);
   });
