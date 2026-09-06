@@ -108,7 +108,7 @@ describe("runRegistryWriteTool (orchestration)", () => {
       context: {
         ...buildContext(),
         testDependencies: {
-          configureTemplateFields: async function* () {
+          async *configureTemplateFields() {
             yield* [];
             return Result.ok({ manifest: { fields: [], version: 1 } });
           },
@@ -144,7 +144,7 @@ describe("runRegistryWriteTool (orchestration)", () => {
       context: {
         ...buildContext(),
         testDependencies: {
-          createStoredTemplate: async function* () {
+          async *createStoredTemplate() {
             yield* [];
             return Result.ok({
               createdAt: new Date("2026-01-01T00:00:00.000Z"),
