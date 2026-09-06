@@ -397,3 +397,49 @@ test("v5 emits neither stem field", () => {
     ).toBe(true);
   }
 });
+
+/**
+ * Stems are remembered between calls (see the memo in morphology/stem.ts), so
+ * what a revision projects to must not depend on what was projected before
+ * it: not on the other revisions in the batch, not on their order, and not on
+ * whether this one has been built already.
+ */
+test("a revision projects to the same documents whatever preceded it", () => {
+  const revisions = [
+    "Nájemního bytu se to netýká, uvedl Nejvyšší správní soud.",
+    "Soud rozhodl o nájemním vztahu a o náhradě nákladů řízení.",
+    "Nejvyšší soud zrušil rozsudek krajského soudu a věc mu vrátil.",
+  ].map((text, index) => ({
+    text,
+    input: {
+      ...CASE_LAW_INPUT,
+      language: "cs",
+      metadata: { legalSentence: text },
+    },
+    revision: toSafeId<"corpusIndexProjectionIntent">(
+      `0198e331-e578-7000-8000-00000000001${index}`,
+    ),
+  }));
+
+  const project = ({
+    text,
+    input,
+    revision,
+  }: (typeof revisions)[number]): string =>
+    JSON.stringify(
+      buildCaseLawProjectionDocuments({
+        manifest: CORPUS_INDEX_MANIFESTS.case_law_v6,
+        input,
+        payload: { text, ast: null },
+        revision,
+      }),
+    );
+
+  const first = revisions.map(project);
+  // Again in reverse, so every revision is now built with the memo carrying
+  // the terms of the ones that followed it the first time round.
+  const reversed = revisions.toReversed().map(project);
+
+  expect<string[]>(reversed.toReversed()).toEqual(first);
+  expect<string[]>(revisions.map(project)).toEqual(first);
+});

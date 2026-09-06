@@ -38,6 +38,7 @@ import { PortugueseStemmer } from "@/api/lib/legal-search/morphology/snowball/po
 import { RomanianStemmer } from "@/api/lib/legal-search/morphology/snowball/romanian.gen";
 import { SpanishStemmer } from "@/api/lib/legal-search/morphology/snowball/spanish.gen";
 import { SwedishStemmer } from "@/api/lib/legal-search/morphology/snowball/swedish.gen";
+import { createBoundedMemo } from "@/api/lib/legal-search/morphology/stem-memo";
 
 /** ISO 639-1 codes this module can stem. */
 export const MORPHOLOGY_LANGUAGES = [
@@ -119,6 +120,36 @@ const STEMMERS = {
 >;
 
 /**
+ * Distinct terms the memo keeps before rotating a generation.
+ *
+ * Sized against one indexing batch rather than the corpus: a batch of a few
+ * hundred documents carries a few hundred thousand tokens over tens of
+ * thousands of distinct terms, so a ceiling in this range answers nearly
+ * every repeat inside a batch while the retained entries (at most twice this,
+ * across both generations) stay a few megabytes. A larger ceiling would buy
+ * hits only across batches, where the term distribution has already moved.
+ */
+const STEM_MEMO_MAX_ENTRIES = 50_000;
+
+/**
+ * Stems already computed, across every language.
+ *
+ * Stemming is the dominant cost of projecting a document into the index, and
+ * a legal corpus repeats its terms: inside one decision, and far more across
+ * the decisions of one batch. A stem is a pure function of the term and the
+ * language, so a remembered answer is the algorithm's answer — the
+ * projection's output is unchanged, only the work is.
+ *
+ * One shared structure rather than one per language, so the memory ceiling is
+ * a single number instead of one multiplied by however many languages a
+ * deployment touches. Keys are the language code followed by the term; every
+ * ISO 639-1 code is two characters, so the prefix is fixed width and no term
+ * can spell its way into another language's entry (`stem.test.ts` holds the
+ * language list to that width).
+ */
+const stemMemo = createBoundedMemo(STEM_MEMO_MAX_ENTRIES);
+
+/**
  * Reduce a term to its stem for the given language.
  *
  * Two normalisations happen here, and both are preconditions the underlying
@@ -142,8 +173,13 @@ const STEMMERS = {
 export const stemLegalTerm = (
   term: string,
   language: MorphologyLanguage,
-): string => {
-  const normalized = term.normalize("NFC").toLowerCase();
-  const stem = STEMMERS[language].stem(normalized);
-  return stem === "" ? normalized : stem;
-};
+): string =>
+  // Keyed by the term as it arrived, not by its normalised form: the memo
+  // then answers a repeat without normalising it again, and a key that is
+  // already a live string keeps the hash the engine cached for it rather than
+  // rehashing a freshly built one on every lookup.
+  stemMemo.get(`${language}${term}`, () => {
+    const normalized = term.normalize("NFC").toLowerCase();
+    const stem = STEMMERS[language].stem(normalized);
+    return stem === "" ? normalized : stem;
+  });

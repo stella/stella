@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
 import { readConformanceVocabulary } from "@/api/lib/legal-search/morphology/snowball/__fixtures__/vocabulary";
+import { CzechStemmer } from "@/api/lib/legal-search/morphology/snowball/czech.gen";
+import { PolishStemmer } from "@/api/lib/legal-search/morphology/snowball/polish.gen";
 import {
   MORPHOLOGY_LANGUAGES,
   stemLegalTerm,
@@ -283,5 +285,70 @@ describe("stemLegalTerm", () => {
 
     expect<string>(stemLegalTerm("absolwentów", "pl")).toBe("absolwent");
     expect<string>(stemLegalTerm("absolwentow", "pl")).toBe("absolwentow");
+  });
+});
+
+/**
+ * Stems are remembered between calls (see the memo in stem.ts). What the
+ * memo may never do is change an answer, so these hold the public surface to
+ * the algorithms it stands in front of.
+ */
+describe("remembered stems", () => {
+  test("every language code is two characters, which the memo key relies on", () => {
+    // The memo keys one shared structure as the code followed by the term.
+    // A code of another width would let one language's term address another's
+    // entry, so the width is a property of the list, not of the memo.
+    expect<readonly string[]>(
+      MORPHOLOGY_LANGUAGES.filter((language) => language.length !== 2),
+    ).toEqual([]);
+  });
+
+  test("a remembered stem equals the algorithm's, over the whole vocabulary", () => {
+    const cases = [
+      { language: "cs", stemmer: new CzechStemmer(), algorithm: "czech" },
+      { language: "pl", stemmer: new PolishStemmer(), algorithm: "polish" },
+    ] as const satisfies readonly {
+      language: (typeof MORPHOLOGY_LANGUAGES)[number];
+      stemmer: { stem: (term: string) => string };
+      algorithm: string;
+    }[];
+
+    for (const { language, stemmer, algorithm } of cases) {
+      const pairs = readConformanceVocabulary(algorithm);
+      expect<number>(pairs.length).toBeGreaterThan(2000);
+
+      // Twice through, so the second pass reads what the first remembered,
+      // and interleaved with the other language, so a shared structure that
+      // confused the two would answer with the neighbour's stem.
+      for (const pass of [1, 2]) {
+        const divergent = pairs
+          .filter(({ word }) => {
+            const normalized = word.normalize("NFC").toLowerCase();
+            const expected = stemmer.stem(normalized);
+            return (
+              stemLegalTerm(word, language) !==
+              (expected === "" ? normalized : expected)
+            );
+          })
+          .slice(0, 10)
+          .map(({ word }) => `${algorithm} pass ${pass}: ${word}`);
+
+        expect<readonly string[]>(divergent).toEqual([]);
+      }
+    }
+  });
+
+  test("one term stems the same under every language that reads it", () => {
+    // The shared memo is keyed by language as well as term; a key collision
+    // would make whichever language asked first answer for the rest.
+    const term = "rozhodnutia";
+    const stems = MORPHOLOGY_LANGUAGES.map((language) =>
+      stemLegalTerm(term, language),
+    );
+
+    expect<number>(new Set(stems).size).toBeGreaterThan(1);
+    expect<readonly string[]>(
+      MORPHOLOGY_LANGUAGES.map((language) => stemLegalTerm(term, language)),
+    ).toEqual(stems);
   });
 });
