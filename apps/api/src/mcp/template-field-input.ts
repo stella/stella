@@ -23,7 +23,6 @@ import {
   hasCompatibleDerivedSources,
   hasCompleteCompositeField,
 } from "@/api/lib/docx/types";
-import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 
 const { entries: fieldEntries } = fieldMetaToolInputObjectSchema;
 const { entries: partEntries } = fieldPartSchema;
@@ -77,69 +76,6 @@ const templateFieldInputObjectSchema = v.strictObject({
   condition: fieldEntries.condition,
   date_format: fieldEntries.dateFormat,
 });
-
-/**
- * Declared property names per level of a `fields` entry, read off the schemas
- * themselves so {@link readTemplateFieldsInput} cannot drift from what the
- * surface accepts.
- */
-const FIELD_PROPERTIES = new Set(
-  Object.keys(templateFieldInputObjectSchema.entries),
-);
-const VALIDATION_PROPERTIES = new Set(
-  Object.keys(templateFieldValidationInputSchema.entries),
-);
-const PART_PROPERTIES = new Set(
-  Object.keys(templateFieldPartInputSchema.entries),
-);
-
-const withoutDeclaredNullProperties = (
-  entry: Record<string, unknown>,
-  declaredProperties: ReadonlySet<string>,
-): Record<string, unknown> =>
-  Object.fromEntries(
-    Object.entries(entry).filter(
-      ([key, value]) => value !== null || !declaredProperties.has(key),
-    ),
-  );
-
-/** Drop null only at the three schema levels where it means an omitted
- * optional field. Nested lookup/source/date-format objects keep their values,
- * so strict validation still reports a misplaced key even when it is null. */
-const withoutNullProperties = (entry: Record<string, unknown>): unknown => {
-  const field = withoutDeclaredNullProperties(entry, FIELD_PROPERTIES);
-  if (isRecord(field["validation"])) {
-    field["validation"] = withoutDeclaredNullProperties(
-      field["validation"],
-      VALIDATION_PROPERTIES,
-    );
-  }
-  if (isUnknownArray(field["parts"])) {
-    field["parts"] = field["parts"].map((part) =>
-      isRecord(part)
-        ? withoutDeclaredNullProperties(part, PART_PROPERTIES)
-        : part,
-    );
-  }
-  return field;
-};
-
-/**
- * Normalise a raw `fields` argument before validation: GPT-family clients send
- * `null` for an optional property they are not setting, and null is absence on
- * this surface. Without this, `ai_prompt: null` reads as an AI-drafted field
- * and collides with every other derived source, and `options_from: null` fails
- * the field-path check — a request that set none of them.
- *
- * Only DECLARED properties are dropped, so `strictObject` still rejects a
- * misspelled key whatever value it carries.
- */
-export const readTemplateFieldsInput = (value: unknown): unknown =>
-  isUnknownArray(value)
-    ? value.map((entry) =>
-        isRecord(entry) ? withoutNullProperties(entry) : entry,
-      )
-    : value;
 
 export const templateFieldInputSchema = v.pipe(
   templateFieldInputObjectSchema,

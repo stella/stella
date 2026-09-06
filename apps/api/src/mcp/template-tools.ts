@@ -88,7 +88,6 @@ import {
   MAX_INLINE_DOCX_BYTES,
 } from "@/api/mcp/template-docx-limits";
 import {
-  readTemplateFieldsInput,
   templateFieldInputSchema,
   toFieldMetaToolInput,
   toTemplateFieldWireInput,
@@ -126,6 +125,7 @@ import {
   internalFailureResult,
   isToolErrorResult,
   notFoundResult,
+  nullAsAbsent,
   parseOptionalCursor,
   stringProp,
   structuredErrorResult,
@@ -170,83 +170,91 @@ const TEMPLATE_FILL_COMPLETION_MODE_PROP = {
   default: DEFAULT_TEMPLATE_FILL_COMPLETION_MODE,
 } as const;
 
-const saveTemplateArgsSchema = v.pipe(
-  v.strictObject({
-    template_id: v.optional(
-      uuidInputSchema("Template to configure; omit when creating"),
-    ),
-    name: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.maxLength(256),
-        v.description("Display name; required when creating"),
+/**
+ * Exported so `template-field-input.test.ts` can exercise the `fields` overlay
+ * through the schema save_template actually parses, rather than through a
+ * second assembly of the same array that could drift from it.
+ */
+export const saveTemplateArgsSchema = nullAsAbsent(
+  v.pipe(
+    v.strictObject({
+      template_id: v.optional(
+        uuidInputSchema("Template to configure; omit when creating"),
       ),
-    ),
-    docx_base64: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.maxLength(MAX_INLINE_DOCX_BASE64_LENGTH),
-        v.description(
-          "Original .docx bytes, base64-encoded verbatim; the fallback for " +
-            "creating when the host cannot supply 'file'. Never strip parts " +
-            "out of the file to shrink it.",
+      name: v.optional(
+        v.pipe(
+          v.string(),
+          v.minLength(1),
+          v.maxLength(256),
+          v.description("Display name; required when creating"),
         ),
       ),
-    ),
-    file: v.optional(OPENAI_FILE_REFERENCE_SCHEMA),
-    fields: v.optional(
-      v.pipe(
-        v.array(templateFieldInputSchema),
-        v.description(
-          `Field configuration overlay; see ${TEMPLATE_FIELD_REFERENCE_URI}`,
+      docx_base64: v.optional(
+        v.pipe(
+          v.string(),
+          v.minLength(1),
+          v.maxLength(MAX_INLINE_DOCX_BASE64_LENGTH),
+          v.description(
+            "Original .docx bytes, base64-encoded verbatim; the fallback for " +
+              "creating when the host cannot supply 'file'. Never strip parts " +
+              "out of the file to shrink it.",
+          ),
         ),
       ),
-    ),
-  }),
-  v.partialCheck(
-    [["template_id"], ["docx_base64"], ["file"]],
-    ({ template_id, docx_base64, file }) =>
-      (template_id === undefined) !==
-      (docx_base64 === undefined && file === undefined),
-    "Provide file or docx_base64 to create a template, or template_id to configure an existing template's fields",
-  ),
-  v.forward(
+      file: v.optional(OPENAI_FILE_REFERENCE_SCHEMA),
+      fields: v.optional(
+        v.pipe(
+          v.array(templateFieldInputSchema),
+          v.description(
+            `Field configuration overlay; see ${TEMPLATE_FIELD_REFERENCE_URI}`,
+          ),
+        ),
+      ),
+    }),
     v.partialCheck(
-      [["docx_base64"], ["file"]],
-      ({ docx_base64, file }) =>
-        docx_base64 === undefined || file === undefined,
-      "Provide either file or docx_base64, not both",
+      [["template_id"], ["docx_base64"], ["file"]],
+      ({ template_id, docx_base64, file }) =>
+        (template_id === undefined) !==
+        (docx_base64 === undefined && file === undefined),
+      "Provide file or docx_base64 to create a template, or template_id to configure an existing template's fields",
     ),
-    ["file"],
-  ),
-  v.forward(
-    v.partialCheck(
-      [["docx_base64"], ["file"], ["name"]],
-      ({ docx_base64, file, name }) =>
-        (docx_base64 === undefined && file === undefined) || name !== undefined,
-      "name is required to create a template",
+    v.forward(
+      v.partialCheck(
+        [["docx_base64"], ["file"]],
+        ({ docx_base64, file }) =>
+          docx_base64 === undefined || file === undefined,
+        "Provide either file or docx_base64, not both",
+      ),
+      ["file"],
     ),
-    ["name"],
-  ),
-  v.forward(
-    v.partialCheck(
-      [["template_id"], ["name"]],
-      ({ template_id, name }) =>
-        template_id === undefined || name === undefined,
-      "name applies only when creating a template; omit it when configuring",
+    v.forward(
+      v.partialCheck(
+        [["docx_base64"], ["file"], ["name"]],
+        ({ docx_base64, file, name }) =>
+          (docx_base64 === undefined && file === undefined) ||
+          name !== undefined,
+        "name is required to create a template",
+      ),
+      ["name"],
     ),
-    ["name"],
-  ),
-  v.forward(
-    v.partialCheck(
-      [["template_id"], ["fields"]],
-      ({ template_id, fields }) =>
-        template_id === undefined || fields !== undefined,
-      "fields is required to configure a template",
+    v.forward(
+      v.partialCheck(
+        [["template_id"], ["name"]],
+        ({ template_id, name }) =>
+          template_id === undefined || name === undefined,
+        "name applies only when creating a template; omit it when configuring",
+      ),
+      ["name"],
     ),
-    ["fields"],
+    v.forward(
+      v.partialCheck(
+        [["template_id"], ["fields"]],
+        ({ template_id, fields }) =>
+          template_id === undefined || fields !== undefined,
+        "fields is required to configure a template",
+      ),
+      ["fields"],
+    ),
   ),
 );
 
@@ -685,9 +693,19 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
   SAVE_TEMPLATE_TOOL_DEFINITION,
 ] as const satisfies readonly McpToolDefinition[];
 
-const listTemplatesArgsSchema = v.strictObject({
-  cursor: v.optional(v.pipe(v.string(), v.maxLength(512))),
-});
+/** The whole advertised list_templates surface, so the branch dispatch below
+ * reads arguments a strict client's nulls have already been dropped from
+ * rather than the raw ones. */
+const listTemplatesArgsSchema = nullAsAbsent(
+  v.strictObject({
+    template_id: v.optional(
+      uuidInputSchema(
+        "Template id to describe its fields in detail; omit to list templates",
+      ),
+    ),
+    cursor: v.optional(v.pipe(v.string(), v.maxLength(512))),
+  }),
+);
 
 // The list_templates cursor is the boundary template id alone; the query
 // resolves its (createdAt, id) in-DB.
@@ -710,10 +728,16 @@ const handleListTemplatesTool: TypedMcpToolHandler<
     return errorResult("Forbidden");
   }
 
+  const routed = v.safeParse(listTemplatesArgsSchema, args);
+  if (!routed.success) {
+    return validationErrorResult(routed.issues);
+  }
+  const { cursor: requestedCursor, template_id: templateId } = routed.output;
+
   // Detail mode: template_id returns one template's field configuration. The
   // list-only cursor does not apply, so reject the mixed request up front.
-  if (args["template_id"] !== undefined) {
-    if (args["cursor"] !== undefined) {
+  if (templateId !== undefined) {
+    if (requestedCursor !== undefined) {
       return structuredErrorResult({
         code: "validation_error",
         message:
@@ -728,12 +752,10 @@ const handleListTemplatesTool: TypedMcpToolHandler<
         hint: "Omit 'template_id' to list templates with 'cursor', or omit 'cursor' when requesting a single template_id.",
       });
     }
-    return await describeTemplateDetail({ args, context });
-  }
-
-  const parsed = v.safeParse(listTemplatesArgsSchema, args);
-  if (!parsed.success) {
-    return validationErrorResult(parsed.issues);
+    return await describeTemplateDetail({
+      args: { template_id: templateId },
+      context,
+    });
   }
 
   const cursor = parseOptionalCursor({ args, key: "cursor" });
@@ -812,9 +834,11 @@ const handleListTemplatesTool: TypedMcpToolHandler<
  * the schema, once the tool moves to `defineValibotMcpTool` and its advertised
  * schema is projected from this one.
  */
-export const describeTemplateArgsSchema = v.strictObject({
-  template_id: v.pipe(v.string(), v.uuid()),
-});
+export const describeTemplateArgsSchema = nullAsAbsent(
+  v.strictObject({
+    template_id: v.pipe(v.string(), v.uuid()),
+  }),
+);
 
 // Detail branch of list_templates: one template's field configuration. Reused
 // verbatim from the former describe_template tool, which list_templates
@@ -1026,16 +1050,18 @@ const assertTemplateFillUsage = async ({
   });
 };
 
-export const fillTemplateArgsSchema = v.strictObject({
-  template_id: v.pipe(v.string(), v.uuid()),
-  values: v.record(v.string(), v.unknown()),
-  allow_unused_values: v.optional(v.boolean()),
-  completion_mode: templateFillCompletionModeSchema,
-  output_mode: v.optional(
-    v.picklist(TEMPLATE_FILL_OUTPUT_MODES),
-    DEFAULT_TEMPLATE_FILL_OUTPUT_MODE,
-  ),
-});
+export const fillTemplateArgsSchema = nullAsAbsent(
+  v.strictObject({
+    template_id: v.pipe(v.string(), v.uuid()),
+    values: v.record(v.string(), v.unknown()),
+    allow_unused_values: v.optional(v.boolean()),
+    completion_mode: templateFillCompletionModeSchema,
+    output_mode: v.optional(
+      v.picklist(TEMPLATE_FILL_OUTPUT_MODES),
+      DEFAULT_TEMPLATE_FILL_OUTPUT_MODE,
+    ),
+  }),
+);
 
 const handleFillTemplateTool: McpToolHandler = async ({ args, context }) => {
   const hasPermission = hasEffectiveAuthority(context, {
@@ -1230,17 +1256,19 @@ const handleFillTemplateTool: McpToolHandler = async ({ args, context }) => {
   });
 };
 
-export const saveFilledTemplateArgsSchema = v.strictObject({
-  action: v.picklist(["create_document", "create_version"]),
-  template_id: v.pipe(v.string(), v.uuid()),
-  matter_id: v.pipe(v.string(), v.uuid()),
-  entity_id: v.optional(v.pipe(v.string(), v.uuid())),
-  parent_id: v.optional(v.pipe(v.string(), v.uuid())),
-  name: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(255))),
-  idempotency_key: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
-  values: v.record(v.string(), v.unknown()),
-  completion_mode: templateFillCompletionModeSchema,
-});
+export const saveFilledTemplateArgsSchema = nullAsAbsent(
+  v.strictObject({
+    action: v.picklist(["create_document", "create_version"]),
+    template_id: v.pipe(v.string(), v.uuid()),
+    matter_id: v.pipe(v.string(), v.uuid()),
+    entity_id: v.optional(v.pipe(v.string(), v.uuid())),
+    parent_id: v.optional(v.pipe(v.string(), v.uuid())),
+    name: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(255))),
+    idempotency_key: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
+    values: v.record(v.string(), v.unknown()),
+    completion_mode: templateFillCompletionModeSchema,
+  }),
+);
 
 const resolveFilledDocxName = ({
   requested,
@@ -2110,10 +2138,10 @@ const configureExistingTemplate = async ({
 const handleSaveTemplateTool: TypedMcpToolHandler<
   v.InferInput<typeof SAVE_TEMPLATE_PROJECTION>
 > = async ({ args, context }) => {
-  const parsed = v.safeParse(SAVE_TEMPLATE_TOOL_DEFINITION.inputSchemaSource, {
-    ...args,
-    fields: readTemplateFieldsInput(args["fields"]),
-  });
+  const parsed = v.safeParse(
+    SAVE_TEMPLATE_TOOL_DEFINITION.inputSchemaSource,
+    args,
+  );
   if (!parsed.success) {
     return validationErrorResult(parsed.issues);
   }

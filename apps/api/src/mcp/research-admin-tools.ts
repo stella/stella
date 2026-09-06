@@ -49,6 +49,7 @@ import {
   ensureActiveWorkspace,
   errorResult,
   internalFailureResult,
+  nullAsAbsent,
   structuredErrorResult,
   toolDataResult,
   uuidInputSchema,
@@ -123,85 +124,87 @@ const widenDateOnlyBound = (bound: string, edge: "start" | "end"): string =>
     ? `${bound}T${edge === "start" ? "00:00:00.000" : "23:59:59.999"}Z`
     : bound;
 
-const listAuditLogArgsSchema = v.pipe(
-  v.strictObject({
-    matter_id: v.optional(
-      uuidInputSchema("Only entries scoped to this matter."),
-    ),
-    action: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.description("Only entries with this audit action"),
+const listAuditLogArgsSchema = nullAsAbsent(
+  v.pipe(
+    v.strictObject({
+      matter_id: v.optional(
+        uuidInputSchema("Only entries scoped to this matter."),
       ),
-    ),
-    resource_type: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.description("Only entries about this resource type"),
-      ),
-    ),
-    resource_id: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.description(
-          "Only entries about this resource id; requires resource_type",
+      action: v.optional(
+        v.pipe(
+          v.string(),
+          v.minLength(1),
+          v.description("Only entries with this audit action"),
         ),
       ),
-    ),
-    user_id: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.description("Only entries whose actor is this user"),
-      ),
-    ),
-    from: v.optional(
-      v.pipe(
-        auditRangeBoundSchema,
-        v.description(
-          "Only entries created on or after this ISO date-time, or from the start of this YYYY-MM-DD date (UTC)",
+      resource_type: v.optional(
+        v.pipe(
+          v.string(),
+          v.minLength(1),
+          v.description("Only entries about this resource type"),
         ),
       ),
-    ),
-    to: v.optional(
-      v.pipe(
-        auditRangeBoundSchema,
-        v.description(
-          "Only entries created on or before this ISO date-time, or up to the end of this YYYY-MM-DD date (UTC)",
+      resource_id: v.optional(
+        v.pipe(
+          v.string(),
+          v.minLength(1),
+          v.description(
+            "Only entries about this resource id; requires resource_type",
+          ),
         ),
       ),
-    ),
-    limit: v.optional(
-      v.pipe(
-        v.number(),
-        v.integer(),
-        v.minValue(1),
-        v.maxValue(LIMITS.auditLogPageSizeMax),
-        v.description("Max entries to return"),
-      ),
-    ),
-    cursor: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.maxLength(512),
-        v.description(
-          "Opaque cursor from a previous list_audit_log call to fetch the next page",
+      user_id: v.optional(
+        v.pipe(
+          v.string(),
+          v.minLength(1),
+          v.description("Only entries whose actor is this user"),
         ),
       ),
+      from: v.optional(
+        v.pipe(
+          auditRangeBoundSchema,
+          v.description(
+            "Only entries created on or after this ISO date-time, or from the start of this YYYY-MM-DD date (UTC)",
+          ),
+        ),
+      ),
+      to: v.optional(
+        v.pipe(
+          auditRangeBoundSchema,
+          v.description(
+            "Only entries created on or before this ISO date-time, or up to the end of this YYYY-MM-DD date (UTC)",
+          ),
+        ),
+      ),
+      limit: v.optional(
+        v.pipe(
+          v.number(),
+          v.integer(),
+          v.minValue(1),
+          v.maxValue(LIMITS.auditLogPageSizeMax),
+          v.description("Max entries to return"),
+        ),
+      ),
+      cursor: v.optional(
+        v.pipe(
+          v.string(),
+          v.minLength(1),
+          v.maxLength(512),
+          v.description(
+            "Opaque cursor from a previous list_audit_log call to fetch the next page",
+          ),
+        ),
+      ),
+    }),
+    v.forward(
+      v.partialCheck(
+        [["resource_type"], ["resource_id"]],
+        ({ resource_id, resource_type }) =>
+          resource_id === undefined || resource_type !== undefined,
+        "resourceType is required when resourceId is provided",
+      ),
+      ["resource_id"],
     ),
-  }),
-  v.forward(
-    v.partialCheck(
-      [["resource_type"], ["resource_id"]],
-      ({ resource_id, resource_type }) =>
-        resource_id === undefined || resource_type !== undefined,
-      "resourceType is required when resourceId is provided",
-    ),
-    ["resource_id"],
   ),
 );
 
@@ -235,210 +238,215 @@ const LIST_AUDIT_LOG_TOOL_DEFINITION = defineValibotMcpTool({
 
 // --- search_legislation -------------------------------------------------
 
-const searchLegislationArgsSchema = v.pipe(
-  v.strictObject({
-    query: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.maxLength(256),
-        v.description("Free-text search over consolidated legislation"),
-      ),
-    ),
-    title: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.maxLength(256),
-        v.description("Filter search results by title text"),
-      ),
-    ),
-    department_code: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.maxLength(32),
-        v.description("Filter search results by department code"),
-      ),
-    ),
-    legal_range_code: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.maxLength(32),
-        v.description("Filter search results by legal-range code (law rank)"),
-      ),
-    ),
-    matter_code: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.maxLength(32),
-        v.description("Filter search results by subject-matter code"),
-      ),
-    ),
-    date_from: v.optional(
-      v.pipe(
-        v.string(),
-        v.regex(BOE_DATE),
-        v.maxLength(8),
-        v.description("Only laws published on or after this date (YYYYMMDD)"),
-      ),
-    ),
-    date_to: v.optional(
-      v.pipe(
-        v.string(),
-        v.regex(BOE_DATE),
-        v.maxLength(8),
-        v.description("Only laws published on or before this date (YYYYMMDD)"),
-      ),
-    ),
-    limit: v.optional(
-      v.pipe(
-        v.number(),
-        v.integer(),
-        v.minValue(1),
-        v.maxValue(100),
-        v.description("Max search results to return"),
-      ),
-    ),
-    cursor: v.optional(
-      v.pipe(
-        v.string(),
-        v.regex(BOE_OFFSET_CURSOR),
-        v.maxLength(5),
-        v.description(
-          "Opaque cursor from a previous search_legislation call for the next page",
+const searchLegislationArgsSchema = nullAsAbsent(
+  v.pipe(
+    v.strictObject({
+      query: v.optional(
+        v.pipe(
+          v.string(),
+          v.minLength(1),
+          v.maxLength(256),
+          v.description("Free-text search over consolidated legislation"),
         ),
       ),
-    ),
-    law_id: v.optional(
-      v.pipe(
-        v.string(),
-        v.regex(BOE_LAW_ID),
-        v.description(
-          "BOE consolidated-law id (e.g. BOE-A-1889-4763) to read; omit to search",
+      title: v.optional(
+        v.pipe(
+          v.string(),
+          v.minLength(1),
+          v.maxLength(256),
+          v.description("Filter search results by title text"),
         ),
       ),
-    ),
-    block_id: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.maxLength(128),
-        v.description(
-          "With law_id, return this text block's content instead of the whole law",
+      department_code: v.optional(
+        v.pipe(
+          v.string(),
+          v.minLength(1),
+          v.maxLength(32),
+          v.description("Filter search results by department code"),
         ),
       ),
-    ),
-    relation_type: v.optional(
-      v.pipe(
-        v.picklist(RELATION_TYPE_VALUES),
-        v.description(
-          "With law_id, list related laws of this relation kind instead of the law body",
+      legal_range_code: v.optional(
+        v.pipe(
+          v.string(),
+          v.minLength(1),
+          v.maxLength(32),
+          v.description("Filter search results by legal-range code (law rank)"),
         ),
       ),
-    ),
-    full_text: v.optional(
-      v.pipe(
-        v.boolean(),
-        v.description(
-          "With law_id (no block_id/relation_type), include the consolidated full text",
+      matter_code: v.optional(
+        v.pipe(
+          v.string(),
+          v.minLength(1),
+          v.maxLength(32),
+          v.description("Filter search results by subject-matter code"),
         ),
       ),
+      date_from: v.optional(
+        v.pipe(
+          v.string(),
+          v.regex(BOE_DATE),
+          v.maxLength(8),
+          v.description("Only laws published on or after this date (YYYYMMDD)"),
+        ),
+      ),
+      date_to: v.optional(
+        v.pipe(
+          v.string(),
+          v.regex(BOE_DATE),
+          v.maxLength(8),
+          v.description(
+            "Only laws published on or before this date (YYYYMMDD)",
+          ),
+        ),
+      ),
+      limit: v.optional(
+        v.pipe(
+          v.number(),
+          v.integer(),
+          v.minValue(1),
+          v.maxValue(100),
+          v.description("Max search results to return"),
+        ),
+      ),
+      cursor: v.optional(
+        v.pipe(
+          v.string(),
+          v.regex(BOE_OFFSET_CURSOR),
+          v.maxLength(5),
+          v.description(
+            "Opaque cursor from a previous search_legislation call for the next page",
+          ),
+        ),
+      ),
+      law_id: v.optional(
+        v.pipe(
+          v.string(),
+          v.regex(BOE_LAW_ID),
+          v.description(
+            "BOE consolidated-law id (e.g. BOE-A-1889-4763) to read; omit to search",
+          ),
+        ),
+      ),
+      block_id: v.optional(
+        v.pipe(
+          v.string(),
+          v.minLength(1),
+          v.maxLength(128),
+          v.description(
+            "With law_id, return this text block's content instead of the whole law",
+          ),
+        ),
+      ),
+      relation_type: v.optional(
+        v.pipe(
+          v.picklist(RELATION_TYPE_VALUES),
+          v.description(
+            "With law_id, list related laws of this relation kind instead of the law body",
+          ),
+        ),
+      ),
+      full_text: v.optional(
+        v.pipe(
+          v.boolean(),
+          v.description(
+            "With law_id (no block_id/relation_type), include the consolidated full text",
+          ),
+        ),
+      ),
+    }),
+    // block_id, relation_type, and full_text all read a specific law.
+    v.forward(
+      v.partialCheck(
+        [["law_id"], ["block_id"]],
+        ({ law_id, block_id }) =>
+          block_id === undefined || law_id !== undefined,
+        "block_id requires law_id",
+      ),
+      ["block_id"],
     ),
-  }),
-  // block_id, relation_type, and full_text all read a specific law.
-  v.forward(
+    v.forward(
+      v.partialCheck(
+        [["law_id"], ["relation_type"]],
+        ({ law_id, relation_type }) =>
+          relation_type === undefined || law_id !== undefined,
+        "relation_type requires law_id",
+      ),
+      ["relation_type"],
+    ),
+    v.forward(
+      v.partialCheck(
+        [["law_id"], ["full_text"]],
+        ({ law_id, full_text }) =>
+          full_text === undefined || law_id !== undefined,
+        "full_text requires law_id",
+      ),
+      ["full_text"],
+    ),
+    // block_id and relation_type each replace the law body; they cannot combine.
     v.partialCheck(
-      [["law_id"], ["block_id"]],
-      ({ law_id, block_id }) => block_id === undefined || law_id !== undefined,
-      "block_id requires law_id",
+      [["block_id"], ["relation_type"]],
+      ({ block_id, relation_type }) =>
+        block_id === undefined || relation_type === undefined,
+      "Provide at most one of block_id or relation_type",
     ),
-    ["block_id"],
-  ),
-  v.forward(
+    // full_text applies to the law body, not to a single block or the relations.
     v.partialCheck(
-      [["law_id"], ["relation_type"]],
-      ({ law_id, relation_type }) =>
-        relation_type === undefined || law_id !== undefined,
-      "relation_type requires law_id",
+      [["full_text"], ["block_id"], ["relation_type"]],
+      ({ full_text, block_id, relation_type }) =>
+        full_text === undefined ||
+        (block_id === undefined && relation_type === undefined),
+      "full_text does not apply with block_id or relation_type",
     ),
-    ["relation_type"],
-  ),
-  v.forward(
+    // Search filters belong to search mode; a law_id selects read mode.
     v.partialCheck(
-      [["law_id"], ["full_text"]],
-      ({ law_id, full_text }) =>
-        full_text === undefined || law_id !== undefined,
-      "full_text requires law_id",
+      [
+        ["law_id"],
+        ["query"],
+        ["title"],
+        ["department_code"],
+        ["legal_range_code"],
+        ["matter_code"],
+        ["date_from"],
+        ["date_to"],
+        ["limit"],
+        ["cursor"],
+      ],
+      (i) =>
+        i.law_id === undefined ||
+        (i.query === undefined &&
+          i.title === undefined &&
+          i.department_code === undefined &&
+          i.legal_range_code === undefined &&
+          i.matter_code === undefined &&
+          i.date_from === undefined &&
+          i.date_to === undefined &&
+          i.limit === undefined &&
+          i.cursor === undefined),
+      "Search filters apply to search mode; drop law_id to search",
     ),
-    ["full_text"],
-  ),
-  // block_id and relation_type each replace the law body; they cannot combine.
-  v.partialCheck(
-    [["block_id"], ["relation_type"]],
-    ({ block_id, relation_type }) =>
-      block_id === undefined || relation_type === undefined,
-    "Provide at most one of block_id or relation_type",
-  ),
-  // full_text applies to the law body, not to a single block or the relations.
-  v.partialCheck(
-    [["full_text"], ["block_id"], ["relation_type"]],
-    ({ full_text, block_id, relation_type }) =>
-      full_text === undefined ||
-      (block_id === undefined && relation_type === undefined),
-    "full_text does not apply with block_id or relation_type",
-  ),
-  // Search filters belong to search mode; a law_id selects read mode.
-  v.partialCheck(
-    [
-      ["law_id"],
-      ["query"],
-      ["title"],
-      ["department_code"],
-      ["legal_range_code"],
-      ["matter_code"],
-      ["date_from"],
-      ["date_to"],
-      ["limit"],
-      ["cursor"],
-    ],
-    (i) =>
-      i.law_id === undefined ||
-      (i.query === undefined &&
-        i.title === undefined &&
-        i.department_code === undefined &&
-        i.legal_range_code === undefined &&
-        i.matter_code === undefined &&
-        i.date_from === undefined &&
-        i.date_to === undefined &&
-        i.limit === undefined &&
-        i.cursor === undefined),
-    "Search filters apply to search mode; drop law_id to search",
-  ),
-  // Search mode needs at least one substantive filter (mirrors boe-search).
-  v.partialCheck(
-    [
-      ["law_id"],
-      ["query"],
-      ["title"],
-      ["department_code"],
-      ["legal_range_code"],
-      ["matter_code"],
-      ["date_from"],
-      ["date_to"],
-    ],
-    (i) =>
-      i.law_id !== undefined ||
-      i.query !== undefined ||
-      i.title !== undefined ||
-      i.department_code !== undefined ||
-      i.legal_range_code !== undefined ||
-      i.matter_code !== undefined ||
-      i.date_from !== undefined ||
-      i.date_to !== undefined,
-    "Provide law_id to read a law, or at least one search filter",
+    // Search mode needs at least one substantive filter (mirrors boe-search).
+    v.partialCheck(
+      [
+        ["law_id"],
+        ["query"],
+        ["title"],
+        ["department_code"],
+        ["legal_range_code"],
+        ["matter_code"],
+        ["date_from"],
+        ["date_to"],
+      ],
+      (i) =>
+        i.law_id !== undefined ||
+        i.query !== undefined ||
+        i.title !== undefined ||
+        i.department_code !== undefined ||
+        i.legal_range_code !== undefined ||
+        i.matter_code !== undefined ||
+        i.date_from !== undefined ||
+        i.date_to !== undefined,
+      "Provide law_id to read a law, or at least one search filter",
+    ),
   ),
 );
 
@@ -643,141 +651,143 @@ const handleListAuditLogTool: McpToolHandler = async ({ args, context }) => {
 
 // --- manage_organization ------------------------------------------------
 
-const manageOrganizationArgsSchema = v.pipe(
-  v.strictObject({
-    action: v.pipe(
-      v.picklist(MANAGE_ORG_ACTIONS),
-      v.description("Administrative action to perform"),
-    ),
-    matter_id: v.optional(
-      uuidInputSchema("Matter ID for add_member and remove_member."),
-    ),
-    user_id: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.description("User id to add or remove for the member actions"),
+const manageOrganizationArgsSchema = nullAsAbsent(
+  v.pipe(
+    v.strictObject({
+      action: v.pipe(
+        v.picklist(MANAGE_ORG_ACTIONS),
+        v.description("Administrative action to perform"),
       ),
-    ),
-    matter_number_pattern: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.maxLength(128),
-        v.description(
-          "Matter-number pattern (update_org_settings); send with matter_number_padding",
+      matter_id: v.optional(
+        uuidInputSchema("Matter ID for add_member and remove_member."),
+      ),
+      user_id: v.optional(
+        v.pipe(
+          v.string(),
+          v.minLength(1),
+          v.description("User id to add or remove for the member actions"),
         ),
       ),
-    ),
-    matter_number_padding: v.optional(
-      v.pipe(
-        v.number(),
-        v.integer(),
-        v.minValue(1),
-        v.maxValue(6),
-        v.description(
-          "Matter-number zero-padding width (update_org_settings); send with matter_number_pattern",
+      matter_number_pattern: v.optional(
+        v.pipe(
+          v.string(),
+          v.minLength(1),
+          v.maxLength(128),
+          v.description(
+            "Matter-number pattern (update_org_settings); send with matter_number_padding",
+          ),
         ),
       ),
-    ),
-    prompt_caching_enabled: v.optional(
-      v.pipe(
-        v.boolean(),
-        v.description(
-          "Toggle AI prompt caching for the organization (update_org_settings)",
+      matter_number_padding: v.optional(
+        v.pipe(
+          v.number(),
+          v.integer(),
+          v.minValue(1),
+          v.maxValue(6),
+          v.description(
+            "Matter-number zero-padding width (update_org_settings); send with matter_number_pattern",
+          ),
         ),
       ),
-    ),
-    document_processing_mode: v.optional(
-      v.pipe(
-        v.picklist(DOCUMENT_PROCESSING_MODES),
-        v.description(
-          "Set automatic PDF searchable-text extraction for the organization (update_org_settings)",
+      prompt_caching_enabled: v.optional(
+        v.pipe(
+          v.boolean(),
+          v.description(
+            "Toggle AI prompt caching for the organization (update_org_settings)",
+          ),
         ),
       ),
-    ),
-    // The CLI's --yes flow injects `confirm: true` for the destructive
-    // remove_member subcommand; the strictObject would otherwise reject it.
-    // Other actions accept but ignore it.
-    confirm: v.optional(
-      v.pipe(
-        v.boolean(),
-        v.description(
-          "Required for the remove_member action: must be true to remove a " +
-            "member (an irreversible action). Set it only after a human user " +
-            "has approved the removal; ignored by the other actions.",
+      document_processing_mode: v.optional(
+        v.pipe(
+          v.picklist(DOCUMENT_PROCESSING_MODES),
+          v.description(
+            "Set automatic PDF searchable-text extraction for the organization (update_org_settings)",
+          ),
         ),
       ),
+      // The CLI's --yes flow injects `confirm: true` for the destructive
+      // remove_member subcommand; the strictObject would otherwise reject it.
+      // Other actions accept but ignore it.
+      confirm: v.optional(
+        v.pipe(
+          v.boolean(),
+          v.description(
+            "Required for the remove_member action: must be true to remove a " +
+              "member (an irreversible action). Set it only after a human user " +
+              "has approved the removal; ignored by the other actions.",
+          ),
+        ),
+      ),
+    }),
+    // Member actions need a matter and a user.
+    v.forward(
+      v.partialCheck(
+        [["action"], ["matter_id"]],
+        ({ action, matter_id }) =>
+          action === "update_org_settings" || matter_id !== undefined,
+        "matter_id is required for add_member and remove_member",
+      ),
+      ["matter_id"],
     ),
-  }),
-  // Member actions need a matter and a user.
-  v.forward(
+    v.forward(
+      v.partialCheck(
+        [["action"], ["user_id"]],
+        ({ action, user_id }) =>
+          action === "update_org_settings" || user_id !== undefined,
+        "user_id is required for add_member and remove_member",
+      ),
+      ["user_id"],
+    ),
+    // Org-settings fields belong only to update_org_settings.
     v.partialCheck(
-      [["action"], ["matter_id"]],
-      ({ action, matter_id }) =>
-        action === "update_org_settings" || matter_id !== undefined,
-      "matter_id is required for add_member and remove_member",
+      [
+        ["action"],
+        ["matter_number_pattern"],
+        ["matter_number_padding"],
+        ["prompt_caching_enabled"],
+        ["document_processing_mode"],
+      ],
+      (i) =>
+        i.action === "update_org_settings" ||
+        (i.matter_number_pattern === undefined &&
+          i.matter_number_padding === undefined &&
+          i.prompt_caching_enabled === undefined &&
+          i.document_processing_mode === undefined),
+      "matter_number_pattern, matter_number_padding, prompt_caching_enabled, and document_processing_mode apply only to update_org_settings",
     ),
-    ["matter_id"],
-  ),
-  v.forward(
+    // matter_id/user_id are meaningless for an org-settings update.
     v.partialCheck(
-      [["action"], ["user_id"]],
-      ({ action, user_id }) =>
-        action === "update_org_settings" || user_id !== undefined,
-      "user_id is required for add_member and remove_member",
+      [["action"], ["matter_id"], ["user_id"]],
+      (i) =>
+        i.action !== "update_org_settings" ||
+        (i.matter_id === undefined && i.user_id === undefined),
+      "matter_id and user_id do not apply to update_org_settings",
     ),
-    ["user_id"],
-  ),
-  // Org-settings fields belong only to update_org_settings.
-  v.partialCheck(
-    [
-      ["action"],
-      ["matter_number_pattern"],
-      ["matter_number_padding"],
-      ["prompt_caching_enabled"],
-      ["document_processing_mode"],
-    ],
-    (i) =>
-      i.action === "update_org_settings" ||
-      (i.matter_number_pattern === undefined &&
-        i.matter_number_padding === undefined &&
-        i.prompt_caching_enabled === undefined &&
-        i.document_processing_mode === undefined),
-    "matter_number_pattern, matter_number_padding, prompt_caching_enabled, and document_processing_mode apply only to update_org_settings",
-  ),
-  // matter_id/user_id are meaningless for an org-settings update.
-  v.partialCheck(
-    [["action"], ["matter_id"], ["user_id"]],
-    (i) =>
-      i.action !== "update_org_settings" ||
-      (i.matter_id === undefined && i.user_id === undefined),
-    "matter_id and user_id do not apply to update_org_settings",
-  ),
-  // An org-settings update must change at least one field.
-  v.partialCheck(
-    [
-      ["action"],
-      ["matter_number_pattern"],
-      ["matter_number_padding"],
-      ["prompt_caching_enabled"],
-      ["document_processing_mode"],
-    ],
-    (i) =>
-      i.action !== "update_org_settings" ||
-      i.matter_number_pattern !== undefined ||
-      i.matter_number_padding !== undefined ||
-      i.prompt_caching_enabled !== undefined ||
-      i.document_processing_mode !== undefined,
-    "Provide at least one setting to change for update_org_settings",
-  ),
-  // The matter-number pattern and padding are a unit (mirrors the backing).
-  v.partialCheck(
-    [["matter_number_pattern"], ["matter_number_padding"]],
-    ({ matter_number_pattern, matter_number_padding }) =>
-      (matter_number_pattern === undefined) ===
-      (matter_number_padding === undefined),
-    "matter_number_pattern and matter_number_padding must be sent together",
+    // An org-settings update must change at least one field.
+    v.partialCheck(
+      [
+        ["action"],
+        ["matter_number_pattern"],
+        ["matter_number_padding"],
+        ["prompt_caching_enabled"],
+        ["document_processing_mode"],
+      ],
+      (i) =>
+        i.action !== "update_org_settings" ||
+        i.matter_number_pattern !== undefined ||
+        i.matter_number_padding !== undefined ||
+        i.prompt_caching_enabled !== undefined ||
+        i.document_processing_mode !== undefined,
+      "Provide at least one setting to change for update_org_settings",
+    ),
+    // The matter-number pattern and padding are a unit (mirrors the backing).
+    v.partialCheck(
+      [["matter_number_pattern"], ["matter_number_padding"]],
+      ({ matter_number_pattern, matter_number_padding }) =>
+        (matter_number_pattern === undefined) ===
+        (matter_number_padding === undefined),
+      "matter_number_pattern and matter_number_padding must be sent together",
+    ),
   ),
 );
 

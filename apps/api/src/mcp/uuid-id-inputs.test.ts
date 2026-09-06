@@ -92,11 +92,14 @@ const declaresUuid = (schema: unknown): boolean => {
 /**
  * The validator each legacy tool's handler actually parses, keyed by tool name.
  * `list_templates` reaches its detail branch through `describeTemplateArgsSchema`.
+ * `advertisedSchema` is the declared object inside the null-as-absent wrapper
+ * the handler parses; the wrapper only drops nulls, so the declared object is
+ * what enforces the id formats.
  */
 const LEGACY_MANUAL_INPUT_VALIDATORS = {
-  list_templates: describeTemplateArgsSchema,
-  fill_template: fillTemplateArgsSchema,
-  save_filled_template: saveFilledTemplateArgsSchema,
+  list_templates: describeTemplateArgsSchema.advertisedSchema,
+  fill_template: fillTemplateArgsSchema.advertisedSchema,
+  save_filled_template: saveFilledTemplateArgsSchema.advertisedSchema,
 };
 
 /**

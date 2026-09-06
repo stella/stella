@@ -65,6 +65,7 @@ import {
   ISO_DATE_SCHEMA,
   MAX_LIST_LIMIT,
   notFoundResult,
+  nullAsAbsent,
   structuredErrorResult,
   toolDataResult,
   uuidInputSchema,
@@ -368,87 +369,89 @@ const loadUserNames = async ({
 
 // --- list_time_entries --------------------------------------------------
 
-const listTimeEntriesArgsSchema = v.pipe(
-  v.strictObject({
-    matter_id: v.optional(
-      uuidInputSchema(
-        "Matter ID to list time entries in; required unless " +
-          "time_entry_id is given.",
-      ),
-    ),
-    time_entry_id: v.optional(
-      uuidInputSchema("Time entry ID to read in detail"),
-    ),
-    entity_id: v.optional(
-      v.pipe(
-        v.string(),
-        v.uuid(),
-        v.description(
-          "List only entries logged against this entity (document, folder, " +
-            "or task the time is billed to)",
+const listTimeEntriesArgsSchema = nullAsAbsent(
+  v.pipe(
+    v.strictObject({
+      matter_id: v.optional(
+        uuidInputSchema(
+          "Matter ID to list time entries in; required unless " +
+            "time_entry_id is given.",
         ),
       ),
-    ),
-    user_id: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.description("List only entries recorded by this user"),
+      time_entry_id: v.optional(
+        uuidInputSchema("Time entry ID to read in detail"),
       ),
-    ),
-    date_from: v.optional(
-      v.pipe(
-        ISO_DATE_SCHEMA,
-        v.maxLength(10),
-        v.description(
-          "List only entries worked on or after this ISO date (YYYY-MM-DD)",
+      entity_id: v.optional(
+        v.pipe(
+          v.string(),
+          v.uuid(),
+          v.description(
+            "List only entries logged against this entity (document, folder, " +
+              "or task the time is billed to)",
+          ),
         ),
       ),
-    ),
-    date_to: v.optional(
-      v.pipe(
-        ISO_DATE_SCHEMA,
-        v.maxLength(10),
-        v.description(
-          "List only entries worked on or before this ISO date (YYYY-MM-DD)",
+      user_id: v.optional(
+        v.pipe(
+          v.string(),
+          v.minLength(1),
+          v.description("List only entries recorded by this user"),
         ),
       ),
-    ),
-    status: v.optional(
-      v.pipe(
-        v.picklist(TIME_ENTRY_STATUSES),
-        v.description("List only entries with this status"),
-      ),
-    ),
-    limit: v.optional(
-      v.pipe(
-        v.number(),
-        v.integer(),
-        v.minValue(1),
-        v.maxValue(MAX_LIST_LIMIT),
-        v.description("Max entries to return"),
-      ),
-    ),
-    cursor: v.optional(
-      v.pipe(
-        v.string(),
-        v.maxLength(512),
-        v.description(
-          "Opaque cursor from a previous list_time_entries call to fetch the next page",
+      date_from: v.optional(
+        v.pipe(
+          ISO_DATE_SCHEMA,
+          v.maxLength(10),
+          v.description(
+            "List only entries worked on or after this ISO date (YYYY-MM-DD)",
+          ),
         ),
       ),
+      date_to: v.optional(
+        v.pipe(
+          ISO_DATE_SCHEMA,
+          v.maxLength(10),
+          v.description(
+            "List only entries worked on or before this ISO date (YYYY-MM-DD)",
+          ),
+        ),
+      ),
+      status: v.optional(
+        v.pipe(
+          v.picklist(TIME_ENTRY_STATUSES),
+          v.description("List only entries with this status"),
+        ),
+      ),
+      limit: v.optional(
+        v.pipe(
+          v.number(),
+          v.integer(),
+          v.minValue(1),
+          v.maxValue(MAX_LIST_LIMIT),
+          v.description("Max entries to return"),
+        ),
+      ),
+      cursor: v.optional(
+        v.pipe(
+          v.string(),
+          v.maxLength(512),
+          v.description(
+            "Opaque cursor from a previous list_time_entries call to fetch the next page",
+          ),
+        ),
+      ),
+    }),
+    // List mode needs a workspace to scope to; detail mode uses time_entry_id
+    // alone.
+    v.forward(
+      v.partialCheck(
+        [["matter_id"], ["time_entry_id"]],
+        ({ matter_id, time_entry_id }) =>
+          time_entry_id !== undefined || matter_id !== undefined,
+        "Provide matter_id to list entries, or time_entry_id to read one entry",
+      ),
+      ["matter_id"],
     ),
-  }),
-  // List mode needs a workspace to scope to; detail mode uses time_entry_id
-  // alone.
-  v.forward(
-    v.partialCheck(
-      [["matter_id"], ["time_entry_id"]],
-      ({ matter_id, time_entry_id }) =>
-        time_entry_id !== undefined || matter_id !== undefined,
-      "Provide matter_id to list entries, or time_entry_id to read one entry",
-    ),
-    ["matter_id"],
   ),
 );
 
@@ -694,163 +697,167 @@ const handleListTimeEntriesTool: TypedMcpToolHandler<
 
 // --- save_time_entry ----------------------------------------------------
 
-const saveTimeEntryArgsSchema = v.pipe(
-  v.strictObject({
-    time_entry_id: v.optional(
-      uuidInputSchema("Time entry ID to update; omit to create"),
-    ),
-    matter_id: v.optional(
-      uuidInputSchema(
-        "Matter ID to create the entry in; required when creating.",
+const saveTimeEntryArgsSchema = nullAsAbsent(
+  v.pipe(
+    v.strictObject({
+      time_entry_id: v.optional(
+        uuidInputSchema("Time entry ID to update; omit to create"),
       ),
-    ),
-    entity_id: v.optional(
-      v.pipe(
-        v.nullable(v.pipe(v.string(), v.uuid())),
-        v.description(
-          "Optional work item context (document, folder, or task). When " +
-            "updating, moves the entry to a different entity in the same " +
-            "matter; pass null to clear.",
+      matter_id: v.optional(
+        uuidInputSchema(
+          "Matter ID to create the entry in; required when creating.",
         ),
       ),
-    ),
-    date_worked: v.optional(
-      v.pipe(
-        ISO_DATE_SCHEMA,
-        v.maxLength(10),
-        v.description(
-          "Date the work was done (ISO YYYY-MM-DD); required when creating",
+      entity_id: v.optional(
+        v.pipe(
+          v.nullable(v.pipe(v.string(), v.uuid())),
+          v.description(
+            "Optional work item context (document, folder, or task). When " +
+              "updating, moves the entry to a different entity in the same " +
+              "matter; pass null to clear.",
+          ),
         ),
       ),
-    ),
-    timezone_id: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.maxLength(64),
-        v.description(
-          "IANA time zone the date_worked is interpreted in (e.g. " +
-            "Europe/Prague); required when creating or changing date_worked",
+      date_worked: v.optional(
+        v.pipe(
+          ISO_DATE_SCHEMA,
+          v.maxLength(10),
+          v.description(
+            "Date the work was done (ISO YYYY-MM-DD); required when creating",
+          ),
         ),
       ),
-    ),
-    duration_minutes: v.optional(
-      v.pipe(
-        v.number(),
-        v.integer(),
-        v.minValue(1),
-        v.description("Minutes worked (whole minutes); required when creating"),
-      ),
-    ),
-    narrative: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.maxLength(10_000),
-        v.description("Description of the work; required when creating"),
-      ),
-    ),
-    invoice_narrative: v.optional(
-      v.pipe(
-        v.nullable(v.pipe(v.string(), v.maxLength(10_000))),
-        v.description(
-          "Client-facing narrative shown on the invoice; pass null to clear. " +
-            "Only valid when updating.",
+      timezone_id: v.optional(
+        v.pipe(
+          v.string(),
+          v.minLength(1),
+          v.maxLength(64),
+          v.description(
+            "IANA time zone the date_worked is interpreted in (e.g. " +
+              "Europe/Prague); required when creating or changing date_worked",
+          ),
         ),
       ),
-    ),
-    billable: v.optional(
-      v.pipe(
-        v.boolean(),
-        v.description("Whether the entry is billable to the client"),
-      ),
-    ),
-    no_charge: v.optional(
-      v.pipe(
-        v.boolean(),
-        v.description(
-          "Whether the entry is recorded but not charged. Only valid when updating.",
+      duration_minutes: v.optional(
+        v.pipe(
+          v.number(),
+          v.integer(),
+          v.minValue(1),
+          v.description(
+            "Minutes worked (whole minutes); required when creating",
+          ),
         ),
       ),
-    ),
-    task_code: v.optional(
-      v.pipe(
-        v.nullable(v.pipe(v.string(), v.maxLength(20))),
-        v.description("UTBMS/LEDES task code; pass null to clear"),
+      narrative: v.optional(
+        v.pipe(
+          v.string(),
+          v.minLength(1),
+          v.maxLength(10_000),
+          v.description("Description of the work; required when creating"),
+        ),
       ),
-    ),
-    activity_code: v.optional(
-      v.pipe(
-        v.nullable(v.pipe(v.string(), v.maxLength(20))),
-        v.description("UTBMS/LEDES activity code; pass null to clear"),
+      invoice_narrative: v.optional(
+        v.pipe(
+          v.nullable(v.pipe(v.string(), v.maxLength(10_000))),
+          v.description(
+            "Client-facing narrative shown on the invoice; pass null to clear. " +
+              "Only valid when updating.",
+          ),
+        ),
       ),
-    ),
-  }),
-  // Creating (no time_entry_id) requires the full set the backing create schema
-  // demands; list them in one message so a partial create is rejected up front.
-  v.partialCheck(
-    [
-      ["time_entry_id"],
-      ["matter_id"],
-      ["date_worked"],
-      ["timezone_id"],
-      ["duration_minutes"],
-      ["narrative"],
-    ],
-    (i) =>
-      i.time_entry_id !== undefined ||
-      (i.matter_id !== undefined &&
-        i.date_worked !== undefined &&
-        i.timezone_id !== undefined &&
-        i.duration_minutes !== undefined &&
-        i.narrative !== undefined),
-    "Creating a time entry requires matter_id, date_worked, timezone_id, duration_minutes, and narrative",
-  ),
-  // matter_id names the workspace to create in; it cannot change on update.
-  v.forward(
+      billable: v.optional(
+        v.pipe(
+          v.boolean(),
+          v.description("Whether the entry is billable to the client"),
+        ),
+      ),
+      no_charge: v.optional(
+        v.pipe(
+          v.boolean(),
+          v.description(
+            "Whether the entry is recorded but not charged. Only valid when updating.",
+          ),
+        ),
+      ),
+      task_code: v.optional(
+        v.pipe(
+          v.nullable(v.pipe(v.string(), v.maxLength(20))),
+          v.description("UTBMS/LEDES task code; pass null to clear"),
+        ),
+      ),
+      activity_code: v.optional(
+        v.pipe(
+          v.nullable(v.pipe(v.string(), v.maxLength(20))),
+          v.description("UTBMS/LEDES activity code; pass null to clear"),
+        ),
+      ),
+    }),
+    // Creating (no time_entry_id) requires the full set the backing create schema
+    // demands; list them in one message so a partial create is rejected up front.
     v.partialCheck(
-      [["time_entry_id"], ["matter_id"]],
-      ({ time_entry_id, matter_id }) =>
-        time_entry_id === undefined || matter_id === undefined,
-      "matter_id applies only when creating; omit it when updating a time entry",
+      [
+        ["time_entry_id"],
+        ["matter_id"],
+        ["date_worked"],
+        ["timezone_id"],
+        ["duration_minutes"],
+        ["narrative"],
+      ],
+      (i) =>
+        i.time_entry_id !== undefined ||
+        (i.matter_id !== undefined &&
+          i.date_worked !== undefined &&
+          i.timezone_id !== undefined &&
+          i.duration_minutes !== undefined &&
+          i.narrative !== undefined),
+      "Creating a time entry requires matter_id, date_worked, timezone_id, duration_minutes, and narrative",
     ),
-    ["matter_id"],
-  ),
-  // invoice_narrative and no_charge are update-only in the backing
-  // handler, so reject them on a create.
-  v.partialCheck(
-    [["time_entry_id"], ["invoice_narrative"], ["no_charge"]],
-    ({ time_entry_id, invoice_narrative, no_charge }) =>
-      time_entry_id !== undefined ||
-      (invoice_narrative === undefined && no_charge === undefined),
-    "invoice_narrative and no_charge apply to an existing time entry; pass time_entry_id",
-  ),
-  // An update must request at least one change.
-  v.partialCheck(
-    [
-      ["time_entry_id"],
-      ["entity_id"],
-      ["date_worked"],
-      ["duration_minutes"],
-      ["narrative"],
-      ["invoice_narrative"],
-      ["billable"],
-      ["no_charge"],
-      ["task_code"],
-      ["activity_code"],
-    ],
-    (i) =>
-      i.time_entry_id === undefined ||
-      i.entity_id !== undefined ||
-      i.date_worked !== undefined ||
-      i.duration_minutes !== undefined ||
-      i.narrative !== undefined ||
-      i.invoice_narrative !== undefined ||
-      i.billable !== undefined ||
-      i.no_charge !== undefined ||
-      i.task_code !== undefined ||
-      i.activity_code !== undefined,
-    "Provide at least one change to the time entry",
+    // matter_id names the workspace to create in; it cannot change on update.
+    v.forward(
+      v.partialCheck(
+        [["time_entry_id"], ["matter_id"]],
+        ({ time_entry_id, matter_id }) =>
+          time_entry_id === undefined || matter_id === undefined,
+        "matter_id applies only when creating; omit it when updating a time entry",
+      ),
+      ["matter_id"],
+    ),
+    // invoice_narrative and no_charge are update-only in the backing
+    // handler, so reject them on a create.
+    v.partialCheck(
+      [["time_entry_id"], ["invoice_narrative"], ["no_charge"]],
+      ({ time_entry_id, invoice_narrative, no_charge }) =>
+        time_entry_id !== undefined ||
+        (invoice_narrative === undefined && no_charge === undefined),
+      "invoice_narrative and no_charge apply to an existing time entry; pass time_entry_id",
+    ),
+    // An update must request at least one change.
+    v.partialCheck(
+      [
+        ["time_entry_id"],
+        ["entity_id"],
+        ["date_worked"],
+        ["duration_minutes"],
+        ["narrative"],
+        ["invoice_narrative"],
+        ["billable"],
+        ["no_charge"],
+        ["task_code"],
+        ["activity_code"],
+      ],
+      (i) =>
+        i.time_entry_id === undefined ||
+        i.entity_id !== undefined ||
+        i.date_worked !== undefined ||
+        i.duration_minutes !== undefined ||
+        i.narrative !== undefined ||
+        i.invoice_narrative !== undefined ||
+        i.billable !== undefined ||
+        i.no_charge !== undefined ||
+        i.task_code !== undefined ||
+        i.activity_code !== undefined,
+      "Provide at least one change to the time entry",
+    ),
   ),
 );
 
@@ -992,18 +999,20 @@ const handleSaveTimeEntryTool: TypedMcpToolHandler<
 
 // --- delete_time_entry --------------------------------------------------
 
-const deleteTimeEntryArgsSchema = v.strictObject({
-  time_entry_id: uuidInputSchema("Time entry ID to delete or write off"),
-  confirm: v.optional(
-    v.pipe(
-      v.boolean(),
-      v.description(
-        "Must be true to run this irreversible operation. Set it only after " +
-          "a human user has explicitly approved the deletion.",
+const deleteTimeEntryArgsSchema = nullAsAbsent(
+  v.strictObject({
+    time_entry_id: uuidInputSchema("Time entry ID to delete or write off"),
+    confirm: v.optional(
+      v.pipe(
+        v.boolean(),
+        v.description(
+          "Must be true to run this irreversible operation. Set it only after " +
+            "a human user has explicitly approved the deletion.",
+        ),
       ),
     ),
-  ),
-});
+  }),
+);
 
 const handleDeleteTimeEntryTool: TypedMcpToolHandler<
   v.InferInput<typeof DELETE_TIME_ENTRY_PROJECTION>
@@ -1049,19 +1058,21 @@ const handleDeleteTimeEntryTool: TypedMcpToolHandler<
 
 // --- resolve_rate -------------------------------------------------------
 
-const resolveRateArgsSchema = v.strictObject({
-  matter_id: uuidInputSchema("Matter ID to resolve the rate in."),
-  user_id: v.pipe(
-    v.string(),
-    v.minLength(1),
-    v.description("User ID to resolve the rate for"),
-  ),
-  date: v.pipe(
-    ISO_DATE_SCHEMA,
-    v.maxLength(10),
-    v.description("Date to resolve the rate on (ISO YYYY-MM-DD)"),
-  ),
-});
+const resolveRateArgsSchema = nullAsAbsent(
+  v.strictObject({
+    matter_id: uuidInputSchema("Matter ID to resolve the rate in."),
+    user_id: v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.description("User ID to resolve the rate for"),
+    ),
+    date: v.pipe(
+      ISO_DATE_SCHEMA,
+      v.maxLength(10),
+      v.description("Date to resolve the rate on (ISO YYYY-MM-DD)"),
+    ),
+  }),
+);
 
 const handleResolveRateTool: McpToolHandler = async ({ args, context }) => {
   if (!hasEffectiveAuthority(context, { rate: ["read"] })) {
@@ -1122,42 +1133,44 @@ const handleResolveRateTool: McpToolHandler = async ({ args, context }) => {
 
 // --- list_invoices ------------------------------------------------------
 
-const listInvoicesArgsSchema = v.pipe(
-  v.strictObject({
-    matter_id: v.optional(
-      uuidInputSchema(
-        "Matter ID to list invoices in; required unless invoice_id is " +
-          "given.",
-      ),
-    ),
-    invoice_id: v.optional(uuidInputSchema("Invoice ID to read in detail")),
-    limit: v.optional(
-      v.pipe(
-        v.number(),
-        v.integer(),
-        v.minValue(1),
-        v.maxValue(MAX_LIST_LIMIT),
-        v.description("Max invoices to return"),
-      ),
-    ),
-    cursor: v.optional(
-      v.pipe(
-        v.string(),
-        v.maxLength(512),
-        v.description(
-          "Opaque cursor from a previous list_invoices call to fetch the next page",
+const listInvoicesArgsSchema = nullAsAbsent(
+  v.pipe(
+    v.strictObject({
+      matter_id: v.optional(
+        uuidInputSchema(
+          "Matter ID to list invoices in; required unless invoice_id is " +
+            "given.",
         ),
       ),
+      invoice_id: v.optional(uuidInputSchema("Invoice ID to read in detail")),
+      limit: v.optional(
+        v.pipe(
+          v.number(),
+          v.integer(),
+          v.minValue(1),
+          v.maxValue(MAX_LIST_LIMIT),
+          v.description("Max invoices to return"),
+        ),
+      ),
+      cursor: v.optional(
+        v.pipe(
+          v.string(),
+          v.maxLength(512),
+          v.description(
+            "Opaque cursor from a previous list_invoices call to fetch the next page",
+          ),
+        ),
+      ),
+    }),
+    v.forward(
+      v.partialCheck(
+        [["matter_id"], ["invoice_id"]],
+        ({ matter_id, invoice_id }) =>
+          invoice_id !== undefined || matter_id !== undefined,
+        "Provide matter_id to list invoices, or invoice_id to read one invoice",
+      ),
+      ["matter_id"],
     ),
-  }),
-  v.forward(
-    v.partialCheck(
-      [["matter_id"], ["invoice_id"]],
-      ({ matter_id, invoice_id }) =>
-        invoice_id !== undefined || matter_id !== undefined,
-      "Provide matter_id to list invoices, or invoice_id to read one invoice",
-    ),
-    ["matter_id"],
   ),
 );
 
@@ -1388,7 +1401,7 @@ const handleListInvoicesTool: TypedMcpToolHandler<
 
 // --- get_usage ----------------------------------------------------------
 
-const getUsageArgsSchema = v.strictObject({});
+const getUsageArgsSchema = nullAsAbsent(v.strictObject({}));
 
 const handleGetUsageTool: TypedMcpToolHandler<
   v.InferInput<typeof GET_USAGE_PROJECTION>

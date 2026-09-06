@@ -19,6 +19,7 @@ import { isMcpEgressPlan } from "@/api/mcp/tool-types";
 import type { McpToolResponse } from "@/api/mcp/tool-types";
 import {
   internalFailureResult,
+  nullAsAbsent,
   structuredErrorResult,
   uuidInputSchema,
 } from "@/api/mcp/tool-utils";
@@ -56,18 +57,22 @@ export const OPENAI_FILE_REFERENCE_SCHEMA = v.pipe(
   v.description("File reference supplied by a compatible MCP host"),
 );
 
-export const UPLOAD_DOCUMENT_VERSION_INPUT_SCHEMA = v.strictObject({
-  entity_id: uuidInputSchema(
-    "Existing document entity ID that will receive a new version",
-  ),
-  file: OPENAI_FILE_REFERENCE_SCHEMA,
-});
+export const UPLOAD_DOCUMENT_VERSION_INPUT_SCHEMA = nullAsAbsent(
+  v.strictObject({
+    entity_id: uuidInputSchema(
+      "Existing document entity ID that will receive a new version",
+    ),
+    file: OPENAI_FILE_REFERENCE_SCHEMA,
+  }),
+);
 
-export const OPEN_DOCUMENT_VERSION_UPLOAD_INPUT_SCHEMA = v.strictObject({
-  entity_id: uuidInputSchema(
-    "Existing document entity ID that will receive a new version",
-  ),
-});
+export const OPEN_DOCUMENT_VERSION_UPLOAD_INPUT_SCHEMA = nullAsAbsent(
+  v.strictObject({
+    entity_id: uuidInputSchema(
+      "Existing document entity ID that will receive a new version",
+    ),
+  }),
+);
 
 export type UploadDocumentVersionInput = v.InferOutput<
   typeof UPLOAD_DOCUMENT_VERSION_INPUT_SCHEMA

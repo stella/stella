@@ -77,6 +77,7 @@ import {
   errorResult,
   internalFailureResult,
   MCP_INTERNAL_ERROR_HINT,
+  nullAsAbsent,
   structuredErrorResult,
   toolDataResult,
   uuidInputSchema,
@@ -590,85 +591,87 @@ const playbookDetailTextFieldSpecs = (
 
 // --- list_clauses -------------------------------------------------------
 
-const listClausesArgsSchema = v.pipe(
-  v.strictObject({
-    clause_id: v.optional(
-      uuidInputSchema("Clause id to read in detail; omit to list"),
-    ),
-    version_id: v.optional(
-      uuidInputSchema(
-        "With clause_id, return this version's body instead of the current clause",
+const listClausesArgsSchema = nullAsAbsent(
+  v.pipe(
+    v.strictObject({
+      clause_id: v.optional(
+        uuidInputSchema("Clause id to read in detail; omit to list"),
       ),
-    ),
-    category_id: v.optional(
-      uuidInputSchema(
-        "List only clauses filed under this category (list mode)",
-      ),
-    ),
-    query: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.description(
-          "Filter clauses by a text query over title and body (list mode)",
+      version_id: v.optional(
+        uuidInputSchema(
+          "With clause_id, return this version's body instead of the current clause",
         ),
       ),
-    ),
-    include_categories: v.optional(
-      v.pipe(
-        v.boolean(),
-        v.description(
-          "Also return the organization's clause categories (list mode)",
+      category_id: v.optional(
+        uuidInputSchema(
+          "List only clauses filed under this category (list mode)",
         ),
       ),
-    ),
-    limit: v.optional(
-      v.pipe(
-        v.number(),
-        v.integer(),
-        v.minValue(1),
-        v.maxValue(LIMITS.clausesPageSizeMax),
-        v.description("Max clauses to return"),
-      ),
-    ),
-    cursor: v.optional(
-      v.pipe(
-        v.string(),
-        v.maxLength(512),
-        v.description(
-          "Opaque cursor from a previous list_clauses call to fetch the next page",
+      query: v.optional(
+        v.pipe(
+          v.string(),
+          v.minLength(1),
+          v.description(
+            "Filter clauses by a text query over title and body (list mode)",
+          ),
         ),
       ),
+      include_categories: v.optional(
+        v.pipe(
+          v.boolean(),
+          v.description(
+            "Also return the organization's clause categories (list mode)",
+          ),
+        ),
+      ),
+      limit: v.optional(
+        v.pipe(
+          v.number(),
+          v.integer(),
+          v.minValue(1),
+          v.maxValue(LIMITS.clausesPageSizeMax),
+          v.description("Max clauses to return"),
+        ),
+      ),
+      cursor: v.optional(
+        v.pipe(
+          v.string(),
+          v.maxLength(512),
+          v.description(
+            "Opaque cursor from a previous list_clauses call to fetch the next page",
+          ),
+        ),
+      ),
+    }),
+    // version_id selects one version of a specific clause, so it needs clause_id.
+    v.forward(
+      v.partialCheck(
+        [["clause_id"], ["version_id"]],
+        ({ clause_id, version_id }) =>
+          version_id === undefined || clause_id !== undefined,
+        "version_id requires clause_id",
+      ),
+      ["version_id"],
     ),
-  }),
-  // version_id selects one version of a specific clause, so it needs clause_id.
-  v.forward(
+    // The list-only filters have no meaning in detail mode (a single clause_id).
     v.partialCheck(
-      [["clause_id"], ["version_id"]],
-      ({ clause_id, version_id }) =>
-        version_id === undefined || clause_id !== undefined,
-      "version_id requires clause_id",
+      [
+        ["clause_id"],
+        ["category_id"],
+        ["query"],
+        ["include_categories"],
+        ["limit"],
+        ["cursor"],
+      ],
+      (i) =>
+        i.clause_id === undefined ||
+        (i.category_id === undefined &&
+          i.query === undefined &&
+          i.include_categories === undefined &&
+          i.limit === undefined &&
+          i.cursor === undefined),
+      "category_id, query, include_categories, limit, and cursor apply to list mode; drop clause_id to list",
     ),
-    ["version_id"],
-  ),
-  // The list-only filters have no meaning in detail mode (a single clause_id).
-  v.partialCheck(
-    [
-      ["clause_id"],
-      ["category_id"],
-      ["query"],
-      ["include_categories"],
-      ["limit"],
-      ["cursor"],
-    ],
-    (i) =>
-      i.clause_id === undefined ||
-      (i.category_id === undefined &&
-        i.query === undefined &&
-        i.include_categories === undefined &&
-        i.limit === undefined &&
-        i.cursor === undefined),
-    "category_id, query, include_categories, limit, and cursor apply to list mode; drop clause_id to list",
   ),
 );
 
@@ -1009,113 +1012,120 @@ const clauseBodyArgSchema = v.pipe(
   ),
 );
 
-const saveClauseArgsSchema = v.pipe(
-  v.strictObject({
-    clause_id: v.optional(
-      uuidInputSchema("Clause id to update; omit to create"),
-    ),
-    title: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.maxLength(256),
-        v.description("Clause title; required when creating"),
+const saveClauseArgsSchema = nullAsAbsent(
+  v.pipe(
+    v.strictObject({
+      clause_id: v.optional(
+        uuidInputSchema("Clause id to update; omit to create"),
       ),
-    ),
-    body: v.optional(clauseBodyArgSchema),
-    category_id: v.optional(
-      v.pipe(
-        v.nullable(v.pipe(v.string(), v.uuid())),
-        v.description(
-          "Category id to file the clause under; pass null to clear",
+      title: v.optional(
+        v.pipe(
+          v.string(),
+          v.minLength(1),
+          v.maxLength(256),
+          v.description("Clause title; required when creating"),
         ),
       ),
-    ),
-    language: v.optional(
-      v.pipe(
-        v.nullable(v.pipe(v.string(), v.minLength(1), v.maxLength(10))),
-        v.description("BCP-47 language tag for the clause; pass null to clear"),
-      ),
-    ),
-    description: v.optional(
-      v.pipe(
-        v.nullable(v.pipe(v.string(), v.maxLength(2000))),
-        v.description("Short clause description; pass null to clear"),
-      ),
-    ),
-    usage_notes: v.optional(
-      v.pipe(
-        v.nullable(v.pipe(v.string(), v.maxLength(2000))),
-        v.description("Guidance on when to use the clause; pass null to clear"),
-      ),
-    ),
-    metadata: v.optional(
-      v.pipe(
-        v.nullable(v.record(v.string(), v.unknown())),
-        v.description("Free-form metadata object; pass null to clear"),
-      ),
-    ),
-    snapshot_version: v.optional(
-      v.pipe(
-        v.boolean(),
-        v.description(
-          "When updating, also append a version snapshot of the body",
+      body: v.optional(clauseBodyArgSchema),
+      category_id: v.optional(
+        v.pipe(
+          v.nullable(v.pipe(v.string(), v.uuid())),
+          v.description(
+            "Category id to file the clause under; pass null to clear",
+          ),
         ),
       ),
-    ),
-  }),
-  // Creating (no clause_id) requires a title.
-  v.forward(
-    v.partialCheck(
-      [["clause_id"], ["title"]],
-      ({ clause_id, title }) => clause_id !== undefined || title !== undefined,
-      "title is required to create a clause",
-    ),
-    ["title"],
-  ),
-  // Creating (no clause_id) requires a body.
-  v.forward(
-    v.partialCheck(
-      [["clause_id"], ["body"]],
-      ({ clause_id, body }) => clause_id !== undefined || body !== undefined,
-      "body is required to create a clause",
-    ),
-    ["body"],
-  ),
-  // A version snapshot only makes sense for an existing clause.
-  v.forward(
-    v.partialCheck(
-      [["clause_id"], ["snapshot_version"]],
-      ({ clause_id, snapshot_version }) =>
-        clause_id !== undefined || snapshot_version === undefined,
-      "snapshot_version only applies when updating a clause",
-    ),
-    ["snapshot_version"],
-  ),
-  // An update must request at least one change.
-  v.partialCheck(
-    [
-      ["clause_id"],
+      language: v.optional(
+        v.pipe(
+          v.nullable(v.pipe(v.string(), v.minLength(1), v.maxLength(10))),
+          v.description(
+            "BCP-47 language tag for the clause; pass null to clear",
+          ),
+        ),
+      ),
+      description: v.optional(
+        v.pipe(
+          v.nullable(v.pipe(v.string(), v.maxLength(2000))),
+          v.description("Short clause description; pass null to clear"),
+        ),
+      ),
+      usage_notes: v.optional(
+        v.pipe(
+          v.nullable(v.pipe(v.string(), v.maxLength(2000))),
+          v.description(
+            "Guidance on when to use the clause; pass null to clear",
+          ),
+        ),
+      ),
+      metadata: v.optional(
+        v.pipe(
+          v.nullable(v.record(v.string(), v.unknown())),
+          v.description("Free-form metadata object; pass null to clear"),
+        ),
+      ),
+      snapshot_version: v.optional(
+        v.pipe(
+          v.boolean(),
+          v.description(
+            "When updating, also append a version snapshot of the body",
+          ),
+        ),
+      ),
+    }),
+    // Creating (no clause_id) requires a title.
+    v.forward(
+      v.partialCheck(
+        [["clause_id"], ["title"]],
+        ({ clause_id, title }) =>
+          clause_id !== undefined || title !== undefined,
+        "title is required to create a clause",
+      ),
       ["title"],
+    ),
+    // Creating (no clause_id) requires a body.
+    v.forward(
+      v.partialCheck(
+        [["clause_id"], ["body"]],
+        ({ clause_id, body }) => clause_id !== undefined || body !== undefined,
+        "body is required to create a clause",
+      ),
       ["body"],
-      ["category_id"],
-      ["language"],
-      ["description"],
-      ["usage_notes"],
-      ["metadata"],
+    ),
+    // A version snapshot only makes sense for an existing clause.
+    v.forward(
+      v.partialCheck(
+        [["clause_id"], ["snapshot_version"]],
+        ({ clause_id, snapshot_version }) =>
+          clause_id !== undefined || snapshot_version === undefined,
+        "snapshot_version only applies when updating a clause",
+      ),
       ["snapshot_version"],
-    ],
-    (i) =>
-      i.clause_id === undefined ||
-      i.title !== undefined ||
-      i.body !== undefined ||
-      i.category_id !== undefined ||
-      i.language !== undefined ||
-      i.description !== undefined ||
-      i.usage_notes !== undefined ||
-      i.metadata !== undefined ||
-      i.snapshot_version !== undefined,
-    "Provide at least one field to change",
+    ),
+    // An update must request at least one change.
+    v.partialCheck(
+      [
+        ["clause_id"],
+        ["title"],
+        ["body"],
+        ["category_id"],
+        ["language"],
+        ["description"],
+        ["usage_notes"],
+        ["metadata"],
+        ["snapshot_version"],
+      ],
+      (i) =>
+        i.clause_id === undefined ||
+        i.title !== undefined ||
+        i.body !== undefined ||
+        i.category_id !== undefined ||
+        i.language !== undefined ||
+        i.description !== undefined ||
+        i.usage_notes !== undefined ||
+        i.metadata !== undefined ||
+        i.snapshot_version !== undefined,
+      "Provide at least one field to change",
+    ),
   ),
 );
 
@@ -1239,18 +1249,20 @@ const handleSaveClauseTool: TypedMcpToolHandler<
 
 // --- delete_clause ------------------------------------------------------
 
-const deleteClauseArgsSchema = v.strictObject({
-  clause_id: uuidInputSchema("Clause id to delete"),
-  confirm: v.optional(
-    v.pipe(
-      v.boolean(),
-      v.description(
-        "Must be true to run this irreversible operation. Set it only after a " +
-          "human user has explicitly approved the deletion.",
+const deleteClauseArgsSchema = nullAsAbsent(
+  v.strictObject({
+    clause_id: uuidInputSchema("Clause id to delete"),
+    confirm: v.optional(
+      v.pipe(
+        v.boolean(),
+        v.description(
+          "Must be true to run this irreversible operation. Set it only after a " +
+            "human user has explicitly approved the deletion.",
+        ),
       ),
     ),
-  ),
-});
+  }),
+);
 
 const handleDeleteClauseTool: TypedMcpToolHandler<
   v.InferInput<typeof DELETED_TRUE_PROJECTION>
@@ -1282,37 +1294,41 @@ const handleDeleteClauseTool: TypedMcpToolHandler<
 
 // --- list_playbooks -----------------------------------------------------
 
-const listPlaybooksArgsSchema = v.pipe(
-  v.strictObject({
-    playbook_id: v.optional(
-      uuidInputSchema("Playbook id to read in detail; omit to list playbooks"),
-    ),
-    limit: v.optional(
-      v.pipe(
-        v.number(),
-        v.integer(),
-        v.minValue(1),
-        v.maxValue(LIMITS.playbookDefinitionsPageSizeMax),
-        v.description("Max playbooks to return"),
-      ),
-    ),
-    cursor: v.optional(
-      v.pipe(
-        v.string(),
-        v.maxLength(512),
-        v.description(
-          "Opaque cursor from a previous list_playbooks call to fetch the next page",
+const listPlaybooksArgsSchema = nullAsAbsent(
+  v.pipe(
+    v.strictObject({
+      playbook_id: v.optional(
+        uuidInputSchema(
+          "Playbook id to read in detail; omit to list playbooks",
         ),
       ),
+      limit: v.optional(
+        v.pipe(
+          v.number(),
+          v.integer(),
+          v.minValue(1),
+          v.maxValue(LIMITS.playbookDefinitionsPageSizeMax),
+          v.description("Max playbooks to return"),
+        ),
+      ),
+      cursor: v.optional(
+        v.pipe(
+          v.string(),
+          v.maxLength(512),
+          v.description(
+            "Opaque cursor from a previous list_playbooks call to fetch the next page",
+          ),
+        ),
+      ),
+    }),
+    // limit/cursor page the list; they have no meaning for a single playbook_id.
+    v.partialCheck(
+      [["playbook_id"], ["limit"], ["cursor"]],
+      (i) =>
+        i.playbook_id === undefined ||
+        (i.limit === undefined && i.cursor === undefined),
+      "limit and cursor apply to list mode; drop playbook_id to list",
     ),
-  }),
-  // limit/cursor page the list; they have no meaning for a single playbook_id.
-  v.partialCheck(
-    [["playbook_id"], ["limit"], ["cursor"]],
-    (i) =>
-      i.playbook_id === undefined ||
-      (i.limit === undefined && i.cursor === undefined),
-    "limit and cursor apply to list mode; drop playbook_id to list",
   ),
 );
 
@@ -1400,10 +1416,12 @@ const handleListPlaybooksTool: TypedMcpToolHandler<
 
 // --- run_playbook -------------------------------------------------------
 
-const runPlaybookArgsSchema = v.strictObject({
-  matter_id: uuidInputSchema("Matter ID to run the playbook over."),
-  playbook_id: uuidInputSchema("Playbook id to run"),
-});
+const runPlaybookArgsSchema = nullAsAbsent(
+  v.strictObject({
+    matter_id: uuidInputSchema("Matter ID to run the playbook over."),
+    playbook_id: uuidInputSchema("Playbook id to run"),
+  }),
+);
 
 /**
  * A review whose workflow never started. Retryable by construction: the

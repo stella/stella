@@ -91,15 +91,16 @@ import {
   ensureActiveWorkspace,
   ensureWorkspaceAccess,
   errorResult,
-  internalFailureResult,
   getWorkspaceStatus,
+  internalFailureResult,
   ISO_DATE_SCHEMA,
   MAX_LIST_LIMIT,
   notFoundResult,
+  nullAsAbsent,
   structuredErrorResult,
   toolDataResult,
-  validationErrorResult,
   uuidInputSchema,
+  validationErrorResult,
 } from "@/api/mcp/tool-utils";
 import { defineValibotMcpTool } from "@/api/mcp/valibot-tool-definition";
 
@@ -218,90 +219,98 @@ const TASK_DETAIL_TEXT_FIELD_PATHS = deriveTextFieldPaths(
 
 // --- save_matter --------------------------------------------------------
 
-const saveMatterArgsSchema = v.pipe(
-  v.strictObject({
-    matter_id: v.optional(
-      uuidInputSchema("Matter ID to update; omit to create a new matter"),
-    ),
-    name: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.maxLength(256),
-        v.description("Matter name; required when creating"),
+const saveMatterArgsSchema = nullAsAbsent(
+  v.pipe(
+    v.strictObject({
+      matter_id: v.optional(
+        uuidInputSchema("Matter ID to update; omit to create a new matter"),
       ),
-    ),
-    client_id: v.optional(
-      uuidInputSchema(
-        "Contact ID to attach in the client role. Only valid when creating a matter.",
-      ),
-    ),
-    reference: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.maxLength(64),
-        v.description(
-          "Matter reference (file number). Only valid when updating.",
+      name: v.optional(
+        v.pipe(
+          v.string(),
+          v.minLength(1),
+          v.maxLength(256),
+          v.description("Matter name; required when creating"),
         ),
       ),
-    ),
-    billing_reference: v.optional(
-      v.pipe(
-        v.nullable(v.pipe(v.string(), v.maxLength(128))),
-        v.description(
-          "Billing reference; pass null to clear. Only valid when updating.",
+      client_id: v.optional(
+        uuidInputSchema(
+          "Contact ID to attach in the client role. Only valid when creating a matter.",
         ),
       ),
-    ),
-    status: v.optional(
-      v.pipe(
-        v.picklist(MATTER_STATUSES),
-        v.description(
-          "Set 'archived' to archive the matter or 'active' to unarchive it. Only valid when updating.",
+      reference: v.optional(
+        v.pipe(
+          v.string(),
+          v.minLength(1),
+          v.maxLength(64),
+          v.description(
+            "Matter reference (file number). Only valid when updating.",
+          ),
         ),
       ),
+      billing_reference: v.optional(
+        v.pipe(
+          v.nullable(v.pipe(v.string(), v.maxLength(128))),
+          v.description(
+            "Billing reference; pass null to clear. Only valid when updating.",
+          ),
+        ),
+      ),
+      status: v.optional(
+        v.pipe(
+          v.picklist(MATTER_STATUSES),
+          v.description(
+            "Set 'archived' to archive the matter or 'active' to unarchive it. Only valid when updating.",
+          ),
+        ),
+      ),
+    }),
+    // Creating (no matter_id) requires a name.
+    v.forward(
+      v.partialCheck(
+        [["matter_id"], ["name"]],
+        ({ matter_id, name }) => matter_id !== undefined || name !== undefined,
+        "name is required to create a matter",
+      ),
+      ["name"],
     ),
-  }),
-  // Creating (no matter_id) requires a name.
-  v.forward(
+    // reference, billing_reference, status, and client_id apply to existing
+    // matters or to creation respectively; keep the two modes from mixing.
     v.partialCheck(
-      [["matter_id"], ["name"]],
-      ({ matter_id, name }) => matter_id !== undefined || name !== undefined,
-      "name is required to create a matter",
+      [["matter_id"], ["reference"], ["billing_reference"], ["status"]],
+      ({ matter_id, reference, billing_reference, status }) =>
+        matter_id !== undefined ||
+        (reference === undefined &&
+          billing_reference === undefined &&
+          status === undefined),
+      "reference, billing_reference, and status apply to an existing matter; pass matter_id",
     ),
-    ["name"],
-  ),
-  // reference, billing_reference, status, and client_id apply to existing
-  // matters or to creation respectively; keep the two modes from mixing.
-  v.partialCheck(
-    [["matter_id"], ["reference"], ["billing_reference"], ["status"]],
-    ({ matter_id, reference, billing_reference, status }) =>
-      matter_id !== undefined ||
-      (reference === undefined &&
-        billing_reference === undefined &&
-        status === undefined),
-    "reference, billing_reference, and status apply to an existing matter; pass matter_id",
-  ),
-  v.forward(
+    v.forward(
+      v.partialCheck(
+        [["matter_id"], ["client_id"]],
+        ({ matter_id, client_id }) =>
+          matter_id === undefined || client_id === undefined,
+        "client_id can only be set when creating a matter",
+      ),
+      ["client_id"],
+    ),
+    // An update must request at least one change.
     v.partialCheck(
-      [["matter_id"], ["client_id"]],
-      ({ matter_id, client_id }) =>
-        matter_id === undefined || client_id === undefined,
-      "client_id can only be set when creating a matter",
+      [
+        ["matter_id"],
+        ["name"],
+        ["reference"],
+        ["billing_reference"],
+        ["status"],
+      ],
+      ({ matter_id, name, reference, billing_reference, status }) =>
+        matter_id === undefined ||
+        name !== undefined ||
+        reference !== undefined ||
+        billing_reference !== undefined ||
+        status !== undefined,
+      "Provide at least one change: name, reference, billing_reference, or status",
     ),
-    ["client_id"],
-  ),
-  // An update must request at least one change.
-  v.partialCheck(
-    [["matter_id"], ["name"], ["reference"], ["billing_reference"], ["status"]],
-    ({ matter_id, name, reference, billing_reference, status }) =>
-      matter_id === undefined ||
-      name !== undefined ||
-      reference !== undefined ||
-      billing_reference !== undefined ||
-      status !== undefined,
-    "Provide at least one change: name, reference, billing_reference, or status",
   ),
 );
 
@@ -455,18 +464,20 @@ const handleSaveMatterTool: TypedMcpToolHandler<
 
 // --- delete_matter ------------------------------------------------------
 
-const deleteMatterArgsSchema = v.strictObject({
-  matter_id: uuidInputSchema("Matter ID to delete"),
-  confirm: v.optional(
-    v.pipe(
-      v.boolean(),
-      v.description(
-        "Must be true to run this irreversible operation. Set it only after a " +
-          "human user has explicitly approved the deletion.",
+const deleteMatterArgsSchema = nullAsAbsent(
+  v.strictObject({
+    matter_id: uuidInputSchema("Matter ID to delete"),
+    confirm: v.optional(
+      v.pipe(
+        v.boolean(),
+        v.description(
+          "Must be true to run this irreversible operation. Set it only after a " +
+            "human user has explicitly approved the deletion.",
+        ),
       ),
     ),
-  ),
-});
+  }),
+);
 
 const handleDeleteMatterTool: TypedMcpToolHandler<
   v.InferInput<typeof DELETED_TRUE_PROJECTION>
@@ -508,30 +519,32 @@ const handleDeleteMatterTool: TypedMcpToolHandler<
 
 // --- list_contacts ------------------------------------------------------
 
-const listContactsArgsSchema = v.strictObject({
-  q: v.optional(
-    v.pipe(
-      v.string(),
-      v.maxLength(512),
-      v.description("Search contact display names"),
+const listContactsArgsSchema = nullAsAbsent(
+  v.strictObject({
+    q: v.optional(
+      v.pipe(
+        v.string(),
+        v.maxLength(512),
+        v.description("Search contact display names"),
+      ),
     ),
-  ),
-  type: v.optional(
-    v.pipe(v.picklist(CONTACT_TYPES), v.description("Contact kind")),
-  ),
-  cursor: v.optional(
-    v.pipe(v.string(), v.description("Opaque cursor from the previous page")),
-  ),
-  limit: v.optional(
-    v.pipe(
-      v.number(),
-      v.integer(),
-      v.minValue(1),
-      v.maxValue(LIMITS.contactsPageSizeMax),
-      v.description("Maximum contacts to return"),
+    type: v.optional(
+      v.pipe(v.picklist(CONTACT_TYPES), v.description("Contact kind")),
     ),
-  ),
-});
+    cursor: v.optional(
+      v.pipe(v.string(), v.description("Opaque cursor from the previous page")),
+    ),
+    limit: v.optional(
+      v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(1),
+        v.maxValue(LIMITS.contactsPageSizeMax),
+        v.description("Maximum contacts to return"),
+      ),
+    ),
+  }),
+);
 
 const handleListContactsTool: TypedMcpToolHandler<
   v.InferInput<typeof LIST_CONTACTS_PROJECTION>
@@ -613,64 +626,83 @@ export const deriveContactDisplayName = ({
     : personName || organizationName;
 };
 
-const saveContactArgsSchema = v.pipe(
-  v.strictObject({
-    contact_id: v.optional(
-      uuidInputSchema("Contact ID to update; omit to create"),
-    ),
-    type: v.optional(
-      v.pipe(
-        v.picklist(CONTACT_TYPES),
-        v.description("Contact kind; required when creating"),
+const saveContactArgsSchema = nullAsAbsent(
+  v.pipe(
+    v.strictObject({
+      contact_id: v.optional(
+        uuidInputSchema("Contact ID to update; omit to create"),
       ),
-    ),
-    display_name: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.maxLength(512),
-        v.description(
-          "Display name; when creating it defaults to first + last name " +
-            "(person) or organization name (organization); non-empty when " +
-            "updating",
+      type: v.optional(
+        v.pipe(
+          v.picklist(CONTACT_TYPES),
+          v.description("Contact kind; required when creating"),
         ),
       ),
-    ),
-    first_name: v.optional(
-      v.pipe(
-        v.nullable(v.pipe(v.string(), v.maxLength(256))),
-        v.description("First name; pass null to clear"),
+      display_name: v.optional(
+        v.pipe(
+          v.string(),
+          v.minLength(1),
+          v.maxLength(512),
+          v.description(
+            "Display name; when creating it defaults to first + last name " +
+              "(person) or organization name (organization); non-empty when " +
+              "updating",
+          ),
+        ),
       ),
-    ),
-    last_name: v.optional(
-      v.pipe(
-        v.nullable(v.pipe(v.string(), v.maxLength(256))),
-        v.description("Last name; pass null to clear"),
+      first_name: v.optional(
+        v.pipe(
+          v.nullable(v.pipe(v.string(), v.maxLength(256))),
+          v.description("First name; pass null to clear"),
+        ),
       ),
-    ),
-    organization_name: v.optional(
-      v.pipe(
-        v.nullable(v.pipe(v.string(), v.maxLength(512))),
-        v.description("Organization name; pass null to clear"),
+      last_name: v.optional(
+        v.pipe(
+          v.nullable(v.pipe(v.string(), v.maxLength(256))),
+          v.description("Last name; pass null to clear"),
+        ),
       ),
-    ),
-    notes: v.optional(
-      v.pipe(
-        v.nullable(v.string()),
-        v.description("Free-text notes; pass null to clear"),
+      organization_name: v.optional(
+        v.pipe(
+          v.nullable(v.pipe(v.string(), v.maxLength(512))),
+          v.description("Organization name; pass null to clear"),
+        ),
       ),
+      notes: v.optional(
+        v.pipe(
+          v.nullable(v.string()),
+          v.description("Free-text notes; pass null to clear"),
+        ),
+      ),
+    }),
+    // Creating (no contact_id) requires type and a name to display.
+    v.forward(
+      v.partialCheck(
+        [["contact_id"], ["type"]],
+        ({ contact_id, type }) =>
+          contact_id !== undefined || type !== undefined,
+        "type is required to create a contact",
+      ),
+      ["type"],
     ),
-  }),
-  // Creating (no contact_id) requires type and a name to display.
-  v.forward(
-    v.partialCheck(
-      [["contact_id"], ["type"]],
-      ({ contact_id, type }) => contact_id !== undefined || type !== undefined,
-      "type is required to create a contact",
+    v.forward(
+      v.partialCheck(
+        [
+          ["contact_id"],
+          ["type"],
+          ["display_name"],
+          ["first_name"],
+          ["last_name"],
+          ["organization_name"],
+        ],
+        (input) =>
+          input.contact_id !== undefined ||
+          deriveContactDisplayName(input).length > 0,
+        "display_name is required to create a contact, or first_name/last_name (person) or organization_name (organization) to derive it from",
+      ),
+      ["display_name"],
     ),
-    ["type"],
-  ),
-  v.forward(
+    // An update must request at least one change.
     v.partialCheck(
       [
         ["contact_id"],
@@ -679,34 +711,18 @@ const saveContactArgsSchema = v.pipe(
         ["first_name"],
         ["last_name"],
         ["organization_name"],
+        ["notes"],
       ],
-      (input) =>
-        input.contact_id !== undefined ||
-        deriveContactDisplayName(input).length > 0,
-      "display_name is required to create a contact, or first_name/last_name (person) or organization_name (organization) to derive it from",
+      (i) =>
+        i.contact_id === undefined ||
+        i.type !== undefined ||
+        i.display_name !== undefined ||
+        i.first_name !== undefined ||
+        i.last_name !== undefined ||
+        i.organization_name !== undefined ||
+        i.notes !== undefined,
+      "Provide at least one field to change",
     ),
-    ["display_name"],
-  ),
-  // An update must request at least one change.
-  v.partialCheck(
-    [
-      ["contact_id"],
-      ["type"],
-      ["display_name"],
-      ["first_name"],
-      ["last_name"],
-      ["organization_name"],
-      ["notes"],
-    ],
-    (i) =>
-      i.contact_id === undefined ||
-      i.type !== undefined ||
-      i.display_name !== undefined ||
-      i.first_name !== undefined ||
-      i.last_name !== undefined ||
-      i.organization_name !== undefined ||
-      i.notes !== undefined,
-    "Provide at least one field to change",
   ),
 );
 
@@ -800,18 +816,20 @@ const handleSaveContactTool: TypedMcpToolHandler<
 
 // --- delete_contact -----------------------------------------------------
 
-const deleteContactArgsSchema = v.strictObject({
-  contact_id: uuidInputSchema("Contact ID to delete"),
-  confirm: v.optional(
-    v.pipe(
-      v.boolean(),
-      v.description(
-        "Must be true to run this irreversible operation. Set it only after a " +
-          "human user has explicitly approved the deletion.",
+const deleteContactArgsSchema = nullAsAbsent(
+  v.strictObject({
+    contact_id: uuidInputSchema("Contact ID to delete"),
+    confirm: v.optional(
+      v.pipe(
+        v.boolean(),
+        v.description(
+          "Must be true to run this irreversible operation. Set it only after a " +
+            "human user has explicitly approved the deletion.",
+        ),
       ),
     ),
-  ),
-});
+  }),
+);
 
 const handleDeleteContactTool: TypedMcpToolHandler<
   v.InferInput<typeof DELETED_TRUE_PROJECTION>
@@ -843,20 +861,22 @@ const handleDeleteContactTool: TypedMcpToolHandler<
 
 // --- lookup_business_registry -------------------------------------------
 
-const lookupBusinessRegistryArgsSchema = v.strictObject({
-  registry: v.pipe(
-    v.picklist(BUSINESS_REGISTRY_SLUGS),
-    v.description("Business register to query"),
-  ),
-  query: v.pipe(
-    v.string(),
-    v.minLength(1),
-    v.maxLength(256),
-    v.description(
-      "Canonical identifier (e.g. company number, VAT number) or company name",
+const lookupBusinessRegistryArgsSchema = nullAsAbsent(
+  v.strictObject({
+    registry: v.pipe(
+      v.picklist(BUSINESS_REGISTRY_SLUGS),
+      v.description("Business register to query"),
     ),
-  ),
-});
+    query: v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(256),
+      v.description(
+        "Canonical identifier (e.g. company number, VAT number) or company name",
+      ),
+    ),
+  }),
+);
 
 const handleLookupBusinessRegistryTool: TypedMcpToolHandler<
   v.InferInput<typeof LOOKUP_BUSINESS_REGISTRY_PROJECTION>
@@ -937,68 +957,70 @@ const resolveTaskWorkspace = async ({
   return { status: "ok", workspaceId: entity.workspaceId };
 };
 
-const listTasksArgsSchema = v.pipe(
-  v.strictObject({
-    matter_id: v.optional(
-      uuidInputSchema(
-        "Matter ID to list tasks in; required unless task_id is given.",
-      ),
-    ),
-    task_id: v.optional(uuidInputSchema("Task entity ID to read in detail")),
-    date_from: v.optional(
-      v.pipe(
-        ISO_DATE_SCHEMA,
-        v.maxLength(10),
-        v.description(
-          "List only tasks due on or after this ISO date (YYYY-MM-DD)",
+const listTasksArgsSchema = nullAsAbsent(
+  v.pipe(
+    v.strictObject({
+      matter_id: v.optional(
+        uuidInputSchema(
+          "Matter ID to list tasks in; required unless task_id is given.",
         ),
       ),
-    ),
-    date_to: v.optional(
-      v.pipe(
-        ISO_DATE_SCHEMA,
-        v.maxLength(10),
-        v.description(
-          "List only tasks due on or before this ISO date (YYYY-MM-DD)",
+      task_id: v.optional(uuidInputSchema("Task entity ID to read in detail")),
+      date_from: v.optional(
+        v.pipe(
+          ISO_DATE_SCHEMA,
+          v.maxLength(10),
+          v.description(
+            "List only tasks due on or after this ISO date (YYYY-MM-DD)",
+          ),
         ),
       ),
-    ),
-    status: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.maxLength(32),
-        v.description("List only tasks with this status"),
-      ),
-    ),
-    limit: v.optional(
-      v.pipe(
-        v.number(),
-        v.integer(),
-        v.minValue(1),
-        v.maxValue(MAX_LIST_LIMIT),
-        v.description("Max tasks to return"),
-      ),
-    ),
-    cursor: v.optional(
-      v.pipe(
-        v.string(),
-        v.maxLength(512),
-        v.description(
-          "Opaque cursor from a previous list_tasks call to fetch the next page",
+      date_to: v.optional(
+        v.pipe(
+          ISO_DATE_SCHEMA,
+          v.maxLength(10),
+          v.description(
+            "List only tasks due on or before this ISO date (YYYY-MM-DD)",
+          ),
         ),
       ),
+      status: v.optional(
+        v.pipe(
+          v.string(),
+          v.minLength(1),
+          v.maxLength(32),
+          v.description("List only tasks with this status"),
+        ),
+      ),
+      limit: v.optional(
+        v.pipe(
+          v.number(),
+          v.integer(),
+          v.minValue(1),
+          v.maxValue(MAX_LIST_LIMIT),
+          v.description("Max tasks to return"),
+        ),
+      ),
+      cursor: v.optional(
+        v.pipe(
+          v.string(),
+          v.maxLength(512),
+          v.description(
+            "Opaque cursor from a previous list_tasks call to fetch the next page",
+          ),
+        ),
+      ),
+    }),
+    // List mode needs a workspace to scope to; detail mode uses task_id alone.
+    v.forward(
+      v.partialCheck(
+        [["matter_id"], ["task_id"]],
+        ({ matter_id, task_id }) =>
+          task_id !== undefined || matter_id !== undefined,
+        "Provide matter_id to list tasks, or task_id to read one task",
+      ),
+      ["matter_id"],
     ),
-  }),
-  // List mode needs a workspace to scope to; detail mode uses task_id alone.
-  v.forward(
-    v.partialCheck(
-      [["matter_id"], ["task_id"]],
-      ({ matter_id, task_id }) =>
-        task_id !== undefined || matter_id !== undefined,
-      "Provide matter_id to list tasks, or task_id to read one task",
-    ),
-    ["matter_id"],
   ),
 );
 
@@ -1275,159 +1297,161 @@ const handleListTasksTool: TypedMcpToolHandler<
 
 // --- save_task ----------------------------------------------------------
 
-const saveTaskArgsSchema = v.pipe(
-  v.strictObject({
-    task_id: v.optional(
-      uuidInputSchema("Task entity ID to update; omit to create"),
-    ),
-    matter_id: v.optional(
-      uuidInputSchema(
-        "Matter ID to create the task in; required when creating.",
+const saveTaskArgsSchema = nullAsAbsent(
+  v.pipe(
+    v.strictObject({
+      task_id: v.optional(
+        uuidInputSchema("Task entity ID to update; omit to create"),
       ),
-    ),
-    name: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.maxLength(255),
-        v.description("Task name; required when creating"),
-      ),
-    ),
-    status: v.optional(
-      v.pipe(v.picklist(TASK_STATUSES), v.description("Task status")),
-    ),
-    priority: v.optional(
-      v.pipe(v.picklist(ENTITY_PRIORITIES), v.description("Task priority")),
-    ),
-    item_type: v.optional(
-      v.pipe(
-        v.picklist(LIST_ITEM_TYPES),
-        v.description("What the List item represents"),
-      ),
-    ),
-    list_id: v.optional(
-      uuidInputSchema("List ID to create the item in (creating only)"),
-    ),
-    list_section_id: v.optional(
-      uuidInputSchema(
-        "Section of list_id to create the item under (creating only)",
-      ),
-    ),
-    list_description: v.optional(
-      v.pipe(
-        v.nullable(v.pipe(v.string(), v.maxLength(10_000))),
-        v.description("List item description; pass null to clear"),
-      ),
-    ),
-    due_date: v.optional(
-      v.pipe(
-        v.nullable(v.pipe(ISO_DATE_SCHEMA, v.maxLength(10))),
-        v.description("Due date (ISO YYYY-MM-DD); pass null to clear"),
-      ),
-    ),
-    workflow_reason: v.optional(
-      v.pipe(
-        v.string(),
-        v.trim(),
-        v.minLength(1),
-        v.maxLength(1000),
-        v.description("Reason for a governed status or deadline change"),
-      ),
-    ),
-    add_assignee_user_id: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.description(
-          "User ID to assign to the task (must be a matter member)",
+      matter_id: v.optional(
+        uuidInputSchema(
+          "Matter ID to create the task in; required when creating.",
         ),
       ),
-    ),
-    remove_assignee_user_id: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.description("User ID to unassign from the task"),
+      name: v.optional(
+        v.pipe(
+          v.string(),
+          v.minLength(1),
+          v.maxLength(255),
+          v.description("Task name; required when creating"),
+        ),
       ),
-    ),
-    link_entity_id: v.optional(
-      uuidInputSchema(
-        "Entity ID to link to the task (document, folder, or another task)",
+      status: v.optional(
+        v.pipe(v.picklist(TASK_STATUSES), v.description("Task status")),
       ),
-    ),
-    unlink_link_id: v.optional(uuidInputSchema("Entity-link ID to remove")),
-  }),
-  // Creating (no task_id) requires matter_id and name.
-  v.forward(
-    v.partialCheck(
-      [["task_id"], ["matter_id"]],
-      ({ task_id, matter_id }) =>
-        task_id !== undefined || matter_id !== undefined,
-      "matter_id is required to create a task",
-    ),
-    ["matter_id"],
-  ),
-  v.forward(
-    v.partialCheck(
-      [["task_id"], ["name"]],
-      ({ task_id, name }) => task_id !== undefined || name !== undefined,
-      "name is required to create a task",
-    ),
-    ["name"],
-  ),
-  // Assignee/link operations and matter_id only apply to an existing task.
-  v.partialCheck(
-    [
-      ["task_id"],
-      ["add_assignee_user_id"],
-      ["remove_assignee_user_id"],
-      ["link_entity_id"],
-      ["unlink_link_id"],
+      priority: v.optional(
+        v.pipe(v.picklist(ENTITY_PRIORITIES), v.description("Task priority")),
+      ),
+      item_type: v.optional(
+        v.pipe(
+          v.picklist(LIST_ITEM_TYPES),
+          v.description("What the List item represents"),
+        ),
+      ),
+      list_id: v.optional(
+        uuidInputSchema("List ID to create the item in (creating only)"),
+      ),
+      list_section_id: v.optional(
+        uuidInputSchema(
+          "Section of list_id to create the item under (creating only)",
+        ),
+      ),
+      list_description: v.optional(
+        v.pipe(
+          v.nullable(v.pipe(v.string(), v.maxLength(10_000))),
+          v.description("List item description; pass null to clear"),
+        ),
+      ),
+      due_date: v.optional(
+        v.pipe(
+          v.nullable(v.pipe(ISO_DATE_SCHEMA, v.maxLength(10))),
+          v.description("Due date (ISO YYYY-MM-DD); pass null to clear"),
+        ),
+      ),
+      workflow_reason: v.optional(
+        v.pipe(
+          v.string(),
+          v.trim(),
+          v.minLength(1),
+          v.maxLength(1000),
+          v.description("Reason for a governed status or deadline change"),
+        ),
+      ),
+      add_assignee_user_id: v.optional(
+        v.pipe(
+          v.string(),
+          v.minLength(1),
+          v.description(
+            "User ID to assign to the task (must be a matter member)",
+          ),
+        ),
+      ),
+      remove_assignee_user_id: v.optional(
+        v.pipe(
+          v.string(),
+          v.minLength(1),
+          v.description("User ID to unassign from the task"),
+        ),
+      ),
+      link_entity_id: v.optional(
+        uuidInputSchema(
+          "Entity ID to link to the task (document, folder, or another task)",
+        ),
+      ),
+      unlink_link_id: v.optional(uuidInputSchema("Entity-link ID to remove")),
+    }),
+    // Creating (no task_id) requires matter_id and name.
+    v.forward(
+      v.partialCheck(
+        [["task_id"], ["matter_id"]],
+        ({ task_id, matter_id }) =>
+          task_id !== undefined || matter_id !== undefined,
+        "matter_id is required to create a task",
+      ),
       ["matter_id"],
-    ],
-    (i) =>
-      i.task_id !== undefined ||
-      (i.add_assignee_user_id === undefined &&
-        i.remove_assignee_user_id === undefined &&
-        i.link_entity_id === undefined &&
-        i.unlink_link_id === undefined),
-    "assignee and link changes require task_id (they apply to an existing task)",
-  ),
-  v.partialCheck(
-    [["task_id"], ["status"], ["due_date"], ["workflow_reason"]],
-    (i) =>
-      i.workflow_reason === undefined ||
-      (i.task_id !== undefined &&
-        (i.status !== undefined || i.due_date !== undefined)),
-    "workflow_reason only applies to status or due_date updates",
-  ),
-  // An update must request at least one action.
-  v.partialCheck(
-    [
-      ["task_id"],
+    ),
+    v.forward(
+      v.partialCheck(
+        [["task_id"], ["name"]],
+        ({ task_id, name }) => task_id !== undefined || name !== undefined,
+        "name is required to create a task",
+      ),
       ["name"],
-      ["status"],
-      ["priority"],
-      ["item_type"],
-      ["due_date"],
-      ["workflow_reason"],
-      ["add_assignee_user_id"],
-      ["remove_assignee_user_id"],
-      ["link_entity_id"],
-      ["unlink_link_id"],
-    ],
-    (i) =>
-      i.task_id === undefined ||
-      i.name !== undefined ||
-      i.status !== undefined ||
-      i.priority !== undefined ||
-      i.item_type !== undefined ||
-      i.due_date !== undefined ||
-      i.add_assignee_user_id !== undefined ||
-      i.remove_assignee_user_id !== undefined ||
-      i.link_entity_id !== undefined ||
-      i.unlink_link_id !== undefined,
-    "Provide at least one change to the task",
+    ),
+    // Assignee/link operations and matter_id only apply to an existing task.
+    v.partialCheck(
+      [
+        ["task_id"],
+        ["add_assignee_user_id"],
+        ["remove_assignee_user_id"],
+        ["link_entity_id"],
+        ["unlink_link_id"],
+        ["matter_id"],
+      ],
+      (i) =>
+        i.task_id !== undefined ||
+        (i.add_assignee_user_id === undefined &&
+          i.remove_assignee_user_id === undefined &&
+          i.link_entity_id === undefined &&
+          i.unlink_link_id === undefined),
+      "assignee and link changes require task_id (they apply to an existing task)",
+    ),
+    v.partialCheck(
+      [["task_id"], ["status"], ["due_date"], ["workflow_reason"]],
+      (i) =>
+        i.workflow_reason === undefined ||
+        (i.task_id !== undefined &&
+          (i.status !== undefined || i.due_date !== undefined)),
+      "workflow_reason only applies to status or due_date updates",
+    ),
+    // An update must request at least one action.
+    v.partialCheck(
+      [
+        ["task_id"],
+        ["name"],
+        ["status"],
+        ["priority"],
+        ["item_type"],
+        ["due_date"],
+        ["workflow_reason"],
+        ["add_assignee_user_id"],
+        ["remove_assignee_user_id"],
+        ["link_entity_id"],
+        ["unlink_link_id"],
+      ],
+      (i) =>
+        i.task_id === undefined ||
+        i.name !== undefined ||
+        i.status !== undefined ||
+        i.priority !== undefined ||
+        i.item_type !== undefined ||
+        i.due_date !== undefined ||
+        i.add_assignee_user_id !== undefined ||
+        i.remove_assignee_user_id !== undefined ||
+        i.link_entity_id !== undefined ||
+        i.unlink_link_id !== undefined,
+      "Provide at least one change to the task",
+    ),
   ),
 );
 
@@ -1826,18 +1850,20 @@ const handleSaveTaskTool: TypedMcpToolHandler<
 
 // --- delete_task --------------------------------------------------------
 
-const deleteTaskArgsSchema = v.strictObject({
-  task_id: uuidInputSchema("Task entity ID to delete"),
-  confirm: v.optional(
-    v.pipe(
-      v.boolean(),
-      v.description(
-        "Must be true to run this irreversible operation. Set it only after a " +
-          "human user has explicitly approved the deletion.",
+const deleteTaskArgsSchema = nullAsAbsent(
+  v.strictObject({
+    task_id: uuidInputSchema("Task entity ID to delete"),
+    confirm: v.optional(
+      v.pipe(
+        v.boolean(),
+        v.description(
+          "Must be true to run this irreversible operation. Set it only after a " +
+            "human user has explicitly approved the deletion.",
+        ),
       ),
     ),
-  ),
-});
+  }),
+);
 
 const handleDeleteTaskTool: TypedMcpToolHandler<
   v.InferInput<typeof DELETED_TRUE_PROJECTION>
@@ -1882,45 +1908,48 @@ const handleDeleteTaskTool: TypedMcpToolHandler<
 
 // --- link_matter_contact ------------------------------------------------
 
-const linkMatterContactArgsSchema = v.pipe(
-  v.strictObject({
-    matter_id: uuidInputSchema("Matter ID"),
-    contact_id: v.optional(
-      uuidInputSchema(
-        "Contact ID: with role to link the contact, or alone to unlink it " +
-          "from the matter",
-      ),
-    ),
-    role: v.optional(
-      v.pipe(
-        v.picklist(WORKSPACE_CONTACT_ROLES),
-        v.description(
-          "Party role for the linked contact; provide it only when linking",
+const linkMatterContactArgsSchema = nullAsAbsent(
+  v.pipe(
+    v.strictObject({
+      matter_id: uuidInputSchema("Matter ID"),
+      contact_id: v.optional(
+        uuidInputSchema(
+          "Contact ID: with role to link the contact, or alone to unlink it " +
+            "from the matter",
         ),
       ),
-    ),
-    matter_contact_id: v.optional(
-      uuidInputSchema(
-        "Existing matter-contact link ID to remove, from list_matters",
+      role: v.optional(
+        v.pipe(
+          v.picklist(WORKSPACE_CONTACT_ROLES),
+          v.description(
+            "Party role for the linked contact; provide it only when linking",
+          ),
+        ),
       ),
-    ),
-  }),
-  // Exactly one target selector: contact_id (link with role, or unlink the
-  // contact) or matter_contact_id (unlink one specific link).
-  v.partialCheck(
-    [["contact_id"], ["matter_contact_id"]],
-    ({ contact_id, matter_contact_id }) =>
-      (contact_id === undefined) !== (matter_contact_id === undefined),
-    "Provide exactly one of contact_id or matter_contact_id",
-  ),
-  // role selects the link operation, so it only pairs with contact_id.
-  v.forward(
+      matter_contact_id: v.optional(
+        uuidInputSchema(
+          "Existing matter-contact link ID to remove, from list_matters",
+        ),
+      ),
+    }),
+    // Exactly one target selector: contact_id (link with role, or unlink the
+    // contact) or matter_contact_id (unlink one specific link).
     v.partialCheck(
-      [["contact_id"], ["role"]],
-      ({ contact_id, role }) => role === undefined || contact_id !== undefined,
-      "role only applies when linking a contact by contact_id",
+      [["contact_id"], ["matter_contact_id"]],
+      ({ contact_id, matter_contact_id }) =>
+        (contact_id === undefined) !== (matter_contact_id === undefined),
+      "Provide exactly one of contact_id or matter_contact_id",
     ),
-    ["role"],
+    // role selects the link operation, so it only pairs with contact_id.
+    v.forward(
+      v.partialCheck(
+        [["contact_id"], ["role"]],
+        ({ contact_id, role }) =>
+          role === undefined || contact_id !== undefined,
+        "role only applies when linking a contact by contact_id",
+      ),
+      ["role"],
+    ),
   ),
 );
 

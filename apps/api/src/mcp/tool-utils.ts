@@ -16,6 +16,7 @@ import {
   decodePaginationCursor,
   encodePaginationCursor,
 } from "@/api/lib/pagination";
+import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { getAccessibleWorkspaceId } from "@/api/mcp/context";
 import type { McpErrorCode, McpValidationIssue } from "@/api/mcp/error-codes";
@@ -77,6 +78,144 @@ export const featureDisabledHint = (feature: string | undefined): string =>
  */
 export const uuidInputSchema = (description: string) =>
   v.pipe(v.string(), v.uuid(), v.description(description));
+
+/**
+ * An MCP tool's declared input: `v.strictObject(...)`, or a pipe over one.
+ * `entries` names every property the surface declares.
+ */
+type ToolObjectInputSchema = v.GenericSchema & {
+  readonly entries: v.ObjectEntries;
+};
+
+/**
+ * What a handler parses: the declared object with a strict client's nulls
+ * already dropped. The declared object stays reachable as `advertisedSchema`
+ * because JSON Schema projection reads a pipe's first schema, which here is
+ * the `unknown` root the transform needs.
+ */
+export type NullAsAbsentInputSchema = v.GenericSchema & {
+  readonly advertisedSchema: ToolObjectInputSchema;
+};
+
+/** One object or array level of a declared input, as far as null-dropping
+ * cares: which properties carry null as absence, and where to recurse. */
+type NullAsAbsentPlan =
+  | {
+      readonly kind: "object";
+      readonly absentWhenNull: ReadonlySet<string>;
+      readonly properties: ReadonlyMap<string, NullAsAbsentPlan>;
+    }
+  | { readonly kind: "array"; readonly item: NullAsAbsentPlan };
+
+const isObjectSchema = (
+  schema: unknown,
+): schema is { entries: Record<string, v.GenericSchema> } =>
+  isRecord(schema) && isRecord(schema["entries"]);
+
+const isArraySchema = (schema: unknown): schema is { item: v.GenericSchema } =>
+  isRecord(schema) && isRecord(schema["item"]);
+
+/** Strip `optional`/`nullable`/... wrappers and pipes down to the schema that
+ * declares the shape. */
+const declaredShapeOf = (schema: unknown): unknown => {
+  if (!isRecord(schema)) {
+    return schema;
+  }
+  const pipe = schema["pipe"];
+  if (isUnknownArray(pipe) && pipe.length > 0) {
+    return declaredShapeOf(pipe[0]);
+  }
+  const wrapped = schema["wrapped"];
+  return wrapped === undefined ? schema : declaredShapeOf(wrapped);
+};
+
+/**
+ * A property that accepts an omitted value but rejects an explicit null:
+ * exactly the properties where a client's null can only mean absence. A
+ * required property still fails on null, and one that accepts null keeps it.
+ */
+const isAbsentWhenNull = (schema: v.GenericSchema): boolean =>
+  v.safeParse(schema, undefined).success && !v.safeParse(schema, null).success;
+
+const nullAsAbsentPlan = (schema: unknown): NullAsAbsentPlan | undefined => {
+  const declared = declaredShapeOf(schema);
+  if (isObjectSchema(declared)) {
+    const absentWhenNull = new Set<string>();
+    const properties = new Map<string, NullAsAbsentPlan>();
+    for (const [key, property] of Object.entries(declared.entries)) {
+      if (isAbsentWhenNull(property)) {
+        absentWhenNull.add(key);
+      }
+      const nested = nullAsAbsentPlan(property);
+      if (nested !== undefined) {
+        properties.set(key, nested);
+      }
+    }
+    return { kind: "object", absentWhenNull, properties };
+  }
+  if (!isArraySchema(declared)) {
+    return undefined;
+  }
+  const item = nullAsAbsentPlan(declared.item);
+  return item === undefined ? undefined : { kind: "array", item };
+};
+
+const applyNullAsAbsent = (value: unknown, plan: NullAsAbsentPlan): unknown => {
+  switch (plan.kind) {
+    case "array":
+      return isUnknownArray(value)
+        ? value.map((entry) => applyNullAsAbsent(entry, plan.item))
+        : value;
+    case "object": {
+      if (!isRecord(value)) {
+        return value;
+      }
+      const normalized: Record<string, unknown> = {};
+      for (const [key, entry] of Object.entries(value)) {
+        if (entry === null && plan.absentWhenNull.has(key)) {
+          continue;
+        }
+        const nested = plan.properties.get(key);
+        normalized[key] =
+          nested === undefined ? entry : applyNullAsAbsent(entry, nested);
+      }
+      return normalized;
+    }
+    default:
+      return panic(`Unhandled null-as-absent plan: ${JSON.stringify(plan)}`);
+  }
+};
+
+/**
+ * Read a tool's input with `null` meaning absence, at every object level the
+ * schema declares.
+ *
+ * A strict tool-schema client must send every declared property, so it sends
+ * `null` for the ones it is not setting. Null is not a value on this surface:
+ * `ai_prompt: null` reads as an AI-drafted field and collides with every other
+ * derived source, `name: null` as a rename. Normalizing inside one handler
+ * leaves every other consumer of the schema (evals, tests, the capability
+ * catalog) with the raw contract, so the schema owns it instead.
+ *
+ * Only properties the schema itself declares as optional-and-null-rejecting
+ * are dropped, so a required property set to null and a null under a
+ * misspelled key both still fail strict validation.
+ */
+export const nullAsAbsent = <TSchema extends ToolObjectInputSchema>(
+  advertisedSchema: TSchema,
+) => {
+  const plan =
+    nullAsAbsentPlan(advertisedSchema) ??
+    panic("A tool input schema must declare object properties");
+  return Object.assign(
+    v.pipe(
+      v.unknown(),
+      v.transform((value: unknown) => applyNullAsAbsent(value, plan)),
+      advertisedSchema,
+    ),
+    { advertisedSchema },
+  );
+};
 
 type LocalToolExecutionOptions = {
   messages: [];
@@ -567,6 +706,15 @@ export const parseRequiredString = (
   return value;
 };
 
+/**
+ * Absence as a tool argument: omitted, or the `null` a strict tool-schema
+ * client sends for a declared property it is not setting. The schemas express
+ * the same rule through {@link nullAsAbsent}; these readers predate it and
+ * still parse raw arguments.
+ */
+const isAbsentArgument = (value: unknown): boolean =>
+  value === undefined || value === null;
+
 export const parseOptionalEnum = <TValues extends readonly string[]>({
   args,
   defaultValue,
@@ -579,7 +727,7 @@ export const parseOptionalEnum = <TValues extends readonly string[]>({
   values: TValues;
 }): TValues[number] | InternalToolErrorResult => {
   const value = args[key];
-  if (value === undefined) {
+  if (isAbsentArgument(value)) {
     return defaultValue;
   }
   if (typeof value !== "string" || !values.includes(value)) {
@@ -604,7 +752,7 @@ export const parseOptionalLimit = ({
   max: number;
 }): number | InternalToolErrorResult => {
   const value = args[key];
-  if (value === undefined) {
+  if (isAbsentArgument(value)) {
     return defaultValue;
   }
   if (
@@ -641,7 +789,7 @@ export const parseOptionalCursor = ({
   key: string;
 }): string | undefined | InternalToolErrorResult => {
   const value = args[key];
-  if (value === undefined) {
+  if (isAbsentArgument(value)) {
     return undefined;
   }
   if (typeof value !== "string" || value.length === 0) {

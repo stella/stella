@@ -2,29 +2,36 @@ import { describe, expect, test } from "bun:test";
 import { expectTypeOf } from "expect-type";
 import * as v from "valibot";
 
+import { nullAsAbsent } from "@/api/mcp/tool-utils";
 import { defineValibotMcpTool } from "@/api/mcp/valibot-tool-definition";
 
 describe("Valibot-backed MCP tool definitions", () => {
   test("derives the wire schema from the handler's strict runtime schema", () => {
-    const inputSchema = v.strictObject({
-      from: v.pipe(
-        v.string(),
-        v.isoTimestamp(),
-        v.description("Inclusive ISO timestamp"),
-      ),
-      limit: v.optional(
-        v.pipe(
-          v.number(),
-          v.integer(),
-          v.minValue(1),
-          v.maxValue(100),
-          v.description("Maximum rows"),
+    const inputSchema = nullAsAbsent(
+      v.strictObject({
+        from: v.pipe(
+          v.string(),
+          v.isoTimestamp(),
+          v.description("Inclusive ISO timestamp"),
         ),
-      ),
-      score: v.optional(
-        v.pipe(v.number(), v.finite(), v.description("Finite relevance score")),
-      ),
-    });
+        limit: v.optional(
+          v.pipe(
+            v.number(),
+            v.integer(),
+            v.minValue(1),
+            v.maxValue(100),
+            v.description("Maximum rows"),
+          ),
+        ),
+        score: v.optional(
+          v.pipe(
+            v.number(),
+            v.finite(),
+            v.description("Finite relevance score"),
+          ),
+        ),
+      }),
+    );
     const definition = defineValibotMcpTool({
       access: "read",
       annotations: { title: "Read example", readOnlyHint: true },
@@ -94,12 +101,14 @@ describe("Valibot-backed MCP tool definitions", () => {
       annotations: { title: "Set example", readOnlyHint: false },
       anonymized: { exposure: "excluded", reason: "write" },
       description: "Set an example.",
-      inputSchema: v.strictObject({
-        content: v.variant("type", [
-          v.strictObject({ type: v.literal("text"), value: v.string() }),
-          v.strictObject({ type: v.literal("count"), value: v.number() }),
-        ]),
-      }),
+      inputSchema: nullAsAbsent(
+        v.strictObject({
+          content: v.variant("type", [
+            v.strictObject({ type: v.literal("text"), value: v.string() }),
+            v.strictObject({ type: v.literal("count"), value: v.number() }),
+          ]),
+        }),
+      ),
       name: "set_example",
       scope: "stella:documents_write",
     });
@@ -138,9 +147,11 @@ describe("Valibot-backed MCP tool definitions", () => {
         annotations: { title: "Read example", readOnlyHint: true },
         anonymized: { exposure: "passthrough" },
         description: "Read an example.",
-        inputSchema: v.strictObject({
-          score: v.pipe(v.number(), v.finite()),
-        }),
+        inputSchema: nullAsAbsent(
+          v.strictObject({
+            score: v.pipe(v.number(), v.finite()),
+          }),
+        ),
         name: "read_example",
         scope: "stella:read",
       }),
@@ -154,7 +165,7 @@ describe("Valibot-backed MCP tool definitions", () => {
         annotations: { title: "Read example", readOnlyHint: true },
         anonymized: { exposure: "passthrough" },
         description: "Read an example.",
-        inputSchema: v.looseObject({ query: v.string() }),
+        inputSchema: nullAsAbsent(v.looseObject({ query: v.string() })),
         name: "read_example",
         scope: "stella:read",
       }),

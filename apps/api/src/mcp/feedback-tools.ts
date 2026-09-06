@@ -7,7 +7,11 @@ import type {
   McpToolHandler,
 } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
-import { toolDataResult, validationErrorResult } from "@/api/mcp/tool-utils";
+import {
+  nullAsAbsent,
+  toolDataResult,
+  validationErrorResult,
+} from "@/api/mcp/tool-utils";
 import { defineValibotMcpTool } from "@/api/mcp/valibot-tool-definition";
 
 const FEEDBACK_KINDS = ["bug", "feature_request", "docs", "other"] as const;
@@ -30,41 +34,43 @@ const GITHUB_BODY_TRUNCATION_MARKER =
 const HIGH_SURROGATE_START = 55_296;
 const HIGH_SURROGATE_END = 56_319;
 
-const feedbackArgsSchema = v.strictObject({
-  kind: v.pipe(
-    v.picklist(FEEDBACK_KINDS),
-    v.description("Feedback category: bug, feature_request, docs, or other"),
-  ),
-  title: v.pipe(
-    v.string(),
-    v.trim(),
-    v.minLength(1),
-    v.maxLength(MAX_FEEDBACK_TITLE_CHARS),
-    v.description(
-      "Short one-line summary of the issue; no tenant data, ids, or secrets",
+const feedbackArgsSchema = nullAsAbsent(
+  v.strictObject({
+    kind: v.pipe(
+      v.picklist(FEEDBACK_KINDS),
+      v.description("Feedback category: bug, feature_request, docs, or other"),
     ),
-  ),
-  body: v.pipe(
-    v.string(),
-    v.minLength(1),
-    v.maxLength(MAX_FEEDBACK_BODY_CHARS),
-    v.description(
-      "Markdown details: reproduction steps, expected vs actual behavior, " +
-        "environment. Never include tenant data, client or matter names, " +
-        "ids, or secrets; they are redacted server-side.",
-    ),
-  ),
-  channel: v.optional(
-    v.pipe(
-      v.picklist(FEEDBACK_CHANNELS),
+    title: v.pipe(
+      v.string(),
+      v.trim(),
+      v.minLength(1),
+      v.maxLength(MAX_FEEDBACK_TITLE_CHARS),
       v.description(
-        "Delivery channel. github returns a prefilled issue URL the human " +
-          "submits under their own GitHub account.",
+        "Short one-line summary of the issue; no tenant data, ids, or secrets",
       ),
     ),
-    "github",
-  ),
-});
+    body: v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(MAX_FEEDBACK_BODY_CHARS),
+      v.description(
+        "Markdown details: reproduction steps, expected vs actual behavior, " +
+          "environment. Never include tenant data, client or matter names, " +
+          "ids, or secrets; they are redacted server-side.",
+      ),
+    ),
+    channel: v.optional(
+      v.pipe(
+        v.picklist(FEEDBACK_CHANNELS),
+        v.description(
+          "Delivery channel. github returns a prefilled issue URL the human " +
+            "submits under their own GitHub account.",
+        ),
+      ),
+      "github",
+    ),
+  }),
+);
 
 export const FEEDBACK_TOOL_DEFINITIONS = [
   defineValibotMcpTool({

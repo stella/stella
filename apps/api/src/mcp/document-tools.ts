@@ -100,10 +100,11 @@ import {
   isToolErrorResult,
   MAX_LIST_LIMIT,
   notFoundResult,
+  nullAsAbsent,
   structuredErrorResult,
   toolDataResult,
-  validationErrorResult,
   uuidInputSchema,
+  validationErrorResult,
 } from "@/api/mcp/tool-utils";
 import { defineValibotMcpTool } from "@/api/mcp/valibot-tool-definition";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
@@ -608,57 +609,59 @@ const decodeEntityPageCursor = (
   return { createdAt, id: brandPersistedEntityId(id) };
 };
 
-const listDocumentsArgsSchema = v.pipe(
-  v.strictObject({
-    matter_id: uuidInputSchema("Matter ID to list documents in."),
-    mode: v.optional(
-      v.pipe(
-        v.picklist(["flat", "children"]),
-        v.description(
-          "'flat' lists every document and folder in the matter; 'children' " +
-            "lists only the direct children of parent_id (or the matter " +
-            "root when parent_id is omitted). Defaults to 'flat', or 'children' when " +
-            "parent_id is provided. Passing parent_id with mode 'flat' is " +
-            "rejected.",
+const listDocumentsArgsSchema = nullAsAbsent(
+  v.pipe(
+    v.strictObject({
+      matter_id: uuidInputSchema("Matter ID to list documents in."),
+      mode: v.optional(
+        v.pipe(
+          v.picklist(["flat", "children"]),
+          v.description(
+            "'flat' lists every document and folder in the matter; 'children' " +
+              "lists only the direct children of parent_id (or the matter " +
+              "root when parent_id is omitted). Defaults to 'flat', or 'children' when " +
+              "parent_id is provided. Passing parent_id with mode 'flat' is " +
+              "rejected.",
+          ),
         ),
       ),
-    ),
-    parent_id: v.optional(
-      uuidInputSchema(
-        "Folder entity ID whose direct children to list. Only valid in " +
-          "children mode; supplying it selects children mode when mode is " +
-          "omitted and is rejected together with mode 'flat'.",
-      ),
-    ),
-    limit: v.optional(
-      v.pipe(
-        v.number(),
-        v.integer(),
-        v.minValue(1),
-        v.maxValue(MAX_LIST_LIMIT),
-        v.description("Max entities to return"),
-      ),
-    ),
-    cursor: v.optional(
-      v.pipe(
-        v.string(),
-        v.maxLength(512),
-        v.description(
-          "Opaque cursor from a previous list_documents call to fetch the next page",
+      parent_id: v.optional(
+        uuidInputSchema(
+          "Folder entity ID whose direct children to list. Only valid in " +
+            "children mode; supplying it selects children mode when mode is " +
+            "omitted and is rejected together with mode 'flat'.",
         ),
       ),
+      limit: v.optional(
+        v.pipe(
+          v.number(),
+          v.integer(),
+          v.minValue(1),
+          v.maxValue(MAX_LIST_LIMIT),
+          v.description("Max entities to return"),
+        ),
+      ),
+      cursor: v.optional(
+        v.pipe(
+          v.string(),
+          v.maxLength(512),
+          v.description(
+            "Opaque cursor from a previous list_documents call to fetch the next page",
+          ),
+        ),
+      ),
+    }),
+    // parent_id scopes to a folder's children, so it is meaningless in flat mode
+    // (which enumerates the whole matter). Reject the explicit contradiction; an
+    // omitted mode with parent_id resolves to children (see handler default).
+    v.forward(
+      v.partialCheck(
+        [["mode"], ["parent_id"]],
+        ({ mode, parent_id }) => mode !== "flat" || parent_id === undefined,
+        "parent_id requires mode 'children'",
+      ),
+      ["parent_id"],
     ),
-  }),
-  // parent_id scopes to a folder's children, so it is meaningless in flat mode
-  // (which enumerates the whole matter). Reject the explicit contradiction; an
-  // omitted mode with parent_id resolves to children (see handler default).
-  v.forward(
-    v.partialCheck(
-      [["mode"], ["parent_id"]],
-      ({ mode, parent_id }) => mode !== "flat" || parent_id === undefined,
-      "parent_id requires mode 'children'",
-    ),
-    ["parent_id"],
   ),
 );
 
@@ -792,45 +795,47 @@ const decodeVersionsPageCursor = (
   return { versionNumber, id: brandPersistedEntityVersionId(id) };
 };
 
-const readDocumentArgsSchema = v.pipe(
-  v.strictObject({
-    entity_id: uuidInputSchema("Document entity ID"),
-    version_id: v.optional(
-      uuidInputSchema(
-        "Return this version's metadata and field values instead of the current version",
-      ),
-    ),
-    compare_with_version_id: v.optional(
-      uuidInputSchema(
-        "With version_id, return a plain-text line diff of this version (base) against version_id (target)",
-      ),
-    ),
-    include_versions: v.optional(
-      v.pipe(
-        v.boolean(),
-        v.description("Also return the document's version history"),
-      ),
-    ),
-    versions_cursor: v.optional(
-      v.pipe(
-        v.string(),
-        v.maxLength(512),
-        v.description(
-          "Cursor from a previous call for the next page of version history",
+const readDocumentArgsSchema = nullAsAbsent(
+  v.pipe(
+    v.strictObject({
+      entity_id: uuidInputSchema("Document entity ID"),
+      version_id: v.optional(
+        uuidInputSchema(
+          "Return this version's metadata and field values instead of the current version",
         ),
       ),
+      compare_with_version_id: v.optional(
+        uuidInputSchema(
+          "With version_id, return a plain-text line diff of this version (base) against version_id (target)",
+        ),
+      ),
+      include_versions: v.optional(
+        v.pipe(
+          v.boolean(),
+          v.description("Also return the document's version history"),
+        ),
+      ),
+      versions_cursor: v.optional(
+        v.pipe(
+          v.string(),
+          v.maxLength(512),
+          v.description(
+            "Cursor from a previous call for the next page of version history",
+          ),
+        ),
+      ),
+    }),
+    // A diff needs both endpoints: compare_with_version_id (base) is only
+    // meaningful alongside version_id (target).
+    v.forward(
+      v.partialCheck(
+        [["version_id"], ["compare_with_version_id"]],
+        ({ version_id, compare_with_version_id }) =>
+          compare_with_version_id === undefined || version_id !== undefined,
+        "compare_with_version_id requires version_id (the target version)",
+      ),
+      ["compare_with_version_id"],
     ),
-  }),
-  // A diff needs both endpoints: compare_with_version_id (base) is only
-  // meaningful alongside version_id (target).
-  v.forward(
-    v.partialCheck(
-      [["version_id"], ["compare_with_version_id"]],
-      ({ version_id, compare_with_version_id }) =>
-        compare_with_version_id === undefined || version_id !== undefined,
-      "compare_with_version_id requires version_id (the target version)",
-    ),
-    ["compare_with_version_id"],
   ),
 );
 
@@ -1571,171 +1576,173 @@ const handleReadDocumentTool: TypedMcpToolHandler<
   return { egress: "structured", payload, textFields };
 };
 
-const saveDocumentArgsSchema = v.pipe(
-  v.strictObject({
-    entity_id: v.optional(
-      uuidInputSchema("Document entity ID to update; omit to create"),
-    ),
-    matter_id: v.optional(
-      uuidInputSchema(
-        "Matter ID to create the entity in; required when creating.",
+const saveDocumentArgsSchema = nullAsAbsent(
+  v.pipe(
+    v.strictObject({
+      entity_id: v.optional(
+        uuidInputSchema("Document entity ID to update; omit to create"),
       ),
-    ),
-    name: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.maxLength(LIMITS.entityNameMaxLength),
-        v.description(
-          "Display name: required when creating, or the new name when renaming",
+      matter_id: v.optional(
+        uuidInputSchema(
+          "Matter ID to create the entity in; required when creating.",
         ),
       ),
-    ),
-    parent_id: v.optional(
-      uuidInputSchema(
-        "Folder entity ID: to place the new entity inside when creating, or to " +
-          "move the document into when updating",
-      ),
-    ),
-    kind: v.optional(
-      v.pipe(
-        v.picklist(["document", "folder"]),
-        v.description(
-          "Entity kind to create; defaults to 'document'. Only valid when creating.",
+      name: v.optional(
+        v.pipe(
+          v.string(),
+          v.minLength(1),
+          v.maxLength(LIMITS.entityNameMaxLength),
+          v.description(
+            "Display name: required when creating, or the new name when renaming",
+          ),
         ),
       ),
-    ),
-    move_to_root: v.optional(
-      v.pipe(
-        v.boolean(),
-        v.description(
-          "Move the document to the matter root (no parent folder). Only valid when updating.",
+      parent_id: v.optional(
+        uuidInputSchema(
+          "Folder entity ID: to place the new entity inside when creating, or to " +
+            "move the document into when updating",
         ),
       ),
-    ),
-    version_id: v.optional(
-      uuidInputSchema(
-        "Version ID to annotate; required when setting label or description. Only valid when updating.",
-      ),
-    ),
-    label: v.optional(
-      v.pipe(
-        v.nullable(v.pipe(v.string(), v.minLength(1), v.maxLength(128))),
-        v.description(
-          "New label for version_id; pass null to clear, empty string is not allowed, omit to leave unchanged",
+      kind: v.optional(
+        v.pipe(
+          v.picklist(["document", "folder"]),
+          v.description(
+            "Entity kind to create; defaults to 'document'. Only valid when creating.",
+          ),
         ),
       ),
-    ),
-    description: v.optional(
-      v.pipe(
-        v.nullable(v.pipe(v.string(), v.minLength(1), v.maxLength(1024))),
-        v.description(
-          "New description for version_id; pass null to clear, empty string is not allowed, omit to leave unchanged",
+      move_to_root: v.optional(
+        v.pipe(
+          v.boolean(),
+          v.description(
+            "Move the document to the matter root (no parent folder). Only valid when updating.",
+          ),
         ),
       ),
+      version_id: v.optional(
+        uuidInputSchema(
+          "Version ID to annotate; required when setting label or description. Only valid when updating.",
+        ),
+      ),
+      label: v.optional(
+        v.pipe(
+          v.nullable(v.pipe(v.string(), v.minLength(1), v.maxLength(128))),
+          v.description(
+            "New label for version_id; pass null to clear, empty string is not allowed, omit to leave unchanged",
+          ),
+        ),
+      ),
+      description: v.optional(
+        v.pipe(
+          v.nullable(v.pipe(v.string(), v.minLength(1), v.maxLength(1024))),
+          v.description(
+            "New description for version_id; pass null to clear, empty string is not allowed, omit to leave unchanged",
+          ),
+        ),
+      ),
+    }),
+    // Creating (no entity_id) requires matter_id and name.
+    v.forward(
+      v.partialCheck(
+        [["entity_id"], ["matter_id"]],
+        ({ entity_id, matter_id }) =>
+          entity_id !== undefined || matter_id !== undefined,
+        "matter_id is required to create a document",
+      ),
+      ["matter_id"],
     ),
-  }),
-  // Creating (no entity_id) requires matter_id and name.
-  v.forward(
-    v.partialCheck(
-      [["entity_id"], ["matter_id"]],
-      ({ entity_id, matter_id }) =>
-        entity_id !== undefined || matter_id !== undefined,
-      "matter_id is required to create a document",
-    ),
-    ["matter_id"],
-  ),
-  v.forward(
-    v.partialCheck(
-      [["entity_id"], ["name"]],
-      ({ entity_id, name }) => entity_id !== undefined || name !== undefined,
-      "name is required to create a document",
-    ),
-    ["name"],
-  ),
-  // matter_id and kind describe the entity to create; neither applies to an
-  // update.
-  v.forward(
-    v.partialCheck(
-      [["entity_id"], ["matter_id"]],
-      ({ entity_id, matter_id }) =>
-        entity_id === undefined || matter_id === undefined,
-      "matter_id applies only when creating; omit it when updating a document",
-    ),
-    ["matter_id"],
-  ),
-  v.forward(
-    v.partialCheck(
-      [["entity_id"], ["kind"]],
-      ({ entity_id, kind }) => entity_id === undefined || kind === undefined,
-      "kind applies only when creating a document",
-    ),
-    ["kind"],
-  ),
-  // move_to_root, version_id, label, and description are all update-only edits.
-  v.partialCheck(
-    [
-      ["entity_id"],
-      ["move_to_root"],
-      ["version_id"],
-      ["label"],
-      ["description"],
-    ],
-    ({ entity_id, move_to_root, version_id, label, description }) =>
-      entity_id !== undefined ||
-      (move_to_root === undefined &&
-        version_id === undefined &&
-        label === undefined &&
-        description === undefined),
-    "move_to_root, version_id, label, and description apply to an existing document; pass entity_id",
-  ),
-  // An update must request at least one mutation; an empty update is a no-op the
-  // caller almost certainly did not intend.
-  v.partialCheck(
-    [
-      ["entity_id"],
+    v.forward(
+      v.partialCheck(
+        [["entity_id"], ["name"]],
+        ({ entity_id, name }) => entity_id !== undefined || name !== undefined,
+        "name is required to create a document",
+      ),
       ["name"],
-      ["parent_id"],
+    ),
+    // matter_id and kind describe the entity to create; neither applies to an
+    // update.
+    v.forward(
+      v.partialCheck(
+        [["entity_id"], ["matter_id"]],
+        ({ entity_id, matter_id }) =>
+          entity_id === undefined || matter_id === undefined,
+        "matter_id applies only when creating; omit it when updating a document",
+      ),
+      ["matter_id"],
+    ),
+    v.forward(
+      v.partialCheck(
+        [["entity_id"], ["kind"]],
+        ({ entity_id, kind }) => entity_id === undefined || kind === undefined,
+        "kind applies only when creating a document",
+      ),
+      ["kind"],
+    ),
+    // move_to_root, version_id, label, and description are all update-only edits.
+    v.partialCheck(
+      [
+        ["entity_id"],
+        ["move_to_root"],
+        ["version_id"],
+        ["label"],
+        ["description"],
+      ],
+      ({ entity_id, move_to_root, version_id, label, description }) =>
+        entity_id !== undefined ||
+        (move_to_root === undefined &&
+          version_id === undefined &&
+          label === undefined &&
+          description === undefined),
+      "move_to_root, version_id, label, and description apply to an existing document; pass entity_id",
+    ),
+    // An update must request at least one mutation; an empty update is a no-op the
+    // caller almost certainly did not intend.
+    v.partialCheck(
+      [
+        ["entity_id"],
+        ["name"],
+        ["parent_id"],
+        ["move_to_root"],
+        ["version_id"],
+        ["label"],
+        ["description"],
+      ],
+      (input) => {
+        if (input.entity_id === undefined) {
+          return true;
+        }
+        const wantsRename = input.name !== undefined;
+        const wantsMove =
+          input.parent_id !== undefined || input.move_to_root === true;
+        const wantsVersionEdit =
+          input.version_id !== undefined &&
+          (input.label !== undefined || input.description !== undefined);
+        return wantsRename || wantsMove || wantsVersionEdit;
+      },
+      "Provide at least one change: name, parent_id/move_to_root, or version_id with label/description",
+    ),
+    // parent_id (move into folder) and move_to_root (move to matter root) are
+    // opposite moves; accepting both is ambiguous.
+    v.forward(
+      v.partialCheck(
+        [["parent_id"], ["move_to_root"]],
+        ({ parent_id, move_to_root }) =>
+          parent_id === undefined || move_to_root !== true,
+        "Provide either parent_id or move_to_root, not both",
+      ),
       ["move_to_root"],
+    ),
+    // label/description annotate a specific version, so they require version_id.
+    v.forward(
+      v.partialCheck(
+        [["version_id"], ["label"], ["description"]],
+        ({ version_id, label, description }) =>
+          (label === undefined && description === undefined) ||
+          version_id !== undefined,
+        "label and description require version_id",
+      ),
       ["version_id"],
-      ["label"],
-      ["description"],
-    ],
-    (input) => {
-      if (input.entity_id === undefined) {
-        return true;
-      }
-      const wantsRename = input.name !== undefined;
-      const wantsMove =
-        input.parent_id !== undefined || input.move_to_root === true;
-      const wantsVersionEdit =
-        input.version_id !== undefined &&
-        (input.label !== undefined || input.description !== undefined);
-      return wantsRename || wantsMove || wantsVersionEdit;
-    },
-    "Provide at least one change: name, parent_id/move_to_root, or version_id with label/description",
-  ),
-  // parent_id (move into folder) and move_to_root (move to matter root) are
-  // opposite moves; accepting both is ambiguous.
-  v.forward(
-    v.partialCheck(
-      [["parent_id"], ["move_to_root"]],
-      ({ parent_id, move_to_root }) =>
-        parent_id === undefined || move_to_root !== true,
-      "Provide either parent_id or move_to_root, not both",
     ),
-    ["move_to_root"],
-  ),
-  // label/description annotate a specific version, so they require version_id.
-  v.forward(
-    v.partialCheck(
-      [["version_id"], ["label"], ["description"]],
-      ({ version_id, label, description }) =>
-        (label === undefined && description === undefined) ||
-        version_id !== undefined,
-      "label and description require version_id",
-    ),
-    ["version_id"],
   ),
 );
 
@@ -2114,21 +2121,23 @@ const handleOpenDocumentVersionUploadTool: McpToolHandler = async ({
   });
 };
 
-const deleteDocumentArgsSchema = v.strictObject({
-  entity_id: uuidInputSchema("Document entity ID to delete"),
-  version_id: v.optional(
-    uuidInputSchema("Delete only this version instead of the whole document"),
-  ),
-  confirm: v.optional(
-    v.pipe(
-      v.boolean(),
-      v.description(
-        "Must be true to run this irreversible operation. Set it only after a " +
-          "human user has explicitly approved the deletion.",
+const deleteDocumentArgsSchema = nullAsAbsent(
+  v.strictObject({
+    entity_id: uuidInputSchema("Document entity ID to delete"),
+    version_id: v.optional(
+      uuidInputSchema("Delete only this version instead of the whole document"),
+    ),
+    confirm: v.optional(
+      v.pipe(
+        v.boolean(),
+        v.description(
+          "Must be true to run this irreversible operation. Set it only after a " +
+            "human user has explicitly approved the deletion.",
+        ),
       ),
     ),
-  ),
-});
+  }),
+);
 
 const handleDeleteDocumentTool: TypedMcpToolHandler<
   v.InferInput<typeof DELETED_TRUE_PROJECTION>
@@ -2197,27 +2206,29 @@ const handleDeleteDocumentTool: TypedMcpToolHandler<
   } satisfies v.InferInput<typeof DELETED_TRUE_PROJECTION>);
 };
 
-const listPropertiesArgsSchema = v.strictObject({
-  matter_id: uuidInputSchema("Matter ID to list properties for."),
-  limit: v.optional(
-    v.pipe(
-      v.number(),
-      v.integer(),
-      v.minValue(1),
-      v.maxValue(MAX_LIST_LIMIT),
-      v.description("Max properties to return"),
-    ),
-  ),
-  cursor: v.optional(
-    v.pipe(
-      v.string(),
-      v.maxLength(512),
-      v.description(
-        "Opaque cursor from a previous list_properties call to fetch the next page",
+const listPropertiesArgsSchema = nullAsAbsent(
+  v.strictObject({
+    matter_id: uuidInputSchema("Matter ID to list properties for."),
+    limit: v.optional(
+      v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(1),
+        v.maxValue(MAX_LIST_LIMIT),
+        v.description("Max properties to return"),
       ),
     ),
-  ),
-});
+    cursor: v.optional(
+      v.pipe(
+        v.string(),
+        v.maxLength(512),
+        v.description(
+          "Opaque cursor from a previous list_properties call to fetch the next page",
+        ),
+      ),
+    ),
+  }),
+);
 
 const propertyPageCursorCodec = createTimestampIdCursorCodec({
   column: properties.createdAt,
@@ -2377,14 +2388,16 @@ const setFieldValueContentSchema = v.variant("type", [
   }),
 ]);
 
-const setFieldValueArgsSchema = v.strictObject({
-  entity_id: uuidInputSchema("Document entity ID whose cell to set"),
-  property_id: uuidInputSchema("Property ID, as returned by list_properties"),
-  content: v.pipe(
-    setFieldValueContentSchema,
-    v.description("The value to set; 'type' must match the property."),
-  ),
-});
+const setFieldValueArgsSchema = nullAsAbsent(
+  v.strictObject({
+    entity_id: uuidInputSchema("Document entity ID whose cell to set"),
+    property_id: uuidInputSchema("Property ID, as returned by list_properties"),
+    content: v.pipe(
+      setFieldValueContentSchema,
+      v.description("The value to set; 'type' must match the property."),
+    ),
+  }),
+);
 
 type SetFieldValueContent = v.InferOutput<typeof setFieldValueContentSchema>;
 

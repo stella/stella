@@ -24,6 +24,7 @@ import {
   errorResult,
   MAX_CURSOR_LENGTH,
   notFoundResult,
+  nullAsAbsent,
   structuredErrorResult,
   uuidInputSchema,
   validationErrorResult,
@@ -229,38 +230,42 @@ const getCompatFetchPayload = ({
   };
 };
 
-const compatSearchArgsSchema = v.strictObject({
-  query: v.pipe(
-    v.string(),
-    v.minLength(1),
-    v.maxLength(LIMITS.searchQueryMaxLength),
-    v.description("Search query"),
-  ),
-  cursor: v.optional(
-    v.pipe(
+const compatSearchArgsSchema = nullAsAbsent(
+  v.strictObject({
+    query: v.pipe(
       v.string(),
       v.minLength(1),
-      v.maxLength(MAX_CURSOR_LENGTH),
-      v.description(
-        "Opaque cursor from a previous search call to fetch the next page",
+      v.maxLength(LIMITS.searchQueryMaxLength),
+      v.description("Search query"),
+    ),
+    cursor: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.maxLength(MAX_CURSOR_LENGTH),
+        v.description(
+          "Opaque cursor from a previous search call to fetch the next page",
+        ),
       ),
     ),
-  ),
-});
+  }),
+);
 
-const compatFetchArgsSchema = v.strictObject({
-  id: uuidInputSchema("Document/entity ID"),
-  cursor: v.optional(
-    v.pipe(
-      v.string(),
-      v.minLength(1),
-      v.maxLength(MAX_CURSOR_LENGTH),
-      v.description(
-        "Opaque cursor from a previous fetch call to read the next window of text",
+const compatFetchArgsSchema = nullAsAbsent(
+  v.strictObject({
+    id: uuidInputSchema("Document/entity ID"),
+    cursor: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.maxLength(MAX_CURSOR_LENGTH),
+        v.description(
+          "Opaque cursor from a previous fetch call to read the next window of text",
+        ),
       ),
     ),
-  ),
-});
+  }),
+);
 
 export const COMPAT_TOOL_DEFINITIONS = [
   defineValibotMcpTool({

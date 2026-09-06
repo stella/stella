@@ -93,12 +93,13 @@ import {
   MAX_LIST_LIMIT,
   MAX_SEARCH_LIMIT,
   notFoundResult,
+  nullAsAbsent,
   resolveWindowBounds,
   structuredErrorResult,
   toolDataResult,
   toPlainTextSnippet,
-  validationErrorResult,
   uuidInputSchema,
+  validationErrorResult,
 } from "@/api/mcp/tool-utils";
 import { defineValibotMcpTool } from "@/api/mcp/valibot-tool-definition";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
@@ -496,158 +497,178 @@ const buildContactTextFieldSpecs = (
 // One Valibot schema per tool: the handler parses it and the advertised JSON
 // Schema is projected from it, so an unknown key is rejected on both.
 
-const listMattersArgsSchema = v.strictObject({
-  matter_id: v.optional(
-    uuidInputSchema(
-      "Matter ID to return a single matter's overview; omit to list matters",
-    ),
-  ),
-  status: v.optional(
-    v.pipe(
-      v.picklist(["active", "all"]),
-      v.description("Filter by matter status (list mode)"),
-    ),
-  ),
-  limit: v.optional(
-    v.pipe(
-      v.number(),
-      v.integer(),
-      v.minValue(1),
-      v.maxValue(MAX_LIST_LIMIT),
-      v.description("Max matters to return (list mode)"),
-    ),
-  ),
-  cursor: v.optional(
-    v.pipe(
-      v.string(),
-      v.minLength(1),
-      v.maxLength(MAX_CURSOR_LENGTH),
-      v.description(
-        "Opaque cursor from a previous list_matters call to fetch the next page",
+const listMattersArgsSchema = nullAsAbsent(
+  v.strictObject({
+    matter_id: v.optional(
+      uuidInputSchema(
+        "Matter ID to return a single matter's overview; omit to list matters",
       ),
     ),
-  ),
-});
-
-const searchAcrossMattersArgsSchema = v.strictObject({
-  query: v.pipe(
-    v.string(),
-    v.minLength(1),
-    v.maxLength(LIMITS.searchQueryMaxLength),
-    v.description("Search query"),
-  ),
-  limit: v.optional(
-    v.pipe(
-      v.number(),
-      v.integer(),
-      v.minValue(1),
-      v.maxValue(MAX_SEARCH_LIMIT),
-      v.description("Max results to return"),
-    ),
-  ),
-  cursor: v.optional(
-    v.pipe(
-      v.string(),
-      v.minLength(1),
-      v.maxLength(MAX_CURSOR_LENGTH),
-      v.description(
-        "Opaque cursor from a previous search_across_matters call to fetch the next page",
+    status: v.optional(
+      v.pipe(
+        v.picklist(["active", "all"]),
+        v.description("Filter by matter status (list mode)"),
       ),
     ),
-  ),
-});
-
-const searchCaseLawArgsSchema = v.strictObject({
-  query: v.pipe(
-    v.string(),
-    v.minLength(1),
-    v.maxLength(LIMITS.searchQueryMaxLength),
-    v.description("Search query"),
-  ),
-  limit: v.optional(
-    v.pipe(
-      v.number(),
-      v.integer(),
-      v.minValue(1),
-      v.maxValue(MAX_SEARCH_LIMIT),
-      v.description("Max results to return"),
-    ),
-  ),
-  cursor: v.optional(
-    v.pipe(
-      v.string(),
-      v.maxLength(128),
-      v.description("Opaque cursor from a previous search_case_law call"),
-    ),
-  ),
-  court: v.optional(
-    v.pipe(v.string(), v.maxLength(512), v.description("Filter by court name")),
-  ),
-  country: v.optional(
-    v.pipe(v.string(), v.maxLength(3), v.description("Filter by country code")),
-  ),
-  language: v.optional(
-    v.pipe(
-      v.string(),
-      v.maxLength(8),
-      v.description("Filter by language code"),
-    ),
-  ),
-  decision_type: v.optional(
-    v.pipe(
-      v.string(),
-      v.maxLength(128),
-      v.description("Filter by decision type"),
-    ),
-  ),
-  source_id: v.optional(uuidInputSchema("Filter by source ID")),
-  date_from: v.optional(
-    v.pipe(
-      v.string(),
-      v.maxLength(10),
-      v.description("Filter decisions from this ISO date (YYYY-MM-DD)"),
-    ),
-  ),
-  date_to: v.optional(
-    v.pipe(
-      v.string(),
-      v.maxLength(10),
-      v.description("Filter decisions up to this ISO date (YYYY-MM-DD)"),
-    ),
-  ),
-});
-
-const readContentAcrossMattersArgsSchema = v.strictObject({
-  entity_id: uuidInputSchema("Entity ID"),
-  cursor: v.optional(
-    v.pipe(
-      v.string(),
-      v.minLength(1),
-      v.maxLength(MAX_CURSOR_LENGTH),
-      v.description(
-        "Opaque cursor from a previous call to read the next window of text",
+    limit: v.optional(
+      v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(1),
+        v.maxValue(MAX_LIST_LIMIT),
+        v.description("Max matters to return (list mode)"),
       ),
     ),
-  ),
-});
-
-const readCaseLawDecisionArgsSchema = v.strictObject({
-  decision_id: uuidInputSchema("Case-law decision ID"),
-  cursor: v.optional(
-    v.pipe(
-      v.string(),
-      v.minLength(1),
-      v.maxLength(MAX_CURSOR_LENGTH),
-      v.description(
-        "Opaque cursor from a previous call to read the next window of decision text and citations",
+    cursor: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.maxLength(MAX_CURSOR_LENGTH),
+        v.description(
+          "Opaque cursor from a previous list_matters call to fetch the next page",
+        ),
       ),
     ),
-  ),
-});
+  }),
+);
 
-const readContactArgsSchema = v.strictObject({
-  contact_id: uuidInputSchema("Contact ID"),
-});
+const searchAcrossMattersArgsSchema = nullAsAbsent(
+  v.strictObject({
+    query: v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(LIMITS.searchQueryMaxLength),
+      v.description("Search query"),
+    ),
+    limit: v.optional(
+      v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(1),
+        v.maxValue(MAX_SEARCH_LIMIT),
+        v.description("Max results to return"),
+      ),
+    ),
+    cursor: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.maxLength(MAX_CURSOR_LENGTH),
+        v.description(
+          "Opaque cursor from a previous search_across_matters call to fetch the next page",
+        ),
+      ),
+    ),
+  }),
+);
+
+const searchCaseLawArgsSchema = nullAsAbsent(
+  v.strictObject({
+    query: v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(LIMITS.searchQueryMaxLength),
+      v.description("Search query"),
+    ),
+    limit: v.optional(
+      v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(1),
+        v.maxValue(MAX_SEARCH_LIMIT),
+        v.description("Max results to return"),
+      ),
+    ),
+    cursor: v.optional(
+      v.pipe(
+        v.string(),
+        v.maxLength(128),
+        v.description("Opaque cursor from a previous search_case_law call"),
+      ),
+    ),
+    court: v.optional(
+      v.pipe(
+        v.string(),
+        v.maxLength(512),
+        v.description("Filter by court name"),
+      ),
+    ),
+    country: v.optional(
+      v.pipe(
+        v.string(),
+        v.maxLength(3),
+        v.description("Filter by country code"),
+      ),
+    ),
+    language: v.optional(
+      v.pipe(
+        v.string(),
+        v.maxLength(8),
+        v.description("Filter by language code"),
+      ),
+    ),
+    decision_type: v.optional(
+      v.pipe(
+        v.string(),
+        v.maxLength(128),
+        v.description("Filter by decision type"),
+      ),
+    ),
+    source_id: v.optional(uuidInputSchema("Filter by source ID")),
+    date_from: v.optional(
+      v.pipe(
+        v.string(),
+        v.maxLength(10),
+        v.description("Filter decisions from this ISO date (YYYY-MM-DD)"),
+      ),
+    ),
+    date_to: v.optional(
+      v.pipe(
+        v.string(),
+        v.maxLength(10),
+        v.description("Filter decisions up to this ISO date (YYYY-MM-DD)"),
+      ),
+    ),
+  }),
+);
+
+const readContentAcrossMattersArgsSchema = nullAsAbsent(
+  v.strictObject({
+    entity_id: uuidInputSchema("Entity ID"),
+    cursor: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.maxLength(MAX_CURSOR_LENGTH),
+        v.description(
+          "Opaque cursor from a previous call to read the next window of text",
+        ),
+      ),
+    ),
+  }),
+);
+
+const readCaseLawDecisionArgsSchema = nullAsAbsent(
+  v.strictObject({
+    decision_id: uuidInputSchema("Case-law decision ID"),
+    cursor: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.maxLength(MAX_CURSOR_LENGTH),
+        v.description(
+          "Opaque cursor from a previous call to read the next window of decision text and citations",
+        ),
+      ),
+    ),
+  }),
+);
+
+const readContactArgsSchema = nullAsAbsent(
+  v.strictObject({
+    contact_id: uuidInputSchema("Contact ID"),
+  }),
+);
 
 const practiceJurisdictionInputSchema = v.strictObject({
   country_code: v.pipe(
@@ -660,18 +681,20 @@ const practiceJurisdictionInputSchema = v.strictObject({
   ),
 });
 
-const setPracticeJurisdictionsArgsSchema = v.strictObject({
-  jurisdictions: v.pipe(
-    v.array(practiceJurisdictionInputSchema),
-    v.minLength(1),
-    v.maxLength(LIMITS.practiceJurisdictionsPerOrganization),
-    v.description(
-      "Practice jurisdictions for this organization. country_code is an " +
-        "ISO 3166-1 alpha-2 code; exactly one entry should set is_primary " +
-        "to true.",
+const setPracticeJurisdictionsArgsSchema = nullAsAbsent(
+  v.strictObject({
+    jurisdictions: v.pipe(
+      v.array(practiceJurisdictionInputSchema),
+      v.minLength(1),
+      v.maxLength(LIMITS.practiceJurisdictionsPerOrganization),
+      v.description(
+        "Practice jurisdictions for this organization. country_code is an " +
+          "ISO 3166-1 alpha-2 code; exactly one entry should set is_primary " +
+          "to true.",
+      ),
     ),
-  ),
-});
+  }),
+);
 
 // MCP tool inputs are snake_case; the persisted jurisdiction shape is
 // camelCase.

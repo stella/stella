@@ -8,11 +8,18 @@ import type {
   fieldSourceToolInputSchema,
 } from "@/api/lib/template-binding/binding-sources";
 import {
-  readTemplateFieldsInput,
   templateFieldInputSchema,
   toFieldMetaToolInput,
   toTemplateFieldWireInput,
 } from "@/api/mcp/template-field-input";
+import { saveTemplateArgsSchema } from "@/api/mcp/template-tools";
+
+const TEMPLATE_ID = "6f1f4d1e-59b0-4b4f-9a35-4b0ba0f7a1c9";
+
+/** The `fields` overlay read the way save_template reads it: through the tool
+ * input schema, which is where null-as-absence lives. */
+const parseFieldsOverlay = (fields: unknown) =>
+  v.safeParse(saveTemplateArgsSchema, { template_id: TEMPLATE_ID, fields });
 
 const sortedKeys = (entries: object): string[] => Object.keys(entries).sort();
 
@@ -223,12 +230,10 @@ describe("template field input schema", () => {
       format: null,
     });
 
-    const parsed = v.parse(
-      v.array(templateFieldInputSchema),
-      readTemplateFieldsInput([wireField]),
-    );
+    const parsed = parseFieldsOverlay([wireField]);
 
-    expect(parsed).toEqual([
+    expect(parsed.success).toBe(true);
+    expect(parsed.output?.fields).toEqual([
       {
         path: "company",
         input_type: "text",
@@ -256,16 +261,77 @@ describe("template field input schema", () => {
   });
 
   test("does not erase null typos borrowed from a different schema level", () => {
-    const parsed = v.safeParse(
-      v.array(templateFieldInputSchema),
-      readTemplateFieldsInput([
-        { path: "company", validation: { ai_prompt: null } },
-      ]),
-    );
+    const parsed = parseFieldsOverlay([
+      { path: "company", validation: { ai_prompt: null } },
+    ]);
 
     expect(parsed.success).toBe(false);
     expect(
       parsed.issues?.some((issue) => issue.path?.at(-1)?.key === "ai_prompt"),
     ).toBe(true);
+  });
+
+  /**
+   * The overlay is the level a strict tool-schema client fills in most, so
+   * every optional property it declares, at every nesting level, must read a
+   * `null` as the omission it means. Driving the table off the schemas
+   * themselves keeps it total as properties are added.
+   */
+  describe("reads null as absence for every declared optional property", () => {
+    for (const key of Object.keys(advertised)) {
+      if (key === "path") {
+        continue;
+      }
+      test(`fields[].${key}`, () => {
+        const withNull = parseFieldsOverlay([{ path: "company", [key]: null }]);
+        const omitted = parseFieldsOverlay([{ path: "company" }]);
+        expect(withNull.success).toBe(omitted.success);
+        expect(withNull.output?.fields).toEqual(omitted.output?.fields);
+      });
+    }
+
+    for (const key of Object.keys(
+      advertised.validation.wrapped.pipe[0].entries,
+    )) {
+      test(`fields[].validation.${key}`, () => {
+        const withNull = parseFieldsOverlay([
+          { path: "company", validation: { [key]: null } },
+        ]);
+        expect(withNull.success).toBe(true);
+        expect(withNull.output?.fields).toEqual([
+          { path: "company", validation: {} },
+        ]);
+      });
+    }
+
+    for (const key of Object.keys(
+      advertised.parts.wrapped.pipe[0].item.entries,
+    )) {
+      test(`fields[].parts[].${key}`, () => {
+        const parsed = parseFieldsOverlay([
+          {
+            path: "company",
+            format: "{{title}}",
+            parts: [{ key: "title", input_type: "text", [key]: null }],
+          },
+        ]);
+        // A part's `key` and `input_type` are required, so null stays an error
+        // there rather than silently becoming an omitted property.
+        expect(parsed.success).toBe(key !== "key" && key !== "input_type");
+      });
+    }
+
+    test("rejects a null under a key the overlay does not declare", () => {
+      const parsed = parseFieldsOverlay([
+        { path: "company", optionsFrom: null },
+      ]);
+
+      expect(parsed.success).toBe(false);
+      expect(
+        parsed.issues?.some(
+          (issue) => issue.path?.at(-1)?.key === "optionsFrom",
+        ),
+      ).toBe(true);
+    });
   });
 });

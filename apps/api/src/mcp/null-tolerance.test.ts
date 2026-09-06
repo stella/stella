@@ -19,16 +19,21 @@ import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
  *    Elysia-parity TypeBox chain Default -> Convert -> Clean -> Check over the
  *    live handler config schemas.
  *
- * Observed, pinned behavior (identical intent on both paths):
- *  - null on a PLAIN optional field (no null in its type) is REJECTED with a
- *    clean `validation_error` envelope carrying `issues:[{path,message}]` an
- *    agent can self-correct from. null is never silently coerced to "absent",
- *    and never leaks past validation into a handler.
- *  - null on a NULLABLE field (declared `type: ["string","null"]` /
- *    `v.optional(v.nullable(...))` / a TypeBox null-union, the "pass null to
+ * Pinned behavior, which differs between the two paths:
+ *  - Static curated tools read null on a PLAIN optional field as the omission
+ *    a strict tool-schema client means by it: the property is dropped before
+ *    validation, so the call behaves exactly as if it had been left out. A
+ *    strict client must send every declared property, so rejecting the null
+ *    would make those tools uncallable.
+ *  - The capability invoke path still REJECTS null on a plain optional field
+ *    with a `validation_error` envelope carrying `issues:[{path,message}]`.
+ *    Its input is a nested `input` object the model composes deliberately,
+ *    not the tool's own declared property set.
+ *  - On BOTH paths, null on a NULLABLE field (declared `type: ["string","null"]`
+ *    / `v.optional(v.nullable(...))` / a TypeBox null-union, the "pass null to
  *    clear" convention) is ACCEPTED and passes through as a real null.
  *
- * No path was found where null leaks past validation into a handler.
+ * On neither path does an unexpected null leak past validation into a handler.
  */
 
 const emptyScopedDb = asTestRaw<McpRequestContext["scopedDb"]>(
@@ -40,6 +45,11 @@ const emptyScopedDb = asTestRaw<McpRequestContext["scopedDb"]>(
       for: async () => [],
       orderBy: () => builder,
       limit: async () => [],
+      // list_matters reads the org's practice jurisdictions once it gets past
+      // argument validation, which a null that reads as absence now does.
+      query: {
+        organizationSettings: { findFirst: async () => undefined },
+      },
     };
     return await run(builder);
   },
@@ -202,62 +212,38 @@ describe("null-tolerance premise", () => {
 
 // --- Path 1: static curated tools -------------------------------------------
 
-describe("static tools reject explicit null on plain optional fields", () => {
-  // Hand-rolled optional parsers key absence off `value === undefined`, so an
-  // explicit null falls through to the type check and is rejected. list_matters
-  // routes status/limit/cursor through parseOptionalEnum/Limit/Cursor.
-  const handRolledCases: { field: string; value: null }[] = [
-    { field: "status", value: null },
-    { field: "limit", value: null },
-    { field: "cursor", value: null },
-  ];
+describe("static tools read explicit null on plain optional fields as omission", () => {
+  // The tool's whole result, so each case requires the null call and the
+  // omitted call to be indistinguishable rather than only that the null was
+  // not named in an issue. A conditionally required property still reports its
+  // own rule (`name is required to create a matter`) in both calls; what this
+  // pins is that the null reaches that rule at exactly the same place.
+  const outcome = async (tool: string, args: Record<string, unknown>) =>
+    JSON.stringify(await call(tool, args));
 
-  for (const { field, value } of handRolledCases) {
-    test(`list_matters ${field}: null -> validation_error naming ${field}`, async () => {
-      const error = errorEnvelope(
-        await call("list_matters", { [field]: value }),
-      );
-      expect(error?.code).toBe("validation_error");
-      expect(error?.issues.some((issue) => issue.path === field)).toBe(true);
-    });
-  }
-
-  // matter_id: null is NOT undefined, so list_matters enters its detail branch
-  // (`args["matter_id"] !== undefined`) and rejects the null as a missing
-  // required id rather than silently listing.
-  test("list_matters matter_id: null -> validation_error (routed to detail branch)", async () => {
-    const error = errorEnvelope(
-      await call("list_matters", { matter_id: null }),
-    );
-    expect(error?.code).toBe("validation_error");
-    expect(error?.issues.some((issue) => issue.path === "matter_id")).toBe(
-      true,
-    );
-  });
-
-  // Valibot v.strictObject with a plain optional field: null is not the field's
-  // type, so safeParse fails at the boundary (before any workspace/DB access)
-  // with a field-scoped issue.
-  const valibotCases: {
+  const cases: {
     tool: string;
+    property: string;
     args: Record<string, unknown>;
-    path: string;
   }[] = [
-    { tool: "save_matter", args: { name: null }, path: "name" },
-    {
-      tool: "list_documents",
-      args: { matter_id: "ws_1", mode: null },
-      path: "mode",
-    },
+    // Hand-rolled optional parsers (parseOptionalEnum/Limit/Cursor).
+    { tool: "list_matters", property: "status", args: {} },
+    { tool: "list_matters", property: "limit", args: {} },
+    { tool: "list_matters", property: "cursor", args: {} },
+    // The detail-branch discriminator: null must list rather than route to a
+    // one-matter lookup with no id.
+    { tool: "list_matters", property: "matter_id", args: {} },
+    // Valibot strict objects with a plain optional property.
+    { tool: "save_matter", property: "name", args: {} },
+    { tool: "list_documents", property: "mode", args: { matter_id: "ws_1" } },
+    { tool: "list_templates", property: "template_id", args: {} },
   ];
 
-  for (const { tool, args, path } of valibotCases) {
-    test(`${tool} ${path}: null -> validation_error naming ${path}`, async () => {
-      const error = errorEnvelope(await call(tool, args));
-      expect(error?.code).toBe("validation_error");
-      expect(error?.issues.some((issue) => issue.path === path)).toBe(true);
-      // Rejected at the schema boundary: no handler ran.
-      expect(loadOrgSettingsMock).not.toHaveBeenCalled();
+  for (const { tool, property, args } of cases) {
+    test(`${tool} ${property}: null reads exactly as omitting it`, async () => {
+      expect(await outcome(tool, { ...args, [property]: null })).toBe(
+        await outcome(tool, args),
+      );
     });
   }
 });

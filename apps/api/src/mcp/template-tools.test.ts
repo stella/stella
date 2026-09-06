@@ -2786,6 +2786,100 @@ describe("MCP template tools", () => {
     );
   });
 
+  /**
+   * A strict tool-schema client must send every declared property, so it sends
+   * `null` for the ones it is not setting. Both branches of save_template have
+   * to read those nulls as omissions, or a configure call collides with the
+   * create rules and every derived-source property collides with the others.
+   */
+  test("save_template (configure) accepts a strict client's nulls for the properties it does not set", async () => {
+    configureTemplateFieldsMock.mockImplementation(async function* () {
+      yield* [];
+      return Result.ok({ manifest: { version: 1, fields: [] } });
+    });
+    describeStoredTemplateMock.mockResolvedValue({
+      name: "Company POA",
+      fields: [],
+      conditions: [],
+      computed: [],
+    });
+
+    const result = await handleMcpToolCall({
+      args: {
+        template_id: TEMPLATE_ID,
+        name: null,
+        docx_base64: null,
+        file: null,
+        fields: [
+          {
+            path: "company",
+            label: "Company",
+            hint: null,
+            input_type: "text",
+            options: null,
+            validation: null,
+            required: true,
+            ai_prompt: null,
+            ai_adapt: null,
+            ai_sees_document: null,
+            parts: null,
+            format: null,
+            options_from: null,
+            lookup: null,
+            source: null,
+            formula: null,
+            condition: null,
+            date_format: null,
+          },
+        ],
+      },
+      context: createContext(),
+      toolName: "save_template",
+    });
+
+    expect(result.isError).toBeFalsy();
+    expect(configureTemplateFieldsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        templateId: TEMPLATE_ID,
+        fields: [
+          {
+            path: "company",
+            label: "Company",
+            inputType: "text",
+            required: true,
+          },
+        ],
+      }),
+    );
+  });
+
+  test("save_template (create) accepts a strict client's nulls for template_id and the unused file property", async () => {
+    createStoredTemplateMock.mockImplementation(async function* () {
+      yield* [];
+      return Result.ok({ id: "tmpl_new", name: "NDA", fieldCount: 3 });
+    });
+
+    const result = await handleMcpToolCall({
+      args: {
+        template_id: null,
+        name: "NDA",
+        docx_base64: await makeValidDocxBase64(),
+        file: null,
+        fields: null,
+      },
+      context: createContext(),
+      toolName: "save_template",
+    });
+
+    expect(result.isError).toBeFalsy();
+    expect(parseToolPayload(result)).toEqual({
+      templateId: "tmpl_new",
+      name: "NDA",
+      fieldCount: 3,
+      warnings: [],
+    });
+  });
+
   test("save_template (configure) rejects a config whose path is unknown", async () => {
     configureTemplateFieldsMock.mockImplementation(async function* () {
       yield* [];

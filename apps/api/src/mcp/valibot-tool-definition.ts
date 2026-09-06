@@ -6,6 +6,7 @@ import type {
   McpToolDefinition,
   McpToolInputSchema,
 } from "@/api/mcp/tool-types";
+import type { NullAsAbsentInputSchema } from "@/api/mcp/tool-utils";
 
 const VALIBOT_MCP_JSON_SCHEMA_CONFIG = {
   errorMode: "throw",
@@ -21,7 +22,7 @@ type JsonSchemaProjectionWaiver = {
 };
 
 type ValibotMcpToolInput = Omit<McpToolDefinition, "inputSchema"> & {
-  inputSchema: v.GenericSchema;
+  inputSchema: NullAsAbsentInputSchema;
   jsonSchemaProjectionWaiver?: JsonSchemaProjectionWaiver;
 };
 
@@ -170,6 +171,12 @@ const projectSchemaKeywordsIn = (value: unknown): unknown => {
  * handlers parse through the definition, while wire projection selects only
  * MCP protocol fields. The static compile-time ratchet also uses its presence
  * to distinguish derived schemas from legacy hand-maintained mirrors.
+ *
+ * `inputSchema` must be wrapped in `nullAsAbsent`, so that a strict
+ * tool-schema client's `null` for an unset optional property reads as
+ * absence for every consumer of the schema rather than in one handler. The
+ * wrapper is input-side only: projection reads the declared object it wraps,
+ * so the advertised schema is exactly what the object declares.
  */
 export const defineValibotMcpTool = <
   const TDefinition extends ValibotMcpToolInput,
@@ -180,7 +187,10 @@ export const defineValibotMcpTool = <
     definition;
   return {
     ...toolDefinition,
-    inputSchema: deriveMcpInputSchema(inputSchema, jsonSchemaProjectionWaiver),
+    inputSchema: deriveMcpInputSchema(
+      inputSchema.advertisedSchema,
+      jsonSchemaProjectionWaiver,
+    ),
     inputSchemaSource: inputSchema,
   };
 };
