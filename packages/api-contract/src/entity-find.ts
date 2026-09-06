@@ -60,10 +60,10 @@ export const isFindablePropertyType = (type: PropertyContentType): boolean =>
 /**
  * How wide the find reaches.
  *
- * `all` is the unrestricted state: the entity's displayed name or any of the
- * listed columns, and matching column headers highlight. `columns` is the
- * narrowed state: only the listed columns, with no name half and no header
- * highlight. Both carry an explicit property list, because the group-counts
+ * `all` is the unrestricted state: the entity's name (the string a name column
+ * renders, not the display-name fallback chain) or any of the listed columns,
+ * and matching column headers highlight. `columns` is the narrowed state: only
+ * the listed columns, with no name half and no header highlight. Both carry an explicit property list, because the group-counts
  * endpoint receives no field selection and so cannot recompute a default that
  * would agree with the rows.
  */

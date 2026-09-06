@@ -16,6 +16,7 @@ import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decisionIdentifierProjection } from "@/api/lib/case-law/decision-identifiers";
 import { redistributableSourceJoin } from "@/api/lib/case-law/search-sql";
+import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
 import {
   brandPersistedCaseLawDecisionId,
@@ -1296,15 +1297,12 @@ export type GlobalFacetSearchQuery = {
   limit: number;
 };
 
-const escapeLikePattern = (value: string): string =>
-  value.replaceAll("\\", "\\\\").replaceAll("%", "\\%").replaceAll("_", "\\_");
-
 const labelLikeFilter = (column: SQL, search: string): SQL => {
   const trimmed = search.trim();
   if (!trimmed) {
     return sql``;
   }
-  const pattern = `%${escapeLikePattern(trimmed)}%`;
+  const pattern = `%${escapeLike(trimmed)}%`;
   return sql`AND ${column} ILIKE ${pattern}`;
 };
 

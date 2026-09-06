@@ -23,6 +23,7 @@ import {
 import { user } from "@/api/db/auth-schema";
 import { entities, entityVersions, fields, properties } from "@/api/db/schema";
 import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
+import { escapeLike } from "@/api/lib/escape-like";
 import { typedPgArray } from "@/api/lib/search/sql";
 
 // -- Types --
@@ -724,23 +725,12 @@ export const buildFilterConditions = (filters: ConditionNode[]): SQL[] => {
 // -- Find --
 
 /**
- * The name a row renders. `entities.display_name` is maintained synchronously
+ * The name a row sorts by. `entities.display_name` is maintained synchronously
  * by trigger and has its own fallback chain (name, first file's name, first
- * text value, an "Untitled ..." default); tasks render their own `name`.
- * Shared so the find condition and the `_name` sort key stay one expression.
+ * text value, an "Untitled ..." default); tasks sort by their own `name`.
  */
 export const displayedNameExpr = (): SQL =>
   sql`CASE WHEN ${entities.kind} = 'task' THEN ${entities.name} ELSE ${entities.displayName} END`;
-
-/**
- * A find term is literal text, not a pattern: a typed `%` or `_` has to match
- * itself, or the server would return rows the client-side highlighter cannot
- * mark. LIKE's default escape character is backslash, so escaping the three
- * metacharacters needs no ESCAPE clause. `contains` filters keep their
- * existing pass-through behaviour; find is the stricter operation.
- */
-const escapeLikePattern = (term: string): string =>
-  term.replace(/[\\%_]/gu, (char) => `\\${char}`);
 
 /**
  * Whether a cell can be found by substring, total over the stored field
@@ -779,10 +769,19 @@ const FINDABLE_FIELD_TYPES_SQL = typedPgArray(
 
 /**
  * The find predicate: one EXISTS over the searched columns, ORed with the
- * displayed name when the scope is unrestricted. Every reader of a table view
+ * row's name when the scope is unrestricted. Every reader of a table view
  * compiles it here — the row window, each group's window, and the group
  * counts — because counts that disagree with rows is the failure this shares
  * one expression to prevent.
+ *
+ * The name half reads `entities.name`, the string the grid's name column
+ * renders, not `display_name`: its fallbacks (a file name, a text value, an
+ * English "Untitled") would return rows the highlighter has nothing to mark
+ * in, and a reader typing their own locale's placeholder would find nothing.
+ *
+ * A find term is literal text, not a pattern: a typed `%` or `_` has to match
+ * itself, or the server would return rows the highlighter cannot mark.
+ * `contains` filters keep their pass-through behaviour; find is stricter.
  *
  * Property ids need no ownership check: like `fieldIds`, they are only used
  * inside a subquery already scoped to an authorized workspace's current entity
@@ -797,7 +796,7 @@ export const buildFindConditions = (find: EntityFind | undefined): SQL[] => {
     return [];
   }
 
-  const pattern = `%${escapeLikePattern(term)}%`;
+  const pattern = `%${escapeLike(term)}%`;
   const matchesPattern = (valueExpr: SQL) => sql`${valueExpr} ILIKE ${pattern}`;
   const { propertyIds } = find.scope;
   const columnsMatch =
@@ -816,7 +815,7 @@ export const buildFindConditions = (find: EntityFind | undefined): SQL[] => {
     return [columnsMatch ?? sql`false`];
   }
 
-  const nameMatch = matchesPattern(displayedNameExpr());
+  const nameMatch = matchesPattern(sql`${entities.name}`);
   return [
     columnsMatch === null ? nameMatch : sql`(${nameMatch} OR ${columnsMatch})`,
   ];

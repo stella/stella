@@ -162,11 +162,14 @@ describe("buildFindConditions", () => {
   });
 
   test("an unrestricted scope with no columns matches the name only", () => {
+    // The raw name is what the grid's name column renders; `display_name`
+    // falls back to strings no cell shows, which nothing could highlight.
     const sql = findSql({
       scope: { type: "all", propertyIds: [] },
       term: "lease",
     });
-    expect(sql).toContain("display_name");
+    expect(sql).toContain('"entities"."name"');
+    expect(sql).not.toContain("display_name");
     expect(sql).not.toContain("EXISTS");
   });
 
@@ -175,7 +178,7 @@ describe("buildFindConditions", () => {
       scope: { type: "all", propertyIds },
       term: "lease",
     });
-    expect(sql).toContain("display_name");
+    expect(sql).toContain('"entities"."name"');
     expect(sql).toContain(" OR ");
     expect(sql).toContain("EXISTS");
   });
@@ -185,7 +188,7 @@ describe("buildFindConditions", () => {
       scope: { type: "columns", propertyIds },
       term: "lease",
     });
-    expect(sql).not.toContain("display_name");
+    expect(sql).not.toContain('"entities"."name"');
     expect(sql).toContain("EXISTS");
   });
 
