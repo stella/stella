@@ -83,6 +83,7 @@ test("every cycle reports one timing per phase, in both commit modes", async () 
       reservationMs: expect.any(Number),
       materialReadMs: 0,
       payloadLoadMs: 0,
+      documentBuildMs: 0,
       ingestMs: 0,
       storeCommitMs: 0,
     });

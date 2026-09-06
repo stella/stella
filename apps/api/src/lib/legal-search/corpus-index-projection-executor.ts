@@ -128,7 +128,23 @@ type ExecuteCorpusProjectionAppendCycleOptions<
 export type CorpusProjectionAppendCycleTiming = {
   reservationMs: number;
   materialReadMs: number;
+  /**
+   * The payload window end to end: object reads, which run concurrently, and
+   * the document build for each revision, which does not.
+   */
   payloadLoadMs: number;
+  /**
+   * The build's share of `payloadLoadMs`: parsing a payload into documents and
+   * serializing them, summed over the revisions.
+   *
+   * Measured apart from the window it sits inside because the two answer
+   * opposite questions. The window is wall clock over concurrent reads, so it
+   * says nothing about where the time went; this is synchronous work on one
+   * thread, so it adds up to real elapsed time and a cycle whose window is
+   * mostly build is CPU-bound, not I/O-bound. Without the split the phase
+   * reads as object-storage latency however it is actually spent.
+   */
+  documentBuildMs: number;
   ingestMs: number;
   storeCommitMs: number;
 };
@@ -443,18 +459,11 @@ export const advanceCorpusProjectionAppendTails = <
   return { flush, tails: nextTails };
 };
 
-const buildPreparedEntry = async (
-  runInTransaction: ProjectionTransactionRunner,
+/** The synchronous half of a prepared entry: payload in, append request out. */
+const prepareProjectionEntry = (
   material: CorpusProjectionMaterial,
-): Promise<Result<PreparedProjectionEntry, PreparedProjectionFailure>> => {
-  const payload = await Result.tryPromise(
-    async () => await loadCorpusProjectionPayload(runInTransaction, material),
-  );
-  if (payload.isErr()) {
-    return Result.err(
-      classifyCorpusProjectionPayloadReadFailure(payload.error),
-    );
-  }
+  payload: Awaited<ReturnType<typeof loadCorpusProjectionPayload>>,
+): Result<PreparedProjectionEntry, PreparedProjectionFailure> => {
   const built = Result.try(() => {
     switch (material.family) {
       case "case_law":
@@ -462,7 +471,7 @@ const buildPreparedEntry = async (
           family: material.family,
           manifest: material.manifest,
           input: material.input,
-          payload: payload.value,
+          payload,
           revision: material.lease.intentId,
         });
       case "legislation":
@@ -470,7 +479,7 @@ const buildPreparedEntry = async (
           family: material.family,
           manifest: material.manifest,
           input: material.input,
-          payload: payload.value,
+          payload,
           revision: material.lease.intentId,
         });
       default:
@@ -513,6 +522,36 @@ const buildPreparedEntry = async (
     ndjsonBytes: Buffer.byteLength(request.ndjson, "utf-8") + 1,
     leaseExpiresAtMs: material.lease.leaseExpiresAt.getTime(),
   });
+};
+
+type BuildPreparedEntryOptions = {
+  runInTransaction: ProjectionTransactionRunner;
+  material: CorpusProjectionMaterial;
+  /** Records the synchronous build's share of the payload window. */
+  recordBuildMs: (elapsedMs: number) => void;
+};
+
+const buildPreparedEntry = async ({
+  runInTransaction,
+  material,
+  recordBuildMs,
+}: BuildPreparedEntryOptions): Promise<
+  Result<PreparedProjectionEntry, PreparedProjectionFailure>
+> => {
+  const payload = await Result.tryPromise(
+    async () => await loadCorpusProjectionPayload(runInTransaction, material),
+  );
+  if (payload.isErr()) {
+    return Result.err(
+      classifyCorpusProjectionPayloadReadFailure(payload.error),
+    );
+  }
+  // The build is synchronous, so one span covers all of it and the spans of
+  // concurrent revisions cannot overlap.
+  const buildStartedAt = Date.now();
+  const prepared = prepareProjectionEntry(material, payload.value);
+  recordBuildMs(Date.now() - buildStartedAt);
+  return prepared;
 };
 
 const addCancellation = (
@@ -747,7 +786,13 @@ const processPreparedWindows = async ({
       await Promise.all(
         window.map(async (material) => ({
           material,
-          loaded: await buildPreparedEntry(runInTransaction, material),
+          loaded: await buildPreparedEntry({
+            runInTransaction,
+            material,
+            recordBuildMs: (elapsedMs) => {
+              result.timing.documentBuildMs += elapsedMs;
+            },
+          }),
         })),
       ),
     (elapsedMs) => {
@@ -865,6 +910,7 @@ export const executeCorpusProjectionAppendCycle = async <
     reservationMs: 0,
     materialReadMs: 0,
     payloadLoadMs: 0,
+    documentBuildMs: 0,
     ingestMs: 0,
     storeCommitMs: 0,
   };
