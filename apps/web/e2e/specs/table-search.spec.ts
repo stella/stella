@@ -125,4 +125,95 @@ test.describe("find in table", () => {
     await expect(otherRow).toBeVisible({ timeout: 15_000 });
     await expect(page.locator("mark")).toHaveCount(0);
   });
+
+  // Finding 1 of the find browser test: Folio's find/replace dialog binds
+  // Cmd/Ctrl+F on `document` in the bubble phase, unscoped, so one press used
+  // to open its dialog on top of whichever bar the registry had awarded the
+  // press to. The registry now holds the only listener and stops the press it
+  // awards, which is what this asserts — against a stand-in listener of the
+  // same shape rather than against Folio, so the guard survives a Folio
+  // upgrade and needs no DOCX mounted.
+  test("a press the registry awards never reaches a document bubble listener", async ({
+    page,
+    request,
+  }) => {
+    test.slow();
+
+    const testWorkspace = workspace;
+    if (testWorkspace === null) {
+      throw new Error("Test workspace was not created");
+    }
+
+    const rowName = `alpha-lease-${randomUUID().slice(0, 8)}.docx`;
+    await apiUploadDocx(
+      request,
+      testWorkspace.id,
+      testWorkspace.filePropertyId,
+      { name: rowName, mimeType: DOCX_MIME, buffer: await readFile(DOCX_PATH) },
+    );
+
+    const { cookies } = await request.storageState();
+    await page.context().addCookies(cookies);
+    await expect
+      .poll(
+        async () =>
+          await apiStatus(page.request, `/workspaces/${testWorkspace.id}`),
+        {
+          message: "browser context can read the created workspace",
+          timeout: 10_000,
+        },
+      )
+      .toBe(200);
+
+    await page.goto(`/workspaces/${testWorkspace.id}/${testWorkspace.viewId}`, {
+      waitUntil: "domcontentloaded",
+    });
+
+    const tableTab = page.getByRole("tab", { exact: true, name: "Table" });
+    await expect(tableTab).toBeVisible({ timeout: 30_000 });
+    await tableTab.click();
+    await expect(
+      page.getByRole("button", { exact: true, name: rowName }),
+    ).toBeVisible({ timeout: 30_000 });
+
+    // Records every find press that survives to the document's bubble phase,
+    // and whether the app had already claimed it. An attribute rather than a
+    // window global so the assertions read it as ordinary page state.
+    const body = page.locator("body");
+    await page.evaluate(() => {
+      document.addEventListener("keydown", (event) => {
+        if (
+          (!event.metaKey && !event.ctrlKey) ||
+          event.key.toLowerCase() !== "f"
+        ) {
+          return;
+        }
+        const seen = document.body.dataset["bubbledFindPresses"];
+        const entry = event.defaultPrevented ? "prevented" : "untouched";
+        document.body.dataset["bubbledFindPresses"] =
+          seen === undefined ? entry : `${seen},${entry}`;
+      });
+    });
+
+    await page.keyboard.press("ControlOrMeta+f");
+    await expect(page.getByRole("searchbox")).toBeFocused();
+    await expect(body).not.toHaveAttribute("data-bubbled-find-presses");
+
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("searchbox")).toBeHidden();
+
+    // The other half of the contract: with a modal covering the table no
+    // surface is reachable, so the press is left alone and the browser's own
+    // find still opens.
+    await page.keyboard.press("ControlOrMeta+k");
+    await expect(page.getByRole("combobox").first()).toBeVisible({
+      timeout: 30_000,
+    });
+
+    await page.keyboard.press("ControlOrMeta+f");
+    await expect(body).toHaveAttribute(
+      "data-bubbled-find-presses",
+      "untouched",
+    );
+  });
 });

@@ -1,7 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import type { RefObject } from "react";
 
-import { useHotkey } from "@tanstack/react-hotkeys";
 import { Columns3Icon, InfoIcon, SearchIcon, XIcon } from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
@@ -12,9 +11,8 @@ import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { cn } from "@stll/ui/utils";
 
 import { PropertyIcon } from "@/components/workspaces/property-helpers";
-import { ownsFindKeyEvent, useFindSurface } from "@/lib/find-owner";
+import { useFindSurface } from "@/lib/find-owner";
 import type { WorkspaceProperty, WorkspaceView } from "@/lib/types";
-import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
 import { useWorkspaceTableSchema } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-columns";
 import {
   searchableColumnIds,
@@ -85,25 +83,14 @@ export const ViewToolbarSearch = ({
   useFindSurface({
     bar: popupRef,
     enabled: true,
+    onFind: () => {
+      openFind(view.id);
+      inputRef.current?.focus();
+    },
     owner: "table",
     root: paneRef,
     scope: "app",
   });
-  useHotkey(
-    useEffectiveHotkey("find"),
-    (event) => {
-      if (!ownsFindKeyEvent("table", event)) {
-        return;
-      }
-      // The registration does not suppress the browser's find for us: a press
-      // another bar owns, or one aimed at a dialog on top, has to reach the
-      // browser untouched.
-      event.preventDefault();
-      openFind(view.id);
-      inputRef.current?.focus();
-    },
-    { preventDefault: false, stopPropagation: false },
-  );
 
   const searchable = searchableColumnIds(columns);
   const narrowed = selection.type === "columns";

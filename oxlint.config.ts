@@ -156,6 +156,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-inline-style-colors.fixture.tsx", [
     "no-inline-style-colors/no-inline-style-colors",
   ]),
+  fixtureRuleOverride("no-ad-hoc-find-shortcut.fixture.ts", [
+    "no-ad-hoc-find-shortcut/no-ad-hoc-find-shortcut",
+  ]),
   fixtureRuleOverride("no-ambient-hotkey-format.fixture.ts", [
     "no-ambient-hotkey-format/no-ambient-hotkey-format",
   ]),
@@ -981,6 +984,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-literal-minor-unit-scale.ts",
     "./.oxlint-plugins/no-raw-foreground-opacity.ts",
     "./.oxlint-plugins/no-inline-style-colors.ts",
+    "./.oxlint-plugins/no-ad-hoc-find-shortcut.ts",
     "./.oxlint-plugins/no-ambient-hotkey-format.ts",
     "./.oxlint-plugins/no-ambient-nondeterminism.ts",
     "./.oxlint-plugins/no-physical-properties.ts",
@@ -2104,6 +2108,15 @@ export default defineConfig({
       files: ["apps/web/src/**/*.{ts,tsx}"],
       rules: {
         "no-ambient-hotkey-format/no-ambient-hotkey-format": "error",
+      },
+    },
+    {
+      // The find shortcut has one listener, in `@/lib/find-owner`. A surface
+      // that recognises the press itself races that listener and lets Folio's
+      // unscoped document handler open a second find bar on top.
+      files: ["apps/web/src/**/*.{ts,tsx}"],
+      rules: {
+        "no-ad-hoc-find-shortcut/no-ad-hoc-find-shortcut": "error",
       },
     },
     {

@@ -50,7 +50,7 @@ import { createChatThreadId, toChatThreadId } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 import { APIError, toAPIError } from "@/lib/errors/api";
 import { fetchWithTimeout } from "@/lib/fetch";
-import { ownsFindKeyEvent, useFindSurface } from "@/lib/find-owner";
+import { useFindSurface } from "@/lib/find-owner";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { PDFPage } from "@/lib/pdf/pdf-page";
@@ -156,33 +156,25 @@ const useInspectorFind = ({
   const matchCount = findState.open ? findState.matchCount : 0;
   const activeIndex = findState.open ? findState.activeIndex : 0;
 
-  // The DOCX pane and a table view's toolbar bind Cmd/Ctrl+F too, so the press
-  // is arbitrated rather than taken: this panel reaches the whole app while it
-  // is showing a document, and stands down for a pane the press landed inside
-  // or while a modal covers it.
+  // The DOCX pane and a table view's toolbar are candidates for the same
+  // press: this panel reaches the whole app while it is showing a document,
+  // and stands down for a pane the press landed inside or while a modal
+  // covers it.
   useFindSurface({
     enabled,
+    onFind: () => {
+      setFindState((prev) => (prev.open ? prev : FIND_OPENED));
+    },
     owner: "inspector",
     root: panelRef,
     scope: "app",
   });
 
+  // Escape closes this bar and nothing else, so it keeps a listener of its own
+  // rather than travelling through a registry that has no opinion about it.
   useExternalSyncEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (!enabled) {
-        return;
-      }
-
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "f") {
-        if (!ownsFindKeyEvent("inspector", event)) {
-          return;
-        }
-        event.preventDefault();
-        setFindState((prev) => (prev.open ? prev : FIND_OPENED));
-        return;
-      }
-
-      if (event.key === "Escape" && findOpen) {
+      if (enabled && findOpen && event.key === "Escape") {
         event.preventDefault();
         setFindState(FIND_CLOSED);
       }

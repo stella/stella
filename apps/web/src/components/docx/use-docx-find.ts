@@ -9,7 +9,7 @@ import type { DocxEditorRef } from "@stll/folio-react";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { findDocumentSearchResult } from "@/lib/document-search";
-import { ownsFindKeyEvent, useFindSurface } from "@/lib/find-owner";
+import { useFindSurface } from "@/lib/find-owner";
 import {
   getAdjacentSearchMatchIndex,
   MAX_SEARCH_PREVIEW_MATCHES,
@@ -17,7 +17,6 @@ import {
 import type { SearchMatchSummary } from "@/lib/search-match-navigation";
 
 import {
-  classifyDocxFindKeydown,
   EMPTY_DOCX_FIND_SUMMARY,
   resetOpenDocxFindQuery,
 } from "./docx-find.logic";
@@ -55,10 +54,11 @@ type UseDocxFindOptions = {
  * Cmd/Ctrl+F for a DOCX rendered in the inspector pane.
  *
  * Folio's built-in dialog is a viewport overlay positioned clear of the
- * docked inspector, which puts it over unrelated page content. This hook
- * claims the shortcut before Folio's document-level listener sees it and
- * drives a docked bar instead, reusing the passage-highlight search path
- * the PDF peek viewer already uses.
+ * docked inspector, which puts it over unrelated page content. This pane
+ * registers with the find registry (`@/lib/find-owner`), which takes the
+ * press before Folio's document-level listener sees it, and drives a docked
+ * bar instead, reusing the passage-highlight search path the PDF peek viewer
+ * already uses.
  */
 export const useDocxFind = ({
   containerRef,
@@ -181,76 +181,71 @@ export const useDocxFind = ({
 
   const isOpen = state.status === "open";
 
-  // The inspector's external-reference preview and a table view's toolbar bind
-  // Cmd/Ctrl+F too. This pane only claims presses that land inside it, and only
-  // while it is the visible tab, which the shared registry resolves.
+  const openFind = () => {
+    const selection = window.getSelection();
+    const selected =
+      selection && !selection.isCollapsed ? selection.toString().trim() : "";
+    if (selected.length > 0) {
+      matchesRef.current = [];
+      editorRef.current?.getEditorRef()?.setPassageHighlight(null);
+    }
+    setState((prev) => {
+      if (prev.status === "open") {
+        const focused = {
+          ...prev,
+          focusSeq: prev.focusSeq + 1,
+        };
+        return selected.length > 0
+          ? resetOpenDocxFindQuery(focused, selected)
+          : focused;
+      }
+      return {
+        status: "open",
+        activeIndex: 0,
+        focusSeq: 0,
+        query: selected,
+        summary: EMPTY_DOCX_FIND_SUMMARY,
+      };
+    });
+    if (selected.length > 0) {
+      debouncedSearch(selected);
+    }
+  };
+
+  // The inspector's external-reference preview and a table view's toolbar are
+  // candidates for the same press. This pane only claims presses that land
+  // inside it, and only while it is the visible tab; the registry owns the
+  // listener and calls back the surface it awards the press to.
   useFindSurface({
     enabled,
+    onFind: openFind,
     owner: "docx",
     root: containerRef,
     scope: "pane",
   });
 
+  // Escape is not the registry's business, so it keeps a listener of its own,
+  // bound to the pane rather than the document: capture phase to beat the
+  // editor inside, scoped so it cannot swallow the Escape of a dialog on top.
   useExternalSyncEffect(() => {
-    if (!enabled) {
+    const root = containerRef.current;
+    if (!enabled || !isOpen || !root) {
       return undefined;
     }
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (!ownsFindKeyEvent("docx", event)) {
+      if (event.key !== "Escape") {
         return;
       }
-
-      const action = classifyDocxFindKeydown({ event, isOpen });
-      if (action.type === "none") {
-        return;
-      }
-
-      if (action.type === "closeFind") {
-        event.preventDefault();
-        close();
-        return;
-      }
-
       event.preventDefault();
-      // Folio listens for the same shortcut on `document` in the bubble
-      // phase; stopping propagation here keeps its overlay dialog closed.
-      event.stopPropagation();
-      const selection = window.getSelection();
-      const selected =
-        selection && !selection.isCollapsed ? selection.toString().trim() : "";
-      if (selected.length > 0) {
-        matchesRef.current = [];
-        editorRef.current?.getEditorRef()?.setPassageHighlight(null);
-      }
-      setState((prev) => {
-        if (prev.status === "open") {
-          const focused = {
-            ...prev,
-            focusSeq: prev.focusSeq + 1,
-          };
-          return selected.length > 0
-            ? resetOpenDocxFindQuery(focused, selected)
-            : focused;
-        }
-        return {
-          status: "open",
-          activeIndex: 0,
-          focusSeq: 0,
-          query: selected,
-          summary: EMPTY_DOCX_FIND_SUMMARY,
-        };
-      });
-      if (selected.length > 0) {
-        debouncedSearch(selected);
-      }
+      close();
     };
 
-    document.addEventListener("keydown", handleKeyDown, { capture: true });
+    root.addEventListener("keydown", handleKeyDown, { capture: true });
     return () => {
-      document.removeEventListener("keydown", handleKeyDown, { capture: true });
+      root.removeEventListener("keydown", handleKeyDown, { capture: true });
     };
-  }, [close, debouncedSearch, editorRef, enabled, isOpen]);
+  }, [close, containerRef, enabled, isOpen]);
 
   return {
     activeIndex: state.status === "open" ? state.activeIndex : 0,
