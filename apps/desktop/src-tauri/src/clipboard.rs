@@ -2589,8 +2589,8 @@ fn is_highlight_color(value: &str) -> bool {
     return true;
   }
   csscolorparser::parse(value).is_ok_and(|color| {
-    let [red, green, blue, alpha] = color.to_rgba8();
-    alpha > 0 && (red != green || green != blue)
+    let [red, green, blue, alpha] = color.clamp().to_array();
+    alpha > 0.0 && (red != green || green != blue)
   })
 }
 
@@ -4143,6 +4143,8 @@ mod tests {
       "rgb(255, 255, 0)",
       "rgb(100% 100% 0% / 50%)",
       "hsl(60 100% 50%)",
+      "rgba(255, 0, 0, 0.001)",
+      "rgb(10.1 10 10)",
     ] {
       let html = format!("<strong style='background: {color}'>text</strong>");
       let sanitized = sanitized_html(&html).unwrap();
