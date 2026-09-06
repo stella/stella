@@ -1,13 +1,15 @@
 import { panic, Result } from "better-result";
 import type { SQL } from "drizzle-orm";
-import { and, asc, eq, inArray, isNull, or } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 
 import type { GazetteerEntry } from "@stll/anonymize";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { anonymizationBlacklistEntries } from "@/api/db/schema";
+import { loadOrganizationAnonymizationTermsForWrite } from "@/api/lib/anonymization-write-cap";
 import { arrayOrEmpty } from "@/api/lib/array";
+import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { boundedAll } from "@/api/lib/db/bounded-all";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -48,6 +50,10 @@ export const normalizeAnonymizationBlacklistEntry = ({
   variants: normalizeVariants(arrayOrEmpty(variants)),
 });
 
+export type NormalizedAnonymizationBlacklistEntry = ReturnType<
+  typeof normalizeAnonymizationBlacklistEntry
+>;
+
 export const normalizeAnonymizationBlacklistEntries = (
   entries: AnonymizationBlacklistEntryInput[],
 ) => {
@@ -81,6 +87,106 @@ export const normalizeAnonymizationBlacklistEntries = (
   }
 
   return Result.ok(normalized);
+};
+
+/**
+ * Replace an organization's firm-wide always-mask list with `entries`.
+ *
+ * Every read and write here is confined to org-wide rows
+ * (`workspace_id IS NULL`). Matter-scoped terms created from the inspector
+ * live in the same table and must be neither visible to nor deletable by the
+ * firm-wide settings page.
+ *
+ * Two statements, whatever the list's length: one delete for the terms that
+ * are gone, one upsert for the rest. A term already on the list keeps its
+ * row, because the id comes from the locked read, which makes the conflict
+ * target the primary key and leaves `createdBy` and `createdAt` untouched; a
+ * new term gets a fresh id. `setWhere` repeats the tenant scope the delete
+ * carries, so the upsert can reach nothing outside this organization's
+ * org-wide set even if an id from elsewhere reached it.
+ */
+export const replaceOrganizationAnonymizationBlacklist = async ({
+  entries,
+  organizationId,
+  tx,
+  userId,
+}: {
+  entries: readonly NormalizedAnonymizationBlacklistEntry[];
+  organizationId: SafeId<"organization">;
+  tx: Transaction;
+  userId: SafeId<"user">;
+}): Promise<{ deletedCount: number }> => {
+  // Locks the org-wide set for the rest of this transaction. The replace
+  // deletes only the rows its own read saw, so two concurrent replacements
+  // would otherwise each keep their own set and leave the union of both
+  // behind: twice the cap.
+  const existingRows = await loadOrganizationAnonymizationTermsForWrite(
+    tx,
+    organizationId,
+  );
+
+  const existingByCanonical = new Map(
+    existingRows.map((row) => [row.canonical.toLocaleLowerCase(), row]),
+  );
+  const incomingCanonicalKeys = new Set(
+    entries.map((entry) => entry.canonical.toLocaleLowerCase()),
+  );
+
+  const idsToDelete: (typeof existingRows)[number]["id"][] = [];
+  for (const row of existingRows) {
+    if (!incomingCanonicalKeys.has(row.canonical.toLocaleLowerCase())) {
+      idsToDelete.push(row.id);
+    }
+  }
+
+  if (idsToDelete.length > 0) {
+    await tx
+      .delete(anonymizationBlacklistEntries)
+      .where(
+        and(
+          eq(anonymizationBlacklistEntries.organizationId, organizationId),
+          isNull(anonymizationBlacklistEntries.workspaceId),
+          inArray(anonymizationBlacklistEntries.id, idsToDelete),
+        ),
+      );
+  }
+
+  if (entries.length === 0) {
+    return { deletedCount: idsToDelete.length };
+  }
+
+  const now = new Date();
+  const rows = entries.map((entry) => ({
+    id:
+      existingByCanonical.get(entry.canonical.toLocaleLowerCase())?.id ??
+      createSafeId<"anonymizationBlacklistEntry">(),
+    organizationId,
+    label: entry.label,
+    canonical: entry.canonical,
+    variants: entry.variants,
+    enabled: entry.enabled,
+    createdBy: userId,
+    updatedBy: userId,
+  }));
+
+  await tx
+    .insert(anonymizationBlacklistEntries)
+    .values(rows)
+    .onConflictDoUpdate({
+      target: anonymizationBlacklistEntries.id,
+      set: {
+        label: sql`excluded.label`,
+        canonical: sql`excluded.canonical`,
+        variants: sql`excluded.variants`,
+        enabled: sql`excluded.enabled`,
+        updatedBy: sql`excluded.updated_by`,
+        updatedAt: now,
+      },
+      setWhere: sql`${anonymizationBlacklistEntries.organizationId} = ${organizationId}
+        AND ${anonymizationBlacklistEntries.workspaceId} IS NULL`,
+    });
+
+  return { deletedCount: idsToDelete.length };
 };
 
 /**
