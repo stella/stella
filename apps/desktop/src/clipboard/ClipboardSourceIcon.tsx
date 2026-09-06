@@ -1,21 +1,5 @@
 import { cn } from "@stll/ui/utils";
 
-const SOURCE_ICON_SIZES = {
-  card: { icon: "size-7", tileIcon: "size-5", tile: "size-7 rounded-md" },
-  inline: {
-    icon: "size-4 rounded-[3px]",
-    tileIcon: "size-3",
-    tile: "size-4 rounded-[3px]",
-  },
-} as const;
-
-type ClipboardSourceIconProps = {
-  iconDataUrl: string;
-  /** App icons carry their own shape; favicons get a browser-style tile. */
-  kind: "app" | "favicon";
-  size: keyof typeof SOURCE_ICON_SIZES;
-};
-
 export const ClipboardSourceIcon = ({
   iconDataUrl,
   kind,
@@ -49,4 +33,20 @@ export const ClipboardSourceIcon = ({
       />
     </span>
   );
+};
+
+const SOURCE_ICON_SIZES = {
+  card: { icon: "size-7", tileIcon: "size-5", tile: "size-7 rounded-md" },
+  inline: {
+    icon: "size-4 rounded-[3px]",
+    tileIcon: "size-3",
+    tile: "size-4 rounded-[3px]",
+  },
+} as const;
+
+type ClipboardSourceIconProps = {
+  iconDataUrl: string;
+  /** App icons carry their own shape; favicons get a browser-style tile. */
+  kind: "app" | "favicon";
+  size: keyof typeof SOURCE_ICON_SIZES;
 };
