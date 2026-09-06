@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import { isRecord } from "@/api/lib/type-guards";
 
 /**
@@ -8,6 +10,12 @@ import { isRecord } from "@/api/lib/type-guards";
  * exactly one of the two places, so a query verified by a test can still return
  * nothing in production, and the reverse. Every caller of `execute` that reads
  * rows back goes through here so neither half can be forgotten.
+ *
+ * A third shape is not an empty result, it is a driver this function has never
+ * seen. Answering `[]` would hand every caller the reading that looks like
+ * success — no rows found — which for a guard means the guard passes. That is
+ * the wrong direction to fail in, so an unrecognised shape panics with what it
+ * received instead.
  */
 export const executedRows = (result: unknown): unknown[] => {
   if (Array.isArray(result)) {
@@ -16,5 +24,7 @@ export const executedRows = (result: unknown): unknown[] => {
   if (isRecord(result) && Array.isArray(result["rows"])) {
     return result["rows"];
   }
-  return [];
+  return panic(
+    `Unsupported execute() result shape: ${typeof result === "object" && result !== null ? Object.keys(result).join(", ") || "{}" : typeof result}`,
+  );
 };

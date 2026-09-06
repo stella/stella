@@ -1,3 +1,4 @@
+import { Panic } from "better-result";
 import { afterAll, beforeAll, expect, setDefaultTimeout, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
@@ -22,7 +23,8 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
  *
  * So the fixture builds a real chain, root -> middle -> leaf, and asks for each
  * outcome: a legal move, a move onto a descendant at depth one and at depth
- * two, and a chain that already loops.
+ * two, a chain that already loops, and a read the guard cannot interpret —
+ * which has to refuse the move rather than report the permissive answer.
  */
 
 setDefaultTimeout(120_000);
@@ -173,6 +175,42 @@ test("a chain that already loops is reported rather than walked forever", async 
     response: { message: "Cannot create circular category hierarchy" },
   });
   expect(await parentOf(mover)).toBeNull();
+});
+
+// A guard that cannot read its own answer must not report the permissive one.
+// Every other read in the handler stays real; only `execute` returns a shape
+// the reader does not recognise, which is what a driver change would look like.
+test("a cycle check that cannot read its answer refuses rather than allowing", async () => {
+  const brokenExecute: ScopedDb = async (callback) =>
+    await testDb.transaction(async (tx) => {
+      await tx.execute(sql.raw("RESET ROLE"));
+      const proxied = new Proxy(tx, {
+        get: (target, property) => {
+          if (property === "execute") {
+            return async () => ({ unexpected: true });
+          }
+          const value = Reflect.get(target, property);
+          return typeof value === "function" ? value.bind(target) : value;
+        },
+      });
+      return await callback(asTestRaw<Transaction>(proxied));
+    });
+
+  let thrown: unknown;
+  try {
+    await updateTemplateCategoryHandler({
+      scopedDb: brokenExecute,
+      organizationId,
+      categoryId: root,
+      body: { parentId: middle },
+      recordAuditEvent: noAuditRows,
+    });
+  } catch (error) {
+    thrown = error;
+  }
+
+  expect(thrown).toBeInstanceOf(Panic);
+  expect(await parentOf(root)).toBeNull();
 });
 
 test("another firm's category is not reachable from this firm's walk", async () => {

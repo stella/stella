@@ -67,8 +67,19 @@ const parentChainWouldCycle = async ({
     `),
   );
 
-  const row = executedRows(rows).at(0);
-  return isRecord(row) && row["cycle"] === true;
+  // An aggregate over a `WITH RECURSIVE` is exactly one row carrying exactly
+  // one boolean, whatever the tree looks like — `bool_or` over an empty set is
+  // NULL, which the `coalesce` makes `false`. Anything else means the statement
+  // is no longer the statement this reader was written for, and reading it as
+  // "no cycle" would let the move through: a guard has to fail closed.
+  const [row, ...extra] = executedRows(rows);
+  if (extra.length > 0 || !isRecord(row) || typeof row["cycle"] !== "boolean") {
+    return panic(
+      "Category cycle check expected exactly one row with a boolean `cycle`",
+    );
+  }
+
+  return row["cycle"];
 };
 
 // ── Schemas ─────────────────────────────────────────
