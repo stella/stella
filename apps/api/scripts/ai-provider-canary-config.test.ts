@@ -11,6 +11,7 @@ import {
   CANARY_PROVIDERS,
   missingCanaryProviders,
   modelRoleMaxOutputTokens,
+  structuredOutputBudgetEdgeMaxOutputTokens,
   structuredOutputModelRoleMaxOutputTokens,
   TOOL_CALL_PROBE_MAX_OUTPUT_TOKENS,
   WEEKLY_TOOL_SHAPES,
@@ -55,6 +56,25 @@ describe("AI provider canary role budgets", () => {
     // Amazon Nova v1 accepts at most 10,000 output tokens and takes part in
     // the weekly rotation; a larger ceiling is rejected before the tool call.
     expect(TOOL_CALL_PROBE_MAX_OUTPUT_TOKENS).toBeLessThanOrEqual(10_000);
+  });
+
+  test("budgets the budget-edge probe above a truncating ceiling", () => {
+    // A one-property schema still gets the tool-execution headroom: the
+    // "fast"-role default is a provider's smallest model, and a structured
+    // object cut off mid-tool-use is rejected, not shortened.
+    expect(
+      structuredOutputBudgetEdgeMaxOutputTokens({
+        modelId: model,
+        propertyCount: 1,
+      }),
+    ).toBe(TOOL_CALL_PROBE_MAX_OUTPUT_TOKENS);
+    // Past that floor the ceiling still grows with the schema actually sent.
+    expect(
+      structuredOutputBudgetEdgeMaxOutputTokens({
+        modelId: model,
+        propertyCount: 200,
+      }),
+    ).toBeGreaterThan(TOOL_CALL_PROBE_MAX_OUTPUT_TOKENS);
   });
 
   test("clamps role budgets to a model's output limit", () => {

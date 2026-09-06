@@ -192,6 +192,15 @@ export const TOOL_CALL_PROBE_MAX_OUTPUT_TOKENS = 4096;
 const BUDGET_EDGE_PROBE_OUTPUT_TOKENS_BASE = 256;
 const BUDGET_EDGE_PROBE_OUTPUT_TOKENS_PER_PROPERTY = 50;
 
+// The per-property estimate above prices the answer the prompt asks for. The
+// probe runs at the "fast" role, whose default is a provider's smallest
+// model, and a small model fills the fields it was told to leave empty; the
+// object then stops at the ceiling, and a truncated structured object is not
+// a short answer but a failed one. Bedrock rejects the cut-off tool use
+// outright ("Model produced invalid sequence as part of ToolUse"), Google
+// reports `max_tokens`, and either reads as provider drift the provider did
+// not cause. Floor the ceiling at the same value the tool-execution probes
+// already use, so only a schema past ~77 properties needs the scale above.
 export const structuredOutputBudgetEdgeMaxOutputTokens = ({
   modelId,
   propertyCount,
@@ -201,8 +210,11 @@ export const structuredOutputBudgetEdgeMaxOutputTokens = ({
 }) =>
   clampToModelOutputLimit(
     modelId,
-    BUDGET_EDGE_PROBE_OUTPUT_TOKENS_BASE +
-      propertyCount * BUDGET_EDGE_PROBE_OUTPUT_TOKENS_PER_PROPERTY,
+    Math.max(
+      TOOL_CALL_PROBE_MAX_OUTPUT_TOKENS,
+      BUDGET_EDGE_PROBE_OUTPUT_TOKENS_BASE +
+        propertyCount * BUDGET_EDGE_PROBE_OUTPUT_TOKENS_PER_PROPERTY,
+    ),
   );
 
 export const isCanaryProvider = (value: string): value is CanaryProvider =>
