@@ -1,5 +1,6 @@
 import {
   createMcpHandler,
+  isInitializeRequest,
   isLegacyRequest,
   Server,
   WebStandardStreamableHTTPServerTransport,
@@ -16,6 +17,7 @@ import { panic } from "better-result";
 
 import { detached } from "@/api/lib/detached";
 import { isMcpSession, type McpSession } from "@/api/mcp/auth";
+import type { RecordMcpSessionInitialized } from "@/api/mcp/client-identity";
 import {
   MCP_MAX_REQUEST_BODY_BYTES,
   MCP_NOTIFICATION_KEEP_ALIVE_MS,
@@ -151,6 +153,7 @@ type McpServerDependencies = {
     uri: string,
     mode: McpMode,
   ) => ReadResourceResult | Promise<ReadResourceResult>;
+  recordMcpSessionInitialized: RecordMcpSessionInitialized;
   resolveMcpSessionContext: (
     session: McpSession,
     options: { clientIp?: string | null; request: Request },
@@ -593,6 +596,7 @@ export const createMcpHttpRequestHandler = ({
   listMcpResources,
   listMcpTools,
   readMcpResource,
+  recordMcpSessionInitialized,
   resolveMcpSessionContext,
 }: McpServerDependencies) => {
   const createMcpServer = async ({
@@ -787,6 +791,29 @@ export const createMcpHttpRequestHandler = ({
       enableJsonResponse: true,
       keepAliveMs: MCP_NOTIFICATION_KEEP_ALIVE_MS,
     });
+    // Where a session's client names itself: the SDK classifies `initialize`
+    // as 2025-era whatever revision it claims, so every handshake arrives on
+    // this leg. `connect` chains this observer ahead of its own dispatch, and
+    // the instance is per-request, so the identity is recorded once per
+    // handshake rather than once per call. Modern-era requests carry the
+    // identity in each request's `_meta` envelope instead and open no session.
+    //
+    // The transport is not an `EventTarget` and exposes only this callback
+    // slot, so `Reflect.set` performs the assignment the
+    // `prefer-add-event-listener` rule bans, as `redis-client.ts` does for
+    // Bun's client. The handler is typed from the slot it fills.
+    const observeHandshake: NonNullable<typeof transport.onmessage> = (
+      message,
+    ) => {
+      if (isInitializeRequest(message)) {
+        recordMcpSessionInitialized({
+          clientInfo: message.params.clientInfo,
+          mode,
+          session,
+        });
+      }
+    };
+    Reflect.set(transport, "onmessage", observeHandshake);
     const reportTransportError = (error: unknown, operation: string) => {
       captureError(error, {
         mode,
