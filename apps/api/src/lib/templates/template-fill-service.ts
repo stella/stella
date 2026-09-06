@@ -53,7 +53,10 @@ import type {
   FieldDateFormat,
   FieldMeta,
   FieldPart,
+  FieldSource,
+  FieldValidation,
   InputType,
+  LookupRegistry,
 } from "@/api/lib/docx/types";
 import { isTemplateData } from "@/api/lib/docx/types";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
@@ -165,11 +168,24 @@ type DescribedField = {
   /** Allowed values for a select; null when the field is not a select. */
   options: string[] | null;
   /**
-   * Lookup field output formats: the bare `{{path}}` marker renders the first
-   * format; later formats are addressed by `{{path.key}}`. Null for
-   * non-lookup fields so an agent knows which fields resolve from a registry.
+   * Registry lookup: which register resolves the submitted number, and the
+   * named output formats it renders — each addressed by `{{path.key}}`, the
+   * first also by the bare `{{path}}`. Null for non-lookup fields. Echoed in
+   * the shape the `fields` overlay accepts, so a describe payload can be
+   * edited and sent straight back.
    */
-  formats: { key: string; template: string }[] | null;
+  lookup: {
+    registry: LookupRegistry;
+    formats: { key: string; template: string }[];
+  } | null;
+  /** Fill-time constraints (required, lengths, bounds, pattern, item counts);
+   *  null when the field declares none. */
+  validation: FieldValidation | null;
+  /** Matter or contact data the value is bound to and resolved from at fill
+   *  time; null when the field is not bound. */
+  source: FieldSource | null;
+  /** True when the rendered document is included in this AI field's prompt. */
+  aiSeesDocument: boolean;
   /** AI-drafting instruction (this field is written by AI at fill time when
    *  the value is omitted); null when the field is not AI-drafted. */
   aiPrompt: string | null;
@@ -255,8 +271,11 @@ export type DescribeTemplateResult =
   | {
       name: string;
       fields: DescribedField[];
-      conditions: { name: string; expression: string }[];
-      computed: { name: string; expression: string }[];
+      /** Derived fields reported as rules rather than questions, named the
+       *  way the `fields` overlay names them so a caller can edit an
+       *  expression and send it straight back. */
+      conditions: { path: string; condition: string }[];
+      computed: { path: string; formula: string }[];
       arrays: DescribedArrayGroup[];
       /** Marker authoring mistakes found in the stored DOCX plus the ones its
        *  field configuration introduces. Advisory: the template is served
@@ -336,13 +355,19 @@ export const describeStoredTemplate = async ({
           required: isTemplateFieldRequired(field),
           hint: field.hint ?? null,
           options: field.options ?? null,
-          formats:
+          lookup:
             field.lookup === undefined
               ? null
-              : field.lookup.formats.map((format) => ({
-                  key: format.key,
-                  template: format.template,
-                })),
+              : {
+                  registry: field.lookup.registry,
+                  formats: field.lookup.formats.map((format) => ({
+                    key: format.key,
+                    template: format.template,
+                  })),
+                },
+          validation: field.validation ?? null,
+          source: field.source ?? null,
+          aiSeesDocument: field.aiSeesDocument ?? false,
           aiPrompt: field.aiPrompt ?? null,
           aiAdapt: field.aiAdapt ?? false,
           optionsFrom: field.optionsFrom ?? null,
@@ -350,16 +375,16 @@ export const describeStoredTemplate = async ({
           parts: field.parts ?? null,
           format: field.format ?? null,
         })),
-      // Synthesized so each boolean condition-field (name = path) appears here
-      // as a rule rather than a fillable field.
+      // Synthesized so each boolean condition-field appears here as a rule
+      // rather than a fillable field.
       conditions: manifestNamedConditions(manifest).map((c) => ({
-        name: c.name,
-        expression: c.expression,
+        path: c.name,
+        condition: c.expression,
       })),
       computed: manifest.fields.flatMap((field) =>
         field.formula === undefined
           ? []
-          : [{ name: field.path, expression: field.formula }],
+          : [{ path: field.path, formula: field.formula }],
       ),
     };
   }
@@ -381,7 +406,10 @@ export const describeStoredTemplate = async ({
       required: false,
       hint: null,
       options: null,
-      formats: null,
+      lookup: null,
+      validation: null,
+      source: null,
+      aiSeesDocument: false,
       aiPrompt: null,
       aiAdapt: false,
       optionsFrom: null,

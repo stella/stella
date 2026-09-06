@@ -38,6 +38,11 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { getS3, writeS3ObjectWithRetry } from "@/api/lib/s3";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
+import {
+  applyFieldOverlay,
+  fieldOverlayError,
+  validateFieldOverlay,
+} from "@/api/lib/templates/field-overlay";
 import { buildTemplateS3Key } from "@/api/lib/templates/storage-keys";
 import { detectTemplateLanguagesFromDocx } from "@/api/lib/templates/template-languages";
 
@@ -134,9 +139,27 @@ export const createStoredTemplate = async function* ({
       readManifest(buffer),
     ]);
 
-    const fields = mergeManifestWithDiscovery(existingManifest, discovered);
+    // The overlay is folded into the manifest BEFORE the merge: whether a
+    // dotted path is a field or a lookup's rendered output is decided by the
+    // configuration, so a lookup the caller declares in this same request must
+    // be visible to the merge that classifies those paths.
+    if (clientManifest) {
+      const issues = validateFieldOverlay({
+        configured: existingManifest?.fields ?? [],
+        discovered,
+        overlay: clientManifest.fields,
+      });
+      if (issues.length > 0) {
+        return Result.err(fieldOverlayError(issues));
+      }
+    }
 
-    let fieldMetas: FieldMeta[] = fields.map((f) => ({
+    const baseManifest = clientManifest
+      ? applyFieldOverlay(existingManifest, clientManifest.fields)
+      : existingManifest;
+    const fields = mergeManifestWithDiscovery(baseManifest, discovered);
+
+    const fieldMetas: FieldMeta[] = fields.map((f) => ({
       path: f.path,
       label: f.label,
       hint: f.hint,
@@ -157,37 +180,8 @@ export const createStoredTemplate = async function* ({
       dateFormat: f.dateFormat,
     }));
 
-    if (clientManifest) {
-      const fieldPaths = new Set(fieldMetas.map((f) => f.path));
-      const unknown = clientManifest.fields.find(
-        (f) => !fieldPaths.has(f.path),
-      );
-      if (unknown) {
-        return Result.err(
-          new HandlerError({
-            status: 400,
-            message:
-              `No field "${unknown.path}" was discovered in the DOCX. ` +
-              "Configure only paths that exist as {{markers}}.",
-          }),
-        );
-      }
-
-      const metaByPath = new Map<string, FieldMeta>();
-      for (const f of clientManifest.fields) {
-        metaByPath.set(f.path, f);
-      }
-      fieldMetas = fieldMetas.map((f) => {
-        const override = metaByPath.get(f.path);
-        if (!override) {
-          return f;
-        }
-        return { ...f, ...override };
-      });
-    }
-
     resolvedManifest = {
-      version: existingManifest?.version ?? 1,
+      version: baseManifest?.version ?? 1,
       fields: fieldMetas,
     };
   }

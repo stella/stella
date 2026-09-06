@@ -747,6 +747,30 @@ describe("mergeManifestWithDiscovery", () => {
     ]);
   });
 
+  test("keeps a parent the document writes as its own marker", () => {
+    // `{{tenant}}` alongside `{{tenant.name}}` is not a namespace: the
+    // document prints `tenant` itself. Dropping it left the marker with no
+    // field behind it, so the fill emitted the literal `{{tenant}}` text.
+    const discovery: DiscoveredTemplate = {
+      placeholders: [
+        { name: "tenant", count: 1 },
+        { name: "tenant.name", count: 1 },
+      ],
+      fields: [
+        { path: "tenant", kind: "object", count: 1 },
+        { path: "tenant.name", kind: "string", count: 1 },
+      ],
+      structureErrors: [],
+      warnings: [],
+      conditionPaths: [],
+    };
+    const resolved = mergeManifestWithDiscovery(null, discovery);
+    expect(resolved.map((f) => f.path).toSorted()).toEqual([
+      "tenant",
+      "tenant.name",
+    ]);
+  });
+
   test("keeps parent arrays when nested loop paths share their prefix", () => {
     const discovery: DiscoveredTemplate = {
       placeholders: [],

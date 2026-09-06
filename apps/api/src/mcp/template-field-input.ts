@@ -14,6 +14,7 @@ import type {
   fieldMetaToolInputSchema,
 } from "@/api/lib/docx/types";
 import {
+  describeDerivedSourceConflict,
   FIELD_PARTS_DESCRIPTION,
   FIELD_VALIDATION_DESCRIPTION,
   fieldMetaToolInputObjectSchema,
@@ -84,27 +85,35 @@ export const templateFieldInputSchema = v.pipe(
     "parts and format must be provided together",
   ),
   v.check(
-    ({
-      ai_adapt,
-      ai_prompt,
-      condition,
-      formula,
-      lookup,
-      parts,
-      source,
-    }: v.InferOutput<typeof templateFieldInputObjectSchema>) =>
-      hasCompatibleDerivedSources({
-        aiAdapt: ai_adapt,
-        aiPrompt: ai_prompt,
-        condition,
-        formula,
-        lookup,
-        parts,
-        source,
-      }),
-    "Derived field sources are mutually exclusive",
+    (field: v.InferOutput<typeof templateFieldInputObjectSchema>) =>
+      hasCompatibleDerivedSources(toDerivedSourceFields(field)),
+    (issue) =>
+      describeDerivedSourceConflict(toDerivedSourceFields(issue.input), "snake"),
   ),
 );
+
+/** The snake_case entry read through the shared camelCase derived-source
+ *  predicate and message. `path` travels with it so a rejection names the field
+ *  as well as the colliding properties. */
+const toDerivedSourceFields = ({
+  ai_adapt,
+  ai_prompt,
+  condition,
+  formula,
+  lookup,
+  parts,
+  path,
+  source,
+}: v.InferOutput<typeof templateFieldInputObjectSchema>) => ({
+  aiAdapt: ai_adapt,
+  aiPrompt: ai_prompt,
+  condition,
+  formula,
+  lookup,
+  parts,
+  path,
+  source,
+});
 
 type TemplateFieldInput = v.InferOutput<typeof templateFieldInputSchema>;
 type TemplateFieldPartInput = v.InferOutput<

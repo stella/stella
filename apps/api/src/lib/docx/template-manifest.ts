@@ -948,6 +948,25 @@ export const stripManifest = async (docxBuffer: Buffer): Promise<Buffer> => {
 };
 
 /**
+ * Markers a lookup field's named formats own (`company.name`, `company.krs`,
+ * …): each renders the one resolved hit through its own template, so they are
+ * outputs of a single input rather than fillable fields of their own. Every
+ * consumer that decides "is this dotted path a field?" reads this set, so the
+ * manifest merge and the configure service cannot disagree about it.
+ */
+export const lookupFormatMarkerPaths = (
+  fields: readonly FieldMeta[],
+): Set<string> => {
+  const markers = new Set<string>();
+  for (const field of fields) {
+    for (const format of arrayOrEmpty(field.lookup?.formats)) {
+      markers.add(`${field.path}.${format.key}`);
+    }
+  }
+  return markers;
+};
+
+/**
  * Merge manifest field metadata with auto-discovered fields
  * to produce a fully resolved schema. Manifest metadata takes
  * precedence; discovery fills in gaps for fields without
@@ -959,17 +978,10 @@ export const mergeManifestWithDiscovery = (
 ): ResolvedField[] => {
   // Index manifest fields by path
   const metaByPath = new Map<string, FieldMeta>();
-  // Markers a lookup field's named formats own (`company.full`, …). These are
-  // rendered outputs of the one resolved hit, not separate fillable inputs, so
-  // discovery may surface them as dotted fields; the final filter drops them.
-  const lookupFormatMarkers = new Set<string>();
+  const lookupFormatMarkers = lookupFormatMarkerPaths(manifest?.fields ?? []);
   if (manifest) {
     for (const f of manifest.fields) {
       metaByPath.set(f.path, f);
-      const formats = f.lookup?.formats;
-      for (const format of arrayOrEmpty(formats)) {
-        lookupFormatMarkers.add(`${f.path}.${format.key}`);
-      }
     }
   }
 
@@ -1027,25 +1039,25 @@ export const mergeManifestWithDiscovery = (
     }
   }
 
-  // Drop namespace parents: a path that is only a dotted prefix of others
+  // Drop namespace parents: a path that is ONLY a dotted prefix of others
   // (e.g. "tenant" when "tenant.name"/"tenant.krs" exist) is structural, not a
   // fillable field. Discovery registers such roots to infer object/array kinds.
   //
-  // A lookup field is exempt: it is a real leaf input even when dotted format
-  // markers ({{company.full}}) sit "under" it. Those markers are named
-  // renderings of the one resolved hit, not separate fields, so the lookup
-  // root must survive the prefix filter.
+  // Three kinds of path are not structural and survive the prefix filter:
+  //  - a lookup field, a real leaf input whose dotted format markers
+  //    ({{company.krs}}) are renderings of its one resolved hit;
+  //  - an array, a value-bearing loop input whose items are dotted;
+  //  - a path the document writes as its own {{marker}}. Dropping that one left
+  //    the marker with no field behind it, so it survived fill as literal text.
+  const markerPaths = new Set(
+    discovered.placeholders.map((placeholder) => placeholder.name),
+  );
   const paths = resolved.map((f) => f.path);
   return resolved.filter((f) => {
     if (lookupFormatMarkers.has(f.path)) {
       return false;
     }
-    if (f.lookup !== undefined) {
-      return true;
-    }
-    // Arrays are value-bearing loop inputs, not structural namespace roots.
-    // A nested array path must not make its parent loop disappear.
-    if (f.kind === "array") {
+    if (f.lookup !== undefined || f.kind === "array" || markerPaths.has(f.path)) {
       return true;
     }
     return !paths.some((p) => p !== f.path && p.startsWith(`${f.path}.`));

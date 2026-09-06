@@ -23,6 +23,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
 import {
+  lookupFormatMarkerPaths,
   mergeManifestWithDiscovery,
   readManifest,
   writeManifest,
@@ -33,6 +34,11 @@ import { errorTag } from "@/api/lib/errors/utils";
 import { deleteS3Keys } from "@/api/lib/files/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { readS3ArrayBuffer, writeS3ObjectWithRetry } from "@/api/lib/s3";
+import {
+  applyFieldOverlay,
+  fieldOverlayError,
+  validateFieldOverlay,
+} from "@/api/lib/templates/field-overlay";
 import { buildTemplateRevisionS3Key } from "@/api/lib/templates/storage-keys";
 
 type ConfigureTemplateFieldsOptions = {
@@ -116,34 +122,44 @@ export const configureTemplateFields = async function* ({
       // column and finally to a fresh discovery so a manifest-less raw upload
       // can still be configured. The marker bytes are left untouched throughout.
       const embedded = await readManifest(buffer);
-      const baseManifest = embedded ?? locked.manifest ?? null;
+      const discovered = await discoverTemplate(buffer);
+      const baseManifest =
+        embedded ??
+        locked.manifest ??
+        ({
+          version: 1,
+          fields: mergeManifestWithDiscovery(null, discovered).map((f) => ({
+            path: f.path,
+          })),
+        } satisfies TemplateManifest);
 
-      const baseFields: FieldMeta[] =
-        baseManifest?.fields ??
-        mergeManifestWithDiscovery(null, await discoverTemplate(buffer)).map(
-          (f) => ({ path: f.path }),
-        );
-
-      const fieldPaths = new Set(baseFields.map((f) => f.path));
-      const unknownPath = fields.find((f) => !fieldPaths.has(f.path));
-      if (unknownPath) {
+      // The overlay is checked against the DOCX markers, not against the
+      // manifest's current field list: a lookup root the marker scan only saw
+      // as a namespace parent (`company` under `{{company.krs}}`) is a valid
+      // path to configure even though no manifest entry names it yet.
+      const issues = validateFieldOverlay({
+        configured: baseManifest.fields,
+        discovered,
+        overlay: fields,
+      });
+      if (issues.length > 0) {
         return {
           ok: false as const,
-          reason: "unknown-path" as const,
-          path: unknownPath.path,
+          reason: "invalid-overlay" as const,
+          issues,
         };
       }
 
-      const overlayByPath = new Map(fields.map((f) => [f.path, f]));
-      const mergedFields: FieldMeta[] = [];
-      for (const f of baseFields) {
-        const override = overlayByPath.get(f.path);
-        mergedFields.push(override ? { ...f, ...override } : f);
-      }
-
+      const overlaid = applyFieldOverlay(baseManifest, fields);
+      // A lookup's format markers are renderings of its one resolved hit, so
+      // any manifest entry standing for such a marker stops being a field the
+      // moment the lookup that owns it is configured.
+      const formatMarkers = lookupFormatMarkerPaths(overlaid.fields);
       const manifest: TemplateManifest = {
-        version: baseManifest?.version ?? 1,
-        fields: mergedFields,
+        version: overlaid.version,
+        fields: overlaid.fields.filter(
+          (field) => !formatMarkers.has(field.path),
+        ),
       };
 
       // Re-embed the manifest into the bytes just read; markers and every other
@@ -170,7 +186,7 @@ export const configureTemplateFields = async function* ({
         .update(templates)
         .set({
           manifest,
-          fieldCount: mergedFields.length,
+          fieldCount: manifest.fields.length,
           sizeBytes: updatedDocx.byteLength,
           s3Key: revisionS3Key,
           updatedAt: new Date(),
@@ -185,7 +201,7 @@ export const configureTemplateFields = async function* ({
         .update(templateVersions)
         .set({
           manifest,
-          fieldCount: mergedFields.length,
+          fieldCount: manifest.fields.length,
           s3Key: revisionS3Key,
         })
         .where(
@@ -201,7 +217,7 @@ export const configureTemplateFields = async function* ({
         resourceId: templateId,
         workspaceId: null,
         changes: {
-          fieldCount: { old: null, new: mergedFields.length },
+          fieldCount: { old: null, new: manifest.fields.length },
           s3Key: { old: locked.s3Key, new: revisionS3Key },
         },
       });
@@ -224,15 +240,7 @@ export const configureTemplateFields = async function* ({
         new HandlerError({ status: 404, message: "Template not found" }),
       );
     }
-    return Result.err(
-      new HandlerError({
-        status: 400,
-        message:
-          `No field "${txResult.path}" in this template. ` +
-          "Configure only paths that exist as {{markers}} (call " +
-          "describe_template to list them).",
-      }),
-    );
+    return Result.err(fieldOverlayError(txResult.issues));
   }
 
   // The superseded object is referenced by no row once the transaction has

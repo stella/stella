@@ -129,9 +129,9 @@ const config = {
     type: "file-input",
     input: { field: "file", required: true, mediaTypes: [DOCX_MIME_TYPE] },
     alternative: {
-      type: "none",
-      reason:
-        "the template IS the uploaded DOCX and its markers; templates.create-blank and templates.create-from-style-set start from an empty document instead, which is a different artifact",
+      type: "complete",
+      via: ["templates.create"],
+      note: "its own save_template tool accepts the DOCX base64-encoded in docx_base64, which is how a JSON-only caller supplies the bytes; templates.create-blank and templates.create-from-style-set start from an empty document instead, which is a different artifact",
     },
   },
   body: createTemplateBodySchema,

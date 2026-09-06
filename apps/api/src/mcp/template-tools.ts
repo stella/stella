@@ -346,7 +346,7 @@ const templateFieldPartOptionItems = (
 const templateFieldFormatItems = (
   payload: TemplateDetailSuccess,
 ): readonly { key: string; template: string }[] =>
-  payload.fields.flatMap((field) => compact(field.formats));
+  payload.fields.flatMap((field) => field.lookup?.formats ?? []);
 
 const compact = <T>(
   items: readonly (T | null)[] | null | undefined,
@@ -426,7 +426,7 @@ const buildTemplateDetailTextFieldSpecs = (
     },
   }),
   defineTextFieldSpec({
-    path: "fields[].formats[].template",
+    path: "fields[].lookup.formats[].template",
     items: templateFieldFormatItems,
     scope: () => organizationId,
     read: (format: { key: string; template: string }) => format.template,
@@ -1857,7 +1857,7 @@ const createTemplateFromDocx = async ({
     }),
   );
   if (Result.isError(created)) {
-    return errorResult(created.error.message);
+    return internalFailureResult(created.error);
   }
 
   return toolDataResult({
@@ -1903,7 +1903,7 @@ const configureExistingTemplate = async ({
     }),
   );
   if (Result.isError(configured)) {
-    return errorResult(configured.error.message);
+    return internalFailureResult(configured.error);
   }
 
   // Echo the updated field list in the same shape the list_templates detail

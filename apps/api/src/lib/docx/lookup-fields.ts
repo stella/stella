@@ -572,17 +572,17 @@ const resolveLookupValue = async ({
       : lookupValueFromRendered(text);
   };
 
-  // The formats list is non-empty (isFieldLookup invariant). The first format
-  // is the default for the bare `{{company}}` marker (or its nested
-  // `company.value`); every later format is a keyed `{{company.<key>}}`
-  // rendering of the SAME hit; duplicate keys keep the last template.
+  // The formats list is non-empty (isFieldLookup invariant). EVERY format is a
+  // keyed `{{company.<key>}}` rendering of the SAME hit, so a template can
+  // address the whole set by key and never write a bare marker; duplicate keys
+  // keep the last template. The first format is additionally the default the
+  // bare `{{company}}` marker (or its nested `company.value`) renders.
   for (const [index, format] of lookup.formats.entries()) {
     const value = renderHit(format.template);
+    writeKeyed(format.key, value);
     if (index === 0) {
       writeDefault(value);
-      continue;
     }
-    writeKeyed(format.key, value);
   }
 };
 

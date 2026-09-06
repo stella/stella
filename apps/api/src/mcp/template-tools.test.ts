@@ -13,6 +13,7 @@ import JSZip from "jszip";
 import type { Transaction } from "@/api/db/root";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import { CONTACT_FIELDS } from "@/api/lib/template-binding/binding-sources";
 import type { McpRequestContext } from "@/api/mcp/context";
@@ -523,7 +524,13 @@ describe("MCP template tools", () => {
           required: true,
           hint: "Enter the KRS number",
           options: null,
-          formats: [{ key: "default", template: "[name], KRS [krs]" }],
+          lookup: {
+            registry: "krs",
+            formats: [{ key: "default", template: "[name], KRS [krs]" }],
+          },
+          validation: { required: true },
+          source: null,
+          aiSeesDocument: false,
           aiPrompt: null,
           aiAdapt: false,
           optionsFrom: null,
@@ -538,7 +545,10 @@ describe("MCP template tools", () => {
           required: false,
           hint: null,
           options: null,
-          formats: null,
+          lookup: null,
+          validation: null,
+          source: null,
+          aiSeesDocument: true,
           aiPrompt: "Draft the scope of this power of attorney",
           aiAdapt: false,
           optionsFrom: null,
@@ -553,7 +563,10 @@ describe("MCP template tools", () => {
           required: false,
           hint: null,
           options: ["director", "proxy"],
-          formats: null,
+          lookup: null,
+          validation: null,
+          source: { kind: "party", role: "counterparty", field: "name" },
+          aiSeesDocument: false,
           aiPrompt: null,
           aiAdapt: false,
           optionsFrom: "parties",
@@ -562,8 +575,8 @@ describe("MCP template tools", () => {
           format: null,
         },
       ],
-      conditions: [{ name: "isCorp", expression: "type == 'corp'" }],
-      computed: [{ name: "total", expression: "rent * 12" }],
+      conditions: [{ path: "isCorp", condition: "type == 'corp'" }],
+      computed: [{ path: "total", formula: "rent * 12" }],
       arrays: [{ path: "deliverables", itemFieldPaths: ["name", "due_date"] }],
     });
 
@@ -581,17 +594,25 @@ describe("MCP template tools", () => {
       fields: [
         expect.objectContaining({
           hint: "Enter the KRS number",
-          formats: [{ key: "default", template: "[name], KRS [krs]" }],
+          // The whole lookup, registry included, in the shape the `fields`
+          // overlay accepts: read, edit, send back.
+          lookup: {
+            registry: "krs",
+            formats: [{ key: "default", template: "[name], KRS [krs]" }],
+          },
+          validation: { required: true },
         }),
         expect.objectContaining({
           aiPrompt: "Draft the scope of this power of attorney",
+          aiSeesDocument: true,
         }),
         expect.objectContaining({
           options: ["director", "proxy"],
           optionsFrom: "parties",
+          source: { kind: "party", role: "counterparty", field: "name" },
         }),
       ],
-      computed: [{ name: "total", expression: "rent * 12" }],
+      computed: [{ path: "total", formula: "rent * 12" }],
       // A `{{#each}}` loop over object items is surfaced separately from the
       // flat `fields` list so a caller knows to submit it as an array.
       arrays: [{ path: "deliverables", itemFieldPaths: ["name", "due_date"] }],
@@ -615,9 +636,12 @@ describe("MCP template tools", () => {
               options: ["Smith signatory"],
             },
           ],
-          formats: [
-            { key: "default", template: "[company name], Smith registry" },
-          ],
+          lookup: {
+            registry: "krs",
+            formats: [
+              { key: "default", template: "[company name], Smith registry" },
+            ],
+          },
         },
       ],
       conditions: [],
@@ -654,11 +678,13 @@ describe("MCP template tools", () => {
               options: ["[PERSON_1] signatory"],
             },
           ],
-          formats: [
-            {
-              template: "[company name], [PERSON_1] registry",
-            },
-          ],
+          lookup: {
+            formats: [
+              {
+                template: "[company name], [PERSON_1] registry",
+              },
+            ],
+          },
         },
       ],
     });
@@ -2343,8 +2369,16 @@ describe("MCP template tools", () => {
     expect(result.isError).toBe(true);
     expect(createStoredTemplateMock).not.toHaveBeenCalled();
     const error = validationEnvelope(result);
-    const issues = asTestRaw<{ path: string }[]>(error["issues"]);
-    expect(issues.some(({ path }) => path === "fields.0")).toBe(true);
+    const issues = asTestRaw<{ path: string; message: string }[]>(
+      error["issues"],
+    );
+    const conflict = issues.find(({ path }) => path === "fields.0");
+    // The rejection has to name WHICH properties collided, in the snake_case
+    // spelling the caller sent, and on which field: "mutually exclusive" on
+    // its own leaves an agent guessing among seven properties.
+    expect(conflict?.message).toContain("`ai_prompt`");
+    expect(conflict?.message).toContain("`lookup`");
+    expect(conflict?.message).toContain('"company"');
   });
 
   test("save_template rejects unknown field metadata keys before inserting", async () => {
@@ -2368,9 +2402,15 @@ describe("MCP template tools", () => {
   test("save_template (create) surfaces the service's unknown-path rejection", async () => {
     createStoredTemplateMock.mockImplementation(async function* () {
       yield* [];
-      return Result.err({
-        message: 'No field "ghost" was discovered in the DOCX.',
-      });
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "No marker {{ghost}} in the DOCX.",
+          issues: [
+            { path: "fields.0", message: "No marker {{ghost}} in the DOCX." },
+          ],
+        }),
+      );
     });
 
     const result = await handleMcpToolCall({
@@ -2384,8 +2424,13 @@ describe("MCP template tools", () => {
     });
 
     expect(result.isError).toBe(true);
-    const message = result.content.at(0);
-    expect(message?.type === "text" && message.text).toContain("ghost");
+    // The rejection reaches the agent as the structured envelope, naming the
+    // entry it sent — not as one line of bare prose it would have to parse.
+    const error = validationEnvelope(result);
+    expect(error["message"]).toContain("ghost");
+    expect(asTestRaw<{ path: string }[]>(error["issues"])).toEqual([
+      { path: "fields.0", message: "No marker {{ghost}} in the DOCX." },
+    ]);
   });
 
   test("save_template (configure) applies the overlay and returns the updated fields", async () => {
@@ -2405,7 +2450,13 @@ describe("MCP template tools", () => {
           required: true,
           hint: null,
           options: null,
-          formats: [{ key: "default", template: "[name], KRS [krs]" }],
+          lookup: {
+            registry: "krs",
+            formats: [{ key: "default", template: "[name], KRS [krs]" }],
+          },
+          validation: null,
+          source: null,
+          aiSeesDocument: false,
           aiPrompt: null,
           aiAdapt: false,
           optionsFrom: null,
@@ -2454,7 +2505,10 @@ describe("MCP template tools", () => {
       fields: [
         expect.objectContaining({
           path: "company",
-          formats: [{ key: "default", template: "[name], KRS [krs]" }],
+          lookup: {
+            registry: "krs",
+            formats: [{ key: "default", template: "[name], KRS [krs]" }],
+          },
         }),
       ],
     });
@@ -2466,9 +2520,15 @@ describe("MCP template tools", () => {
   test("save_template (configure) rejects a config whose path is unknown", async () => {
     configureTemplateFieldsMock.mockImplementation(async function* () {
       yield* [];
-      return Result.err({
-        message: 'No field "ghost" in this template.',
-      });
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "No marker {{ghost}} in the DOCX.",
+          issues: [
+            { path: "fields.0", message: "No marker {{ghost}} in the DOCX." },
+          ],
+        }),
+      );
     });
 
     const result = await handleMcpToolCall({
@@ -2479,8 +2539,11 @@ describe("MCP template tools", () => {
 
     expect(result.isError).toBe(true);
     expect(describeStoredTemplateMock).not.toHaveBeenCalled();
-    const message = result.content.at(0);
-    expect(message?.type === "text" && message.text).toContain("ghost");
+    const error = validationEnvelope(result);
+    expect(error["message"]).toContain("ghost");
+    expect(asTestRaw<{ path: string }[]>(error["issues"])).toEqual([
+      { path: "fields.0", message: "No marker {{ghost}} in the DOCX." },
+    ]);
   });
 
   test("save_template (configure) forbids members without template:create permission", async () => {

@@ -151,9 +151,11 @@ export const buildFieldReference = (): string => {
       "`source` are mutually exclusive — at most one per field.",
     "",
     "Registry lookup formats: each `formats` entry renders the same resolved " +
-      "hit through its own `[token]` template. The first entry is the " +
-      "default, addressed by the bare marker `{{path}}`; every later entry is " +
-      "addressed by `{{path.key}}` in the document. At most " +
+      "hit through its own `[token]` template. Every entry is addressed by " +
+      "`{{path.key}}` in the document; the first entry is additionally the " +
+      "default a bare `{{path}}` marker renders. A template may therefore " +
+      "carry only keyed markers, and `path` is then configured as the lookup " +
+      "even though no `{{path}}` marker exists. At most " +
       `${LOOKUP_FORMATS_MAX} formats per field, each template at most ` +
       `${LOOKUP_FORMAT_TEMPLATE_MAX_LENGTH} characters.`,
     "",

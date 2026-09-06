@@ -1519,9 +1519,39 @@ export const TEMPLATE_DESCRIBE_PROJECTION = v.strictObject({
       required: v.boolean(),
       hint: v.nullable(v.string()),
       options: v.nullable(v.array(v.string())),
-      formats: v.nullable(
-        v.array(v.strictObject({ key: v.string(), template: v.string() })),
+      // The complete lookup configuration, in the shape `save_template`'s
+      // `fields` overlay accepts, so a described field round-trips.
+      lookup: v.nullable(
+        v.strictObject({
+          registry: v.string(),
+          formats: v.array(
+            v.strictObject({ key: v.string(), template: v.string() }),
+          ),
+        }),
       ),
+      validation: v.nullable(
+        v.strictObject({
+          required: v.optional(v.boolean()),
+          minLength: v.optional(v.number()),
+          maxLength: v.optional(v.number()),
+          min: v.optional(v.number()),
+          max: v.optional(v.number()),
+          pattern: v.optional(v.string()),
+          minItems: v.optional(v.number()),
+          maxItems: v.optional(v.number()),
+        }),
+      ),
+      // A binding resolves server-side from matter/contact data; it names no
+      // record id, only the kind, the selector, and the field key.
+      source: v.nullable(
+        v.strictObject({
+          kind: v.string(),
+          field: v.string(),
+          role: v.optional(v.string()),
+          ref: v.optional(v.string()),
+        }),
+      ),
+      aiSeesDocument: v.boolean(),
       aiPrompt: v.nullable(v.string()),
       aiAdapt: v.boolean(),
       optionsFrom: v.nullable(v.string()),
@@ -1542,11 +1572,13 @@ export const TEMPLATE_DESCRIBE_PROJECTION = v.strictObject({
       format: v.nullable(v.string()),
     }),
   ),
+  // Derived fields, named the way the `fields` overlay names them, so a
+  // caller can edit an expression and send it straight back.
   conditions: v.array(
-    v.strictObject({ name: v.string(), expression: v.string() }),
+    v.strictObject({ path: v.string(), condition: v.string() }),
   ),
   computed: v.array(
-    v.strictObject({ name: v.string(), expression: v.string() }),
+    v.strictObject({ path: v.string(), formula: v.string() }),
   ),
   // Every {{#each}} loop over object items: `path` belongs in `values` as an
   // array of objects (one per `itemFieldPaths` entry), not a flat dotted key.
