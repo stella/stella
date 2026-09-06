@@ -73,8 +73,13 @@ export const ViewToolbarSearch = ({
 
   // Debounced rather than immediate: `submit` is what turns a keystroke into
   // a row query, so it is the only path from `typed` to `submitted`.
-  const submit = useDebouncedCallback(() => {
-    submitFind(view.id);
+  //
+  // The view rides in as an argument rather than a closure. This component
+  // stays mounted across a switch between two table views, so a timer
+  // scheduled in one can fire under the other, and the term belongs to the
+  // view it was typed into.
+  const submit = useDebouncedCallback((viewId: string) => {
+    submitFind(viewId);
   }, FIND_DEBOUNCE_MS);
 
   // The pane is the root, not this button: a press with a grid cell focused
@@ -191,7 +196,7 @@ export const ViewToolbarSearch = ({
             className="flex-1"
             onChange={(event) => {
               setFindTyped(view.id, event.target.value);
-              submit();
+              submit(view.id);
             }}
             onKeyDown={(event) => {
               if (event.key === "Enter") {

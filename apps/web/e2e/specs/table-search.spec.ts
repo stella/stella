@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
-import { apiStatus, apiUploadDocx } from "../helpers/api";
+import { apiPut, apiStatus, apiUploadDocx } from "../helpers/api";
 import { expect, test } from "../helpers/test";
 import {
   type TestWorkspace,
@@ -124,6 +124,115 @@ test.describe("find in table", () => {
     await expect(findChip).toBeHidden();
     await expect(otherRow).toBeVisible({ timeout: 15_000 });
     await expect(page.locator("mark")).toHaveCount(0);
+  });
+
+  // The submit debounces, and one toolbar serves every table view in a matter:
+  // a switch between two of them leaves the component mounted with a timer
+  // still pending. A timer that read the view when it fired rather than when
+  // it was scheduled submitted the term against whichever view the reader had
+  // moved to, and the view it was typed into kept a term it never applied.
+  //
+  // Going back is what makes the switch, rather than clicking the other view's
+  // tab: a tab click is an outside press, which closes the bar and flushes the
+  // pending submit on the way out.
+  test("applies a term to the view it was typed into, not the one switched to", async ({
+    page,
+    request,
+  }) => {
+    test.slow();
+
+    const testWorkspace = workspace;
+    if (testWorkspace === null) {
+      throw new Error("Test workspace was not created");
+    }
+
+    const suffix = randomUUID().slice(0, 8);
+    const matchingName = `alpha-lease-${suffix}.docx`;
+    const otherName = `beta-invoice-${suffix}.docx`;
+    const docx = await readFile(DOCX_PATH);
+    const secondViewName = `Second table ${suffix}`;
+
+    await Promise.all([
+      ...[matchingName, otherName].map(
+        async (name) =>
+          await apiUploadDocx(
+            request,
+            testWorkspace.id,
+            testWorkspace.filePropertyId,
+            { name, mimeType: DOCX_MIME, buffer: docx },
+          ),
+      ),
+      apiPut(request, `/views/${testWorkspace.id}`, {
+        id: randomUUID(),
+        name: secondViewName,
+        layout: {
+          type: "table",
+          version: 1,
+          columnOrder: [],
+          columnPinning: [testWorkspace.filePropertyId],
+          filters: [],
+          sorts: [],
+          hiddenProperties: [],
+        },
+      }),
+    ]);
+
+    const { cookies } = await request.storageState();
+    await page.context().addCookies(cookies);
+    await expect
+      .poll(
+        async () =>
+          await apiStatus(page.request, `/workspaces/${testWorkspace.id}`),
+        {
+          message: "browser context can read the created workspace",
+          timeout: 10_000,
+        },
+      )
+      .toBe(200);
+
+    await page.goto(`/workspaces/${testWorkspace.id}/${testWorkspace.viewId}`, {
+      waitUntil: "domcontentloaded",
+    });
+
+    const tableTab = page.getByRole("tab", { exact: true, name: "Table" });
+    const secondTab = page.getByRole("tab", {
+      exact: true,
+      name: secondViewName,
+    });
+    await expect(tableTab).toBeVisible({ timeout: 30_000 });
+    await expect(secondTab).toBeVisible();
+
+    // Both views into history, ending on the first, so the switch below is a
+    // back navigation.
+    await secondTab.click();
+    await tableTab.click();
+
+    const matchingRow = page.getByRole("button", {
+      exact: true,
+      name: matchingName,
+    });
+    const otherRow = page.getByRole("button", { exact: true, name: otherName });
+    await expect(matchingRow).toBeVisible({ timeout: 30_000 });
+    await expect(otherRow).toBeVisible();
+
+    await page.keyboard.press("ControlOrMeta+f");
+    const findInput = page.getByRole("searchbox");
+    await expect(findInput).toBeFocused();
+    await findInput.fill("alpha");
+
+    // Inside the debounce window on any machine that runs this at all. A slow
+    // enough one submits before the switch, which is the correct outcome the
+    // assertions below already describe: the test cannot fail spuriously, it
+    // can only stop exercising the race.
+    await page.goBack({ waitUntil: "commit" });
+    await expect(findInput).toBeHidden();
+
+    await page.goForward({ waitUntil: "commit" });
+    await expect(
+      page.getByRole("button", { exact: true, name: "alpha" }),
+    ).toBeVisible({ timeout: 15_000 });
+    await expect(otherRow).toBeHidden();
+    await expect(matchingRow).toBeVisible();
   });
 
   // Finding 1 of the find browser test: Folio's find/replace dialog binds
