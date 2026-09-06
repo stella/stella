@@ -119,4 +119,43 @@ describe("detectRowBlockPair", () => {
       detectRowBlockPair(row("{{#if paid}}paid", "no{{#else}}", "yes{{/if}}")),
     ).toBeNull();
   });
+
+  test("a branch marker stranded in the opener's cell refuses the pair", () => {
+    // Only the opener and the closer are ever hoisted, so a `{{#else}}` buried
+    // in a cell would be dropped with the row when the condition is false.
+    expect(
+      detectRowBlockPair(
+        row("{{#if paid}}Paid{{#else}}Unpaid", "Amount{{/if}}"),
+      ),
+    ).toBeNull();
+    expect(
+      detectRowBlockPair(
+        row("{{#if paid}}Paid", "Unpaid{{#elseif refunded}}", "Amount{{/if}}"),
+      ),
+    ).toBeNull();
+  });
+
+  test("a branch that closes inside its own paragraph leaves the row block", () => {
+    const pair = detectRowBlockPair(
+      row(
+        "{{#each x}}{{x.a}}",
+        "{{#if x.paid}}yes{{#else}}no{{/if}}",
+        "{{x.b}}{{/each}}",
+      ),
+    );
+
+    expect(pair?.open.marker.meta.kind).toBe("each");
+    expect(pair?.close.cellIndex).toBe(2);
+  });
+
+  test("both markers in one cell's paragraphs is not a row block", () => {
+    // Cell to cell only: this reads as a block scoped to the cell, and the row
+    // is the only unit the placement can act on.
+    expect(
+      detectRowBlockPair([["{{#each x}}Item", "Fee{{/each}}"]]),
+    ).toBeNull();
+    expect(
+      detectRowBlockPair([["{{#each x}}Item", "Fee{{/each}}"], ["Net"]]),
+    ).toBeNull();
+  });
 });

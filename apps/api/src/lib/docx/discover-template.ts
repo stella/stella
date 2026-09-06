@@ -26,7 +26,10 @@ import {
   templateContentPartPaths,
   W_NS,
 } from "./ooxml";
-import { normalizeRowBlockMarkers } from "./row-block-markers";
+import {
+  authoredParagraphIndices,
+  normalizeRowBlockMarkers,
+} from "./row-block-markers";
 import {
   boundTemplateWarnings,
   collectParagraphWarnings,
@@ -433,9 +436,19 @@ const collectContainerStructure = ({
   warnings,
 }: ContainerStructureOptions) => {
   const paragraphs = body.getElementsByTagNameNS(W_NS, "p");
+  // Positions to report. Everything below indexes `paragraphs`, which carries
+  // the marker paragraphs normalization hoisted out of a table row's cells;
+  // a diagnostic has to name the paragraph the author can count to instead.
+  const authoredIndices = authoredParagraphIndices(paragraphs);
   const directives = scanBlockDirectives(body);
   const { blocks, errors: parseErrors } = parseBlockTree(directives);
-  errors.push(...parseErrors);
+  for (const error of parseErrors) {
+    errors.push({
+      ...error,
+      paragraphIndex:
+        authoredIndices[error.paragraphIndex] ?? error.paragraphIndex,
+    });
+  }
   const arrayScopes = new Map<number, readonly RowScope[]>();
   const activeArrays: RowScope[] = [];
   const directiveByParagraph = new Map(
@@ -472,7 +485,7 @@ const collectContainerStructure = ({
       warnings.push(
         ...collectParagraphWarnings({
           loops: activeArrays,
-          paragraphIndex: i,
+          paragraphIndex: authoredIndices[i] ?? i,
           text: paragraphText(paragraph),
         }),
       );
@@ -485,6 +498,7 @@ const collectContainerStructure = ({
 
   return {
     arrayScopes,
+    authoredIndices,
     blocks,
     conditionMap: buildConditionMapFromRanges(directives, paragraphs.length),
     directiveIndices,
@@ -538,6 +552,7 @@ const collectLoopItemFields = ({
 
 const collectParagraphPlaceholders = ({
   arrayScopes,
+  authoredIndices,
   conditionMap,
   conditionPaths,
   directiveIndices,
@@ -574,7 +589,7 @@ const collectParagraphPlaceholders = ({
     if (!inline.ok) {
       errors.push({
         message: inline.message,
-        paragraphIndex: i,
+        paragraphIndex: authoredIndices[i] ?? i,
         directive: inline.directive,
       });
     } else {

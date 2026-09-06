@@ -51,6 +51,14 @@ const isOpenKind = (kind: string): kind is OpenKind =>
  * spouse{{/if}}`), which the inline engine already owns; only what is left
  * over can reach across cells.
  *
+ * A branch marker (`{{#elseif}}`, `{{#else}}`) counts as left over unless its
+ * `{{#if}}` also closes in this paragraph. Only the opener and the closer of a
+ * row block are hoisted, so a branch marker stranded between them would stay
+ * buried in the cell text: a false condition would drop the whole row and the
+ * branch that should have rendered with it, and a true one would leave the
+ * marker behind as an inline orphan. Counting it here refuses the placement
+ * instead.
+ *
  * A paragraph that is nothing but a directive is the canonical form and
  * belongs to the block engine, so it contributes nothing here.
  */
@@ -58,30 +66,45 @@ const danglingBlockMarkers = (text: string): ScannedMarker[] => {
   if (blockDirectiveLinePattern().test(text)) {
     return [];
   }
-  const open: { kind: OpenKind; marker: ScannedMarker }[] = [];
+  type OpenFrame = {
+    kind: OpenKind;
+    marker: ScannedMarker;
+    /** `{{#elseif}}` / `{{#else}}` markers belonging to this frame. */
+    branches: ScannedMarker[];
+  };
+  const open: OpenFrame[] = [];
   const dangling: ScannedMarker[] = [];
   for (const marker of scanMarkers(text)) {
     const { kind } = marker.meta;
     if (isOpenKind(kind)) {
-      open.push({ kind, marker });
+      open.push({ kind, marker, branches: [] });
       continue;
     }
     if (kind === "endeach" || kind === "endif") {
       const innermost = open.at(-1);
       if (innermost && CLOSER_OF[innermost.kind] === kind) {
+        // The frame closed here, so its branch markers closed with it.
         open.pop();
       } else {
         dangling.push(marker);
       }
       continue;
     }
-    if ((kind === "elseif" || kind === "else") && open.at(-1)?.kind !== "if") {
-      dangling.push(marker);
+    if (kind === "elseif" || kind === "else") {
+      const innermost = open.at(-1);
+      if (innermost?.kind === "if") {
+        innermost.branches.push(marker);
+      } else {
+        dangling.push(marker);
+      }
     }
   }
-  return [...dangling, ...open.map(({ marker }) => marker)].toSorted(
-    (a, b) => a.start - b.start,
-  );
+  // A frame still open at the end of the paragraph reaches outside it, and so
+  // does every branch marker that belonged to it.
+  for (const { branches, marker } of open) {
+    dangling.push(marker, ...branches);
+  }
+  return dangling.toSorted((a, b) => a.start - b.start);
 };
 
 const firstContentParagraph = (paragraphs: readonly string[]): number =>
@@ -113,10 +136,11 @@ const suffixesCell = (
  * document order.
  *
  * A row qualifies when exactly two block markers reach outside their own
- * paragraph, they are a matching opener/closer pair, the opener prefixes its
- * cell and the closer suffixes its cell. Everything else — one half of a pair,
- * two nested pairs, a stray `{{#else}}` — is left to the engine's existing
- * structure errors rather than guessed at.
+ * paragraph, they are a matching opener/closer pair, the closer sits in a LATER
+ * cell than the opener, the opener prefixes its cell and the closer suffixes
+ * its cell. Everything else — one half of a pair, two nested pairs, a stray
+ * `{{#else}}`, a pair wrapping the paragraphs of a single cell — is left to the
+ * engine's existing structure errors rather than guessed at.
  */
 export const detectRowBlockPair = (
   cells: readonly (readonly string[])[],
@@ -139,6 +163,12 @@ export const detectRowBlockPair = (
   }
   const openKind = open.marker.meta.kind;
   if (!isOpenKind(openKind) || close.marker.meta.kind !== CLOSER_OF[openKind]) {
+    return null;
+  }
+  // Cell to cell, never within one cell: a pair wrapping the paragraphs of a
+  // single cell reads as a block scoped to that cell, not to the row, and the
+  // row is the only unit this placement can act on.
+  if (open.cellIndex >= close.cellIndex) {
     return null;
   }
   if (

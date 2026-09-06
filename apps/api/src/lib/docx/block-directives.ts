@@ -77,7 +77,10 @@ import type {
 } from "@stll/template-conditions";
 
 import { ancestorByLocalName, isElement, paragraphText, W_NS } from "./ooxml";
-import { normalizeRowBlockMarkers } from "./row-block-markers";
+import {
+  authoredParagraphIndices,
+  normalizeRowBlockMarkers,
+} from "./row-block-markers";
 import type {
   Block,
   BlockDirective,
@@ -798,7 +801,17 @@ export const processBlockDirectives = (
       }
 
       const { blocks, errors } = parseBlockTree(directives);
-      allErrors.push(...errors);
+      // `paragraphs` carries the marker paragraphs normalization hoisted out of
+      // a table row's cells; a reported position must name the paragraph the
+      // author wrote.
+      const authoredIndices = authoredParagraphIndices(paragraphs);
+      for (const error of errors) {
+        allErrors.push({
+          ...error,
+          paragraphIndex:
+            authoredIndices[error.paragraphIndex] ?? error.paragraphIndex,
+        });
+      }
 
       if (blocks.length === 0) {
         return;
@@ -826,9 +839,13 @@ export const processBlockDirectives = (
     if (remaining.length > 0) {
       const first = remaining[0];
       if (first) {
+        const authoredIndices = authoredParagraphIndices(
+          bodyParagraphs(bodyEl),
+        );
         allErrors.push({
           message: `Template nesting too deep: ${remaining.length} unresolved directive(s) after ${MAX_PASSES} passes`,
-          paragraphIndex: first.paragraphIndex,
+          paragraphIndex:
+            authoredIndices[first.paragraphIndex] ?? first.paragraphIndex,
           directive: "MAX_PASSES exceeded",
         });
       }
@@ -901,6 +918,7 @@ export const processBlockDirectives = (
           directive: `{{#if ${block.branches[0]?.condition ?? ""}}}`,
           markerParagraphs,
           markers: "{{#if}} and {{/if}}",
+          paragraphs,
           paragraphIndex: firstDirective,
         });
         return;
@@ -1128,6 +1146,8 @@ export const processBlockDirectives = (
     markerParagraphs: readonly slimdom.Element[];
     /** The marker pair named in the message, e.g. `{{#if}} and {{/if}}`. */
     markers: string;
+    /** The pass's paragraph snapshot `paragraphIndex` addresses. */
+    paragraphs: readonly slimdom.Element[];
     paragraphIndex: number;
   };
 
@@ -1137,14 +1157,16 @@ export const processBlockDirectives = (
     directive,
     markerParagraphs,
     markers,
+    paragraphs,
     paragraphIndex,
   }: ReportAmbiguousPlacementOptions): void => {
     for (const marker of markerParagraphs) {
       rewriteTextNodes(marker, () => "");
     }
+    const authoredIndices = authoredParagraphIndices(paragraphs);
     allErrors.push({
       message: `${markers} must sit in the same table row or share a block-level parent; a marker pair that straddles a table boundary is not supported`,
-      paragraphIndex,
+      paragraphIndex: authoredIndices[paragraphIndex] ?? paragraphIndex,
       directive,
     });
   };
@@ -1437,6 +1459,7 @@ export const processBlockDirectives = (
         directive: `{{#each ${block.arrayPath}}}`,
         markerParagraphs: [openerP, closerP],
         markers: "{{#each}} and {{/each}}",
+        paragraphs,
         paragraphIndex: openingIdx,
       });
       return;

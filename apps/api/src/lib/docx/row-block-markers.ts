@@ -48,6 +48,17 @@ const cellParagraphs = (cell: slimdom.Element): slimdom.Element[] =>
   );
 
 /**
+ * The authored paragraph each hoisted marker paragraph was cut out of.
+ *
+ * A hoisted paragraph exists only so the block engine sees the canonical
+ * placement; the author never typed it and cannot count to it in Word. Every
+ * diagnostic that names a paragraph position therefore resolves through
+ * {@link authoredParagraphIndex}, which gives a hoisted marker the index of the
+ * paragraph it came from and no index of its own.
+ */
+const hoistedFrom = new WeakMap<slimdom.Element, slimdom.Element>();
+
+/**
  * Cut one marker out of its paragraph's runs and re-emit it as its own
  * paragraph beside that one, so the block engine sees the canonical placement.
  */
@@ -73,6 +84,7 @@ const hoistMarker = (
   text.appendChild(doc.createTextNode(marker.raw));
   run.appendChild(text);
   markerParagraph.appendChild(run);
+  hoistedFrom.set(markerParagraph, paragraph);
   parent.insertBefore(
     markerParagraph,
     placement === "before" ? paragraph : paragraph.nextSibling,
@@ -99,4 +111,37 @@ export const normalizeRowBlockMarkers = (container: slimdom.Element): void => {
     hoistMarker(paragraphsByCell, pair.close, "after");
     hoistMarker(paragraphsByCell, pair.open, "before");
   }
+};
+
+/**
+ * For each position in `paragraphs`, the position that paragraph holds in the
+ * file the author wrote: hoisted marker paragraphs take no index of their own,
+ * and each reports the index of the paragraph it was cut from.
+ *
+ * Every diagnostic that names a paragraph resolves through this, so a template
+ * using the row form reports the same positions as the same template written
+ * the long way — the positions `extractText` and the preview address. Built
+ * once per paragraph snapshot; the index it translates must address that same
+ * snapshot.
+ *
+ * A paragraph that was never hoisted and is not in the snapshot keeps its own
+ * position: that is a paragraph the loop engine cloned, which has no authored
+ * position at all, so its position is the only honest answer.
+ */
+export const authoredParagraphIndices = (
+  paragraphs: readonly slimdom.Element[],
+): number[] => {
+  const authoredBySource = new Map<slimdom.Element, number>();
+  let authored = 0;
+  for (const paragraph of paragraphs) {
+    if (hoistedFrom.has(paragraph)) {
+      continue;
+    }
+    authoredBySource.set(paragraph, authored);
+    authored += 1;
+  }
+  return paragraphs.map((paragraph, index) => {
+    const source = hoistedFrom.get(paragraph) ?? paragraph;
+    return authoredBySource.get(source) ?? index;
+  });
 };

@@ -132,8 +132,10 @@ const NON_DIRECTIVE_RULES = [
       "`{{#each deliverables}}{{deliverables.item}}`, last cell " +
       "`{{deliverables.fee}}{{/each}}`. A conditional row: first cell " +
       "`{{#if penalty}}Late fee`, last cell `{{penalty_amount}}{{/if}}`. " +
-      "Nothing may precede the opener or follow the closer in those cells, " +
-      "one pair per row only, and the pair must not straddle a row boundary.",
+      "The two halves must sit in DIFFERENT cells of the same row; nothing " +
+      "may precede the opener or follow the closer in those cells, a branch " +
+      "(`{{#elseif}}`, `{{#else}}`) must own its paragraph, one pair per row " +
+      "only, and the pair must not straddle a row boundary.",
   },
   {
     title: "Markers Word splits into runs",

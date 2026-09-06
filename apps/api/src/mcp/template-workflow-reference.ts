@@ -192,11 +192,16 @@ const AUTHORING_RULES = [
       "Each `{{#if}}` / `{{#each}}` opener and closer sits alone in its own " +
       "paragraph, and a pair either shares a block-level parent or is " +
       "confined to a single table row (which repeats the row). Within one row " +
-      "the pair may instead prefix a cell's text and suffix a later cell's " +
+      "the pair may instead prefix a cell's text and suffix a LATER cell's " +
       "text — `{{#each deliverables}}{{deliverables.item}}` in one cell and " +
-      "`{{deliverables.fee}}{{/each}}` in another act on the whole row. A " +
-      "pair that straddles a table boundary is ambiguous: it is refused as a " +
-      "structure error and its markers are neutralized instead of expanding.",
+      "`{{deliverables.fee}}{{/each}}` in another act on the whole row; both " +
+      "halves must be in the same row and in different cells. A pair that " +
+      "straddles a table boundary is refused either way, and how it is " +
+      "refused depends on how it was written: a pair whose markers each own " +
+      "their paragraph is reported as a structure error and its markers are " +
+      "emptied, so the fill continues without expanding them, while a pair " +
+      "sharing its paragraphs with text is reported as an unclosed and an " +
+      "orphaned inline marker and both stay in the document as literal text.",
   },
 ] as const;
 

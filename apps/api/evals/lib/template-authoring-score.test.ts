@@ -118,6 +118,21 @@ describe("detectGrammarTraps", () => {
     ).toBe(1);
   });
 
+  test("a branch marker buried in a row's cell is still a trap", () => {
+    // Not a row block: only the opener and closer are ever hoisted, so this
+    // placement loses the branch.
+    expect(
+      traps([table(["{{#if paid}}Paid{{#else}}Unpaid", "Amount{{/if}}"])])
+        .block_marker_inline,
+    ).toBe(2);
+  });
+
+  test("a pair wrapping one cell's own paragraphs is still a trap", () => {
+    expect(
+      traps([table(["{{#each x}}Item\nFee{{/each}}"])]).block_marker_inline,
+    ).toBe(2);
+  });
+
   test("per-language paths for one value collapse to a language_variant_path", () => {
     const counts = traps([
       paragraph("Podpisano {{signing_date_pl}}"),

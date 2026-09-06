@@ -1088,7 +1088,7 @@ const SYNTAX_QUIZ_QUESTIONS = {
   },
   block_marker_own_paragraph: {
     question:
-      "Must a block marker (`{{#each}}`, `{{#if}}`, `{{/each}}`, `{{/if}}`) occupy a paragraph of its own? true or false.",
+      "Outside a table row, must a block marker (`{{#each}}`, `{{#if}}`, `{{/each}}`, `{{/if}}`) occupy a paragraph of its own? true or false.",
     expected: true,
   },
   bilingual_same_path: {

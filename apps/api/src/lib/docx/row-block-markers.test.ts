@@ -1,10 +1,12 @@
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import fc from "fast-check";
+import JSZip from "jszip";
 import * as slimdom from "slimdom";
 
 import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
 
 import { processBlockDirectives } from "./block-directives";
+import { discoverTemplate } from "./discover-template";
 import { processInlineConditions } from "./inline-conditions";
 import { paragraphText, W_NS } from "./ooxml";
 import type { TemplateData } from "./types";
@@ -22,6 +24,12 @@ const P = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
 const TC = (...paragraphs: string[]) => `<w:tc>${paragraphs.join("")}</w:tc>`;
 const TR = (...cells: string[]) => `<w:tr>${cells.join("")}</w:tr>`;
 const TBL = (...rows: string[]) => `<w:tbl>${rows.join("")}</w:tbl>`;
+
+const makeDocx = async (documentXml: string): Promise<Buffer> => {
+  const zip = new JSZip();
+  zip.file("word/document.xml", documentXml);
+  return Buffer.from(await zip.generateAsync({ type: "nodebuffer" }));
+};
 
 const parseBody = (xml: string): slimdom.Element => {
   const body = slimdom
@@ -262,6 +270,106 @@ describe("row-form {{#if}} markers", () => {
 
     expect(rowCount).toBe(1);
     expect(texts).toEqual(["Clause", "Amount"]);
+  });
+
+  test("a branch marker buried in a cell refuses the row and keeps the branch", () => {
+    // Only the opener and closer are hoisted, so accepting this would drop
+    // "Unpaid" with the row whenever the condition is false.
+    for (const paid of [true, false]) {
+      const { inlineErrors, rowCount, texts } = render(
+        WRAP(
+          TBL(
+            TR(
+              TC(P("{{#if paid}}Paid{{#else}}Unpaid")),
+              TC(P("Amount{{/if}}")),
+            ),
+          ),
+        ),
+        { paid },
+      );
+
+      expect(rowCount).toBe(1);
+      expect(texts).toEqual([
+        "{{#if paid}}Paid{{#else}}Unpaid",
+        "Amount{{/if}}",
+      ]);
+      expect(inlineErrors.map(({ directive }) => directive)).toEqual([
+        "{{#if paid}}",
+        "{{/if}}",
+      ]);
+    }
+  });
+
+  test("a pair wrapping one cell's paragraphs is not a row block", () => {
+    const { inlineErrors, rowCount } = render(
+      WRAP(TBL(TR(TC(P("{{#if penalty}}Late fee"), P("500{{/if}}"))))),
+      { penalty: false },
+    );
+
+    expect(rowCount).toBe(1);
+    expect(inlineErrors.map(({ directive }) => directive)).toEqual([
+      "{{#if penalty}}",
+      "{{/if}}",
+    ]);
+  });
+});
+
+// ── Reported paragraph positions ─────────────────────────
+
+describe("diagnostics name the authored paragraph", () => {
+  /** A table row plus a later paragraph whose inline `{{#if}}` never closes.
+   *  The malformed paragraph is the third the author typed: two table cells,
+   *  then it. */
+  const withRow = (firstCell: string, secondCell: string) =>
+    WRAP(
+      TBL(TR(TC(P(firstCell)), TC(P(secondCell)))) +
+        P("Buyer {{#if has_spouse}} and spouse"),
+    );
+
+  const AUTHORED_INDEX = 2;
+
+  test("a row form before a malformed marker does not shift its index", async () => {
+    const rowForm = await discoverTemplate(
+      await makeDocx(
+        withRow(
+          "{{#each deliverables}}{{deliverables.item}}",
+          "{{deliverables.fee}}{{/each}}",
+        ),
+      ),
+    );
+    const noBlock = await discoverTemplate(
+      await makeDocx(withRow("Item", "Fee")),
+    );
+
+    // Normalization hoists two marker paragraphs into the row; neither may take
+    // a position of its own, because extractText and the preview still address
+    // the authored file.
+    expect(rowForm.structureErrors.map((e) => e.paragraphIndex)).toEqual([
+      AUTHORED_INDEX,
+    ]);
+    expect(noBlock.structureErrors.map((e) => e.paragraphIndex)).toEqual([
+      AUTHORED_INDEX,
+    ]);
+  });
+
+  test("a split-marker warning after a row form names the authored paragraph", async () => {
+    const result = await discoverTemplate(
+      await makeDocx(
+        WRAP(
+          TBL(
+            TR(
+              TC(P("{{#each deliverables}}{{deliverables.item}}")),
+              TC(P("{{deliverables.fee}}{{/each}}")),
+            ),
+          ) + P("Total {{amount"),
+        ),
+      ),
+    );
+
+    expect(result.warnings.map(({ code }) => code)).toEqual(["split_marker"]);
+    expect(result.warnings[0]?.message).toContain(
+      `paragraph ${AUTHORED_INDEX}`,
+    );
   });
 });
 
