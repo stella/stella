@@ -2510,9 +2510,8 @@ fn sanitized_style(element: &str, style: &str) -> Option<String> {
       }
       // The theme token styles cards; the fallback keeps the highlight when
       // the HTML is pasted into another application.
-      "background" | "background-color" => {
-        is_plain_color(&value).then(|| format!("background: {HIGHLIGHT_BACKGROUND}"))
-      }
+      "background" | "background-color" => is_highlight_color(&value)
+        .then(|| format!("background: {HIGHLIGHT_BACKGROUND}")),
       _ => None,
     };
     if let Some(kept) = kept {
@@ -2583,36 +2582,16 @@ fn format_points(value: f32) -> String {
   text.trim_end_matches('0').trim_end_matches('.').to_string()
 }
 
-/// A colour literal a highlight can be mapped from: a name, `#hex` or an
-/// `rgb(...)` call. Anything else (`url(...)`, gradients, keywords) is not.
-fn is_plain_color(value: &str) -> bool {
-  if matches!(
-    value,
-    "" | "none"
-      | "transparent"
-      | "inherit"
-      | "initial"
-      | "unset"
-      | "white"
-      | "#fff"
-      | "#ffffff"
-  ) {
-    return false;
+/// Ignore neutral page backgrounds regardless of their CSS spelling. The exact
+/// generated token remains valid when stored HTML is sanitized again.
+fn is_highlight_color(value: &str) -> bool {
+  if value == HIGHLIGHT_BACKGROUND {
+    return true;
   }
-  if let Some(hex) = value.strip_prefix('#') {
-    return matches!(hex.len(), 3 | 4 | 6 | 8)
-      && hex.chars().all(|c| c.is_ascii_hexdigit());
-  }
-  if let Some(arguments) = value
-    .strip_prefix("rgb(")
-    .or_else(|| value.strip_prefix("rgba("))
-    .and_then(|rest| rest.strip_suffix(')'))
-  {
-    return arguments
-      .chars()
-      .all(|c| c.is_ascii_digit() || matches!(c, ',' | '.' | '%' | ' ' | '/'));
-  }
-  value.chars().all(|c| c.is_ascii_alphabetic())
+  csscolorparser::parse(value).is_ok_and(|color| {
+    let [red, green, blue, alpha] = color.to_rgba8();
+    alpha > 0 && (red != green || green != blue)
+  })
 }
 
 /// Word separates an auto-numbered list label from its paragraph with a span in
@@ -4086,6 +4065,119 @@ mod tests {
       "width=\"94\"",
     ] {
       assert!(!html.contains(dropped), "{dropped} survived: {html}");
+    }
+  }
+
+  #[test]
+  fn sanitizer_ignores_equivalent_white_backgrounds() {
+    for color in [
+      "white",
+      "#fff",
+      "#ffffff",
+      "#ffff",
+      "#ffffffff",
+      "rgb(255, 255, 255)",
+      "rgba(255, 255, 255, 1)",
+      "rgb(100% 100% 100%)",
+      "rgb(255 255 255 / 50%)",
+      "hsl(120 0% 100%)",
+    ] {
+      for property in ["background", "background-color"] {
+        let html = format!("<strong style='{property}: {color}'>text</strong>");
+        assert_eq!(
+          sanitized_html(&html).as_deref(),
+          Some("<strong>text</strong>"),
+          "{html}"
+        );
+      }
+    }
+  }
+
+  #[test]
+  fn sanitizer_ignores_every_achromatic_rgb_background() {
+    for channel in 0..=255 {
+      for color in [
+        format!("rgb({channel}, {channel}, {channel})"),
+        format!("rgb({channel} {channel} {channel} / 50%)"),
+        format!("#{channel:02x}{channel:02x}{channel:02x}"),
+      ] {
+        let html = format!("<strong style='background: {color}'>text</strong>");
+        assert_eq!(
+          sanitized_html(&html).as_deref(),
+          Some("<strong>text</strong>"),
+          "{html}"
+        );
+      }
+    }
+  }
+
+  #[test]
+  fn sanitizer_ignores_zero_alpha_independently_of_rgb_channels() {
+    for red in [0, 64, 128, 255] {
+      for green in [0, 64, 128, 255] {
+        for blue in [0, 64, 128, 255] {
+          for color in [
+            format!("rgba({red}, {green}, {blue}, 0)"),
+            format!("rgb({red} {green} {blue} / 0%)"),
+            format!("#{red:02x}{green:02x}{blue:02x}00"),
+          ] {
+            let html =
+              format!("<strong style='background-color: {color}'>text</strong>");
+            assert_eq!(
+              sanitized_html(&html).as_deref(),
+              Some("<strong>text</strong>"),
+              "{html}"
+            );
+          }
+        }
+      }
+    }
+  }
+
+  #[test]
+  fn sanitizer_preserves_equivalent_highlights_on_repeated_import() {
+    for color in [
+      "yellow",
+      "#ff0",
+      "#ffff00",
+      "rgb(255, 255, 0)",
+      "rgb(100% 100% 0% / 50%)",
+      "hsl(60 100% 50%)",
+    ] {
+      let html = format!("<strong style='background: {color}'>text</strong>");
+      let sanitized = sanitized_html(&html).unwrap();
+      assert_eq!(
+        sanitized,
+        format!("<strong style=\"background: {HIGHLIGHT_BACKGROUND}\">text</strong>"),
+        "{html}"
+      );
+      assert_eq!(
+        sanitized_html(&sanitized).as_deref(),
+        Some(sanitized.as_str()),
+        "{html}"
+      );
+    }
+  }
+
+  #[test]
+  fn sanitizer_drops_invalid_and_context_dependent_backgrounds() {
+    for color in [
+      "currentcolor",
+      "inherit",
+      "notacolor",
+      "rgb()",
+      "rgb(1,2,3,4,5)",
+      "red trailing",
+      "var(--page-background)",
+      "url(javascript:alert(1))",
+      "linear-gradient(red, blue)",
+    ] {
+      let html = format!("<strong style='background: {color}'>text</strong>");
+      assert_eq!(
+        sanitized_html(&html).as_deref(),
+        Some("<strong>text</strong>"),
+        "{html}"
+      );
     }
   }
 
