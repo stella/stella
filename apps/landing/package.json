@@ -19,9 +19,9 @@
     "test": "bun scripts/precompute-anonymize-demo-sample.ts --check && bun scripts/check-meta-budgets.ts && bun scripts/check-img-alt.ts && bun test --pass-with-no-tests"
   },
   "dependencies": {
-    "@astrojs/react": "^6.0.4",
-    "@astrojs/sitemap": "^3.7.3",
-    "@astrojs/starlight": "^0.41.10",
+    "@astrojs/react": "^6.0.5",
+    "@astrojs/sitemap": "^3.7.4",
+    "@astrojs/starlight": "^0.41.11",
     "@resvg/resvg-js": "^2.6.2",
     "@stll/anonymize-chat": "workspace:*",
     "@stll/anonymize-data": "catalog:",
@@ -32,7 +32,7 @@
     "@stll/ui": "workspace:*",
     "@stll/workspace-ui": "workspace:*",
     "@tailwindcss/vite": "catalog:",
-    "astro": "^7.2.9",
+    "astro": "^7.2.10",
     "better-result": "catalog:",
     "buffer": "^6.0.3",
     "lucide-react": "catalog:",

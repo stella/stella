@@ -129,7 +129,7 @@
     "katex": "^0.16.33",
     "lucide-react": "catalog:",
     "pdfjs-dist": "^6.3.289",
-    "posthog-js": "^1.422.5",
+    "posthog-js": "^1.424.1",
     "prism-react-renderer": "^2.4.1",
     "prosemirror-commands": "^1.7.2",
     "prosemirror-history": "^1.5.0",
