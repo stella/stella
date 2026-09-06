@@ -10,7 +10,7 @@ import {
   lookupRegistryName,
   renderLookupOutput,
 } from "@/api/lib/docx/lookup-fields";
-import { buildIsRegistryEnabledForOrg } from "@/api/lib/docx/registry-org-gate";
+import { buildResolveRegistryDisabledReason } from "@/api/lib/docx/registry-org-gate";
 import { LOOKUP_REGISTRIES } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -66,10 +66,10 @@ const lookupPreview = createSafeRootHandler(
     // Gate on the org's native-tool settings before consulting the
     // org-agnostic outcome cache, so a disabled org never reads a cached hit
     // and never reaches the registry (mirrors the contacts lookup route).
-    const isRegistryEnabledForOrg = yield* Result.await(
+    const resolveRegistryDisabledReason = yield* Result.await(
       Result.tryPromise({
         try: async () =>
-          await buildIsRegistryEnabledForOrg({
+          await buildResolveRegistryDisabledReason({
             organizationId: session.activeOrganizationId,
             scopedDb,
           }),
@@ -81,11 +81,15 @@ const lookupPreview = createSafeRootHandler(
           }),
       }),
     );
-    if (!isRegistryEnabledForOrg(registry)) {
+    const disabledReason = resolveRegistryDisabledReason(registry);
+    if (disabledReason) {
       return Result.err(
         new HandlerError({
           status: 403,
-          message: registryDisabledForOrgRefusal(registry).message,
+          message: registryDisabledForOrgRefusal({
+            registry,
+            reason: disabledReason,
+          }).message,
         }),
       );
     }

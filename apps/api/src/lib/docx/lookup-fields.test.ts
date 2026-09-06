@@ -3,6 +3,7 @@ import JSZip from "jszip";
 
 import { KrsValidationError } from "@stll/business-registries/krs";
 
+import { env } from "@/api/env";
 import type {
   BusinessRegistryHit,
   RegistryHandler,
@@ -571,13 +572,17 @@ describe("engine substitution of formatted lookup values", () => {
   });
 });
 
+/** The refusal links into this deployment's frontend, so the expectation reads
+ *  the same origin the builder does rather than assuming the test default. */
+const APP_BASE_URL = env.FRONTEND_URL.replace(/\/$/u, "");
+
 /** The one refusal text the dispatch layer builds (registry proper name, slug,
  *  and both ways an admin enables it), asserted verbatim because it is what a
  *  person filling a template and an agent both read. */
 const KRS_DISABLED_MESSAGE =
   "The KRS registry is disabled for this organization. An organization admin " +
-  "can enable it at http://localhost:3000/knowledge/tools?slug=krs, or add " +
-  "Poland to the practice jurisdictions.";
+  `can enable it at ${APP_BASE_URL}/knowledge/tools?slug=krs, or add Poland ` +
+  "to the practice jurisdictions.";
 
 describe("createDispatchLookupResolver — mocked dispatch", () => {
   // The resolver's dispatch is now keyed by every supported registry; spread
@@ -629,7 +634,8 @@ describe("createDispatchLookupResolver — mocked dispatch", () => {
           return KRS_HIT;
         },
       }),
-      isRegistryEnabledForOrg: (registry) => registry !== "krs",
+      resolveRegistryDisabledReason: (registry) =>
+        registry === "krs" ? "jurisdiction_mismatch" : null,
     });
     const outcome = await resolver({ registry: "krs", query: "0000592109" });
     expect(outcome).toEqual({
@@ -643,7 +649,7 @@ describe("createDispatchLookupResolver — mocked dispatch", () => {
   test("resolves a registry the org has enabled", async () => {
     const resolver = createDispatchLookupResolver({
       dispatch: stubDispatch({ lookup: async () => KRS_HIT }),
-      isRegistryEnabledForOrg: () => true,
+      resolveRegistryDisabledReason: () => null,
     });
     const outcome = await resolver({ registry: "krs", query: "0000592109" });
     expect(outcome).toEqual({ type: "hit", hit: KRS_HIT });
@@ -658,7 +664,7 @@ describe("createDispatchLookupResolver — mocked dispatch", () => {
           return KRS_HIT;
         },
       }),
-      isRegistryEnabledForOrg: async () => false,
+      resolveRegistryDisabledReason: async () => "jurisdiction_mismatch",
     });
     const outcome = await resolver({ registry: "krs", query: "0000592109" });
     expect(outcome).toEqual({
@@ -744,7 +750,7 @@ describe("applyLookupFields — fill flow over a mocked dispatch", () => {
             },
           },
           // krs is deployed (isDeployAvailable: always) but disabled for the org.
-          isRegistryEnabledForOrg: () => false,
+          resolveRegistryDisabledReason: () => "jurisdiction_mismatch",
         }),
       },
     );
@@ -770,7 +776,7 @@ describe("applyLookupFields — fill flow over a mocked dispatch", () => {
               lookup: async () => KRS_HIT,
             },
           },
-          isRegistryEnabledForOrg: () => true,
+          resolveRegistryDisabledReason: () => null,
         }),
       },
     );

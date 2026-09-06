@@ -5,11 +5,13 @@ import {
   type AresCompany,
 } from "@stll/business-registries/ares";
 
+import { env } from "@/api/env";
 import {
   BUSINESS_REGISTRY_DISPATCH,
   executeRegistryLookup,
   getRegistryHandlerByCountry,
   isBusinessRegistryNativeToolDeployAvailable,
+  registryDisabledForOrgRefusal,
   type RegistryHandler,
 } from "@/api/lib/business-registries/dispatch";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -371,5 +373,51 @@ describe("executeRegistryLookup — canonical-id guard", () => {
       throw new TypeError("expected a handler error");
     }
     expect(result.status).toBe(500);
+  });
+});
+
+describe("registryDisabledForOrgRefusal", () => {
+  const catalogueUrl = `${env.FRONTEND_URL.replace(/\/$/u, "")}/knowledge/tools?slug=krs`;
+
+  test("names the catalogue link and the jurisdiction that would enable it", () => {
+    const refusal = registryDisabledForOrgRefusal({
+      registry: "krs",
+      reason: "jurisdiction_mismatch",
+    });
+
+    expect(refusal.message).toBe(
+      `The KRS registry is disabled for this organization. An organization ` +
+        `admin can enable it at ${catalogueUrl}, or add Poland to the ` +
+        `practice jurisdictions.`,
+    );
+    expect(refusal.hint).toBe(
+      `Ask an organization admin to enable KRS at ${catalogueUrl}, or to add ` +
+        `Poland to the practice jurisdictions. It cannot be enabled from the ` +
+        `client.`,
+    );
+  });
+
+  test("offers only the catalogue link when an explicit override turned it off", () => {
+    // Adding the jurisdiction would not clear an explicit `false` override, so
+    // the refusal must not promise that it would.
+    const refusal = registryDisabledForOrgRefusal({
+      registry: "krs",
+      reason: "disabled_by_override",
+    });
+
+    expect(refusal.message).toBe(
+      `The KRS registry is disabled for this organization. An organization ` +
+        `admin can enable it at ${catalogueUrl}.`,
+    );
+    expect(refusal.message).not.toContain("practice jurisdictions");
+  });
+
+  test("asks for an EU member state where the catalogue recommends the EU", () => {
+    expect(
+      registryDisabledForOrgRefusal({
+        registry: "vies",
+        reason: "jurisdiction_mismatch",
+      }).message,
+    ).toContain("add an EU member state to the practice jurisdictions");
   });
 });

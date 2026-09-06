@@ -257,7 +257,10 @@ function ToolsPage() {
           canManageCustomTools={routeData.canManageCustomTools}
           initialKind={initialKind}
           initialSlug={initialSlug}
-          key={initialKind ?? "all"}
+          // The browser reads both search params once, on mount, so a link that
+          // changes either one remounts it rather than leaving the previous
+          // filter or detail panel in place.
+          key={`${initialKind ?? "all"}:${initialSlug ?? ""}`}
           organizationId={organizationId}
           practiceJurisdictions={routeData.practiceJurisdictions}
         />

@@ -60,7 +60,7 @@ const organizationId = toSafeId<"organization">("org_1");
 
 /** ScopedDb stub covering only what a manifest-carrying fill touches when no
  *  templateId is supplied (clause-slot resolution is skipped): the org
- *  registry-gate read, which `buildIsRegistryEnabledForOrg` always issues
+ *  registry-gate read, which `buildResolveRegistryDisabledReason` always issues
  *  once a manifest is present, even with no lookup field in play. */
 const stubScopedDb = (): ScopedDb => {
   const fakeTx = {

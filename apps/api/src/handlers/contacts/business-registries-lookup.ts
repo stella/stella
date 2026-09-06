@@ -17,7 +17,7 @@ import type {
   RegistryLookupResponse,
 } from "@/api/lib/business-registries/dispatch";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { isNativeToolEnabledForOrg } from "@/api/lib/mcp-connectors/catalog-metadata";
+import { nativeToolDisabledReasonForOrg } from "@/api/lib/mcp-connectors/catalog-metadata";
 
 const querySchema = t.Object({
   registry: t.UnionEnum(BUSINESS_REGISTRY_SLUGS, {
@@ -76,12 +76,12 @@ export const lookupBusinessRegistryShared = async ({
   }
   const settings = settingsResult.value;
 
-  const enabled = isNativeToolEnabledForOrg({
+  const disabledReason = nativeToolDisabledReasonForOrg({
     slug: handler.nativeToolSlug,
     practiceJurisdictions: arrayOrEmpty(settings?.practiceJurisdictions),
     nativeToolOverrides: settings?.nativeToolOverrides ?? {},
   });
-  if (!enabled) {
+  if (disabledReason) {
     // Tenant-neutral denial: the shared refusal names the refused registry and
     // both ways to enable it, and does NOT enumerate the org's enabled
     // registries. This handler is shared by the anonymized MCP surface, whose
@@ -90,7 +90,9 @@ export const lookupBusinessRegistryShared = async ({
     // tools/call. The default surface's narrowed tools/list already steers the
     // agent to reachable registries.
     return Result.err(
-      new RegistryDisabledForOrgError(registryDisabledForOrgRefusal(registry)),
+      new RegistryDisabledForOrgError(
+        registryDisabledForOrgRefusal({ registry, reason: disabledReason }),
+      ),
     );
   }
 

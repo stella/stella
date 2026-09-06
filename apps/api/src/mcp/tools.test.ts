@@ -1000,10 +1000,11 @@ describe("OpenAI-compatible MCP tools", () => {
     });
 
     test("refuses a disabled registry with the enablement path, not a bare enum error", async () => {
-      // The org practises in CZ only (the settings mock declares no practice
-      // jurisdictions), so KRS is off. The call-time schema still accepts every
-      // registry in the dispatch table, so the refusal can say where to enable
-      // it instead of failing as an unexplained enum mismatch.
+      // The org declares no practice jurisdictions in the settings mock, so KRS
+      // is off on the jurisdiction default rather than an explicit override.
+      // The call-time schema still accepts every registry in the dispatch
+      // table, so the refusal can say where to enable it instead of failing as
+      // an unexplained enum mismatch.
       const result = await handleMcpToolCall({
         args: { registry: "krs", query: "0000592109" },
         context: { ...createContext(), enabledRegistrySlugs: ["ares"] },

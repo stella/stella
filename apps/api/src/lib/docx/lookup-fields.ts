@@ -40,6 +40,7 @@ import {
   executeRegistryLookup,
   registryDisabledForOrgRefusal,
 } from "@/api/lib/business-registries/dispatch";
+import type { NativeToolDisabledReason } from "@/api/lib/mcp-connectors/catalog-metadata";
 
 import { replaceResolvedValue } from "./composite-fields";
 import {
@@ -103,23 +104,25 @@ export type LookupResolver = (input: {
 }) => Promise<LookupOutcome>;
 
 /**
- * Predicate gating a registry against the org's native-tool settings, by the
- * handler's `nativeToolSlug`. Mirrors the org-enabled check the contacts
- * lookup route enforces, threaded into the fill resolver so a template cannot
- * invoke a registry the organization has disabled. Async so the handler
- * boundary can construct it from a one-shot org-settings read.
+ * The org gate for a registry, keyed by the handler's `nativeToolSlug`: why
+ * the registry is off for the organization, or null when it is on.
+ * Mirrors the check the contacts lookup route enforces, threaded into the fill
+ * resolver so a template cannot invoke a registry the organization has
+ * disabled, and carrying the reason so the refusal names the recovery that
+ * applies. Async so the handler boundary can construct it from a one-shot
+ * org-settings read.
  *
  * Omitting it (the default) skips org gating: tests and any internal/system
  * caller without an org context resolve as before. The gate is additive — a
  * caller WITH an org context passes this in to deny disabled registries.
  */
-export type IsRegistryEnabledForOrg = (
+export type ResolveRegistryDisabledReason = (
   registry: LookupRegistry,
-) => boolean | Promise<boolean>;
+) => NativeToolDisabledReason | null | Promise<NativeToolDisabledReason | null>;
 
 type CreateDispatchLookupResolverOptions = {
   dispatch?: Record<LookupRegistry, RegistryHandler>;
-  isRegistryEnabledForOrg?: IsRegistryEnabledForOrg;
+  resolveRegistryDisabledReason?: ResolveRegistryDisabledReason;
 };
 
 /**
@@ -128,14 +131,14 @@ type CreateDispatchLookupResolverOptions = {
  * The dispatch table is injectable for tests (mirroring how dispatch.test.ts
  * stubs handlers); production callers use the default.
  *
- * `isRegistryEnabledForOrg`, when supplied, gates each lookup on the org's
- * native-tool settings before any upstream call. Constructed at the handler
- * boundary where org context exists; omitted on internal/test paths.
+ * `resolveRegistryDisabledReason`, when supplied, gates each lookup on the
+ * org's native-tool settings before any upstream call. Constructed at the
+ * handler boundary where org context exists; omitted on internal/test paths.
  */
 export const createDispatchLookupResolver =
   ({
     dispatch = BUSINESS_REGISTRY_DISPATCH,
-    isRegistryEnabledForOrg,
+    resolveRegistryDisabledReason,
   }: CreateDispatchLookupResolverOptions = {}): LookupResolver =>
   async ({ registry, query }) => {
     const handler = dispatch[registry];
@@ -153,10 +156,14 @@ export const createDispatchLookupResolver =
     // Gate on the org's native-tool settings (when an org context was threaded
     // in), exactly like the contacts lookup route: a deployed-but-disabled
     // registry is refused here, before any upstream call.
-    if (isRegistryEnabledForOrg && !(await isRegistryEnabledForOrg(registry))) {
+    const disabledReason = await resolveRegistryDisabledReason?.(registry);
+    if (disabledReason) {
       return {
         type: "error",
-        message: registryDisabledForOrgRefusal(registry).message,
+        message: registryDisabledForOrgRefusal({
+          registry,
+          reason: disabledReason,
+        }).message,
       };
     }
     const response = await executeRegistryLookup({ handler, query });

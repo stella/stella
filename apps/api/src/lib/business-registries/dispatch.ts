@@ -128,6 +128,8 @@ import type { CountryCode } from "@stll/country-codes";
 import { captureError } from "@/api/lib/analytics/capture";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { buildCatalogueEntryUrl } from "@/api/lib/mcp-connectors/app-urls";
+import { nativeToolRecommendedJurisdictions } from "@/api/lib/mcp-connectors/catalog-metadata";
+import type { NativeToolDisabledReason } from "@/api/lib/mcp-connectors/catalog-metadata";
 
 export { BUSINESS_REGISTRY_SLUGS } from "@stll/api-contract";
 export type { BusinessRegistrySlug } from "@stll/api-contract";
@@ -1504,14 +1506,16 @@ const REGION_DISPLAY_NAMES = new Intl.DisplayNames(["en"], {
   type: "region",
 });
 
-/** What the org adds to its practice jurisdictions to reach this registry, as
- *  a country name rather than a code. VIES is enabled by any EU member state:
- *  "EU" is a pseudo-jurisdiction of the dispatch table, never a
- *  practice-jurisdiction row. */
-const enablingJurisdiction = (country: RegistryJurisdictionCode): string =>
-  country === EU_PSEUDO_JURISDICTION
-    ? "an EU member state"
-    : (REGION_DISPLAY_NAMES.of(country) ?? country);
+/** The jurisdictions that would turn this registry on, as country names rather
+ *  than codes, read from the same catalogue recommendation the enablement gate
+ *  reads. "EU" is a catalogue pseudo-jurisdiction matched by any member state,
+ *  never a practice-jurisdiction row of its own. */
+const enablingJurisdictions = (nativeToolSlug: string): string[] =>
+  nativeToolRecommendedJurisdictions(nativeToolSlug).map((code) =>
+    code === EU_PSEUDO_JURISDICTION
+      ? "an EU member state"
+      : (REGION_DISPLAY_NAMES.of(code) ?? code),
+  );
 
 export type RegistryDisabledForOrgRefusal = {
   message: string;
@@ -1522,20 +1526,35 @@ export type RegistryDisabledForOrgRefusal = {
 /**
  * The one refusal text for a registry the organization has not enabled, used
  * by every surface that can hit the gate (contacts lookup, template fill,
- * lookup preview, MCP tools). It names the refused registry, links to the
- * catalogue entry that turns it on, and names the jurisdiction that enables it
- * for the whole org. Tenant-neutral by design: never what the org has enabled.
+ * lookup preview, MCP tools). It names the refused registry and links to the
+ * catalogue entry that turns it on; on a jurisdiction miss it also names the
+ * jurisdiction that enables the tool for the whole org, and on an explicit
+ * per-slug override it does not, because adding a jurisdiction would not clear
+ * that override. Tenant-neutral by design: never what the org has enabled.
  */
-export const registryDisabledForOrgRefusal = (
-  registry: BusinessRegistrySlug,
-): RegistryDisabledForOrgRefusal => {
-  const { country, displayName, nativeToolSlug } =
-    BUSINESS_REGISTRY_DISPATCH[registry];
-  const jurisdiction = enablingJurisdiction(country);
+export const registryDisabledForOrgRefusal = ({
+  registry,
+  reason,
+}: {
+  registry: BusinessRegistrySlug;
+  reason: NativeToolDisabledReason;
+}): RegistryDisabledForOrgRefusal => {
+  const { displayName, nativeToolSlug } = BUSINESS_REGISTRY_DISPATCH[registry];
   const url = buildCatalogueEntryUrl(nativeToolSlug);
+  const jurisdictions =
+    reason === "jurisdiction_mismatch"
+      ? enablingJurisdictions(nativeToolSlug)
+      : [];
+  if (jurisdictions.length === 0) {
+    return {
+      message: `The ${displayName} registry is disabled for this organization. An organization admin can enable it at ${url}.`,
+      hint: `Ask an organization admin to enable ${displayName} at ${url}. It cannot be enabled from the client.`,
+    };
+  }
+  const jurisdictionList = jurisdictions.join(" or ");
   return {
-    message: `The ${displayName} registry is disabled for this organization. An organization admin can enable it at ${url}, or add ${jurisdiction} to the practice jurisdictions.`,
-    hint: `Ask an organization admin to enable ${displayName} at ${url}, or to add ${jurisdiction} to the practice jurisdictions. It cannot be enabled from the client.`,
+    message: `The ${displayName} registry is disabled for this organization. An organization admin can enable it at ${url}, or add ${jurisdictionList} to the practice jurisdictions.`,
+    hint: `Ask an organization admin to enable ${displayName} at ${url}, or to add ${jurisdictionList} to the practice jurisdictions. It cannot be enabled from the client.`,
   };
 };
 
