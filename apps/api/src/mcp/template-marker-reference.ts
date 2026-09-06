@@ -126,6 +126,14 @@ const NON_DIRECTIVE_RULES = [
       "boundary.",
   },
   {
+    title: "Markers Word splits into runs",
+    detail:
+      "Word often splits a marker across several runs (`w:r`) inside one " +
+      "paragraph; discovery and fill join a paragraph's run text before " +
+      "scanning, so a split marker still resolves. A marker must never span " +
+      "two paragraphs or two table cells.",
+  },
+  {
     title: "Bilingual / multi-column documents",
     detail:
       "Mark every language or column occurrence of the same value with the " +

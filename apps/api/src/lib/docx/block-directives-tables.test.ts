@@ -491,6 +491,33 @@ describe("processBlockDirectives — table-row conditionals", () => {
     expect(bodyTexts(body)).toEqual(["Intro", "Outro"]);
   });
 
+  test("markers Word split across runs still bind to the row", () => {
+    // Word splits a marker into several `w:r` runs after an edit or a
+    // spell-check pass. The scanner joins a paragraph's run text, so the block
+    // is recognized and the row is still the unit.
+    const splitOpener =
+      "<w:p><w:r><w:t>{{#if </w:t></w:r><w:r><w:t>scope.analysis}}</w:t></w:r></w:p>";
+    const splitCloser =
+      "<w:p><w:r><w:t>{{/</w:t></w:r><w:r><w:t>if}}</w:t></w:r></w:p>";
+    const xml = WRAP(
+      TBL(
+        TR(TC(P("Zakres")), TC(P("Scope"))),
+        TR(
+          TC(splitOpener, P("Analiza umowy")),
+          TC(P("Contract analysis"), splitCloser),
+        ),
+      ),
+    );
+    const body = parseBody(xml);
+    const { errors } = processBlockDirectives(body, {
+      scope: { analysis: false },
+    });
+
+    expect(errors).toEqual([]);
+    expect(rowCount(body)).toBe(1);
+    expect(bodyTexts(body)).toEqual(["Zakres", "Scope"]);
+  });
+
   test("a nested row conditional inside a row-repeat drops only its own rows", () => {
     const xml = WRAP(
       TBL(
