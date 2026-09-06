@@ -7,6 +7,7 @@ import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
 import { processBlockDirectives } from "./block-directives";
 import { processInlineConditions } from "./inline-conditions";
 import { paragraphText, W_NS } from "./ooxml";
+import type { TemplateData } from "./types";
 
 setDefaultTimeout(propertyTestTimeout(30_000));
 
@@ -32,16 +33,8 @@ const parseBody = (xml: string): slimdom.Element => {
   return body;
 };
 
-type Rendered = {
-  blockErrors: readonly { message: string; directive: string }[];
-  inlineErrors: readonly { message: string; directive: string }[];
-  patchValues: Record<string, unknown>;
-  rowCount: number;
-  texts: string[];
-};
-
 /** The full directive pipeline over one body, as patch-template runs it. */
-const render = (xml: string, data: Record<string, unknown>): Rendered => {
+const render = (xml: string, data: TemplateData) => {
   const body = parseBody(xml);
   const { errors, patchValues } = processBlockDirectives(body, data);
   const inlineErrors = processInlineConditions(body, data);
@@ -56,24 +49,22 @@ const render = (xml: string, data: Record<string, unknown>): Rendered => {
 
 const HEADER_ROW = TR(TC(P("Deliverable")), TC(P("Fee")));
 
-const eachRowForm = (rows: string) =>
-  WRAP(
-    TBL(
-      HEADER_ROW,
-      TR(
-        TC(P("{{#each deliverables}}{{deliverables.item}}")),
-        TC(P("{{deliverables.fee}}{{/each}}")),
-      ),
-      rows,
+const EACH_ROW_FORM = WRAP(
+  TBL(
+    HEADER_ROW,
+    TR(
+      TC(P("{{#each deliverables}}{{deliverables.item}}")),
+      TC(P("{{deliverables.fee}}{{/each}}")),
     ),
-  );
+  ),
+);
 
 // ── Row-form {{#each}} ───────────────────────────────────
 
 describe("row-form {{#each}} markers", () => {
   test("repeats the row per item and strips the markers", () => {
     const { blockErrors, inlineErrors, patchValues, rowCount, texts } = render(
-      eachRowForm(""),
+      EACH_ROW_FORM,
       {
         deliverables: [
           { item: "Report", fee: "100" },
@@ -101,7 +92,7 @@ describe("row-form {{#each}} markers", () => {
   });
 
   test("an empty list removes the template row and keeps the header", () => {
-    const { rowCount, texts } = render(eachRowForm(""), { deliverables: [] });
+    const { rowCount, texts } = render(EACH_ROW_FORM, { deliverables: [] });
 
     expect(rowCount).toBe(1);
     expect(texts).toEqual(["Deliverable", "Fee"]);
