@@ -1382,7 +1382,7 @@ describe("MCP template tools", () => {
       args: {
         action: "create_document",
         template_id: TEMPLATE_ID,
-        matter_id: "ws_1",
+        matter_id: WORKSPACE_ID,
         idempotency_key: "failed-ai",
         values: {},
       },
@@ -1431,7 +1431,7 @@ describe("MCP template tools", () => {
       args: {
         action: "create_document",
         template_id: TEMPLATE_ID,
-        matter_id: "ws_1",
+        matter_id: WORKSPACE_ID,
         idempotency_key: "failed-ai-partial",
         values: { contracts: [{}] },
         completion_mode: "allow_partial",
@@ -1484,7 +1484,7 @@ describe("MCP template tools", () => {
       args: {
         action: "create_version",
         template_id: TEMPLATE_ID,
-        matter_id: "ws_1",
+        matter_id: WORKSPACE_ID,
         entity_id: ENTITY_ID,
         idempotency_key: "failed-ai-version",
         values: { contracts: [{}] },
@@ -1535,7 +1535,7 @@ describe("MCP template tools", () => {
       args: {
         action: "create_version",
         template_id: TEMPLATE_ID,
-        matter_id: "ws_1",
+        matter_id: WORKSPACE_ID,
         entity_id: ENTITY_ID,
         idempotency_key: "failed-ai-version-partial",
         values: { contracts: [{}] },
@@ -1867,7 +1867,7 @@ describe("MCP template tools", () => {
     const args = {
       action: "create_version",
       template_id: TEMPLATE_ID,
-      matter_id: "ws_1",
+      matter_id: WORKSPACE_ID,
       idempotency_key: "fingerprint-1",
       entity_id: ENTITY_ID,
       values: { "tenant.name": "ACME" },
@@ -1913,7 +1913,7 @@ describe("MCP template tools", () => {
       args: {
         action: "create_version",
         template_id: TEMPLATE_ID,
-        matter_id: "ws_1",
+        matter_id: WORKSPACE_ID,
         idempotency_key: "incomplete-1",
         entity_id: ENTITY_ID,
         values: { "tenant.name": "ACME" },
