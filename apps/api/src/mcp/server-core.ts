@@ -13,7 +13,7 @@ import type {
   ReadResourceResult,
   Resource,
 } from "@modelcontextprotocol/server";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 
 import { detached } from "@/api/lib/detached";
 import { isMcpSession, type McpSession } from "@/api/mcp/auth";
@@ -810,17 +810,21 @@ export const createMcpHttpRequestHandler = ({
       }
       // Telemetry does not decide whether a handshake succeeds. This callback
       // runs inside `handleRequest`, so a throwing analytics sink would reject
-      // it and answer a valid `initialize` with a 503. The catch sits on a
-      // framework callback boundary and reports the failure rather than
-      // swallowing it.
-      try {
+      // it and answer a valid `initialize` with a 503. Convert the failure to a
+      // result and report it rather than swallowing it.
+      const recorded = Result.try(() =>
         recordMcpSessionInitialized({
           clientInfo: message.params.clientInfo,
           mode,
           session,
+        }),
+      );
+      if (recorded.isErr()) {
+        captureError(recorded.error, {
+          phase: "initialize",
+          mode,
+          source: "mcp",
         });
-      } catch (error) {
-        captureError(error, { phase: "initialize", mode, source: "mcp" });
       }
     };
     Reflect.set(transport, "onmessage", observeHandshake);
