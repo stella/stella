@@ -2166,6 +2166,16 @@ const ClipboardApp = () => {
           >
             <StellaMark className="size-5" />
           </a>
+          {snapshot.captureStatus === "paused" ? (
+            <span
+              aria-label={t("capturePaused")}
+              className="grid size-7 place-items-center text-(--option-orange)"
+              role="status"
+              title={t("capturePaused")}
+            >
+              <PauseIcon aria-hidden="true" className="size-4" />
+            </span>
+          ) : null}
           {snapshot.persistence.status === "memoryOnly" ||
           snapshot.persistence.status === "deletionOnly" ||
           imageCleanupPending ? (
