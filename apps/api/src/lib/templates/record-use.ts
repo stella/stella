@@ -45,6 +45,7 @@ type RecordTemplateFillOptions = {
   /** Output the caller produced (`docx`, `pdf`, `text`). */
   format: string;
   unmatchedCount: number;
+  aiFieldErrorCount: number;
   unusedCount: number;
   structureErrors?: TemplateStructureError[] | undefined;
   /** Records the `EXECUTE` audit event when present (chat tools may run without
@@ -70,11 +71,13 @@ export const recordTemplateFill = async ({
   entityVersionId,
   format,
   unmatchedCount,
+  aiFieldErrorCount,
   unusedCount,
   structureErrors,
   recordAuditEvent,
 }: RecordTemplateFillOptions): Promise<void> => {
-  const status = unmatchedCount > 0 ? "partial" : "success";
+  const status =
+    unmatchedCount > 0 || aiFieldErrorCount > 0 ? "partial" : "success";
   await tx.insert(templateFills).values({
     organizationId,
     templateId,
@@ -97,6 +100,7 @@ export const recordTemplateFill = async ({
       format,
       status,
       unmatchedCount,
+      aiFieldErrorCount,
       ...(entityId !== undefined && { entityId }),
       ...(entityVersionId !== undefined && { entityVersionId }),
     },

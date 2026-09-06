@@ -24,7 +24,6 @@ import {
 } from "@/api/lib/templates/template-fill-service";
 import { buildTemplateFillAiWiring } from "@/api/lib/templates/template-fill-usage";
 import { isTemplateOutputValid } from "@/api/lib/templates/validate-template-output";
-import { isRecord } from "@/api/lib/type-guards";
 import { DOCX_MIME_TYPE, OCTET_STREAM_MIME_TYPE } from "@/api/mime-types";
 
 export type FillByIdLogicProps = {
@@ -33,7 +32,10 @@ export type FillByIdLogicProps = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   templateId: SafeId<"template">;
-  body: { values: string; clauseOverrides?: Record<string, ClauseBody> };
+  body: {
+    values: Record<string, unknown>;
+    clauseOverrides?: Record<string, ClauseBody>;
+  };
   query: { format?: "docx" | "pdf" };
   recordAuditEvent: AuditRecorder;
 };
@@ -49,31 +51,11 @@ export const fillByIdLogic = async function* ({
   organizationId,
   userId,
   templateId,
-  body: { values: valuesJson, clauseOverrides },
+  body: { values, clauseOverrides },
   query: { format = "docx" },
   recordAuditEvent,
 }: FillByIdLogicProps) {
-  const parseResult = Result.try((): unknown => JSON.parse(valuesJson));
-  if (Result.isError(parseResult)) {
-    return Result.err(
-      new HandlerError({
-        status: 400,
-        message: "Invalid JSON in 'values' field.",
-      }),
-    );
-  }
-
-  const parsed = parseResult.value;
-  if (!isRecord(parsed)) {
-    return Result.err(
-      new HandlerError({
-        status: 400,
-        message: "'values' must be a JSON object (not null or array).",
-      }),
-    );
-  }
-
-  if (Object.values(parsed).some(containsNull)) {
+  if (Object.values(values).some(containsNull)) {
     return Result.err(
       new HandlerError({
         status: 400,
@@ -95,7 +77,7 @@ export const fillByIdLogic = async function* ({
 
   const result = await fillTemplateDocx({
     source,
-    values: parsed,
+    values,
     scopedDb,
     organizationId,
     clauseOverrides,
@@ -136,8 +118,12 @@ export const fillByIdLogic = async function* ({
   }
 
   const { unusedValues } = result;
+  // A failed AI draft leaves its field unfilled, so it counts against the
+  // fill the same way an unmatched placeholder does.
   const fillStatus =
-    result.unmatchedPlaceholders.length > 0 ? "partial" : "success";
+    result.unmatchedPlaceholders.length > 0 || result.aiFieldErrors.length > 0
+      ? "partial"
+      : "success";
 
   yield* Result.await(
     Result.tryPromise({
@@ -179,6 +165,14 @@ export const fillByIdLogic = async function* ({
 
   const baseName = result.fileName;
 
+  const additionalHeaders = new Headers();
+  if (result.aiFieldErrors.length > 0) {
+    additionalHeaders.set(
+      "X-Ai-Field-Errors",
+      encodeURIComponent(JSON.stringify(result.aiFieldErrors)),
+    );
+  }
+
   // PDF conversion via Gotenberg
   if (format === "pdf") {
     const docxBytes = new Uint8Array(result.buffer);
@@ -218,6 +212,7 @@ export const fillByIdLogic = async function* ({
     // source for that call, so returning the ready-made Response from here
     // instead would make its declared file-response transport look stale.
     return Result.ok({
+      additionalHeaders,
       body: new Uint8Array(pdfResult.value.buffer),
       // Octet-stream, not application/pdf: see OCTET_STREAM_MIME_TYPE.
       contentType: OCTET_STREAM_MIME_TYPE,
@@ -225,8 +220,6 @@ export const fillByIdLogic = async function* ({
       fileName: sanitizeFilename(pdfName),
     } satisfies SecureDocumentResponseOptions);
   }
-
-  const additionalHeaders = new Headers();
 
   if (result.unmatchedPlaceholders.length > 0) {
     additionalHeaders.set(
@@ -248,7 +241,6 @@ export const fillByIdLogic = async function* ({
       JSON.stringify(result.structureErrors),
     );
   }
-
   return Result.ok({
     additionalHeaders,
     body: new Uint8Array(result.buffer),

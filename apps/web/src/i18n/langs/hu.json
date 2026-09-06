@@ -4015,6 +4015,7 @@
     "addPart": "Rész hozzáadása",
     "addTag": "Címke hozzáadása",
     "aiAdaptHint": "Az MI a megfogalmazást a dokumentum minden előfordulási helyéhez igazítja.",
+    "aiFieldsNotDrafted": "Az MI nem tudta megfogalmazni ezeket a mezőket: {list}",
     "allTemplates": "Összes sablon",
     "backToList": "Vissza a sablonokhoz",
     "binding": {

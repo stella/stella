@@ -1,11 +1,17 @@
 import { describe, expect, test } from "bun:test";
+import { expectTypeOf } from "expect-type";
 import * as v from "valibot";
 
 import { fieldMetaToolInputSchema } from "@/api/lib/docx/types";
-import { fieldSourceToolInputSchema } from "@/api/lib/template-binding/binding-sources";
+import type {
+  FieldSource,
+  fieldSourceToolInputSchema,
+} from "@/api/lib/template-binding/binding-sources";
 import {
+  readTemplateFieldsInput,
   templateFieldInputSchema,
   toFieldMetaToolInput,
+  toTemplateFieldWireInput,
 } from "@/api/mcp/template-field-input";
 
 const sortedKeys = (entries: object): string[] => Object.keys(entries).sort();
@@ -22,6 +28,12 @@ const advertised = templateFieldInputSchema.pipe[0].entries;
 const persisted = fieldMetaToolInputSchema.pipe[0].entries;
 
 describe("template field input schema", () => {
+  test("preserves the persisted source union in the portable schema", () => {
+    expectTypeOf<
+      v.InferOutput<typeof fieldSourceToolInputSchema>
+    >().toEqualTypeOf<FieldSource>();
+  });
+
   test("advertises the persisted tool-input keys in snake_case", () => {
     expect(sortedCamelKeys(advertised)).toEqual(sortedKeys(persisted));
   });
@@ -74,13 +86,10 @@ describe("template field input schema", () => {
         registry: "krs",
         formats: [{ key: "default", template: "[name]" }],
       },
-      // Parsed rather than written inline: the advertised source union is a
-      // provider-portable `anyOf`, so a bare literal has no discriminant to
-      // narrow against.
-      source: v.parse(fieldSourceToolInputSchema, {
+      source: {
         kind: "contact",
         field: "displayName",
-      }),
+      },
       formula: "rent * 12",
       condition: "type == 'corp'",
       date_format: { locale: "cs", style: "long" },
@@ -129,6 +138,111 @@ describe("template field input schema", () => {
     });
   });
 
+  test("serializes every persisted field key back onto the accepted wire contract", () => {
+    const persistedField = v.parse(fieldMetaToolInputSchema, {
+      path: "company",
+      label: "Company",
+      hint: "Enter the registry number",
+      inputType: "select",
+      options: ["director"],
+      validation: {
+        required: true,
+        minLength: 1,
+        maxLength: 64,
+        min: 0,
+        max: 12,
+        pattern: "^.+$",
+        minItems: 1,
+        maxItems: 3,
+      },
+      required: true,
+      aiSeesDocument: true,
+      parts: [
+        {
+          key: "title",
+          label: "Title",
+          inputType: "select",
+          options: ["Mr"],
+          pattern: "^.+$",
+        },
+      ],
+      format: "{{title}}",
+      optionsFrom: "parties",
+      dateFormat: { locale: "cs", style: "long" },
+    });
+
+    const wireField = toTemplateFieldWireInput(persistedField);
+    const censusField = toTemplateFieldWireInput({
+      ...persistedField,
+      aiPrompt: "Draft the scope",
+      aiAdapt: true,
+      lookup: {
+        registry: "krs",
+        formats: [{ key: "default", template: "[name]" }],
+      },
+      source: {
+        kind: "contact",
+        field: "displayName",
+      },
+      formula: "rent * 12",
+      condition: "type == 'corp'",
+    });
+
+    expect(sortedKeys(censusField)).toEqual(sortedKeys(advertised));
+    expect(sortedKeys(wireField.validation ?? {})).toEqual(
+      sortedKeys(advertised.validation.wrapped.pipe[0].entries),
+    );
+    expect(sortedKeys(wireField.parts?.at(0) ?? {})).toEqual(
+      sortedKeys(advertised.parts.wrapped.pipe[0].item.entries),
+    );
+    expect(
+      toFieldMetaToolInput(v.parse(templateFieldInputSchema, wireField)),
+    ).toEqual(persistedField);
+  });
+
+  test("accepts the describe producer's default flags beside a derived lookup", () => {
+    const wireField = toTemplateFieldWireInput({
+      path: "company",
+      label: null,
+      hint: null,
+      inputType: "text",
+      options: null,
+      validation: null,
+      required: false,
+      lookup: {
+        registry: "krs",
+        formats: [{ key: "default", template: "[name]" }],
+      },
+      source: null,
+      aiSeesDocument: false,
+      aiPrompt: null,
+      aiAdapt: false,
+      optionsFrom: null,
+      dateFormat: null,
+      parts: null,
+      format: null,
+    });
+
+    const parsed = v.parse(
+      v.array(templateFieldInputSchema),
+      readTemplateFieldsInput([wireField]),
+    );
+
+    expect(parsed).toEqual([
+      {
+        path: "company",
+        input_type: "text",
+        required: false,
+        lookup: {
+          registry: "krs",
+          formats: [{ key: "default", template: "[name]" }],
+        },
+        ai_sees_document: false,
+        ai_adapt: false,
+      },
+    ]);
+  });
+
   test("rejects the persisted camelCase spellings", () => {
     const result = v.safeParse(templateFieldInputSchema, {
       path: "company",
@@ -138,6 +252,20 @@ describe("template field input schema", () => {
     expect(result.success).toBe(false);
     expect(
       result.issues?.some((issue) => issue.path?.at(0)?.key === "inputType"),
+    ).toBe(true);
+  });
+
+  test("does not erase null typos borrowed from a different schema level", () => {
+    const parsed = v.safeParse(
+      v.array(templateFieldInputSchema),
+      readTemplateFieldsInput([
+        { path: "company", validation: { ai_prompt: null } },
+      ]),
+    );
+
+    expect(parsed.success).toBe(false);
+    expect(
+      parsed.issues?.some((issue) => issue.path?.at(-1)?.key === "ai_prompt"),
     ).toBe(true);
   });
 });

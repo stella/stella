@@ -4,13 +4,13 @@ import { t } from "elysia";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { clauseBodySchema } from "@/api/lib/clauses/body-schema";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { tJsonObject, tSafeId } from "@/api/lib/custom-schema";
 import { secureDocumentResponse } from "@/api/lib/secure-document-response";
 import { fillByIdLogic } from "@/api/lib/templates/fill-by-id-logic";
 import { OCTET_STREAM_MIME_TYPE } from "@/api/mime-types";
 
 const fillByIdBodySchema = t.Object({
-  values: t.String(),
+  values: tJsonObject,
   // Per-fill clause edits (e.g. an AI tweak made in the fill form), keyed by
   // the slot patch key (`@clause:Name`). When present, the override body is
   // inserted for that slot instead of the linked clause's resolved body.
@@ -28,7 +28,7 @@ const fillByIdParamsSchema = t.Object({
 const config = {
   description:
     "Fill a stored template and return the finished document as DOCX (the " +
-    "default) or PDF. values is a JSON-encoded map of field path to value; " +
+    "default) or PDF. values is an object mapping each field path to its value; " +
     "clauseOverrides replaces a clause slot's body for this fill only. " +
     "Registry lookups, formulas, composite fields, AI-drafted fields, and " +
     "conditional sections resolve server-side. Use " +

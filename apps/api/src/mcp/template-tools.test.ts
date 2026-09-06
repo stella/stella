@@ -14,8 +14,10 @@ import type { Transaction } from "@/api/db/root";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { DOCX_MAX_ENTRIES } from "@/api/lib/docx-archive";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import { CONTACT_FIELDS } from "@/api/lib/template-binding/binding-sources";
+import { MCP_MAX_REQUEST_BODY_BYTES } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { TEMPLATE_FIELD_REFERENCE_URI } from "@/api/mcp/template-field-reference";
 import { TEMPLATE_MARKER_REFERENCE_URI } from "@/api/mcp/template-marker-reference";
@@ -31,6 +33,7 @@ const fillStoredTemplateWithTextStrictMock = mock();
 const createEntityFromBufferMock = mock();
 const createEntityVersionFromBufferMock = mock();
 const createStoredTemplateMock = mock();
+const safeOutboundFetchBytesMock = mock();
 const recordTemplateFillMock = mock();
 const recordTemplateUseMock = mock();
 const claimTemplatePersistenceRequestMock = mock();
@@ -216,6 +219,7 @@ const createContext = ({
     fillStoredTemplateWithText: fillStoredTemplateWithTextMock,
     fillStoredTemplateWithTextStrict: fillStoredTemplateWithTextStrictMock,
     createStoredTemplate: createStoredTemplateMock,
+    safeOutboundFetchBytes: safeOutboundFetchBytesMock,
     recordTemplateFill: recordTemplateFillMock,
     recordTemplateUse: recordTemplateUseMock,
     claimTemplatePersistenceRequest: claimTemplatePersistenceRequestMock,
@@ -247,9 +251,9 @@ const fakeTransaction = asTestRaw<Transaction>({});
 /** A real, minimal valid DOCX (well-formed word/document.xml) as base64, so
  *  save_template (create) exercises the real validateDocxBuffer — no module mock to
  *  leak across test files. */
-const makeValidDocxBase64 = async (
+const makeValidDocxBytes = async (
   paragraphs: readonly string[] = ["{{name}}"],
-): Promise<string> => {
+): Promise<Uint8Array> => {
   const zip = new JSZip();
   const body = paragraphs
     .map((text) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`)
@@ -259,8 +263,46 @@ const makeValidDocxBase64 = async (
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
       `<w:document xmlns:w="${W_NS}"><w:body>${body}</w:body></w:document>`,
   );
-  const bytes = await zip.generateAsync({ type: "uint8array" });
-  return Buffer.from(bytes).toString("base64");
+  return await zip.generateAsync({ type: "uint8array" });
+};
+
+const makeValidDocxBase64 = async (
+  paragraphs: readonly string[] = ["{{name}}"],
+): Promise<string> =>
+  Buffer.from(await makeValidDocxBytes(paragraphs)).toString("base64");
+
+/** A host file reference pointing at `bytes`, as an MCP host would supply. */
+const hostFileResponse = (bytes: Uint8Array) =>
+  Result.ok({
+    body: bytes.buffer.slice(
+      bytes.byteOffset,
+      bytes.byteOffset + bytes.byteLength,
+    ),
+    headers: new Headers(),
+    ok: true,
+    status: 200,
+  });
+
+const HOST_FILE_REFERENCE = {
+  download_url: "https://files.example/nda.docx",
+  file_id: "file_nda",
+  file_name: "nda.docx",
+  mime_type:
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+};
+
+/** A real DOCX carrying the given paragraphs, so a fill whose result is read
+ *  back through the shared extractor runs the real reader instead of a stub. */
+const makeDocxBuffer = async (paragraphs: string[]): Promise<Buffer> => {
+  const body = paragraphs
+    .map((text) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`)
+    .join("");
+  const zip = new JSZip();
+  zip.file(
+    "word/document.xml",
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="${W_NS}"><w:body>${body}</w:body></w:document>`,
+  );
+  return Buffer.from(await zip.generateAsync({ type: "uint8array" }));
 };
 
 describe("MCP template tools", () => {
@@ -275,6 +317,7 @@ describe("MCP template tools", () => {
     createEntityFromBufferMock.mockReset();
     createEntityVersionFromBufferMock.mockReset();
     createStoredTemplateMock.mockReset();
+    safeOutboundFetchBytesMock.mockReset();
     recordTemplateFillMock.mockReset();
     recordTemplateUseMock.mockReset();
     claimTemplatePersistenceRequestMock.mockReset();
@@ -368,7 +411,7 @@ describe("MCP template tools", () => {
     expect(saveTemplate?.description).not.toContain("{{@clause:");
   });
 
-  test("save_template advertises the size limit it enforces, and forbids trimming the file to fit", async () => {
+  test("save_template advertises its host-file and inline limits, and forbids trimming the file to fit", async () => {
     const saveTemplate = await getMcpToolDefinition(
       "save_template",
       createContext(),
@@ -376,8 +419,14 @@ describe("MCP template tools", () => {
     const enforcedMegabytes = Math.floor(
       FILE_SIZE_LIMIT_BYTES.document / (1024 * 1024),
     );
+    const inlineDocxBytes = Math.floor(
+      (Math.floor(MCP_MAX_REQUEST_BODY_BYTES / 2) / 4) * 3,
+    );
     expect(saveTemplate?.description).toContain(
-      `max ${enforcedMegabytes} MB decoded`,
+      `up to ${enforcedMegabytes} MB`,
+    );
+    expect(saveTemplate?.description).toContain(
+      `max ${inlineDocxBytes} bytes decoded within the ${MCP_MAX_REQUEST_BODY_BYTES}-byte MCP request frame`,
     );
     expect(saveTemplate?.description).toContain(
       "never retype the file or strip parts out to fit",
@@ -510,7 +559,13 @@ describe("MCP template tools", () => {
           required: true,
           hint: "Enter the KRS number",
           options: null,
-          formats: [{ key: "default", template: "[name], KRS [krs]" }],
+          lookup: {
+            registry: "krs",
+            formats: [{ key: "default", template: "[name], KRS [krs]" }],
+          },
+          validation: { required: true },
+          source: null,
+          aiSeesDocument: false,
           aiPrompt: null,
           aiAdapt: false,
           optionsFrom: null,
@@ -525,7 +580,10 @@ describe("MCP template tools", () => {
           required: false,
           hint: null,
           options: null,
-          formats: null,
+          lookup: null,
+          validation: null,
+          source: null,
+          aiSeesDocument: true,
           aiPrompt: "Draft the scope of this power of attorney",
           aiAdapt: false,
           optionsFrom: null,
@@ -540,7 +598,10 @@ describe("MCP template tools", () => {
           required: false,
           hint: null,
           options: ["director", "proxy"],
-          formats: null,
+          lookup: null,
+          validation: null,
+          source: { kind: "party", role: "counterparty", field: "name" },
+          aiSeesDocument: false,
           aiPrompt: null,
           aiAdapt: false,
           optionsFrom: "parties",
@@ -549,9 +610,10 @@ describe("MCP template tools", () => {
           format: null,
         },
       ],
-      conditions: [{ name: "isCorp", expression: "type == 'corp'" }],
-      computed: [{ name: "total", expression: "rent * 12" }],
+      conditions: [{ path: "isCorp", condition: "type == 'corp'" }],
+      computed: [{ path: "total", formula: "rent * 12" }],
       arrays: [{ path: "deliverables", itemFieldPaths: ["name", "due_date"] }],
+      warnings: [],
     });
 
     const result = await handleMcpToolCall({
@@ -568,17 +630,25 @@ describe("MCP template tools", () => {
       fields: [
         expect.objectContaining({
           hint: "Enter the KRS number",
-          formats: [{ key: "default", template: "[name], KRS [krs]" }],
+          // The whole lookup, registry included, in the shape the `fields`
+          // overlay accepts: read, edit, send back.
+          lookup: {
+            registry: "krs",
+            formats: [{ key: "default", template: "[name], KRS [krs]" }],
+          },
+          validation: { required: true },
         }),
         expect.objectContaining({
-          aiPrompt: "Draft the scope of this power of attorney",
+          ai_prompt: "Draft the scope of this power of attorney",
+          ai_sees_document: true,
         }),
         expect.objectContaining({
           options: ["director", "proxy"],
-          optionsFrom: "parties",
+          options_from: "parties",
+          source: { kind: "party", role: "counterparty", field: "name" },
         }),
       ],
-      computed: [{ name: "total", expression: "rent * 12" }],
+      computed: [{ path: "total", formula: "rent * 12" }],
       // A `{{#each}}` loop over object items is surfaced separately from the
       // flat `fields` list so a caller knows to submit it as an array.
       arrays: [{ path: "deliverables", itemFieldPaths: ["name", "due_date"] }],
@@ -602,16 +672,27 @@ describe("MCP template tools", () => {
               options: ["Smith signatory"],
             },
           ],
-          formats: [
-            { key: "default", template: "[company name], Smith registry" },
-          ],
+          lookup: {
+            registry: "krs",
+            formats: [
+              { key: "default", template: "[company name], Smith registry" },
+            ],
+          },
         },
       ],
       conditions: [],
       computed: [],
+      warnings: [
+        {
+          code: "split_marker",
+          path: "{{Smith.name}}",
+          message: "{{Smith.name}} is split across runs.",
+          hint: "Retype {{Smith.name}} in one run.",
+        },
+      ],
     });
     anonymizeTextFieldsMock.mockResolvedValue({
-      entityCount: 6,
+      entityCount: 9,
       fields: [
         "[PERSON_1] POA",
         "[PERSON_1] role",
@@ -619,6 +700,9 @@ describe("MCP template tools", () => {
         "[PERSON_1] capacity",
         "[PERSON_1] signatory",
         "[company name], [PERSON_1] registry",
+        "{{[PERSON_1].name}}",
+        "{{[PERSON_1].name}} is split across runs.",
+        "Retype {{[PERSON_1].name}} in one run.",
       ],
     });
 
@@ -641,11 +725,20 @@ describe("MCP template tools", () => {
               options: ["[PERSON_1] signatory"],
             },
           ],
-          formats: [
-            {
-              template: "[company name], [PERSON_1] registry",
-            },
-          ],
+          lookup: {
+            formats: [
+              {
+                template: "[company name], [PERSON_1] registry",
+              },
+            ],
+          },
+        },
+      ],
+      warnings: [
+        {
+          path: "{{[PERSON_1].name}}",
+          message: "{{[PERSON_1].name}} is split across runs.",
+          hint: "Retype {{[PERSON_1].name}} in one run.",
         },
       ],
     });
@@ -657,6 +750,9 @@ describe("MCP template tools", () => {
         "Smith capacity",
         "Smith signatory",
         "[company name], Smith registry",
+        "{{Smith.name}}",
+        "{{Smith.name}} is split across runs.",
+        "Retype {{Smith.name}} in one run.",
       ],
       workspaceId: "org_1",
     });
@@ -682,7 +778,7 @@ describe("MCP template tools", () => {
     expect(analytics.exceptions()).toEqual([]);
   });
 
-  test("fill_template returns a complete rendered document plus the DOCX as base64", async () => {
+  test("fill_template returns a complete rendered document plus the DOCX as base64 under output=docx", async () => {
     const docxBytes = Buffer.from("PK filled docx bytes");
     fillStoredTemplateWithTextStrictMock.mockResolvedValue({
       templateName: "Lease",
@@ -691,6 +787,7 @@ describe("MCP template tools", () => {
       text: "Lease between ACME and Tenant.",
       unmatchedPlaceholders: [],
       unusedValues: [],
+      aiFieldErrors: [],
       structureErrors: [
         {
           directive: "#if signature",
@@ -701,7 +798,11 @@ describe("MCP template tools", () => {
     });
 
     const result = await handleMcpToolCall({
-      args: { template_id: "t1", values: { "tenant.name": "ACME" } },
+      args: {
+        template_id: "t1",
+        values: { "tenant.name": "ACME" },
+        output_mode: "docx",
+      },
       context: createContext(),
       toolName: "fill_template",
     });
@@ -722,6 +823,14 @@ describe("MCP template tools", () => {
       docxBase64: docxBytes.toString("base64"),
       unmatchedPlaceholders: [],
       unusedValues: [],
+      structureErrors: [
+        {
+          directive: "#if signature",
+          message: "Missing closing directive",
+          paragraphIndex: 4,
+        },
+      ],
+      aiFieldErrors: [],
     });
     // The execution is recorded (fill row + audit) so agent fills are audited.
     expect(recordTemplateFillMock).toHaveBeenCalledWith(
@@ -742,14 +851,90 @@ describe("MCP template tools", () => {
     );
   });
 
+  test("fill_template returns rendered text and no base64 by default", async () => {
+    const docxBytes = await makeDocxBuffer([
+      "Lease between ACME and Tenant.",
+      "Signed in Prague.",
+    ]);
+    fillStoredTemplateWithTextStrictMock.mockResolvedValue({
+      templateName: "Lease",
+      fileName: "lease.docx",
+      buffer: docxBytes,
+      text: "Lease between ACME and Tenant.\nSigned in Prague.",
+      unmatchedPlaceholders: [],
+      unusedValues: [],
+      aiFieldErrors: [],
+      structureErrors: [],
+    });
+
+    const result = await handleMcpToolCall({
+      args: { template_id: "t1", values: { "tenant.name": "ACME" } },
+      context: createContext(),
+      toolName: "fill_template",
+    });
+
+    // The base64 archive is ~4/3 of the document's byte size; an agent that
+    // only reads the result must not be charged for it.
+    expect(parseToolPayload(result)).toEqual({
+      templateName: "Lease",
+      fileName: "lease.docx",
+      completionStatus: "complete",
+      paragraphs: ["Lease between ACME and Tenant.", "Signed in Prague."],
+      charCount: 47,
+      truncated: false,
+      unmatchedPlaceholders: [],
+      unusedValues: [],
+      structureErrors: [],
+      aiFieldErrors: [],
+    });
+  });
+
+  test("fill_template keeps the prefix of a paragraph larger than the text budget", async () => {
+    // A document that is one long paragraph must still render: spending the
+    // budget on its prefix beats returning an empty preview. Sized well past
+    // any plausible budget so the assertion does not restate the constant.
+    const oversized = "x".repeat(100_000);
+    fillStoredTemplateWithTextStrictMock.mockResolvedValue({
+      templateName: "Lease",
+      fileName: "lease.docx",
+      buffer: await makeDocxBuffer([oversized, "Trailing paragraph."]),
+      text: oversized,
+      unmatchedPlaceholders: [],
+      unusedValues: [],
+      aiFieldErrors: [],
+      structureErrors: [],
+    });
+
+    const result = await handleMcpToolCall({
+      args: { template_id: "t1", values: { "tenant.name": "ACME" } },
+      context: createContext(),
+      toolName: "fill_template",
+    });
+
+    const payload = parseToolPayload(result);
+    if (!isRecord(payload) || !Array.isArray(payload["paragraphs"])) {
+      throw new TypeError("Expected a paragraph preview");
+    }
+    const first = payload["paragraphs"].at(0);
+    if (typeof first !== "string") {
+      throw new TypeError("Expected a text paragraph");
+    }
+    expect(payload["paragraphs"]).toHaveLength(1);
+    expect(first.length).toBeGreaterThan(0);
+    expect(first.length).toBeLessThan(oversized.length);
+    expect(first).toBe("x".repeat(first.length));
+    expect(payload["truncated"]).toBe(true);
+  });
+
   test("fill_template rejects unmatched placeholders by default", async () => {
     fillStoredTemplateWithTextStrictMock.mockResolvedValue({
       templateName: "Lease",
       fileName: "lease.docx",
-      buffer: Buffer.from("partial"),
+      buffer: await makeDocxBuffer(["Zakres: {{scope}}"]),
       text: "Lease between ACME and {{landlord.signature}}.",
       unmatchedPlaceholders: ["landlord.signature"],
       unusedValues: [],
+      aiFieldErrors: [],
     });
 
     const result = await handleMcpToolCall({
@@ -783,6 +968,7 @@ describe("MCP template tools", () => {
       text: "Partial lease",
       unmatchedPlaceholders,
       unusedValues: [],
+      aiFieldErrors: [],
     });
 
     const result = await handleMcpToolCall({
@@ -808,10 +994,13 @@ describe("MCP template tools", () => {
     fillStoredTemplateWithTextStrictMock.mockResolvedValue({
       templateName: "Lease",
       fileName: "lease.docx",
-      buffer: Buffer.from("partial"),
+      buffer: await makeDocxBuffer([
+        "Lease between ACME and {{landlord.signature}}.",
+      ]),
       text: "Lease between ACME and {{landlord.signature}}.",
       unmatchedPlaceholders: ["landlord.signature"],
       unusedValues: [],
+      aiFieldErrors: [],
     });
 
     const result = await handleMcpToolCall({
@@ -829,6 +1018,92 @@ describe("MCP template tools", () => {
       expect.objectContaining({
         completionStatus: "partial",
         unmatchedPlaceholders: ["landlord.signature"],
+      }),
+    );
+  });
+
+  test("fill_template rejects a fill whose AI field could not be drafted", async () => {
+    // The field is unfilled rather than carrying a value the model stopped
+    // writing mid-word, and the tool must not report that fill as complete.
+    fillStoredTemplateWithTextStrictMock.mockResolvedValue({
+      templateName: "Power of attorney",
+      fileName: "poa.docx",
+      buffer: Buffer.from("partial"),
+      text: "Zakres: {{scope}}",
+      unmatchedPlaceholders: ["scope"],
+      unusedValues: [],
+      aiFieldErrors: [
+        {
+          fieldPath: "scope",
+          valuePath: "scope",
+          itemIndex: null,
+          reason: "truncated",
+          message:
+            "The model reached its output limit before finishing this field.",
+        },
+      ],
+    });
+
+    const result = await handleMcpToolCall({
+      args: { template_id: "t1", values: {} },
+      context: createContext(),
+      toolName: "fill_template",
+    });
+
+    expect(result.isError).toBe(true);
+    const error = validationEnvelope(result);
+    expect(error["message"]).toContain("AI-drafted fields that failed: scope");
+    expect(
+      asTestRaw<{ path: string; message: string }[]>(error["issues"]),
+    ).toContainEqual({
+      path: "values.scope",
+      message:
+        "The model reached its output limit before finishing this field.",
+    });
+  });
+
+  test("fill_template reports a failed AI draft under an explicit partial policy", async () => {
+    fillStoredTemplateWithTextStrictMock.mockResolvedValue({
+      templateName: "Power of attorney",
+      fileName: "poa.docx",
+      buffer: await makeDocxBuffer(["Zakres: {{scope}}"]),
+      text: "Zakres: {{scope}}",
+      unmatchedPlaceholders: ["scope"],
+      unusedValues: [],
+      aiFieldErrors: [
+        {
+          fieldPath: "scope",
+          valuePath: "scope",
+          itemIndex: null,
+          reason: "truncated",
+          message:
+            "The model reached its output limit before finishing this field.",
+        },
+      ],
+    });
+
+    const result = await handleMcpToolCall({
+      args: {
+        template_id: "t1",
+        values: {},
+        completion_mode: "allow_partial",
+      },
+      context: createContext(),
+      toolName: "fill_template",
+    });
+
+    expect(result.isError).not.toBe(true);
+    expect(parseToolPayload(result)).toEqual(
+      expect.objectContaining({
+        completionStatus: "partial",
+        aiFieldErrors: [
+          {
+            field: "scope",
+            reason: "truncated",
+            message:
+              "The model reached its output limit before finishing this field.",
+          },
+        ],
       }),
     );
   });
@@ -925,10 +1200,11 @@ describe("MCP template tools", () => {
     fillStoredTemplateWithTextMock.mockResolvedValue({
       templateName: "Lease",
       fileName: "lease.docx",
-      buffer: Buffer.from("filled"),
+      buffer: await makeDocxBuffer(["Lease"]),
       text: "Lease",
       unmatchedPlaceholders: [],
       unusedValues: ["intentional"],
+      aiFieldErrors: [],
     });
 
     const result = await handleMcpToolCall({
@@ -978,6 +1254,7 @@ describe("MCP template tools", () => {
       buffer: Buffer.from("filled docx"),
       unmatchedPlaceholders: [],
       unusedValues: ["unused"],
+      aiFieldErrors: [],
     });
     createEntityFromBufferMock.mockImplementation(async (input) => {
       const created = {
@@ -1083,6 +1360,254 @@ describe("MCP template tools", () => {
     expect(releaseTemplatePersistenceClaimMock).toHaveBeenCalled();
   });
 
+  test("save_filled_template rejects failed AI fields by default and releases its claim", async () => {
+    fillStoredTemplateDocxMock.mockResolvedValue({
+      fileName: "draft.docx",
+      buffer: Buffer.from("optional field defaulted to blank"),
+      unmatchedPlaceholders: [],
+      unusedValues: [],
+      aiFieldErrors: [
+        {
+          fieldPath: "scope",
+          valuePath: "scope",
+          itemIndex: null,
+          reason: "truncated",
+          message: "Draft truncated",
+        },
+      ],
+    });
+    const result = await handleMcpToolCall({
+      args: {
+        action: "create_document",
+        template_id: TEMPLATE_ID,
+        matter_id: "ws_1",
+        idempotency_key: "failed-ai",
+        values: {},
+      },
+      context: createContext(),
+      toolName: "save_filled_template",
+    });
+    expect(result.isError).toBe(true);
+    expect(validationEnvelope(result)["issues"]).toEqual([
+      { path: "values.scope", message: "Draft truncated" },
+    ]);
+    expect(createEntityFromBufferMock).not.toHaveBeenCalled();
+    expect(recordTemplatePersistenceReceiptMock).not.toHaveBeenCalled();
+    expect(releaseTemplatePersistenceClaimMock).toHaveBeenCalled();
+  });
+
+  test("save_filled_template persists and audits failed AI fields only under an explicit partial policy", async () => {
+    const aiFieldErrors = [
+      {
+        fieldPath: "contracts.summary",
+        valuePath: "contracts[0].summary",
+        itemIndex: 1,
+        reason: "generation-failed",
+        message:
+          "AI field generation failed. Retry or provide the value yourself.",
+      },
+    ];
+    fillStoredTemplateDocxMock.mockResolvedValue({
+      fileName: "draft.docx",
+      buffer: Buffer.from("optional field defaulted to blank"),
+      unmatchedPlaceholders: [],
+      unusedValues: [],
+      aiFieldErrors,
+    });
+    createEntityFromBufferMock.mockImplementation(async (input) => {
+      const created = {
+        entityId: "entity_partial",
+        entityVersionId: "version_partial",
+        fieldId: "field_partial",
+        fileName: "draft.docx",
+      };
+      await input.afterCreate(fakeTransaction, created);
+      return Result.ok(created);
+    });
+
+    const result = await handleMcpToolCall({
+      args: {
+        action: "create_document",
+        template_id: TEMPLATE_ID,
+        matter_id: "ws_1",
+        idempotency_key: "failed-ai-partial",
+        values: { contracts: [{}] },
+        completion_mode: "allow_partial",
+      },
+      context: createContext(),
+      toolName: "save_filled_template",
+    });
+
+    const expectedErrors = [
+      {
+        field: "contracts[0].summary",
+        reason: "generation-failed",
+        message:
+          "AI field generation failed. Retry or provide the value yourself.",
+      },
+    ];
+    expect(parseToolPayload(result)).toEqual(
+      expect.objectContaining({ aiFieldErrors: expectedErrors }),
+    );
+    expect(createEntityFromBufferMock).toHaveBeenCalled();
+    expect(recordTemplateFillMock).toHaveBeenCalledWith(
+      expect.objectContaining({ unmatchedCount: 0, aiFieldErrorCount: 1 }),
+    );
+    expect(recordTemplatePersistenceReceiptMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        result: expect.objectContaining({ aiFieldErrors: expectedErrors }),
+      }),
+    );
+    expect(releaseTemplatePersistenceClaimMock).not.toHaveBeenCalled();
+  });
+
+  test("save_filled_template create_version rejects failed AI fields by default before writing", async () => {
+    fillStoredTemplateDocxMock.mockResolvedValue({
+      fileName: "draft.docx",
+      buffer: Buffer.from("optional field defaulted to blank"),
+      unmatchedPlaceholders: [],
+      unusedValues: [],
+      aiFieldErrors: [
+        {
+          fieldPath: "contracts.summary",
+          valuePath: "contracts[0].summary",
+          itemIndex: 1,
+          reason: "truncated",
+          message: "Draft truncated",
+        },
+      ],
+    });
+
+    const result = await handleMcpToolCall({
+      args: {
+        action: "create_version",
+        template_id: TEMPLATE_ID,
+        matter_id: "ws_1",
+        entity_id: ENTITY_ID,
+        idempotency_key: "failed-ai-version",
+        values: { contracts: [{}] },
+      },
+      context: createContext(),
+      toolName: "save_filled_template",
+    });
+
+    expect(validationEnvelope(result)["issues"]).toEqual([
+      { path: "values.contracts[0].summary", message: "Draft truncated" },
+    ]);
+    expect(createEntityVersionFromBufferMock).not.toHaveBeenCalled();
+    expect(recordTemplatePersistenceReceiptMock).not.toHaveBeenCalled();
+    expect(releaseTemplatePersistenceClaimMock).toHaveBeenCalled();
+  });
+
+  test("save_filled_template create_version receipts exact AI errors under an explicit partial policy", async () => {
+    fillStoredTemplateDocxMock.mockResolvedValue({
+      fileName: "draft.docx",
+      buffer: Buffer.from("optional field defaulted to blank"),
+      unmatchedPlaceholders: [],
+      unusedValues: [],
+      aiFieldErrors: [
+        {
+          fieldPath: "contracts.summary",
+          valuePath: "contracts[0].summary",
+          itemIndex: 1,
+          reason: "generation-failed",
+          message:
+            "AI field generation failed. Retry or provide the value yourself.",
+        },
+      ],
+    });
+    createEntityVersionFromBufferMock.mockImplementation(async (input) => {
+      const created = {
+        status: "ok",
+        entityId: ENTITY_ID,
+        entityVersionId: "version_partial",
+        fieldId: "field_partial",
+        fileName: "draft.docx",
+        versionNumber: 3,
+      };
+      await input.afterWrite(fakeTransaction, created);
+      return Result.ok(created);
+    });
+
+    const result = await handleMcpToolCall({
+      args: {
+        action: "create_version",
+        template_id: TEMPLATE_ID,
+        matter_id: "ws_1",
+        entity_id: ENTITY_ID,
+        idempotency_key: "failed-ai-version-partial",
+        values: { contracts: [{}] },
+        completion_mode: "allow_partial",
+      },
+      context: createContext(),
+      toolName: "save_filled_template",
+    });
+
+    const expectedErrors = [
+      {
+        field: "contracts[0].summary",
+        reason: "generation-failed",
+        message:
+          "AI field generation failed. Retry or provide the value yourself.",
+      },
+    ];
+    expect(parseToolPayload(result)).toEqual(
+      expect.objectContaining({
+        action: "create_version",
+        aiFieldErrors: expectedErrors,
+      }),
+    );
+    expect(recordTemplateFillMock).toHaveBeenCalledWith(
+      expect.objectContaining({ aiFieldErrorCount: 1 }),
+    );
+    expect(recordTemplatePersistenceReceiptMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        result: expect.objectContaining({ aiFieldErrors: expectedErrors }),
+      }),
+    );
+    expect(releaseTemplatePersistenceClaimMock).not.toHaveBeenCalled();
+  });
+
+  test("failed row drafts return indexed value paths and record the AI shortfall", async () => {
+    for (const fieldPath of ["contracts.summary", "client.contracts.summary"]) {
+      fillStoredTemplateWithTextStrictMock.mockResolvedValue({
+        templateName: "Summary",
+        fileName: "summary.docx",
+        buffer: Buffer.from("blank optional value"),
+        text: "Summary:",
+        unmatchedPlaceholders: [],
+        unusedValues: [],
+        aiFieldErrors: [
+          {
+            fieldPath,
+            valuePath: fieldPath.replace(".summary", "[1].summary"),
+            itemIndex: 2,
+            reason: "truncated",
+            message: "Draft truncated",
+          },
+        ],
+      });
+      const values = fieldPath.startsWith("client.")
+        ? { client: { contracts: [{}, {}] } }
+        : { contracts: [{}, {}] };
+      const result = await handleMcpToolCall({
+        args: { template_id: "t1", values },
+        context: createContext(),
+        toolName: "fill_template",
+      });
+      expect(result.isError).toBe(true);
+      expect(validationEnvelope(result)["issues"]).toEqual([
+        {
+          path: `values.${fieldPath.replace(".summary", "[1].summary")}`,
+          message: "Draft truncated",
+        },
+      ]);
+      expect(recordTemplateFillMock).toHaveBeenCalledWith(
+        expect.objectContaining({ unmatchedCount: 0, aiFieldErrorCount: 1 }),
+      );
+    }
+  });
+
   test("save_filled_template does not persist after its caller disconnects", async () => {
     const controller = new AbortController();
     const request = new Request("http://localhost/mcp", {
@@ -1095,6 +1620,7 @@ describe("MCP template tools", () => {
         buffer: Buffer.from("filled docx"),
         unmatchedPlaceholders: [],
         unusedValues: [],
+        aiFieldErrors: [],
       };
     });
 
@@ -1135,6 +1661,14 @@ describe("MCP template tools", () => {
           fileName: "lease.docx",
           unmatchedPlaceholders: [],
           unusedValues: ["unused"],
+          aiFieldErrors: [
+            {
+              field: "contracts[0].summary",
+              reason: "generation-failed",
+              message:
+                "AI field generation failed. Retry or provide the value yourself.",
+            },
+          ],
         },
       }),
     );
@@ -1158,6 +1692,14 @@ describe("MCP template tools", () => {
       fileName: "lease.docx",
       unmatchedPlaceholders: [],
       unusedValues: ["unused"],
+      aiFieldErrors: [
+        {
+          field: "contracts[0].summary",
+          reason: "generation-failed",
+          message:
+            "AI field generation failed. Retry or provide the value yourself.",
+        },
+      ],
     });
     expect(fillStoredTemplateDocxMock).not.toHaveBeenCalled();
     expect(createEntityFromBufferMock).not.toHaveBeenCalled();
@@ -1221,6 +1763,7 @@ describe("MCP template tools", () => {
       buffer: Buffer.from("filled docx v2"),
       unmatchedPlaceholders: ["signature"],
       unusedValues: [],
+      aiFieldErrors: [],
       structureErrors: [
         {
           directive: "#if signature",
@@ -1250,6 +1793,9 @@ describe("MCP template tools", () => {
         idempotency_key: "create-version-1",
         entity_id: ENTITY_ID,
         values: { "tenant.name": "ACME" },
+        // The fixture leaves {{signature}} unfilled, which the default mode
+        // refuses to persist; this test is about the persistence path.
+        completion_mode: "allow_partial",
       },
       context: createContext(),
       toolName: "save_filled_template",
@@ -1288,6 +1834,100 @@ describe("MCP template tools", () => {
       unmatchedPlaceholders: ["signature"],
       unusedValues: [],
     });
+  });
+
+  test("save_filled_template fingerprints every argument except the idempotency key", async () => {
+    // The fingerprint decides whether a reused key replays a receipt or
+    // reports a conflict, so it must cover the whole request. A field left out
+    // of it lets a key answer a question it was never asked: an allow_partial
+    // save replaying as success for a later require_complete retry.
+    fillStoredTemplateDocxMock.mockResolvedValue({
+      fileName: "lease",
+      buffer: Buffer.from("filled docx"),
+      unmatchedPlaceholders: [],
+      unusedValues: [],
+      aiFieldErrors: [],
+      structureErrors: [],
+    });
+    createEntityVersionFromBufferMock.mockImplementation(async (input) => {
+      const created = {
+        status: "ok",
+        entityId: ENTITY_ID,
+        entityVersionId: "version_3",
+        fieldId: "field_3",
+        fileName: "lease.docx",
+        versionNumber: 3,
+      };
+      await input.afterWrite(fakeTransaction, created);
+      return Result.ok(created);
+    });
+
+    const args = {
+      action: "create_version",
+      template_id: TEMPLATE_ID,
+      matter_id: "ws_1",
+      idempotency_key: "fingerprint-1",
+      entity_id: ENTITY_ID,
+      values: { "tenant.name": "ACME" },
+      completion_mode: "allow_partial",
+    } as const;
+    await handleMcpToolCall({
+      args,
+      context: createContext(),
+      toolName: "save_filled_template",
+    });
+
+    const fingerprinted = fingerprintTemplatePersistenceRequestMock.mock.calls
+      .at(0)
+      ?.at(0);
+    if (!isRecord(fingerprinted)) {
+      throw new Error("Expected fingerprinted request arguments");
+    }
+    // Both directions: every argument but the key is fingerprinted, and the
+    // key itself never is (it is the lookup, not part of the identity).
+    expect(
+      Object.keys(args)
+        .filter((key) => key !== "idempotency_key")
+        .sort()
+        .every((key) => key in fingerprinted),
+    ).toBe(true);
+    expect("idempotency_key" in fingerprinted).toBe(false);
+    expect(fingerprinted["completion_mode"]).toBe("allow_partial");
+  });
+
+  test("save_filled_template refuses to persist a document with live placeholders", async () => {
+    // The persisting tool cannot be laxer than the transient one: an unfilled
+    // {{placeholder}} would otherwise reach a matter as document text.
+    fillStoredTemplateDocxMock.mockResolvedValue({
+      fileName: "lease",
+      buffer: Buffer.from("filled docx"),
+      unmatchedPlaceholders: ["signature", "landlord.name"],
+      unusedValues: [],
+      aiFieldErrors: [],
+      structureErrors: [],
+    });
+
+    const result = await handleMcpToolCall({
+      args: {
+        action: "create_version",
+        template_id: TEMPLATE_ID,
+        matter_id: "ws_1",
+        idempotency_key: "incomplete-1",
+        entity_id: ENTITY_ID,
+        values: { "tenant.name": "ACME" },
+      },
+      context: createContext(),
+      toolName: "save_filled_template",
+    });
+
+    expect(validationEnvelope(result)).toMatchObject({
+      code: "validation_error",
+      message:
+        "Template fill incomplete; unmatched placeholders: signature, landlord.name",
+    });
+    expect(createEntityVersionFromBufferMock).not.toHaveBeenCalled();
+    // The key stays reusable: nothing was written under it.
+    expect(releaseTemplatePersistenceClaimMock).toHaveBeenCalled();
   });
 
   test("save_filled_template validates its destination before filling", async () => {
@@ -1567,6 +2207,86 @@ describe("MCP template tools", () => {
     });
   });
 
+  test("save_template (create) reads the DOCX from a host file reference", async () => {
+    createStoredTemplateMock.mockImplementation(async function* () {
+      yield* [];
+      return Result.ok({ id: "tmpl_hosted", name: "NDA", fieldCount: 1 });
+    });
+    const bytes = await makeValidDocxBytes();
+    safeOutboundFetchBytesMock.mockResolvedValue(hostFileResponse(bytes));
+
+    const result = await handleMcpToolCall({
+      args: { name: "NDA", file: HOST_FILE_REFERENCE },
+      context: createContext(),
+      toolName: "save_template",
+    });
+
+    // Same SSRF-vetted fetch and byte ceiling the document upload uses.
+    expect(safeOutboundFetchBytesMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        maxBytes: FILE_SIZE_LIMIT_BYTES.document,
+        url: HOST_FILE_REFERENCE.download_url,
+      }),
+    );
+    // The downloaded bytes reach the same create path the base64 branch uses.
+    expect(createStoredTemplateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "NDA",
+        fileName: "NDA.docx",
+        buffer: Buffer.from(bytes),
+      }),
+    );
+    expect(parseToolPayload(result)).toEqual({
+      templateId: "tmpl_hosted",
+      name: "NDA",
+      fieldCount: 1,
+      warnings: [],
+    });
+  });
+
+  test("save_template (create) rejects host-file bytes that are not a DOCX", async () => {
+    safeOutboundFetchBytesMock.mockResolvedValue(
+      hostFileResponse(new TextEncoder().encode("not a docx")),
+    );
+
+    const result = await handleMcpToolCall({
+      args: { name: "NDA", file: HOST_FILE_REFERENCE },
+      context: createContext(),
+      toolName: "save_template",
+    });
+
+    expect(result.isError).toBe(true);
+    const error = validationEnvelope(result);
+    expect(error["code"]).toBe("validation_error");
+    expect(error["issues"]).toEqual([
+      { path: "file", message: expect.any(String) },
+    ]);
+    // The bytes were never retyped, so the hint points at the attachment
+    // rather than at base64 encoding.
+    expect(error["hint"]).toContain("attached file");
+    expect(createStoredTemplateMock).not.toHaveBeenCalled();
+  });
+
+  test("save_template (create) reports a host file it cannot download", async () => {
+    safeOutboundFetchBytesMock.mockResolvedValue(
+      Result.err(new Error("blocked")),
+    );
+
+    const result = await handleMcpToolCall({
+      args: { name: "NDA", file: HOST_FILE_REFERENCE },
+      context: createContext(),
+      toolName: "save_template",
+    });
+
+    expect(result.isError).toBe(true);
+    const error = validationEnvelope(result);
+    expect(error["message"]).toBe("The attached file could not be downloaded");
+    expect(error["issues"]).toEqual([
+      { path: "file", message: "The attached file could not be downloaded" },
+    ]);
+    expect(createStoredTemplateMock).not.toHaveBeenCalled();
+  });
+
   test("save_template (create) rejects an invalid DOCX before inserting", async () => {
     const result = await handleMcpToolCall({
       args: {
@@ -1643,20 +2363,23 @@ describe("MCP template tools", () => {
     for (let index = 0; index < DOCX_MAX_ENTRIES; index += 1) {
       zip.file(`word/media/${String(index)}.bin`, "x");
     }
-    const overBound = Buffer.from(
-      await zip.generateAsync({ type: "uint8array" }),
+    // Thousands of entries outgrow the inline base64 frame, so this archive
+    // arrives the way a large template does: as a host file reference.
+    safeOutboundFetchBytesMock.mockResolvedValue(
+      hostFileResponse(await zip.generateAsync({ type: "uint8array" })),
     );
 
     const result = await handleMcpToolCall({
-      args: { name: "NDA", docx_base64: overBound.toString("base64") },
+      args: { name: "NDA", file: HOST_FILE_REFERENCE },
       context: createContext(),
       toolName: "save_template",
     });
 
     const error = validationEnvelope(result);
-    expect(error["hint"]).toContain("outside the bounds stella will unpack");
-    // These bytes arrived intact, so re-encoding advice would send the caller
-    // after a fault that is not there.
+    expect(error["hint"]).toContain("entry-count or decompressed-size limit");
+    // These bytes arrived intact, so retransmission advice would send the
+    // caller after a fault that is not there.
+    expect(error["hint"]).toContain("reattaching the same file will not help");
     expect(error["hint"]).not.toContain("does not decode");
     expect(createStoredTemplateMock).not.toHaveBeenCalled();
   });
@@ -1834,8 +2557,94 @@ describe("MCP template tools", () => {
     expect(result.isError).toBe(true);
     expect(createStoredTemplateMock).not.toHaveBeenCalled();
     const error = validationEnvelope(result);
-    const issues = asTestRaw<{ path: string }[]>(error["issues"]);
-    expect(issues.some(({ path }) => path === "fields.0")).toBe(true);
+    const issues = asTestRaw<{ path: string; message: string }[]>(
+      error["issues"],
+    );
+    const conflict = issues.find(({ path }) => path === "fields.0");
+    // The rejection has to name WHICH properties collided, in the snake_case
+    // spelling the caller sent, and on which field: "mutually exclusive" on
+    // its own leaves an agent guessing among seven properties.
+    expect(conflict?.message).toContain("`ai_prompt`");
+    expect(conflict?.message).toContain("`lookup`");
+    expect(conflict?.message).toContain('"company"');
+  });
+
+  test("save_template reads a null-padded field entry as a plain text field", async () => {
+    // GPT-family clients send `null` for every optional property they are not
+    // setting. Null is absence here: without that, this entry reads as an
+    // AI-drafted, conditioned, computed, looked-up, composite, bound field all
+    // at once and is refused for conflicting derived sources.
+    createStoredTemplateMock.mockImplementation(async function* () {
+      yield* [];
+      return Result.ok({ id: "tmpl_new", name: "NDA", fieldCount: 1 });
+    });
+
+    const result = await handleMcpToolCall({
+      args: {
+        name: "NDA",
+        docx_base64: await makeValidDocxBase64(),
+        fields: [
+          {
+            path: "name",
+            label: "Client name",
+            hint: null,
+            input_type: null,
+            options: null,
+            validation: { required: true, min_length: null, pattern: null },
+            required: null,
+            ai_prompt: null,
+            ai_adapt: null,
+            ai_sees_document: null,
+            parts: null,
+            format: null,
+            options_from: null,
+            lookup: null,
+            source: null,
+            formula: null,
+            condition: null,
+            date_format: null,
+          },
+        ],
+      },
+      context: createContext(),
+      toolName: "save_template",
+    });
+
+    expect(result.isError).not.toBe(true);
+    expect(createStoredTemplateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        clientManifest: {
+          fields: [
+            {
+              path: "name",
+              label: "Client name",
+              validation: { required: true },
+            },
+          ],
+        },
+      }),
+    );
+  });
+
+  test("save_template still rejects a misspelled key that carries null", async () => {
+    // Null is absence only for a property the surface declares: dropping it
+    // for any key would turn `lable: null` into a silently accepted typo.
+    const result = await handleMcpToolCall({
+      args: {
+        name: "NDA",
+        docx_base64: await makeValidDocxBase64(),
+        fields: [{ path: "name", lable: null }],
+      },
+      context: createContext(),
+      toolName: "save_template",
+    });
+
+    expect(result.isError).toBe(true);
+    expect(createStoredTemplateMock).not.toHaveBeenCalled();
+    const issues = asTestRaw<{ path: string }[]>(
+      validationEnvelope(result)["issues"],
+    );
+    expect(issues.some(({ path }) => path === "fields.0.lable")).toBe(true);
   });
 
   test("save_template rejects unknown field metadata keys before inserting", async () => {
@@ -1859,9 +2668,15 @@ describe("MCP template tools", () => {
   test("save_template (create) surfaces the service's unknown-path rejection", async () => {
     createStoredTemplateMock.mockImplementation(async function* () {
       yield* [];
-      return Result.err({
-        message: 'No field "ghost" was discovered in the DOCX.',
-      });
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "No marker {{ghost}} in the DOCX.",
+          issues: [
+            { path: "fields.0", message: "No marker {{ghost}} in the DOCX." },
+          ],
+        }),
+      );
     });
 
     const result = await handleMcpToolCall({
@@ -1875,8 +2690,14 @@ describe("MCP template tools", () => {
     });
 
     expect(result.isError).toBe(true);
-    const message = result.content.at(0);
-    expect(message?.type === "text" && message.text).toContain("ghost");
+    // The rejection reaches the agent as the structured envelope, naming the
+    // entry it sent — not as one line of bare prose it would have to parse.
+    const error = validationEnvelope(result);
+    expect(error["message"]).toContain("ghost");
+    expect(error["code"]).toBe("validation_error");
+    expect(error["issues"]).toEqual([
+      { path: "fields.0", message: "No marker {{ghost}} in the DOCX." },
+    ]);
   });
 
   test("save_template (configure) applies the overlay and returns the updated fields", async () => {
@@ -1896,7 +2717,13 @@ describe("MCP template tools", () => {
           required: true,
           hint: null,
           options: null,
-          formats: [{ key: "default", template: "[name], KRS [krs]" }],
+          lookup: {
+            registry: "krs",
+            formats: [{ key: "default", template: "[name], KRS [krs]" }],
+          },
+          validation: null,
+          source: null,
+          aiSeesDocument: false,
           aiPrompt: null,
           aiAdapt: false,
           optionsFrom: null,
@@ -1945,7 +2772,10 @@ describe("MCP template tools", () => {
       fields: [
         expect.objectContaining({
           path: "company",
-          formats: [{ key: "default", template: "[name], KRS [krs]" }],
+          lookup: {
+            registry: "krs",
+            formats: [{ key: "default", template: "[name], KRS [krs]" }],
+          },
         }),
       ],
     });
@@ -1957,9 +2787,15 @@ describe("MCP template tools", () => {
   test("save_template (configure) rejects a config whose path is unknown", async () => {
     configureTemplateFieldsMock.mockImplementation(async function* () {
       yield* [];
-      return Result.err({
-        message: 'No field "ghost" in this template.',
-      });
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "No marker {{ghost}} in the DOCX.",
+          issues: [
+            { path: "fields.0", message: "No marker {{ghost}} in the DOCX." },
+          ],
+        }),
+      );
     });
 
     const result = await handleMcpToolCall({
@@ -1970,8 +2806,12 @@ describe("MCP template tools", () => {
 
     expect(result.isError).toBe(true);
     expect(describeStoredTemplateMock).not.toHaveBeenCalled();
-    const message = result.content.at(0);
-    expect(message?.type === "text" && message.text).toContain("ghost");
+    const error = validationEnvelope(result);
+    expect(error["message"]).toContain("ghost");
+    expect(error["code"]).toBe("validation_error");
+    expect(error["issues"]).toEqual([
+      { path: "fields.0", message: "No marker {{ghost}} in the DOCX." },
+    ]);
   });
 
   test("save_template (configure) forbids members without template:create permission", async () => {
@@ -2009,7 +2849,7 @@ describe("MCP template tools", () => {
     expect(describeStoredTemplateMock).not.toHaveBeenCalled();
   });
 
-  test("save_template rejects a request with neither docx_base64 nor template_id", async () => {
+  test("save_template rejects a request with no DOCX source and no template_id", async () => {
     const result = await handleMcpToolCall({
       args: { name: "NDA" },
       context: createContext(),
@@ -2020,9 +2860,59 @@ describe("MCP template tools", () => {
     const error = validationEnvelope(result);
     expect(error["code"]).toBe("validation_error");
     expect(error["message"]).toBe(
-      "Provide docx_base64 to create a template, or template_id to configure an existing template's fields",
+      "Provide file or docx_base64 to create a template, or template_id to configure an existing template's fields",
     );
     expect(createStoredTemplateMock).not.toHaveBeenCalled();
     expect(configureTemplateFieldsMock).not.toHaveBeenCalled();
+  });
+
+  test("save_template rejects a request carrying both DOCX sources", async () => {
+    const result = await handleMcpToolCall({
+      args: {
+        name: "NDA",
+        docx_base64: await makeValidDocxBase64(),
+        file: HOST_FILE_REFERENCE,
+      },
+      context: createContext(),
+      toolName: "save_template",
+    });
+
+    expect(result.isError).toBe(true);
+    const error = validationEnvelope(result);
+    expect(error["code"]).toBe("validation_error");
+    expect(error["message"]).toBe(
+      "Provide either file or docx_base64, not both",
+    );
+    expect(error["issues"]).toEqual([
+      { path: "file", message: "Provide either file or docx_base64, not both" },
+    ]);
+    expect(safeOutboundFetchBytesMock).not.toHaveBeenCalled();
+    expect(createStoredTemplateMock).not.toHaveBeenCalled();
+  });
+
+  test("save_template advertises file as a host file parameter", async () => {
+    const saveTemplate = (await listMcpTools(createContext())).find(
+      ({ name }) => name === "save_template",
+    );
+
+    expect(saveTemplate?._meta).toMatchObject({
+      "openai/fileParams": ["file"],
+    });
+    expect(saveTemplate?.inputSchema).toMatchObject({
+      properties: {
+        file: {
+          required: ["download_url", "file_id"],
+          properties: {
+            download_url: { type: "string" },
+            file_id: { type: "string" },
+            mime_type: { type: "string" },
+            file_name: { type: "string" },
+          },
+        },
+      },
+    });
+    // Neither source is required at the schema level; the partial checks pick
+    // exactly one at parse time.
+    expect(saveTemplate?.inputSchema.required).toEqual([]);
   });
 });

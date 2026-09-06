@@ -6,6 +6,7 @@ import type { NamedCondition } from "@stll/template-conditions";
 
 import {
   MANIFEST_NS,
+  manifestFieldsFromMerge,
   mergeManifestWithDiscovery,
   readManifest,
   stripManifest,
@@ -743,6 +744,121 @@ describe("mergeManifestWithDiscovery", () => {
     expect(resolved.map((f) => f.path).sort()).toEqual([
       "rent",
       "tenant.krs",
+      "tenant.name",
+    ]);
+  });
+
+  test("keeps a loop item's configuration as its own manifest field", () => {
+    // `{{#each attorneys}}{{attorneys.name}}{{/each}}` resolves to ONE field,
+    // the array root, with `name` folded into its itemFields. The item's own
+    // configuration is a manifest field all the same — the fill form asks it
+    // once per row — so building the manifest from the resolved list alone
+    // discarded every label, hint, input type and validation set on it.
+    const discovery: DiscoveredTemplate = {
+      placeholders: [
+        { name: "attorneys.name", count: 1 },
+        { name: "attorneys.role", count: 1 },
+      ],
+      fields: [
+        {
+          path: "attorneys",
+          kind: "array",
+          count: 2,
+          itemFields: [
+            { path: "name", kind: "string", count: 1 },
+            { path: "role", kind: "string", count: 1 },
+          ],
+        },
+      ],
+      structureErrors: [],
+      warnings: [],
+      conditionPaths: [],
+    };
+    const manifest: TemplateManifest = {
+      version: 1,
+      fields: [
+        { path: "attorneys", validation: { minItems: 1 } },
+        { path: "attorneys.name", label: "Attorney name", required: true },
+      ],
+    };
+
+    const resolved = mergeManifestWithDiscovery(manifest, discovery);
+    // The merge itself still reports one field: the item lives in itemFields.
+    expect(resolved.map((f) => f.path)).toEqual(["attorneys"]);
+
+    const fields = manifestFieldsFromMerge(resolved, manifest);
+    expect(fields.map((f) => f.path)).toEqual(["attorneys", "attorneys.name"]);
+    expect(fields.at(1)).toEqual({
+      path: "attorneys.name",
+      label: "Attorney name",
+      required: true,
+    });
+  });
+
+  test("does not carry a lookup's format marker back as a field", () => {
+    // The item carry-back must not resurrect what the prefix filter dropped on
+    // purpose: `deliverables.company.name` is a rendering, not an input.
+    const discovery: DiscoveredTemplate = {
+      placeholders: [
+        { name: "deliverables.company", count: 1 },
+        { name: "deliverables.company.name", count: 1 },
+      ],
+      fields: [
+        {
+          path: "deliverables",
+          kind: "array",
+          count: 1,
+          itemFields: [{ path: "company", kind: "string", count: 1 }],
+        },
+      ],
+      structureErrors: [],
+      warnings: [],
+      conditionPaths: [],
+    };
+    const manifest: TemplateManifest = {
+      version: 1,
+      fields: [
+        {
+          path: "deliverables.company",
+          lookup: {
+            registry: "krs",
+            formats: [{ key: "name", template: "[company name]" }],
+          },
+        },
+        { path: "deliverables.company.name", label: "leftover" },
+      ],
+    };
+
+    const fields = manifestFieldsFromMerge(
+      mergeManifestWithDiscovery(manifest, discovery),
+      manifest,
+    );
+    expect(fields.map((f) => f.path)).toEqual([
+      "deliverables",
+      "deliverables.company",
+    ]);
+  });
+
+  test("keeps a parent the document writes as its own marker", () => {
+    // `{{tenant}}` alongside `{{tenant.name}}` is not a namespace: the
+    // document prints `tenant` itself. Dropping it left the marker with no
+    // field behind it, so the fill emitted the literal `{{tenant}}` text.
+    const discovery: DiscoveredTemplate = {
+      placeholders: [
+        { name: "tenant", count: 1 },
+        { name: "tenant.name", count: 1 },
+      ],
+      fields: [
+        { path: "tenant", kind: "object", count: 1 },
+        { path: "tenant.name", kind: "string", count: 1 },
+      ],
+      structureErrors: [],
+      warnings: [],
+      conditionPaths: [],
+    };
+    const resolved = mergeManifestWithDiscovery(null, discovery);
+    expect(resolved.map((f) => f.path).toSorted()).toEqual([
+      "tenant",
       "tenant.name",
     ]);
   });

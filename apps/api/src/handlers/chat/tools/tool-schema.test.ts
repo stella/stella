@@ -69,6 +69,8 @@ import {
 import { projectSchemaInputJsonSchema } from "@/api/lib/tanstack-ai-schema";
 import type { UrlFetcher, WebSearchProvider } from "@/api/lib/web-search/types";
 import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
+import { TEMPLATE_FIELD_REFERENCE_URI } from "@/api/mcp/template-field-reference";
+import { TEMPLATE_MARKER_REFERENCE_URI } from "@/api/mcp/template-marker-reference";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import { createOrgTools } from "./org-tools";
@@ -2209,6 +2211,30 @@ describe("registry write tool approval policy", () => {
       expect(tool.needsApproval, name).toBe(true);
       expect(getChatToolPolicy(tool).kind, name).toBe("mutation");
     }
+  });
+
+  test("save_template exposes its executable inline and configure modes, not host files", () => {
+    const tool = buildToolsWithWorkspace()["save_template"];
+    if (!tool?.inputSchema) {
+      throw new Error("Expected save_template to be registered");
+    }
+    const schema = requireRecord(
+      convertSchemaToJsonSchema(tool.inputSchema),
+      "save_template input schema",
+    );
+    const properties = requireRecord(
+      schema["properties"],
+      "save_template input properties",
+    );
+
+    expect(properties["file"]).toBeUndefined();
+    expect(properties["docx_base64"]).toBeDefined();
+    expect(properties["template_id"]).toBeDefined();
+    expect(tool.description).toContain("docx_base64");
+    expect(tool.description).toContain("template_id");
+    expect(tool.description).toContain(TEMPLATE_MARKER_REFERENCE_URI);
+    expect(tool.description).toContain(TEMPLATE_FIELD_REFERENCE_URI);
+    expect(tool.description).not.toContain("host file");
   });
 
   test("no write tools are registered when the workspace set is empty", () => {

@@ -18,6 +18,10 @@ import {
   buildMarkerReference,
   TEMPLATE_MARKER_REFERENCE_URI,
 } from "@/api/mcp/template-marker-reference";
+import {
+  buildWorkflowReference,
+  TEMPLATE_WORKFLOW_REFERENCE_URI,
+} from "@/api/mcp/template-workflow-reference";
 
 /**
  * MCP resources are static, no-argument documents (the textbook fit for a
@@ -98,6 +102,19 @@ const STATIC_RESOURCES: readonly StaticResource[] = [
     mimeType: "text/markdown",
     listed: true,
     read: buildFieldReference,
+  },
+  {
+    uri: TEMPLATE_WORKFLOW_REFERENCE_URI,
+    name: "template-workflow",
+    title: "Template workflow",
+    description:
+      "The order to drive stella's templates in: author markers, create the " +
+      "template, read the discovered paths back, configure fields, preview " +
+      "the fill, persist it into a matter. Read this before the first " +
+      "save_template call.",
+    mimeType: "text/markdown",
+    listed: true,
+    read: buildWorkflowReference,
   },
   {
     uri: DOCUMENT_UPLOAD_APP_RESOURCE_URI,

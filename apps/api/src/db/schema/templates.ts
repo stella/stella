@@ -3,6 +3,8 @@ import { sql } from "drizzle-orm";
 import { CONTACT_TYPES } from "@stll/api-contract";
 import type { TemplatePackAuthor } from "@stll/template-packs/schema";
 
+import type { AiFieldError } from "@/api/lib/docx/resolve-ai-fields";
+
 import {
   ENTITY_KINDS,
   SEARCH_PROJECTION_KINDS,
@@ -186,6 +188,9 @@ export type TemplatePersistenceResult =
       fileName: string;
       unmatchedPlaceholders: string[];
       unusedValues: string[];
+      /** Optional only because receipts persisted before AI diagnostics were
+       * recorded do not carry this property. New partial receipts include it. */
+      aiFieldErrors?: TemplatePersistenceAiFieldError[] | undefined;
     }
   | {
       action: "create_version";
@@ -194,8 +199,14 @@ export type TemplatePersistenceResult =
       fileName: string;
       unmatchedPlaceholders: string[];
       unusedValues: string[];
+      /** See the persisted-receipt compatibility boundary above. */
+      aiFieldErrors?: TemplatePersistenceAiFieldError[] | undefined;
       versionNumber: number;
     };
+
+type TemplatePersistenceAiFieldError = {
+  field: AiFieldError["valuePath"];
+} & Pick<AiFieldError, "reason" | "message">;
 
 export const TEMPLATE_PERSISTENCE_REQUEST_STATUS = {
   COMPLETED: "completed",

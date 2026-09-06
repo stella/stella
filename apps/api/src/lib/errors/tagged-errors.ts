@@ -94,6 +94,17 @@ export type HandlerErrorMissingRequiredField = {
   options: string[] | null;
 };
 
+/**
+ * One field-level reason a request was rejected: the dot path of the offending
+ * input (`fields.2`) and what is wrong with it. Structurally mirrors the MCP
+ * envelope's issue shape rather than importing it, so this foundational module
+ * stays free of transport dependencies.
+ */
+export type HandlerErrorValidationIssue = {
+  path: string;
+  message: string;
+};
+
 export type HandlerErrorProps<
   TStatus extends HandlerErrorStatusCode = HandlerErrorStatusCode,
 > = {
@@ -118,6 +129,10 @@ export type HandlerErrorProps<
    *  input type, options) — not reduced to a message — so a client can
    *  render the right control per field and retry with all of them at once. */
   requiredFields?: HandlerErrorMissingRequiredField[] | undefined;
+  /** Every input entry a validation rejection found fault with, by its dot
+   *  path, so a caller can fix the exact entries it sent rather than parsing
+   *  the summary message. */
+  issues?: HandlerErrorValidationIssue[] | undefined;
 };
 
 // TaggedError(...) cannot reference the class type parameter in the base
@@ -134,6 +149,7 @@ export class HandlerError<
   declare claim?: HandlerErrorClaim | undefined;
   declare stepUp?: HandlerErrorStepUp | undefined;
   declare requiredFields?: HandlerErrorMissingRequiredField[] | undefined;
+  declare issues?: HandlerErrorValidationIssue[] | undefined;
 
   constructor(props: HandlerErrorProps<TStatus>) {
     super(props);
@@ -145,6 +161,7 @@ export class HandlerError<
     this.claim = props.claim;
     this.stepUp = props.stepUp;
     this.requiredFields = props.requiredFields;
+    this.issues = props.issues;
   }
 }
 

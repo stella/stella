@@ -23,21 +23,23 @@ import {
 import type { TemplateKind, TemplateOrigin } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeHandlerGenerator } from "@/api/lib/api-handlers";
+import { arrayOrEmpty } from "@/api/lib/array";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
-import {
-  mergeManifestWithDiscovery,
-  readManifest,
-  writeManifest,
-} from "@/api/lib/docx/template-manifest";
+import { readManifest, writeManifest } from "@/api/lib/docx/template-manifest";
 import type { FieldMeta, TemplateManifest } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { getS3, writeS3ObjectWithRetry } from "@/api/lib/s3";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
+import {
+  resolveTemplateFieldOverlay,
+  fieldOverlayError,
+  validateFieldOverlay,
+} from "@/api/lib/templates/field-overlay";
 import { buildTemplateS3Key } from "@/api/lib/templates/storage-keys";
 import { detectTemplateLanguagesFromDocx } from "@/api/lib/templates/template-languages";
 
@@ -134,62 +136,26 @@ export const createStoredTemplate = async function* ({
       readManifest(buffer),
     ]);
 
-    const fields = mergeManifestWithDiscovery(existingManifest, discovered);
-
-    let fieldMetas: FieldMeta[] = fields.map((f) => ({
-      path: f.path,
-      label: f.label,
-      hint: f.hint,
-      inputType: f.inputType,
-      options: f.options,
-      validation: f.validation,
-      required: f.required,
-      aiPrompt: f.aiPrompt,
-      aiAdapt: f.aiAdapt,
-      aiSeesDocument: f.aiSeesDocument,
-      parts: f.parts,
-      format: f.format,
-      optionsFrom: f.optionsFrom,
-      lookup: f.lookup,
-      formula: f.formula,
-      condition: f.condition,
-      conditionAst: f.conditionAst,
-      dateFormat: f.dateFormat,
-    }));
-
+    // The overlay is folded into the manifest BEFORE the merge: whether a
+    // dotted path is a field or a lookup's rendered output is decided by the
+    // configuration, so a lookup the caller declares in this same request must
+    // be visible to the merge that classifies those paths.
     if (clientManifest) {
-      const fieldPaths = new Set(fieldMetas.map((f) => f.path));
-      const unknown = clientManifest.fields.find(
-        (f) => !fieldPaths.has(f.path),
-      );
-      if (unknown) {
-        return Result.err(
-          new HandlerError({
-            status: 400,
-            message:
-              `No field "${unknown.path}" was discovered in the DOCX. ` +
-              "Configure only paths that exist as {{markers}}.",
-          }),
-        );
-      }
-
-      const metaByPath = new Map<string, FieldMeta>();
-      for (const f of clientManifest.fields) {
-        metaByPath.set(f.path, f);
-      }
-      fieldMetas = fieldMetas.map((f) => {
-        const override = metaByPath.get(f.path);
-        if (!override) {
-          return f;
-        }
-        return { ...f, ...override };
+      const issues = validateFieldOverlay({
+        configured: arrayOrEmpty(existingManifest?.fields),
+        discovered,
+        overlay: clientManifest.fields,
       });
+      if (issues.length > 0) {
+        return Result.err(fieldOverlayError(issues));
+      }
     }
 
-    resolvedManifest = {
-      version: existingManifest?.version ?? 1,
-      fields: fieldMetas,
-    };
+    resolvedManifest = resolveTemplateFieldOverlay({
+      discovered,
+      manifest: existingManifest,
+      overlay: clientManifest?.fields,
+    });
   }
 
   const fieldCount = resolvedManifest.fields.length;

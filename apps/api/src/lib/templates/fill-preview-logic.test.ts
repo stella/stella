@@ -90,7 +90,7 @@ describe("fillPreviewLogic required fields (allow-partial)", () => {
         organizationId,
         userId,
         templateId,
-        body: { values: "{}" },
+        body: { values: {} },
       });
 
       expect(Result.isOk(result)).toBe(true);
@@ -119,7 +119,7 @@ describe("fillPreviewLogic required fields (allow-partial)", () => {
         organizationId,
         userId,
         templateId,
-        body: { values: '{"governing_law": "Czech"}' },
+        body: { values: { governing_law: "Czech" } },
       });
 
       expect(Result.isOk(result)).toBe(true);

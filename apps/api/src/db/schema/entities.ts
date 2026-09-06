@@ -1287,6 +1287,22 @@ export const bufferObjectCleanupIntents = p.pgTable(
       ${table.writerUserId} = (SELECT pg_catalog.current_setting('app.user_id', true))
     `;
     const scopedAccess = sql`${organizationCheck} AND (${ownerScopeAccess} OR ${writerSettlementAccess})`;
+    // Template writers reserve only new attempt keys beneath an existing,
+    // tenant-visible template. Settlement remains exclusive to the stamped
+    // writer; this does not grant another member access to its live intent.
+    const templateWriteAccess = sql`(
+      ${table.chatThreadId} IS NULL
+      AND ${table.workspaceId} IS NULL
+      AND pg_catalog.split_part(${table.objectKey}, '/', 1) = ${table.organizationId}
+      AND pg_catalog.split_part(${table.objectKey}, '/', 2) = 'templates'
+      AND pg_catalog.split_part(${table.objectKey}, '/', 4) ~ '^write-[0-9a-f-]{36}[.]docx$'
+      AND pg_catalog.array_length(pg_catalog.string_to_array(${table.objectKey}, '/'), 1) = 4
+      AND EXISTS (
+        SELECT 1 FROM templates t
+        WHERE t.organization_id = ${table.organizationId}
+          AND t.id::text = pg_catalog.split_part(${table.objectKey}, '/', 3)
+      )
+    )`;
 
     return [
       p
@@ -1313,7 +1329,7 @@ export const bufferObjectCleanupIntents = p.pgTable(
       p.pgPolicy("buffer_object_cleanup_insert", {
         for: "insert",
         to: stella,
-        withCheck: sql`${organizationCheck} AND ${writerSettlementAccess} AND ${ownerScopeAccess}`,
+        withCheck: sql`${organizationCheck} AND ${writerSettlementAccess} AND (${ownerScopeAccess} OR ${templateWriteAccess})`,
       }),
       p.pgPolicy("buffer_object_cleanup_select", {
         for: "select",

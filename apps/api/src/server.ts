@@ -395,6 +395,7 @@ const api = new Elysia()
       exposeHeaders: [
         "set-auth-token",
         "Content-Disposition",
+        "X-Ai-Field-Errors",
         REQUEST_ID_HEADER,
       ],
       maxAge: CORS_PREFLIGHT_MAX_AGE_SECONDS,

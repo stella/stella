@@ -4015,6 +4015,7 @@
     "addPart": "Pievienot daļu",
     "addTag": "Pievienot birku",
     "aiAdaptHint": "MI pielāgos šo formulējumu katrai dokumenta vietai, kur tas parādās.",
+    "aiFieldsNotDrafted": "MI neizdevās sagatavot šos laukus: {list}",
     "allTemplates": "Visas veidnes",
     "backToList": "Atpakaļ pie veidnēm",
     "binding": {

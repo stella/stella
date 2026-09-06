@@ -1462,6 +1462,21 @@ describe("invoke_capability file-response gate (fix-6)", () => {
 // --- file-input capabilities refused (t.File over JSON) ----------------------
 
 describe("invoke_capability file-input gate", () => {
+  test("template upload recovery names the dedicated MCP tool instead of the rejected capability", async () => {
+    const result = await handleMcpToolCall({
+      args: {
+        capability: "templates.create",
+        input: { body: { file: "bytes", name: "Template" } },
+      },
+      context: createContext(),
+      toolName: "invoke_capability",
+    });
+    const error = errorEnvelope(result);
+    expect(error.code).toBe("feature_disabled");
+    expect(error.hint).toContain("Call the save_template MCP tool directly");
+    expect(error.hint).not.toContain("Use templates.create instead");
+  });
+
   test("a required-file capability is refused pre-execution, naming its alternative", async () => {
     // entities.upload's body carries a required t.File(); JSON cannot deliver a
     // File, so the gate refuses before validation/dispatch — and the hint

@@ -1514,40 +1514,70 @@ export const TEMPLATE_DESCRIBE_PROJECTION = v.strictObject({
   fields: v.array(
     v.strictObject({
       path: v.string(),
-      label: v.nullable(v.string()),
-      inputType: v.string(),
+      label: v.optional(v.string()),
+      input_type: v.string(),
       required: v.boolean(),
-      hint: v.nullable(v.string()),
-      options: v.nullable(v.array(v.string())),
-      formats: v.nullable(
-        v.array(v.strictObject({ key: v.string(), template: v.string() })),
+      hint: v.optional(v.string()),
+      options: v.optional(v.array(v.string())),
+      // The complete lookup configuration, in the shape `save_template`'s
+      // `fields` overlay accepts, so a described field round-trips.
+      lookup: v.optional(
+        v.strictObject({
+          registry: v.string(),
+          formats: v.array(
+            v.strictObject({ key: v.string(), template: v.string() }),
+          ),
+        }),
       ),
-      aiPrompt: v.nullable(v.string()),
-      aiAdapt: v.boolean(),
-      optionsFrom: v.nullable(v.string()),
-      dateFormat: v.nullable(
+      validation: v.optional(
+        v.strictObject({
+          required: v.optional(v.boolean()),
+          min_length: v.optional(v.number()),
+          max_length: v.optional(v.number()),
+          min: v.optional(v.number()),
+          max: v.optional(v.number()),
+          pattern: v.optional(v.string()),
+          min_items: v.optional(v.number()),
+          max_items: v.optional(v.number()),
+        }),
+      ),
+      // A binding resolves server-side from matter/contact data; it names no
+      // record id, only the kind, the selector, and the field key.
+      source: v.optional(
+        v.strictObject({
+          kind: v.string(),
+          field: v.string(),
+          role: v.optional(v.string()),
+          ref: v.optional(v.string()),
+        }),
+      ),
+      ai_sees_document: v.boolean(),
+      ai_prompt: v.optional(v.string()),
+      ai_adapt: v.boolean(),
+      options_from: v.optional(v.string()),
+      date_format: v.optional(
         v.strictObject({ locale: v.string(), style: v.string() }),
       ),
-      parts: v.nullable(
+      parts: v.optional(
         v.array(
           v.strictObject({
             key: v.string(),
             label: v.optional(v.string()),
-            inputType: v.string(),
+            input_type: v.string(),
             options: v.optional(v.array(v.string())),
             pattern: v.optional(v.string()),
           }),
         ),
       ),
-      format: v.nullable(v.string()),
+      format: v.optional(v.string()),
     }),
   ),
+  // Derived fields, named the way the `fields` overlay names them, so a
+  // caller can edit an expression and send it straight back.
   conditions: v.array(
-    v.strictObject({ name: v.string(), expression: v.string() }),
+    v.strictObject({ path: v.string(), condition: v.string() }),
   ),
-  computed: v.array(
-    v.strictObject({ name: v.string(), expression: v.string() }),
-  ),
+  computed: v.array(v.strictObject({ path: v.string(), formula: v.string() })),
   // Every {{#each}} loop over object items: `path` belongs in `values` as an
   // array of objects (one per `itemFieldPaths` entry), not a flat dotted key.
   // Manifest field entries for the loop's own contents still appear in

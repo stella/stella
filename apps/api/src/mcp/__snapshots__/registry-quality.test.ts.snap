@@ -633,7 +633,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "name": "fill_template",
     "scope": "stella:templates",
     "access": "write",
-    "description": "Fill a template and return text plus the DOCX as base64. First call list_templates with template_id for field paths, then pass values as a path-to-value map (for example, {\\"tenant.name\\":\\"ACME\\"}). Registry, composite, formula, and AI fields resolve automatically. Unknown keys fail unless allow_unused_values is true; unfilled placeholders fail unless completion_mode is allow_partial. A required field that is not AI-fillable must be provided: an omitted or empty one fails with the exact list of missing fields instead of a guessed value or a raw placeholder in the output — ask the user for those values and retry. Successful output includes completionStatus.",
+    "description": "Fill a template and return the rendered text; pass output_mode='docx' for base64 bytes. Call list_templates first, then pass its field paths in values. Registry, composite, formula, and AI fields resolve automatically. Unknown keys fail unless allow_unused_values is true. Missing required values always fail. Unfilled placeholders or failed AI drafts fail unless completion_mode is allow_partial. Errors name exact paths; never guess required values. Output includes completionStatus.",
     "annotations": {
       "title": "Fill template",
       "idempotentHint": false,
@@ -663,6 +663,15 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           ],
           "description": "Require every placeholder by default; use allow_partial only for an intentionally incomplete document.",
           "default": "require_complete"
+        },
+        "output_mode": {
+          "type": "string",
+          "enum": [
+            "text",
+            "docx"
+          ],
+          "description": "text returns the rendered paragraphs and cells; docx adds the base64 archive, which is large.",
+          "default": "text"
         }
       },
       "required": [
@@ -679,7 +688,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "stella:templates"
     ],
     "access": "write",
-    "description": "Fill a registered template and persist the generated DOCX directly in a matter, without requiring the client to upload bytes. Use action='create_document' to create a new document (optionally inside parent_id), or action='create_version' with entity_id to append a version to an existing document. Call list_templates first to learn the field paths and which are required. A required field that is not AI-fillable must be provided, or the fill fails with the exact list of missing fields; ask the user for those values instead of guessing. Returns the entity and version identifiers plus any unmatched placeholders or unused values.",
+    "description": "Fill a registered template and persist its DOCX in a matter. Use create_document (optionally with parent_id) or create_version with entity_id. Call list_templates for field paths; never guess required values. Missing required values always fail. Unfilled placeholders or failed AI drafts stop writes unless completion_mode is allow_partial. Returns document/version ids and fill diagnostics.",
     "annotations": {
       "title": "Save filled template",
       "idempotentHint": false,
@@ -726,6 +735,15 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "type": "object",
           "description": "Map of template field path to value",
           "additionalProperties": true
+        },
+        "completion_mode": {
+          "type": "string",
+          "enum": [
+            "require_complete",
+            "allow_partial"
+          ],
+          "description": "Require every placeholder by default; use allow_partial only for an intentionally incomplete document.",
+          "default": "require_complete"
         }
       },
       "required": [
@@ -742,7 +760,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "name": "save_template",
     "scope": "stella:templates",
     "access": "write",
-    "description": "Create a template from a DOCX, or configure its fields. To create, pass the original .docx bytes as docx_base64 (max 50 MB decoded) and a name; never retype the file or strip parts out to fit. Its {{field}} markers become fillable fields; fields can configure them in the same call. To configure an existing template, pass template_id with fields and no docx_base64; this changes only the manifest, not its {{markers}}. Read stella://reference/template-markers before authoring a DOCX and stella://reference/template-fields before configuring fields. Returns the template id and field count when creating, or the updated fields when configuring, plus marker-authoring warnings to fix before filling.",
+    "description": "Create a template from a DOCX or configure its fields. For creation, pass a name and file (preferred, up to 50 MB) or original bytes as docx_base64 (max 196608 bytes decoded within the 524288-byte MCP request frame); never retype the file or strip parts out to fit. {{field}} markers become fillable. For configuration, pass template_id and fields without a document; markers stay intact. Read stella://reference/template-markers before authoring a DOCX and stella://reference/template-fields before configuring fields. Returns id and field count on creation, updated fields on configuration, and marker-authoring warnings.",
     "annotations": {
       "title": "Save template",
       "idempotentHint": false,
@@ -767,8 +785,35 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "docx_base64": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 69905068,
-          "description": "Original .docx bytes, base64-encoded verbatim; required when creating. Never strip parts out of the file to shrink it."
+          "maxLength": 262144,
+          "description": "Original .docx bytes, base64-encoded verbatim; the fallback for creating when the host cannot supply 'file'. Never strip parts out of the file to shrink it."
+        },
+        "file": {
+          "type": "object",
+          "properties": {
+            "download_url": {
+              "type": "string",
+              "description": "Temporary URL supplied by the host for downloading the file"
+            },
+            "file_id": {
+              "type": "string",
+              "description": "Host-assigned identifier for the attached file"
+            },
+            "mime_type": {
+              "type": "string",
+              "description": "MIME type reported by the host"
+            },
+            "file_name": {
+              "type": "string",
+              "description": "Original file name reported by the host"
+            }
+          },
+          "required": [
+            "download_url",
+            "file_id"
+          ],
+          "additionalProperties": false,
+          "description": "File reference supplied by a compatible MCP host"
         },
         "fields": {
           "type": "array",

@@ -1033,6 +1033,16 @@ const parseAlternative = (
   }
   const type: unknown = Reflect.get(raw, "type");
   const via: unknown = Reflect.get(raw, "via");
+  if (type === "mcp-tool") {
+    const name: unknown = Reflect.get(raw, "name");
+    const note: unknown = Reflect.get(raw, "note");
+    return typeof name === "string" &&
+      name.length > 0 &&
+      typeof note === "string" &&
+      note.length > 0
+      ? { type: "mcp-tool", name, note }
+      : undefined;
+  }
   if (type === "none") {
     const reason: unknown = Reflect.get(raw, "reason");
     return typeof reason === "string" && reason.length > 0

@@ -1,3 +1,23 @@
+import { Result } from "better-result";
+import * as v from "valibot";
+
+const aiFieldErrorPathsSchema = v.array(
+  v.object({ fieldPath: v.pipe(v.string(), v.nonEmpty()) }),
+);
+
+/** Decode the download diagnostics without trusting the HTTP header shape. */
+export const readAiFieldErrorPaths = (headers: Headers) =>
+  Result.try(() => {
+    const encoded = headers.get("X-Ai-Field-Errors");
+    if (encoded === null) {
+      return [];
+    }
+    const decoded: unknown = JSON.parse(decodeURIComponent(encoded));
+    return v
+      .parse(aiFieldErrorPathsSchema, decoded)
+      .map(({ fieldPath }) => fieldPath);
+  });
+
 type SingleFlightState = {
   current: Promise<void> | null;
 };

@@ -233,22 +233,22 @@ are omitted here.
   - optional: --task-id, --matter-id, --name, --status (open|in_progress|in_review|done|cancelled), --priority (none|urgent|high|medium|low), --item-type (task|fact|issue|requirement|event), --list-id, --list-section-id, --list-description, --due-date, --workflow-reason, --add-assignee-user-id, --remove-assignee-user-id, --link-entity-id, --unlink-link-id
 - `stella template fill`
   - `--template-id` — Template id, as returned by list_templates (string)
-  - optional: --allow-unused-values, --completion-mode (require_complete|allow_partial)
+  - optional: --allow-unused-values, --completion-mode (require_complete|allow_partial), --output-mode (text|docx)
 - `stella template list`
   - optional: --template-id
 - `stella template save`
-  - optional: --template-id, --name, --docx-base64
+  - optional: --template-id, --name, --docx-base64, --file.download-url, --file.file-id, --file.mime-type, --file.file-name
 - `stella template save-filled new-document`
   - `--template-id` — Template id, as returned by list_templates (string)
   - `--matter-id` — Matter receiving the filled DOCX. (string)
   - `--idempotency-key` — Unique retry key for this save operation; reuse it only to recover the same timed-out request (string)
-  - optional: --parent-id, --name
+  - optional: --parent-id, --name, --completion-mode (require_complete|allow_partial)
 - `stella template save-filled new-version`
   - `--template-id` — Template id, as returned by list_templates (string)
   - `--matter-id` — Matter receiving the filled DOCX. (string)
   - `--idempotency-key` — Unique retry key for this save operation; reuse it only to recover the same timed-out request (string)
   - `--entity-id` — Existing document entity id; required only for create_version (string)
-  - optional: --name
+  - optional: --name, --completion-mode (require_complete|allow_partial)
 - `stella time-entry delete`
   - `--time-entry-id` — Time entry ID to delete or write off (string)
 - `stella time-entry list`

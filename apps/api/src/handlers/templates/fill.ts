@@ -157,8 +157,12 @@ export const fillHandler = async ({
 
   const { unusedValues } = result;
 
+  // A failed AI draft leaves its field unfilled, so it counts against the fill
+  // the same way an unmatched placeholder does.
   const fillStatus =
-    result.unmatchedPlaceholders.length > 0 ? "partial" : "success";
+    result.unmatchedPlaceholders.length > 0 || result.aiFieldErrors.length > 0
+      ? "partial"
+      : "success";
 
   // Best-effort analytics; don't block the download.
   // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive that the require-audit-on-mutation rule scans for inside this arrow's body range
@@ -183,6 +187,14 @@ export const fillHandler = async ({
       userId,
     });
   });
+
+  const additionalHeaders = new Headers();
+  if (result.aiFieldErrors.length > 0) {
+    additionalHeaders.set(
+      "X-Ai-Field-Errors",
+      encodeURIComponent(JSON.stringify(result.aiFieldErrors)),
+    );
+  }
 
   // PDF conversion via Gotenberg
   if (format === "pdf") {
@@ -220,6 +232,7 @@ export const fillHandler = async ({
       ? sourceName.replace(DOCX_EXT_RE, ".pdf")
       : `${sourceName}.pdf`;
     return secureDocumentResponse({
+      additionalHeaders,
       body: new Uint8Array(pdfResult.value.buffer),
       // Octet-stream, not application/pdf: see OCTET_STREAM_MIME_TYPE.
       contentType: OCTET_STREAM_MIME_TYPE,
@@ -227,8 +240,6 @@ export const fillHandler = async ({
       fileName: sanitizeFilename(pdfName),
     });
   }
-
-  const additionalHeaders = new Headers();
 
   if (result.unmatchedPlaceholders.length > 0) {
     additionalHeaders.set(
@@ -250,7 +261,6 @@ export const fillHandler = async ({
       JSON.stringify(result.structureErrors),
     );
   }
-
   return secureDocumentResponse({
     additionalHeaders,
     body: new Uint8Array(result.buffer),

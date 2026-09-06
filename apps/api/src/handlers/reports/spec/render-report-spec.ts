@@ -6,7 +6,8 @@
  * Rendering never throws for missing data: an absent value renders as an
  * empty string or an omitted paragraph. Narrative sections call the AI
  * generator sequentially and are dropped entirely (heading included) when
- * narrative is off, no generator exists, or the generator yields nothing.
+ * narrative is off or no generator exists. A failed requested draft fails
+ * the report, so exports cannot silently omit requested sections.
  *
  * Citation links: the data object carries no ids (AI hygiene), so a link is
  * resolved at render time from `report.links` by the citation's positional
@@ -228,6 +229,7 @@ type RenderContext = {
   linkBase: ReportLinkBase | undefined;
   /** Sequential narrative counter; names the generator's `fieldPath`. */
   narrativeCount: number;
+  narrativeFailures: string[];
 };
 
 /** What a section sees: the whole report at root, one group inside `grouped`. */
@@ -452,17 +454,20 @@ const renderNarrative = async (
     return [];
   }
   ctx.narrativeCount += 1;
-  const text = await ctx.generateAiValue({
+  const draft = await ctx.generateAiValue({
     prompt,
     fieldPath: `narrative.${ctx.narrativeCount}`,
     values: scopeAiValues(ctx, scope),
   });
-  if (text === undefined || text.trim().length === 0) {
+  if (draft.type === "failed") {
+    ctx.narrativeFailures.push(
+      `narrative.${String(ctx.narrativeCount)}: ${draft.reason}`,
+    );
     return [];
   }
   return [
     ...optionalHeading(section.heading, section.level ?? scope.headingLevel),
-    ...proseParagraphs(text),
+    ...proseParagraphs(draft.value),
   ];
 };
 
@@ -1079,12 +1084,20 @@ export const renderReportSpec = async ({
     aiNarrative,
     linkBase,
     narrativeCount: 0,
+    narrativeFailures: [],
   };
   const scope: Scope = { type: "root", headingLevel: 1 };
   const blocks = await renderInOrder(
     spec.sections,
     async (section) => await renderSection(section, ctx, scope),
   );
+  if (ctx.narrativeFailures.length > 0) {
+    return Result.err(
+      new RenderReportError({
+        message: `Report narrative generation failed: ${ctx.narrativeFailures.join(", ")}`,
+      }),
+    );
+  }
   // A body must end with a paragraph (Word rejects a trailing table).
   if (blocks.at(-1)?.type === "table") {
     blocks.push(paragraph(""));

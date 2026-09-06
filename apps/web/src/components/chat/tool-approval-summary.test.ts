@@ -53,6 +53,35 @@ describe("buildRegistryWriteSummaryRows", () => {
     expect(byKey["fields"]).toBe("3");
   });
 
+  test("save_template shows a host file by name, never its download URL", () => {
+    const rows = build("save_template", {
+      name: "NDA",
+      file: {
+        download_url: "https://files.example/signed?token=secret",
+        file_id: "file_123",
+        file_name: "nda.docx",
+      },
+    });
+    const byKey = Object.fromEntries(rows.map((row) => [row.key, row.value]));
+    expect(byKey["file"]).toBe("nda.docx");
+    expect(rows.find((row) => row.key === "file")?.label).toBe(DOCUMENT_LABEL);
+    expect(rows.map((row) => row.value).join(" ")).not.toContain(
+      "token=secret",
+    );
+  });
+
+  test("save_template falls back to the placeholder for an unnamed host file", () => {
+    const rows = build("save_template", {
+      name: "NDA",
+      file: {
+        download_url: "https://files.example/signed",
+        file_id: "file_123",
+      },
+    });
+    const byKey = Object.fromEntries(rows.map((row) => [row.key, row.value]));
+    expect(byKey["file"]).toBe(UPLOAD_PLACEHOLDER);
+  });
+
   test("fill_template summarizes the template handle and per-field values", () => {
     const rows = build("fill_template", {
       templateId: "tmpl-abc",

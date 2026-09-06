@@ -169,6 +169,11 @@ const isAlternativeShape = (value: unknown): boolean => {
   if (!isRecord(value)) {
     return false;
   }
+  if (value["type"] === "mcp-tool") {
+    return (
+      typeof value["name"] === "string" && typeof value["note"] === "string"
+    );
+  }
   if (value["type"] === "none") {
     return typeof value["reason"] === "string";
   }

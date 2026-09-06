@@ -180,10 +180,12 @@ const layout: Extract<ViewLayout, { type: "table" }> = {
 };
 
 // Deterministic stub: top-level -> exec summary; per-item -> a per-contract line.
-const stubGenerate: AiFieldGenerator = async ({ item }) =>
-  item
+const stubGenerate: AiFieldGenerator = async ({ item }) => ({
+  type: "drafted",
+  value: item
     ? `Summary for contract ${item.index} of ${item.count}.`
-    : "Executive summary drafted by the stub.";
+    : "Executive summary drafted by the stub.",
+});
 
 const readDocumentXml = async (buffer: Buffer): Promise<string> => {
   const zip = await JSZip.loadAsync(buffer);
@@ -273,7 +275,7 @@ describe("Due Diligence Report built-in template", () => {
 
     // AI fields drafted exactly as the fill pipeline would (execSummary +
     // per-contract summary), using the stub generator.
-    const record = await resolveAiFields({
+    const { values: record } = await resolveAiFields({
       values: data,
       fields: DD_REPORT_MANIFEST.fields,
       generate: stubGenerate,
@@ -360,9 +362,9 @@ describe("Due Diligence Report built-in template", () => {
     let aiCalls = 0;
     const spy: AiFieldGenerator = async () => {
       aiCalls += 1;
-      return "should not be called";
+      return { type: "drafted", value: "should not be called" };
     };
-    const record = await resolveAiFields({
+    const { values: record } = await resolveAiFields({
       values: data,
       fields: DD_REPORT_MANIFEST.fields,
       generate: data.aiNarrative ? spy : undefined,

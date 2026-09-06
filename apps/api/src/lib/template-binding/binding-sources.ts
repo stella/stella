@@ -116,19 +116,6 @@ export const fieldSourceSchema = v.variant("kind", [
   }),
 ]);
 
-const toFieldSourceToolInputOption = <
-  const TKind extends BindingSourceKind,
-  const TEntries extends v.ObjectEntries & {
-    kind: v.LiteralSchema<TKind, undefined>;
-  },
->(
-  option: v.StrictObjectSchema<TEntries, undefined>,
-) =>
-  v.strictObject({
-    ...option.entries,
-    kind: v.picklist([option.entries.kind.literal]),
-  });
-
 const [contactSource, partySource, matterSource, attorneySource, firmSource] =
   fieldSourceSchema.options;
 
@@ -136,11 +123,26 @@ const [contactSource, partySource, matterSource, attorneySource, firmSource] =
  * parsing uses the indexed variant above; tool JSON Schema uses `anyOf` plus
  * single-value enums because providers do not share `oneOf`/`const` support. */
 export const fieldSourceToolInputSchema = v.union([
-  toFieldSourceToolInputOption(contactSource),
-  toFieldSourceToolInputOption(partySource),
-  toFieldSourceToolInputOption(matterSource),
-  toFieldSourceToolInputOption(attorneySource),
-  toFieldSourceToolInputOption(firmSource),
+  v.strictObject({
+    ...contactSource.entries,
+    kind: v.picklist([contactSource.entries.kind.literal]),
+  }),
+  v.strictObject({
+    ...partySource.entries,
+    kind: v.picklist([partySource.entries.kind.literal]),
+  }),
+  v.strictObject({
+    ...matterSource.entries,
+    kind: v.picklist([matterSource.entries.kind.literal]),
+  }),
+  v.strictObject({
+    ...attorneySource.entries,
+    kind: v.picklist([attorneySource.entries.kind.literal]),
+  }),
+  v.strictObject({
+    ...firmSource.entries,
+    kind: v.picklist([firmSource.entries.kind.literal]),
+  }),
 ]);
 
 export type FieldSource = v.InferOutput<typeof fieldSourceSchema>;

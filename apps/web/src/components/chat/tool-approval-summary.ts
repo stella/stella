@@ -115,9 +115,10 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
  * field manifest is summarized rather than dumped.
  *
  * `documentLabel` and `uploadPlaceholder` are supplied by the caller
- * (translated) so this module stays i18n-free: they label and replace the
- * `save_template` base64 upload field, which must never be dumped verbatim
- * into the summary.
+ * (translated) so this module stays i18n-free: they label and replace
+ * `save_template`'s document input, which must never be dumped verbatim into
+ * the summary — neither the base64 blob nor the host file reference's signed
+ * download URL.
  */
 export const buildRegistryWriteSummaryRows = ({
   documentLabel,
@@ -163,6 +164,15 @@ export const buildRegistryWriteSummaryRows = ({
   return rows;
 };
 
+/** The display name of a host file reference, when it carries one. */
+const hostFileName = (value: unknown): string | null => {
+  if (!isRecord(value)) {
+    return null;
+  }
+  const name = value["file_name"];
+  return typeof name === "string" && name.length > 0 ? name : null;
+};
+
 const buildSaveTemplateRows = ({
   documentLabel,
   emptyLabel,
@@ -179,6 +189,16 @@ const buildSaveTemplateRows = ({
     // Never dump the base64 blob or the full field manifest into the card.
     if (key === "docx_base64") {
       rows.push({ key, label: documentLabel, value: uploadPlaceholder });
+      continue;
+    }
+    // The host file reference carries a temporary signed download URL and an
+    // opaque host id. Show the attachment's name instead of the transport.
+    if (key === "file") {
+      rows.push({
+        key,
+        label: documentLabel,
+        value: hostFileName(value) ?? uploadPlaceholder,
+      });
       continue;
     }
     if (key === "fields") {

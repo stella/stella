@@ -1,3 +1,7 @@
+import * as v from "valibot";
+
+import type { AiFieldError } from "@/api/lib/docx/resolve-ai-fields";
+
 export const TEMPLATE_FILL_COMPLETION_MODES = [
   "require_complete",
   "allow_partial",
@@ -9,51 +13,74 @@ export type TemplateFillCompletionMode =
 export const DEFAULT_TEMPLATE_FILL_COMPLETION_MODE =
   "require_complete" satisfies TemplateFillCompletionMode;
 
-type NonEmptyPlaceholders = readonly [string, ...string[]];
+/**
+ * The `completion_mode` argument every template-rendering tool accepts. One
+ * declaration so a transient fill and a persisting fill cannot drift into
+ * different defaults: an omitted mode is strict on both.
+ */
+export const templateFillCompletionModeSchema = v.optional(
+  v.picklist(TEMPLATE_FILL_COMPLETION_MODES),
+  DEFAULT_TEMPLATE_FILL_COMPLETION_MODE,
+);
+
+/**
+ * What kept a fill from being complete. A partial decision always carries at
+ * least one of the two: a placeholder the renderer could not fill, or a field
+ * whose AI draft failed (a truncated draft is reported, never written, so it
+ * shows up here rather than as a cut value in the document).
+ */
+type NonEmptyReadonlyArray<T> = readonly [T, ...T[]];
+
+type TemplateFillShortfall =
+  | {
+      unmatchedPlaceholders: NonEmptyReadonlyArray<string>;
+      aiFieldErrors: readonly AiFieldError[];
+    }
+  | {
+      unmatchedPlaceholders: readonly [];
+      aiFieldErrors: NonEmptyReadonlyArray<AiFieldError>;
+    };
 
 type TemplateFillCompletionDecision =
   | { type: "complete" }
-  | {
-      type: "accepted_partial";
-      unmatchedPlaceholders: NonEmptyPlaceholders;
-    }
-  | {
-      type: "rejected_partial";
-      unmatchedPlaceholders: NonEmptyPlaceholders;
-    };
+  | ({ type: "accepted_partial" } & TemplateFillShortfall)
+  | ({ type: "rejected_partial" } & TemplateFillShortfall);
 
 type DecideTemplateFillCompletionOptions = {
   mode: TemplateFillCompletionMode;
   unmatchedPlaceholders: readonly string[];
+  aiFieldErrors: readonly AiFieldError[];
 };
 
 /**
- * Turn renderer diagnostics plus the caller's declared policy into a closed
- * decision. Partial-success and partial-error states both carry a statically
- * non-empty placeholder list; an empty list can only produce `complete`.
+ * Turn fill diagnostics plus the caller's declared policy into a closed
+ * decision. Both shortfalls are graded the same way: `require_complete`
+ * rejects either one, `allow_partial` reports either one back to the caller.
  */
 export const decideTemplateFillCompletion = ({
   mode,
   unmatchedPlaceholders,
+  aiFieldErrors,
 }: DecideTemplateFillCompletionOptions): TemplateFillCompletionDecision => {
-  const firstPlaceholder = unmatchedPlaceholders.at(0);
-  if (firstPlaceholder === undefined) {
-    return { type: "complete" };
-  }
-
-  const nonEmptyPlaceholders: NonEmptyPlaceholders = [
-    firstPlaceholder,
-    ...unmatchedPlaceholders.slice(1),
-  ];
-  if (mode === "allow_partial") {
-    return {
-      type: "accepted_partial",
-      unmatchedPlaceholders: nonEmptyPlaceholders,
+  const [firstPlaceholder, ...remainingPlaceholders] = unmatchedPlaceholders;
+  let shortfall: TemplateFillShortfall;
+  if (firstPlaceholder !== undefined) {
+    shortfall = {
+      unmatchedPlaceholders: [firstPlaceholder, ...remainingPlaceholders],
+      aiFieldErrors,
+    };
+  } else {
+    const [firstError, ...remainingErrors] = aiFieldErrors;
+    if (firstError === undefined) {
+      return { type: "complete" };
+    }
+    shortfall = {
+      unmatchedPlaceholders: [],
+      aiFieldErrors: [firstError, ...remainingErrors],
     };
   }
 
-  return {
-    type: "rejected_partial",
-    unmatchedPlaceholders: nonEmptyPlaceholders,
-  };
+  return mode === "allow_partial"
+    ? { type: "accepted_partial", ...shortfall }
+    : { type: "rejected_partial", ...shortfall };
 };

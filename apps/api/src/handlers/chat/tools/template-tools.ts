@@ -246,6 +246,7 @@ export const createTemplateTools = ({
               userId,
               format: "text",
               unmatchedCount: result.unmatchedPlaceholders.length,
+              aiFieldErrorCount: result.aiFieldErrors.length,
               unusedCount: result.unusedValues.length,
               recordAuditEvent,
             }),

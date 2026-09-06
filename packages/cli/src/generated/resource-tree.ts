@@ -46,6 +46,15 @@ export const generatedResourceTree: ResourceNode = {
             uri: "stella://reference/template-fields",
           },
         },
+        "template-workflow": {
+          kind: "leaf",
+          spec: {
+            kind: "show",
+            commandPath: ["reference", "show", "template-workflow"],
+            name: "template-workflow",
+            uri: "stella://reference/template-workflow",
+          },
+        },
       },
     },
   },

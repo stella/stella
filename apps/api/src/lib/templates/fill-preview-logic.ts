@@ -10,6 +10,7 @@ import { Result } from "better-result";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { SafeId } from "@/api/lib/branded-types";
 import { extractText } from "@/api/lib/docx/extract-text";
+import type { AiFieldError } from "@/api/lib/docx/resolve-ai-fields";
 import type {
   ExtractedParagraph,
   TemplateStructureError,
@@ -21,7 +22,6 @@ import {
   loadStoredTemplateSource,
 } from "@/api/lib/templates/template-fill-service";
 import { buildTemplateFillAiWiring } from "@/api/lib/templates/template-fill-usage";
-import { isRecord } from "@/api/lib/type-guards";
 
 export type FillPreviewLogicProps = {
   safeDb: SafeDb;
@@ -29,7 +29,7 @@ export type FillPreviewLogicProps = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   templateId: SafeId<"template">;
-  body: { values: string };
+  body: { values: Record<string, unknown> };
 };
 
 /** What the preview renders: the filled text plus the same diagnostics a
@@ -40,6 +40,9 @@ type FillPreviewResult = {
   unmatchedPlaceholders: string[];
   unusedValues: string[];
   structureErrors: TemplateStructureError[];
+  /** AI-drafted fields the model could not complete; their markers are
+   *  unfilled in the preview above. */
+  aiFieldErrors: AiFieldError[];
 };
 
 /** `templates.fill-preview`'s fill logic: the shared fill pipeline in its
@@ -53,30 +56,10 @@ export const fillPreviewLogic = async ({
   organizationId,
   userId,
   templateId,
-  body: { values: valuesJson },
+  body: { values: parsed },
 }: FillPreviewLogicProps): Promise<
   ResultType<FillPreviewResult, HandlerError<400 | 402 | 404 | 500>>
 > => {
-  const parseResult = Result.try((): unknown => JSON.parse(valuesJson));
-  if (Result.isError(parseResult)) {
-    return Result.err(
-      new HandlerError({
-        status: 400,
-        message: "Invalid JSON in 'values' field.",
-      }),
-    );
-  }
-
-  const parsed = parseResult.value;
-  if (!isRecord(parsed)) {
-    return Result.err(
-      new HandlerError({
-        status: 400,
-        message: "'values' must be a JSON object (not null or array).",
-      }),
-    );
-  }
-
   if (Object.values(parsed).some(containsNull)) {
     return Result.err(
       new HandlerError({
@@ -148,5 +131,6 @@ export const fillPreviewLogic = async ({
     unmatchedPlaceholders: result.unmatchedPlaceholders,
     unusedValues: result.unusedValues,
     structureErrors: result.structureErrors,
+    aiFieldErrors: result.aiFieldErrors,
   });
 };

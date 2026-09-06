@@ -1,30 +1,30 @@
 import { Result, panic } from "better-result";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
-import { abortableTx } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
-import { templates, templateVersions } from "@/api/db/schema";
+import { templates } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { writeManifest } from "@/api/lib/docx/template-manifest";
 import type { TemplateManifest } from "@/api/lib/docx/types";
 import { isTemplateManifest } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { LIMITS } from "@/api/lib/limits";
 import { pickDefined } from "@/api/lib/pick-defined";
-import { readS3ArrayBuffer, writeS3ObjectWithRetry } from "@/api/lib/s3";
-import { buildTemplateVersionS3Key } from "@/api/lib/templates/storage-keys";
+import { readS3ArrayBuffer } from "@/api/lib/s3";
 import {
   MAX_TEMPLATE_LANGUAGES,
   normalizeTemplateLanguages,
 } from "@/api/lib/templates/template-languages";
+import {
+  type TemplateMetadataUpdate,
+  writeStoredTemplate,
+} from "@/api/lib/templates/write-template";
 
 const updateTemplateBodySchema = t.Object({
   name: t.Optional(tDefaultVarchar),
@@ -88,8 +88,6 @@ const updateTemplateHandler = async function* ({
         },
         columns: {
           id: true,
-          s3Key: true,
-          currentVersion: true,
         },
       }),
     ),
@@ -121,20 +119,7 @@ const updateTemplateHandler = async function* ({
     }
   }
 
-  const updates: Partial<{
-    name: string;
-    categoryId: SafeId<"templateCategory"> | null;
-    manifest: TemplateManifest;
-    fieldCount: number;
-    sizeBytes: number;
-    s3Key: string;
-    currentVersion: number;
-    tags: string[];
-    whenToUse: string | null;
-    whenNotToUse: string | null;
-    languages: string[];
-    updatedAt: Date;
-  }> = {
+  const updates: TemplateMetadataUpdate & { updatedAt: Date } = {
     ...pickDefined(body, ["name", "categoryId"]),
     updatedAt: new Date(),
   };
@@ -176,146 +161,32 @@ const updateTemplateHandler = async function* ({
       );
     }
 
-    // Advisory lock, then re-read s3Key/currentVersion fresh, transform the
-    // DOCX, allocate the version, write its S3 object, and commit the row +
-    // version insert — all under the lock. Reading the stored DOCX and
-    // allocating/writing the new version's S3 object *outside* the lock let
-    // two overlapping updates read the same currentVersion, compute the same
-    // versionS3Key, and clobber each other's bytes (last write wins,
-    // non-transactionally) while the loser's version insert lost to the
-    // (templateId, version) unique index. Mirrors save-document.ts /
-    // configure-template-fields-service.ts.
-    const txResult = yield* Result.await(
-      abortableTx(safeDb, async (tx) => {
-        await tx.execute(
-          sql`SELECT pg_advisory_xact_lock(hashtext(${templateId}))`,
-        );
-
-        // Re-read under the lock: a concurrent update that already committed
-        // will have bumped currentVersion and rotated s3Key, so both are read
-        // fresh here.
-        const [locked] = await tx
-          .select({
-            currentVersion: templates.currentVersion,
-            s3Key: templates.s3Key,
-          })
-          .from(templates)
-          .where(
-            and(
-              eq(templates.id, templateId),
-              eq(templates.organizationId, organizationId),
-            ),
-          );
-        if (!locked) {
-          throw new HandlerError({
-            status: 404,
-            message: "Template not found",
-          });
-        }
-
-        const versionCount = await tx.$count(
-          templateVersions,
-          eq(templateVersions.templateId, templateId),
-        );
-
-        if (versionCount >= LIMITS.templateVersionsPerTemplate) {
-          throw new HandlerError({
-            status: 400,
-            message: "Version limit reached for this template",
-          });
-        }
-
-        // Re-embed the manifest in the DOCX so the S3 file
-        // stays in sync with the DB.
-        const docxBuffer = await readS3ArrayBuffer(locked.s3Key);
-        const updatedDocx = await writeManifest(
-          Buffer.from(docxBuffer),
-          manifest,
-        );
-
-        updates.manifest = manifest;
-        updates.fieldCount = manifest.fields.length;
-        updates.sizeBytes = updatedDocx.byteLength;
-
-        const newVersion = locked.currentVersion + 1;
-        updates.currentVersion = newVersion;
-
-        // Each version gets its own immutable S3 key so
-        // historical snapshots remain downloadable.
-        const versionS3Key = buildTemplateVersionS3Key(
+    const { updatedAt: _, ...metadata } = updates;
+    const written = yield* Result.await(
+      Result.gen(() =>
+        writeStoredTemplate({
+          safeDb,
           organizationId,
           templateId,
-          newVersion,
-        );
-        updates.s3Key = versionS3Key;
-
-        // Under the lock: only concurrent updates of this same template
-        // wait, and they must serialize anyway so vN's bytes aren't
-        // overwritten before the version row commits.
-
-        await writeS3ObjectWithRetry({
-          data: new Uint8Array(updatedDocx),
-          key: versionS3Key,
-        });
-
-        const [r] = await tx
-          .update(templates)
-          .set(updates)
-          .where(
-            and(
-              eq(templates.id, templateId),
-              eq(templates.organizationId, organizationId),
-            ),
-          )
-          .returning({
-            id: templates.id,
-            name: templates.name,
-            fieldCount: templates.fieldCount,
-            updatedAt: templates.updatedAt,
-          });
-
-        await tx.insert(templateVersions).values({
-          id: createSafeId<"templateVersion">(),
-          organizationId,
-          templateId,
-          version: newVersion,
-          s3Key: versionS3Key,
-          manifest,
-          fieldCount: manifest.fields.length,
-          createdBy: userId,
-        });
-
-        await recordAuditEvent(tx, {
-          action: AUDIT_ACTION.UPDATE,
-          resourceType: AUDIT_RESOURCE_TYPE.TEMPLATE,
-          resourceId: templateId,
-          workspaceId: null,
-          changes: {
-            currentVersion: {
-              old: locked.currentVersion,
-              new: newVersion,
-            },
-            s3Key: { old: locked.s3Key, new: versionS3Key },
-            fieldCount: { old: null, new: manifest.fields.length },
+          mode: { type: "new-version", userId },
+          metadata,
+          recordAuditEvent,
+          async prepare({ s3Key }) {
+            const docxBuffer = await readS3ArrayBuffer(s3Key);
+            const updatedDocx = await writeManifest(
+              Buffer.from(docxBuffer),
+              manifest,
+            );
+            return Result.ok({
+              manifest,
+              bytes: new Uint8Array(updatedDocx),
+            });
           },
-        });
-
-        if (!r) {
-          // The update targeted a row the locked re-read just confirmed
-          // exists; a missing returning row means it vanished mid-transaction.
-          // Returning here (rather than throwing) would commit the template
-          // update, the version row, and the audit event above while
-          // answering 404.
-          throw new HandlerError({
-            status: 404,
-            message: "Template not found",
-          });
-        }
-        return { row: r };
-      }),
+        }),
+      ),
     );
 
-    return Result.ok(txResult.row);
+    return Result.ok(written.row);
   }
 
   const updated = yield* Result.await(
@@ -367,8 +238,9 @@ const config = {
   description:
     "Change a template's record: name, category, tags, languages, whenToUse " +
     "and whenNotToUse guidance, or the embedded manifest supplied as a JSON " +
-    "string. Only the fields you pass are written. The stored DOCX itself is " +
-    "untouched: store a new document body with templates.save-document.",
+    "string. Only the fields you pass are written. A manifest update creates " +
+    "a new version with that manifest embedded; store a new document body with " +
+    "templates.save-document.",
   permissions: { template: ["update"] },
   mcp: { type: "capability", reason: "template_authoring_ui" },
   params: updateTemplateParamsSchema,

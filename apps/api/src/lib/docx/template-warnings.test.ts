@@ -175,7 +175,7 @@ describe("lookup field warnings", () => {
     ).toEqual([]);
   });
 
-  test("the first format is addressed by the bare marker or its .value alias", async () => {
+  test("the first format is addressed by the bare marker or its declared key", async () => {
     const placed = async (placeholderPaths: readonly string[]) =>
       await fieldOverlayWarnings({
         conditionPaths: [],
@@ -190,42 +190,38 @@ describe("lookup field warnings", () => {
       });
 
     expect(await placed(["company"])).toEqual([]);
-    expect(await placed(["company.value"])).toEqual([]);
+    expect(await placed(["company.default"])).toEqual([]);
+    expect(await placed(["company", "company.value"])).toEqual([
+      expect.objectContaining({
+        code: "unmatched_lookup_format",
+        path: "company.value",
+      }),
+    ]);
     expect((await placed(["client.name"])).map(({ code }) => code)).toEqual([
       "unmatched_lookup_format",
     ]);
   });
 
-  // The resolver writes the first format to the bare marker whatever its key
-  // is, so a keyed marker for it is never filled — the case a "the key has a
-  // marker" rule would call placed.
-  test("a keyed marker for the first format is reported, not accepted", async () => {
-    const warnings = await fieldOverlayWarnings({
-      conditionPaths: [],
-      placeholderPaths: ["company.full"],
-      fields: [
-        {
-          path: "company",
-          lookup: { registry: "krs", formats: [{ key: "full" }] },
-        },
-      ],
-      registryGate: allowAll,
-    });
-
-    expect(warnings).toEqual([
-      {
-        code: "unmatched_lookup_format",
-        path: "company",
-        message: expect.stringContaining("has no {{company}} marker"),
-        hint: "Add {{company}} where the default rendering belongs.",
-      },
-      {
-        code: "unmatched_lookup_format",
-        path: "company.full",
-        message: expect.stringContaining("names the FIRST format"),
-        hint: expect.stringContaining("Write {{company}} instead"),
-      },
-    ]);
+  test("a template that addresses every format by key, bare marker included, is clean", async () => {
+    // The bilingual case: `company` carries no marker of its own, and each
+    // format key IS a marker. Every format still renders, from one lookup, so
+    // there is nothing to warn about.
+    expect(
+      await fieldOverlayWarnings({
+        conditionPaths: [],
+        placeholderPaths: ["company.krs", "company.name"],
+        fields: [
+          {
+            path: "company",
+            lookup: {
+              registry: "krs",
+              formats: [{ key: "name" }, { key: "krs" }],
+            },
+          },
+        ],
+        registryGate: allowAll,
+      }),
+    ).toEqual([]);
   });
 });
 

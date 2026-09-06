@@ -410,7 +410,14 @@ export const internalFailureResult = (
     }
     const code = statusCodeToErrorCode(error.status);
     if (code !== "internal_error") {
-      return structuredErrorResult({ code, message: error.message });
+      return structuredErrorResult({
+        code,
+        message: error.message,
+        // A handler that rejected specific input entries names them here, so
+        // the envelope carries the same `issues[].path` detail a schema
+        // rejection does instead of collapsing to one line of prose.
+        issues: error.issues,
+      });
     }
   }
   captureError(error, { source: "mcp" });

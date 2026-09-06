@@ -238,7 +238,9 @@ describe("fillTemplateDocx required-field rejection", () => {
       scopedDb: stubScopedDb(),
       organizationId,
       requiredFields: "enforce",
-      aiCollaborators: async () => ({ generateAiValue: async () => "Slovak" }),
+      aiCollaborators: async () => ({
+        generateAiValue: async () => ({ type: "drafted", value: "Slovak" }),
+      }),
     });
 
     expect("requiredFieldsRejection" in result).toBe(false);
@@ -247,6 +249,49 @@ describe("fillTemplateDocx required-field rejection", () => {
     }
     const texts = await extractTexts(result.buffer);
     expect(texts.join("")).toContain("Governed by Slovak law.");
+    expect(result.aiFieldErrors).toEqual([]);
+  });
+
+  test("reports a field the model could not draft and leaves it unfilled", async () => {
+    const buffer = await makeManifestDocx([
+      {
+        path: "governing_law",
+        label: "Governing law",
+        inputType: "text",
+        required: true,
+        aiPrompt: "The governing law most likely intended by the parties.",
+      },
+    ]);
+
+    const result = await fillTemplateDocx({
+      source: { name: "NDA", fileName: "nda.docx", buffer },
+      values: {},
+      scopedDb: stubScopedDb(),
+      organizationId,
+      requiredFields: "enforce",
+      aiCollaborators: async () => ({
+        generateAiValue: async () => ({
+          type: "failed",
+          reason: "truncated",
+          message: "The model reached its output limit before finishing.",
+        }),
+      }),
+    });
+
+    if (!("buffer" in result)) {
+      throw new Error("expected a filled document");
+    }
+    // The cut draft is reported instead of being written into the instrument.
+    expect(result.aiFieldErrors).toEqual([
+      {
+        fieldPath: "governing_law",
+        valuePath: "governing_law",
+        itemIndex: null,
+        reason: "truncated",
+        message: "The model reached its output limit before finishing.",
+      },
+    ]);
+    expect(result.unmatchedPlaceholders).toContain("governing_law");
   });
 
   test("does not reject a required, source-bound field left unfilled", async () => {

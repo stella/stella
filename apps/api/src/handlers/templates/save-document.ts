@@ -1,21 +1,12 @@
 import { Result } from "better-result";
-import { and, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 
-import { abortableTx } from "@/api/db/safe-db";
-import { templates, templateVersions } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
-import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
-import {
-  mergeManifestWithDiscovery,
-  readManifest,
-  writeManifest,
-} from "@/api/lib/docx/template-manifest";
+import { readManifest, writeManifest } from "@/api/lib/docx/template-manifest";
 import type {
   DiscoveredField,
   DiscoveredTemplate,
@@ -24,9 +15,9 @@ import type {
 } from "@/api/lib/docx/types";
 import { isTemplateManifest } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
-import { writeS3ObjectWithRetry } from "@/api/lib/s3";
-import { buildTemplateVersionS3Key } from "@/api/lib/templates/storage-keys";
+import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
+import { resolveTemplateFieldOverlay } from "@/api/lib/templates/field-overlay";
+import { writeStoredTemplate } from "@/api/lib/templates/write-template";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 /** Every path discovery still found in the saved body, including nested
@@ -83,6 +74,28 @@ export const hasLiveMarker = (
     discoveredPaths.has(`${field.path}.${format.key}`),
   ) ??
     false);
+
+export const savedManifestFromDiscovery = ({
+  manifest,
+  discovered,
+}: {
+  manifest: TemplateManifest | null;
+  discovered: DiscoveredTemplate;
+}): TemplateManifest => {
+  const resolvedManifest = resolveTemplateFieldOverlay({
+    manifest,
+    discovered,
+    overlay: undefined,
+  });
+  const discoveredPaths = collectDiscoveredPaths(discovered);
+  return {
+    version: resolvedManifest.version,
+    fields: resolvedManifest.fields.filter(
+      (field) =>
+        hasLiveMarker(field, discoveredPaths) || hasDerivedValueSource(field),
+    ),
+  };
+};
 
 const saveDocumentBodySchema = t.Object({
   file: t.File({ maxSize: FILE_SIZE_LIMITS.document }),
@@ -166,9 +179,6 @@ const saveTemplateDocument = createSafeRootHandler(
           },
           columns: {
             id: true,
-            s3Key: true,
-            currentVersion: true,
-            manifest: true,
           },
         }),
       ),
@@ -187,182 +197,41 @@ const saveTemplateDocument = createSafeRootHandler(
       readManifest(buffer),
     ]);
 
-    const baseManifest =
-      clientManifest ?? embeddedManifest ?? existing.manifest;
-    const fields = mergeManifestWithDiscovery(baseManifest, discovered);
-    // mergeManifestWithDiscovery returns ResolvedField, which carries no
-    // aiPrompt, so recover each field's AI settings from the source manifest
-    // by path. Without this, saving a template silently disables its
-    // AI-fillable (aiPrompt) and AI-adapted (aiAdapt) fields. Composite
-    // parts + format, dependent optionsFrom, registry lookup, formula, date
-    // format, and the fill hint are restored the same way.
-    const sourceFieldByPath = new Map(
-      arrayOrEmpty(baseManifest?.fields).map((f) => [f.path, f]),
-    );
-    const fieldMetas: FieldMeta[] = fields.map((f) => ({
-      path: f.path,
-      label: f.label,
-      hint: f.hint,
-      inputType: f.inputType,
-      options: f.options,
-      validation: f.validation,
-      required: f.required,
-      aiPrompt: sourceFieldByPath.get(f.path)?.aiPrompt,
-      aiAdapt: sourceFieldByPath.get(f.path)?.aiAdapt,
-      aiSeesDocument: sourceFieldByPath.get(f.path)?.aiSeesDocument,
-      parts: sourceFieldByPath.get(f.path)?.parts,
-      format: sourceFieldByPath.get(f.path)?.format,
-      optionsFrom: sourceFieldByPath.get(f.path)?.optionsFrom,
-      lookup: sourceFieldByPath.get(f.path)?.lookup,
-      formula: sourceFieldByPath.get(f.path)?.formula,
-      condition: sourceFieldByPath.get(f.path)?.condition,
-      conditionAst: sourceFieldByPath.get(f.path)?.conditionAst,
-      dateFormat: sourceFieldByPath.get(f.path)?.dateFormat,
-    }));
-
-    // Drop orphaned fields: a Studio edit can delete a `{{field}}` marker from
-    // the body without a separate field-delete action, but the client manifest
-    // still carries that field, so the merge re-adds it as a manifest-only
-    // field. Such a field has no live marker (discovery did not find its path or
-    // any keyed lookup-format path) and no marker-less derived value source, so
-    // persisting it would keep the Fill tab prompting for a value the document
-    // can never use. Marker-backed lookup/composite fields are pruned once their
-    // last marker is gone; only genuinely marker-less derived fields
-    // (formula/condition/AI) survive without one.
-    const discoveredPaths = collectDiscoveredPaths(discovered);
-    const prunedFieldMetas = fieldMetas.filter(
-      (field) =>
-        hasLiveMarker(field, discoveredPaths) || hasDerivedValueSource(field),
-    );
-
-    const manifest: TemplateManifest = {
-      version: baseManifest?.version ?? 1,
-      fields: prunedFieldMetas,
-    };
-
-    // Re-embed the merged manifest so the stored DOCX stays in sync with the DB.
-    const updatedDocx = await writeManifest(buffer, manifest);
-
-    // Advisory lock, then allocate the version, write its S3 object, and commit
-    // the row + version insert — all under the lock. Allocating the version and
-    // writing S3 *outside* the lock let two overlapping saves pick the same vN,
-    // write the same key (one clobbering the other), and leave the committed
-    // version pointing at the loser's bytes.
-    const txResult = yield* Result.await(
-      abortableTx(safeDb, async (tx) => {
-        await tx.execute(
-          sql`SELECT pg_advisory_xact_lock(hashtext(${templateId}))`,
-        );
-
-        // Re-read under the lock: a concurrent save that already committed will
-        // have bumped currentVersion, so the next version is read fresh here.
-        const [locked] = await tx
-          .select({
-            currentVersion: templates.currentVersion,
-            s3Key: templates.s3Key,
-          })
-          .from(templates)
-          .where(
-            and(
-              eq(templates.id, templateId),
-              eq(templates.organizationId, organizationId),
-            ),
-          );
-        if (!locked) {
-          throw new HandlerError({
-            status: 404,
-            message: "Template not found",
-          });
-        }
-
-        const versionCount = await tx.$count(
-          templateVersions,
-          eq(templateVersions.templateId, templateId),
-        );
-
-        if (versionCount >= LIMITS.templateVersionsPerTemplate) {
-          throw new HandlerError({
-            status: 400,
-            message: "Version limit reached for this template",
-          });
-        }
-
-        const newVersion = locked.currentVersion + 1;
-        const versionS3Key = buildTemplateVersionS3Key(
+    const written = yield* Result.await(
+      Result.gen(() =>
+        writeStoredTemplate({
+          safeDb,
           organizationId,
           templateId,
-          newVersion,
-        );
-        // Under the lock: only concurrent saves of this same template wait, and
-        // they must serialize anyway so vN's bytes aren't overwritten before the
-        // version row commits.
-
-        await writeS3ObjectWithRetry({
-          data: new Uint8Array(updatedDocx),
-          key: versionS3Key,
-        });
-
-        const [row] = await tx
-          .update(templates)
-          .set({
-            manifest,
-            fieldCount: manifest.fields.length,
-            sizeBytes: updatedDocx.byteLength,
-            s3Key: versionS3Key,
-            currentVersion: newVersion,
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(templates.id, templateId),
-              eq(templates.organizationId, organizationId),
-            ),
-          )
-          .returning({
-            id: templates.id,
-            name: templates.name,
-            fieldCount: templates.fieldCount,
-            updatedAt: templates.updatedAt,
-          });
-
-        await tx.insert(templateVersions).values({
-          id: createSafeId<"templateVersion">(),
-          organizationId,
-          templateId,
-          version: newVersion,
-          s3Key: versionS3Key,
-          manifest,
-          fieldCount: manifest.fields.length,
-          createdBy: user.id,
-        });
-
-        await recordAuditEvent(tx, {
-          action: AUDIT_ACTION.UPDATE,
-          resourceType: AUDIT_RESOURCE_TYPE.TEMPLATE,
-          resourceId: templateId,
-          workspaceId: null,
-          changes: {
-            currentVersion: { old: locked.currentVersion, new: newVersion },
-            s3Key: { old: locked.s3Key, new: versionS3Key },
-            fieldCount: { old: null, new: manifest.fields.length },
+          mode: { type: "new-version", userId: user.id },
+          recordAuditEvent,
+          async prepare({ manifest: currentManifest }) {
+            const baseManifest =
+              clientManifest ?? embeddedManifest ?? currentManifest;
+            // Drop orphaned fields: a Studio edit can delete a `{{field}}` marker from
+            // the body without a separate field-delete action, but the client manifest
+            // still carries that field, so the merge re-adds it as a manifest-only
+            // field. Such a field has no live marker (discovery did not find its path or
+            // any keyed lookup-format path) and no marker-less derived value source, so
+            // persisting it would keep the Fill tab prompting for a value the document
+            // can never use. Marker-backed lookup/composite fields are pruned once their
+            // last marker is gone; only genuinely marker-less derived fields
+            // (formula/condition/AI) survive without one.
+            const manifest = savedManifestFromDiscovery({
+              manifest: baseManifest,
+              discovered,
+            });
+            const updatedDocx = await writeManifest(buffer, manifest);
+            return Result.ok({
+              manifest,
+              bytes: new Uint8Array(updatedDocx),
+            });
           },
-        });
-
-        if (!row) {
-          // The update targeted a row the locked re-read just confirmed exists;
-          // a missing returning row means it vanished mid-transaction. Returning
-          // here (rather than throwing) would commit the template update, the
-          // version row, and the audit event above while answering 404.
-          throw new HandlerError({
-            status: 404,
-            message: "Template not found",
-          });
-        }
-        return { row };
-      }),
+        }),
+      ),
     );
 
-    return Result.ok(txResult.row);
+    return Result.ok(written.row);
   },
 );
 

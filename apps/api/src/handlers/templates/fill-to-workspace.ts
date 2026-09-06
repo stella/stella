@@ -10,7 +10,7 @@ import {
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { clauseBodySchema } from "@/api/lib/clauses/body-schema";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { tJsonObject, tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import {
   buildAiConditionDecider,
   buildAiFieldGenerator,
@@ -22,7 +22,6 @@ import { DOCX_EXT_RE, sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
 import { containsNull } from "@/api/lib/templates/template-data";
 import { fillStoredTemplateDocx } from "@/api/lib/templates/template-fill-service";
-import { isRecord } from "@/api/lib/type-guards";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const fillToWorkspaceParamsSchema = workspaceParams({
@@ -30,8 +29,8 @@ const fillToWorkspaceParamsSchema = workspaceParams({
 });
 
 const fillToWorkspaceBodySchema = t.Object({
-  /** JSON-encoded field-path → value map, same contract as the fill route. */
-  values: t.String(),
+  /** Field-path → value map, same contract as the fill route. */
+  values: tJsonObject,
   /** Per-fill clause edits keyed by slot patch key (`@clause:Name`), same
    *  contract as the fill route; the override body is inserted for a matching
    *  slot instead of the linked clause's resolved body. */
@@ -93,27 +92,7 @@ const fillTemplateToWorkspace = createSafeHandler(
     const organizationId = session.activeOrganizationId;
     const { templateId } = params;
 
-    const parseResult = Result.try((): unknown => JSON.parse(body.values));
-    if (Result.isError(parseResult)) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "Invalid JSON in 'values' field.",
-        }),
-      );
-    }
-
-    const parsed = parseResult.value;
-    if (!isRecord(parsed)) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "'values' must be a JSON object (not null or array).",
-        }),
-      );
-    }
-
-    if (Object.values(parsed).some(containsNull)) {
+    if (Object.values(body.values).some(containsNull)) {
       return Result.err(
         new HandlerError({
           status: 400,
@@ -203,7 +182,7 @@ const fillTemplateToWorkspace = createSafeHandler(
         try: async () =>
           await fillStoredTemplateDocx({
             templateId,
-            values: parsed,
+            values: body.values,
             scopedDb,
             organizationId,
             workspaceId,
@@ -282,8 +261,12 @@ const fillTemplateToWorkspace = createSafeHandler(
 
     const entityId = created.value.entityId;
 
+    // A failed AI draft leaves its field unfilled, so it counts against the
+    // fill the same way an unmatched placeholder does.
     const fillStatus =
-      filled.unmatchedPlaceholders.length > 0 ? "partial" : "success";
+      filled.unmatchedPlaceholders.length > 0 || filled.aiFieldErrors.length > 0
+        ? "partial"
+        : "success";
 
     yield* Result.await(
       Result.tryPromise({
@@ -329,6 +312,9 @@ const fillTemplateToWorkspace = createSafeHandler(
       fileName: created.value.fileName,
       unmatchedPlaceholders: filled.unmatchedPlaceholders,
       unusedValues: filled.unusedValues,
+      // Fields whose AI draft failed: unfilled in the saved document, so the
+      // person who filled the template has to write them.
+      aiFieldErrors: filled.aiFieldErrors,
     });
   },
 );

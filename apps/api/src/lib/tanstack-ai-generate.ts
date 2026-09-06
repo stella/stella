@@ -46,6 +46,7 @@ import {
 } from "@/api/lib/chat/tanstack-chat-runtime";
 import type {
   PublicStreamChunk,
+  StreamChatChunksOptions,
   TanStackTextFinishReason,
 } from "@/api/lib/chat/tanstack-chat-runtime";
 import {
@@ -394,6 +395,62 @@ const normalizeAnthropicTextStops = (
     readOutputCeilingStopAsLength(adapter.chatStream(options)),
 });
 
+/**
+ * The adapter a text run must be dispatched through for its finish to be
+ * readable: on Anthropic an output-ceiling stop arrives as a `RUN_ERROR`, so
+ * a caller reading the run's finish off the raw adapter would grade a
+ * truncated answer as a failure on one provider and as a whole answer on the
+ * next. Every caller that grades a finish goes through here.
+ */
+export const textAdapterWithNormalizedStops = (
+  model: ResolvedTanStackTextModel,
+): AnyTextAdapter =>
+  model.provider === "anthropic"
+    ? normalizeAnthropicTextStops(model.adapter)
+    : model.adapter;
+
+/** Text collected from one chat run, plus the finish the run reported. */
+export type TanStackTextRun = {
+  finish: TextRunFinish;
+  text: string;
+};
+
+/**
+ * Run a text chat to completion and keep both halves of the answer: the
+ * collected text and how the run ended. Collecting only the text drops the finish,
+ * which leaves a caller unable to tell a whole answer from one cut at the
+ * output ceiling — for a drafted document field that difference is the
+ * difference between a value and a sentence ending mid-word.
+ *
+ * Unlike `generateTanStackTextForRole` this takes the assembled chat options,
+ * so a run carrying tools (the skill loop) can be graded the same way. The
+ * caller owns the model resolution and must dispatch through
+ * {@link textAdapterWithNormalizedStops}.
+ */
+export const collectTanStackTextRun = async (
+  options: StreamChatChunksOptions,
+): Promise<TanStackTextRun> => {
+  // Assigned from the loop below; a property keeps the declared union instead
+  // of narrowing to the initial branch.
+  const run: { finish: TextRunFinish } = { finish: { kind: "unfinished" } };
+  let text = "";
+
+  for await (const chunk of streamChatChunks(options)) {
+    throwIfTanStackRunError(chunk);
+    if (chunk.type === EventType.RUN_FINISHED) {
+      // A tool loop runs several times inside one call; the last finish is
+      // the one that produced the answer being returned.
+      run.finish = { kind: "finished", reason: finishReasonOf(chunk) };
+      continue;
+    }
+    if (chunk.type === EventType.TEXT_MESSAGE_CONTENT) {
+      text += chunk.delta;
+    }
+  }
+
+  return { finish: run.finish, text };
+};
+
 const streamTanStackTextDeltas = async function* ({
   abortController,
   analytics,
@@ -422,10 +479,7 @@ const streamTanStackTextDeltas = async function* ({
     serviceTier,
     stream: (requestedServiceTier) =>
       streamChatChunks({
-        adapter:
-          model.provider === "anthropic"
-            ? normalizeAnthropicTextStops(model.adapter)
-            : model.adapter,
+        adapter: textAdapterWithNormalizedStops(model),
         messages,
         ...systemPromptsPatch({ caching, model, system }),
         modelOptions: mergeGenerationOptions({

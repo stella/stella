@@ -11,6 +11,7 @@
 
 import { maxIterations } from "@tanstack/ai";
 import type { ModelMessage } from "@tanstack/ai";
+import { panic } from "better-result";
 import * as v from "valibot";
 
 import type { OrgAIConfig } from "@/api/lib/ai-config";
@@ -29,10 +30,7 @@ import type {
   GuardedModelMessages,
   GuardedSystemPrompt,
 } from "@/api/lib/chat/model-ingress-guard";
-import {
-  generateChatObject,
-  generateChatText,
-} from "@/api/lib/chat/tanstack-chat-runtime";
+import { generateChatObject } from "@/api/lib/chat/tanstack-chat-runtime";
 import type { AiOccurrenceAdapter } from "@/api/lib/docx/adapt-ai-fields";
 import {
   maybeSkillTools,
@@ -40,13 +38,20 @@ import {
   type SkillToolsContext,
 } from "@/api/lib/docx/ai-skill-tools";
 import type { AiConditionDecider } from "@/api/lib/docx/resolve-ai-conditions";
-import type { AiFieldGenerator } from "@/api/lib/docx/resolve-ai-fields";
+import { AI_FIELD_GENERATION_FAILURE_MESSAGE } from "@/api/lib/docx/resolve-ai-fields";
+import type {
+  AiFieldDraft,
+  AiFieldGenerator,
+} from "@/api/lib/docx/resolve-ai-fields";
 import {
   abortControllerFromSignal,
+  collectTanStackTextRun,
   mergeGenerationOptions,
   resolveTanStackTextModel,
   systemPromptsPatch,
+  textAdapterWithNormalizedStops,
 } from "@/api/lib/tanstack-ai-generate";
+import type { TanStackTextRun } from "@/api/lib/tanstack-ai-generate";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
 import { toTanStackValibotSchema } from "@/api/lib/tanstack-ai-schema";
 
@@ -60,10 +65,105 @@ import { toTanStackValibotSchema } from "@/api/lib/tanstack-ai-schema";
 type AiFieldAnalytics = ReturnType<typeof createTanStackAIAnalyticsCallbacks>;
 
 const AI_FIELD_TIMEOUT_MS = 20_000;
-const AI_FIELD_MAX_TOKENS = 800;
 // One step to (optionally) call load-skill, one to draft the value. Bounded so
 // a skill-referencing prompt cannot loop the model indefinitely.
 const SKILL_TOOL_MAX_STEPS = 4;
+
+/**
+ * Output ceilings are sized from the work asked for, never from a flat
+ * constant.
+ *
+ * Tokens per character is not a language-independent constant: the
+ * tokenizers behind this catalogue split diacritic-heavy inflected text
+ * (Polish, Czech, Lithuanian) and non-Latin scripts into far shorter pieces
+ * than English, so a ceiling that comfortably fits an English paragraph cuts
+ * the same paragraph in Polish mid-word. One token per expected character is
+ * the pessimistic end of that range, and a run that reaches the ceiling
+ * anyway is retried once at {@link OUTPUT_CEILING_RETRY_FACTOR} times the
+ * budget rather than returned truncated.
+ */
+const OUTPUT_PROMPT_OVERHEAD_TOKENS = 200;
+const OUTPUT_TOKENS_PER_EXPECTED_CHAR = 1;
+const OUTPUT_CEILING_RETRY_FACTOR = 2;
+/** Ceiling on any single generation, so a large or hostile manifest cannot
+ *  turn one fill into an unbounded model spend. */
+const OUTPUT_MAX_TOKENS = 8000;
+
+/** Value length assumed for a field whose manifest declares no maxLength:
+ *  a drafted clause or scope paragraph, not a one-line answer. */
+const AI_FIELD_DEFAULT_EXPECTED_CHARS = 1500;
+
+const outputTokenBudget = (expectedChars: number): number =>
+  Math.min(
+    OUTPUT_MAX_TOKENS,
+    OUTPUT_PROMPT_OVERHEAD_TOKENS +
+      Math.ceil(expectedChars * OUTPUT_TOKENS_PER_EXPECTED_CHAR),
+  );
+
+const retryTokenBudget = (budget: number): number =>
+  Math.min(OUTPUT_MAX_TOKENS, budget * OUTPUT_CEILING_RETRY_FACTOR);
+
+const hitOutputCeiling = ({ finish }: TanStackTextRun): boolean =>
+  finish.kind === "finished" && finish.reason === "length";
+
+/**
+ * Grade one drafted field value. A run that stopped at the output ceiling, was
+ * filtered, ended on an unresolved tool call, or closed without reporting a
+ * finish did not produce a field value, whatever text arrived with it: writing
+ * that text is how a scope clause reaches a signed instrument ending mid-word.
+ */
+const draftFromRun = ({ finish, text }: TanStackTextRun): AiFieldDraft => {
+  const trimmed = text.trim();
+  if (finish.kind === "unfinished") {
+    return {
+      type: "failed",
+      reason: "interrupted",
+      message: "The model stopped before it finished this field.",
+    };
+  }
+  switch (finish.reason) {
+    case "stop":
+      return trimmed === ""
+        ? {
+            type: "failed",
+            reason: "empty",
+            message: "The model returned no text for this field.",
+          }
+        : { type: "drafted", value: trimmed };
+    case "length":
+      return {
+        type: "failed",
+        reason: "truncated",
+        message:
+          "The model reached its output limit before finishing this field.",
+      };
+    case "content_filter":
+      return {
+        type: "failed",
+        reason: "generation-failed",
+        message: "The model stopped this field on a content filter.",
+      };
+    case "tool_calls":
+      return {
+        type: "failed",
+        reason: "interrupted",
+        message: "The model ended this field on an unanswered tool call.",
+      };
+    case null:
+      // No reason reported: the text is all there is to go on, so a non-empty
+      // answer is taken at face value rather than discarded.
+      return trimmed === ""
+        ? {
+            type: "failed",
+            reason: "empty",
+            message: "The model returned no text for this field.",
+          }
+        : { type: "drafted", value: trimmed };
+    default:
+      finish.reason satisfies never;
+      return panic(`Unhandled finish reason: ${String(finish.reason)}`);
+  }
+};
 
 const boundedAiSignal = (
   timeoutMs: number,
@@ -137,11 +237,13 @@ const resolveFieldChat = ({
       : redactModelSystemPrompt({ system, workspaceIds: tenantWorkspaceIds }),
 });
 
-const generateFieldText = async (input: FieldChatInput): Promise<string> => {
+const generateFieldText = async (
+  input: FieldChatInput,
+): Promise<TanStackTextRun> => {
   const { abortController, caching, messages, model, system } =
     resolveFieldChat(input);
-  return await generateChatText({
-    adapter: model.adapter,
+  return await collectTanStackTextRun({
+    adapter: textAdapterWithNormalizedStops(model),
     messages,
     abortController,
     ...systemPromptsPatch({ caching, model, system }),
@@ -222,7 +324,7 @@ export const buildAiFieldGenerator = ({
   if (!orgAIConfig && !hasTanStackInstanceProvider()) {
     return undefined;
   }
-  return async ({ prompt, values, documentText, item }) => {
+  return async ({ prompt, values, documentText, item, maxLength }) => {
     try {
       const skillTools = maybeSkillTools(prompt, skillContext);
       // Injected only for fields that opted in via aiSeesDocument; omitted
@@ -237,10 +339,8 @@ export const buildAiFieldGenerator = ({
         item !== undefined
           ? `\nThis is item ${String(item.index)} of ${String(item.count)}.\n`
           : "";
-      const text = await generateFieldText({
-        abortSignal: boundedAiSignal(AI_FIELD_TIMEOUT_MS, operationSignal),
+      const request = {
         aiAnalytics,
-        maxOutputTokens: AI_FIELD_MAX_TOKENS,
         orgAIConfig,
         organizationId,
         prompt: `You are drafting a single field of a legal document. Instruction: ${prompt}
@@ -253,12 +353,34 @@ Reply with only the text for this field — no preamble, no quotes, no markdown.
         resolveTextModel,
         system: skillTools ? SKILL_REF_GENERATOR_GUIDANCE : undefined,
         tenantWorkspaceIds,
+      };
+      const budget = outputTokenBudget(
+        maxLength ?? AI_FIELD_DEFAULT_EXPECTED_CHARS,
+      );
+      const first = await generateFieldText({
+        ...request,
+        abortSignal: boundedAiSignal(AI_FIELD_TIMEOUT_MS, operationSignal),
+        maxOutputTokens: budget,
       });
-      const trimmed = text.trim();
-      return trimmed.length > 0 ? trimmed : undefined;
+      // One retry at a wider ceiling: the sized budget is an estimate over an
+      // unknown language and tokenizer, and a value the model wanted to write
+      // longer is worth a second call. A second ceiling hit is reported, not
+      // written.
+      const run = hitOutputCeiling(first)
+        ? await generateFieldText({
+            ...request,
+            abortSignal: boundedAiSignal(AI_FIELD_TIMEOUT_MS, operationSignal),
+            maxOutputTokens: retryTokenBudget(budget),
+          })
+        : first;
+      return draftFromRun(run);
     } catch (error) {
       aiAnalytics?.captureError(error);
-      return undefined;
+      return {
+        type: "failed",
+        reason: "generation-failed",
+        message: AI_FIELD_GENERATION_FAILURE_MESSAGE,
+      };
     }
   };
 };
@@ -335,7 +457,32 @@ Decide true (yes) or false (no) for this condition.`,
 };
 
 const AI_ADAPT_TIMEOUT_MS = 30_000;
-const AI_ADAPT_MAX_TOKENS = 2000;
+
+/**
+ * One adaptation call returns a rendering per occurrence, so its ceiling
+ * scales with the occurrence count: a fixed budget silently truncated the
+ * JSON of a field that appears many times, and a cut response yields no
+ * renderings at all. A rendering can also run several times the stub's length
+ * (a two-word stub becomes a declined clause), with a floor so a very short
+ * stub still gets room.
+ */
+const ADAPT_RENDERING_GROWTH_FACTOR = 4;
+const ADAPT_MIN_RENDERING_CHARS = 80;
+
+const adaptTokenBudget = ({
+  occurrenceCount,
+  stubLength,
+}: {
+  occurrenceCount: number;
+  stubLength: number;
+}): number =>
+  outputTokenBudget(
+    occurrenceCount *
+      Math.max(
+        stubLength * ADAPT_RENDERING_GROWTH_FACTOR,
+        ADAPT_MIN_RENDERING_CHARS,
+      ),
+  );
 
 // strictObject (no optional members): OpenAI strict structured output rejects
 // plain objects and optional properties.
@@ -423,7 +570,10 @@ export const buildAiOccurrenceAdapter = ({
       const { renderings } = await generateFieldObject({
         abortSignal: boundedAiSignal(AI_ADAPT_TIMEOUT_MS, operationSignal),
         aiAnalytics,
-        maxOutputTokens: AI_ADAPT_MAX_TOKENS,
+        maxOutputTokens: adaptTokenBudget({
+          occurrenceCount: input.occurrences.length,
+          stubLength: input.stub.length,
+        }),
         orgAIConfig,
         organizationId,
         outputSchema: occurrenceRenderingsSchema,

@@ -5,35 +5,33 @@
  * date format, lookup, composite parts, dependent select, formula, hint,
  * required) is overlaid by path.
  *
- * Backs the MCP `configure_template_fields` tool. Mirrors save-document's
+ * Backs the MCP `save_template` configuration action. Mirrors save-document's
  * restore-by-path discipline (overlay merged onto the source manifest fields by
- * path) but stays on the same version: no new version, no marker re-discovery,
- * just the manifest re-embedded and stored under a fresh key the current
- * version's rows are repointed to.
+ * path) but stays on the same version: it re-embeds the manifest in the
+ * current document bytes and republishes that version under a new key.
  */
 
 import { Result } from "better-result";
-import { and, eq, sql } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { templates, templateVersions } from "@/api/db/schema";
 import type { SafeHandlerGenerator } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
-import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
 import {
+  lookupFormatMarkerPaths,
   mergeManifestWithDiscovery,
   readManifest,
   writeManifest,
 } from "@/api/lib/docx/template-manifest";
 import type { FieldMeta, TemplateManifest } from "@/api/lib/docx/types";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { errorTag } from "@/api/lib/errors/utils";
-import { deleteS3Keys } from "@/api/lib/files/utils";
-import { logger } from "@/api/lib/observability/logger";
-import { readS3ArrayBuffer, writeS3ObjectWithRetry } from "@/api/lib/s3";
-import { buildTemplateRevisionS3Key } from "@/api/lib/templates/storage-keys";
+import { readS3ArrayBuffer } from "@/api/lib/s3";
+import {
+  applyFieldOverlay,
+  fieldOverlayError,
+  validateFieldOverlay,
+} from "@/api/lib/templates/field-overlay";
+import { writeStoredTemplate } from "@/api/lib/templates/write-template";
 
 type ConfigureTemplateFieldsOptions = {
   safeDb: SafeDb;
@@ -57,199 +55,52 @@ export const configureTemplateFields = async function* ({
   fields,
   recordAuditEvent,
 }: ConfigureTemplateFieldsOptions): SafeHandlerGenerator<ConfiguredTemplate> {
-  const existing = yield* Result.await(
-    safeDb((tx) =>
-      tx.query.templates.findFirst({
-        where: {
-          id: { eq: templateId },
-          organizationId: { eq: organizationId },
-        },
-        columns: {
-          id: true,
+  const written = yield* Result.await(
+    Result.gen(() =>
+      writeStoredTemplate({
+        safeDb,
+        organizationId,
+        templateId,
+        mode: { type: "current-version" },
+        recordAuditEvent,
+        async prepare({ s3Key, manifest: currentManifest }) {
+          const buffer = Buffer.from(await readS3ArrayBuffer(s3Key));
+          const embedded = await readManifest(buffer);
+          const discovered = await discoverTemplate(buffer);
+          const baseManifest =
+            embedded ??
+            currentManifest ??
+            ({
+              version: 1,
+              fields: mergeManifestWithDiscovery(null, discovered).map(
+                (field) => ({
+                  path: field.path,
+                }),
+              ),
+            } satisfies TemplateManifest);
+          const issues = validateFieldOverlay({
+            configured: baseManifest.fields,
+            discovered,
+            overlay: fields,
+          });
+          if (issues.length > 0) {
+            return Result.err(fieldOverlayError(issues));
+          }
+
+          const overlaid = applyFieldOverlay(baseManifest, fields);
+          const formatMarkers = lookupFormatMarkerPaths(overlaid.fields);
+          const manifest: TemplateManifest = {
+            version: overlaid.version,
+            fields: overlaid.fields.filter(
+              (field) => !formatMarkers.has(field.path),
+            ),
+          };
+          const updatedDocx = await writeManifest(buffer, manifest);
+          return Result.ok({ manifest, bytes: new Uint8Array(updatedDocx) });
         },
       }),
     ),
   );
 
-  if (!existing) {
-    return Result.err(
-      new HandlerError({ status: 404, message: "Template not found" }),
-    );
-  }
-
-  // All S3 I/O (read the stored DOCX, re-embed the manifest, store the result)
-  // and the row updates happen under the advisory lock, after re-reading s3Key /
-  // currentVersion fresh. Reading the buffer and writing the result *outside*
-  // the lock let a concurrent save-document commit a new vN+1 (a fresh
-  // per-version s3Key) between this read and write, so the manifest would be
-  // embedded into the now-stale object while templates.s3Key points elsewhere,
-  // diverging the DB manifest from the bytes the row references. Mirrors
-  // save-document.ts.
-  const txResult = yield* Result.await(
-    safeDb(async (tx) => {
-      await tx.execute(
-        sql`SELECT pg_advisory_xact_lock(hashtext(${templateId}))`,
-      );
-
-      // Re-read under the lock: a concurrent save that already committed will
-      // have bumped currentVersion and rotated s3Key, so both are read fresh.
-      const [locked] = await tx
-        .select({
-          s3Key: templates.s3Key,
-          manifest: templates.manifest,
-          currentVersion: templates.currentVersion,
-        })
-        .from(templates)
-        .where(
-          and(
-            eq(templates.id, templateId),
-            eq(templates.organizationId, organizationId),
-          ),
-        );
-      if (!locked) {
-        return { ok: false as const, reason: "not-found" as const };
-      }
-
-      const buffer = Buffer.from(await readS3ArrayBuffer(locked.s3Key));
-
-      // Prefer the manifest embedded in the stored DOCX; fall back to the DB
-      // column and finally to a fresh discovery so a manifest-less raw upload
-      // can still be configured. The marker bytes are left untouched throughout.
-      const embedded = await readManifest(buffer);
-      const baseManifest = embedded ?? locked.manifest ?? null;
-
-      const baseFields: FieldMeta[] =
-        baseManifest?.fields ??
-        mergeManifestWithDiscovery(null, await discoverTemplate(buffer)).map(
-          (f) => ({ path: f.path }),
-        );
-
-      const fieldPaths = new Set(baseFields.map((f) => f.path));
-      const unknownPath = fields.find((f) => !fieldPaths.has(f.path));
-      if (unknownPath) {
-        return {
-          ok: false as const,
-          reason: "unknown-path" as const,
-          path: unknownPath.path,
-        };
-      }
-
-      const overlayByPath = new Map(fields.map((f) => [f.path, f]));
-      const mergedFields: FieldMeta[] = [];
-      for (const f of baseFields) {
-        const override = overlayByPath.get(f.path);
-        mergedFields.push(override ? { ...f, ...override } : f);
-      }
-
-      const manifest: TemplateManifest = {
-        version: baseManifest?.version ?? 1,
-        fields: mergedFields,
-      };
-
-      // Re-embed the manifest into the bytes just read; markers and every other
-      // part of the DOCX are preserved by writeManifest.
-      const updatedDocx = await writeManifest(buffer, manifest);
-      const updatedBytes = new Uint8Array(updatedDocx);
-
-      // The result goes to a fresh key rather than over the object the rows
-      // still point at: this transaction can still roll back after the write
-      // (a later statement, a serialization failure), and an in-place overwrite
-      // would leave the stored bytes carrying an overlay the rows never
-      // recorded. Writing beside the current object leaves at worst an
-      // unreferenced one. Same discipline as save-document.ts / update.ts,
-      // which allocate a per-version key.
-      const revisionS3Key = buildTemplateRevisionS3Key({
-        contents: updatedBytes,
-        organizationId,
-        templateId,
-        version: locked.currentVersion,
-      });
-      await writeS3ObjectWithRetry({ data: updatedBytes, key: revisionS3Key });
-
-      await tx
-        .update(templates)
-        .set({
-          manifest,
-          fieldCount: mergedFields.length,
-          sizeBytes: updatedDocx.byteLength,
-          s3Key: revisionS3Key,
-          updatedAt: new Date(),
-        })
-        .where(eq(templates.id, templateId));
-
-      // Keep ONLY the current version row in sync (its manifest and the key
-      // holding the bytes that manifest is embedded in) so a later
-      // save-document / fill / version download reads the configured fields
-      // back; historical versions keep their own key and stay immutable.
-      await tx
-        .update(templateVersions)
-        .set({
-          manifest,
-          fieldCount: mergedFields.length,
-          s3Key: revisionS3Key,
-        })
-        .where(
-          and(
-            eq(templateVersions.templateId, templateId),
-            eq(templateVersions.version, locked.currentVersion),
-          ),
-        );
-
-      await recordAuditEvent(tx, {
-        action: AUDIT_ACTION.UPDATE,
-        resourceType: AUDIT_RESOURCE_TYPE.TEMPLATE,
-        resourceId: templateId,
-        workspaceId: null,
-        changes: {
-          fieldCount: { old: null, new: mergedFields.length },
-          s3Key: { old: locked.s3Key, new: revisionS3Key },
-        },
-      });
-
-      return {
-        ok: true as const,
-        manifest,
-        // Reclaimed after the commit, not here: only a committed transaction
-        // proves no row still names it. Identical bytes resolve to the same
-        // key, in which case there is nothing to reclaim.
-        supersededS3Key:
-          locked.s3Key === revisionS3Key ? undefined : locked.s3Key,
-      };
-    }),
-  );
-
-  if (!txResult.ok) {
-    if (txResult.reason === "not-found") {
-      return Result.err(
-        new HandlerError({ status: 404, message: "Template not found" }),
-      );
-    }
-    return Result.err(
-      new HandlerError({
-        status: 400,
-        message:
-          `No field "${txResult.path}" in this template. ` +
-          "Configure only paths that exist as {{markers}} (call " +
-          "describe_template to list them).",
-      }),
-    );
-  }
-
-  // The superseded object is referenced by no row once the transaction has
-  // committed: template deletion discovers keys from templates.s3Key and the
-  // template_versions rows only (handlers/templates/delete.ts), so leaving it
-  // in place would strand it beyond the reach of every cleanup path. A failed
-  // delete is not a failed configuration: the rows are already consistent, so
-  // it is reported and the request still succeeds.
-  if (txResult.supersededS3Key !== undefined) {
-    const reclaimed = await deleteS3Keys([txResult.supersededS3Key]);
-    if (Result.isError(reclaimed)) {
-      logger.warn("templates.superseded_object_reclaim_failed", {
-        "error.type": errorTag(reclaimed.error),
-        templateId,
-      });
-    }
-  }
-
-  return Result.ok({ manifest: txResult.manifest });
+  return Result.ok({ manifest: written.manifest });
 };

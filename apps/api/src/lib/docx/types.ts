@@ -391,6 +391,23 @@ export const fieldValidationSchema = v.pipe(
   v.description(FIELD_VALIDATION_DESCRIPTION),
 );
 
+/** Property names per derived-source mode, per surface. The persisted model is
+ *  camelCase and the MCP tool input is snake_case, so a conflict message must
+ *  quote the spelling the caller actually sent. Total over the mode union: a
+ *  new derived source is a compile error here until both spellings exist. */
+export const DERIVED_SOURCE_PROPERTIES = {
+  "ai-adapt": { camel: "aiAdapt", snake: "ai_adapt" },
+  "ai-prompt": { camel: "aiPrompt", snake: "ai_prompt" },
+  condition: { camel: "condition", snake: "condition" },
+  formula: { camel: "formula", snake: "formula" },
+  lookup: { camel: "lookup", snake: "lookup" },
+  parts: { camel: "parts", snake: "parts" },
+  source: { camel: "source", snake: "source" },
+} as const satisfies Record<
+  DerivedSourceMode,
+  { camel: string; snake: string }
+>;
+
 type DerivedSourceMode =
   | "ai-adapt"
   | "ai-prompt"
@@ -451,6 +468,25 @@ const activeDerivedSourceModes = ({
 export const hasCompatibleDerivedSources = (
   fields: DerivedSourceFields,
 ): boolean => activeDerivedSourceModes(fields).length <= 1;
+
+/**
+ * The rejection message for a field that names more than one derived source.
+ * "Mutually exclusive" alone leaves the caller to guess which of the seven
+ * properties collided and on which entry, so both are named here.
+ */
+export const describeDerivedSourceConflict = (
+  fields: DerivedSourceFields & { path?: string | undefined },
+  spelling: "camel" | "snake",
+): string => {
+  const properties = activeDerivedSourceModes(fields).map(
+    (mode) => `\`${DERIVED_SOURCE_PROPERTIES[mode][spelling]}\``,
+  );
+  const at = fields.path === undefined ? "" : ` on "${fields.path}"`;
+  return (
+    "Derived field sources are mutually exclusive: " +
+    `${properties.join(", ")} are set together${at}. Keep exactly one.`
+  );
+};
 
 const FIELD_SOURCE_DESCRIPTION = "Who fills = matter or contact data";
 
@@ -517,7 +553,7 @@ export const hasCompleteCompositeField = ({
   parts?: readonly unknown[] | undefined;
 }): boolean => (parts === undefined) === (format === undefined);
 
-export const fieldMetaSchema = v.pipe(
+const fieldMetaSchema = v.pipe(
   fieldMetaObjectSchema,
   v.check(
     (field: v.InferOutput<typeof fieldMetaObjectSchema>) =>
@@ -527,7 +563,7 @@ export const fieldMetaSchema = v.pipe(
   v.check(
     (field: v.InferOutput<typeof fieldMetaObjectSchema>) =>
       hasCompatibleDerivedSources(field),
-    "Derived field sources are mutually exclusive",
+    (issue) => describeDerivedSourceConflict(issue.input, "camel"),
   ),
 );
 
@@ -551,7 +587,7 @@ export const fieldMetaToolInputSchema = v.pipe(
   v.check(
     (field: v.InferOutput<typeof fieldMetaToolInputObjectSchema>) =>
       hasCompatibleDerivedSources(field),
-    "Derived field sources are mutually exclusive",
+    (issue) => describeDerivedSourceConflict(issue.input, "camel"),
   ),
 );
 

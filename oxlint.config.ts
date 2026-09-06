@@ -209,6 +209,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-direct-property-table-write.fixture.ts", [
     "no-direct-property-table-write/no-direct-property-table-write",
   ]),
+  fixtureRuleOverride("no-direct-template-version-write.fixture.ts", [
+    "no-direct-template-version-write/no-direct-template-version-write",
+  ]),
   fixtureRuleOverride("no-condition-combinator-outside-conditions.fixture.ts", [
     "no-condition-combinator-outside-conditions/no-condition-combinator-outside-conditions",
   ]),
@@ -701,6 +704,8 @@ export default defineConfig({
       "error",
     "no-direct-audit-log-insert/no-direct-audit-log-insert": "error",
     "no-direct-property-table-write/no-direct-property-table-write": "error",
+    "no-direct-template-version-write/no-direct-template-version-write":
+      "error",
     "no-condition-combinator-outside-conditions/no-condition-combinator-outside-conditions":
       "error",
     "no-direct-buffer-cleanup-intent-delete/no-direct-buffer-cleanup-intent-delete":
@@ -1043,6 +1048,7 @@ export default defineConfig({
     "./.oxlint-plugins/require-transaction-abort.ts",
     "./.oxlint-plugins/no-direct-audit-log-insert.ts",
     "./.oxlint-plugins/no-direct-property-table-write.ts",
+    "./.oxlint-plugins/no-direct-template-version-write.ts",
     "./.oxlint-plugins/no-condition-combinator-outside-conditions.ts",
     "./.oxlint-plugins/no-direct-buffer-cleanup-intent-delete.ts",
     "./.oxlint-plugins/require-buffer-cleanup-intent-status.ts",

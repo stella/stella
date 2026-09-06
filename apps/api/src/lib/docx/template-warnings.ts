@@ -241,20 +241,12 @@ const conditionWarning = (path: string): TemplateWarning => ({
   hint: `Drop the condition to keep "${path}" as a yes/no input, or give the {{#if}} rule its own path.`,
 });
 
-/** The default format's nested alias: `{{company.value}}` renders the same
- *  hit as the bare `{{company}}` marker, so it names no keyed format. */
-const DEFAULT_FORMAT_ALIAS = "value";
-
 /**
- * Every format must have a marker to render into, and every dotted marker
- * under a lookup field must name one: a format with no marker renders nowhere,
- * and a marker with no format is left unfilled.
- *
- * Placement follows the fill resolver exactly (`lookup-fields.ts`): the FIRST
- * format is written to the bare `{{path}}` marker and its `{{path.value}}`
- * alias whatever its key is, and only later formats are written to
- * `{{path.<key>}}`. A `{{path.<first key>}}` marker is therefore never filled,
- * which is the case this reports rather than accepts.
+ * Every declared format must have a marker to render into, and every dotted
+ * marker under a lookup field must name a declared format: a format with no
+ * marker renders nowhere, and a marker with no format is left unfilled. Every
+ * format, the first included, is addressed by `{{path.key}}`; the first is
+ * additionally the default a bare `{{path}}` marker renders.
  */
 const lookupFormatWarnings = (
   { lookup, path }: LookupOverlayField,
@@ -266,7 +258,8 @@ const lookupFormatWarnings = (
 
   const isDefaultPlaced =
     valueMarkers.has(path) ||
-    valueMarkers.has(keyedMarker(DEFAULT_FORMAT_ALIAS));
+    (defaultFormat !== undefined &&
+      valueMarkers.has(keyedMarker(defaultFormat.key)));
   if (defaultFormat !== undefined && !isDefaultPlaced) {
     warnings.push({
       code: "unmatched_lookup_format",
@@ -288,31 +281,22 @@ const lookupFormatWarnings = (
     });
   }
 
-  const keyedKeys = new Set(keyedFormats.map((format) => format.key));
+  const keyedKeys = new Set(lookup.formats.map((format) => format.key));
   const markerPrefix = `${path}.`;
   for (const marker of valueMarkers) {
     if (!marker.startsWith(markerPrefix)) {
       continue;
     }
     const key = marker.slice(markerPrefix.length);
-    if (key === DEFAULT_FORMAT_ALIAS || keyedKeys.has(key)) {
+    if (keyedKeys.has(key)) {
       continue;
     }
-    warnings.push(
-      key === defaultFormat?.key
-        ? {
-            code: "unmatched_lookup_format",
-            path: marker,
-            message: `{{${marker}}} names the FIRST format of lookup field "${path}", which is written to the bare {{${path}}} marker, so {{${marker}}} is left unfilled.`,
-            hint: `Write {{${path}}} instead, or move "${key}" after the first entry in formats.`,
-          }
-        : {
-            code: "unmatched_lookup_format",
-            path: marker,
-            message: `{{${marker}}} names no format of lookup field "${path}", so it is left unfilled.`,
-            hint: `Add a "${key}" format to the field's formats, or remove the marker.`,
-          },
-    );
+    warnings.push({
+      code: "unmatched_lookup_format",
+      path: marker,
+      message: `{{${marker}}} names no format of lookup field "${path}", so it is left unfilled.`,
+      hint: `Add a "${key}" format to the field's formats, or remove the marker.`,
+    });
   }
 
   return warnings;

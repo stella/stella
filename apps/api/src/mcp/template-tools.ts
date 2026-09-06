@@ -11,6 +11,7 @@ import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { assertUsageAvailableForHandler } from "@/api/lib/api-handlers";
+import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
   AssertNoExtraFields,
@@ -26,17 +27,16 @@ import {
   buildAiOccurrenceAdapter,
 } from "@/api/lib/docx/ai-field-generator";
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
+import { extractTextForPreview } from "@/api/lib/docx/extract-text";
 import { buildIsRegistryEnabledForOrg } from "@/api/lib/docx/registry-org-gate";
-import {
-  mergeManifestWithDiscovery,
-  readManifest,
-} from "@/api/lib/docx/template-manifest";
+import type { AiFieldError } from "@/api/lib/docx/resolve-ai-fields";
+import { readManifest } from "@/api/lib/docx/template-manifest";
 import {
   boundTemplateWarnings,
   fieldOverlayWarnings,
   type TemplateWarning,
 } from "@/api/lib/docx/template-warnings";
-import type { FieldMeta, FieldPart } from "@/api/lib/docx/types";
+import type { FieldMeta } from "@/api/lib/docx/types";
 import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buffer";
 import type { DocxValidationFailure } from "@/api/lib/entity-versions/validate-docx-buffer";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
@@ -50,18 +50,22 @@ import {
   brandPersistedEntityId,
   brandPersistedTemplateId,
 } from "@/api/lib/safe-id-boundaries";
+import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 import { DOCX_EXT_RE, sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
 import { createStoredTemplate } from "@/api/lib/templates/create-template";
+import { resolveTemplateFieldOverlay } from "@/api/lib/templates/field-overlay";
 import {
   recordTemplateFill,
   recordTemplateUse,
 } from "@/api/lib/templates/record-use";
 import { containsNull } from "@/api/lib/templates/template-data";
+import type { TemplateFillCompletionMode } from "@/api/lib/templates/template-fill-completion";
 import {
   decideTemplateFillCompletion,
   DEFAULT_TEMPLATE_FILL_COMPLETION_MODE,
   TEMPLATE_FILL_COMPLETION_MODES,
+  templateFillCompletionModeSchema,
 } from "@/api/lib/templates/template-fill-completion";
 import type {
   DescribeTemplateResult,
@@ -74,11 +78,20 @@ import {
   fillStoredTemplateWithTextStrict,
 } from "@/api/lib/templates/template-fill-service";
 import { withTimeout } from "@/api/lib/with-timeout";
+import { MCP_MAX_REQUEST_BODY_BYTES } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
+import { OPENAI_FILE_REFERENCE_SCHEMA } from "@/api/mcp/document-file-upload";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import {
+  MAX_DOCX_MEGABYTES,
+  MAX_INLINE_DOCX_BASE64_LENGTH,
+  MAX_INLINE_DOCX_BYTES,
+} from "@/api/mcp/template-docx-limits";
+import {
+  readTemplateFieldsInput,
   templateFieldInputSchema,
   toFieldMetaToolInput,
+  toTemplateFieldWireInput,
 } from "@/api/mcp/template-field-input";
 import { TEMPLATE_FIELD_REFERENCE_URI } from "@/api/mcp/template-field-reference";
 import { TEMPLATE_MARKER_REFERENCE_URI } from "@/api/mcp/template-marker-reference";
@@ -96,6 +109,7 @@ import {
   runTextFieldSpecs,
 } from "@/api/mcp/text-field-spec";
 import type {
+  InternalToolErrorResult,
   InternalToolResult,
   McpTextFieldSpec,
   McpToolDefinition,
@@ -131,16 +145,28 @@ type TemplateToolName =
 const TEMPLATE_FILL_TEXT_MAX_CHARS = 16_000;
 const SAVE_FILLED_TEMPLATE_RENDER_TIMEOUT_MS = 300_000;
 
-// Base64 encodes 3 bytes per 4 chars, so bound the encoded length to the doc
-// size limit and reject an oversized upload at parse time, before it is decoded
-// into a Buffer.
-const MAX_DOCX_BASE64_LENGTH =
-  Math.ceil(FILE_SIZE_LIMIT_BYTES.document / 3) * 4;
+/**
+ * What `fill_template` sends back. `text` is the rendered preview a caller
+ * reads; `docx` adds the base64 archive, which for a short document runs to
+ * ~100k characters and is worth spending only when the caller keeps the bytes.
+ */
+const TEMPLATE_FILL_OUTPUT_MODES = ["text", "docx"] as const;
+const DEFAULT_TEMPLATE_FILL_OUTPUT_MODE =
+  "text" satisfies (typeof TEMPLATE_FILL_OUTPUT_MODES)[number];
 
-/** Derived so the advertised ceiling cannot drift from the enforced one. */
-const MAX_DOCX_MEGABYTES = Math.floor(
-  FILE_SIZE_LIMIT_BYTES.document / (1024 * 1024),
-);
+/**
+ * One advertised `completion_mode` property for both fill tools. The
+ * persisting tool writes into a matter, so it cannot be the laxer of the two:
+ * both reject unmatched placeholders unless the caller opts into a partial
+ * document.
+ */
+const TEMPLATE_FILL_COMPLETION_MODE_PROP = {
+  ...enumProp(
+    "Require every placeholder by default; use allow_partial only for an intentionally incomplete document.",
+    TEMPLATE_FILL_COMPLETION_MODES,
+  ),
+  default: DEFAULT_TEMPLATE_FILL_COMPLETION_MODE,
+} as const;
 
 const saveTemplateArgsSchema = v.pipe(
   v.strictObject({
@@ -163,13 +189,15 @@ const saveTemplateArgsSchema = v.pipe(
       v.pipe(
         v.string(),
         v.minLength(1),
-        v.maxLength(MAX_DOCX_BASE64_LENGTH),
+        v.maxLength(MAX_INLINE_DOCX_BASE64_LENGTH),
         v.description(
-          "Original .docx bytes, base64-encoded verbatim; required when " +
-            "creating. Never strip parts out of the file to shrink it.",
+          "Original .docx bytes, base64-encoded verbatim; the fallback for " +
+            "creating when the host cannot supply 'file'. Never strip parts " +
+            "out of the file to shrink it.",
         ),
       ),
     ),
+    file: v.optional(OPENAI_FILE_REFERENCE_SCHEMA),
     fields: v.optional(
       v.pipe(
         v.array(templateFieldInputSchema),
@@ -180,16 +208,26 @@ const saveTemplateArgsSchema = v.pipe(
     ),
   }),
   v.partialCheck(
-    [["template_id"], ["docx_base64"]],
-    ({ template_id, docx_base64 }) =>
-      (template_id === undefined) !== (docx_base64 === undefined),
-    "Provide docx_base64 to create a template, or template_id to configure an existing template's fields",
+    [["template_id"], ["docx_base64"], ["file"]],
+    ({ template_id, docx_base64, file }) =>
+      (template_id === undefined) !==
+      (docx_base64 === undefined && file === undefined),
+    "Provide file or docx_base64 to create a template, or template_id to configure an existing template's fields",
   ),
   v.forward(
     v.partialCheck(
-      [["docx_base64"], ["name"]],
-      ({ docx_base64, name }) =>
-        docx_base64 === undefined || name !== undefined,
+      [["docx_base64"], ["file"]],
+      ({ docx_base64, file }) =>
+        docx_base64 === undefined || file === undefined,
+      "Provide either file or docx_base64, not both",
+    ),
+    ["file"],
+  ),
+  v.forward(
+    v.partialCheck(
+      [["docx_base64"], ["file"], ["name"]],
+      ({ docx_base64, file, name }) =>
+        (docx_base64 === undefined && file === undefined) || name !== undefined,
       "name is required to create a template",
     ),
     ["name"],
@@ -293,10 +331,34 @@ type TemplateDetailSuccess = Extract<
   DescribeTemplateResult,
   { fields: unknown[] }
 >;
-type TemplateDetailField = TemplateDetailSuccess["fields"][number];
+
+const toTemplateDetailPayload = (payload: TemplateDetailSuccess) => ({
+  ...payload,
+  fields: payload.fields.map((field) => {
+    // Derived expressions belong to the conditions/computed collections below.
+    const {
+      condition: _condition,
+      formula: _formula,
+      ...wireField
+    } = toTemplateFieldWireInput(field);
+    return {
+      ...wireField,
+      input_type: field.inputType,
+      required: field.required,
+      ai_adapt: field.aiAdapt,
+      ai_sees_document: field.aiSeesDocument,
+    };
+  }),
+});
+
+type TemplateDetailPayload = ReturnType<typeof toTemplateDetailPayload>;
+type TemplateDetailField = TemplateDetailPayload["fields"][number];
+type TemplateDetailFieldPart = NonNullable<
+  TemplateDetailField["parts"]
+>[number];
 
 const templateFieldOptionItems = (
-  payload: TemplateDetailSuccess,
+  payload: TemplateDetailPayload,
 ): readonly { index: number; options: string[] }[] =>
   payload.fields.flatMap((field) => {
     const options = field.options;
@@ -304,12 +366,12 @@ const templateFieldOptionItems = (
   });
 
 const templateFieldPartItems = (
-  payload: TemplateDetailSuccess,
-): readonly FieldPart[] =>
+  payload: TemplateDetailPayload,
+): readonly TemplateDetailFieldPart[] =>
   payload.fields.flatMap((field) => compact(field.parts));
 
 const templateFieldPartOptionItems = (
-  payload: TemplateDetailSuccess,
+  payload: TemplateDetailPayload,
 ): readonly { index: number; options: string[] }[] =>
   templateFieldPartItems(payload).flatMap((part) => {
     const options = part.options;
@@ -317,9 +379,9 @@ const templateFieldPartOptionItems = (
   });
 
 const templateFieldFormatItems = (
-  payload: TemplateDetailSuccess,
+  payload: TemplateDetailPayload,
 ): readonly { key: string; template: string }[] =>
-  payload.fields.flatMap((field) => compact(field.formats));
+  payload.fields.flatMap((field) => arrayOrEmpty(field.lookup?.formats));
 
 const compact = <T>(
   items: readonly (T | null)[] | null | undefined,
@@ -332,19 +394,19 @@ const compact = <T>(
 
 const buildTemplateDetailTextFieldSpecs = (
   organizationId: string,
-): readonly McpTextFieldSpec<TemplateDetailSuccess>[] => [
+): readonly McpTextFieldSpec<TemplateDetailPayload>[] => [
   defineTextFieldSpec({
     path: "name",
-    items: (payload: TemplateDetailSuccess) => [payload],
+    items: (payload: TemplateDetailPayload) => [payload],
     scope: () => organizationId,
-    read: (payload: TemplateDetailSuccess) => payload.name,
-    apply: (payload: TemplateDetailSuccess, value) => {
+    read: (payload: TemplateDetailPayload) => payload.name,
+    apply: (payload: TemplateDetailPayload, value) => {
       payload.name = value;
     },
   }),
   defineTextFieldSpec({
     path: "fields[].label",
-    items: (payload: TemplateDetailSuccess) => payload.fields,
+    items: (payload: TemplateDetailPayload) => payload.fields,
     scope: () => organizationId,
     read: (field: TemplateDetailField) => field.label,
     apply: (field: TemplateDetailField, value) => {
@@ -353,7 +415,7 @@ const buildTemplateDetailTextFieldSpecs = (
   }),
   defineTextFieldSpec({
     path: "fields[].hint",
-    items: (payload: TemplateDetailSuccess) => payload.fields,
+    items: (payload: TemplateDetailPayload) => payload.fields,
     scope: () => organizationId,
     read: (field: TemplateDetailField) => field.hint,
     apply: (field: TemplateDetailField, value) => {
@@ -361,12 +423,12 @@ const buildTemplateDetailTextFieldSpecs = (
     },
   }),
   defineTextFieldSpec({
-    path: "fields[].aiPrompt",
-    items: (payload: TemplateDetailSuccess) => payload.fields,
+    path: "fields[].ai_prompt",
+    items: (payload: TemplateDetailPayload) => payload.fields,
     scope: () => organizationId,
-    read: (field: TemplateDetailField) => field.aiPrompt,
+    read: (field: TemplateDetailField) => field.ai_prompt,
     apply: (field: TemplateDetailField, value) => {
-      field.aiPrompt = value;
+      field.ai_prompt = value;
     },
   }),
   defineTextFieldSpec({
@@ -383,8 +445,8 @@ const buildTemplateDetailTextFieldSpecs = (
     path: "fields[].parts[].label",
     items: templateFieldPartItems,
     scope: () => organizationId,
-    read: (part: FieldPart) => part.label,
-    apply: (part: FieldPart, value) => {
+    read: (part: TemplateDetailFieldPart) => part.label,
+    apply: (part: TemplateDetailFieldPart, value) => {
       part.label = value;
     },
   }),
@@ -399,7 +461,7 @@ const buildTemplateDetailTextFieldSpecs = (
     },
   }),
   defineTextFieldSpec({
-    path: "fields[].formats[].template",
+    path: "fields[].lookup.formats[].template",
     items: templateFieldFormatItems,
     scope: () => organizationId,
     read: (format: { key: string; template: string }) => format.template,
@@ -407,21 +469,49 @@ const buildTemplateDetailTextFieldSpecs = (
       format.template = value;
     },
   }),
+  defineTextFieldSpec({
+    path: "warnings[].path",
+    items: (payload: TemplateDetailPayload) => arrayOrEmpty(payload.warnings),
+    scope: () => organizationId,
+    read: (warning: TemplateWarning) => warning.path,
+    apply: (warning: TemplateWarning, value) => {
+      warning.path = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: "warnings[].message",
+    items: (payload: TemplateDetailPayload) => arrayOrEmpty(payload.warnings),
+    scope: () => organizationId,
+    read: (warning: TemplateWarning) => warning.message,
+    apply: (warning: TemplateWarning, value) => {
+      warning.message = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: "warnings[].hint",
+    items: (payload: TemplateDetailPayload) => arrayOrEmpty(payload.warnings),
+    scope: () => organizationId,
+    read: (warning: TemplateWarning) => warning.hint,
+    apply: (warning: TemplateWarning, value) => {
+      warning.hint = value;
+    },
+  }),
 ];
 
 const SAVE_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
+  _meta: {
+    "openai/fileParams": ["file"],
+  },
   description:
-    "Create a template from a DOCX, or configure its fields. To create, pass " +
-    `the original .docx bytes as docx_base64 (max ${MAX_DOCX_MEGABYTES} MB ` +
-    "decoded) and a name; never retype the file or strip parts out to fit. " +
-    "Its {{field}} markers become fillable fields; fields can configure " +
-    "them in the same call. To configure an existing template, pass " +
-    "template_id with fields and no docx_base64; this changes only the " +
-    "manifest, not its {{markers}}. Read " +
+    "Create a template from a DOCX or configure its fields. For creation, pass " +
+    `a name and file (preferred, up to ${MAX_DOCX_MEGABYTES} MB) or original ` +
+    `bytes as docx_base64 (max ${MAX_INLINE_DOCX_BYTES} bytes decoded within ` +
+    `the ${MCP_MAX_REQUEST_BODY_BYTES}-byte MCP request frame); never retype the ` +
+    "file or strip parts out to fit. {{field}} markers become fillable. For configuration, pass " +
+    "template_id and fields without a document; markers stay intact. Read " +
     `${TEMPLATE_MARKER_REFERENCE_URI} before authoring a DOCX and ` +
-    `${TEMPLATE_FIELD_REFERENCE_URI} before configuring fields. Returns the ` +
-    "template id and field count when creating, or the updated fields when " +
-    "configuring, plus marker-authoring warnings to fix before filling.",
+    `${TEMPLATE_FIELD_REFERENCE_URI} before configuring fields. Returns id ` +
+    "and field count on creation, updated fields on configuration, and marker-authoring warnings.",
   inputSchema: saveTemplateArgsSchema,
   jsonSchemaProjectionWaiver: {
     ignoreActions: ["check", "finite", "partial_check"],
@@ -487,16 +577,13 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
   },
   {
     description:
-      "Fill a template and return text plus the DOCX as base64. First call " +
-      "list_templates with template_id for field paths, then pass values as a " +
-      'path-to-value map (for example, {"tenant.name":"ACME"}). Registry, ' +
-      "composite, formula, and AI fields resolve automatically. Unknown keys " +
-      "fail unless allow_unused_values is true; unfilled placeholders fail " +
-      "unless completion_mode is allow_partial. A required field that is not " +
-      "AI-fillable must be provided: an omitted or empty one fails with the " +
-      "exact list of missing fields instead of a guessed value or a raw " +
-      "placeholder in the output — ask the user for those values and retry. " +
-      "Successful output includes completionStatus.",
+      "Fill a template and return the rendered text; pass output_mode='docx' " +
+      "for base64 bytes. Call list_templates first, then pass its field paths " +
+      "in values. Registry, composite, formula, and AI fields resolve " +
+      "automatically. Unknown keys fail unless allow_unused_values is true. " +
+      "Missing required values always fail. Unfilled placeholders or failed AI " +
+      "drafts fail unless completion_mode is allow_partial. Errors name exact " +
+      "paths; never guess required values. Output includes completionStatus.",
     inputSchema: {
       type: "object",
       properties: {
@@ -511,12 +598,13 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
           description:
             "Allow value keys that do not match template fields. Defaults to false so misspelled field paths fail loudly.",
         },
-        completion_mode: {
+        completion_mode: TEMPLATE_FILL_COMPLETION_MODE_PROP,
+        output_mode: {
           ...enumProp(
-            "Require every placeholder by default; use allow_partial only for an intentionally incomplete document.",
-            TEMPLATE_FILL_COMPLETION_MODES,
+            "text returns the rendered paragraphs and cells; docx adds the base64 archive, which is large.",
+            TEMPLATE_FILL_OUTPUT_MODES,
           ),
-          default: DEFAULT_TEMPLATE_FILL_COMPLETION_MODE,
+          default: DEFAULT_TEMPLATE_FILL_OUTPUT_MODE,
         },
       },
       required: ["template_id", "values"],
@@ -540,16 +628,12 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
   },
   {
     description:
-      "Fill a registered template and persist the generated DOCX directly in " +
-      "a matter, without requiring the client to upload bytes. Use " +
-      "action='create_document' to create a new document (optionally inside " +
-      "parent_id), or action='create_version' with entity_id to append a " +
-      "version to an existing document. Call list_templates first to learn " +
-      "the field paths and which are required. A required field that is not " +
-      "AI-fillable must be provided, or the fill fails with the exact list of " +
-      "missing fields; ask the user for those values instead of guessing. " +
-      "Returns the entity and version identifiers plus any unmatched " +
-      "placeholders or unused values.",
+      "Fill a registered template and persist its DOCX in a matter. Use " +
+      "create_document (optionally with parent_id) or create_version with " +
+      "entity_id. Call list_templates for field paths; never guess required " +
+      "values. Missing required values always fail. Unfilled placeholders or " +
+      "failed AI drafts stop writes unless completion_mode is allow_partial. " +
+      "Returns document/version ids and fill diagnostics.",
     inputSchema: {
       type: "object",
       properties: {
@@ -578,6 +662,7 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
           description: "Map of template field path to value",
           additionalProperties: true,
         },
+        completion_mode: TEMPLATE_FILL_COMPLETION_MODE_PROP,
       },
       required: [
         "action",
@@ -747,23 +832,25 @@ const describeTemplateDetail: TypedMcpToolHandler<
     return errorResult(result.error);
   }
 
+  const payload = toTemplateDetailPayload(result);
+
   // Redact the org-authored template name and each field's label/hint/aiPrompt;
   // field paths, input types, options, and condition/formula expressions are
   // structural and pass through. Template = org scope.
   const textFields = runTextFieldSpecs(
     buildTemplateDetailTextFieldSpecs(context.organizationId),
-    result,
+    payload,
   );
 
   // `describeStoredTemplate` builds the describe payload, so there is no
   // literal for excess-property checking to guard; tie its return type instead.
   type TemplateDescribePayload = AssertNoExtraFields<
-    typeof result,
+    typeof payload,
     v.InferInput<typeof TEMPLATE_DESCRIBE_PROJECTION>
   >;
   return {
     egress: "structured",
-    payload: result satisfies TemplateDescribePayload,
+    payload: payload satisfies TemplateDescribePayload,
     textFields,
   };
 };
@@ -805,6 +892,86 @@ const requiredFieldsRejectionResult = (
     })),
     hint: "Ask the user for these values (they are required and not AI-fillable), then retry with them added to 'values'.",
   });
+};
+
+type TemplateFillCompletionGate =
+  | { type: "allowed"; completionStatus: "complete" | "partial" }
+  | { type: "rejected"; result: ReturnType<typeof structuredErrorResult> };
+
+/**
+ * The completion gate both fill tools run over renderer diagnostics. Owning it
+ * here is what keeps the transient tool and the persisting one on one policy:
+ * a live `{{placeholder}}` is an error under the default mode whether the
+ * document is handed back or written into a matter.
+ */
+const gateTemplateFillCompletion = ({
+  mode,
+  unmatchedPlaceholders,
+  aiFieldErrors,
+}: {
+  mode: TemplateFillCompletionMode;
+  unmatchedPlaceholders: readonly string[];
+  aiFieldErrors: readonly AiFieldError[];
+}): TemplateFillCompletionGate => {
+  const completion = decideTemplateFillCompletion({
+    mode,
+    unmatchedPlaceholders,
+    aiFieldErrors,
+  });
+  if (completion.type !== "rejected_partial") {
+    return {
+      type: "allowed",
+      completionStatus: completion.type === "complete" ? "complete" : "partial",
+    };
+  }
+
+  return {
+    type: "rejected",
+    result: structuredErrorResult({
+      code: "validation_error",
+      message: `Template fill incomplete; ${describeFillShortfall(completion)}`,
+      issues: [
+        ...completion.unmatchedPlaceholders.map((placeholder) => ({
+          path: `values.${placeholder}`,
+          message: "Template placeholder was not filled",
+        })),
+        ...completion.aiFieldErrors.map((error) => ({
+          path: `values.${error.valuePath}`,
+          message: error.message,
+        })),
+      ],
+      hint: "Call list_templates with template_id (CLI: template list --template-id ID) and provide the missing values yourself, or set completion_mode to allow_partial when an incomplete document is intentional.",
+    }),
+  };
+};
+/** Summary line for a fill that is not complete. Both shortfalls are named
+ *  when both are present: an agent retrying needs to know a placeholder was
+ *  never filled AND that a drafted field came back unusable. */
+const describeFillShortfall = ({
+  unmatchedPlaceholders,
+  aiFieldErrors,
+}: {
+  unmatchedPlaceholders: readonly string[];
+  aiFieldErrors: readonly AiFieldError[];
+}): string => {
+  const parts: string[] = [];
+  if (unmatchedPlaceholders.length > 0) {
+    parts.push(`unmatched placeholders: ${previewList(unmatchedPlaceholders)}`);
+  }
+  if (aiFieldErrors.length > 0) {
+    parts.push(
+      `AI-drafted fields that failed: ${previewList(aiFieldErrors.map(({ valuePath }) => valuePath))}`,
+    );
+  }
+  return parts.join("; ");
+};
+
+/** The summary `message` stays short; the full set always travels in `issues`
+ *  so one retry can address every item. */
+const previewList = (items: readonly string[]): string => {
+  const preview = items.slice(0, 10);
+  const omitted = items.length - preview.length;
+  return `${preview.join(", ")}${omitted > 0 ? ` (${omitted} more omitted)` : ""}`;
 };
 
 /**
@@ -857,9 +1024,10 @@ const fillTemplateArgsSchema = v.strictObject({
   template_id: v.pipe(v.string(), v.minLength(1)),
   values: v.record(v.string(), v.unknown()),
   allow_unused_values: v.optional(v.boolean()),
-  completion_mode: v.optional(
-    v.picklist(TEMPLATE_FILL_COMPLETION_MODES),
-    DEFAULT_TEMPLATE_FILL_COMPLETION_MODE,
+  completion_mode: templateFillCompletionModeSchema,
+  output_mode: v.optional(
+    v.picklist(TEMPLATE_FILL_OUTPUT_MODES),
+    DEFAULT_TEMPLATE_FILL_OUTPUT_MODE,
   ),
 });
 
@@ -974,6 +1142,7 @@ const handleFillTemplateTool: McpToolHandler = async ({ args, context }) => {
           userId: context.userId,
           format: "docx",
           unmatchedCount: filled.unmatchedPlaceholders.length,
+          aiFieldErrorCount: filled.aiFieldErrors.length,
           unusedCount: filled.unusedValues.length,
           structureErrors: filled.structureErrors,
           recordAuditEvent: context.recordAuditEvent,
@@ -981,41 +1150,77 @@ const handleFillTemplateTool: McpToolHandler = async ({ args, context }) => {
     )
     .catch(captureError);
 
-  const completion = decideTemplateFillCompletion({
+  const completion = gateTemplateFillCompletion({
     mode: parsed.output.completion_mode,
     unmatchedPlaceholders: filled.unmatchedPlaceholders,
+    aiFieldErrors: filled.aiFieldErrors,
   });
-  if (completion.type === "rejected_partial") {
-    const preview = completion.unmatchedPlaceholders.slice(0, 10);
-    const omitted = completion.unmatchedPlaceholders.length - preview.length;
-    const suffix = omitted > 0 ? ` (${omitted} more omitted)` : "";
-    return structuredErrorResult({
-      code: "validation_error",
-      message: `Template fill incomplete; unmatched placeholders: ${preview.join(", ")}${suffix}`,
-      issues: completion.unmatchedPlaceholders.map((placeholder) => ({
-        path: `values.${placeholder}`,
-        message: "Template placeholder was not filled",
+  if (completion.type === "rejected") {
+    return completion.result;
+  }
+
+  if (parsed.output.output_mode === "docx") {
+    const truncated = filled.text.length > TEMPLATE_FILL_TEXT_MAX_CHARS;
+    return toolDataResult({
+      completionStatus: completion.completionStatus,
+      templateName: filled.templateName,
+      fileName: filled.fileName,
+      text: truncated
+        ? filled.text.slice(0, TEMPLATE_FILL_TEXT_MAX_CHARS)
+        : filled.text,
+      truncated,
+      docxBase64: filled.buffer.toString("base64"),
+      unmatchedPlaceholders: filled.unmatchedPlaceholders,
+      unusedValues: filled.unusedValues,
+      structureErrors: filled.structureErrors,
+      aiFieldErrors: filled.aiFieldErrors.map((error) => ({
+        field: error.valuePath,
+        reason: error.reason,
+        message: error.message,
       })),
-      hint: "Call list_templates with template_id (CLI: template list --template-id ID) and provide the missing values, or set completion_mode to allow_partial when an incomplete document is intentional.",
     });
   }
 
-  const completionStatus =
-    completion.type === "complete" ? "complete" : "partial";
-
-  const truncated = filled.text.length > TEMPLATE_FILL_TEXT_MAX_CHARS;
+  // The shared preview reader the template preview routes use: it flattens
+  // table cells into their own entries, so an agent reading the result sees
+  // the same text a human reviewing the preview does.
+  const { paragraphs, charCount } = await extractTextForPreview(filled.buffer);
+  const rendered: string[] = [];
+  let renderedChars = 0;
+  let truncated = false;
+  for (const paragraph of paragraphs) {
+    const remaining = TEMPLATE_FILL_TEXT_MAX_CHARS - renderedChars;
+    if (paragraph.text.length > remaining) {
+      // Spend the remaining budget on this paragraph's prefix rather than
+      // dropping it whole: one oversized paragraph (or a document that is a
+      // single long one) must not render the preview empty.
+      if (remaining > 0) {
+        rendered.push(paragraph.text.slice(0, remaining));
+      }
+      truncated = true;
+      break;
+    }
+    rendered.push(paragraph.text);
+    renderedChars += paragraph.text.length;
+  }
 
   return toolDataResult({
-    completionStatus,
+    completionStatus: completion.completionStatus,
     templateName: filled.templateName,
     fileName: filled.fileName,
-    text: truncated
-      ? filled.text.slice(0, TEMPLATE_FILL_TEXT_MAX_CHARS)
-      : filled.text,
+    paragraphs: rendered,
+    charCount,
     truncated,
-    docxBase64: filled.buffer.toString("base64"),
     unmatchedPlaceholders: filled.unmatchedPlaceholders,
     unusedValues: filled.unusedValues,
+    structureErrors: filled.structureErrors,
+    // Fields whose AI draft failed: they are unfilled in the document above,
+    // so an agent must supply them itself rather than treat the fill as done.
+    aiFieldErrors: filled.aiFieldErrors.map((error) => ({
+      field: error.valuePath,
+      reason: error.reason,
+      message: error.message,
+    })),
   });
 };
 
@@ -1028,6 +1233,7 @@ const saveFilledTemplateArgsSchema = v.strictObject({
   name: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(255))),
   idempotency_key: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
   values: v.record(v.string(), v.unknown()),
+  completion_mode: templateFillCompletionModeSchema,
 });
 
 const resolveFilledDocxName = ({
@@ -1188,17 +1394,18 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
   const recordAuditEvent = bindWorkspaceRecorder(context, workspaceId);
   const templateId = brandPersistedTemplateId(input.template_id);
 
+  // Everything the caller sent except the key itself identifies the request,
+  // so a rest spread keeps the fingerprint total: a future argument joins it
+  // without anyone remembering to, and a key replayed under different
+  // arguments (a different completion_mode included) reports a conflict
+  // instead of replaying a receipt that answered a different question.
+  const { idempotency_key: _idempotencyKey, ...fingerprintedInput } = input;
   const requestFingerprint = (
     context.testDependencies?.fingerprintTemplatePersistenceRequest ??
     fingerprintTemplatePersistenceRequest
   )({
-    action: input.action,
-    templateId: input.template_id,
+    ...fingerprintedInput,
     workspaceId,
-    entityId: input.entity_id,
-    parentId: input.parent_id,
-    name: input.name,
-    values: input.values,
   });
   const claim = await (
     context.testDependencies?.claimTemplatePersistenceRequest ??
@@ -1369,6 +1576,18 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
     await releaseClaim();
     return requiredFieldsRejectionResult(filled.requiredFieldsRejection);
   }
+  // A live `{{placeholder}}` is rejected before the document reaches the
+  // matter, not reported afterwards: this tool persists, so it cannot be
+  // laxer than the transient fill_template.
+  const completion = gateTemplateFillCompletion({
+    mode: input.completion_mode,
+    unmatchedPlaceholders: filled.unmatchedPlaceholders,
+    aiFieldErrors: filled.aiFieldErrors,
+  });
+  if (completion.type === "rejected") {
+    await releaseClaim();
+    return completion.result;
+  }
   // Never cross the non-idempotent persistence boundary after either the
   // caller disconnects or the server-owned render deadline expires, even if
   // the abandoned fill operation settles later.
@@ -1377,6 +1596,11 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
     return errorResult("Request cancelled before document persistence");
   }
 
+  const aiFieldErrors = filled.aiFieldErrors.map((error) => ({
+    field: error.valuePath,
+    reason: error.reason,
+    message: error.message,
+  }));
   const fileName = resolveFilledDocxName({
     requested: input.name,
     fallback: filled.fileName,
@@ -1396,6 +1620,7 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
       userId: context.userId,
       format: "docx",
       unmatchedCount: filled.unmatchedPlaceholders.length,
+      aiFieldErrorCount: filled.aiFieldErrors.length,
       unusedCount: filled.unusedValues.length,
       structureErrors: filled.structureErrors,
       workspaceId,
@@ -1448,6 +1673,7 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
               fileName: persisted.fileName,
               unmatchedPlaceholders: filled.unmatchedPlaceholders,
               unusedValues: filled.unusedValues,
+              ...(aiFieldErrors.length === 0 ? {} : { aiFieldErrors }),
             };
             await recordPersistedFill(tx, result);
           },
@@ -1488,6 +1714,7 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
             fileName,
             unmatchedPlaceholders: filled.unmatchedPlaceholders,
             unusedValues: filled.unusedValues,
+            ...(aiFieldErrors.length === 0 ? {} : { aiFieldErrors }),
             versionNumber: persisted.versionNumber,
           };
           await recordPersistedFill(tx, result);
@@ -1532,27 +1759,17 @@ const templateAuthoringWarnings = async ({
     readManifest(buffer),
   ]);
 
-  // The saved manifest is what `createStoredTemplate` writes: any manifest the
-  // DOCX already embeds, merged with discovery, then the request overlay
-  // applied per path. Warning on the request overlay alone would let an
-  // embedded condition or lookup be persisted unreported, and the next
-  // list_templates describe would then disagree with this response.
-  const overlayByPath = new Map<string, FieldMeta>();
-  if (fields !== undefined) {
-    for (const field of fields) {
-      overlayByPath.set(field.path, field);
-    }
-  }
-  const savedFields = mergeManifestWithDiscovery(
-    embeddedManifest,
+  const savedManifest = resolveTemplateFieldOverlay({
     discovered,
-  ).map((field) => overlayByPath.get(field.path) ?? field);
+    manifest: embeddedManifest,
+    overlay: fields,
+  });
 
   return boundTemplateWarnings([
     ...discovered.warnings,
     ...(await fieldOverlayWarnings({
       conditionPaths: discovered.conditionPaths,
-      fields: savedFields,
+      fields: savedManifest.fields,
       placeholderPaths: discovered.placeholders.map(({ name }) => name),
       registryGate: async () =>
         await buildIsRegistryEnabledForOrg({
@@ -1566,12 +1783,12 @@ const templateAuthoringWarnings = async ({
 /**
  * What to tell the caller for each structural DOCX failure on the base64 path.
  *
- * `unreadable-archive` is the failure a model-driven client actually hits: the
- * only way to reach this tool with a DOCX today is to emit the whole archive as
- * base64 token by token, and a payload that drifted by one character decodes to
- * bytes that are no longer a readable ZIP. The generic "make sure it is a valid
- * .docx" advice invites the agent to shrink the file until it fits, which
- * destroys the document, so name the real cause instead.
+ * `unreadable-archive` is the failure a model-driven client actually hits on
+ * this path: a client whose host cannot supply a file reference emits the whole
+ * archive as base64 token by token, and a payload that drifted by one character
+ * decodes to bytes that are no longer a readable ZIP. The generic "make sure it
+ * is a valid .docx" advice invites the agent to shrink the file until it fits,
+ * which destroys the document, so name the real cause instead.
  *
  * Total over the failure union: a new structural check has to decide what the
  * caller should do about it.
@@ -1597,19 +1814,154 @@ const DOCX_BASE64_FAILURE_HINT = {
     "Send the original .docx unmodified; do not edit its XML by hand.",
 } as const satisfies Record<DocxValidationFailure, string>;
 
+/**
+ * What to tell the caller for each structural DOCX failure on the host-file
+ * path. The bytes were never retyped here, so the archive is broken at the
+ * source: point at the attachment, not at the encoding.
+ */
+const DOCX_FILE_FAILURE_HINT = {
+  "unreadable-archive":
+    "The attached file is not a readable .docx archive. Attach the original " +
+    "document rather than a renamed or re-exported copy.",
+  "archive-limit-exceeded":
+    "The attached archive exceeds the entry-count or decompressed-size limit. " +
+    "Ask the user for a smaller .docx; reattaching the same file will not help.",
+  "missing-document-xml":
+    "The attached archive has no 'word/document.xml'. Attach the original " +
+    ".docx unmodified; do not rebuild or repackage it.",
+  "malformed-document-xml":
+    "The attached archive's 'word/document.xml' is not well-formed XML. " +
+    "Attach the original .docx unmodified.",
+} as const satisfies Record<DocxValidationFailure, string>;
+
+/** How the caller supplied the DOCX bytes for the create branch. */
+type TemplateDocxSource =
+  | { type: "base64"; docxBase64: string }
+  | { type: "file"; file: v.InferOutput<typeof OPENAI_FILE_REFERENCE_SCHEMA> };
+
+/** The input field each source's validation issues point back at. */
+const DOCX_SOURCE_ISSUE_PATH = {
+  base64: "docx_base64",
+  file: "file",
+} as const satisfies Record<TemplateDocxSource["type"], string>;
+
+const DOCX_SOURCE_FAILURE_HINT = {
+  base64: DOCX_BASE64_FAILURE_HINT,
+  file: DOCX_FILE_FAILURE_HINT,
+} as const satisfies Record<
+  TemplateDocxSource["type"],
+  Record<DocxValidationFailure, string>
+>;
+
+const HOST_FILE_DOWNLOAD_TIMEOUT_MS = 60_000;
+
+type ResolvedTemplateDocx =
+  | { status: "ok"; buffer: Buffer }
+  | { status: "error"; result: InternalToolErrorResult };
+
+const decodeBase64Docx = (docxBase64: string): ResolvedTemplateDocx => {
+  const buffer = Buffer.from(docxBase64, "base64");
+  // base64 silently drops invalid characters; an empty decode means the input
+  // was not valid base64 at all.
+  if (buffer.byteLength === 0) {
+    return {
+      status: "error",
+      result: structuredErrorResult({
+        code: "validation_error",
+        message: "Invalid input: docx_base64 is not valid base64",
+        issues: [
+          { path: "docx_base64", message: "docx_base64 is not valid base64" },
+        ],
+        hint: "Base64-encode the raw DOCX bytes and pass the result as 'docx_base64'.",
+      }),
+    };
+  }
+  return { status: "ok", buffer };
+};
+
+/**
+ * Pull the bytes behind a host file reference. The same SSRF-vetted outbound
+ * fetch and byte ceiling `upload_document_version` uses: the reference is
+ * caller-supplied, so the URL is resolved and pinned before any connection and
+ * the body is cut off at the document size limit.
+ */
+const downloadHostFileDocx = async ({
+  context,
+  file,
+}: {
+  context: McpRequestContext;
+  file: v.InferOutput<typeof OPENAI_FILE_REFERENCE_SCHEMA>;
+}): Promise<ResolvedTemplateDocx> => {
+  const downloaded = await (
+    context.testDependencies?.safeOutboundFetchBytes ?? safeOutboundFetchBytes
+  )({
+    maxBytes: FILE_SIZE_LIMIT_BYTES.document,
+    timeoutMs: HOST_FILE_DOWNLOAD_TIMEOUT_MS,
+    url: file.download_url,
+  });
+  if (Result.isError(downloaded) || !downloaded.value.ok) {
+    return {
+      status: "error",
+      result: structuredErrorResult({
+        code: "validation_error",
+        message: "The attached file could not be downloaded",
+        issues: [
+          {
+            path: "file",
+            message: "The attached file could not be downloaded",
+          },
+        ],
+        hint:
+          `Attach a .docx no larger than ${MAX_DOCX_MEGABYTES} MB and retry ` +
+          "before its temporary download URL expires.",
+      }),
+    };
+  }
+  if (downloaded.value.body.byteLength === 0) {
+    return {
+      status: "error",
+      result: structuredErrorResult({
+        code: "validation_error",
+        message: "The attached file is empty",
+        issues: [{ path: "file", message: "The attached file is empty" }],
+      }),
+    };
+  }
+  return { status: "ok", buffer: Buffer.from(downloaded.value.body) };
+};
+
+const resolveTemplateDocx = async ({
+  context,
+  source,
+}: {
+  context: McpRequestContext;
+  source: TemplateDocxSource;
+}): Promise<ResolvedTemplateDocx> => {
+  switch (source.type) {
+    case "base64":
+      return decodeBase64Docx(source.docxBase64);
+    case "file":
+      return await downloadHostFileDocx({ context, file: source.file });
+    default: {
+      source satisfies never;
+      return panic(`Unhandled template DOCX source: ${String(source)}`);
+    }
+  }
+};
+
 // Create branch of save_template: a new template from an uploaded DOCX, with an
 // optional field-configuration overlay. Reused from the former create_template
 // tool.
 const createTemplateFromDocx = async ({
   context,
-  docxBase64,
   fields,
   name,
+  source,
 }: {
   context: McpRequestContext;
-  docxBase64: string;
   fields: FieldMeta[] | undefined;
   name: string;
+  source: TemplateDocxSource;
 }): Promise<
   InternalToolResult<v.InferInput<typeof SAVE_TEMPLATE_PROJECTION>>
 > => {
@@ -1625,26 +1977,20 @@ const createTemplateFromDocx = async ({
     clientManifest = { fields };
   }
 
-  const buffer = Buffer.from(docxBase64, "base64");
-  // base64 silently drops invalid characters; an empty decode means the input
-  // was not valid base64 at all.
-  if (buffer.byteLength === 0) {
-    return structuredErrorResult({
-      code: "validation_error",
-      message: "Invalid input: docx_base64 is not valid base64",
-      issues: [
-        { path: "docx_base64", message: "docx_base64 is not valid base64" },
-      ],
-      hint: "Base64-encode the raw DOCX bytes and pass the result as 'docx_base64'.",
-    });
+  const resolved = await resolveTemplateDocx({ context, source });
+  if (resolved.status === "error") {
+    return resolved.result;
   }
+  const { buffer } = resolved;
+  const issuePath = DOCX_SOURCE_ISSUE_PATH[source.type];
+
   if (buffer.byteLength > FILE_SIZE_LIMIT_BYTES.document) {
     return structuredErrorResult({
       code: "validation_error",
       message: "DOCX exceeds the maximum allowed size",
       issues: [
         {
-          path: "docx_base64",
+          path: issuePath,
           message: "DOCX exceeds the maximum allowed size",
         },
       ],
@@ -1652,18 +1998,13 @@ const createTemplateFromDocx = async ({
     });
   }
 
-  const validation = await validateDocxBuffer(
-    buffer.buffer.slice(
-      buffer.byteOffset,
-      buffer.byteOffset + buffer.byteLength,
-    ),
-  );
+  const validation = await validateDocxBuffer(new Uint8Array(buffer).buffer);
   if (!validation.valid) {
     return structuredErrorResult({
       code: "validation_error",
       message: `Invalid DOCX file: ${validation.error}`,
-      issues: [{ path: "docx_base64", message: validation.error }],
-      hint: DOCX_BASE64_FAILURE_HINT[validation.reason],
+      issues: [{ path: issuePath, message: validation.error }],
+      hint: DOCX_SOURCE_FAILURE_HINT[source.type][validation.reason],
     });
   }
 
@@ -1686,7 +2027,7 @@ const createTemplateFromDocx = async ({
     }),
   );
   if (Result.isError(created)) {
-    return errorResult(created.error.message);
+    return internalFailureResult(created.error);
   }
 
   return toolDataResult({
@@ -1732,7 +2073,7 @@ const configureExistingTemplate = async ({
     }),
   );
   if (Result.isError(configured)) {
-    return errorResult(configured.error.message);
+    return internalFailureResult(configured.error);
   }
 
   // Echo the updated field list in the same shape the list_templates detail
@@ -1749,20 +2090,22 @@ const configureExistingTemplate = async ({
     return errorResult(described.error);
   }
 
+  const payload = toTemplateDetailPayload(described);
+
   type ConfiguredTemplatePayload = AssertNoExtraFields<
-    typeof described,
+    typeof payload,
     v.InferInput<typeof TEMPLATE_DESCRIBE_PROJECTION>
   >;
-  return toolDataResult(described satisfies ConfiguredTemplatePayload);
+  return toolDataResult(payload satisfies ConfiguredTemplatePayload);
 };
 
 const handleSaveTemplateTool: TypedMcpToolHandler<
   v.InferInput<typeof SAVE_TEMPLATE_PROJECTION>
 > = async ({ args, context }) => {
-  const parsed = v.safeParse(
-    SAVE_TEMPLATE_TOOL_DEFINITION.inputSchemaSource,
-    args,
-  );
+  const parsed = v.safeParse(SAVE_TEMPLATE_TOOL_DEFINITION.inputSchemaSource, {
+    ...args,
+    fields: readTemplateFieldsInput(args["fields"]),
+  });
   if (!parsed.success) {
     return validationErrorResult(parsed.issues);
   }
@@ -1783,15 +2126,24 @@ const handleSaveTemplateTool: TypedMcpToolHandler<
     });
   }
 
-  // Create branch: docx_base64 and name are guaranteed present by the schema.
+  // Create branch: name and exactly one of file / docx_base64 are guaranteed
+  // present by the schema.
   return await createTemplateFromDocx({
     context,
-    docxBase64:
-      input.docx_base64 ??
-      panic("save_template create branch reached without docx_base64"),
     fields,
     name:
       input.name ?? panic("save_template create branch reached without name"),
+    source:
+      input.file === undefined
+        ? {
+            type: "base64",
+            docxBase64:
+              input.docx_base64 ??
+              panic(
+                "save_template create branch reached without a DOCX source",
+              ),
+          }
+        : { type: "file", file: input.file },
   });
 };
 

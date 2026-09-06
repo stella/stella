@@ -113,9 +113,11 @@ const NON_DIRECTIVE_RULES = [
   {
     title: "Lookup output formats",
     detail:
-      "When a field resolves from a registry/lookup, a bare path uses the " +
-      "default format (`{{company}}`); a named-format key selects a specific " +
-      "rendering (`{{company.address}}`).",
+      "When a field resolves from a registry/lookup, each named-format key " +
+      "selects a rendering (`{{company.address}}`) and a bare path uses the " +
+      "first format (`{{company}}`). Both address the same single lookup, so " +
+      "dotted format markers do not make `company` a grouping path: it stays " +
+      "the one field the person filling enters a registry number into.",
   },
   {
     title: "Bilingual / multi-column documents",

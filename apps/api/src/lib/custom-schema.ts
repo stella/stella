@@ -60,6 +60,14 @@ export const tDefaultVarchar = t.String({
   maxLength: 256,
 });
 
+/** A JSON object with caller-defined keys and values. `t.Record` does not
+ * reject scalar JSON values in Elysia's runtime validator, so intersect it
+ * with an object schema at every boundary that requires a map. */
+export const tJsonObject = t.Intersect([
+  t.Object({}, { additionalProperties: true }),
+  t.Record(t.String(), t.Unknown()),
+]);
+
 /**
  * ISO 4217 alphabetic code, upper case, for a column that stores money.
  *

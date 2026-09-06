@@ -4015,6 +4015,7 @@
     "addPart": "Ajouter une partie",
     "addTag": "Ajouter une étiquette",
     "aiAdaptHint": "L'IA adapte cette formulation à chaque endroit du document où elle apparaît.",
+    "aiFieldsNotDrafted": "L'IA n'a pas pu rédiger ces champs : {list}",
     "allTemplates": "Tous les modèles",
     "backToList": "Retour aux modèles",
     "binding": {

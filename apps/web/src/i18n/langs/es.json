@@ -4015,6 +4015,7 @@
     "addPart": "Añadir parte",
     "addTag": "Añadir etiqueta",
     "aiAdaptHint": "La IA adapta esta redacción a cada lugar del documento donde aparece.",
+    "aiFieldsNotDrafted": "La IA no pudo redactar estos campos: {list}",
     "allTemplates": "Todas las plantillas",
     "backToList": "Volver a plantillas",
     "binding": {

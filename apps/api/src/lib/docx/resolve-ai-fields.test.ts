@@ -1,10 +1,16 @@
 import { describe, expect, test } from "bun:test";
 
-import { type AiFieldGenerator, resolveAiFields } from "./resolve-ai-fields";
+import {
+  type AiFieldDraft,
+  type AiFieldGenerator,
+  resolveAiFields,
+} from "./resolve-ai-fields";
 import type { FieldMeta } from "./types";
 
+const drafted = (value: string): AiFieldDraft => ({ type: "drafted", value });
+
 const echoGenerator: AiFieldGenerator = async ({ prompt }) =>
-  `DRAFT[${prompt}]`;
+  drafted(`DRAFT[${prompt}]`);
 
 const fields: FieldMeta[] = [
   { path: "client.name" }, // plain field
@@ -18,7 +24,7 @@ describe("resolveAiFields", () => {
       fields,
       generate: echoGenerator,
     });
-    expect(result).toEqual({
+    expect(result.values).toEqual({
       "client.name": "ACME",
       scope: "DRAFT[Draft the scope of this power of attorney]",
     });
@@ -30,7 +36,7 @@ describe("resolveAiFields", () => {
       fields,
       generate: echoGenerator,
     });
-    expect(result["scope"]).toBe("manually written scope");
+    expect(result.values["scope"]).toBe("manually written scope");
   });
 
   test("a nested user value wins for a dotted AI-field path", async () => {
@@ -41,7 +47,9 @@ describe("resolveAiFields", () => {
       fields: [{ path: "company.scope", aiPrompt: "Draft the scope" }],
       generate: echoGenerator,
     });
-    expect(result).toEqual({ company: { scope: "manually written scope" } });
+    expect(result.values).toEqual({
+      company: { scope: "manually written scope" },
+    });
   });
 
   test("a flat dotted user value wins (fill_template tool shape)", async () => {
@@ -51,7 +59,7 @@ describe("resolveAiFields", () => {
       fields: [{ path: "company.scope", aiPrompt: "Draft the scope" }],
       generate: echoGenerator,
     });
-    expect(result["company.scope"]).toBe("manually written scope");
+    expect(result.values["company.scope"]).toBe("manually written scope");
   });
 
   test("does not disclose source-bound values to the AI generator", async () => {
@@ -71,13 +79,13 @@ describe("resolveAiFields", () => {
       ],
       generate: async ({ values }) => {
         seenValues = values;
-        return "safe draft";
+        return drafted("safe draft");
       },
     });
 
     expect(seenValues).toEqual({ "client.name": "ACME" });
-    expect(result["client.taxId"]).toBe("TAX-ID-SECRET-12345");
-    expect(result["summary"]).toBe("safe draft");
+    expect(result.values["client.taxId"]).toBe("TAX-ID-SECRET-12345");
+    expect(result.values["summary"]).toBe("safe draft");
   });
 
   test("leaves AI fields unfilled when no generator is supplied", async () => {
@@ -86,16 +94,60 @@ describe("resolveAiFields", () => {
       fields,
       generate: undefined,
     });
-    expect(result["scope"]).toBeUndefined();
+    expect(result.values["scope"]).toBeUndefined();
   });
 
-  test("a generator returning undefined leaves the field unfilled", async () => {
+  test("a failed draft leaves the field unfilled and is reported", async () => {
     const result = await resolveAiFields({
       values: {},
       fields,
-      generate: async () => undefined,
+      generate: async () => ({
+        type: "failed",
+        reason: "truncated",
+        message: "The model reached its output limit before finishing.",
+      }),
     });
-    expect("scope" in result).toBe(false);
+
+    expect("scope" in result.values).toBe(false);
+    expect(result.errors).toEqual([
+      {
+        fieldPath: "scope",
+        valuePath: "scope",
+        itemIndex: null,
+        reason: "truncated",
+        message: "The model reached its output limit before finishing.",
+      },
+    ]);
+  });
+
+  test("hands the generator the field's declared max length", async () => {
+    let seen: number | undefined;
+    await resolveAiFields({
+      values: {},
+      fields: [
+        {
+          path: "scope",
+          aiPrompt: "Draft the scope",
+          validation: { maxLength: 4000 },
+        },
+      ],
+      generate: async ({ maxLength }) => {
+        seen = maxLength;
+        return drafted("scope");
+      },
+    });
+
+    expect(seen).toBe(4000);
+  });
+
+  test("a drafted field reports no error", async () => {
+    const result = await resolveAiFields({
+      values: {},
+      fields,
+      generate: echoGenerator,
+    });
+
+    expect(result.errors).toEqual([]);
   });
 
   test("injects the document text only for fields that opted in", async () => {
@@ -105,7 +157,7 @@ describe("resolveAiFields", () => {
       documentText,
     }) => {
       seenByPath.set(fieldPath, documentText);
-      return `DRAFT[${fieldPath}]`;
+      return drafted(`DRAFT[${fieldPath}]`);
     };
     await resolveAiFields({
       values: {},
@@ -129,7 +181,7 @@ describe("resolveAiFields", () => {
       fields: [{ path: "reads", aiPrompt: "Draft", aiSeesDocument: true }],
       generate: async ({ documentText }) => {
         seen = documentText;
-        return "DRAFT";
+        return drafted("DRAFT");
       },
     });
     expect(seen).toBeUndefined();
@@ -146,7 +198,7 @@ describe("resolveAiFields — array-scoped (per-item) fields", () => {
     await resolveAiFields({
       values: { contracts: [{ name: "Alpha" }] },
       fields: [{ path: "contracts.__proto__.draft", aiPrompt: "Draft a note" }],
-      generate: async () => "NOTE",
+      generate: async () => drafted("NOTE"),
     });
 
     expect(Object.hasOwn(Object.prototype, "draft")).toBe(original);
@@ -161,7 +213,7 @@ describe("resolveAiFields — array-scoped (per-item) fields", () => {
       fields: arrayFields,
       generate: async ({ values }) => {
         seenNames.push(String(values["name"]));
-        return `SUMMARY[${String(values["name"])}]`;
+        return drafted(`SUMMARY[${String(values["name"])}]`);
       },
     });
     // One draft per row, grounded in the row object (not the whole data object).
@@ -172,13 +224,13 @@ describe("resolveAiFields — array-scoped (per-item) fields", () => {
       "Beta",
     ]);
     // Value written onto the row object at the remainder path; no flat key.
-    expect(result).toEqual({
+    expect(result.values).toEqual({
       contracts: [
         { name: "Alpha", summary: "SUMMARY[Alpha]" },
         { name: "Beta", summary: "SUMMARY[Beta]" },
       ],
     });
-    expect("contracts.summary" in result).toBe(false);
+    expect("contracts.summary" in result.values).toBe(false);
   });
 
   test("does not disclose source-bound row values to the AI generator", async () => {
@@ -201,12 +253,12 @@ describe("resolveAiFields — array-scoped (per-item) fields", () => {
       ],
       generate: async ({ values }) => {
         seenValues.push(values);
-        return "SAFE SUMMARY";
+        return drafted("SAFE SUMMARY");
       },
     });
 
     expect(seenValues).toEqual([{ name: "Alpha", client: { name: "ACME" } }]);
-    expect(result["contracts"]).toEqual([
+    expect(result.values["contracts"]).toEqual([
       {
         name: "Alpha",
         client: { taxId: "TAX-ID-SECRET-12345", name: "ACME" },
@@ -224,7 +276,7 @@ describe("resolveAiFields — array-scoped (per-item) fields", () => {
         if (item !== undefined) {
           seen.push(item);
         }
-        return "S";
+        return drafted("S");
       },
     });
     expect(seen.map((i) => i.count)).toEqual([3, 3, 3]);
@@ -244,11 +296,11 @@ describe("resolveAiFields — array-scoped (per-item) fields", () => {
       fields: arrayFields,
       generate: async ({ values }) => {
         calls += 1;
-        return `SUMMARY[${String(values["name"])}]`;
+        return drafted(`SUMMARY[${String(values["name"])}]`);
       },
     });
     expect(calls).toBe(2); // Beta + Gamma, not Alpha
-    expect(result).toEqual({
+    expect(result.values).toEqual({
       contracts: [
         { name: "Alpha", summary: "hand written" },
         { name: "Beta", summary: "SUMMARY[Beta]" },
@@ -265,10 +317,12 @@ describe("resolveAiFields — array-scoped (per-item) fields", () => {
         { path: "contracts.summary", aiPrompt: "Summarize" },
       ],
       generate: async ({ fieldPath, item }) =>
-        item === undefined ? `TOP[${fieldPath}]` : `ITEM[${fieldPath}]`,
+        item === undefined
+          ? drafted(`TOP[${fieldPath}]`)
+          : drafted(`ITEM[${fieldPath}]`),
     });
-    expect(result["execSummary"]).toBe("TOP[execSummary]");
-    expect(result["contracts"]).toEqual([
+    expect(result.values["execSummary"]).toBe("TOP[execSummary]");
+    expect(result.values["contracts"]).toEqual([
       { name: "Alpha", summary: "ITEM[contracts.summary]" },
     ]);
   });
@@ -277,9 +331,9 @@ describe("resolveAiFields — array-scoped (per-item) fields", () => {
     const result = await resolveAiFields({
       values: { contracts: [{ name: "Alpha" }] },
       fields: [{ path: "contracts.review.note", aiPrompt: "Draft a note" }],
-      generate: async () => "NOTE",
+      generate: async () => drafted("NOTE"),
     });
-    expect(result["contracts"]).toEqual([
+    expect(result.values["contracts"]).toEqual([
       { name: "Alpha", review: { note: "NOTE" } },
     ]);
   });
@@ -294,11 +348,11 @@ describe("resolveAiFields — array-scoped (per-item) fields", () => {
       fields: [{ path: "groups.items.summary", aiPrompt: "Summarize" }],
       generate: async () => {
         calls += 1;
-        return "S";
+        return drafted("S");
       },
     });
     expect(calls).toBe(0);
-    expect(result).toEqual({
+    expect(result.values).toEqual({
       groups: [{ items: [{ name: "A" }, { name: "B" }] }],
     });
   });
@@ -314,16 +368,81 @@ describe("resolveAiFields — array-scoped (per-item) fields", () => {
         if (name === "Boom") {
           throw new Error("model exploded");
         }
-        return `SUMMARY[${name}]`;
+        return drafted(`SUMMARY[${name}]`);
       },
     });
-    expect(result).toEqual({
+    expect(result.values).toEqual({
       contracts: [
         { name: "Alpha", summary: "SUMMARY[Alpha]" },
         { name: "Boom" }, // failed row left unfilled
         { name: "Gamma", summary: "SUMMARY[Gamma]" },
       ],
     });
+    // The failed row is named by its 1-based position, so a caller can say
+    // which item of the list has no value.
+    expect(result.errors).toEqual([
+      {
+        fieldPath: "contracts.summary",
+        valuePath: "contracts[1].summary",
+        itemIndex: 2,
+        reason: "generation-failed",
+        message:
+          "AI field generation failed. Retry or provide the value yourself.",
+      },
+    ]);
+  });
+
+  test("a row cut at the output ceiling is reported, not written", async () => {
+    const result = await resolveAiFields({
+      values: { contracts: [{ name: "Alpha" }] },
+      fields: arrayFields,
+      generate: async () => ({
+        type: "failed",
+        reason: "truncated",
+        message: "The model reached its output limit before finishing.",
+      }),
+    });
+
+    expect(result.values).toEqual({ contracts: [{ name: "Alpha" }] });
+    expect(result.errors).toEqual([
+      {
+        fieldPath: "contracts.summary",
+        valuePath: "contracts[0].summary",
+        itemIndex: 1,
+        reason: "truncated",
+        message: "The model reached its output limit before finishing.",
+      },
+    ]);
+  });
+
+  test("failed nested array drafts carry their exact value address", async () => {
+    const result = await resolveAiFields({
+      values: {
+        client: {
+          contracts: ["Not an object row", { summary: "Provided" }, {}],
+        },
+      },
+      fields: [
+        {
+          path: "client.contracts.summary",
+          aiPrompt: "Summarize",
+        },
+      ],
+      generate: async () => ({
+        type: "failed",
+        reason: "truncated",
+        message: "Draft truncated",
+      }),
+    });
+    expect(result.errors).toEqual([
+      {
+        fieldPath: "client.contracts.summary",
+        valuePath: "client.contracts[2].summary",
+        itemIndex: 3,
+        reason: "truncated",
+        message: "Draft truncated",
+      },
+    ]);
   });
 
   test("runs rows with bounded concurrency", async () => {
@@ -341,7 +460,7 @@ describe("resolveAiFields — array-scoped (per-item) fields", () => {
         await Promise.resolve();
         await Promise.resolve();
         inFlight -= 1;
-        return "S";
+        return drafted("S");
       },
     });
     // The named pool cap is 4; concurrency must never exceed it.

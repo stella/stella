@@ -327,6 +327,20 @@ export const OWNERSHIP = [
     enforcement: { kind: "none" },
   },
   {
+    id: "template-version-publication",
+    capability: "Publishing stored template DOCX revisions and version history",
+    owner: [
+      "apps/api/src/lib/templates/write-template.ts",
+      "apps/api/src/lib/templates/create-template.ts",
+    ],
+    summary:
+      "Existing-template writes prepare and upload outside transactions, then " +
+      "publish against the exact snapshot with durable cleanup ownership and " +
+      "transactional audit. Initial creation has its own owner. " +
+      "`no-direct-template-version-write` confines version-row mutations to these owners.",
+    enforcement: { kind: "none" },
+  },
+  {
     id: "relative-time",
     capability: "Relative and absolute time formatting in the web client",
     owner: ["apps/web/src/lib/relative-time.ts"],

@@ -293,7 +293,9 @@ describe("resolveLookupFields", () => {
     // Inside `{{#each companies}}` the value arrives as an array of row
     // objects, so the field path `companies.krs` resolves to undefined at the
     // top level; each row's sub-path number must be resolved and rendered in
-    // place (the keyed `full` format written as a flat dotted key on the row).
+    // place. Every format is written as a flat dotted key on the row, and the
+    // first one additionally replaces the submitted number at the row path,
+    // which is what the bare `{{companies.krs}}` marker renders.
     const result = await resolveLookupFields({
       values: {
         companies: [{ krs: "0000592109" }, { krs: "0000592109" }],
@@ -314,16 +316,12 @@ describe("resolveLookupFields", () => {
     });
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.values["companies"]).toEqual([
-        {
-          krs: "Żabka Polska sp. z o.o.",
-          "krs.full": "Żabka Polska sp. z o.o., seat in Poznań",
-        },
-        {
-          krs: "Żabka Polska sp. z o.o.",
-          "krs.full": "Żabka Polska sp. z o.o., seat in Poznań",
-        },
-      ]);
+      const row = {
+        krs: "Żabka Polska sp. z o.o.",
+        "krs.output_1": "Żabka Polska sp. z o.o.",
+        "krs.full": "Żabka Polska sp. z o.o., seat in Poznań",
+      };
+      expect(result.values["companies"]).toEqual([row, row]);
     }
   });
 
@@ -932,5 +930,171 @@ describe("named-format lookup — end-to-end fill", () => {
 
     const result = await fillTemplate(withManifest, values);
     expect(result.unmatchedPlaceholders).toEqual(["company.unknown"]);
+  });
+});
+
+// The documented model: a lookup field's `formats` are named renderings of the
+// ONE resolved hit, each addressed in the DOCX by `{{path.key}}`. The first
+// format is additionally the default for a bare `{{path}}` marker, so a
+// template may address the formats by key only, by the bare marker only, or by
+// both — always from a single registry round trip.
+describe("lookup formats are addressed by their keys", () => {
+  const WRAP = (inner: string) =>
+    `<?xml version="1.0" encoding="UTF-8"?>` +
+    `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">` +
+    `<w:body>${inner}</w:body></w:document>`;
+  const P = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
+
+  const makeDocx = async (documentXml: string): Promise<Buffer> => {
+    const zip = new JSZip();
+    zip.file("word/document.xml", documentXml);
+    zip.file(
+      "[Content_Types].xml",
+      `<?xml version="1.0" encoding="UTF-8"?>` +
+        `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
+        `<Default Extension="xml" ContentType="application/xml"/>` +
+        `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+        `</Types>`,
+    );
+    return Buffer.from(await zip.generateAsync({ type: "nodebuffer" }));
+  };
+
+  const docText = async (buffer: Buffer): Promise<string> => {
+    const zip = await JSZip.loadAsync(buffer);
+    return (await zip.file("word/document.xml")?.async("string")) ?? "";
+  };
+
+  const NAME_RENDER = "Żabka Polska sp. z o.o.";
+  const KRS_RENDER = "KRS 0000592109";
+
+  test("the first format is addressable by its key, not only by the bare marker", async () => {
+    const result = await resolveLookupFields({
+      values: { company: "0000592109" },
+      fields: [
+        {
+          path: "company",
+          lookup: {
+            registry: "krs",
+            formats: [
+              { key: "name", template: "[company name]" },
+              { key: "krs", template: "KRS [registry number]" },
+            ],
+          },
+        },
+      ],
+      resolve: hitResolver(KRS_HIT),
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    // The bare {{company}} marker keeps rendering the first format …
+    expect(result.values["company"]).toBe(NAME_RENDER);
+    // … and {{company.name}} addresses that same format by its key.
+    expect(result.values["company.name"]).toBe(NAME_RENDER);
+    expect(result.values["company.krs"]).toBe(KRS_RENDER);
+  });
+
+  test("one lookup fills a bare marker and a keyed marker together", async () => {
+    const manifest: TemplateManifest = {
+      version: 1,
+      fields: [
+        {
+          path: "company",
+          lookup: {
+            registry: "krs",
+            formats: [
+              { key: "default", template: "[company name]" },
+              { key: "krs", template: "KRS [registry number]" },
+            ],
+          },
+        },
+      ],
+    };
+    const docx = await makeDocx(
+      WRAP([P("{{company}}"), P("{{company.krs}}")].join("")),
+    );
+    const withManifest = await writeManifest(docx, manifest);
+
+    // Both markers are discovered, and the merge keeps `company` as the one
+    // fillable input while its format marker stays a rendering, not a field.
+    const discovered = await discoverTemplate(docx);
+    expect(discovered.placeholders.map((p) => p.name)).toEqual([
+      "company",
+      "company.krs",
+    ]);
+    const resolved = mergeManifestWithDiscovery(manifest, discovered);
+    expect(resolved.map((f) => f.path)).toEqual(["company"]);
+
+    let calls = 0;
+    const values: TemplateData = { company: "0000592109" };
+    const stepError = await applyManifestFillSteps({
+      values,
+      manifest,
+      resolveLookup: async () => {
+        calls += 1;
+        return { type: "hit", hit: KRS_HIT };
+      },
+    });
+    expect(stepError).toBeNull();
+    expect(calls).toBe(1);
+
+    const result = await fillTemplate(withManifest, values);
+    expect(result.unmatchedPlaceholders).toEqual([]);
+    const text = await docText(result.buffer);
+    expect(text).toContain(NAME_RENDER);
+    expect(text).toContain(KRS_RENDER);
+  });
+
+  test("dotted markers alone are filled by one lookup on their parent", async () => {
+    const manifest: TemplateManifest = {
+      version: 1,
+      fields: [
+        {
+          path: "company",
+          lookup: {
+            registry: "krs",
+            formats: [
+              { key: "name", template: "[company name]" },
+              { key: "krs", template: "KRS [registry number]" },
+            ],
+          },
+        },
+      ],
+    };
+    const docx = await makeDocx(
+      WRAP([P("{{company.name}}"), P("{{company.krs}}")].join("")),
+    );
+    const withManifest = await writeManifest(docx, manifest);
+
+    // No bare {{company}} marker: the format keys ARE the markers, and the
+    // lookup root stays the single fillable input.
+    const discovered = await discoverTemplate(docx);
+    expect(discovered.placeholders.map((p) => p.name)).toEqual([
+      "company.krs",
+      "company.name",
+    ]);
+    const resolved = mergeManifestWithDiscovery(manifest, discovered);
+    expect(resolved.map((f) => f.path)).toEqual(["company"]);
+
+    let calls = 0;
+    const values: TemplateData = { company: "0000592109" };
+    const stepError = await applyManifestFillSteps({
+      values,
+      manifest,
+      resolveLookup: async () => {
+        calls += 1;
+        return { type: "hit", hit: KRS_HIT };
+      },
+    });
+    expect(stepError).toBeNull();
+    expect(calls).toBe(1);
+
+    const result = await fillTemplate(withManifest, values);
+    expect(result.unmatchedPlaceholders).toEqual([]);
+    const text = await docText(result.buffer);
+    expect(text).toContain(NAME_RENDER);
+    expect(text).toContain(KRS_RENDER);
   });
 });

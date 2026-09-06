@@ -1,6 +1,52 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import { runLeadingSingleFlight } from "./template-form.logic";
+import {
+  readAiFieldErrorPaths,
+  runLeadingSingleFlight,
+} from "./template-form.logic";
+
+describe("download AI diagnostics", () => {
+  test("preserves field paths across URI-encoded JSON, including multilingual paths", () => {
+    const paths = ["pełnomocnictwo.zakres", "مهمة", "scope,english"];
+    const headers = new Headers({
+      "X-Ai-Field-Errors": encodeURIComponent(
+        JSON.stringify(
+          paths.map((fieldPath) => ({ fieldPath, error: "failed" })),
+        ),
+      ),
+    });
+    const result = readAiFieldErrorPaths(headers);
+    expect(Result.isOk(result)).toBe(true);
+    if (Result.isOk(result)) {
+      expect(result.value).toEqual(paths);
+    }
+  });
+
+  test("an absent diagnostic header means no failed drafts", () => {
+    const result = readAiFieldErrorPaths(new Headers());
+    expect(Result.isOk(result) && result.value).toEqual([]);
+  });
+
+  test.each([
+    "%",
+    "not-json",
+    "null",
+    "{}",
+    '[{"fieldPath":1}]',
+    '[{"fieldPath":""}]',
+  ])("rejects malformed diagnostics: %s", (encoded) => {
+    expect(
+      Result.isError(
+        readAiFieldErrorPaths(
+          new Headers({
+            "X-Ai-Field-Errors": encoded,
+          }),
+        ),
+      ),
+    ).toBe(true);
+  });
+});
 
 describe("runLeadingSingleFlight", () => {
   test("coalesces every concurrent caller into one operation", async () => {
