@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo } from "react";
+import { lazy, Suspense, useDeferredValue, useMemo } from "react";
 
 import {
   useSuspenseInfiniteQuery,
@@ -106,7 +106,10 @@ const FlatTableLayout = ({ workspaceId, view }: TableLayoutProps) => {
 
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
   const columns = useTableColumns({ properties, view });
-  const find = useTableFind({ properties, view });
+  // Deferred alongside the window key (`useListPage` defers its own), so the
+  // marks and the empty state describe the rows on screen, not the term whose
+  // fetch is still in flight.
+  const find = useDeferredValue(useTableFind({ properties, view }));
   const fieldIds = useMemo(
     () =>
       visibleEntityFieldIds({

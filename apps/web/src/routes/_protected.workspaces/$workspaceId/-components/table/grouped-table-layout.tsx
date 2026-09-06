@@ -1,4 +1,11 @@
-import { type RefObject, useCallback, useMemo, useRef, useState } from "react";
+import {
+  type RefObject,
+  useCallback,
+  useDeferredValue,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import {
   useInfiniteQuery,
@@ -146,7 +153,9 @@ export const GroupedTableLayout = ({
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
   const tableState = useTableState({ workspaceId, view });
   const columns = useTableColumns({ properties, view });
-  const find = useTableFind({ properties, view });
+  // Deferred alongside the group keys (each section defers its own), so the
+  // marks describe the rows on screen, not a term still being fetched.
+  const find = useDeferredValue(useTableFind({ properties, view }));
   // One shared scroller for the whole grouped view: every group's table flows
   // inside it (no nested scroll boxes), so the sticky group headers stack
   // correctly and a single horizontal scroll keeps every group aligned.
