@@ -521,8 +521,8 @@ const SAVE_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
     "file or strip parts out to fit. {{field}} markers become fillable. For configuration, pass " +
     "template_id and fields without a document; markers stay intact. Read " +
     `${TEMPLATE_MARKER_REFERENCE_URI} before authoring a DOCX and ` +
-    `${TEMPLATE_FIELD_REFERENCE_URI} before configuring fields. Returns the ` +
-    "created or updated fields plus marker-authoring warnings.",
+    `${TEMPLATE_FIELD_REFERENCE_URI} before configuring fields. Returns id ` +
+    "and field count on creation, updated fields on configuration, and marker-authoring warnings.",
   inputSchema: saveTemplateArgsSchema,
   jsonSchemaProjectionWaiver: {
     ignoreActions: ["check", "finite", "partial_check"],
@@ -592,9 +592,9 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
       "for base64 bytes. Call list_templates first, then pass its field paths " +
       "in values. Registry, composite, formula, and AI fields resolve " +
       "automatically. Unknown keys fail unless allow_unused_values is true. " +
-      "Missing required values and unfilled placeholders fail with their exact " +
-      "paths unless completion_mode is allow_partial. Never guess required " +
-      "values. Output includes completionStatus.",
+      "Missing required values always fail. Unfilled placeholders or failed AI " +
+      "drafts fail unless completion_mode is allow_partial. Errors name exact " +
+      "paths; never guess required values. Output includes completionStatus.",
     inputSchema: {
       type: "object",
       properties: {
@@ -642,9 +642,9 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
       "Fill a registered template and persist its DOCX in a matter. Use " +
       "create_document (optionally with parent_id) or create_version with " +
       "entity_id. Call list_templates for field paths; never guess required " +
-      "values. Missing required values and unfilled placeholders fail before " +
-      "writes unless completion_mode is allow_partial. Returns entity and " +
-      "version ids plus unmatched placeholders or unused values.",
+      "values. Missing required values always fail. Unfilled placeholders or " +
+      "failed AI drafts stop writes unless completion_mode is allow_partial. " +
+      "Returns document/version ids and fill diagnostics.",
     inputSchema: {
       type: "object",
       properties: {
