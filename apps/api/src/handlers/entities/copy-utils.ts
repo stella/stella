@@ -37,6 +37,7 @@ import type {
 import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 
 export type EntityFieldSnapshot = {
+  id: SafeId<"field">;
   propertyId: SafeId<"property">;
   content: FieldContent;
 };
@@ -53,6 +54,7 @@ export type EntitySnapshot = {
 };
 
 type WritableEntityFieldSnapshot = {
+  id: SafeId<"field">;
   propertyId: SafeId<"property">;
   content: WritableFieldContent;
 };
@@ -77,6 +79,13 @@ export type CopiedFileField = {
   fieldId: SafeId<"field">;
   mimeType: string;
   encrypted: boolean;
+};
+
+export type CopiedField = {
+  sourceEntityId: SafeId<"entity">;
+  sourceFieldId: SafeId<"field">;
+  entityId: SafeId<"entity">;
+  fieldId: SafeId<"field">;
 };
 
 export type FileMapping = {
@@ -487,6 +496,7 @@ export type CopyEntitiesResult = {
   /** Newly created runs to hand to the queue after this transaction commits. */
   nativeExtractionRunIds: SafeId<"documentProcessingRun">[];
   copiedEntities: CopiedEntity[];
+  copiedFields: CopiedField[];
   /** File fields that may need PDF derivative generation. */
   fileFields: CopiedFileField[];
 };
@@ -614,6 +624,7 @@ export const copyEntities = async ({
 
   const idMap = new Map<SafeId<"entity">, SafeId<"entity">>();
   const copiedEntities: CopiedEntity[] = [];
+  const copiedFields: CopiedField[] = [];
   // Split by which mechanism owns each copy's search projection, so every
   // copy is covered exactly once: a durable extraction run indexes the
   // documents it extracts, and a dirty mark committed with this transaction
@@ -707,6 +718,13 @@ export const copyEntities = async ({
 
     const fieldInserts = source.currentVersion.fields.map((field) => {
       const fieldId = createSafeId<"field">();
+
+      copiedFields.push({
+        sourceEntityId: source.id,
+        sourceFieldId: field.id,
+        entityId: newEntityId,
+        fieldId,
+      });
 
       // Track file fields for PDF derivative enqueueing
       if (field.content.type === "file") {
@@ -809,6 +827,7 @@ export const copyEntities = async ({
     entityId: rootEntityId,
     entityIdsBySearchIndexOwner: copiedEntityIds,
     copiedEntities,
+    copiedFields,
     fileFields,
     nativeExtractionRunIds,
   };

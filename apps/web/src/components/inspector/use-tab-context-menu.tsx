@@ -1,3 +1,5 @@
+import { useRef } from "react";
+
 import {
   ListXIcon,
   Maximize2Icon,
@@ -11,6 +13,7 @@ import { useTranslations } from "use-intl";
 import { MenuItem, MenuSeparator } from "@stll/ui/menu";
 
 import { requestInspectorRename } from "@/components/inspector/inspector-actions";
+import { useInspectorGroupMenu } from "@/components/inspector/inspector-group-controls";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { useAnchoredMenu } from "@/components/inspector/use-anchored-menu";
 
@@ -42,8 +45,11 @@ export const useTabContextMenu = ({
   const setMinimized = useInspectorTabsStore((s) => s.setMinimized);
   const tabsCount = useInspectorTabsStore((s) => s.tabs.length);
   const hasOthers = tabsCount > 1;
+  const returnFocus = useRef<HTMLElement | null>(null);
+  const groupMenu = useInspectorGroupMenu(tabId, returnFocus);
 
-  return useAnchoredMenu({
+  const menu = useAnchoredMenu({
+    returnFocus,
     children: (
       <>
         <MenuItem onClick={() => setMinimized(true)}>
@@ -56,6 +62,8 @@ export const useTabContextMenu = ({
             {t("chat.moveToMain")}
           </MenuItem>
         )}
+        <MenuSeparator />
+        {groupMenu.items}
         <MenuSeparator />
         {canRename && (
           <MenuItem onClick={() => requestInspectorRename(tabId)}>
@@ -82,4 +90,13 @@ export const useTabContextMenu = ({
       </>
     ),
   });
+  return {
+    ...menu,
+    element: (
+      <>
+        {menu.element}
+        {groupMenu.dialogs}
+      </>
+    ),
+  };
 };

@@ -2525,6 +2525,28 @@
       "anonymization": "Anonimizācija",
       "previewInFullViewToast": "Priekšskatījums šeit ir galvenais skats. Noklikšķiniet uz minimizēšanas pogas, lai redzētu to līdzās metadatiem."
     },
+    "groups": {
+      "addContext": "Pievienot kontekstu",
+      "chatMoveDescription": "{chatName} tiks grupēta zem {matterName}. Pievienojiet lietu tērzēšanas kontekstam, lai tā varētu izmantot lietas failus un informāciju.",
+      "chatMoveTitle": "Pievienot šo lietu tērzēšanai?",
+      "collapse": "Sakļaut {groupName}",
+      "color": "Grupas krāsa",
+      "colorOption": "Krāsa {number}",
+      "copyIntoMatter": "Kopēt uz lietu",
+      "expand": "Izvērst {groupName}",
+      "fileMoveDescription": "{fileName} pieder lietai {sourceMatterName}. Kopējiet to uz {matterName} vai paturiet esošo failu kā atsauci.",
+      "fileMoveTitle": "Kopēt šo failu uz lietu?",
+      "groupOnly": "Tikai grupēt",
+      "keepReference": "Paturēt kā atsauci",
+      "moveToGroup": "Pārvietot uz grupu",
+      "name": "Grupas nosaukums",
+      "newGroup": "Jauna grupa",
+      "remove": "Atgrupēt cilnes",
+      "rename": "Pārdēvēt grupu",
+      "saveFailed": "Šajā pārlūkprogrammā neizdevās saglabāt ciļņu grupas.",
+      "tabCount": "{count, plural, zero {# ciļņu} one {# cilne} other {# cilnes}}",
+      "ungroup": "Noņemt no grupas"
+    },
     "hidePane": "Slēpt paneli",
     "matterPicker": {
       "allMatters": "Visas lietas",

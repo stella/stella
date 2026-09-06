@@ -134,6 +134,7 @@ const subtree = ({
     currentVersion: {
       fields: [
         {
+          id: toSafeId<"field">("field_source_document"),
           propertyId,
           content: {
             type: "file",

@@ -35,7 +35,13 @@ describe("remapFileIds", () => {
     const sourceEntities: EntitySnapshot[] = [
       {
         currentVersion: {
-          fields: [{ content: sharedSourceFile, propertyId: filePropertyId }],
+          fields: [
+            {
+              id: toSafeId<"field">("field_1"),
+              content: sharedSourceFile,
+              propertyId: filePropertyId,
+            },
+          ],
         },
         id: firstEntityId,
         kind: "document",
@@ -44,7 +50,13 @@ describe("remapFileIds", () => {
       },
       {
         currentVersion: {
-          fields: [{ content: sharedSourceFile, propertyId: filePropertyId }],
+          fields: [
+            {
+              id: toSafeId<"field">("field_2"),
+              content: sharedSourceFile,
+              propertyId: filePropertyId,
+            },
+          ],
         },
         id: secondEntityId,
         kind: "document",

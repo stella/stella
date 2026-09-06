@@ -2525,6 +2525,28 @@
       "anonymization": "Anonimizálás",
       "previewInFullViewToast": "Az előnézet itt a fő nézet. Kattintson a kis méretre gombra, hogy a metaadatok mellett jelenjen meg."
     },
+    "groups": {
+      "addContext": "Kontextus hozzáadása",
+      "chatMoveDescription": "A(z) {chatName} a(z) {matterName} ügy alá kerül. Adja hozzá az ügyet a csevegés kontextusához, hogy használhassa annak fájljait és adatait.",
+      "chatMoveTitle": "Hozzáadja ezt az ügyet a csevegéshez?",
+      "collapse": "{groupName} összecsukása",
+      "color": "Csoport színe",
+      "colorOption": "{number}. szín",
+      "copyIntoMatter": "Másolás az ügybe",
+      "expand": "{groupName} kibontása",
+      "fileMoveDescription": "A(z) {fileName} a(z) {sourceMatterName} ügyhöz tartozik. Másolja a(z) {matterName} ügybe, vagy tartsa meg a meglévő fájlt hivatkozásként.",
+      "fileMoveTitle": "Bemásolja ezt a fájlt az ügybe?",
+      "groupOnly": "Csak csoportosítás",
+      "keepReference": "Megtartás hivatkozásként",
+      "moveToGroup": "Áthelyezés csoportba",
+      "name": "Csoport neve",
+      "newGroup": "Új csoport",
+      "remove": "Lapok csoportosításának megszüntetése",
+      "rename": "Csoport átnevezése",
+      "saveFailed": "A lapcsoportokat nem sikerült menteni ebben a böngészőben.",
+      "tabCount": "{count, plural, one {# lap} other {# lap}}",
+      "ungroup": "Eltávolítás a csoportból"
+    },
     "hidePane": "Panel elrejtése",
     "matterPicker": {
       "allMatters": "Összes ügy",

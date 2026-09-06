@@ -2525,6 +2525,28 @@
       "anonymization": "إخفاء الهوية",
       "previewInFullViewToast": "المعاينة هي العرض الرئيسي هنا. انقر زر التصغير لرؤيتها إلى جانب البيانات الوصفية."
     },
+    "groups": {
+      "addContext": "إضافة سياق",
+      "chatMoveDescription": "سيتم تجميع {chatName} ضمن {matterName}. أضف الملف القانوني إلى سياق المحادثة لتتمكن من استخدام ملفاته ومعلوماته.",
+      "chatMoveTitle": "إضافة هذا الملف القانوني إلى المحادثة؟",
+      "collapse": "طي {groupName}",
+      "color": "لون المجموعة",
+      "colorOption": "اللون {number}",
+      "copyIntoMatter": "نسخ إلى الملف القانوني",
+      "expand": "توسيع {groupName}",
+      "fileMoveDescription": "ينتمي {fileName} إلى {sourceMatterName}. انسخه إلى {matterName} أو احتفظ بالملف الحالي كمرجع.",
+      "fileMoveTitle": "نسخ هذا الملف إلى الملف القانوني؟",
+      "groupOnly": "تجميع فقط",
+      "keepReference": "الاحتفاظ كمرجع",
+      "moveToGroup": "نقل إلى مجموعة",
+      "name": "اسم المجموعة",
+      "newGroup": "مجموعة جديدة",
+      "remove": "إلغاء تجميع علامات التبويب",
+      "rename": "إعادة تسمية المجموعة",
+      "saveFailed": "تعذّر حفظ مجموعات علامات التبويب في هذا المتصفح.",
+      "tabCount": "{count, plural, zero {لا علامات تبويب} one {علامة تبويب واحدة} two {علامتا تبويب} few {# علامات تبويب} many {# علامة تبويب} other {# علامة تبويب}}",
+      "ungroup": "إزالة من المجموعة"
+    },
     "hidePane": "إخفاء اللوحة",
     "matterPicker": {
       "allMatters": "جميع الملفات القانونية",

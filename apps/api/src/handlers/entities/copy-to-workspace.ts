@@ -322,6 +322,7 @@ const copyToWorkspaceHandler = async function* ({
               // one field per property bounds the read.
               fields: {
                 columns: {
+                  id: true,
                   propertyId: true,
                   content: true,
                 },
@@ -370,6 +371,7 @@ const copyToWorkspaceHandler = async function* ({
               with: {
                 fields: {
                   columns: {
+                    id: true,
                     propertyId: true,
                     content: true,
                   },
@@ -627,6 +629,7 @@ const copyToWorkspaceHandler = async function* ({
   return Result.ok({
     entityId: txResult.entityId,
     entityIds: txResult.copiedEntities.map(({ entityId }) => entityId),
+    fields: txResult.copiedFields,
   });
 };
 

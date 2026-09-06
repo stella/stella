@@ -119,6 +119,10 @@ export type InspectorTab =
   | SkillResourceTab
   | GenericTab;
 
+export type InspectorTabGroup =
+  | { id: string; type: "matter"; workspaceId: string }
+  | { id: string; type: "custom"; name: string; color: string };
+
 /** A tab shape `openTabs` can materialize: the kinds a workspace entity maps to. */
 export type InspectorOpenTarget = FileTab | TaskTab;
 
@@ -145,6 +149,9 @@ export type AnonymizationSelection = {
 
 export type InspectorTabsState = {
   tabs: InspectorTab[];
+  groups: InspectorTabGroup[];
+  groupAssignments: Record<string, string | null>;
+  collapsedGroupIds: string[];
   activeId: string | null;
   activationSeq: number;
   flashTabId: string | null;
@@ -218,6 +225,12 @@ export type OpenTabsArgs = {
 };
 
 export type InspectorTabsActions = {
+  createGroup: (args: { name: string; color: string }) => string;
+  updateGroup: (args: { id: string; name: string; color: string }) => void;
+  removeGroup: (id: string) => void;
+  setTabGroup: (tabId: string, groupId: string | null) => void;
+  toggleGroupCollapsed: (id: string) => void;
+  expandGroup: (id: string) => void;
   openFile: (tab: Omit<FileTab, "type">) => void;
   openFileForEntity: (tab: Omit<FileTab, "type">) => void;
   openTask: (args: {

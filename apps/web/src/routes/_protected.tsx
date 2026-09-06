@@ -1,4 +1,11 @@
-import { lazy, Suspense, useCallback, useRef, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import type { MouseEvent } from "react";
 
 import { useHotkey } from "@tanstack/react-hotkeys";
@@ -36,6 +43,9 @@ import { cn } from "@stll/ui/utils";
 import { WorkspaceEndRail } from "@stll/ui/workspace-shell";
 import { WorkspaceFrame } from "@stll/workspace-ui/workspace-frame";
 
+import "@/features/case-law/case-decision-inspector-registration";
+import "@/features/inbox/signal-inspector-registration";
+import "@/features/statutes/provision-inspector-registration";
 import { ApiVersionMismatchBanner } from "@/components/api-version-mismatch-banner";
 import { AppSidebar } from "@/components/app-sidebar";
 import { AppBreadcrumbs } from "@/components/breadcrumbs/app-breadcrumbs";
@@ -345,7 +355,8 @@ function ProtectedComponent() {
     viewportWidth,
   });
 
-  useExternalSyncEffect(
+  // Restore the authenticated tab scope before any previous scope can paint.
+  useLayoutEffect(
     () =>
       initializeInspectorTabBroadcast({
         organizationId: inspectorBroadcastOrganizationId,
@@ -386,7 +397,10 @@ function ProtectedComponent() {
   });
 
   return (
-    <AuthenticatedUserProvider user={analyticsUser}>
+    <AuthenticatedUserProvider
+      key={`${inspectorBroadcastOrganizationId}:${inspectorBroadcastUserId}`}
+      user={analyticsUser}
+    >
       <SidebarProvider forceCollapsed={forceSidebarCollapsed}>
         <SidebarToggleHotkey />
         <ChatMentionProviders>

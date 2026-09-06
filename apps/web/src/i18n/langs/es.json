@@ -2525,6 +2525,28 @@
       "anonymization": "Anonimización",
       "previewInFullViewToast": "Aquí la vista previa es la vista principal. Haz clic en el botón de minimizar para verla junto a los metadatos."
     },
+    "groups": {
+      "addContext": "Añadir contexto",
+      "chatMoveDescription": "{chatName} se agrupará bajo {matterName}. Añade el asunto al contexto del chat para que pueda usar sus archivos e información.",
+      "chatMoveTitle": "¿Añadir este asunto al chat?",
+      "collapse": "Contraer {groupName}",
+      "color": "Color del grupo",
+      "colorOption": "Color n.º {number}",
+      "copyIntoMatter": "Copiar al asunto",
+      "expand": "Expandir {groupName}",
+      "fileMoveDescription": "{fileName} pertenece a {sourceMatterName}. Cópialo en {matterName} o conserva el archivo existente como referencia.",
+      "fileMoveTitle": "¿Copiar este archivo al asunto?",
+      "groupOnly": "Solo agrupar",
+      "keepReference": "Conservar como referencia",
+      "moveToGroup": "Mover al grupo",
+      "name": "Nombre del grupo",
+      "newGroup": "Nuevo grupo",
+      "remove": "Desagrupar pestañas",
+      "rename": "Cambiar nombre del grupo",
+      "saveFailed": "No se pudieron guardar los grupos de pestañas en este navegador.",
+      "tabCount": "{count, plural, one {# pestaña} other {# pestañas}}",
+      "ungroup": "Quitar del grupo"
+    },
     "hidePane": "Ocultar panel",
     "matterPicker": {
       "allMatters": "Todos los asuntos",

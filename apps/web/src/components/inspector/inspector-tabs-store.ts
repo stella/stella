@@ -14,6 +14,11 @@ import {
   isGenericInspectorTab,
 } from "@/components/inspector/inspector-tabs-slice";
 
+export {
+  getInspectorTabGroupId,
+  getInspectorTabMatterId,
+} from "@/components/inspector/inspector-groups.logic";
+
 export type {
   ChatTab,
   CloseTabOptions,
@@ -23,6 +28,7 @@ export type {
   FileTab,
   GenericTab,
   InspectorTab,
+  InspectorTabGroup,
   InspectorTabsActions,
   InspectorTabsState,
   InspectorTabsStore,

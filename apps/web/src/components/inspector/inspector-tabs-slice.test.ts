@@ -64,6 +64,7 @@ describe("closing deleted inspector entities", () => {
       const state = {
         tabs,
         activeId: "field-1",
+        groupAssignments: {},
         reviveSuggestion: tabs.at(-1) ?? null,
       };
 
