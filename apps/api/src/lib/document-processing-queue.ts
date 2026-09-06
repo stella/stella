@@ -98,6 +98,7 @@ import {
   recognizePdfTextLocally,
 } from "@/api/lib/ocr-local/recognize-local";
 import { createOcrSearchablePdf } from "@/api/lib/ocr-searchable-pdf";
+import { isTransientPgConnectionError } from "@/api/lib/pg-error";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import {
   createBullMqConnection,
@@ -2804,6 +2805,40 @@ export const runDocumentProcessingReconciliationPhases = async ({
   return results;
 };
 
+/**
+ * Grade a phase's failure: WARN on a connection the tick lost, capture and log
+ * at ERROR for everything else.
+ *
+ * A phase reaches both stores, and either can hand back a connection that is
+ * gone between one tick and the next: Redis rejects the first command after an
+ * idle window, and Postgres refuses or terminates a connection across a
+ * restart, a failover, or recovery. Neither says anything about the work the
+ * phase was doing. Every phase re-reads its own backlog from scratch and the
+ * tick above already reports a failed phase as work left behind, so the next
+ * one repeats it against a live connection. Capturing either would report a
+ * healthy loop's own retry as a defect.
+ */
+export const handleDocumentProcessingReconcilePhaseFailure = (
+  error: unknown,
+  phase: ReconciliationPhaseName,
+): void => {
+  if (
+    isTransientRedisConnectionError(error) ||
+    isTransientPgConnectionError(error)
+  ) {
+    logger.warn("document_processing.reconcile_phase_disrupted", {
+      "error.type": errorTag(error),
+      phase,
+    });
+    return;
+  }
+  captureError(error, { phase });
+  logger.error("document_processing.reconcile_phase_failed", {
+    ...errorSystemFields(error),
+    phase,
+  });
+};
+
 const reconcileDocumentProcessing = async ({
   onComplete,
 }: {
@@ -2816,23 +2851,7 @@ const reconcileDocumentProcessing = async ({
     await reconciliationProgress.runTick(async () => {
       const results = await runDocumentProcessingReconciliationPhases({
         phases: DOCUMENT_PROCESSING_RECONCILIATION_PHASES,
-        onPhaseError: (error, phase) => {
-          // A dropped Redis socket rejects the first command after an idle
-          // window; the next 30s tick retries the phase, so the transient
-          // stays a structured log instead of an exception.
-          if (isTransientRedisConnectionError(error)) {
-            logger.warn("document_processing.reconcile_phase_disrupted", {
-              "error.type": errorTag(error),
-              phase,
-            });
-            return;
-          }
-          captureError(error, { phase });
-          logger.error("document_processing.reconcile_phase_failed", {
-            ...errorSystemFields(error),
-            phase,
-          });
-        },
+        onPhaseError: handleDocumentProcessingReconcilePhaseFailure,
       });
       if (
         RECONCILIATION_PHASE_NAMES.some((phase) => results[phase].count > 0)
@@ -2856,7 +2875,11 @@ const reconcileDocumentProcessing = async ({
     // The tick never reported, so the backlog stays unknown and
     // `runTick` leaves reconciliation marked unfinished. Same rule the
     // idle check applies to a failed sample: never exit on uncertainty.
-    if (isTransientRedisConnectionError(error)) {
+    // Both stores are graded here for the same reason they are per phase.
+    if (
+      isTransientRedisConnectionError(error) ||
+      isTransientPgConnectionError(error)
+    ) {
       logger.warn("document_processing.reconcile_disrupted", {
         "error.type": errorTag(error),
       });

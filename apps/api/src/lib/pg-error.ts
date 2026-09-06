@@ -166,8 +166,32 @@ const CONNECTION_LIFECYCLE_CODES: ReadonlySet<string> = new Set(
 );
 
 /**
- * True when `error`, or anything in its `.cause` chain, is a driver error
- * reporting a lost or retired connection: the work is retryable as-is.
+ * SQLSTATEs Postgres answers with when the backend can speak the protocol but
+ * will not serve the connection: it is still starting up or in recovery
+ * (`57P03`), an operator shut it down (`57P01`), or it is tearing down after
+ * another backend crashed (`57P02`). The server refuses or terminates the
+ * connection rather than rejecting the query, so the work never ran and is
+ * retryable as-is, exactly like the driver codes above.
+ *
+ * These are the same conditions as `PG_DRIVER_ERROR`, seen from the other side
+ * of a completed handshake. A restart surfaces as a driver code while the
+ * socket dies before the startup packet is answered, and as one of these once
+ * the backend is far enough along to reply, so neither set covers the
+ * condition without the other.
+ *
+ * `57014` (`query_canceled`) shares the class and is deliberately absent: it
+ * reports a statement the server cancelled, which says nothing about the
+ * connection and carries its own replay semantics. It lives in `PG_ERROR`.
+ */
+const CONNECTION_LIFECYCLE_SQL_STATES: ReadonlySet<string> = new Set([
+  "57P01",
+  "57P02",
+  "57P03",
+]);
+
+/**
+ * True when `error`, or anything in its `.cause` chain, reports a connection
+ * that was lost, retired, or refused: the work is retryable as-is.
  *
  * Reads the driver's `code` rather than the message. A `PostgresError`'s
  * message is the failure alone ("Idle timeout reached after 2m") and never
@@ -175,11 +199,26 @@ const CONNECTION_LIFECYCLE_CODES: ReadonlySet<string> = new Set(
  * the wording is also the driver's to change between releases, while the code
  * is its stable contract. Walks the chain because a failure raised inside
  * prepared-query execution arrives wrapped in a `DrizzleQueryError`.
+ *
+ * A node matches on either contract, because the two describe the same
+ * conditions at different points of the handshake: the driver's own `code`
+ * when the connection failed below the protocol, and the server's SQLSTATE
+ * when the backend answered and declined to serve it. Reading only `code`
+ * misses the latter entirely, since the driver files every server error under
+ * the one generic `code` and puts the SQLSTATE in `errno`. `sqlStateOf` is the
+ * same reader `pgErrorFields` uses, so a SQLSTATE the observability fields can
+ * see is one this predicate can match.
  */
 export const isTransientPgConnectionError = (error: unknown): boolean =>
   causeChain(error).some((node) => {
     const code = readNonEmptyString(node, "code");
-    return code !== undefined && CONNECTION_LIFECYCLE_CODES.has(code);
+    if (code !== undefined && CONNECTION_LIFECYCLE_CODES.has(code)) {
+      return true;
+    }
+    const sqlState = sqlStateOf(node);
+    return (
+      sqlState !== undefined && CONNECTION_LIFECYCLE_SQL_STATES.has(sqlState)
+    );
   });
 
 export const PG_ERROR = {
