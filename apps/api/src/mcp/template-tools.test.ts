@@ -816,16 +816,19 @@ describe("MCP template tools", () => {
       toolName: "fill_template",
     });
 
-    const payload = parseToolPayload(result) as {
-      paragraphs: string[];
-      truncated: boolean;
-    };
-    const [first] = payload.paragraphs;
-    expect(payload.paragraphs).toHaveLength(1);
-    expect(first?.length).toBeGreaterThan(0);
-    expect(first?.length).toBeLessThan(oversized.length);
-    expect(first).toBe("x".repeat(first?.length ?? 0));
-    expect(payload.truncated).toBe(true);
+    const payload = parseToolPayload(result);
+    if (!isRecord(payload) || !Array.isArray(payload["paragraphs"])) {
+      throw new Error("Expected a paragraph preview");
+    }
+    const first = payload["paragraphs"].at(0);
+    if (typeof first !== "string") {
+      throw new Error("Expected a text paragraph");
+    }
+    expect(payload["paragraphs"]).toHaveLength(1);
+    expect(first.length).toBeGreaterThan(0);
+    expect(first.length).toBeLessThan(oversized.length);
+    expect(first).toBe("x".repeat(first.length));
+    expect(payload["truncated"]).toBe(true);
   });
 
   test("fill_template rejects unmatched placeholders by default", async () => {
@@ -1421,8 +1424,12 @@ describe("MCP template tools", () => {
       toolName: "save_filled_template",
     });
 
-    const fingerprinted = fingerprintTemplatePersistenceRequestMock.mock
-      .calls[0]?.[0] as Record<string, unknown>;
+    const fingerprinted = fingerprintTemplatePersistenceRequestMock.mock.calls
+      .at(0)
+      ?.at(0);
+    if (!isRecord(fingerprinted)) {
+      throw new Error("Expected fingerprinted request arguments");
+    }
     // Both directions: every argument but the key is fingerprinted, and the
     // key itself never is (it is the lookup, not part of the identity).
     expect(
