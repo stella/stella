@@ -42,27 +42,6 @@ minimumReleaseAgeExcludes = [
   # rules used by Ultracite 7.10.7. Keep every native binding in the same
   # temporary exception so Bun cannot silently omit the executable.
   # Remove these exceptions after 2026-09-06T15:22:06.857Z.
-  "@oxlint/binding-android-arm-eabi", # quarantine-expires: 2026-09-06T15:22:06.857Z
-  "@oxlint/binding-android-arm64", # quarantine-expires: 2026-09-06T15:22:06.857Z
-  "@oxlint/binding-darwin-arm64", # quarantine-expires: 2026-09-06T15:22:06.857Z
-  "@oxlint/binding-darwin-x64", # quarantine-expires: 2026-09-06T15:22:06.857Z
-  "@oxlint/binding-freebsd-x64", # quarantine-expires: 2026-09-06T15:22:06.857Z
-  "@oxlint/binding-linux-arm-gnueabihf", # quarantine-expires: 2026-09-06T15:22:06.857Z
-  "@oxlint/binding-linux-arm-musleabihf", # quarantine-expires: 2026-09-06T15:22:06.857Z
-  "@oxlint/binding-linux-arm64-gnu", # quarantine-expires: 2026-09-06T15:22:06.857Z
-  "@oxlint/binding-linux-arm64-musl", # quarantine-expires: 2026-09-06T15:22:06.857Z
-  "@oxlint/binding-linux-ppc64-gnu", # quarantine-expires: 2026-09-06T15:22:06.857Z
-  "@oxlint/binding-linux-riscv64-gnu", # quarantine-expires: 2026-09-06T15:22:06.857Z
-  "@oxlint/binding-linux-riscv64-musl", # quarantine-expires: 2026-09-06T15:22:06.857Z
-  "@oxlint/binding-linux-s390x-gnu", # quarantine-expires: 2026-09-06T15:22:06.857Z
-  "@oxlint/binding-linux-x64-gnu", # quarantine-expires: 2026-09-06T15:22:06.857Z
-  "@oxlint/binding-linux-x64-musl", # quarantine-expires: 2026-09-06T15:22:06.857Z
-  "@oxlint/binding-openharmony-arm64", # quarantine-expires: 2026-09-06T15:22:06.857Z
-  "@oxlint/binding-win32-arm64-msvc", # quarantine-expires: 2026-09-06T15:22:06.857Z
-  "@oxlint/binding-win32-ia32-msvc", # quarantine-expires: 2026-09-06T15:22:06.857Z
-  "@oxlint/binding-win32-x64-msvc", # quarantine-expires: 2026-09-06T15:22:06.857Z
-  "@oxlint/plugins", # quarantine-expires: 2026-09-06T15:22:06.857Z
-  "oxlint", # quarantine-expires: 2026-09-06T15:22:06.857Z
   "bun-types", # quarantine-expires: 2026-09-10T06:00:22.737Z
   "@stll/oxlint-config", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
   "@stll/typescript-config", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
