@@ -1,3 +1,5 @@
+import { hashKey } from "@tanstack/react-query";
+
 import type { EntityFind } from "@stll/api-contract";
 
 import type { ConditionNode, EntityKind, WorkspaceProperty } from "@/lib/types";
@@ -257,6 +259,53 @@ export const entitiesKeys = {
     "count",
   ],
 };
+
+/** The shape every kanban-group key ends in; any object may be read as it. */
+const isKeyParams = (
+  value: unknown,
+): value is {
+  find?: unknown;
+  groupByPropertyId?: unknown;
+  groupValue?: unknown;
+} => typeof value === "object" && value !== null;
+
+/**
+ * What a kanban-group key says about which rows it holds, as opposed to how
+ * many of them and which of their cells: the workspace, the group, and the
+ * find. Null for a key that is not a kanban-group key at all.
+ */
+const kanbanRowsIdentity = (queryKey: readonly unknown[]): string | null => {
+  const [root, workspaceId, kind, params] = queryKey;
+  if (root !== "entities" || kind !== "kanban-group" || !isKeyParams(params)) {
+    return null;
+  }
+  return hashKey([
+    workspaceId,
+    params.groupByPropertyId,
+    params.groupValue,
+    params.find,
+  ]);
+};
+
+/**
+ * Whether a group's previous rows may stand in for `key`'s while they load.
+ *
+ * They may while columns, filters, sorts or paging change: the rows already
+ * exist, and dropping every group to skeleton for a column toggle is the
+ * flicker `placeholderData` is there to prevent. They may not across a find.
+ * The group counts answer first and carry the new term, and the marks over
+ * the rows already name it, so the previous term's rows would render under
+ * the new term's counts and highlights until their replacement arrived. Rows
+ * of another workspace or another group are not these rows either.
+ */
+export const keepsRowsAcrossFind = (
+  previousKey: readonly unknown[] | undefined,
+  key: KanbanGroupKey,
+): boolean =>
+  previousKey !== undefined &&
+  kanbanRowsIdentity(previousKey) !== null &&
+  kanbanRowsIdentity(previousKey) ===
+    kanbanRowsIdentity(entitiesKeys.kanbanGroup(key));
 
 export const visibleEntityFieldIds = ({
   hiddenProperties,

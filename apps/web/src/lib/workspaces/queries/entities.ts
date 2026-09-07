@@ -1,10 +1,6 @@
 import { useDeferredValue } from "react";
 
-import {
-  infiniteQueryOptions,
-  keepPreviousData,
-  queryOptions,
-} from "@tanstack/react-query";
+import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
 import { isEntityPriority, isTaskStatus } from "@stll/api-contract";
 import { isListItemType } from "@stll/api-contract/entity-options";
@@ -25,6 +21,7 @@ import {
   DEFAULT_ENTITY_VIEW_PAGE_SIZE,
   DEFAULT_ENTITY_WINDOW_SIZE,
   entitiesKeys,
+  keepsRowsAcrossFind,
   normalizeFind,
   normalizeVisibleFieldIds,
   visibleEntityFieldIds,
@@ -320,8 +317,13 @@ export const kanbanGroupOptions = (key: KanbanGroupOptionsInput) =>
     // The key carries the visible fieldIds, so showing/hiding a column changes
     // it and refetches. Keep the previous rows on screen during that refetch
     // (and on filter/sort/paging changes) instead of dropping every group to
-    // skeleton — the rows already exist, only the column set changed.
-    placeholderData: keepPreviousData,
+    // skeleton: the rows already exist, only the column set changed. A new
+    // find is the one change they do not survive, or they would render under
+    // its counts and marks.
+    placeholderData: (previousData, previousQuery) =>
+      keepsRowsAcrossFind(previousQuery?.queryKey, key)
+        ? previousData
+        : undefined,
   });
 
 // Per-group entity counts in one query, so the grouped table can skip
