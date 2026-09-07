@@ -1,13 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import path from "node:path";
 
 import { UI_LOCALES } from "@stll/locales";
 
 // The desktop ships exactly the locales the web app ships, with the same keys
 // in every catalogue. Reading the directory (rather than a list repeated here)
 // is what makes a forgotten file or a stray one fail.
-const LANGS_DIR = join(import.meta.dir, "../src/i18n/langs");
+const LANGS_DIR = path.join(import.meta.dir, "../src/i18n/langs");
 
 const shippedLocales = readdirSync(LANGS_DIR)
   .filter((file) => file.endsWith(".json"))
@@ -38,7 +38,7 @@ const flatten = (
 /** Message paths mapped to their text, e.g. `tray.settings`. */
 const readCatalogue = (locale: string): Record<string, string> => {
   const parsed: unknown = JSON.parse(
-    readFileSync(join(LANGS_DIR, `${locale}.json`), "utf-8"),
+    readFileSync(path.join(LANGS_DIR, `${locale}.json`), "utf-8"),
   );
   const messages: Record<string, string> = {};
   flatten(parsed, "", messages);

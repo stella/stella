@@ -61,25 +61,29 @@ const detectLanguage = (): SupportedLanguage => {
   return "en";
 };
 
-type MessageLoader = () => typeof en | Promise<typeof en>;
-
-const messageLoaders = {
-  en: () => en,
-  ar: async () => (await import("./langs/ar.json")).default,
-  cs: async () => (await import("./langs/cs.json")).default,
-  de: async () => (await import("./langs/de.json")).default,
-  es: async () => (await import("./langs/es.json")).default,
-  et: async () => (await import("./langs/et.json")).default,
-  fr: async () => (await import("./langs/fr.json")).default,
-  hu: async () => (await import("./langs/hu.json")).default,
-  lt: async () => (await import("./langs/lt.json")).default,
-  lv: async () => (await import("./langs/lv.json")).default,
-  pl: async () => (await import("./langs/pl.json")).default,
-  "pt-BR": async () => (await import("./langs/pt-BR.json")).default,
-  sk: async () => (await import("./langs/sk.json")).default,
-} as const satisfies Record<SupportedLanguage, MessageLoader>;
-
 export type DesktopMessages = typeof en;
+
+// English is bundled with the app; every other catalogue is its own chunk,
+// fetched when that language is chosen.
+type CatalogueModule = { default: DesktopMessages };
+
+const catalogueModules = {
+  ar: async () => import("./langs/ar.json"),
+  cs: async () => import("./langs/cs.json"),
+  de: async () => import("./langs/de.json"),
+  es: async () => import("./langs/es.json"),
+  et: async () => import("./langs/et.json"),
+  fr: async () => import("./langs/fr.json"),
+  hu: async () => import("./langs/hu.json"),
+  lt: async () => import("./langs/lt.json"),
+  lv: async () => import("./langs/lv.json"),
+  pl: async () => import("./langs/pl.json"),
+  "pt-BR": async () => import("./langs/pt-BR.json"),
+  sk: async () => import("./langs/sk.json"),
+} as const satisfies Record<
+  Exclude<SupportedLanguage, "en">,
+  () => Promise<CatalogueModule>
+>;
 
 export const detectedLanguage = detectLanguage();
 
@@ -113,8 +117,11 @@ const resolvedTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 export const loadMessages = async (
   language: SupportedLanguage,
 ): Promise<DesktopMessages> => {
+  if (language === "en") {
+    return en;
+  }
   try {
-    return await messageLoaders[language]();
+    return (await catalogueModules[language]()).default;
   } catch {
     return en;
   }
