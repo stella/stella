@@ -141,6 +141,13 @@ describe("runEvalModelTurn", () => {
     async function* neverFinishes(abortController: AbortController) {
       yield textChunk("thinking");
       await new Promise<void>((resolve) => {
+        // The deadline can fire before the generator resumes; a listener
+        // registered on an already-aborted signal never runs and the test
+        // would hang instead of failing.
+        if (abortController.signal.aborted) {
+          resolve();
+          return;
+        }
         abortController.signal.addEventListener("abort", () => {
           resolve();
         });
