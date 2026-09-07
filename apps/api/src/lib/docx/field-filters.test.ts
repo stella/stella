@@ -92,6 +92,8 @@ describe("fieldMetaFromFilters", () => {
     ['date("cs_CZ")', { locale: "cs-CZ", style: "long" }],
     ['date("cs_CZ-long")', { locale: "cs-CZ", style: "long" }],
     ['date("pl-full")', { locale: "pl", style: "long" }],
+    // An ISO date reads the same in every language, so the style stands alone.
+    ['date("iso")', { locale: "en", style: "iso" }],
   ])("%s reads as a locale and a style", (filter, dateFormat) => {
     expect(fieldFrom("signed_on", `signed_on | ${filter}`).field).toEqual({
       path: "signed_on",
@@ -102,7 +104,7 @@ describe("fieldMetaFromFilters", () => {
 
   // A bare style names no locale, and a tag `Intl` refuses cannot be stored:
   // both ask, with the one hint the date-format reader owns.
-  test.each(['date("iso")', 'date("long")', 'date("!!")'])(
+  test.each(['date("long")', 'date("!!")'])(
     "%s is rejected by name",
     (filter) => {
       const { field, issues } = fieldFrom("signed_on", `signed_on | ${filter}`);

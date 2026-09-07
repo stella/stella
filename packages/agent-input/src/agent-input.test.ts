@@ -111,11 +111,22 @@ describe("date format specs", () => {
   });
 
   test("a bare style names no locale, so it is an ask", () => {
-    // The style test runs first: "iso" is structurally a language tag, and
-    // reading it as one would silently render dates in an unknown language.
-    for (const spec of ["iso", "long", "short"]) {
+    // The style test runs first: "long" is not a language tag, and reading it
+    // as one would silently render dates in an unknown language.
+    for (const spec of ["long", "medium", "short", "full", "numeric"]) {
       expect(normalizeDateFormatSpec(spec).ok).toBe(false);
     }
+  });
+
+  test('"iso" alone is a whole format: its output has no locale', () => {
+    expect(valueOf(normalizeDateFormatSpec("iso"))).toEqual({
+      locale: "en",
+      style: "iso",
+    });
+    expect(valueOf(normalizeDateFormatSpec(" ISO "))).toEqual({
+      locale: "en",
+      style: "iso",
+    });
   });
 
   test.each([

@@ -311,6 +311,25 @@ describe("locales and date format specs", () => {
     );
   });
 
+  test("a bare style is read only when its output carries no locale", () => {
+    fc.assert(
+      fc.property(
+        fc.constantFrom("long", "medium", "short", "iso", "full", "numeric"),
+        fc.constantFrom("", " ", "  "),
+        (style: string, pad: string) => {
+          const result = normalizeDateFormatSpec(`${pad}${style}${pad}`);
+          // "iso" renders the same string in every language, so it needs no
+          // locale; every other style without one would guess the language.
+          expect(result.ok).toBe(style === "iso");
+          expect(result.ok && result.value).toEqual(
+            style === "iso" ? { locale: "en", style: "iso" } : false,
+          );
+        },
+      ),
+      propertyConfig({ numRuns: 100 }),
+    );
+  });
+
   test("a spec round-trips through its canonical spelling", () => {
     fc.assert(
       fc.property(

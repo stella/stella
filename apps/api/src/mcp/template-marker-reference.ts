@@ -138,14 +138,14 @@ const FILTER_DESCRIPTIONS = {
   number: { usage: "number", detail: "A numeric input." },
   checkbox: { usage: "checkbox", detail: "A yes/no input." },
   date: {
-    usage: 'date("pl") or date("pl-long")',
+    usage: 'date("pl"), date("pl-long") or date("iso")',
     detail:
       "A date input, rendered in that BCP-47 locale. A trailing style is " +
       `optional and defaults to long; the styles are ${DATE_FORMAT_STYLES.join(", ")}. ` +
       "Write the tag as pl or en-GB; the underscore spelling (cs_CZ) is read " +
       "as the same tag, and a style named full or numeric is read as long or " +
-      'short. A style with no locale in front of it, date("iso"), configures ' +
-      "nothing and is reported.",
+      'short. date("iso") stands on its own: an ISO date reads the same in ' +
+      "every language. Every other style needs the locale in front of it.",
   },
   select: {
     usage: 'select("company", "person")',

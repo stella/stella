@@ -6,8 +6,8 @@
  * wire — so both are read here and both produce the canonical pair. A locale
  * carries its own hyphens (`en-GB`, `pt-BR`), so only a final segment that
  * names a style is one, and the style test runs first: `date("iso")` names a
- * style with no locale in front of it, and is asked about rather than read as
- * a three-letter language tag.
+ * style, not a three-letter language tag. A bare style asks for the locale it
+ * is missing, except `iso`, whose output has none.
  */
 
 import { DATE_FORMAT_STYLES } from "@stll/template-conditions";
@@ -38,7 +38,8 @@ export const DATE_FORMAT_SPEC_HINT =
   'Write the BCP-47 locale, optionally suffixed with a style: "pl", ' +
   '"cs-CZ", "pl-long", "en-GB-short". The styles are ' +
   `${quoted(DATE_FORMAT_STYLES)} and the default is ` +
-  `"${DEFAULT_DATE_FORMAT_STYLE}".`;
+  `"${DEFAULT_DATE_FORMAT_STYLE}"; "iso" stands alone, since an ISO date ` +
+  "reads the same in every language.";
 
 /**
  * Style names a model reaches for that are not the catalogue's own. `full` is
@@ -83,12 +84,32 @@ const splitSpec = (
     : { localeText: spec, style: null };
 };
 
-/** `pl-long`, `cs`, `en-GB`, `cs_CZ`, `en-GB-short`, `pl-full`. */
+/**
+ * The one style whose output names no language: `2028-06-13` is the same
+ * string in every locale, so `iso` on its own is a complete format. The pair
+ * still carries a locale because the rendering shape has one, and `en` is the
+ * carrier that never reaches a rendered date.
+ */
+const LOCALE_FREE_STYLE = "iso" as const satisfies DateFormatStyle;
+const LOCALE_FREE_STYLE_LOCALE = "en";
+
+/** `pl-long`, `cs`, `en-GB`, `cs_CZ`, `en-GB-short`, `pl-full`, `iso`. */
 const readStringSpec = (input: string): Normalized<DateFormatSpec> => {
   const spec = input.trim();
-  // A bare style configures no locale, so it is an ask rather than a tag.
-  if (spec === "" || readStyle(spec).ok) {
+  if (spec === "") {
     return specAsk(input);
+  }
+  const bare = readStyle(spec);
+  if (bare.ok) {
+    // Every other bare style configures no locale, so it is an ask rather
+    // than a tag: a date in an unknown language is a wrong date.
+    return bare.value === LOCALE_FREE_STYLE
+      ? readValueAs(
+          input,
+          { locale: LOCALE_FREE_STYLE_LOCALE, style: bare.value },
+          `"${LOCALE_FREE_STYLE}"`,
+        )
+      : specAsk(input);
   }
   const { localeText, style } = splitSpec(spec);
   const locale = normalizeLocale(localeText);
