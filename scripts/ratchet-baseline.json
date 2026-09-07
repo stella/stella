@@ -428,7 +428,7 @@
     }
   },
   "try-catch-outside-boundary": {
-    "count": 437,
+    "count": 436,
     "files": {
       "apps/api/src/handlers/ai-autocomplete/stream.ts": 1,
       "apps/api/src/handlers/api-keys/mint.ts": 1,
@@ -621,7 +621,6 @@
       "apps/web/src/routes/_protected.settings/-components/account/two-factor-card.tsx": 1,
       "apps/web/src/routes/_protected.settings/-components/organization/anonymization-deny-list-card.tsx": 2,
       "apps/web/src/routes/_protected.settings/-components/organization/jurisdictions-card.tsx": 1,
-      "apps/web/src/routes/_protected.settings/account.desktop.tsx": 1,
       "apps/web/src/routes/_protected.settings/account.memory.tsx": 1,
       "apps/web/src/routes/_protected.settings/account.profile.tsx": 3,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx": 1,
