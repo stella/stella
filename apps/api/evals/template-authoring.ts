@@ -11,8 +11,8 @@
  * descriptions and input schemas, the source document, and a short brief
  * naming the field paths to use. The tools are backed in memory by the same
  * recipe the services run: decode, `validateDocxBuffer`, `discoverTemplate`,
- * `mergeManifestWithDiscovery`, `partitionFieldOverlay`, `applyFieldOverlay`,
- * `writeManifest`; minus the DB and S3 the eval has no business touching. The
+ * `resolveTemplateFieldOverlay`, `partitionFieldOverlay`, `writeManifest`;
+ * minus the DB and S3 the eval has no business touching. The
  * saved template is then filled with fixed values through the real
  * `fillTemplateDocx`, so the round trip is scored on rendered bytes.
  *
@@ -109,8 +109,8 @@ import {
 } from "@/api/lib/tanstack-ai-generate";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import {
-  applyFieldOverlay,
   partitionFieldOverlay,
+  resolveTemplateFieldOverlay,
 } from "@/api/lib/templates/field-overlay";
 import {
   fillTemplateDocx,
@@ -533,29 +533,16 @@ const saveTemplateInMemory = async ({
   }
 
   const discovered = await discoverTemplate(buffer);
-  const baseFields: FieldMeta[] = mergeManifestWithDiscovery(
-    null,
+  // The manifest a stored template carries once the create call resolved it:
+  // the document layer a marker's own filters declare
+  // (`{{ landlord_name | contact("displayName") }}`), then the stored
+  // manifest, then the overlay — `resolveTemplateFieldOverlay`, the same
+  // function and the same order production runs.
+  const stored = resolveTemplateFieldOverlay({
     discovered,
-  ).map((field) => ({
-    path: field.path,
-    label: field.label,
-    hint: field.hint,
-    inputType: field.inputType,
-    options: field.options,
-    validation: field.validation,
-    required: field.required,
-    aiPrompt: field.aiPrompt,
-    aiAdapt: field.aiAdapt,
-    aiSeesDocument: field.aiSeesDocument,
-    parts: field.parts,
-    format: field.format,
-    optionsFrom: field.optionsFrom,
-    lookup: field.lookup,
-    formula: field.formula,
-    condition: field.condition,
-    conditionAst: field.conditionAst,
-    dateFormat: field.dateFormat,
-  }));
+    manifest: null,
+    overlay: undefined,
+  });
 
   const structureErrors = discovered.structureErrors.map(
     (error) => `${error.directive}: ${error.message}`,
@@ -568,14 +555,15 @@ const saveTemplateInMemory = async ({
   // `attorneys.name` inside `{% for a in attorneys %}` - that the service accepts.
   // Measuring the contract means running the contract's own validator.
   const { applied, issues } = partitionFieldOverlay({
-    configured: baseFields,
+    configured: stored.fields,
     discovered,
     overlay: overlay ?? [],
   });
-  const manifest = applyFieldOverlay(
-    { version: 1, fields: baseFields },
-    applied,
-  );
+  const manifest = resolveTemplateFieldOverlay({
+    discovered,
+    manifest: stored,
+    overlay: applied,
+  });
   const withManifest = await writeManifest(buffer, manifest);
   const overlayIssues = issues.map(
     (issue) => `${issue.path}: ${issue.message} ${issue.hint}`,
