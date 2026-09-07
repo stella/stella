@@ -77,9 +77,20 @@ marketing:reshoot` re-records only the stale captures (see
    `scripts/rehearse-migration-upgrade.sh` runs the same rehearsal locally
    against an empty database.
 
-5. Merge the commit to `main`. The `tag-on-version-bump.yml` workflow pushes
-   the matching `vX.Y.Z` tag automatically. The tag then triggers
-   `release.yml`.
+   The same pull request runs `scripts/check-cli-release-coupling.ts`: a
+   stable release is refused while a pending changeset names `@stll/cli`,
+   because the CLI that has to ship with the release does not have a version
+   yet. Merge the Version Packages pull request first, then rebase the
+   release. The check also refuses a commit whose CLI version is behind npm's
+   `latest`, or equals it while the generated contract surface differs from
+   the published tarball.
+
+5. Merge the commit to `main`. The `tag-on-version-bump.yml` workflow runs
+   the same CLI coupling check and pushes the matching `vX.Y.Z` tag. The tag
+   then triggers `release.yml`. If the check fails there (a CLI changeset
+   merged between the pull request check and the tag), merge the Version
+   Packages pull request and dispatch `tag-on-version-bump.yml` against
+   `main` by hand.
 6. Wait for the release workflow. It builds and attests the immutable
    images, creates the GitHub release as a draft with the manifest attached,
    and promotes stable releases automatically; the release is published and
@@ -123,8 +134,23 @@ Before expanding the CLI contract:
 
 1. Add the API behavior and scopes, then update the API revision or capability.
 2. Regenerate and commit the CLI contract snapshot.
-3. Ship that API in a stable release.
-4. Let the post-release exact-tarball canary publish the CLI.
+3. Merge the Version Packages pull request so the CLI carries its new version.
+4. Ship that API in a stable release.
+5. Let the post-release exact-tarball canary publish the CLI.
+
+A stable release therefore has one of two shapes, and the coupling check
+refuses every other:
+
+- Unchanged: the commit's CLI version is npm's `latest` and its generated
+  contract surface equals the published tarball. The published CLI keeps
+  working; the release may only add server behavior.
+- Coupled: the commit's CLI version is newer than anything published. The
+  server change may drop behavior the previous CLI relied on, and
+  `publish-npm.yml` publishes the new CLI as soon as production serves the
+  release. Between promotion and publication the previous CLI can fail
+  against production; that window is minutes and is the whole cost of a
+  non-additive change, so keep such changes rare and batch them into one
+  coupled release.
 
 The legacy `stella_compatibility` package-version range remains frozen for
 clients published before protocol negotiation. New CLIs prefer

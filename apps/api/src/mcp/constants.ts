@@ -97,9 +97,11 @@ export const MCP_ALLOWED_HEADERS = [
 // discovery. CLI package versions are deliberately absent: compatibility is a
 // property of the wire protocol and capabilities, not release numbering.
 export const STELLA_API_CONTRACT = {
-  protocol: 1,
   // 2: the agent surface renamed the client-engagement container to "matter"
-  // (tool inputs, capability ids, capability params), with no alias.
+  // (tool inputs, capability ids, capability params), with no alias. A CLI
+  // built for protocol 1 refuses this server up front instead of failing on
+  // its first renamed input.
+  protocol: 2,
   revision: 2,
   capabilities: {
     "document-version-upload": 1,

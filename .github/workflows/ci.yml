@@ -664,6 +664,14 @@ jobs:
           BASE_REF: ${{ github.base_ref || 'main' }}
         run: bash scripts/check-release-changelog.sh --base "origin/$BASE_REF"
 
+      # Same verdict the tag workflow gives after merge, delivered while the
+      # release pull request can still wait for the Version Packages one.
+      - name: Release CLI coupling guard
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+        run: bun scripts/check-cli-release-coupling.ts --base "origin/$BASE_REF"
+
       - name: Release marketing freshness warning
         if: github.event_name == 'pull_request'
         env:
@@ -1116,6 +1124,12 @@ jobs:
           scripts/detect-e2e-changes.test.ts
           scripts/autofix-workflow.test.ts
           scripts/dependabot-empty-changeset.test.ts
+
+      # Needs the installed workspace (fast-check, property-testing), so it
+      # cannot join the no-install invariants step above.
+      - name: Test CLI release coupling gate
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        run: bun test scripts/check-cli-release-coupling.test.ts
 
       - name: Test package scaffolder
         if: needs.ci-plan.outputs.package_checks_required == 'true'
