@@ -470,28 +470,35 @@ const prepareProjectionEntry = (
   material: CorpusProjectionMaterial,
   payload: Awaited<ReturnType<typeof loadCorpusProjectionPayload>>,
 ): Result<PreparedProjectionEntry, PreparedProjectionFailure> => {
-  const built = Result.try(() => {
-    switch (material.family) {
-      case "case_law":
-        return buildCorpusProjectionDocuments({
-          family: material.family,
-          manifest: material.manifest,
-          input: material.input,
-          payload,
-          revision: material.lease.intentId,
-        });
-      case "legislation":
-        return buildCorpusProjectionDocuments({
-          family: material.family,
-          manifest: material.manifest,
-          input: material.input,
-          payload,
-          revision: material.lease.intentId,
-        });
-      default:
-        material satisfies never;
-        return panic(`Unhandled material: ${String(material)}`);
-    }
+  // The `catch` mapper is what keeps the thrown error itself: the one-argument
+  // form wraps the cause, and the `instanceof ChunkBudgetError` below — the
+  // difference between blocking one oversized revision and panicking the whole
+  // cycle — would never match again.
+  const built = Result.try({
+    catch: (cause: unknown) => cause,
+    try: () => {
+      switch (material.family) {
+        case "case_law":
+          return buildCorpusProjectionDocuments({
+            family: material.family,
+            manifest: material.manifest,
+            input: material.input,
+            payload,
+            revision: material.lease.intentId,
+          });
+        case "legislation":
+          return buildCorpusProjectionDocuments({
+            family: material.family,
+            manifest: material.manifest,
+            input: material.input,
+            payload,
+            revision: material.lease.intentId,
+          });
+        default:
+          material satisfies never;
+          return panic(`Unhandled material: ${String(material)}`);
+      }
+    },
   });
   if (built.isErr()) {
     if (built.error instanceof ChunkBudgetError) {
@@ -544,9 +551,14 @@ const buildPreparedEntry = async ({
 }: BuildPreparedEntryOptions): Promise<
   Result<PreparedProjectionEntry, PreparedProjectionFailure>
 > => {
-  const payload = await Result.tryPromise(
-    async () => await loadCorpusProjectionPayload(runInTransaction, material),
-  );
+  // As in `prepareProjectionEntry`: without the `catch` mapper the cause is
+  // wrapped, and every budget failure would classify as a transient
+  // `payload_unavailable` and retry forever instead of blocking.
+  const payload = await Result.tryPromise({
+    try: async () =>
+      await loadCorpusProjectionPayload(runInTransaction, material),
+    catch: (cause: unknown) => cause,
+  });
   if (payload.isErr()) {
     return Result.err(
       classifyCorpusProjectionPayloadReadFailure(payload.error),
@@ -837,6 +849,17 @@ const processPreparedStream = async ({
           message: prepared.error.message,
         },
       });
+    }
+
+    // An append is the usual thing that persists the failures collected
+    // beside it, but a batch whose payloads all fail never produces one. Left
+    // to the end of the stream, those revisions would wait out every read in
+    // the batch — long enough at the permitted batch size for their leases to
+    // expire, at which point classification reports `lease_lost`, records no
+    // attempt, and an unavailable payload retries forever instead of reaching
+    // `blocked`. So drain on the same granularity the reads run at.
+    if (pendingFailures.length >= payloadReadConcurrency) {
+      await classifyPendingFailures();
     }
 
     const advanced = advanceCorpusProjectionAppendTails({

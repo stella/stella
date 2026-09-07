@@ -471,12 +471,17 @@ export const OWNERSHIP = [
       "and it is not a concurrency bound: the window refills only once its " +
       "slowest member settles, so effective concurrency decays to each slice's " +
       "tail and drops to zero for whatever the caller does between slices. " +
-      "`mapWithConcurrency` returns every result; `streamWithConcurrency` " +
-      "yields each result in input order as it is ready and states its " +
-      "look-ahead, so a caller that works per result overlaps that work with " +
-      "the operations still running. Both keep the pool full, and the stream " +
-      "settles results at the pool so a rejection behind a slower item cannot " +
-      "surface as an unhandled rejection.",
+      "`mapWithConcurrency` returns every result and keeps the pool full " +
+      "throughout. `streamWithConcurrency` yields each result in input order " +
+      "as it is ready, and its `lookAhead` decides whether the pool refills " +
+      "on completion or on consumption: at the default of zero a settled " +
+      "result holds its slot, so the pool slides and residency stays at " +
+      "`limit`; a caller that wants work to continue through a slow item and " +
+      "through its own per-result work has to ask for look-ahead and pay for " +
+      "up to `limit + lookAhead` resident results. The stream observes each " +
+      "settlement at the pool, so a rejection behind a slower item cannot " +
+      "surface as an unhandled rejection, and it stops refilling once the " +
+      "consumer closes it.",
     enforcement: { kind: "none" },
   },
 ] as const satisfies readonly OwnershipEntry[];

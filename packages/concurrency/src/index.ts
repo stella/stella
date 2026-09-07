@@ -99,6 +99,12 @@ type PoolSlot<Value> = {
  * it, and abandons the operations still in flight: they must be safe to
  * abandon.
  *
+ * A consumer that stops early — `break`, `return`, or a rejection it does not
+ * catch — closes the pool: operations already running settle, and none start
+ * after that. Without this the settlement of each running operation would
+ * refill behind the consumer's back, so a caller that abandoned the run
+ * because its work had become invalid would keep paying for the rest of it.
+ *
  * @yields {Value} each operation's result, in the order of `items`.
  */
 export const streamWithConcurrency = async function* <Item, Value>({
@@ -112,6 +118,7 @@ export const streamWithConcurrency = async function* <Item, Value>({
   const started: PoolSlot<Value>[] = [];
   let inFlight = 0;
   let nextIndex = 0;
+  let closed = false;
   // Mutually recursive with `fill`: a settled operation frees its slot and
   // refills the pool, which is what keeps work going while the consumer is
   // busy with an earlier result.
@@ -125,6 +132,11 @@ export const streamWithConcurrency = async function* <Item, Value>({
     return { value, settled };
   };
   const fill = (): void => {
+    // Checked on entry rather than per iteration: nothing the loop body does
+    // can close the pool, and only a settlement or the consumer calls back in.
+    if (closed) {
+      return;
+    }
     while (
       nextIndex < items.length &&
       inFlight < width &&
@@ -136,11 +148,17 @@ export const streamWithConcurrency = async function* <Item, Value>({
       started.push(startOne(item));
     }
   };
-  fill();
-  while (started.length > 0) {
-    const slot = started.shift() ?? panic("Lost a bounded-pool slot");
-    await slot.settled;
+  try {
     fill();
-    yield await slot.value;
+    while (started.length > 0) {
+      const slot = started.shift() ?? panic("Lost a bounded-pool slot");
+      await slot.settled;
+      fill();
+      yield await slot.value;
+    }
+  } finally {
+    // Reached on every exit, including the consumer's `break` or `return`,
+    // which resumes this generator only to unwind it.
+    closed = true;
   }
 };

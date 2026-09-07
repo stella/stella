@@ -257,4 +257,60 @@ describe("streamWithConcurrency", () => {
     expect(started).toBe(limit + 1);
     await stream.return(undefined);
   });
+
+  /**
+   * A consumer abandons the run because its remaining work became invalid, so
+   * the pool must not keep paying for it. Each running operation refills on
+   * settlement, which without a closed pool would cascade through the whole
+   * list behind the consumer's back.
+   */
+  test("stops refilling once the consumer closes the stream", async () => {
+    const items = Array.from({ length: 32 }, (_unused, index) => index);
+    let started = 0;
+    const stream = streamWithConcurrency({
+      items,
+      limit: 4,
+      lookAhead: 4,
+      operation: async (index) => {
+        started += 1;
+        await Bun.sleep(5);
+        return index;
+      },
+    });
+
+    expect((await stream.next()).value).toBe(0);
+    await stream.return(undefined);
+    const startedWhenClosed = started;
+
+    // Long enough for every operation still running to settle and refill.
+    await Bun.sleep(100);
+
+    expect(started).toBe(startedWhenClosed);
+    expect(started).toBeLessThan(items.length);
+  });
+
+  test("a consumer that breaks out closes the pool the same way", async () => {
+    const items = Array.from({ length: 32 }, (_unused, index) => index);
+    let started = 0;
+    for await (const value of streamWithConcurrency({
+      items,
+      limit: 4,
+      lookAhead: 4,
+      operation: async (index) => {
+        started += 1;
+        await Bun.sleep(5);
+        return index;
+      },
+    })) {
+      if (value === 0) {
+        break;
+      }
+    }
+    const startedWhenClosed = started;
+
+    await Bun.sleep(100);
+
+    expect(started).toBe(startedWhenClosed);
+    expect(started).toBeLessThan(items.length);
+  });
 });
