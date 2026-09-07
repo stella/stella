@@ -37,14 +37,31 @@ const open = {
   },
 } as const satisfies Record<Component, (page: Page) => Promise<void>>;
 
+// The side each request resolves to once collision handling has run. The
+// triggers sit at the inline end of the viewport, so `right` has no room and
+// flips; every other side keeps what it asked for. Asserting the resolved side
+// is what separates "the popup is on screen because it was placed correctly"
+// from "the popup is on screen because it never left the default side".
+const RESOLVED_SIDE = {
+  top: "top",
+  bottom: "bottom",
+  left: "left",
+  right: "left",
+} as const satisfies Record<Side, Side>;
+
 // Base UI positions and collision-tests the positioner, so the popup only
 // stays on screen when the positioner's box is the popup's box. Both animate
 // on open (the popup scales in, the tooltip positioner transitions its
 // offsets), so poll until the two boxes agree, then measure once.
-const expectPopupInsideViewport = async (page: Page, component: Component) => {
+const expectPopupInsideViewport = async (
+  page: Page,
+  component: Component,
+  side: Side,
+) => {
   const popup = page.locator(`[data-slot="${component}-popup"]`);
   const positioner = page.locator(`[data-slot="${component}-positioner"]`);
   await expect(popup).toBeVisible();
+  await expect(positioner).toHaveAttribute("data-side", RESOLVED_SIDE[side]);
 
   await expect
     .poll(async () => {
@@ -88,7 +105,7 @@ for (const component of COMPONENTS) {
     }) => {
       await openFixture(page, side);
       await open[component](page);
-      await expectPopupInsideViewport(page, component);
+      await expectPopupInsideViewport(page, component, side);
     });
   }
 }
