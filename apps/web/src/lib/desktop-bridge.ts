@@ -7,6 +7,7 @@ import type { DesktopEditFileType } from "@/lib/desktop-edit-formats";
 import { buildSelfHostConnectDeepLink } from "@/lib/desktop-self-host-link.logic";
 import { unwrapEden } from "@/lib/errors/api";
 import { fetchWithTimeout } from "@/lib/fetch";
+import type { FetchWithTimeoutInit } from "@/lib/fetch";
 import { toSafeId } from "@/lib/safe-id";
 
 const DESKTOP_BRIDGE_PORT = env.VITE_DESKTOP_BRIDGE_PORT;
@@ -109,6 +110,22 @@ const isSelfHostConnectionStatus = (
   "trusted" in value &&
   typeof value.trusted === "boolean";
 
+/**
+ * Every call here targets the app's loopback listener. Chromium's Local
+ * Network Access check reads this hint on the request: declaring the target
+ * address space keeps the request classified (and any permission prompt named)
+ * as loopback instead of being judged as a private-network access. Engines
+ * that do not implement it ignore the field.
+ */
+type LoopbackFetchInit = FetchWithTimeoutInit & {
+  targetAddressSpace: "loopback";
+};
+
+const loopback = (init: FetchWithTimeoutInit): LoopbackFetchInit => ({
+  ...init,
+  targetAddressSpace: "loopback",
+});
+
 const parseBridgeResponse = async (response: Response) => {
   try {
     const payload: unknown = await response.json();
@@ -123,11 +140,14 @@ const readBridgeHealth = async (
   signal?: AbortSignal,
 ): Promise<BridgeHealth | null> => {
   try {
-    const response = await fetchWithTimeout(`${DESKTOP_BRIDGE_URL}/health`, {
-      method: "GET",
-      ...(signal && { signal }),
-      timeoutMs,
-    });
+    const response = await fetchWithTimeout(
+      `${DESKTOP_BRIDGE_URL}/health`,
+      loopback({
+        method: "GET",
+        ...(signal && { signal }),
+        timeoutMs,
+      }),
+    );
     if (!response.ok) {
       return null;
     }
@@ -341,10 +361,10 @@ const readSelfHostedDesktopConnection = async ({
   try {
     const response = await fetchWithTimeout(
       `${DESKTOP_BRIDGE_URL}/v1/self-host-connection?${params.toString()}`,
-      {
+      loopback({
         method: "GET",
         timeoutMs: 1000,
-      },
+      }),
     );
     if (!response.ok) {
       return null;
@@ -400,14 +420,17 @@ export const linkDesktopAccount = async (request: LinkAccountRequest) => {
 
   let response: Response;
   try {
-    response = await fetchWithTimeout(`${DESKTOP_BRIDGE_URL}/v1/link-account`, {
-      body: JSON.stringify(request),
-      headers: {
-        "Content-Type": "application/json",
-      },
-      method: "POST",
-      timeoutMs: 10_000,
-    });
+    response = await fetchWithTimeout(
+      `${DESKTOP_BRIDGE_URL}/v1/link-account`,
+      loopback({
+        body: JSON.stringify(request),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        method: "POST",
+        timeoutMs: 10_000,
+      }),
+    );
   } catch {
     throw new DesktopBridgeUnavailableError();
   }
@@ -447,21 +470,24 @@ const openFileViaBridge = async ({
   let response: Response;
 
   try {
-    response = await fetchWithTimeout(`${DESKTOP_BRIDGE_URL}/v1/open-file`, {
-      body: JSON.stringify({
-        apiBaseUrl,
-        entityId,
-        linkedAccount,
-        propertyId,
-        remoteSession,
-        workspaceId,
+    response = await fetchWithTimeout(
+      `${DESKTOP_BRIDGE_URL}/v1/open-file`,
+      loopback({
+        body: JSON.stringify({
+          apiBaseUrl,
+          entityId,
+          linkedAccount,
+          propertyId,
+          remoteSession,
+          workspaceId,
+        }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        method: "POST",
+        timeoutMs: 10_000,
       }),
-      headers: {
-        "Content-Type": "application/json",
-      },
-      method: "POST",
-      timeoutMs: 10_000,
-    });
+    );
   } catch {
     return await rethrowAfterBridgeCompatibilityCheck(
       new DesktopBridgeUnavailableError(),
