@@ -2471,7 +2471,7 @@ export const parseConfigureEntries = (
     ? [...sentFields]
     : null;
   const issues: FieldOverlayIssue[] = [];
-  for (const [position, entry] of sent?.entries() ?? []) {
+  for (const [position, entry] of sent === null ? [] : sent.entries()) {
     const dropped = withoutCircularCondition(entry);
     if (dropped === null || sent === null) {
       continue;
