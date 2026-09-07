@@ -24,10 +24,8 @@ const PROJECTION_TRIGGER =
   "CREATE TRIGGER case_law_decisions_enqueue_corpus_index_projection";
 const PROJECTION_TRIGGER_STATEMENT =
   /\b(?:CREATE|DROP) TRIGGER (?:IF EXISTS )?case_law_decisions_enqueue_corpus_index_projection\b/u;
-const ACCOUNTING_FUNCTION =
-  "CREATE OR REPLACE FUNCTION derive_case_law_corpus_index_accounting()";
 const ACCOUNTING_OBJECT =
-  /(?:INSERT INTO "case_law_corpus_index_count_backfills"|derive_case_law_corpus_index_accounting|add_inserted_case_law_corpus_index_counts|apply_updated_case_law_corpus_index_counts|subtract_deleted_case_law_corpus_index_counts|seed_case_law_corpus_index_count_backfill|case_law_corpus_index_projection_(?:derive_accounting|count_(?:insert|update|delete))|case_law_corpus_index_backfill_seed_count)/u;
+  /(?:INSERT INTO "case_law_corpus_index_count_backfills"|derive_case_law_corpus_index_accounting|add_inserted_case_law_corpus_index_counts|apply_updated_case_law_corpus_index_counts|subtract_deleted_case_law_corpus_index_counts|seed_case_law_corpus_index_count_backfill|case_law_corpus_index_count_delta|case_law_corpus_index_projection_(?:derive_accounting|count_(?:insert|update|delete))|case_law_corpus_index_backfill_seed_count)/u;
 
 /** Statements of a migration file, in order, comments included. */
 export const migrationStatements = (path: string): string[] =>
@@ -36,12 +34,17 @@ export const migrationStatements = (path: string): string[] =>
     .map((statement) => statement.trim())
     .filter((statement) => statement.length > 0);
 
+/** Every migration path, in the order the migrator applies them. */
+const migrationPaths = (): string[] =>
+  [...new Bun.Glob("*/migration.sql").scanSync(DRIZZLE_DIR)]
+    .sort()
+    .map((file) => nodePath.join(DRIZZLE_DIR, file));
+
 /** Path of the last migration whose text contains `marker`. */
 export const latestMigrationContaining = (marker: string): string => {
-  const path = [...new Bun.Glob("*/migration.sql").scanSync(DRIZZLE_DIR)]
-    .sort()
-    .map((file) => nodePath.join(DRIZZLE_DIR, file))
-    .findLast((file) => readFileSync(file, "utf-8").includes(marker));
+  const path = migrationPaths().findLast((file) =>
+    readFileSync(file, "utf-8").includes(marker),
+  );
   return path ?? panic(`no migration contains ${marker}`);
 };
 
@@ -86,9 +89,24 @@ export const installCaseLawProjectionTrigger = async (
   }
 };
 
-/** The seed statement and triggers that maintain exact projection counts. */
-export const caseLawProjectionAccountingStatements = (): string[] =>
-  latestStatements(ACCOUNTING_FUNCTION, ACCOUNTING_OBJECT);
+/**
+ * The seed statement, functions, and triggers that maintain exact projection
+ * counts, replayed from every migration that defines one, in migration order.
+ * Taking them from a single migration would pin the test to that migration's
+ * definitions and silently miss a later redefinition; replaying leaves the test
+ * database with what a migrated database converges to.
+ */
+export const caseLawProjectionAccountingStatements = (): string[] => {
+  const statements = migrationPaths().flatMap((path) =>
+    migrationStatements(path).filter((statement) =>
+      ACCOUNTING_OBJECT.test(statement),
+    ),
+  );
+  if (statements.length === 0) {
+    panic("no migration defines case-law corpus index projection accounting");
+  }
+  return statements;
+};
 
 /** Install exact projection accounting in a schema-built test database. */
 export const installCaseLawProjectionAccounting = async (
