@@ -1,10 +1,14 @@
 import { expect, test } from "bun:test";
+import fc from "fast-check";
+
+import { propertyConfig } from "@stll/property-testing";
 
 import {
   CORPUS_QUERY_LEAF_BUDGET,
   caseLawCorpusQuery,
   type CorpusStemming,
   corpusFreeTextClause,
+  type CorpusTermExpander,
   quoteCorpusValue,
   tokenizeCorpusFreeText,
 } from "@/api/lib/legal-search/corpus-query";
@@ -350,6 +354,23 @@ test("stem clauses compose with expansion rather than replacing it", () => {
   );
 });
 
+// Every leaf group the budget can grant reaches the clause, exactly once and
+// in the written order: the group union is the pass list itself, so a group no
+// pass spends cannot exist, and a group spent twice would repeat its leaves
+// here. The stem leaves are last though the budget buys them first.
+test("each leaf group is granted once, in the order a group is written", () => {
+  expect(
+    corpusFreeTextClause("nájemné", {
+      expand: () => ["nájemného"],
+      stemming: CS_STEMMING,
+      surfaceFields: ["headnote"],
+    }),
+  ).toBe(
+    '(("nájemné" OR "nájemného" OR headnote:"nájemné"' +
+      ' OR text_stem:"nájemn" OR headnote_stem:"nájemn"))',
+  );
+});
+
 test("a generation without extra fields gets the query it gets today", () => {
   for (const text of [
     "náhrada škody",
@@ -384,4 +405,121 @@ test("the leaf budget counts stem leaves too", () => {
   expect(clause).not.toBeNull();
   const leaves = [...(clause ?? "").matchAll(/"/gu)].length / 2;
   expect(leaves).toBeLessThanOrEqual(CORPUS_QUERY_LEAF_BUDGET);
+});
+
+/** Quoted values in a clause, which is what the leaf budget counts. */
+const countLeaves = (clause: string): number =>
+  [...clause.matchAll(/"/gu)].length / 2;
+
+/** The AND-ed groups of a free-text clause, outer parentheses removed. */
+const clauseGroups = (clause: string): string[] =>
+  clause.slice(1, -1).split(" AND ");
+
+/** Field-scoped leaves of a clause, e.g. `text_stem:"nájemn"`. */
+const fieldLeaves = (clause: string): string[] =>
+  [...clause.matchAll(/[a-z_]+:"[^"]*"/gu)].map(([leaf]) => leaf);
+
+// Every group is AND-ed, so a word the corpus carries only in another case
+// form empties the whole result set on its own. Spending the budget left to
+// right starved exactly the words a reader adds to narrow a search: the last
+// ones.
+test("a long query's later words still carry their stems", () => {
+  const expansions = new Map([
+    ["nájemní", ["nájemního", "nájemnímu", "nájemním"]],
+    ["smlouva", ["smlouvy", "smlouvě", "smlouvou"]],
+    ["výpověď", ["výpovědi", "výpovědí", "výpovědím"]],
+    ["bytu", ["byt", "bytem", "byty"]],
+    ["důvod", ["důvodu", "důvody", "důvodem"]],
+  ]);
+  const expand: CorpusTermExpander = (term) => expansions.get(term) ?? [];
+
+  const clause = corpusFreeTextClause(
+    "nájemní smlouva výpověď bytu důvod přiměřenosti",
+    { expand, stemming: CS_STEMMING },
+  );
+
+  expect(clause).not.toBeNull();
+  const groups = clauseGroups(clause ?? "");
+  expect(groups).toHaveLength(6);
+  for (const group of groups) {
+    expect(group).toContain('text_stem:"');
+    expect(group).toContain('headnote_stem:"');
+  }
+  // The last word is the one the corpus writes as `přiměřenost`; nothing but
+  // its stem leaf reaches that judgment, and it has no dictionary forms here.
+  expect(groups.at(-1)).toStartWith('("přiměřenosti" OR text_stem:"');
+  expect(countLeaves(clause ?? "")).toBeLessThanOrEqual(
+    CORPUS_QUERY_LEAF_BUDGET,
+  );
+});
+
+const STEM_FIELDS = ["text_stem", "headnote_stem"] as const;
+
+const wordArbitrary = fc
+  .array(fc.constantFrom(...Array.from("aeioumnprstvzáéíýčřšž")), {
+    minLength: 3,
+    maxLength: 10,
+  })
+  .map((letters) => letters.join(""));
+
+const queryArbitrary = fc.record({
+  fields: fc.subarray([...STEM_FIELDS], { minLength: 1 }),
+  words: fc.array(
+    fc.record({
+      extras: fc.integer({ max: 4, min: 0 }),
+      word: wordArbitrary,
+    }),
+    { maxLength: 12, minLength: 1 },
+  ),
+});
+
+/**
+ * A word's stem leaves are what makes it reachable at all in an inflected
+ * corpus, so the budget must buy every word's before it buys any word's
+ * dictionary forms. The baseline is what the same word gets as a query of its
+ * own, where the budget cannot bind: deriving it from the builder rather than
+ * restemming here keeps the property from re-encoding the stemmer.
+ *
+ * The condition is the stem pass's own cost: one surface leaf per word, plus
+ * one stem leaf per word per stem field.
+ */
+test("every word keeps its stem leaves while the stem pass fits", () => {
+  fc.assert(
+    fc.property(queryArbitrary, ({ fields, words }) => {
+      const stemming: CorpusStemming = { fields, language: "cs" };
+      const forms = new Map(
+        words.map(({ extras, word }) => [
+          word,
+          Array.from(
+            { length: extras },
+            (_unused, index) => `${word}x${index}`,
+          ),
+        ]),
+      );
+      const expand: CorpusTermExpander = (term) => forms.get(term) ?? [];
+
+      const clause = corpusFreeTextClause(
+        words.map(({ word }) => word).join(" "),
+        { expand, stemming },
+      );
+      expect(clause).not.toBeNull();
+      const groups = clauseGroups(clause ?? "");
+      expect(groups).toHaveLength(words.length);
+      expect(countLeaves(clause ?? "")).toBeLessThanOrEqual(
+        CORPUS_QUERY_LEAF_BUDGET,
+      );
+
+      if (words.length * (1 + fields.length) > CORPUS_QUERY_LEAF_BUDGET) {
+        return;
+      }
+      for (const [index, { word }] of words.entries()) {
+        const alone = corpusFreeTextClause(word, { stemming }) ?? "";
+        const group = groups[index] ?? "";
+        for (const leaf of fieldLeaves(alone)) {
+          expect(group).toContain(leaf);
+        }
+      }
+    }),
+    propertyConfig(),
+  );
 });
