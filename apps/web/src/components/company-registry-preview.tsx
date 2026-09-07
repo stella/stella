@@ -7,7 +7,6 @@ import { isBusinessRegistryCredentialSlug } from "@stll/api-contract";
 import type { AresCompany } from "@stll/business-registries/ares";
 import { getAresCourtName } from "@stll/business-registries/ares/court-names";
 import { getAresLegalFormName } from "@stll/business-registries/ares/legal-forms";
-import { parseIsoDateLocal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import { Skeleton } from "@stll/ui/skeleton";
 import {
@@ -19,6 +18,7 @@ import {
 } from "@stll/ui/table";
 
 import { registryDetailLabel } from "@/components/company-registry-labels";
+import { parseRegistryCalendarDate } from "@/components/company-registry-preview.logic";
 import { CompanySpecification } from "@/components/company-specification";
 import { RegistryCredentialSetup } from "@/components/registry-credential-setup";
 import type { RegistryHit } from "@/components/templates/registry-autofill";
@@ -261,11 +261,28 @@ const RegistryDetails = ({ details }: { details: RegistryDetailsValue }) => {
                 />
               </TableHead>
               <TableCell className="px-0 py-3 align-baseline text-sm leading-5 wrap-break-word whitespace-normal select-text">
-                <RegistryDetailValue
-                  registry={details.registry}
-                  detailKey={key}
-                  value={value}
-                />
+                {details.registry === "orsr" &&
+                key === "courtFile" &&
+                details.company.courtFile ? (
+                  <div className="space-y-1">
+                    <bdi className="block">
+                      {details.company.courtFile.section}{" "}
+                      {details.company.courtFile.insertNumber}/
+                      {details.company.courtFile.court}
+                    </bdi>
+                    {details.company.courtFile.courtName ? (
+                      <bdi className="text-muted-foreground block">
+                        {details.company.courtFile.courtName}
+                      </bdi>
+                    ) : null}
+                  </div>
+                ) : (
+                  <RegistryDetailValue
+                    registry={details.registry}
+                    detailKey={key}
+                    value={value}
+                  />
+                )}
               </TableCell>
             </TableRow>
           ))}
@@ -366,7 +383,7 @@ const RegistryDetailValue = ({
       return <bdi>{getAresLegalFormName(value) ?? value}</bdi>;
     }
     const date = Object.hasOwn(REGISTRY_DATE_FIELDS, detailKey)
-      ? parseIsoDateLocal(value)
+      ? parseRegistryCalendarDate(value)
       : null;
     if (date) {
       return (

@@ -238,6 +238,7 @@ const DETAIL_LABELS = {
     textAddress: "Úplná adresa",
     courtFile: "Spisová značka",
     court: "Súd",
+    courtName: "Súd",
     section: "Oddiel",
     insertNumber: "Vložka číslo",
     establishedAt: "Deň zápisu",

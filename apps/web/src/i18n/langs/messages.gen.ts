@@ -3513,9 +3513,9 @@ type Messages = {
     "scopeFilter": "Search scope";
     "scopePlaceholderAll": "Search across all <scope>sources</scope>…";
     "scopePlaceholderMatters": "Search across all <scope>matters</scope>…";
-    "scopePlaceholderRegistries": "Search <scope>business registries</scope>…";
-    "scopeRegistries": "Business registries";
-    "searchRegistries": "Search in business registries";
+    "scopePlaceholderRegistries": "Search in <scope>registries</scope>…";
+    "scopeRegistries": "Registries";
+    "searchRegistries": "Search in registries";
     "summaryAction": "Summarize top results";
     "summaryError": "Summary unavailable";
     "summaryLoading": "Summarizing results...";
