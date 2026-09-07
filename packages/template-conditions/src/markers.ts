@@ -130,25 +130,13 @@ export const isBlockDirectiveKind = (
   typeof kind === "string" &&
   BLOCK_DIRECTIVE_KINDS.some((blockKind) => blockKind === kind);
 
-/** The tag token an author writes for each block directive. Kind names and
- *  surface tokens are the same word, so a reference generated from the kinds
- *  cannot describe a token the scanner does not accept. */
-export const BLOCK_DIRECTIVE_TOKENS = {
-  if: "if",
-  elif: "elif",
-  else: "else",
-  endif: "endif",
-  for: "for",
-  endfor: "endfor",
-} as const satisfies Record<BlockDirectiveKind, BlockDirectiveKind>;
-
 // ── Functions and filters ────────────────────────────────
 
 /** Callable forms inside `{{ }}` that address document machinery rather than a
  *  fill value. */
-export const FUNCTION_NAMES = ["clause", "num", "ref"] as const;
+const FUNCTION_NAMES = ["clause", "num", "ref"] as const;
 
-export type FunctionName = (typeof FUNCTION_NAMES)[number];
+type FunctionName = (typeof FUNCTION_NAMES)[number];
 
 /**
  * Every filter the dialect accepts on a fillable value. The names are the

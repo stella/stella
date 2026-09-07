@@ -209,7 +209,6 @@ export type {
 export {
   assertNever,
   BLOCK_DIRECTIVE_KINDS,
-  BLOCK_DIRECTIVE_TOKENS,
   blockDirectiveLinePattern,
   classifyMarker,
   clauseSlotKey,
@@ -217,7 +216,6 @@ export {
   clauseSlotPattern,
   DIRECTIVE_KINDS,
   FILTER_NAMES,
-  FUNCTION_NAMES,
   hasBlockDirectivePattern,
   hasNumberingPattern,
   isBlockDirectiveKind,
@@ -246,7 +244,6 @@ export type {
   FilterArgument,
   FilterCall,
   FilterName,
-  FunctionName,
   InvalidMarker,
   LoopProperty,
   MarkerDefect,
