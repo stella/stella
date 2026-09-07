@@ -95,8 +95,8 @@ type MarketingViewRoutes = {
 const PAINTED_REDLINE_SELECTOR = ".layout-run-text.docx-insertion";
 
 // Folio's painted template-directive overlays in the template studio: the
-// {{...}} field placeholders, the {{#if}} conditional-section markers, and
-// the {{@clause:...}} slots. The templates scene requires the first two
+// {{ … }} value markers, the {% if %} conditional-section tags, and
+// the clause() slots. The templates scene requires the first two
 // before the ready marker and scrolls to the last clause slot mid-loop.
 const TEMPLATE_FIELD_SELECTOR = ".folio-template-directive--placeholder";
 const TEMPLATE_CONDITIONAL_SELECTOR = ".folio-template-directive--if";
@@ -495,7 +495,7 @@ const scenes = [
   },
   {
     // The seeded Supply Agreement template open in the template studio:
-    // highlighted {{...}} field placeholders, the {{#if}} conditional
+    // highlighted {{ … }} value markers, the {% if %} conditional
     // sections, and the fields inspector panel. The template row click and
     // studio layout all settle in prepare, before the ready marker. Cursor
     // hidden: the loop is a document scroll with no pointer interaction,

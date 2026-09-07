@@ -75,7 +75,7 @@ export const formatMarker = (meta: MarkerMeta): string => {
 
 /** The loop variable a fresh `{% for %}` names its item, derived from the
  *  array path by the same rule the marker codemod uses. */
-export const loopAliasFor = (path: string): string => legacyLoopAlias(path);
+const loopAliasFor = (path: string): string => legacyLoopAlias(path);
 
 export const fieldMarker = (path: string): string =>
   formatMarker({ kind: "placeholder", expr: path, filters: [] });
