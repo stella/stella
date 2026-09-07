@@ -1143,6 +1143,7 @@ describe("MCP anonymization canary corpus", () => {
             format: null,
           },
         ],
+        arrays: [],
         conditions: [],
         computed: [],
       });
