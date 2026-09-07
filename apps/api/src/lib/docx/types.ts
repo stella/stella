@@ -301,6 +301,13 @@ export const isPlausibleLocale = (value: string): boolean => {
 const describedString = (description: string) =>
   v.pipe(v.string(), v.description(description));
 
+/** A string whose empty value says nothing: an empty join template renders
+ *  nothing and an empty regex constrains nothing, so "" on either can only be
+ *  a placeholder for a property the caller is not setting. Rejecting it here is
+ *  what lets the tool surface read it as omitted. */
+const nonEmptyString = (description: string) =>
+  v.pipe(v.string(), v.minLength(1), v.description(description));
+
 const fieldPathSchema = (description: string) =>
   v.pipe(
     v.string(),
@@ -321,7 +328,7 @@ export const fieldPartSchema = v.strictObject({
       v.description("Allowed values for a select part"),
     ),
   ),
-  pattern: v.optional(describedString("Regex for the whole part value")),
+  pattern: v.optional(nonEmptyString("Regex for the whole part value")),
 });
 
 export const fieldLookupFormatSchema = v.strictObject({
@@ -387,7 +394,7 @@ export const fieldValidationObjectSchema = v.strictObject({
   max: v.optional(
     v.pipe(v.number(), v.finite(), v.description("Maximum numeric value")),
   ),
-  pattern: v.optional(describedString("Regex for the whole value")),
+  pattern: v.optional(nonEmptyString("Regex for the whole value")),
   minItems: v.optional(
     v.pipe(v.number(), v.finite(), v.description("Minimum repeated items")),
   ),
@@ -533,7 +540,7 @@ const fieldMetaObjectSchema = v.strictObject({
       v.description(FIELD_PARTS_DESCRIPTION),
     ),
   ),
-  format: v.optional(describedString("Join template over the part keys")),
+  format: v.optional(nonEmptyString("Join template over the part keys")),
   optionsFrom: v.optional(
     fieldPathSchema("Dependent select: source field path"),
   ),

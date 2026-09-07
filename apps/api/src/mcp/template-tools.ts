@@ -2316,6 +2316,67 @@ const entryIndexOfIssue = (issue: v.BaseIssue<unknown>): number | null => {
   return typeof position.key === "number" ? position.key : null;
 };
 
+type TemplateFieldProperty = keyof v.InferInput<
+  typeof templateFieldInputSchema
+>;
+
+/**
+ * The properties that decide WHO fills a field. Dropping one would silently
+ * turn a derived field into a question for the person filling, so an entry
+ * that gets one wrong is reported whole and applied not at all. Typed against
+ * the entry's own keys, so renaming one is a compile error here.
+ */
+const DECISION_PROPERTIES = [
+  "source",
+  "parts",
+  "format",
+] as const satisfies readonly TemplateFieldProperty[];
+
+/** Every property the entry schema declares, so an undeclared key is never
+ *  dropped: a misspelled `lable` must refuse the entry, not vanish. */
+const DECLARED_ENTRY_PROPERTIES: ReadonlySet<string> = new Set(
+  Object.keys(templateFieldInputSchema.entries),
+);
+
+/**
+ * The entry property one issue is about and that may be dropped on its own, or
+ * null when the issue belongs to the entry as a whole: an undeclared key, a
+ * failed cross-property check, `path` (the entry cannot be read without it),
+ * or a property that decides who fills the field.
+ */
+const droppablePropertyOfIssue = (
+  issue: v.BaseIssue<unknown>,
+): string | null => {
+  const property = issue.path?.[2]?.key;
+  if (typeof property !== "string" || property === "path") {
+    return null;
+  }
+  if (!DECLARED_ENTRY_PROPERTIES.has(property)) {
+    return null;
+  }
+  return DECISION_PROPERTIES.some((decision) => decision === property)
+    ? null
+    : property;
+};
+
+const isUnknownArray = (value: unknown): value is readonly unknown[] =>
+  Array.isArray(value);
+
+const isEntryRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+/** One entry with a property removed. */
+const withoutProperty = (
+  entry: unknown,
+  property: string,
+): Record<string, unknown> | null => {
+  if (!isEntryRecord(entry) || !Object.hasOwn(entry, property)) {
+    return null;
+  }
+  const { [property]: _dropped, ...rest } = entry;
+  return rest;
+};
+
 type ConfigureEntries =
   | { type: "rejected"; result: InternalToolErrorResult }
   | {
@@ -2333,18 +2394,24 @@ type ConfigureEntries =
     };
 
 /**
- * Read the request one entry at a time. The schema is the tool's own, applied
- * to a shrinking `fields` array: an entry it refuses drops out with its own
- * issue and the rest are re-parsed, so a caller that got one property wrong
- * still configures the entries beside it. Anything the schema objects to
- * outside `fields` is about the request, and fails it.
+ * Read the request one property at a time. The schema is the tool's own,
+ * applied to a `fields` array that is repaired between attempts: a property it
+ * refuses is dropped from its entry and reported on its own, and only an entry
+ * whose `path` (or whose shape as a whole) is unreadable drops out. A caller
+ * that got one property wrong still configures everything else it sent —
+ * including the rest of that entry. Anything the schema objects to outside
+ * `fields` is about the request, and fails it.
+ *
+ * The loop terminates: every pass either drops one property from an entry or
+ * drops an entry, and both are finite.
  */
 const parseConfigureEntries = (
   args: Record<string, unknown>,
 ): ConfigureEntries => {
   const schema = CONFIGURE_TEMPLATE_FIELDS_TOOL_DEFINITION.inputSchemaSource;
-  const sent: unknown[] | null = Array.isArray(args["fields"])
-    ? args["fields"]
+  const sentFields: unknown = args["fields"];
+  const sent: unknown[] | null = isUnknownArray(sentFields)
+    ? [...sentFields]
     : null;
   const issues: FieldOverlayIssue[] = [];
   let positions = sent === null ? [] : sent.map((_entry, index) => index);
@@ -2364,6 +2431,7 @@ const parseConfigureEntries = (
       };
     }
     const rejected = new Set<number>();
+    const repaired = new Set<number>();
     for (const issue of parsed.issues) {
       const local = entryIndexOfIssue(issue);
       if (local === null || sent === null) {
@@ -2375,12 +2443,26 @@ const parseConfigureEntries = (
       const position =
         positions[local] ??
         panic(`entry issue names position ${String(local)}`);
-      if (rejected.has(position)) {
+      if (rejected.has(position) || repaired.has(position)) {
+        continue;
+      }
+      const property = droppablePropertyOfIssue(issue);
+      const without =
+        property === null ? null : withoutProperty(sent[position], property);
+      if (property !== null && without !== null) {
+        repaired.add(position);
+        sent[position] = without;
+        issues.push({
+          path: `fields.${String(position)}.${property}`,
+          index: position,
+          message: `\`${property}\` was dropped: ${issue.message}`,
+          hint: `Send that property again once it is valid; the rest of the entry was applied. See ${TEMPLATE_FIELD_REFERENCE_URI}.`,
+        });
         continue;
       }
       rejected.add(position);
       issues.push({
-        path: `fields.${position}`,
+        path: `fields.${String(position)}`,
         index: position,
         message: issue.message,
         hint: `Fix this entry against ${TEMPLATE_FIELD_REFERENCE_URI} and send it again; the other entries were applied.`,

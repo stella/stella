@@ -3289,6 +3289,107 @@ describe("MCP template tools", () => {
     ]);
   });
 
+  test("configure_template_fields applies an entry whose optional properties are empty placeholders", async () => {
+    // The payload a model that fills every declared property actually sends,
+    // taken verbatim from an authoring-eval trace: `options_from`, `format`
+    // and the numeric bounds are placeholders it never meant to set.
+    let received: unknown;
+    configureTemplateFieldsMock.mockImplementation(async function* (options: {
+      fields: unknown;
+    }) {
+      yield* [];
+      received = options.fields;
+      return Result.ok({ issues: [], manifest: { version: 1, fields: [] } });
+    });
+    describeStoredTemplateMock.mockResolvedValue(
+      describedTemplate({ name: "Dohoda o mlcenlivosti" }),
+    );
+
+    const result = await handleMcpToolCall({
+      args: {
+        template_id: TEMPLATE_ID,
+        fields: [
+          {
+            path: "rozhodne_pravo",
+            label: "Rozhodné právo",
+            hint: "Vyberte rozhodné právo.",
+            input_type: "select",
+            options: ["České republiky", "Slovenské republiky"],
+            validation: {
+              required: true,
+              min_length: 0,
+              max_length: 0,
+              min: 0,
+              max: 0,
+              pattern: "",
+              min_items: 0,
+              max_items: 0,
+            },
+            required: true,
+            format: "",
+            options_from: "",
+            source: { type: "person" },
+            date_format: { locale: "cs", style: "long" },
+          },
+        ],
+      },
+      context: createContext(),
+      toolName: "configure_template_fields",
+    });
+
+    expect(result.isError).toBeFalsy();
+    const { issues } = asTestRaw<{ issues: unknown[] }>(
+      parseToolPayload(result),
+    );
+    expect(issues).toEqual([]);
+    // `options_from: ""` is a placeholder the property refuses, so it reads as
+    // omitted; `format: ""` and the zero bounds are values the property
+    // accepts, so they are applied as sent.
+    expect(received).toMatchObject([
+      {
+        path: "rozhodne_pravo",
+        inputType: "select",
+        options: ["České republiky", "Slovenské republiky"],
+        required: true,
+      },
+    ]);
+    expect(received).not.toMatchObject([{ optionsFrom: "" }]);
+  });
+
+  test("configure_template_fields drops one unusable optional property and keeps the entry", async () => {
+    let received: unknown;
+    configureTemplateFieldsMock.mockImplementation(async function* (options: {
+      fields: unknown;
+    }) {
+      yield* [];
+      received = options.fields;
+      return Result.ok({ issues: [], manifest: { version: 1, fields: [] } });
+    });
+    describeStoredTemplateMock.mockResolvedValue(
+      describedTemplate({ name: "Company POA" }),
+    );
+
+    const result = await handleMcpToolCall({
+      args: {
+        template_id: TEMPLATE_ID,
+        fields: [
+          { path: "company", label: "Company", options_from: "not a path!" },
+        ],
+      },
+      context: createContext(),
+      toolName: "configure_template_fields",
+    });
+
+    expect(result.isError).toBeFalsy();
+    const { issues } = asTestRaw<{
+      issues: { path: string; index: number; message: string }[];
+    }>(parseToolPayload(result));
+    expect(issues).toMatchObject([{ path: "fields.0.options_from", index: 0 }]);
+    expect(issues[0]?.message).toContain("`options_from` was dropped");
+    // The rest of the entry is applied.
+    expect(received).toEqual([{ path: "company", label: "Company" }]);
+  });
+
   test("configure_template_fields forbids members without template:update permission", async () => {
     const result = await handleMcpToolCall({
       args: { template_id: TEMPLATE_ID, fields: [{ path: "company" }] },

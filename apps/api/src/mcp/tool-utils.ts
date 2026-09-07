@@ -109,12 +109,56 @@ type NullAsAbsentSchema<TSchema extends ToolObjectInputSchema> =
     readonly advertisedSchema: TSchema;
   };
 
-/** One object or array level of a declared input, as far as null-dropping
- * cares: which properties carry null as absence, and where to recurse. */
+/**
+ * The values a client sends for a property it is not setting. `null` is the
+ * convention this surface documents; a client that must fill every declared
+ * property instead sends the empty value of the declared type. `0` and `false`
+ * are absent from this list on purpose: they are values a number or boolean
+ * property means.
+ */
+const ABSENT_PLACEHOLDERS = [
+  "null",
+  "empty-string",
+  "empty-array",
+  "empty-object",
+] as const;
+
+type AbsentPlaceholder = (typeof ABSENT_PLACEHOLDERS)[number];
+
+/** The value each placeholder stands for, for probing a property's schema. */
+const PLACEHOLDER_VALUES = {
+  null: null,
+  "empty-string": "",
+  "empty-array": [],
+  "empty-object": {},
+} as const satisfies Record<AbsentPlaceholder, unknown>;
+
+const isPlaceholder = (value: unknown, placeholder: AbsentPlaceholder) => {
+  switch (placeholder) {
+    case "null":
+      return value === null;
+    case "empty-string":
+      return value === "";
+    case "empty-array":
+      return isUnknownArray(value) && value.length === 0;
+    case "empty-object":
+      return (
+        isRecord(value) &&
+        !isUnknownArray(value) &&
+        Object.keys(value).length === 0
+      );
+    default:
+      return panic(`Unhandled absent placeholder: ${String(placeholder)}`);
+  }
+};
+
+/** One object or array level of a declared input, as far as placeholder
+ * dropping cares: which placeholders each property carries as absence, and
+ * where to recurse. */
 type NullAsAbsentPlan =
   | {
       readonly kind: "object";
-      readonly absentWhenNull: ReadonlySet<string>;
+      readonly absentWhen: ReadonlyMap<string, readonly AbsentPlaceholder[]>;
       readonly properties: ReadonlyMap<string, NullAsAbsentPlan>;
     }
   | { readonly kind: "array"; readonly item: NullAsAbsentPlan };
@@ -142,28 +186,37 @@ const declaredShapeOf = (schema: unknown): unknown => {
 };
 
 /**
- * A property that accepts an omitted value but rejects an explicit null:
- * exactly the properties where a client's null can only mean absence. A
- * required property still fails on null, and one that accepts null keeps it.
+ * The placeholders one property carries as absence: those it REJECTS, on a
+ * property that accepts being omitted. A required property still fails on the
+ * placeholder, and a property that accepts it keeps it — an empty string on a
+ * plain text property is an empty label, not an omission.
  */
-const isAbsentWhenNull = (schema: v.GenericSchema): boolean =>
-  v.safeParse(schema, undefined).success && !v.safeParse(schema, null).success;
+const absentPlaceholdersOf = (schema: v.GenericSchema): AbsentPlaceholder[] => {
+  if (!v.safeParse(schema, undefined).success) {
+    return [];
+  }
+  return ABSENT_PLACEHOLDERS.filter(
+    (placeholder) =>
+      !v.safeParse(schema, PLACEHOLDER_VALUES[placeholder]).success,
+  );
+};
 
 const nullAsAbsentPlan = (schema: unknown): NullAsAbsentPlan | undefined => {
   const declared = declaredShapeOf(schema);
   if (isObjectSchema(declared)) {
-    const absentWhenNull = new Set<string>();
+    const absentWhen = new Map<string, readonly AbsentPlaceholder[]>();
     const properties = new Map<string, NullAsAbsentPlan>();
     for (const [key, property] of Object.entries(declared.entries)) {
-      if (isAbsentWhenNull(property)) {
-        absentWhenNull.add(key);
+      const placeholders = absentPlaceholdersOf(property);
+      if (placeholders.length > 0) {
+        absentWhen.set(key, placeholders);
       }
       const nested = nullAsAbsentPlan(property);
       if (nested !== undefined) {
         properties.set(key, nested);
       }
     }
-    return { kind: "object", absentWhenNull, properties };
+    return { kind: "object", absentWhen, properties };
   }
   if (!isArraySchema(declared)) {
     return undefined;
@@ -184,7 +237,10 @@ const applyNullAsAbsent = (value: unknown, plan: NullAsAbsentPlan): unknown => {
       }
       const normalized: Record<string, unknown> = {};
       for (const [key, entry] of Object.entries(value)) {
-        if (entry === null && plan.absentWhenNull.has(key)) {
+        const placeholders = plan.absentWhen.get(key) ?? [];
+        if (
+          placeholders.some((placeholder) => isPlaceholder(entry, placeholder))
+        ) {
           continue;
         }
         const nested = plan.properties.get(key);
@@ -199,19 +255,24 @@ const applyNullAsAbsent = (value: unknown, plan: NullAsAbsentPlan): unknown => {
 };
 
 /**
- * Read a tool's input with `null` meaning absence, at every object level the
- * schema declares.
+ * Read a tool's input with a placeholder meaning absence, at every object level
+ * the schema declares.
  *
  * A strict tool-schema client must send every declared property, so it sends
- * `null` for the ones it is not setting. Null is not a value on this surface:
- * `input_type: null` reads as a field with no input control, `name: null` as
- * a rename to nothing. Normalizing inside one handler
- * leaves every other consumer of the schema (evals, tests, the capability
- * catalog) with the raw contract, so the schema owns it instead.
+ * something for the ones it is not setting: `null`, or — the shape models
+ * actually produce — the empty value of the declared type, `""` for a string,
+ * `[]` for an array, `{}` for an object. None of those is a value on this
+ * surface: `input_type: null` reads as a field with no input control,
+ * `options_from: ""` as a dependent select sourced from a field with no path.
+ * Normalizing inside one handler leaves every other consumer of the schema
+ * (evals, tests, the capability catalog) with the raw contract, so the schema
+ * owns it instead.
  *
- * Only properties the schema itself declares as optional-and-null-rejecting
- * are dropped, so a required property set to null and a null under a
- * misspelled key both still fail strict validation.
+ * Only a placeholder the property ITSELF rejects is dropped, and only on a
+ * property that accepts being omitted. A required property set to a
+ * placeholder, a placeholder under a misspelled key, and an empty string on a
+ * property that accepts one all still read exactly as sent. `0` and `false`
+ * are never placeholders.
  */
 export const nullAsAbsent = <TSchema extends ToolObjectInputSchema>(
   advertisedSchema: TSchema,

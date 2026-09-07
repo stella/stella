@@ -2860,6 +2860,7 @@ export const generatedRouteMap: RouteNode = {
                           },
                           pattern: {
                             type: "string",
+                            minLength: 1,
                             description: "Regex for the whole value",
                           },
                           min_items: {
@@ -2906,6 +2907,7 @@ export const generatedRouteMap: RouteNode = {
                             },
                             pattern: {
                               type: "string",
+                              minLength: 1,
                               description: "Regex for the whole part value",
                             },
                           },
@@ -2917,6 +2919,7 @@ export const generatedRouteMap: RouteNode = {
                       },
                       format: {
                         type: "string",
+                        minLength: 1,
                         description: "Join template over the part keys",
                       },
                       options_from: {
