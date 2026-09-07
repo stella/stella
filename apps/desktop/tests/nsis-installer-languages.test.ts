@@ -10,6 +10,7 @@ import type { SupportedLanguage } from "../src/i18n/index";
 // to the app fails to compile until it is answered here, and a locale the app
 // dropped fails as an excess key.
 const NSIS_LANGUAGE_BY_LOCALE = {
+  ar: "Arabic",
   cs: "Czech",
   de: "German",
   en: "English",
@@ -20,6 +21,7 @@ const NSIS_LANGUAGE_BY_LOCALE = {
   lt: "Lithuanian",
   lv: "Latvian",
   pl: "Polish",
+  "pt-BR": "PortugueseBR",
   sk: "Slovak",
 } as const satisfies Record<SupportedLanguage, string>;
 
