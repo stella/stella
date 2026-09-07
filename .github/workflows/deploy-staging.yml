@@ -457,7 +457,7 @@ jobs:
 
       - name: Setup Bun
         if: steps.current.outputs.promoted == 'true'
-        uses: stella/.github/actions/setup-bun-cached@2703e4d3ed115089e593e4ca5cc749be4a5d8cee
+        uses: stella/.github/actions/setup-bun-cached@49138dbccd20714b3e8997c4346edc3efb5c29cd
 
       - name: Install dependencies
         id: smoke-deps
