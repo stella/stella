@@ -502,6 +502,17 @@ describe("every adapter accounts for the fields its source states", () => {
         `${key}: its source states fields nothing decided about: ${undeclared.join(", ")}. Store them, or exclude them with the reason.`,
       ).toEqual([]);
 
+      // The other direction, or a disposition could be declared and never
+      // exercised: the checks below only walk what the fixture states, so a
+      // stored field missing from the fixture would be certified by nothing.
+      const unexercised = Object.keys(sourceFields.fields).filter(
+        (field) => !stated.includes(field),
+      );
+      expect(
+        unexercised,
+        `${key}: its inventory declares fields the fixture does not state: ${unexercised.join(", ")}. The fixture is the union of what the source's pages state, so add them there or drop them from the inventory.`,
+      ).toEqual([]);
+
       const decision = await buildDecision();
       const unstored = stated.flatMap((field) => {
         const disposition: SourceFieldDisposition | undefined =

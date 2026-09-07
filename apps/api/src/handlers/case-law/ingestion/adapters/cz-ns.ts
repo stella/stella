@@ -551,7 +551,17 @@ export const buildCzNsDecision = async (
     meta["legalSentence"] === undefined && meta["abstract"] === undefined
       ? ""
       : `|${meta["legalSentence"] ?? ""}|${meta["abstract"] ?? ""}`;
-  const raw = `${caseNumber}|${meta["ecli"] ?? ""}|${meta["decisionDate"] ?? ""}${summary}`;
+  const publishedOnWeb =
+    meta["publishedOnWeb"] === undefined
+      ? undefined
+      : parseCeDate(meta["publishedOnWeb"]);
+  // The publication day is hashed for every decision, not only where the page
+  // states one, and that moves every stored row's hash once. It is the pass
+  // that carries the day itself, and the multi-part raw beside it, onto rows
+  // written before either existed: the refresh check skips a row whose hash
+  // stands still, so a field nothing hashes can never reach the corpus that is
+  // already stored.
+  const raw = `${caseNumber}|${meta["ecli"] ?? ""}|${meta["decisionDate"] ?? ""}|${publishedOnWeb ?? ""}${summary}`;
 
   // Parse AST from the print page (rich HTML)
   let documentAst: DocumentAst | EmptyAst = EMPTY_AST;
@@ -614,9 +624,7 @@ export const buildCzNsDecision = async (
         // page the parser reads carries the court's other metadata rows but
         // not this one, so a row built from the print page alone never states
         // the day the document was published.
-        zverejnenoNaWebu: meta["publishedOnWeb"]
-          ? parseCeDate(meta["publishedOnWeb"])
-          : sourceMetadata["zverejnenoNaWebu"],
+        zverejnenoNaWebu: publishedOnWeb ?? sourceMetadata["zverejnenoNaWebu"],
         keywords: meta["keywords"]?.split("\n").flatMap((s) => {
           const trimmed = s.trim();
           return trimmed ? [trimmed] : [];

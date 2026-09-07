@@ -39,6 +39,7 @@ import { hashContent } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import { publisherSummaryOf } from "@/api/lib/case-law/publisher-summary";
 import {
+  decodeSourceRawEnvelope,
   listingIdentityKey,
   SOURCE_DOCUMENT_ID_MAX_LENGTH,
 } from "@/api/lib/legal-search/ingestion-types";
@@ -169,6 +170,13 @@ const DOCUMENT_HTML = `<html><body>
   řízení o kasační stížnosti.</p>
 </body></html>`;
 
+/** What the plain-text endpoint serves where the rich one is unavailable. */
+const DOCUMENT_TEXT =
+  "Nejvyšší správní soud rozhodl v senátě složeném z předsedy JUDr. Karla " +
+  "Šimky ve věci žalobce proti žalovanému Ministerstvu vnitra, o kasační " +
+  "stížnosti žalobce proti rozsudku městského soudu, takto: Kasační stížnost " +
+  "se zamítá.";
+
 /**
  * One field of the detail page, in the portal's own markup: a `data-field-id`
  * div whose label and value are two spans told apart by their class, and
@@ -213,6 +221,8 @@ type StubOptions = {
   continuation?: readonly Response[];
   /** Status for both document endpoints; 200 serves the fixture. */
   documentStatus?: number;
+  /** Status for the rich HTML document alone; defaults to `documentStatus`. */
+  htmlDocumentStatus?: number;
   /** Status for the detail page alone; defaults to `documentStatus`. */
   detailStatus?: number;
   /** The headnote the detail page states, if the court wrote one. */
@@ -225,10 +235,15 @@ const htmlResponse = (body: string, status = 200): Response =>
     headers: { "Content-Type": "text/html; charset=utf-8" },
   });
 
+/** The plain-text endpoint serves UTF-16, which is what the adapter decodes. */
+const utf16Response = (body: string): Response =>
+  new Response(Buffer.from(body, "utf16le"));
+
 const installStub = ({
   continuation = [],
   documentStatus = 200,
   detailStatus = documentStatus,
+  htmlDocumentStatus = documentStatus,
   legalSentence,
   search = [],
 }: StubOptions): { requests: RecordedRequest[] } => {
@@ -270,13 +285,13 @@ const installStub = ({
             : htmlResponse("", detailStatus);
         }
         if (url.pathname.startsWith("/DokumentOriginal/Html/")) {
-          return documentStatus === 200
+          return htmlDocumentStatus === 200
             ? htmlResponse(DOCUMENT_HTML)
-            : htmlResponse("", documentStatus);
+            : htmlResponse("", htmlDocumentStatus);
         }
         if (url.pathname.startsWith("/DokumentOriginal/Text/")) {
           return documentStatus === 200
-            ? new Response(DOCUMENT_HTML)
+            ? utf16Response(DOCUMENT_TEXT)
             : new Response(null, { status: documentStatus });
         }
         if (url.pathname === "/") {
@@ -1417,6 +1432,21 @@ describe("cz-nss buildDecision", () => {
     expect(none.rawHash).toBe(
       hashContent("1 Az 4/2026-79|2026-06-10|rozsudek"),
     );
+  });
+
+  test("a row built from the text endpoint still stores what was fetched", async () => {
+    const payload = await listedRow();
+    // The portal serves the rich document for most decisions and the plain
+    // text for the rest; the fallback row used to keep neither response.
+    installStub({ search: [], htmlDocumentStatus: 404 });
+    const built = await reconciliation.buildDecision(payload);
+    if (built.type !== "built") {
+      throw new TypeError("Expected the text fallback to build a decision");
+    }
+
+    const parts = decodeSourceRawEnvelope(built.decision.sourceRaw ?? "");
+    expect(built.decision.fulltext).toContain("Kasační stížnost");
+    expect(Object.keys(parts ?? {}).toSorted()).toEqual(["detail", "text"]);
   });
 
   test("refuses to write a row whose document the court did not serve", async () => {

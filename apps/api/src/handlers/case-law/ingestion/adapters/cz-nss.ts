@@ -551,7 +551,15 @@ export const parseResultRows = (html: string): ParsedRow[] => {
 type DecisionContent = {
   fulltext: string | undefined;
   documentAst: DocumentAst | EmptyAst | undefined;
+  /** The rich HTML document, which is what the parser reads. */
   sourceRaw: string | undefined;
+  /**
+   * The plain-text document, where the portal served that endpoint and not the
+   * rich one. Kept because it is a response fetched for this decision: a row
+   * built from it carries fulltext and no AST, and dropping the payload would
+   * leave that row with nothing to re-read.
+   */
+  fallbackText: string | undefined;
 };
 
 /**
@@ -561,6 +569,7 @@ type DecisionContent = {
 const CZ_NSS_RAW_PART = {
   DOCUMENT: "document",
   DETAIL: "detail",
+  TEXT: "text",
 } as const;
 
 const CZ_NSS_REPARSABLE_CONTENT_TYPES = new Set([
@@ -673,6 +682,7 @@ const fetchDecisionContent = async (
           fulltext: parsed.fulltext,
           documentAst: parsed.documentAst,
           sourceRaw: html,
+          fallbackText: undefined,
         };
       }
     }
@@ -699,22 +709,28 @@ const fetchDecisionContent = async (
         fulltext: undefined,
         documentAst: undefined,
         sourceRaw: undefined,
+        fallbackText: undefined,
       };
     }
 
     const buffer = await response.arrayBuffer();
     const text = new TextDecoder("utf-16").decode(buffer);
     const body = stripHtml(text);
+    const usable = body.length > 100;
     return {
-      fulltext: body.length > 100 ? body : undefined,
+      fulltext: usable ? body : undefined,
       documentAst: undefined,
       sourceRaw: undefined,
+      // Decoded rather than verbatim: the endpoint serves UTF-16, and the raw
+      // is stored as text. It is the payload this row's fulltext came from.
+      fallbackText: usable ? text : undefined,
     };
   } catch {
     return {
       fulltext: undefined,
       documentAst: undefined,
       sourceRaw: undefined,
+      fallbackText: undefined,
     };
   }
 };
@@ -1385,6 +1401,15 @@ const rowToResult = ({
   // This source publishes the docket with the sheet number appended.
   const publishedCaseNumber = row.publishedCaseNumber ?? row.caseNumber;
   const { sheetNumber } = splitCaseReference(publishedCaseNumber);
+  const rawParts = {
+    ...(content.sourceRaw === undefined
+      ? {}
+      : { [CZ_NSS_RAW_PART.DOCUMENT]: content.sourceRaw }),
+    ...(content.fallbackText === undefined
+      ? {}
+      : { [CZ_NSS_RAW_PART.TEXT]: content.fallbackText }),
+    ...(detailHtml === null ? {} : { [CZ_NSS_RAW_PART.DETAIL]: detailHtml }),
+  };
 
   return {
     caseNumber: row.caseNumber,
@@ -1444,20 +1469,15 @@ const rowToResult = ({
     }),
     parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NSS],
     documentAst: content.documentAst ?? EMPTY_AST,
-    // Every page fetched for this decision, not just the one the parser reads:
-    // the headnote and the rest of the portal's metadata are on the detail
-    // page, so a row that stored the document alone could never recover a
-    // field read later without going back to the court. Written only where the
-    // document itself came back, so a listing-only row still states no raw.
-    ...(content.sourceRaw === undefined
+    // Every response fetched for this decision, not just the one the parser
+    // reads: the headnote and the rest of the portal's metadata are on the
+    // detail page, so a row that stored the document alone could never recover
+    // a field read later without going back to the court. A row the portal
+    // served nothing for still states no raw.
+    ...(Object.keys(rawParts).length === 0
       ? {}
       : {
-          sourceRaw: encodeSourceRawEnvelope({
-            [CZ_NSS_RAW_PART.DOCUMENT]: content.sourceRaw,
-            ...(detailHtml === null
-              ? {}
-              : { [CZ_NSS_RAW_PART.DETAIL]: detailHtml }),
-          }),
+          sourceRaw: encodeSourceRawEnvelope(rawParts),
           sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
         }),
   };
@@ -1855,6 +1875,7 @@ const EMPTY_CONTENT: DecisionContent = {
   fulltext: undefined,
   documentAst: undefined,
   sourceRaw: undefined,
+  fallbackText: undefined,
 };
 
 /**
