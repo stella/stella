@@ -9,9 +9,12 @@ import { cn } from "@stll/ui/utils";
 
 import { CopyField } from "@/components/copy-field";
 import { DesktopDownloadButtons } from "@/components/desktop-download-buttons";
+import { DesktopConnectionStatus } from "@/features/desktop/desktop-connection-status";
+import { useDesktopAccountConnection } from "@/features/desktop/use-desktop-account-connection";
 import { useHydrationSafeDesktopPlatform } from "@/hooks/use-hydration-safe-desktop-platform";
 import type { TranslationKey } from "@/i18n/types";
 import { externalApiOrigin } from "@/lib/api-origins";
+import { detached } from "@/lib/detached";
 import { ClipboardWorkflowPreview } from "@/routes/onboarding/-components/clipboard-workflow-preview";
 
 /**
@@ -240,6 +243,9 @@ const AssistantSetupPanel = () => {
 const DesktopSetupPanel = () => {
   const t = useTranslations();
   const platform = useHydrationSafeDesktopPlatform();
+  // Downloading here starts the watch, so launching the app is the whole
+  // setup: no trip back to settings to connect.
+  const { connect, startWatch, state } = useDesktopAccountConnection();
   const shortcut = platform === "mac" ? "⌘ ⇧ V" : "Ctrl + Shift + V";
   const copyShortcut = platform === "mac" ? "⌘ C" : "Ctrl + C";
 
@@ -259,7 +265,13 @@ const DesktopSetupPanel = () => {
           {shortcut}
         </kbd>
       </p>
-      <DesktopDownloadButtons platform={platform} />
+      <DesktopDownloadButtons onDownload={startWatch} platform={platform} />
+      <DesktopConnectionStatus
+        onRetry={() => {
+          detached(connect(), "onboarding-download-step.connect-desktop");
+        }}
+        state={state}
+      />
     </SetupPanel>
   );
 };

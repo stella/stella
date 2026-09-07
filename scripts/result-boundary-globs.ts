@@ -90,6 +90,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/components/markdown/**/*.{ts,tsx}",
   "apps/web/src/components/organization/**/*.{ts,tsx}",
   "apps/web/src/features/command-palette/**/*.{ts,tsx}",
+  "apps/web/src/features/desktop/**/*.{ts,tsx}",
   "apps/web/src/features/guides/**/*.{ts,tsx}",
   "apps/web/src/features/inbox/**/*.{ts,tsx}",
   "apps/web/src/lib/deepl/**/*.{ts,tsx}",
