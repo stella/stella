@@ -429,7 +429,7 @@
     }
   },
   "try-catch-outside-boundary": {
-    "count": 436,
+    "count": 435,
     "files": {
       "apps/api/src/handlers/ai-autocomplete/stream.ts": 1,
       "apps/api/src/handlers/api-keys/mint.ts": 1,
