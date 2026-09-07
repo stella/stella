@@ -148,7 +148,14 @@ export type CaseDocument = {
 
 const REVIEW_STATUSES = ["reviewed", "disputed"] as const;
 export type ReviewStatus = (typeof REVIEW_STATUSES)[number];
-export type ReviewerOverrideState = Exclude<ClaimState, "recordconflict">;
+export const REVIEWER_OVERRIDE_STATES = [
+  "supported",
+  "tension",
+  "contradicted",
+  "nocover",
+  "notverifiable",
+] as const satisfies readonly ClaimState[];
+export type ReviewerOverrideState = (typeof REVIEWER_OVERRIDE_STATES)[number];
 
 /**
  * How a human resolved a record conflict: either picked which anchor

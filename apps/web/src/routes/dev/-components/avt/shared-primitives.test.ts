@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 
+import type { ClaimDetailPanel } from "@/routes/dev/-components/avt/claim-detail-panel";
 import type {
   CLAIM_TEXT,
   DOCUMENT,
@@ -21,6 +22,7 @@ import type {
 import type {
   CONFIDENCE_LEVELS,
   CLAIM_TYPE_META,
+  REVIEWER_OVERRIDE_STATES,
   STATE_META,
   ClaimFactRelation,
   RecordConflictBoundary,
@@ -37,6 +39,7 @@ import type {
 } from "@/routes/dev/-components/avt/verdict";
 
 type SharedPrimitiveExports = [
+  typeof ClaimDetailPanel,
   typeof CLAIM_TEXT,
   typeof DOCUMENT,
   typeof ConfBadge,
@@ -53,6 +56,7 @@ type SharedPrimitiveExports = [
   typeof TypeChip,
   typeof CONFIDENCE_LEVELS,
   typeof CLAIM_TYPE_META,
+  typeof REVIEWER_OVERRIDE_STATES,
   typeof STATE_META,
   ClaimFactRelation,
   RecordConflictBoundary,
