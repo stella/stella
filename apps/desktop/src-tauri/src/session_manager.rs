@@ -2125,12 +2125,7 @@ impl SessionManager {
       let snapshot = self.get_snapshot();
       let _ = handle.emit_to("main", "state-changed", &snapshot);
 
-      // Rebuild tray menu to reflect new state
-      if let Ok(menu) = crate::tray::build_tray_menu(handle, &snapshot)
-        && let Some(tray) = handle.tray_by_id("main")
-      {
-        let _ = tray.set_menu(Some(menu));
-      }
+      crate::tray::refresh(handle, &snapshot);
     }
   }
 

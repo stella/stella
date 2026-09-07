@@ -205,12 +205,7 @@ pub fn run() {
             mgr.ensure_sse_listener(&manager, sid);
           }
 
-          let snapshot = mgr.get_snapshot();
-          if let Ok(menu) = tray::build_tray_menu(&handle, &snapshot)
-            && let Some(tray) = handle.tray_by_id("main")
-          {
-            let _ = tray.set_menu(Some(menu));
-          }
+          tray::refresh(&handle, &mgr.get_snapshot());
         });
       }
 

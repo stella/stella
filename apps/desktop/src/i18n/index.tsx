@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core";
 import { emit } from "@tauri-apps/api/event";
 import { IntlProvider } from "use-intl";
 
@@ -87,23 +88,50 @@ const catalogueModules = {
 
 export const detectedLanguage = detectLanguage();
 
-export const getPreferredLanguage = (): SupportedLanguage => {
+const storedLanguage = (): SupportedLanguage | null => {
   try {
-    const storedLanguage = localStorage.getItem(DESKTOP_LANGUAGE_STORAGE_KEY);
-    if (storedLanguage && isSupportedLanguage(storedLanguage)) {
-      return storedLanguage;
-    }
+    const stored = localStorage.getItem(DESKTOP_LANGUAGE_STORAGE_KEY);
+    return stored !== null && isSupportedLanguage(stored) ? stored : null;
   } catch {
-    return detectedLanguage;
+    return null;
   }
-
-  return detectedLanguage;
 };
 
+export const getPreferredLanguage = (): SupportedLanguage =>
+  storedLanguage() ?? detectedLanguage;
+
 export const setPreferredLanguage = async (language: SupportedLanguage) => {
+  // The tray, the menus and the notifications render from the locale the
+  // backend holds, so the choice has to reach it, not only this window. It
+  // is stored only once the backend accepted it: a refused choice left in
+  // storage would come back on the next window as if it had gone through.
+  await invoke("set_desktop_language", { language });
   localStorage.setItem(DESKTOP_LANGUAGE_STORAGE_KEY, language);
   await emit(DESKTOP_LANGUAGE_CHANGED_EVENT, { language });
 };
+
+/**
+ * Settles the one language the app runs in when a window starts.
+ *
+ * A stored choice wins: the backend may predate it, and adopting the
+ * backend's own resolution would silently discard what the user picked.
+ * With nothing stored, the backend's resolution is adopted instead of
+ * detecting a second time here, so the tray and the windows cannot start
+ * out in different languages.
+ */
+export const synchronizeDesktopLanguage =
+  async (): Promise<SupportedLanguage> => {
+    const stored = storedLanguage();
+    if (stored) {
+      await invoke("set_desktop_language", { language: stored });
+      return stored;
+    }
+
+    const native = await invoke<string>("get_desktop_language");
+    const language = isSupportedLanguage(native) ? native : detectedLanguage;
+    localStorage.setItem(DESKTOP_LANGUAGE_STORAGE_KEY, language);
+    return language;
+  };
 
 /** Lays the window out in the language's own direction, so an RTL locale
  *  mirrors the whole UI rather than only its text. */
