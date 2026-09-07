@@ -601,7 +601,11 @@ export const caseLawDecisions = p.pgTable(
     // Attempt count is deliberately not a key column: leading with it
     // ordered every retry behind the whole untried backlog, and keeping
     // it here would make the index unable to serve the order that fixed
-    // that.
+    // that. The attempt-led index it replaces
+    // (`case_law_decisions_document_pending_idx`) outlives this change on
+    // purpose, so tasks still on the previous revision keep an index for
+    // the order they issue; a follow-up migration drops it once the
+    // release carrying this one is fully rolled out.
     p
       .index("case_law_decisions_document_pending_date_idx")
       .on(t.sourceId, t.decisionDate.desc().nullsLast(), t.id)

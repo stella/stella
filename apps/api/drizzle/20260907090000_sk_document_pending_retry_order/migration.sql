@@ -28,9 +28,9 @@ DROP INDEX CONCURRENTLY IF EXISTS "case_law_decisions_document_pending_date_idx"
 -- bounded range scan instead of a sort over the backlog. Same predicate, so
 -- the index still covers exactly the pending set.
 --
--- Built under a new name and the superseded one dropped after, rather than
--- replaced in place: the queue reads this index every page, and a drop-then-
--- build would leave it scanning the whole table for as long as the build runs.
+-- Built under a new name rather than replaced in place: the queue reads this
+-- index every page, and a drop-then-build would leave it scanning the whole
+-- table for as long as the build runs.
 -- squawk-ignore prefer-robust-stmts
 CREATE INDEX CONCURRENTLY "case_law_decisions_document_pending_date_idx"
   ON "case_law_decisions" (
@@ -40,14 +40,15 @@ CREATE INDEX CONCURRENTLY "case_law_decisions_document_pending_date_idx"
   )
   WHERE "fulltext" is null AND "document_url" is not null;
 --> statement-breakpoint
--- stella-migration-safety: reviewed drop-object - drops the superseded
--- index only, after its replacement above is built and valid. It carries no
--- data and no constraint, and the only reader of it (the deferred-document
--- queue) is served by the replacement, so a task running either revision of
--- the code keeps an index for the same predicate. Rollback is the reverse
--- build: the definition is in this file and in the migration that created it.
-DROP INDEX CONCURRENTLY IF EXISTS "case_law_decisions_document_pending_idx";
---> statement-breakpoint
+-- The superseded "case_law_decisions_document_pending_idx" is deliberately
+-- left in place. A migration runs before the rolling deployment finishes, so
+-- tasks still on the previous revision keep ordering the tier by attempt
+-- count; dropping their index here would make each of their queue refills a
+-- sort over the whole backlog until the last one is replaced.
+--
+-- Removal condition: every runner is on the order this migration's index
+-- serves, i.e. the release carrying it is fully rolled out. A follow-up
+-- migration in a later release drops it.
 
 SET statement_timeout = '5s';
 --> statement-breakpoint
