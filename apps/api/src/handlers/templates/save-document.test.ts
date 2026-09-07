@@ -134,6 +134,7 @@ test("save manifest resolution retains source and nested AI metadata", () => {
     warnings: [],
     conditionPaths: [],
     documentFields: [],
+    loopAliases: [],
   };
   const manifest: TemplateManifest = {
     version: 1,

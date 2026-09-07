@@ -464,6 +464,22 @@ type AnalysisResult = {
   warnings: TemplateWarning[];
   conditionPaths: Set<string>;
   documentFilters: Map<string, DocumentFieldDeclaration>;
+  /** Alias to the array paths it was bound to. More than one path means the
+   *  document uses the name for two different loops, so it names nothing. */
+  loopAliases: Map<string, Set<string>>;
+};
+
+const recordLoopAlias = (
+  aliases: Map<string, Set<string>>,
+  alias: string,
+  path: string,
+): void => {
+  if (alias === path) {
+    return;
+  }
+  const paths = aliases.get(alias) ?? new Set<string>();
+  paths.add(path);
+  aliases.set(alias, paths);
 };
 
 /**
@@ -517,6 +533,7 @@ type ContainerStructureOptions = {
   conditionPaths: Set<string>;
   errors: TemplateStructureError[];
   fields: FieldAccumulator;
+  loopAliases: Map<string, Set<string>>;
   warnings: TemplateWarning[];
 };
 
@@ -525,6 +542,7 @@ const collectContainerStructure = ({
   conditionPaths,
   errors,
   fields,
+  loopAliases,
   warnings,
 }: ContainerStructureOptions) => {
   const paragraphs = body.getElementsByTagNameNS(W_NS, "p");
@@ -562,8 +580,10 @@ const collectContainerStructure = ({
     if (directive?.kind === "for") {
       const scopedPath = qualifyLoopPath(directive.expression, activeArrays);
       registerField(fields, scopedPath, "array");
+      const alias = directive.alias ?? directive.expression;
+      recordLoopAlias(loopAliases, alias, scopedPath);
       activeArrays.push({
-        alias: directive.alias ?? directive.expression,
+        alias,
         declaredPath: directive.expression,
         scopedPath,
       });
@@ -651,6 +671,7 @@ const collectParagraphPlaceholders = ({
   errors,
   fieldConditions,
   fields,
+  loopAliases,
   paragraphs,
   placeholderCounts,
 }: ReturnType<typeof collectContainerStructure> & AnalysisResult): void => {
@@ -693,6 +714,7 @@ const collectParagraphPlaceholders = ({
             requireRowScopes(arrayScopes, i),
           );
           registerField(fields, scopedPath, "array");
+          recordLoopAlias(loopAliases, group.alias, scopedPath);
           inlineLoopScopes.push({
             alias: group.alias,
             declaredPath: group.arrayPath,
@@ -841,11 +863,13 @@ const analyzeContainer = (body: slimdom.Element): AnalysisResult => {
   const warnings: TemplateWarning[] = [];
   const conditionPaths = new Set<string>();
   const documentFilters = new Map<string, DocumentFieldDeclaration>();
+  const loopAliases = new Map<string, Set<string>>();
   const structure = collectContainerStructure({
     body,
     conditionPaths,
     errors,
     fields,
+    loopAliases,
     warnings,
   });
   collectLoopItemFields({ ...structure, fields });
@@ -856,6 +880,7 @@ const analyzeContainer = (body: slimdom.Element): AnalysisResult => {
     errors,
     fieldConditions,
     fields,
+    loopAliases,
     placeholderCounts,
     warnings,
   });
@@ -868,6 +893,7 @@ const analyzeContainer = (body: slimdom.Element): AnalysisResult => {
     warnings,
     conditionPaths,
     documentFilters,
+    loopAliases,
   };
 };
 
@@ -897,6 +923,11 @@ const mergeAnalysis = (
 
   primary.errors.push(...secondary.errors);
   primary.warnings.push(...secondary.warnings);
+  for (const [alias, paths] of secondary.loopAliases) {
+    for (const path of paths) {
+      recordLoopAlias(primary.loopAliases, alias, path);
+    }
+  }
   for (const [path, declaration] of secondary.documentFilters) {
     recordFieldDeclaration({
       declarations: primary.documentFilters,
@@ -946,6 +977,7 @@ const analyzeHeadersAndFooters = async (
     warnings: [],
     conditionPaths: new Set(),
     documentFilters: new Map(),
+    loopAliases: new Map(),
   };
 
   // Sort entries alphabetically to match the order used by
@@ -1015,6 +1047,7 @@ export const discoverTemplate = async (
     warnings: [],
     conditionPaths: [],
     documentFields: [],
+    loopAliases: [],
   };
 
   const docEntry = zip.file(MAIN_DOCUMENT_PART_PATH);
@@ -1104,6 +1137,13 @@ export const discoverTemplate = async (
     warnings: boundTemplateWarnings(primary.warnings),
     conditionPaths,
     documentFields: documentLayerFields(primary.documentFilters, errors),
+    loopAliases: [...primary.loopAliases]
+      .flatMap(([alias, paths]) => {
+        const [path] = [...paths];
+        // An alias two loops gave different arrays names nothing on its own.
+        return paths.size === 1 && path !== undefined ? [{ alias, path }] : [];
+      })
+      .toSorted((left, right) => compareCodeUnit(left.alias, right.alias)),
   };
 };
 

@@ -211,7 +211,14 @@ export type DiscoveredTemplate = {
    *  filter chain configures something. This is the document layer — the
    *  bytes are the source of truth, and a stored overlay only refines it. */
   documentFields: FieldMeta[];
+  /** Each `{% for alias in path %}` the document opens, as the name its body
+   *  writes and the array path the manifest speaks. An alias two loops give
+   *  different arrays is absent: it names nothing on its own. */
+  loopAliases: LoopAlias[];
 };
+
+/** One loop's name for its item, and the array path it stands for. */
+export type LoopAlias = { alias: string; path: string };
 
 // ── Custom XML Manifest ─────────────────────────────────
 

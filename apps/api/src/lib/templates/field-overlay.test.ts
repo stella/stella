@@ -6,6 +6,7 @@ import type { FieldMeta } from "@/api/lib/docx/types";
 
 import {
   applyFieldOverlay,
+  partitionFieldOverlay,
   resolveTemplateFieldOverlay,
   validateFieldOverlay,
 } from "./field-overlay";
@@ -244,6 +245,92 @@ describe("validateFieldOverlay", () => {
         }),
       ]);
     }
+  });
+});
+
+describe("loop aliases at the configure boundary", () => {
+  const loopDocx = async () =>
+    makeDocx(
+      "appoints: {% for attorney in attorneys %}{{ attorney.name }}" +
+        "{% if not loop.last %}, {% endif %}{% endfor %}.",
+    );
+
+  test("discovery reports the name the loop bound and the array it stands for", async () => {
+    const discovered = await discoverTemplate(await loopDocx());
+
+    expect(discovered.loopAliases).toEqual([
+      { alias: "attorney", path: "attorneys" },
+    ]);
+  });
+
+  test("an entry written through the loop alias configures the array's item field", async () => {
+    const discovered = await discoverTemplate(await loopDocx());
+
+    const { applied, issues } = partitionFieldOverlay({
+      configured: [],
+      discovered,
+      overlay: [{ path: "attorney.name", label: "Attorney name" }],
+    });
+
+    expect(issues).toEqual([]);
+    expect(applied).toEqual([
+      { path: "attorneys.name", label: "Attorney name" },
+    ]);
+  });
+
+  test("the bare array root carries the loop's own properties", async () => {
+    const discovered = await discoverTemplate(await loopDocx());
+
+    const { applied, issues } = partitionFieldOverlay({
+      configured: [],
+      discovered,
+      overlay: [
+        {
+          path: "attorneys",
+          label: "Attorneys",
+          required: true,
+          validation: { minItems: 3, maxItems: 3 },
+        },
+      ],
+    });
+
+    expect(issues).toEqual([]);
+    expect(applied.at(0)?.path).toBe("attorneys");
+  });
+
+  test("a name no loop bound is still refused, naming the discovered paths", async () => {
+    const discovered = await discoverTemplate(await loopDocx());
+
+    const { applied, issues } = partitionFieldOverlay({
+      configured: [],
+      discovered,
+      overlay: [{ path: "lawyer.name", label: "Lawyer" }],
+    });
+
+    expect(applied).toEqual([]);
+    expect(issues.at(0)?.message).toContain("No marker {{lawyer.name}}");
+  });
+
+  test("a real path always wins over the alias reading", async () => {
+    const discovered = await discoverTemplate(
+      await makeDocx(
+        "{{ attorney.name }}",
+        "{% for attorney in attorneys %}",
+        "{{ attorney.name }}",
+        "{% endfor %}",
+      ),
+    );
+
+    // The loop body's own marker is the array's item field; the paragraph
+    // above the loop declares a top-level `attorney.name`. Configuring that
+    // path means the field that exists under that exact name.
+    const { applied } = partitionFieldOverlay({
+      configured: [],
+      discovered,
+      overlay: [{ path: "attorney.name", label: "Attorney" }],
+    });
+
+    expect(applied.at(0)?.path).toBe("attorney.name");
   });
 });
 

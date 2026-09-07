@@ -90,6 +90,42 @@ const carriesConfiguration = (field: FieldMeta): boolean =>
     ([key, value]) => key !== "path" && value !== undefined,
   );
 
+/**
+ * The path an overlay entry means, in the vocabulary the manifest speaks.
+ *
+ * A loop names its item — `{% for attorney in attorneys %}` — and the body
+ * writes `{{ attorney.name }}`, so that is the path a model reaches for when
+ * it configures the field. The manifest speaks the array path, because a loop
+ * over `attorneys` has ONE `attorneys.name` however the body spells it. The
+ * two are the same field, so the alias resolves here rather than being
+ * refused as a marker the DOCX does not carry.
+ *
+ * Only an alias the document actually bound is resolved, and only when it does
+ * not collide with a real path: a field genuinely called `attorney.name`
+ * always wins over the alias reading.
+ */
+export const canonicalizeOverlayPath = (
+  path: string,
+  discovered: DiscoveredTemplate,
+  declared: ReadonlySet<string>,
+): string => {
+  if (declared.has(path)) {
+    return path;
+  }
+  for (const { alias, path: arrayPath } of discovered.loopAliases) {
+    if (path === alias) {
+      return arrayPath;
+    }
+    if (path.startsWith(`${alias}.`)) {
+      const resolved = `${arrayPath}.${path.slice(alias.length + 1)}`;
+      if (declared.has(resolved)) {
+        return resolved;
+      }
+    }
+  }
+  return path;
+};
+
 type ValidateFieldOverlayOptions = {
   /** Fields already configured on the template (its current manifest). */
   configured: readonly FieldMeta[];
@@ -243,7 +279,14 @@ export const partitionFieldOverlay = ({
   overlay,
 }: ValidateFieldOverlayOptions): PartitionFieldOverlayResult => {
   const issuesByIndex = new Map<number, FieldOverlayIssue>();
-  let survivors = overlay.map((field, index) => ({ field, index }));
+  const { declared } = declaredPaths(discovered);
+  let survivors = overlay.map((field, index) => ({
+    field: {
+      ...field,
+      path: canonicalizeOverlayPath(field.path, discovered, declared),
+    },
+    index,
+  }));
   for (;;) {
     const issues = validateFieldOverlay({
       configured,

@@ -611,6 +611,7 @@ describe("mergeManifestWithDiscovery", () => {
     warnings: [],
     conditionPaths: [],
     documentFields: [],
+    loopAliases: [],
   };
 
   test("returns discovered fields when no manifest", () => {
@@ -684,6 +685,7 @@ describe("mergeManifestWithDiscovery", () => {
       warnings: [],
       conditionPaths: [],
       documentFields: [],
+      loopAliases: [],
     };
     const manifest: TemplateManifest = {
       version: 1,
@@ -711,6 +713,7 @@ describe("mergeManifestWithDiscovery", () => {
       warnings: [],
       conditionPaths: [],
       documentFields: [],
+      loopAliases: [],
     };
     const manifest: TemplateManifest = {
       version: 1,
@@ -743,6 +746,7 @@ describe("mergeManifestWithDiscovery", () => {
       warnings: [],
       conditionPaths: [],
       documentFields: [],
+      loopAliases: [],
     };
     const resolved = mergeManifestWithDiscovery(null, discovery);
     expect(resolved.map((f) => f.path).sort()).toEqual([
@@ -778,6 +782,7 @@ describe("mergeManifestWithDiscovery", () => {
       warnings: [],
       conditionPaths: [],
       documentFields: [],
+      loopAliases: [],
     };
     const manifest: TemplateManifest = {
       version: 1,
@@ -820,6 +825,7 @@ describe("mergeManifestWithDiscovery", () => {
       warnings: [],
       conditionPaths: [],
       documentFields: [],
+      loopAliases: [],
     };
     const manifest: TemplateManifest = {
       version: 1,
@@ -862,6 +868,7 @@ describe("mergeManifestWithDiscovery", () => {
       warnings: [],
       conditionPaths: [],
       documentFields: [],
+      loopAliases: [],
     };
     const resolved = mergeManifestWithDiscovery(null, discovery);
     expect(resolved.map((f) => f.path).toSorted()).toEqual([
@@ -891,6 +898,7 @@ describe("mergeManifestWithDiscovery", () => {
       warnings: [],
       conditionPaths: [],
       documentFields: [],
+      loopAliases: [],
     };
 
     const resolved = mergeManifestWithDiscovery(null, discovery);
@@ -931,6 +939,7 @@ describe("mergeManifestWithDiscovery", () => {
       warnings: [],
       conditionPaths: [],
       documentFields: [],
+      loopAliases: [],
     };
     const resolved = mergeManifestWithDiscovery(manifest, discovery);
     expect(resolved.map((f) => f.path)).toEqual(["company"]);
@@ -984,6 +993,7 @@ describe("mergeManifestWithDiscovery", () => {
       warnings: [],
       conditionPaths: [],
       documentFields: [],
+      loopAliases: [],
     };
 
     const resolved = mergeManifestWithDiscovery(null, discovery);
@@ -1007,6 +1017,7 @@ describe("mergeManifestWithDiscovery", () => {
       warnings: [],
       conditionPaths: [],
       documentFields: [],
+      loopAliases: [],
     };
     const manifest: TemplateManifest = {
       version: 1,
@@ -1050,6 +1061,7 @@ describe("mergeManifestWithDiscovery", () => {
       warnings: [],
       conditionPaths: [],
       documentFields: [],
+      loopAliases: [],
     };
     const manifest: TemplateManifest = {
       version: 1,
@@ -1339,6 +1351,7 @@ describe("round-trip", () => {
       warnings: [],
       conditionPaths: [],
       documentFields: [],
+      loopAliases: [],
     };
 
     const resolved = mergeManifestWithDiscovery(manifest, discovered);
@@ -1641,6 +1654,7 @@ describe("round-trip", () => {
       warnings: [],
       conditionPaths: [],
       documentFields: [],
+      loopAliases: [],
     };
     const resolved = mergeManifestWithDiscovery(manifest, discovered);
     expect(resolved.find((f) => f.path === "company.krs")?.hint).toBe(
@@ -1674,6 +1688,7 @@ describe("round-trip", () => {
       warnings: [],
       conditionPaths: [],
       documentFields: [],
+      loopAliases: [],
     };
 
     const resolved = mergeManifestWithDiscovery(manifest, discovered);
@@ -1711,6 +1726,7 @@ describe("round-trip", () => {
       warnings: [],
       conditionPaths: [],
       documentFields: [],
+      loopAliases: [],
     };
 
     const resolved = mergeManifestWithDiscovery(manifest, discovered);
@@ -1749,6 +1765,7 @@ describe("round-trip", () => {
       warnings: [],
       conditionPaths: [],
       documentFields: [],
+      loopAliases: [],
     };
     const resolved = mergeManifestWithDiscovery(readBack, discovered);
     expect(resolved.find((f) => f.path === "lawyers")?.validation).toEqual({
@@ -1784,6 +1801,7 @@ describe("round-trip", () => {
       warnings: [],
       conditionPaths: [],
       documentFields: [],
+      loopAliases: [],
     };
 
     const resolved = mergeManifestWithDiscovery(manifest, discovered);
@@ -1817,6 +1835,7 @@ describe("round-trip", () => {
       warnings: [],
       conditionPaths: [],
       documentFields: [],
+      loopAliases: [],
     };
 
     const resolved = mergeManifestWithDiscovery(manifest, discovered);
