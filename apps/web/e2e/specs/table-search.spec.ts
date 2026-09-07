@@ -127,6 +127,79 @@ test.describe("find in table", () => {
     await expect(page.locator("mark")).toHaveCount(0);
   });
 
+  // The cells are read through a trigram index, so a term under three
+  // characters is never sent: the rows stay put, and the bar says why rather
+  // than looking broken. The third character is what submits.
+  test("a term under the floor submits nothing and says so", async ({
+    page,
+    request,
+  }) => {
+    test.slow();
+
+    const testWorkspace = workspace;
+    if (testWorkspace === null) {
+      throw new Error("Test workspace was not created");
+    }
+
+    const suffix = randomUUID().slice(0, 8);
+    const matchingName = `alpha-lease-${suffix}.docx`;
+    const otherName = `beta-invoice-${suffix}.docx`;
+    const docx = await readFile(DOCX_PATH);
+    await Promise.all(
+      [matchingName, otherName].map(
+        async (name) =>
+          await apiUploadDocx(
+            request,
+            testWorkspace.id,
+            testWorkspace.filePropertyId,
+            { name, mimeType: DOCX_MIME, buffer: docx },
+          ),
+      ),
+    );
+
+    const { cookies } = await request.storageState();
+    await page.context().addCookies(cookies);
+    await expect
+      .poll(
+        async () =>
+          await apiStatus(page.request, `/workspaces/${testWorkspace.id}`),
+        {
+          message: "browser context can read the created workspace",
+          timeout: 10_000,
+        },
+      )
+      .toBe(200);
+
+    await page.goto(`/workspaces/${testWorkspace.id}/${testWorkspace.viewId}`, {
+      waitUntil: "domcontentloaded",
+    });
+    const tableTab = page.getByRole("tab", { exact: true, name: "Table" });
+    await expect(tableTab).toBeVisible({ timeout: 30_000 });
+    await tableTab.click();
+    const otherRow = page.getByRole("button", { exact: true, name: otherName });
+    await expect(otherRow).toBeVisible({ timeout: 30_000 });
+
+    await page.keyboard.press("ControlOrMeta+f");
+    const findInput = page.getByRole("searchbox");
+    await expect(findInput).toBeFocused();
+
+    await findInput.fill("al");
+    await expect(findInput).toHaveAccessibleDescription(
+      "Type at least 3 characters",
+    );
+    // Enter is "search now", and there is still nothing to send.
+    await findInput.press("Enter");
+    await expect(otherRow).toBeVisible();
+    await expect(page.locator("mark")).toHaveCount(0);
+
+    await findInput.fill("alp");
+    await expect(findInput).not.toHaveAccessibleDescription(
+      "Type at least 3 characters",
+    );
+    await expect(otherRow).toBeHidden({ timeout: 15_000 });
+    await expect(page.locator("mark").first()).toHaveText("alp");
+  });
+
   // The submit debounces, and one toolbar serves every table view in a matter:
   // a switch between two of them leaves the component mounted with a timer
   // still pending. A timer that read the view when it fired rather than when

@@ -5155,6 +5155,7 @@
       "findInTable": "Ieškoti lentelėje",
       "findPlaceholder": "Ieškoti eilutėse…",
       "findScopeColumns": "{count, plural, one {# stulpelis} few {# stulpeliai} many {# stulpelio} other {# stulpelių}}",
+      "findTermTooShort": "{count, plural, one {Įveskite bent # simbolį} few {Įveskite bent # simbolius} many {Įveskite bent # simbolio} other {Įveskite bent # simbolių}}",
       "group": "Grupė",
       "groupBy": "Grupuoti pagal:",
       "groupItemCount": "{count, plural, one {# elementas} few {# elementai} many {# elemento} other {# elementų}}",

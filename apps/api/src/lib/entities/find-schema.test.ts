@@ -2,7 +2,10 @@ import { Value } from "@sinclair/typebox/value";
 import { describe, expect, test } from "bun:test";
 import type { Static } from "elysia";
 
-import { ENTITY_FIND_SCOPE_TYPES } from "@stll/api-contract";
+import {
+  ENTITY_FIND_SCOPE_TYPES,
+  ENTITY_FIND_TERM_MIN_LENGTH,
+} from "@stll/api-contract";
 import type { EntityFindScopeType } from "@stll/api-contract";
 
 import { tFind, tFindScope } from "@/api/lib/entities/find-schema";
@@ -31,6 +34,22 @@ describe("find schema", () => {
         term: "lease",
       }),
     ).toBe(true);
+  });
+});
+
+describe("find term length", () => {
+  const scope = { propertyIds: [], type: "all" };
+
+  test("the floor is the contract's, not a copy of it", () => {
+    expect(tFind.properties.term.minLength).toBe(ENTITY_FIND_TERM_MIN_LENGTH);
+  });
+
+  test("a term one character short is rejected, one at the floor accepted", () => {
+    const short = "a".repeat(ENTITY_FIND_TERM_MIN_LENGTH - 1);
+    const enough = "a".repeat(ENTITY_FIND_TERM_MIN_LENGTH);
+
+    expect(Value.Check(tFind, { scope, term: short })).toBe(false);
+    expect(Value.Check(tFind, { scope, term: enough })).toBe(true);
   });
 });
 

@@ -7,7 +7,10 @@
  * are testable without rendering a table.
  */
 
-import { PROPERTY_FIND_SUPPORT } from "@stll/api-contract";
+import {
+  ENTITY_FIND_TERM_MIN_LENGTH,
+  PROPERTY_FIND_SUPPORT,
+} from "@stll/api-contract";
 import type { EntityFindScope } from "@stll/api-contract";
 
 import type { TableFindHighlight } from "@/components/workspaces/table/find-highlight";
@@ -241,8 +244,10 @@ export const resolveTableFind = ({
     properties,
   });
   const effective = effectiveFindSelection({ columns, selection });
+  // A term under the floor is no find, the same as a blank one: the server
+  // would reject it, and marking it would explain rows nothing narrowed.
   const trimmed = term.trim();
-  if (trimmed === "") {
+  if (trimmed.length < ENTITY_FIND_TERM_MIN_LENGTH) {
     return { columns, highlight: null, request: {}, selection: effective };
   }
 

@@ -14380,7 +14380,7 @@ export const generatedRouteMap: RouteNode = {
                         },
                         find: {
                           description:
-                            "Filter rows to those whose displayed name or chosen columns contain this literal substring. Not `search`: that ranks an asynchronous index of document titles, this filters exactly what the grid renders and adds no sort keys. `scope.type` `all` also matches the name, `columns` matches only `scope.propertyIds`.",
+                            "Filter rows to those whose displayed name or chosen columns contain this literal substring. Not `search`: that ranks an asynchronous index of document titles, this filters exactly what the grid renders and adds no sort keys. `scope.type` `all` also matches the name, `columns` matches only `scope.propertyIds`. `term` is at least 3 characters: the cells are read through a trigram index, which a shorter term cannot use.",
                           type: "object",
                           required: ["scope", "term"],
                           properties: {
@@ -14414,6 +14414,7 @@ export const generatedRouteMap: RouteNode = {
                               },
                             },
                             term: {
+                              minLength: 3,
                               maxLength: 500,
                               type: "string",
                             },

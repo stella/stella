@@ -5155,6 +5155,7 @@
       "findInTable": "Najít v tabulce",
       "findPlaceholder": "Hledat v řádcích…",
       "findScopeColumns": "{count, plural, one {# sloupec} few {# sloupce} other {# sloupců}}",
+      "findTermTooShort": "{count, plural, one {Zadejte alespoň # znak} few {Zadejte alespoň # znaky} other {Zadejte alespoň # znaků}}",
       "group": "Skupina",
       "groupBy": "Seskupit podle:",
       "groupItemCount": "{count, plural, one {# položka} few {# položky} other {# položek}}",

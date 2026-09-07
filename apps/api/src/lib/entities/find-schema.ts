@@ -1,5 +1,7 @@
 import { t } from "elysia";
 
+import { ENTITY_FIND_TERM_MIN_LENGTH } from "@stll/api-contract";
+
 import { tSafeId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -44,7 +46,12 @@ export const tFindScope = t.Object({
 export const tFind = t.Object(
   {
     scope: tFindScope,
-    term: t.String({ maxLength: LIMITS.searchQueryMaxLength }),
+    // The floor is the trigram index's: a shorter term could only be answered
+    // by reading every cell in the workspace. The web never sends one.
+    term: t.String({
+      minLength: ENTITY_FIND_TERM_MIN_LENGTH,
+      maxLength: LIMITS.searchQueryMaxLength,
+    }),
   },
   {
     description:
@@ -52,6 +59,8 @@ export const tFind = t.Object(
       "this literal substring. Not `search`: that ranks an asynchronous " +
       "index of document titles, this filters exactly what the grid renders " +
       "and adds no sort keys. `scope.type` `all` also matches the name, " +
-      "`columns` matches only `scope.propertyIds`.",
+      "`columns` matches only `scope.propertyIds`. `term` is at least " +
+      `${ENTITY_FIND_TERM_MIN_LENGTH} characters: the cells are read through ` +
+      "a trigram index, which a shorter term cannot use.",
   },
 );

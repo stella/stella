@@ -58,6 +58,21 @@ export const isFindablePropertyType = (type: PropertyContentType): boolean =>
   PROPERTY_FIND_SUPPORT[type] === "searchable";
 
 /**
+ * The shortest term a find accepts, in characters after trimming.
+ *
+ * The cells are read through a trigram index, and a term shorter than one
+ * trigram gives that index nothing to look up: the query would fall back to
+ * reading every field row in the workspace, which is what the index exists to
+ * prevent. The API rejects a shorter term; the toolbar sends none and says
+ * why; the CLI surface documents it.
+ *
+ * A floor of three is a real cost for CJK, where two characters are often a
+ * whole word. That is a property of trigrams, not of this number: the remedy
+ * is a bigram index (`pg_bigm`) for those scripts, not a lower floor.
+ */
+export const ENTITY_FIND_TERM_MIN_LENGTH = 3;
+
+/**
  * How wide the find reaches.
  *
  * `all` is the unrestricted state: the entity's name (the string a name column

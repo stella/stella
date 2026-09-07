@@ -5155,6 +5155,7 @@
       "findInTable": "Keresés a táblázatban",
       "findPlaceholder": "Keresés a sorokban…",
       "findScopeColumns": "{count, plural, one {# oszlop} other {# oszlop}}",
+      "findTermTooShort": "{count, plural, one {Írjon be legalább # karaktert} other {Írjon be legalább # karaktert}}",
       "group": "Csoport",
       "groupBy": "Csoportosítás:",
       "groupItemCount": "{count, plural, one {# elem} other {# elem}}",

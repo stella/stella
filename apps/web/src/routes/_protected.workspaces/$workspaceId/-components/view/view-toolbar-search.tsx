@@ -1,10 +1,11 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useId, useRef, useState } from "react";
 import type { RefObject } from "react";
 
 import { Columns3Icon, InfoIcon, SearchIcon, XIcon } from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
+import { ENTITY_FIND_TERM_MIN_LENGTH } from "@stll/api-contract";
 import { Button } from "@stll/ui/button";
 import { Input } from "@stll/ui/input";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
@@ -106,6 +107,11 @@ export const ViewToolbarSearch = ({
   const searchable = searchableColumnIds(columns);
   const narrowed = selection.type === "columns";
   const open = find?.status === "open";
+  // Under the floor nothing is sent, so the rows stay put while the reader
+  // types; the hint is what tells them the bar is waiting rather than broken.
+  const typedLength = (find?.typed ?? "").trim().length;
+  const tooShort = typedLength > 0 && typedLength < ENTITY_FIND_TERM_MIN_LENGTH;
+  const tooShortHintId = useId();
 
   // What the rows on screen were asked for, so the chip cannot name a term
   // the query has not been sent; the selection it shows resolved in the same
@@ -198,6 +204,7 @@ export const ViewToolbarSearch = ({
       >
         <div className="flex items-center gap-1">
           <Input
+            aria-describedby={tooShort ? tooShortHintId : undefined}
             autoFocus
             className="flex-1"
             onChange={(event) => {
@@ -232,6 +239,13 @@ export const ViewToolbarSearch = ({
             <Columns3Icon className="size-3.5" />
           </Button>
         </div>
+        {tooShort && (
+          <p className="text-muted-foreground px-1 text-xs" id={tooShortHintId}>
+            {t("workspaces.views.findTermTooShort", {
+              count: ENTITY_FIND_TERM_MIN_LENGTH,
+            })}
+          </p>
+        )}
         {columnsShown && (
           <FindColumnList
             columns={pickerColumns}

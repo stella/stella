@@ -5155,6 +5155,7 @@
       "findInTable": "البحث في الجدول",
       "findPlaceholder": "ابحث في الصفوف…",
       "findScopeColumns": "{count, plural, zero {لا أعمدة} one {عمود واحد} two {عمودان} few {# أعمدة} many {# عمودًا} other {# عمود}}",
+      "findTermTooShort": "{count, plural, zero {اكتب حرفًا واحدًا على الأقل} one {اكتب حرفًا واحدًا على الأقل} two {اكتب حرفين على الأقل} few {اكتب # أحرف على الأقل} many {اكتب # حرفًا على الأقل} other {اكتب # حرف على الأقل}}",
       "group": "المجموعة",
       "groupBy": "التجميع حسب:",
       "groupItemCount": "{count, plural, zero {لا عناصر} one {عنصر واحد} two {عنصران} few {# عناصر} many {# عنصرًا} other {# عنصر}}",

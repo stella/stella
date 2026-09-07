@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { ENTITY_FIND_TERM_MIN_LENGTH } from "@stll/api-contract";
 import type { ConditionNode } from "@stll/conditions";
 
 import { toSafeId } from "@/lib/safe-id";
@@ -229,6 +230,24 @@ describe("resolving a view's find", () => {
       request: {},
       selection: { type: "all" },
     });
+  });
+
+  test("a term under the floor is no find either", () => {
+    const resolve = (term: string) =>
+      resolveTableFind({
+        layout: layout([]),
+        properties,
+        selection: { type: "all" },
+        term,
+      });
+    const floor = "a".repeat(ENTITY_FIND_TERM_MIN_LENGTH);
+
+    // Trimmed first: padding does not count towards the floor.
+    expect(resolve(` ${floor.slice(1)} `)).toMatchObject({
+      highlight: null,
+      request: {},
+    });
+    expect(resolve(floor).request.find?.term).toBe(floor);
   });
 
   test("the request, the marks and the picker come from one pass", () => {

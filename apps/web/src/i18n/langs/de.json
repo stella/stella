@@ -5155,6 +5155,7 @@
       "findInTable": "In Tabelle suchen",
       "findPlaceholder": "In Zeilen suchen…",
       "findScopeColumns": "{count, plural, one {# Spalte} other {# Spalten}}",
+      "findTermTooShort": "{count, plural, one {Geben Sie mindestens # Zeichen ein} other {Geben Sie mindestens # Zeichen ein}}",
       "group": "Gruppe",
       "groupBy": "Gruppieren nach:",
       "groupItemCount": "{count, plural, one {# Element} other {# Elemente}}",

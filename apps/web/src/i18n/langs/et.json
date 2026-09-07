@@ -5155,6 +5155,7 @@
       "findInTable": "Otsi tabelist",
       "findPlaceholder": "Otsi ridadest…",
       "findScopeColumns": "{count, plural, one {# veerg} other {# veergu}}",
+      "findTermTooShort": "{count, plural, one {Sisesta vähemalt # märk} other {Sisesta vähemalt # märki}}",
       "group": "Rühm",
       "groupBy": "Rühmita:",
       "groupItemCount": "{count, plural, one {# üksus} other {# üksust}}",

@@ -5155,6 +5155,7 @@
       "findInTable": "Meklēt tabulā",
       "findPlaceholder": "Meklēt rindās…",
       "findScopeColumns": "{count, plural, zero {# kolonnu} one {# kolonna} other {# kolonnas}}",
+      "findTermTooShort": "{count, plural, zero {Ievadiet vismaz # rakstzīmju} one {Ievadiet vismaz # rakstzīmi} other {Ievadiet vismaz # rakstzīmes}}",
       "group": "Grupa",
       "groupBy": "Grupēt pēc:",
       "groupItemCount": "{count, plural, zero {# vienumu} one {# vienums} other {# vienumi}}",

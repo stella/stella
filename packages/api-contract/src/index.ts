@@ -136,6 +136,7 @@ export type {
 } from "./document-properties";
 export {
   ENTITY_FIND_SCOPE_TYPES,
+  ENTITY_FIND_TERM_MIN_LENGTH,
   isFindablePropertyType,
   PROPERTY_CONTENT_TYPES,
   PROPERTY_FIND_SUPPORT,
