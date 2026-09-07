@@ -43,6 +43,12 @@ export type FieldOverlayIssue = {
   hint: string;
 };
 
+/** The phrase that names the lookup-ownership refusal built below. A reader
+ *  of the issues (the template-authoring eval's grammar-trap detector) has to
+ *  recognize that one refusal among the rest, so the message and the matcher
+ *  are the same constant and cannot drift apart. */
+export const LOOKUP_OWNERSHIP_REFUSAL = "declares a lookup whose format key";
+
 /**
  * What the DOCX declares, split by how the path came to exist. `declared` is
  * everything discovery knows: markers, the condition paths only an `{% if %}`
@@ -226,7 +232,7 @@ export const validateFieldOverlay = ({
         continue;
       }
       const message =
-        `"${field.path}" declares a lookup whose format key "${format.key}" ` +
+        `"${field.path}" ${LOOKUP_OWNERSHIP_REFUSAL} "${format.key}" ` +
         `renders {{${childPath}}}, but "${childPath}" is configured as its ` +
         "own field.";
       const hint =

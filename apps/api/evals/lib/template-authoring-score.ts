@@ -11,9 +11,10 @@
  *
  * A trap is a placement or a spelling the ENGINE refuses, so the detectors
  * ask the engine's own parsers (`scanMarkers`, `classifyMarkerDefect`,
- * `detectRowBlockPair`, `parseInlineConditions`) rather than re-deriving the
- * rules: a placement the engine learns to run stops being a trap here on the
- * same day.
+ * `detectRowBlockPair`, `parseInlineConditions`) and, for a configuration
+ * trap, the refusals `partitionFieldOverlay` actually returned, rather than
+ * re-deriving the rules: a placement the engine learns to run, or an overlay
+ * shape it learns to fold, stops being a trap here on the same day.
  */
 
 import {
@@ -28,6 +29,7 @@ import {
 } from "@stll/template-conditions";
 
 import { parseInlineConditions } from "@/api/lib/docx/inline-conditions";
+import { LOOKUP_OWNERSHIP_REFUSAL } from "@/api/lib/templates/field-overlay";
 
 /**
  * One block of the document the model authored. A table cell holds a
@@ -45,7 +47,13 @@ export type AuthoredBlock =
 type OverlayFieldView = {
   path: string;
   condition?: string | undefined;
-  lookup?: { formats?: readonly { key: string }[] | undefined } | undefined;
+};
+
+/** One refusal the production overlay partition returned, naming the entry it
+ *  refuses by its position in the overlay that was sent. */
+type OverlayIssueView = {
+  index: number;
+  message: string;
 };
 
 /**
@@ -228,8 +236,6 @@ const countLanguageVariants = (paths: readonly string[]): number => {
   return count;
 };
 
-const rootSegment = (path: string): string => path.split(".")[0] ?? path;
-
 /** A truthiness test on the field's own path (`penalty`, `penalty == true`),
  *  which is the tick-box confusion wherever it appears. */
 const TRUTHINESS_TAIL_RE = /\s*(?:==|=|is)\s*true$/u;
@@ -243,6 +249,8 @@ type DetectGrammarTrapsOptions = {
   blocks: readonly AuthoredBlock[];
   /** The `fields` entries it passed to `configure_template_fields`. */
   overlay: readonly OverlayFieldView[];
+  /** What `partitionFieldOverlay` refused of those entries. */
+  overlayIssues: readonly OverlayIssueView[];
   /** Paths the task expects a person to answer as a yes/no question, so a
    *  `condition` on one of them is the tick-box confusion. */
   booleanInputPaths: readonly string[];
@@ -256,13 +264,13 @@ type DetectGrammarTrapsOptions = {
 export const detectGrammarTraps = ({
   blocks,
   overlay,
+  overlayIssues,
   booleanInputPaths,
 }: DetectGrammarTrapsOptions): GrammarTrapCounts => {
   const counts = zeroTrapCounts();
   /** The loops open at this point, each with the alias its body must use. */
   const eachStack: { alias: string; path: string }[] = [];
   const placeholderPaths: string[] = [];
-  const arrayPaths = new Set<string>();
 
   for (const { rowBlockStarts, text } of paragraphsOf(blocks)) {
     // The grammar package diagnoses a rejected span; the eval only counts what
@@ -320,7 +328,6 @@ export const detectGrammarTraps = ({
 
     for (const { meta } of markers) {
       if (meta.kind === "for") {
-        arrayPaths.add(meta.path);
         eachStack.push({ alias: meta.alias, path: meta.path });
         continue;
       }
@@ -349,17 +356,22 @@ export const detectGrammarTraps = ({
     ...new Set(placeholderPaths),
   ]);
 
-  const markerPathSet = new Set(placeholderPaths);
-  const booleanInputs = new Set(booleanInputPaths);
-  for (const field of overlay) {
+  // A child that only restates its parent's lookup now folds into that
+  // parent's format, so the trap is what the engine STILL refuses: the entry
+  // it names as a rival configuration of a marker the lookup already renders.
+  for (const { index, message } of overlayIssues) {
+    const path = overlay[index]?.path;
     if (
-      field.lookup !== undefined &&
-      field.path.includes(".") &&
-      markerPathSet.has(rootSegment(field.path)) &&
-      !arrayPaths.has(rootSegment(field.path))
+      message.includes(LOOKUP_OWNERSHIP_REFUSAL) &&
+      path !== undefined &&
+      path.includes(".")
     ) {
       counts.lookup_not_parent += 1;
     }
+  }
+
+  const booleanInputs = new Set(booleanInputPaths);
+  for (const field of overlay) {
     const { condition } = field;
     if (
       condition !== undefined &&

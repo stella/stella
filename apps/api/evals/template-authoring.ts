@@ -1762,6 +1762,7 @@ const buildAttempt = async ({
       traps: detectGrammarTraps({
         blocks: call.blocks,
         overlay: call.overlay,
+        overlayIssues: outcome.issues,
         booleanInputPaths: task.booleanInputPaths,
       }),
       overlayIssues: [
@@ -1809,6 +1810,7 @@ const buildUnsavedAttempt = async ({
     traps: detectGrammarTraps({
       blocks,
       overlay: [],
+      overlayIssues: [],
       booleanInputPaths: task.booleanInputPaths,
     }),
     overlayIssues: [
@@ -2060,6 +2062,7 @@ const scoreQuizTurn = ({
     traps: detectGrammarTraps({
       blocks: [],
       overlay: [],
+      overlayIssues: [],
       booleanInputPaths: [],
     }),
     overlayIssues: [],
