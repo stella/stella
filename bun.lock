@@ -545,7 +545,7 @@
     },
     "packages/business-registries": {
       "name": "@stll/business-registries",
-      "version": "0.3.3",
+      "version": "0.4.0",
       "dependencies": {
         "@stll/country-codes": "workspace:*",
         "@stll/stdnum": "^2.3.2",
@@ -620,7 +620,7 @@
     },
     "packages/cli": {
       "name": "@stll/cli",
-      "version": "0.10.1",
+      "version": "1.0.0",
       "bin": {
         "stella": "./dist/cli.js",
       },
@@ -841,7 +841,7 @@
     },
     "packages/ssr-kit": {
       "name": "@stll/ssr-kit",
-      "version": "0.1.1",
+      "version": "0.2.0",
       "dependencies": {
         "better-result": "catalog:",
       },
@@ -885,7 +885,7 @@
     },
     "packages/template-conditions": {
       "name": "@stll/template-conditions",
-      "version": "0.2.2",
+      "version": "0.3.0",
       "dependencies": {
         "@stll/conditions": "workspace:^",
         "better-result": "catalog:",

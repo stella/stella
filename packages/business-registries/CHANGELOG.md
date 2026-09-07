@@ -1,5 +1,13 @@
 # @stll/business-registries
 
+## 0.4.0
+
+### Minor Changes
+
+- [#3054](https://github.com/stella/stella/pull/3054) [`8289300`](https://github.com/stella/stella/commit/82893000f1ddbed8ac4dc81ef6b589cf9e401a31) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose ARES legal-form and court names and browser-safe KRS number validation. Preserve fractional share capital and format Czech registry particulars with readable currency and paragraph spacing.
+
+  Preserve full Slovak registry court names and format court references as section, insert number, and court code.
+
 ## 0.3.3
 
 ### Patch Changes

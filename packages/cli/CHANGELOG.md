@@ -1,5 +1,50 @@
 # @stll/cli
 
+## 1.0.0
+
+### Major Changes
+
+- [#2996](https://github.com/stella/stella/pull/2996) [`a5babe4`](https://github.com/stella/stella/commit/a5babe46525dbea0431c8b777648fb530e918ba6) Thanks [@jan-kubica](https://github.com/jan-kubica)! - The client-engagement container is now called a matter everywhere the CLI speaks: `--workspace-id` and the synthesized `--workspace` become `--matter-id`, `stella capability workspaces …` becomes `stella capability matters …`, and the `matter_id` input alias is gone because `matter_id` is now the canonical name. This CLI requires a server on contract revision 2 or newer, and older CLIs cannot talk to one.
+
+### Minor Changes
+
+- [#2979](https://github.com/stella/stella/pull/2979) [`1ed653b`](https://github.com/stella/stella/commit/1ed653ba2c78b34f37e6a7af3b3c4765534e4cec) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Smooth out the first-session papercuts: a registry cache the current schema cannot read is rebuilt instead of skipped forever; unknown commands and flags exit 2 and auth failures exit 3 per the documented contract; a default login requests the working scope set; tables fit the terminal, drop empty columns, and flatten nested objects; tool errors name the flag instead of the wire field; `--input` accepts camelCase keys; help briefs use the tool's description, groups list their commands, and a Required line states each command's inputs; workspace-scoped capabilities all take `--workspace-id`; commands a deployment has gated off are marked in help and `tools list`; `upload` prints the finalized document like other saves; `auth whoami` says how long the session has left; `task delete` removes a task (new `delete_task` tool).
+
+- [#3034](https://github.com/stella/stella/pull/3034) [`4348458`](https://github.com/stella/stella/commit/43484581996a74f8e25a655149bc01349c4866a5) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `stella template save-filled` takes `--completion-mode`, the same strict-by-default policy `stella template fill` already had: a fill that leaves `{{placeholders}}` live now fails instead of writing that document into a matter. `stella template fill` takes `--output-mode` (`text` by default, `docx` for the base64 archive), so a fill no longer returns a large base64 blob unless it is asked for. `stella capability templates fill-preview` takes `values` as a JSON object through `--input` instead of a JSON-encoded string flag.
+
+- [#3034](https://github.com/stella/stella/pull/3034) [`4348458`](https://github.com/stella/stella/commit/43484581996a74f8e25a655149bc01349c4866a5) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `stella capability templates fill-to-matter` now takes `values` as a JSON object through `--input` instead of a JSON-encoded string flag, matching `fill-preview`. The stored-template fill endpoints behind them read the same object: `templates.fill-by-id`, `templates.fill-preview`, and `templates.fill-to-matter` take `values` as a field-path map in the JSON body, and the web fill form sends it that way. The multipart upload fill (`templates.fill`) keeps `values` JSON-encoded, because a multipart field carries a string.
+
+- [#3034](https://github.com/stella/stella/pull/3034) [`4348458`](https://github.com/stella/stella/commit/43484581996a74f8e25a655149bc01349c4866a5) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `stella reference show template-workflow` prints the end-to-end template procedure: author markers, create the template, read the discovered paths back, configure the fields, preview the fill, persist it into a matter, plus the completion gate and the marker rules that are easy to get wrong.
+
+- [#2998](https://github.com/stella/stella/pull/2998) [`eef001f`](https://github.com/stella/stella/commit/eef001fefc5fb0c5d5c7e79b38338c90725b3e8f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Translation goes through the background run: `stella capability document-translations runs-create` starts one and `runs-get` reads its progress and output. The synchronous `stella capability entities translate` command is gone.
+
+### Patch Changes
+
+- [#3034](https://github.com/stella/stella/pull/3034) [`4348458`](https://github.com/stella/stella/commit/43484581996a74f8e25a655149bc01349c4866a5) Thanks [@jan-kubica](https://github.com/jan-kubica)! - A registry lookup field addresses every one of its output formats by
+  `{{path.key}}`, and the first format is additionally what a bare `{{path}}`
+  marker renders. A template whose only markers are the keyed ones therefore
+  fills from a single registry round trip, and `path` is configurable as the
+  lookup even though no `{{path}}` marker exists. A path the document writes as
+  its own marker is no longer dropped as a namespace parent, so it fills instead
+  of surviving as literal text. Overlay rejections now travel in the structured
+  error envelope with an `issues[].path` per offending entry, a lookup format key
+  colliding with a separately configured field at the same path is refused naming
+  both, and a field naming two derived sources says which two. The
+  `list_templates` detail payload echoes the whole field configuration —
+  registry, validation, binding source, `aiSeesDocument`, and the derived rules
+  keyed the way the `fields` overlay names them. A loop item's configuration
+  (`attorneys.name`) is kept as its own manifest field instead of being dropped
+  with the array root it folds into, and a declared property sent as `null` is
+  read as unset rather than as a value.
+
+- [#3036](https://github.com/stella/stella/pull/3036) [`f16ae79`](https://github.com/stella/stella/commit/f16ae79a24ece98b378489728ee78047b080dc2b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Every id a tool accepts that names a persisted record is now advertised as a UUID, so a malformed id is rejected before it is sent instead of failing on the server.
+
+- [#3002](https://github.com/stella/stella/pull/3002) [`6302ab3`](https://github.com/stella/stella/commit/6302ab3adbd9dc9d88db26938f09bcad81e99f38) Thanks [@jan-kubica](https://github.com/jan-kubica)! - The work transition capability's description says that completing or cancelling the task a workflow review gate raised approves or rejects that gate.
+
+- [#3034](https://github.com/stella/stella/pull/3034) [`4348458`](https://github.com/stella/stella/commit/43484581996a74f8e25a655149bc01349c4866a5) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `template save`'s `--docx-base64` help now states that the flag carries the original file's bytes encoded verbatim, and that parts must never be stripped out to shrink it.
+
+- [#3034](https://github.com/stella/stella/pull/3034) [`4348458`](https://github.com/stella/stella/commit/43484581996a74f8e25a655149bc01349c4866a5) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Clarify that updating a template manifest embeds it into a new stored DOCX version.
+
 ## 0.10.1
 
 ### Patch Changes
