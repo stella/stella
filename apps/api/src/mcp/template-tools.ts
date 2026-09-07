@@ -2321,7 +2321,7 @@ const droppablePath = (
 ): string[] => {
   const keys: string[] = [];
   let value = entry;
-  for (const segment of (issue.path ?? []).slice(2)) {
+  for (const segment of arrayOrEmpty(issue.path).slice(2)) {
     if (
       typeof segment.key !== "string" ||
       !isEntryRecord(value) ||

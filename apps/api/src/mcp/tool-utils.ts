@@ -237,9 +237,9 @@ const applyNullAsAbsent = (value: unknown, plan: NullAsAbsentPlan): unknown => {
       }
       const normalized: Record<string, unknown> = {};
       for (const [key, entry] of Object.entries(value)) {
-        const placeholders = plan.absentWhen.get(key) ?? [];
+        const placeholders = plan.absentWhen.get(key);
         if (
-          placeholders.some((placeholder) => isPlaceholder(entry, placeholder))
+          placeholders?.some((placeholder) => isPlaceholder(entry, placeholder))
         ) {
           continue;
         }

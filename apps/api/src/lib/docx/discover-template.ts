@@ -21,6 +21,8 @@ import {
   type FilterCall,
 } from "@stll/template-conditions";
 
+import { arrayOrEmpty } from "@/api/lib/array";
+
 import { parseBlockTree, scanBlockDirectives } from "./block-directives";
 import { scanPlaceholders } from "./discover-placeholders";
 import {
@@ -598,7 +600,7 @@ const collectContainerStructure = ({
       recordFieldDeclaration({
         declarations: documentFilters,
         errors,
-        filters: directive.filters ?? [],
+        filters: arrayOrEmpty(directive.filters),
         paragraphIndex: authoredIndices[i] ?? i,
         path: scopedPath,
         scope: "array",
