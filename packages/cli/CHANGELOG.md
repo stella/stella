@@ -1,5 +1,18 @@
 # @stll/cli
 
+## 1.1.0
+
+### Minor Changes
+
+- [#3102](https://github.com/stella/stella/pull/3102) [`41ef6b1`](https://github.com/stella/stella/commit/41ef6b1d5170789f1b93a8a4604d6d98633fb0b4) Thanks [@jan-kubica](https://github.com/jan-kubica)! - The server advertises API protocol 2 for the matter vocabulary, and this CLI
+  speaks only protocol 2. A CLI built for protocol 1 now fails
+  `compatibility check` against such a server with an upgrade message, instead
+  of failing on its first renamed input.
+
+### Patch Changes
+
+- [#3077](https://github.com/stella/stella/pull/3077) [`a8c9cf8`](https://github.com/stella/stella/commit/a8c9cf89ef701eaac16a3c34a9d32b55d7a1e2dc) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `template save` is replaced by `template create` and `template configure-fields`, one command per intent. Creating a template returns the fields the document declares and the exact configure call to make next, and passing a template id publishes a new version of that template rather than a second one. A field's "who fills this" is now a single `source` with a type (`person`, `ai`, `lookup`, `contact`, `party`, `matter`, `attorney`, `firm`, `formula`, `condition`) instead of six keys that could contradict each other, and configuring fields applies the entries it can and reports the rest per entry instead of refusing the whole call.
+
 ## 1.0.0
 
 ### Major Changes

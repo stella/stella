@@ -620,7 +620,7 @@
     },
     "packages/cli": {
       "name": "@stll/cli",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "bin": {
         "stella": "./dist/cli.js",
       },
@@ -949,7 +949,7 @@
     },
     "packages/ui": {
       "name": "@stll/ui",
-      "version": "0.25.1",
+      "version": "0.25.2",
       "dependencies": {
         "better-result": "catalog:",
         "class-variance-authority": "^0.7.1",
