@@ -107,6 +107,10 @@ import {
 } from "@/api/lib/tanstack-ai-generate";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import {
+  applyFieldOverlay,
+  partitionFieldOverlay,
+} from "@/api/lib/templates/field-overlay";
+import {
   fillTemplateDocx,
   type FillTemplateSource,
 } from "@/api/lib/templates/template-fill-service";
@@ -387,6 +391,9 @@ type SaveOutcome =
       status: "saved";
       buffer: Buffer;
       manifest: TemplateManifest;
+      /** Entries the configuration could not apply. The rest were applied, so
+       *  this is a defect list, not a rejection. */
+      overlayIssues: readonly string[];
       /** Field paths after the overlay is folded back into discovery: a
        *  lookup parent's named-format markers disappear here exactly as they
        *  do for a stored template. */
@@ -466,31 +473,25 @@ const saveTemplateInMemory = async ({
     (error) => `${error.directive}: ${error.message}`,
   );
 
-  let fields = baseFields;
-  if (overlay !== undefined) {
-    const known = new Set(baseFields.map((field) => field.path));
-    const unknown = overlay.find((field) => !known.has(field.path));
-    if (unknown) {
-      return {
-        status: "rejected",
-        issues: [
-          `No field "${unknown.path}" was discovered in the DOCX. ` +
-            "Configure only paths that exist as {{markers}}.",
-          ...structureErrors,
-        ],
-      };
-    }
-    const byPath = new Map(overlay.map((field) => [field.path, field]));
-    const merged: FieldMeta[] = [];
-    for (const field of baseFields) {
-      const override = byPath.get(field.path);
-      merged.push(override === undefined ? field : { ...field, ...override });
-    }
-    fields = merged;
-  }
-
-  const manifest: TemplateManifest = { version: 1, fields };
+  // Exactly what `configureTemplateFields` does: validate each entry against
+  // the DOCX's own markers, apply the ones that hold, report the rest. The
+  // eval used to keep a second, stricter rule here (an overlay path had to be
+  // one of the merged manifest paths), which refused a loop's item path -
+  // `attorneys.name` inside `{{#each attorneys}}` - that the service accepts.
+  // Measuring the contract means running the contract's own validator.
+  const { applied, issues } = partitionFieldOverlay({
+    configured: baseFields,
+    discovered,
+    overlay: overlay ?? [],
+  });
+  const manifest = applyFieldOverlay(
+    { version: 1, fields: baseFields },
+    applied,
+  );
   const withManifest = await writeManifest(buffer, manifest);
+  const overlayIssues = issues.map(
+    (issue) => `${issue.path}: ${issue.message} ${issue.hint}`,
+  );
   const resolvedPaths = mergeManifestWithDiscovery(manifest, discovered).map(
     (field) => field.path,
   );
@@ -498,6 +499,7 @@ const saveTemplateInMemory = async ({
     status: "saved",
     buffer: withManifest,
     manifest,
+    overlayIssues,
     resolvedPaths,
     structureErrors,
   };
@@ -1534,6 +1536,7 @@ const buildAttempt = async ({
         booleanInputPaths: task.booleanInputPaths,
       }),
       overlayIssues: [
+        ...outcome.overlayIssues,
         ...outcome.structureErrors,
         ...(roundTrip.error === null ? [] : [`fill: ${roundTrip.error}`]),
       ],
