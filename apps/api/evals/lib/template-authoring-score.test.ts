@@ -6,6 +6,7 @@ import {
   cleanRoundTrip,
   comparePaths,
   detectGrammarTraps,
+  isEntryOverlayIssue,
   scoreAuthoringRun,
   scoreSyntaxQuiz,
 } from "./template-authoring-score";
@@ -254,6 +255,18 @@ describe("comparePaths", () => {
   });
 });
 
+describe("isEntryOverlayIssue", () => {
+  test("an entry path is the entry, a property path is one property of it", () => {
+    expect(isEntryOverlayIssue({ path: "fields.3" })).toBe(true);
+    expect(isEntryOverlayIssue({ path: "fields.12" })).toBe(true);
+    expect(isEntryOverlayIssue({ path: "fields.3.parts" })).toBe(false);
+    expect(isEntryOverlayIssue({ path: "fields.3.lookup.formats" })).toBe(
+      false,
+    );
+    expect(isEntryOverlayIssue({ path: "template_id" })).toBe(false);
+  });
+});
+
 describe("scoreAuthoringRun", () => {
   type SavedAttempt = Extract<SaveAttempt, { status: "saved" }>;
 
@@ -266,6 +279,7 @@ describe("scoreAuthoringRun", () => {
       booleanInputPaths: [],
     }),
     overlayIssues: [],
+    propertyDrops: [],
     configDefects: [],
     fidelity: [],
     roundTrip: cleanRoundTrip(),
@@ -309,6 +323,22 @@ describe("scoreAuthoringRun", () => {
         attempt: { ...savedAttempt(), fidelity: ['dropped "MIETVERTRAG"'] },
       }).outcome,
     ).toBe("partial");
+  });
+
+  test("a property drop is reported without failing the configure step", () => {
+    const dropped = scoreAuthoringRun({
+      created: true,
+      turnError: null,
+      attempt: {
+        ...savedAttempt(),
+        propertyDrops: ["fields.3.parts: `parts` is not a property."],
+      },
+    });
+    expect(dropped.outcome).toBe("pass");
+    expect(dropped.steps.configured).toBe(true);
+    expect(dropped.propertyDrops).toEqual([
+      "fields.3.parts: `parts` is not a property.",
+    ]);
   });
 
   test("a provider error overrides the outcome without discarding saved diagnostics", () => {

@@ -443,6 +443,17 @@ const hasRoundTripDefect = (roundTrip: RoundTripDefects): boolean =>
   roundTrip.dateLocaleMismatch;
 
 /**
+ * An overlay issue's `path` names either the entry it refuses (`fields.3`) or
+ * the single property it dropped out of an entry that otherwise applied
+ * (`fields.3.parts`). Only the first means the entry did not land, so the two
+ * are told apart here, once, rather than at every reader.
+ */
+const ENTRY_ISSUE_PATH = /^fields\.\d+$/u;
+
+export const isEntryOverlayIssue = ({ path }: { path: string }): boolean =>
+  ENTRY_ISSUE_PATH.test(path);
+
+/**
  * What became of the model's last create/configure call. `rejected` covers the
  * production validations that refuse a call outright (schema, mutually
  * exclusive derived sources, a `path` matching no marker); `invalid-docx`
@@ -460,8 +471,10 @@ export type AuthoringSteps = {
   authored: boolean;
   /** `create_template` accepted the document. */
   created: boolean;
-  /** `configure_template_fields` applied every entry, with no issue left,
-   *  and configured what the brief asked for. */
+  /** `configure_template_fields` landed every entry, with no entry-level
+   *  issue left, and configured what the brief asked for. A property the
+   *  tool site dropped out of an entry that otherwise applied is reported,
+   *  never a step failure: the entry landed. */
   configured: boolean;
   /** The fill round trip rendered cleanly. */
   filled: boolean;
@@ -495,7 +508,10 @@ export type SaveAttempt =
       status: "saved";
       paths: PathComparison;
       traps: GrammarTrapCounts;
+      /** Entry-level refusals: the entry did not land. */
       overlayIssues: readonly string[];
+      /** Properties dropped out of entries that did land. */
+      propertyDrops: readonly string[];
       configDefects: readonly string[];
       /** Source wording the template dropped: marking values fillable must
        *  not licence rewriting or deleting the rest of the document. */
@@ -516,6 +532,7 @@ export type AuthoringRunScore = {
   paths: PathComparison;
   traps: GrammarTrapCounts;
   overlayIssues: readonly string[];
+  propertyDrops: readonly string[];
   configDefects: readonly string[];
   fidelity: readonly string[];
   roundTrip: RoundTripDefects;
@@ -540,6 +557,7 @@ const emptyScore = (): Omit<AuthoringRunScore, "outcome" | "note"> => ({
   paths: { missing: [], extra: [] },
   traps: zeroTrapCounts(),
   overlayIssues: [],
+  propertyDrops: [],
   configDefects: [],
   fidelity: [],
   roundTrip: cleanRoundTrip(),
@@ -616,6 +634,7 @@ const scoreAttempt = (
         paths: attempt.paths,
         traps: attempt.traps,
         overlayIssues: attempt.overlayIssues,
+        propertyDrops: attempt.propertyDrops,
         configDefects: attempt.configDefects,
         fidelity: attempt.fidelity,
         roundTrip: attempt.roundTrip,

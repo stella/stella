@@ -29,7 +29,7 @@
  *                 says WHICH one the model could not get through:
  *                 authored (the right markers, no grammar trap, the source
  *                 wording kept), created (create_template accepted the
- *                 document), configured (every configuration entry applied,
+ *                 document), configured (every configuration ENTRY landed,
  *                 and the brief's configuration present), filled (the fill
  *                 round trip rendered cleanly)
  *   outcome       pass / partial / invalid-docx / no-call / error
@@ -38,9 +38,12 @@
  *                 unprefixed_item_path, this_prefix, unknown_directive,
  *                 bracket_index, language_variant_path, block_marker_inline,
  *                 lookup_not_parent, condition_on_input
- *   overlay       production validation issues: the per-entry `issues[]` a
- *                 best-effort configure reports, schema rejections, and a
- *                 `path` matching no marker
+ *   overlay       entry-level production validation issues: the entries a
+ *                 best-effort configure refused, schema rejections, and a
+ *                 `path` matching no marker. These fail `configured`.
+ *   dropped       properties the tool site dropped out of entries that
+ *                 otherwise applied (a retired key such as `parts`). The
+ *                 entry landed, so a drop is reported and fails no step.
  *   config        field configuration the brief asked for and did not get
  *   fidelity      source wording the template dropped instead of keeping
  *   round trip    leftover `{{`, blank repeated rows, a conditional row that
@@ -117,6 +120,7 @@ import {
 } from "@/api/lib/tanstack-ai-generate";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import {
+  type FieldOverlayIssue,
   partitionFieldOverlay,
   resolveTemplateFieldOverlay,
 } from "@/api/lib/templates/field-overlay";
@@ -151,6 +155,7 @@ import {
   comparePaths,
   detectGrammarTraps,
   GRAMMAR_TRAP_CODES,
+  isEntryOverlayIssue,
   scoreAuthoringRun,
   scoreSyntaxQuiz,
 } from "./lib/template-authoring-score";
@@ -458,9 +463,11 @@ type SaveOutcome =
       status: "saved";
       buffer: Buffer;
       manifest: TemplateManifest;
-      /** Entries the configuration could not apply. The rest were applied, so
-       *  this is a defect list, not a rejection. */
-      overlayIssues: readonly string[];
+      /** What the configuration could not apply, unformatted, as the engine
+       *  and the tool site reported it: an entry that did not land, or one
+       *  property dropped out of an entry that did. The rest were applied,
+       *  so this is a defect list, not a rejection. */
+      issues: readonly FieldOverlayIssue[];
       /** Field paths after the overlay is folded back into discovery: a
        *  lookup parent's named-format markers disappear here exactly as they
        *  do for a stored template. */
@@ -576,9 +583,6 @@ const saveTemplateInMemory = async ({
     overlay: applied,
   });
   const withManifest = await writeManifest(buffer, manifest);
-  const overlayIssues = issues.map(
-    (issue) => `${issue.path}: ${issue.message} ${issue.hint}`,
-  );
   const resolvedPaths = mergeManifestWithDiscovery(manifest, discovered).map(
     (field) => field.path,
   );
@@ -586,7 +590,7 @@ const saveTemplateInMemory = async ({
     status: "saved",
     buffer: withManifest,
     manifest,
-    overlayIssues,
+    issues,
     resolvedPaths,
     configurablePaths: configurableTemplatePaths(discovered),
     structureErrors,
@@ -1474,20 +1478,14 @@ const createAuthoringTools = ({
       overlay,
     });
     if (outcome.status === "saved") {
-      stored = { docxBase64: stored.docxBase64, manifest: outcome.manifest };
+      stored = { ...stored, manifest: outcome.manifest };
     }
     // The properties and entries the tool site dropped are part of what the
     // call reported, so they are part of what the run is scored on.
-    const dropped = parsed.issues.map(
-      ({ message, path }) => `${path}: ${message}`,
-    );
     await recordAttempt({
       outcome:
-        outcome.status === "saved" && dropped.length > 0
-          ? {
-              ...outcome,
-              overlayIssues: [...outcome.overlayIssues, ...dropped],
-            }
+        outcome.status === "saved" && parsed.issues.length > 0
+          ? { ...outcome, issues: [...outcome.issues, ...parsed.issues] }
           : outcome,
       overlay,
       step: "configure",
@@ -1500,7 +1498,7 @@ const createAuthoringTools = ({
     }
     return {
       name: stored.name,
-      issues: dropped,
+      issues: parsed.issues.map(({ message, path }) => `${path}: ${message}`),
       fields: outcome.manifest.fields.map((field) => ({ path: field.path })),
     };
   };
@@ -1767,11 +1765,18 @@ const buildAttempt = async ({
         booleanInputPaths: task.booleanInputPaths,
       }),
       overlayIssues: [
-        ...outcome.overlayIssues,
+        ...outcome.issues
+          .filter(isEntryOverlayIssue)
+          .map((issue) => `${issue.path}: ${issue.message} ${issue.hint}`),
         ...extraIssues,
         ...outcome.structureErrors,
         ...(roundTrip.error === null ? [] : [`fill: ${roundTrip.error}`]),
       ],
+      // The hint every property drop carries is the same sentence; the column
+      // names the property, which is the part that differs.
+      propertyDrops: outcome.issues
+        .filter((issue) => !isEntryOverlayIssue(issue))
+        .map((issue) => `${issue.path}: ${issue.message}`),
       configDefects: task.checkConfig(outcome.manifest.fields),
       fidelity: checkSourceFidelity({
         authored: authoredParagraphs(call.blocks),
@@ -2058,6 +2063,7 @@ const scoreQuizTurn = ({
       booleanInputPaths: [],
     }),
     overlayIssues: [],
+    propertyDrops: [],
     configDefects: [],
     fidelity: [],
     roundTrip: cleanRoundTrip(),
@@ -2279,8 +2285,8 @@ const renderReport = (runs: readonly EvalRun[]): string => {
     const modelRuns = runs.filter((run) => run.modelId === modelId);
     lines.push(`\n### ${modelId}\n`);
     lines.push(
-      "| task | run | outcome | steps | error | calls | missing | extra | traps | overlay | config | fidelity | round trip | tokens | ms |",
-      "| --- | ---: | --- | --- | --- | ---: | --- | --- | --- | --- | --- | --- | --- | ---: | ---: |",
+      "| task | run | outcome | steps | error | calls | missing | extra | traps | overlay | dropped | config | fidelity | round trip | tokens | ms |",
+      "| --- | ---: | --- | --- | --- | ---: | --- | --- | --- | --- | --- | --- | --- | --- | ---: | ---: |",
     );
     for (const run of modelRuns) {
       const { score } = run;
@@ -2296,6 +2302,7 @@ const renderReport = (runs: readonly EvalRun[]): string => {
           cell(score.paths.extra),
           trapsCell(score.traps),
           cell(score.overlayIssues),
+          cell(score.propertyDrops),
           cell(score.configDefects),
           cell(score.fidelity),
           roundTripCell(score.roundTrip),
@@ -2323,6 +2330,10 @@ const renderReport = (runs: readonly EvalRun[]): string => {
           authoringRuns.filter((run) => run.score.steps[name]).length,
         )}/${String(authoringRuns.length)}`,
     ).join(", ");
+    const propertyDrops = modelRuns.reduce(
+      (total, run) => total + run.score.propertyDrops.length,
+      0,
+    );
     const quiz = modelRuns.find((run) => run.quiz !== null)?.quiz ?? null;
     const quizSummary =
       quiz === null
@@ -2330,7 +2341,7 @@ const renderReport = (runs: readonly EvalRun[]): string => {
         : `, syntax quiz ${String(quiz.correct)}/${String(quiz.total)}`;
     lines.push(
       "",
-      `passed ${String(passed)}/${String(modelRuns.length)}, ${stepTotals}, grammar traps ${String(traps)}${quizSummary}`,
+      `passed ${String(passed)}/${String(modelRuns.length)}, ${stepTotals}, grammar traps ${String(traps)}, property drops ${String(propertyDrops)}${quizSummary}`,
     );
   }
   return lines.join("\n");
