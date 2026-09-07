@@ -86,7 +86,7 @@ describe("MCP protected resource metadata", () => {
     expect(headers.get("Access-Control-Expose-Headers")).toBe(
       "WWW-Authenticate, x-stella-api-contract-version, x-stella-cli-minimum, x-stella-organization, x-stella-scopes, x-stella-scope-omitted-tools, x-stella-feature-omitted-tools, x-request-id",
     );
-    expect(headers.get("x-stella-api-contract-version")).toBe("1");
+    expect(headers.get("x-stella-api-contract-version")).toBe("2");
     expect(headers.get("x-stella-cli-minimum")).toBe(
       STELLA_CLI_MINIMUM_VERSION,
     );
@@ -100,7 +100,7 @@ describe("MCP protected resource metadata", () => {
     expect(headers.get("Access-Control-Allow-Methods")).toBe(
       MCP_STATELESS_ALLOW_HEADER,
     );
-    expect(headers.get("x-stella-api-contract-version")).toBe("1");
+    expect(headers.get("x-stella-api-contract-version")).toBe("2");
     expect(headers.get("x-stella-cli-minimum")).toBe(
       STELLA_CLI_MINIMUM_VERSION,
     );
