@@ -144,7 +144,7 @@ describe("validateFieldOverlay", () => {
       discovered,
       overlay: [
         { path: "company", lookup: krsLookup("name", "krs") },
-        { path: "company.name", inputType: "text", label: "Company name" },
+        { path: "company.name", inputType: "number", label: "Company name" },
       ],
     });
 
@@ -162,7 +162,7 @@ describe("validateFieldOverlay", () => {
     );
 
     const issues = validateFieldOverlay({
-      configured: [{ path: "company.name", inputType: "text" }],
+      configured: [{ path: "company.name", inputType: "number" }],
       discovered,
       overlay: [{ path: "company", lookup: krsLookup("name", "krs") }],
     });
@@ -191,7 +191,11 @@ describe("validateFieldOverlay", () => {
       await makeDocx("{{company.name}}"),
     );
     const owner = { path: "company", lookup: krsLookup("name") };
-    const child = { path: "company.name", label: "Legal name" };
+    const child = {
+      path: "company.name",
+      label: "Legal name",
+      inputType: "number" as const,
+    };
     for (const { configured, overlay } of [
       { configured: [owner], overlay: [child] },
       { configured: [child], overlay: [owner] },
@@ -422,11 +426,93 @@ describe("a child restating the parent's lookup", () => {
       discovered,
       overlay: [
         { path: "company", lookup: krsLookup("name", "krs") },
-        { path: "company.krs", inputType: "text", lookup: krsChild },
+        { path: "company.krs", inputType: "number", lookup: krsChild },
       ],
     });
 
     expect(issues.map(({ path }) => path)).toEqual(["fields.0", "fields.1"]);
+  });
+
+  /** How a model that never repeats the lookup describes the same document:
+   *  the parent carries every format, and each dotted marker is an entry
+   *  filled in with the shape every entry has and nothing else. */
+  const shapeOnlyOverlay = (): FieldMeta[] => [
+    {
+      path: "company",
+      label: "Company",
+      lookup: {
+        registry: "krs",
+        formats: [
+          { key: "address", template: "[street], [postal_code] [city]" },
+          { key: "krs", template: "[registration_number]" },
+        ],
+      },
+    },
+    {
+      path: "company.address",
+      label: "Registered address",
+      hint: "From the register",
+      inputType: "text",
+      required: false,
+    },
+    {
+      path: "company.krs",
+      label: "KRS number",
+      inputType: "text",
+      required: false,
+    },
+  ];
+
+  test("a child carrying only what a format cannot hold folds too", async () => {
+    const discovered = await discoverTemplate(await companyDocx());
+    const overlay = shapeOnlyOverlay();
+
+    const { applied, issues } = partitionFieldOverlay({
+      configured: [],
+      discovered,
+      overlay,
+    });
+
+    expect(issues).toEqual([]);
+    // One field, and the formats are the parent's: the children said nothing
+    // a format could not already hold, so nothing of theirs survives.
+    expect(applyFieldOverlay(null, applied).fields).toEqual([overlay[0]]);
+  });
+
+  test("a child that names a real input type is still refused", async () => {
+    const discovered = await discoverTemplate(await companyDocx());
+    const [parent] = shapeOnlyOverlay();
+
+    const { issues } = partitionFieldOverlay({
+      configured: [],
+      discovered,
+      overlay: [parent, { path: "company.krs", inputType: "number" }],
+    });
+
+    expect(issues.map(({ path }) => path)).toEqual(["fields.0", "fields.1"]);
+  });
+
+  test("a second configure of the shape-only overlay changes nothing", async () => {
+    const discovered = await discoverTemplate(await companyDocx());
+    const overlay = shapeOnlyOverlay();
+
+    const first = resolveTemplateFieldOverlay({
+      discovered,
+      manifest: null,
+      overlay: partitionFieldOverlay({ configured: [], discovered, overlay })
+        .applied,
+    });
+    const second = resolveTemplateFieldOverlay({
+      discovered,
+      manifest: first,
+      overlay: partitionFieldOverlay({
+        configured: first.fields,
+        discovered,
+        overlay,
+      }).applied,
+    });
+
+    expect(second).toEqual(first);
   });
 
   test("configuring the same overlay twice resolves the same manifest", async () => {
@@ -481,7 +567,7 @@ describe("applyFieldOverlay", () => {
     const manifest = {
       version: 1,
       fields: [
-        { path: "company.name", label: "Name" },
+        { path: "tenant", label: "Name" },
         { path: "signed_on", inputType: "date" as const },
       ],
     };
@@ -494,7 +580,7 @@ describe("applyFieldOverlay", () => {
     ).toEqual({
       version: 1,
       fields: [
-        { path: "company.name", label: "Name" },
+        { path: "tenant", label: "Name" },
         { path: "signed_on", inputType: "date", label: "Signature date" },
         { path: "company", lookup: krsLookup("name") },
       ],

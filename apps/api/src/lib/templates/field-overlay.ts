@@ -333,10 +333,18 @@ export const partitionFieldOverlay = ({
 /**
  * What folding a field into one of its parent's lookup formats can do with
  * each manifest property. A format is a key and a `[token]` template and
- * nothing else, so a property a format cannot carry keeps the child a rival
- * configuration, refused as before. Total over the manifest shape: a property
- * added to `fieldMetaSchema` cannot ship without deciding whether a rendering
- * of a registry hit can hold it.
+ * nothing else:
+ *
+ *   identity  the path, which names the format's key
+ *   template  becomes the format's template
+ *   dropped   has nowhere to go in a format and is discarded
+ *   default   discarded when it carries the value it would have anyway,
+ *             blocking when it decides something
+ *   blocking  a decision only a field of its own can hold, so the child stays
+ *             a rival configuration of the marker and keeps the refusal
+ *
+ * Total over the manifest shape: a property added to `fieldMetaSchema` cannot
+ * ship without deciding whether a rendering of a registry hit can hold it.
  */
 const FORMAT_FOLD = {
   path: "identity",
@@ -345,11 +353,11 @@ const FORMAT_FOLD = {
   // person filling has nowhere to go in a format.
   label: "dropped",
   hint: "dropped",
-  inputType: "blocking",
-  options: "blocking",
+  inputType: "default",
+  options: "default",
+  validation: "default",
+  required: "default",
   optionsFrom: "blocking",
-  validation: "blocking",
-  required: "blocking",
   aiPrompt: "blocking",
   aiAdapt: "blocking",
   aiSeesDocument: "blocking",
@@ -362,29 +370,61 @@ const FORMAT_FOLD = {
   dateFormat: "blocking",
 } as const satisfies Record<
   keyof FieldMeta,
-  "identity" | "template" | "dropped" | "blocking"
+  "identity" | "template" | "dropped" | "default" | "blocking"
 >;
+
+/** Derived from {@link FORMAT_FOLD}, so a property that becomes `default`
+ *  cannot ship without saying what its default is. */
+type DefaultFoldProperty = {
+  [Property in keyof typeof FORMAT_FOLD]: (typeof FORMAT_FOLD)[Property] extends "default"
+    ? Property
+    : never;
+}[keyof typeof FORMAT_FOLD];
+
+/**
+ * A property spelled out at the value it would have had anyway decides
+ * nothing. A model describing every marker it can see writes the whole entry
+ * shape for each one, so `input_type: "text"` and `required: false` on a
+ * rendering of a registry hit are a description of the default, not a second
+ * configuration of the marker.
+ */
+const AT_DEFAULT_VALUE = {
+  inputType: ({ inputType }) => inputType === undefined || inputType === "text",
+  options: ({ options }) => options === undefined || options.length === 0,
+  validation: ({ validation }) =>
+    validation === undefined || Object.keys(validation).length === 0,
+  required: ({ required }) => required !== true,
+} as const satisfies Record<DefaultFoldProperty, (field: FieldMeta) => boolean>;
 
 const foldsIntoFormat = (field: FieldMeta): boolean => {
   const declared: Record<string, unknown> = field;
-  return Object.entries(FORMAT_FOLD).every(
-    ([property, disposition]) =>
-      disposition !== "blocking" || declared[property] === undefined,
+  return (
+    Object.entries(FORMAT_FOLD).every(
+      ([property, disposition]) =>
+        disposition !== "blocking" || declared[property] === undefined,
+    ) && Object.values(AT_DEFAULT_VALUE).every((atDefault) => atDefault(field))
   );
 };
 
 /** The parent's formats with `key` rendering `template`. The child is the more
- *  specific declaration, so its template replaces the parent's. `null` when the
- *  key is new and the lookup already carries its maximum. */
+ *  specific declaration, so its template replaces the parent's; a child that
+ *  declares no template of its own leaves them alone. `null` when the fold
+ *  cannot be made: nothing renders the key, or the key is new and the lookup
+ *  already carries its maximum. */
 const withFormatTemplate = (
   formats: readonly FieldLookupFormat[],
   key: string,
-  template: string,
+  template: string | undefined,
 ): FieldLookupFormat[] | null => {
   if (formats.some((format) => format.key === key)) {
-    return formats.map((format) =>
-      format.key === key ? { ...format, template } : format,
-    );
+    return template === undefined
+      ? [...formats]
+      : formats.map((format) =>
+          format.key === key ? { ...format, template } : format,
+        );
+  }
+  if (template === undefined) {
+    return null;
   }
   return formats.length >= LOOKUP_FORMATS_MAX
     ? null
@@ -396,12 +436,22 @@ const withFormatTemplate = (
  *
  * A model that reads `{{company}}`, `{{company.address}}` and `{{company.krs}}`
  * describes every marker it sees, and describes the dotted ones the only way
- * it can: as the same registry lookup rendered differently. That is not a
- * rival configuration of one marker, it is the parent's format `key` spelled
- * as a field of its own, so the template moves onto that format and the field
- * goes. A child on a DIFFERENT registry is two lookups over one marker, and a
- * child carrying what a format cannot hold is two configurations of it; both
- * stay separate fields and keep the ownership refusal.
+ * it can: as the same registry lookup rendered differently, or as an entry
+ * that says nothing beyond the shape every entry has. That is not a rival
+ * configuration of one marker, it is the parent's format `key` spelled as a
+ * field of its own, so whatever template the child declares moves onto that
+ * format and the field goes. A child on a DIFFERENT registry is two lookups
+ * over one marker, and a child carrying a real decision — an input type, a
+ * validation, options, a condition, a formula, an AI instruction — is two
+ * configurations of it; both stay separate fields and keep the refusal.
+ *
+ * The child's `label` and `hint` go with it: a rendering of the resolved hit
+ * is not filled by anyone, so there is nowhere in a format to put wording
+ * addressed at the person filling, and the parent's label names the group.
+ * The drop is silent because this merge has no issue channel — the manifest
+ * is its whole result — and the only per-property issues the contract reports
+ * come from the tool site, where a property is dropped before the overlay
+ * reaches the engine at all.
  */
 const foldLookupFormatFields = (fields: readonly FieldMeta[]): FieldMeta[] => {
   const byPath = new Map(fields.map((field) => [field.path, field]));
@@ -411,26 +461,28 @@ const foldLookupFormatFields = (fields: readonly FieldMeta[]): FieldMeta[] => {
     const parent =
       cut === -1 ? undefined : byPath.get(field.path.slice(0, cut));
     const key = field.path.slice(cut + 1);
-    // The first format renders the bare marker, and a format key holds no
-    // dots, so a field declaring several renderings cannot move into one.
-    const only =
-      field.lookup?.formats.length === 1
-        ? field.lookup.formats.at(0)
-        : undefined;
     if (
-      only === undefined ||
       parent?.lookup === undefined ||
-      parent.lookup.registry !== field.lookup?.registry ||
       folded.has(parent.path) ||
       !isLookupFormatKey(key) ||
       !foldsIntoFormat(field)
     ) {
       continue;
     }
+    const restated = field.lookup;
+    // The first format renders the bare marker, and a format key holds no
+    // dots, so a field declaring several renderings cannot move into one.
+    if (
+      restated !== undefined &&
+      (restated.registry !== parent.lookup.registry ||
+        restated.formats.length > 1)
+    ) {
+      continue;
+    }
     const formats = withFormatTemplate(
       parent.lookup.formats,
       key,
-      only.template,
+      restated?.formats.at(0)?.template,
     );
     if (formats === null) {
       continue;
