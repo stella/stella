@@ -29,8 +29,9 @@ jobs:
     permissions:
       contents: read
       # The merge-group trust check reads the queued pull request's head
-      # repository.
+      # and the pull_request runs recorded for it.
       pull-requests: read
+      actions: read
     outputs:
       trusted: ${{ steps.check.outputs.trusted }}
       agent_sandbox_docker_required: ${{ steps.changed-files.outputs.agent_sandbox_docker_required }}
@@ -69,24 +70,44 @@ jobs:
           # the Actions UI (repository policy: approval required for
           # first-time contributors).
           #
-          # A merge group runs with the base repository's secrets and
-          # carries no per-push approval. Only a same-repo pull
-          # request is trusted there; the group's head ref names it
-          # as gh-readonly-queue/<base>/pr-<number>-<sha>.
-          if [[ "$EVENT_NAME" == "merge_group" ]]; then
-            if [[ "$MERGE_GROUP_HEAD_REF" =~ /pr-([0-9]+)-[0-9a-f]+$ ]]; then
-              queued_head_repo=$(gh api "repos/$BASE_REPO/pulls/${BASH_REMATCH[1]}" --jq '.head.repo.full_name')
-            else
-              queued_head_repo=""
-            fi
-            if [[ "$queued_head_repo" == "$BASE_REPO" ]]; then
-              echo "trusted=true" >> "$GITHUB_OUTPUT"
-            else
-              echo "trusted=false" >> "$GITHUB_OUTPUT"
-              echo "::error::Merge group for a fork pull request (head ${queued_head_repo:-unknown}). Land fork changes from a same-repo branch."
-            fi
-          else
+          # A merge group runs with the base repository's secrets. The
+          # group's head ref names the queued pull request as
+          # gh-readonly-queue/<base>/pr-<number>-<sha>. A same-repo pull
+          # request is trusted outright. A fork pull request is trusted
+          # when its head passed a pull_request run of this workflow:
+          # that run cleared the fork gate above, GitHub enqueues only
+          # after `ci-result` passed on the head and only for a user
+          # with write access, and a later push drops the entry. So the
+          # group holds exactly the code a maintainer chose to merge
+          # after CI passed on it, and the enqueue is the approval to
+          # run it with this repository's secrets.
+          if [[ "$EVENT_NAME" != "merge_group" ]]; then
             echo "trusted=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [[ ! "$MERGE_GROUP_HEAD_REF" =~ /pr-([0-9]+)-[0-9a-f]+$ ]]; then
+            echo "trusted=false" >> "$GITHUB_OUTPUT"
+            echo "::error::Merge group head ref does not name a pull request: $MERGE_GROUP_HEAD_REF"
+            exit 0
+          fi
+          queued_number="${BASH_REMATCH[1]}"
+          read -r queued_head_repo queued_head_sha < <(
+            gh api "repos/$BASE_REPO/pulls/$queued_number" --jq '.head.repo.full_name + " " + .head.sha'
+          )
+          if [[ "$queued_head_repo" == "$BASE_REPO" ]]; then
+            echo "trusted=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          passed_runs=$(
+            gh api "repos/$BASE_REPO/actions/workflows/ci.yml/runs?event=pull_request&status=success&head_sha=$queued_head_sha" \
+              --jq '.total_count'
+          )
+          if [[ "${passed_runs:-0}" -gt 0 ]]; then
+            echo "Fork pull request #$queued_number: head $queued_head_sha passed a pull_request run. Trusted."
+            echo "trusted=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "trusted=false" >> "$GITHUB_OUTPUT"
+            echo "::error::Merge group for fork pull request #$queued_number (head $queued_head_repo@$queued_head_sha) with no successful pull_request run on that head. Let CI pass on the pull request, then enqueue it again."
           fi
 
       - name: Checkout
@@ -2719,7 +2740,7 @@ jobs:
           fi
 
           if [[ "$TRUSTED" != "true" ]]; then
-            echo "::error::CI did not run: the merge group carries a fork pull request. Land fork changes from a same-repo branch."
+            echo "::error::CI did not run: the merge group carries a fork pull request whose head has no successful pull_request run."
             exit 1
           fi
 
