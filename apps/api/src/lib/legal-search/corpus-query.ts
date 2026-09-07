@@ -143,8 +143,8 @@ const TOKEN_EXPANSION_POLICY = {
 /**
  * Quoted leaves one query may carry. Expansion multiplies leaves per term, so
  * without a ceiling a long query would hand the engine a clause whose cost is
- * quadratic in what the reader typed. Terms are expanded left to right until
- * the next group would cross the ceiling; the rest stay single leaves.
+ * quadratic in what the reader typed. `spendLeafBudget` decides which of a
+ * token's alternatives the ceiling pays for.
  */
 export const CORPUS_QUERY_LEAF_BUDGET = 24;
 
@@ -223,6 +223,82 @@ const expansionLeaves = (
   }
 };
 
+/**
+ * How the budget pays for one token's alternatives. `stem` is the
+ * generation's stem fields, one leaf each; `surface` is every alternative
+ * spelling of the word as written — the dictionary's other inflections and
+ * the extra surface fields.
+ */
+type LeafGroup = "stem" | "surface";
+
+/**
+ * The order the budget is spent in, which is deliberately not the order a
+ * group is written in.
+ *
+ * Stems come first because they are the alternatives an AND clause cannot do
+ * without. Every token is AND-ed, so a word the corpus carries only in
+ * another case form matches nothing as a bare surface leaf and empties the
+ * whole result set on its own; in an inflected language the most selective
+ * word of a long query is routinely the last one, which is exactly the token
+ * a single left-to-right pass starves. The stem pass costs tokens × stem
+ * fields, so it is bounded by what the reader typed.
+ *
+ * Dictionary expansion then spends what is left, left to right. Rarest first
+ * would be the better order and no frequency signal reaches this builder to
+ * give it: the dictionary payload carries a per-bucket document frequency,
+ * but the loader keeps only the forms and `CorpusTermExpander` hands over
+ * surface forms alone. Ordering by selectivity means retaining that column at
+ * load and exposing it on the expander.
+ */
+const LEAF_BUDGET_PASSES = [
+  "stem",
+  "surface",
+] as const satisfies readonly LeafGroup[];
+
+type TokenLeaves = {
+  alternatives: Record<LeafGroup, readonly string[]>;
+  typed: string;
+};
+
+type BudgetedToken = {
+  granted: Record<LeafGroup, readonly string[]>;
+  token: TokenLeaves;
+};
+
+/**
+ * Which of each token's alternatives the ceiling could pay for.
+ *
+ * Both passes run the same rule: a group is granted whole or skipped, never
+ * truncated into a clause asking for an arbitrary subset of a word's forms,
+ * and a token no pass reaches keeps the surface leaf it always had. So a
+ * query long enough that the stem pass alone would cross the ceiling
+ * allocates stems left to right and leaves the remaining tokens bare, which
+ * is what every token got before this pass existed.
+ */
+const spendLeafBudget = (tokens: readonly TokenLeaves[]): BudgetedToken[] => {
+  const budgeted: BudgetedToken[] = tokens.map((token) => ({
+    granted: { stem: [], surface: [] },
+    token,
+  }));
+  let leaves = tokens.length;
+
+  for (const pass of LEAF_BUDGET_PASSES) {
+    for (const entry of budgeted) {
+      const extras = entry.token.alternatives[pass];
+      if (
+        extras.length === 0 ||
+        leaves + extras.length > CORPUS_QUERY_LEAF_BUDGET
+      ) {
+        continue;
+      }
+      leaves += extras.length;
+      entry.granted[pass] = extras;
+    }
+  }
+
+  return budgeted;
+};
+
 export type CorpusFreeTextOptions = {
   expand?: CorpusTermExpander | undefined;
   stemming?: CorpusStemming | null | undefined;
@@ -271,25 +347,27 @@ export const corpusFreeTextClause = (
     return null;
   }
 
-  let leaves = tokens.length;
-  const clauses = tokens.map((token) => {
-    const typed = quoteCorpusValue(token.value);
-    const extras = [
-      ...expansionLeaves(token, expand),
-      ...surfaceFieldLeaves(token.value, surfaceFields),
-      ...stemLeaves(token.value, stemming),
-    ];
-    // The budget is spent left to right: a token whose group would cross it
-    // stays a single leaf rather than truncating a group into a clause that
-    // asks for something narrower than either alternative.
-    if (
-      extras.length === 0 ||
-      leaves + extras.length > CORPUS_QUERY_LEAF_BUDGET
-    ) {
-      return typed;
+  const budgeted = spendLeafBudget(
+    tokens.map((token) => ({
+      alternatives: {
+        stem: stemLeaves(token.value, stemming),
+        surface: [
+          ...expansionLeaves(token, expand),
+          ...surfaceFieldLeaves(token.value, surfaceFields),
+        ],
+      },
+      typed: quoteCorpusValue(token.value),
+    })),
+  );
+
+  const clauses = budgeted.map(({ granted, token }) => {
+    // Surface alternatives before stems, the order a group has always been
+    // written in; only which of them the budget bought is new.
+    const extras = [...granted.surface, ...granted.stem];
+    if (extras.length === 0) {
+      return token.typed;
     }
-    leaves += extras.length;
-    return `(${[typed, ...extras].join(" OR ")})`;
+    return `(${[token.typed, ...extras].join(" OR ")})`;
   });
 
   return `(${clauses.join(" AND ")})`;
