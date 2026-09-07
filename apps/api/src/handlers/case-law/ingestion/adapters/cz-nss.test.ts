@@ -1336,7 +1336,7 @@ describe("cz-nss buildDecision", () => {
     ).not.toBe("ne");
   });
 
-  test("a replay carries the headnote the crawl read, and cannot add one", async () => {
+  test("a replay reads the headnote back off the stored detail page", async () => {
     const decision = await crawledWithHeadnote(HEADNOTE);
     const reparse = czNssAdapter.reparseStoredRaw;
     if (reparse === undefined) {
@@ -1346,10 +1346,11 @@ describe("cz-nss buildDecision", () => {
       throw new TypeError("Stored-raw replay must not contact the publisher");
     });
 
-    const replayed = async (metadata: Record<string, unknown>) =>
+    const replayed = async (
+      stored: Pick<StoredRawReparseInput, "raw" | "contentType" | "metadata">,
+    ) =>
       await reparse({
-        raw: new TextEncoder().encode(decision.sourceRaw ?? ""),
-        contentType: decision.sourceRawContentType ?? null,
+        ...stored,
         caseNumber: decision.caseNumber,
         sourceDocumentId: decision.sourceDocumentId ?? null,
         language: decision.language,
@@ -1359,27 +1360,40 @@ describe("cz-nss buildDecision", () => {
         decisionType: decision.decisionType ?? null,
         sourceUrl: decision.sourceUrl ?? null,
         documentUrl: decision.documentUrl ?? null,
-        metadata,
       } satisfies StoredRawReparseInput);
 
-    const carried = await replayed(decision.metadata);
-    // The stored payload is the decision document; the headnote is a field of
-    // the detail page. A replay therefore keeps what the crawl wrote and
-    // cannot recover the sentence for a row stored without it.
-    const { legalSentence: _dropped, ...withoutHeadnote } = decision.metadata;
-    const bare = await replayed(withoutHeadnote);
+    // The row as stored today: both pages the crawl fetched. The headnote is
+    // on the detail page, so a replay recovers it even for a row written
+    // before anything read that field.
+    const { legalSentence: _unread, ...beforeCapture } = decision.metadata;
+    const recovered = await replayed({
+      raw: new TextEncoder().encode(decision.sourceRaw ?? ""),
+      contentType: decision.sourceRawContentType ?? null,
+      metadata: beforeCapture,
+    });
 
-    expect(carried.type).toBe("parsed");
-    expect(bare.type).toBe("parsed");
-    if (carried.type !== "parsed" || bare.type !== "parsed") {
+    // A row stored before the raw held every page carries the document alone,
+    // and the sentence is on neither document endpoint. Only a re-crawl adds
+    // it there.
+    const legacy = await replayed({
+      raw: new TextEncoder().encode(DOCUMENT_HTML),
+      contentType: "text/html",
+      metadata: beforeCapture,
+    });
+
+    expect(recovered.type).toBe("parsed");
+    expect(legacy.type).toBe("parsed");
+    if (recovered.type !== "parsed" || legacy.type !== "parsed") {
       return;
     }
-    expect(carried.result.metadata["legalSentence"]).toBe(HEADNOTE);
-    expect(bare.result.metadata["legalSentence"]).toBeUndefined();
+    expect(recovered.result.metadata["legalSentence"]).toBe(HEADNOTE);
+    expect(legacy.result.metadata["legalSentence"]).toBeUndefined();
     // Crawl and replay have to agree on the hash, or every replayed row would
-    // read as changed to the crawl that next re-reads it, and back again.
-    expect(carried.result.rawHash).toBe(decision.rawHash);
-    expect(bare.result.rawHash).not.toBe(decision.rawHash);
+    // read as changed to the crawl that next re-reads it, and back again. For
+    // a row whose metadata never read the sentence, the stored detail page is
+    // what brings the two back into agreement.
+    expect(recovered.result.rawHash).toBe(decision.rawHash);
+    expect(legacy.result.rawHash).not.toBe(decision.rawHash);
   });
 
   test("a headnote the court adds or edits moves the source hash", async () => {

@@ -91,8 +91,8 @@ An inventory has three parts, in the adapter beside the readers it mirrors:
 - a disposition map written
   `as const satisfies Record<<that union>, SourceFieldDisposition>`, so the map
   is total by type and a new name without a decision does not compile. Each
-  entry is `{ disposition: "stored", target }` — a metadata key, a result
-  field, the parsed document, or the row's identity — or
+  entry is `{ disposition: "stored", target }` (a metadata key, a result
+  field, the parsed document, or the row's identity), or
   `{ disposition: "excluded", reason }`, where the reason says what the field
   is and why the row does not carry it. "Not read today" is not a reason;
   duplicate of a stored field, derived elsewhere, no field on the row, and data
@@ -118,6 +118,22 @@ delete the adapter's line from the baseline.
 Refresh a fixture from the live page when the source changes. The suite
 certifies the adapter against the page it is given, so a fixture that stopped
 matching the publisher certifies nothing.
+
+### Raw Holds Every Fetched Response
+
+An inventory decides what is read; the stored raw decides what can still be
+read later. Where a source serves one decision across several responses (a
+detail page beside the document), store all of them, with
+`encodeSourceRawEnvelope` and `SOURCE_RAW_ENVELOPE_CONTENT_TYPE`, naming each
+part by its role. A raw that holds only the page the parser read makes a field
+captured later unrecoverable for every stored row: replay can only re-read what
+was kept.
+
+`reparseStoredRaw` decodes with `decodeSourceRawEnvelope` and handles `null`,
+which is what a row stored before its adapter had an envelope reads as. Bump
+the adapter's entry in `PARSER_VERSIONS` when the replay's output changes, and
+state in the pull request what a replay does and does not backfill: rows stored
+before the change hold what they held, and only a re-crawl adds to them.
 
 ## Verification
 

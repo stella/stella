@@ -9,7 +9,9 @@ import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
   defineSourceAdapter,
   EMPTY_AST,
+  encodeSourceRawEnvelope,
   isPersistableSourceDocumentId,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
   sourceTotalRead,
@@ -64,6 +66,12 @@ const PAGE_SIZE = 40;
 
 /** The only language this court publishes. */
 const CZ_NS_LANGUAGE = "cs";
+
+/** The two pages fetched for one decision, as the stored raw names them. */
+const CZ_NS_RAW_PART = {
+  DETAIL: "detail",
+  PRINT: "print",
+} as const;
 
 /** Domino ReadViewEntries JSON shape. */
 type DominoViewEntry = {
@@ -621,8 +629,15 @@ export const buildCzNsDecision = async (
       rawHash: hashContent(raw),
       parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NS],
       documentAst,
-      sourceRaw: JSON.stringify({ webHtml, printHtml }),
-      sourceRawContentType: "text/html",
+      // Both pages fetched for this decision, named by role: the detail page
+      // states the metadata rows, the print page carries the document. Stored
+      // whole so a field read later can be recovered from what was fetched
+      // rather than from a re-crawl.
+      sourceRaw: encodeSourceRawEnvelope({
+        [CZ_NS_RAW_PART.DETAIL]: webHtml,
+        [CZ_NS_RAW_PART.PRINT]: printHtml,
+      }),
+      sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
     },
   };
 };

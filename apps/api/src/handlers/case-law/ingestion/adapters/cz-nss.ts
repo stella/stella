@@ -10,9 +10,12 @@ import {
 } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
+  decodeSourceRawEnvelope,
   defineSourceAdapter,
   EMPTY_AST,
+  encodeSourceRawEnvelope,
   isPersistableSourceDocumentId,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   STORED_RAW_REPARSE_REJECTION,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
@@ -551,7 +554,19 @@ type DecisionContent = {
   sourceRaw: string | undefined;
 };
 
-const CZ_NSS_REPARSABLE_CONTENT_TYPES = new Set(["text/html"]);
+/**
+ * The pages fetched for one decision, as the stored raw names them. A row
+ * written before the envelope holds the document alone, as bare HTML.
+ */
+const CZ_NSS_RAW_PART = {
+  DOCUMENT: "document",
+  DETAIL: "detail",
+} as const;
+
+const CZ_NSS_REPARSABLE_CONTENT_TYPES = new Set([
+  "text/html",
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+]);
 
 const nonEmptyString = (value: unknown): string | undefined =>
   typeof value === "string" && value.length > 0 ? value : undefined;
@@ -1273,7 +1288,7 @@ const EMPTY_DETAIL: CzNssDetailMetadata = {
  * a document not yet read and comes back for.
  */
 type DetailFetch =
-  | { type: "fetched"; detail: CzNssDetailMetadata }
+  | { type: "fetched"; detail: CzNssDetailMetadata; html: string | null }
   | { type: "unavailable" };
 
 const fetchDetailMetadata = async (
@@ -1294,7 +1309,7 @@ const fetchDetailMetadata = async (
       },
     );
     if (response.status === 404) {
-      return { type: "fetched", detail: EMPTY_DETAIL };
+      return { type: "fetched", detail: EMPTY_DETAIL, html: null };
     }
     if (!response.ok) {
       return { type: "unavailable" };
@@ -1302,18 +1317,59 @@ const fetchDetailMetadata = async (
 
     const html = await response.text();
 
-    return { type: "fetched", detail: parseCzNssDetailMetadata(html) };
+    return { type: "fetched", detail: parseCzNssDetailMetadata(html), html };
   } catch {
     return { type: "unavailable" };
   }
 };
 
-/** Convert a parsed row into an IngestionResult. */
-const rowToResult = (
-  row: ParsedRow,
-  content: DecisionContent,
+type RowToResultOptions = {
+  row: ParsedRow;
+  content: DecisionContent;
+  detail: CzNssDetailMetadata;
+  /** The detail page as served, where it was read for this document. */
+  detailHtml: string | null;
+};
+
+/**
+ * The metadata keys a detail page fills, written once so the crawl and the
+ * stored-raw replay cannot drift into filling different ones.
+ */
+const detailMetadataFields = (
   detail: CzNssDetailMetadata,
-): IngestionResult => {
+): Record<string, unknown> => ({
+  ecli: detail.ecli,
+  judge: detail.judge,
+  senate: detail.senate,
+  legalArea: detail.legalArea,
+  decisionType: detail.decisionType,
+  decisionDate: detail.decisionDate,
+  outcome: detail.outcome,
+  caseType: detail.caseType,
+  parties: detail.parties,
+  caseStatus: detail.caseStatus,
+  administrativeAuthority: detail.administrativeAuthority,
+  citation: detail.citation,
+  legalSentence: detail.legalSentence,
+});
+
+/** The keys a detail page states a value for, for a replay that merges them. */
+const statedDetailMetadataFields = (
+  detail: CzNssDetailMetadata,
+): Record<string, unknown> =>
+  Object.fromEntries(
+    Object.entries(detailMetadataFields(detail)).filter(
+      ([, value]) => value !== undefined,
+    ),
+  );
+
+/** Convert a parsed row into an IngestionResult. */
+const rowToResult = ({
+  content,
+  detail,
+  detailHtml,
+  row,
+}: RowToResultOptions): IngestionResult => {
   const sourceDocumentId = czNssSourceDocumentId(row);
   const court = courtFromEcli(detail.ecli);
   const decisionDate = (() => {
@@ -1373,19 +1429,9 @@ const rowToResult = (
       // together, so the split stays reversible from what we stored.
       publishedCaseNumber,
       court,
-      ecli: detail.ecli,
-      judge: detail.judge,
-      senate: detail.senate,
-      legalArea: detail.legalArea,
-      decisionType: detail.decisionType,
-      decisionDate: detail.decisionDate,
+      ...detailMetadataFields(detail),
+      // The listing states an outcome for rows whose detail page does not.
       outcome: detail.outcome ?? row.outcome,
-      caseType: detail.caseType,
-      parties: detail.parties,
-      caseStatus: detail.caseStatus,
-      administrativeAuthority: detail.administrativeAuthority,
-      citation: detail.citation,
-      legalSentence: detail.legalSentence,
     },
     // Fulltext is parser output, not publisher identity. Keeping it out makes
     // crawl and replay converge on the same source hash after parser changes.
@@ -1398,8 +1444,22 @@ const rowToResult = (
     }),
     parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NSS],
     documentAst: content.documentAst ?? EMPTY_AST,
-    sourceRaw: content.sourceRaw,
-    sourceRawContentType: "text/html",
+    // Every page fetched for this decision, not just the one the parser reads:
+    // the headnote and the rest of the portal's metadata are on the detail
+    // page, so a row that stored the document alone could never recover a
+    // field read later without going back to the court. Written only where the
+    // document itself came back, so a listing-only row still states no raw.
+    ...(content.sourceRaw === undefined
+      ? {}
+      : {
+          sourceRaw: encodeSourceRawEnvelope({
+            [CZ_NSS_RAW_PART.DOCUMENT]: content.sourceRaw,
+            ...(detailHtml === null
+              ? {}
+              : { [CZ_NSS_RAW_PART.DETAIL]: detailHtml }),
+          }),
+          sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+        }),
   };
 };
 
@@ -1445,7 +1505,16 @@ const storedPublishedCaseNumber = ({
   return caseNumber;
 };
 
-/** Rebuild one NSS decision from the exact HTML the crawl stored. */
+/**
+ * Rebuild one NSS decision from what the crawl stored for it.
+ *
+ * Two payload shapes reach this, and the difference is what a replay can
+ * recover. A row stored since the raw became an envelope carries the document
+ * and the detail page, so the replay derives the portal's metadata from the
+ * page itself and a field first read later lands on the row. A row stored
+ * before it carries the document alone: its metadata is whatever the ingest
+ * of the day wrote, and only a re-crawl can add to it.
+ */
 const reparseStoredRaw = (
   stored: StoredRawReparseInput,
 ): StoredRawReparseOutcome => {
@@ -1460,7 +1529,14 @@ const reparseStoredRaw = (
     };
   }
 
-  const html = new TextDecoder().decode(stored.raw);
+  const raw = new TextDecoder().decode(stored.raw);
+  const parts = decodeSourceRawEnvelope(raw);
+  const html = parts === null ? raw : (parts[CZ_NSS_RAW_PART.DOCUMENT] ?? "");
+  const storedDetailHtml = parts?.[CZ_NSS_RAW_PART.DETAIL];
+  const storedDetail =
+    storedDetailHtml === undefined
+      ? undefined
+      : parseCzNssDetailMetadata(storedDetailHtml);
   const sourceUrl = stored.sourceUrl ?? undefined;
   const decisionDate = stored.decisionDate ?? undefined;
   const decisionType = stored.decisionType ?? undefined;
@@ -1484,7 +1560,9 @@ const reparseStoredRaw = (
     };
   }
 
-  const citation = nonEmptyString(stored.metadata["citation"]);
+  const citation =
+    nonEmptyString(storedDetail?.citation) ??
+    nonEmptyString(stored.metadata["citation"]);
   const sourceDocumentId = stored.sourceDocumentId ?? undefined;
   const publishedCaseNumber = storedPublishedCaseNumber(stored);
   const { sheetNumber } = splitCaseReference(publishedCaseNumber);
@@ -1521,18 +1599,35 @@ const reparseStoredRaw = (
       // reference only in `metadata.caseNumber`, and a replay that left the
       // metadata as it found it would leave the split unreversible for good.
       // For a row stored since, these are the values already there.
-      metadata: { ...stored.metadata, sheetNumber, publishedCaseNumber },
+      metadata: {
+        ...stored.metadata,
+        // What the stored detail page states wins over what the row holds: the
+        // page is the publisher's, the row is what an older parser made of it.
+        ...(storedDetail === undefined
+          ? {}
+          : statedDetailMetadataFields(storedDetail)),
+        sheetNumber,
+        publishedCaseNumber,
+      },
+      // The sentence this replay writes, not the one the row arrived with: a
+      // row whose detail page was stored before anything read the headnote
+      // gains it here, and a hash still taken from the old metadata would make
+      // the crawl read the replayed row as changed on its next pass.
       rawHash: czNssSourceHash({
         caseNumber: stored.caseNumber,
         sheetNumber,
         decisionDate,
         decisionType,
-        legalSentence: nonEmptyString(stored.metadata["legalSentence"]),
+        legalSentence:
+          nonEmptyString(storedDetail?.legalSentence) ??
+          nonEmptyString(stored.metadata["legalSentence"]),
       }),
       parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NSS],
       documentAst: parsed.documentAst,
-      sourceRaw: html,
-      sourceRawContentType: "text/html",
+      // The payload verbatim, in the shape it was stored in: a replay re-reads
+      // a decision, it does not rewrite what the crawl fetched for it.
+      sourceRaw: raw,
+      sourceRawContentType: stored.contentType ?? "text/html",
     },
   };
 };
@@ -1801,7 +1896,12 @@ export const buildCzNssDecision = async ({
     // key it on.
     return {
       type: "detail-unavailable",
-      decision: rowToResult(row, EMPTY_CONTENT, EMPTY_DETAIL),
+      decision: rowToResult({
+        row,
+        content: EMPTY_CONTENT,
+        detail: EMPTY_DETAIL,
+        detailHtml: null,
+      }),
     };
   }
 
@@ -1809,10 +1909,15 @@ export const buildCzNssDecision = async ({
   if (detailFetch.type === "unavailable") {
     return {
       type: "detail-unavailable",
-      decision: rowToResult(row, EMPTY_CONTENT, EMPTY_DETAIL),
+      decision: rowToResult({
+        row,
+        content: EMPTY_CONTENT,
+        detail: EMPTY_DETAIL,
+        detailHtml: null,
+      }),
     };
   }
-  const { detail } = detailFetch;
+  const { detail, html: detailHtml } = detailFetch;
   const content = await fetchDecisionContent(
     documentId,
     row,
@@ -1820,7 +1925,7 @@ export const buildCzNssDecision = async ({
     session,
     signal,
   );
-  const decision = rowToResult(row, content, detail);
+  const decision = rowToResult({ row, content, detail, detailHtml });
 
   // Both document endpoints answered with nothing usable. The metadata row is
   // still a decision to the crawl; to the reconciliation it is a document that

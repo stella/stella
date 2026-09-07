@@ -10,7 +10,7 @@
  * back through `listSourceFields`, and every name that comes out has to be in
  * the inventory as stored or as excluded with a reason.
  *
- * Two invariants, run over every registered adapter:
+ * Three invariants, run over every registered adapter:
  *
  * 1. The pending baseline names exactly the adapters without an inventory, so
  *    the un-inventoried set can only shrink.
@@ -18,6 +18,9 @@
  *    and every field the map stores is on the decision built from that
  *    fixture — at the metadata key, result field, document or identity the
  *    disposition names.
+ * 3. The page the inventory reads is one of the parts of the stored raw. A
+ *    field captured later is only recoverable for stored rows if the response
+ *    stating it was kept.
  */
 
 import { panic } from "better-result";
@@ -25,6 +28,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import type { AdapterKey } from "@/api/handlers/case-law/consts";
+import { decodeSourceRawEnvelope } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   IngestionResult,
   SourceFieldDisposition,
@@ -508,6 +512,15 @@ describe("every adapter accounts for the fields its source states", () => {
         unstored,
         `${key}: these fields are declared stored, and the decision built from the fixture that states them does not carry them: ${unstored.join("; ")}.`,
       ).toEqual([]);
+
+      // What the inventory reads has to survive in the raw, or a field read
+      // later is unrecoverable for every row already stored: replay can only
+      // re-read what was kept.
+      const parts = decodeSourceRawEnvelope(decision.sourceRaw ?? "");
+      expect(
+        Object.values(parts ?? {}),
+        `${key}: the page its inventory reads is not among the parts of the stored raw, so a field captured later could never be recovered from a stored row. Store every response fetched for the decision.`,
+      ).toContain(payload);
     });
   }
 });

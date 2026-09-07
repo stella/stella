@@ -1,5 +1,4 @@
-import { panic } from "better-result";
-import type { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
 
@@ -152,6 +151,62 @@ export type SliceCoverage = {
 export type SyncPage = {
   decisions: IngestionResult[];
   nextCursor: string | null;
+};
+
+/**
+ * Every response an adapter fetched for one decision, under the name it gives
+ * each part.
+ *
+ * A source that serves a decision across several pages — a detail page beside
+ * the document itself — has to store all of them or replay can only ever
+ * recover what the parser already read. A field first captured later is then
+ * unrecoverable for stored rows: the page that states it was fetched, parsed
+ * for the fields of the day, and dropped.
+ *
+ * Parts are named by role rather than by URL: a replay asks for the detail
+ * page, and which address served it is history.
+ */
+export type SourceRawParts = Readonly<Record<string, string>>;
+
+/**
+ * Media type for a multi-part raw payload, distinct from `application/json` so
+ * a reader can tell an envelope from a publisher's own JSON document.
+ */
+export const SOURCE_RAW_ENVELOPE_CONTENT_TYPE =
+  "application/vnd.stella.case-law-raw+json";
+
+const SOURCE_RAW_ENVELOPE_VERSION = 1;
+
+export const encodeSourceRawEnvelope = (parts: SourceRawParts): string =>
+  JSON.stringify({ version: SOURCE_RAW_ENVELOPE_VERSION, parts });
+
+/**
+ * The parts of a stored envelope, or `null` for a payload that is not one —
+ * which is how a row stored before its adapter had an envelope reads, and why
+ * every caller has to handle it rather than assume the shape it writes today.
+ */
+export const decodeSourceRawEnvelope = (raw: string): SourceRawParts | null => {
+  const parsed = Result.try({
+    try: (): unknown => JSON.parse(raw),
+    catch: () => null,
+  }).unwrapOr(null);
+
+  if (
+    parsed === null ||
+    typeof parsed !== "object" ||
+    !("version" in parsed) ||
+    parsed.version !== SOURCE_RAW_ENVELOPE_VERSION ||
+    !("parts" in parsed) ||
+    typeof parsed.parts !== "object" ||
+    parsed.parts === null
+  ) {
+    return null;
+  }
+
+  const parts = Object.entries(parsed.parts);
+  return parts.every(([, value]) => typeof value === "string")
+    ? Object.fromEntries(parts.map(([name, value]) => [name, String(value)]))
+    : null;
 };
 
 /**
