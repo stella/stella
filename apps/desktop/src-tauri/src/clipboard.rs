@@ -3635,8 +3635,16 @@ fn read_bounded_image_file(path: &Path) -> Result<Vec<u8>, String> {
   let byte_size = usize::try_from(metadata.len())
     .map_err(|_| "clipboard image source is too large".to_string())?;
   validate_clipboard_image_source_size(byte_size)?;
-  let bytes = std::fs::read(path)
+  // The file can grow between the metadata check and the read, so the read
+  // itself stops one byte past the cap rather than trusting the length.
+  let file = std::fs::File::open(path)
     .map_err(|error| format!("clipboard image file could not be read: {error}"))?;
+  let mut bytes = Vec::with_capacity(byte_size);
+  std::io::Read::read_to_end(
+    &mut std::io::Read::take(file, MAX_ITEM_IMAGE_SOURCE_BYTES as u64 + 1),
+    &mut bytes,
+  )
+  .map_err(|error| format!("clipboard image file could not be read: {error}"))?;
   validate_clipboard_image_source_size(bytes.len())?;
   Ok(bytes)
 }

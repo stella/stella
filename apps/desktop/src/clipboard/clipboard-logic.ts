@@ -1,3 +1,5 @@
+import { Result } from "better-result";
+
 import {
   findSearchMatchRanges,
   foldSearchMatchText,
@@ -53,10 +55,12 @@ export const clipboardItemLink = (
     .startsWith(CLIPBOARD_LINK_BARE_HOST_PREFIX)
     ? `https://${text}`
     : text;
-  if (!URL.canParse(candidate)) {
+  // `URL.canParse` is newer than the oldest supported system WebView.
+  const parsed = Result.try(() => new URL(candidate));
+  if (!Result.isOk(parsed)) {
     return null;
   }
-  const url = new URL(candidate);
+  const url = parsed.value;
   if (!CLIPBOARD_LINK_PROTOCOLS.has(url.protocol)) {
     return null;
   }
