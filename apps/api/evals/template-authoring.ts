@@ -58,7 +58,7 @@
  * when the turn ends before `create_template`; it remains a partial outcome
  * because configuration and the fill round trip never completed.
  *
- * The `syntax-quiz` task has no DOCX: eight grammar questions answered as one
+ * The `syntax-quiz` task has no DOCX: the grammar questions answered as one
  * JSON object, scored exactly. Its wrong answers are reported in the
  * `missing` column, and it reaches none of the four workflow steps.
  *
@@ -178,16 +178,16 @@ const ANSWER_SYNTAX_TOOL_NAME = "answer_syntax_questions";
 const AUTHORING_SYSTEM_PROMPT = [
   "You are stella, a drafting assistant for lawyers. The user gives you a",
   "source document and asks for a reusable template. Work in three steps.",
-  "First mark the fillable values with {{markers}} and write the file with",
+  "First mark the fillable values with {{ markers }} and write the file with",
   `${WRITE_DOCX_TOOL_NAME}. Second call ${CREATE_TEMPLATE_TOOL_NAME} with a`,
   "name and, as docx_base64, the exact string write_docx returned; send no",
   "template_id. It answers with the field paths the document",
   `declares and the configure call to make next. Third call`,
   `${CONFIGURE_FIELDS_TOOL_NAME} with that template_id and one fields entry`,
-  "per path. Keep the document's",
-  "wording exactly as given; only replace the values that become fields. The",
-  "two reference resources below are the complete grammar and configuration",
-  "contract; follow them literally.",
+  "per path — for anything the marker's own filters did not already say. Keep",
+  "the document's wording exactly as given; only replace the values that",
+  "become fields. The two reference resources below are the complete grammar",
+  "and configuration contract; follow them literally.",
 ].join(" ");
 
 // The quiz executes no authoring tool, so it must not be told to call them:
@@ -221,7 +221,7 @@ const P = (text: string): string =>
   `<w:p><w:r><w:t xml:space="preserve">${escapeXml(text)}</w:t></w:r></w:p>`;
 
 // A newline inside a cell starts a new paragraph, so a row-repeat can put its
-// `{{#each}}` opener in a paragraph of its own inside the first cell.
+// `{% for %}` opener in a paragraph of its own inside the first cell.
 const TC = (text: string): string =>
   `<w:tc>${text.split("\n").map(P).join("")}</w:tc>`;
 
@@ -392,12 +392,18 @@ const advertisedWithoutUnservedInputs = (
 };
 
 /**
- * The tool schema the model sees. `toTanStackToolSchema` gives the same
- * Standard Schema validation `fill_template`'s eval uses, but these inputs
- * carry `check` / `partial_check` actions that have no JSON Schema
- * projection; each definition already declares that waiver and derives the
- * wire schema every MCP client is served, so the projection is taken from
- * there instead of re-derived.
+ * The tool schema the model sees: the exact wire schema every MCP client is
+ * served for this tool (each definition declares the projection waiver its
+ * `check` / `partial_check` actions need, so the projection is taken from
+ * there rather than re-derived).
+ *
+ * Validation is deliberately NOT done here. Production parses the input inside
+ * the tool site and hands the parsed value to the handler, which is best
+ * effort for some calls — an overlay entry it cannot apply comes back in
+ * `issues[]` while the entries beside it still apply. A transport that
+ * pre-validated would turn such a call into a refusal the production server
+ * never makes, and the handler would never run to record the attempt. One
+ * validation, in the one place production does it.
  */
 const productionToolSchema = (definition: {
   name: string;
@@ -414,6 +420,7 @@ const productionToolSchema = (definition: {
     ...schema,
     "~standard": {
       ...schema["~standard"],
+      validate: (value: unknown) => ({ value }),
       jsonSchema: { input: wireSchema, output: wireSchema },
     },
   };
@@ -558,7 +565,7 @@ const saveTemplateInMemory = async ({
   // the DOCX's own markers, apply the ones that hold, report the rest. The
   // eval used to keep a second, stricter rule here (an overlay path had to be
   // one of the merged manifest paths), which refused a loop's item path -
-  // `attorneys.name` inside `{{#each attorneys}}` - that the service accepts.
+  // `attorneys.name` inside `{% for a in attorneys %}` - that the service accepts.
   // Measuring the contract means running the contract's own validator.
   const { applied, issues } = partitionFieldOverlay({
     configured: baseFields,
@@ -938,7 +945,7 @@ const TASKS: EvalTask[] = [
       strana_b: "Bohemia Data a.s.",
       ucinnost_od: "2026-04-01",
       rozhodne_pravo: "České republiky",
-      // Filled false on purpose: a penalty clause left outside an `{{#if}}`
+      // Filled false on purpose: a penalty clause left outside an `{% if %}`
       // survives the fill, which is the only way to tell a real conditional
       // from an ordinary paragraph the model happened not to touch.
       smluvni_pokuta: false,
@@ -969,7 +976,7 @@ const TASKS: EvalTask[] = [
     },
     checkRoundTrip: ({ text }) => ({
       blankRepeatedRows: 0,
-      // The flag is false, so an `{{#if}}`-wrapped clause is gone; an
+      // The flag is false, so an `{% if %}`-wrapped clause is gone; an
       // unconditional paragraph is still here.
       conditionalRowKept: digitsOf(text).includes("100000"),
       dateLocaleMismatch: false,
@@ -1041,7 +1048,7 @@ const TASKS: EvalTask[] = [
       // The flag is false, so nothing but the header and the three
       // deliverables may remain. A row emptied of its text but left in the
       // table counts as kept: today's engine strips the paragraphs of a
-      // row-mode `{{#if}}` without removing the row.
+      // row-mode `{% if %}` without removing the row.
       return {
         blankRepeatedRows,
         conditionalRowKept: rows.slice(1).some((row) => !isDeliverableRow(row)),
@@ -1141,33 +1148,33 @@ const TASKS: EvalTask[] = [
 // ── Syntax quiz ───────────────────────────────────────────
 
 const SYNTAX_QUIZ_QUESTIONS = {
-  each_closer: {
-    question: "Which marker closes a `{{#each attorneys}}` block?",
-    expected: "{{/each}}",
+  loop_closer: {
+    question: "Which tag closes a `{% for attorney in attorneys %}` block?",
+    expected: "{% endfor %}",
   },
   item_reference: {
     question:
-      "Inside `{{#each attorneys}}`, which marker renders the current item's `name`?",
-    expected: "{{attorneys.name}}",
+      "Inside `{% for attorney in attorneys %}`, which marker renders the current item's `name`?",
+    expected: "{{ attorney.name }}",
   },
-  this_prefix_supported: {
+  legacy_marker_supported: {
     question:
-      "Is a `this.` prefix (`{{this.name}}`) a supported way to reference the current item? true or false.",
+      "Is `{{#each attorneys}}` still a supported way to open a loop? true or false.",
     expected: false,
   },
   first_item_reference: {
     question:
       "Outside any loop, which marker renders the FIRST attorney's `name`?",
-    expected: "{{attorneys.0.name}}",
+    expected: "{{ attorneys.0.name }}",
   },
   condition_for_tick_box: {
     question:
-      "A person ticks a yes/no box that drives `{{#if penalty_applies}}`. Does `penalty_applies` need a `condition` in the fields overlay? true or false.",
+      "A person ticks a yes/no box that drives `{% if penalty_applies %}`. Does `penalty_applies` need a `condition(...)` filter? true or false.",
     expected: false,
   },
   block_marker_own_paragraph: {
     question:
-      "Outside a table row, must a block marker (`{{#each}}`, `{{#if}}`, `{{/each}}`, `{{/if}}`) occupy a paragraph of its own? true or false.",
+      "Outside a table row, must a block tag (`{% for %}`, `{% if %}`, `{% endfor %}`, `{% endif %}`) occupy a paragraph of its own? true or false.",
     expected: true,
   },
   bilingual_same_path: {
@@ -1178,16 +1185,16 @@ const SYNTAX_QUIZ_QUESTIONS = {
   lookup_format_marker: {
     question:
       "A lookup field at path `company` declares a named format with key `address`. Which marker renders that format?",
-    expected: "{{company.address}}",
+    expected: "{{ company.address }}",
   },
 } as const;
 
 type QuizKey = keyof typeof SYNTAX_QUIZ_QUESTIONS;
 
 const SYNTAX_QUIZ_ANSWER_SCHEMA = v.strictObject({
-  each_closer: v.string(),
+  loop_closer: v.string(),
   item_reference: v.string(),
-  this_prefix_supported: v.boolean(),
+  legacy_marker_supported: v.boolean(),
   first_item_reference: v.string(),
   condition_for_tick_box: v.boolean(),
   block_marker_own_paragraph: v.boolean(),
@@ -1210,9 +1217,10 @@ true satisfies [
  *  reading each question's `expected`, so a new question carries its answer
  *  with it. */
 const SYNTAX_QUIZ_EXPECTED: Record<QuizKey, string | boolean> = {
-  each_closer: SYNTAX_QUIZ_QUESTIONS.each_closer.expected,
+  loop_closer: SYNTAX_QUIZ_QUESTIONS.loop_closer.expected,
   item_reference: SYNTAX_QUIZ_QUESTIONS.item_reference.expected,
-  this_prefix_supported: SYNTAX_QUIZ_QUESTIONS.this_prefix_supported.expected,
+  legacy_marker_supported:
+    SYNTAX_QUIZ_QUESTIONS.legacy_marker_supported.expected,
   first_item_reference: SYNTAX_QUIZ_QUESTIONS.first_item_reference.expected,
   condition_for_tick_box: SYNTAX_QUIZ_QUESTIONS.condition_for_tick_box.expected,
   block_marker_own_paragraph:
@@ -1221,10 +1229,12 @@ const SYNTAX_QUIZ_EXPECTED: Record<QuizKey, string | boolean> = {
   lookup_format_marker: SYNTAX_QUIZ_QUESTIONS.lookup_format_marker.expected,
 };
 
+const SYNTAX_QUIZ_QUESTION_COUNT = Object.keys(SYNTAX_QUIZ_QUESTIONS).length;
+
 const SYNTAX_QUIZ_PROMPT = [
-  "Answer these eight questions about the stella template marker grammar by",
-  `calling ${ANSWER_SYNTAX_TOOL_NAME} exactly once. Give each marker answer`,
-  "as the complete marker including its braces.",
+  `Answer these ${SYNTAX_QUIZ_QUESTION_COUNT} questions about the stella`,
+  `template marker grammar by calling ${ANSWER_SYNTAX_TOOL_NAME} exactly`,
+  "once. Give each marker answer as the complete marker including its braces.",
   "",
   ...Object.entries(SYNTAX_QUIZ_QUESTIONS).map(
     ([key, { question }]) => `- ${key}: ${question}`,
@@ -1465,8 +1475,7 @@ const createQuizTool = ({
 }): AnyServerTool[] => [
   toolDefinition({
     name: ANSWER_SYNTAX_TOOL_NAME,
-    description:
-      "Answer the eight marker-grammar questions. Every property is required.",
+    description: `Answer the ${SYNTAX_QUIZ_QUESTION_COUNT} marker-grammar questions. Every property is required.`,
     inputSchema: toTanStackToolSchema(SYNTAX_QUIZ_ANSWER_SCHEMA),
   }).server(async (input) => {
     trace.push({ name: ANSWER_SYNTAX_TOOL_NAME, input });

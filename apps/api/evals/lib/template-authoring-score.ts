@@ -12,6 +12,7 @@
 
 import {
   assertNever,
+  classifyMarkerDefect,
   detectRowBlockPair,
   isBlockDirectiveKind,
   scanInvalidMarkers,
@@ -43,12 +44,17 @@ type OverlayFieldView = {
  * resources failed to teach rather than "the template was wrong".
  */
 export const GRAMMAR_TRAP_CODES = [
-  /** `{{name}}` inside `{{#each attorneys}}` instead of `{{attorneys.name}}`. */
-  "unprefixed_item_path",
-  /** `{{this.name}}` / `{{this}}`: a Handlebars reflex stella does not have. */
-  "this_prefix",
-  /** A directive-shaped marker that classifies to nothing (`{{#endeach}}`). */
-  "unknown_directive",
+  /** `{{ name }}` inside `{% for attorney in attorneys %}` instead of
+   *  `{{ attorney.name }}` — the loop's item is addressed by its alias. */
+  "unaliased_item_path",
+  /** A marker in the old dialect (`{{#each}}`, `{{@num:k}}`). */
+  "legacy_marker",
+  /** A Jinja tag this dialect does not run (`{% set %}`, `{% macro %}`). */
+  "unsupported_tag",
+  /** A filter outside the field-configuration catalogue (`| upper`). */
+  "unknown_filter",
+  /** Arithmetic, a call or a Python literal inside `{{ }}`. */
+  "python_expression",
   /** `{{attorneys[0].name}}` instead of the numeric segment `attorneys.0.name`. */
   "bracket_index",
   /** One value given a per-language path (`date_pl` beside `date_en`). */
@@ -67,9 +73,11 @@ type GrammarTrapCode = (typeof GRAMMAR_TRAP_CODES)[number];
 export type GrammarTrapCounts = Record<GrammarTrapCode, number>;
 
 const zeroTrapCounts = (): GrammarTrapCounts => ({
-  unprefixed_item_path: 0,
-  this_prefix: 0,
-  unknown_directive: 0,
+  unaliased_item_path: 0,
+  legacy_marker: 0,
+  unsupported_tag: 0,
+  unknown_filter: 0,
+  python_expression: 0,
   bracket_index: 0,
   language_variant_path: 0,
   block_marker_inline: 0,
@@ -128,8 +136,6 @@ const paragraphsOf = (blocks: readonly AuthoredBlock[]): ScannedParagraph[] =>
       ? [{ text: block.text, rowBlockStarts: NO_ROW_BLOCK }]
       : block.rows.flatMap(rowParagraphs),
   );
-
-const DIRECTIVE_SHAPED_RE = /^[#/@]/u;
 
 /** Two-letter tags a bilingual document is likely to suffix a path with.
  *  Deliberately short: a longer list starts eating real field names. */
@@ -228,17 +234,37 @@ export const detectGrammarTraps = ({
   booleanInputPaths,
 }: DetectGrammarTrapsOptions): GrammarTrapCounts => {
   const counts = zeroTrapCounts();
-  const eachStack: string[] = [];
+  /** The loops open at this point, each with the alias its body must use. */
+  const eachStack: { alias: string; path: string }[] = [];
   const placeholderPaths: string[] = [];
   const arrayPaths = new Set<string>();
 
   for (const { rowBlockStarts, text } of paragraphsOf(blocks)) {
-    for (const invalid of scanInvalidMarkers(text)) {
-      if (DIRECTIVE_SHAPED_RE.test(invalid.inner)) {
-        counts.unknown_directive += 1;
+    // The grammar package diagnoses a rejected span; the eval only counts what
+    // it names, so a defect kind added there lands here with no second list.
+    for (const { form, inner } of scanInvalidMarkers(text)) {
+      const defect = classifyMarkerDefect(inner, form);
+      if (defect === null) {
+        continue;
       }
-      if (invalid.inner.includes("[")) {
-        counts.bracket_index += 1;
+      switch (defect.kind) {
+        case "legacy_marker":
+          counts.legacy_marker += 1;
+          break;
+        case "unsupported_tag":
+          counts.unsupported_tag += 1;
+          break;
+        case "unknown_filter":
+          counts.unknown_filter += 1;
+          break;
+        case "python_expression":
+          counts.python_expression += 1;
+          break;
+        case "bracket_index":
+          counts.bracket_index += 1;
+          break;
+        default:
+          assertNever(defect.kind);
       }
     }
 
@@ -265,12 +291,12 @@ export const detectGrammarTraps = ({
     }
 
     for (const { meta } of markers) {
-      if (meta.kind === "each") {
-        arrayPaths.add(meta.expr);
-        eachStack.push(meta.expr);
+      if (meta.kind === "for") {
+        arrayPaths.add(meta.path);
+        eachStack.push({ alias: meta.alias, path: meta.path });
         continue;
       }
-      if (meta.kind === "endeach") {
+      if (meta.kind === "endfor") {
         eachStack.pop();
         continue;
       }
@@ -279,17 +305,14 @@ export const detectGrammarTraps = ({
       }
       const { expr } = meta;
       placeholderPaths.push(expr);
-      if (expr === "this" || expr.startsWith("this.")) {
-        counts.this_prefix += 1;
-        continue;
-      }
       const enclosing = eachStack.at(-1);
       if (
         enclosing !== undefined &&
-        expr !== enclosing &&
-        !expr.startsWith(`${enclosing}.`)
+        ![enclosing.alias, enclosing.path].some(
+          (head) => expr === head || expr.startsWith(`${head}.`),
+        )
       ) {
-        counts.unprefixed_item_path += 1;
+        counts.unaliased_item_path += 1;
       }
     }
   }

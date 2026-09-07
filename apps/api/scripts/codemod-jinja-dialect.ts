@@ -69,7 +69,7 @@ const aliasPath = (path: string, stack: readonly LoopFrame[]): string => {
 const migrateExpression = (expr: string, stack: readonly LoopFrame[]): string =>
   translateLegacyExpression(expr).replace(
     /(?<!["\p{L}\p{N}_.-])(?<path>[\p{L}_][\p{L}\p{N}_.-]*)/gu,
-    (match, path: string) => aliasPath(path, stack),
+    (_match, path: string) => aliasPath(path, stack),
   );
 
 /** The Jinja replacement for one marker's inner text, given the loops it sits
