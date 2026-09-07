@@ -82,7 +82,8 @@ describe("compareStableVersions", () => {
       fc.property(stableVersion, stableVersion, (a, b) => {
         const forward = Math.sign(compareStableVersions(a, b));
         const backward = Math.sign(compareStableVersions(b, a));
-        expect(forward).toBe(-backward);
+        // Summed, not negated: `toBe` is `Object.is`, and -0 !== 0 for equal inputs.
+        expect(forward + backward).toBe(0);
         const left = a.split(".").map(Number);
         const right = b.split(".").map(Number);
         let expected = 0;
