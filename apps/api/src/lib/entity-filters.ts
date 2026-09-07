@@ -771,17 +771,47 @@ export const FINDABLE_FIELD_TYPES: readonly string[] = Object.entries(
   .filter(([, support]) => support === "searchable")
   .map(([type]) => type);
 
-const FINDABLE_FIELD_TYPES_SQL = typedPgArray(
-  [...FINDABLE_FIELD_TYPES],
-  "text",
-);
+/**
+ * The type gate as the partial index `fields_find_text_trgm_idx` spells it:
+ * inline literals, not a bound array. The planner proves a query clause
+ * implies an index predicate only when it can see both, and a parameter it
+ * cannot see would leave the index unusable for every find. The literals are
+ * content-type names from a const map, checked here so a name that needed
+ * quoting could not reach `sql.raw`.
+ */
+const FINDABLE_FIELD_TYPES_PREDICATE_SQL: SQL = (() => {
+  const unquotable = FINDABLE_FIELD_TYPES.find(
+    (type) => !/^[a-z-]+$/u.test(type),
+  );
+  if (unquotable !== undefined) {
+    return panic(`Findable field type is not a plain literal: ${unquotable}`);
+  }
+  return sql`${fields.content}->>'type' IN (${sql.raw(
+    FINDABLE_FIELD_TYPES.map((type) => `'${type}'`).join(", "),
+  )})`;
+})();
+
+type BuildFindConditionsOptions = {
+  find: EntityFind | undefined;
+  /** The workspace the reader is already scoped to; bounds the cell scan. */
+  workspaceId: string;
+};
 
 /**
- * The find predicate: one EXISTS over the searched columns, ORed with the
- * row's name when the scope is unrestricted. Every reader of a table view
- * compiles it here — the row window, each group's window, and the group
+ * The find predicate: the row's name when the scope is unrestricted, ORed
+ * with a membership test over the searched columns. Every reader of a table
+ * view compiles it here — the row window, each group's window, and the group
  * counts — because counts that disagree with rows is the failure this shares
  * one expression to prevent.
+ *
+ * The column half is an uncorrelated subquery over `fields`, not an EXISTS
+ * per entity: the planner runs it once, reading candidates off the trigram
+ * index `fields_find_text_trgm_idx` through the same `field_find_text`
+ * expression and the same type gate the index is built over. A correlated
+ * form would probe the index once per candidate row instead. The index only
+ * proposes: `fieldValueMatches` stays inside as the recheck, so a multi-select
+ * whose joined text matches across an element boundary is still rejected, and
+ * what a find returns is defined by the recheck alone.
  *
  * The name half reads `entities.name`, the string the grid's name column
  * renders, not `display_name`: its fallbacks (a file name, a text value, an
@@ -793,10 +823,13 @@ const FINDABLE_FIELD_TYPES_SQL = typedPgArray(
  * `contains` filters keep their pass-through behaviour; find is stricter.
  *
  * Property ids need no ownership check: like `fieldIds`, they are only used
- * inside a subquery already scoped to an authorized workspace's current entity
- * versions, so a foreign id is inert.
+ * inside a subquery already scoped to the authorized workspace, so a foreign
+ * id is inert.
  */
-export const buildFindConditions = (find: EntityFind | undefined): SQL[] => {
+export const buildFindConditions = ({
+  find,
+  workspaceId,
+}: BuildFindConditionsOptions): SQL[] => {
   if (!find) {
     return [];
   }
@@ -811,11 +844,14 @@ export const buildFindConditions = (find: EntityFind | undefined): SQL[] => {
   const columnsMatch =
     propertyIds.length === 0
       ? null
-      : fieldsExist(
-          sql`${fields.propertyId} = ANY(${typedPgArray(propertyIds, "uuid")})
-            AND ${fields.content}->>'type' = ANY(${FINDABLE_FIELD_TYPES_SQL})`,
-          fieldValueMatches(matchesPattern, matchesPattern),
-        );
+      : sql`${entities.currentVersionId} IN (
+          SELECT ${fields.entityVersionId} FROM ${fields}
+          WHERE ${fields.workspaceId} = ${workspaceId}
+            AND ${fields.propertyId} = ANY(${typedPgArray(propertyIds, "uuid")})
+            AND ${FINDABLE_FIELD_TYPES_PREDICATE_SQL}
+            AND field_find_text(${fields.content}) ILIKE ${pattern}
+            AND ${fieldValueMatches(matchesPattern, matchesPattern)}
+        )`;
 
   // "columns" drops the name half, so a row whose name matches but whose chosen
   // columns do not is absent. Narrowed to no columns at all, nothing can match;

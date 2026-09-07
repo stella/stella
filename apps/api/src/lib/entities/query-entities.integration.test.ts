@@ -730,7 +730,7 @@ describe("find in table", () => {
           and(
             eq(entities.workspaceId, ids.wsA1),
             isNotNull(entities.currentVersionId),
-            ...buildFindConditions(find),
+            ...buildFindConditions({ find, workspaceId: ids.wsA1 }),
           ),
         ),
     );

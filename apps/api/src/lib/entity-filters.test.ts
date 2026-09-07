@@ -17,6 +17,7 @@ import {
   buildFilterConditions,
   buildFindConditions,
   FIELD_FIND_SUPPORT,
+  FINDABLE_FIELD_TYPES,
 } from "./entity-filters";
 
 // -- buildFilterConditions (builtin filters) --
@@ -130,18 +131,23 @@ describe("buildFilterConditions (kind)", () => {
 
 // -- buildFindConditions --
 
-const findSql = (args: Parameters<typeof buildFindConditions>[0]): string => {
-  const [condition] = buildFindConditions(args);
+const WORKSPACE_ID = "ws1";
+
+type Find = NonNullable<Parameters<typeof buildFindConditions>[0]["find"]>;
+
+const findConditions = (find: Find | undefined) =>
+  buildFindConditions({ find, workspaceId: WORKSPACE_ID });
+
+const findSql = (find: Find): string => {
+  const [condition] = findConditions(find);
   if (!condition) {
     throw new Error("expected a find condition");
   }
   return new PgDialect().sqlToQuery(condition).sql;
 };
 
-const findParams = (
-  args: Parameters<typeof buildFindConditions>[0],
-): unknown[] => {
-  const [condition] = buildFindConditions(args);
+const findParams = (find: Find): unknown[] => {
+  const [condition] = findConditions(find);
   if (!condition) {
     throw new Error("expected a find condition");
   }
@@ -152,12 +158,12 @@ describe("buildFindConditions", () => {
   const propertyIds = ["p1", "p2"];
 
   test("an empty or whitespace term produces no condition", () => {
-    expect(buildFindConditions(undefined)).toHaveLength(0);
+    expect(findConditions(undefined)).toHaveLength(0);
     expect(
-      buildFindConditions({ scope: { type: "all", propertyIds }, term: "" }),
+      findConditions({ scope: { type: "all", propertyIds }, term: "" }),
     ).toHaveLength(0);
     expect(
-      buildFindConditions({ scope: { type: "all", propertyIds }, term: "   " }),
+      findConditions({ scope: { type: "all", propertyIds }, term: "   " }),
     ).toHaveLength(0);
   });
 
@@ -170,7 +176,7 @@ describe("buildFindConditions", () => {
     });
     expect(sql).toContain('"entities"."name"');
     expect(sql).not.toContain("display_name");
-    expect(sql).not.toContain("EXISTS");
+    expect(sql).not.toContain("IN (");
   });
 
   test("an unrestricted scope ORs the name with the searched columns", () => {
@@ -180,7 +186,7 @@ describe("buildFindConditions", () => {
     });
     expect(sql).toContain('"entities"."name"');
     expect(sql).toContain(" OR ");
-    expect(sql).toContain("EXISTS");
+    expect(sql).toContain('"entities"."current_version_id" IN (');
   });
 
   test("a narrowed scope drops the name half", () => {
@@ -189,7 +195,7 @@ describe("buildFindConditions", () => {
       term: "lease",
     });
     expect(sql).not.toContain('"entities"."name"');
-    expect(sql).toContain("EXISTS");
+    expect(sql).toContain('"entities"."current_version_id" IN (');
   });
 
   test("a narrowed scope with no columns matches nothing", () => {
@@ -207,7 +213,27 @@ describe("buildFindConditions", () => {
       term: "lease",
     });
     expect(sql).toContain("= ANY(");
-    expect(sql.match(/EXISTS/gu)).toHaveLength(2);
+    expect(sql.match(/IN \(\s*SELECT/gu)).toHaveLength(1);
+  });
+
+  test("candidates come off the trigram index, scoped to the workspace", () => {
+    // Uncorrelated: the subquery names the workspace and never the outer
+    // row, so the planner runs it once against the index rather than once
+    // per entity. The expression and the type gate are the index's own.
+    const sql = findSql({
+      scope: { type: "columns", propertyIds },
+      term: "lease",
+    });
+    const subquery = sql.slice(sql.indexOf("IN ("));
+    expect(subquery).toContain('"fields"."workspace_id" = ');
+    expect(subquery).toContain('field_find_text("fields"."content") ILIKE');
+    expect(subquery).toContain(
+      `->>'type' IN (${FINDABLE_FIELD_TYPES.map((type) => `'${type}'`).join(", ")})`,
+    );
+    expect(subquery).not.toContain('"entities".');
+    expect(
+      findParams({ scope: { type: "columns", propertyIds }, term: "lease" }),
+    ).toContain(WORKSPACE_ID);
   });
 
   test("a multi-select array matches element-wise, a scalar by substring", () => {
@@ -234,7 +260,7 @@ describe("buildFindConditions", () => {
       scope: { type: "columns", propertyIds },
       term: "lease",
     });
-    expect(sql).toContain("->>'type' = ANY(");
+    expect(sql).toContain("->>'type' IN (");
   });
 
   test("the cell gate and the column picker classify a type the same way", () => {

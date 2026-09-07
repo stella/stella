@@ -705,7 +705,7 @@ const queryEntitiesGenerator = async function* ({
     workspaceCondition,
     ...filterConditions,
     ...searchConditions,
-    ...buildFindConditions(find),
+    ...buildFindConditions({ find, workspaceId }),
     ...kindConditions,
     ...previewableConditions,
     ...extraConditions,

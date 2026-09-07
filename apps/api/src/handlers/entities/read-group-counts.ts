@@ -79,7 +79,7 @@ const readGroupCounts = createSafeHandler(
       eq(entities.workspaceId, workspaceId),
       isNotNull(entities.currentVersionId),
       ...buildFilterConditions(arrayOrEmpty(body.filters)),
-      ...buildFindConditions(body.find),
+      ...buildFindConditions({ find: body.find, workspaceId }),
     );
     // The grouped table is a document table: it never renders folders or tasks
     // (the flat window query excludes them too), so the counts must exclude them
