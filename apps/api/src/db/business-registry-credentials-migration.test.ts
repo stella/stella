@@ -11,7 +11,7 @@ test("registry credential migrations grant application access while preserving o
   await db.exec(
     await Bun.file(
       new URL(
-        "../../drizzle/20260906190000_business_registry_credentials/migration.sql",
+        "../../drizzle/20260907140100_business_registry_credentials/migration.sql",
         import.meta.url,
       ),
     ).text(),
@@ -26,7 +26,7 @@ test("registry credential migrations grant application access while preserving o
   await db.exec(
     await Bun.file(
       new URL(
-        "../../drizzle/20260906213000_business_registry_credentials_grants/migration.sql",
+        "../../drizzle/20260907140200_business_registry_credentials_grants/migration.sql",
         import.meta.url,
       ),
     ).text(),
@@ -65,7 +65,7 @@ test("saved company formats can be created and reused without crossing organizat
   await db.exec(
     await Bun.file(
       new URL(
-        "../../drizzle/20260906170000_template_lookup_formats/migration.sql",
+        "../../drizzle/20260907140000_template_lookup_formats/migration.sql",
         import.meta.url,
       ),
     ).text(),
@@ -80,7 +80,7 @@ test("saved company formats can be created and reused without crossing organizat
   await db.exec(
     await Bun.file(
       new URL(
-        "../../drizzle/20260906220000_template_lookup_formats_grants/migration.sql",
+        "../../drizzle/20260907140300_template_lookup_formats_grants/migration.sql",
         import.meta.url,
       ),
     ).text(),
