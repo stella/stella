@@ -303,21 +303,11 @@ type TemplateDetailSuccess = Extract<
 
 const toTemplateDetailPayload = (payload: TemplateDetailSuccess) => ({
   ...payload,
-  fields: payload.fields.map((field) => {
-    // Derived expressions belong to the conditions/computed collections below.
-    const {
-      condition: _condition,
-      formula: _formula,
-      ...wireField
-    } = toTemplateFieldWireInput(field);
-    return {
-      ...wireField,
-      input_type: field.inputType,
-      required: field.required,
-      ai_adapt: field.aiAdapt,
-      ai_sees_document: field.aiSeesDocument,
-    };
-  }),
+  fields: payload.fields.map((field) => ({
+    ...toTemplateFieldWireInput(field),
+    input_type: field.inputType,
+    required: field.required,
+  })),
 });
 
 type TemplateDetailPayload = ReturnType<typeof toTemplateDetailPayload>;
@@ -350,7 +340,9 @@ const templateFieldPartOptionItems = (
 const templateFieldFormatItems = (
   payload: TemplateDetailPayload,
 ): readonly { key: string; template: string }[] =>
-  payload.fields.flatMap((field) => arrayOrEmpty(field.lookup?.formats));
+  payload.fields.flatMap((field) =>
+    field.source.type === "lookup" ? arrayOrEmpty(field.source.formats) : [],
+  );
 
 const compact = <T>(
   items: readonly (T | null)[] | null | undefined,
@@ -392,12 +384,15 @@ const buildTemplateDetailTextFieldSpecs = (
     },
   }),
   defineTextFieldSpec({
-    path: "fields[].ai_prompt",
+    path: "fields[].source.prompt",
     items: (payload: TemplateDetailPayload) => payload.fields,
     scope: () => organizationId,
-    read: (field: TemplateDetailField) => field.ai_prompt,
+    read: (field: TemplateDetailField) =>
+      field.source.type === "ai" ? field.source.prompt : undefined,
     apply: (field: TemplateDetailField, value) => {
-      field.ai_prompt = value;
+      if (field.source.type === "ai") {
+        field.source.prompt = value;
+      }
     },
   }),
   defineTextFieldSpec({
@@ -430,7 +425,7 @@ const buildTemplateDetailTextFieldSpecs = (
     },
   }),
   defineTextFieldSpec({
-    path: "fields[].lookup.formats[].template",
+    path: "fields[].source.formats[].template",
     items: templateFieldFormatItems,
     scope: () => organizationId,
     read: (format: { key: string; template: string }) => format.template,
@@ -476,11 +471,10 @@ export const CREATE_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
     `up to ${MAX_DOCX_MEGABYTES} MB) or the original bytes as docx_base64 ` +
     `(max ${MAX_INLINE_DOCX_BYTES} bytes decoded within the ` +
     `${MCP_MAX_REQUEST_BODY_BYTES}-byte MCP request frame); never retype the ` +
-    "file or strip parts out to fit. Every {{marker}} in the document becomes " +
-    `a fillable field. Read ${TEMPLATE_MARKER_REFERENCE_URI} before authoring ` +
-    "the DOCX. Returns the template id, the discovered fields, arrays, " +
-    "conditions and computed values, and marker-authoring warnings. Then call " +
-    "configure_template_fields to say who fills each field.",
+    `file or strip parts out to fit. Read ${TEMPLATE_MARKER_REFERENCE_URI} ` +
+    "before authoring the DOCX. Returns the template id, its discovered " +
+    "fields, arrays, conditions, computed values and marker warnings. Then " +
+    "call configure_template_fields to say who fills each field.",
   inputSchema: createTemplateArgsSchema,
   jsonSchemaProjectionWaiver: {
     ignoreActions: ["partial_check"],
@@ -499,12 +493,11 @@ export const CREATE_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
 
 export const CONFIGURE_TEMPLATE_FIELDS_TOOL_DEFINITION = defineValibotMcpTool({
   description:
-    "Configure the fields of an existing template: who fills each one, its " +
-    "input control, options and validation. The document's {{markers}} are " +
-    "never touched, only the field configuration. Pass template_id and one " +
-    "entry per field path; every path must already exist as a marker. Read " +
-    `${TEMPLATE_FIELD_REFERENCE_URI} first. Returns the template's full field ` +
-    "configuration after the change.",
+    "Configure an existing template's fields: who fills each one, its input " +
+    "control, options and validation. The document's {{markers}} are " +
+    "untouched. Pass template_id and one entry per field path; every path " +
+    `must already exist as a marker. Read ${TEMPLATE_FIELD_REFERENCE_URI} ` +
+    "first. Returns the template's full field configuration afterwards.",
   inputSchema: configureTemplateFieldsArgsSchema,
   jsonSchemaProjectionWaiver: {
     ignoreActions: ["check", "finite"],

@@ -96,9 +96,14 @@ const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
 // advertises): measured 70_171 chars, and the tool description shrank to pay
 // part of it back.
 // default bumped 70_200 -> 71_000 when save_template split into
-// create_template and configure_template_fields: measured 70_801 chars. Two
-// tool entries replace one, and each carries only the properties its own
-// intent uses, so the second description is most of the growth.
+// create_template and configure_template_fields: two tool entries replace
+// one, and each carries only the properties its own intent uses.
+// Folding the six mutually exclusive derived-source keys into one `source`
+// union then paid part of that back: the union's structure costs more than
+// the flat keys did, but its per-branch prose belongs in the field-reference
+// resource rather than in a schema every client downloads on connect, and
+// the two tool descriptions lost the sentences the references already carry.
+// Measured with both changes in: 70_849 chars.
 const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
   default: 71_000,
   anonymized: 23_557,

@@ -91,6 +91,21 @@ const fieldEnum = (branch: unknown): unknown => {
   return isRecord(field) ? field["enum"] : undefined;
 };
 
+/** The single value a `source` branch's `type` discriminator advertises.
+ *  Provider portability makes each discriminator a one-value enum, not a
+ *  JSON Schema `const`. */
+const sourceBranchType = (branch: unknown): unknown => {
+  const properties = isRecord(branch) ? branch["properties"] : undefined;
+  const type = isRecord(properties) ? properties["type"] : undefined;
+  const values = isRecord(type) ? type["enum"] : undefined;
+  return Array.isArray(values) ? values.at(0) : undefined;
+};
+
+const sourceBranch = (branches: unknown, type: string): unknown =>
+  Array.isArray(branches)
+    ? branches.find((branch) => sourceBranchType(branch) === type)
+    : undefined;
+
 /** Walks an advertised schema and records the path of every object level (at
  *  any depth, including array items and union branches) that does not close
  *  its property set. */
@@ -507,11 +522,27 @@ describe("MCP template tools", () => {
     );
     const source = fieldOverlayProperty(configureFields?.inputSchema, "source");
     const branches = isRecord(source) ? source["anyOf"] : undefined;
-    expect(Array.isArray(branches) ? branches.length : 0).toBe(5);
+    // Who fills a field is one property: every way to fill it is a branch of
+    // this union, so a branch that stops being advertised is a lost source.
+    expect(
+      Array.isArray(branches) ? branches.map(sourceBranchType) : [],
+    ).toEqual([
+      "person",
+      "ai",
+      "lookup",
+      "contact",
+      "party",
+      "matter",
+      "attorney",
+      "firm",
+      "formula",
+      "condition",
+    ]);
     // Moving the prose out must not narrow what the schema accepts: the
     // contact branch still enumerates every built-in contact field key.
-    const contactBranch = Array.isArray(branches) ? branches.at(0) : undefined;
-    expect(fieldEnum(contactBranch)).toEqual([...CONTACT_FIELDS]);
+    expect(fieldEnum(sourceBranch(branches, "contact"))).toEqual([
+      ...CONTACT_FIELDS,
+    ]);
   });
 
   test("every template tool schema closes its objects, bar the free-form value maps", async () => {
@@ -680,20 +711,24 @@ describe("MCP template tools", () => {
           hint: "Enter the KRS number",
           // The whole lookup, registry included, in the shape the `fields`
           // overlay accepts: read, edit, send back.
-          lookup: {
+          source: {
+            type: "lookup",
             registry: "krs",
             formats: [{ key: "default", template: "[name], KRS [krs]" }],
           },
           validation: { required: true },
         }),
         expect.objectContaining({
-          ai_prompt: "Draft the scope of this power of attorney",
-          ai_sees_document: true,
+          source: {
+            type: "ai",
+            prompt: "Draft the scope of this power of attorney",
+            sees_document: true,
+          },
         }),
         expect.objectContaining({
           options: ["director", "proxy"],
           options_from: "parties",
-          source: { kind: "party", role: "counterparty", field: "name" },
+          source: { type: "party", role: "counterparty", field: "name" },
         }),
       ],
       computed: [{ path: "total", formula: "rent * 12" }],
@@ -773,7 +808,8 @@ describe("MCP template tools", () => {
               options: ["[PERSON_1] signatory"],
             },
           ],
-          lookup: {
+          source: {
+            type: "lookup",
             formats: [
               {
                 template: "[company name], [PERSON_1] registry",
@@ -2558,7 +2594,8 @@ describe("MCP template tools", () => {
             label: "Company",
             input_type: "text",
             required: true,
-            lookup: {
+            source: {
+              type: "lookup",
               registry: "krs",
               formats: [
                 { key: "default", template: "[name], KRS [krs]" },
@@ -2625,7 +2662,8 @@ describe("MCP template tools", () => {
           {
             path: "company",
             input_type: "text",
-            lookup: {
+            source: {
+              type: "lookup",
               registry: "krs",
               formats: [
                 { key: "default", template: "[name], KRS [krs]" },
@@ -2653,8 +2691,11 @@ describe("MCP template tools", () => {
     const result = await handleMcpToolCall({
       args: {
         template_id: TEMPLATE_ID,
-        // formula is mutually exclusive with ai_prompt, so isFieldMeta rejects it.
-        fields: [{ path: "fee", formula: "rent * 12", ai_prompt: "draft it" }],
+        // `parts` without `format` has no join template, so the entry-level
+        // check rejects it before anything is configured.
+        fields: [
+          { path: "fee", parts: [{ key: "amount", input_type: "text" }] },
+        ],
       },
       context: createContext(),
       toolName: "configure_template_fields",
@@ -2667,17 +2708,21 @@ describe("MCP template tools", () => {
     expect(issues.some(({ path }) => path === "fields.0")).toBe(true);
   });
 
-  test("configure_template_fields rejects conflicting derived source modes", async () => {
+  test("configure_template_fields rejects a second source beside the one it declared", async () => {
+    // Two derived sources on one field used to be a runtime conflict between
+    // six optionals. `source` is one property with one `type`, so the second
+    // source is not a conflicting key but an unknown one, rejected on the
+    // branch the caller picked.
     const result = await handleMcpToolCall({
       args: {
         template_id: TEMPLATE_ID,
         fields: [
           {
             path: "company",
-            ai_prompt: "Draft the company details",
-            lookup: {
+            source: {
+              type: "lookup",
               registry: "krs",
-              formats: [{ key: "default", template: "[name]" }],
+              prompt: "Draft the company details",
             },
           },
         ],
@@ -2688,24 +2733,77 @@ describe("MCP template tools", () => {
 
     expect(result.isError).toBe(true);
     expect(configureTemplateFieldsMock).not.toHaveBeenCalled();
-    const error = validationEnvelope(result);
-    const issues = asTestRaw<{ path: string; message: string }[]>(
-      error["issues"],
+    const issues = asTestRaw<{ path: string }[]>(
+      validationEnvelope(result)["issues"],
     );
-    const conflict = issues.find(({ path }) => path === "fields.0");
-    // The rejection has to name WHICH properties collided, in the snake_case
-    // spelling the caller sent, and on which field: "mutually exclusive" on
-    // its own leaves an agent guessing among seven properties.
-    expect(conflict?.message).toContain("`ai_prompt`");
-    expect(conflict?.message).toContain("`lookup`");
-    expect(conflict?.message).toContain('"company"');
+    expect(issues.some(({ path }) => path.startsWith("fields.0.source"))).toBe(
+      true,
+    );
+  });
+
+  test("configure_template_fields rejects an ai source that is neither a draft nor an adaptation", async () => {
+    // The one contradiction the union can still spell: AI drafting the value
+    // and AI rewriting the entered value are separate sources in the manifest.
+    // The rejection has to say which property is at fault and on which entry.
+    const result = await handleMcpToolCall({
+      args: {
+        template_id: TEMPLATE_ID,
+        fields: [
+          {
+            path: "company",
+            source: {
+              type: "ai",
+              prompt: "Draft the company details",
+              adapt: true,
+            },
+          },
+        ],
+      },
+      context: createContext(),
+      toolName: "configure_template_fields",
+    });
+
+    expect(result.isError).toBe(true);
+    expect(configureTemplateFieldsMock).not.toHaveBeenCalled();
+    const issues = asTestRaw<{ path: string; message: string }[]>(
+      validationEnvelope(result)["issues"],
+    );
+    const conflict = issues.find(({ path }) => path === "fields.0.source");
+    expect(conflict?.message).toContain("prompt");
+    expect(conflict?.message).toContain("adapt");
+  });
+
+  test("configure_template_fields rejects a composite field bound to something other than its parts", async () => {
+    const result = await handleMcpToolCall({
+      args: {
+        template_id: TEMPLATE_ID,
+        fields: [
+          {
+            path: "property_address",
+            parts: [{ key: "street", input_type: "text" }],
+            format: "{{street}}",
+            source: { type: "contact", field: "address" },
+          },
+        ],
+      },
+      context: createContext(),
+      toolName: "configure_template_fields",
+    });
+
+    expect(result.isError).toBe(true);
+    expect(configureTemplateFieldsMock).not.toHaveBeenCalled();
+    const issues = asTestRaw<{ path: string; message: string }[]>(
+      validationEnvelope(result)["issues"],
+    );
+    const conflict = issues.find(({ path }) => path === "fields.0.source");
+    expect(conflict?.message).toContain("parts");
   });
 
   test("configure_template_fields reads a null-padded field entry as a plain text field", async () => {
     // GPT-family clients send `null` for every optional property they are not
-    // setting. Null is absence here: without that, this entry reads as an
-    // AI-drafted, conditioned, computed, looked-up, composite, bound field all
-    // at once and is refused for conflicting derived sources.
+    // setting. Null is absence here: without that, this entry reads as a
+    // composite field with a null source and a null date format rather than
+    // the plain text field it is.
     configureTemplateFieldsMock.mockImplementation(async function* () {
       yield* [];
       return Result.ok({ manifest: { version: 1, fields: [] } });
@@ -2724,16 +2822,10 @@ describe("MCP template tools", () => {
             options: null,
             validation: { required: true, min_length: null, pattern: null },
             required: null,
-            ai_prompt: null,
-            ai_adapt: null,
-            ai_sees_document: null,
             parts: null,
             format: null,
             options_from: null,
-            lookup: null,
             source: null,
-            formula: null,
-            condition: null,
             date_format: null,
           },
         ],
@@ -2835,7 +2927,8 @@ describe("MCP template tools", () => {
         fields: [
           {
             path: "company",
-            lookup: {
+            source: {
+              type: "lookup",
               registry: "krs",
               formats: [{ key: "default", template: "[name], KRS [krs]" }],
             },
@@ -2865,7 +2958,8 @@ describe("MCP template tools", () => {
       fields: [
         expect.objectContaining({
           path: "company",
-          lookup: {
+          source: {
+            type: "lookup",
             registry: "krs",
             formats: [{ key: "default", template: "[name], KRS [krs]" }],
           },
@@ -2904,16 +2998,10 @@ describe("MCP template tools", () => {
             options: null,
             validation: null,
             required: true,
-            ai_prompt: null,
-            ai_adapt: null,
-            ai_sees_document: null,
             parts: null,
             format: null,
             options_from: null,
-            lookup: null,
             source: null,
-            formula: null,
-            condition: null,
             date_format: null,
           },
         ],

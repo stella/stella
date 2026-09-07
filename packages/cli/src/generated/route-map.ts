@@ -2760,7 +2760,7 @@ export const generatedRouteMap: RouteNode = {
             commandPath: ["template", "configure-fields"],
             toolName: "configure_template_fields",
             description:
-              "Configure the fields of an existing template: who fills each one, its input control, options and validation.",
+              "Configure an existing template's fields: who fills each one, its input control, options and validation.",
             flags: [
               {
                 flag: "--template-id",
@@ -2861,18 +2861,6 @@ export const generatedRouteMap: RouteNode = {
                         type: "boolean",
                         description: "Value is required",
                       },
-                      ai_prompt: {
-                        type: "string",
-                        description: "Who fills = AI: drafting instruction",
-                      },
-                      ai_adapt: {
-                        type: "boolean",
-                        description: "Who fills = person + AI",
-                      },
-                      ai_sees_document: {
-                        type: "boolean",
-                        description: "AI field also sees the document",
-                      },
                       parts: {
                         type: "array",
                         items: {
@@ -2917,62 +2905,93 @@ export const generatedRouteMap: RouteNode = {
                         type: "string",
                         description: "Dependent select: source field path",
                       },
-                      lookup: {
-                        type: "object",
-                        properties: {
-                          registry: {
-                            enum: [
-                              "ares",
-                              "brreg",
-                              "companies-house",
-                              "denue",
-                              "edgar",
-                              "gcis",
-                              "krs",
-                              "orsr",
-                              "prh",
-                              "recherche-entreprises",
-                              "vies",
-                            ],
-                            type: "string",
-                            description: "Business registry to query",
-                          },
-                          formats: {
-                            type: "array",
-                            items: {
-                              type: "object",
-                              properties: {
-                                key: {
-                                  type: "string",
-                                  description:
-                                    "Format key, addressed as {{path.key}}",
-                                },
-                                template: {
-                                  type: "string",
-                                  maxLength: 2000,
-                                  description:
-                                    "[token] rendering of the registry hit",
-                                },
-                              },
-                              required: ["key", "template"],
-                              additionalProperties: false,
-                            },
-                            minItems: 1,
-                            maxItems: 10,
-                            description:
-                              "Named renderings; the first is the default",
-                          },
-                        },
-                        required: ["registry", "formats"],
-                        additionalProperties: false,
-                        description: "Who fills = business-registry lookup",
-                      },
                       source: {
                         anyOf: [
                           {
                             type: "object",
                             properties: {
-                              kind: {
+                              type: {
+                                enum: ["person"],
+                                type: "string",
+                              },
+                            },
+                            required: ["type"],
+                            additionalProperties: false,
+                          },
+                          {
+                            type: "object",
+                            properties: {
+                              type: {
+                                enum: ["ai"],
+                                type: "string",
+                              },
+                              prompt: {
+                                type: "string",
+                              },
+                              adapt: {
+                                type: "boolean",
+                              },
+                              sees_document: {
+                                type: "boolean",
+                              },
+                            },
+                            required: ["type"],
+                            additionalProperties: false,
+                          },
+                          {
+                            type: "object",
+                            properties: {
+                              type: {
+                                enum: ["lookup"],
+                                type: "string",
+                              },
+                              registry: {
+                                enum: [
+                                  "ares",
+                                  "brreg",
+                                  "companies-house",
+                                  "denue",
+                                  "edgar",
+                                  "gcis",
+                                  "krs",
+                                  "orsr",
+                                  "prh",
+                                  "recherche-entreprises",
+                                  "vies",
+                                ],
+                                type: "string",
+                              },
+                              formats: {
+                                type: "array",
+                                items: {
+                                  type: "object",
+                                  properties: {
+                                    key: {
+                                      type: "string",
+                                      description:
+                                        "Format key, addressed as {{path.key}}",
+                                    },
+                                    template: {
+                                      type: "string",
+                                      maxLength: 2000,
+                                      description:
+                                        "[token] rendering of the registry hit",
+                                    },
+                                  },
+                                  required: ["key", "template"],
+                                  additionalProperties: false,
+                                },
+                                minItems: 1,
+                                maxItems: 10,
+                              },
+                            },
+                            required: ["type", "registry"],
+                            additionalProperties: false,
+                          },
+                          {
+                            type: "object",
+                            properties: {
+                              type: {
                                 enum: ["contact"],
                                 type: "string",
                               },
@@ -2998,13 +3017,13 @@ export const generatedRouteMap: RouteNode = {
                                 type: "string",
                               },
                             },
-                            required: ["kind", "field"],
+                            required: ["type", "field"],
                             additionalProperties: false,
                           },
                           {
                             type: "object",
                             properties: {
-                              kind: {
+                              type: {
                                 enum: ["party"],
                                 type: "string",
                               },
@@ -3044,13 +3063,13 @@ export const generatedRouteMap: RouteNode = {
                                 type: "string",
                               },
                             },
-                            required: ["kind", "role", "field"],
+                            required: ["type", "role", "field"],
                             additionalProperties: false,
                           },
                           {
                             type: "object",
                             properties: {
-                              kind: {
+                              type: {
                                 enum: ["matter"],
                                 type: "string",
                               },
@@ -3064,13 +3083,13 @@ export const generatedRouteMap: RouteNode = {
                                 type: "string",
                               },
                             },
-                            required: ["kind", "field"],
+                            required: ["type", "field"],
                             additionalProperties: false,
                           },
                           {
                             type: "object",
                             properties: {
-                              kind: {
+                              type: {
                                 enum: ["attorney"],
                                 type: "string",
                               },
@@ -3083,13 +3102,13 @@ export const generatedRouteMap: RouteNode = {
                                 type: "string",
                               },
                             },
-                            required: ["kind", "ref", "field"],
+                            required: ["type", "ref", "field"],
                             additionalProperties: false,
                           },
                           {
                             type: "object",
                             properties: {
-                              kind: {
+                              type: {
                                 enum: ["firm"],
                                 type: "string",
                               },
@@ -3098,19 +3117,39 @@ export const generatedRouteMap: RouteNode = {
                                 type: "string",
                               },
                             },
-                            required: ["kind", "field"],
+                            required: ["type", "field"],
+                            additionalProperties: false,
+                          },
+                          {
+                            type: "object",
+                            properties: {
+                              type: {
+                                enum: ["formula"],
+                                type: "string",
+                              },
+                              expression: {
+                                type: "string",
+                              },
+                            },
+                            required: ["type", "expression"],
+                            additionalProperties: false,
+                          },
+                          {
+                            type: "object",
+                            properties: {
+                              type: {
+                                enum: ["condition"],
+                                type: "string",
+                              },
+                              expression: {
+                                type: "string",
+                              },
+                            },
+                            required: ["type", "expression"],
                             additionalProperties: false,
                           },
                         ],
-                        description: "Who fills = matter or contact data",
-                      },
-                      formula: {
-                        type: "string",
-                        description: "Arithmetic over other fields",
-                      },
-                      condition: {
-                        type: "string",
-                        description: "Boolean rule for an {{#if}} marker",
+                        description: "Who fills the field; one branch, by type",
                       },
                       date_format: {
                         type: "object",

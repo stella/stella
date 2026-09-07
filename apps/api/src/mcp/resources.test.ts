@@ -83,11 +83,11 @@ describe("MCP resources", () => {
     expect(content.text).toBe(buildFieldReference());
     // The per-property guidance an agent needs to configure fields: who fills
     // the field, the dependent-select rule, the lookup format addressing, and
-    // the binding kinds with their allowed keys.
-    expect(content.text).toContain("Who fills = AI");
+    // the source branches with their allowed keys.
+    expect(content.text).toContain('`{ "type": "ai" }`');
     expect(content.text).toContain("`options_from`");
     expect(content.text).toContain("{{path.key}}");
-    expect(content.text).toContain('`kind: "party"`');
+    expect(content.text).toContain('`{ "type": "party" }`');
     expect(content.text).toContain("dataBox");
     expect(content.text).toContain(MARKER_REFERENCE_URI);
   });

@@ -391,22 +391,19 @@ export const fieldValidationSchema = v.pipe(
   v.description(FIELD_VALIDATION_DESCRIPTION),
 );
 
-/** Property names per derived-source mode, per surface. The persisted model is
- *  camelCase and the MCP tool input is snake_case, so a conflict message must
- *  quote the spelling the caller actually sent. Total over the mode union: a
- *  new derived source is a compile error here until both spellings exist. */
+/** The persisted property each derived-source mode occupies. Only the
+ *  persisted manifest still spells these separately: the MCP surface carries
+ *  one discriminated `source`, where a second mode is unrepresentable. Total
+ *  over the mode union, so a new derived source is a compile error here. */
 export const DERIVED_SOURCE_PROPERTIES = {
-  "ai-adapt": { camel: "aiAdapt", snake: "ai_adapt" },
-  "ai-prompt": { camel: "aiPrompt", snake: "ai_prompt" },
-  condition: { camel: "condition", snake: "condition" },
-  formula: { camel: "formula", snake: "formula" },
-  lookup: { camel: "lookup", snake: "lookup" },
-  parts: { camel: "parts", snake: "parts" },
-  source: { camel: "source", snake: "source" },
-} as const satisfies Record<
-  DerivedSourceMode,
-  { camel: string; snake: string }
->;
+  "ai-adapt": "aiAdapt",
+  "ai-prompt": "aiPrompt",
+  condition: "condition",
+  formula: "formula",
+  lookup: "lookup",
+  parts: "parts",
+  source: "source",
+} as const satisfies Record<DerivedSourceMode, string>;
 
 type DerivedSourceMode =
   | "ai-adapt"
@@ -470,16 +467,15 @@ export const hasCompatibleDerivedSources = (
 ): boolean => activeDerivedSourceModes(fields).length <= 1;
 
 /**
- * The rejection message for a field that names more than one derived source.
- * "Mutually exclusive" alone leaves the caller to guess which of the seven
- * properties collided and on which entry, so both are named here.
+ * The rejection message for a manifest field that names more than one derived
+ * source. "Mutually exclusive" alone leaves the reader to guess which of the
+ * seven properties collided and on which field, so both are named here.
  */
 export const describeDerivedSourceConflict = (
   fields: DerivedSourceFields & { path?: string | undefined },
-  spelling: "camel" | "snake",
 ): string => {
   const properties = activeDerivedSourceModes(fields).map(
-    (mode) => `\`${DERIVED_SOURCE_PROPERTIES[mode][spelling]}\``,
+    (mode) => `\`${DERIVED_SOURCE_PROPERTIES[mode]}\``,
   );
   const at = fields.path === undefined ? "" : ` on "${fields.path}"`;
   return (
@@ -564,7 +560,7 @@ const fieldMetaSchema = v.pipe(
   v.check(
     (field: v.InferOutput<typeof fieldMetaObjectSchema>) =>
       hasCompatibleDerivedSources(field),
-    (issue) => describeDerivedSourceConflict(issue.input, "camel"),
+    (issue) => describeDerivedSourceConflict(issue.input),
   ),
 );
 
@@ -588,7 +584,7 @@ export const fieldMetaToolInputSchema = v.pipe(
   v.check(
     (field: v.InferOutput<typeof fieldMetaToolInputObjectSchema>) =>
       hasCompatibleDerivedSources(field),
-    (issue) => describeDerivedSourceConflict(issue.input, "camel"),
+    (issue) => describeDerivedSourceConflict(issue.input),
   ),
 );
 

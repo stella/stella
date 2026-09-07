@@ -102,8 +102,9 @@ const WORKFLOW_STEPS: readonly WorkflowStep[] = [
       `${CREATE_TEMPLATE} already returned this, and ${LIST_TEMPLATES} with ` +
       "`template_id` returns it again for a template you did not just " +
       "create. `fields[]` (`path`, " +
-      "`label`, `inputType`, `required`, `hint`, `options`, `optionsFrom`, " +
-      "`formats`, `aiPrompt`, `aiAdapt`, `parts`, `format`, `dateFormat`), " +
+      "`label`, `input_type`, `required`, `hint`, `options`, `options_from`, " +
+      "`parts`, `format`, `date_format`, and `source`: who fills the field, " +
+      "as one object with a `type`), " +
       "`arrays[]` (one entry per `{{#each}}` loop: its `path` plus the " +
       "`itemFieldPaths` it repeats), `conditions[]`, `computed[]` " +
       "(`name` + `expression`) and the same `warnings[]`. Compare " +
@@ -117,9 +118,10 @@ const WORKFLOW_STEPS: readonly WorkflowStep[] = [
     detail:
       `${CONFIGURE_TEMPLATE_FIELDS} with \`template_id\` and \`fields\`. Every ` +
       `entry's \`path\` must be one ${CREATE_TEMPLATE} or ${LIST_TEMPLATES} ` +
-      "reported; an undiscovered path is refused. Each entry decides who " +
-      "fills that field (person, AI, registry lookup, matter or contact " +
-      "binding, formula) — see " +
+      "reported; an undiscovered path is refused. Each entry's `source` is " +
+      "ONE object naming who fills that field (`person`, `ai`, `lookup`, " +
+      "`contact`, `party`, `matter`, `attorney`, `firm`, `formula`, " +
+      "`condition`); omit it for a field the person fills — see " +
       `${TEMPLATE_FIELD_REFERENCE_URI}. The response echoes the full ` +
       `configuration in the ${LIST_TEMPLATES} detail shape, \`warnings[]\` ` +
       "included: the change recomputes them, so a condition that removes " +

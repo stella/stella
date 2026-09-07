@@ -1503,6 +1503,30 @@ const TEMPLATE_WARNINGS_PROJECTION = v.array(
 );
 
 /**
+ * Who fills a template field, as one discriminated union: the same shape
+ * `configure_template_fields` accepts, so a described field round-trips. A
+ * binding branch names no record id, only the selector and the field key; a
+ * lookup branch names the registry and its rendering templates. The branches
+ * are flattened into one object here because a projection describes the wire
+ * payload, not the runtime validator that already refused every other
+ * combination.
+ */
+const TEMPLATE_FIELD_SOURCE_PROJECTION = v.strictObject({
+  type: v.string(),
+  field: v.optional(v.string()),
+  role: v.optional(v.string()),
+  ref: v.optional(v.string()),
+  prompt: v.optional(v.string()),
+  adapt: v.optional(v.boolean()),
+  sees_document: v.optional(v.boolean()),
+  registry: v.optional(v.string()),
+  formats: v.optional(
+    v.array(v.strictObject({ key: v.string(), template: v.string() })),
+  ),
+  expression: v.optional(v.string()),
+});
+
+/**
  * The describe shape (`DescribeTemplateResult` success variant,
  * `lib/templates/template-fill-service.ts`) served by list_templates' detail
  * mode and echoed by configure_template_fields. Field paths, input
@@ -1519,16 +1543,6 @@ export const TEMPLATE_DESCRIBE_PROJECTION = v.strictObject({
       required: v.boolean(),
       hint: v.optional(v.string()),
       options: v.optional(v.array(v.string())),
-      // The complete lookup configuration, in the shape
-      // `configure_template_fields` accepts, so a described field round-trips.
-      lookup: v.optional(
-        v.strictObject({
-          registry: v.string(),
-          formats: v.array(
-            v.strictObject({ key: v.string(), template: v.string() }),
-          ),
-        }),
-      ),
       validation: v.optional(
         v.strictObject({
           required: v.optional(v.boolean()),
@@ -1541,19 +1555,7 @@ export const TEMPLATE_DESCRIBE_PROJECTION = v.strictObject({
           max_items: v.optional(v.number()),
         }),
       ),
-      // A binding resolves server-side from matter/contact data; it names no
-      // record id, only the kind, the selector, and the field key.
-      source: v.optional(
-        v.strictObject({
-          kind: v.string(),
-          field: v.string(),
-          role: v.optional(v.string()),
-          ref: v.optional(v.string()),
-        }),
-      ),
-      ai_sees_document: v.boolean(),
-      ai_prompt: v.optional(v.string()),
-      ai_adapt: v.boolean(),
+      source: TEMPLATE_FIELD_SOURCE_PROJECTION,
       options_from: v.optional(v.string()),
       date_format: v.optional(
         v.strictObject({ locale: v.string(), style: v.string() }),
