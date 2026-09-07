@@ -19,7 +19,7 @@
  */
 
 import { evaluateNumericExpression } from "./compute.js";
-import { markerPattern } from "./markers.js";
+import { replaceOutputMarkers } from "./markers.js";
 import { resolvePath } from "./path.js";
 
 // ── Date ──────────────────────────────────────────────────
@@ -129,7 +129,7 @@ export const renderComposite = (
   format: string,
   partValues: Readonly<Record<string, string>>,
 ): string =>
-  format.replace(markerPattern(), (raw, inner: string) => {
+  replaceOutputMarkers(format, (raw, inner) => {
     const key = inner.trim();
     if (!parts.some((part) => part.key === key)) {
       return raw;
