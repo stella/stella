@@ -126,6 +126,71 @@ export const shouldReturnToTimelineFromInput = ({
 }: ClipboardInputKey) =>
   !isClipboardNameInput(dataset) && key === "ArrowUp" && !isComposing;
 
+type ClipboardSearchArrowKey = ClipboardInputKey &
+  ClipboardModifiers & {
+    direction: "ltr" | "rtl";
+    selectionEnd: number | null;
+    selectionStart: number | null;
+    shiftKey: boolean;
+    valueLength: number;
+  };
+
+/**
+ * ArrowRight with the caret at the search field's visual right edge hands
+ * focus to the group rail beside the search field (an empty field qualifies).
+ * The field resolves its own direction from the query, so an Arabic or Hebrew
+ * query puts that edge at offset 0 and the end of the text on the left. With
+ * text still to the right of the caret the arrow keeps moving the caret, and
+ * any modifier leaves the platform's own word, line, and selection gestures
+ * alone.
+ */
+export const shouldLeaveSearchForGroups = ({
+  altGraphKey,
+  altKey,
+  ctrlKey,
+  dataset,
+  direction,
+  isComposing,
+  key,
+  metaKey,
+  selectionEnd,
+  selectionStart,
+  shiftKey,
+  valueLength,
+}: ClipboardSearchArrowKey) => {
+  const rightEdge = direction === "rtl" ? 0 : valueLength;
+  return (
+    !isClipboardNameInput(dataset) &&
+    key === "ArrowRight" &&
+    !isComposing &&
+    !altGraphKey &&
+    !altKey &&
+    !ctrlKey &&
+    !metaKey &&
+    !shiftKey &&
+    selectionStart === rightEdge &&
+    selectionEnd === rightEdge
+  );
+};
+
+/**
+ * The group rail is the row below the timeline: left and right walk its
+ * controls, ArrowUp returns to the selected card. Stepping before the first
+ * control lands back in the search field, so the two arrows pair up.
+ */
+export const clipboardGroupRailKeyAction = (key: string) => {
+  switch (key) {
+    case "ArrowLeft":
+      return "previous";
+    case "ArrowRight":
+      return "next";
+    case "ArrowUp":
+      return "focusTimeline";
+    default:
+      return null;
+  }
+};
+
 /**
  * Command, or Control on Windows and Linux. Alt disqualifies the combination:
  * AltGr reports as Ctrl+Alt there, so a layout that produces a character with

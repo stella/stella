@@ -109,6 +109,7 @@ import {
   clipboardSourceTintIndex,
   clipboardSourceTitle,
   clipboardTimelineKeyAction,
+  clipboardGroupRailKeyAction,
   filterClipboardItems,
   formatClipboardAge,
   hasClipboardPrimaryModifier,
@@ -118,6 +119,7 @@ import {
   quickCopyIndex,
   shouldCopyFromClipboardInput,
   shouldReturnToTimelineFromInput,
+  shouldLeaveSearchForGroups,
 } from "./clipboard-logic";
 import type { ClipboardPointerPosition } from "./clipboard-logic";
 import {
@@ -231,6 +233,13 @@ const focusTimeline = (node: HTMLDivElement | null) => {
     node.focus();
   }
 };
+
+/**
+ * The shared input carries `dir="auto"` once it holds text, so only the
+ * computed style says which side of the field its caret offsets sit on.
+ */
+const clipboardInputDirection = (input: HTMLInputElement) =>
+  getComputedStyle(input).direction === "rtl" ? "rtl" : "ltr";
 
 const focusCard = (rail: HTMLDivElement | null, id: string) => {
   requestAnimationFrame(() => {
@@ -1347,6 +1356,7 @@ const ClipboardApp = () => {
     : "ltr";
   const searchInputRef = useRef<HTMLInputElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
+  const groupsRailRef = useRef<HTMLElement>(null);
   const timelineRailRef = useRef<HTMLDivElement>(null);
   const railPointerRef = useRef<ClipboardPointerPosition | null>(null);
   const contextMenuTriggerRef = useRef<HTMLElement>(null);
@@ -1829,6 +1839,36 @@ const ClipboardApp = () => {
     selectIndex(nextIndex);
   };
 
+  const handleGroupRailKeyDown = (
+    event: KeyboardEvent,
+    target: HTMLElement,
+  ) => {
+    const groupsRail = groupsRailRef.current;
+    const railAction = clipboardGroupRailKeyAction(event.key);
+    if (!groupsRail || !railAction) {
+      return;
+    }
+    if (railAction === "focusTimeline") {
+      if (activeItem) {
+        event.preventDefault();
+        selectIndex(activeIndex);
+      }
+      return;
+    }
+    event.preventDefault();
+    const controls = Array.from(
+      groupsRail.querySelectorAll<HTMLElement>("button:not([disabled])"),
+    );
+    const control = target.closest("button");
+    const index = control ? controls.indexOf(control) : -1;
+    const nextIndex = index + (railAction === "next" ? 1 : -1);
+    if (nextIndex < 0) {
+      searchInputRef.current?.focus();
+      return;
+    }
+    controls.at(nextIndex)?.focus();
+  };
+
   const handleKeyDown = (event: KeyboardEvent) => {
     if (dialog.type !== "closed" || welcomeOpen) {
       return;
@@ -1873,6 +1913,21 @@ const ClipboardApp = () => {
       } else if (activeItem && shouldReturnToTimelineFromInput(inputKey)) {
         event.preventDefault();
         selectIndex(activeIndex);
+      } else if (
+        shouldLeaveSearchForGroups({
+          ...inputKey,
+          ...modifiers,
+          direction: clipboardInputDirection(event.target),
+          selectionEnd: event.target.selectionEnd,
+          selectionStart: event.target.selectionStart,
+          shiftKey: event.shiftKey,
+          valueLength: event.target.value.length,
+        })
+      ) {
+        event.preventDefault();
+        groupsRailRef.current
+          ?.querySelector<HTMLElement>("button[aria-pressed='true']")
+          ?.focus();
       }
       return;
     }
@@ -1897,6 +1952,10 @@ const ClipboardApp = () => {
       return;
     }
     const target = event.target instanceof HTMLElement ? event.target : null;
+    if (target && groupsRailRef.current?.contains(target)) {
+      handleGroupRailKeyDown(event, target);
+      return;
+    }
     const cardTrigger = target?.closest("[data-clipboard-card-trigger]");
     const interactiveTarget = target?.closest(
       "button, a, input, textarea, select, [contenteditable='true']",
@@ -2332,6 +2391,7 @@ const ClipboardApp = () => {
         </div>
         <nav
           aria-label={t("groups")}
+          ref={groupsRailRef}
           className="clipboard-groups-rail border-border flex min-w-0 scrollbar-none items-center gap-1 overflow-x-auto border-s ps-2"
         >
           <Button
