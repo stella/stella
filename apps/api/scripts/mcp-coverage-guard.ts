@@ -127,6 +127,8 @@ const TOOLS_WITHOUT_ENUMERABLE_ENDPOINT: Record<string, string> = {
     "no dedicated endpoint: MCP-only launcher resolves an authorized document target for the portable upload App (apps/api/src/mcp/document-tools.ts)",
   delete_task:
     "no dedicated endpoint: reuses the entities delete handler already claimed by delete_document, confined to kind task (apps/api/src/mcp/matter-tools.ts)",
+  configure_template_fields:
+    "no dedicated endpoint: MCP-only tool writing field configuration through the configure service (apps/api/src/handlers/templates/configure-template-fields-service.ts)",
 };
 
 // Re-exported from the shared enumeration lib so the guard's own test suite
