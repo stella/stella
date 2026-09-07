@@ -560,6 +560,7 @@ type CzNssSourceHashOptions = {
   sheetNumber: string | undefined;
   decisionDate: string | undefined;
   decisionType: string | undefined;
+  legalSentence: string | undefined;
 };
 
 /**
@@ -576,19 +577,29 @@ type CzNssSourceHashOptions = {
  * carries ` - 66`, or through a court that re-spaces its own citations.
  * Spacing is typography, not a document changing, and a hash that tracked it
  * would rewrite rows for it and would leave crawl and replay disagreeing.
+ *
+ * The headnote is here for the same reason as the sheet, and its timing is
+ * why: the court writes it when it selects an already published decision for
+ * its collection, and edits it afterwards. Left out, a row stored before that
+ * would be skipped as unchanged for good. It is appended only where the court
+ * states one, so a decision that has none hashes exactly as it did and is not
+ * rewritten for this. The replay hashes the value off the row's own metadata,
+ * which is where the crawl put it, so the two agree.
  */
 const czNssSourceHash = ({
   caseNumber,
   sheetNumber,
   decisionDate,
   decisionType,
+  legalSentence,
 }: CzNssSourceHashOptions): string => {
   const { caseNumber: docket, sheetNumber: carried } =
     splitCaseReference(caseNumber);
   const sheet = sheetNumber ?? carried;
   const reference = sheet === undefined ? docket : `${docket}-${sheet}`;
+  const base = `${reference}|${decisionDate ?? ""}|${decisionType ?? ""}`;
   return hashContent(
-    `${reference}|${decisionDate ?? ""}|${decisionType ?? ""}`,
+    legalSentence === undefined ? base : `${base}|${legalSentence}`,
   );
 };
 
@@ -910,6 +921,7 @@ const rowToResult = (
       sheetNumber,
       decisionDate,
       decisionType,
+      legalSentence: detail.legalSentence,
     }),
     parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NSS],
     documentAst: content.documentAst ?? EMPTY_AST,
@@ -1042,6 +1054,7 @@ const reparseStoredRaw = (
         sheetNumber,
         decisionDate,
         decisionType,
+        legalSentence: nonEmptyString(stored.metadata["legalSentence"]),
       }),
       parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NSS],
       documentAst: parsed.documentAst,

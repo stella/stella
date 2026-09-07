@@ -353,7 +353,18 @@ export const buildCzNsDecision = async (
   const printHtml = printResponse.ok ? await printResponse.text() : "";
 
   const meta = parseDetailPage(webHtml);
-  const raw = `${caseNumber}|${meta["ecli"] ?? ""}|${meta["decisionDate"] ?? ""}`;
+  // The court writes a headnote and an annotation when it selects an already
+  // published decision for its collection, and edits them afterwards. Left out
+  // of the source hash, the refresh check would read such a row as unchanged
+  // and skip the update for good. They are appended only where the court
+  // states one, so a decision that has neither hashes exactly as it did and is
+  // not rewritten for this; both positions are then present, so a headnote
+  // alone and an annotation alone cannot hash alike.
+  const summary =
+    meta["legalSentence"] === undefined && meta["abstract"] === undefined
+      ? ""
+      : `|${meta["legalSentence"] ?? ""}|${meta["abstract"] ?? ""}`;
+  const raw = `${caseNumber}|${meta["ecli"] ?? ""}|${meta["decisionDate"] ?? ""}${summary}`;
 
   // Parse AST from the print page (rich HTML)
   let documentAst: DocumentAst | EmptyAst = EMPTY_AST;

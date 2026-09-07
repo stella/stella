@@ -1376,6 +1376,33 @@ describe("cz-nss buildDecision", () => {
     }
     expect(carried.result.metadata["legalSentence"]).toBe(HEADNOTE);
     expect(bare.result.metadata["legalSentence"]).toBeUndefined();
+    // Crawl and replay have to agree on the hash, or every replayed row would
+    // read as changed to the crawl that next re-reads it, and back again.
+    expect(carried.result.rawHash).toBe(decision.rawHash);
+    expect(bare.result.rawHash).not.toBe(decision.rawHash);
+  });
+
+  test("a headnote the court adds or edits moves the source hash", async () => {
+    const none = await crawledWithHeadnote();
+    const headnoted = await crawledWithHeadnote(HEADNOTE);
+    const edited = await crawledWithHeadnote(`${HEADNOTE} Věta druhá.`);
+
+    // The refresh check skips a row whose source hash stands still. The court
+    // writes its headnote after publishing the decision and edits it later,
+    // so a row stored before either has to hash differently once the portal
+    // states the new text; otherwise the update never lands.
+    expect(headnoted.rawHash).not.toBe(none.rawHash);
+    expect(edited.rawHash).not.toBe(headnoted.rawHash);
+  });
+
+  test("a decision the court states no headnote for hashes as it did before", async () => {
+    const none = await crawledWithHeadnote();
+
+    // The literal is the hash's pre-existing input, so re-hashing the rows the
+    // court wrote no headnote for cannot happen without editing this line.
+    expect(none.rawHash).toBe(
+      hashContent("1 Az 4/2026-79|2026-06-10|rozsudek"),
+    );
   });
 
   test("refuses to write a row whose document the court did not serve", async () => {

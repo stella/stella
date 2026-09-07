@@ -22,6 +22,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import type { CzNsListingRow } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
+import { hashContent } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import { publisherSummaryOf } from "@/api/lib/case-law/publisher-summary";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
@@ -686,6 +687,39 @@ describe("cz-ns buildDecision", () => {
     // holds a one-pixel spacer image, which must not be stored as a sentence.
     expect(decision.metadata["legalSentence"]).toBeUndefined();
     expect(decision.metadata["abstract"]).toBeUndefined();
+  });
+
+  test("a headnote or annotation the court adds later moves the source hash", async () => {
+    // Sequentially: each crawl installs its own fetch stub on the global.
+    const hashes: string[] = [];
+    for (const summary of [
+      {},
+      { legalSentence: HEADNOTE },
+      { abstract: ANNOTATION },
+      { abstract: ANNOTATION, legalSentence: HEADNOTE },
+      { legalSentence: `${HEADNOTE} Věta druhá.` },
+    ] satisfies DetailPageOptions[]) {
+      hashes.push((await crawledWithSummary(summary)).rawHash);
+    }
+
+    // The refresh check skips a row whose source hash stands still. The court
+    // writes both after publishing the decision and edits them later, so a row
+    // stored before that has to hash differently once the page states the new
+    // text; otherwise the update never lands. The two are hashed in fixed
+    // positions, so a headnote alone and an annotation alone cannot collide.
+    expect(new Set(hashes).size).toBe(hashes.length);
+  });
+
+  test("a decision the court wrote neither for hashes as it did before", async () => {
+    const decision = await crawledWithSummary({});
+
+    // The literal is the hash's pre-existing input, so re-hashing the rows the
+    // court wrote neither for cannot happen without editing this line.
+    expect(decision.rawHash).toBe(
+      hashContent(
+        `${DOCKET.FIRST}|ECLI:CZ:NS:2026:30.CDO.3000.2025.1|28. 5. 2026`,
+      ),
+    );
   });
 
   test("a detail page that does not come back is reported, never written", async () => {
