@@ -15,6 +15,7 @@ import {
   CORPUS_INDEX_DATE_INPUT_FORMATS,
   DECISION_TIMESTAMP_FIELD,
   FOLDED_TOKENIZER,
+  PUBLISHER_KEYWORDS_FIELD,
   PUBLISHER_SUMMARY_FIELD,
   STEM_FIELD_OF,
   canonicalCorpusIndexMaturationPeriod,
@@ -83,6 +84,30 @@ type CaseLawV6Manifest = CaseLawManifestBase & {
   };
 };
 
+/**
+ * v6 with the publisher's classification in its own field. v6 has one field
+ * for everything a publisher wrote, so a decision with no headnote carries its
+ * subject-index terms there instead, and a query matching those terms scores
+ * against the field that stands for a written headnote. Splitting them is a
+ * mapping change, and the case-law doc mapping is `strict`, so it arrives as a
+ * generation: v6 keeps its exact bytes, its digest, and every projection
+ * fingerprint derived from it while v7 builds beside it.
+ */
+type CaseLawV7Manifest = CaseLawManifestBase & {
+  generation: "case_law_v7";
+  projection: CorpusIndexProjectionContract & {
+    layout: "passage";
+    builderVersion: "case-law-passages-v3";
+    yearFacetField: "decision_year";
+    publisherSummaryField: typeof PUBLISHER_SUMMARY_FIELD;
+    keywordsField: typeof PUBLISHER_KEYWORDS_FIELD;
+    stemFields: {
+      text: (typeof STEM_FIELD_OF)["text"];
+      publisherSummary: (typeof STEM_FIELD_OF)[typeof PUBLISHER_SUMMARY_FIELD];
+    };
+  };
+};
+
 type LegislationV2Manifest = CorpusIndexManifestBase & {
   family: "legislation";
   generation: "legislation_v2";
@@ -99,6 +124,7 @@ type LegislationV2Manifest = CorpusIndexManifestBase & {
 export type CorpusIndexManifest =
   | CaseLawV5Manifest
   | CaseLawV6Manifest
+  | CaseLawV7Manifest
   | LegislationV2Manifest;
 export type CorpusIndexManifestGeneration = CorpusIndexManifest["generation"];
 
@@ -335,6 +361,37 @@ const CASE_LAW_V6_INDEX_CONFIG = deepFreeze(
   ),
 );
 
+const caseLawV7Fields = (): CorpusIndexFieldMapping[] => {
+  const base = caseLawV6Fields();
+  const headnote =
+    base.find((field) => field.name === PUBLISHER_SUMMARY_FIELD) ??
+    panic("Case-law fields no longer map the headnote");
+  // The headnote's tokenizer and positions, so the same phrase matches the
+  // same way, minus the fieldnorms: a classification is a handful of terms and
+  // BM25 length normalization would let it outscore a sentence a publisher
+  // wrote for the same word. Not stored and not fast for the headnote's
+  // reasons: nothing reads it back, nothing filters or sorts on it.
+  return [
+    ...base,
+    { ...headnote, name: PUBLISHER_KEYWORDS_FIELD, fieldnorms: false },
+  ];
+};
+
+const CASE_LAW_V7_INDEX_CONFIG = deepFreeze(
+  structuredClone(
+    indexConfig({
+      fieldMappings: caseLawV7Fields(),
+      tagFields: [...CASE_LAW_TAG_FIELDS],
+      timestampField: DECISION_TIMESTAMP_FIELD,
+      // Unchanged from v6, for the reason stated there: a hit is a passage and
+      // its stored `text` is the excerpt that stands for the match, so a field
+      // written to the opening passage only is named by the query builder or
+      // not matched at all.
+      defaultSearchFields: ["title", "text"],
+    }),
+  ),
+);
+
 const LEGISLATION_V2_INDEX_CONFIG = deepFreeze(
   structuredClone(
     indexConfig({
@@ -408,6 +465,34 @@ export const CORPUS_INDEX_MANIFESTS = deepFreeze({
       byJurisdiction: { ...CASE_LAW_INDEX_GROUP_OF },
     },
   },
+  case_law_v7: {
+    schemaVersion: CORPUS_INDEX_MANIFEST_SCHEMA_VERSION,
+    family: "case_law",
+    generation: "case_law_v7",
+    cluster: "q09",
+    engine: {
+      binaryVersion: QUICKWIT_V09_BINARY_VERSION,
+      indexConfig: CASE_LAW_V7_INDEX_CONFIG,
+    },
+    projection: {
+      layout: "passage",
+      builderVersion: "case-law-passages-v3",
+      documentIdField: "document_id",
+      projectionRevisionField: "projection_revision",
+      openingField: "is_opening",
+      yearFacetField: "decision_year",
+      publisherSummaryField: PUBLISHER_SUMMARY_FIELD,
+      keywordsField: PUBLISHER_KEYWORDS_FIELD,
+      stemFields: {
+        text: STEM_FIELD_OF.text,
+        publisherSummary: STEM_FIELD_OF[PUBLISHER_SUMMARY_FIELD],
+      },
+    },
+    route: {
+      type: "case_law_group",
+      byJurisdiction: { ...CASE_LAW_INDEX_GROUP_OF },
+    },
+  },
   legislation_v2: {
     schemaVersion: CORPUS_INDEX_MANIFEST_SCHEMA_VERSION,
     family: "legislation",
@@ -442,6 +527,8 @@ export const requireCorpusIndexManifest = (
           return CORPUS_INDEX_MANIFESTS.case_law_v5;
         case "case_law_v6":
           return CORPUS_INDEX_MANIFESTS.case_law_v6;
+        case "case_law_v7":
+          return CORPUS_INDEX_MANIFESTS.case_law_v7;
         default:
           return panic(`Unknown case-law index manifest: ${generation}`);
       }
@@ -455,22 +542,50 @@ export const requireCorpusIndexManifest = (
 };
 
 /**
- * The index field a generation carries the publisher summary in, or null for
- * a generation whose indexes never mapped one. Total over every generation, so
- * a new one has to answer rather than inherit: writing the field into a
- * `strict` index that does not map it drops the whole document, and the engine
- * reports that as a successful ingest.
+ * How a generation's indexes hold what a publisher wrote, as the three shapes
+ * that exist rather than as a field name plus a convention:
+ *
+ * - `none`: the generation mapped neither field. Nothing publisher-authored is
+ *   written, because writing a field into a `strict` index that does not map
+ *   it drops the whole document, and the engine reports that as a successful
+ *   ingest.
+ * - `summary`: one field for everything a publisher wrote. A decision with no
+ *   headnote carries its classification there, which is the reading the
+ *   generation was built with and may not change under it.
+ * - `summary_and_keywords`: a field each. The headnote holds sentences and
+ *   nothing else; the classification has somewhere of its own to go.
+ *
+ * Total over every generation, so a new one answers rather than inherits, and
+ * the kind is what the writer, the fingerprint and the reader all branch on.
  */
-export const corpusIndexPublisherSummaryField = (
+export type CorpusIndexPublisherFields =
+  | { kind: "none" }
+  | { kind: "summary"; summaryField: typeof PUBLISHER_SUMMARY_FIELD }
+  | {
+      kind: "summary_and_keywords";
+      summaryField: typeof PUBLISHER_SUMMARY_FIELD;
+      keywordsField: typeof PUBLISHER_KEYWORDS_FIELD;
+    };
+
+export const corpusIndexPublisherFields = (
   manifest: CorpusIndexManifest,
-): typeof PUBLISHER_SUMMARY_FIELD | null => {
+): CorpusIndexPublisherFields => {
   switch (manifest.generation) {
     case "case_law_v5":
-      return null;
+      return { kind: "none" };
     case "case_law_v6":
-      return manifest.projection.publisherSummaryField;
+      return {
+        kind: "summary",
+        summaryField: manifest.projection.publisherSummaryField,
+      };
+    case "case_law_v7":
+      return {
+        kind: "summary_and_keywords",
+        summaryField: manifest.projection.publisherSummaryField,
+        keywordsField: manifest.projection.keywordsField,
+      };
     case "legislation_v2":
-      return null;
+      return { kind: "none" };
     default:
       manifest satisfies never;
       return panic(`Unhandled manifest: ${String(manifest)}`);
@@ -495,6 +610,7 @@ export const corpusIndexStemFields = (
     case "case_law_v5":
       return null;
     case "case_law_v6":
+    case "case_law_v7":
       return manifest.projection.stemFields;
     case "legislation_v2":
       return null;

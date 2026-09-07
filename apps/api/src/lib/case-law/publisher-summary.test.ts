@@ -6,7 +6,11 @@ import type {
   ParagraphRole,
 } from "@stll/legal-ast/document-ast";
 
-import { publisherSummaryOf } from "@/api/lib/case-law/publisher-summary";
+import {
+  publisherHeadnoteOf,
+  publisherKeywordsOf,
+  publisherSummaryOf,
+} from "@/api/lib/case-law/publisher-summary";
 
 const documentAst = (blocks: Block[]): DocumentAst => ({
   version: 1,
@@ -129,4 +133,42 @@ test("a summary opening with a one-letter word keeps it", () => {
       metadata: { legalArea: "  v likvidaci  " },
     }),
   ).toBe("v likvidaci");
+});
+
+test("a headnote is a sentence somebody wrote, never a classification", () => {
+  // The reading the corpus index writes into its headnote field. Every
+  // classification key at once, so the answer cannot be an accident of order:
+  // no source of this list holds one, so none can come back from it.
+  const classified = {
+    documentAst: null,
+    metadata: {
+      keywords: ["nájem", "výpověď"],
+      legalAreas: ["Občanské právo"],
+      legalArea: "Daně",
+    },
+  };
+
+  expect(publisherHeadnoteOf(classified)).toBeNull();
+  expect(publisherKeywordsOf(classified)).toBe("nájem · výpověď");
+  expect(
+    publisherHeadnoteOf({
+      documentAst: documentAst([paragraph("b1", "Právní věta", "headnotes")]),
+      metadata: { legalArea: "Daně" },
+    }),
+  ).toBe("Právní věta");
+});
+
+test("the line a reader sees falls back to the classification", () => {
+  // Display behaviour, unchanged: a decision whose publisher wrote no sentence
+  // reads better with the terms it was filed under than with an empty line.
+  // What the index must not do is score that fallback as a headnote.
+  const tagged = { documentAst: null, metadata: { legalArea: "Daně" } };
+
+  expect(publisherSummaryOf(tagged)).toBe("Daně");
+  expect(publisherSummaryOf(tagged)).toBe(publisherKeywordsOf(tagged));
+  const written = {
+    documentAst: null,
+    metadata: { legalSentence: "Právní věta", legalArea: "Daně" },
+  };
+  expect(publisherSummaryOf(written)).toBe(publisherHeadnoteOf(written));
 });

@@ -5,16 +5,17 @@ import type { SQL, SQLWrapper } from "drizzle-orm";
 import type { ApparatusRole, DocumentAst } from "@stll/legal-ast/document-ast";
 
 /**
- * The publisher's own summary of a decision: the sentence a reader
- * recognises the case by, written by whoever published it rather than by the
- * court. Every jurisdiction the corpus covers has one under a different name
- * and in a different place, so the sources are declared once, in order, and
- * every consumer walks that one list.
+ * What a publisher says about a decision, in the two kinds it comes in: the
+ * headnote — the sentence a reader recognises the case by, written by whoever
+ * published it rather than by the court — and the keywords, the subject index
+ * and legal areas the decision was filed under. Every jurisdiction the corpus
+ * covers publishes both under different names and in different places, so the
+ * sources are declared once, in order, and every consumer walks these lists.
  *
- * Order is from the most to the least specific, and it is the same for every
- * court, so a decision's summary means the same thing across jurisdictions.
- * Adding a jurisdiction means adding a source here, never a branch anywhere
- * else.
+ * Order within a kind is from the most to the least specific, and it is the
+ * same for every court, so a decision's headnote means the same thing across
+ * jurisdictions. Adding a jurisdiction means adding a source here, never a
+ * branch anywhere else.
  */
 
 /**
@@ -23,36 +24,70 @@ import type { ApparatusRole, DocumentAst } from "@stll/legal-ast/document-ast";
  * publisher's own, in document order, with no key naming convention in
  * between.
  *
- * `apparatus` and `counsel` are apparatus too but are not summaries: the
+ * `apparatus` and `counsel` are apparatus too but are not headnotes: the
  * first is unnamed publisher matter, the second is who appeared.
  */
-const PUBLISHER_SUMMARY_AST_ROLES = [
+const PUBLISHER_HEADNOTE_AST_ROLES = [
   "headnotes",
   "syllabus",
   "summary",
 ] as const satisfies readonly ApparatusRole[];
 
-/** How one metadata value is read into summary text. */
+/** How one metadata value is read into text. */
 type PublisherSummaryValueShape = "text" | "list";
 
-type PublisherSummarySource =
-  | { origin: "ast"; roles: readonly ApparatusRole[] }
-  | { origin: "metadata"; key: string; shape: PublisherSummaryValueShape };
+/**
+ * What a source's value is. A headnote is a sentence somebody wrote about the
+ * decision; keywords are the terms it was indexed and filed under. Both are
+ * the publisher's, and a reader with no headnote is better served by the tags
+ * than by an empty line, but they are not the same kind of text: one is prose,
+ * the other a classification. The kind therefore travels with the source, and
+ * a consumer that has to keep them apart — the corpus index gives each its own
+ * field — asks for one list or the other instead of re-deciding per key.
+ */
+type PublisherSummaryKind = "headnote" | "keywords";
+
+type PublisherSummarySourceOf<Kind extends PublisherSummaryKind> =
+  | { kind: Kind; origin: "ast"; roles: readonly ApparatusRole[] }
+  | {
+      kind: Kind;
+      origin: "metadata";
+      key: string;
+      shape: PublisherSummaryValueShape;
+    };
+
+type PublisherSummarySource = PublisherSummarySourceOf<PublisherSummaryKind>;
 
 /**
- * Every place a publisher summary can live, best first. Each metadata key is
- * one an adapter records verbatim from its source; a key arrives here with the
+ * Every place a headnote can live, best first. Each metadata key is one an
+ * adapter records verbatim from its source; a key arrives here with the
  * adapter that writes it, never before one.
  */
+const PUBLISHER_HEADNOTE_SOURCES = [
+  { kind: "headnote", origin: "ast", roles: PUBLISHER_HEADNOTE_AST_ROLES },
+  { kind: "headnote", origin: "metadata", key: "legalSentence", shape: "text" },
+  { kind: "headnote", origin: "metadata", key: "abstract", shape: "text" },
+  { kind: "headnote", origin: "metadata", key: "summary", shape: "text" },
+] as const satisfies readonly PublisherSummarySourceOf<"headnote">[];
+
+/**
+ * Every place a decision's classification can live, best first: the subject
+ * index the publisher assigned, then the areas of law they filed it under.
+ */
+const PUBLISHER_KEYWORD_SOURCES = [
+  { kind: "keywords", origin: "metadata", key: "keywords", shape: "list" },
+  { kind: "keywords", origin: "metadata", key: "legalAreas", shape: "list" },
+  { kind: "keywords", origin: "metadata", key: "legalArea", shape: "text" },
+] as const satisfies readonly PublisherSummarySourceOf<"keywords">[];
+
+/**
+ * Both lists as one, headnotes first: the order the single line a reader sees
+ * resolves in, and the order the SQL reading below walks.
+ */
 export const PUBLISHER_SUMMARY_SOURCES = [
-  { origin: "ast", roles: PUBLISHER_SUMMARY_AST_ROLES },
-  { origin: "metadata", key: "legalSentence", shape: "text" },
-  { origin: "metadata", key: "abstract", shape: "text" },
-  { origin: "metadata", key: "summary", shape: "text" },
-  { origin: "metadata", key: "keywords", shape: "list" },
-  { origin: "metadata", key: "legalAreas", shape: "list" },
-  { origin: "metadata", key: "legalArea", shape: "text" },
-] as const satisfies readonly PublisherSummarySource[];
+  ...PUBLISHER_HEADNOTE_SOURCES,
+  ...PUBLISHER_KEYWORD_SOURCES,
+] as const;
 
 /** Items of a list-shaped source, as one line. */
 const LIST_SEPARATOR = " · ";
@@ -178,21 +213,17 @@ const astSummary = (
   return paragraphs.length === 0 ? null : paragraphs.join(PARAGRAPH_SEPARATOR);
 };
 
-type PublisherSummaryInput = {
+export type PublisherSummaryInput = {
   documentAst: DocumentAst | null;
   metadata: Record<string, unknown> | null;
 };
 
-/**
- * The first source that has something, over the full list. Null when the
- * publisher supplied nothing, so a consumer omits the line rather than
- * rendering an empty one.
- */
-export const publisherSummaryOf = ({
-  documentAst,
-  metadata,
-}: PublisherSummaryInput): string | null => {
-  for (const source of PUBLISHER_SUMMARY_SOURCES) {
+/** The first source of a list that has something, or null when none has. */
+const firstSourceText = (
+  sources: readonly PublisherSummarySource[],
+  { documentAst, metadata }: PublisherSummaryInput,
+): string | null => {
+  for (const source of sources) {
     switch (source.origin) {
       case "ast": {
         const text = astSummary(documentAst, source.roles);
@@ -216,6 +247,29 @@ export const publisherSummaryOf = ({
   }
   return null;
 };
+
+/**
+ * The publisher's own sentence about the decision, and only that: a
+ * classification cannot come back from here, because the list this walks holds
+ * no classification source. Null where no publisher wrote one.
+ */
+export const publisherHeadnoteOf = (
+  input: PublisherSummaryInput,
+): string | null => firstSourceText(PUBLISHER_HEADNOTE_SOURCES, input);
+
+/** The terms the publisher indexed and filed the decision under. */
+export const publisherKeywordsOf = (
+  input: PublisherSummaryInput,
+): string | null => firstSourceText(PUBLISHER_KEYWORD_SOURCES, input);
+
+/**
+ * One line for a reader: the headnote, or the classification where there is no
+ * headnote. Null when the publisher supplied neither, so a consumer omits the
+ * line rather than rendering an empty one.
+ */
+export const publisherSummaryOf = (
+  input: PublisherSummaryInput,
+): string | null => publisherHeadnoteOf(input) ?? publisherKeywordsOf(input);
 
 /**
  * The same list, as one SQL expression over a decision's `metadata`, and the

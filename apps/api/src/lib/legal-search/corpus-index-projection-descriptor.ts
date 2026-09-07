@@ -1,14 +1,19 @@
 import { panic } from "better-result";
 
-import { publisherSummaryOf } from "@/api/lib/case-law/publisher-summary";
+import {
+  publisherHeadnoteOf,
+  publisherKeywordsOf,
+  publisherSummaryOf,
+} from "@/api/lib/case-law/publisher-summary";
 import { UNDATED_DECISION_TIMESTAMP } from "@/api/lib/legal-search/corpus-index-config";
 import {
   corpusIndexContractDigest,
   corpusIndexIdFromManifest,
   corpusIndexManifestDigest,
-  corpusIndexPublisherSummaryField,
+  corpusIndexPublisherFields,
   corpusIndexStemFields,
   type CorpusIndexManifest,
+  type CorpusIndexPublisherFields,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/lib/legal-search/corpus-storage";
 import { MORPHOLOGY_VERSION } from "@/api/lib/legal-search/morphology/stem";
@@ -90,6 +95,38 @@ export const caseLawProjectionTitle = ({
   return `${reference} — ${court}`;
 };
 
+type PublisherFingerprintFields = {
+  publisherSummary?: string | null;
+  keywords?: string | null;
+};
+
+/**
+ * The publisher text a generation's fingerprint covers. Keyed by what the
+ * reading means rather than by the field it lands in, and derived from the
+ * same union the writer branches on, so a fingerprint cannot describe a
+ * reading the writer does not perform.
+ */
+const publisherFingerprintFields = (
+  publisher: CorpusIndexPublisherFields,
+  metadata: Record<string, unknown> | null,
+): PublisherFingerprintFields => {
+  const input = { documentAst: null, metadata };
+  switch (publisher.kind) {
+    case "none":
+      return {};
+    case "summary":
+      return { publisherSummary: publisherSummaryOf(input) };
+    case "summary_and_keywords":
+      return {
+        publisherSummary: publisherHeadnoteOf(input),
+        keywords: publisherKeywordsOf(input),
+      };
+    default:
+      publisher satisfies never;
+      return panic(`Unhandled publisher fields: ${String(publisher)}`);
+  }
+};
+
 export const deriveCorpusIndexProjectionDescriptor = (
   manifest: CorpusIndexManifest,
   input: CorpusIndexProjectionInput,
@@ -135,20 +172,16 @@ export const deriveCorpusIndexProjectionDescriptor = (
 
   switch (input.family) {
     case "case_law": {
-      // A fingerprint has to cover everything the generation writes. The
-      // summary's AST source is already covered through `contentHash`; its
-      // metadata source is not, so a generation carrying the field folds the
-      // metadata reading in and re-projects when a publisher edits it. A
-      // generation without the field keeps the fingerprints it already has.
-      const publisherSummary =
-        corpusIndexPublisherSummaryField(manifest) === null
-          ? {}
-          : {
-              publisherSummary: publisherSummaryOf({
-                documentAst: null,
-                metadata: input.metadata,
-              }),
-            };
+      // A fingerprint has to cover everything the generation writes, under the
+      // exact reading that generation writes it with. The AST source is
+      // already covered through `contentHash`; the metadata sources are not,
+      // so a generation carrying a publisher field folds its metadata reading
+      // in and re-projects when a publisher edits it. A generation without the
+      // fields keeps the fingerprints it already has.
+      const publisher = publisherFingerprintFields(
+        corpusIndexPublisherFields(manifest),
+        input.metadata,
+      );
       return {
         action: "upsert",
         indexId,
@@ -161,7 +194,7 @@ export const deriveCorpusIndexProjectionDescriptor = (
           decisionDateTimestamp:
             input.decisionDate ?? UNDATED_DECISION_TIMESTAMP,
           ecli: input.ecli,
-          ...publisherSummary,
+          ...publisher,
         }),
       };
     }

@@ -181,7 +181,7 @@ const searchResult = async (
   // resolver takes it separately from the clause.
   // The generation decides which fields exist to be named; the language
   // filter, then the jurisdiction, decides how the reader's words are stemmed.
-  const { surfaceFields, stemming } = caseLawCorpusQueryFields({
+  const { surfaceFields, keywordFields, stemming } = caseLawCorpusQueryFields({
     generation,
     jurisdiction: query.jurisdiction,
     language: query.language,
@@ -202,6 +202,7 @@ const searchResult = async (
         expand,
         stemming,
         surfaceFields,
+        keywordFields,
       }),
     jurisdiction: query.jurisdiction,
     mode: envBase.QUERY_EXPANSION_MODE,

@@ -6,7 +6,7 @@ import {
   corpusIndexConfigFromManifest,
   corpusIndexIdFromManifest,
   corpusIndexManifestDigest,
-  corpusIndexPublisherSummaryField,
+  corpusIndexPublisherFields,
   corpusIndexStemFields,
   requireCorpusIndexIdForManifest,
   requireCorpusIndexManifest,
@@ -22,6 +22,8 @@ const EXPECTED_DIGESTS = {
     "7ee1e1bdbc0a1c746407333cac6eba21446d32b0eca461235569eac4197ed0ce",
   case_law_v6:
     "1fc5f09b5471e49a4e5588c9f59c3ce78c08a9aa54b55e5edef168bc315accc8",
+  case_law_v7:
+    "2de0dbda9f81c61968b0775f47dcbdb151aa1f3bfa2e982aa7272ce43238add4",
   legislation_v2:
     "dc252d8635081d8037e7f9b1aca6713181a27390e8eb6dda54139ae6a1e68583",
 } as const satisfies Record<keyof typeof CORPUS_INDEX_MANIFESTS, string>;
@@ -30,6 +32,7 @@ test("the final-generation registry is exact and fails closed", () => {
   expect(Object.keys(CORPUS_INDEX_MANIFESTS).sort()).toEqual([
     "case_law_v5",
     "case_law_v6",
+    "case_law_v7",
     "legislation_v2",
   ]);
   expect(requireCorpusIndexManifest("case_law", "case_law_v5")).toBe(
@@ -37,6 +40,9 @@ test("the final-generation registry is exact and fails closed", () => {
   );
   expect(requireCorpusIndexManifest("case_law", "case_law_v6")).toBe(
     CORPUS_INDEX_MANIFESTS.case_law_v6,
+  );
+  expect(requireCorpusIndexManifest("case_law", "case_law_v7")).toBe(
+    CORPUS_INDEX_MANIFESTS.case_law_v7,
   );
   expect(requireCorpusIndexManifest("legislation", "legislation_v2")).toBe(
     CORPUS_INDEX_MANIFESTS.legislation_v2,
@@ -55,6 +61,9 @@ test("manifest digests pin every semantic array and ignore object key order", ()
   );
   expect(corpusIndexManifestDigest(CORPUS_INDEX_MANIFESTS.case_law_v6)).toBe(
     EXPECTED_DIGESTS.case_law_v6,
+  );
+  expect(corpusIndexManifestDigest(CORPUS_INDEX_MANIFESTS.case_law_v7)).toBe(
+    EXPECTED_DIGESTS.case_law_v7,
   );
   expect(corpusIndexManifestDigest(CORPUS_INDEX_MANIFESTS.legislation_v2)).toBe(
     EXPECTED_DIGESTS.legislation_v2,
@@ -420,26 +429,78 @@ test("v6 adds the publisher summary and nothing else", () => {
   );
 });
 
-test("only a generation that maps the field reports one", () => {
+test("v7 gives the publisher's classification a field of its own", () => {
+  const v6 = CORPUS_INDEX_MANIFESTS.case_law_v6.engine.indexConfig.doc_mapping;
+  const v7 = CORPUS_INDEX_MANIFESTS.case_law_v7.engine.indexConfig.doc_mapping;
+
+  expect(v7.field_mappings.map(({ name }) => name)).toEqual([
+    ...v6.field_mappings.map(({ name }) => name),
+    "keywords",
+  ]);
+  // The headnote's mapping, minus the fieldnorms BM25 length normalization
+  // runs on: a two-word tag list must not outscore a sentence a publisher
+  // wrote, for the same term, on brevity alone.
+  expect(v7.field_mappings.at(-1)).toEqual({
+    name: "keywords",
+    type: "text",
+    tokenizer: "folded",
+    record: "position",
+    fieldnorms: false,
+    indexed: true,
+    stored: false,
+    fast: false,
+  });
+  expect(v7.mode).toBe("strict");
+  expect(v7.tag_fields).toEqual(v6.tag_fields);
+  expect(v7.timestamp_field).toBe(v6.timestamp_field);
+  expect(CORPUS_INDEX_MANIFESTS.case_law_v7.projection.builderVersion).toBe(
+    "case-law-passages-v3",
+  );
+});
+
+test("only a generation that maps a publisher field reports one", () => {
   expect(
-    corpusIndexPublisherSummaryField(CORPUS_INDEX_MANIFESTS.case_law_v5),
-  ).toBeNull();
+    corpusIndexPublisherFields(CORPUS_INDEX_MANIFESTS.case_law_v5),
+  ).toEqual({ kind: "none" });
+  // v6 has one field for everything a publisher wrote, and keeps it: changing
+  // what a built generation writes would leave two readings of one field
+  // inside a single index.
   expect(
-    corpusIndexPublisherSummaryField(CORPUS_INDEX_MANIFESTS.case_law_v6),
-  ).toBe("headnote");
+    corpusIndexPublisherFields(CORPUS_INDEX_MANIFESTS.case_law_v6),
+  ).toEqual({ kind: "summary", summaryField: "headnote" });
   expect(
-    corpusIndexPublisherSummaryField(CORPUS_INDEX_MANIFESTS.legislation_v2),
-  ).toBeNull();
+    corpusIndexPublisherFields(CORPUS_INDEX_MANIFESTS.case_law_v7),
+  ).toEqual({
+    kind: "summary_and_keywords",
+    summaryField: "headnote",
+    keywordsField: "keywords",
+  });
+  expect(
+    corpusIndexPublisherFields(CORPUS_INDEX_MANIFESTS.legislation_v2),
+  ).toEqual({ kind: "none" });
   for (const manifest of Object.values(CORPUS_INDEX_MANIFESTS)) {
-    const field = corpusIndexPublisherSummaryField(manifest);
-    if (field === null) {
-      continue;
-    }
-    expect(
-      manifest.engine.indexConfig.doc_mapping.field_mappings.some(
-        ({ name }) => name === field,
+    const publisher = corpusIndexPublisherFields(manifest);
+    const declared = new Set(
+      manifest.engine.indexConfig.doc_mapping.field_mappings.map(
+        ({ name }) => name,
       ),
-    ).toBe(true);
+    );
+    switch (publisher.kind) {
+      case "none":
+        break;
+      case "summary":
+        expect(declared.has(publisher.summaryField)).toBe(true);
+        break;
+      case "summary_and_keywords":
+        expect([
+          declared.has(publisher.summaryField),
+          declared.has(publisher.keywordsField),
+        ]).toEqual([true, true]);
+        break;
+      default:
+        publisher satisfies never;
+        throw new Error("Unhandled publisher fields");
+    }
   }
 });
 
@@ -450,20 +511,30 @@ test("v6 keeps the default search fields v5 has", () => {
   // only — the summary, or either stem — must never be reachable by a bare
   // term, or a summary-only match would answer with a passage whose text does
   // not carry the terms. The query builder names those fields explicitly.
-  const defaultsOf = (generation: "case_law_v5" | "case_law_v6") =>
+  const defaultsOf = (
+    generation: "case_law_v5" | "case_law_v6" | "case_law_v7",
+  ) =>
     CORPUS_INDEX_MANIFESTS[generation].engine.indexConfig.search_settings
       .default_search_fields;
 
   expect(defaultsOf("case_law_v6")).toEqual(["title", "text"]);
   expect(defaultsOf("case_law_v6")).toEqual(defaultsOf("case_law_v5"));
-  for (const absent of ["headnote", "text_stem", "headnote_stem"]) {
-    expect(defaultsOf("case_law_v6")).not.toContain(absent);
+  expect(defaultsOf("case_law_v7")).toEqual(defaultsOf("case_law_v6"));
+  for (const absent of ["headnote", "keywords", "text_stem", "headnote_stem"]) {
+    expect(defaultsOf("case_law_v7")).not.toContain(absent);
   }
 });
 
 test("only a generation that maps the stem fields reports them", () => {
   expect(corpusIndexStemFields(CORPUS_INDEX_MANIFESTS.case_law_v5)).toBeNull();
   expect(corpusIndexStemFields(CORPUS_INDEX_MANIFESTS.case_law_v6)).toEqual({
+    text: "text_stem",
+    publisherSummary: "headnote_stem",
+  });
+  // v7 stems the same two fields. The classification is a controlled
+  // vocabulary matched on the words it is written in, so it carries no stem
+  // companion; adding one is a mapping change and therefore a generation.
+  expect(corpusIndexStemFields(CORPUS_INDEX_MANIFESTS.case_law_v7)).toEqual({
     text: "text_stem",
     publisherSummary: "headnote_stem",
   });

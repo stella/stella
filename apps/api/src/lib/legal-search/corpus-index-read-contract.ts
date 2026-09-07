@@ -3,9 +3,10 @@ import { panic } from "better-result";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import { corpusIndexClusterForGeneration } from "@/api/lib/legal-search/corpus-generation-contract";
 import {
-  corpusIndexPublisherSummaryField,
+  corpusIndexPublisherFields,
   corpusIndexStemFields,
   requireCorpusIndexManifest,
+  type CorpusIndexPublisherFields,
   type CorpusIndexStemFields,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import type { CorpusStemming } from "@/api/lib/legal-search/corpus-query";
@@ -30,6 +31,48 @@ export type CaseLawIndexReadContract = {
    * reaches. Named explicitly by a query or not matched at all.
    */
   searchableFields: readonly string[];
+  /**
+   * The publisher's classification, kept apart from the fields above rather
+   * than listed with them: it is the newest and weakest of a query's
+   * alternatives, and the leaf budget pays for it only after every token's
+   * stems and older alternatives, so naming it can never cost a query the
+   * matches it had without it.
+   */
+  keywordFields: readonly string[];
+};
+
+type PublisherQueryFields = Pick<
+  CaseLawIndexReadContract,
+  "searchableFields" | "keywordFields"
+>;
+
+/**
+ * The publisher fields of a generation, as the lists a query may name them
+ * in. Both are matched only where a clause asks for them; what a bare term
+ * reaches is the index's own decision and neither is part of it. One switch
+ * answers for both, so the two lists cannot drift into disagreeing about what
+ * a generation maps.
+ */
+const publisherQueryFields = (
+  publisher: CorpusIndexPublisherFields,
+): PublisherQueryFields => {
+  switch (publisher.kind) {
+    case "none":
+      return { searchableFields: [], keywordFields: [] };
+    case "summary":
+      return {
+        searchableFields: [publisher.summaryField],
+        keywordFields: [],
+      };
+    case "summary_and_keywords":
+      return {
+        searchableFields: [publisher.summaryField],
+        keywordFields: [publisher.keywordsField],
+      };
+    default:
+      publisher satisfies never;
+      return panic(`Unhandled publisher fields: ${String(publisher)}`);
+  }
 };
 
 export type LegislationIndexReadContract = {
@@ -72,22 +115,21 @@ export function corpusIndexReadContract(
           yearFacetField: "year",
           stemFields: null,
           searchableFields: [],
+          keywordFields: [],
         }
       : { family, openingPassageQuery: "seq:0" };
   }
 
   const manifest = requireCorpusIndexManifest(family, generation);
   switch (manifest.family) {
-    case "case_law": {
-      const publisherSummary = corpusIndexPublisherSummaryField(manifest);
+    case "case_law":
       return {
         family: manifest.family,
         openingPassageQuery: `${manifest.projection.openingField}:true`,
         yearFacetField: manifest.projection.yearFacetField,
         stemFields: corpusIndexStemFields(manifest),
-        searchableFields: publisherSummary === null ? [] : [publisherSummary],
+        ...publisherQueryFields(corpusIndexPublisherFields(manifest)),
       };
-    }
     case "legislation":
       return {
         family: manifest.family,
@@ -109,6 +151,7 @@ type CaseLawCorpusQueryFieldsOptions = {
 
 export type CaseLawCorpusQueryFields = {
   surfaceFields: readonly string[];
+  keywordFields: readonly string[];
   stemming: CorpusStemming | null;
 };
 
@@ -137,16 +180,15 @@ export const caseLawCorpusQueryFields = ({
   jurisdiction,
   language,
 }: CaseLawCorpusQueryFieldsOptions): CaseLawCorpusQueryFields => {
-  const { stemFields, searchableFields } = corpusIndexReadContract(
-    "case_law",
-    generation,
-  );
+  const { stemFields, searchableFields, keywordFields } =
+    corpusIndexReadContract("case_law", generation);
   const stemLanguage =
     language === undefined
       ? corpusMorphologyLanguage(jurisdiction)
       : documentMorphologyLanguage(language);
   return {
     surfaceFields: searchableFields,
+    keywordFields,
     stemming:
       stemFields === null || stemLanguage === null
         ? null

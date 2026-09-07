@@ -138,6 +138,14 @@ test("manifest and projection families cannot be crossed", () => {
   ).toThrow("Corpus projection family mismatch");
 });
 
+const fingerprintOf = (
+  manifest: CorpusIndexManifest,
+  input: CaseLawProjectionInput,
+): string | null => {
+  const descriptor = deriveCorpusIndexProjectionDescriptor(manifest, input);
+  return descriptor.action === "upsert" ? descriptor.fingerprint : null;
+};
+
 test("only a generation that indexes the summary fingerprints it", () => {
   const withSummary = {
     ...CASE_LAW_INPUT,
@@ -193,27 +201,53 @@ const EXPECTED_FINGERPRINTS = {
     "67b6e403467118f9e7369c10b8f2de9d76d3297033926efb81b2cc47945d7acf",
   case_law_v6:
     "f52ff99433302ac499667cf09c3745046db4a5451bb5c46e218eb8bc8d8376f1",
+  case_law_v7:
+    "a9c3029fe0840d45d985de94edba5bd92c3bdac7bb76dc53e5449237802c92d9",
 } as const;
+
+test("v7 fingerprints the sentence and the classification apart", () => {
+  const tagged = {
+    ...CASE_LAW_INPUT,
+    metadata: { legalArea: "Daně" },
+  } as const satisfies CaseLawProjectionInput;
+  const written = {
+    ...CASE_LAW_INPUT,
+    metadata: { legalSentence: "Daně" },
+  } as const satisfies CaseLawProjectionInput;
+
+  // v6 reads both through one field, so the two decisions project the same
+  // way: the tag is written where the sentence would have been.
+  expect(fingerprintOf(CORPUS_INDEX_MANIFESTS.case_law_v6, tagged)).toBe(
+    fingerprintOf(CORPUS_INDEX_MANIFESTS.case_law_v6, written),
+  );
+  // v7 writes them to different fields, so they are different projections and
+  // a fingerprint that could not tell them apart would leave one of them
+  // holding the other's document.
+  expect(fingerprintOf(CORPUS_INDEX_MANIFESTS.case_law_v7, tagged)).not.toBe(
+    fingerprintOf(CORPUS_INDEX_MANIFESTS.case_law_v7, written),
+  );
+  // Both readings are covered, so editing either re-projects.
+  for (const input of [tagged, written]) {
+    expect(fingerprintOf(CORPUS_INDEX_MANIFESTS.case_law_v7, input)).not.toBe(
+      fingerprintOf(CORPUS_INDEX_MANIFESTS.case_law_v7, CASE_LAW_INPUT),
+    );
+  }
+});
 
 test("only a generation that writes stem fields fingerprints the stemmer set", () => {
   // Stems are content: the manifest digest pins the fields, not the algorithms
   // filling them, so a new language or a Snowball upgrade has to move v6's
   // fingerprint and re-project, and has to leave v5 — which writes no stem
   // field — exactly where it is.
-  const fingerprintOf = (manifest: CorpusIndexManifest) => {
-    const descriptor = deriveCorpusIndexProjectionDescriptor(
-      manifest,
-      CASE_LAW_INPUT,
-    );
-    return descriptor.action === "upsert" ? descriptor.fingerprint : null;
-  };
-
-  expect(fingerprintOf(CORPUS_INDEX_MANIFESTS.case_law_v5)).toBe(
-    EXPECTED_FINGERPRINTS.case_law_v5,
-  );
-  expect(fingerprintOf(CORPUS_INDEX_MANIFESTS.case_law_v6)).toBe(
-    EXPECTED_FINGERPRINTS.case_law_v6,
-  );
+  expect(
+    fingerprintOf(CORPUS_INDEX_MANIFESTS.case_law_v5, CASE_LAW_INPUT),
+  ).toBe(EXPECTED_FINGERPRINTS.case_law_v5);
+  expect(
+    fingerprintOf(CORPUS_INDEX_MANIFESTS.case_law_v6, CASE_LAW_INPUT),
+  ).toBe(EXPECTED_FINGERPRINTS.case_law_v6);
+  expect(
+    fingerprintOf(CORPUS_INDEX_MANIFESTS.case_law_v7, CASE_LAW_INPUT),
+  ).toBe(EXPECTED_FINGERPRINTS.case_law_v7);
   // Why the v6 pin moves: the version names the release and every language the
   // module dispatches, so either kind of change reaches the fingerprint.
   expect(MORPHOLOGY_VERSION).toContain(SNOWBALL_RELEASE);
