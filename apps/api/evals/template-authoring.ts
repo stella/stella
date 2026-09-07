@@ -1,64 +1,66 @@
 /**
- * save_template authoring eval: the authoring half of `template-fill.ts`. Can
- * a model turn a source document into a stella template through the
- * production `save_template` contract (the right `{{markers}}` in the right
- * paragraphs, plus a `fields` overlay that configures each one), and are the
- * two reference resources clear enough that a lower-tier model gets there?
+ * Template authoring eval: the authoring half of `template-fill.ts`. Can a
+ * model turn a source document into a stella template through the production
+ * contract — the right `{{markers}}` in the right paragraphs, then
+ * `create_template` and `configure_template_fields` — and are the reference
+ * resources clear enough that a lower-tier model gets there?
  *
  * The model sees exactly what an external MCP client sees: the marker-grammar
  * and field-configuration resources verbatim (`buildMarkerReference()`,
- * `buildFieldReference()`), the `save_template` tool with its production name,
- * description and input schema, the source document, and a short brief naming
- * the field paths to use. `save_template` is backed in memory by the same
- * recipe `createStoredTemplate` runs: decode, `validateDocxBuffer`,
- * `discoverTemplate`, `mergeManifestWithDiscovery`, the unknown-path overlay
- * rejection, `writeManifest`; minus the DB and S3 the eval has no business
- * touching. The saved template is then filled with fixed values through the
- * real `fillTemplateDocx`, so the round trip is scored on rendered bytes.
+ * `buildFieldReference()`), both authoring tools with their production names,
+ * descriptions and input schemas, the source document, and a short brief
+ * naming the field paths to use. The tools are backed in memory by the same
+ * recipe the services run: decode, `validateDocxBuffer`, `discoverTemplate`,
+ * `mergeManifestWithDiscovery`, `partitionFieldOverlay`, `applyFieldOverlay`,
+ * `writeManifest`; minus the DB and S3 the eval has no business touching. The
+ * saved template is then filled with fixed values through the real
+ * `fillTemplateDocx`, so the round trip is scored on rendered bytes.
  *
  * `write_docx` is NOT a stella tool. It stands in for the DOCX writer an MCP
  * client runs locally: a language model cannot emit zip bytes, and making it
  * copy kilobytes of base64 would measure transcription, not authoring. It
  * returns a reference that expands to the file's real base64 at the
- * `save_template` boundary, so every production validation still runs on real
- * bytes.
+ * `create_template` boundary, so every production validation still runs on
+ * real bytes.
  *
  * Scored per run:
  *
+ *   steps         the four steps of the workflow, separately, so a report
+ *                 says WHICH one the model could not get through:
+ *                 authored (the right markers, no grammar trap, the source
+ *                 wording kept), created (create_template accepted the
+ *                 document), configured (every configuration entry applied,
+ *                 and the brief's configuration present), filled (the fill
+ *                 round trip rendered cleanly)
  *   outcome       pass / partial / invalid-docx / no-call / error
  *   missing/extra discovered field paths against the set the brief names
  *   traps         named grammar mistakes (see GRAMMAR_TRAP_CODES):
  *                 unprefixed_item_path, this_prefix, unknown_directive,
  *                 bracket_index, language_variant_path, block_marker_inline,
  *                 lookup_not_parent, condition_on_input
- *   overlay       production validation issues (schema, mutually exclusive
- *                 derived sources, a `path` matching no marker)
+ *   overlay       production validation issues: the per-entry `issues[]` a
+ *                 best-effort configure reports, schema rejections, and a
+ *                 `path` matching no marker
  *   config        field configuration the brief asked for and did not get
  *   fidelity      source wording the template dropped instead of keeping
  *   round trip    leftover `{{`, blank repeated rows, a conditional row that
  *                 was not dropped, a date outside its requested locale
- *   error         exact provider or stream error for the run
+ *   error         exact provider or stream error for the run, including the
+ *                 turn deadline: a turn the timer aborts says so instead of
+ *                 looking like a model that stopped calling tools
  *   tokens, ms
  *
+ * Every call the advertised schema rejected before the handler ran is kept in
+ * the run trace. A pass rate without the payload the model actually sent
+ * cannot say whether the model or the contract failed.
+ *
  * A valid `write_docx` result still earns marker, grammar and fidelity credit
- * when the turn ends before `save_template`; it remains a partial outcome
+ * when the turn ends before `create_template`; it remains a partial outcome
  * because configuration and the fill round trip never completed.
  *
  * The `syntax-quiz` task has no DOCX: eight grammar questions answered as one
  * JSON object, scored exactly. Its wrong answers are reported in the
- * `missing` column.
- *
- * Two tasks cannot pass on today's engine, by design: the eval measures the
- * contract, not the current code, so these columns are a backlog rather than
- * a regression.
- *   - `pl-en-poa`: discovery reports a marker with dotted children
- *     (`{{company}}` beside `{{company.address}}`) as kind `object`, and the
- *     merge drops object parents, so `company` is not a configurable path and
- *     the overlay is rejected. One lookup parent with named formats needs
- *     that parent discoverable first.
- *   - `en-sow-table`: a row-mode `{{#if}}` has its paragraphs stripped but
- *     its row left in the table, so the row is never dropped.
- * Save time also emits no marker warnings yet.
+ * `missing` column, and it reaches none of the four workflow steps.
  *
  * Registry lookups and contact bindings are neutralized before the fill: the
  * eval has no matter and must not call a business registry, so those fields
@@ -129,11 +131,13 @@ import { runEvalModelTurn } from "./lib/model-turn";
 import type {
   AuthoredBlock,
   AuthoringRunScore,
+  AuthoringSteps,
   GrammarTrapCounts,
   RoundTripDefects,
   SaveAttempt,
 } from "./lib/template-authoring-score";
 import {
+  AUTHORING_STEP_NAMES,
   checkSourceFidelity,
   cleanRoundTrip,
   comparePaths,
@@ -158,7 +162,13 @@ const MAX_RUNS = 20;
 // room for a reasoning model's thinking tokens, which share this budget.
 const MAX_OUTPUT_TOKENS = 48_000;
 const MAX_ITERATIONS = 10;
-const MODEL_REQUEST_TIMEOUT_MS = 240_000;
+/**
+ * The deadline for a WHOLE turn: the model's own thinking, every tool round
+ * trip, and the agent loop's iterations share it. A three-step workflow needs
+ * more of it than a single request does, and a turn that runs out is reported
+ * as an error rather than as a model that stopped calling tools.
+ */
+const MODEL_TURN_TIMEOUT_MS = 600_000;
 
 const CREATE_TEMPLATE_TOOL_NAME = "create_template";
 const CONFIGURE_FIELDS_TOOL_NAME = "configure_template_fields";
@@ -398,10 +408,16 @@ type SaveOutcome =
        *  lookup parent's named-format markers disappear here exactly as they
        *  do for a stored template. */
       resolvedPaths: string[];
+      /** Every path a configuration may name, loop item paths included: what
+       *  the production create response hands back as its `configure`
+       *  skeleton. */
+      configurablePaths: string[];
       structureErrors: string[];
     };
 
 type SaveCall = {
+  /** Which step of the workflow the call was. */
+  step: "create" | "configure";
   /** The saved document read back from its bytes, for trap detection. */
   blocks: readonly AuthoredBlock[];
   overlay: readonly FieldMeta[];
@@ -413,6 +429,29 @@ const validationIssues = (issues: readonly v.BaseIssue<unknown>[]): string[] =>
     (issue) =>
       `${issue.path?.map((part) => String(part.key)).join(".") ?? "<root>"}: ${issue.message}`,
   );
+
+/** Every path the overlay validator accepts: a marker of its own, a loop
+ *  root, or a field of a loop's item. Mirrors what the production create
+ *  response spells out as its configure skeleton. */
+const configurableTemplatePaths = (
+  discovered: Awaited<ReturnType<typeof discoverTemplate>>,
+): string[] => {
+  const paths: string[] = [];
+  const visit = (
+    field: { path: string; itemFields?: { path: string }[] | undefined },
+    prefix: string,
+  ): void => {
+    const path = prefix === "" ? field.path : `${prefix}.${field.path}`;
+    paths.push(path);
+    for (const item of field.itemFields ?? []) {
+      visit(item, path);
+    }
+  };
+  for (const field of discovered.fields) {
+    visit(field, "");
+  }
+  return paths;
+};
 
 /**
  * The DB-free half of `createStoredTemplate`: everything from the base64
@@ -501,6 +540,7 @@ const saveTemplateInMemory = async ({
     manifest,
     overlayIssues,
     resolvedPaths,
+    configurablePaths: configurableTemplatePaths(discovered),
     structureErrors,
   };
 };
@@ -1224,11 +1264,14 @@ const createAuthoringTools = ({
   const recordAttempt = async ({
     outcome,
     overlay,
+    step,
   }: {
     outcome: SaveOutcome;
     overlay: readonly FieldMeta[];
+    step: SaveCall["step"];
   }): Promise<void> => {
     saveCalls.push({
+      step,
       // Traps are read off the document that was actually saved, not off the
       // write_docx input, so they describe the bytes the contract received.
       blocks:
@@ -1253,6 +1296,7 @@ const createAuthoringTools = ({
       await recordAttempt({
         outcome: { status: "rejected", issues },
         overlay: [],
+        step: "create",
       });
       return { error: "validation_error", issues };
     }
@@ -1264,6 +1308,7 @@ const createAuthoringTools = ({
       await recordAttempt({
         outcome: { status: "rejected", issues },
         overlay: [],
+        step: "create",
       });
       return { error: "validation_error", issues };
     }
@@ -1275,7 +1320,7 @@ const createAuthoringTools = ({
       docxBase64,
       overlay: undefined,
     });
-    await recordAttempt({ outcome, overlay: [] });
+    await recordAttempt({ outcome, overlay: [], step: "create" });
     if (outcome.status === "invalid-docx") {
       return { error: "validation_error", issues: [outcome.reason] };
     }
@@ -1287,7 +1332,14 @@ const createAuthoringTools = ({
       templateId: EVAL_TEMPLATE_ID,
       name: parsed.output.name,
       fieldCount: outcome.manifest.fields.length,
-      fields: outcome.manifest.fields.map((field) => ({ path: field.path })),
+      // The next call, spelled out, exactly as the production response does.
+      configure: {
+        template_id: EVAL_TEMPLATE_ID,
+        fields: outcome.configurablePaths.map((path) => ({
+          path,
+          source: { type: "person" },
+        })),
+      },
     };
   });
 
@@ -1308,6 +1360,7 @@ const createAuthoringTools = ({
       await recordAttempt({
         outcome: { status: "rejected", issues },
         overlay: [],
+        step: "create",
       });
       return { error: "validation_error", issues };
     }
@@ -1316,14 +1369,18 @@ const createAuthoringTools = ({
       const issues = [
         `template_id: no template exists yet; call ${CREATE_TEMPLATE_TOOL_NAME} first`,
       ];
-      await recordAttempt({ outcome: { status: "rejected", issues }, overlay });
+      await recordAttempt({
+        outcome: { status: "rejected", issues },
+        overlay,
+        step: "configure",
+      });
       return { error: "not_found", issues };
     }
     const outcome = await saveTemplateInMemory({
       docxBase64: stored.docxBase64,
       overlay,
     });
-    await recordAttempt({ outcome, overlay });
+    await recordAttempt({ outcome, overlay, step: "configure" });
     if (outcome.status === "invalid-docx") {
       return { error: "validation_error", issues: [outcome.reason] };
     }
@@ -1441,7 +1498,7 @@ const runModelTurn = async ({
   const callNames = new Map<string, string>();
   let finalText = "";
   const { error, latencyMs, usage } = await runEvalModelTurn({
-    timeoutMs: MODEL_REQUEST_TIMEOUT_MS,
+    timeoutMs: MODEL_TURN_TIMEOUT_MS,
     chat: (abortController) =>
       streamChatChunks({
         abortController,
@@ -1501,10 +1558,13 @@ type EvalRun = {
 
 const buildAttempt = async ({
   call,
+  extraIssues,
   task,
   organizationId,
 }: {
   call: SaveCall;
+  /** Issues from a later call that was refused after this one was saved. */
+  extraIssues: readonly string[];
   task: EvalTask;
   organizationId: SafeId<"organization">;
 }): Promise<{ attempt: SaveAttempt; renderedText: string | null }> => {
@@ -1537,6 +1597,7 @@ const buildAttempt = async ({
       }),
       overlayIssues: [
         ...outcome.overlayIssues,
+        ...extraIssues,
         ...outcome.structureErrors,
         ...(roundTrip.error === null ? [] : [`fill: ${roundTrip.error}`]),
       ],
@@ -1617,20 +1678,42 @@ const runAuthoringTask = async ({
     systemPrompt: AUTHORING_SYSTEM_PROMPT,
     tools,
   });
-  const call = saveCalls.at(-1);
-  if (call === undefined) {
-    // A call the advertised schema rejected never reaches the handler; the
-    // raw trace still proves the model tried, so it is scored as a rejection
-    // rather than as no call at all.
-    const raw = turn.rawCalls.filter(
+  // Every call the advertised schema rejected before the handler ran, kept in
+  // the trace: a pass rate without the payload the model actually sent cannot
+  // say whether the model or the contract failed.
+  const rawCalls = turn.rawCalls.filter(
+    (entry) =>
+      entry.name === CREATE_TEMPLATE_TOOL_NAME ||
+      entry.name === CONFIGURE_FIELDS_TOOL_NAME,
+  );
+  const handled = new Set<string>(
+    saveCalls.map((entry) =>
+      entry.step === "create"
+        ? CREATE_TEMPLATE_TOOL_NAME
+        : CONFIGURE_FIELDS_TOOL_NAME,
+    ),
+  );
+  for (const entry of rawCalls) {
+    if (!handled.has(entry.name)) {
+      trace.push({ name: `${entry.name}(raw)`, input: entry.input });
+    }
+  }
+
+  // `create_template` accepted a document at some point in the run, which the
+  // last attempt alone cannot say: a configure that was refused still follows
+  // a create that was not.
+  const created = saveCalls.some(
+    (entry) => entry.step === "create" && entry.outcome.status === "saved",
+  );
+  const savedIndex = saveCalls.findLastIndex(
+    (entry) => entry.outcome.status === "saved",
+  );
+  const saved = saveCalls[savedIndex];
+
+  if (saved === undefined) {
+    const raw = rawCalls.filter(
       (entry) => entry.name === CREATE_TEMPLATE_TOOL_NAME,
     );
-    for (const entry of raw) {
-      trace.push({
-        name: `${CREATE_TEMPLATE_TOOL_NAME}(raw)`,
-        input: entry.input,
-      });
-    }
     const last = raw.at(-1);
     const parsed =
       last === undefined
@@ -1639,8 +1722,11 @@ const runAuthoringTask = async ({
             CREATE_TEMPLATE_TOOL_DEFINITION.inputSchemaSource,
             last.input,
           );
+    const rejection = saveCalls.at(-1)?.outcome;
     let overlayIssues: string[];
-    if (parsed === null) {
+    if (rejection !== undefined && rejection.status === "rejected") {
+      overlayIssues = [...rejection.issues];
+    } else if (parsed === null) {
       overlayIssues = [];
     } else if (parsed.success) {
       overlayIssues = [
@@ -1649,23 +1735,27 @@ const runAuthoringTask = async ({
     } else {
       overlayIssues = validationIssues(parsed.issues);
     }
-    // A rejected raw save can name an earlier write. Score that exact
+    // A rejected raw create can name an earlier write. Score that exact
     // document; using the most recent write would attach its diagnostics to a
-    // different attempted save. With no save attempt, the last authored
+    // different attempted create. With no create attempt, the last authored
     // document remains the only available partial evidence.
     let authored: WrittenDocx | undefined;
     if (last === undefined) {
       authored = writeCalls.at(-1);
     } else if (parsed?.success) {
       const ref = parsed.output.docx_base64;
-      if (ref !== undefined) {
-        authored = writeCalls.findLast((written) => written.ref === ref.trim());
-      }
+      authored =
+        ref === undefined
+          ? undefined
+          : writeCalls.findLast((written) => written.ref === ref.trim());
     }
 
     let attempt: SaveAttempt | null;
     if (authored === undefined) {
-      attempt = parsed === null ? null : { status: "rejected", overlayIssues };
+      attempt =
+        parsed === null && rejection === undefined
+          ? null
+          : { status: "rejected", overlayIssues };
     } else {
       attempt = await buildUnsavedAttempt({
         blocks: authored.blocks,
@@ -1678,9 +1768,9 @@ const runAuthoringTask = async ({
       modelId,
       taskId: task.id,
       repeat,
-      score: scoreAuthoringRun({ turnError: turn.error, attempt }),
+      score: scoreAuthoringRun({ turnError: turn.error, attempt, created }),
       error: turn.error,
-      calls: raw.length,
+      calls: rawCalls.length,
       quiz: null,
       latencyMs: turn.latencyMs,
       usage: turn.usage,
@@ -1689,8 +1779,17 @@ const runAuthoringTask = async ({
       renderedText: null,
     };
   }
+
+  // A configure refused after the template was created leaves the created
+  // document standing; its issues belong to the run, not a lost attempt.
+  const laterIssues = saveCalls
+    .slice(savedIndex + 1)
+    .flatMap((entry) =>
+      entry.outcome.status === "rejected" ? entry.outcome.issues : [],
+    );
   const { attempt, renderedText } = await buildAttempt({
-    call,
+    call: saved,
+    extraIssues: laterIssues,
     task,
     organizationId,
   });
@@ -1698,9 +1797,9 @@ const runAuthoringTask = async ({
     modelId,
     taskId: task.id,
     repeat,
-    score: scoreAuthoringRun({ turnError: turn.error, attempt }),
+    score: scoreAuthoringRun({ turnError: turn.error, attempt, created }),
     error: turn.error,
-    calls: saveCalls.length,
+    calls: rawCalls.length,
     quiz: null,
     latencyMs: turn.latencyMs,
     usage: turn.usage,
@@ -1742,6 +1841,13 @@ const runSyntaxQuiz = async ({
   };
   const score: AuthoringRunScore = {
     outcome: quizOutcome(),
+    // The quiz authors nothing: its four workflow steps are all "not reached".
+    steps: {
+      authored: false,
+      created: false,
+      configured: false,
+      filled: false,
+    },
     // Wrong answers ride in `missing`, the column that already means "the
     // contract asked for this and did not get it".
     paths: { missing: quiz.wrong, extra: [] },
@@ -1801,6 +1907,14 @@ const roundTripCell = (roundTrip: RoundTripDefects): string =>
     ...(roundTrip.dateLocaleMismatch ? ["date-locale"] : []),
   ]);
 
+/** The four steps as the initials of the ones that were reached, so the
+ *  column stays one glance wide: `ACcf` reached authoring and creation. */
+const stepsCell = (steps: AuthoringSteps): string =>
+  AUTHORING_STEP_NAMES.map((name) => {
+    const initial = name.slice(0, 1);
+    return steps[name] ? initial.toUpperCase() : initial;
+  }).join("");
+
 const tokensCell = (usage: TokenUsage | null): string =>
   usage === null ? "-" : String(usage.totalTokens);
 
@@ -1810,8 +1924,8 @@ const renderReport = (runs: readonly EvalRun[]): string => {
     const modelRuns = runs.filter((run) => run.modelId === modelId);
     lines.push(`\n### ${modelId}\n`);
     lines.push(
-      "| task | run | outcome | error | calls | missing | extra | traps | overlay | config | fidelity | round trip | tokens | ms |",
-      "| --- | ---: | --- | --- | ---: | --- | --- | --- | --- | --- | --- | --- | ---: | ---: |",
+      "| task | run | outcome | steps | error | calls | missing | extra | traps | overlay | config | fidelity | round trip | tokens | ms |",
+      "| --- | ---: | --- | --- | --- | ---: | --- | --- | --- | --- | --- | --- | --- | ---: | ---: |",
     );
     for (const run of modelRuns) {
       const { score } = run;
@@ -1820,6 +1934,7 @@ const renderReport = (runs: readonly EvalRun[]): string => {
           `| ${run.taskId}`,
           String(run.repeat),
           score.outcome,
+          stepsCell(score.steps),
           run.error === null ? "-" : cell([run.error]),
           String(run.calls),
           cell(score.paths.missing),
@@ -1846,6 +1961,13 @@ const renderReport = (runs: readonly EvalRun[]): string => {
         ),
       0,
     );
+    const authoringRuns = modelRuns.filter((run) => run.quiz === null);
+    const stepTotals = AUTHORING_STEP_NAMES.map(
+      (name) =>
+        `${name} ${String(
+          authoringRuns.filter((run) => run.score.steps[name]).length,
+        )}/${String(authoringRuns.length)}`,
+    ).join(", ");
     const quiz = modelRuns.find((run) => run.quiz !== null)?.quiz ?? null;
     const quizSummary =
       quiz === null
@@ -1853,7 +1975,7 @@ const renderReport = (runs: readonly EvalRun[]): string => {
         : `, syntax quiz ${String(quiz.correct)}/${String(quiz.total)}`;
     lines.push(
       "",
-      `passed ${String(passed)}/${String(modelRuns.length)}, grammar traps ${String(traps)}${quizSummary}`,
+      `passed ${String(passed)}/${String(modelRuns.length)}, ${stepTotals}, grammar traps ${String(traps)}${quizSummary}`,
     );
   }
   return lines.join("\n");

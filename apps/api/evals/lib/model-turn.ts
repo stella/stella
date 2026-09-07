@@ -13,7 +13,8 @@ import type { PublicStreamChunk } from "@/api/lib/chat/tanstack-chat-runtime";
 import { tokenUsageFromRunFinishedChunk } from "@/api/lib/tanstack-ai-usage";
 
 export type EvalModelTurnResult = {
-  /** The provider's run error, or the stream/`chat()` rejection message. */
+  /** The provider's run error, the stream/`chat()` rejection message, or the
+   *  deadline that killed the turn. */
   error: string | null;
   latencyMs: number;
   usage: TokenUsage | null;
@@ -55,7 +56,11 @@ export const runEvalModelTurn = async ({
 }: RunEvalModelTurnOptions): Promise<EvalModelTurnResult> => {
   const start = performance.now();
   const abortController = new AbortController();
-  const abortTimer = setTimer(() => abortController.abort(), timeoutMs);
+  let timedOut = false;
+  const abortTimer = setTimer(() => {
+    timedOut = true;
+    abortController.abort();
+  }, timeoutMs);
   let usage: TokenUsage | null = null;
   let error: string | null = null;
   try {
@@ -76,5 +81,14 @@ export const runEvalModelTurn = async ({
   } finally {
     clearTimer(abortTimer);
   }
-  return { error, latencyMs: Math.round(performance.now() - start), usage };
+  // An adapter that honours the abort signal ends its stream quietly, so a
+  // turn killed by the deadline otherwise reports no error at all and scores
+  // as a model that simply stopped calling tools. Name the deadline instead.
+  return {
+    error: timedOut
+      ? `model turn exceeded ${String(timeoutMs)} ms and was aborted`
+      : error,
+    latencyMs: Math.round(performance.now() - start),
+    usage,
+  };
 };

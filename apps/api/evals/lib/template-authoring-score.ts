@@ -1,5 +1,5 @@
 /**
- * Deterministic scoring for the `save_template` authoring eval
+ * Deterministic scoring for the template authoring eval
  * (`evals/template-authoring.ts`). Kept in its own module because the eval
  * script runs a paid model turn at import time: the scoring has to be
  * importable, and unit-testable, without that.
@@ -210,7 +210,7 @@ const isSelfReferentialCondition = (path: string, condition: string): boolean =>
 type DetectGrammarTrapsOptions = {
   /** The document the model authored, in order. */
   blocks: readonly AuthoredBlock[];
-  /** The `fields` overlay it passed to `save_template`. */
+  /** The `fields` entries it passed to `configure_template_fields`. */
   overlay: readonly OverlayFieldView[];
   /** Paths the task expects a person to answer as a yes/no question, so a
    *  `condition` on one of them is the tick-box confusion. */
@@ -392,11 +392,44 @@ const hasRoundTripDefect = (roundTrip: RoundTripDefects): boolean =>
   roundTrip.dateLocaleMismatch;
 
 /**
- * What became of the model's last `save_template` call. `rejected` covers the
+ * What became of the model's last create/configure call. `rejected` covers the
  * production validations that refuse a call outright (schema, mutually
  * exclusive derived sources, a `path` matching no marker); `invalid-docx`
  * covers bytes that are not a DOCX at all.
  */
+/**
+ * The workflow's four steps, scored separately so a report says WHICH step a
+ * model could not get through rather than only that the run was partial. A
+ * later step is never credited without the one before it: a template that was
+ * never created cannot have been configured.
+ */
+export type AuthoringSteps = {
+  /** A DOCX was written with exactly the expected marker paths and no
+   *  grammar trap, keeping the source wording. */
+  authored: boolean;
+  /** `create_template` accepted the document. */
+  created: boolean;
+  /** `configure_template_fields` applied every entry, with no issue left,
+   *  and configured what the brief asked for. */
+  configured: boolean;
+  /** The fill round trip rendered cleanly. */
+  filled: boolean;
+};
+
+export const AUTHORING_STEP_NAMES = [
+  "authored",
+  "created",
+  "configured",
+  "filled",
+] as const satisfies readonly (keyof AuthoringSteps)[];
+
+const noSteps = (): AuthoringSteps => ({
+  authored: false,
+  created: false,
+  configured: false,
+  filled: false,
+});
+
 export type SaveAttempt =
   | { status: "invalid-docx"; reason: string }
   | { status: "rejected"; overlayIssues: readonly string[] }
@@ -428,6 +461,7 @@ type AuthoringOutcome =
 
 export type AuthoringRunScore = {
   outcome: AuthoringOutcome;
+  steps: AuthoringSteps;
   paths: PathComparison;
   traps: GrammarTrapCounts;
   overlayIssues: readonly string[];
@@ -441,11 +475,17 @@ export type AuthoringRunScore = {
 type ScoreAuthoringRunOptions = {
   /** The provider's error, when the turn itself failed. */
   turnError: string | null;
-  /** The last `save_template` attempt, or null when the model never called it. */
+  /** The last attempt at the create/configure pair, or null when the model
+   *  never got that far. */
   attempt: SaveAttempt | null;
+  /** Whether `create_template` accepted a document at any point in the run,
+   *  which the last attempt alone cannot say: a configure call that failed
+   *  still followed a create that succeeded. */
+  created: boolean;
 };
 
 const emptyScore = (): Omit<AuthoringRunScore, "outcome" | "note"> => ({
+  steps: noSteps(),
   paths: { missing: [], extra: [] },
   traps: zeroTrapCounts(),
   overlayIssues: [],
@@ -460,32 +500,43 @@ const emptyScore = (): Omit<AuthoringRunScore, "outcome" | "note"> => ({
  * every production validation, configured every field the brief asked for,
  * and filled cleanly.
  */
-const scoreAttempt = (attempt: SaveAttempt | null): AuthoringRunScore => {
+const scoreAttempt = (
+  attempt: SaveAttempt | null,
+  created: boolean,
+): AuthoringRunScore => {
   if (attempt === null) {
     return {
       ...emptyScore(),
+      steps: { ...noSteps(), created },
       outcome: "no-call",
-      note: "no save_template call",
+      note: "no create_template call",
     };
   }
   switch (attempt.status) {
     case "invalid-docx":
       return {
         ...emptyScore(),
+        steps: { ...noSteps(), created },
         outcome: "invalid-docx",
         note: attempt.reason,
       };
     case "rejected":
       return {
         ...emptyScore(),
+        steps: { ...noSteps(), created },
         outcome: "partial",
         overlayIssues: attempt.overlayIssues,
-        note: "save_template rejected the call",
+        note: "the call was rejected",
       };
     case "unsaved":
       return {
         ...emptyScore(),
         outcome: "partial",
+        steps: {
+          ...noSteps(),
+          authored: authoredCleanly(attempt),
+          created,
+        },
         paths: attempt.paths,
         traps: attempt.traps,
         overlayIssues: attempt.overlayIssues,
@@ -503,6 +554,14 @@ const scoreAttempt = (attempt: SaveAttempt | null): AuthoringRunScore => {
         !hasRoundTripDefect(attempt.roundTrip);
       return {
         outcome: clean ? "pass" : "partial",
+        steps: {
+          authored: authoredCleanly(attempt),
+          created: true,
+          configured:
+            attempt.overlayIssues.length === 0 &&
+            attempt.configDefects.length === 0,
+          filled: !hasRoundTripDefect(attempt.roundTrip),
+        },
         paths: attempt.paths,
         traps: attempt.traps,
         overlayIssues: attempt.overlayIssues,
@@ -519,11 +578,23 @@ const scoreAttempt = (attempt: SaveAttempt | null): AuthoringRunScore => {
 
 /** A turn error overrides completion, but never erases attempt evidence that
  * was already produced before the provider or stream failed. */
+/** The authoring step alone: the right marker paths, no grammar trap, and
+ *  the source wording kept. It is scored the same way whether or not the
+ *  document was ever saved. */
+const authoredCleanly = (
+  attempt: Extract<SaveAttempt, { status: "unsaved" | "saved" }>,
+): boolean =>
+  attempt.paths.missing.length === 0 &&
+  attempt.paths.extra.length === 0 &&
+  Object.values(attempt.traps).every((count) => count === 0) &&
+  attempt.fidelity.length === 0;
+
 export const scoreAuthoringRun = ({
   turnError,
   attempt,
+  created,
 }: ScoreAuthoringRunOptions): AuthoringRunScore => {
-  const score = scoreAttempt(attempt);
+  const score = scoreAttempt(attempt, created);
   return turnError === null
     ? score
     : { ...score, outcome: "error", note: turnError };

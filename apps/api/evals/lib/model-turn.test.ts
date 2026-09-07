@@ -128,4 +128,36 @@ describe("runEvalModelTurn", () => {
     expect(result.usage).toBeNull();
     expect(timer.cleared.length).toBe(1);
   });
+
+  /**
+   * The failure that reads as success: an adapter honouring the abort signal
+   * ends its stream without throwing and without a RUN_ERROR, so a turn the
+   * deadline killed used to come back with `error: null` and score as a model
+   * that simply stopped calling tools.
+   */
+  test("a turn the deadline aborts reports the deadline, not silence", async () => {
+    const timer = fakeTimer();
+
+    async function* neverFinishes(abortController: AbortController) {
+      yield textChunk("thinking");
+      await new Promise<void>((resolve) => {
+        abortController.signal.addEventListener("abort", () => {
+          resolve();
+        });
+      });
+    }
+
+    const result = await runEvalModelTurn({
+      chat: (abortController) => neverFinishes(abortController),
+      timeoutMs: 10,
+      onChunk: () => {
+        // The text is scored by the caller; this test is about the deadline.
+      },
+      setTimer: timer.setTimer,
+      clearTimer: timer.clearTimer,
+    });
+
+    expect(result.error).toBe("model turn exceeded 10 ms and was aborted");
+    expect(timer.cleared.length).toBe(1);
+  });
 });

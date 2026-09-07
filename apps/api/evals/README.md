@@ -42,10 +42,11 @@ the default provider chain (see `getTanStackTextModelById`).
   `fill_template` contract: correct field paths and types, ISO and locale
   date handling, and asking rather than inventing a missing required value?
 - `template-authoring.ts`: the other half of the template contract; can a
-  model turn a source document into a template through `save_template`:
-  the right `{{markers}}` in the right paragraphs, a `fields` overlay that
-  configures each one, and no grammar trap (unprefixed item paths, `this.`,
-  bracket indexing, per-language path variants, inline block markers)?
+  model turn a source document into a template through `create_template` and
+  `configure_template_fields`: the right `{{markers}}` in the right
+  paragraphs, one configuration entry per field, and no grammar trap
+  (unprefixed item paths, `this.`, bracket indexing, per-language path
+  variants, inline block markers)? Scores the four steps separately.
 - `extraction.ts`: does the structured-extraction path (`generateWorkflowData`)
   match ground truth across text, date, int, and select fields, and does it
   answer a question the source never states?
