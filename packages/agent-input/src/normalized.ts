@@ -37,10 +37,14 @@ const MAX_RECEIVED_CHARS = 80;
 /** The input as one quoted token: what the agent sent, ready to drop into a
  *  sentence. */
 const describeInput = (input: unknown): string => {
+  // A function or a symbol has no JSON spelling, so it is named by its type
+  // rather than stringified into "[object Object]".
+  const spelled =
+    typeof input === "function" || typeof input === "symbol"
+      ? undefined
+      : JSON.stringify(input);
   const rendered =
-    input === undefined
-      ? "undefined"
-      : (JSON.stringify(input) ?? String(input));
+    input === undefined ? "undefined" : (spelled ?? `a ${typeof input}`);
   return rendered.length <= MAX_RECEIVED_CHARS
     ? rendered
     : `${rendered.slice(0, MAX_RECEIVED_CHARS)}…`;

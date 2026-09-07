@@ -80,7 +80,7 @@ describe("date values", () => {
   test("names both readings of a day/month pair instead of guessing", () => {
     const result = normalizeDateValue("01/02/2026");
     expect(result.ok).toBe(false);
-    expect(result.ok === false && result.hint).toBe(
+    expect(!result.ok && result.hint).toBe(
       'That reads as 2026-02-01 with the day first, or 2026-01-02 with the month first. Send "2026-02-01" or "2026-01-02".',
     );
   });
@@ -171,9 +171,7 @@ describe("date format specs", () => {
 
   test("names the closest style on a near miss", () => {
     const result = normalizeDateFormatSpec({ locale: "cs", style: "shor" });
-    expect(result.ok === false && result.hint).toContain(
-      'Did you mean "short"',
-    );
+    expect(!result.ok && result.hint).toContain('Did you mean "short"');
   });
 });
 
@@ -204,7 +202,7 @@ describe("numbers", () => {
   test("a single group-sized separator is an ask when no locale decides it", () => {
     const result = normalizeNumber("1,234");
     expect(result.ok).toBe(false);
-    expect(result.ok === false && result.hint).toContain("Send 1234 or 1.234");
+    expect(!result.ok && result.hint).toContain("Send 1234 or 1.234");
   });
 
   test("the field's locale decides the group-sized separator", () => {
@@ -290,14 +288,14 @@ describe("closed vocabularies", () => {
   test("a near miss asks and names the closest allowed value", () => {
     const result = normalizeEnumValue("kra", REGISTRIES);
     expect(result.ok).toBe(false);
-    expect(result.ok === false && result.hint).toBe(
+    expect(!result.ok && result.hint).toBe(
       'Did you mean "krs"? The allowed values are "krs", "ares", "orsr".',
     );
   });
 
   test("a value nothing is close to asks with the whole set", () => {
     const result = normalizeEnumValue("companies-house", REGISTRIES);
-    expect(result.ok === false && result.hint).toBe(
+    expect(!result.ok && result.hint).toBe(
       'The allowed values are "krs", "ares", "orsr".',
     );
   });

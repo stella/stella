@@ -137,7 +137,7 @@ describe("date values", () => {
             return;
           }
           expect(result.ok).toBe(false);
-          expect(result.ok === false && result.hint).toContain(
+          expect(!result.ok && result.hint).toContain(
             `${year}-${pad(second)}-${pad(first)}`,
           );
         },
@@ -347,8 +347,8 @@ describe("locales and date format specs", () => {
       fc.property(
         fc.constantFrom("long", "medium", "short", "iso", "full", "numeric"),
         fc.constantFrom("", " ", "  "),
-        (style: string, pad: string) => {
-          const result = normalizeDateFormatSpec(`${pad}${style}${pad}`);
+        (style: string, spaces: string) => {
+          const result = normalizeDateFormatSpec(`${spaces}${style}${spaces}`);
           // "iso" renders the same string in every language, so it needs no
           // locale; every other style without one would guess the language.
           expect(result.ok).toBe(style === "iso");

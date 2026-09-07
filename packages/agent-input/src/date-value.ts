@@ -186,8 +186,20 @@ const REGEXP_META_RE = /[.*+?^${}()|[\]\\]/gu;
 const literalPattern = (literal: string): string =>
   literal
     .split(/\s+/u)
-    .map((chunk) => chunk.replace(REGEXP_META_RE, String.raw`\$&`))
+    .map((chunk) => chunk.replace(REGEXP_META_RE, (meta) => `\\${meta}`))
     .join(String.raw`\s*`);
+
+/** The parts a calendar-date layout is built from. A formatter asked for a
+ *  day, a month and a year emits nothing else; anything else means the layout
+ *  is not one this reader can rebuild. */
+const LAYOUT_PART_KINDS = ["day", "month", "year", "literal"] as const;
+
+type LayoutPartKind = (typeof LAYOUT_PART_KINDS)[number];
+
+const layoutPartKind = (
+  type: Intl.DateTimeFormatPartTypes,
+): LayoutPartKind | null =>
+  LAYOUT_PART_KINDS.find((kind) => kind === type) ?? null;
 
 /**
  * The date structures one locale actually renders, as patterns: ICU's own
@@ -210,7 +222,12 @@ const localeLayouts = (locale: string): readonly RegExp[] => {
     let named = false;
     let readable = true;
     for (const part of parts) {
-      switch (part.type) {
+      const kind = layoutPartKind(part.type);
+      if (kind === null) {
+        readable = false;
+        continue;
+      }
+      switch (kind) {
         case "day":
           source += String.raw`(?<day>\d{1,2})`;
           break;
@@ -227,8 +244,6 @@ const localeLayouts = (locale: string): readonly RegExp[] => {
           literals += part.value;
           source += literalPattern(part.value);
           break;
-        default:
-          readable = false;
       }
     }
     if (readable && (named || !SEPARATORS_ONLY_RE.test(literals))) {

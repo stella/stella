@@ -73,6 +73,10 @@ const toNumber = (body: string, decimalMark: string | null): number =>
           .replace(decimalMark, "."),
   );
 
+/** The separator carries both readings and no locale decides it. A symbol,
+ *  not a string, so the decision cannot be confused with a decimal mark. */
+const AMBIGUOUS = Symbol("ambiguous decimal mark");
+
 const ambiguousAsk = (input: unknown, body: string, separator: string) => {
   const grouped = toNumber(body, null);
   const fractional = toNumber(body, separator);
@@ -126,7 +130,7 @@ export const normalizeNumber = (
   const commas = body.split(",").length - 1;
   const dots = body.split(".").length - 1;
 
-  const decimalMark = ((): string | null | "ambiguous" => {
+  const decimalMark = ((): string | null | typeof AMBIGUOUS => {
     if (commas > 0 && dots > 0) {
       return lastSeparator(body);
     }
@@ -143,12 +147,12 @@ export const normalizeNumber = (
     const mark =
       options?.locale === undefined ? null : localeDecimalMark(options.locale);
     if (mark === null) {
-      return "ambiguous";
+      return AMBIGUOUS;
     }
     return mark === separator ? separator : null;
   })();
 
-  if (decimalMark === "ambiguous") {
+  if (decimalMark === AMBIGUOUS) {
     return ambiguousAsk(input, body, commas === 1 ? "," : ".");
   }
 
