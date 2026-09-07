@@ -7,6 +7,7 @@ import {
   clipboardDraggedItemId,
   clipboardItemLink,
   clipboardPointerMoved,
+  clipboardGroupRailKeyAction,
   clipboardTimelineKeyAction,
   clipboardRailScrollDelta,
   clipboardRailWindow,
@@ -20,6 +21,7 @@ import {
   isClipboardNameInput,
   quickCopyIndex,
   shouldCopyFromClipboardInput,
+  shouldLeaveSearchForGroups,
   shouldReturnToTimelineFromInput,
 } from "../src/clipboard/clipboard-logic";
 import type { ClipboardItem } from "../src/clipboard/clipboard-types";
@@ -330,6 +332,14 @@ describe("keyboard indexes", () => {
     expect(clipboardTimelineKeyAction("ArrowUp")).toBeNull();
   });
 
+  test("group rail arrows walk horizontally and Arrow Up returns to the timeline", () => {
+    expect(clipboardGroupRailKeyAction("ArrowLeft")).toBe("previous");
+    expect(clipboardGroupRailKeyAction("ArrowRight")).toBe("next");
+    expect(clipboardGroupRailKeyAction("ArrowUp")).toBe("focusTimeline");
+    expect(clipboardGroupRailKeyAction("ArrowDown")).toBeNull();
+    expect(clipboardGroupRailKeyAction("Enter")).toBeNull();
+  });
+
   test("timeline navigation has no target beyond either edge", () => {
     expect(adjacentClipboardIndex(0, "next", 2)).toBe(1);
     expect(adjacentClipboardIndex(1, "next", 2)).toBeNull();
@@ -516,6 +526,48 @@ describe("clipboard input keyboard handling", () => {
         dataset: {},
         isComposing: false,
         key: "ArrowDown",
+      }),
+    ).toBe(false);
+  });
+
+  test("ArrowRight leaves search for the groups only from the end of the text", () => {
+    const atEnd = {
+      dataset: {},
+      isComposing: false,
+      key: "ArrowRight",
+      selectionEnd: 3,
+      selectionStart: 3,
+      valueLength: 3,
+    };
+    expect(shouldLeaveSearchForGroups(atEnd)).toBe(true);
+    expect(
+      shouldLeaveSearchForGroups({
+        ...atEnd,
+        selectionEnd: 0,
+        selectionStart: 0,
+        valueLength: 0,
+      }),
+    ).toBe(true);
+    expect(shouldLeaveSearchForGroups({ ...atEnd, selectionStart: 2 })).toBe(
+      false,
+    );
+    expect(
+      shouldLeaveSearchForGroups({
+        ...atEnd,
+        selectionEnd: 1,
+        selectionStart: 1,
+      }),
+    ).toBe(false);
+    expect(shouldLeaveSearchForGroups({ ...atEnd, isComposing: true })).toBe(
+      false,
+    );
+    expect(shouldLeaveSearchForGroups({ ...atEnd, key: "ArrowLeft" })).toBe(
+      false,
+    );
+    expect(
+      shouldLeaveSearchForGroups({
+        ...atEnd,
+        dataset: { clipboardNameInput: "" },
       }),
     ).toBe(false);
   });

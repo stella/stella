@@ -125,6 +125,49 @@ export const shouldReturnToTimelineFromInput = ({
 }: ClipboardInputKey) =>
   !isClipboardNameInput(dataset) && key === "ArrowUp" && !isComposing;
 
+type ClipboardSearchArrowKey = ClipboardInputKey & {
+  selectionEnd: number | null;
+  selectionStart: number | null;
+  valueLength: number;
+};
+
+/**
+ * ArrowRight with the caret at the end of the search text hands focus to the
+ * group rail beside the search field (an empty field qualifies). With text to
+ * the right of the caret, or a selection, the arrow keeps moving the caret.
+ */
+export const shouldLeaveSearchForGroups = ({
+  dataset,
+  isComposing,
+  key,
+  selectionEnd,
+  selectionStart,
+  valueLength,
+}: ClipboardSearchArrowKey) =>
+  !isClipboardNameInput(dataset) &&
+  key === "ArrowRight" &&
+  !isComposing &&
+  selectionStart === valueLength &&
+  selectionEnd === valueLength;
+
+/**
+ * The group rail is the row below the timeline: left and right walk its
+ * controls, ArrowUp returns to the selected card. Stepping before the first
+ * control lands back in the search field, so the two arrows pair up.
+ */
+export const clipboardGroupRailKeyAction = (key: string) => {
+  switch (key) {
+    case "ArrowLeft":
+      return "previous";
+    case "ArrowRight":
+      return "next";
+    case "ArrowUp":
+      return "focusTimeline";
+    default:
+      return null;
+  }
+};
+
 /**
  * Command, or Control on Windows and Linux. Alt disqualifies the combination:
  * AltGr reports as Ctrl+Alt there, so a layout that produces a character with
