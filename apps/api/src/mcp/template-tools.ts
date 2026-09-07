@@ -588,9 +588,10 @@ export const CREATE_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
     `(max ${MAX_INLINE_DOCX_BYTES} bytes decoded within the ` +
     `${MCP_MAX_REQUEST_BODY_BYTES}-byte MCP request frame); never retype the ` +
     `file or strip parts out to fit. Read ${TEMPLATE_MARKER_REFERENCE_URI} ` +
-    "before authoring the DOCX. Returns the template id, its discovered " +
-    "fields, arrays, conditions, computed values and marker warnings. Then " +
-    "call configure_template_fields to say who fills each field.",
+    "before authoring: markers are the docxtpl dialect of Jinja, and a value " +
+    "marker's filters configure the field. Returns the template id, its " +
+    "fields, arrays, conditions, computed values and warnings; " +
+    "configure_template_fields sets what the filters did not.",
   inputSchema: createTemplateArgsSchema,
   jsonSchemaProjectionWaiver: {
     ignoreActions: ["partial_check"],
@@ -610,8 +611,10 @@ export const CREATE_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
 export const CONFIGURE_TEMPLATE_FIELDS_TOOL_DEFINITION = defineValibotMcpTool({
   description:
     "Configure an existing template's fields: who fills each one, its input " +
-    "control, options and validation. The document's {{markers}} are " +
-    "untouched. Pass template_id and one entry per field path; every path " +
+    "control, options and validation, for a template whose markers you are " +
+    "not rewriting. The document is untouched, and a filter written on a " +
+    "marker says the same thing. Pass template_id and one entry per field " +
+    "path; every path " +
     `must already exist as a marker. Read ${TEMPLATE_FIELD_REFERENCE_URI} ` +
     "first. Returns the template's full field configuration afterwards.",
   inputSchema: configureTemplateFieldsArgsSchema,
@@ -1011,7 +1014,7 @@ type TemplateFillCompletionGate =
 /**
  * The completion gate both fill tools run over renderer diagnostics. Owning it
  * here is what keeps the transient tool and the persisting one on one policy:
- * a live `{{placeholder}}` is an error under the default mode whether the
+ * a live `{{ placeholder }}` is an error under the default mode whether the
  * document is handed back or written into a matter.
  */
 const gateTemplateFillCompletion = ({
@@ -1690,7 +1693,7 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
     await releaseClaim();
     return requiredFieldsRejectionResult(filled.requiredFieldsRejection);
   }
-  // A live `{{placeholder}}` is rejected before the document reaches the
+  // A live `{{ placeholder }}` is rejected before the document reaches the
   // matter, not reported afterwards: this tool persists, so it cannot be
   // laxer than the transient fill_template.
   const completion = gateTemplateFillCompletion({
@@ -2292,7 +2295,7 @@ const describeTemplateForAgent = async ({
 };
 
 /** `configure_template_fields`: overlay field configuration onto an existing
- *  template. The stored document bytes keep their {{markers}}; only the
+ *  template. The stored document bytes keep their markers; only the
  *  manifest changes. */
 /**
  * The position of the `fields` entry a validation issue belongs to, or null

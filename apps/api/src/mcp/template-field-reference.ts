@@ -27,6 +27,10 @@ import { TEMPLATE_MARKER_REFERENCE_URI } from "@/api/mcp/template-marker-referen
  * per-property guidance lives here — pulled on demand — while the schema
  * carries the structure plus one short line per property.
  *
+ * The same properties are writable in the document as marker filters, which is
+ * where an author should put them; this tool is the way to set them without
+ * rewriting the DOCX. The filter catalogue lives with the marker grammar.
+ *
  * Both inventories below are keyed by their source of truth
  * ({@link templateFieldInputSchema}'s own keys, and the `source` union's own
  * branches), so a new field property or source branch is a compile error here
@@ -72,7 +76,7 @@ true satisfies Exclude<
   : never;
 
 const FIELD_PROPERTY_DOCS = {
-  path: "Must match a `{{marker}}` in the DOCX. Identical paths anywhere in the document are one field and one question.",
+  path: "Must match a `{{ marker }}` in the DOCX. Identical paths anywhere in the document are one field and one question.",
   label: "Question label shown to the person filling the field.",
   hint: "Short fill guidance shown with the input.",
   input_type: `Input control: ${INPUT_TYPES.join(", ")}. Defaults to text.`,
@@ -156,7 +160,7 @@ const SOURCE_BRANCH_DOCS = {
   },
   condition: {
     detail:
-      "A boolean rule for a field a `{{#if field_path}}` marker references. A boolean field WITHOUT a condition source is asked as a yes/no question instead.",
+      "A boolean rule for a field a `{% if field_path %}` tag references. A boolean field WITHOUT a condition source is asked as a yes/no question instead.",
     properties: ["`expression`: for example `amount > 1000`"],
   },
 } as const satisfies Record<TemplateFieldSourceType, SourceBranchDoc>;
@@ -183,9 +187,12 @@ export const buildFieldReference = (): string => {
   return [
     "stella template field configuration (`configure_template_fields`)",
     "",
-    "Markers decide WHICH values are fillable; a field configuration decides " +
-      "how each one behaves. Configuration never lives in the DOCX. See " +
-      `${TEMPLATE_MARKER_REFERENCE_URI} for the marker grammar.`,
+    "A marker's filter chain is the primary way to configure a field, and it " +
+      "lives in the DOCX: " +
+      '`{{ deposit | number | label(\"Kaution\") | required }}`. See ' +
+      `${TEMPLATE_MARKER_REFERENCE_URI} for the filters. This tool configures ` +
+      "the same properties from outside the document, for a template whose " +
+      "markers you are not rewriting; where both say something, this wins.",
     "",
     "Send one entry per field path. Every entry's `path` must match a marker " +
       "in the template, unknown properties are rejected, and an entry " +

@@ -67,9 +67,11 @@ const WORKFLOW_STEPS: readonly WorkflowStep[] = [
   {
     title: "Read the grammar",
     detail:
-      `${TEMPLATE_MARKER_REFERENCE_URI} is the \`{{...}}\` marker grammar; ` +
-      `${TEMPLATE_FIELD_REFERENCE_URI} is the field configuration. Read both ` +
-      "before authoring or configuring anything.",
+      `${TEMPLATE_MARKER_REFERENCE_URI} is the marker grammar — the docxtpl ` +
+      "dialect of Jinja, including the filters that configure a field in the " +
+      `document; ${TEMPLATE_FIELD_REFERENCE_URI} is the same configuration ` +
+      "from outside the document. Read both before authoring or configuring " +
+      "anything.",
   },
   {
     title: "Author markers in the ORIGINAL document",
@@ -101,8 +103,8 @@ const WORKFLOW_STEPS: readonly WorkflowStep[] = [
       "`configure`: the " +
       `exact ${CONFIGURE_TEMPLATE_FIELDS} call for this template, one entry ` +
       "per configurable path (loop item paths included) with the source each " +
-      "field already has. Copy it and edit the entries that should differ; " +
-      "do not spell the paths yourself.",
+      "field already has, filters in the document included. Copy it and edit " +
+      "the entries that should differ; do not spell the paths yourself.",
   },
   {
     title: "Read the discovered paths back",
@@ -114,7 +116,7 @@ const WORKFLOW_STEPS: readonly WorkflowStep[] = [
       "`label`, `input_type`, `required`, `hint`, `options`, `options_from`, " +
       "`parts`, `format`, `date_format`, and `source`: who fills the field, " +
       "as one object with a `type`), " +
-      "`arrays[]` (one entry per `{{#each}}` loop: its `path` plus the " +
+      "`arrays[]` (one entry per `{% for %}` loop: its `path` plus the " +
       "`itemFieldPaths` it repeats), `conditions[]`, `computed[]` " +
       "(each `path` + its `condition` or `formula`) and the same " +
       "`warnings[]`. Compare `fields[].path` against the markers you wrote: a " +
@@ -189,7 +191,7 @@ const COMPLETION_GATE_NOTE =
   `through instead: ${FILL_TEMPLATE} reports \`completionStatus: "partial"\` ` +
   `and ${SAVE_FILLED_TEMPLATE} writes the document with the shortfall in ` +
   "`unmatchedPlaceholders` and `aiFieldErrors`. Set it only when a document " +
-  "with live `{{markers}}` is what the user asked for; otherwise collect the " +
+  "with live markers is what the user asked for; otherwise collect the " +
   "missing values and retry. A missing required value is refused in either " +
   "mode, before the gate.";
 
@@ -202,21 +204,22 @@ const AUTHORING_RULES = [
       "language-specific variants create duplicate questions.",
   },
   {
-    title: "Item fields are prefixed by the loop path",
+    title: "Item fields are addressed through the loop's own name",
     detail:
-      "Inside `{{#each X}}`, an item's field is `{{X.field}}`, not " +
-      "`{{field}}`. The loop path plus its `itemFieldPaths` is what " +
-      `${LIST_TEMPLATES} reports under \`arrays\`.`,
+      "`{% for attorney in attorneys %}` binds `attorney`, so an item's " +
+      "field is `{{ attorney.name }}`, not `{{ name }}`. The array path plus " +
+      `its \`itemFieldPaths\` is what ${LIST_TEMPLATES} reports under ` +
+      "`arrays`.",
   },
   {
-    title: "Block markers own their paragraph, or wrap a table row",
+    title: "Block tags own their paragraph, or wrap a table row",
     detail:
-      "Each `{{#if}}` / `{{#each}}` opener and closer sits alone in its own " +
+      "Each `{% if %}` / `{% for %}` opener and closer sits alone in its own " +
       "paragraph, and a pair either shares a block-level parent or is " +
       "confined to a single table row (which repeats the row). Within one row " +
       "the pair may instead prefix a cell's text and suffix a LATER cell's " +
-      "text — `{{#each deliverables}}{{deliverables.item}}` in one cell and " +
-      "`{{deliverables.fee}}{{/each}}` in another act on the whole row; both " +
+      "text — `{% for d in deliverables %}{{ d.item }}` in one cell and " +
+      "`{{ d.fee }}{% endfor %}` in another act on the whole row; both " +
       "halves must be in the same row and in different cells. A pair that " +
       "straddles a table boundary is refused either way, and how it is " +
       "refused depends on how it was written: a pair whose markers each own " +

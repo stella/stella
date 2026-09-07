@@ -607,7 +607,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "name": "list_templates",
     "scope": "stella:templates",
     "access": "read",
-    "description": "List the document templates in this organization (NDAs, powers of attorney, leases), or describe one template's fillable fields. Omit template_id to list templates: each template's id, name, field count, tags, and usage guidance (whenToUse / whenNotToUse); prefer a template whose whenToUse matches the request and skip any whose whenNotToUse applies. Pass template_id to return that template's full field configuration, in the shape the field reference documents (see stella://reference/template-fields), its named conditions and formula fields, and the configure_template_fields call to make next. \`arrays\` marks {{#each}} fields as arrays of objects, not dotted keys.",
+    "description": "List the document templates in this organization (NDAs, powers of attorney, leases), or describe one template's fillable fields. Omit template_id to list templates: each template's id, name, field count, tags, and usage guidance (whenToUse / whenNotToUse); prefer a template whose whenToUse matches the request and skip any whose whenNotToUse applies. Pass template_id to return that template's full field configuration, in the shape the field reference documents (see stella://reference/template-fields), its named conditions and formula fields, and the configure_template_fields call to make next. \`arrays\` marks {% for %} fields as arrays of objects, not dotted keys.",
     "annotations": {
       "title": "List templates",
       "readOnlyHint": true,
@@ -766,7 +766,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "name": "create_template",
     "scope": "stella:templates",
     "access": "write",
-    "description": "Create a template from a DOCX, or publish a new version of one. To create, pass a name and the document. To publish over an existing template, pass its template_id with the document; template_id with only a name renames it. Same-name templates are never merged: only template_id matches an existing one. For the document, pass file (preferred, up to 50 MB) or the original bytes as docx_base64 (max 196608 bytes decoded within the 524288-byte MCP request frame); never retype the file or strip parts out to fit. Read stella://reference/template-markers before authoring the DOCX. Returns the template id, its discovered fields, arrays, conditions, computed values and marker warnings. Then call configure_template_fields to say who fills each field.",
+    "description": "Create a template from a DOCX, or publish a new version of one. To create, pass a name and the document. To publish over an existing template, pass its template_id with the document; template_id with only a name renames it. Same-name templates are never merged: only template_id matches an existing one. For the document, pass file (preferred, up to 50 MB) or the original bytes as docx_base64 (max 196608 bytes decoded within the 524288-byte MCP request frame); never retype the file or strip parts out to fit. Read stella://reference/template-markers before authoring: markers are the docxtpl dialect of Jinja, and a value marker's filters configure the field. Returns the template id, its fields, arrays, conditions, computed values and warnings; configure_template_fields sets what the filters did not.",
     "annotations": {
       "title": "Create template",
       "idempotentHint": false,
@@ -828,7 +828,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "name": "configure_template_fields",
     "scope": "stella:templates",
     "access": "write",
-    "description": "Configure an existing template's fields: who fills each one, its input control, options and validation. The document's {{markers}} are untouched. Pass template_id and one entry per field path; every path must already exist as a marker. Read stella://reference/template-fields first. Returns the template's full field configuration afterwards.",
+    "description": "Configure an existing template's fields: who fills each one, its input control, options and validation, for a template whose markers you are not rewriting. The document is untouched, and a filter written on a marker says the same thing. Pass template_id and one entry per field path; every path must already exist as a marker. Read stella://reference/template-fields first. Returns the template's full field configuration afterwards.",
     "annotations": {
       "title": "Configure template fields",
       "idempotentHint": true,
@@ -854,7 +854,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
             "properties": {
               "path": {
                 "type": "string",
-                "description": "Field path; must match a {{marker}}"
+                "description": "Field path; must match a {{ marker }}"
               },
               "label": {
                 "type": "string",
@@ -2510,11 +2510,11 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
               "directive_kind": {
                 "enum": [
                   "if",
-                  "elseif",
+                  "elif",
                   "else",
                   "endif",
-                  "each",
-                  "endeach"
+                  "for",
+                  "endfor"
                 ],
                 "type": "string",
                 "description": "Directive kind when is_directive is set"
@@ -3714,7 +3714,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     "name": "list_templates",
     "scope": "stella:templates_anonymized",
     "access": "read",
-    "description": "List the document templates in this organization (NDAs, powers of attorney, leases), or describe one template's fillable fields. Omit template_id to list templates: each template's id, name, field count, tags, and usage guidance (whenToUse / whenNotToUse); prefer a template whose whenToUse matches the request and skip any whose whenNotToUse applies. Pass template_id to return that template's full field configuration, in the shape the field reference documents (see stella://reference/template-fields), its named conditions and formula fields, and the configure_template_fields call to make next. \`arrays\` marks {{#each}} fields as arrays of objects, not dotted keys.",
+    "description": "List the document templates in this organization (NDAs, powers of attorney, leases), or describe one template's fillable fields. Omit template_id to list templates: each template's id, name, field count, tags, and usage guidance (whenToUse / whenNotToUse); prefer a template whose whenToUse matches the request and skip any whose whenNotToUse applies. Pass template_id to return that template's full field configuration, in the shape the field reference documents (see stella://reference/template-fields), its named conditions and formula fields, and the configure_template_fields call to make next. \`arrays\` marks {% for %} fields as arrays of objects, not dotted keys.",
     "annotations": {
       "title": "List templates",
       "readOnlyHint": true,

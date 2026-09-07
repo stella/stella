@@ -2778,7 +2778,7 @@ export const generatedRouteMap: RouteNode = {
             commandPath: ["template", "configure-fields"],
             toolName: "configure_template_fields",
             description:
-              "Configure an existing template's fields: who fills each one, its input control, options and validation.",
+              "Configure an existing template's fields: who fills each one, its input control, options and validation, for a template whose markers you are not rewriting.",
             flags: [
               {
                 flag: "--template-id",
@@ -2813,7 +2813,7 @@ export const generatedRouteMap: RouteNode = {
                     properties: {
                       path: {
                         type: "string",
-                        description: "Field path; must match a {{marker}}",
+                        description: "Field path; must match a {{ marker }}",
                       },
                       label: {
                         type: "string",
@@ -3866,14 +3866,7 @@ export const generatedRouteMap: RouteNode = {
                           "Whether the paragraph is a template directive marker",
                       },
                       directive_kind: {
-                        enum: [
-                          "if",
-                          "elseif",
-                          "else",
-                          "endif",
-                          "each",
-                          "endeach",
-                        ],
+                        enum: ["if", "elif", "else", "endif", "for", "endfor"],
                         type: "string",
                         description: "Directive kind when is_directive is set",
                       },
@@ -7263,7 +7256,7 @@ export const generatedRouteMap: RouteNode = {
                                     type: "string",
                                   },
                                   {
-                                    const: "elseif",
+                                    const: "elif",
                                     type: "string",
                                   },
                                   {
@@ -7275,11 +7268,11 @@ export const generatedRouteMap: RouteNode = {
                                     type: "string",
                                   },
                                   {
-                                    const: "each",
+                                    const: "for",
                                     type: "string",
                                   },
                                   {
-                                    const: "endeach",
+                                    const: "endfor",
                                     type: "string",
                                   },
                                 ],
@@ -7648,7 +7641,7 @@ export const generatedRouteMap: RouteNode = {
                                     type: "string",
                                   },
                                   {
-                                    const: "elseif",
+                                    const: "elif",
                                     type: "string",
                                   },
                                   {
@@ -7660,11 +7653,11 @@ export const generatedRouteMap: RouteNode = {
                                     type: "string",
                                   },
                                   {
-                                    const: "each",
+                                    const: "for",
                                     type: "string",
                                   },
                                   {
-                                    const: "endeach",
+                                    const: "endfor",
                                     type: "string",
                                   },
                                 ],
@@ -7929,7 +7922,7 @@ export const generatedRouteMap: RouteNode = {
                                     type: "string",
                                   },
                                   {
-                                    const: "elseif",
+                                    const: "elif",
                                     type: "string",
                                   },
                                   {
@@ -7941,11 +7934,11 @@ export const generatedRouteMap: RouteNode = {
                                     type: "string",
                                   },
                                   {
-                                    const: "each",
+                                    const: "for",
                                     type: "string",
                                   },
                                   {
-                                    const: "endeach",
+                                    const: "endfor",
                                     type: "string",
                                   },
                                 ],
@@ -8120,7 +8113,7 @@ export const generatedRouteMap: RouteNode = {
                                     type: "string",
                                   },
                                   {
-                                    const: "elseif",
+                                    const: "elif",
                                     type: "string",
                                   },
                                   {
@@ -8132,11 +8125,11 @@ export const generatedRouteMap: RouteNode = {
                                     type: "string",
                                   },
                                   {
-                                    const: "each",
+                                    const: "for",
                                     type: "string",
                                   },
                                   {
-                                    const: "endeach",
+                                    const: "endfor",
                                     type: "string",
                                   },
                                 ],
@@ -8392,7 +8385,7 @@ export const generatedRouteMap: RouteNode = {
                                     type: "string",
                                   },
                                   {
-                                    const: "elseif",
+                                    const: "elif",
                                     type: "string",
                                   },
                                   {
@@ -8404,11 +8397,11 @@ export const generatedRouteMap: RouteNode = {
                                     type: "string",
                                   },
                                   {
-                                    const: "each",
+                                    const: "for",
                                     type: "string",
                                   },
                                   {
-                                    const: "endeach",
+                                    const: "endfor",
                                     type: "string",
                                   },
                                 ],
@@ -38357,7 +38350,7 @@ export const generatedRouteMap: RouteNode = {
                                         type: "string",
                                       },
                                       {
-                                        const: "elseif",
+                                        const: "elif",
                                         type: "string",
                                       },
                                       {
@@ -38369,11 +38362,11 @@ export const generatedRouteMap: RouteNode = {
                                         type: "string",
                                       },
                                       {
-                                        const: "each",
+                                        const: "for",
                                         type: "string",
                                       },
                                       {
-                                        const: "endeach",
+                                        const: "endfor",
                                         type: "string",
                                       },
                                     ],
