@@ -799,32 +799,27 @@
   },
   {
     "cli": {
-      "command": ["template", "save"],
+      "command": ["template", "create"],
       "scope": "templates"
     },
-    "name": "save_template",
-    "description": "Create a template from a DOCX or configure its fields. For creation, pass a name and file (preferred, up to 50 MB) or original bytes as docx_base64 (max 196608 bytes decoded within the 524288-byte MCP request frame); never retype the file or strip parts out to fit. {{field}} markers become fillable. For configuration, pass template_id and fields without a document; markers stay intact. Read stella://reference/template-markers before authoring a DOCX and stella://reference/template-fields before configuring fields. Returns id and field count on creation, updated fields on configuration, and marker-authoring warnings.",
+    "name": "create_template",
+    "description": "Create a template from a DOCX. Pass a name and either file (preferred, up to 50 MB) or the original bytes as docx_base64 (max 196608 bytes decoded within the 524288-byte MCP request frame); never retype the file or strip parts out to fit. Every {{marker}} in the document becomes a fillable field. Read stella://reference/template-markers before authoring the DOCX. Returns the template id, the discovered fields, arrays, conditions and computed values, and marker-authoring warnings. Then call configure_template_fields to say who fills each field.",
     "inputSchema": {
       "type": "object",
-      "required": [],
+      "required": ["name"],
       "additionalProperties": false,
       "properties": {
-        "template_id": {
-          "type": "string",
-          "format": "uuid",
-          "description": "Template to configure; omit when creating"
-        },
         "name": {
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Display name; required when creating"
+          "description": "Display name for the template"
         },
         "docx_base64": {
           "type": "string",
           "minLength": 1,
           "maxLength": 262144,
-          "description": "Original .docx bytes, base64-encoded verbatim; the fallback for creating when the host cannot supply 'file'. Never strip parts out of the file to shrink it."
+          "description": "Original .docx bytes, base64-encoded verbatim; the fallback when the host cannot supply 'file'. Never strip parts out of the file to shrink it."
         },
         "file": {
           "type": "object",
@@ -849,6 +844,31 @@
           "required": ["download_url", "file_id"],
           "additionalProperties": false,
           "description": "File reference supplied by a compatible MCP host"
+        }
+      }
+    },
+    "annotations": {
+      "title": "Create template",
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "cli": {
+      "command": ["template", "configure-fields"],
+      "scope": "templates"
+    },
+    "name": "configure_template_fields",
+    "description": "Configure the fields of an existing template: who fills each one, its input control, options and validation. The document's {{markers}} are never touched, only the field configuration. Pass template_id and one entry per field path; every path must already exist as a marker. Read stella://reference/template-fields first. Returns the template's full field configuration after the change.",
+    "inputSchema": {
+      "type": "object",
+      "required": ["template_id", "fields"],
+      "additionalProperties": false,
+      "properties": {
+        "template_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Template to configure, as returned by create_template or list_templates"
         },
         "fields": {
           "type": "array",
@@ -1192,13 +1212,13 @@
             "required": ["path"],
             "additionalProperties": false
           },
-          "description": "Field configuration overlay; see stella://reference/template-fields"
+          "description": "Field configuration entries; see stella://reference/template-fields"
         }
       }
     },
     "annotations": {
-      "title": "Save template",
-      "idempotentHint": false,
+      "title": "Configure template fields",
+      "idempotentHint": true,
       "openWorldHint": false
     }
   },

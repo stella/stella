@@ -21,7 +21,7 @@ import type { templateFieldInputSchema } from "@/api/mcp/template-field-input";
 import { TEMPLATE_MARKER_REFERENCE_URI } from "@/api/mcp/template-marker-reference";
 
 /**
- * Human-readable reference for `save_template`'s `fields` overlay. Every MCP
+ * Human-readable reference for `configure_template_fields`. Every MCP
  * client pays a tool's advertised `inputSchema` on connect, so the
  * per-property guidance lives here — pulled on demand — while the schema
  * carries the structure plus one short line per property.
@@ -133,7 +133,7 @@ export const buildFieldReference = (): string => {
   const bindingLines = BINDING_SOURCE_KINDS.map(renderBindingSource).join("\n");
 
   return [
-    "stella template field configuration (`save_template` `fields`)",
+    "stella template field configuration (`configure_template_fields`)",
     "",
     "Markers decide WHICH values are fillable; a field configuration decides " +
       "how each one behaves. Configuration never lives in the DOCX. See " +

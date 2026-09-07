@@ -23,7 +23,7 @@ export const MAX_TOOLS = 200;
 // Depth/enum caps bound recursion and abuse; they must clear the first-party
 // registry with headroom (the `registry snapshot validates` test in
 // registry-trust.test.ts fails closed if a shipped schema outgrows either cap).
-// The deepest baked-in schema is `save_template` (depth 7); the largest enum is
+// The deepest baked-in schema is `configure_template_fields` (depth 7); the largest enum is
 // `set_practice_jurisdictions` (250). Both were raised from their spec S5.5
 // starting values (depth 6, enum 200) once the real registry exceeded them.
 /** Reject an `inputSchema` nested deeper than this. */

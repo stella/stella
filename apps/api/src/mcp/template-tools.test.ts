@@ -251,7 +251,7 @@ const WORKSPACE_ID = "00000000-0000-4000-8000-000000000009";
 const fakeTransaction = asTestRaw<Transaction>({});
 
 /** A real, minimal valid DOCX (well-formed word/document.xml) as base64, so
- *  save_template (create) exercises the real validateDocxBuffer — no module mock to
+ *  create_template exercises the real validateDocxBuffer — no module mock to
  *  leak across test files. */
 const makeValidDocxBytes = async (
   paragraphs: readonly string[] = ["{{name}}"],
@@ -272,6 +272,24 @@ const makeValidDocxBase64 = async (
   paragraphs: readonly string[] = ["{{name}}"],
 ): Promise<string> =>
   Buffer.from(await makeValidDocxBytes(paragraphs)).toString("base64");
+
+/**
+ * The describe payload `describeStoredTemplate` produces, which both authoring
+ * tools hand back verbatim. The warning and field computation itself belongs to
+ * that producer (and is covered where it lives); here it pins that both tools
+ * serve exactly what list_templates' detail mode serves.
+ */
+const describedTemplate = (
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> => ({
+  name: "NDA",
+  fields: [],
+  conditions: [],
+  computed: [],
+  arrays: [],
+  warnings: [],
+  ...overrides,
+});
 
 /** A host file reference pointing at `bytes`, as an MCP host would supply. */
 const hostFileResponse = (bytes: Uint8Array) =>
@@ -352,19 +370,25 @@ describe("MCP template tools", () => {
     const names = (await listMcpTools(createContext())).map(
       (tool) => tool.name,
     );
-    // list_templates absorbed describe_template (M2); save_template absorbed
-    // create_template + configure_template_fields (M3); template_marker_reference
-    // moved to an MCP resource (M5).
+    // list_templates absorbed describe_template (M2); template authoring is two
+    // intent-shaped tools, create_template and configure_template_fields, in
+    // place of the one save_template that advertised both branches;
+    // template_marker_reference moved to an MCP resource (M5).
     expect(names).toContain("list_templates");
     expect(names).toContain("fill_template");
     expect(names).toContain("save_filled_template");
-    expect(names).toContain("save_template");
+    expect(names).toContain("create_template");
+    expect(names).toContain("configure_template_fields");
     expect(names).not.toContain("describe_template");
-    expect(names).not.toContain("create_template");
-    expect(names).not.toContain("configure_template_fields");
+    expect(names).not.toContain("save_template");
     expect(names).not.toContain("template_marker_reference");
 
-    for (const name of ["list_templates", "fill_template", "save_template"]) {
+    for (const name of [
+      "list_templates",
+      "fill_template",
+      "create_template",
+      "configure_template_fields",
+    ]) {
       expect((await getMcpToolDefinition(name, createContext()))?.scope).toBe(
         "stella:templates",
       );
@@ -388,7 +412,8 @@ describe("MCP template tools", () => {
     expect(names).toContain("list_templates");
     expect(names).not.toContain("fill_template");
     expect(names).not.toContain("save_filled_template");
-    expect(names).not.toContain("save_template");
+    expect(names).not.toContain("create_template");
+    expect(names).not.toContain("configure_template_fields");
   });
 
   test("the projected template tool carries the anonymized templates scope", async () => {
@@ -400,22 +425,42 @@ describe("MCP template tools", () => {
     expect(definition?.scope).toBe("stella:templates_anonymized");
   });
 
-  test("save_template's description names both reference resource URIs", async () => {
-    const saveTemplate = await getMcpToolDefinition(
-      "save_template",
+  test("each authoring tool's description names the reference resource it needs", async () => {
+    const createTemplate = await getMcpToolDefinition(
+      "create_template",
+      createContext(),
+    );
+    const configureFields = await getMcpToolDefinition(
+      "configure_template_fields",
       createContext(),
     );
     // The grammar and the per-property field guidance stay in the resources:
-    // the description carries only the tool contract plus the URIs an agent
-    // can read them from.
-    expect(saveTemplate?.description).toContain(TEMPLATE_MARKER_REFERENCE_URI);
-    expect(saveTemplate?.description).toContain(TEMPLATE_FIELD_REFERENCE_URI);
-    expect(saveTemplate?.description).not.toContain("{{@clause:");
+    // each description carries only its own tool contract plus the URI an
+    // agent can read the rest from. Authoring the DOCX is the marker
+    // reference; configuring who fills a field is the field reference.
+    expect(createTemplate?.description).toContain(
+      TEMPLATE_MARKER_REFERENCE_URI,
+    );
+    expect(createTemplate?.description).not.toContain("{{@clause:");
+    expect(configureFields?.description).toContain(
+      TEMPLATE_FIELD_REFERENCE_URI,
+    );
+    expect(configureFields?.description).not.toContain("{{@clause:");
   });
 
-  test("save_template advertises its host-file and inline limits, and forbids trimming the file to fit", async () => {
-    const saveTemplate = await getMcpToolDefinition(
-      "save_template",
+  test("create_template points the agent at the field configuration step", async () => {
+    // The split is only navigable if creating names what comes next: an agent
+    // that stops after create leaves every field unassigned.
+    const createTemplate = await getMcpToolDefinition(
+      "create_template",
+      createContext(),
+    );
+    expect(createTemplate?.description).toContain("configure_template_fields");
+  });
+
+  test("create_template advertises its host-file and inline limits, and forbids trimming the file to fit", async () => {
+    const createTemplate = await getMcpToolDefinition(
+      "create_template",
       createContext(),
     );
     const enforcedMegabytes = Math.floor(
@@ -424,13 +469,13 @@ describe("MCP template tools", () => {
     const inlineDocxBytes = Math.floor(
       (Math.floor(MCP_MAX_REQUEST_BODY_BYTES / 2) / 4) * 3,
     );
-    expect(saveTemplate?.description).toContain(
+    expect(createTemplate?.description).toContain(
       `up to ${enforcedMegabytes} MB`,
     );
-    expect(saveTemplate?.description).toContain(
+    expect(createTemplate?.description).toContain(
       `max ${inlineDocxBytes} bytes decoded within the ${MCP_MAX_REQUEST_BODY_BYTES}-byte MCP request frame`,
     );
-    expect(saveTemplate?.description).toContain(
+    expect(createTemplate?.description).toContain(
       "never retype the file or strip parts out to fit",
     );
   });
@@ -444,23 +489,23 @@ describe("MCP template tools", () => {
     expect(listTemplates?.description).not.toContain("options_from");
   });
 
-  test("save_template advertises the fields overlay pointing at the resource", async () => {
-    const saveTemplate = await getMcpToolDefinition(
-      "save_template",
+  test("configure_template_fields advertises the field entries pointing at the resource", async () => {
+    const configureFields = await getMcpToolDefinition(
+      "configure_template_fields",
       createContext(),
     );
-    const fields = saveTemplate?.inputSchema.properties?.["fields"];
+    const fields = configureFields?.inputSchema.properties?.["fields"];
     expect(isRecord(fields) ? fields["description"] : undefined).toContain(
       TEMPLATE_FIELD_REFERENCE_URI,
     );
   });
 
-  test("save_template keeps the full source union and every contact field key", async () => {
-    const saveTemplate = await getMcpToolDefinition(
-      "save_template",
+  test("configure_template_fields keeps the full source union and every contact field key", async () => {
+    const configureFields = await getMcpToolDefinition(
+      "configure_template_fields",
       createContext(),
     );
-    const source = fieldOverlayProperty(saveTemplate?.inputSchema, "source");
+    const source = fieldOverlayProperty(configureFields?.inputSchema, "source");
     const branches = isRecord(source) ? source["anyOf"] : undefined;
     expect(Array.isArray(branches) ? branches.length : 0).toBe(5);
     // Moving the prose out must not narrow what the schema accepts: the
@@ -475,7 +520,8 @@ describe("MCP template tools", () => {
       "list_templates",
       "fill_template",
       "save_filled_template",
-      "save_template",
+      "create_template",
+      "configure_template_fields",
     ]) {
       const tool = await getMcpToolDefinition(name, createContext());
       collectOpenObjectPaths(tool?.inputSchema, name, openPaths);
@@ -2147,7 +2193,7 @@ describe("MCP template tools", () => {
     expect(createEntityFromBufferMock).not.toHaveBeenCalled();
   });
 
-  test("save_template (create) validates the DOCX and returns the new template id", async () => {
+  test("create_template validates the DOCX and returns the new template id", async () => {
     createStoredTemplateMock.mockImplementation(async function* () {
       yield* [];
       return Result.ok({
@@ -2156,12 +2202,15 @@ describe("MCP template tools", () => {
         fieldCount: 3,
       });
     });
+    describeStoredTemplateMock.mockResolvedValue(
+      describedTemplate({ name: "NDA" }),
+    );
 
     const docxBase64 = await makeValidDocxBase64();
     const result = await handleMcpToolCall({
       args: { name: "NDA", docx_base64: docxBase64 },
       context: createContext(),
-      toolName: "save_template",
+      toolName: "create_template",
     });
 
     expect(createStoredTemplateMock).toHaveBeenCalledWith(
@@ -2171,19 +2220,51 @@ describe("MCP template tools", () => {
         organizationId: toSafeId<"organization">("org_1"),
       }),
     );
+    // The id and the field count, then the describe payload list_templates'
+    // detail mode serves, so the agent can configure the fields it just
+    // created without a second round trip.
     expect(parseToolPayload(result)).toEqual({
       templateId: "tmpl_new",
-      name: "NDA",
       fieldCount: 3,
+      name: "NDA",
+      fields: [],
+      conditions: [],
+      computed: [],
+      arrays: [],
       warnings: [],
     });
+    expect(describeStoredTemplateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ templateId: "tmpl_new" }),
+    );
   });
 
-  test("save_template (create) reports marker authoring warnings with the saved template", async () => {
+  test("create_template reports marker authoring warnings with the created template", async () => {
     createStoredTemplateMock.mockImplementation(async function* () {
       yield* [];
       return Result.ok({ id: "tmpl_new", name: "POA", fieldCount: 2 });
     });
+    // Warnings ride on the describe payload: one producer computes them for
+    // create, configure and list_templates alike, so the three cannot report
+    // different advice about the same document.
+    describeStoredTemplateMock.mockResolvedValue(
+      describedTemplate({
+        name: "POA",
+        warnings: [
+          {
+            code: "unprefixed_item_path",
+            path: "name",
+            message: "{{name}} inside {{#each attorneys}} is not item-scoped",
+            hint: "Write {{attorneys.name}}.",
+          },
+          {
+            code: "unknown_directive",
+            path: "{{#endeach}}",
+            message: "{{#endeach}} is not a directive",
+            hint: "Close the loop with {{/each}}.",
+          },
+        ],
+      }),
+    );
 
     const result = await handleMcpToolCall({
       args: {
@@ -2195,10 +2276,10 @@ describe("MCP template tools", () => {
         ]),
       },
       context: createContext(),
-      toolName: "save_template",
+      toolName: "create_template",
     });
 
-    // The save still happens: warnings advise, they never block.
+    // The create still happens: warnings advise, they never block.
     expect(createStoredTemplateMock).toHaveBeenCalledTimes(1);
     expect(parseToolPayload(result)).toMatchObject({
       templateId: "tmpl_new",
@@ -2209,18 +2290,21 @@ describe("MCP template tools", () => {
     });
   });
 
-  test("save_template (create) reads the DOCX from a host file reference", async () => {
+  test("create_template reads the DOCX from a host file reference", async () => {
     createStoredTemplateMock.mockImplementation(async function* () {
       yield* [];
       return Result.ok({ id: "tmpl_hosted", name: "NDA", fieldCount: 1 });
     });
+    describeStoredTemplateMock.mockResolvedValue(
+      describedTemplate({ name: "NDA" }),
+    );
     const bytes = await makeValidDocxBytes();
     safeOutboundFetchBytesMock.mockResolvedValue(hostFileResponse(bytes));
 
     const result = await handleMcpToolCall({
       args: { name: "NDA", file: HOST_FILE_REFERENCE },
       context: createContext(),
-      toolName: "save_template",
+      toolName: "create_template",
     });
 
     // Same SSRF-vetted fetch and byte ceiling the document upload uses.
@@ -2238,15 +2322,15 @@ describe("MCP template tools", () => {
         buffer: Buffer.from(bytes),
       }),
     );
-    expect(parseToolPayload(result)).toEqual({
+    expect(parseToolPayload(result)).toMatchObject({
       templateId: "tmpl_hosted",
-      name: "NDA",
       fieldCount: 1,
+      name: "NDA",
       warnings: [],
     });
   });
 
-  test("save_template (create) rejects host-file bytes that are not a DOCX", async () => {
+  test("create_template rejects host-file bytes that are not a DOCX", async () => {
     safeOutboundFetchBytesMock.mockResolvedValue(
       hostFileResponse(new TextEncoder().encode("not a docx")),
     );
@@ -2254,7 +2338,7 @@ describe("MCP template tools", () => {
     const result = await handleMcpToolCall({
       args: { name: "NDA", file: HOST_FILE_REFERENCE },
       context: createContext(),
-      toolName: "save_template",
+      toolName: "create_template",
     });
 
     expect(result.isError).toBe(true);
@@ -2269,7 +2353,7 @@ describe("MCP template tools", () => {
     expect(createStoredTemplateMock).not.toHaveBeenCalled();
   });
 
-  test("save_template (create) reports a host file it cannot download", async () => {
+  test("create_template reports a host file it cannot download", async () => {
     safeOutboundFetchBytesMock.mockResolvedValue(
       Result.err(new Error("blocked")),
     );
@@ -2277,7 +2361,7 @@ describe("MCP template tools", () => {
     const result = await handleMcpToolCall({
       args: { name: "NDA", file: HOST_FILE_REFERENCE },
       context: createContext(),
-      toolName: "save_template",
+      toolName: "create_template",
     });
 
     expect(result.isError).toBe(true);
@@ -2289,14 +2373,14 @@ describe("MCP template tools", () => {
     expect(createStoredTemplateMock).not.toHaveBeenCalled();
   });
 
-  test("save_template (create) rejects an invalid DOCX before inserting", async () => {
+  test("create_template rejects an invalid DOCX before inserting", async () => {
     const result = await handleMcpToolCall({
       args: {
         name: "NDA",
         docx_base64: Buffer.from("not a docx").toString("base64"),
       },
       context: createContext(),
-      toolName: "save_template",
+      toolName: "create_template",
     });
 
     const error = validationEnvelope(result);
@@ -2307,7 +2391,7 @@ describe("MCP template tools", () => {
     expect(createStoredTemplateMock).not.toHaveBeenCalled();
   });
 
-  test("save_template (create) blames the encoding, not the file, when the archive will not open", async () => {
+  test("create_template blames the encoding, not the file, when the archive will not open", async () => {
     // The failure a model-driven client actually produces: the payload is
     // well-formed base64 but decodes to bytes that are no longer a readable
     // archive.
@@ -2320,7 +2404,7 @@ describe("MCP template tools", () => {
     const result = await handleMcpToolCall({
       args: { name: "NDA", docx_base64: truncated.toString("base64") },
       context: createContext(),
-      toolName: "save_template",
+      toolName: "create_template",
     });
 
     const error = validationEnvelope(result);
@@ -2337,7 +2421,7 @@ describe("MCP template tools", () => {
     expect(createStoredTemplateMock).not.toHaveBeenCalled();
   });
 
-  test("save_template (create) hints per failure: a readable archive missing the main part is not an encoding problem", async () => {
+  test("create_template hints per failure: a readable archive missing the main part is not an encoding problem", async () => {
     const withoutDocumentXml = Buffer.from(
       await new JSZip()
         .file("word/styles.xml", "<styles/>")
@@ -2350,7 +2434,7 @@ describe("MCP template tools", () => {
         docx_base64: withoutDocumentXml.toString("base64"),
       },
       context: createContext(),
-      toolName: "save_template",
+      toolName: "create_template",
     });
 
     const error = validationEnvelope(result);
@@ -2359,7 +2443,7 @@ describe("MCP template tools", () => {
     expect(createStoredTemplateMock).not.toHaveBeenCalled();
   });
 
-  test("save_template (create) hints per failure: an archive past the unpack bounds is not an encoding problem", async () => {
+  test("create_template hints per failure: an archive past the unpack bounds is not an encoding problem", async () => {
     const zip = new JSZip();
     zip.file("word/document.xml", `<w:document xmlns:w="${W_NS}"/>`);
     for (let index = 0; index < DOCX_MAX_ENTRIES; index += 1) {
@@ -2374,7 +2458,7 @@ describe("MCP template tools", () => {
     const result = await handleMcpToolCall({
       args: { name: "NDA", file: HOST_FILE_REFERENCE },
       context: createContext(),
-      toolName: "save_template",
+      toolName: "create_template",
     });
 
     const error = validationEnvelope(result);
@@ -2386,7 +2470,7 @@ describe("MCP template tools", () => {
     expect(createStoredTemplateMock).not.toHaveBeenCalled();
   });
 
-  test("save_template (create) hints per failure: unparseable document XML is not an encoding problem", async () => {
+  test("create_template hints per failure: unparseable document XML is not an encoding problem", async () => {
     const malformed = Buffer.from(
       await new JSZip()
         .file(
@@ -2399,7 +2483,7 @@ describe("MCP template tools", () => {
     const result = await handleMcpToolCall({
       args: { name: "NDA", docx_base64: malformed.toString("base64") },
       context: createContext(),
-      toolName: "save_template",
+      toolName: "create_template",
     });
 
     const error = validationEnvelope(result);
@@ -2410,14 +2494,14 @@ describe("MCP template tools", () => {
     expect(createStoredTemplateMock).not.toHaveBeenCalled();
   });
 
-  test("save_template (create) forbids members without template:create permission", async () => {
+  test("create_template forbids members without template:create permission", async () => {
     const result = await handleMcpToolCall({
       args: {
         name: "NDA",
-        docx_base64: Buffer.from("PK").toString("base64"),
+        docx_base64: Buffer.from("PK").toString("base64"),
       },
       context: createContext({ memberRole: "intern" }),
-      toolName: "save_template",
+      toolName: "create_template",
     });
 
     expect(result.isError).toBe(true);
@@ -2425,16 +2509,49 @@ describe("MCP template tools", () => {
     expect(createStoredTemplateMock).not.toHaveBeenCalled();
   });
 
-  test("save_template (create) passes a validated fields overlay (incl. a lookup field) to the service", async () => {
+  test("create_template surfaces the create service's rejection with the entries it names", async () => {
     createStoredTemplateMock.mockImplementation(async function* () {
       yield* [];
-      return Result.ok({ id: "tmpl_new", name: "Company POA", fieldCount: 1 });
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Template name is already taken.",
+          issues: [
+            { path: "name", message: "Template name is already taken." },
+          ],
+        }),
+      );
     });
 
     const result = await handleMcpToolCall({
+      args: { name: "NDA", docx_base64: await makeValidDocxBase64() },
+      context: createContext(),
+      toolName: "create_template",
+    });
+
+    expect(result.isError).toBe(true);
+    // The rejection reaches the agent as the structured envelope, naming the
+    // input it sent — not as one line of bare prose it would have to parse.
+    const error = validationEnvelope(result);
+    expect(error["code"]).toBe("validation_error");
+    expect(error["issues"]).toEqual([
+      { path: "name", message: "Template name is already taken." },
+    ]);
+    expect(describeStoredTemplateMock).not.toHaveBeenCalled();
+  });
+
+  test("configure_template_fields passes a validated field entry (incl. a lookup source) to the service", async () => {
+    configureTemplateFieldsMock.mockImplementation(async function* () {
+      yield* [];
+      return Result.ok({ manifest: { version: 1, fields: [] } });
+    });
+    describeStoredTemplateMock.mockResolvedValue(
+      describedTemplate({ name: "Company POA" }),
+    );
+
+    const result = await handleMcpToolCall({
       args: {
-        name: "Company POA",
-        docx_base64: await makeValidDocxBase64(),
+        template_id: TEMPLATE_ID,
         fields: [
           {
             path: "company",
@@ -2452,41 +2569,58 @@ describe("MCP template tools", () => {
         ],
       },
       context: createContext(),
-      toolName: "save_template",
+      toolName: "configure_template_fields",
     });
 
     expect(result.isError).toBeFalsy();
-    expect(createStoredTemplateMock).toHaveBeenCalledWith(
+    // Every named format survives the wire-to-manifest mapping: a dropped one
+    // leaves its {{company.address}} marker unfilled at render time.
+    expect(configureTemplateFieldsMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        clientManifest: {
-          fields: [
-            expect.objectContaining({
-              path: "company",
-              lookup: {
-                registry: "krs",
-                formats: [
-                  { key: "default", template: "[name], KRS [krs]" },
-                  { key: "address", template: "[seat]" },
-                ],
-              },
-            }),
-          ],
-        },
+        fields: [
+          expect.objectContaining({
+            path: "company",
+            lookup: {
+              registry: "krs",
+              formats: [
+                { key: "default", template: "[name], KRS [krs]" },
+                { key: "address", template: "[seat]" },
+              ],
+            },
+          }),
+        ],
       }),
     );
   });
 
-  test("save_template (create) reports a lookup the org cannot resolve and a format with no marker", async () => {
-    createStoredTemplateMock.mockImplementation(async function* () {
+  test("configure_template_fields reports a lookup the org cannot resolve and a format with no marker", async () => {
+    configureTemplateFieldsMock.mockImplementation(async function* () {
       yield* [];
-      return Result.ok({ id: "tmpl_new", name: "Company POA", fieldCount: 1 });
+      return Result.ok({ manifest: { version: 1, fields: [] } });
     });
+    describeStoredTemplateMock.mockResolvedValue(
+      describedTemplate({
+        name: "Company POA",
+        warnings: [
+          {
+            code: "unmatched_lookup_format",
+            path: "company.address",
+            message: "No {{company.address}} marker places this format",
+            hint: "Place the marker or drop the format.",
+          },
+          {
+            code: "registry_disabled",
+            path: "company",
+            message: "The krs registry is not enabled for this organization",
+            hint: "Enable it in the practice jurisdictions.",
+          },
+        ],
+      }),
+    );
 
     const result = await handleMcpToolCall({
       args: {
-        name: "Company POA",
-        // {{company}} places the default format; nothing places `address`.
-        docx_base64: await makeValidDocxBase64(["{{company}}"]),
+        template_id: TEMPLATE_ID,
         fields: [
           {
             path: "company",
@@ -2502,11 +2636,11 @@ describe("MCP template tools", () => {
         ],
       },
       context: createContext(),
-      toolName: "save_template",
+      toolName: "configure_template_fields",
     });
 
-    // The config is still saved: the org can enable the registry later.
-    expect(createStoredTemplateMock).toHaveBeenCalledTimes(1);
+    // The configuration is still saved: the org can enable the registry later.
+    expect(configureTemplateFieldsMock).toHaveBeenCalledTimes(1);
     expect(parseToolPayload(result)).toMatchObject({
       warnings: [
         { code: "unmatched_lookup_format", path: "company.address" },
@@ -2515,32 +2649,28 @@ describe("MCP template tools", () => {
     });
   });
 
-  test("save_template (create) rejects a malformed field config before inserting", async () => {
-    const docxBase64 = await makeValidDocxBase64();
-
+  test("configure_template_fields rejects a malformed field config before configuring", async () => {
     const result = await handleMcpToolCall({
       args: {
-        name: "NDA",
-        docx_base64: docxBase64,
+        template_id: TEMPLATE_ID,
         // formula is mutually exclusive with ai_prompt, so isFieldMeta rejects it.
         fields: [{ path: "fee", formula: "rent * 12", ai_prompt: "draft it" }],
       },
       context: createContext(),
-      toolName: "save_template",
+      toolName: "configure_template_fields",
     });
 
     expect(result.isError).toBe(true);
-    expect(createStoredTemplateMock).not.toHaveBeenCalled();
+    expect(configureTemplateFieldsMock).not.toHaveBeenCalled();
     const error = validationEnvelope(result);
     const issues = asTestRaw<{ path: string }[]>(error["issues"]);
     expect(issues.some(({ path }) => path === "fields.0")).toBe(true);
   });
 
-  test("save_template rejects conflicting derived source modes", async () => {
+  test("configure_template_fields rejects conflicting derived source modes", async () => {
     const result = await handleMcpToolCall({
       args: {
-        name: "NDA",
-        docx_base64: await makeValidDocxBase64(),
+        template_id: TEMPLATE_ID,
         fields: [
           {
             path: "company",
@@ -2553,11 +2683,11 @@ describe("MCP template tools", () => {
         ],
       },
       context: createContext(),
-      toolName: "save_template",
+      toolName: "configure_template_fields",
     });
 
     expect(result.isError).toBe(true);
-    expect(createStoredTemplateMock).not.toHaveBeenCalled();
+    expect(configureTemplateFieldsMock).not.toHaveBeenCalled();
     const error = validationEnvelope(result);
     const issues = asTestRaw<{ path: string; message: string }[]>(
       error["issues"],
@@ -2571,20 +2701,20 @@ describe("MCP template tools", () => {
     expect(conflict?.message).toContain('"company"');
   });
 
-  test("save_template reads a null-padded field entry as a plain text field", async () => {
+  test("configure_template_fields reads a null-padded field entry as a plain text field", async () => {
     // GPT-family clients send `null` for every optional property they are not
     // setting. Null is absence here: without that, this entry reads as an
     // AI-drafted, conditioned, computed, looked-up, composite, bound field all
     // at once and is refused for conflicting derived sources.
-    createStoredTemplateMock.mockImplementation(async function* () {
+    configureTemplateFieldsMock.mockImplementation(async function* () {
       yield* [];
-      return Result.ok({ id: "tmpl_new", name: "NDA", fieldCount: 1 });
+      return Result.ok({ manifest: { version: 1, fields: [] } });
     });
+    describeStoredTemplateMock.mockResolvedValue(describedTemplate());
 
     const result = await handleMcpToolCall({
       args: {
-        name: "NDA",
-        docx_base64: await makeValidDocxBase64(),
+        template_id: TEMPLATE_ID,
         fields: [
           {
             path: "name",
@@ -2609,134 +2739,95 @@ describe("MCP template tools", () => {
         ],
       },
       context: createContext(),
-      toolName: "save_template",
+      toolName: "configure_template_fields",
     });
 
     expect(result.isError).not.toBe(true);
-    expect(createStoredTemplateMock).toHaveBeenCalledWith(
+    expect(configureTemplateFieldsMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        clientManifest: {
-          fields: [
-            {
-              path: "name",
-              label: "Client name",
-              validation: { required: true },
-            },
-          ],
-        },
+        fields: [
+          {
+            path: "name",
+            label: "Client name",
+            validation: { required: true },
+          },
+        ],
       }),
     );
   });
 
-  test("save_template still rejects a misspelled key that carries null", async () => {
+  test("configure_template_fields still rejects a misspelled key that carries null", async () => {
     // Null is absence only for a property the surface declares: dropping it
     // for any key would turn `lable: null` into a silently accepted typo.
     const result = await handleMcpToolCall({
       args: {
-        name: "NDA",
-        docx_base64: await makeValidDocxBase64(),
+        template_id: TEMPLATE_ID,
         fields: [{ path: "name", lable: null }],
       },
       context: createContext(),
-      toolName: "save_template",
+      toolName: "configure_template_fields",
     });
 
     expect(result.isError).toBe(true);
-    expect(createStoredTemplateMock).not.toHaveBeenCalled();
+    expect(configureTemplateFieldsMock).not.toHaveBeenCalled();
     const issues = asTestRaw<{ path: string }[]>(
       validationEnvelope(result)["issues"],
     );
     expect(issues.some(({ path }) => path === "fields.0.lable")).toBe(true);
   });
 
-  test("save_template rejects unknown field metadata keys before inserting", async () => {
+  test("configure_template_fields rejects unknown field metadata keys before configuring", async () => {
     const result = await handleMcpToolCall({
       args: {
-        name: "NDA",
-        docx_base64: await makeValidDocxBase64(),
+        template_id: TEMPLATE_ID,
         fields: [{ path: "fee", lable: "Misspelled label" }],
       },
       context: createContext(),
-      toolName: "save_template",
+      toolName: "configure_template_fields",
     });
 
     expect(result.isError).toBe(true);
-    expect(createStoredTemplateMock).not.toHaveBeenCalled();
+    expect(configureTemplateFieldsMock).not.toHaveBeenCalled();
     const error = validationEnvelope(result);
     const issues = asTestRaw<{ path: string }[]>(error["issues"]);
     expect(issues.some(({ path }) => path === "fields.0.lable")).toBe(true);
   });
 
-  test("save_template (create) surfaces the service's unknown-path rejection", async () => {
-    createStoredTemplateMock.mockImplementation(async function* () {
-      yield* [];
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "No marker {{ghost}} in the DOCX.",
-          issues: [
-            { path: "fields.0", message: "No marker {{ghost}} in the DOCX." },
-          ],
-        }),
-      );
-    });
-
-    const result = await handleMcpToolCall({
-      args: {
-        name: "NDA",
-        docx_base64: await makeValidDocxBase64(),
-        fields: [{ path: "ghost", label: "Ghost" }],
-      },
-      context: createContext(),
-      toolName: "save_template",
-    });
-
-    expect(result.isError).toBe(true);
-    // The rejection reaches the agent as the structured envelope, naming the
-    // entry it sent — not as one line of bare prose it would have to parse.
-    const error = validationEnvelope(result);
-    expect(error["message"]).toContain("ghost");
-    expect(error["code"]).toBe("validation_error");
-    expect(error["issues"]).toEqual([
-      { path: "fields.0", message: "No marker {{ghost}} in the DOCX." },
-    ]);
-  });
-
-  test("save_template (configure) applies the overlay and returns the updated fields", async () => {
+  test("configure_template_fields applies the overlay and returns the updated fields", async () => {
     configureTemplateFieldsMock.mockImplementation(async function* () {
       yield* [];
       return Result.ok({
         manifest: { version: 1, fields: [] },
       });
     });
-    describeStoredTemplateMock.mockResolvedValue({
-      name: "Company POA",
-      fields: [
-        {
-          path: "company",
-          label: "Company",
-          inputType: "text",
-          required: true,
-          hint: null,
-          options: null,
-          lookup: {
-            registry: "krs",
-            formats: [{ key: "default", template: "[name], KRS [krs]" }],
+    describeStoredTemplateMock.mockResolvedValue(
+      describedTemplate({
+        name: "Company POA",
+        fields: [
+          {
+            path: "company",
+            label: "Company",
+            inputType: "text",
+            required: true,
+            hint: null,
+            options: null,
+            lookup: {
+              registry: "krs",
+              formats: [{ key: "default", template: "[name], KRS [krs]" }],
+            },
+            validation: null,
+            source: null,
+            aiSeesDocument: false,
+            aiPrompt: null,
+            aiAdapt: false,
+            optionsFrom: null,
+            dateFormat: null,
+            parts: null,
+            format: null,
           },
-          validation: null,
-          source: null,
-          aiSeesDocument: false,
-          aiPrompt: null,
-          aiAdapt: false,
-          optionsFrom: null,
-          dateFormat: null,
-          parts: null,
-          format: null,
-        },
-      ],
-      conditions: [],
-      computed: [],
-    });
+        ],
+      }),
+    );
 
     const result = await handleMcpToolCall({
       args: {
@@ -2752,7 +2843,7 @@ describe("MCP template tools", () => {
         ],
       },
       context: createContext(),
-      toolName: "save_template",
+      toolName: "configure_template_fields",
     });
 
     expect(result.isError).toBeFalsy();
@@ -2788,28 +2879,22 @@ describe("MCP template tools", () => {
 
   /**
    * A strict tool-schema client must send every declared property, so it sends
-   * `null` for the ones it is not setting. Both branches of save_template have
-   * to read those nulls as omissions, or a configure call collides with the
-   * create rules and every derived-source property collides with the others.
+   * `null` for the ones it is not setting. Both authoring tools have to read
+   * those nulls as omissions, or a field entry collides with the source rules
+   * and a create collides with the one-document-source rule.
    */
-  test("save_template (configure) accepts a strict client's nulls for the properties it does not set", async () => {
+  test("configure_template_fields accepts a strict client's nulls for the properties it does not set", async () => {
     configureTemplateFieldsMock.mockImplementation(async function* () {
       yield* [];
       return Result.ok({ manifest: { version: 1, fields: [] } });
     });
-    describeStoredTemplateMock.mockResolvedValue({
-      name: "Company POA",
-      fields: [],
-      conditions: [],
-      computed: [],
-    });
+    describeStoredTemplateMock.mockResolvedValue(
+      describedTemplate({ name: "Company POA" }),
+    );
 
     const result = await handleMcpToolCall({
       args: {
         template_id: TEMPLATE_ID,
-        name: null,
-        docx_base64: null,
-        file: null,
         fields: [
           {
             path: "company",
@@ -2834,7 +2919,7 @@ describe("MCP template tools", () => {
         ],
       },
       context: createContext(),
-      toolName: "save_template",
+      toolName: "configure_template_fields",
     });
 
     expect(result.isError).toBeFalsy();
@@ -2853,34 +2938,35 @@ describe("MCP template tools", () => {
     );
   });
 
-  test("save_template (create) accepts a strict client's nulls for template_id and the unused file property", async () => {
+  test("create_template accepts a strict client's null for the document source it did not use", async () => {
     createStoredTemplateMock.mockImplementation(async function* () {
       yield* [];
       return Result.ok({ id: "tmpl_new", name: "NDA", fieldCount: 3 });
     });
+    describeStoredTemplateMock.mockResolvedValue(
+      describedTemplate({ name: "NDA" }),
+    );
 
     const result = await handleMcpToolCall({
       args: {
-        template_id: null,
         name: "NDA",
         docx_base64: await makeValidDocxBase64(),
         file: null,
-        fields: null,
       },
       context: createContext(),
-      toolName: "save_template",
+      toolName: "create_template",
     });
 
     expect(result.isError).toBeFalsy();
-    expect(parseToolPayload(result)).toEqual({
+    expect(parseToolPayload(result)).toMatchObject({
       templateId: "tmpl_new",
-      name: "NDA",
       fieldCount: 3,
-      warnings: [],
+      name: "NDA",
     });
+    expect(safeOutboundFetchBytesMock).not.toHaveBeenCalled();
   });
 
-  test("save_template (configure) rejects a config whose path is unknown", async () => {
+  test("configure_template_fields rejects a config whose path is unknown", async () => {
     configureTemplateFieldsMock.mockImplementation(async function* () {
       yield* [];
       return Result.err(
@@ -2900,7 +2986,7 @@ describe("MCP template tools", () => {
         fields: [{ path: "ghost", label: "Ghost" }],
       },
       context: createContext(),
-      toolName: "save_template",
+      toolName: "configure_template_fields",
     });
 
     expect(result.isError).toBe(true);
@@ -2913,11 +2999,11 @@ describe("MCP template tools", () => {
     ]);
   });
 
-  test("save_template (configure) forbids members without template:create permission", async () => {
+  test("configure_template_fields forbids members without template:update permission", async () => {
     const result = await handleMcpToolCall({
       args: { template_id: TEMPLATE_ID, fields: [{ path: "company" }] },
       context: createContext({ memberRole: "intern" }),
-      toolName: "save_template",
+      toolName: "configure_template_fields",
     });
 
     expect(result.isError).toBe(true);
@@ -2948,24 +3034,23 @@ describe("MCP template tools", () => {
     expect(describeStoredTemplateMock).not.toHaveBeenCalled();
   });
 
-  test("save_template rejects a request with no DOCX source and no template_id", async () => {
+  test("create_template rejects a request with no document source", async () => {
     const result = await handleMcpToolCall({
       args: { name: "NDA" },
       context: createContext(),
-      toolName: "save_template",
+      toolName: "create_template",
     });
 
     expect(result.isError).toBe(true);
     const error = validationEnvelope(result);
     expect(error["code"]).toBe("validation_error");
-    expect(error["message"]).toBe(
-      "Provide file or docx_base64 to create a template, or template_id to configure an existing template's fields",
+    expect(error["message"]).toContain(
+      "Provide exactly one document source: file, or docx_base64",
     );
     expect(createStoredTemplateMock).not.toHaveBeenCalled();
-    expect(configureTemplateFieldsMock).not.toHaveBeenCalled();
   });
 
-  test("save_template rejects a request carrying both DOCX sources", async () => {
+  test("create_template rejects a request carrying both document sources", async () => {
     const result = await handleMcpToolCall({
       args: {
         name: "NDA",
@@ -2973,31 +3058,31 @@ describe("MCP template tools", () => {
         file: HOST_FILE_REFERENCE,
       },
       context: createContext(),
-      toolName: "save_template",
+      toolName: "create_template",
     });
 
     expect(result.isError).toBe(true);
     const error = validationEnvelope(result);
     expect(error["code"]).toBe("validation_error");
-    expect(error["message"]).toBe(
-      "Provide either file or docx_base64, not both",
-    );
     expect(error["issues"]).toEqual([
-      { path: "file", message: "Provide either file or docx_base64, not both" },
+      {
+        path: "docx_base64",
+        message: "Provide exactly one document source: file, or docx_base64",
+      },
     ]);
     expect(safeOutboundFetchBytesMock).not.toHaveBeenCalled();
     expect(createStoredTemplateMock).not.toHaveBeenCalled();
   });
 
-  test("save_template advertises file as a host file parameter", async () => {
-    const saveTemplate = (await listMcpTools(createContext())).find(
-      ({ name }) => name === "save_template",
+  test("create_template advertises file as a host file parameter", async () => {
+    const createTemplate = (await listMcpTools(createContext())).find(
+      ({ name }) => name === "create_template",
     );
 
-    expect(saveTemplate?._meta).toMatchObject({
+    expect(createTemplate?._meta).toMatchObject({
       "openai/fileParams": ["file"],
     });
-    expect(saveTemplate?.inputSchema).toMatchObject({
+    expect(createTemplate?.inputSchema).toMatchObject({
       properties: {
         file: {
           required: ["download_url", "file_id"],
@@ -3010,8 +3095,8 @@ describe("MCP template tools", () => {
         },
       },
     });
-    // Neither source is required at the schema level; the partial checks pick
-    // exactly one at parse time.
-    expect(saveTemplate?.inputSchema.required).toEqual([]);
+    // Neither source is required at the schema level; the partial check picks
+    // exactly one at parse time. Only the name is unconditionally required.
+    expect(createTemplate?.inputSchema.required).toEqual(["name"]);
   });
 });

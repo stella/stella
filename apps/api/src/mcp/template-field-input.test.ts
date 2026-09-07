@@ -12,14 +12,17 @@ import {
   toFieldMetaToolInput,
   toTemplateFieldWireInput,
 } from "@/api/mcp/template-field-input";
-import { saveTemplateArgsSchema } from "@/api/mcp/template-tools";
+import { configureTemplateFieldsArgsSchema } from "@/api/mcp/template-tools";
 
 const TEMPLATE_ID = "6f1f4d1e-59b0-4b4f-9a35-4b0ba0f7a1c9";
 
-/** The `fields` overlay read the way save_template reads it: through the tool
- * input schema, which is where null-as-absence lives. */
+/** The `fields` entries read the way configure_template_fields reads them:
+ * through the tool input schema, which is where null-as-absence lives. */
 const parseFieldsOverlay = (fields: unknown) =>
-  v.safeParse(saveTemplateArgsSchema, { template_id: TEMPLATE_ID, fields });
+  v.safeParse(configureTemplateFieldsArgsSchema, {
+    template_id: TEMPLATE_ID,
+    fields,
+  });
 
 const sortedKeys = (entries: object): string[] => Object.keys(entries).sort();
 

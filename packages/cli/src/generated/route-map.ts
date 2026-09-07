@@ -2642,29 +2642,20 @@ export const generatedRouteMap: RouteNode = {
             },
           },
         },
-        save: {
+        create: {
           kind: "leaf",
           spec: {
-            commandPath: ["template", "save"],
-            toolName: "save_template",
-            description:
-              "Create a template from a DOCX or configure its fields.",
+            commandPath: ["template", "create"],
+            toolName: "create_template",
+            description: "Create a template from a DOCX.",
             flags: [
-              {
-                flag: "--template-id",
-                prop: "template_id",
-                kind: "string",
-                repeatable: false,
-                description: "Template to configure; omit when creating",
-                required: false,
-              },
               {
                 flag: "--name",
                 prop: "name",
                 kind: "string",
                 repeatable: false,
-                description: "Display name; required when creating",
-                required: false,
+                description: "Display name for the template",
+                required: true,
               },
               {
                 flag: "--docx-base64",
@@ -2672,7 +2663,7 @@ export const generatedRouteMap: RouteNode = {
                 kind: "string",
                 repeatable: false,
                 description:
-                  "Original .docx bytes, base64-encoded verbatim; the fallback for creating when the host cannot supply 'file'. Never strip parts out of the file to shrink it.",
+                  "Original .docx bytes, base64-encoded verbatim; the fallback when the host cannot supply 'file'. Never strip parts out of the file to shrink it.",
                 required: false,
               },
               {
@@ -2709,33 +2700,28 @@ export const generatedRouteMap: RouteNode = {
                 required: false,
               },
             ],
-            inputOnly: ["fields"],
+            inputOnly: [],
             paginated: false,
             windowedText: false,
             destructive: false,
             scope: "templates",
             inputSchema: {
               type: "object",
-              required: [],
+              required: ["name"],
               additionalProperties: false,
               properties: {
-                template_id: {
-                  type: "string",
-                  format: "uuid",
-                  description: "Template to configure; omit when creating",
-                },
                 name: {
                   type: "string",
                   minLength: 1,
                   maxLength: 256,
-                  description: "Display name; required when creating",
+                  description: "Display name for the template",
                 },
                 docx_base64: {
                   type: "string",
                   minLength: 1,
                   maxLength: 262144,
                   description:
-                    "Original .docx bytes, base64-encoded verbatim; the fallback for creating when the host cannot supply 'file'. Never strip parts out of the file to shrink it.",
+                    "Original .docx bytes, base64-encoded verbatim; the fallback when the host cannot supply 'file'. Never strip parts out of the file to shrink it.",
                 },
                 file: {
                   type: "object",
@@ -2763,6 +2749,44 @@ export const generatedRouteMap: RouteNode = {
                   additionalProperties: false,
                   description:
                     "File reference supplied by a compatible MCP host",
+                },
+              },
+            },
+          },
+        },
+        "configure-fields": {
+          kind: "leaf",
+          spec: {
+            commandPath: ["template", "configure-fields"],
+            toolName: "configure_template_fields",
+            description:
+              "Configure the fields of an existing template: who fills each one, its input control, options and validation.",
+            flags: [
+              {
+                flag: "--template-id",
+                prop: "template_id",
+                kind: "string",
+                repeatable: false,
+                description:
+                  "Template to configure, as returned by create_template or list_templates",
+                required: true,
+              },
+            ],
+            inputOnly: ["fields"],
+            paginated: false,
+            windowedText: false,
+            destructive: false,
+            scope: "templates",
+            inputSchema: {
+              type: "object",
+              required: ["template_id", "fields"],
+              additionalProperties: false,
+              properties: {
+                template_id: {
+                  type: "string",
+                  format: "uuid",
+                  description:
+                    "Template to configure, as returned by create_template or list_templates",
                 },
                 fields: {
                   type: "array",
@@ -3110,7 +3134,7 @@ export const generatedRouteMap: RouteNode = {
                     additionalProperties: false,
                   },
                   description:
-                    "Field configuration overlay; see stella://reference/template-fields",
+                    "Field configuration entries; see stella://reference/template-fields",
                 },
               },
             },

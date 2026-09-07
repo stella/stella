@@ -113,7 +113,12 @@ import {
 import { toFieldMetaToolInput } from "@/api/mcp/template-field-input";
 import { buildFieldReference } from "@/api/mcp/template-field-reference";
 import { buildMarkerReference } from "@/api/mcp/template-marker-reference";
-import { TEMPLATE_TOOL_DEFINITIONS } from "@/api/mcp/template-tools";
+import {
+  CONFIGURE_TEMPLATE_FIELDS_TOOL_DEFINITION,
+  CREATE_TEMPLATE_TOOL_DEFINITION,
+} from "@/api/mcp/template-tools";
+import type { McpToolInputSchema } from "@/api/mcp/tool-types";
+import type { NullAsAbsentInputSchema } from "@/api/mcp/tool-utils";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 
 import { runEvalModelTurn } from "./lib/model-turn";
@@ -151,19 +156,22 @@ const MAX_OUTPUT_TOKENS = 48_000;
 const MAX_ITERATIONS = 10;
 const MODEL_REQUEST_TIMEOUT_MS = 240_000;
 
-const SAVE_TEMPLATE_TOOL_NAME = "save_template";
+const CREATE_TEMPLATE_TOOL_NAME = "create_template";
+const CONFIGURE_FIELDS_TOOL_NAME = "configure_template_fields";
 const WRITE_DOCX_TOOL_NAME = "write_docx";
 const ANSWER_SYNTAX_TOOL_NAME = "answer_syntax_questions";
 
 const AUTHORING_SYSTEM_PROMPT = [
   "You are stella, a drafting assistant for lawyers. The user gives you a",
-  "source document and asks for a reusable template. Mark the fillable",
-  `values with {{markers}}, write the file with ${WRITE_DOCX_TOOL_NAME}, then`,
-  `call ${SAVE_TEMPLATE_TOOL_NAME} once with the returned reference as`,
-  "docx_base64, a name, and a fields overlay configuring every field. Keep",
-  "the document's wording exactly as given; only replace the values that",
-  "become fields. The two reference resources below are the complete",
-  "grammar and configuration contract; follow them literally.",
+  "source document and asks for a reusable template. Work in three steps.",
+  "First mark the fillable values with {{markers}} and write the file with",
+  `${WRITE_DOCX_TOOL_NAME}. Second call ${CREATE_TEMPLATE_TOOL_NAME} with a`,
+  "name and the returned reference as docx_base64; it answers with the field",
+  `paths the document declares. Third call ${CONFIGURE_FIELDS_TOOL_NAME} with`,
+  "that template_id and one fields entry per path. Keep the document's",
+  "wording exactly as given; only replace the values that become fields. The",
+  "two reference resources below are the complete grammar and configuration",
+  "contract; follow them literally.",
 ].join(" ");
 
 // The quiz executes no authoring tool, so it must not be told to call them:
@@ -330,35 +338,22 @@ const readFilledDocument = async (buffer: Buffer): Promise<FilledDocument> => {
   return { text: lines.join("\n"), tables };
 };
 
-// ── The production save_template definition ──────────────
-
-const saveTemplateDefinition = () => {
-  const definition = TEMPLATE_TOOL_DEFINITIONS.find(
-    (candidate) => candidate.name === SAVE_TEMPLATE_TOOL_NAME,
-  );
-  if (definition === undefined || !("inputSchemaSource" in definition)) {
-    return panic(
-      "save_template is not a valibot-defined tool in TEMPLATE_TOOL_DEFINITIONS",
-    );
-  }
-  return definition;
-};
-
-const SAVE_TEMPLATE_DEFINITION = saveTemplateDefinition();
+// ── The production template tool definitions ─────────────
 
 /**
  * The tool schema the model sees. `toTanStackToolSchema` gives the same
- * Standard Schema validation `fill_template`'s eval uses, but save_template's
- * input carries `check` / `partial_check` actions (the create-vs-configure
- * rules) that have no JSON Schema projection; the definition already declares
- * that waiver and derives the wire schema every MCP client is served, so the
- * projection is taken from there instead of re-derived.
+ * Standard Schema validation `fill_template`'s eval uses, but these inputs
+ * carry `check` / `partial_check` actions that have no JSON Schema
+ * projection; each definition already declares that waiver and derives the
+ * wire schema every MCP client is served, so the projection is taken from
+ * there instead of re-derived.
  */
-const saveTemplateToolSchema = () => {
-  const schema = toTanStackToolSchema(
-    SAVE_TEMPLATE_DEFINITION.inputSchemaSource,
-  );
-  const wireSchema = () => SAVE_TEMPLATE_DEFINITION.inputSchema;
+const productionToolSchema = (definition: {
+  inputSchema: McpToolInputSchema;
+  inputSchemaSource: NullAsAbsentInputSchema;
+}) => {
+  const schema = toTanStackToolSchema(definition.inputSchemaSource);
+  const wireSchema = () => definition.inputSchema;
   return {
     ...schema,
     "~standard": {
@@ -368,7 +363,7 @@ const saveTemplateToolSchema = () => {
   };
 };
 
-// ── In-memory save_template ──────────────────────────────
+// ── In-memory template store ─────────────────────────────
 
 /**
  * `fillTemplateDocx` always resolves the org's registry-lookup settings, so
@@ -1174,11 +1169,13 @@ const WRITE_DOCX_DESCRIPTION =
   "its bytes. This stands in for the DOCX writer an MCP client runs locally. " +
   "Pass `blocks` in document order, one entry per paragraph or per table; a " +
   "newline inside a table cell starts a new paragraph in that cell. Then " +
-  `pass the returned reference as ${SAVE_TEMPLATE_TOOL_NAME}'s docx_base64: ` +
+  `pass the returned reference as ${CREATE_TEMPLATE_TOOL_NAME}'s docx_base64: ` +
   "it expands to the file's base64 bytes at the boundary.";
 
 type ToolTrace = { name: string; input: unknown };
 type WrittenDocx = { ref: string; blocks: AuthoredBlock[]; buffer: Buffer };
+
+const EVAL_TEMPLATE_ID = "00000000-0000-4000-8000-00000000e7a1";
 
 const createAuthoringTools = ({
   trace,
@@ -1190,6 +1187,9 @@ const createAuthoringTools = ({
   writeCalls: WrittenDocx[];
 }): AnyServerTool[] => {
   const written = new Map<string, Buffer>();
+  // The one template this run may create, kept as the bytes the create call
+  // accepted so the configure call overlays the same document.
+  let stored: { docxBase64: string } | null = null;
 
   const writeDocxTool = toolDefinition({
     name: WRITE_DOCX_TOOL_NAME,
@@ -1217,53 +1217,111 @@ const createAuthoringTools = ({
     return { docx_ref: ref, bytes: buffer.byteLength };
   });
 
-  const saveTemplateTool = toolDefinition({
-    name: SAVE_TEMPLATE_TOOL_NAME,
-    description: SAVE_TEMPLATE_DEFINITION.description,
-    inputSchema: saveTemplateToolSchema(),
+  /** Record one attempt at the create/configure pair, in the shape scoring
+   *  reads: the saved document's blocks, the overlay it carried, the outcome. */
+  const recordAttempt = async ({
+    outcome,
+    overlay,
+  }: {
+    outcome: SaveOutcome;
+    overlay: readonly FieldMeta[];
+  }): Promise<void> => {
+    saveCalls.push({
+      // Traps are read off the document that was actually saved, not off the
+      // write_docx input, so they describe the bytes the contract received.
+      blocks:
+        outcome.status === "saved" ? await readDocxBlocks(outcome.buffer) : [],
+      overlay,
+      outcome,
+    });
+  };
+
+  const createTemplateTool = toolDefinition({
+    name: CREATE_TEMPLATE_TOOL_NAME,
+    description: CREATE_TEMPLATE_TOOL_DEFINITION.description,
+    inputSchema: productionToolSchema(CREATE_TEMPLATE_TOOL_DEFINITION),
   }).server(async (input: unknown) => {
-    trace.push({ name: SAVE_TEMPLATE_TOOL_NAME, input });
+    trace.push({ name: CREATE_TEMPLATE_TOOL_NAME, input });
     const parsed = v.safeParse(
-      SAVE_TEMPLATE_DEFINITION.inputSchemaSource,
+      CREATE_TEMPLATE_TOOL_DEFINITION.inputSchemaSource,
       input,
     );
     if (!parsed.success) {
       const issues = validationIssues(parsed.issues);
-      saveCalls.push({
-        blocks: [],
-        overlay: [],
+      await recordAttempt({
         outcome: { status: "rejected", issues },
+        overlay: [],
       });
       return { error: "validation_error", issues };
     }
-    const overlay = parsed.output.fields?.map(toFieldMetaToolInput);
     const ref = parsed.output.docx_base64;
     if (ref === undefined) {
       const issues = [
         "docx_base64 is required: pass the reference write_docx returned",
       ];
-      saveCalls.push({
-        blocks: [],
-        overlay: overlay ?? [],
+      await recordAttempt({
         outcome: { status: "rejected", issues },
+        overlay: [],
       });
       return { error: "validation_error", issues };
     }
     // A reference expands to the bytes write_docx wrote; anything else is
     // taken as real base64, so a client that does hold the file still works.
     const writtenDocx = written.get(ref.trim());
+    const docxBase64 = writtenDocx?.toString("base64") ?? ref;
     const outcome = await saveTemplateInMemory({
-      docxBase64: writtenDocx?.toString("base64") ?? ref,
+      docxBase64,
+      overlay: undefined,
+    });
+    await recordAttempt({ outcome, overlay: [] });
+    if (outcome.status === "invalid-docx") {
+      return { error: "validation_error", issues: [outcome.reason] };
+    }
+    if (outcome.status === "rejected") {
+      return { error: "validation_error", issues: outcome.issues };
+    }
+    stored = { docxBase64 };
+    return {
+      templateId: EVAL_TEMPLATE_ID,
+      name: parsed.output.name,
+      fieldCount: outcome.manifest.fields.length,
+      fields: outcome.manifest.fields.map((field) => ({ path: field.path })),
+    };
+  });
+
+  const configureFieldsTool = toolDefinition({
+    name: CONFIGURE_FIELDS_TOOL_NAME,
+    description: CONFIGURE_TEMPLATE_FIELDS_TOOL_DEFINITION.description,
+    inputSchema: productionToolSchema(
+      CONFIGURE_TEMPLATE_FIELDS_TOOL_DEFINITION,
+    ),
+  }).server(async (input: unknown) => {
+    trace.push({ name: CONFIGURE_FIELDS_TOOL_NAME, input });
+    const parsed = v.safeParse(
+      CONFIGURE_TEMPLATE_FIELDS_TOOL_DEFINITION.inputSchemaSource,
+      input,
+    );
+    if (!parsed.success) {
+      const issues = validationIssues(parsed.issues);
+      await recordAttempt({
+        outcome: { status: "rejected", issues },
+        overlay: [],
+      });
+      return { error: "validation_error", issues };
+    }
+    const overlay = parsed.output.fields.map(toFieldMetaToolInput);
+    if (stored === null) {
+      const issues = [
+        `template_id: no template exists yet; call ${CREATE_TEMPLATE_TOOL_NAME} first`,
+      ];
+      await recordAttempt({ outcome: { status: "rejected", issues }, overlay });
+      return { error: "not_found", issues };
+    }
+    const outcome = await saveTemplateInMemory({
+      docxBase64: stored.docxBase64,
       overlay,
     });
-    saveCalls.push({
-      // Traps are read off the document that was actually saved, not off the
-      // write_docx input, so they describe the bytes the contract received.
-      blocks:
-        outcome.status === "saved" ? await readDocxBlocks(outcome.buffer) : [],
-      overlay: overlay ?? [],
-      outcome,
-    });
+    await recordAttempt({ outcome, overlay });
     if (outcome.status === "invalid-docx") {
       return { error: "validation_error", issues: [outcome.reason] };
     }
@@ -1271,13 +1329,12 @@ const createAuthoringTools = ({
       return { error: "validation_error", issues: outcome.issues };
     }
     return {
-      templateId: "tpl-eval-1",
-      name: parsed.output.name ?? "",
-      fieldCount: outcome.manifest.fields.length,
+      name: parsed.output.template_id,
+      fields: outcome.manifest.fields.map((field) => ({ path: field.path })),
     };
   });
 
-  return [writeDocxTool, saveTemplateTool];
+  return [writeDocxTool, createTemplateTool, configureFieldsTool];
 };
 
 const createQuizTool = ({
@@ -1563,18 +1620,29 @@ const runAuthoringTask = async ({
     // raw trace still proves the model tried, so it is scored as a rejection
     // rather than as no call at all.
     const raw = turn.rawCalls.filter(
-      (entry) => entry.name === SAVE_TEMPLATE_TOOL_NAME,
+      (entry) => entry.name === CREATE_TEMPLATE_TOOL_NAME,
     );
+    for (const entry of raw) {
+      trace.push({
+        name: `${CREATE_TEMPLATE_TOOL_NAME}(raw)`,
+        input: entry.input,
+      });
+    }
     const last = raw.at(-1);
     const parsed =
       last === undefined
         ? null
-        : v.safeParse(SAVE_TEMPLATE_DEFINITION.inputSchemaSource, last.input);
+        : v.safeParse(
+            CREATE_TEMPLATE_TOOL_DEFINITION.inputSchemaSource,
+            last.input,
+          );
     let overlayIssues: string[];
     if (parsed === null) {
       overlayIssues = [];
     } else if (parsed.success) {
-      overlayIssues = ["save_template call never reached the handler"];
+      overlayIssues = [
+        `${CREATE_TEMPLATE_TOOL_NAME} call never reached the handler`,
+      ];
     } else {
       overlayIssues = validationIssues(parsed.issues);
     }

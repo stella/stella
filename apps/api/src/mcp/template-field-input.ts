@@ -1,5 +1,5 @@
 /**
- * Snake_case MCP surface for `save_template`'s `fields` overlay. Advertised
+ * Snake_case MCP surface for `configure_template_fields`' `fields`. Advertised
  * tool inputs are snake_case, while the persisted field model is camelCase and
  * shared with the rest of the API and web, so the two cannot be the same
  * schema. Leaf validators, picklists and descriptions are reused from the
@@ -175,7 +175,7 @@ const PART_WIRE_KEYS = {
 } as const satisfies Record<keyof FieldPart, keyof TemplateFieldPartInput>;
 
 /** Camel-case field data returned by the template service. Describe uses
- * `null` for absent values, while save_template treats null as absence. */
+ * `null` for absent values, while the tool treats null as absence. */
 type DescribedFieldInput = {
   [Key in keyof PersistedFieldInput]?: PersistedFieldInput[Key] | null;
 } & { path: string };
@@ -252,7 +252,7 @@ const toTemplateFieldValidationInput = (
     : { [VALIDATION_WIRE_KEYS.maxItems]: validation.maxItems }),
 });
 
-/** Serialize a persisted/describe field onto save_template's snake_case wire
+/** Serialize a persisted/describe field onto the tool's snake_case wire
  * contract. Null describe values are omitted, producing an object the strict
  * overlay schema accepts without client-side key translation. */
 export const toTemplateFieldWireInput = (
@@ -330,7 +330,7 @@ export const toTemplateFieldWireInput = (
     : { [FIELD_WIRE_KEYS.dateFormat]: field.dateFormat }),
 });
 
-/** Deserialize save_template's wire field through the same total key map used
+/** Deserialize the wire field through the same total key map used
  * by the describe serializer. */
 export const toFieldMetaToolInput = ({
   [FIELD_WIRE_KEYS.validation]: validation,

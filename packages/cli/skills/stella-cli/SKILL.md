@@ -121,9 +121,10 @@ requires (request it at `stella auth login --scopes`).
 | task         | `stella task delete`                       | matters_write               | destructive (needs `--yes` off a TTY) |
 | task         | `stella task list`                         | read                        | paginated                             |
 | task         | `stella task save`                         | matters_write               |                                       |
+| template     | `stella template configure-fields`         | templates                   |                                       |
+| template     | `stella template create`                   | templates                   |                                       |
 | template     | `stella template fill`                     | templates                   |                                       |
 | template     | `stella template list`                     | templates                   | paginated                             |
-| template     | `stella template save`                     | templates                   |                                       |
 | template     | `stella template save-filled new-document` | documents_write + templates |                                       |
 | template     | `stella template save-filled new-version`  | documents_write + templates |                                       |
 | time-entry   | `stella time-entry delete`                 | billing_write               | destructive (needs `--yes` off a TTY) |
@@ -231,13 +232,16 @@ are omitted here.
   - optional: --matter-id, --task-id, --date-from, --date-to, --status
 - `stella task save`
   - optional: --task-id, --matter-id, --name, --status (open|in_progress|in_review|done|cancelled), --priority (none|urgent|high|medium|low), --item-type (task|fact|issue|requirement|event), --list-id, --list-section-id, --list-description, --due-date, --workflow-reason, --add-assignee-user-id, --remove-assignee-user-id, --link-entity-id, --unlink-link-id
+- `stella template configure-fields`
+  - `--template-id` — Template to configure, as returned by create_template or list_templates (string)
+- `stella template create`
+  - `--name` — Display name for the template (string)
+  - optional: --docx-base64, --file.download-url, --file.file-id, --file.mime-type, --file.file-name
 - `stella template fill`
   - `--template-id` — Template id, as returned by list_templates (string)
   - optional: --allow-unused-values, --completion-mode (require_complete|allow_partial), --output-mode (text|docx)
 - `stella template list`
   - optional: --template-id
-- `stella template save`
-  - optional: --template-id, --name, --docx-base64, --file.download-url, --file.file-id, --file.mime-type, --file.file-name
 - `stella template save-filled new-document`
   - `--template-id` — Template id, as returned by list_templates (string)
   - `--matter-id` — Matter receiving the filled DOCX. (string)

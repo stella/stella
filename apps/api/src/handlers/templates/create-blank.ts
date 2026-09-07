@@ -72,7 +72,7 @@ const config = {
     "document and storing it with templates.save-document. Use " +
     "templates.create to upload a DOCX that already has {{field}} markers.",
   permissions: { template: ["create"] },
-  // Not reachable through save_template (which requires a DOCX on create).
+  // Not reachable through create_template (which requires a DOCX).
   mcp: { type: "capability", reason: "template_authoring_ui" },
   body: createBlankTemplateBodySchema,
 } satisfies HandlerConfig;

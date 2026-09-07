@@ -116,9 +116,9 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
  *
  * `documentLabel` and `uploadPlaceholder` are supplied by the caller
  * (translated) so this module stays i18n-free: they label and replace
- * `save_template`'s document input, which must never be dumped verbatim into
- * the summary — neither the base64 blob nor the host file reference's signed
- * download URL.
+ * `create_template`'s document input, which must never be dumped verbatim
+ * into the summary — neither the base64 blob nor the host file reference's
+ * signed download URL.
  */
 export const buildRegistryWriteSummaryRows = ({
   documentLabel,
@@ -141,8 +141,11 @@ export const buildRegistryWriteSummaryRows = ({
     });
   }
 
-  if (toolName === "save_template") {
-    return buildSaveTemplateRows({
+  if (
+    toolName === "create_template" ||
+    toolName === "configure_template_fields"
+  ) {
+    return buildTemplateAuthoringRows({
       documentLabel,
       emptyLabel,
       input,
@@ -173,7 +176,7 @@ const hostFileName = (value: unknown): string | null => {
   return typeof name === "string" && name.length > 0 ? name : null;
 };
 
-const buildSaveTemplateRows = ({
+const buildTemplateAuthoringRows = ({
   documentLabel,
   emptyLabel,
   input,

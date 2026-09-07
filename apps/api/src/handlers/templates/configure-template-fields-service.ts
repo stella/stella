@@ -5,7 +5,7 @@
  * date format, lookup, composite parts, dependent select, formula, hint,
  * required) is overlaid by path.
  *
- * Backs the MCP `save_template` configuration action. Mirrors save-document's
+ * Backs the MCP `configure_template_fields` tool. Mirrors save-document's
  * restore-by-path discipline (overlay merged onto the source manifest fields by
  * path) but stays on the same version: it re-embeds the manifest in the
  * current document bytes and republishes that version under a new key.

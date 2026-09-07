@@ -15,10 +15,10 @@ import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
   AssertNoExtraFields,
+  CONFIGURE_TEMPLATE_FIELDS_PROJECTION,
+  CREATE_TEMPLATE_PROJECTION,
   LIST_TEMPLATES_LIST_PROJECTION,
   LIST_TEMPLATES_PROJECTION,
-  SAVE_TEMPLATE_CREATE_PROJECTION,
-  SAVE_TEMPLATE_PROJECTION,
   TEMPLATE_DESCRIBE_PROJECTION,
 } from "@/api/lib/chat/projections";
 import {
@@ -26,16 +26,9 @@ import {
   buildAiFieldGenerator,
   buildAiOccurrenceAdapter,
 } from "@/api/lib/docx/ai-field-generator";
-import { discoverTemplate } from "@/api/lib/docx/discover-template";
 import { extractTextForPreview } from "@/api/lib/docx/extract-text";
-import { buildResolveRegistryDisabledReason } from "@/api/lib/docx/registry-org-gate";
 import type { AiFieldError } from "@/api/lib/docx/resolve-ai-fields";
-import { readManifest } from "@/api/lib/docx/template-manifest";
-import {
-  boundTemplateWarnings,
-  fieldOverlayWarnings,
-  type TemplateWarning,
-} from "@/api/lib/docx/template-warnings";
+import type { TemplateWarning } from "@/api/lib/docx/template-warnings";
 import type { FieldMeta } from "@/api/lib/docx/types";
 import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buffer";
 import type { DocxValidationFailure } from "@/api/lib/entity-versions/validate-docx-buffer";
@@ -54,7 +47,6 @@ import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 import { DOCX_EXT_RE, sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
 import { createStoredTemplate } from "@/api/lib/templates/create-template";
-import { resolveTemplateFieldOverlay } from "@/api/lib/templates/field-overlay";
 import {
   recordTemplateFill,
   recordTemplateUse,
@@ -109,7 +101,6 @@ import {
 } from "@/api/mcp/text-field-spec";
 import type {
   InternalToolErrorResult,
-  InternalToolResult,
   McpTextFieldSpec,
   McpToolDefinition,
   McpToolHandler,
@@ -141,7 +132,8 @@ type TemplateToolName =
   | "list_templates"
   | "fill_template"
   | "save_filled_template"
-  | "save_template";
+  | "create_template"
+  | "configure_template_fields";
 
 /** Max assembled-text length returned inline; full bytes ride along as base64. */
 const TEMPLATE_FILL_TEXT_MAX_CHARS = 16_000;
@@ -171,23 +163,18 @@ const TEMPLATE_FILL_COMPLETION_MODE_PROP = {
 } as const;
 
 /**
- * Exported so `template-field-input.test.ts` can exercise the `fields` overlay
- * through the schema save_template actually parses, rather than through a
- * second assembly of the same array that could drift from it.
+ * `create_template`: a name and exactly one document source. Creation never
+ * carries a field overlay; `configure_template_fields` owns that half, so
+ * neither tool advertises properties the other ignores.
  */
-export const saveTemplateArgsSchema = nullAsAbsent(
+export const createTemplateArgsSchema = nullAsAbsent(
   v.pipe(
     v.strictObject({
-      template_id: v.optional(
-        uuidInputSchema("Template to configure; omit when creating"),
-      ),
-      name: v.optional(
-        v.pipe(
-          v.string(),
-          v.minLength(1),
-          v.maxLength(256),
-          v.description("Display name; required when creating"),
-        ),
+      name: v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.maxLength(256),
+        v.description("Display name for the template"),
       ),
       docx_base64: v.optional(
         v.pipe(
@@ -195,67 +182,43 @@ export const saveTemplateArgsSchema = nullAsAbsent(
           v.minLength(1),
           v.maxLength(MAX_INLINE_DOCX_BASE64_LENGTH),
           v.description(
-            "Original .docx bytes, base64-encoded verbatim; the fallback for " +
-              "creating when the host cannot supply 'file'. Never strip parts " +
-              "out of the file to shrink it.",
+            "Original .docx bytes, base64-encoded verbatim; the fallback when " +
+              "the host cannot supply 'file'. Never strip parts out of the " +
+              "file to shrink it.",
           ),
         ),
       ),
       file: v.optional(OPENAI_FILE_REFERENCE_SCHEMA),
-      fields: v.optional(
-        v.pipe(
-          v.array(templateFieldInputSchema),
-          v.description(
-            `Field configuration overlay; see ${TEMPLATE_FIELD_REFERENCE_URI}`,
-          ),
-        ),
-      ),
     }),
-    v.partialCheck(
-      [["template_id"], ["docx_base64"], ["file"]],
-      ({ template_id, docx_base64, file }) =>
-        (template_id === undefined) !==
-        (docx_base64 === undefined && file === undefined),
-      "Provide file or docx_base64 to create a template, or template_id to configure an existing template's fields",
-    ),
     v.forward(
       v.partialCheck(
         [["docx_base64"], ["file"]],
         ({ docx_base64, file }) =>
-          docx_base64 === undefined || file === undefined,
-        "Provide either file or docx_base64, not both",
+          (docx_base64 === undefined) !== (file === undefined),
+        "Provide exactly one document source: file, or docx_base64",
       ),
-      ["file"],
-    ),
-    v.forward(
-      v.partialCheck(
-        [["docx_base64"], ["file"], ["name"]],
-        ({ docx_base64, file, name }) =>
-          (docx_base64 === undefined && file === undefined) ||
-          name !== undefined,
-        "name is required to create a template",
-      ),
-      ["name"],
-    ),
-    v.forward(
-      v.partialCheck(
-        [["template_id"], ["name"]],
-        ({ template_id, name }) =>
-          template_id === undefined || name === undefined,
-        "name applies only when creating a template; omit it when configuring",
-      ),
-      ["name"],
-    ),
-    v.forward(
-      v.partialCheck(
-        [["template_id"], ["fields"]],
-        ({ template_id, fields }) =>
-          template_id === undefined || fields !== undefined,
-        "fields is required to configure a template",
-      ),
-      ["fields"],
+      ["docx_base64"],
     ),
   ),
+);
+
+/**
+ * `configure_template_fields`: the template plus the field entries to apply.
+ * Exported so `template-field-input.test.ts` exercises the entries through the
+ * schema the tool actually parses rather than a second assembly of it.
+ */
+export const configureTemplateFieldsArgsSchema = nullAsAbsent(
+  v.strictObject({
+    template_id: uuidInputSchema(
+      "Template to configure, as returned by create_template or list_templates",
+    ),
+    fields: v.pipe(
+      v.array(templateFieldInputSchema),
+      v.description(
+        `Field configuration entries; see ${TEMPLATE_FIELD_REFERENCE_URI}`,
+      ),
+    ),
+  }),
 );
 
 // --- Text-field specs (plan 049, Option B) --------------------------------
@@ -504,34 +467,58 @@ const buildTemplateDetailTextFieldSpecs = (
   }),
 ];
 
-const SAVE_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
+export const CREATE_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
   _meta: {
     "openai/fileParams": ["file"],
   },
   description:
-    "Create a template from a DOCX or configure its fields. For creation, pass " +
-    `a name and file (preferred, up to ${MAX_DOCX_MEGABYTES} MB) or original ` +
-    `bytes as docx_base64 (max ${MAX_INLINE_DOCX_BYTES} bytes decoded within ` +
-    `the ${MCP_MAX_REQUEST_BODY_BYTES}-byte MCP request frame); never retype the ` +
-    "file or strip parts out to fit. {{field}} markers become fillable. For configuration, pass " +
-    "template_id and fields without a document; markers stay intact. Read " +
-    `${TEMPLATE_MARKER_REFERENCE_URI} before authoring a DOCX and ` +
-    `${TEMPLATE_FIELD_REFERENCE_URI} before configuring fields. Returns id ` +
-    "and field count on creation, updated fields on configuration, and marker-authoring warnings.",
-  inputSchema: saveTemplateArgsSchema,
+    "Create a template from a DOCX. Pass a name and either file (preferred, " +
+    `up to ${MAX_DOCX_MEGABYTES} MB) or the original bytes as docx_base64 ` +
+    `(max ${MAX_INLINE_DOCX_BYTES} bytes decoded within the ` +
+    `${MCP_MAX_REQUEST_BODY_BYTES}-byte MCP request frame); never retype the ` +
+    "file or strip parts out to fit. Every {{marker}} in the document becomes " +
+    `a fillable field. Read ${TEMPLATE_MARKER_REFERENCE_URI} before authoring ` +
+    "the DOCX. Returns the template id, the discovered fields, arrays, " +
+    "conditions and computed values, and marker-authoring warnings. Then call " +
+    "configure_template_fields to say who fills each field.",
+  inputSchema: createTemplateArgsSchema,
   jsonSchemaProjectionWaiver: {
-    ignoreActions: ["check", "finite", "partial_check"],
-    reason:
-      "Field compatibility checks remain runtime-only; JSON numbers are finite on the wire.",
+    ignoreActions: ["partial_check"],
+    reason: "The one-document-source check remains runtime-only.",
   },
   annotations: {
-    title: "Save template",
+    title: "Create template",
     idempotentHint: false,
     openWorldHint: false,
   },
   access: "write",
   anonymized: { exposure: "excluded", reason: "write" },
-  name: "save_template",
+  name: "create_template",
+  scope: "stella:templates",
+});
+
+export const CONFIGURE_TEMPLATE_FIELDS_TOOL_DEFINITION = defineValibotMcpTool({
+  description:
+    "Configure the fields of an existing template: who fills each one, its " +
+    "input control, options and validation. The document's {{markers}} are " +
+    "never touched, only the field configuration. Pass template_id and one " +
+    "entry per field path; every path must already exist as a marker. Read " +
+    `${TEMPLATE_FIELD_REFERENCE_URI} first. Returns the template's full field ` +
+    "configuration after the change.",
+  inputSchema: configureTemplateFieldsArgsSchema,
+  jsonSchemaProjectionWaiver: {
+    ignoreActions: ["check", "finite"],
+    reason:
+      "Field compatibility checks remain runtime-only; JSON numbers are finite on the wire.",
+  },
+  annotations: {
+    title: "Configure template fields",
+    idempotentHint: true,
+    openWorldHint: false,
+  },
+  access: "write",
+  anonymized: { exposure: "excluded", reason: "write" },
+  name: "configure_template_fields",
   scope: "stella:templates",
 });
 
@@ -690,7 +677,8 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
     name: "save_filled_template",
     scope: "stella:documents_write",
   },
-  SAVE_TEMPLATE_TOOL_DEFINITION,
+  CREATE_TEMPLATE_TOOL_DEFINITION,
+  CONFIGURE_TEMPLATE_FIELDS_TOOL_DEFINITION,
 ] as const satisfies readonly McpToolDefinition[];
 
 /** The whole advertised list_templates surface, so the branch dispatch below
@@ -851,18 +839,13 @@ const describeTemplateDetail: TypedMcpToolHandler<
     return validationErrorResult(parsed.issues);
   }
 
-  const result = await (
-    context.testDependencies?.describeStoredTemplate ?? describeStoredTemplate
-  )({
+  const payload = await describeTemplateForAgent({
+    context,
     templateId: brandPersistedTemplateId(parsed.output.template_id),
-    organizationId: context.organizationId,
-    scopedDb: context.scopedDb,
   });
-  if ("error" in result) {
-    return errorResult(result.error);
+  if (isToolErrorResult(payload)) {
+    return payload;
   }
-
-  const payload = toTemplateDetailPayload(result);
 
   // Redact the org-authored template name and each field's label/hint/aiPrompt;
   // field paths, input types, options, and condition/formula expressions are
@@ -872,17 +855,7 @@ const describeTemplateDetail: TypedMcpToolHandler<
     payload,
   );
 
-  // `describeStoredTemplate` builds the describe payload, so there is no
-  // literal for excess-property checking to guard; tie its return type instead.
-  type TemplateDescribePayload = AssertNoExtraFields<
-    typeof payload,
-    v.InferInput<typeof TEMPLATE_DESCRIBE_PROJECTION>
-  >;
-  return {
-    egress: "structured",
-    payload: payload satisfies TemplateDescribePayload,
-    textFields,
-  };
+  return { egress: "structured", payload, textFields };
 };
 
 /** One line describing a missing required field for the issues list: its
@@ -1776,46 +1749,6 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
   return toolDataResult(persistence.value.value);
 };
 
-/** Marker mistakes in the uploaded DOCX plus the ones the field overlay
- *  introduces, reported with the new template so the author fixes them before
- *  the first fill. Never blocks the save. */
-const templateAuthoringWarnings = async ({
-  buffer,
-  context,
-  fields,
-}: {
-  buffer: Buffer;
-  context: McpRequestContext;
-  fields: FieldMeta[] | undefined;
-}): Promise<TemplateWarning[]> => {
-  const [discovered, embeddedManifest] = await Promise.all([
-    discoverTemplate(buffer),
-    readManifest(buffer),
-  ]);
-
-  const savedManifest = resolveTemplateFieldOverlay({
-    discovered,
-    manifest: embeddedManifest,
-    overlay: fields,
-  });
-
-  return boundTemplateWarnings([
-    ...discovered.warnings,
-    ...(await fieldOverlayWarnings({
-      conditionPaths: discovered.conditionPaths,
-      fields: savedManifest.fields,
-      placeholderPaths: discovered.placeholders.map(({ name }) => name),
-      registryGate: async () => {
-        const resolveDisabledReason = await buildResolveRegistryDisabledReason({
-          organizationId: context.organizationId,
-          scopedDb: context.scopedDb,
-        });
-        return (registry) => resolveDisabledReason(registry) === null;
-      },
-    })),
-  ]);
-};
-
 /**
  * What to tell the caller for each structural DOCX failure on the base64 path.
  *
@@ -1985,22 +1918,14 @@ const resolveTemplateDocx = async ({
   }
 };
 
-// Create branch of save_template: a new template from an uploaded DOCX, with an
-// optional field-configuration overlay. Reused from the former create_template
-// tool.
-const createTemplateFromDocx = async ({
-  context,
-  fields,
-  name,
-  source,
-}: {
-  context: McpRequestContext;
-  fields: FieldMeta[] | undefined;
-  name: string;
-  source: TemplateDocxSource;
-}): Promise<
-  InternalToolResult<v.InferInput<typeof SAVE_TEMPLATE_PROJECTION>>
-> => {
+/**
+ * `create_template`: a new template from an uploaded DOCX. The response is the
+ * describe payload the template now serves, so the agent reads the discovered
+ * fields, arrays and warnings from the same producer `list_templates` uses.
+ */
+const handleCreateTemplateTool: TypedMcpToolHandler<
+  v.InferInput<typeof CREATE_TEMPLATE_PROJECTION>
+> = async ({ args, context }) => {
   const hasPermission = hasEffectiveAuthority(context, {
     template: ["create"],
   });
@@ -2008,10 +1933,23 @@ const createTemplateFromDocx = async ({
     return errorResult("Forbidden");
   }
 
-  let clientManifest: { fields: FieldMeta[] } | null = null;
-  if (fields !== undefined) {
-    clientManifest = { fields };
+  const parsed = v.safeParse(
+    CREATE_TEMPLATE_TOOL_DEFINITION.inputSchemaSource,
+    args,
+  );
+  if (!parsed.success) {
+    return validationErrorResult(parsed.issues);
   }
+  const input = parsed.output;
+  const source: TemplateDocxSource =
+    input.file === undefined
+      ? {
+          type: "base64",
+          docxBase64:
+            input.docx_base64 ??
+            panic("create_template reached without a DOCX source"),
+        }
+      : { type: "file", file: input.file };
 
   const resolved = await resolveTemplateDocx({ context, source });
   if (resolved.status === "error") {
@@ -2025,10 +1963,7 @@ const createTemplateFromDocx = async ({
       code: "validation_error",
       message: "DOCX exceeds the maximum allowed size",
       issues: [
-        {
-          path: issuePath,
-          message: "DOCX exceeds the maximum allowed size",
-        },
+        { path: issuePath, message: "DOCX exceeds the maximum allowed size" },
       ],
       hint: `Upload a DOCX no larger than ${FILE_SIZE_LIMIT_BYTES.document} bytes.`,
     });
@@ -2044,21 +1979,14 @@ const createTemplateFromDocx = async ({
     });
   }
 
-  // Discovery runs again here rather than riding out of `createStoredTemplate`:
-  // that recipe also serves the built-in report clones, which embed a
-  // pre-built manifest and never discover at all. One extra parse per template
-  // creation buys every create branch the same warning list.
-  const warnings = await templateAuthoringWarnings({ buffer, context, fields });
-
   const created = await Result.gen(() =>
     (context.testDependencies?.createStoredTemplate ?? createStoredTemplate)({
       safeDb: context.safeDb,
       organizationId: context.organizationId,
       userId: context.userId,
       buffer,
-      name,
-      fileName: `${name}.docx`,
-      clientManifest,
+      name: input.name,
+      fileName: `${input.name}.docx`,
       recordAuditEvent: context.recordAuditEvent,
     }),
   );
@@ -2066,27 +1994,64 @@ const createTemplateFromDocx = async ({
     return internalFailureResult(created.error);
   }
 
+  const described = await describeTemplateForAgent({
+    context,
+    templateId: created.value.id,
+  });
+  if (isToolErrorResult(described)) {
+    // The template exists: only reading it back failed. Returning the create
+    // error bare would leave the caller with no id, and a retry would create a
+    // second template, so the id and the way to reach it travel with the
+    // failure.
+    return structuredErrorResult({
+      code: "internal_error",
+      message: `Template ${created.value.id} was created, but reading its fields back failed`,
+      hint: `Do not create it again. Read it with list_templates and template_id '${created.value.id}', then configure its fields.`,
+      retryable: true,
+    });
+  }
+
   return toolDataResult({
     templateId: created.value.id,
-    name: created.value.name,
     fieldCount: created.value.fieldCount,
-    warnings,
-  } satisfies v.InferInput<typeof SAVE_TEMPLATE_CREATE_PROJECTION>);
+    ...described,
+  });
 };
 
-// Configure branch of save_template: overlay field configuration onto an
-// existing template. Reused from the former configure_template_fields tool.
-const configureExistingTemplate = async ({
+/** The describe payload both `create_template` and `configure_template_fields`
+ *  hand back, read through the same producer `list_templates` detail mode
+ *  uses so the three surfaces cannot drift. */
+const describeTemplateForAgent = async ({
   context,
-  fields,
-  templateId: rawTemplateId,
+  templateId,
 }: {
   context: McpRequestContext;
-  fields: FieldMeta[];
-  templateId: string;
-}): Promise<
-  InternalToolResult<v.InferInput<typeof SAVE_TEMPLATE_PROJECTION>>
-> => {
+  templateId: SafeId<"template">;
+}): Promise<InternalToolErrorResult | TemplateDetailPayload> => {
+  const described = await (
+    context.testDependencies?.describeStoredTemplate ?? describeStoredTemplate
+  )({
+    templateId,
+    organizationId: context.organizationId,
+    scopedDb: context.scopedDb,
+  });
+  if ("error" in described) {
+    return errorResult(described.error);
+  }
+  const payload = toTemplateDetailPayload(described);
+  type DescribedTemplatePayload = AssertNoExtraFields<
+    typeof payload,
+    v.InferInput<typeof TEMPLATE_DESCRIBE_PROJECTION>
+  >;
+  return payload satisfies DescribedTemplatePayload;
+};
+
+/** `configure_template_fields`: overlay field configuration onto an existing
+ *  template. The stored document bytes keep their {{markers}}; only the
+ *  manifest changes. */
+const handleConfigureTemplateFieldsTool: TypedMcpToolHandler<
+  v.InferInput<typeof CONFIGURE_TEMPLATE_FIELDS_PROJECTION>
+> = async ({ args, context }) => {
   const hasPermission = hasEffectiveAuthority(context, {
     template: ["update"],
   });
@@ -2094,7 +2059,15 @@ const configureExistingTemplate = async ({
     return errorResult("Forbidden");
   }
 
-  const templateId = brandPersistedTemplateId(rawTemplateId);
+  const parsed = v.safeParse(
+    CONFIGURE_TEMPLATE_FIELDS_TOOL_DEFINITION.inputSchemaSource,
+    args,
+  );
+  if (!parsed.success) {
+    return validationErrorResult(parsed.issues);
+  }
+  const fields: FieldMeta[] = parsed.output.fields.map(toFieldMetaToolInput);
+  const templateId = brandPersistedTemplateId(parsed.output.template_id);
 
   const configured = await Result.gen(() =>
     (
@@ -2112,82 +2085,21 @@ const configureExistingTemplate = async ({
     return internalFailureResult(configured.error);
   }
 
-  // Echo the updated field list in the same shape the list_templates detail
-  // mode returns, so the agent sees exactly what is now configured (a complete
-  // round-trip).
-  const described = await (
-    context.testDependencies?.describeStoredTemplate ?? describeStoredTemplate
-  )({
-    templateId,
-    organizationId: context.organizationId,
-    scopedDb: context.scopedDb,
-  });
-  if ("error" in described) {
-    return errorResult(described.error);
+  // Echo the field list in the same shape list_templates' detail mode returns,
+  // so the agent sees exactly what is now configured.
+  const described = await describeTemplateForAgent({ context, templateId });
+  if (isToolErrorResult(described)) {
+    return described;
   }
-
-  const payload = toTemplateDetailPayload(described);
-
-  type ConfiguredTemplatePayload = AssertNoExtraFields<
-    typeof payload,
-    v.InferInput<typeof TEMPLATE_DESCRIBE_PROJECTION>
-  >;
-  return toolDataResult(payload satisfies ConfiguredTemplatePayload);
-};
-
-const handleSaveTemplateTool: TypedMcpToolHandler<
-  v.InferInput<typeof SAVE_TEMPLATE_PROJECTION>
-> = async ({ args, context }) => {
-  const parsed = v.safeParse(
-    SAVE_TEMPLATE_TOOL_DEFINITION.inputSchemaSource,
-    args,
-  );
-  if (!parsed.success) {
-    return validationErrorResult(parsed.issues);
-  }
-  const input = parsed.output;
-  const fields = input.fields?.map(toFieldMetaToolInput);
-
-  // Configure branch: template_id (no docx_base64) overlays field config onto an
-  // existing template. The schema guarantees fields is present here.
-  if (input.template_id !== undefined) {
-    return await configureExistingTemplate({
-      context,
-      fields:
-        fields ??
-        panic(
-          "save_template configure branch reached without a fields overlay",
-        ),
-      templateId: input.template_id,
-    });
-  }
-
-  // Create branch: name and exactly one of file / docx_base64 are guaranteed
-  // present by the schema.
-  return await createTemplateFromDocx({
-    context,
-    fields,
-    name:
-      input.name ?? panic("save_template create branch reached without name"),
-    source:
-      input.file === undefined
-        ? {
-            type: "base64",
-            docxBase64:
-              input.docx_base64 ??
-              panic(
-                "save_template create branch reached without a DOCX source",
-              ),
-          }
-        : { type: "file", file: input.file },
-  });
+  return toolDataResult(described);
 };
 
 export const TEMPLATE_TOOL_HANDLERS = {
+  configure_template_fields: handleConfigureTemplateFieldsTool,
+  create_template: handleCreateTemplateTool,
   fill_template: handleFillTemplateTool,
   list_templates: handleListTemplatesTool,
   save_filled_template: handleSaveFilledTemplateTool,
-  save_template: handleSaveTemplateTool,
 } satisfies Record<TemplateToolName, McpToolHandler>;
 
 export const TEMPLATE_TOOL_SET = defineMcpToolSet(

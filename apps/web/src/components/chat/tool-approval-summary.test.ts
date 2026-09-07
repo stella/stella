@@ -35,11 +35,10 @@ describe("buildRegistryWriteSummaryRows", () => {
     expect(notes.endsWith("…")).toBe(true);
   });
 
-  test("save_template never dumps the base64 upload or the field manifest", () => {
-    const rows = build("save_template", {
+  test("create_template never dumps the base64 upload", () => {
+    const rows = build("create_template", {
       name: "NDA",
       docx_base64: "QUJDR".repeat(1000),
-      fields: [{ path: "a" }, { path: "b" }, { path: "c" }],
     });
     const byKey = Object.fromEntries(rows.map((row) => [row.key, row.value]));
     expect(byKey["name"]).toBe("NDA");
@@ -49,12 +48,20 @@ describe("buildRegistryWriteSummaryRows", () => {
     expect(rows.find((row) => row.key === "docx_base64")?.label).toBe(
       DOCUMENT_LABEL,
     );
-    // The field manifest is summarized as a count.
+  });
+
+  test("configure_template_fields summarizes the field manifest as a count", () => {
+    const rows = build("configure_template_fields", {
+      template_id: "tmpl-abc",
+      fields: [{ path: "a" }, { path: "b" }, { path: "c" }],
+    });
+    const byKey = Object.fromEntries(rows.map((row) => [row.key, row.value]));
+    expect(byKey["template_id"]).toBe("tmpl-abc");
     expect(byKey["fields"]).toBe("3");
   });
 
-  test("save_template shows a host file by name, never its download URL", () => {
-    const rows = build("save_template", {
+  test("create_template shows a host file by name, never its download URL", () => {
+    const rows = build("create_template", {
       name: "NDA",
       file: {
         download_url: "https://files.example/signed?token=secret",
@@ -70,8 +77,8 @@ describe("buildRegistryWriteSummaryRows", () => {
     );
   });
 
-  test("save_template falls back to the placeholder for an unnamed host file", () => {
-    const rows = build("save_template", {
+  test("create_template falls back to the placeholder for an unnamed host file", () => {
+    const rows = build("create_template", {
       name: "NDA",
       file: {
         download_url: "https://files.example/signed",

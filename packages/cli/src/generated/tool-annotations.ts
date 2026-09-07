@@ -109,8 +109,12 @@ export const generatedToolAnnotations: Readonly<
       },
     },
   },
-  save_template: {
-    command: ["template", "save"],
+  create_template: {
+    command: ["template", "create"],
+    scope: "templates",
+  },
+  configure_template_fields: {
+    command: ["template", "configure-fields"],
     scope: "templates",
   },
   list_documents: {

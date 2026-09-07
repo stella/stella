@@ -197,7 +197,11 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
         },
       },
     },
-    save_template: { command: ["template", "save"], scope: "templates" },
+    create_template: { command: ["template", "create"], scope: "templates" },
+    configure_template_fields: {
+      command: ["template", "configure-fields"],
+      scope: "templates",
+    },
 
     list_time_entries: {
       command: ["time-entry", "list"],

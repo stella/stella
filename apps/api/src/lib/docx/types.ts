@@ -491,7 +491,8 @@ export const describeDerivedSourceConflict = (
 const FIELD_SOURCE_DESCRIPTION = "Who fills = matter or contact data";
 
 /**
- * Every description below is advertised in `save_template`'s `inputSchema`,
+ * Every description below is advertised in `configure_template_fields`'s
+ * `inputSchema`,
  * which each MCP client downloads on connect, so they stay one short line that
  * names the property's role. The per-property guidance (examples, who fills a
  * field, the binding kinds and their keys) lives in the `template-fields`

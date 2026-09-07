@@ -877,8 +877,10 @@ type Messages = {
       "borme_get_summary": "BORME daily summary";
       "business_registry_lookup": "Searching business registry";
       "compare_versions": "Comparing versions";
+      "configure_template_fields": "Configure template fields";
       "create-document": "Preparing document";
       "create_matter_document": "Creating document";
+      "create_template": "Create template";
       "delete_clause": "Delete clause";
       "delete_contact": "Delete contact";
       "delete_document": "Delete document";
@@ -936,7 +938,6 @@ type Messages = {
       "save_document": "Save document";
       "save_matter": "Save matter";
       "save_task": "Save task";
-      "save_template": "Save template";
       "save_time_entry": "Save time entry";
       "search-across-matters": "Searching across matters";
       "search-chat-history": "Searching chat history";

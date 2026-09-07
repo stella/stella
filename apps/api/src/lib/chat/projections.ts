@@ -1505,7 +1505,7 @@ const TEMPLATE_WARNINGS_PROJECTION = v.array(
 /**
  * The describe shape (`DescribeTemplateResult` success variant,
  * `lib/templates/template-fill-service.ts`) served by list_templates' detail
- * mode and echoed by save_template's configure branch. Field paths, input
+ * mode and echoed by configure_template_fields. Field paths, input
  * types, options, and condition/formula expressions are structural
  * org-authored data; no ids anywhere.
  */
@@ -1519,8 +1519,8 @@ export const TEMPLATE_DESCRIBE_PROJECTION = v.strictObject({
       required: v.boolean(),
       hint: v.optional(v.string()),
       options: v.optional(v.array(v.string())),
-      // The complete lookup configuration, in the shape `save_template`'s
-      // `fields` overlay accepts, so a described field round-trips.
+      // The complete lookup configuration, in the shape
+      // `configure_template_fields` accepts, so a described field round-trips.
       lookup: v.optional(
         v.strictObject({
           registry: v.string(),
@@ -1759,18 +1759,23 @@ export const SET_PRACTICE_JURISDICTIONS_PROJECTION = v.strictObject({
 });
 
 /**
- * save_template: create returns `{ templateId, name, fieldCount, warnings }`
- * (template handle); configure echoes the same describe shape list_templates'
- * detail mode serves, so the agent sees exactly what is now configured.
+ * create_template: the template handle and field count, plus the same describe
+ * shape list_templates' detail mode serves, so one call both creates the
+ * template and hands back the configuration surface to edit.
  */
-export const SAVE_TEMPLATE_CREATE_PROJECTION = v.strictObject({
+export const CREATE_TEMPLATE_PROJECTION = v.strictObject({
   templateId: passthroughId(),
-  name: v.string(),
+  // The manifest field count, the same number list_templates reports per
+  // template. `fields[]` below is the fillable subset: a formula or condition
+  // field is a rule, reported under `computed`/`conditions`, so the two
+  // numbers differ for a template that declares any.
   fieldCount: v.number(),
-  warnings: TEMPLATE_WARNINGS_PROJECTION,
+  ...TEMPLATE_DESCRIBE_PROJECTION.entries,
 });
 
-export const SAVE_TEMPLATE_PROJECTION = v.union([
-  projectionBranch(SAVE_TEMPLATE_CREATE_PROJECTION),
-  projectionBranch(TEMPLATE_DESCRIBE_PROJECTION),
-]);
+/**
+ * configure_template_fields echoes the describe shape, so the agent sees
+ * exactly what is now configured.
+ */
+export const CONFIGURE_TEMPLATE_FIELDS_PROJECTION =
+  TEMPLATE_DESCRIBE_PROJECTION;

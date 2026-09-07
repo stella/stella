@@ -2213,28 +2213,49 @@ describe("registry write tool approval policy", () => {
     }
   });
 
-  test("save_template exposes its executable inline and configure modes, not host files", () => {
-    const tool = buildToolsWithWorkspace()["save_template"];
+  test("create_template exposes its executable inline mode, not host files", () => {
+    const tool = buildToolsWithWorkspace()["create_template"];
     if (!tool?.inputSchema) {
-      throw new Error("Expected save_template to be registered");
+      throw new Error("Expected create_template to be registered");
     }
     const schema = requireRecord(
       convertSchemaToJsonSchema(tool.inputSchema),
-      "save_template input schema",
+      "create_template input schema",
     );
     const properties = requireRecord(
       schema["properties"],
-      "save_template input properties",
+      "create_template input properties",
     );
 
     expect(properties["file"]).toBeUndefined();
     expect(properties["docx_base64"]).toBeDefined();
-    expect(properties["template_id"]).toBeDefined();
     expect(tool.description).toContain("docx_base64");
-    expect(tool.description).toContain("template_id");
     expect(tool.description).toContain(TEMPLATE_MARKER_REFERENCE_URI);
-    expect(tool.description).toContain(TEMPLATE_FIELD_REFERENCE_URI);
     expect(tool.description).not.toContain("host file");
+  });
+
+  test("configure_template_fields exposes the field entries and their reference", () => {
+    const tool = buildToolsWithWorkspace()["configure_template_fields"];
+    if (!tool?.inputSchema) {
+      throw new Error("Expected configure_template_fields to be registered");
+    }
+    const schema = requireRecord(
+      convertSchemaToJsonSchema(tool.inputSchema),
+      "configure_template_fields input schema",
+    );
+    const properties = requireRecord(
+      schema["properties"],
+      "configure_template_fields input properties",
+    );
+
+    // Configuration never carries a document: only the template it applies to
+    // and the field entries.
+    expect(properties["docx_base64"]).toBeUndefined();
+    expect(properties["file"]).toBeUndefined();
+    expect(properties["template_id"]).toBeDefined();
+    expect(properties["fields"]).toBeDefined();
+    expect(tool.description).toContain("template_id");
+    expect(tool.description).toContain(TEMPLATE_FIELD_REFERENCE_URI);
   });
 
   test("no write tools are registered when the workspace set is empty", () => {

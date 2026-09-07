@@ -33,7 +33,8 @@ export const TEMPLATE_WORKFLOW_REFERENCE_URI =
  * half can drift from the other.
  */
 const TOOL = {
-  saveTemplate: "save_template",
+  createTemplate: "create_template",
+  configureTemplateFields: "configure_template_fields",
   listTemplates: "list_templates",
   setPracticeJurisdictions: "set_practice_jurisdictions",
   fillTemplate: "fill_template",
@@ -45,10 +46,11 @@ const TOOL = {
 export const TEMPLATE_WORKFLOW_TOOL_NAMES = Object.values(TOOL);
 
 const {
+  configureTemplateFields: CONFIGURE_TEMPLATE_FIELDS,
+  createTemplate: CREATE_TEMPLATE,
   fillTemplate: FILL_TEMPLATE,
   listTemplates: LIST_TEMPLATES,
   saveFilledTemplate: SAVE_FILLED_TEMPLATE,
-  saveTemplate: SAVE_TEMPLATE,
   sendFeedback: SEND_FEEDBACK,
   setPracticeJurisdictions: SET_PRACTICE_JURISDICTIONS,
   uploadDocumentVersion: UPLOAD_DOCUMENT_VERSION,
@@ -82,22 +84,24 @@ const WORKFLOW_STEPS: readonly WorkflowStep[] = [
   {
     title: "Create the template",
     detail:
-      `${SAVE_TEMPLATE} with \`name\`, the DOCX, and no \`fields\`. Two ways ` +
-      `to send it: \`file\`, a host file reference (the shape ` +
+      `${CREATE_TEMPLATE} with \`name\` and the DOCX. Two ways to send it: ` +
+      `\`file\`, a host file reference (the shape ` +
       `${UPLOAD_DOCUMENT_VERSION} takes), up to ${MAX_DOCX_MEGABYTES} MB; or ` +
       "`docx_base64`, base64 of the raw bytes, for a small document only " +
       `(at most ${MAX_INLINE_DOCX_BYTES} bytes decoded), because the whole ` +
       "call must fit one MCP request frame. Never strip parts out to fit " +
-      "that; use `file`. Returns `templateId`, `name`, `fieldCount` and " +
-      "`warnings[]` (`code`, `path`, `message`, `hint`): markers the save " +
+      "that; use `file`. Returns `templateId`, `fieldCount`, the discovered " +
+      "`fields[]`, `arrays[]`, `conditions[]` and `computed[]`, and " +
+      "`warnings[]` (`code`, `path`, `message`, `hint`): markers the create " +
       "accepted that will not do what you meant. Fix them in the DOCX and " +
-      "create again before configuring. Discovery decides which paths exist, " +
-      "so configure in a second call rather than guessing paths here.",
+      "create again before configuring.",
   },
   {
     title: "Read the discovered paths back",
     detail:
-      `${LIST_TEMPLATES} with \`template_id\`. Returns \`fields[]\` (\`path\`, ` +
+      `${CREATE_TEMPLATE} already returned this, and ${LIST_TEMPLATES} with ` +
+      "`template_id` returns it again for a template you did not just " +
+      "create. `fields[]` (`path`, " +
       "`label`, `inputType`, `required`, `hint`, `options`, `optionsFrom`, " +
       "`formats`, `aiPrompt`, `aiAdapt`, `parts`, `format`, `dateFormat`), " +
       "`arrays[]` (one entry per `{{#each}}` loop: its `path` plus the " +
@@ -111,14 +115,14 @@ const WORKFLOW_STEPS: readonly WorkflowStep[] = [
   {
     title: "Configure the fields",
     detail:
-      `${SAVE_TEMPLATE} with \`template_id\` and a \`fields\` overlay, and no ` +
-      "`docx_base64` and no `name`. Every entry's `path` must be one " +
-      `${LIST_TEMPLATES} reported; an undiscovered path is refused. The ` +
-      "overlay decides who fills each field (person, AI, registry lookup, " +
-      "matter or contact binding, formula) — see " +
+      `${CONFIGURE_TEMPLATE_FIELDS} with \`template_id\` and \`fields\`. Every ` +
+      `entry's \`path\` must be one ${CREATE_TEMPLATE} or ${LIST_TEMPLATES} ` +
+      "reported; an undiscovered path is refused. Each entry decides who " +
+      "fills that field (person, AI, registry lookup, matter or contact " +
+      "binding, formula) — see " +
       `${TEMPLATE_FIELD_REFERENCE_URI}. The response echoes the full ` +
       `configuration in the ${LIST_TEMPLATES} detail shape, \`warnings[]\` ` +
-      "included: the overlay recomputes them, so a condition that removes " +
+      "included: the change recomputes them, so a condition that removes " +
       "its own input or a lookup on a disabled registry shows up here. A " +
       "`lookup` " +
       "field resolves at fill time only for a registry the organization has " +
