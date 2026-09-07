@@ -43,6 +43,8 @@ const isOrsrExtractResponse = (
 ): value is OrsrRawExtractResponse =>
   isRecord(value) &&
   (value["fileReference"] === undefined || isRecord(value["fileReference"])) &&
+  (value["courtName"] === undefined ||
+    typeof value["courtName"] === "string") &&
   (value["legalPerson"] === undefined || isRecord(value["legalPerson"]));
 
 const parseErrorBody = (value: unknown): OrsrRawErrorResponse => {

@@ -188,6 +188,31 @@ describe("lookupByIco (fixture)", () => {
       upstreamMessage: null,
     });
   });
+
+  test("rejects non-string court names in successful extract payloads", async () => {
+    const search = await readFixture<unknown>("search-by-ico-eset.json");
+    let malformedCourtName: unknown;
+    restore = installFetchStub(async (input) =>
+      jsonResponse(
+        urlOf(input).includes("/extract")
+          ? { legalPerson: {}, courtName: malformedCourtName }
+          : search,
+      ),
+    );
+
+    for (const value of [null, 42, false, {}, []]) {
+      malformedCourtName = value;
+      const rejection: unknown = await lookupByIco("31333532").then(
+        () => null,
+        (error: unknown) => error,
+      );
+      expect(rejection).toMatchObject({
+        name: "OrsrAPIError",
+        httpStatus: 200,
+        upstreamMessage: null,
+      });
+    }
+  });
 });
 
 describe("searchByName (fixture)", () => {
