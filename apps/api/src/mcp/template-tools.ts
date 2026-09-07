@@ -51,7 +51,10 @@ import { DOCX_EXT_RE, sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
 import { createStoredTemplate } from "@/api/lib/templates/create-template";
 import type { FieldOverlayIssue } from "@/api/lib/templates/field-overlay";
-import { resolveTemplateFieldOverlay } from "@/api/lib/templates/field-overlay";
+import {
+  conditionReferencesOnlySelf,
+  resolveTemplateFieldOverlay,
+} from "@/api/lib/templates/field-overlay";
 import {
   recordTemplateFill,
   recordTemplateUse,
@@ -2396,6 +2399,38 @@ const withoutPath = (
   return inner === null ? null : { ...entry, [head]: inner };
 };
 
+/**
+ * The one `source` shape that is read before the entry is parsed at all: a
+ * condition on the field's own value.
+ *
+ * `{ "type": "condition", "expression": "expenses_reimbursed" }` on
+ * `expenses_reimbursed` says "ask this when the answer is yes", which no one
+ * can ever answer. The entry means the plain question, so the condition is
+ * dropped and the rest of the entry applies — a decision property normally
+ * costs the whole entry, and this one is not a decision, it is a shape with
+ * no meaning. `null` when the entry is not that shape.
+ */
+const withoutCircularCondition = (
+  entry: unknown,
+): Record<string, unknown> | null => {
+  if (!isEntryRecord(entry)) {
+    return null;
+  }
+  const { path, source } = entry;
+  if (
+    typeof path !== "string" ||
+    !isEntryRecord(source) ||
+    source["type"] !== "condition"
+  ) {
+    return null;
+  }
+  const expression = source["expression"];
+  return typeof expression === "string" &&
+    conditionReferencesOnlySelf(path, expression)
+    ? withoutPath(entry, ["source"])
+    : null;
+};
+
 export type ConfigureEntries =
   | { type: "rejected"; result: InternalToolErrorResult }
   | {
@@ -2435,6 +2470,21 @@ export const parseConfigureEntries = (
     ? [...sentFields]
     : null;
   const issues: FieldOverlayIssue[] = [];
+  for (const [position, entry] of sent?.entries() ?? []) {
+    const dropped = withoutCircularCondition(entry);
+    if (dropped === null || sent === null) {
+      continue;
+    }
+    sent[position] = dropped;
+    issues.push({
+      path: `fields.${String(position)}.source`,
+      index: position,
+      message:
+        "`source` was dropped: a condition that reads only the field's own " +
+        "value cannot decide whether to ask for it.",
+      hint: `The rest of the entry was applied and the field stays a question the person answers. A condition names the OTHER field it depends on; see ${TEMPLATE_FIELD_REFERENCE_URI}.`,
+    });
+  }
   let positions = sent === null ? [] : sent.map((_entry, index) => index);
   for (;;) {
     const candidate =

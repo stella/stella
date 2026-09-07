@@ -243,15 +243,18 @@ describe("detectGrammarTraps", () => {
     ).toBe(0);
   });
 
-  test("a condition on a tick-box field, or one restating its own path, is condition_on_input", () => {
+  test("a condition the engine drops is no longer counted", () => {
     expect(
       detectGrammarTraps({
         blocks: [paragraph("{% if penalty %}")],
         overlay: [{ path: "penalty", condition: "penalty == true" }],
         overlayIssues: [],
-        booleanInputPaths: [],
+        booleanInputPaths: ["penalty"],
       }).condition_on_input,
-    ).toBe(1);
+    ).toBe(0);
+  });
+
+  test("a condition on a tick-box field is condition_on_input", () => {
     expect(
       detectGrammarTraps({
         blocks: [paragraph("{% if penalty %}")],

@@ -382,6 +382,60 @@ describe("loop aliases at the configure boundary", () => {
   });
 });
 
+describe("a condition that answers itself", () => {
+  test("a condition that reads only its own field is read as absent", async () => {
+    const discovered = await discoverTemplate(
+      await makeDocx("{{ expenses_reimbursed }}", "{{ expense_cap }}"),
+    );
+
+    const { applied, issues } = partitionFieldOverlay({
+      configured: [],
+      discovered,
+      overlay: [
+        {
+          path: "expenses_reimbursed",
+          label: "Expenses reimbursed",
+          inputType: "boolean",
+          condition: "expenses_reimbursed == true",
+        },
+        { path: "expense_cap", condition: "expenses_reimbursed" },
+      ],
+    });
+
+    expect(issues).toEqual([]);
+    expect(applied).toEqual([
+      {
+        path: "expenses_reimbursed",
+        label: "Expenses reimbursed",
+        inputType: "boolean",
+      },
+      // A condition on ANOTHER field's value still decides something.
+      { path: "expense_cap", condition: "expenses_reimbursed" },
+    ]);
+  });
+
+  test("a condition that reads its own path among others stands", async () => {
+    const discovered = await discoverTemplate(
+      await makeDocx("{{ expenses_reimbursed }}", "{{ expense_cap }}"),
+    );
+
+    const { applied } = partitionFieldOverlay({
+      configured: [],
+      discovered,
+      overlay: [
+        {
+          path: "expenses_reimbursed",
+          condition: "expenses_reimbursed and expense_cap > 0",
+        },
+      ],
+    });
+
+    expect(applied.at(0)?.condition).toBe(
+      "expenses_reimbursed and expense_cap > 0",
+    );
+  });
+});
+
 describe("a child restating the parent's lookup", () => {
   const companyDocx = async () =>
     makeDocx("{{company}}", "{{company.address}}", "{{company.krs}}");

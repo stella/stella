@@ -156,6 +156,7 @@ export const evaluateCondition = (
 };
 
 export { parseCondition } from "./parse.js";
+export { referencedConditionPaths } from "./referenced-paths.js";
 
 // Value-returning arithmetic evaluator for computed fields. Kept separate
 // from the boolean condition engine above; re-exported here as the package's

@@ -29,7 +29,10 @@ import {
 } from "@stll/template-conditions";
 
 import { parseInlineConditions } from "@/api/lib/docx/inline-conditions";
-import { LOOKUP_OWNERSHIP_REFUSAL } from "@/api/lib/templates/field-overlay";
+import {
+  conditionReferencesOnlySelf,
+  LOOKUP_OWNERSHIP_REFUSAL,
+} from "@/api/lib/templates/field-overlay";
 
 /**
  * One block of the document the model authored. A table cell holds a
@@ -241,14 +244,6 @@ const countLanguageVariants = (paths: readonly string[]): number => {
   return count;
 };
 
-/** A truthiness test on the field's own path (`penalty`, `penalty == true`),
- *  which is the tick-box confusion wherever it appears. */
-const TRUTHINESS_TAIL_RE = /\s*(?:==|=|is)\s*true$/u;
-
-const isSelfReferentialCondition = (path: string, condition: string): boolean =>
-  condition.trim().toLowerCase().replace(TRUTHINESS_TAIL_RE, "").trim() ===
-  path.toLowerCase();
-
 type DetectGrammarTrapsOptions = {
   /** The document the model authored, in order. */
   blocks: readonly AuthoredBlock[];
@@ -376,13 +371,16 @@ export const detectGrammarTraps = ({
     }
   }
 
+  // A condition that reads only the field's own value is one the engine drops
+  // before it configures anything, so it is no longer a trap; what remains is
+  // a condition that makes a question the person was meant to answer derived.
   const booleanInputs = new Set(booleanInputPaths);
   for (const field of overlay) {
     const { condition } = field;
     if (
       condition !== undefined &&
-      (booleanInputs.has(field.path) ||
-        isSelfReferentialCondition(field.path, condition))
+      booleanInputs.has(field.path) &&
+      !conditionReferencesOnlySelf(field.path, condition)
     ) {
       counts.condition_on_input += 1;
     }

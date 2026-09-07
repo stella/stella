@@ -3003,6 +3003,39 @@ describe("MCP template tools", () => {
     expect(issues).toMatchObject([{ path: "fields.0.options", index: 0 }]);
   });
 
+  test("configure_template_fields drops a condition that reads only its own field", async () => {
+    // "Show this input when it is true" cannot be answered: the input has to
+    // be shown first. The entry means the plain question, so the condition is
+    // dropped and the rest of the entry — a decision property normally costs
+    // the whole entry — still configures the field.
+    const issues = await configureEntryIssues([
+      {
+        path: "expenses_reimbursed",
+        label: "Expenses reimbursed",
+        input_type: "boolean",
+        source: { type: "condition", expression: "expenses_reimbursed" },
+      },
+      {
+        path: "expense_cap",
+        source: { type: "condition", expression: "expenses_reimbursed" },
+      },
+    ]);
+
+    expect(issues).toMatchObject([{ path: "fields.0.source", index: 0 }]);
+    expect(configureTemplateFieldsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fields: [
+          {
+            path: "expenses_reimbursed",
+            label: "Expenses reimbursed",
+            inputType: "boolean",
+          },
+          { path: "expense_cap", condition: "expenses_reimbursed" },
+        ],
+      }),
+    );
+  });
+
   test("configure_template_fields still refuses an entry whose source is unreadable", async () => {
     // `source` decides WHO fills the field, so no part of it is dropped on
     // its own however deep the schema's objection sits.

@@ -14,6 +14,8 @@
 
 import { panic } from "better-result";
 
+import { referencedConditionPaths } from "@stll/template-conditions";
+
 import { arrayOrEmpty } from "@/api/lib/array";
 import { foldItemCountConstraints } from "@/api/lib/docx/field-filters";
 import {
@@ -141,6 +143,41 @@ const canonicalizeOverlayPath = (
   return path;
 };
 
+/**
+ * A condition that reads only the field it is attached to.
+ *
+ * `expenses_reimbursed` is shown when `expenses_reimbursed` is true, which is
+ * circular: the input has to be shown before anyone can answer it, so the
+ * condition can only ever hide it. What the author meant is the plain
+ * question, so the condition says nothing and is read as absent. A condition
+ * that reads its own path AMONG others still decides something and stands.
+ */
+export const conditionReferencesOnlySelf = (
+  path: string,
+  condition: string,
+): boolean => {
+  const referenced = referencedConditionPaths(condition);
+  return (
+    referenced !== null &&
+    referenced.length > 0 &&
+    referenced.every((referencedPath) => referencedPath === path)
+  );
+};
+
+/** The entry with a self-referential condition taken off it. The canonical
+ *  AST is derived from the expression, so it goes with it. */
+const withoutSelfCondition = (field: FieldMeta): FieldMeta => {
+  const { condition } = field;
+  if (
+    condition === undefined ||
+    !conditionReferencesOnlySelf(field.path, condition)
+  ) {
+    return field;
+  }
+  const { condition: _condition, conditionAst: _conditionAst, ...rest } = field;
+  return rest;
+};
+
 /** One overlay entry, with the position it was sent at: an issue names the
  *  entry the caller wrote, never the position it ended up in. */
 type OverlayEntry = {
@@ -150,7 +187,8 @@ type OverlayEntry = {
 
 /**
  * The overlay in the vocabulary the manifest speaks: loop aliases resolved,
- * and item counts on the repeat they count.
+ * item counts on the repeat they count, and a condition that answers itself
+ * read as the absent condition it is.
  *
  * A model that configures `attorneys.name` writes the whole entry there,
  * item count included, because that is the entry it is filling in. The count
@@ -163,10 +201,10 @@ const canonicalizeOverlay = (
   { arrays, declared }: DeclaredPaths,
 ): OverlayEntry[] => {
   const entries = overlay.map((field, index) => ({
-    field: {
+    field: withoutSelfCondition({
       ...field,
       path: canonicalizeOverlayPath(field.path, discovered, declared),
-    },
+    }),
     index,
   }));
   const { fields, moves } = foldItemCountConstraints(
