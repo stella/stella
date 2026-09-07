@@ -611,7 +611,7 @@ const czNssSourceHash = ({
 const fetchDecisionContent = async (
   documentId: string,
   row: ParsedRow,
-  detail: DetailMetadata,
+  detail: CzNssDetailMetadata,
   session: SessionState,
   signal: AbortSignal,
 ): Promise<DecisionContent> => {
@@ -703,7 +703,13 @@ const fetchDecisionContent = async (
   }
 };
 
-type DetailMetadata = {
+/**
+ * The fields the portal states on a document's own detail page, which no
+ * document endpoint carries. Exported under the adapter's name because a
+ * second reader — a backfill that fetches this page for the headnote alone —
+ * must bind to the same shape rather than restate its keys.
+ */
+export type CzNssDetailMetadata = {
   ecli: string | undefined;
   judge: string | undefined;
   senate: string | undefined;
@@ -747,11 +753,41 @@ const extractDivText = (html: string, divId: string): string | undefined => {
 };
 
 /**
+ * Read the detail page's fields out of its markup.
+ *
+ * Split from the fetch below so a caller that already holds the page — a
+ * backfill reading the headnote off it, its own tests — parses it through
+ * the adapter rather than through a second copy of these field names.
+ */
+export const parseCzNssDetailMetadata = (
+  html: string,
+): CzNssDetailMetadata => ({
+  ecli: extractDivText(html, "ecli"),
+  judge: extractDivText(html, "soudcezpravodaj"),
+  senate: extractDivText(html, "soudsenat"),
+  legalArea: extractDivText(html, "oblastupravy"),
+  decisionType: extractDivText(html, "druhdokumentuavyrokrozhodnuti"),
+  decisionDate: extractDivText(html, "datumvydanirozhodnuti"),
+  outcome: extractDivText(html, "vyrokrozhodnuti"),
+  caseType: extractDivText(html, "typrizeni"),
+  parties: extractDivText(html, "ucastnicirizeniz"),
+  caseStatus: extractDivText(html, "stavrizeni"),
+  administrativeAuthority: extractDivText(html, "nazevspravnihoorganu"),
+  citation: extractDivText(html, "citace"),
+  // The headnote the court writes for a decision it selects into its
+  // collection, under `pravnivetaupravena` ("Právní věta (text)"). The
+  // neighbouring `pravnivetaanv` is the ano/ne flag, not the sentence,
+  // and the field is on the detail page alone: neither document
+  // endpoint carries it.
+  legalSentence: extractDivText(html, "pravnivetaupravena"),
+});
+
+/**
  * Fetch structured metadata from /DokumentDetail/Index/{id}.
  * Extracts ECLI, judge, legal area, decision type, outcome,
  * case type, and parties.
  */
-const EMPTY_DETAIL: DetailMetadata = {
+const EMPTY_DETAIL: CzNssDetailMetadata = {
   ecli: undefined,
   judge: undefined,
   senate: undefined,
@@ -778,7 +814,7 @@ const EMPTY_DETAIL: DetailMetadata = {
  * a document not yet read and comes back for.
  */
 type DetailFetch =
-  | { type: "fetched"; detail: DetailMetadata }
+  | { type: "fetched"; detail: CzNssDetailMetadata }
   | { type: "unavailable" };
 
 const fetchDetailMetadata = async (
@@ -807,29 +843,7 @@ const fetchDetailMetadata = async (
 
     const html = await response.text();
 
-    return {
-      type: "fetched",
-      detail: {
-        ecli: extractDivText(html, "ecli"),
-        judge: extractDivText(html, "soudcezpravodaj"),
-        senate: extractDivText(html, "soudsenat"),
-        legalArea: extractDivText(html, "oblastupravy"),
-        decisionType: extractDivText(html, "druhdokumentuavyrokrozhodnuti"),
-        decisionDate: extractDivText(html, "datumvydanirozhodnuti"),
-        outcome: extractDivText(html, "vyrokrozhodnuti"),
-        caseType: extractDivText(html, "typrizeni"),
-        parties: extractDivText(html, "ucastnicirizeniz"),
-        caseStatus: extractDivText(html, "stavrizeni"),
-        administrativeAuthority: extractDivText(html, "nazevspravnihoorganu"),
-        citation: extractDivText(html, "citace"),
-        // The headnote the court writes for a decision it selects into its
-        // collection, under `pravnivetaupravena` ("Právní věta (text)"). The
-        // neighbouring `pravnivetaanv` is the ano/ne flag, not the sentence,
-        // and the field is on the detail page alone: neither document
-        // endpoint carries it.
-        legalSentence: extractDivText(html, "pravnivetaupravena"),
-      },
-    };
+    return { type: "fetched", detail: parseCzNssDetailMetadata(html) };
   } catch {
     return { type: "unavailable" };
   }
@@ -839,7 +853,7 @@ const fetchDetailMetadata = async (
 const rowToResult = (
   row: ParsedRow,
   content: DecisionContent,
-  detail: DetailMetadata,
+  detail: CzNssDetailMetadata,
 ): IngestionResult => {
   const sourceDocumentId = czNssSourceDocumentId(row);
   const court = courtFromEcli(detail.ecli);

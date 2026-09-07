@@ -246,8 +246,10 @@ const extractFulltext = (html: string): string | undefined => {
   return text.length > 100 ? text : undefined;
 };
 
-/** Parse metadata from a decision detail page. */
-const parseDetailPage = (html: string): Record<string, string | undefined> => {
+/** Read every labelled row of a detail page into its own key. */
+const parseDetailLabels = (
+  html: string,
+): Record<string, string | undefined> => {
   const result: Record<string, string | undefined> = {};
 
   for (const [key, pattern] of Object.entries(LABEL_PATTERNS)) {
@@ -260,10 +262,49 @@ const parseDetailPage = (html: string): Record<string, string | undefined> => {
     }
   }
 
-  result["fulltext"] = extractFulltext(html);
-
   return result;
 };
+
+/**
+ * What the court writes about a decision it selected into its collection:
+ * the headnote, the annotation beside it, and the category letter that says
+ * the decision is in the collection at all (`A`).
+ *
+ * Its own type because two readers want exactly these rows and no others —
+ * the crawl, which reads them off a page it fetched for the decision text,
+ * and a backfill, which fetches the page for these rows alone. Naming them
+ * once is what keeps the two reading the same keys.
+ */
+export type CzNsPublishedSummary = {
+  /** `Právní věta:`, the court's own headnote. */
+  legalSentence: string | undefined;
+  /** `Anotace:`, the court's own case annotation. */
+  abstract: string | undefined;
+  /** `Kategorie rozhodnutí:`; `A` is the published collection. */
+  category: string | undefined;
+};
+
+const summaryOfLabels = (
+  labels: Record<string, string | undefined>,
+): CzNsPublishedSummary => ({
+  legalSentence: labels["legalSentence"],
+  abstract: labels["abstract"],
+  category: labels["category"]?.trim(),
+});
+
+/**
+ * The summary rows of a detail page, without the decision text beneath them.
+ * The text is the expensive half of the page and a reader after the headnote
+ * alone has no use for it.
+ */
+export const parseCzNsDetailSummary = (html: string): CzNsPublishedSummary =>
+  summaryOfLabels(parseDetailLabels(html));
+
+/** Parse metadata from a decision detail page. */
+const parseDetailPage = (html: string): Record<string, string | undefined> => ({
+  ...parseDetailLabels(html),
+  fulltext: extractFulltext(html),
+});
 
 /** One decision as the publisher lists it, whichever listing named it. */
 export type CzNsListingRow = {
@@ -422,8 +463,7 @@ export const buildCzNsDecision = async (
         decisionType: meta["decisionType"]?.toLowerCase(),
         ...sourceMetadata,
         judge,
-        legalSentence: meta["legalSentence"],
-        abstract: meta["abstract"],
+        ...summaryOfLabels(meta),
         keywords: meta["keywords"]?.split("\n").flatMap((s) => {
           const trimmed = s.trim();
           return trimmed ? [trimmed] : [];
@@ -432,7 +472,6 @@ export const buildCzNsDecision = async (
           const trimmed = s.trim();
           return trimmed ? [trimmed] : [];
         }),
-        category: meta["category"]?.trim(),
       },
       rawHash: hashContent(raw),
       parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NS],
