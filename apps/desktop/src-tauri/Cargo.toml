@@ -88,9 +88,13 @@ dirs = "6"
 futures-util = "0.3"
 hex = "0.4"
 image = { version = "0.25", default-features = false, features = [
+  "bmp",
+  "gif",
   "ico",
+  "jpeg",
   "png",
   "tiff",
+  "webp",
 ] }
 keyring-core = "1"
 opener = "0.8"

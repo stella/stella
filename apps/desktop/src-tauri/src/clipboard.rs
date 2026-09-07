@@ -19,6 +19,7 @@ use std::{
   collections::{BTreeSet, HashMap, HashSet},
   io::{Cursor, Write},
   net::IpAddr,
+  path::Path,
   sync::{Arc, Mutex},
   time::{Duration as StdDuration, Instant},
 };
@@ -48,13 +49,11 @@ use icns::{IconFamily, PixelFormat};
 use image::{DynamicImage, ImageDecoder, codecs::bmp::BmpDecoder};
 #[cfg(target_os = "macos")]
 use objc2_app_kit::NSWorkspace;
-#[cfg(target_os = "windows")]
-use std::path::Path;
 #[cfg(target_os = "macos")]
 use std::{
   fs::File,
   io::BufReader,
-  path::{Component, Path, PathBuf},
+  path::{Component, PathBuf},
   sync::mpsc::sync_channel,
 };
 #[cfg(target_os = "windows")]
@@ -78,6 +77,13 @@ const MAX_ITEM_IMAGE_DIMENSION: u32 = 32_768;
 const MAX_ITEM_IMAGE_DECODE_BYTES: u64 = 192 * 1024 * 1024;
 const MAX_ITEM_IMAGE_PREVIEW_BYTES: usize = 512 * 1024;
 const MAX_ITEM_IMAGE_PREVIEW_EDGE: u32 = 512;
+/// Downscaling an oversized capture stops here: below this edge the clip has
+/// lost enough detail that keeping it would be worse than dropping it.
+const MIN_ITEM_IMAGE_STORED_EDGE: u32 = 512;
+/// Extensions a copied file must carry to be captured as an image; the
+/// decoder still decides whether the bytes are one.
+const CLIPBOARD_IMAGE_FILE_EXTENSIONS: [&str; 8] =
+  ["bmp", "gif", "jpeg", "jpg", "png", "tif", "tiff", "webp"];
 const MAX_HISTORY_IMAGE_BYTES: usize = 256 * 1024 * 1024;
 const MAX_ITEM_NAME_CHARACTERS: usize = 80;
 const MAX_HISTORY_BYTES: usize = 16 * 1024 * 1024;
@@ -1217,6 +1223,8 @@ struct ClipboardImageCapture {
   copied_at: DateTime<Utc>,
   height: u32,
   image: Vec<u8>,
+  /// Set when the copy names the image, as a copied file does.
+  name: Option<String>,
   preview: Vec<u8>,
   source_app: Option<ClipboardSourceApp>,
   source_app_visual: Option<ClipboardSourceAppVisual>,
@@ -1846,6 +1854,7 @@ impl ClipboardManager {
       copied_at,
       height,
       image,
+      name: captured_name,
       preview,
       source_app,
       source_app_visual,
@@ -1916,7 +1925,7 @@ impl ClipboardManager {
         height,
         id: id.clone(),
         image: Some(image.into()),
-        name,
+        name: name.or(captured_name),
         preview: Some(preview.into()),
         retention_class,
         source_app,
@@ -3272,7 +3281,7 @@ impl ClipboardHandler for HistoryClipboardHandler {
       }
       return;
     }
-    if should_ignore_formats(&formats) || self.clipboard.has(ContentFormat::Files) {
+    if should_ignore_formats(&formats) {
       return;
     }
     #[cfg(target_os = "windows")]
@@ -3289,6 +3298,10 @@ impl ClipboardHandler for HistoryClipboardHandler {
         (Some(app), source.visual)
       })
       .unwrap_or((None, None));
+    if self.clipboard.has(ContentFormat::Files) {
+      self.capture_copied_image_file(source_app, source_app_visual);
+      return;
+    }
     if self.clipboard.has(ContentFormat::Image) {
       match resolve_clipboard_image_capture(
         bounded_clipboard_image(&self.clipboard, &formats).and_then(|image| {
@@ -3301,12 +3314,12 @@ impl ClipboardHandler for HistoryClipboardHandler {
               return;
             }
             ClipboardCaptureOutcome::Rejected => {
-              tracing::debug!("clipboard image was not recorded; falling back to text");
+              tracing::warn!("clipboard image was not recorded; falling back to text");
             }
           }
         }
         ClipboardImageCaptureAttempt::ContinueWithText { error } => {
-          tracing::debug!(error = %error, "clipboard image could not be captured");
+          tracing::warn!(error = %error, "clipboard image could not be captured");
         }
       }
     }
@@ -3350,6 +3363,45 @@ impl ClipboardHandler for HistoryClipboardHandler {
 }
 
 impl HistoryClipboardHandler {
+  /// Captures a copied image file as an image clip. Every other file
+  /// selection is left alone: the history holds clips, not a file manager.
+  fn capture_copied_image_file(
+    &self,
+    source_app: Option<ClipboardSourceApp>,
+    source_app_visual: Option<ClipboardSourceAppVisual>,
+  ) {
+    let paths = match self.clipboard.get_files() {
+      Ok(paths) => paths,
+      Err(error) => {
+        tracing::debug!(error = %error, "clipboard file list could not be read");
+        return;
+      }
+    };
+    let Some(path) = single_clipboard_image_file(&paths) else {
+      tracing::debug!(
+        count = paths.len(),
+        "clipboard files are not a single image file"
+      );
+      return;
+    };
+    let capture = read_bounded_image_file(path)
+      .and_then(decode_bounded_clipboard_image)
+      .and_then(|image| normalized_image_capture(image, source_app, source_app_visual));
+    match capture {
+      Ok(capture) => {
+        self.capture(ClipboardCapture::Image(ClipboardImageCapture {
+          name: path
+            .file_stem()
+            .and_then(|stem| bounded_item_name(&stem.to_string_lossy())),
+          ..capture
+        }));
+      }
+      Err(error) => {
+        tracing::warn!(error = %error, "copied image file could not be captured");
+      }
+    }
+  }
+
   fn capture(&self, capture: ClipboardCapture) -> ClipboardCaptureOutcome {
     let source_page = capture.source_page().cloned();
     let outcome = match self.manager.lock() {
@@ -3557,6 +3609,47 @@ fn bounded_windows_clipboard_bytes(format: u32) -> Result<Vec<u8>, String> {
   Ok(encoded)
 }
 
+/// The one image file a copy selected, or None for anything else: a
+/// multi-file selection, or a path whose extension is not an image's.
+fn single_clipboard_image_file(paths: &[String]) -> Option<&Path> {
+  let [path] = paths else {
+    return None;
+  };
+  let path = Path::new(path);
+  let extension = path.extension()?.to_str()?;
+  CLIPBOARD_IMAGE_FILE_EXTENSIONS
+    .iter()
+    .any(|candidate| extension.eq_ignore_ascii_case(candidate))
+    .then_some(path)
+}
+
+/// Reads a copied image file. The path comes from the user's own copy, but
+/// the watcher still only reads that one regular file, and only up to the
+/// source cap, so a directory or a huge file cannot pull the app under.
+fn read_bounded_image_file(path: &Path) -> Result<Vec<u8>, String> {
+  let metadata = std::fs::metadata(path)
+    .map_err(|error| format!("clipboard image file could not be read: {error}"))?;
+  if !metadata.is_file() {
+    return Err("clipboard image file is not a regular file".to_string());
+  }
+  let byte_size = usize::try_from(metadata.len())
+    .map_err(|_| "clipboard image source is too large".to_string())?;
+  validate_clipboard_image_source_size(byte_size)?;
+  let bytes = std::fs::read(path)
+    .map_err(|error| format!("clipboard image file could not be read: {error}"))?;
+  validate_clipboard_image_source_size(bytes.len())?;
+  Ok(bytes)
+}
+
+/// A name the capture itself supplies, held to the cap `set_item_name` keeps.
+fn bounded_item_name(value: &str) -> Option<String> {
+  let name = value.trim();
+  if name.is_empty() {
+    return None;
+  }
+  Some(name.chars().take(MAX_ITEM_NAME_CHARACTERS).collect())
+}
+
 fn validate_clipboard_image_source_size(byte_size: usize) -> Result<(), String> {
   if byte_size == 0 || byte_size > MAX_ITEM_IMAGE_SOURCE_BYTES {
     return Err("clipboard image source is too large".to_string());
@@ -3587,10 +3680,26 @@ fn normalized_image_capture(
   if width == 0 || height == 0 || pixels > MAX_ITEM_IMAGE_PIXELS {
     return Err("clipboard image dimensions are invalid".to_string());
   }
-  let image_bytes = encode_png_bounded(&image, MAX_ITEM_IMAGE_BYTES)?;
+  // A large screenshot re-encodes past the item cap as RGBA PNG. Halving the
+  // stored copy until it fits keeps the clip; the alternative is dropping it.
+  let mut stored = image;
+  let (image_bytes, width, height) = loop {
+    let (width, height) = stored.get_size();
+    match encode_png_bounded(&stored, MAX_ITEM_IMAGE_BYTES) {
+      Ok(encoded) => break (encoded, width, height),
+      Err(error) => {
+        if width.max(height) / 2 < MIN_ITEM_IMAGE_STORED_EDGE {
+          return Err(error);
+        }
+        stored = stored
+          .thumbnail(width / 2, height / 2)
+          .map_err(|error| format!("clipboard image downscale failed: {error}"))?;
+      }
+    }
+  };
   let mut preview_edge = MAX_ITEM_IMAGE_PREVIEW_EDGE;
   let preview = loop {
-    let thumbnail = image
+    let thumbnail = stored
       .thumbnail(preview_edge, preview_edge)
       .map_err(|error| format!("clipboard image preview failed: {error}"))?;
     match encode_png_bounded(&thumbnail, MAX_ITEM_IMAGE_PREVIEW_BYTES) {
@@ -3604,6 +3713,7 @@ fn normalized_image_capture(
     copied_at: Utc::now(),
     height,
     image: image_bytes,
+    name: None,
     preview,
     source_app,
     source_app_visual,
@@ -3825,6 +3935,12 @@ mod tests {
     let mut manager = ClipboardManager::new();
     manager.install(ClipboardLoad::MemoryOnly);
     manager
+  }
+
+  /// A path in the system temp directory no other test can collide with.
+  fn temp_test_path(name: &str) -> std::path::PathBuf {
+    std::env::temp_dir()
+      .join(format!("stella-clipboard-{}-{name}", uuid::Uuid::new_v4()))
   }
 
   fn text_item(copied_at: DateTime<Utc>, text: &str) -> ClipboardItem {
@@ -4434,6 +4550,108 @@ mod tests {
 
     assert!(encode_png_bounded(&image, 8).is_err());
     assert!(encode_png_bounded(&image, MAX_ITEM_IMAGE_BYTES).is_ok());
+  }
+
+  #[test]
+  fn an_image_past_the_item_limit_is_stored_downscaled() {
+    let (width, height) = (3000_u32, 2500_u32);
+    // Noise so the encoding cannot compress under the cap.
+    let mut seed = 0x2545_f491_4f6c_dd1d_u64;
+    let mut pixels = Vec::with_capacity((width * height * 4) as usize);
+    for _ in 0..width * height * 4 {
+      seed = seed
+        .wrapping_mul(6_364_136_223_846_793_005)
+        .wrapping_add(1_442_695_040_888_963_407);
+      pixels.push((seed >> 33) as u8);
+    }
+    let image = RustImageData::from_dynamic_image(image::DynamicImage::ImageRgba8(
+      image::RgbaImage::from_raw(width, height, pixels).unwrap(),
+    ));
+
+    let capture = normalized_image_capture(image, None, None).unwrap();
+
+    assert!(capture.image.len() <= MAX_ITEM_IMAGE_BYTES);
+    assert!(capture.width < width && capture.height < height);
+    assert!(capture.width.max(capture.height) >= MIN_ITEM_IMAGE_STORED_EDGE);
+    // The recorded size is the stored one, not the source's.
+    let stored = ImageReader::new(Cursor::new(capture.image.as_slice()))
+      .with_guessed_format()
+      .unwrap()
+      .into_dimensions()
+      .unwrap();
+    assert_eq!(stored, (capture.width, capture.height));
+  }
+
+  #[test]
+  fn only_a_single_image_file_selection_is_captured() {
+    let selected = ["/copies/Exhibit A.PNG".to_string()];
+    assert_eq!(
+      single_clipboard_image_file(&selected),
+      Some(Path::new("/copies/Exhibit A.PNG"))
+    );
+    assert!(single_clipboard_image_file(&[]).is_none());
+    assert!(
+      single_clipboard_image_file(&[
+        "/copies/one.png".to_string(),
+        "/copies/two.png".to_string(),
+      ])
+      .is_none()
+    );
+    assert!(single_clipboard_image_file(&["/copies/deed.pdf".to_string()]).is_none());
+    assert!(single_clipboard_image_file(&["/copies/README".to_string()]).is_none());
+  }
+
+  #[test]
+  fn a_copied_image_file_is_read_only_as_a_bounded_regular_file() {
+    let file = temp_test_path("copy.png");
+    std::fs::write(&file, b"exhibit bytes").unwrap();
+    assert_eq!(read_bounded_image_file(&file).unwrap(), b"exhibit bytes");
+    std::fs::remove_file(&file).unwrap();
+
+    let empty = temp_test_path("empty.png");
+    std::fs::write(&empty, b"").unwrap();
+    assert!(read_bounded_image_file(&empty).is_err());
+    std::fs::remove_file(&empty).unwrap();
+
+    let directory = temp_test_path("bundle.png");
+    std::fs::create_dir(&directory).unwrap();
+    assert!(read_bounded_image_file(&directory).is_err());
+    std::fs::remove_dir(&directory).unwrap();
+
+    assert!(read_bounded_image_file(&temp_test_path("missing.png")).is_err());
+  }
+
+  #[test]
+  fn a_capture_name_is_trimmed_bounded_and_kept_on_the_item() {
+    assert_eq!(
+      bounded_item_name("  Exhibit A  ").as_deref(),
+      Some("Exhibit A")
+    );
+    assert!(bounded_item_name("   ").is_none());
+    assert_eq!(
+      bounded_item_name(&"界".repeat(MAX_ITEM_NAME_CHARACTERS + 5))
+        .unwrap()
+        .chars()
+        .count(),
+      MAX_ITEM_NAME_CHARACTERS
+    );
+
+    let mut manager = ready_manager();
+    manager
+      .capture(ClipboardCapture::Image(ClipboardImageCapture {
+        checksum: "file-checksum".to_string(),
+        copied_at: Utc::now(),
+        height: 2,
+        image: vec![0x89, 0x50, 0x4e, 0x47],
+        name: bounded_item_name("Exhibit A"),
+        preview: vec![0x89, 0x50, 0x4e, 0x47],
+        source_app: None,
+        source_app_visual: None,
+        width: 3,
+      }))
+      .unwrap();
+
+    assert_eq!(manager.items[0].name(), Some("Exhibit A"));
   }
 
   #[test]
@@ -5780,6 +5998,7 @@ mod tests {
         copied_at: Utc::now(),
         height: 1,
         image: vec![1],
+        name: None,
         preview: vec![1],
         source_app: None,
         source_app_visual: None,
@@ -5802,6 +6021,7 @@ mod tests {
         copied_at,
         height: 2,
         image: vec![0x89, 0x50, 0x4e, 0x47],
+        name: None,
         preview: vec![0x89, 0x50, 0x4e, 0x47],
         source_app: None,
         source_app_visual: None,
