@@ -22,25 +22,52 @@ import type { LookupRegistry } from "@/components/templates/template-field-manif
 export type LookupRegistryOption = {
   slug: LookupRegistry;
   label: string;
+  name: string;
   country: string;
 };
 
 export const LOOKUP_REGISTRY_OPTIONS = [
-  { slug: "ares", label: "Czechia — ARES", country: "CZ" },
-  { slug: "orsr", label: "Slovakia — ORSR", country: "SK" },
-  { slug: "krs", label: "Poland — KRS", country: "PL" },
+  { slug: "ares", name: "ARES", label: "Czechia — ARES", country: "CZ" },
+  { slug: "orsr", name: "ORSR", label: "Slovakia — ORSR", country: "SK" },
+  { slug: "krs", name: "KRS", label: "Poland — KRS", country: "PL" },
   {
     slug: "companies-house",
+    name: "Companies House",
     label: "United Kingdom — Companies House",
     country: "GB",
   },
-  { slug: "denue", label: "Mexico — INEGI DENUE", country: "MX" },
-  { slug: "brreg", label: "Norway — Brønnøysund (BRREG)", country: "NO" },
-  { slug: "prh", label: "Finland — PRH", country: "FI" },
-  { slug: "recherche-entreprises", label: "France — RNE", country: "FR" },
-  { slug: "edgar", label: "United States — SEC EDGAR", country: "US" },
-  { slug: "gcis", label: "Taiwan — GCIS", country: "TW" },
-  { slug: "vies", label: "European Union — VIES (VAT)", country: "EU" },
+  {
+    slug: "denue",
+    name: "INEGI DENUE",
+    label: "Mexico — INEGI DENUE",
+    country: "MX",
+  },
+  {
+    slug: "brreg",
+    name: "Brønnøysund (BRREG)",
+    label: "Norway — Brønnøysund (BRREG)",
+    country: "NO",
+  },
+  { slug: "prh", name: "PRH", label: "Finland — PRH", country: "FI" },
+  {
+    slug: "recherche-entreprises",
+    name: "RNE",
+    label: "France — RNE",
+    country: "FR",
+  },
+  {
+    slug: "edgar",
+    name: "SEC EDGAR",
+    label: "United States — SEC EDGAR",
+    country: "US",
+  },
+  { slug: "gcis", name: "GCIS", label: "Taiwan — GCIS", country: "TW" },
+  {
+    slug: "vies",
+    name: "VIES (VAT)",
+    label: "European Union — VIES (VAT)",
+    country: "EU",
+  },
 ] as const satisfies readonly LookupRegistryOption[];
 
 type MissingLookupRegistryOption = Exclude<

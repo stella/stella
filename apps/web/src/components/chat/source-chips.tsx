@@ -19,6 +19,7 @@ import type {
 import {
   collectExternalSources,
   collectSourceDocuments,
+  dedupeExternalSources,
 } from "@/components/chat/source-chips.logic";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { EntityIcon } from "@/components/workspaces/entity-kind-icon";
@@ -173,28 +174,8 @@ const collectSourceChipEntries = ({
     seen.add(key);
     return true;
   });
-  const externalSourcesByUrl = new Map<string, ExternalSourceEntry>();
-  for (const source of externalSources) {
-    const existing = externalSourcesByUrl.get(source.url);
-    externalSourcesByUrl.set(
-      source.url,
-      existing
-        ? {
-            connectorSlug: source.connectorSlug ?? existing.connectorSlug,
-            iconHref: source.iconHref ?? existing.iconHref,
-            provider: source.provider ?? existing.provider,
-            snippet: source.snippet ?? existing.snippet,
-            sourceToolName: source.sourceToolName ?? existing.sourceToolName,
-            text: source.text ?? existing.text,
-            title: source.title,
-            url: source.url,
-          }
-        : source,
-    );
-  }
-
   return {
-    uniqueExternalSources: Array.from(externalSourcesByUrl.values()),
+    uniqueExternalSources: dedupeExternalSources(externalSources),
     uniqueSources,
   };
 };

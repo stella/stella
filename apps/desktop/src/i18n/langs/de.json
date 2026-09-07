@@ -142,6 +142,7 @@
     "groups": "Gruppen",
     "itemCount": "{count, plural, one {1 Eintrag} other {{count} Einträge}}",
     "keyboardNavigate": "← → navigieren",
+    "link": "Link",
     "local": "Lokal",
     "memoryOnly": "Der verschlüsselte Speicher ist nicht verfügbar. Der Verlauf bleibt nur bis zum Beenden von stella desktop erhalten.",
     "moreOptions": "Weitere Optionen",

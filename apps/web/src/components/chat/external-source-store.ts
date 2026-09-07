@@ -1,6 +1,14 @@
 import { create } from "zustand";
 
+import type { BusinessRegistrySlug } from "@stll/api-contract";
+
+export type BusinessRegistrySourceReference = {
+  registry: BusinessRegistrySlug;
+  companyId: string;
+};
+
 export type ExternalSourceReference = {
+  businessRegistry?: BusinessRegistrySourceReference | undefined;
   connectorSlug?: string | undefined;
   iconHref?: string | undefined;
   provider?: string | undefined;
@@ -25,9 +33,12 @@ export const useExternalSourceStore = create<ExternalSourceState>()(
       set((state) => {
         const sourcesByUrl = { ...state.sourcesByUrl };
         for (const source of sources) {
+          const existing = sourcesByUrl[source.url];
           sourcesByUrl[source.url] = {
-            ...sourcesByUrl[source.url],
+            ...existing,
             ...source,
+            businessRegistry:
+              source.businessRegistry ?? existing?.businessRegistry,
           };
         }
         return { sourcesByUrl };

@@ -48,6 +48,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./ares": "./src/ares/index.ts",
+    "./ares/court-names": "./src/ares/court-names.ts",
+    "./ares/legal-forms": "./src/ares/legal-forms.ts",
     "./browser": "./src/browser.ts",
     "./brreg": "./src/brreg/index.ts",
     "./cnpj": "./src/cnpj/index.ts",
@@ -57,10 +59,12 @@
     "./edgar": "./src/edgar/index.ts",
     "./gcis": "./src/gcis/index.ts",
     "./krs": "./src/krs/index.ts",
+    "./krs/number": "./src/krs/number.ts",
     "./orsr": "./src/orsr/index.ts",
     "./prh": "./src/prh/index.ts",
     "./recherche-entreprises": "./src/recherche-entreprises/index.ts",
     "./vies": "./src/vies/index.ts",
+    "./vies/validation": "./src/vies/validation.ts",
     "./shared": "./src/shared/index.ts",
     "./sudreg": "./src/sudreg/index.ts",
     "./zefix": "./src/zefix/index.ts"

@@ -226,6 +226,7 @@ export const parseAddress = (raw: OrsrRawAddress): OrsrAddress => {
 
 const parseCourtFile = (
   ref: OrsrRawFileReference | undefined,
+  courtName: string | undefined,
 ): OrsrCourtFile | null => {
   if (!ref) {
     return null;
@@ -236,6 +237,7 @@ const parseCourtFile = (
   }
   return {
     court,
+    courtName: courtName ?? null,
     section,
     insertNumber: String(insertNumber),
   };
@@ -524,7 +526,7 @@ export const parseExtract = (
     return null;
   }
 
-  const courtFile = parseCourtFile(raw.fileReference);
+  const courtFile = parseCourtFile(raw.fileReference, raw.courtName);
   const rawAddress = pickActiveRecord(legalPerson.physicalAddress, terminated);
   const legalForm = pickActiveRecord(body.legalForm, terminated);
   const equity = pickActiveRecord(body.equity, terminated);

@@ -70,7 +70,7 @@ const stubDb = () =>
           languages: [],
         }),
       },
-      organizationSettings: { findFirst: async () => undefined },
+      businessRegistryCredentials: { findMany: async () => [] },
     },
   });
 

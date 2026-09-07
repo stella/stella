@@ -631,3 +631,50 @@ describe("terminology: real glossary covers migrated Team-scope keys", () => {
     });
   }
 });
+
+describe("terminology: Matter stays canonical in search", () => {
+  test("the search kind remains protected if its English source is reworded", () => {
+    expect(
+      findForbiddenTerms(
+        "Client work",
+        "Věc",
+        "cs",
+        realRules,
+        "search.kinds.matter",
+      ),
+    ).toEqual(["Věc"]);
+  });
+
+  test("Czech case-law uses of věc remain outside the Matter concept", () => {
+    expect(
+      findForbiddenTerms(
+        "No case was found for this court and case number.",
+        "Pro tento soud a sp. zn. nebyla nalezena věc.",
+        "cs",
+        realRules,
+        "workspaces.infosoud.notFound",
+      ),
+    ).toEqual([]);
+  });
+
+  test("every locale derives the search kind from the canonical Matter term", async () => {
+    const glossary = parseGlossary(await Bun.file(realGlossaryPath).text());
+    const matter = glossary.legalConcepts.find(({ id }) => id === "matter");
+    expect(matter).toBeDefined();
+
+    const englishCatalogue = await Bun.file(
+      path.resolve(import.meta.dir, "../../../apps/web/src/i18n/langs/en.json"),
+    ).json();
+    expect(englishCatalogue.search.kinds.matter).toBe(matter?.en);
+
+    for (const locale of LOCALES) {
+      const catalogue = await Bun.file(
+        path.resolve(
+          import.meta.dir,
+          `../../../apps/web/src/i18n/langs/${locale}.json`,
+        ),
+      ).json();
+      expect(catalogue.search.kinds.matter).toBe(matter?.translations[locale]);
+    }
+  });
+});

@@ -34,6 +34,7 @@ import {
   FolderPlusIcon,
   ImageIcon,
   KeyboardIcon,
+  LinkIcon,
   LockKeyholeIcon,
   PauseIcon,
   PencilIcon,
@@ -97,6 +98,7 @@ import {
   CLIPBOARD_CARD_PREVIEW_MAX_CHARACTERS,
   CLIPBOARD_ITEM_DRAG_TYPE,
   clipboardDraggedItemId,
+  clipboardItemLink,
   clipboardPointerMoved,
   clipboardRailScrollDelta,
   clipboardRailWindow,
@@ -199,6 +201,11 @@ const PRIMARY_MODIFIER_LABEL = navigator.userAgent.includes("Mac")
 const CLIPBOARD_SHORTCUT_LABEL = navigator.userAgent.includes("Mac")
   ? "⌘⇧V"
   : "Ctrl+Shift+V";
+// Only macOS gives the window a native material; elsewhere the page paints the
+// surface its rounded corners clip.
+const CLIPBOARD_WINDOW_CLASS = navigator.userAgent.includes("Mac")
+  ? "clipboard-window"
+  : "clipboard-window clipboard-window-painted";
 const IMAGE_CLIPBOARD_CAPTURE_SUPPORTED =
   !navigator.userAgent.includes("Linux");
 
@@ -334,7 +341,9 @@ const ClipboardCard = ({
     ? { "--clipboard-source-accent": accent }
     : undefined;
   const rendersHtml = item.type === "formattedText" && !query;
-  const fallbackName = item.type === "image" ? t("image") : t("unnamedClip");
+  const link = clipboardItemLink(item);
+  const fallbackName =
+    item.type === "image" ? t("image") : (link?.host ?? t("unnamedClip"));
   // An unnamed browser copy is named after the page it came from.
   const untitledName =
     item.sourceApp?.page && sourceLabel ? sourceLabel : fallbackName;
@@ -412,6 +421,11 @@ const ClipboardCard = ({
       <ImageIcon aria-hidden="true" className="text-muted-foreground size-6" />
     );
   }
+  if (link) {
+    metadataIcon = (
+      <LinkIcon aria-hidden="true" className="text-muted-foreground size-6" />
+    );
+  }
   if (groupName) {
     metadataIcon = (
       <TagsIcon aria-hidden="true" className="text-muted-foreground size-6" />
@@ -437,6 +451,9 @@ const ClipboardCard = ({
   }
   if (item.type === "image") {
     metadataTitle = t("image");
+  }
+  if (link) {
+    metadataTitle = t("link");
   }
 
   const beginNameEdit = () => {
@@ -1994,7 +2011,7 @@ const ClipboardApp = () => {
 
   return (
     <div
-      className="clipboard-window text-foreground relative flex min-h-dvh flex-col overflow-hidden outline-none"
+      className={`${CLIPBOARD_WINDOW_CLASS} text-foreground relative flex min-h-dvh flex-col overflow-hidden outline-none`}
       aria-label={t("timeline")}
       ref={(node) => {
         timelineRef.current = node;

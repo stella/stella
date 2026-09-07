@@ -201,6 +201,8 @@ export type OrsrAddress = {
 export type OrsrCourtFile = {
   /** Trade-register court abbreviation (e.g. "B" = Mestský súd Bratislava III). */
   court: string;
+  /** Full court name supplied by the extract endpoint. */
+  courtName: string | null;
   /** Register section, e.g. "Sro", "Sa". */
   section: string;
   /** Insert (vložka) number — globally unique within (section, court). */

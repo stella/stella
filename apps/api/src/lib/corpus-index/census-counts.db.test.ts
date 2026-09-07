@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { asc, eq } from "drizzle-orm";
+import { asc, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import type { Transaction } from "@/api/db/root";
@@ -45,6 +45,16 @@ const insertedDecisionId = toSafeId<"caseLawDecision">(
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof drizzle>;
 let scopedDb: ScopedDb;
+
+// The statement triggers touch one bucket per (generation, index_id) a
+// statement changes. Without a fixed lock order, concurrent writers can take
+// those row locks in opposite orders and deadlock, so every one of them must
+// lock its buckets in primary-key order before the update reaches them. The
+// set is discovered from the catalog rather than listed here, so a trigger
+// added or renamed later is held to the same invariant.
+const ORDERED_BUCKET_LOCK =
+  /FROM case_law_corpus_index_counts AS counts\s+WHERE[\s\S]*?ORDER BY counts\.generation, counts\.index_id\s+FOR UPDATE/u;
+const BUCKET_UPDATE = "UPDATE case_law_corpus_index_counts AS counts";
 
 const countRows = async () =>
   await db
@@ -137,6 +147,50 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await client.close();
+});
+
+test("count triggers lock their buckets in primary-key order before updating", async () => {
+  // Every trigger function on the projection table that writes a count
+  // bucket, whatever it is called.
+  const installed = await db.execute(sql`
+    SELECT proc.proname AS "name", pg_get_functiondef(proc.oid) AS "definition"
+    FROM pg_catalog.pg_trigger AS projection_trigger
+    JOIN pg_catalog.pg_class AS projection_table
+      ON projection_table.oid = projection_trigger.tgrelid
+    JOIN pg_catalog.pg_proc AS proc
+      ON proc.oid = projection_trigger.tgfoid
+    WHERE projection_table.relname = 'case_law_corpus_index_projections'
+      AND NOT projection_trigger.tgisinternal
+      AND pg_get_functiondef(proc.oid)
+        ~ '(UPDATE|INSERT INTO)\\s+case_law_corpus_index_counts'
+    ORDER BY proc.proname
+  `);
+
+  // The catalog columns arrive untyped; naming each function in the result
+  // makes a failure report which definition regressed.
+  const lockOrder = installed.rows.map((row) => {
+    const definition = String(row["definition"]);
+    const lockIndex = ORDERED_BUCKET_LOCK.exec(definition)?.index ?? -1;
+    return {
+      locksBeforeUpdating: definition.indexOf(BUCKET_UPDATE) > lockIndex,
+      locksBucketsInOrder: lockIndex >= 0,
+      name: String(row["name"]),
+    };
+  });
+  // Naming the writers keeps a discovery that returned nothing from
+  // satisfying the invariant vacuously, and makes adding one a decision. The
+  // invariant below is checked against whatever the catalog returned.
+  expect(lockOrder.map(({ name }) => name)).toEqual([
+    "add_inserted_case_law_corpus_index_counts",
+    "apply_updated_case_law_corpus_index_counts",
+    "subtract_deleted_case_law_corpus_index_counts",
+  ]);
+  expect(
+    lockOrder.filter(
+      ({ locksBeforeUpdating, locksBucketsInOrder }) =>
+        !locksBucketsInOrder || !locksBeforeUpdating,
+    ),
+  ).toEqual([]);
 });
 
 test("exact accounting converges across replay, races, and valid projection transitions", async () => {

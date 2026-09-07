@@ -142,6 +142,7 @@
     "groups": "Grupės",
     "itemCount": "{count, plural, one {1 elementas} few {{count} elementai} other {{count} elementų}}",
     "keyboardNavigate": "← → naršyti",
+    "link": "Nuoroda",
     "local": "Vietinė",
     "memoryOnly": "Šifruota saugykla nepasiekiama. Istorija bus laikoma tik iki stella desktop uždarymo.",
     "moreOptions": "Daugiau parinkčių",

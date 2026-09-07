@@ -142,6 +142,7 @@
     "groups": "Grupos",
     "itemCount": "{count, plural, one {1 elemento} other {{count} elementos}}",
     "keyboardNavigate": "← → navegar",
+    "link": "Enlace",
     "local": "Local",
     "memoryOnly": "El almacenamiento cifrado no está disponible. El historial se conservará solo hasta cerrar stella desktop.",
     "moreOptions": "Más opciones",

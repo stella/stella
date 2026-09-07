@@ -1,14 +1,49 @@
 import { describe, expect, test } from "bun:test";
 
+import { BUSINESS_REGISTRY_SLUGS } from "@stll/api-contract";
+
 import {
   externalMcpCitedAssistantMessageFixture,
   externalMcpGetDocumentResponseFixture,
   externalMcpSearchResponseFixture,
 } from "@/components/chat/__fixtures__/external-mcp";
-import { collectExternalSources } from "@/components/chat/source-chips.logic";
+import {
+  collectExternalSources,
+  dedupeExternalSources,
+} from "@/components/chat/source-chips.logic";
 import type { ExternalSourceEntry } from "@/components/chat/source-chips.logic";
 
 describe("external source extraction from tool output", () => {
+  test.each([...BUSINESS_REGISTRY_SLUGS])(
+    "preserves the company identity through nested source deduplication for %s",
+    (registry) => {
+      const sources: ExternalSourceEntry[] = [];
+      const source = {
+        registry,
+        id: "27082440",
+        name: "Alza.cz a.s.",
+        registryUrl: "https://example.org/company/27082440",
+      };
+      collectExternalSources(
+        {
+          hit: {
+            ...source,
+            details: {
+              company: { name: source.name, registryUrl: source.registryUrl },
+            },
+          },
+        },
+        sources,
+      );
+      const deduplicated = dedupeExternalSources(sources);
+      expect(sources.length).toBeGreaterThan(1);
+      expect(deduplicated).toHaveLength(1);
+      expect(deduplicated.at(0)?.businessRegistry).toEqual({
+        registry,
+        companyId: source.id,
+      });
+    },
+  );
   test("extracts a search-hit source from JSON wrapped in MCP text content", () => {
     const sources: ExternalSourceEntry[] = [];
 
@@ -201,10 +236,40 @@ describe("external source extraction from tool output", () => {
         item.url === "https://ares.gov.cz/ekonomicke-subjekty?ico=27082440",
     );
     expect(source).toMatchObject({
+      businessRegistry: {
+        companyId: "27082440",
+        registry: "ares",
+      },
       provider: "ares",
       title: "Alza.cz a.s.",
     });
     expect(source?.text).toBeUndefined();
     expect(source).not.toHaveProperty("data");
+
+    expect(dedupeExternalSources(sources)).toEqual([
+      expect.objectContaining({
+        businessRegistry: {
+          companyId: "27082440",
+          registry: "ares",
+        },
+      }),
+    ]);
+  });
+
+  test("does not treat unrecognized registry metadata as a company source", () => {
+    const sources: ExternalSourceEntry[] = [];
+
+    collectExternalSources(
+      {
+        id: "27082440",
+        name: "Alza.cz a.s.",
+        registry: "unknown-registry",
+        registryUrl: "https://ares.gov.cz/ekonomicke-subjekty?ico=27082440",
+      },
+      sources,
+    );
+
+    expect(sources).toHaveLength(1);
+    expect(sources.at(0)?.businessRegistry).toBeUndefined();
   });
 });

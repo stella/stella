@@ -564,19 +564,19 @@ if (!databaseUrl || !runPostgresTests) {
       expect(onlyThese(queue, [cooling, cooled])).toEqual([cooled]);
     });
 
-    test("decisions the source keeps refusing sink below untried ones", async () => {
-      // The livelock this prevents: a source answering 403 for the
-      // newest page would otherwise hand back the same rows every run,
-      // because they are the newest, and nothing behind them would ever
-      // be reached.
+    test("a refused decision comes back once its cooldown passes", async () => {
+      // What bounds a source answering 403 for the newest page is the
+      // cooldown, not the order: each refusal costs one attempt per
+      // cooldown. Ordering by attempts on top of that did not bound
+      // anything further, it only pushed the retry behind the backlog.
       const refusedIds = await Promise.all(
         [1, 2, 3].map(
           async (n) =>
             await insertDecision({
-              caseNumber: `livelock-refused-${n}-${suffix}`,
+              caseNumber: `retry-refused-${n}-${suffix}`,
               fulltext: null,
               documentUrl: `https://example.test/refused-${n}.pdf`,
-              // Newest decisions, so date order alone would put them first.
+              // Newest decisions, so date order puts them first.
               decisionDate: `2026-08-0${n}`,
               documentFetchAttempts: MAX_PRIORITY_FETCH_ATTEMPTS,
               documentFetchAttemptedAt: new Date(
@@ -586,7 +586,7 @@ if (!databaseUrl || !runPostgresTests) {
         ),
       );
       const untried = await insertDecision({
-        caseNumber: `livelock-untried-${suffix}`,
+        caseNumber: `retry-untried-${suffix}`,
         fulltext: null,
         documentUrl: "https://example.test/untried.pdf",
         decisionDate: "2026-01-01",
@@ -594,7 +594,12 @@ if (!databaseUrl || !runPostgresTests) {
 
       const queue = await loadPendingDocuments(scopedDb, QUEUE_READ_LIMIT);
 
-      expect(onlyThese(queue, [...refusedIds, untried]).at(0)).toBe(untried);
+      // Newest first, whatever each has already cost: the cooled
+      // refusals, then the older untried decision.
+      expect(onlyThese(queue, [...refusedIds, untried])).toEqual([
+        ...refusedIds.toReversed(),
+        untried,
+      ]);
     });
 
     test("requested decisions come first, then the newest of the rest", async () => {
@@ -664,7 +669,7 @@ if (!databaseUrl || !runPostgresTests) {
         scopedDb,
         sourceId,
         limit: QUEUE_READ_LIMIT,
-        after: { attempts: 0, decisionDate: "2026-04-02", id: first },
+        after: { decisionDate: "2026-04-02", id: first },
       });
 
       expect(onlyThese(page, [first, second])).toEqual([second]);

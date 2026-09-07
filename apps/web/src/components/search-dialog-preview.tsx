@@ -21,6 +21,7 @@ import {
   SEARCH_PREVIEW_COLUMN_CLASS_NAME,
   SEARCH_PREVIEW_CONTENT_CLASS_NAME,
 } from "@/components/search-dialog.shared";
+import { SearchMatterPreview } from "@/components/search-matter-preview";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { GlobalSearchHit } from "@/lib/api-contract";
 import { DOCX_MIME, PDF_MIME } from "@/lib/consts";
@@ -226,7 +227,7 @@ const SearchPreviewContent = ({
   const t = useTranslations();
   const format = useFormatter();
   const location =
-    hit.type === "contact" || hit.type === "case-law"
+    hit.type === "contact" || hit.type === "case-law" || hit.type === "matter"
       ? null
       : hit.workspaceName;
   const opensLocation =
@@ -317,6 +318,9 @@ const SearchPreviewBody = (props: SearchPreviewBodyProps) => {
     [hit.headline, props.previewLocatorCandidates, props.query],
   );
   const emailPreviewTarget = getEmailSearchPreviewTarget(hit);
+  if (hit.type === "matter") {
+    return <SearchMatterPreview workspaceId={hit.workspaceId} />;
+  }
   if (emailPreviewTarget) {
     return (
       <div className="min-h-0 flex-1 overflow-y-auto">

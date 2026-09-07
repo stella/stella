@@ -4,7 +4,7 @@ import JSZip from "jszip";
 import { discoverTemplate } from "./discover-template";
 import {
   fieldOverlayWarnings,
-  type RegistryGate,
+  type RegistryAvailabilityLoader,
   inlineBytesIgnoredWarning,
   TEMPLATE_WARNING_CODES,
   type TemplateWarningCode,
@@ -23,11 +23,11 @@ const makeDocx = async (documentXml: string): Promise<Buffer> => {
   return Buffer.from(await zip.generateAsync({ type: "nodebuffer" }));
 };
 
-/** Gates that stand in for the org's native-tool settings. `refuseAll` also
- *  records that it ran, so a test can prove the settings read is skipped when
+/** Loaders stand in for registry configuration. `refuseAll` also
+ *  records that it ran, so a test can prove the credential read is skipped when
  *  no field declares a lookup. */
-const allowAll: RegistryGate = async () => () => true;
-const refuseAll = (): RegistryGate & { calls: () => number } => {
+const allowAll: RegistryAvailabilityLoader = async () => () => true;
+const refuseAll = (): RegistryAvailabilityLoader & { calls: () => number } => {
   let calls = 0;
   const gate = async () => {
     calls++;
@@ -41,7 +41,7 @@ describe("field overlay warnings", () => {
   const bothRoles = {
     conditionPaths: ["is_signed"],
     placeholderPaths: ["is_signed", "client.name"],
-    registryGate: allowAll,
+    loadRegistryAvailability: allowAll,
   };
   const SIGNED_RULE = 'status == "signed"';
 
@@ -66,7 +66,7 @@ describe("field overlay warnings", () => {
       await fieldOverlayWarnings({
         conditionPaths: ["is_signed"],
         placeholderPaths: ["client.name"],
-        registryGate: allowAll,
+        loadRegistryAvailability: allowAll,
         fields: [{ path: "is_signed", condition: SIGNED_RULE }],
       }),
     ).toEqual([]);
@@ -107,33 +107,38 @@ describe("lookup field warnings", () => {
     },
   } as const;
 
-  test("a registry the organization has not enabled is reported", async () => {
+  test("a registry missing required configuration is reported", async () => {
     const gate = refuseAll();
     const warnings = await fieldOverlayWarnings({
       conditionPaths: [],
       placeholderPaths: ["company", "company.address"],
-      fields: [lookupField],
-      registryGate: gate,
+      fields: [
+        {
+          ...lookupField,
+          lookup: { ...lookupField.lookup, registry: "companies-house" },
+        },
+      ],
+      loadRegistryAvailability: gate,
     });
 
     expect(warnings).toEqual([
       {
-        code: "registry_disabled",
+        code: "registry_configuration_required",
         path: "company",
-        message: expect.stringContaining("krs"),
-        hint: expect.stringContaining("Enable that registry"),
+        message: expect.stringContaining("companies-house"),
+        hint: expect.stringContaining("Configure credentials"),
       },
     ]);
     expect(gate.calls()).toBe(1);
   });
 
-  test("no lookup field means no settings read", async () => {
+  test("no lookup field means no credential read", async () => {
     const gate = refuseAll();
     await fieldOverlayWarnings({
       conditionPaths: [],
       placeholderPaths: ["client.name"],
       fields: [{ path: "client.name" }],
-      registryGate: gate,
+      loadRegistryAvailability: gate,
     });
 
     expect(gate.calls()).toBe(0);
@@ -146,7 +151,7 @@ describe("lookup field warnings", () => {
       // but undeclared. The default format rides the bare `{{company}}`.
       placeholderPaths: ["company", "company.seat"],
       fields: [lookupField],
-      registryGate: allowAll,
+      loadRegistryAvailability: allowAll,
     });
 
     expect(warnings).toEqual([
@@ -171,7 +176,7 @@ describe("lookup field warnings", () => {
         conditionPaths: [],
         placeholderPaths: ["company", "company.address"],
         fields: [lookupField],
-        registryGate: allowAll,
+        loadRegistryAvailability: allowAll,
       }),
     ).toEqual([]);
   });
@@ -187,7 +192,7 @@ describe("lookup field warnings", () => {
             lookup: { registry: "krs", formats: [{ key: "default" }] },
           },
         ],
-        registryGate: allowAll,
+        loadRegistryAvailability: allowAll,
       });
 
     expect(await placed(["company"])).toEqual([]);
@@ -220,7 +225,7 @@ describe("lookup field warnings", () => {
             },
           },
         ],
-        registryGate: allowAll,
+        loadRegistryAvailability: allowAll,
       }),
     ).toEqual([]);
   });
@@ -263,7 +268,7 @@ describe("warning code census", () => {
               },
             },
           ],
-          registryGate: refuseAll(),
+          loadRegistryAvailability: refuseAll(),
         })
       ).map(({ code }) => code),
       // Not a document defect: the create tool reports it when a call carries

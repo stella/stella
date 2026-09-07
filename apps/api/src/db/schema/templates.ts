@@ -4,6 +4,7 @@ import { CONTACT_TYPES } from "@stll/api-contract";
 import type { TemplatePackAuthor } from "@stll/template-packs/schema";
 
 import type { AiFieldError } from "@/api/lib/docx/resolve-ai-fields";
+import { LOOKUP_REGISTRIES } from "@/api/lib/docx/types";
 
 import {
   ENTITY_KINDS,
@@ -36,6 +37,61 @@ import type {
 } from "./common";
 import { contacts, workspaces } from "./contacts";
 import { TEMPLATE_KINDS, entities, entityVersions, fields } from "./entities";
+
+export const LOOKUP_FORMAT_PREFERENCE = {
+  SAVED: "saved",
+  DEFAULT: "default",
+} as const;
+
+export const templateLookupFormats = p.pgTable(
+  "template_lookup_formats",
+  {
+    id: pUuid<"templateLookupFormat">().primaryKey(),
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    registry: p.text({ enum: LOOKUP_REGISTRIES }).notNull(),
+    name: p.varchar({ length: 120 }).notNull(),
+    format: p.varchar({ length: 2000 }).notNull(),
+    preference: p
+      .text({
+        enum: [
+          LOOKUP_FORMAT_PREFERENCE.SAVED,
+          LOOKUP_FORMAT_PREFERENCE.DEFAULT,
+        ],
+      })
+      .notNull()
+      .default(LOOKUP_FORMAT_PREFERENCE.SAVED),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p
+      .uniqueIndex("template_lookup_formats_org_registry_default_idx")
+      .on(table.organizationId, table.registry)
+      .where(sql`${table.preference} = 'default'`),
+    p.check(
+      "template_lookup_formats_preference_check",
+      sql`${table.preference} IN (${sql.join(
+        Object.values(LOOKUP_FORMAT_PREFERENCE).map((value) =>
+          sql.raw(`'${value}'`),
+        ),
+        sql`, `,
+      )})`,
+    ),
+    p
+      .index("template_lookup_formats_org_registry_id_idx")
+      .on(table.organizationId, table.registry, table.id),
+    p.check(
+      "template_lookup_formats_name_nonempty",
+      sql`length(btrim(${table.name})) > 0`,
+    ),
+    p.check(
+      "template_lookup_formats_format_nonempty",
+      sql`length(btrim(${table.format})) > 0`,
+    ),
+    ...orgPolicies(),
+  ],
+);
 
 export const templateCategories = p.pgTable(
   "template_categories",

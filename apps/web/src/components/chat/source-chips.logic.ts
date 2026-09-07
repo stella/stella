@@ -1,4 +1,9 @@
-import type { ExternalSourceReference } from "@/components/chat/external-source-store";
+import { isBusinessRegistrySlug } from "@stll/api-contract";
+
+import type {
+  BusinessRegistrySourceReference,
+  ExternalSourceReference,
+} from "@/components/chat/external-source-store";
 import type { ChatSourceDocument } from "@/lib/api-contract";
 import { sanitizeHref } from "@/lib/sanitize-href";
 
@@ -81,6 +86,25 @@ const getTextField = (
     }
   }
   return undefined;
+};
+
+const getBusinessRegistryReference = (
+  value: Record<string, unknown>,
+  sourceUrl: string,
+): BusinessRegistrySourceReference | undefined => {
+  const registry = value["registry"];
+  const companyId = value["id"];
+  const registryUrl = value["registryUrl"];
+  if (
+    !isBusinessRegistrySlug(registry) ||
+    typeof companyId !== "string" ||
+    companyId.trim().length === 0 ||
+    companyId.trim().length > 256 ||
+    registryUrl !== sourceUrl
+  ) {
+    return undefined;
+  }
+  return { registry, companyId: companyId.trim() };
 };
 
 const collectTextValue = (value: unknown, depth = 0): string | undefined => {
@@ -221,6 +245,7 @@ export const collectExternalSources = (
     const safeUrl = sanitizeHref(url);
     if (safeUrl) {
       sources.push({
+        businessRegistry: getBusinessRegistryReference(value, url),
         url: safeUrl,
         title:
           getStringField(value, [
@@ -249,4 +274,31 @@ export const collectExternalSources = (
   for (const child of Object.values(value)) {
     collectExternalSources(child, sources, depth + 1);
   }
+};
+
+export const dedupeExternalSources = (
+  sources: readonly ExternalSourceEntry[],
+): ExternalSourceEntry[] => {
+  const sourcesByUrl = new Map<string, ExternalSourceEntry>();
+  for (const source of sources) {
+    const existing = sourcesByUrl.get(source.url);
+    sourcesByUrl.set(
+      source.url,
+      existing
+        ? {
+            businessRegistry:
+              source.businessRegistry ?? existing.businessRegistry,
+            connectorSlug: source.connectorSlug ?? existing.connectorSlug,
+            iconHref: source.iconHref ?? existing.iconHref,
+            provider: source.provider ?? existing.provider,
+            snippet: source.snippet ?? existing.snippet,
+            sourceToolName: source.sourceToolName ?? existing.sourceToolName,
+            text: source.text ?? existing.text,
+            title: source.title,
+            url: source.url,
+          }
+        : source,
+    );
+  }
+  return Array.from(sourcesByUrl.values());
 };

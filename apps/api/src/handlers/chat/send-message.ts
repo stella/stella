@@ -168,6 +168,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
+import { getOrganizationRegistryDispatch } from "@/api/lib/business-registries/credentials";
 import { resolveEffectiveChatModelSelection } from "@/api/lib/chat-model-selection";
 import {
   canUseChatThreadForGeneratedDocumentDraft,
@@ -902,6 +903,7 @@ type PrepareValidatedIncomingMessageOptions = {
   };
   tools: {
     disabledNativeToolSlugs: ChatToolsInput["disabledNativeToolSlugs"];
+    registryDispatch: ChatToolsInput["registryDispatch"];
     docxEditRepresentation: NonNullable<
       ChatToolsInput["docxEditRepresentation"]
     >;
@@ -942,6 +944,7 @@ const prepareValidatedIncomingMessage = async ({
   },
   tools: {
     disabledNativeToolSlugs,
+    registryDispatch,
     docxEditRepresentation,
     editApplyMode,
     externalMcpToolsLoader,
@@ -1044,6 +1047,7 @@ const prepareValidatedIncomingMessage = async ({
       webSearchProviders,
       externalTools: externalToolsForValidation,
       disabledNativeToolSlugs,
+      registryDispatch,
       activeSkillContext: validationActiveSkillContext,
       recordAuditEvent,
       resolveMemorySourceWorkspaceIds: () =>
@@ -1444,6 +1448,19 @@ export const createSendMessage = (
 
       const workspaceId =
         scope.scope === "workspace" ? scope.workspaceId : null;
+      const registryDispatchResult = Result.tryPromise({
+        try: async () =>
+          await getOrganizationRegistryDispatch({
+            organizationId: session.activeOrganizationId,
+            scopedDb,
+          }),
+        catch: (cause) =>
+          new HandlerError({
+            status: 500,
+            message: "Failed to load business registry availability",
+            cause,
+          }),
+      });
       const orgSettingsForChat = yield* Result.await(
         safeDb((tx) =>
           tx.query.organizationSettings.findFirst({
@@ -1463,6 +1480,7 @@ export const createSendMessage = (
         ),
         nativeToolOverrides: orgSettingsForChat?.nativeToolOverrides ?? {},
       });
+      const registryDispatch = yield* Result.await(registryDispatchResult);
 
       // The body's contextMatterIds is the AI's "draw-from" set —
       // distinct from the chat's own scope (workspaceId/global). It
@@ -1646,6 +1664,7 @@ export const createSendMessage = (
             },
             tools: {
               disabledNativeToolSlugs,
+              registryDispatch,
               docxEditRepresentation,
               editApplyMode,
               externalMcpToolsLoader,
@@ -1899,6 +1918,7 @@ export const createSendMessage = (
           webSearchProviders,
           externalTools: externalMcpTools?.tools ?? {},
           disabledNativeToolSlugs,
+          registryDispatch,
           skillMetadata: chatContext.skillMetadata,
           activeSkillContext: chatContext.activeSkillContext,
           recordAuditEvent: createAuditRecorder({

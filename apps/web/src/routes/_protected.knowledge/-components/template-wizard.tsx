@@ -38,6 +38,11 @@ import { contentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
 
 import {
+  REGISTRY_DEFAULT_FORMAT,
+  REGISTRY_FIELD_EXAMPLES,
+  REGISTRY_RETURN_FIELDS,
+} from "@/components/templates/registry-format-config";
+import {
   LOOKUP_REGISTRY_OPTIONS,
   type LookupRegistryOption,
 } from "@/components/templates/registry-options";
@@ -963,100 +968,6 @@ const orderedRegistryOptions = (
  *  `LOOKUP_REGISTRY_OPTIONS`; the `?? "krs"` only satisfies the type checker. */
 const preferredRegistry = (locale: string): LookupRegistry =>
   orderedRegistryOptions(locale).at(0)?.slug ?? "krs";
-
-/** The cross-registry baseline tokens every registry hit exposes, mapped onto
- *  the backend's baseline token names (see `lookupTemplateTokens` in
- *  apps/api/src/lib/docx/lookup-fields.ts). */
-const REGISTRY_BASE_RETURN_FIELDS = [
-  "company name",
-  "legal form",
-  "seat",
-  "address",
-  "registry number",
-  "postal code",
-  "country",
-] as const;
-
-/** Detail names a registry hit returns, offered as clickable [placeholder]
- *  chips for the AI format instruction. Each registry's set is the shared
- *  baseline plus its per-registry extras; the names match the backend tokens
- *  in `lookupTemplateTokens` character-for-character. */
-const REGISTRY_RETURN_FIELDS: Record<LookupRegistry, readonly string[]> = {
-  ares: [
-    ...REGISTRY_BASE_RETURN_FIELDS,
-    "share capital",
-    "court file",
-    "registered on",
-    "acting clause",
-  ],
-  orsr: [
-    ...REGISTRY_BASE_RETURN_FIELDS,
-    "share capital",
-    "share capital paid",
-    "court file",
-    "registered on",
-    "acting clause",
-  ],
-  krs: [
-    ...REGISTRY_BASE_RETURN_FIELDS,
-    "NIP",
-    "REGON",
-    "share capital",
-    "registered on",
-  ],
-  "companies-house": [
-    ...REGISTRY_BASE_RETURN_FIELDS,
-    "registered on",
-    "jurisdiction",
-  ],
-  denue: REGISTRY_BASE_RETURN_FIELDS.filter(
-    (fieldName) => fieldName !== "legal form",
-  ),
-  brreg: [...REGISTRY_BASE_RETURN_FIELDS, "registered on"],
-  prh: [...REGISTRY_BASE_RETURN_FIELDS, "registered on"],
-  "recherche-entreprises": [...REGISTRY_BASE_RETURN_FIELDS, "registered on"],
-  edgar: [...REGISTRY_BASE_RETURN_FIELDS, "EIN"],
-  gcis: [...REGISTRY_BASE_RETURN_FIELDS, "registered on"],
-  vies: [...REGISTRY_BASE_RETURN_FIELDS, "VAT number"],
-};
-
-/** Pre-seeded format per registry. KRS keeps the standard Polish company
- *  recital; the other jurisdictions use a neutral "name, address" rendering
- *  (no invented notarial recital text). The author can edit or clear it. */
-const GENERIC_DEFAULT_FORMAT = "[company name], [address]";
-
-const REGISTRY_DEFAULT_FORMAT: Record<LookupRegistry, string> = {
-  krs: "[company name] with its registered office at [address], entered in the Register of Entrepreneurs under KRS no. [registry number], kept by Krajowy Rejestr Sądowy, share capital of [share capital], Tax Identification Number (NIP) [NIP], Statistical Identification Number (REGON) [REGON]",
-  ares: GENERIC_DEFAULT_FORMAT,
-  orsr: GENERIC_DEFAULT_FORMAT,
-  "companies-house": GENERIC_DEFAULT_FORMAT,
-  denue: GENERIC_DEFAULT_FORMAT,
-  brreg: GENERIC_DEFAULT_FORMAT,
-  prh: GENERIC_DEFAULT_FORMAT,
-  "recherche-entreprises": GENERIC_DEFAULT_FORMAT,
-  edgar: GENERIC_DEFAULT_FORMAT,
-  gcis: GENERIC_DEFAULT_FORMAT,
-  vies: GENERIC_DEFAULT_FORMAT,
-};
-
-/** Hover examples per return field, from a well-known public registry entry
- *  (CD PROJEKT S.A., KRS 0000006865 — public KRS data), so authors see what
- *  a token resolves to before writing it into the format. Only registries with
- *  curated examples appear; tokens without an example render without a tooltip. */
-const REGISTRY_FIELD_EXAMPLES: Partial<
-  Record<LookupRegistry, Record<string, string>>
-> = {
-  krs: {
-    "company name": "CD PROJEKT S.A.",
-    "legal form": "spółka akcyjna",
-    seat: "Warszawa",
-    address: "ul. Jagiellońska 74, 03-301 Warszawa",
-    "registry number": "0000006865",
-    NIP: "7342867148",
-    REGON: "492707333",
-    "share capital": "100 000 000,00 PLN",
-  },
-};
 
 type InsertTokenResult = {
   value: string;

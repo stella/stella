@@ -2,10 +2,11 @@ use std::{
   sync::Mutex,
   time::{Duration, Instant},
 };
+#[cfg(target_os = "macos")]
+use tauri::window::{Effect, EffectState, EffectsBuilder};
 use tauri::{
   AppHandle, LogicalPosition, LogicalSize, Manager, WebviewWindow,
   webview::PageLoadEvent,
-  window::{Effect, EffectState, EffectsBuilder},
 };
 
 use crate::clipboard::ClipboardAppState;
@@ -21,6 +22,7 @@ const CLIPBOARD_WINDOW_LABEL: &str = "clipboard";
 const CLIPBOARD_EDITOR_WINDOW_LABEL: &str = "clipboard-editor";
 const CLIPBOARD_WINDOW_HEIGHT: f64 = 326.0;
 const CLIPBOARD_WINDOW_INSET: f64 = 18.0;
+#[cfg(target_os = "macos")]
 const CLIPBOARD_WINDOW_RADIUS: f64 = 28.0;
 const CLIPBOARD_EDITOR_WIDTH: f64 = 700.0;
 const CLIPBOARD_EDITOR_HEIGHT: f64 = 520.0;
@@ -301,17 +303,6 @@ fn show_as(app: &AppHandle, created_kind: ClipboardOpenKind) {
   // Windows, so HTML5 drops (a card onto a group chip) never reach the
   // webview. The window accepts no OS file drops.
   .disable_drag_drop_handler()
-  // Menu is the most translucent appearance-adaptive material: the desktop and
-  // windows underneath read through it in light mode too, where Popover is
-  // nearly opaque and UnderWindowBackground is flat.
-  .effects(
-    EffectsBuilder::new()
-      .effect(Effect::Menu)
-      .effect(Effect::Acrylic)
-      .state(EffectState::Active)
-      .radius(CLIPBOARD_WINDOW_RADIUS)
-      .build(),
-  )
   .resizable(false)
   .shadow(false)
   .skip_taskbar(true)
@@ -344,6 +335,20 @@ fn show_as(app: &AppHandle, created_kind: ClipboardOpenKind) {
       );
     }
   });
+
+  // Menu is the most translucent appearance-adaptive material: the desktop and
+  // windows underneath read through it in light mode too, where Popover is
+  // nearly opaque and UnderWindowBackground is flat. Windows is left without a
+  // material because acrylic paints the whole rectangular HWND, so the corners
+  // stay square; there the page paints its own rounded surface instead.
+  #[cfg(target_os = "macos")]
+  let builder = builder.effects(
+    EffectsBuilder::new()
+      .effect(Effect::Menu)
+      .state(EffectState::Active)
+      .radius(CLIPBOARD_WINDOW_RADIUS)
+      .build(),
+  );
 
   match builder.build() {
     Ok(window) => {

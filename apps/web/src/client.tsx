@@ -1,4 +1,4 @@
-import { StrictMode, startTransition } from "react";
+import { StrictMode, startTransition, useLayoutEffect } from "react";
 import { hydrateRoot } from "react-dom/client";
 
 import { CancelledError } from "@tanstack/react-query";
@@ -12,11 +12,26 @@ import { detached } from "@/lib/detached";
 import { installPreloadErrorRecovery } from "@/lib/preload-error-recovery";
 import { isPublicSsrPath } from "@/lib/public-ssr-paths";
 
-const hydrate = () => {
+type HydrationCommitSignalProps = {
+  onCommit: () => void;
+};
+
+const HydrationCommitSignal = ({ onCommit }: HydrationCommitSignalProps) => {
+  useLayoutEffect(() => {
+    onCommit();
+  }, [onCommit]);
+  return null;
+};
+
+const hydrate = async () => {
+  const hydrationCommit = Promise.withResolvers<undefined>();
   startTransition(() => {
     hydrateRoot(
       document,
       <StrictMode>
+        <HydrationCommitSignal
+          onCommit={() => hydrationCommit.resolve(undefined)}
+        />
         <RenderStormCanary>
           <StartClient />
         </RenderStormCanary>
@@ -34,13 +49,15 @@ const hydrate = () => {
       },
     );
   });
+  await hydrationCommit.promise;
 };
 
 // Recover from failed route-chunk imports before they blank the screen.
 installPreloadErrorRecovery();
 
 // The server renders public paths with bundled English. They hydrate against
-// that same state before persisted browser state loads after first paint.
+// that same state before persisted browser state loads after the hydration
+// commit.
 // Client-only paths resolve browser state before their first render.
 detached(
   bootHydratedClient({

@@ -44,6 +44,23 @@ const company: AresCompany = {
 };
 
 describe("ARES normalized projection", () => {
+  test.each([
+    ["112", "Společnost s ručením omezeným"],
+    ["121", "Akciová společnost"],
+    ["964", "Historická právnická osoba – církevní fond"],
+    ["999", null],
+    ["__proto__", null],
+    ["constructor", null],
+  ])(
+    "preserves legal form code %s with its official name when known",
+    (code, label) => {
+      expect(
+        toNormalizedEntity({ ...company, legalForm: code }, { vrLoaded: true })
+          .legalForm,
+      ).toEqual({ availability: "available", value: { code, label } });
+    },
+  );
+
   test("preserves rich registry fields and declares unsupported fields", () => {
     const entity = toNormalizedEntity(company, { vrLoaded: true });
     expect(entity.registryId.scheme).toBe("CZ-ICO");

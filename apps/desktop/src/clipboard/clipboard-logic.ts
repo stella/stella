@@ -1,3 +1,5 @@
+import { Result } from "better-result";
+
 import {
   findSearchMatchRanges,
   foldSearchMatchText,
@@ -20,6 +22,57 @@ export const clipboardSourceLabel = (sourceApp: ClipboardSourceApp) =>
 /** The full page URL for browser copies, else the app name. */
 export const clipboardSourceTitle = (sourceApp: ClipboardSourceApp) =>
   sourceApp.page?.url ?? sourceApp.name;
+
+export type ClipboardItemLink = { host: string };
+
+/** Past this a clip is a document that happens to hold no spaces, not a link. */
+const CLIPBOARD_LINK_MAX_CHARACTERS = 2048;
+
+const CLIPBOARD_LINK_PROTOCOLS = new Set(["http:", "https:", "mailto:"]);
+
+const CLIPBOARD_LINK_BARE_HOST_PREFIX = "www.";
+
+/**
+ * The link a clip is, or null when it is text that merely contains one: the
+ * whole clip has to be the URL, so a paragraph quoting one stays text.
+ */
+export const clipboardItemLink = (
+  item: ClipboardItem,
+): ClipboardItemLink | null => {
+  if (item.type === "image") {
+    return null;
+  }
+  const text = item.plainText.trim();
+  if (
+    text.length === 0 ||
+    text.length > CLIPBOARD_LINK_MAX_CHARACTERS ||
+    /\s/u.test(text)
+  ) {
+    return null;
+  }
+  const candidate = text
+    .toLowerCase()
+    .startsWith(CLIPBOARD_LINK_BARE_HOST_PREFIX)
+    ? `https://${text}`
+    : text;
+  // `URL.canParse` is newer than the oldest supported system WebView.
+  const parsed = Result.try(() => new URL(candidate));
+  if (!Result.isOk(parsed)) {
+    return null;
+  }
+  const url = parsed.value;
+  if (!CLIPBOARD_LINK_PROTOCOLS.has(url.protocol)) {
+    return null;
+  }
+  if (url.protocol === "mailto:") {
+    return url.pathname.length === 0 ? null : { host: url.pathname };
+  }
+  // `www.` on its own, and `www..com`, parse but leave an empty label.
+  if (url.hostname.split(".").some((label) => label.length === 0)) {
+    return null;
+  }
+  return { host: url.hostname.replace(/^www\./u, "") };
+};
 
 export const CLIPBOARD_ITEM_DRAG_TYPE =
   "application/x-stella-clipboard-item-id";

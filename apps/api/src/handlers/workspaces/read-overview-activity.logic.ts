@@ -191,6 +191,7 @@ export const ACTIVITY_TARGET_SOURCE_BY_RESOURCE_TYPE = {
   signal: null,
   style_set: null,
   template: null,
+  template_lookup_format: null,
   time_entry: null,
   usage_allocation: null,
   usage_entitlement: null,

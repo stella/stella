@@ -1,3 +1,5 @@
+import { BUSINESS_REGISTRY_CREDENTIAL_SLUGS } from "@stll/api-contract";
+
 import {
   bytea,
   jsonb,
@@ -16,6 +18,37 @@ import {
 import type { PracticeJurisdiction } from "./common";
 import { workspaces } from "./contacts";
 import { entities } from "./entities";
+
+export const businessRegistryCredentials = p.pgTable(
+  "business_registry_credentials",
+  {
+    organizationId: safeOrganizationId("organization_id").notNull(),
+    registry: p
+      .text("registry", { enum: BUSINESS_REGISTRY_CREDENTIAL_SLUGS })
+      .notNull(),
+    ciphertext: bytea("ciphertext").notNull(),
+    iv: bytea("iv").notNull(),
+    updatedAt: timestamptz("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    p.primaryKey({ columns: [table.organizationId, table.registry] }),
+    p
+      .foreignKey({
+        columns: [table.organizationId],
+        foreignColumns: [organization.id],
+        name: "business_registry_credentials_org_fk",
+      })
+      .onDelete("cascade"),
+    p.check(
+      "business_registry_credentials_registry_check",
+      sql`${table.registry} in (${sql.join(
+        BUSINESS_REGISTRY_CREDENTIAL_SLUGS.map((slug) => sql.raw(`'${slug}'`)),
+        sql`, `,
+      )})`,
+    ),
+    ...orgPolicies(),
+  ],
+);
 
 export const DOCUMENT_PROCESSING_MODE = {
   OFF: "off",

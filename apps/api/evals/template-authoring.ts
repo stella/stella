@@ -422,16 +422,16 @@ const productionToolSchema = (definition: {
 // ── In-memory template store ─────────────────────────────
 
 /**
- * `fillTemplateDocx` always resolves the org's registry-lookup settings, so
+ * `fillTemplateDocx` resolves organization registry credentials, so
  * every fill needs a working `scopedDb`, not a throwing stub.
  */
 const buildStubScopedDb = (): ScopedDb => {
   const run = (fn: (tx: unknown) => unknown) =>
     fn({
-      query: { organizationSettings: { findFirst: () => undefined } },
+      query: { businessRegistryCredentials: { findMany: () => [] } },
     });
-  // SAFETY: test double exposing only `organizationSettings.findFirst`, the
-  // one surface `buildIsRegistryEnabledForOrg` touches.
+  // SAFETY: the fill's registry dispatch only reads
+  // `businessRegistryCredentials.findMany`; the fixture has no stored keys.
   // eslint-disable-next-line typescript/no-unsafe-type-assertion -- narrows a stub to the real ScopedDb signature
   return run as unknown as ScopedDb;
 };

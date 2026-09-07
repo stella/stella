@@ -84,6 +84,7 @@ describe("parseExtract (ESET)", () => {
     expect(company.address?.city).toBe("Bratislava");
     expect(company.courtFile).toEqual({
       court: "B",
+      courtName: "Mestský súd Bratislava III",
       section: "Sro",
       insertNumber: "3586",
     });
@@ -99,6 +100,13 @@ describe("parseExtract (ESET)", () => {
     expect(company.registryUrl).toBe(
       "https://sluzby.orsr.sk/Subjekt?oddiel=Sro&vlozka=3586&sud=B",
     );
+  });
+
+  test("preserves an omitted court name as null", async () => {
+    const { courtName: _courtName, ...raw } =
+      await readFixture<OrsrRawExtractResponse>("extract-eset.json");
+
+    expect(parseExtract(raw)?.courtFile?.courtName).toBeNull();
   });
 
   test("collects statutory body members with mapped position", async () => {

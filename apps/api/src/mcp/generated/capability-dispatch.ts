@@ -537,6 +537,10 @@ export const CAPABILITY_DISPATCH = {
     load: async () =>
       await import("@/api/handlers/workspaces/read-workflow-target-count"),
   },
+  "matters.search-preview.get": {
+    load: async () =>
+      await import("@/api/handlers/workspaces/search-preview/get"),
+  },
   "matters.unarchive": {
     load: async () => await import("@/api/handlers/workspaces/unarchive"),
   },
@@ -965,6 +969,22 @@ export const CAPABILITY_DISPATCH = {
   },
   "templates.list": {
     load: async () => await import("@/api/handlers/templates/list"),
+  },
+  "templates.lookup-formats.create": {
+    load: async () =>
+      await import("@/api/handlers/templates/lookup-formats/create"),
+  },
+  "templates.lookup-formats.default.update": {
+    load: async () =>
+      await import("@/api/handlers/templates/lookup-formats/default/update"),
+  },
+  "templates.lookup-formats.delete": {
+    load: async () =>
+      await import("@/api/handlers/templates/lookup-formats/delete"),
+  },
+  "templates.lookup-formats.list": {
+    load: async () =>
+      await import("@/api/handlers/templates/lookup-formats/list"),
   },
   "templates.lookup-preview": {
     load: async () => await import("@/api/handlers/templates/lookup-preview"),

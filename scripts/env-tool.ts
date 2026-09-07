@@ -495,6 +495,8 @@ const AUDIT_IGNORE_PATH_SEGMENTS = new Set([".cache", "node_modules"]);
 const AUDIT_IGNORE_PATH_PREFIXES = ["packages/template-packs/content/"];
 
 export const isIgnoredAuditPath = (file: string) =>
+  // Turbo builds emit dist/**; bundled dependency reads are not application configuration.
+  /^(?:apps|packages)\/[^/]+\/dist\//u.test(file) ||
   AUDIT_IGNORE_PATH_PREFIXES.some((prefix) => file.startsWith(prefix)) ||
   file.split("/").some((segment) => AUDIT_IGNORE_PATH_SEGMENTS.has(segment));
 

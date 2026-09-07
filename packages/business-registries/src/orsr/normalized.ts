@@ -100,14 +100,10 @@ export const toNormalizedEntity = (
   registryRecord: availableField(
     company.courtFile
       ? {
-          courtName: company.courtFile.court,
+          courtName: company.courtFile.courtName,
           section: company.courtFile.section,
           idNumber: company.courtFile.insertNumber,
-          reference: [
-            company.courtFile.section,
-            company.courtFile.insertNumber,
-            company.courtFile.court,
-          ].join(" "),
+          reference: `${company.courtFile.section} ${company.courtFile.insertNumber}/${company.courtFile.court}`,
         }
       : null,
   ),

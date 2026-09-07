@@ -200,8 +200,8 @@ const createScopedDb = (
             },
           },
           templates: { findMany: async () => templates },
-          // No settings row: a brand-new org with no practice jurisdictions,
-          // which is exactly when a registry lookup is not enabled.
+          businessRegistryCredentials: { findMany: async () => [] },
+          // Public registries remain available without practice jurisdictions.
           organizationSettings: { findFirst: async () => undefined },
         },
       });
@@ -2808,7 +2808,7 @@ describe("MCP template tools", () => {
     );
   });
 
-  test("configure_template_fields reports a lookup the org cannot resolve and a format with no marker", async () => {
+  test("configure_template_fields accepts a public registry without jurisdiction approval and warns only about an unplaced format", async () => {
     configureTemplateFieldsMock.mockImplementation(async function* () {
       yield* [];
       return Result.ok({ issues: [], manifest: { version: 1, fields: [] } });
@@ -2822,12 +2822,6 @@ describe("MCP template tools", () => {
             path: "company.address",
             message: "No {{company.address}} marker places this format",
             hint: "Place the marker or drop the format.",
-          },
-          {
-            code: "registry_disabled",
-            path: "company",
-            message: "The krs registry is not enabled for this organization",
-            hint: "Enable it in the practice jurisdictions.",
           },
         ],
       }),
@@ -2855,13 +2849,9 @@ describe("MCP template tools", () => {
       toolName: "configure_template_fields",
     });
 
-    // The configuration is still saved: the org can enable the registry later.
     expect(configureTemplateFieldsMock).toHaveBeenCalledTimes(1);
     expect(parseToolPayload(result)).toMatchObject({
-      warnings: [
-        { code: "unmatched_lookup_format", path: "company.address" },
-        { code: "registry_disabled", path: "company" },
-      ],
+      warnings: [{ code: "unmatched_lookup_format", path: "company.address" }],
     });
   });
 

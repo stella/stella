@@ -14,16 +14,19 @@ const isServerRendered = createPathMatcher([
 ]);
 ```
 
-The hydration entry keeps ordering explicit. An SSR document hydrates first,
-then initializes browser-owned state after paint; a client-only document
-initializes that state before its first render.
+The hydration entry keeps ordering explicit. An SSR document reports when its
+hydration commit completes, then initializes browser-owned state; a client-only
+document initializes that state before its first render.
 
 ```ts
 import { bootHydratedClient } from "@stll/ssr-kit/hydration";
 
 await bootHydratedClient({
   type: "server-rendered",
-  hydrate,
+  hydrate: hydrateAndWaitForCommit,
   initializeClientState,
 });
 ```
+
+`hydrateAndWaitForCommit` must resolve from the hydration tree's layout effect,
+not when the framework's hydrate function returns.
