@@ -128,6 +128,7 @@ import type { NullAsAbsentInputSchema } from "@/api/mcp/tool-utils";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 
 import { runEvalModelTurn } from "./lib/model-turn";
+import { runFillValues } from "./lib/run-fill-values";
 import type {
   AuthoredBlock,
   AuthoringRunScore,
@@ -625,7 +626,7 @@ const runRoundTrip = async ({
   };
   const filled = await fillTemplateDocx({
     source,
-    values: { ...task.fillValues },
+    values: runFillValues(task.fillValues),
     scopedDb: buildStubScopedDb(),
     organizationId,
     requiredFields: "allow-partial",
