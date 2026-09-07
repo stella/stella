@@ -755,8 +755,11 @@ export const TemplateStudioPage = ({
         return;
       }
       const para = (text: string) => markerParagraph(state, paragraph, text);
+      // Search from the end: the name to rename is the tag's last token, and
+      // a `{% for item in item %}` opener repeats it as the loop variable.
+      const placeholderOffset = open.lastIndexOf(placeholder);
       const selectPlaceholder = (tr: Transaction, openStart: number) => {
-        const namePos = openStart + 1 + open.indexOf(placeholder);
+        const namePos = openStart + 1 + placeholderOffset;
         return tr.setSelection(
           TextSelection.create(tr.doc, namePos, namePos + placeholder.length),
         );
@@ -774,7 +777,7 @@ export const TemplateStudioPage = ({
             $to.parentOffset === $to.parent.content.size;
           if ($from.sameParent($to) && !wholeParagraph) {
             const tr = state.tr.insertText(close, to).insertText(open, from);
-            const namePos = from + open.indexOf(placeholder);
+            const namePos = from + placeholderOffset;
             view.dispatch(
               tr
                 .setSelection(
