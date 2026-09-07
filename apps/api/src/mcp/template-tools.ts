@@ -2377,7 +2377,7 @@ const withoutProperty = (
   return rest;
 };
 
-type ConfigureEntries =
+export type ConfigureEntries =
   | { type: "rejected"; result: InternalToolErrorResult }
   | {
       type: "parsed";
@@ -2405,7 +2405,7 @@ type ConfigureEntries =
  * The loop terminates: every pass either drops one property from an entry or
  * drops an entry, and both are finite.
  */
-const parseConfigureEntries = (
+export const parseConfigureEntries = (
   args: Record<string, unknown>,
 ): ConfigureEntries => {
   const schema = CONFIGURE_TEMPLATE_FIELDS_TOOL_DEFINITION.inputSchemaSource;

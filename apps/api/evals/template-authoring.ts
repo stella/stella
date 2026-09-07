@@ -116,12 +116,12 @@ import {
   fillTemplateDocx,
   type FillTemplateSource,
 } from "@/api/lib/templates/template-fill-service";
-import { toFieldMetaToolInput } from "@/api/mcp/template-field-input";
 import { buildFieldReference } from "@/api/mcp/template-field-reference";
 import { buildMarkerReference } from "@/api/mcp/template-marker-reference";
 import {
   CONFIGURE_TEMPLATE_FIELDS_TOOL_DEFINITION,
   CREATE_TEMPLATE_TOOL_DEFINITION,
+  parseConfigureEntries,
 } from "@/api/mcp/template-tools";
 import type { McpToolInputSchema } from "@/api/mcp/tool-types";
 import type { NullAsAbsentInputSchema } from "@/api/mcp/tool-utils";
@@ -1067,16 +1067,19 @@ const TASKS: EvalTask[] = [
       "- `landlord_name` kommt aus dem Mandantenkontakt (Anzeigename), nicht",
       "  aus einer Eingabe.",
       "- `tenant_name` ist ein einfacher Wert.",
-      "- `property_address` ist ein zusammengesetztes Feld mit den Teilen",
-      "  `street`, `postal_code` und `city`, zusammengefügt als",
-      "  `{{street}}, {{postal_code}} {{city}}`.",
+      "- Die Anschrift des Mietobjekts steht als drei Felder im Dokument:",
+      "  `property_address.street`, `property_address.postal_code` und",
+      "  `property_address.city`. Die Interpunktion dazwischen schreibst du",
+      "  als Dokumenttext.",
       "- `base_rent` ist eine Zahl (die monatliche Kaltmiete).",
       "- `annual_rent` wird aus `base_rent` berechnet: `base_rent * 12`.",
     ].join("\n"),
     expectedPaths: [
       "landlord_name",
       "tenant_name",
-      "property_address",
+      "property_address.street",
+      "property_address.postal_code",
+      "property_address.city",
       "base_rent",
       "annual_rent",
     ],
@@ -1108,20 +1111,13 @@ const TASKS: EvalTask[] = [
       } else if (source.kind !== "contact" || source.field !== "displayName") {
         defects.push(`landlord_name binding is ${source.kind}/${source.field}`);
       }
-      const address = fieldAt(fields, "property_address");
-      const partKeys = new Set((address?.parts ?? []).map((part) => part.key));
+      // The address is three fields with the punctuation between them written
+      // as document text: composites are configuration a marker cannot carry,
+      // and they go with the overlay.
       for (const key of ["street", "postal_code", "city"]) {
-        if (!partKeys.has(key)) {
-          defects.push(`property_address has no "${key}" part`);
+        if (fieldAt(fields, `property_address.${key}`) === undefined) {
+          defects.push(`property_address.${key} is not a field`);
         }
-      }
-      const format = address?.format ?? "";
-      if (
-        !["street", "postal_code", "city"].every((key) =>
-          format.includes(`{{${key}}}`),
-        )
-      ) {
-        defects.push("property_address format does not join all three parts");
       }
       if (fieldAt(fields, "base_rent")?.inputType !== "number") {
         defects.push("base_rent is not a number");
@@ -1135,9 +1131,10 @@ const TASKS: EvalTask[] = [
       return defects;
     },
     checkRoundTrip: ({ text }) => ({
-      // The composite address and the derived annual rent must both render.
+      // The address parts and the derived annual rent must all render, with
+      // the document's own punctuation joining the three.
       blankRepeatedRows:
-        (text.includes("Hauptstraße 14") ? 0 : 1) +
+        (text.includes("Hauptstraße 14, 80331 München") ? 0 : 1) +
         (digitsOf(text).includes("15000") ? 0 : 1),
       conditionalRowKept: false,
       dateLocaleMismatch: false,
@@ -1269,6 +1266,18 @@ const WRITE_DOCX_DESCRIPTION =
   "is the only way the document reaches the tool.";
 
 type ToolTrace = { name: string; input: unknown };
+
+const isPlainRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+/** The message inside a refused tool result, for the trace. */
+const toolErrorText = (result: unknown): string => {
+  const content = isPlainRecord(result) ? result["content"] : undefined;
+  const [first] = Array.isArray(content) ? content : [];
+  return isPlainRecord(first) && typeof first["text"] === "string"
+    ? first["text"]
+    : "validation_error";
+};
 type WrittenDocx = { ref: string; blocks: AuthoredBlock[]; buffer: Buffer };
 
 const EVAL_TEMPLATE_ID = "00000000-0000-4000-8000-00000000e7a1";
@@ -1408,12 +1417,14 @@ const createAuthoringTools = ({
     ),
   }).server(async (input: unknown) => {
     trace.push({ name: CONFIGURE_FIELDS_TOOL_NAME, input });
-    const parsed = v.safeParse(
-      CONFIGURE_TEMPLATE_FIELDS_TOOL_DEFINITION.inputSchemaSource,
-      input,
+    // The tool site's own reader, not a second one: it is best effort per
+    // property and per entry, so what the eval counts as a contract rejection
+    // is what the production server returns.
+    const parsed = parseConfigureEntries(
+      isPlainRecord(input) ? input : { fields: input },
     );
-    if (!parsed.success) {
-      const issues = validationIssues(parsed.issues);
+    if (parsed.type === "rejected") {
+      const issues = [`the call was refused: ${toolErrorText(parsed.result)}`];
       await recordAttempt({
         outcome: { status: "rejected", issues },
         overlay: [],
@@ -1421,7 +1432,7 @@ const createAuthoringTools = ({
       });
       return { error: "validation_error", issues };
     }
-    const overlay = parsed.output.fields.map(toFieldMetaToolInput);
+    const overlay = parsed.fields;
     if (stored === null) {
       const issues = [
         `template_id: no template exists yet; call ${CREATE_TEMPLATE_TOOL_NAME} first`,
@@ -1450,7 +1461,22 @@ const createAuthoringTools = ({
       docxBase64: stored.docxBase64,
       overlay,
     });
-    await recordAttempt({ outcome, overlay, step: "configure" });
+    // The properties and entries the tool site dropped are part of what the
+    // call reported, so they are part of what the run is scored on.
+    const dropped = parsed.issues.map(
+      ({ message, path }) => `${path}: ${message}`,
+    );
+    await recordAttempt({
+      outcome:
+        outcome.status === "saved" && dropped.length > 0
+          ? {
+              ...outcome,
+              overlayIssues: [...outcome.overlayIssues, ...dropped],
+            }
+          : outcome,
+      overlay,
+      step: "configure",
+    });
     if (outcome.status === "invalid-docx") {
       return { error: "validation_error", issues: [outcome.reason] };
     }
@@ -1459,6 +1485,7 @@ const createAuthoringTools = ({
     }
     return {
       name: stored.name,
+      issues: dropped,
       fields: outcome.manifest.fields.map((field) => ({ path: field.path })),
     };
   });
