@@ -1595,6 +1595,21 @@ export const TEMPLATE_DESCRIBE_PROJECTION = v.strictObject({
   // field path it names, and fixed guidance text. Structural, like the field
   // paths above; no document prose is echoed.
   warnings: TEMPLATE_WARNINGS_PROJECTION,
+  // The `configure_template_fields` call to make next, spelled exactly as
+  // that tool accepts it: an org template handle plus one entry per
+  // configurable path. Nothing here is new data, only the field paths above
+  // and the loop item paths `arrays` names, arranged as the next call.
+  configure: v.strictObject({
+    template_id: passthroughId(),
+    fields: v.array(
+      v.strictObject({
+        path: v.string(),
+        label: v.optional(v.string()),
+        input_type: v.optional(v.string()),
+        source: TEMPLATE_FIELD_SOURCE_PROJECTION,
+      }),
+    ),
+  }),
 });
 
 /**

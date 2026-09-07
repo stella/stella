@@ -80,7 +80,9 @@ import {
   MAX_INLINE_DOCX_BASE64_LENGTH,
   MAX_INLINE_DOCX_BYTES,
 } from "@/api/mcp/template-docx-limits";
+import type { DescribedTemplateField } from "@/api/mcp/template-field-input";
 import {
+  PERSON_FIELD_SOURCE,
   templateFieldInputSchema,
   toFieldMetaToolInput,
   toTemplateFieldWireInput,
@@ -302,14 +304,65 @@ type TemplateDetailSuccess = Extract<
   { fields: unknown[] }
 >;
 
-const toTemplateDetailPayload = (payload: TemplateDetailSuccess) => ({
-  ...payload,
-  fields: payload.fields.map((field) => ({
+/**
+ * The `configure_template_fields` call to make next, spelled out: one entry
+ * per configurable path, carrying the source the template already has (a
+ * freshly created template has `person` everywhere) and nothing else the
+ * caller has not decided. Copying and editing this beats inferring the path
+ * vocabulary, and sending it back unchanged is a no-op.
+ *
+ * Loop item paths are included even though the manifest folds them into their
+ * array root, because they are configurable and an agent has no other way to
+ * learn how they are spelled.
+ */
+const configureSkeleton = (
+  templateId: SafeId<"template">,
+  payload: {
+    fields: readonly DescribedTemplateField[];
+    arrays: TemplateDetailSuccess["arrays"];
+  },
+) => {
+  const configured = new Set(payload.fields.map((field) => field.path));
+  return {
+    template_id: templateId,
+    fields: [
+      ...payload.fields.map((field) => ({
+        path: field.path,
+        ...(field.label === undefined ? {} : { label: field.label }),
+        // The default carries no decision, so it stays out of the skeleton.
+        ...(field.input_type === undefined || field.input_type === "text"
+          ? {}
+          : { input_type: field.input_type }),
+        source: field.source,
+      })),
+      ...payload.arrays.flatMap((group) =>
+        group.itemFieldPaths
+          .map((itemPath) => `${group.path}.${itemPath}`)
+          .filter((path) => !configured.has(path))
+          .map((path) => ({ path, source: PERSON_FIELD_SOURCE })),
+      ),
+    ],
+  };
+};
+
+const toTemplateDetailPayload = (
+  templateId: SafeId<"template">,
+  payload: TemplateDetailSuccess,
+) => {
+  const fields = payload.fields.map((field) => ({
     ...toTemplateFieldWireInput(field),
     input_type: field.inputType,
     required: field.required,
-  })),
-});
+  }));
+  return {
+    ...payload,
+    fields,
+    configure: configureSkeleton(templateId, {
+      arrays: payload.arrays,
+      fields,
+    }),
+  };
+};
 
 type TemplateDetailPayload = ReturnType<typeof toTemplateDetailPayload>;
 type TemplateDetailField = TemplateDetailPayload["fields"][number];
@@ -2032,7 +2085,7 @@ const describeTemplateForAgent = async ({
   if ("error" in described) {
     return errorResult(described.error);
   }
-  const payload = toTemplateDetailPayload(described);
+  const payload = toTemplateDetailPayload(templateId, described);
   type DescribedTemplatePayload = AssertNoExtraFields<
     typeof payload,
     v.InferInput<typeof TEMPLATE_DESCRIBE_PROJECTION>

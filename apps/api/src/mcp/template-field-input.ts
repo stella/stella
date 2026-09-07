@@ -118,9 +118,10 @@ export type TemplateFieldSourceInput = v.InferOutput<
   typeof templateFieldSourceInputSchema
 >;
 
-/** The person branch, spelled once: the default `source`, and what a field
- *  with no derived configuration serializes back to. */
-const PERSON_SOURCE = {
+/** The person branch, spelled once: the default `source`, what a field with
+ *  no derived configuration serializes back to, and what the configure
+ *  skeleton hands out for a path nothing has configured yet. */
+export const PERSON_FIELD_SOURCE = {
   type: "person",
 } as const satisfies TemplateFieldSourceInput;
 
@@ -468,7 +469,7 @@ const toWireFieldSource = (
       ...(field.aiSeesDocument === true ? { sees_document: true } : {}),
     };
   }
-  return PERSON_SOURCE;
+  return PERSON_FIELD_SOURCE;
 };
 
 /** Serialize a persisted/describe field onto the tool's snake_case wire

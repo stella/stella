@@ -295,7 +295,11 @@ export const applyFieldOverlay = (
   });
   const existingPaths = new Set(existing.map((field) => field.path));
   for (const field of overlayByPath.values()) {
-    if (!existingPaths.has(field.path)) {
+    // A bare `{ path }` entry decides nothing: it is the skeleton read back
+    // unchanged. Appending it would record a loop's item path as a field of
+    // its own and grow the manifest on every no-op configure, so only an
+    // entry that carries a decision creates a new manifest field.
+    if (!existingPaths.has(field.path) && carriesConfiguration(field)) {
       merged.push(field);
     }
   }

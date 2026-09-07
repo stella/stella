@@ -94,13 +94,18 @@ const WORKFLOW_STEPS: readonly WorkflowStep[] = [
       "`fields[]`, `arrays[]`, `conditions[]` and `computed[]`, and " +
       "`warnings[]` (`code`, `path`, `message`, `hint`): markers the create " +
       "accepted that will not do what you meant. Fix them in the DOCX and " +
-      "create again before configuring.",
+      `create again before configuring. It also returns \`configure\`: the ` +
+      `exact ${CONFIGURE_TEMPLATE_FIELDS} call for this template, one entry ` +
+      "per configurable path (loop item paths included) with the source each " +
+      "field already has. Copy it and edit the entries that should differ; " +
+      "do not spell the paths yourself.",
   },
   {
     title: "Read the discovered paths back",
     detail:
       `${CREATE_TEMPLATE} already returned this, and ${LIST_TEMPLATES} with ` +
-      "`template_id` returns it again for a template you did not just " +
+      "`template_id` returns it again (`configure` included) for a template " +
+      "you did not just " +
       "create. `fields[]` (`path`, " +
       "`label`, `input_type`, `required`, `hint`, `options`, `options_from`, " +
       "`parts`, `format`, `date_format`, and `source`: who fills the field, " +

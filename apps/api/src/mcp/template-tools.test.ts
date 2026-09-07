@@ -763,6 +763,7 @@ describe("MCP template tools", () => {
           },
         },
       ],
+      arrays: [],
       conditions: [],
       computed: [],
       warnings: [
@@ -2268,6 +2269,9 @@ describe("MCP template tools", () => {
       computed: [],
       arrays: [],
       warnings: [],
+      // The next call, spelled out: nothing to configure on an empty
+      // template, but the shape is there to copy.
+      configure: { template_id: "tmpl_new", fields: [] },
     });
     expect(describeStoredTemplateMock).toHaveBeenCalledWith(
       expect.objectContaining({ templateId: "tmpl_new" }),
