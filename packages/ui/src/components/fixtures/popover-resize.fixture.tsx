@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 
 import { panic } from "better-result";
 
+import { cn } from "../../lib/utils";
 import { Popover, PopoverPanel, PopoverTrigger } from "../popover";
 
 // The editor is far wider than the picker it replaces, and the swap happens
@@ -17,6 +18,14 @@ const VIEW_WIDTH_CLASS = {
 
 type PopoverView = keyof typeof VIEW_WIDTH_CLASS;
 
+// `side="top"` makes Base UI take the popup out of normal flow, so the
+// positioner has to measure it some other way; the trigger sits at the
+// bottom edge so that side has room and is not flipped away.
+const side =
+  new URLSearchParams(window.location.search).get("side") === "top"
+    ? "top"
+    : "bottom";
+
 const PopoverResizeFixture = () => {
   const [view, setView] = useState<PopoverView>("picker");
 
@@ -28,7 +37,12 @@ const PopoverResizeFixture = () => {
   }, []);
 
   return (
-    <main className="flex justify-end p-2">
+    <main
+      className={cn(
+        "flex min-h-dvh justify-end p-2",
+        side === "top" ? "items-end" : "items-start",
+      )}
+    >
       <Popover
         onOpenChange={(open) => {
           if (!open) {
@@ -37,7 +51,11 @@ const PopoverResizeFixture = () => {
         }}
       >
         <PopoverTrigger>Open</PopoverTrigger>
-        <PopoverPanel align="start" className={VIEW_WIDTH_CLASS[view]}>
+        <PopoverPanel
+          align="start"
+          className={VIEW_WIDTH_CLASS[view]}
+          side={side}
+        >
           {view === "picker" ? (
             <button onClick={() => setView("editor")} type="button">
               Edit

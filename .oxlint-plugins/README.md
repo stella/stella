@@ -137,6 +137,7 @@ runtime validation, or integration tests.
 ### Internationalization, accessibility, and design-system consistency
 
 - [`icon-button-requires-tooltip`](./icon-button-requires-tooltip.ts) (`icon-button-requires-tooltip`): requires icon-only buttons to expose an accessible label through the owned tooltip contract.
+- [`require-in-flow-viewport-popup`](./require-in-flow-viewport-popup.ts) (`require-in-flow-viewport-popup`): requires a Base UI positioner that renders a `Viewport` to size itself and keep its popup in flow through the shared `positioner-sizing` constants, so collision handling measures the real popup on every side.
 - [`no-adhoc-loader`](./no-adhoc-loader.ts) (`no-adhoc-loader`): requires the owned `Loader` primitive for indeterminate loading states instead of ad hoc spinners; a ratchet over the files that still carry one.
 - [`no-ambient-hotkey-format`](./no-ambient-hotkey-format.ts) (`no-ambient-hotkey-format`): keeps platform detection and hotkey display formatting behind the hydration-safe helper so server and client output cannot diverge.
 - [`no-broad-translation-callable`](./no-broad-translation-callable.ts) (`no-broad-translation-callable`): prevents helpers from carrying the full `TranslationKey` callable, which is both too broad and expensive to type-check.

@@ -7,6 +7,10 @@ import {
   OVERLAY_LAYER_CLASS_NAMES,
   type OverlayLayer,
 } from "../lib/overlay-layer";
+import {
+  CONTENT_SIZED_POSITIONER_CLASS_NAME,
+  IN_FLOW_POPUP_CLASS_NAME,
+} from "../lib/positioner-sizing";
 import { cn } from "../lib/utils";
 
 const TooltipCreateHandle = TooltipPrimitive.createHandle;
@@ -36,10 +40,9 @@ const TooltipPopup = ({
   <TooltipPrimitive.Portal>
     <TooltipPrimitive.Positioner
       align={align}
-      // Same payload-driven staleness as the popover positioner: size to the
-      // rendered popup instead of to `--positioner-width`.
       className={cn(
-        "h-(--positioner-height) w-max max-w-(--available-width) transition-[top,left,right,bottom,transform] data-instant:transition-none",
+        CONTENT_SIZED_POSITIONER_CLASS_NAME,
+        "transition-[top,left,right,bottom,transform] data-instant:transition-none",
         OVERLAY_LAYER_CLASS_NAMES[layer],
       )}
       collisionPadding={OVERLAY_COLLISION_PADDING}
@@ -49,7 +52,8 @@ const TooltipPopup = ({
     >
       <TooltipPrimitive.Popup
         className={cn(
-          "bg-popover text-popover-foreground relative flex h-(--popup-height,auto) w-(--popup-width,auto) origin-(--transform-origin) rounded-md border text-xs text-balance shadow-md/5 transition-[width,height,scale,opacity] not-dark:bg-clip-padding before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-md)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] data-ending-style:scale-98 data-ending-style:opacity-0 data-instant:duration-0 data-starting-style:scale-98 data-starting-style:opacity-0 dark:before:shadow-[0_-1px_--theme(--color-white/6%)]",
+          IN_FLOW_POPUP_CLASS_NAME,
+          "bg-popover text-popover-foreground flex h-(--popup-height,auto) w-(--popup-width,auto) origin-(--transform-origin) rounded-md border text-xs text-balance shadow-md/5 transition-[width,height,scale,opacity] not-dark:bg-clip-padding before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-md)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] data-ending-style:scale-98 data-ending-style:opacity-0 data-instant:duration-0 data-starting-style:scale-98 data-starting-style:opacity-0 dark:before:shadow-[0_-1px_--theme(--color-white/6%)]",
           className,
         )}
         data-slot="tooltip-popup"

@@ -71,6 +71,7 @@
     "./overlay-layer": "./src/lib/overlay-layer.ts",
     "./pagination": "./src/components/pagination.tsx",
     "./popover": "./src/components/popover.tsx",
+    "./positioner-sizing": "./src/lib/positioner-sizing.ts",
     "./preview-card": "./src/components/preview-card.tsx",
     "./preview-pane": "./src/components/preview-pane.tsx",
     "./review-author-avatar": "./src/review/review-author-avatar.tsx",
