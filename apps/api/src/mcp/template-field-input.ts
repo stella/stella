@@ -250,8 +250,9 @@ const FIELD_WIRE_KEYS = {
   format: "format",
   optionsFrom: "options_from",
   dateFormat: "date_format",
-} as const satisfies Partial<
-  Record<keyof PersistedFieldInput, keyof TemplateFieldInput>
+} as const satisfies Record<
+  Exclude<keyof PersistedFieldInput, FoldedIntoSourceKey>,
+  keyof TemplateFieldInput
 >;
 
 const VALIDATION_WIRE_KEYS = {
@@ -358,14 +359,19 @@ const toTemplateFieldValidationInput = (
  *  wire union produces exactly one of these shapes, and every key appears in
  *  it: an entry merges onto the field it names, so a key the new branch omits
  *  has to be present and cleared, or the old branch survives the merge. */
+/** The persisted properties `source` folds up. Everything else on a field
+ *  travels under its own wire key. */
+type FoldedIntoSourceKey =
+  | "aiAdapt"
+  | "aiPrompt"
+  | "aiSeesDocument"
+  | "condition"
+  | "formula"
+  | "lookup"
+  | "source";
+
 type PersistedFieldSourceProperties = Required<{
-  [Key in
-    | "aiAdapt"
-    | "aiPrompt"
-    | "aiSeesDocument"
-    | "condition"
-    | "formula"
-    | "lookup"]: PersistedFieldInput[Key];
+  [Key in Exclude<FoldedIntoSourceKey, "source">]: PersistedFieldInput[Key];
 }> & { source: FieldSource | undefined };
 
 /** Nothing set: the shape every branch below starts from, so switching a

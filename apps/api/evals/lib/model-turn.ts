@@ -56,9 +56,12 @@ export const runEvalModelTurn = async ({
 }: RunEvalModelTurnOptions): Promise<EvalModelTurnResult> => {
   const start = performance.now();
   const abortController = new AbortController();
-  let timedOut = false;
+  // A property rather than a local: the timer writes it after this function
+  // has already read its way past the declaration, and only an object's field
+  // survives that for the reader below.
+  const deadline = { exceeded: false };
   const abortTimer = setTimer(() => {
-    timedOut = true;
+    deadline.exceeded = true;
     abortController.abort();
   }, timeoutMs);
   let usage: TokenUsage | null = null;
@@ -85,7 +88,7 @@ export const runEvalModelTurn = async ({
   // turn killed by the deadline otherwise reports no error at all and scores
   // as a model that simply stopped calling tools. Name the deadline instead.
   return {
-    error: timedOut
+    error: deadline.exceeded
       ? `model turn exceeded ${String(timeoutMs)} ms and was aborted`
       : error,
     latencyMs: Math.round(performance.now() - start),

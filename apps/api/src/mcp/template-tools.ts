@@ -2301,8 +2301,13 @@ const describeTemplateForAgent = async ({
  * belong to the request.
  */
 const entryIndexOfIssue = (issue: v.BaseIssue<unknown>): number | null => {
-  const [root, position] = issue.path ?? [];
-  if (root?.key !== "fields" || position === undefined) {
+  const path = issue.path;
+  // An issue with no path at all is about the request, not about one entry.
+  if (path === undefined) {
+    return null;
+  }
+  const [root, position] = path;
+  if (root.key !== "fields" || position === undefined) {
     return null;
   }
   return typeof position.key === "number" ? position.key : null;
@@ -2335,7 +2340,9 @@ const parseConfigureEntries = (
   args: Record<string, unknown>,
 ): ConfigureEntries => {
   const schema = CONFIGURE_TEMPLATE_FIELDS_TOOL_DEFINITION.inputSchemaSource;
-  const sent = Array.isArray(args["fields"]) ? args["fields"] : null;
+  const sent: unknown[] | null = Array.isArray(args["fields"])
+    ? args["fields"]
+    : null;
   const issues: FieldOverlayIssue[] = [];
   let positions = sent === null ? [] : sent.map((_entry, index) => index);
   for (;;) {
@@ -2417,9 +2424,14 @@ const handleConfigureTemplateFieldsTool: TypedMcpToolHandler<
   // translated back before the two lists are merged.
   const serviceIssues = configured.value.issues.map((issue) => {
     const index =
-      parsed.applied[issue.index] ??
+      parsed.applied.at(issue.index) ??
       panic(`configure issue names applied entry ${String(issue.index)}`);
-    return { ...issue, path: `fields.${index}`, index };
+    return {
+      path: `fields.${index}`,
+      index,
+      message: issue.message,
+      hint: issue.hint,
+    };
   });
 
   // Echo the field list in the same shape list_templates' detail mode returns,

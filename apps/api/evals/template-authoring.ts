@@ -1770,7 +1770,7 @@ const runAuthoringTask = async ({
           );
     const rejection = saveCalls.at(-1)?.outcome;
     let overlayIssues: string[];
-    if (rejection !== undefined && rejection.status === "rejected") {
+    if (rejection?.status === "rejected") {
       overlayIssues = [...rejection.issues];
     } else if (parsed === null) {
       overlayIssues = [];
