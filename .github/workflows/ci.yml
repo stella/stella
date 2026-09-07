@@ -1124,7 +1124,12 @@ jobs:
           scripts/detect-e2e-changes.test.ts
           scripts/autofix-workflow.test.ts
           scripts/dependabot-empty-changeset.test.ts
-          scripts/check-cli-release-coupling.test.ts
+
+      # Needs the installed workspace (fast-check, property-testing), so it
+      # cannot join the no-install invariants step above.
+      - name: Test CLI release coupling gate
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        run: bun test scripts/check-cli-release-coupling.test.ts
 
       - name: Test package scaffolder
         if: needs.ci-plan.outputs.package_checks_required == 'true'

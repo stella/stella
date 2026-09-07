@@ -16,7 +16,7 @@
 //
 //   unchanged  the CLI version on the commit is npm's `latest`, and the
 //              generated contract surface (capability catalog, registry
-//              snapshot, negotiated API contract) equals the published
+//              snapshot, API and MCP contract modules) equals the published
 //              tarball's. The published CLI keeps working against this release.
 //   coupled    the CLI version on the commit is newer than anything published.
 //              publish-npm.yml publishes it right after promotion; until then
@@ -27,8 +27,11 @@
 // version does not exist yet), a CLI version behind npm, or a `latest`-versioned
 // commit whose contract surface drifted from the published bytes.
 //
-// Runs without `bun install`: the tag workflow checks out the repository and
-// nothing else, so this file uses only Bun and Node built-ins.
+// The published tarball is data, never code: its generated modules are read
+// as text and parsed as literals, so nothing fetched from the registry runs
+// inside the release job. Runs without `bun install`: the tag workflow checks
+// out the repository and nothing else, so this file uses only Bun and Node
+// built-ins.
 //
 //   bun scripts/check-cli-release-coupling.ts --version 1.2.3
 //   bun scripts/check-cli-release-coupling.ts --base origin/main
@@ -36,13 +39,7 @@
 import { existsSync, mkdtempSync, readdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
 
-import {
-  CLI_MINIMUM_SERVER_REVISION,
-  CLI_REQUIRED_CAPABILITIES,
-  CLI_SUPPORTED_API_PROTOCOLS,
-} from "../packages/cli/src/generated/api-contract";
 import { isChangesetEntry } from "./changeset-guard";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
@@ -166,71 +163,143 @@ export const classifyCliRelease = ({
   return { status: "coupled", cliVersion, latest: published.latest };
 };
 
-/** The negotiated contract the CLI bakes in, as plain data for comparison. */
-export type ApiContractSnapshot = {
-  readonly protocols: readonly number[];
-  readonly minimumServerRevision: number;
-  readonly requiredCapabilities: Readonly<Record<string, number>>;
+/**
+ * The generated files that decide whether a CLI can drive a server: the tool
+ * catalog and registry it bakes in, the negotiated API contract, and the MCP
+ * paths, scopes and error codes. Keyed by the source path; the published
+ * tarball holds the same data under `dist/` as compiled modules.
+ */
+const SURFACE_PARTS = [
+  "capability-catalog.json",
+  "src/generated/registry-snapshot.json",
+  "src/generated/api-contract.ts",
+  "src/generated/mcp-contract.ts",
+] as const;
+
+export type CliContractSurfacePart = (typeof SURFACE_PARTS)[number];
+
+type SurfacePartSource = {
+  readonly kind: "json" | "constants";
+  /** Where the published tarball holds the same data. */
+  readonly published: string;
 };
 
-/** What a published CLI and a commit each contribute to the drift check. */
-export type CliContractSurface = {
-  readonly apiContract: ApiContractSnapshot;
-  /** Raw JSON text; compared after parsing so formatting cannot drift it. */
-  readonly capabilityCatalog: string;
-  readonly registrySnapshot: string;
+export const CLI_CONTRACT_SURFACE = {
+  "capability-catalog.json": {
+    kind: "json",
+    published: "capability-catalog.json",
+  },
+  "src/generated/registry-snapshot.json": {
+    kind: "json",
+    published: "dist/generated/registry-snapshot.json",
+  },
+  "src/generated/api-contract.ts": {
+    kind: "constants",
+    published: "dist/generated/api-contract.js",
+  },
+  "src/generated/mcp-contract.ts": {
+    kind: "constants",
+    published: "dist/generated/mcp-contract.js",
+  },
+} as const satisfies Record<CliContractSurfacePart, SurfacePartSource>;
+
+/** Raw file text per surface part; parsed and canonicalised before comparing. */
+export type CliContractSurface = Readonly<
+  Record<CliContractSurfacePart, string>
+>;
+
+/** Total by construction: a new part in SURFACE_PARTS fails to compile here. */
+const mapSurfaceParts = (
+  read: (part: CliContractSurfacePart) => string,
+): CliContractSurface => ({
+  "capability-catalog.json": read("capability-catalog.json"),
+  "src/generated/registry-snapshot.json": read(
+    "src/generated/registry-snapshot.json",
+  ),
+  "src/generated/api-contract.ts": read("src/generated/api-contract.ts"),
+  "src/generated/mcp-contract.ts": read("src/generated/mcp-contract.ts"),
+});
+
+const EXPORTED_CONSTANT = /^export const (\w+) =\s*([\s\S]*?);\s*$/gmu;
+const AS_CONST_SUFFIX = /\s+as const$/u;
+const TRAILING_COMMA = /,(\s*[\]}])/gu;
+const BARE_OBJECT_KEY = /([{,]\s*)([A-Za-z_$][\w$]*)\s*:/gu;
+
+/**
+ * Reads a generated constants module (TypeScript source or its compiled
+ * JavaScript) as data. The generator only emits string, number, array and
+ * flat object literals, so each exported literal becomes JSON after dropping
+ * `as const`, trailing commas and bare keys. Anything else is a generator
+ * change this parser must learn about, so it fails loudly.
+ */
+export const parseGeneratedConstants = (
+  source: string,
+): Readonly<Record<string, unknown>> => {
+  const constants: Record<string, unknown> = {};
+  for (const match of source.matchAll(EXPORTED_CONSTANT)) {
+    const [, name, literal] = match;
+    if (name === undefined || literal === undefined) {
+      continue;
+    }
+    const json = literal
+      .replace(AS_CONST_SUFFIX, "")
+      .replace(TRAILING_COMMA, "$1")
+      .replace(BARE_OBJECT_KEY, '$1"$2":');
+    try {
+      constants[name] = JSON.parse(json) as unknown;
+    } catch {
+      panic(`generated constant ${name} is not a plain literal: ${literal}`);
+    }
+  }
+  return constants;
 };
 
-const canonicalJson = (text: string): string =>
-  JSON.stringify(JSON.parse(text) as unknown);
+/** JSON with object keys sorted at every level, so key order never reads as drift. */
+export const canonicalJson = (value: unknown): string => {
+  if (Array.isArray(value)) {
+    return `[${value.map((entry: unknown) => canonicalJson(entry)).join(",")}]`;
+  }
+  if (typeof value === "object" && value !== null) {
+    const entries = Object.entries(value)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, entry]) => `${JSON.stringify(key)}:${canonicalJson(entry)}`);
+    return `{${entries.join(",")}}`;
+  }
+  return JSON.stringify(value);
+};
 
-const sortedProtocols = (protocols: readonly number[]): string =>
-  JSON.stringify([...protocols].sort((a, b) => a - b));
-
-const sortedCapabilities = (
-  capabilities: Readonly<Record<string, number>>,
-): string =>
-  JSON.stringify(
-    Object.entries(capabilities).sort(([a], [b]) => a.localeCompare(b)),
-  );
-
-const sameApiContract = (
-  a: ApiContractSnapshot,
-  b: ApiContractSnapshot,
-): boolean =>
-  sortedProtocols(a.protocols) === sortedProtocols(b.protocols) &&
-  a.minimumServerRevision === b.minimumServerRevision &&
-  sortedCapabilities(a.requiredCapabilities) ===
-    sortedCapabilities(b.requiredCapabilities);
+const canonicalSurfacePart = (
+  part: CliContractSurfacePart,
+  text: string,
+): string => {
+  const { kind } = CLI_CONTRACT_SURFACE[part];
+  switch (kind) {
+    case "json":
+      return canonicalJson(JSON.parse(text) as unknown);
+    case "constants":
+      return canonicalJson(parseGeneratedConstants(text));
+    default: {
+      kind satisfies never;
+      throw new CliReleaseCouplingError(`Unhandled surface part: ${part}`);
+    }
+  }
+};
 
 type SurfaceComparison = {
   readonly head: CliContractSurface;
   readonly published: CliContractSurface;
 };
 
-/** Names of the surface parts that differ; empty when the published CLI matches. */
+/** Surface parts that differ; empty when the published CLI matches the commit. */
 export const findSurfaceDrift = ({
   head,
   published,
-}: SurfaceComparison): readonly string[] => {
-  const drift: string[] = [];
-  if (!sameApiContract(head.apiContract, published.apiContract)) {
-    drift.push("src/generated/api-contract.ts");
-  }
-  if (
-    canonicalJson(head.capabilityCatalog) !==
-    canonicalJson(published.capabilityCatalog)
-  ) {
-    drift.push("capability-catalog.json");
-  }
-  if (
-    canonicalJson(head.registrySnapshot) !==
-    canonicalJson(published.registrySnapshot)
-  ) {
-    drift.push("src/generated/registry-snapshot.json");
-  }
-  return drift;
-};
+}: SurfaceComparison): readonly CliContractSurfacePart[] =>
+  SURFACE_PARTS.filter(
+    (part) =>
+      canonicalSurfacePart(part, head[part]) !==
+      canonicalSurfacePart(part, published[part]),
+  );
 
 export type CliReleaseVerdict =
   | { readonly status: "not-a-release"; readonly reason: string }
@@ -372,59 +441,19 @@ const readPublishedCli = (): PublishedCli => {
   return { latest: parsed["dist-tags.latest"], versions: parsed.versions };
 };
 
-const isNumberArray = (value: unknown): value is readonly number[] =>
-  Array.isArray(value) && value.every((entry) => typeof entry === "number");
+const readSurface = (
+  root: string,
+  locate: (part: CliContractSurfacePart) => string,
+): CliContractSurface =>
+  mapSurfaceParts((part) =>
+    readFileSync(path.join(root, locate(part)), "utf-8"),
+  );
 
-const isCapabilityMap = (
-  value: unknown,
-): value is Readonly<Record<string, number>> =>
-  typeof value === "object" &&
-  value !== null &&
-  Object.values(value).every((entry) => typeof entry === "number");
+const readHeadSurface = (root: string): CliContractSurface =>
+  readSurface(path.join(root, CLI_DIRECTORY), (part) => part);
 
-const readApiContractModule = async (
-  modulePath: string,
-): Promise<ApiContractSnapshot> => {
-  const contract: unknown = await import(pathToFileURL(modulePath).href);
-  if (
-    typeof contract !== "object" ||
-    contract === null ||
-    !("CLI_SUPPORTED_API_PROTOCOLS" in contract) ||
-    !isNumberArray(contract.CLI_SUPPORTED_API_PROTOCOLS) ||
-    !("CLI_MINIMUM_SERVER_REVISION" in contract) ||
-    typeof contract.CLI_MINIMUM_SERVER_REVISION !== "number" ||
-    !("CLI_REQUIRED_CAPABILITIES" in contract) ||
-    !isCapabilityMap(contract.CLI_REQUIRED_CAPABILITIES)
-  ) {
-    return panic(`${modulePath} does not export the generated API contract`);
-  }
-  return {
-    protocols: contract.CLI_SUPPORTED_API_PROTOCOLS,
-    minimumServerRevision: contract.CLI_MINIMUM_SERVER_REVISION,
-    requiredCapabilities: contract.CLI_REQUIRED_CAPABILITIES,
-  };
-};
-
-const readHeadSurface = (root: string): CliContractSurface => ({
-  apiContract: {
-    protocols: CLI_SUPPORTED_API_PROTOCOLS,
-    minimumServerRevision: CLI_MINIMUM_SERVER_REVISION,
-    requiredCapabilities: CLI_REQUIRED_CAPABILITIES,
-  },
-  capabilityCatalog: readFileSync(
-    path.join(root, CLI_DIRECTORY, "capability-catalog.json"),
-    "utf-8",
-  ),
-  registrySnapshot: readFileSync(
-    path.join(root, CLI_DIRECTORY, "src/generated/registry-snapshot.json"),
-    "utf-8",
-  ),
-});
-
-/** Downloads the published tarball and reads the same three surface parts from it. */
-const readPublishedSurface = async (
-  version: string,
-): Promise<CliContractSurface> => {
+/** Downloads the published tarball and reads the same surface parts from it. */
+const readPublishedSurface = (version: string): CliContractSurface => {
   const workDir = mkdtempSync(path.join(tmpdir(), "stella-cli-release-"));
   const pack = run(
     [
@@ -444,20 +473,10 @@ const readPublishedSurface = async (
   if (!run(["tar", "-xzf", path.join(workDir, tarball)], workDir).ok) {
     return panic(`could not extract ${tarball}`);
   }
-  const packageRoot = path.join(workDir, "package");
-  return {
-    apiContract: await readApiContractModule(
-      path.join(packageRoot, "dist/generated/api-contract.js"),
-    ),
-    capabilityCatalog: readFileSync(
-      path.join(packageRoot, "capability-catalog.json"),
-      "utf-8",
-    ),
-    registrySnapshot: readFileSync(
-      path.join(packageRoot, "dist/generated/registry-snapshot.json"),
-      "utf-8",
-    ),
-  };
+  return readSurface(
+    path.join(workDir, "package"),
+    (part) => CLI_CONTRACT_SURFACE[part].published,
+  );
 };
 
 const readVersionFile = (root: string): string => {
@@ -491,7 +510,7 @@ const parseArgs = (args: readonly string[]): Args => {
   return { version, base };
 };
 
-const main = async (args: readonly string[]): Promise<number> => {
+const main = (args: readonly string[]): number => {
   const { version: versionArg, base } = parseArgs(args);
   const version = versionArg ?? readVersionFile(REPO_ROOT);
 
@@ -520,7 +539,7 @@ const main = async (args: readonly string[]): Promise<number> => {
 
   const drift = findSurfaceDrift({
     head: readHeadSurface(REPO_ROOT),
-    published: await readPublishedSurface(verdict.cliVersion),
+    published: readPublishedSurface(verdict.cliVersion),
   });
   if (drift.length === 0) {
     return report(verdict);
@@ -532,5 +551,5 @@ const main = async (args: readonly string[]): Promise<number> => {
 };
 
 if (import.meta.main) {
-  process.exit(await main(process.argv.slice(2)));
+  process.exit(main(process.argv.slice(2)));
 }
