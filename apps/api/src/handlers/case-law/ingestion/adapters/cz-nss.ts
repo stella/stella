@@ -278,26 +278,77 @@ const extractFormFields = (html: string): Map<string, string> => {
 const extractAntiforgeryToken = (html: string): string | undefined =>
   extractHiddenField(html, "__RequestVerificationToken");
 
+/** The four hex digits a `\uXXXX` escape is made of. */
+const HEX_QUAD_PATTERN = /^[0-9a-fA-F]{4}$/u;
+
+/** The single-character escapes a JavaScript string literal may carry. */
+const SINGLE_CHARACTER_ESCAPES = new Map([
+  ["n", "\n"],
+  ["r", "\r"],
+  ["t", "\t"],
+  ["b", "\b"],
+  ["f", "\f"],
+  ["v", "\v"],
+]);
+
 /**
- * Decode the `\uXXXX` escapes a JavaScript string literal carries.
+ * Decode a JavaScript string literal the way the interpreter reads it.
  *
  * The results page hands its pagination state to `infiniteScroll.js` inside
  * single-quoted literals in which every double quote is escaped. The browser
  * posts the decoded value; anything else posts a query the server does not
- * recognise and answers with an empty body, which reads as a finished day.
+ * recognise and answers with an empty body.
+ *
+ * The escapes have to be consumed left to right, the backslash first. A
+ * reader that resolved `\uXXXX` wherever it appeared would treat the second
+ * half of an escaped backslash as the start of an escape, and any condition
+ * whose value is itself quoted JSON carries one: a codelist condition states
+ * its options in `ciselnikTreeData`, whose titles are wrapped in `\\` plus
+ * the escape for a double quote. The date-range search the crawl runs has no
+ * such condition, which is why the simpler reader stood; a single codelist
+ * condition decodes into text that is no longer JSON.
  */
-const unescapeJsStringLiteral = (value: string): string =>
-  value.replace(/\\u(?<hex>[0-9a-fA-F]{4})/gu, (_match, hex: string) =>
-    String.fromCodePoint(Number.parseInt(hex, 16)),
-  );
+const unescapeJsStringLiteral = (value: string): string => {
+  let decoded = "";
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index];
+    if (character !== "\\") {
+      decoded += character;
+      continue;
+    }
+    const escape = value[index + 1];
+    index += 1;
+    if (escape === "u") {
+      const hex = value.slice(index + 1, index + 5);
+      if (HEX_QUAD_PATTERN.test(hex)) {
+        decoded += String.fromCodePoint(Number.parseInt(hex, 16));
+        index += 4;
+        continue;
+      }
+    }
+    // `\\`, `\'`, `\"` and anything else stand for the character they escape;
+    // a backslash ending the literal stands for itself.
+    decoded +=
+      escape === undefined
+        ? "\\"
+        : (SINGLE_CHARACTER_ESCAPES.get(escape) ?? escape);
+  }
+  return decoded;
+};
 
-/** Read a `var name = '...';` initializer out of the page's inline script. */
+/**
+ * Read a `var name = '...';` initializer out of the page's inline script.
+ *
+ * The literal ends at the first *unescaped* quote. Ending it at any quote
+ * would truncate a value containing an escaped apostrophe and post a prefix
+ * of the query, which the endpoint does not recognise.
+ */
 const extractScriptString = (
   html: string,
   name: string,
 ): string | undefined => {
   const match = new RegExp(
-    `var\\s+${name}\\s*=\\s*'(?<value>[^']*)'`,
+    `var\\s+${name}\\s*=\\s*'(?<value>(?:\\\\.|[^'\\\\])*)'`,
     "u",
   ).exec(html);
   const value = match?.groups?.["value"];
@@ -1210,6 +1261,12 @@ type FetchResultPageOptions = {
   date: string;
   /** 0-indexed page within the day. */
   page: number;
+  /**
+   * What the day's results page said the search matched, or `null` where it
+   * said nothing. It is the only thing that tells a page past the day's last
+   * record from a query the endpoint refused.
+   */
+  statedCount: number | null;
   signal: AbortSignal;
 };
 
@@ -1223,6 +1280,7 @@ const fetchResultPage = async ({
   continuation,
   date,
   page,
+  statedCount,
   session,
   signal,
 }: FetchResultPageOptions): Promise<string> => {
@@ -1256,7 +1314,30 @@ const fetchResultPage = async ({
     });
   }
 
-  return await response.text();
+  const html = await response.text();
+  // Case-law rule 14: a day ends when the source says there is nothing more.
+  // This endpoint answers 200 with an empty body for two different things —
+  // a page past the day's last record, and a query it did not recognise —
+  // and only the stated count tells them apart. Reading the second as the
+  // first settles a day the walk saw a fraction of, and a forward-only
+  // cursor never comes back to it. A day whose count the page did not state
+  // is refused for the same reason: nothing here can say the day is over.
+  const requiredRows =
+    statedCount === null ? null : czNssExpectedRows({ page, statedCount });
+  if (html.trim() === "" && requiredRows !== 0) {
+    invalidateSession();
+    throw new AdapterFetchError({
+      message:
+        `NSS pagination for ${date} answered no rows for page ${page}, which ${ 
+        requiredRows === null
+          ? "the day's unstated record count cannot show is past its last record"
+          : `its stated count of ${statedCount} requires ${requiredRows} of`}`,
+      adapterKey: ADAPTER_KEYS.CZ_NSS,
+      cursor: `${date}:${page}`,
+    });
+  }
+
+  return html;
 };
 
 // ── Shared build path ────────────────────────────────────
@@ -1496,6 +1577,7 @@ const listCzNssSlicePage = async ({
             continuation,
             date: slice,
             page,
+            statedCount: search.statedCount,
             session,
             signal: effectiveSignal,
           }),
@@ -1739,6 +1821,7 @@ export const czNssAdapter = defineSourceAdapter({
                 continuation,
                 date,
                 page,
+                statedCount: searchResult.statedCount,
                 session,
                 signal: effectiveSignal,
               });
