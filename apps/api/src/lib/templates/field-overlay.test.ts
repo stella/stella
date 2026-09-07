@@ -334,6 +334,128 @@ describe("loop aliases at the configure boundary", () => {
   });
 });
 
+describe("a child restating the parent's lookup", () => {
+  const companyDocx = async () =>
+    makeDocx("{{company}}", "{{company.address}}", "{{company.krs}}");
+
+  /** How a model describes every marker it can see: the registry lookup on the
+   *  parent, and each dotted marker as the same lookup rendered its own way. */
+  const perMarkerOverlay = (registry: FieldMeta["lookup"]) => [
+    {
+      path: "company",
+      label: "Company",
+      lookup: krsLookup("name", "address", "krs"),
+    },
+    {
+      path: "company.address",
+      label: "Registered address",
+      lookup: {
+        registry: "krs" as const,
+        formats: [
+          { key: "default", template: "[street], [postal_code] [city]" },
+        ],
+      },
+    },
+    { path: "company.krs", label: "KRS number", lookup: registry },
+  ];
+
+  const krsChild = {
+    registry: "krs" as const,
+    formats: [{ key: "default", template: "[registration_number]" }],
+  };
+
+  test("folds into the parent's format for that key", async () => {
+    const discovered = await discoverTemplate(await companyDocx());
+    const configured = [{ path: "company.address" }, { path: "company.krs" }];
+
+    const { applied, issues } = partitionFieldOverlay({
+      configured,
+      discovered,
+      overlay: perMarkerOverlay(krsChild),
+    });
+
+    expect(issues).toEqual([]);
+    // The children are the parent's renderings, so one field carries all three
+    // and their templates are the ones the child entries declared.
+    expect(
+      applyFieldOverlay({ version: 1, fields: configured }, applied).fields,
+    ).toEqual([
+      {
+        path: "company",
+        label: "Company",
+        lookup: {
+          registry: "krs",
+          formats: [
+            { key: "name", template: "[company name]" },
+            { key: "address", template: "[street], [postal_code] [city]" },
+            { key: "krs", template: "[registration_number]" },
+          ],
+        },
+      },
+    ]);
+  });
+
+  test("a child on a different registry is still refused", async () => {
+    const discovered = await discoverTemplate(await companyDocx());
+
+    const { applied, issues } = partitionFieldOverlay({
+      configured: [],
+      discovered,
+      overlay: perMarkerOverlay({
+        registry: "ares",
+        formats: [{ key: "default", template: "[registration_number]" }],
+      }),
+    });
+
+    expect(issues.map(({ path }) => path)).toEqual(["fields.0", "fields.2"]);
+    for (const { message } of issues) {
+      expect(message).toContain('"company.krs"');
+    }
+    expect(applied.map(({ path }) => path)).toEqual(["company.address"]);
+  });
+
+  test("a child carrying what a format cannot hold is still refused", async () => {
+    const discovered = await discoverTemplate(await companyDocx());
+
+    const { issues } = partitionFieldOverlay({
+      configured: [],
+      discovered,
+      overlay: [
+        { path: "company", lookup: krsLookup("name", "krs") },
+        { path: "company.krs", inputType: "text", lookup: krsChild },
+      ],
+    });
+
+    expect(issues.map(({ path }) => path)).toEqual(["fields.0", "fields.1"]);
+  });
+
+  test("configuring the same overlay twice resolves the same manifest", async () => {
+    const discovered = await discoverTemplate(await companyDocx());
+    const overlay = perMarkerOverlay(krsChild);
+
+    const first = resolveTemplateFieldOverlay({
+      discovered,
+      manifest: null,
+      overlay: partitionFieldOverlay({ configured: [], discovered, overlay })
+        .applied,
+    });
+    const second = resolveTemplateFieldOverlay({
+      discovered,
+      manifest: first,
+      overlay: partitionFieldOverlay({
+        configured: first.fields,
+        discovered,
+        overlay,
+      }).applied,
+    });
+
+    expect(second).toEqual(first);
+    expect(
+      first.fields.find(({ path }) => path === "company")?.lookup?.formats,
+    ).toHaveLength(3);
+  });
+});
+
 describe("applyFieldOverlay", () => {
   test("new and embedded lookup configurations resolve the same manifest for storage and diagnostics", async () => {
     const discovered = await discoverTemplate(

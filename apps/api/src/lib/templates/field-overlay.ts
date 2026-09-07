@@ -19,11 +19,14 @@ import {
   manifestFieldsFromMerge,
   mergeManifestWithDiscovery,
 } from "@/api/lib/docx/template-manifest";
-import type {
-  DiscoveredField,
-  DiscoveredTemplate,
-  FieldMeta,
-  TemplateManifest,
+import {
+  isLookupFormatKey,
+  LOOKUP_FORMATS_MAX,
+  type DiscoveredField,
+  type DiscoveredTemplate,
+  type FieldLookupFormat,
+  type FieldMeta,
+  type TemplateManifest,
 } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -322,9 +325,128 @@ export const partitionFieldOverlay = ({
 };
 
 /**
+ * What folding a field into one of its parent's lookup formats can do with
+ * each manifest property. A format is a key and a `[token]` template and
+ * nothing else, so a property a format cannot carry keeps the child a rival
+ * configuration, refused as before. Total over the manifest shape: a property
+ * added to `fieldMetaSchema` cannot ship without deciding whether a rendering
+ * of a registry hit can hold it.
+ */
+const FORMAT_FOLD = {
+  path: "identity",
+  lookup: "template",
+  // Nobody fills a rendering of the resolved hit, so wording addressed at the
+  // person filling has nowhere to go in a format.
+  label: "dropped",
+  hint: "dropped",
+  inputType: "blocking",
+  options: "blocking",
+  optionsFrom: "blocking",
+  validation: "blocking",
+  required: "blocking",
+  aiPrompt: "blocking",
+  aiAdapt: "blocking",
+  aiSeesDocument: "blocking",
+  parts: "blocking",
+  format: "blocking",
+  source: "blocking",
+  formula: "blocking",
+  condition: "blocking",
+  conditionAst: "blocking",
+  dateFormat: "blocking",
+} as const satisfies Record<
+  keyof FieldMeta,
+  "identity" | "template" | "dropped" | "blocking"
+>;
+
+const foldsIntoFormat = (field: FieldMeta): boolean => {
+  const declared: Record<string, unknown> = field;
+  return Object.entries(FORMAT_FOLD).every(
+    ([property, disposition]) =>
+      disposition !== "blocking" || declared[property] === undefined,
+  );
+};
+
+/** The parent's formats with `key` rendering `template`. The child is the more
+ *  specific declaration, so its template replaces the parent's. `null` when the
+ *  key is new and the lookup already carries its maximum. */
+const withFormatTemplate = (
+  formats: readonly FieldLookupFormat[],
+  key: string,
+  template: string,
+): FieldLookupFormat[] | null => {
+  if (formats.some((format) => format.key === key)) {
+    return formats.map((format) =>
+      format.key === key ? { ...format, template } : format,
+    );
+  }
+  return formats.length >= LOOKUP_FORMATS_MAX
+    ? null
+    : [...formats, { key, template }];
+};
+
+/**
+ * Fold `parent.key` back into the lookup that renders it.
+ *
+ * A model that reads `{{company}}`, `{{company.address}}` and `{{company.krs}}`
+ * describes every marker it sees, and describes the dotted ones the only way
+ * it can: as the same registry lookup rendered differently. That is not a
+ * rival configuration of one marker, it is the parent's format `key` spelled
+ * as a field of its own, so the template moves onto that format and the field
+ * goes. A child on a DIFFERENT registry is two lookups over one marker, and a
+ * child carrying what a format cannot hold is two configurations of it; both
+ * stay separate fields and keep the ownership refusal.
+ */
+const foldLookupFormatFields = (fields: readonly FieldMeta[]): FieldMeta[] => {
+  const byPath = new Map(fields.map((field) => [field.path, field]));
+  const folded = new Set<string>();
+  for (const field of fields) {
+    const cut = field.path.lastIndexOf(".");
+    const parent =
+      cut === -1 ? undefined : byPath.get(field.path.slice(0, cut));
+    const key = field.path.slice(cut + 1);
+    // The first format renders the bare marker, and a format key holds no
+    // dots, so a field declaring several renderings cannot move into one.
+    const only =
+      field.lookup?.formats.length === 1
+        ? field.lookup.formats.at(0)
+        : undefined;
+    if (
+      only === undefined ||
+      parent?.lookup === undefined ||
+      parent.lookup.registry !== field.lookup?.registry ||
+      folded.has(parent.path) ||
+      !isLookupFormatKey(key) ||
+      !foldsIntoFormat(field)
+    ) {
+      continue;
+    }
+    const formats = withFormatTemplate(
+      parent.lookup.formats,
+      key,
+      only.template,
+    );
+    if (formats === null) {
+      continue;
+    }
+    byPath.set(parent.path, {
+      ...parent,
+      lookup: { ...parent.lookup, formats },
+    });
+    folded.add(field.path);
+  }
+  return fields
+    .filter((field) => !folded.has(field.path))
+    .map((field) => byPath.get(field.path) ?? field);
+};
+
+/**
  * The manifest a validated overlay produces: entries merge by path onto the
  * existing configuration, and a path the manifest does not carry yet (a lookup
  * root the marker scan only saw as a namespace parent) is appended.
+ *
+ * The merge is where a field that restates its parent's lookup becomes that
+ * parent's format, so creation, configuration and read-back fold identically.
  */
 export const applyFieldOverlay = (
   manifest: TemplateManifest | null,
@@ -346,7 +468,10 @@ export const applyFieldOverlay = (
       merged.push(field);
     }
   }
-  return { version: manifest?.version ?? 1, fields: merged };
+  return {
+    version: manifest?.version ?? 1,
+    fields: foldLookupFormatFields(merged),
+  };
 };
 
 type ResolveTemplateFieldOverlayOptions = {
