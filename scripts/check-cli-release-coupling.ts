@@ -184,15 +184,24 @@ export type CliContractSurface = {
 const canonicalJson = (text: string): string =>
   JSON.stringify(JSON.parse(text) as unknown);
 
+const sortedProtocols = (protocols: readonly number[]): string =>
+  JSON.stringify([...protocols].sort((a, b) => a - b));
+
+const sortedCapabilities = (
+  capabilities: Readonly<Record<string, number>>,
+): string =>
+  JSON.stringify(
+    Object.entries(capabilities).sort(([a], [b]) => a.localeCompare(b)),
+  );
+
 const sameApiContract = (
   a: ApiContractSnapshot,
   b: ApiContractSnapshot,
 ): boolean =>
-  JSON.stringify([...a.protocols].sort()) ===
-    JSON.stringify([...b.protocols].sort()) &&
+  sortedProtocols(a.protocols) === sortedProtocols(b.protocols) &&
   a.minimumServerRevision === b.minimumServerRevision &&
-  JSON.stringify(Object.entries(a.requiredCapabilities).sort()) ===
-    JSON.stringify(Object.entries(b.requiredCapabilities).sort());
+  sortedCapabilities(a.requiredCapabilities) ===
+    sortedCapabilities(b.requiredCapabilities);
 
 type SurfaceComparison = {
   readonly head: CliContractSurface;
