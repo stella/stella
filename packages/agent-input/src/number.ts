@@ -104,7 +104,12 @@ export const normalizeNumber = (
   // Scientific notation first: its exponent marker is a letter, which the
   // currency strip below would remove.
   if (SCIENTIFIC_RE.test(trimmed)) {
-    return readValueAs(input, Number(trimmed));
+    const exponential = Number(trimmed);
+    // An exponent the double cannot hold ("1e999") parses as Infinity, which
+    // is not a number a field can carry.
+    return Number.isFinite(exponential)
+      ? readValueAs(input, exponential)
+      : askForFix({ input, expected: NUMBER_EXPECTED, hint: NUMBER_HINT });
   }
 
   const stripped = trimmed

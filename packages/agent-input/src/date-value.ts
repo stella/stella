@@ -24,9 +24,10 @@ export const DATE_VALUE_HINT =
   "as well.";
 
 export type DateValueOptions = {
-  /** Locales whose month names to read besides English: the field's own
-   *  `dateFormat` locale, so a document rendered in Czech also accepts a Czech
-   *  month name back. */
+  /** Locales to read besides English: the field's own `dateFormat` locale, so
+   *  a document rendered in Czech accepts a Czech month name back, and one
+   *  rendered in Portuguese accepts `1 de outubro de 2026` — the structure
+   *  that locale renders, not only its month names. */
   locales?: readonly string[] | undefined;
 };
 
@@ -164,6 +165,111 @@ const readNumeric = (spec: string): Reading | null => {
       };
 };
 
+/** The month styles a date field renders in, and therefore the structures a
+ *  model copies back out of the document. */
+const READ_MONTH_STYLES = ["long", "short"] as const;
+
+/** The instant every locale probe is formatted at: a two-digit day and a
+ *  two-digit month, so no part of the layout is a single character by
+ *  accident. */
+const LAYOUT_PROBE = new Date(Date.UTC(2026, 9, 15));
+
+/** Separators alone. A layout whose month is numeric and whose literals are
+ *  only these is `01/02/2026` with one locale's ordering imposed on it, which
+ *  is the reading this module refuses to guess. */
+const SEPARATORS_ONLY_RE = /^[\s./,-]*$/u;
+
+const REGEXP_META_RE = /[.*+?^${}()|[\]\\]/gu;
+
+/** A literal ICU emits between the parts (`. `, ` de `, `年`), matched with the
+ *  whitespace around it left to the writer. */
+const literalPattern = (literal: string): string =>
+  literal
+    .split(/\s+/u)
+    .map((chunk) => chunk.replace(REGEXP_META_RE, String.raw`\$&`))
+    .join(String.raw`\s*`);
+
+/**
+ * The date structures one locale actually renders, as patterns: ICU's own
+ * ordering and its own literals, so `1 de outubro de 2026` and
+ * `2026. október 1.` are read where the field renders them that way. A layout
+ * whose month is a number separated by nothing but punctuation is dropped: it
+ * carries the day/month ambiguity this module never guesses at.
+ */
+const localeLayouts = (locale: string): readonly RegExp[] => {
+  const layouts: RegExp[] = [];
+  for (const month of READ_MONTH_STYLES) {
+    const parts = new Intl.DateTimeFormat(locale, {
+      day: "numeric",
+      month,
+      year: "numeric",
+      timeZone: "UTC",
+    }).formatToParts(LAYOUT_PROBE);
+    let source = "";
+    let literals = "";
+    let named = false;
+    let readable = true;
+    for (const part of parts) {
+      switch (part.type) {
+        case "day":
+          source += String.raw`(?<day>\d{1,2})`;
+          break;
+        case "year":
+          source += String.raw`(?<year>\d{4})`;
+          break;
+        case "month":
+          named = /\p{L}/u.test(part.value);
+          source += named
+            ? String.raw`(?<month>[\p{L}\p{M}]+\.?)`
+            : String.raw`(?<month>\d{1,2})`;
+          break;
+        case "literal":
+          literals += part.value;
+          source += literalPattern(part.value);
+          break;
+        default:
+          readable = false;
+      }
+    }
+    if (readable && (named || !SEPARATORS_ONLY_RE.test(literals))) {
+      layouts.push(new RegExp(String.raw`^\s*${source}\s*$`, "u"));
+    }
+  }
+  return layouts;
+};
+
+const layoutCache = new Map<string, readonly RegExp[]>();
+
+const NUMERIC_RE = /^\d+$/u;
+
+const readLocaleLayout = (
+  spec: string,
+  locales: readonly string[],
+): Reading | null => {
+  for (const locale of locales) {
+    const layouts = layoutCache.get(locale) ?? localeLayouts(locale);
+    layoutCache.set(locale, layouts);
+    for (const layout of layouts) {
+      const groups = layout.exec(spec)?.groups;
+      if (groups === undefined) {
+        continue;
+      }
+      const spelled = groups["month"] ?? "";
+      const month = NUMERIC_RE.test(spelled)
+        ? Number(spelled)
+        : monthNumber(spelled, [locale]);
+      if (month !== null) {
+        return {
+          year: Number(groups["year"]),
+          month,
+          day: Number(groups["day"]),
+        };
+      }
+    }
+  }
+  return null;
+};
+
 /** English is always read: it is the language of the schema and of most model
  *  output, whatever the document's own language is. */
 const readingLocales = (options: DateValueOptions | undefined): string[] => [
@@ -222,8 +328,11 @@ export const normalizeDateValue = (
   // a date field's value.
   const spec = ISO_DATETIME_RE.exec(trimmed)?.groups?.["date"] ?? trimmed;
 
+  const locales = readingLocales(options);
   const unambiguous =
-    readNumeric(spec) ?? readNamedMonth(spec, readingLocales(options));
+    readNumeric(spec) ??
+    readNamedMonth(spec, locales) ??
+    readLocaleLayout(spec, locales);
   if (unambiguous !== null) {
     const iso = isoDate(unambiguous.year, unambiguous.month, unambiguous.day);
     return iso === null ? invalidAsk(input) : readValueAs(input, iso);

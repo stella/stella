@@ -44,6 +44,27 @@ describe("date values", () => {
     ).toBe("2026-10-01");
   });
 
+  test("reads the structure the locale renders, not only its month name", () => {
+    expect(
+      valueOf(normalizeDateValue("1 de octubre de 2026", { locales: ["es"] })),
+    ).toBe("2026-10-01");
+    expect(
+      valueOf(normalizeDateValue("2026. október 1.", { locales: ["hu"] })),
+    ).toBe("2026-10-01");
+    expect(
+      valueOf(normalizeDateValue("2026年10月1日", { locales: ["ja"] })),
+    ).toBe("2026-10-01");
+  });
+
+  test("a locale never decides a day/month pair separated by slashes", () => {
+    expect(normalizeDateValue("01/02/2026", { locales: ["en-GB"] }).ok).toBe(
+      false,
+    );
+    expect(normalizeDateValue("01/02/2026", { locales: ["en-US"] }).ok).toBe(
+      false,
+    );
+  });
+
   test("a month name in a locale the field does not render in is an ask", () => {
     const result = normalizeDateValue("1. října 2026");
     expect(result.ok).toBe(false);
@@ -192,9 +213,12 @@ describe("numbers", () => {
     expect(valueOf(normalizeNumber("1.234", { locale: "cs" }))).toBe(1234);
   });
 
-  test.each(["", "abc", "1-2-3", true, null, {}])("asks about %p", (input) => {
-    expect(normalizeNumber(input).ok).toBe(false);
-  });
+  test.each(["", "abc", "1-2-3", "1e999", "-1e999", true, null, {}])(
+    "asks about %p",
+    (input) => {
+      expect(normalizeNumber(input).ok).toBe(false);
+    },
+  );
 });
 
 describe("booleans", () => {

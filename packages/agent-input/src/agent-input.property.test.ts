@@ -25,7 +25,19 @@ import { normalizeNumber } from "./number";
 
 setDefaultTimeout(propertyTestTimeout(20_000));
 
-const READING_LOCALES = ["en", "cs", "pl", "de", "en-GB", "pt-BR"] as const;
+// A locale whose date is day-first with a month name (`de`, `cs`), one that
+// writes the month name into a phrase (`pt-BR`, `es`), and one that is
+// year-first (`hu`): three orderings no single word order covers.
+const READING_LOCALES = [
+  "en",
+  "cs",
+  "pl",
+  "de",
+  "en-GB",
+  "pt-BR",
+  "es",
+  "hu",
+] as const;
 
 const valueOrNull = <TValue>(result: Normalized<TValue>): TValue | null =>
   result.ok ? result.value : null;
@@ -46,20 +58,21 @@ const isoDateArb = fc
     day: date.getUTCDate(),
   }));
 
-const monthName = (
+/** The whole date as one locale renders it, in its own ordering and with its
+ *  own literals — what a model copies back out of the document. */
+const rendered = (
   year: number,
   month: number,
   day: number,
   locale: string,
+  style: "long" | "short",
 ): string =>
   new Intl.DateTimeFormat(locale, {
     day: "numeric",
-    month: "long",
+    month: style,
     year: "numeric",
     timeZone: "UTC",
-  })
-    .formatToParts(new Date(Date.UTC(year, month - 1, day)))
-    .find((part) => part.type === "month")?.value ?? "";
+  }).format(new Date(Date.UTC(year, month - 1, day)));
 
 describe("date values", () => {
   test("every unambiguous numeric spelling round-trips to the ISO date", () => {
@@ -84,23 +97,25 @@ describe("date values", () => {
     );
   });
 
-  test("a month name round-trips in every locale the field may render in", () => {
+  test("a date round-trips as every locale the field may render in writes it", () => {
     fc.assert(
       fc.property(
         isoDateArb,
         fc.constantFrom(...READING_LOCALES),
-        ({ iso, year, month, day }, locale) => {
-          const name = monthName(year, month, day, locale);
+        fc.constantFrom("long", "short" as const),
+        ({ iso, year, month, day }, locale, style) => {
           const options = { locales: [locale] };
           expect(
-            valueOrNull(normalizeDateValue(`${day} ${name} ${year}`, options)),
-          ).toBe(iso);
-          expect(
-            valueOrNull(normalizeDateValue(`${name} ${day}, ${year}`, options)),
+            valueOrNull(
+              normalizeDateValue(
+                rendered(year, month, day, locale, style),
+                options,
+              ),
+            ),
           ).toBe(iso);
         },
       ),
-      propertyConfig({ numRuns: 200 }),
+      propertyConfig({ numRuns: 300 }),
     );
   });
 
@@ -203,6 +218,22 @@ describe("numbers", () => {
         },
       ),
       propertyConfig({ numRuns: 300 }),
+    );
+  });
+
+  test("no spelling reads as a number a field cannot carry", () => {
+    const exponentialArb = fc
+      .tuple(
+        fc.integer({ min: -9999, max: 9999 }),
+        fc.integer({ min: -9999, max: 9999 }),
+      )
+      .map(([mantissa, exponent]) => `${mantissa}e${exponent}`);
+    fc.assert(
+      fc.property(fc.oneof(exponentialArb, fc.string()), (spelling) => {
+        const read = normalizeNumber(spelling);
+        expect(!read.ok || Number.isFinite(read.value)).toBe(true);
+      }),
+      propertyConfig({ numRuns: 400 }),
     );
   });
 
