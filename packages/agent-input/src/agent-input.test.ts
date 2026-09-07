@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { normalizeBoolean } from "./boolean";
 import { normalizeDateFormatSpec } from "./date-format-spec";
+import type { DateFormatSpec } from "./date-format-spec";
 import { normalizeDateValue } from "./date-value";
 import { normalizeEnumValue } from "./enum-value";
 import { isPlausibleLocale, normalizeLocale } from "./locale";
@@ -92,9 +93,12 @@ describe("date format specs", () => {
     // Style synonyms: each names exactly one of the catalogue's styles.
     ["pl-full", { locale: "pl", style: "long" }],
     ["de-numeric", { locale: "de", style: "short" }],
-  ])("reads %s", (spec, expected) => {
-    expect(valueOf(normalizeDateFormatSpec(spec))).toEqual(expected);
-  });
+  ] as const satisfies readonly (readonly [string, DateFormatSpec])[])(
+    "reads %s",
+    (spec, expected) => {
+      expect(valueOf(normalizeDateFormatSpec(spec))).toEqual(expected);
+    },
+  );
 
   test.each([
     [
@@ -106,9 +110,12 @@ describe("date format specs", () => {
       { locale: "cs-CZ", style: "short" },
     ],
     [{ locale: "pl" }, { locale: "pl", style: "long" }],
-  ])("reads the wire object %p", (spec, expected) => {
-    expect(valueOf(normalizeDateFormatSpec(spec))).toEqual(expected);
-  });
+  ] as const satisfies readonly (readonly [unknown, DateFormatSpec])[])(
+    "reads the wire object %p",
+    (spec, expected) => {
+      expect(valueOf(normalizeDateFormatSpec(spec))).toEqual(expected);
+    },
+  );
 
   test("a bare style names no locale, so it is an ask", () => {
     // The style test runs first: "long" is not a language tag, and reading it

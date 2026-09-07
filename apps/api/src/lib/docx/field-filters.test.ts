@@ -94,7 +94,10 @@ describe("fieldMetaFromFilters", () => {
     ['date("pl-full")', { locale: "pl", style: "long" }],
     // An ISO date reads the same in every language, so the style stands alone.
     ['date("iso")', { locale: "en", style: "iso" }],
-  ])("%s reads as a locale and a style", (filter, dateFormat) => {
+  ] as const satisfies readonly (readonly [
+    string,
+    NonNullable<FieldMeta["dateFormat"]>,
+  ])[])("%s reads as a locale and a style", (filter, dateFormat) => {
     expect(fieldFrom("signed_on", `signed_on | ${filter}`).field).toEqual({
       path: "signed_on",
       inputType: "date",

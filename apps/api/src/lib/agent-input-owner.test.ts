@@ -135,8 +135,12 @@ describe("every agent-written value kind has one reader", () => {
   for (const [kind, rule] of Object.entries(BYPASS_RULES)) {
     test(`${kind} values are read by ${rule.owner}`, async () => {
       const matched = await filesMatching(rule);
-      const allowed = rule.allowed.map(({ path: allowedPath }) => allowedPath);
-      expect(matched.filter((file) => !allowed.includes(file))).toEqual([]);
+      expect(
+        matched.filter(
+          (file) =>
+            !rule.allowed.some(({ path: allowedPath }) => allowedPath === file),
+        ),
+      ).toEqual([]);
     });
 
     test(`the ${kind} allowlist carries nothing stale`, async () => {

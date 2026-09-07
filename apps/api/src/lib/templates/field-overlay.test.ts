@@ -666,17 +666,21 @@ describe("a child restating the parent's lookup", () => {
     expect(issues).toEqual([]);
     // One field, and the formats are the parent's: the children said nothing
     // a format could not already hold, so nothing of theirs survives.
-    expect(applyFieldOverlay(null, applied).fields).toEqual([overlay[0]]);
+    expect(applyFieldOverlay(null, applied).fields).toEqual(
+      overlay.slice(0, 1),
+    );
   });
 
   test("a child that names a real input type is still refused", async () => {
     const discovered = await discoverTemplate(await companyDocx());
-    const [parent] = shapeOnlyOverlay();
 
     const { issues } = partitionFieldOverlay({
       configured: [],
       discovered,
-      overlay: [parent, { path: "company.krs", inputType: "number" }],
+      overlay: [
+        ...shapeOnlyOverlay().slice(0, 1),
+        { path: "company.krs", inputType: "number" },
+      ],
     });
 
     expect(issues.map(({ path }) => path)).toEqual(["fields.0", "fields.1"]);
