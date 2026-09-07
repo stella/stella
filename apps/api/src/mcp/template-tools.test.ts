@@ -2602,6 +2602,60 @@ describe("MCP template tools", () => {
     });
   });
 
+  /**
+   * A model that fills every property invents a `template_id`: one wrote
+   * `00000000-0000-0000-0000-000000000000` beside a name and a document. An id
+   * the organization does not own must be a `not_found`, never a silent create
+   * and never a reach into another tenant's template. The writer resolves the
+   * template under the caller's organization, so a foreign id is
+   * indistinguishable from a missing one, which is the point.
+   */
+  test("create_template with an unknown template_id is not found, and creates nothing", async () => {
+    writeStoredTemplateMock.mockImplementation(async function* () {
+      yield* [];
+      return Result.err(
+        new HandlerError({ status: 404, message: "Template not found" }),
+      );
+    });
+
+    const result = await handleMcpToolCall({
+      args: {
+        template_id: "00000000-0000-0000-0000-000000000000",
+        name: "NDA",
+        docx_base64: await makeValidDocxBase64(),
+      },
+      context: createContext(),
+      toolName: "create_template",
+    });
+
+    expect(result.isError).toBe(true);
+    expect(validationEnvelope(result)["code"]).toBe("not_found");
+    expect(createStoredTemplateMock).not.toHaveBeenCalled();
+  });
+
+  test("create_template renaming an unknown template_id is not found, and creates nothing", async () => {
+    renameStoredTemplateMock.mockImplementation(async function* () {
+      yield* [];
+      return Result.err(
+        new HandlerError({ status: 404, message: "Template not found" }),
+      );
+    });
+
+    const result = await handleMcpToolCall({
+      args: {
+        template_id: "00000000-0000-0000-0000-000000000000",
+        name: "Renamed",
+      },
+      context: createContext(),
+      toolName: "create_template",
+    });
+
+    expect(result.isError).toBe(true);
+    expect(validationEnvelope(result)["code"]).toBe("not_found");
+    expect(createStoredTemplateMock).not.toHaveBeenCalled();
+    expect(writeStoredTemplateMock).not.toHaveBeenCalled();
+  });
+
   test("create_template with a template_id and nothing to change is refused", async () => {
     const result = await handleMcpToolCall({
       args: { template_id: TEMPLATE_ID },
