@@ -595,18 +595,16 @@ export const caseLawDecisions = p.pgTable(
       .where(
         sql`${t.fulltext} is null and ${t.documentUrl} is not null and ${t.documentFetchRequestedAt} is not null`,
       ),
-    // Deferred-document queue, remaining tier: least-tried first, then
-    // newest decisions, per source. Matches the loader's ORDER BY so the
-    // head of the queue is a bounded index range scan rather than a sort
-    // over the backlog.
+    // Deferred-document queue, remaining tier: newest decisions first,
+    // per source. Matches the loader's ORDER BY so the head of the queue
+    // is a bounded index range scan rather than a sort over the backlog.
+    // Attempt count is deliberately not a key column: leading with it
+    // ordered every retry behind the whole untried backlog, and keeping
+    // it here would make the index unable to serve the order that fixed
+    // that.
     p
-      .index("case_law_decisions_document_pending_idx")
-      .on(
-        t.sourceId,
-        t.documentFetchAttempts,
-        t.decisionDate.desc().nullsLast(),
-        t.id,
-      )
+      .index("case_law_decisions_document_pending_date_idx")
+      .on(t.sourceId, t.decisionDate.desc().nullsLast(), t.id)
       .where(sql`${t.fulltext} is null and ${t.documentUrl} is not null`),
     // Same rule as on the citation side: null means "does not canonicalize",
     // and an empty string would make every such decision a candidate for

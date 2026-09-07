@@ -310,15 +310,24 @@ export const requestedDocumentOrder = [
 ] as const;
 
 /**
- * Least-tried first, then newest decision. Attempts lead so a document
- * the source keeps refusing sinks below everything still untried rather
- * than holding the newest end of the range; within one attempt count the
- * newest decision is the one a reader is most likely to open next.
+ * Newest decision first, among the decisions that are ready to be tried.
+ *
+ * Readiness is the predicate's, not this order's: `outsideFetchCooldown`
+ * already admits only a decision never attempted or attempted longer ago
+ * than the cooldown, so every row this orders is one the queue may hand
+ * out now. That is what bounds a document the source keeps refusing —
+ * one attempt per cooldown, not one per pass.
+ *
+ * Attempt count deliberately does not lead. It reads as a tie-break but
+ * behaves as a partition: with a backlog of untried decisions, every row
+ * that failed once sorts behind all of them, so its retry waits for the
+ * backlog to drain rather than for its cooldown to pass. The cooldown is
+ * the retry delay; the order must not turn it into the backlog length.
+ *
  * NULLS LAST matches the index and puts undated decisions after every
  * dated one, rather than at the head of a DESC scan.
  */
 export const remainingDocumentOrder = [
-  asc(caseLawDecisions.documentFetchAttempts),
   sql`${caseLawDecisions.decisionDate} desc nulls last`,
   asc(caseLawDecisions.id),
 ] as const;
@@ -334,9 +343,8 @@ export const remainingDocumentOrder = [
  */
 export type RequestedDocumentCursor = SafeId<"caseLawDecision">;
 
-/** Keyset position in the remaining tier (attempts, decisionDate, id). */
+/** Keyset position in the remaining tier (decisionDate, id). */
 export type RemainingDocumentCursor = {
-  attempts: number;
   decisionDate: string | null;
   id: SafeId<"caseLawDecision">;
 };
@@ -412,12 +420,12 @@ export const loadRequestedDocuments = async ({
   });
 
 /**
- * Keyset boundary within one attempt count, for `decision_date DESC
- * NULLS LAST, id ASC`. A NULL date sorts after every date, so a cursor
- * on a dated row also has to admit the undated tail, and a cursor
- * already in that tail is ordered by id alone.
+ * Keyset boundary for `decision_date DESC NULLS LAST, id ASC`. A NULL
+ * date sorts after every date, so a cursor on a dated row also has to
+ * admit the undated tail, and a cursor already in that tail is ordered
+ * by id alone.
  */
-const remainingDateCursorPredicate = ({
+const remainingCursorPredicate = ({
   decisionDate,
   id,
 }: RemainingDocumentCursor) =>
@@ -431,20 +439,6 @@ const remainingDateCursorPredicate = ({
           gt(caseLawDecisions.id, id),
         ),
       );
-
-/**
- * Keyset boundary for `attempts ASC, decision_date DESC NULLS LAST, id
- * ASC`: everything in a later attempt count, plus what follows the
- * cursor inside its own.
- */
-const remainingCursorPredicate = (cursor: RemainingDocumentCursor) =>
-  or(
-    gt(caseLawDecisions.documentFetchAttempts, cursor.attempts),
-    and(
-      eq(caseLawDecisions.documentFetchAttempts, cursor.attempts),
-      remainingDateCursorPredicate(cursor),
-    ),
-  );
 
 /**
  * Remaining tier: newest decision first. A fresh decision is the one a
