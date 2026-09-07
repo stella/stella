@@ -313,4 +313,105 @@ describe("streamWithConcurrency", () => {
     expect(started).toBe(startedWhenClosed);
     expect(started).toBeLessThan(items.length);
   });
+
+  /**
+   * Closing must also wait for what is already running. A caller that stops
+   * has decided the rest of its work is invalid, so an operation settling
+   * afterwards would be writing into work its owner has finished with.
+   */
+  test("closing waits for the operations already running", async () => {
+    let started = 0;
+    let completed = 0;
+    for await (const value of streamWithConcurrency({
+      items: Array.from({ length: 32 }, (_unused, index) => index),
+      limit: 4,
+      lookAhead: 4,
+      operation: async (index) => {
+        started += 1;
+        await Bun.sleep(20);
+        completed += 1;
+        return index;
+      },
+    })) {
+      if (value === 0) {
+        break;
+      }
+    }
+
+    // No sleep: the loop does not finish until the generator has unwound.
+    expect(completed).toBe(started);
+  });
+
+  test("a fractional limit cannot admit an extra operation", async () => {
+    let active = 0;
+    let peakActive = 0;
+    const values = await drain(
+      streamWithConcurrency({
+        items: [1, 2, 3, 4],
+        // `inFlight < 1.5` is true at one in flight; flooring is what stops
+        // the second from starting.
+        limit: 1.5,
+        lookAhead: 2,
+        operation: async (value) => {
+          active += 1;
+          peakActive = Math.max(peakActive, active);
+          await Bun.sleep(5);
+          active -= 1;
+          return value;
+        },
+      }),
+    );
+    expect(peakActive).toBe(1);
+    expect(values).toEqual([1, 2, 3, 4]);
+  });
+
+  test("a non-finite limit is a defect, not a clamp", () => {
+    // NaN would clamp to a pool that starts nothing and returns an empty run.
+    expect(
+      async () =>
+        await drain(
+          streamWithConcurrency({
+            items: [1, 2, 3],
+            limit: Number.NaN,
+            operation: async (value) => value,
+          }),
+        ),
+    ).toThrow("Concurrency limit must be a finite number");
+  });
+});
+
+/**
+ * `Item` is unconstrained, so `undefined` is an ordinary element. Reading one
+ * as an end-of-list sentinel silently truncated the run in `mapWithConcurrency`
+ * and tripped the lost-item panic in `streamWithConcurrency`.
+ */
+describe("a list containing undefined", () => {
+  const items = [1, undefined, 3, undefined, 5];
+
+  test("mapWithConcurrency runs every item", async () => {
+    const seen: (number | undefined)[] = [];
+    const values = await mapWithConcurrency({
+      items,
+      limit: 2,
+      operation: async (value) => {
+        seen.push(value);
+        return value;
+      },
+    });
+    expect(values).toEqual(items);
+    expect(seen).toHaveLength(items.length);
+  });
+
+  test("streamWithConcurrency yields every item", async () => {
+    expect(
+      await drain(
+        streamWithConcurrency({
+          items,
+          limit: 2,
+          lookAhead: 2,
+          operation: async (value) => value,
+        }),
+      ),
+    ).toEqual(items);
+  });
 });

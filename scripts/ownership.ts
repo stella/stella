@@ -480,8 +480,9 @@ export const OWNERSHIP = [
       "through its own per-result work has to ask for look-ahead and pay for " +
       "up to `limit + lookAhead` resident results. The stream observes each " +
       "settlement at the pool, so a rejection behind a slower item cannot " +
-      "surface as an unhandled rejection, and it stops refilling once the " +
-      "consumer closes it.",
+      "surface as an unhandled rejection, and nothing it started outlives " +
+      "its consumer: closing the stream starts nothing more and waits for " +
+      "what is already running.",
     enforcement: { kind: "none" },
   },
 ] as const satisfies readonly OwnershipEntry[];

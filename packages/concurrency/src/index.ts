@@ -13,17 +13,33 @@ import { panic } from "better-result";
  * once its slowest member settles, so effective concurrency decays to the
  * tail of every slice, and whatever the caller does between slices runs
  * with nothing in flight at all.
+ *
+ * Both walk `items` with an iterator rather than testing an indexed read for
+ * `undefined`: `Item` is unconstrained, so `undefined` is an ordinary element
+ * and a sentinel read of one would end the run early on a list that merely
+ * contains a hole.
  */
 
 type BoundedConcurrencyOptions<Item, Value> = {
   items: readonly Item[];
-  /** Most operations in flight at once; a value below 1 reads as 1. */
+  /**
+   * Most operations in flight at once.
+   *
+   * Rounded down and floored at one, so a caller cannot ask for a fraction of
+   * an operation and get two: `inFlight < 1.5` admits a second.
+   */
   limit: number;
   operation: (item: Item) => Promise<Value>;
 };
 
-const poolWidth = (limit: number, itemCount: number): number =>
-  Math.min(Math.max(limit, 1), itemCount);
+const poolWidth = (limit: number, itemCount: number): number => {
+  if (!Number.isFinite(limit)) {
+    // Not a runtime condition: NaN would silently clamp to a pool that starts
+    // nothing at all, and no caller can mean "unbounded" from a bounded API.
+    return panic(`Concurrency limit must be a finite number, got ${limit}`);
+  }
+  return Math.min(Math.max(Math.floor(limit), 1), itemCount);
+};
 
 /**
  * Every result, in input order, with at most `limit` operations in flight.
@@ -37,15 +53,16 @@ export const mapWithConcurrency = async <Item, Value>({
   operation,
 }: BoundedConcurrencyOptions<Item, Value>): Promise<Value[]> => {
   const values: Value[] = [];
+  const iterator = items[Symbol.iterator]();
   let nextIndex = 0;
   const run = async (): Promise<void> => {
-    const index = nextIndex;
-    nextIndex += 1;
-    const item = items.at(index);
-    if (item === undefined) {
+    const next = iterator.next();
+    if (next.done === true) {
       return;
     }
-    values[index] = await operation(item);
+    const index = nextIndex;
+    nextIndex += 1;
+    values[index] = await operation(next.value);
     await run();
   };
   await Promise.all(
@@ -96,14 +113,15 @@ type PoolSlot<Value> = {
  * Each result, in input order, as soon as that result is ready.
  *
  * A rejection reaches the consumer in input order, after the results before
- * it, and abandons the operations still in flight: they must be safe to
- * abandon.
+ * it.
  *
- * A consumer that stops early — `break`, `return`, or a rejection it does not
- * catch — closes the pool: operations already running settle, and none start
- * after that. Without this the settlement of each running operation would
- * refill behind the consumer's back, so a caller that abandoned the run
- * because its work had become invalid would keep paying for the rest of it.
+ * Nothing outlives the consumer. Stopping early — `break`, `return`, or a
+ * rejection — closes the pool: no operation starts after that, and closing
+ * waits for the ones already running to settle. A caller that stops has
+ * usually decided the rest of its work is invalid, and an operation
+ * finishing afterwards would be writing into that abandoned work: a build
+ * still adding to a timing total the cycle already returned, a read still
+ * opening a transaction past the boundary that owned it.
  *
  * @yields {Value} each operation's result, in the order of `items`.
  */
@@ -115,9 +133,9 @@ export const streamWithConcurrency = async function* <Item, Value>({
 }: StreamWithConcurrencyOptions<Item, Value>): AsyncGenerator<Value> {
   const width = poolWidth(limit, items.length);
   const capacity = width + Math.max(lookAhead, 0);
+  const iterator = items[Symbol.iterator]();
   const started: PoolSlot<Value>[] = [];
   let inFlight = 0;
-  let nextIndex = 0;
   let closed = false;
   // Mutually recursive with `fill`: a settled operation frees its slot and
   // refills the pool, which is what keeps work going while the consumer is
@@ -137,15 +155,13 @@ export const streamWithConcurrency = async function* <Item, Value>({
     if (closed) {
       return;
     }
-    while (
-      nextIndex < items.length &&
-      inFlight < width &&
-      started.length < capacity
-    ) {
-      const item = items.at(nextIndex) ?? panic("Lost a bounded-pool item");
-      nextIndex += 1;
+    while (inFlight < width && started.length < capacity) {
+      const next = iterator.next();
+      if (next.done === true) {
+        return;
+      }
       inFlight += 1;
-      started.push(startOne(item));
+      started.push(startOne(next.value));
     }
   };
   try {
@@ -158,7 +174,13 @@ export const streamWithConcurrency = async function* <Item, Value>({
     }
   } finally {
     // Reached on every exit, including the consumer's `break` or `return`,
-    // which resumes this generator only to unwind it.
+    // which resumes this generator only to unwind it. Closing first means the
+    // settlements awaited below cannot start anything more.
     closed = true;
+    const settlements: Promise<void>[] = [];
+    for (const slot of started) {
+      settlements.push(slot.settled);
+    }
+    await Promise.allSettled(settlements);
   }
 };
