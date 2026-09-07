@@ -181,7 +181,7 @@ const AUTHORING_SYSTEM_PROMPT = [
   "First mark the fillable values with {{markers}} and write the file with",
   `${WRITE_DOCX_TOOL_NAME}. Second call ${CREATE_TEMPLATE_TOOL_NAME} with a`,
   "name and, as docx_base64, the exact string write_docx returned; send no",
-  "template_id and no file. It answers with the field paths the document",
+  "template_id. It answers with the field paths the document",
   `declares and the configure call to make next. Third call`,
   `${CONFIGURE_FIELDS_TOOL_NAME} with that template_id and one fields entry`,
   "per path. Keep the document's",
@@ -357,6 +357,41 @@ const readFilledDocument = async (buffer: Buffer): Promise<FilledDocument> => {
 // ── The production template tool definitions ─────────────
 
 /**
+ * Inputs this harness cannot serve, hidden from the advertised schema the way
+ * a real client hides them. `file` is a HOST file reference: the host fills
+ * it in from its own transport, and this harness has none — `write_docx`
+ * stands in for a writer running locally, so the document reaches the tool as
+ * `docx_base64`. The chat surface hides the same property for the same reason
+ * (`unavailableInputParams` in the registry's ref-field map).
+ *
+ * Advertising an input nothing can fill measures the model against a client
+ * configuration that does not exist: two models filled `file` with a
+ * fabricated reference beside a fabricated base64 string and were refused for
+ * sending two document sources, every attempt, in every task.
+ */
+const UNSERVED_TOOL_INPUTS: Partial<Record<string, readonly string[]>> = {
+  create_template: ["file"],
+};
+
+/** The advertised JSON Schema minus the properties this harness cannot fill.
+ *  Validation still runs the production schema, which accepts their absence. */
+const advertisedWithoutUnservedInputs = (
+  name: string,
+  inputSchema: McpToolInputSchema,
+): McpToolInputSchema => {
+  const hidden = UNSERVED_TOOL_INPUTS[name];
+  if (hidden === undefined) {
+    return inputSchema;
+  }
+  const properties = Object.fromEntries(
+    Object.entries(inputSchema.properties ?? {}).filter(
+      ([property]) => !hidden.includes(property),
+    ),
+  );
+  return { ...inputSchema, properties };
+};
+
+/**
  * The tool schema the model sees. `toTanStackToolSchema` gives the same
  * Standard Schema validation `fill_template`'s eval uses, but these inputs
  * carry `check` / `partial_check` actions that have no JSON Schema
@@ -365,11 +400,16 @@ const readFilledDocument = async (buffer: Buffer): Promise<FilledDocument> => {
  * there instead of re-derived.
  */
 const productionToolSchema = (definition: {
+  name: string;
   inputSchema: McpToolInputSchema;
   inputSchemaSource: NullAsAbsentInputSchema;
 }) => {
   const schema = toTanStackToolSchema(definition.inputSchemaSource);
-  const wireSchema = () => definition.inputSchema;
+  const advertised = advertisedWithoutUnservedInputs(
+    definition.name,
+    definition.inputSchema,
+  );
+  const wireSchema = () => advertised;
   return {
     ...schema,
     "~standard": {
@@ -1215,8 +1255,8 @@ const WRITE_DOCX_DESCRIPTION =
   "new paragraph in that cell. Returns `docx_base64`, a SHORT reference " +
   `string. Copy that string verbatim into ${CREATE_TEMPLATE_TOOL_NAME}'s ` +
   "`docx_base64`; it expands to the file's real bytes at the boundary. Never " +
-  "write base64 yourself, and never send `file`: this host has no file " +
-  "transport, so a `file` reference you invent cannot be downloaded.";
+  "write base64 yourself: this host has no file transport, so the reference " +
+  "is the only way the document reaches the tool.";
 
 type ToolTrace = { name: string; input: unknown };
 type WrittenDocx = { ref: string; blocks: AuthoredBlock[]; buffer: Buffer };
