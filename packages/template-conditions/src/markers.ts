@@ -827,7 +827,10 @@ export const legacyLoopAlias = (path: string): string => {
 export const translateLegacyExpression = (expr: string): string =>
   expr
     .replace(
-      /(?<path>[\p{L}\p{N}_.-]+)\s+contains\s+(?<value>"[^"]*"|[\p{L}\p{N}_.-]+)/gu,
+      // The lookbehind pins each attempt to a path's first character. Without
+      // it the scan restarts inside a path it has already walked, so one long
+      // token costs quadratic time and matches nothing new.
+      /(?<![\p{L}\p{N}_.-])(?<path>[\p{L}\p{N}_.-]+)\s+contains\s+(?<value>"[^"]*"|[\p{L}\p{N}_.-]+)/gu,
       (_m, path: string, value: string) =>
         `${value.startsWith('"') ? value : `"${value}"`} in ${path}`,
     )

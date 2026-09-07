@@ -31,7 +31,10 @@ const CURRENCY_RE = /[\p{L}\p{Sc}]/gu;
 /** The accounting "and no cents" dash: `100.-`, `100,-`. */
 const ACCOUNTING_DASH_RE = /[.,]\s*-$/u;
 const SCIENTIFIC_RE = /^[+-]?\d+(?:\.\d+)?[eE][+-]?\d+$/u;
-const DIGITS_AND_SEPARATORS_RE = /^[+-]?[\d.,]*\d[\d.,]*$/u;
+/** Digits and separators only, at least one digit. The head before the first
+ *  digit is separators alone, so no two quantifiers compete for the same
+ *  character and the match is linear in the input. */
+const DIGITS_AND_SEPARATORS_RE = /^[+-]?[.,]*\d[\d.,]*$/u;
 /** A single separator with exactly three digits behind it: a thousands group
  *  and a three-decimal fraction are spelled identically. */
 const THREE_DIGIT_TAIL_RE = /^\d{1,3}[.,]\d{3}$/u;
