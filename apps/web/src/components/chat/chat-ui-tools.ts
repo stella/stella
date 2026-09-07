@@ -527,14 +527,43 @@ const REGISTRY_WRITE_SUMMARY_TOOL_NAMES = {
   boolean
 >;
 
+/**
+ * The same decision for the retired tools whose calls persisted threads still
+ * carry: a card that rendered a write summary when the call was made keeps
+ * rendering it. A TOTAL record over `RETIRED_CHAT_TOOL_TITLE_KEYS`, so
+ * retiring a tool decides this rather than silently dropping its summary.
+ * Every name here must also reach a redacting branch in
+ * `buildRegistryWriteSummaryRows`; the generic branch formats each input
+ * property verbatim.
+ */
+const RETIRED_REGISTRY_WRITE_SUMMARY_TOOL_NAMES = {
+  "apply-active-docx-edits": false,
+  ares_lookup_company: false,
+  ares_search_companies: false,
+  "describe-stella-api": false,
+  "describe-stella-function": false,
+  edit_workspace_document: false,
+  "execute-typescript": false,
+  "read-contact": false,
+  "read-content-across-matters": false,
+  "run-stella-query": false,
+  save_template: true,
+  "search-across-matters": false,
+} as const satisfies Record<keyof typeof RETIRED_CHAT_TOOL_TITLE_KEYS, boolean>;
+
+const REGISTRY_WRITE_SUMMARY_DISPLAY_TOOL_NAMES = {
+  ...REGISTRY_WRITE_SUMMARY_TOOL_NAMES,
+  ...RETIRED_REGISTRY_WRITE_SUMMARY_TOOL_NAMES,
+} as const;
+
 const isRegistryWriteSummaryEligibleToolName = (
   toolName: string,
-): toolName is keyof typeof REGISTRY_WRITE_SUMMARY_TOOL_NAMES =>
-  Object.hasOwn(REGISTRY_WRITE_SUMMARY_TOOL_NAMES, toolName);
+): toolName is keyof typeof REGISTRY_WRITE_SUMMARY_DISPLAY_TOOL_NAMES =>
+  Object.hasOwn(REGISTRY_WRITE_SUMMARY_DISPLAY_TOOL_NAMES, toolName);
 
 export const isRegistryWriteSummaryToolName = (toolName: string): boolean =>
   isRegistryWriteSummaryEligibleToolName(toolName) &&
-  REGISTRY_WRITE_SUMMARY_TOOL_NAMES[toolName];
+  REGISTRY_WRITE_SUMMARY_DISPLAY_TOOL_NAMES[toolName];
 
 export type ChatToolTitleKey =
   | (typeof CHAT_TOOL_DISPLAY_TITLE_KEYS)[keyof typeof CHAT_TOOL_DISPLAY_TITLE_KEYS]

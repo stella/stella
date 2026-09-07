@@ -110,7 +110,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 /**
  * Readable rows for a registry write tool's approval input. Ref params
  * (`mat_N`/`ent_N`/`contact_N`/`prop_N`) are shown as their chat refs — the
- * exact model-visible values, never a raw id. Long values are truncated. Two
+ * exact model-visible values, never a raw id. Long values are truncated. The
  * template tools get bespoke handling so a base64 document upload or a large
  * field manifest is summarized rather than dumped.
  *
@@ -143,7 +143,10 @@ export const buildRegistryWriteSummaryRows = ({
 
   if (
     toolName === "create_template" ||
-    toolName === "configure_template_fields"
+    toolName === "configure_template_fields" ||
+    // Retired: persisted threads still carry `save_template` calls, whose
+    // input mixes both document forms with the field manifest.
+    toolName === "save_template"
   ) {
     return buildTemplateAuthoringRows({
       documentLabel,

@@ -89,6 +89,27 @@ describe("buildRegistryWriteSummaryRows", () => {
     expect(byKey["file"]).toBe(UPLOAD_PLACEHOLDER);
   });
 
+  test("retired save_template keeps both document forms redacted", () => {
+    const rows = build("save_template", {
+      name: "NDA",
+      docx_base64: "QUJDR".repeat(1000),
+      file: {
+        download_url: "https://files.example/signed?token=secret",
+        file_id: "file_123",
+        file_name: "nda.docx",
+      },
+      fields: [{ path: "a" }, { path: "b" }, { path: "c" }],
+    });
+    const byKey = Object.fromEntries(rows.map((row) => [row.key, row.value]));
+    expect(byKey["name"]).toBe("NDA");
+    expect(byKey["docx_base64"]).toBe(UPLOAD_PLACEHOLDER);
+    expect(byKey["file"]).toBe("nda.docx");
+    expect(byKey["fields"]).toBe("3");
+    const values = rows.map((row) => row.value).join(" ");
+    expect(values).not.toContain("QUJDR");
+    expect(values).not.toContain("token=secret");
+  });
+
   test("fill_template summarizes the template handle and per-field values", () => {
     const rows = build("fill_template", {
       templateId: "tmpl-abc",

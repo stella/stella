@@ -43,6 +43,13 @@ describe("chat tool activity", () => {
     expect(getChatToolActivityState("save_matter")).toBe("working");
   });
 
+  test("keeps a retired tool's category instead of the unknown fallback", () => {
+    expect(getChatToolActivityCategory("save_template")).toBe("mutation");
+    expect(getChatToolActivityCategory("edit_workspace_document")).toBe(
+      "artifact",
+    );
+  });
+
   test("does not animate tools awaiting user input", () => {
     expect(getChatToolActivityCategory("ask-user")).toBe("user-input");
     expect(getChatToolActivityState("ask-user")).toBeNull();

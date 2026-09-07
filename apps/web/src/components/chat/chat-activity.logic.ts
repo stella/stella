@@ -89,6 +89,7 @@ const RETIRED_CHAT_TOOL_ACTIVITY_CATEGORIES = {
   read_contact: "research",
   read_content_across_matters: "research",
   "run-stella-query": "computation",
+  save_template: "mutation",
   "search-across-matters": "research",
 } as const satisfies Record<string, ChatToolActivityCategory>;
 
