@@ -3,24 +3,21 @@
  *
  * The append cycle consumes payloads one at a time and advances the tails per
  * revision, so every flush decision is re-evaluated 512 times a cycle where a
- * read window re-evaluated it 16 times. A cap is a property of the tail and
- * survives that: the next tail fills from empty either way. The lease start
- * margin is a property of the clock, so once crossed it holds on every later
- * call, and a consumer that keeps buffering past it emits one request per
- * revision — 512 batch starts, ingest round trips and commits for what fits
- * in two requests.
+ * read window re-evaluated it 16 times. A cap survives that: it is a property
+ * of the tail, so the next one fills from empty either way, and this pins that
+ * a full cycle still packs its requests to the ceiling.
+ *
+ * The other reason a tail flushes, the lease start margin, is a property of
+ * the clock rather than the tail, and the cycle stops on it; that behaviour is
+ * driven end to end in corpus-index-projection-margin-stop.db.test.ts.
  */
 
 import { describe, expect, test } from "bun:test";
 
 import { streamWithConcurrency } from "@stll/concurrency";
 
-import {
-  CORPUS_PROJECTION_APPEND_MAX_REQUEST_BYTES,
-  CORPUS_PROJECTION_UNKNOWN_APPEND_MARGIN_MS,
-} from "@/api/lib/legal-search/corpus-index-projection-engine";
+import { CORPUS_PROJECTION_APPEND_MAX_REQUEST_BYTES } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import { advanceCorpusProjectionAppendTails } from "@/api/lib/legal-search/corpus-index-projection-executor";
-import { LIMITS } from "@/api/lib/limits";
 
 const REVISIONS = 512;
 const READ_CONCURRENCY = 32;
@@ -30,9 +27,6 @@ const REVISION_BYTES = 33 * 1024;
 const CAPFUL = Math.floor(
   CORPUS_PROJECTION_APPEND_MAX_REQUEST_BYTES / REVISION_BYTES,
 );
-const START_MARGIN_MS =
-  LIMITS.corpusObjectIoTimeoutMs + CORPUS_PROJECTION_UNKNOWN_APPEND_MARGIN_MS;
-
 type Entry = {
   indexId: string;
   ndjson: string;
@@ -124,36 +118,5 @@ describe("append request sizing", () => {
       Array.from({ length: sizes.length - 1 }, () => CAPFUL),
     );
     expect(sizes.at(-1)).toBe(REVISIONS - CAPFUL * (sizes.length - 1));
-  });
-
-  /**
-   * The regression this pins. Past the margin the deadline branch fires on
-   * every advance, so without a stop the cycle emits one request per revision
-   * for the whole remainder.
-   */
-  test("the lease start margin stops the cycle instead of dribbling", async () => {
-    const { sizes, consumed } = await runCycle({
-      // Inside the margin from the first advance: every flush is deadline-led.
-      leaseExpiresAtMs: Date.now() + START_MARGIN_MS - 1000,
-      requestMs: 1,
-    });
-
-    expect(sizes).toHaveLength(1);
-    expect(sizes.at(0)).toBe(1);
-    // The cycle stopped rather than reading on to append 511 more requests.
-    expect(consumed).toBeLessThan(REVISIONS);
-  });
-
-  test("a cycle that crosses the margin mid-run stops at that request", async () => {
-    // Long enough for the first capful to append before the margin bites.
-    const { sizes } = await runCycle({
-      leaseExpiresAtMs: Date.now() + START_MARGIN_MS + 120,
-      requestMs: 150,
-      readMs: 0,
-    });
-
-    expect(sizes.at(0)).toBe(CAPFUL);
-    // One capful, then at most the margin-led flush that ends the cycle.
-    expect(sizes.length).toBeLessThanOrEqual(2);
   });
 });

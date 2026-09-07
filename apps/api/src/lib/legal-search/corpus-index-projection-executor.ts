@@ -849,6 +849,8 @@ const processPreparedStream = async ({
   });
 
   let waitingSince = Date.now();
+  /** The margin-led flush to append once the pool is closed, if one came. */
+  let marginFlush: ProjectionAppendTail<PreparedProjectionEntry>[] | undefined;
   for await (const { material, prepared } of payloads) {
     result.timing.payloadLoadMs += Date.now() - waitingSince;
     consumed += 1;
@@ -896,49 +898,56 @@ const processPreparedStream = async ({
       nowMs: Date.now(),
     });
     tails = advanced.tails;
+    if (advanced.leaseMarginReached) {
+      // The lease is inside the margin an append needs to start safely, and it
+      // only gets closer. Reading on would append one revision per request,
+      // each paying a batch start, an ingest round trip and a commit for what
+      // belongs in one capful, so the cycle stops here and hands the rest back
+      // to a cycle whose lease can fill its requests.
+      //
+      // Breaking before the append is what stops the reads: closing the pool
+      // ends the refill, so the cycle spends the ingest and commit appending
+      // rather than reading payloads for revisions it has already given up.
+      marginFlush = advanced.flush;
+      break;
+    }
     if (advanced.flush.length > 0) {
       await classifyPendingFailures();
-      const unattemptedLeases = remainingLeases(
-        tails,
-        consumed,
-        materialsReady,
-      );
       const requestStatus = await processPreparedRequests({
         runInTransaction,
         client,
         commitMode,
         requests: advanced.flush,
         requestIndex: 0,
-        unattemptedLeases,
+        unattemptedLeases: remainingLeases(tails, consumed, materialsReady),
         result,
       });
       if (requestStatus === "append_unknown") {
         return requestStatus;
       }
-      if (advanced.leaseMarginReached) {
-        // The lease is inside the margin an append needs to start safely, and
-        // it only gets closer. Reading on would append one revision per
-        // request, each paying a batch start, an ingest round trip and a
-        // commit for what belongs in one capful, so the cycle stops here and
-        // hands the rest back to a cycle that can fill its requests.
-        result.timing.payloadLoadMs += Date.now() - waitingSince;
-        addCancellation(
-          result,
-          await cancelReservations({
-            runInTransaction,
-            leases: unattemptedLeases,
-            errorMessage:
-              "projection append stopped inside the lease start margin",
-          }),
-        );
-        await classifyPendingFailures();
-        return "completed";
-      }
     }
     waitingSince = Date.now();
   }
-  result.timing.payloadLoadMs += Date.now() - waitingSince;
 
+  if (marginFlush !== undefined) {
+    await classifyPendingFailures();
+    // The revisions this cycle will not attempt keep their reservations. Every
+    // one of them is inside the start margin by construction, so they come
+    // back on their own within it, and cancelling instead would spend a
+    // statement per lease — up to the whole batch — holding a connection and
+    // the shared fence to reclaim them barely sooner.
+    return await processPreparedRequests({
+      runInTransaction,
+      client,
+      commitMode,
+      requests: marginFlush,
+      requestIndex: 0,
+      unattemptedLeases: remainingLeases(tails, consumed, materialsReady),
+      result,
+    });
+  }
+
+  result.timing.payloadLoadMs += Date.now() - waitingSince;
   await classifyPendingFailures();
   const final = advanceCorpusProjectionAppendTails({
     tails,
