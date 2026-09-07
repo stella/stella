@@ -21,7 +21,7 @@ export const clipboardSourceLabel = (sourceApp: ClipboardSourceApp) =>
 export const clipboardSourceTitle = (sourceApp: ClipboardSourceApp) =>
   sourceApp.page?.url ?? sourceApp.name;
 
-export type ClipboardItemLink = { host: string; url: string };
+export type ClipboardItemLink = { host: string };
 
 /** Past this a clip is a document that happens to hold no spaces, not a link. */
 const CLIPBOARD_LINK_MAX_CHARACTERS = 2048;
@@ -61,15 +61,13 @@ export const clipboardItemLink = (
     return null;
   }
   if (url.protocol === "mailto:") {
-    return url.pathname.length === 0
-      ? null
-      : { host: url.pathname, url: url.href };
+    return url.pathname.length === 0 ? null : { host: url.pathname };
   }
   // `www.` on its own, and `www..com`, parse but leave an empty label.
   if (url.hostname.split(".").some((label) => label.length === 0)) {
     return null;
   }
-  return { host: url.hostname.replace(/^www\./u, ""), url: url.href };
+  return { host: url.hostname.replace(/^www\./u, "") };
 };
 
 export const CLIPBOARD_ITEM_DRAG_TYPE =

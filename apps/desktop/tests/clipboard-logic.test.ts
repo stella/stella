@@ -667,31 +667,21 @@ describe("clipboardItemLink", () => {
     clipboardItemLink({ ...TEXT_ITEM, plainText });
 
   test("reads https, http and www clips", () => {
-    expect(linkOf("https://example.com/deal")).toEqual({
-      host: "example.com",
-      url: "https://example.com/deal",
-    });
+    expect(linkOf("https://example.com/deal")).toEqual({ host: "example.com" });
     expect(linkOf("http://docs.example.co.uk/a?b=1")?.host).toBe(
       "docs.example.co.uk",
     );
-    expect(linkOf("www.example.com/deal")).toEqual({
-      host: "example.com",
-      url: "https://www.example.com/deal",
-    });
+    expect(linkOf("www.example.com/deal")).toEqual({ host: "example.com" });
   });
 
   test("reads a mailto clip as its address", () => {
     expect(linkOf("mailto:counsel@example.com")).toEqual({
       host: "counsel@example.com",
-      url: "mailto:counsel@example.com",
     });
   });
 
   test("ignores scheme case and surrounding whitespace", () => {
-    expect(linkOf("  HTTPS://Example.com  ")).toEqual({
-      host: "example.com",
-      url: "https://example.com/",
-    });
+    expect(linkOf("  HTTPS://Example.com  ")).toEqual({ host: "example.com" });
   });
 
   test("keeps text that merely contains a link as text", () => {
