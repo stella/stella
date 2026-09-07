@@ -567,6 +567,11 @@ test.describe("find in table", () => {
     // dialog is not. Neither of the app's bars has any business here.
     await expect(page.getByRole("searchbox")).toHaveCount(0);
 
+    // Folio's Escape handler sits on the dialog, not on the document, and the
+    // dialog moves focus into its input on a timer after opening. Waiting for
+    // that focus is what makes the press land on a listener that exists;
+    // asserting the dialog is merely present races the timer.
+    await expect(folioDialog.getByRole("textbox").first()).toBeFocused();
     await page.keyboard.press("Escape");
     await expect(folioDialog).toHaveCount(0);
 
