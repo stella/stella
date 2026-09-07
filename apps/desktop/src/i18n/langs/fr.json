@@ -142,6 +142,7 @@
     "groups": "Groupes",
     "itemCount": "{count, plural, one {1 élément} other {{count} éléments}}",
     "keyboardNavigate": "← → naviguer",
+    "link": "Lien",
     "local": "Local",
     "memoryOnly": "Le stockage chiffré est indisponible. L’historique sera conservé uniquement jusqu’à la fermeture de stella desktop.",
     "moreOptions": "Plus d’options",

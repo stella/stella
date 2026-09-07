@@ -142,6 +142,7 @@
     "groups": "Grupy",
     "itemCount": "{count, plural, one {1 element} few {{count} elementy} other {{count} elementów}}",
     "keyboardNavigate": "← → nawigacja",
+    "link": "Link",
     "local": "Lokalnie",
     "memoryOnly": "Zaszyfrowana pamięć jest niedostępna. Historia zostanie zachowana tylko do zamknięcia stella desktop.",
     "moreOptions": "Więcej opcji",

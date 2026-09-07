@@ -1,6 +1,8 @@
 use objc2::runtime::{AnyObject, NSObjectProtocol};
 use objc2::{ClassType, MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
-use objc2_app_kit::{NSApplication, NSPanel, NSWindow, NSWindowStyleMask};
+use objc2_app_kit::{
+  NSApplication, NSPanel, NSWindow, NSWindowCollectionBehavior, NSWindowStyleMask,
+};
 use tauri::{Runtime, WebviewWindow};
 
 define_class!(
@@ -54,6 +56,16 @@ fn make_nonactivating_panel(ns_window: &NSWindow) {
   // this window.
   unsafe { AnyObject::set_class(ns_window, panel_class) };
   ns_window.setStyleMask(ns_window.styleMask() | NSWindowStyleMask::NonactivatingPanel);
+  // A full-screen app owns its own Space, and only a window marked
+  // FullScreenAuxiliary may be ordered onto it; the floating window level
+  // alone leaves the panel behind the full-screen app. CanJoinAllSpaces is
+  // what tao maps `visible_on_all_workspaces` to, and setting the behaviour
+  // replaces it wholesale, so keep it.
+  ns_window.setCollectionBehavior(
+    ns_window.collectionBehavior()
+      | NSWindowCollectionBehavior::FullScreenAuxiliary
+      | NSWindowCollectionBehavior::CanJoinAllSpaces,
+  );
   // The mask alone does not update the window server's prevents-activation
   // state on a window that already exists: keyboard use would stay
   // non-activating, but a click inside the panel would activate the app and
