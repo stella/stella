@@ -738,7 +738,7 @@ describe("MCP template tools", () => {
         }),
       ],
       computed: [{ path: "total", formula: "rent * 12" }],
-      // A `{{#each}}` loop over object items is surfaced separately from the
+      // A `{% for %}` loop over object items is surfaced separately from the
       // flat `fields` list so a caller knows to submit it as an array.
       arrays: [{ path: "deliverables", itemFieldPaths: ["name", "due_date"] }],
     });
@@ -2314,14 +2314,15 @@ describe("MCP template tools", () => {
           {
             code: "unprefixed_item_path",
             path: "name",
-            message: "{{name}} inside {{#each attorneys}} is not item-scoped",
-            hint: "Write {{attorneys.name}}.",
+            message:
+              "{{name}} inside {% for attorney in attorneys %} is not item-scoped",
+            hint: "Write {{ attorney.name }}.",
           },
           {
             code: "unknown_directive",
             path: "{{#endeach}}",
             message: "{{#endeach}} is not a directive",
-            hint: "Close the loop with {{/each}}.",
+            hint: "Close the loop with {% endfor %}.",
           },
         ],
       }),
@@ -2331,7 +2332,7 @@ describe("MCP template tools", () => {
       args: {
         name: "POA",
         docx_base64: await makeValidDocxBase64([
-          "{{#each attorneys}}",
+          "{% for attorney in attorneys %}",
           "{{name}}",
           "{{#endeach}}",
         ]),

@@ -648,7 +648,7 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
       "configuration, in the shape the field reference documents " +
       `(see ${TEMPLATE_FIELD_REFERENCE_URI}), its named conditions and ` +
       "formula fields, and the configure_template_fields call to make next. " +
-      "`arrays` marks {{#each}} fields as arrays of objects, not dotted keys.",
+      "`arrays` marks {% for %} fields as arrays of objects, not dotted keys.",
     inputSchema: {
       type: "object",
       properties: {

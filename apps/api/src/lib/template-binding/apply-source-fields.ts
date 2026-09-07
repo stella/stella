@@ -272,7 +272,7 @@ const resolveSource = (
  * Skips a field that already carries a value (an explicit override wins) and any
  * field whose source record is absent or empty for it. No-op without a manifest.
  * Bound fields are scalar (one client/matter/firm, one contact per role), so a
- * `{{#each}}` loop-item path simply finds no target and is left unfilled.
+ * `{% for %}` loop-item path simply finds no target and is left unfilled.
  */
 export const applySourceFields = (
   values: Record<string, unknown>,

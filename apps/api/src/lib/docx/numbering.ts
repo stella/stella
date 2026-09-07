@@ -24,7 +24,7 @@
  *    contiguously in one `w:t`;
  *  - the paragraph/DOM helpers (`assignNumbersInDoc`/`resolveRefsInDoc`) scan
  *    each paragraph's concatenated span text (`paragraphSpanText`) and rewrite
- *    via `replaceParagraphTextRanges`, so a `{{@num}}`/`{{@ref}}` Word split
+ *    via `replaceParagraphTextRanges`, so a `num()`/`ref()` Word split
  *    across runs is seen and resolved — mirroring how discover-placeholders /
  *    rich-patch handle split placeholder runs. The fill pipeline drives the DOM
  *    helpers; the raw-text helpers remain for callers/tests that work on a
@@ -132,7 +132,7 @@ export const applyNumbering = (xml: string): string => {
 };
 
 // ── DOM (split-run-aware) numbering ──────────────────────────
-// These scan each paragraph's concatenated span text so a `{{@num}}`/`{{@ref}}`
+// These scan each paragraph's concatenated span text so a `num()`/`ref()`
 // split across runs is seen, then rewrite the marker in place. Offsets are
 // computed from `paragraphSpanText` (the patcher's coordinate space), never
 // from `paragraphText`, so they cannot drift from the `w:t` walk below or from

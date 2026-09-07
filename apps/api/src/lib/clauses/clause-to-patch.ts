@@ -113,7 +113,7 @@ export const clauseBodyToRichPatch = (body: ClauseBody): RichPatchValue => {
 
 /**
  * Flatten a ClauseBody to plain text (one line per paragraph) for
- * version diffing. Directive paragraphs are kept: a changed `{{#if}}`
+ * version diffing. Directive paragraphs are kept: a changed `{% if %}`
  * condition alters fill behaviour and must show up in the diff.
  */
 export const clauseBodyToPlainText = (body: ClauseBody): string =>

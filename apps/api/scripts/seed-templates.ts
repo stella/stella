@@ -1366,21 +1366,21 @@ const TEMPLATES: TemplateSeed[] = [
       xmlP(
         "Completion of the sale and purchase shall take place on {{completionDate}} at the offices of the Seller's solicitors.",
       ) +
-      xmlP("{{#if includeEarnOut}}") +
+      xmlP("{% if includeEarnOut %}") +
       xmlHeading("Earn-Out", 2) +
       xmlP(
         "In addition to the Purchase Price, the Buyer shall pay the Seller an earn-out amount calculated in accordance with Schedule 3.",
       ) +
-      xmlP("{{/if}}") +
-      xmlP("{{#if includeWarrantyInsurance}}") +
+      xmlP("{% endif %}") +
+      xmlP("{% if includeWarrantyInsurance %}") +
       xmlHeading("Warranty and Indemnity Insurance", 2) +
       xmlP(
         "The Buyer shall procure warranty and indemnity insurance in respect of the Seller's warranties, on terms reasonably satisfactory to both Parties.",
       ) +
-      xmlP("{{/if}}") +
-      xmlP("{{@clause:Confidentiality}}") +
-      xmlP("{{@clause:GoverningLaw}}") +
-      xmlP("{{@clause:IndemnificationProvision}}"),
+      xmlP("{% endif %}") +
+      xmlP("{{ clause('Confidentiality') }}") +
+      xmlP("{{ clause('GoverningLaw') }}") +
+      xmlP("{{ clause('IndemnificationProvision') }}"),
     fields: [
       { path: "date", label: "Date", inputType: "date", required: true },
       {
@@ -1472,11 +1472,11 @@ const TEMPLATES: TemplateSeed[] = [
         "At a duly convened meeting of the Board of Directors of {{companyName}}, the following resolution was passed:",
       ) +
       xmlP("{{resolutionText}}") +
-      xmlP("{{#if requiresShareholderApproval}}") +
+      xmlP("{% if requiresShareholderApproval %}") +
       xmlP(
         "This resolution is subject to shareholder approval at the next general meeting of the Company.",
       ) +
-      xmlP("{{/if}}") +
+      xmlP("{% endif %}") +
       xmlHeading("Signatories", 2) +
       xmlP("Chairperson: {{chairpersonName}}") +
       xmlP("Secretary: {{secretaryName}}"),
@@ -1539,29 +1539,29 @@ const TEMPLATES: TemplateSeed[] = [
       xmlP(
         "The authorised share capital of the Company is {{authorisedCapital}}, divided into ordinary shares of {{shareNominalValue}} each.",
       ) +
-      xmlP("{{#if includePreEmptionRights}}") +
+      xmlP("{% if includePreEmptionRights %}") +
       xmlHeading("Pre-Emption Rights", 2) +
       xmlP(
         "No Shareholder shall transfer any shares without first offering them to the existing Shareholders pro rata to their holdings, in accordance with the procedure set out in Schedule 2.",
       ) +
-      xmlP("{{/if}}") +
-      xmlP("{{#if includeDragAlong}}") +
+      xmlP("{% endif %}") +
+      xmlP("{% if includeDragAlong %}") +
       xmlHeading("Drag-Along Rights", 2) +
       xmlP(
         "If Shareholders holding in aggregate seventy-five percent (75%) or more of the issued share capital wish to accept a bona fide offer for the entire issued share capital, they may require the remaining Shareholders to sell their shares on the same terms.",
       ) +
-      xmlP("{{/if}}") +
-      xmlP("{{#if includeTagAlong}}") +
+      xmlP("{% endif %}") +
+      xmlP("{% if includeTagAlong %}") +
       xmlHeading("Tag-Along Rights", 2) +
       xmlP(
         "If any Shareholder receives a bona fide offer to purchase shares representing fifty percent (50%) or more of the issued share capital, the remaining Shareholders shall have the right to sell their shares on the same terms and conditions.",
       ) +
-      xmlP("{{/if}}") +
+      xmlP("{% endif %}") +
       xmlHeading("Board Composition", 2) +
       xmlP(
         "The Board shall comprise {{boardSize}} directors, appointed in accordance with Schedule 3.",
       ) +
-      xmlP("{{@clause:DisputeResolution}}"),
+      xmlP("{{ clause('DisputeResolution') }}"),
     fields: [
       { path: "date", label: "Date", inputType: "date", required: true },
       {
@@ -1641,22 +1641,22 @@ const TEMPLATES: TemplateSeed[] = [
       ) +
       xmlHeading("Commencement and Term", 2) +
       xmlP("Employment shall commence on {{startDate}}.") +
-      xmlP("{{#if hasProbationPeriod}}") +
+      xmlP("{% if hasProbationPeriod %}") +
       xmlP(
         "The first {{probationMonths}} months of employment shall constitute a probationary period, during which either party may terminate employment by giving one week's written notice.",
       ) +
-      xmlP("{{/if}}") +
+      xmlP("{% endif %}") +
       xmlHeading("Remuneration", 2) +
       xmlP(
         "The Employee's gross annual salary shall be {{salary}}, payable in equal monthly instalments.",
       ) +
-      xmlP("{{#if includeBonus}}") +
+      xmlP("{% if includeBonus %}") +
       xmlP(
         "The Employee shall be eligible for a discretionary annual bonus of up to {{bonusPercentage}}% of annual salary, subject to the achievement of performance targets set by the Employer.",
       ) +
-      xmlP("{{/if}}") +
-      xmlP("{{@clause:NonCompete}}") +
-      xmlP("{{@clause:Confidentiality}}"),
+      xmlP("{% endif %}") +
+      xmlP("{{ clause('NonCompete') }}") +
+      xmlP("{{ clause('Confidentiality') }}"),
     fields: [
       { path: "date", label: "Date", inputType: "date", required: true },
       {
@@ -1760,11 +1760,11 @@ const TEMPLATES: TemplateSeed[] = [
       xmlP(
         "This Agreement shall remain in effect for a period of {{durationYears}} years from the date hereof.",
       ) +
-      xmlP("{{#if isMutual}}") +
+      xmlP("{% if isMutual %}") +
       xmlP(
         "The obligations of confidentiality under this Agreement shall apply equally to both Parties, each acting as both Disclosing Party and Receiving Party as the context requires.",
       ) +
-      xmlP("{{/if}}"),
+      xmlP("{% endif %}"),
     fields: [
       { path: "date", label: "Date", inputType: "date", required: true },
       {
@@ -1834,29 +1834,29 @@ const TEMPLATES: TemplateSeed[] = [
       xmlP(
         "The Provider shall provide the services described in each Statement of Work (SOW) executed under this Agreement. Each SOW shall specify the scope, deliverables, timeline, and fees for the relevant services.",
       ) +
-      xmlP("{{#each services}}") +
+      xmlP("{% for service in services %}") +
       xmlBoldP("{{serviceName}}") +
       xmlP("{{serviceDescription}}") +
       xmlP("Fee: {{serviceFee}}") +
-      xmlP("{{/each}}") +
-      xmlP("{{#if includeChangeControl}}") +
+      xmlP("{% endfor %}") +
+      xmlP("{% if includeChangeControl %}") +
       xmlHeading("Change Control", 2) +
       xmlP(
         "Any change to the scope of Services shall be agreed in writing through a Change Request, signed by authorised representatives of both Parties, before work on the change commences.",
       ) +
-      xmlP("{{/if}}") +
+      xmlP("{% endif %}") +
       xmlHeading("Term", 2) +
       xmlP(
         "This Agreement shall commence on {{startDate}} and continue for an initial term of {{termYears}} years, unless terminated earlier in accordance with the termination provisions.",
       ) +
-      xmlP("{{#if includeAutoRenewal}}") +
+      xmlP("{% if includeAutoRenewal %}") +
       xmlP(
         "Upon expiry of the initial term, this Agreement shall automatically renew for successive periods of twelve (12) months, unless either Party gives not less than ninety (90) days' written notice of non-renewal prior to the end of the then-current term.",
       ) +
-      xmlP("{{/if}}") +
-      xmlP("{{@clause:LimitationOfLiability}}") +
-      xmlP("{{@clause:ForceMajeure}}") +
-      xmlP("{{@clause:GoverningLaw}}"),
+      xmlP("{% endif %}") +
+      xmlP("{{ clause('LimitationOfLiability') }}") +
+      xmlP("{{ clause('ForceMajeure') }}") +
+      xmlP("{{ clause('GoverningLaw') }}"),
     fields: [
       { path: "date", label: "Date", inputType: "date", required: true },
       {
@@ -1938,21 +1938,21 @@ const TEMPLATES: TemplateSeed[] = [
         "This Service Level Agreement (SLA) supplements the Master Services Agreement between {{providerName}} and {{clientName}}.",
       ) +
       xmlHeading("Service Levels", 2) +
-      xmlP("{{#each metrics}}") +
+      xmlP("{% for metric in metrics %}") +
       xmlBoldP("{{metricName}}") +
       xmlP("Target: {{metricTarget}}") +
       xmlP("Measurement: {{metricMeasurement}}") +
-      xmlP("{{/each}}") +
+      xmlP("{% endfor %}") +
       xmlHeading("Service Credits", 2) +
       xmlP(
         "If the Provider fails to meet any Service Level in a given calendar month, the Client shall be entitled to a service credit equal to {{creditPercentage}}% of the monthly fees for each percentage point below the target, up to a maximum credit of {{maxCreditPercentage}}% of monthly fees.",
       ) +
-      xmlP("{{#if includeEscalation}}") +
+      xmlP("{% if includeEscalation %}") +
       xmlHeading("Escalation Procedure", 2) +
       xmlP(
         "Service level failures shall be escalated in accordance with the escalation matrix set out in Appendix A.",
       ) +
-      xmlP("{{/if}}"),
+      xmlP("{% endif %}"),
     fields: [
       { path: "date", label: "Date", inputType: "date", required: true },
       {
@@ -2019,12 +2019,12 @@ const TEMPLATES: TemplateSeed[] = [
       xmlP(
         "The annual rent shall be {{annualRent}}, payable in equal quarterly instalments in advance on the usual quarter days.",
       ) +
-      xmlP("{{#if includeRentReview}}") +
+      xmlP("{% if includeRentReview %}") +
       xmlHeading("Rent Review", 2) +
       xmlP(
         "The rent shall be reviewed on each fifth anniversary of the commencement date. The revised rent shall be the higher of: (a) the rent payable immediately before the review date; and (b) the open market rent as determined by an independent surveyor appointed pursuant to the RICS guidelines.",
       ) +
-      xmlP("{{/if}}") +
+      xmlP("{% endif %}") +
       xmlHeading("Permitted Use", 2) +
       xmlP(
         "The Tenant shall use the Premises solely for {{permittedUse}} and shall not change the use without the prior written consent of the Landlord.",
@@ -2125,12 +2125,12 @@ const TEMPLATES: TemplateSeed[] = [
       xmlP(
         "The Customer shall order Products by written purchase order. Each accepted order shall be delivered {{deliveryTerms}} to {{deliveryLocation}} within the lead time stated in Annex 1.",
       ) +
-      xmlP("{{#if includeLiquidatedDamages}}") +
+      xmlP("{% if includeLiquidatedDamages %}") +
       xmlHeading("Liquidated Damages for Late Delivery", 2) +
       xmlP(
         "If the Supplier fails to deliver an accepted order by the agreed delivery date, the Supplier shall pay liquidated damages of 0.5 per cent of the order value for each commenced week of delay, up to an aggregate cap of 5 per cent of the order value. The Parties agree this is a genuine pre-estimate of loss and not a penalty.",
       ) +
-      xmlP("{{/if}}") +
+      xmlP("{% endif %}") +
       xmlHeading("Liability", 2) +
       xmlP(
         "Each Party's aggregate liability under this Agreement shall not exceed {{liabilityCapPercent}} per cent of the annual fees paid or payable under this Agreement in the twelve months preceding the event giving rise to the claim.",
@@ -2139,15 +2139,15 @@ const TEMPLATES: TemplateSeed[] = [
       xmlP(
         "This Agreement shall commence on {{startDate}} and continue for an initial term of {{termYears}} years. Either Party may terminate for convenience on not less than {{terminationNoticeDays}} days' written notice.",
       ) +
-      xmlP("{{#if includeStepInRights}}") +
+      xmlP("{% if includeStepInRights %}") +
       xmlHeading("Step-In Rights", 2) +
       xmlP(
         "If the Supplier suffers a persistent failure to meet the agreed service or quality levels, the Customer may, at its option and on written notice, assume or appoint a third party to assume performance of the affected obligations until the failure is remedied.",
       ) +
-      xmlP("{{/if}}") +
-      xmlP("{{@clause:Confidentiality}}") +
-      xmlP("{{@clause:LimitationOfLiability}}") +
-      xmlP("{{@clause:GoverningLaw}}"),
+      xmlP("{% endif %}") +
+      xmlP("{{ clause('Confidentiality') }}") +
+      xmlP("{{ clause('LimitationOfLiability') }}") +
+      xmlP("{{ clause('GoverningLaw') }}"),
     fields: [
       { path: "date", label: "Date", inputType: "date", required: true },
       {

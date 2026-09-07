@@ -141,7 +141,7 @@ export const clauseVersions = p.pgTable(
 
 /**
  * Saved structural-block recipes: a named, org-wide snapshot of
- * pre-configured template fields (optionally wrapped in a `{{#each}}`
+ * pre-configured template fields (optionally wrapped in a `{% for %}`
  * loop) that can be inserted into any template in one click.
  */
 export const templateRecipes = p.pgTable(

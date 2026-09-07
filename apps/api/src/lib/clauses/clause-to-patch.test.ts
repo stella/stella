@@ -31,9 +31,9 @@ describe("clauseBodyToRichPatch", () => {
 
   test("drops block-directive paragraphs from the fill value", () => {
     const body: ClauseBody = [
-      { text: "{{#if x}}", isDirective: true, directiveKind: "if" },
+      { text: "{% if x %}", isDirective: true, directiveKind: "if" },
       { text: "Conditional" },
-      { text: "{{/if}}", isDirective: true, directiveKind: "endif" },
+      { text: "{% endif %}", isDirective: true, directiveKind: "endif" },
     ];
 
     expect(clauseBodyToRichPatch(body)).toEqual({
@@ -122,11 +122,11 @@ describe("clauseBodyToRichPatch", () => {
 describe("clauseBodyToPlainText", () => {
   test("keeps directive paragraphs so condition changes show up in diffs", () => {
     const body: ClauseBody = [
-      { text: "{{#if x}}", isDirective: true, directiveKind: "if" },
+      { text: "{% if x %}", isDirective: true, directiveKind: "if" },
       { text: "Body" },
-      { text: "{{/if}}", isDirective: true, directiveKind: "endif" },
+      { text: "{% endif %}", isDirective: true, directiveKind: "endif" },
     ];
 
-    expect(clauseBodyToPlainText(body)).toBe("{{#if x}}\nBody\n{{/if}}");
+    expect(clauseBodyToPlainText(body)).toBe("{% if x %}\nBody\n{% endif %}");
   });
 });

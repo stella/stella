@@ -267,7 +267,7 @@ export const fillTemplate = async (
   // (split-run aware): assignNumbersInDoc over each part threading one shared
   // `numbers` map (body first so document order drives the count), then
   // resolveRefsInDoc over each part with the full map. Operating on the DOM
-  // (paragraph span text) rather than the raw string lets a `{{@num}}`/`{{@ref}}`
+  // (paragraph span text) rather than the raw string lets a `num()`/`ref()`
   // that Word split across runs be seen and rewritten, the same way the
   // placeholder pipeline handles split markers.
   const numberingZip = await JSZip.loadAsync(data);

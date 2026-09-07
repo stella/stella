@@ -4,7 +4,7 @@
  * matching, and (via a string parser) DOCX template
  * conditionals. One representation, one evaluator, one set of
  * operators. Surface syntaxes (a visual builder, an inline
- * `{{#if ...}}` string) parse into this AST; they are not
+ * `{% if ... %}` string) parse into this AST; they are not
  * competing models.
  *
  * Pure schema module: valibot only, no runtime side effects,
