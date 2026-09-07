@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 
+import type { AnchorFactsPanel } from "@/routes/dev/-components/avt/anchor-facts-panel";
 import type { ClaimDetailPanel } from "@/routes/dev/-components/avt/claim-detail-panel";
 import type {
   CLAIM_TEXT,
@@ -40,6 +41,7 @@ import type {
 import type { VerificationView } from "@/routes/dev/-components/avt/verification-view";
 
 type SharedPrimitiveExports = [
+  typeof AnchorFactsPanel,
   typeof ClaimDetailPanel,
   typeof VerificationView,
   typeof CLAIM_TEXT,
