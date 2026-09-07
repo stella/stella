@@ -183,8 +183,8 @@ const createScopedDb = (
             },
           },
           templates: { findMany: async () => templates },
-          // No settings row: a brand-new org with no practice jurisdictions,
-          // which is exactly when a registry lookup is not enabled.
+          businessRegistryCredentials: { findMany: async () => [] },
+          // Public registries remain available without practice jurisdictions.
           organizationSettings: { findFirst: async () => undefined },
         },
       });
@@ -2476,7 +2476,7 @@ describe("MCP template tools", () => {
     );
   });
 
-  test("save_template (create) reports a lookup the org cannot resolve and a format with no marker", async () => {
+  test("save_template (create) accepts a public registry without jurisdiction approval and warns only about an unplaced format", async () => {
     createStoredTemplateMock.mockImplementation(async function* () {
       yield* [];
       return Result.ok({ id: "tmpl_new", name: "Company POA", fieldCount: 1 });
@@ -2505,13 +2505,9 @@ describe("MCP template tools", () => {
       toolName: "save_template",
     });
 
-    // The config is still saved: the org can enable the registry later.
     expect(createStoredTemplateMock).toHaveBeenCalledTimes(1);
     expect(parseToolPayload(result)).toMatchObject({
-      warnings: [
-        { code: "unmatched_lookup_format", path: "company.address" },
-        { code: "registry_disabled", path: "company" },
-      ],
+      warnings: [{ code: "unmatched_lookup_format", path: "company.address" }],
     });
   });
 

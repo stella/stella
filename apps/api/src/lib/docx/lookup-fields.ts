@@ -19,6 +19,7 @@
  */
 
 import { validateIco as validateAresIco } from "@stll/business-registries/ares";
+import { getAresLegalFormName } from "@stll/business-registries/ares/legal-forms";
 import { validateOrgnr } from "@stll/business-registries/brreg";
 import { validateCompanyNumber } from "@stll/business-registries/companies-house";
 import { validateEstablishmentId } from "@stll/business-registries/denue";
@@ -30,6 +31,7 @@ import { validateBusinessId } from "@stll/business-registries/prh";
 import { hasCanonicalShape as hasRechercheEntreprisesShape } from "@stll/business-registries/recherche-entreprises";
 import { validateVatFormat } from "@stll/business-registries/vies";
 import { assertNever, resolvePath } from "@stll/template-conditions";
+import { parseIsoDateLocal } from "@stll/time";
 
 import type {
   BusinessRegistryHit,
@@ -38,9 +40,7 @@ import type {
 import {
   BUSINESS_REGISTRY_DISPATCH,
   executeRegistryLookup,
-  registryDisabledForOrgRefusal,
 } from "@/api/lib/business-registries/dispatch";
-import type { NativeToolDisabledReason } from "@/api/lib/mcp-connectors/catalog-metadata";
 
 import { replaceResolvedValue } from "./composite-fields";
 import {
@@ -103,26 +103,8 @@ export type LookupResolver = (input: {
   query: string;
 }) => Promise<LookupOutcome>;
 
-/**
- * The org gate for a registry, keyed by the handler's `nativeToolSlug`: why
- * the registry is off for the organization, or null when it is on.
- * Mirrors the check the contacts lookup route enforces, threaded into the fill
- * resolver so a template cannot invoke a registry the organization has
- * disabled, and carrying the reason so the refusal names the recovery that
- * applies. Async so the handler boundary can construct it from a one-shot
- * org-settings read.
- *
- * Omitting it (the default) skips org gating: tests and any internal/system
- * caller without an org context resolve as before. The gate is additive — a
- * caller WITH an org context passes this in to deny disabled registries.
- */
-export type ResolveRegistryDisabledReason = (
-  registry: LookupRegistry,
-) => NativeToolDisabledReason | null | Promise<NativeToolDisabledReason | null>;
-
 type CreateDispatchLookupResolverOptions = {
   dispatch?: Record<LookupRegistry, RegistryHandler>;
-  resolveRegistryDisabledReason?: ResolveRegistryDisabledReason;
 };
 
 /**
@@ -130,15 +112,10 @@ type CreateDispatchLookupResolverOptions = {
  * adapters own timeouts (`AbortSignal.timeout`) on their upstream calls.
  * The dispatch table is injectable for tests (mirroring how dispatch.test.ts
  * stubs handlers); production callers use the default.
- *
- * `resolveRegistryDisabledReason`, when supplied, gates each lookup on the
- * org's native-tool settings before any upstream call. Constructed at the
- * handler boundary where org context exists; omitted on internal/test paths.
  */
 export const createDispatchLookupResolver =
   ({
     dispatch = BUSINESS_REGISTRY_DISPATCH,
-    resolveRegistryDisabledReason,
   }: CreateDispatchLookupResolverOptions = {}): LookupResolver =>
   async ({ registry, query }) => {
     const handler = dispatch[registry];
@@ -151,19 +128,6 @@ export const createDispatchLookupResolver =
       return {
         type: "error",
         message: `The ${registry} registry is not available in this deployment.`,
-      };
-    }
-    // Gate on the org's native-tool settings (when an org context was threaded
-    // in), exactly like the contacts lookup route: a deployed-but-disabled
-    // registry is refused here, before any upstream call.
-    const disabledReason = await resolveRegistryDisabledReason?.(registry);
-    if (disabledReason) {
-      return {
-        type: "error",
-        message: registryDisabledForOrgRefusal({
-          registry,
-          reason: disabledReason,
-        }).message,
       };
     }
     const response = await executeRegistryLookup({ handler, query });
@@ -192,6 +156,16 @@ const formatCourtFile = (
 ): string | null =>
   parts === null ? null : `${parts.court}, ${parts.section} ${parts.insert}`;
 
+const formatAresDate = (value: string | null): string | null => {
+  if (value === null) {
+    return null;
+  }
+  const date = parseIsoDateLocal(value);
+  return date === null
+    ? value
+    : date.toLocaleDateString("cs-CZ", { dateStyle: "medium" });
+};
+
 /** The [token] names the config UI offers, mapped onto hit fields. The
  *  baseline tokens come from the cross-registry hit (every registry); the
  *  switch adds and overrides per-registry tokens from the typed `details`
@@ -216,10 +190,30 @@ const lookupTemplateTokens = (
   switch (details.registry) {
     case "ares": {
       const { company } = details;
+      tokens["legal form"] = company.legalForm
+        ? (getAresLegalFormName(company.legalForm) ?? company.legalForm)
+        : null;
       tokens["share capital"] = company.shareCapital;
       tokens["court file"] = formatCourtFile(company.courtFile);
-      tokens["registered on"] = company.dateRegistered;
+      tokens["registered on"] = formatAresDate(company.dateRegistered);
       tokens["acting clause"] = company.actingClause;
+      tokens["statutory bodies"] = company.statutoryBodies
+        .map(({ organName, members }) =>
+          [
+            organName,
+            ...members.map(({ name, role, address, since }) =>
+              [
+                name,
+                role,
+                address,
+                since ? `od ${formatAresDate(since)}` : null,
+              ]
+                .filter((part) => part !== null && part !== "")
+                .join(", "),
+            ),
+          ].join("\n"),
+        )
+        .join("\n\n");
       break;
     }
     case "orsr": {

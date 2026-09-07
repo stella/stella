@@ -4,8 +4,7 @@ import * as v from "valibot";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import {
   executeRegistryLookup,
-  getRegistryHandlerDefinitionByCountry,
-  getRegistryHandlerByCountry,
+  type RegistryHandler,
   type RegistryJurisdictionCode,
 } from "@/api/lib/business-registries/dispatch";
 
@@ -33,11 +32,8 @@ const QUERY_DESCRIPTION_BASE =
 
 type CreateBusinessRegistryToolsArgs = {
   /**
-   * Jurisdiction codes for the registry adapters the org is permitted
-   * to call on this chat turn. Computed by the caller from the
-   * existing native-tool enablement logic (practice-jurisdiction
-   * defaults + `nativeToolOverrides`). Pass only jurisdictions we
-   * actually ship an adapter for.
+   * Organization-bound registry handlers permitted on this chat turn.
+   * Discovery and execution consume these exact handlers.
    *
    * Accepts the special "EU" pseudo-jurisdiction for EU-wide adapters
    * such as VIES; see `RegistryJurisdictionCode`.
@@ -45,7 +41,7 @@ type CreateBusinessRegistryToolsArgs = {
    * Empty array → the tool is not registered (do not surface a
    * jurisdiction picker the model cannot use).
    */
-  enabledJurisdictions: readonly RegistryJurisdictionCode[];
+  enabledHandlers: readonly RegistryHandler[];
 };
 
 /**
@@ -57,8 +53,9 @@ type CreateBusinessRegistryToolsArgs = {
  * is enabled so the model does not see a dead picker.
  */
 export const createBusinessRegistryTools = ({
-  enabledJurisdictions,
+  enabledHandlers,
 }: CreateBusinessRegistryToolsArgs) => {
+  const enabledJurisdictions = enabledHandlers.map(({ country }) => country);
   if (enabledJurisdictions.length === 0) {
     return {};
   }
@@ -75,10 +72,9 @@ export const createBusinessRegistryTools = ({
     RegistryJurisdictionCode,
     ...RegistryJurisdictionCode[],
   ] = [first, ...rest];
-  const canonicalOnlyJurisdictions = enabledJurisdictions.filter(
-    (jurisdiction) =>
-      getRegistryHandlerDefinitionByCountry(jurisdiction)?.search === null,
-  );
+  const canonicalOnlyJurisdictions = enabledHandlers
+    .filter(({ search }) => search === null)
+    .map(({ country }) => country);
   const canonicalOnlyGuidance = canonicalOnlyJurisdictions
     .map(canonicalOnlyQueryGuidanceFor)
     .join("; ");
@@ -117,7 +113,9 @@ export const createBusinessRegistryTools = ({
       description: TOOL_DESCRIPTION_BASE + canonicalOnlySuffix,
       inputSchema: toTanStackToolSchema(inputSchema),
     }).server(async ({ jurisdiction, limit, query }) => {
-      const handler = getRegistryHandlerByCountry(jurisdiction);
+      const handler = enabledHandlers.find(
+        (candidate) => candidate.country === jurisdiction,
+      );
       if (!handler) {
         // `enabledJurisdictions` should always be a subset of the
         // countries we ship adapters for, but defend against

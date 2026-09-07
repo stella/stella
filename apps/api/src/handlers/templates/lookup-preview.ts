@@ -3,14 +3,14 @@ import { t } from "elysia";
 
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { registryDisabledForOrgRefusal } from "@/api/lib/business-registries/dispatch";
+import { getOrganizationRegistryHandler } from "@/api/lib/business-registries/credentials";
+import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispatch";
 import {
   createDispatchLookupResolver,
   isPlausibleLookupValue,
   lookupRegistryName,
   renderLookupOutput,
 } from "@/api/lib/docx/lookup-fields";
-import { buildResolveRegistryDisabledReason } from "@/api/lib/docx/registry-org-gate";
 import { LOOKUP_REGISTRIES } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -29,7 +29,7 @@ const config = {
     "chosen public register and render the field's format string over the " +
     "hit, returning the text with its bold and italic markers left in place " +
     "for the client to interpret. Refused when the number is not plausible " +
-    "for that register or the register is disabled for the organization, and " +
+    "for that register or required credentials are missing, and " +
     "a 404 when the company is not found. Outcomes are cached per register " +
     "and number, and no model is involved.",
   permissions: { workspace: ["read"] },
@@ -37,8 +37,6 @@ const config = {
   access: "read",
   body: lookupPreviewBodySchema,
 } satisfies HandlerConfig;
-
-const resolveLookup = createDispatchLookupResolver();
 
 /**
  * Deterministic live preview of a registry-lookup field: number → registry
@@ -63,38 +61,35 @@ const lookupPreview = createSafeRootHandler(
       );
     }
 
-    // Gate on the org's native-tool settings before consulting the
-    // org-agnostic outcome cache, so a disabled org never reads a cached hit
-    // and never reaches the registry (mirrors the contacts lookup route).
-    const resolveRegistryDisabledReason = yield* Result.await(
+    const handler = yield* Result.await(
       Result.tryPromise({
         try: async () =>
-          await buildResolveRegistryDisabledReason({
-            organizationId: session.activeOrganizationId,
+          await getOrganizationRegistryHandler({
             scopedDb,
+            organizationId: session.activeOrganizationId,
+            registry,
           }),
         catch: (cause) =>
           new HandlerError({
             status: 500,
-            message: "Failed to read organization settings",
+            message: "Could not load registry configuration",
             cause,
           }),
       }),
     );
-    const disabledReason = resolveRegistryDisabledReason(registry);
-    if (disabledReason) {
+    if (!handler.isDeployAvailable()) {
       return Result.err(
         new HandlerError({
-          status: 403,
-          message: registryDisabledForOrgRefusal({
-            registry,
-            reason: disabledReason,
-          }).message,
+          status: 428,
+          code: "registry_configuration_required",
+          message: `Configure credentials for ${registryName} to preview the specification`,
         }),
       );
     }
-
-    const cacheKey = `${registry}:${number.replaceAll(/\s/gu, "")}`;
+    const resolveLookup = createDispatchLookupResolver({
+      dispatch: { ...BUSINESS_REGISTRY_DISPATCH, [registry]: handler },
+    });
+    const cacheKey = `${session.activeOrganizationId}:${registry}:${handler.cacheVersion ?? "deployment"}:${number.replaceAll(/\s/gu, "")}`;
     const outcome = yield* Result.await(
       Result.tryPromise({
         try: async () =>

@@ -13,11 +13,3 @@ import { env } from "@/api/env";
 
 /** The deployment's frontend origin, without a trailing slash. */
 export const getAppBaseUrl = () => env.FRONTEND_URL.replace(/\/$/u, "");
-
-/**
- * The catalogue entry's page under Knowledge → Tools, opened on its detail
- * panel. `slug` is a catalogue slug (`krs`, `ares`, ...); the Tools route
- * reads it from `?slug=` and selects that entry.
- */
-export const buildCatalogueEntryUrl = (slug: string): string =>
-  `${getAppBaseUrl()}/knowledge/tools?slug=${encodeURIComponent(slug)}`;

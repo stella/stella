@@ -130,6 +130,7 @@ export type SafeIdType =
   | "task"
   | "template"
   | "templateCategory"
+  | "templateLookupFormat"
   | "templateClause"
   | "templateRecipe"
   | "templateFill"

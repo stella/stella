@@ -23,7 +23,12 @@ describe("ORSR normalized projection", () => {
     const entity = toNormalizedEntity(company);
     expect(entity.registryRecord).toMatchObject({
       availability: "available",
-      value: { section: "Sro", idNumber: "3586" },
+      value: {
+        courtName: "Mestský súd Bratislava III",
+        section: "Sro",
+        idNumber: "3586",
+        reference: "Sro 3586/B",
+      },
     });
     expect(entity.shareCapital).toMatchObject({
       availability: "available",

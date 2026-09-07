@@ -1305,6 +1305,7 @@ type Messages = {
     "scrollToBottom": "Scroll to bottom";
     "scrollToTop": "Scroll to top";
     "search": "Search...";
+    "searchIn": "Search in";
     "selectAMatter": "Select a matter";
     "selectARole": "Select a role";
     "selectDate": "Select date…";
@@ -1743,8 +1744,6 @@ type Messages = {
     "uploadFailed": "Upload failed";
   };
   "feedback": {
-    "discord": "Discord community";
-    "github": "GitHub issues";
     "trigger": "Feedback";
   };
   "fileDetail": {
@@ -3001,7 +3000,6 @@ type Messages = {
     "noSignals": "No signals yet";
     "prompt": "What are you looking for?";
     "recentlyInForce": "Recently in force";
-    "scopeLabel": "Search in";
     "searchLabel": "Search the legal database";
     "searchPlaceholder": "Case number, act number, ECLI or keywords";
     "signals": "Signals";
@@ -3484,12 +3482,26 @@ type Messages = {
     };
     "mimeType": "File type";
     "noResults": "No results found for \"{query}\".";
+    "noUpcomingDeadlines": "No upcoming deadlines";
     "openMatter": "Open matter <bdi>{name}</bdi>";
     "placeholder": "Search across all matters...";
     "previewUnavailable": "Preview unavailable";
+    "recentDocuments": "Recent documents";
     "recentSearches": "Recent searches";
     "recentlyOpenedFiles": "Recently opened files";
+    "registryChoose": "Choose a company registry";
+    "registryCredentialAskAdmin": "Ask an organization administrator to configure access to this registry.";
+    "registryCredentialSaved": "Registry access saved";
+    "registryCredentialSharedHint": "Saved securely for everyone in your organization.";
+    "registryCredentialUserAgent": "SEC contact identification";
+    "registryCredentialUserAgentHint": "Enter an organization name and contact email. Saved securely for everyone in your organization.";
+    "registryDetails": {
+      "enrichmentUnavailable": "Commercial-register details are temporarily unavailable";
+    };
+    "registryKrsHint": "KRS searches by registration number, not company name. Enter a 10-digit KRS number, including leading zeros (e.g. 0000006865).";
+    "registryVatHint": "VIES checks VAT numbers, not company names. Enter a VAT number with its country prefix (e.g. CZ27082440); the format depends on the country.";
     "renameSearchTitle": "Rename saved search";
+    "requestCountry": "Request a new country";
     "resizeFilters": "Resize filters column";
     "resizePreview": "Resize preview column";
     "resultCount": "{count, plural, one {# result} other {# results}}";
@@ -3498,6 +3510,12 @@ type Messages = {
     "saveSearchTitle": "Save search";
     "savedSearches": "Saved searches";
     "savedSearchesEmpty": "Save a search to reuse it.";
+    "scopeFilter": "Search scope";
+    "scopePlaceholderAll": "Search across all <scope>sources</scope>…";
+    "scopePlaceholderMatters": "Search across all <scope>matters</scope>…";
+    "scopePlaceholderRegistries": "Search in <scope>registries</scope>…";
+    "scopeRegistries": "Registries";
+    "searchRegistries": "Search in registries";
     "summaryAction": "Summarize top results";
     "summaryError": "Summary unavailable";
     "summaryLoading": "Summarizing results...";
@@ -4034,6 +4052,7 @@ type Messages = {
       "sourceParty": "Other party";
     };
     "browseFiles": "Browse files";
+    "builtInLookupFormat": "Basic format";
     "categoryDeleteConfirm": "This will remove the category. Templates in this category will become uncategorized.";
     "categoryDeleteFailed": "Failed to delete category";
     "categorySaveFailed": "Failed to save category";
@@ -4085,6 +4104,7 @@ type Messages = {
     "conditionsTitle": "Conditions";
     "configureFields": "Configure fields";
     "confirmDelete": "This will permanently delete the template.";
+    "copyCompanySpecification": "Copy company specification";
     "createDocument": "Create document";
     "createDocumentAnyway": "Create anyway";
     "createFromStyles": "Start with document styles";
@@ -4095,6 +4115,7 @@ type Messages = {
     "dateChipPlus30Days": "In 30 days";
     "dateFormatStyle": "Date format";
     "dateRenderPreview": "In the document: {value}";
+    "defaultLookupFormat": "Default format";
     "deleteFailed": "Failed to delete template";
     "describeWhenToUse": "Describe when to use this";
     "directiveEach": "Loop: {expression}";
@@ -4159,6 +4180,8 @@ type Messages = {
     "lastUsedAgo": "Last used {time}";
     "loadFailed": "Failed to load templates";
     "lookupFieldHint": "Enter a KRS number; the company details are filled from the register.";
+    "lookupFormatSaved": "Output format saved";
+    "lookupFormatsSharedHint": "Saved formats are available to colleagues in this organization.";
     "moveToCategory": "Move to category";
     "moveToMatter": "Save to matter";
     "moveToMatterAnyway": "Save anyway";
@@ -4194,6 +4217,7 @@ type Messages = {
     "registryNotFound": "No company found for that ID";
     "renameFailed": "Failed to rename template";
     "saveFailed": "Failed to save template";
+    "savedLookupFormats": "Saved output formats";
     "searchTemplates": "Search templates…";
     "structureWarningParagraph": "Paragraph {paragraph, number}";
     "structureWarnings": "{count, plural, one {# structure warning} other {# structure warnings}}";

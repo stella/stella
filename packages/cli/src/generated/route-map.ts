@@ -23222,6 +23222,46 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
+            "search-preview-get": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "matters", "search-preview-get"],
+                capabilityId: "matters.search-preview.get",
+                description:
+                  "Return bounded task and document highlights for a matter search-result preview.",
+                access: "read",
+                flags: [
+                  {
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      properties: {
+                        matterId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["matterId"],
+                    },
+                  },
+                },
+              },
+            },
             unarchive: {
               kind: "capability-leaf",
               spec: {
@@ -38349,13 +38389,336 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
+            "lookup-formats-create": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "templates",
+                  "lookup-formats-create",
+                ],
+                capabilityId: "templates.lookup-formats.create",
+                description:
+                  "Save a reusable company specification format for colleagues in the active organization.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "enum",
+                    enum: [
+                      "ares",
+                      "brreg",
+                      "companies-house",
+                      "denue",
+                      "edgar",
+                      "gcis",
+                      "krs",
+                      "orsr",
+                      "prh",
+                      "recherche-entreprises",
+                      "vies",
+                    ],
+                    repeatable: false,
+                    flag: "--registry",
+                    prop: "registry",
+                    required: true,
+                    part: "body",
+                    partPath: "registry",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--name",
+                    prop: "name",
+                    required: true,
+                    part: "body",
+                    partPath: "name",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--format",
+                    prop: "format",
+                    required: true,
+                    part: "body",
+                    partPath: "format",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "templates",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      additionalProperties: false,
+                      type: "object",
+                      required: ["registry", "name", "format"],
+                      properties: {
+                        registry: {
+                          default: "ares",
+                          type: "string",
+                          enum: [
+                            "ares",
+                            "brreg",
+                            "companies-house",
+                            "denue",
+                            "edgar",
+                            "gcis",
+                            "krs",
+                            "orsr",
+                            "prh",
+                            "recherche-entreprises",
+                            "vies",
+                          ],
+                        },
+                        name: {
+                          minLength: 1,
+                          maxLength: 120,
+                          type: "string",
+                        },
+                        format: {
+                          minLength: 1,
+                          maxLength: 2000,
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "lookup-formats-default-update": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "templates",
+                  "lookup-formats-default-update",
+                ],
+                capabilityId: "templates.lookup-formats.default.update",
+                description:
+                  "Choose or clear the default company specification format for a business registry in the active organization.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "enum",
+                    enum: [
+                      "ares",
+                      "brreg",
+                      "companies-house",
+                      "denue",
+                      "edgar",
+                      "gcis",
+                      "krs",
+                      "orsr",
+                      "prh",
+                      "recherche-entreprises",
+                      "vies",
+                    ],
+                    repeatable: false,
+                    flag: "--registry",
+                    prop: "registry",
+                    required: true,
+                    part: "body",
+                    partPath: "registry",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--format-id",
+                    prop: "formatId",
+                    required: true,
+                    part: "body",
+                    partPath: "formatId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "templates",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      additionalProperties: false,
+                      type: "object",
+                      required: ["registry", "formatId"],
+                      properties: {
+                        registry: {
+                          default: "ares",
+                          type: "string",
+                          enum: [
+                            "ares",
+                            "brreg",
+                            "companies-house",
+                            "denue",
+                            "edgar",
+                            "gcis",
+                            "krs",
+                            "orsr",
+                            "prh",
+                            "recherche-entreprises",
+                            "vies",
+                          ],
+                        },
+                        formatId: {
+                          anyOf: [
+                            {
+                              minLength: 36,
+                              maxLength: 36,
+                              pattern:
+                                "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "lookup-formats-delete": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "templates",
+                  "lookup-formats-delete",
+                ],
+                capabilityId: "templates.lookup-formats.delete",
+                description:
+                  "Delete a shared company specification format from the active organization.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--format-id",
+                    prop: "formatId",
+                    required: true,
+                    part: "params",
+                    partPath: "formatId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: true,
+                scope: "templates",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["formatId"],
+                      properties: {
+                        formatId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "lookup-formats-list": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "templates", "lookup-formats-list"],
+                capabilityId: "templates.lookup-formats.list",
+                description:
+                  "List shared company specification formats and the default for a business registry in the active organization.",
+                access: "read",
+                flags: [
+                  {
+                    kind: "enum",
+                    enum: [
+                      "ares",
+                      "brreg",
+                      "companies-house",
+                      "denue",
+                      "edgar",
+                      "gcis",
+                      "krs",
+                      "orsr",
+                      "prh",
+                      "recherche-entreprises",
+                      "vies",
+                    ],
+                    repeatable: false,
+                    flag: "--registry",
+                    prop: "registry",
+                    required: true,
+                    part: "query",
+                    partPath: "registry",
+                  },
+                ],
+                inputOnly: [],
+                paginated: true,
+                paginationPart: "query",
+                itemsKey: "items",
+                destructive: false,
+                scope: "templates",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    query: {
+                      type: "object",
+                      required: ["registry"],
+                      properties: {
+                        registry: {
+                          default: "ares",
+                          type: "string",
+                          enum: [
+                            "ares",
+                            "brreg",
+                            "companies-house",
+                            "denue",
+                            "edgar",
+                            "gcis",
+                            "krs",
+                            "orsr",
+                            "prh",
+                            "recherche-entreprises",
+                            "vies",
+                          ],
+                        },
+                        limit: {
+                          minimum: 1,
+                          maximum: 100,
+                          type: "integer",
+                        },
+                        cursor: {
+                          maxLength: 512,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
             "lookup-preview": {
               kind: "capability-leaf",
               spec: {
                 commandPath: ["capability", "templates", "lookup-preview"],
                 capabilityId: "templates.lookup-preview",
                 description:
-                  "Preview a registry-lookup field: resolve a company number against the chosen public register and render the field's format string over the hit, returning the text with its bold and italic markers left in place for the client to interpret. Refused when the number is not plausible for that register or the register is disabled for the organization, and a 404 when the company is not found. Outcomes are cached per register and number, and no model is involved.",
+                  "Preview a registry-lookup field: resolve a company number against the chosen public register and render the field's format string over the hit, returning the text with its bold and italic markers left in place for the client to interpret. Refused when the number is not plausible for that register or required credentials are missing, and a 404 when the company is not found. Outcomes are cached per register and number, and no model is involved.",
                 access: "read",
                 flags: [
                   {

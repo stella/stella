@@ -60,6 +60,7 @@ import {
 } from "@/api/lib/agent-skills/skills";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
+import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispatch";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
 import {
@@ -107,14 +108,21 @@ const noopAuditRecorder: AuditRecorder = async () => undefined;
 const getChatTools = (
   props: Omit<
     Parameters<typeof getChatToolsWithPin>[0],
-    "pinServerValidatedWorkspaceId"
-  >,
-) =>
-  getChatToolsWithPin({
-    ...props,
+    "pinServerValidatedWorkspaceId" | "registryDispatch"
+  > & {
+    registryDispatch?: Parameters<
+      typeof getChatToolsWithPin
+    >[0]["registryDispatch"];
+  },
+) => {
+  const { registryDispatch = BUSINESS_REGISTRY_DISPATCH, ...rest } = props;
+  return getChatToolsWithPin({
+    ...rest,
     memoryEnabled: props.memoryEnabled ?? true,
     pinServerValidatedWorkspaceId: () => true,
+    registryDispatch,
   });
+};
 
 const editableActiveSkillContext: ActiveChatSkillContext = {
   body: "# Instructions\nUse the checklist.",
@@ -1100,6 +1108,13 @@ describe("chat tool schemas", () => {
       docxSuggestionSurface: "template-studio",
       webSearchEnabled: false,
       webSearchProviders: { webSearchProvider: null, urlFetcher: null },
+      registryDispatch: {
+        ...BUSINESS_REGISTRY_DISPATCH,
+        "companies-house": {
+          ...BUSINESS_REGISTRY_DISPATCH["companies-house"],
+          isDeployAvailable: () => true,
+        },
+      },
     });
 
     const businessRegistryLookup = tools["business_registry_lookup"];
@@ -1124,6 +1139,12 @@ describe("chat tool schemas", () => {
     }
 
     expect(businessRegistryLookup.needsApproval).toBeUndefined();
+    const businessRegistrySchema = convertSchemaToJsonSchema(
+      businessRegistryLookup.inputSchema,
+    );
+    expect(
+      businessRegistrySchema?.properties?.["jurisdiction"]?.enum,
+    ).toContain("GB");
     expect(getChatToolPolicy(businessRegistryLookup)).toEqual({
       kind: "public_official",
       needsApproval: false,

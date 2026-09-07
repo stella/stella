@@ -1,6 +1,10 @@
 import { resourceRef, RESOURCE_TYPE, toResourceName } from "@stll/api-contract";
 
-import type { GlobalSearchHit } from "@/lib/api-contract";
+import type { SearchScope } from "@/components/search-scope";
+import type {
+  GlobalSearchHit,
+  GlobalSearchResultType,
+} from "@/lib/api-contract";
 import { chatThreadRoute } from "@/lib/chat-thread-ref";
 import type { ChatThreadRoute } from "@/lib/chat-thread-ref";
 import { toSafeId } from "@/lib/safe-id";
@@ -8,6 +12,81 @@ import type { RecentFile } from "@/lib/search-recents";
 
 type ChatGlobalSearchHit = Extract<GlobalSearchHit, { type: "chat" }>;
 type EntityGlobalSearchHit = Extract<GlobalSearchHit, { entityId: string }>;
+
+type CompanySearchQueryOptions = {
+  open: boolean;
+  mode: "browse" | "pick";
+  query: string;
+  debouncedQuery: string;
+};
+
+type LazySearchGroupOptions = {
+  open: boolean;
+  mode: CompanySearchQueryOptions["mode"];
+  scope: SearchScope;
+  query: string;
+  expanded: boolean;
+};
+
+type EagerSearchTypesOptions = {
+  mode: CompanySearchQueryOptions["mode"];
+  scope: SearchScope;
+  types: GlobalSearchResultType[];
+};
+
+export const resolveEagerSearchTypes = ({
+  mode,
+  scope,
+  types,
+}: EagerSearchTypesOptions) =>
+  mode === "browse" && scope === "all"
+    ? types.filter((type) => type !== "case-law")
+    : types;
+
+export const isLazySearchGroupActive = ({
+  open,
+  mode,
+  scope,
+  query,
+  expanded,
+}: LazySearchGroupOptions): boolean =>
+  open &&
+  mode === "browse" &&
+  scope === "all" &&
+  expanded &&
+  query.trim().length > 0;
+
+export const resolveRegistryResultsPane = ({
+  scope,
+  expanded,
+  visible,
+  registryVisible,
+  caseLawEnabled,
+}: Pick<LazySearchGroupOptions, "scope" | "expanded"> & {
+  registryVisible: boolean;
+  caseLawEnabled: boolean;
+  visible: boolean;
+}) => {
+  const active = scope === "all" && expanded && visible;
+  return {
+    active,
+    hideMatterChrome: registryVisible || active,
+    caseLawEnabled: caseLawEnabled && !active,
+  };
+};
+
+export const getCompanySearchQuery = ({
+  open,
+  mode,
+  query,
+  debouncedQuery,
+}: CompanySearchQueryOptions): string | null => {
+  const value = debouncedQuery.trim();
+  if (!open || mode !== "browse" || query.trim() !== value) {
+    return null;
+  }
+  return value.length <= 256 ? value : null;
+};
 
 export type EntityNavigationRoute =
   | {

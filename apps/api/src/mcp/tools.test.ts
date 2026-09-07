@@ -18,6 +18,7 @@ import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
+import type { executeRegistryLookup } from "@/api/lib/business-registries/dispatch";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { encryptContent } from "@/api/lib/content-encryption";
 import type { EncryptedContent } from "@/api/lib/content-encryption";
@@ -999,29 +1000,38 @@ describe("OpenAI-compatible MCP tools", () => {
       });
     });
 
-    test("refuses a disabled registry with the enablement path, not a bare enum error", async () => {
-      // The org declares no practice jurisdictions in the settings mock, so KRS
-      // is off on the jurisdiction default rather than an explicit override.
-      // The call-time schema still accepts every registry in the dispatch
-      // table, so the refusal can say where to enable it instead of failing as
-      // an unexplained enum mismatch.
+    test("allows a manual lookup outside the advertised home jurisdictions", async () => {
+      const baseContext = createContext();
+      const executeRegistryLookupMock = mock(
+        async ({ handler }: Parameters<typeof executeRegistryLookup>[0]) => ({
+          type: "lookup" as const,
+          registry: handler.slug,
+          hit: null,
+        }),
+      );
       const result = await handleMcpToolCall({
         args: { registry: "krs", query: "0000592109" },
-        context: { ...createContext(), enabledRegistrySlugs: ["ares"] },
+        context: {
+          ...baseContext,
+          enabledRegistrySlugs: ["ares"],
+          testDependencies: {
+            ...baseContext.testDependencies,
+            executeRegistryLookup: executeRegistryLookupMock,
+          },
+        },
         toolName: "lookup_business_registry",
       });
 
-      expectErrorEnvelope(result, {
-        code: "feature_disabled",
-        message:
-          "The KRS registry is disabled for this organization. An " +
-          "organization admin can enable it at " +
-          `${APP_BASE_URL}/knowledge/tools?slug=krs, or add Poland to the ` +
-          "practice jurisdictions.",
-        hint:
-          "Ask an organization admin to enable KRS at " +
-          `${APP_BASE_URL}/knowledge/tools?slug=krs, or to add Poland to the ` +
-          "practice jurisdictions. It cannot be enabled from the client.",
+      expect(result.isError).toBeUndefined();
+      expect(parseToolPayload(result)).toEqual({
+        type: "lookup",
+        registry: "krs",
+        hit: null,
+      });
+      expect(executeRegistryLookupMock).toHaveBeenCalledTimes(1);
+      expect(executeRegistryLookupMock.mock.calls.at(0)?.at(0)).toMatchObject({
+        handler: { slug: "krs" },
+        query: "0000592109",
       });
     });
   });

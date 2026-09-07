@@ -73,7 +73,7 @@ const stubDb = (fileName: string) =>
           languages: [],
         }),
       },
-      organizationSettings: { findFirst: async () => undefined },
+      businessRegistryCredentials: { findMany: async () => [] },
     },
   });
 

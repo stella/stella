@@ -307,6 +307,9 @@ export const bytea = customType<{ data: Buffer }>({
     if (Buffer.isBuffer(value)) {
       return value;
     }
+    if (value instanceof Uint8Array) {
+      return Buffer.from(value);
+    }
     if (typeof value === "string") {
       const hex = value.startsWith("\\x") ? value.slice(2) : value;
       return Buffer.from(hex, "hex");

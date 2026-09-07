@@ -35,6 +35,7 @@ import { cn } from "@stll/ui/utils";
 import { MessageResponse } from "@/components/ai-elements/message";
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
 import { useExternalSourceStore } from "@/components/chat/external-source-store";
+import { CompanyRegistryPreview } from "@/components/company-registry-preview";
 import { findMcpConnectorIconHref } from "@/components/inspector/external-source-icon";
 import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
 import type { InspectorTab } from "@/components/inspector/inspector-tabs-store";
@@ -547,7 +548,7 @@ const ExternalPreviewUnavailable = ({
   );
 };
 
-export const ExternalReferencePanel = ({
+const GenericExternalReferencePanel = ({
   onClose,
   tab,
   workspaceId,
@@ -1013,6 +1014,41 @@ export const ExternalReferencePanel = ({
           </DialogFooter>
         </DialogPopup>
       </Dialog>
+    </div>
+  );
+};
+
+export const ExternalReferencePanel = ({
+  onClose,
+  tab,
+  workspaceId,
+}: ExternalReferencePanelProps) => {
+  const safeHref = sanitizeHref(tab.url);
+  const businessRegistry = useExternalSourceStore((state) =>
+    safeHref === undefined
+      ? undefined
+      : state.sourcesByUrl[safeHref]?.businessRegistry,
+  );
+
+  if (businessRegistry === undefined) {
+    return (
+      <GenericExternalReferencePanel
+        onClose={onClose}
+        tab={tab}
+        workspaceId={workspaceId}
+      />
+    );
+  }
+
+  return (
+    <div className="bg-background flex min-h-0 flex-1 flex-col overflow-hidden">
+      <InspectorTabHeader label={tab.label} onClose={onClose} />
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <CompanyRegistryPreview
+          companyId={businessRegistry.companyId}
+          registry={businessRegistry.registry}
+        />
+      </div>
     </div>
   );
 };

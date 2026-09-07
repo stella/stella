@@ -18,11 +18,23 @@ import { useNavigate } from "@tanstack/react-router";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { VirtualItem } from "@tanstack/react-virtual";
 import { panic } from "better-result";
-import { LoaderIcon, PanelRightIcon, WandSparklesIcon } from "lucide-react";
+import {
+  ChevronRightIcon,
+  LoaderIcon,
+  PanelRightIcon,
+  WandSparklesIcon,
+} from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
 import { GLOBAL_SEARCH_RESULT_TYPES } from "@stll/api-contract";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@stll/ui/breadcrumb";
 import { Button } from "@stll/ui/button";
 import {
   Command,
@@ -39,12 +51,18 @@ import { useIsMobile } from "@stll/ui/use-mobile";
 import { cn } from "@stll/ui/utils";
 
 import { openEntityInInspector } from "@/components/chat/entity-open";
+import { CompanyRegistryPreview } from "@/components/company-registry-preview";
 import { RenderStormRegion } from "@/components/render-storm-canary";
 import { SavedSearches } from "@/components/saved-searches";
 import {
   toSearchFilters,
   type SavedSearchCriteria,
 } from "@/components/saved-searches.logic";
+import { SearchCaseLawGroup } from "@/components/search-case-law-group";
+import {
+  SearchCompanyResult,
+  useCompanyRegistrySearch,
+} from "@/components/search-company-result";
 import {
   SearchColumnResizeHandle,
   SearchFooterHint,
@@ -70,9 +88,13 @@ import {
   canUseAskAIShortcut,
   createDialogCloseActionQueue,
   getChatHitRoute,
+  getCompanySearchQuery,
+  isLazySearchGroupActive,
+  resolveRegistryResultsPane,
   getEntityLocationRoute,
   getEntityWorkspaceRoute,
   getRecentFileRoute,
+  resolveEagerSearchTypes,
   resolveEntityDocumentRoute,
   toAskAIMessageHtml,
 } from "@/components/search-dialog.logic";
@@ -101,6 +123,8 @@ import {
   toggleArrayMember,
 } from "@/components/search-filters.logic";
 import type { SearchFilters } from "@/components/search-filters.logic";
+import { SearchScopeFilter, SearchScopeInput } from "@/components/search-scope";
+import type { SearchScope } from "@/components/search-scope";
 import { useChatUserContext } from "@/features/chat/hooks/use-chat-user-context";
 import { startNewThreadCommandHandoff } from "@/features/chat/lib/start-new-thread-command-handoff";
 import { invalidateGroupedChatThreads } from "@/features/chat/queries";
@@ -249,6 +273,186 @@ type SearchResultsStatus =
   | { query: string | null; type: "empty" }
   | { type: "results" };
 
+const getSearchScopeVisibility = ({
+  open,
+  scope,
+  query,
+  mode,
+  companyQuery,
+  hasSearchCriteria,
+  hasUnavailableSelectedType,
+  hasVisibleSearch,
+  registryExpanded,
+  activeTypeCount,
+}: {
+  open: boolean;
+  scope: SearchScope;
+  query: string;
+  mode: SearchDialogMode["type"];
+  companyQuery: string | null;
+  hasSearchCriteria: boolean;
+  hasUnavailableSelectedType: boolean;
+  hasVisibleSearch: boolean;
+  registryExpanded: boolean;
+  activeTypeCount: number;
+}) => {
+  const registryGroupActive = isLazySearchGroupActive({
+    open,
+    mode,
+    scope,
+    query,
+    expanded: registryExpanded,
+  });
+  const registryVisible = scope === "registries" && open && mode === "browse";
+  return {
+    activeSearch:
+      hasSearchCriteria &&
+      !hasUnavailableSelectedType &&
+      activeTypeCount > 0 &&
+      scope !== "registries",
+    visibleSearch:
+      hasVisibleSearch && activeTypeCount > 0 && scope !== "registries",
+    companyQuery: registryVisible || registryGroupActive ? companyQuery : null,
+    registryVisible,
+    companySearchVisible: registryVisible || registryGroupActive,
+    recents: !hasVisibleSearch && scope !== "registries",
+    showPrompt: query.length === 0 && mode === "browse",
+    placeholder: mode === "pick" ? undefined : "",
+    actions: mode === "browse" && scope !== "registries",
+    lazyGroups: isLazySearchGroupActive({
+      open,
+      mode,
+      scope,
+      query,
+      expanded: true,
+    }),
+    registryGroupActive,
+  };
+};
+
+type SupplementalPreview =
+  | { type: "internal" }
+  | { type: "registry" }
+  | { type: "case-law"; query: string; hit: GlobalSearchHit };
+
+const registryExpansionPreview = (expanded: boolean): SupplementalPreview =>
+  expanded ? { type: "registry" } : { type: "internal" };
+
+const responsiveFacetVisibility = (showPreview: boolean) =>
+  showPreview ? "xl:block" : "sm:block";
+
+const resolveSupplementalPreview = ({
+  searchScope,
+  registryGroupActive,
+  showLazySearchGroups,
+  caseLawExpanded,
+  supplementalPreview,
+  companyHit,
+  internalHit,
+  query,
+}: {
+  searchScope: SearchScope;
+  registryGroupActive: boolean;
+  showLazySearchGroups: boolean;
+  caseLawExpanded: boolean;
+  supplementalPreview: SupplementalPreview;
+  companyHit: ReturnType<typeof useCompanyRegistrySearch>["selectedHit"];
+  internalHit: GlobalSearchHit | null;
+  query: string;
+}) => ({
+  companyHit:
+    searchScope === "registries" ||
+    (registryGroupActive && supplementalPreview.type === "registry")
+      ? companyHit
+      : null,
+  displayedHit:
+    showLazySearchGroups &&
+    caseLawExpanded &&
+    supplementalPreview.type === "case-law" &&
+    supplementalPreview.query === query
+      ? supplementalPreview.hit
+      : internalHit,
+  registryKeyboard:
+    searchScope === "registries" ||
+    (registryGroupActive && supplementalPreview.type === "registry"),
+  caseLawSelectedHitId:
+    supplementalPreview.type === "case-law"
+      ? supplementalPreview.hit.id
+      : undefined,
+});
+
+const SearchSupplementalGroups = ({
+  visible,
+  scope,
+  companySearch,
+  registryExpanded,
+  onRegistryExpandedChange,
+  onRegistryBack,
+  onRegistrySelect,
+  caseLawEnabled,
+  caseLawProps,
+}: {
+  visible: boolean;
+  scope: SearchScope;
+  companySearch: ReturnType<typeof useCompanyRegistrySearch>;
+  registryExpanded: boolean;
+  onRegistryExpandedChange: (expanded: boolean) => void;
+  onRegistryBack: () => void;
+  onRegistrySelect: () => void;
+  caseLawEnabled: boolean;
+  caseLawProps: ComponentProps<typeof SearchCaseLawGroup>;
+}) => {
+  const t = useTranslations();
+  if (!visible && scope !== "registries") {
+    return null;
+  }
+  if (scope === "registries" || registryExpanded) {
+    return (
+      <section>
+        <Breadcrumb
+          aria-label={t("navigation.search")}
+          className="bg-background sticky top-0 z-10 border-b px-4"
+        >
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <Button
+                variant="ghost"
+                className="text-muted-foreground min-h-11 px-0"
+                onClick={onRegistryBack}
+              >
+                {t("navigation.search")}
+              </Button>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <BreadcrumbPage>{t("search.scopeRegistries")}</BreadcrumbPage>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
+        <SearchCompanyResult
+          search={companySearch}
+          onSelect={onRegistrySelect}
+        />
+      </section>
+    );
+  }
+  return (
+    <>
+      <section className="border-t px-2 py-1">
+        <Button
+          className="bg-background sticky top-0 z-10 min-h-11 w-full justify-start gap-2 px-2 text-start"
+          variant="ghost"
+          onClick={() => onRegistryExpandedChange(true)}
+        >
+          <DirectionalIcon icon={ChevronRightIcon} className="size-4" />
+          {t("search.searchRegistries")}
+        </Button>
+      </section>
+      {caseLawEnabled && <SearchCaseLawGroup {...caseLawProps} />}
+    </>
+  );
+};
+
 const resolveSearchResultsStatus = ({
   hasActiveSearch,
   hasQuery,
@@ -366,6 +570,12 @@ export const SearchDialog = ({
     };
   }, [open]);
   const [query, setQuery] = useState("");
+  const [searchScope, setSearchScope] = useState<SearchScope>("all");
+  const [scopeFilterOpen, setScopeFilterOpen] = useState(false);
+  const [registryExpanded, setRegistryExpanded] = useState(false);
+  const [caseLawExpanded, setCaseLawExpanded] = useState(false);
+  const [supplementalPreview, setSupplementalPreview] =
+    useState<SupplementalPreview>({ type: "internal" });
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [highlightedHitId, setHighlightedHitId] = useState<string | null>(null);
   const [previewEnabled, setPreviewEnabled] = useState(true);
@@ -396,6 +606,12 @@ export const SearchDialog = ({
   );
 
   const searchQuery = debouncedQuery.trim();
+  const companyQuery = getCompanySearchQuery({
+    open,
+    mode: mode.type,
+    query,
+    debouncedQuery,
+  });
   // Resolve preset → ISO once per logical search. Memoising on
   // [filters.time, searchQuery] gives us a fresh `now() - duration`
   // whenever the user picks a new preset or runs a new query, while
@@ -409,8 +625,11 @@ export const SearchDialog = ({
     [filters.time, searchQuery],
   );
   const updatedTo = resolveUpdatedTo(filters.time);
-  const availableSearchTypes = GLOBAL_SEARCH_RESULT_TYPES.filter((type) =>
-    isAvailableSearchKind(type, publicLawPreviewEnabled),
+  const availableSearchTypes = GLOBAL_SEARCH_RESULT_TYPES.filter(
+    (type) =>
+      isAvailableSearchKind(type, publicLawPreviewEnabled) &&
+      (searchScope !== "matters" ||
+        (type !== "case-law" && type !== "contact")),
   );
   const selectedSearchTypes = filters.types.filter(isSearchKindOption);
   const hasUnavailableSelectedType = hasUnavailableSearchType({
@@ -418,10 +637,15 @@ export const SearchDialog = ({
     kinds: filters.kinds,
     selectedTypes: selectedSearchTypes,
   });
-  const activeSearchTypes = resolveActiveSearchTypes({
+  const resolvedSearchTypes = resolveActiveSearchTypes({
     availableTypes: availableSearchTypes,
     kinds: filters.kinds,
     selectedTypes: selectedSearchTypes,
+  });
+  const activeSearchTypes = resolveEagerSearchTypes({
+    mode: mode.type,
+    scope: searchScope,
+    types: resolvedSearchTypes,
   });
   const hasQuery = searchQuery.trim().length > 0;
   const hasSearchCriteria = hasSearchQueryOrSelectiveFilter({
@@ -442,9 +666,34 @@ export const SearchDialog = ({
     updatedFrom,
     updatedTo,
   });
-  const hasActiveSearch = hasSearchCriteria && !hasUnavailableSelectedType;
   const hasTypedQuery = query.trim().length > 0;
   const hasVisibleSearch = hasTypedQuery || hasExplicitSearchFilters;
+  const scopeVisibility = getSearchScopeVisibility({
+    open,
+    scope: searchScope,
+    query,
+    mode: mode.type,
+    companyQuery,
+    hasSearchCriteria,
+    hasUnavailableSelectedType,
+    hasVisibleSearch,
+    registryExpanded,
+    activeTypeCount: activeSearchTypes.length,
+  });
+  const hasActiveSearch = scopeVisibility.activeSearch;
+  const showLazySearchGroups = scopeVisibility.lazyGroups;
+  const registryGroupActive = scopeVisibility.registryGroupActive;
+  const registryResultsPane = resolveRegistryResultsPane({
+    scope: searchScope,
+    expanded: registryExpanded,
+    visible: showLazySearchGroups,
+    registryVisible: scopeVisibility.registryVisible,
+    caseLawEnabled: publicLawPreviewEnabled,
+  });
+  const companySearch = useCompanyRegistrySearch(
+    scopeVisibility.companyQuery,
+    scopeVisibility.companySearchVisible,
+  );
 
   const {
     data,
@@ -481,7 +730,7 @@ export const SearchDialog = ({
     mode.type === "pick" ? mode.excludeEntityIds : NO_EXCLUDED_ENTITY_IDS;
   const excludedEntityIdsKey = excludedEntityIds.join("|");
   const allHits = useMemo(() => {
-    if (!data) {
+    if (!data || searchScope === "registries" || !hasActiveSearch) {
       return EMPTY_SEARCH_HITS;
     }
     const hits = data.pages.flatMap((page) => page.hits);
@@ -492,7 +741,7 @@ export const SearchDialog = ({
     return hits.filter(
       (hit) => !("entityId" in hit) || !excluded.has(hit.entityId),
     );
-  }, [data, excludedEntityIdsKey]);
+  }, [data, excludedEntityIdsKey, searchScope, hasActiveSearch]);
   const previewLocatorCandidates =
     data?.pages.at(0)?.previewLocatorCandidates ??
     EMPTY_SEARCH_PREVIEW_LOCATOR_CANDIDATES;
@@ -506,6 +755,16 @@ export const SearchDialog = ({
   const displayedPreviewHit = selectDisplayedSearchPreviewHit({
     hit: previewHit,
     showPreview,
+  });
+  const supplementalDisplay = resolveSupplementalPreview({
+    searchScope,
+    registryGroupActive,
+    showLazySearchGroups,
+    caseLawExpanded,
+    supplementalPreview,
+    companyHit: companySearch.selectedHit,
+    internalHit: displayedPreviewHit,
+    query,
   });
   const displayedRecentFile =
     showPreview && !hasVisibleSearch ? recentPreviewFile : null;
@@ -552,6 +811,9 @@ export const SearchDialog = ({
   >(null);
   if (recentsSnapshotKey !== lastRecentsSnapshotKey) {
     setLastRecentsSnapshotKey(recentsSnapshotKey);
+    setRegistryExpanded(false);
+    setCaseLawExpanded(false);
+    setSupplementalPreview({ type: "internal" });
     setRecentPreviewFile(null);
     if (recentsSnapshotKey) {
       setRecentSearches(readRecentSearches(searchRecentsScope));
@@ -747,6 +1009,10 @@ export const SearchDialog = ({
 
   const clearSearch = () => {
     clearSearchQuery();
+    setRegistryExpanded(false);
+    setCaseLawExpanded(false);
+    setSupplementalPreview({ type: "internal" });
+    setSearchScope("all");
     setFilters(initialFiltersForMode(mode, initialWorkspaceId));
   };
 
@@ -1144,7 +1410,7 @@ export const SearchDialog = ({
     hasQuery,
     hasResults,
     hasUnavailableSelectedType,
-    hasVisibleSearch,
+    hasVisibleSearch: scopeVisibility.visibleSearch,
     isBlockingSearchError,
     isLoading,
     searchQuery,
@@ -1312,6 +1578,7 @@ export const SearchDialog = ({
   }
 
   const applySavedSearch = (criteria: SavedSearchCriteria) => {
+    setSearchScope("all");
     const savedFilters = toSearchFilters(criteria);
     debouncedSetQuery.cancel();
     setRecentPreviewFile(null);
@@ -1387,6 +1654,7 @@ export const SearchDialog = ({
                   return;
                 }
                 if (highlightedHit) {
+                  setSupplementalPreview({ type: "internal" });
                   if (eventDetails.reason === "keyboard") {
                     debouncedSetHighlightedHitId.cancel();
                     setHighlightedHitId(highlightedHit.id);
@@ -1422,37 +1690,56 @@ export const SearchDialog = ({
               )}
               {/* Search input */}
               <div className="flex shrink-0 items-center gap-3 border-b px-4 py-3">
-                <CommandInput
-                  autoFocus
-                  className="text-sm"
-                  dir={contentDir(query)}
-                  onKeyDown={(event) => {
-                    if (event.key === "ArrowDown" && !hasVisibleSearch) {
-                      const firstRow = getEmptyScreenRows().at(0);
-                      if (firstRow) {
-                        event.preventDefault();
-                        firstRow.focus();
+                <SearchScopeInput
+                  scope={searchScope}
+                  showPrompt={scopeVisibility.showPrompt}
+                  onOpenFilter={() => setScopeFilterOpen(true)}
+                >
+                  <CommandInput
+                    autoFocus
+                    className="text-sm"
+                    dir={contentDir(query)}
+                    onKeyDown={(event) => {
+                      if (
+                        supplementalDisplay.registryKeyboard &&
+                        companySearch.onSearchKeyDown(event)
+                      ) {
+                        return;
                       }
-                      return;
+                      if (event.key === "ArrowDown" && !hasVisibleSearch) {
+                        const firstRow = getEmptyScreenRows().at(0);
+                        if (firstRow) {
+                          event.preventDefault();
+                          firstRow.focus();
+                        }
+                        return;
+                      }
+                      if (
+                        event.key !== "Tab" ||
+                        event.shiftKey ||
+                        companySearch.visible
+                      ) {
+                        return;
+                      }
+                      if (
+                        !canUseAskAIShortcut({
+                          canAskAI,
+                          mode: mode.type,
+                          query,
+                        })
+                      ) {
+                        return;
+                      }
+                      event.preventDefault();
+                      handleAskAI();
+                    }}
+                    aria-label={t("common.search")}
+                    placeholder={
+                      scopeVisibility.placeholder ?? t("search.placeholder")
                     }
-                    if (event.key !== "Tab" || event.shiftKey) {
-                      return;
-                    }
-                    if (
-                      !canUseAskAIShortcut({
-                        canAskAI,
-                        mode: mode.type,
-                        query,
-                      })
-                    ) {
-                      return;
-                    }
-                    event.preventDefault();
-                    handleAskAI();
-                  }}
-                  placeholder={t("search.placeholder")}
-                  ref={searchInputRef}
-                />
+                    ref={searchInputRef}
+                  />
+                </SearchScopeInput>
                 {isFetching && !isFetchingNextPage && (
                   <LoaderIcon className="text-muted-foreground size-4 shrink-0 animate-spin" />
                 )}
@@ -1473,8 +1760,23 @@ export const SearchDialog = ({
                     <WandSparklesIcon className="size-4" />
                   )}
                 </Button>
+                <SearchScopeFilter
+                  scope={searchScope}
+                  open={scopeFilterOpen}
+                  onOpenChange={setScopeFilterOpen}
+                  visible={mode.type === "browse"}
+                  onChange={(scope) => {
+                    setSearchScope(scope);
+                    setFilters(initialFiltersForMode(mode, initialWorkspaceId));
+                    setHighlightedHitId(null);
+                    setRecentPreviewFile(null);
+                    setRegistryExpanded(false);
+                    setSupplementalPreview({ type: "internal" });
+                  }}
+                />
                 <SavedSearches
                   filters={filters}
+                  showTrigger={searchScope !== "registries"}
                   isOpen={open}
                   onApply={applySavedSearch}
                   overlayLayer="search-child"
@@ -1495,15 +1797,16 @@ export const SearchDialog = ({
 
               {/* Content area */}
               <div
-                className="flex min-h-0 flex-1 overflow-hidden"
+                className="group/search-content flex min-h-0 flex-1 overflow-hidden"
+                data-registry-search={registryResultsPane.hideMatterChrome}
                 ref={contentAreaRef}
                 style={columnsStyle}
               >
-                {/* Facets sidebar — always present so the layout stays stable. */}
+                {/* Matter filters do not apply to external registry searches. */}
                 <div
                   className={cn(
-                    "hidden w-[var(--search-facets-w,14rem)] shrink-0 overflow-y-auto border-e px-3 py-3",
-                    showPreview ? "xl:block" : "sm:block",
+                    "hidden w-[var(--search-facets-w,14rem)] shrink-0 overflow-y-auto border-e px-3 py-3 group-data-[registry-search=true]/search-content:hidden",
+                    responsiveFacetVisibility(showPreview),
                   )}
                 >
                   <SearchFacetsBody
@@ -1522,8 +1825,8 @@ export const SearchDialog = ({
 
                 <SearchColumnResizeHandle
                   className={cn(
-                    "hidden",
-                    showPreview ? "xl:block" : "sm:block",
+                    "hidden group-data-[registry-search=true]/search-content:hidden",
+                    responsiveFacetVisibility(showPreview),
                   )}
                   label={t("search.resizeFilters")}
                   max={SEARCH_FACETS_MAX_WIDTH}
@@ -1533,101 +1836,163 @@ export const SearchDialog = ({
                 />
 
                 {/* Results */}
-                <CommandList
-                  className={cn(
-                    "max-h-none min-w-0 flex-1",
-                    hasVisibleSearch
-                      ? "overflow-y-auto"
-                      : "flex min-h-0 flex-col overflow-hidden",
+                <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+                  {!registryResultsPane.hideMatterChrome && (
+                    <CommandList
+                      className={cn(
+                        "max-h-none min-w-0 flex-1 group-data-[registry-search=true]/search-content:hidden",
+                        hasVisibleSearch
+                          ? "overflow-y-auto"
+                          : "flex min-h-0 flex-col overflow-hidden",
+                      )}
+                      onKeyDown={handleEmptyScreenListKeyDown}
+                      ref={setResultsElement}
+                    >
+                      <div
+                        className="min-h-0 flex-1 overflow-y-auto"
+                        hidden={!scopeVisibility.recents}
+                      >
+                        <SearchRecentsScreen
+                          filters={filters}
+                          onApplySavedSearch={applySavedSearch}
+                          onFileClick={openRecentFile}
+                          onFilePreview={setRecentPreviewFile}
+                          onSearchClick={applyRecentSearch}
+                          open={open}
+                          previewedFileId={
+                            displayedRecentFile?.entityId ?? null
+                          }
+                          query={query}
+                          recentFiles={recentFiles}
+                          recentSearches={recentSearches}
+                          visible={scopeVisibility.recents}
+                        />
+                      </div>
+                      {scopeVisibility.actions &&
+                        filteredActions.length > 0 && (
+                          <section className="shrink-0 px-4 py-4">
+                            <h3 className="text-muted-foreground mb-2 text-xs font-medium">
+                              {t("common.actions")}
+                            </h3>
+                            <div className="space-y-1">
+                              {actionEntries.map((entry, index) => (
+                                <CommandActionItem
+                                  entry={entry}
+                                  navigation={
+                                    hasVisibleSearch
+                                      ? { type: "command", index }
+                                      : { type: "button" }
+                                  }
+                                  key={entry.action.id}
+                                  onSelect={handleActionSelect}
+                                />
+                              ))}
+                            </div>
+                          </section>
+                        )}
+                      <SearchResultsContent
+                        onRetry={() => {
+                          detached(
+                            refetchSearch(),
+                            "search-dialog.refetch-search",
+                          );
+                        }}
+                        status={resultsStatus}
+                      >
+                        <SearchHitResults
+                          commandIndexOffset={commandActions.length}
+                          measureContainer={(element) => {
+                            if (element && resultsElement) {
+                              // Actions and the result heading precede the virtual rows.
+                              setHitsScrollMargin(
+                                element.getBoundingClientRect().top -
+                                  resultsElement.getBoundingClientRect().top +
+                                  resultsElement.scrollTop,
+                              );
+                            }
+                          }}
+                          hits={allHits}
+                          onOpenResult={openSearchResult}
+                          pagination={{
+                            fetchNextPage,
+                            hasNextPage,
+                            isFetchNextPageError,
+                            isFetchingNextPage,
+                            loadMoreRef,
+                          }}
+                          summary={{
+                            isOpeningChat: createSummaryChatMutation.isPending,
+                            onOpenChat: handleOpenSummaryChat,
+                            onSummarize: handleSummarizeResults,
+                            summarizeMutation: summarizeSearchMutation,
+                            visible: showSearchSummary,
+                          }}
+                          totalCount={totalCount}
+                          virtual={{
+                            items: virtualHits,
+                            measureElement: hitVirtualizer.measureElement,
+                            totalSize: hitVirtualizer.getTotalSize(),
+                            scrollMargin: hitsScrollMargin,
+                          }}
+                        />
+                      </SearchResultsContent>
+                    </CommandList>
                   )}
-                  onKeyDown={handleEmptyScreenListKeyDown}
-                  ref={setResultsElement}
-                >
-                  <div
-                    className="min-h-0 flex-1 overflow-y-auto"
-                    hidden={hasVisibleSearch}
-                  >
-                    <SearchRecentsScreen
-                      filters={filters}
-                      onApplySavedSearch={applySavedSearch}
-                      onFileClick={openRecentFile}
-                      onFilePreview={setRecentPreviewFile}
-                      onSearchClick={applyRecentSearch}
-                      open={open}
-                      previewedFileId={displayedRecentFile?.entityId ?? null}
-                      query={query}
-                      recentFiles={recentFiles}
-                      recentSearches={recentSearches}
-                      visible={!hasVisibleSearch}
+                  <div className="bg-background max-h-[60%] min-h-0 shrink-0 overflow-y-auto overscroll-contain group-data-[registry-search=true]/search-content:max-h-none group-data-[registry-search=true]/search-content:flex-1">
+                    <SearchSupplementalGroups
+                      visible={showLazySearchGroups}
+                      scope={searchScope}
+                      companySearch={companySearch}
+                      registryExpanded={registryExpanded}
+                      onRegistryBack={() => {
+                        setSearchScope("all");
+                        setRegistryExpanded(false);
+                        setSupplementalPreview({ type: "internal" });
+                        searchInputRef.current?.focus();
+                      }}
+                      onRegistryExpandedChange={(expanded) => {
+                        setRegistryExpanded(expanded);
+                        setSupplementalPreview(
+                          registryExpansionPreview(expanded),
+                        );
+                      }}
+                      onRegistrySelect={() =>
+                        setSupplementalPreview({ type: "registry" })
+                      }
+                      caseLawEnabled={registryResultsPane.caseLawEnabled}
+                      caseLawProps={{
+                        expanded: caseLawExpanded,
+                        onExpandedChange: (expanded) => {
+                          setCaseLawExpanded(expanded);
+                          setSupplementalPreview({ type: "internal" });
+                        },
+                        query,
+                        debouncedQuery,
+                        organizationId: searchRecentsScope.organizationId,
+                        userId: searchRecentsScope.userId,
+                        selectedHitId: supplementalDisplay.caseLawSelectedHitId,
+                        onPreview: (hit) =>
+                          setSupplementalPreview({
+                            type: "case-law",
+                            query,
+                            hit,
+                          }),
+                        onOpen: openSearchResult,
+                        searchFilters: {
+                          workspaceIds: filters.workspaceIds,
+                          kinds: filters.kinds,
+                          editedByUserIds: filters.editedByUserIds,
+                          mimeTypes: filters.mimeTypes,
+                          updatedFrom,
+                          updatedTo,
+                        },
+                      }}
                     />
                   </div>
-                  {mode.type === "browse" && filteredActions.length > 0 && (
-                    <section className="shrink-0 px-4 py-4">
-                      <h3 className="text-muted-foreground mb-2 text-xs font-medium">
-                        {t("common.actions")}
-                      </h3>
-                      <div className="space-y-1">
-                        {actionEntries.map((entry, index) => (
-                          <CommandActionItem
-                            entry={entry}
-                            navigation={
-                              hasVisibleSearch
-                                ? { type: "command", index }
-                                : { type: "button" }
-                            }
-                            key={entry.action.id}
-                            onSelect={handleActionSelect}
-                          />
-                        ))}
-                      </div>
-                    </section>
-                  )}
-                  <SearchResultsContent
-                    onRetry={() => {
-                      detached(refetchSearch(), "search-dialog.refetch-search");
-                    }}
-                    status={resultsStatus}
-                  >
-                    <SearchHitResults
-                      commandIndexOffset={commandActions.length}
-                      measureContainer={(element) => {
-                        if (element && resultsElement) {
-                          // Actions and the result heading precede the virtual rows.
-                          setHitsScrollMargin(
-                            element.getBoundingClientRect().top -
-                              resultsElement.getBoundingClientRect().top +
-                              resultsElement.scrollTop,
-                          );
-                        }
-                      }}
-                      hits={allHits}
-                      onOpenResult={openSearchResult}
-                      pagination={{
-                        fetchNextPage,
-                        hasNextPage,
-                        isFetchNextPageError,
-                        isFetchingNextPage,
-                        loadMoreRef,
-                      }}
-                      summary={{
-                        isOpeningChat: createSummaryChatMutation.isPending,
-                        onOpenChat: handleOpenSummaryChat,
-                        onSummarize: handleSummarizeResults,
-                        summarizeMutation: summarizeSearchMutation,
-                        visible: showSearchSummary,
-                      }}
-                      totalCount={totalCount}
-                      virtual={{
-                        items: virtualHits,
-                        measureElement: hitVirtualizer.measureElement,
-                        totalSize: hitVirtualizer.getTotalSize(),
-                        scrollMargin: hitsScrollMargin,
-                      }}
-                    />
-                  </SearchResultsContent>
-                </CommandList>
+                </div>
                 <SearchPreviewColumn
-                  displayedHit={displayedPreviewHit}
+                  companyHit={supplementalDisplay.companyHit}
+                  displayedHit={supplementalDisplay.displayedHit}
                   displayedRecentFile={displayedRecentFile}
                   locationModifierHeld={locationModifierHeld}
                   onOpenRecentFile={openRecentFile}
@@ -1645,6 +2010,7 @@ export const SearchDialog = ({
                 the right — everything that is not the query itself lives
                 here so the input row stays a plain input. */}
               <SearchDialogFooter
+                scope={searchScope}
                 canAskAI={canAskAI}
                 isAskingAI={askAIMutation.isPending}
                 mode={mode.type}
@@ -1803,6 +2169,7 @@ const SearchFacetsBody = ({
 };
 
 type SearchPreviewColumnProps = {
+  companyHit: ReturnType<typeof useCompanyRegistrySearch>["selectedHit"];
   displayedHit: ComponentProps<typeof SearchPreviewPanel>["hit"] | null;
   displayedRecentFile: RecentFile | null;
   locationModifierHeld: boolean;
@@ -1819,6 +2186,7 @@ type SearchPreviewColumnProps = {
 };
 
 const SearchPreviewColumn = ({
+  companyHit,
   displayedHit,
   displayedRecentFile,
   locationModifierHeld,
@@ -1836,7 +2204,17 @@ const SearchPreviewColumn = ({
     return null;
   }
   let content;
-  if (displayedHit !== null) {
+  if (companyHit !== null) {
+    content = (
+      <aside className={SEARCH_PREVIEW_COLUMN_CLASS_NAME}>
+        <CompanyRegistryPreview
+          key={`${companyHit.registry}:${companyHit.id}`}
+          registry={companyHit.registry}
+          companyId={companyHit.id}
+        />
+      </aside>
+    );
+  } else if (displayedHit !== null) {
     content = (
       <SearchPreviewPanel
         hit={displayedHit}
@@ -1883,6 +2261,7 @@ const SearchPreviewColumn = ({
 };
 
 type SearchDialogFooterProps = {
+  scope: SearchScope;
   canAskAI: boolean;
   isAskingAI: boolean;
   mode: SearchDialogMode["type"];
@@ -1892,6 +2271,7 @@ type SearchDialogFooterProps = {
 };
 
 const SearchDialogFooter = ({
+  scope,
   canAskAI,
   isAskingAI,
   mode,
@@ -1914,7 +2294,7 @@ const SearchDialogFooter = ({
         ) : (
           <SearchFooterHint translationKey="search.hintOpen" />
         )}
-        {canAskAI && mode === "browse" && (
+        {canAskAI && mode === "browse" && scope !== "registries" && (
           <Button
             aria-keyshortcuts="Tab"
             className="text-muted-foreground hover:text-foreground h-auto gap-1.5 px-1 py-0.5 text-xs font-normal sm:text-xs"

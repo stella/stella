@@ -1,4 +1,5 @@
 export { lookupByIco, searchByName } from "./client.js";
+export { getAresCourtName } from "./court-names.js";
 export type { LookupOptions, SearchOptions } from "./client.js";
 export {
   AresAPIError,

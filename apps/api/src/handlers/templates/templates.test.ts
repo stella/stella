@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
-import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { discoverHandler } from "@/api/handlers/templates/discover";
 import { fillHandler } from "@/api/handlers/templates/fill";
 import { manifestHandler } from "@/api/handlers/templates/manifest";
@@ -16,6 +15,7 @@ import {
 } from "@/api/lib/docx/template-manifest";
 import type { TemplateManifest } from "@/api/lib/docx/types";
 import { readTestJson } from "@/api/tests/helpers/test-tool-set";
+import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 // ── Helpers ──────────────────────────────────────────────
 
@@ -136,24 +136,9 @@ const DOCX_MIME =
 const fakeOrgId = toSafeId<"organization">("org_test");
 const fakeUserId = toSafeId<"user">("user_test");
 
-/** No-op ScopedDb stub for tests. Calls the callback but
- *  returns `undefined`; sufficient for handlers where the
- *  scopedDb call is best-effort (e.g., analytics inserts). */
-// SAFETY: test stub; shape satisfies ScopedDb interface for handler mocks
-// oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test-only ScopedDb stub
-const stubScopedDb = (async (fn: unknown) => {
-  if (typeof fn === "function") {
-    // Swallow the result; the callback runs against a
-    // fake tx that will throw on actual DB access.
-    return;
-  }
-  return;
-}) as unknown as ScopedDb;
-
-// SAFETY: test stub; these fill cases reject before reaching any AI generator
-// (non-DOCX file or empty values), so the safeDb is never invoked.
-// oxlint-disable-next-line typescript/no-unsafe-type-assertion
-const stubSafeDb = (async () => undefined) as unknown as SafeDb;
+const { scopedDb: stubScopedDb, safeDb: stubSafeDb } = createScopedDbMock({
+  query: { businessRegistryCredentials: { findMany: async () => [] } },
+});
 
 const makeDocxFile = async (buf: Buffer) =>
   new File([new Uint8Array(buf)], "test.docx", { type: DOCX_MIME });

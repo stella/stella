@@ -71,7 +71,11 @@ import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
-import { enabledRegistryHandlersForOrg } from "@/api/lib/business-registries/dispatch";
+import { availableRegistryHandlersForOrg } from "@/api/lib/business-registries/credentials";
+import type {
+  BusinessRegistrySlug,
+  RegistryHandler,
+} from "@/api/lib/business-registries/dispatch";
 import type {
   ChatToolMap,
   ChatUIToolsFor,
@@ -393,6 +397,7 @@ type GetChatToolsProps = {
    * live execution path.
    */
   disabledNativeToolSlugs?: readonly string[] | undefined;
+  registryDispatch: Record<BusinessRegistrySlug, RegistryHandler>;
   skillMetadata?: readonly SkillMetadata[] | undefined;
   activeSkillContext?: ActiveChatSkillContext | null | undefined;
   recordAuditEvent?: AuditRecorder | undefined;
@@ -601,6 +606,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     webSearchProviders,
     externalTools = {},
     disabledNativeToolSlugs,
+    registryDispatch,
     skillMetadata,
     activeSkillContext,
     recordAuditEvent,
@@ -667,15 +673,15 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   });
   // Unified business-registry tool: register once with a dynamic
   // `jurisdiction` enum derived from the per-adapter native-tool
-  // enablement. Shipped adapters are filtered by deployment config
-  // first (e.g. EDGAR requires EDGAR_USER_AGENT), then by org-level
-  // native-tool enablement. Empty list means the tool isn't
+  // enablement. Adapters are filtered by organization/deployment credential
+  // availability, then by org-level native-tool enablement. Empty list means the tool isn't
   // registered at all (no dead picker for the model).
-  const businessRegistryJurisdictions = enabledRegistryHandlersForOrg(
+  const businessRegistryHandlers = availableRegistryHandlersForOrg({
     disabledNativeToolSlugs,
-  ).map((handler) => handler.country);
+    dispatch: registryDispatch,
+  });
   const businessRegistryTools = createBusinessRegistryTools({
-    enabledJurisdictions: businessRegistryJurisdictions,
+    enabledHandlers: businessRegistryHandlers,
   });
   const boeDisabled = disabledNativeToolSlugs?.includes("boe") ?? false;
   const boeTools = boeDisabled ? {} : createBoeTools();

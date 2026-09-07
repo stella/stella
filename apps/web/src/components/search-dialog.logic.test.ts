@@ -1,25 +1,221 @@
 import { describe, expect, test } from "bun:test";
 
-import { resourceRef, RESOURCE_TYPE, toResourceName } from "@stll/api-contract";
+import {
+  GLOBAL_SEARCH_RESULT_TYPES,
+  resourceRef,
+  RESOURCE_TYPE,
+  toResourceName,
+} from "@stll/api-contract";
 
-import type { GlobalSearchHit } from "@/lib/api-contract";
+import type {
+  GlobalSearchHit,
+  GlobalSearchResultType,
+} from "@/lib/api-contract";
 import { toSafeId } from "@/lib/safe-id";
 
 import {
   canUseAskAIShortcut,
   createDialogCloseActionQueue,
   getChatHitRoute,
+  getCompanySearchQuery,
   getEntityLocationRoute,
   getEntityWorkspaceRoute,
   getRecentFileRoute,
   getRecentFilePreviewDateVisibility,
   getRecentFilePreviewHit,
+  isLazySearchGroupActive,
+  resolveRegistryResultsPane,
   rememberSelectedFacetLabels,
   resolveEntityDocumentRoute,
+  resolveEagerSearchTypes,
   toAskAIMessageHtml,
 } from "./search-dialog.logic";
 
 type ChatGlobalSearchHit = Extract<GlobalSearchHit, { type: "chat" }>;
+
+describe("lazy search groups", () => {
+  test("gives the results pane to an expanded registry group only in All scope", () => {
+    for (const scope of ["all", "matters", "registries"] as const) {
+      for (const expanded of [false, true]) {
+        const visible = true;
+        expect(
+          resolveRegistryResultsPane({
+            scope,
+            expanded,
+            visible,
+            registryVisible: scope === "registries",
+            caseLawEnabled: true,
+          }),
+        ).toEqual({
+          active: scope === "all" && expanded,
+          hideMatterChrome:
+            scope === "registries" || (scope === "all" && expanded),
+          caseLawEnabled: !(scope === "all" && expanded),
+        });
+      }
+    }
+    expect(
+      resolveRegistryResultsPane({
+        scope: "all",
+        expanded: true,
+        visible: false,
+        registryVisible: false,
+        caseLawEnabled: true,
+      }),
+    ).toEqual({
+      active: false,
+      hideMatterChrome: false,
+      caseLawEnabled: true,
+    });
+  });
+
+  test("defers only case law in All browse searches while preserving every other type and its order", () => {
+    const modes = ["browse", "pick"] as const;
+    const scopes = ["all", "matters", "registries"] as const;
+    const inputs = [
+      [],
+      [...GLOBAL_SEARCH_RESULT_TYPES],
+      GLOBAL_SEARCH_RESULT_TYPES.toReversed(),
+      ...GLOBAL_SEARCH_RESULT_TYPES.map((type) => [type]),
+      ...GLOBAL_SEARCH_RESULT_TYPES.map(
+        (type) => [type, "case-law", type] satisfies GlobalSearchResultType[],
+      ),
+    ];
+    for (const mode of modes) {
+      for (const scope of scopes) {
+        for (const types of inputs) {
+          const original = [...types];
+          const result = resolveEagerSearchTypes({ mode, scope, types });
+          expect(types).toEqual(original);
+          if (mode !== "browse" || scope !== "all") {
+            expect(result).toEqual(original);
+            continue;
+          }
+          expect(result).not.toContain("case-law");
+          const expected = [...original];
+          while (expected.includes("case-law")) {
+            expected.splice(expected.indexOf("case-law"), 1);
+          }
+          expect(result).toEqual(expected);
+        }
+      }
+    }
+  });
+
+  test("only starts an expanded group in an open All browse search", () => {
+    const modes = ["browse", "pick"] as const;
+    const scopes = ["all", "matters", "registries"] as const;
+    const queries = ["", " ", "\t\n", "\u00a0", "ALZA", " 27082440 ", "عقد"];
+    let activeStates = 0;
+    for (const open of [false, true]) {
+      for (const mode of modes) {
+        for (const scope of scopes) {
+          for (const expanded of [false, true]) {
+            for (const query of queries) {
+              const active = isLazySearchGroupActive({
+                open,
+                mode,
+                scope,
+                expanded,
+                query,
+              });
+              if (
+                !open ||
+                mode === "pick" ||
+                scope !== "all" ||
+                !expanded ||
+                query.trim() === ""
+              ) {
+                expect(active).toBe(false);
+              } else {
+                expect(active).toBe(true);
+                activeStates += 1;
+              }
+            }
+          }
+        }
+      }
+    }
+    expect(activeStates).toBe(3);
+  });
+});
+
+describe("company registry search query", () => {
+  test.each([
+    ["1", "1"],
+    ["12345678", "12345678"],
+    ["00123456", "00123456"],
+  ])(
+    "keeps a numeric company id (%s) for registry lookup",
+    (query, expected) => {
+      expect(
+        getCompanySearchQuery({
+          debouncedQuery: query,
+          mode: "browse",
+          open: true,
+          query,
+        }),
+      ).toBe(expected);
+    },
+  );
+
+  test.each(["a".repeat(257)])(
+    "rejects an oversized company registry query (%j)",
+    (query) => {
+      expect(
+        getCompanySearchQuery({
+          debouncedQuery: query,
+          mode: "browse",
+          open: true,
+          query,
+        }),
+      ).toBeNull();
+    },
+  );
+
+  test.each(["", "   "])(
+    "keeps an empty query eligible for registry source selection (%j)",
+    (query) => {
+      expect(
+        getCompanySearchQuery({
+          open: true,
+          mode: "browse",
+          query,
+          debouncedQuery: query,
+        }),
+      ).toBe("");
+    },
+  );
+
+  test("keeps a debounced company name query for registry lookup", () => {
+    expect(
+      getCompanySearchQuery({
+        debouncedQuery: "Acme Legal Services",
+        mode: "browse",
+        open: true,
+        query: "Acme Legal Services",
+      }),
+    ).toBe("Acme Legal Services");
+  });
+
+  test.each([
+    {
+      open: false,
+      mode: "browse" as const,
+      query: "123",
+      debouncedQuery: "123",
+    },
+    { open: true, mode: "pick" as const, query: "123", debouncedQuery: "123" },
+    {
+      open: true,
+      mode: "browse" as const,
+      query: "1234",
+      debouncedQuery: "123",
+    },
+  ])("rejects a query when the overlay state is not eligible", (options) => {
+    expect(getCompanySearchQuery(options)).toBeNull();
+  });
+});
 
 const chatHit = (
   overrides: Pick<ChatGlobalSearchHit, "threadId" | "workspaceId">,

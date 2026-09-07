@@ -2,13 +2,12 @@ import { useLocation } from "@tanstack/react-router";
 import { MailIcon, MegaphoneIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { DiscordLogoIcon, GitHubLogoIcon } from "@stll/ui/brand-icons";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 
+import { FeedbackCommunityItems } from "@/components/feedback-community-items";
 import { buildFeedbackMailto } from "@/components/feedback-dialog.logic";
 import { SidebarMenuButton, SidebarMenuItem } from "@/components/sidebar";
 import { env } from "@/env";
-import { COMMUNITY_FORUM_URL } from "@/lib/consts";
 import { sanitizeHref } from "@/lib/sanitize-href";
 
 export const FeedbackDialog = ({ userEmail }: Props) => {
@@ -34,32 +33,7 @@ export const FeedbackDialog = ({ userEmail }: Props) => {
           <span>{t("feedback.trigger")}</span>
         </MenuTrigger>
         <MenuPopup align="start" side="right">
-          <MenuItem
-            render={
-              <a
-                aria-label={t("feedback.discord")}
-                href={sanitizeHref(COMMUNITY_FORUM_URL)}
-                rel="noreferrer"
-                target="_blank"
-              />
-            }
-          >
-            <DiscordLogoIcon />
-            {t("feedback.discord")}
-          </MenuItem>
-          <MenuItem
-            render={
-              <a
-                aria-label={t("feedback.github")}
-                href={sanitizeHref(GITHUB_FEEDBACK_URL)}
-                rel="noreferrer"
-                target="_blank"
-              />
-            }
-          >
-            <GitHubLogoIcon />
-            {t("feedback.github")}
-          </MenuItem>
+          <FeedbackCommunityItems />
           {mailto && (
             <MenuItem
               render={
@@ -79,6 +53,3 @@ export const FeedbackDialog = ({ userEmail }: Props) => {
 type Props = {
   userEmail?: string | undefined;
 };
-
-const GITHUB_FEEDBACK_URL =
-  "https://github.com/stella/stella/issues/new/choose";

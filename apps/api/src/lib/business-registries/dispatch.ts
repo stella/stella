@@ -7,8 +7,6 @@
 // `executeRegistryLookup` so the two surfaces never drift in error
 // mapping, normalisation, or shape detection.
 
-import { TaggedError } from "better-result";
-
 import type { BusinessRegistrySlug } from "@stll/api-contract";
 import {
   AresAPIError,
@@ -127,9 +125,6 @@ import type { CountryCode } from "@stll/country-codes";
 
 import { captureError } from "@/api/lib/analytics/capture";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { buildCatalogueEntryUrl } from "@/api/lib/mcp-connectors/app-urls";
-import { nativeToolRecommendedJurisdictions } from "@/api/lib/mcp-connectors/catalog-metadata";
-import type { NativeToolDisabledReason } from "@/api/lib/mcp-connectors/catalog-metadata";
 
 export { BUSINESS_REGISTRY_SLUGS } from "@stll/api-contract";
 export type { BusinessRegistrySlug } from "@stll/api-contract";
@@ -143,7 +138,7 @@ export type { BusinessRegistrySlug } from "@stll/api-contract";
 // `CountryCode` (which is structurally the ISO 3166-1 alpha-2 set).
 // ---------------------------------------------------------------------------
 
-export const EU_PSEUDO_JURISDICTION = "EU" as const;
+const EU_PSEUDO_JURISDICTION = "EU" as const;
 export type RegistryJurisdictionCode =
   | CountryCode
   | typeof EU_PSEUDO_JURISDICTION;
@@ -232,6 +227,8 @@ export type RegistryLookupResponse =
 // ---------------------------------------------------------------------------
 
 export type RegistryHandler = {
+  /** Changes on credential rotation so cached preview failures cannot survive it. */
+  cacheVersion?: string;
   /** Slug as it appears in the catalogue + the REST `?registry=` param. */
   slug: BusinessRegistrySlug;
   /**
@@ -265,7 +262,10 @@ export type RegistryHandler = {
    */
   isCanonicalId: (input: string) => boolean;
   /** Lookup by canonical ID. */
-  lookup: (input: string) => Promise<BusinessRegistryHit | null>;
+  lookup: (
+    input: string,
+    credential?: string,
+  ) => Promise<BusinessRegistryHit | null>;
   /**
    * Search by name. `null` when the upstream registry has no
    * name-search endpoint (e.g. KRS). Callers attempting name search
@@ -276,11 +276,11 @@ export type RegistryHandler = {
   search:
     | ((
         input: string,
-        options?: { limit?: number },
+        options?: { limit?: number; credential?: string },
       ) => Promise<BusinessRegistryHit[]>)
     | null;
   /** Deployment-level gate for adapters that require server config. */
-  isDeployAvailable: () => boolean;
+  isDeployAvailable: (credential?: string) => boolean;
   /** Translate per-registry tagged errors into HandlerError. */
   mapError: (error: unknown) => HandlerError | null;
 };
@@ -615,11 +615,14 @@ const mapCompaniesHouseError = (error: unknown): HandlerError | null => {
 // validates it like the rest of config.
 const COMPANIES_HOUSE_API_KEY_ENV_VAR = "COMPANIES_HOUSE_API_KEY";
 
-export const isCompaniesHouseDeployAvailable = (): boolean =>
-  Boolean(process.env[COMPANIES_HOUSE_API_KEY_ENV_VAR]?.trim());
+export const isCompaniesHouseDeployAvailable = (credential?: string): boolean =>
+  Boolean(
+    credential?.trim() || process.env[COMPANIES_HOUSE_API_KEY_ENV_VAR]?.trim(),
+  );
 
-const requireCompaniesHouseApiKey = (): string => {
-  const apiKey = process.env[COMPANIES_HOUSE_API_KEY_ENV_VAR]?.trim();
+const requireCompaniesHouseApiKey = (credential?: string): string => {
+  const apiKey =
+    credential?.trim() || process.env[COMPANIES_HOUSE_API_KEY_ENV_VAR]?.trim();
   if (!apiKey) {
     throw new CompaniesHouseAuthError(
       "COMPANIES_HOUSE_API_KEY is not configured. Get a free API key at https://developer.company-information.service.gov.uk and set the env var.",
@@ -640,16 +643,16 @@ const COMPANIES_HOUSE_HANDLER: RegistryHandler = {
   // as CompaniesHouseValidationError → HTTP 400.
   isCanonicalId: (input) =>
     /^(?:R0\d{6}|[A-Z]{2}\d{6}|\d{8})$/u.test(normalizeCompanyNumber(input)),
-  lookup: async (input) => {
+  lookup: async (input, credential) => {
     const company = await lookupByCompanyNumber(input, {
-      apiKey: requireCompaniesHouseApiKey(),
+      apiKey: requireCompaniesHouseApiKey(credential),
     });
     return company ? companiesHouseCompanyToHit(company) : null;
   },
   search: async (input, options) => {
     const results = await searchCompaniesHouseByName(
       input,
-      { apiKey: requireCompaniesHouseApiKey() },
+      { apiKey: requireCompaniesHouseApiKey(options?.credential) },
       options,
     );
     return results.map(companiesHouseSearchResultToHit);
@@ -742,11 +745,14 @@ const mapDenueError = (error: unknown): HandlerError | null => {
 // worker/test contexts that do not run full env validation.
 const INEGI_DENUE_API_TOKEN_ENV_VAR = "INEGI_DENUE_API_TOKEN";
 
-export const isDenueDeployAvailable = (): boolean =>
-  Boolean(process.env[INEGI_DENUE_API_TOKEN_ENV_VAR]?.trim());
+export const isDenueDeployAvailable = (credential?: string): boolean =>
+  Boolean(
+    credential?.trim() || process.env[INEGI_DENUE_API_TOKEN_ENV_VAR]?.trim(),
+  );
 
-const requireDenueApiToken = (): string => {
-  const token = process.env[INEGI_DENUE_API_TOKEN_ENV_VAR]?.trim();
+const requireDenueApiToken = (credential?: string): string => {
+  const token =
+    credential?.trim() || process.env[INEGI_DENUE_API_TOKEN_ENV_VAR]?.trim();
   if (!token) {
     throw new DenueAuthError(
       "INEGI_DENUE_API_TOKEN is not configured. Get a token at https://www.inegi.org.mx/app/api/denue/v1/tokenVerify.aspx and set the env var.",
@@ -764,16 +770,16 @@ const DENUE_HANDLER = {
   // validation lives in lookupByEstablishmentId and surfaces as
   // DenueValidationError -> HTTP 400.
   isCanonicalId: (input) => /^\d{1,12}$/u.test(normalizeEstablishmentId(input)),
-  lookup: async (input) => {
+  lookup: async (input, credential) => {
     const establishment = await lookupByEstablishmentId(input, {
-      token: requireDenueApiToken(),
+      token: requireDenueApiToken(credential),
     });
     return establishment ? denueEstablishmentToHit(establishment) : null;
   },
   search: async (input, options) => {
     const results = await searchDenueByName(
       input,
-      { token: requireDenueApiToken() },
+      { token: requireDenueApiToken(options?.credential) },
       options,
     );
     return results.map(denueSearchResultToHit);
@@ -851,11 +857,12 @@ const mapEdgarError = (error: unknown): HandlerError | null => {
 // API server boot path validates it like the rest of config.
 const EDGAR_USER_AGENT_ENV_VAR = "EDGAR_USER_AGENT";
 
-export const isEdgarDeployAvailable = (): boolean =>
-  Boolean(process.env[EDGAR_USER_AGENT_ENV_VAR]?.trim());
+export const isEdgarDeployAvailable = (credential?: string): boolean =>
+  Boolean(credential?.trim() || process.env[EDGAR_USER_AGENT_ENV_VAR]?.trim());
 
-const requireEdgarUserAgent = (): string => {
-  const userAgent = process.env[EDGAR_USER_AGENT_ENV_VAR]?.trim();
+const requireEdgarUserAgent = (credential?: string): string => {
+  const userAgent =
+    credential?.trim() || process.env[EDGAR_USER_AGENT_ENV_VAR]?.trim();
   if (!userAgent) {
     throw new EdgarValidationError(
       "EDGAR_USER_AGENT is not configured. Set it to '<App name> <contact@email>'; the SEC returns 403 without one.",
@@ -873,9 +880,9 @@ const EDGAR_HANDLER: RegistryHandler = {
   // padding. Semantic validation (e.g. the reserved zero CIK) lives
   // in the adapter and surfaces as EdgarValidationError -> HTTP 400.
   isCanonicalId: (input) => /^\d{1,10}$/u.test(normalizeCik(input)),
-  lookup: async (input) => {
+  lookup: async (input, credential) => {
     const company = await lookupByCik(input, {
-      userAgent: requireEdgarUserAgent(),
+      userAgent: requireEdgarUserAgent(credential),
     });
     return company ? edgarCompanyToHit(company) : null;
   },
@@ -1493,100 +1500,6 @@ export const BUSINESS_REGISTRY_DISPATCH: Record<
   vies: VIES_HANDLER,
 };
 
-export const getDeployAvailableRegistryHandlers = (): RegistryHandler[] =>
-  Object.values(BUSINESS_REGISTRY_DISPATCH).filter((handler) =>
-    handler.isDeployAvailable(),
-  );
-
-// ---------------------------------------------------------------------------
-// Org-disabled refusal
-// ---------------------------------------------------------------------------
-
-const REGION_DISPLAY_NAMES = new Intl.DisplayNames(["en"], {
-  type: "region",
-});
-
-/** The jurisdictions that would turn this registry on, as country names rather
- *  than codes, read from the same catalogue recommendation the enablement gate
- *  reads. "EU" is a catalogue pseudo-jurisdiction matched by any member state,
- *  never a practice-jurisdiction row of its own. */
-const enablingJurisdictions = (nativeToolSlug: string): string[] =>
-  nativeToolRecommendedJurisdictions(nativeToolSlug).map((code) =>
-    code === EU_PSEUDO_JURISDICTION
-      ? "an EU member state"
-      : (REGION_DISPLAY_NAMES.of(code) ?? code),
-  );
-
-export type RegistryDisabledForOrgRefusal = {
-  message: string;
-  /** Next step for an agent client, per the MCP error contract. */
-  hint: string;
-};
-
-/**
- * The one refusal text for a registry the organization has not enabled, used
- * by every surface that can hit the gate (contacts lookup, template fill,
- * lookup preview, MCP tools). It names the refused registry and links to the
- * catalogue entry that turns it on; on a jurisdiction miss it also names the
- * jurisdiction that enables the tool for the whole org, and on an explicit
- * per-slug override it does not, because adding a jurisdiction would not clear
- * that override. Tenant-neutral by design: never what the org has enabled.
- */
-export const registryDisabledForOrgRefusal = ({
-  registry,
-  reason,
-}: {
-  registry: BusinessRegistrySlug;
-  reason: NativeToolDisabledReason;
-}): RegistryDisabledForOrgRefusal => {
-  const { displayName, nativeToolSlug } = BUSINESS_REGISTRY_DISPATCH[registry];
-  const url = buildCatalogueEntryUrl(nativeToolSlug);
-  const jurisdictions =
-    reason === "jurisdiction_mismatch"
-      ? enablingJurisdictions(nativeToolSlug)
-      : [];
-  if (jurisdictions.length === 0) {
-    return {
-      message: `The ${displayName} registry is disabled for this organization. An organization admin can enable it at ${url}.`,
-      hint: `Ask an organization admin to enable ${displayName} at ${url}. It cannot be enabled from the client.`,
-    };
-  }
-  const jurisdictionList = jurisdictions.join(" or ");
-  return {
-    message: `The ${displayName} registry is disabled for this organization. An organization admin can enable it at ${url}, or add ${jurisdictionList} to the practice jurisdictions.`,
-    hint: `Ask an organization admin to enable ${displayName} at ${url}, or to add ${jurisdictionList} to the practice jurisdictions. It cannot be enabled from the client.`,
-  };
-};
-
-/**
- * A lookup refused because the organization has the registry's native tool
- * disabled. Distinct from {@link HandlerError} so each surface maps it on its
- * own terms: HTTP answers 403, MCP answers the `feature_disabled` envelope
- * with the enablement hint — neither has to match on message text.
- */
-export class RegistryDisabledForOrgError extends TaggedError(
-  "RegistryDisabledForOrgError",
-)<RegistryDisabledForOrgRefusal> {}
-
-/**
- * Registry handlers this organization may actually call: shipped on this
- * deployment AND enabled for the org (per-adapter native-tool enablement,
- * expressed here as the set of *disabled* native-tool slugs the caller has
- * already resolved from `organization_settings`).
- *
- * Both advertisement surfaces derive their options from this single source:
- * the in-app chat tool's `jurisdiction` enum (via `handler.country`) and the
- * external MCP tool's `registry` enum (via `handler.slug`). Neither can then
- * advertise a registry the call-time gate would reject with a 403.
- */
-export const enabledRegistryHandlersForOrg = (
-  disabledNativeToolSlugs: readonly string[] | undefined,
-): RegistryHandler[] =>
-  getDeployAvailableRegistryHandlers().filter(
-    (handler) =>
-      !(disabledNativeToolSlugs?.includes(handler.nativeToolSlug) ?? false),
-  );
-
 export const isBusinessRegistryNativeToolDeployAvailable = (
   nativeToolSlug: string,
 ): boolean => {
@@ -1625,7 +1538,7 @@ export const getRegistryHandlerByCountry = (
   return handler;
 };
 
-export const getRegistryHandlerDefinitionByCountry = (
+const getRegistryHandlerDefinitionByCountry = (
   country: RegistryJurisdictionCode,
 ): RegistryHandler | undefined => HANDLERS_BY_JURISDICTION.get(country);
 

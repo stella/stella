@@ -241,6 +241,10 @@ export const brandPersistedSavedSearchId = (
   savedSearchId: string,
 ): SafeId<"savedSearch"> => toSafeId<"savedSearch">(savedSearchId);
 
+export const brandPersistedTemplateLookupFormatId = (
+  formatId: string,
+): SafeId<"templateLookupFormat"> => toSafeId<"templateLookupFormat">(formatId);
+
 export const brandPersistedCaseLawResearchTableId = (
   researchTableId: string,
 ): SafeId<"caseLawResearchTable"> =>

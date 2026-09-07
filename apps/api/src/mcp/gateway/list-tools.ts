@@ -92,8 +92,8 @@ const isStaticToolVisibleToRole = (
  * registries this org can actually reach (`context.enabledRegistrySlugs`,
  * resolved once at context bootstrap), and drop the tool entirely when none
  * are. Mirrors the in-app chat tool, so the external MCP surface can no longer
- * advertise a registry whose call-time gate would 403 — the same defect the
- * chat tool already avoids. Applied only to the default surface; the
+ * advertise a registry whose call cannot execute — the same defect the chat
+ * tool already avoids. Applied only to the default surface; the
  * anonymized projection stays tenant-neutral and is never narrowed.
  *
  * `enabledRegistrySlugs === undefined` means the set was not resolved (a

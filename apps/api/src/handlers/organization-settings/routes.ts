@@ -1,5 +1,10 @@
 import Elysia from "elysia";
 
+import {
+  readBusinessRegistryCredentials,
+  saveBusinessRegistryCredential,
+  deleteBusinessRegistryCredential,
+} from "@/api/handlers/organization-settings/business-registry-credentials";
 import deleteAIConfig from "@/api/handlers/organization-settings/delete-ai-config";
 import deleteDeepLKey from "@/api/handlers/organization-settings/delete-deepl-key";
 import deleteWebSearchKey from "@/api/handlers/organization-settings/delete-web-search-key";
@@ -40,6 +45,27 @@ export const organizationSettingsRoute = new Elysia({
   .get("/", readOrganizationSettings.handler, {
     permissions: readOrganizationSettings.config.permissions,
   })
+  .get(
+    "/business-registry-credentials",
+    readBusinessRegistryCredentials.handler,
+    { permissions: readBusinessRegistryCredentials.config.permissions },
+  )
+  .post(
+    "/business-registry-credentials",
+    saveBusinessRegistryCredential.handler,
+    {
+      body: saveBusinessRegistryCredential.config.body,
+      permissions: saveBusinessRegistryCredential.config.permissions,
+    },
+  )
+  .delete(
+    "/business-registry-credentials",
+    deleteBusinessRegistryCredential.handler,
+    {
+      query: deleteBusinessRegistryCredential.config.query,
+      permissions: deleteBusinessRegistryCredential.config.permissions,
+    },
+  )
   .post("/", updateOrganizationSettings.handler, {
     body: updateOrganizationSettings.config.body,
     permissions: updateOrganizationSettings.config.permissions,

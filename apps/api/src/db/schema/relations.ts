@@ -121,6 +121,7 @@ import {
   documentCounters,
   matterCounters,
   organizationSettings,
+  businessRegistryCredentials,
 } from "./workspace-admin";
 
 export const relations = defineRelations(
@@ -179,6 +180,7 @@ export const relations = defineRelations(
     documentCounters,
     documentProcessingRuns,
     organizationSettings,
+    businessRegistryCredentials,
     anonymizationAllowlistEntries,
     anonymizationBlacklistEntries,
     clauseCategories,
@@ -1035,6 +1037,7 @@ export const relations = defineRelations(
     matterCounters: {},
     documentCounters: {},
     organizationSettings: {},
+    businessRegistryCredentials: {},
     anonymizationAllowlistEntries: {},
     anonymizationBlacklistEntries: {},
     clauseCategories: {

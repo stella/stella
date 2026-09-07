@@ -1,3 +1,4 @@
+import { getAresCourtName } from "./court-names.js";
 import type {
   AresAddress,
   AresBodyMember,
@@ -18,7 +19,7 @@ import type {
 const ARES_RES_URL = "https://ares.gov.cz/ekonomicke-subjekty?ico=";
 
 const CURRENCIES: Record<string, string> = {
-  KORUNY: "Kc",
+  KORUNY: "Kč",
   EURA: "EUR",
   EUR: "EUR",
 };
@@ -91,13 +92,13 @@ const parseCourtFile = (
     return null;
   }
   return {
-    court: entry.soud,
+    court: getAresCourtName(entry.soud),
     section: entry.oddil,
     insert: entry.vlozka,
   };
 };
 
-/** Format monetary value from VR (e.g. "50000;00" KORUNY → "50 000,- Kc"). */
+/** Format VR decimals without losing precision or fractional capital. */
 const formatMoney = (
   value: string | undefined,
   currency: string | undefined,
@@ -106,13 +107,17 @@ const formatMoney = (
     return null;
   }
   const currencyStr = currency ? (CURRENCIES[currency] ?? currency) : "";
-  const numericPart = value.split(";", 1).at(0) ?? value;
-  const numeric = Number(numericPart);
-  if (!Number.isFinite(numeric)) {
+  const match = /^(?<whole>\d+)(?:[;.](?<fraction>\d+))?$/u.exec(value);
+  const whole = match?.groups?.["whole"];
+  if (whole === undefined) {
     return `${value} ${currencyStr}`.trim();
   }
-  const formatted = numeric.toLocaleString("cs-CZ").replace(/\u00a0/gu, " ");
-  return `${formatted},- ${currencyStr}`.trim();
+  const fraction = match?.groups?.["fraction"];
+  const formatted = BigInt(whole)
+    .toLocaleString("cs-CZ")
+    .replace(/\u00a0/gu, " ");
+  const decimal = fraction && /[1-9]/u.test(fraction) ? fraction : "-";
+  return `${formatted},${decimal} ${currencyStr}`.trim();
 };
 
 /** Extract share capital from VR data. */
@@ -179,7 +184,7 @@ const parseStatutoryBodies = (
     if (body.datumVymazu) {
       continue;
     }
-    const organName = body.nazevOrganu ?? "Statutarni organ";
+    const organName = body.nazevOrganu ?? "Statutární orgán";
     const members: AresBodyMember[] = [];
 
     for (const member of body.clenoveOrganu ?? []) {
@@ -232,11 +237,11 @@ const parseActingClause = (
         continue;
       }
       if (entry.hodnota) {
-        parts.push(entry.hodnota);
+        parts.push(entry.hodnota.replace(/[\t ]+/gu, " ").trim());
       }
     }
   }
-  return parts.length > 0 ? parts.join(" ").trim() : null;
+  return parts.length > 0 ? parts.join("\n\n").trim() : null;
 };
 
 // ---------------------------------------------------------------------------

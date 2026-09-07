@@ -58,15 +58,9 @@ const extractTexts = async (buffer: Buffer): Promise<string[]> => {
 
 const organizationId = toSafeId<"organization">("org_1");
 
-/** ScopedDb stub covering only what a manifest-carrying fill touches when no
- *  templateId is supplied (clause-slot resolution is skipped): the org
- *  registry-gate read, which `buildResolveRegistryDisabledReason` always issues
- *  once a manifest is present, even with no lookup field in play. */
 const stubScopedDb = (): ScopedDb => {
   const fakeTx = {
-    query: {
-      organizationSettings: { findFirst: async () => undefined },
-    },
+    query: { businessRegistryCredentials: { findMany: async () => [] } },
   };
   // SAFETY: test stub; the required-fields path under test never reaches
   // clause-slot or template-row queries (no templateId is passed).
@@ -383,6 +377,7 @@ describe("fillStoredTemplateDocx use recording", () => {
     let updates = 0;
     const fakeTx = {
       query: {
+        businessRegistryCredentials: { findMany: async () => [] },
         templates: {
           findFirst: async ({
             where,
@@ -401,15 +396,14 @@ describe("fillStoredTemplateDocx use recording", () => {
               ? storedRow
               : undefined,
         },
-        organizationSettings: { findFirst: async () => undefined },
       },
       update: () => {
         updates += 1;
         return { set: () => ({ where: async () => undefined }) };
       },
     };
-    // SAFETY: test stub; this fill touches only the template row, the
-    // registry-gate read, and the use-counter update counted above.
+    // SAFETY: test stub; this fill touches the template row, registry
+    // credential configuration, and the use-counter update counted above.
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     const scopedDb = (async (fn: (tx: unknown) => Promise<unknown>) =>
       fn(fakeTx)) as unknown as ScopedDb;

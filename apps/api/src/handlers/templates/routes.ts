@@ -25,6 +25,10 @@ import fillTemplatePreview from "@/api/handlers/templates/fill-preview";
 import fillTemplateToWorkspace from "@/api/handlers/templates/fill-to-workspace";
 import getTemplate from "@/api/handlers/templates/get";
 import listTemplates from "@/api/handlers/templates/list";
+import createLookupFormat from "@/api/handlers/templates/lookup-formats/create";
+import setDefaultLookupFormat from "@/api/handlers/templates/lookup-formats/default/update";
+import deleteLookupFormat from "@/api/handlers/templates/lookup-formats/delete";
+import listLookupFormats from "@/api/handlers/templates/lookup-formats/list";
 import lookupPreview from "@/api/handlers/templates/lookup-preview";
 import manifestTemplate from "@/api/handlers/templates/manifest";
 import prefillTemplate from "@/api/handlers/templates/prefill";
@@ -53,6 +57,22 @@ export const templatesRoute = new Elysia({
     validateAuth: true,
   })
   // ── Existing transient endpoints ───────────────────
+  .get("/lookup-formats", listLookupFormats.handler, {
+    query: listLookupFormats.config.query,
+    permissions: listLookupFormats.config.permissions,
+  })
+  .post("/lookup-formats", createLookupFormat.handler, {
+    body: createLookupFormat.config.body,
+    permissions: createLookupFormat.config.permissions,
+  })
+  .delete("/lookup-formats/:formatId", deleteLookupFormat.handler, {
+    params: deleteLookupFormat.config.params,
+    permissions: deleteLookupFormat.config.permissions,
+  })
+  .post("/lookup-formats/default", setDefaultLookupFormat.handler, {
+    body: setDefaultLookupFormat.config.body,
+    permissions: setDefaultLookupFormat.config.permissions,
+  })
   .post("/discover", discoverTemplate.handler, {
     body: discoverTemplate.config.body,
     permissions: discoverTemplate.config.permissions,
