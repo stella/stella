@@ -5,7 +5,7 @@ import { panic } from "better-result";
  *
  * A visual builder (all/any groups, nested subgroups, "answer to question X is
  * equal to Y") edits a canonical `@stll/conditions` `ConditionNode` tree;
- * `serializeCondition` renders it into the `{{#if ...}}` expression string that
+ * `serializeCondition` renders it into the `{% if ... %}` expression string that
  * `evaluateCondition` (via `parseCondition`) understands. This is the bridge
  * between the point-and-click UI and the engine — the UI never hand-writes
  * expression syntax, and there is only one condition AST.
@@ -49,7 +49,7 @@ const serializeOperand = (operand: Operand): string => {
   if (operand.type === "path") {
     return operand.path;
   }
-  // A `formula` operand has no `{{#if}}` surface syntax: a condition that uses
+  // A `formula` operand has no `{% if %}` surface syntax: a condition that uses
   // one must persist as the AST (`conditionHasFormula` gates this at save), so
   // reaching here is a caller routing the wrong condition through the string
   // serializer. Fail fast rather than emit a silently-empty expression.
@@ -70,11 +70,17 @@ const serializePredicate = (node: PredicateNode): string => {
     const value = Array.isArray(node.value)
       ? node.value.join(",")
       : (node.value ?? "");
-    return `${operand} contains ${serializeLiteral(value)}`;
+    return `${serializeLiteral(value)} in ${operand}`;
+  }
+  if (node.op === "is_not_empty") {
+    return `${operand} is defined`;
+  }
+  if (node.op === "is_empty") {
+    return `${operand} is not defined`;
   }
   // `is_truthy` is a bare value; the remaining @stll/conditions predicates
-  // (is_empty, starts_with, in, …) have no `{{#if}}` surface syntax, so the
-  // template builder only emits truthiness here.
+  // (starts_with, in, …) have no `{% if %}` surface syntax, so the template
+  // builder only emits truthiness here.
   return operand;
 };
 
@@ -97,7 +103,7 @@ const serializeGroup = (group: GroupNode, top: boolean): string => {
       : parts.join(group.combinator === "and" ? " and " : " or ");
 
   if (group.negated) {
-    return `!(${body})`;
+    return `not (${body})`;
   }
   if (parts.length === 1) {
     // A single child needs neither a joiner nor wrapping parentheses.

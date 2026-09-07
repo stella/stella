@@ -1,17 +1,17 @@
 /**
- * Parse a template `{{#if ...}}` condition expression into the canonical
- * `@stll/conditions` AST. The surface syntax (`==`, `!=`, `>`, `<`, `>=`,
- * `<=`, `contains`, `and`, `or`, `!`, parentheses, dotted-path identifiers,
- * and string / number / boolean literals) maps onto `CompareNode` /
- * `PredicateNode` / `GroupNode` with `path` and `literal` operands. Operator
- * semantics and evaluation live in `@stll/conditions`; this module is purely
- * surface-syntax → AST.
+ * Parse a template `{% if ... %}` condition expression into the canonical
+ * `@stll/conditions` AST. The Jinja surface syntax (`==`, `!=`, `>`, `<`,
+ * `>=`, `<=`, `in`, `is defined` / `is not defined`, `and`, `or`, `not`,
+ * parentheses, dotted-path identifiers, and string / number / boolean
+ * literals) maps onto `CompareNode` / `PredicateNode` / `GroupNode` with
+ * `path` and `literal` operands. Operator semantics and evaluation live in
+ * `@stll/conditions`; this module is purely surface-syntax → AST.
  *
  * A bare identifier becomes a `path` operand. Whether that path names a
  * reusable condition or a fill-bag value is decided at evaluation time by the
  * resolver, so named-condition references are NOT expanded here.
  *
- * Precedence (lowest to highest): `or` < `and` < `!` < comparison. `(...)`
+ * Precedence (lowest to highest): `or` < `and` < `not` < comparison. `(...)`
  * groups explicitly. Malformed input degrades gracefully (an unmatched `(`
  * closes at end of input; trailing tokens are ignored) rather than throwing,
  * so a half-typed condition never breaks a fill.
@@ -31,7 +31,10 @@ type CompareSymbol = keyof typeof COMPARE_SYMBOL_TO_OP;
 
 type Token =
   | { type: "value"; raw: string }
-  | { type: "op"; raw: CompareSymbol | "contains" }
+  | { type: "op"; raw: CompareSymbol }
+  | { type: "in" }
+  | { type: "is" }
+  | { type: "defined" }
   | { type: "not" }
   | { type: "and" }
   | { type: "or" }
@@ -59,7 +62,7 @@ const COMPARE_SYMBOL_PATTERN = Object.keys(COMPARE_SYMBOL_TO_OP)
   .join("|");
 
 const NON_STRING_TOKEN_RE = new RegExp(
-  String.raw`(?<token>${COMPARE_SYMBOL_PATTERN}|!(?!=)|and\b|or\b|contains\b|[()]|-?\d[\p{N}_.]*|[\p{L}\p{N}_.]+(?:-[\p{L}\p{N}_.]+)*)`,
+  String.raw`(?<token>${COMPARE_SYMBOL_PATTERN}|and\b|or\b|not\b|in\b|is\b|defined\b|[()]|-?\d[\p{N}_.]*|[\p{L}\p{N}_.]+(?:-[\p{L}\p{N}_.]+)*)`,
   "uy",
 );
 
@@ -71,7 +74,8 @@ const isCompareSymbol = (raw: string): raw is CompareSymbol =>
 type StringScan = { content: string; end: number };
 
 /**
- * Scan a `"..."` literal starting at `expr[start]` (the opening quote),
+ * Scan a `"..."` or `'...'` literal starting at `expr[start]` (the opening
+ * quote),
  * honoring `\\`-escapes without interpreting them. A single linear pass:
  * each character is visited at most once, so this is safe on adversarial
  * input regardless of how many `"` or `\\` characters it contains.
@@ -81,9 +85,10 @@ type StringScan = { content: string; end: number };
  * closing quote simply closes at end of input.
  */
 const scanString = (expr: string, start: number): StringScan => {
+  const quote = expr[start];
   let i = start + 1;
   while (i < expr.length) {
-    if (expr[i] === '"') {
+    if (expr[i] === quote) {
       return { content: expr.slice(start + 1, i), end: i + 1 };
     }
     i += expr[i] === "\\" && i + 1 < expr.length ? 2 : 1;
@@ -98,10 +103,19 @@ const classifyNonString = (raw: string): Token => {
   if (raw === "or") {
     return { type: "or" };
   }
-  if (raw === "!") {
+  if (raw === "not") {
     return { type: "not" };
   }
-  if (raw === "contains" || isCompareSymbol(raw)) {
+  if (raw === "in") {
+    return { type: "in" };
+  }
+  if (raw === "is") {
+    return { type: "is" };
+  }
+  if (raw === "defined") {
+    return { type: "defined" };
+  }
+  if (isCompareSymbol(raw)) {
     return { type: "op", raw };
   }
   if (raw === "(") {
@@ -117,9 +131,12 @@ const tokenize = (expr: string): Token[] => {
   const tokens: Token[] = [];
   let pos = 0;
   while (pos < expr.length) {
-    if (expr[pos] === '"') {
+    if (expr[pos] === '"' || expr[pos] === "'") {
       const { content, end } = scanString(expr, pos);
-      tokens.push({ type: "string", raw: content.replace(/\\"/gu, '"') });
+      tokens.push({
+        type: "string",
+        raw: content.replace(/\\(?<quote>["'])/gu, "$<quote>"),
+      });
       pos = end;
       continue;
     }
@@ -167,9 +184,11 @@ const operandFromToken = (
   return { type: "path", path: token.raw };
 };
 
-/** `contains` carries a literal payload (`string`), not an operand: render the
- *  right-hand token as a string. */
-const containsValue = (token: Token & { type: "value" | "string" }): string => {
+/** `"x" in path` carries a literal payload (`string`), not an operand: render
+ *  the left-hand token as a string. */
+const membershipValue = (
+  token: Token & { type: "value" | "string" },
+): string => {
   const operand = operandFromToken(token);
   return operand.type === "literal" ? String(operand.value) : token.raw;
 };
@@ -211,7 +230,7 @@ export const parseCondition = (expression: string): ConditionNode | null => {
     return { type: "group", combinator: "and", children };
   };
 
-  // not := "!" not | comparison
+  // not := "not" not | comparison
   const parseNot = (): ConditionNode => {
     if (peek()?.type === "not") {
       pos += 1;
@@ -225,7 +244,10 @@ export const parseCondition = (expression: string): ConditionNode | null => {
     return parseComparison();
   };
 
-  // comparison := "(" or ")" | operand ( compareOp operand )?
+  // comparison := "(" or ")"
+  //              | operand "is" [ "not" ] "defined"
+  //              | literal "in" operand
+  //              | operand ( compareOp operand )?
   const parseComparison = (): ConditionNode => {
     if (peek()?.type === "lparen") {
       pos += 1;
@@ -245,9 +267,50 @@ export const parseCondition = (expression: string): ConditionNode | null => {
     pos += 1;
     const left = operandFromToken(leftTok);
 
+    // `path is defined` / `path is not defined` — presence, not truthiness.
+    if (peek()?.type === "is") {
+      pos += 1;
+      const negated = peek()?.type === "not";
+      if (negated) {
+        pos += 1;
+      }
+      if (peek()?.type === "defined") {
+        pos += 1;
+      }
+      return {
+        type: "predicate",
+        operand: left,
+        op: negated ? "is_empty" : "is_not_empty",
+      };
+    }
+
+    // `"guarantor" in parties` — membership of a literal in a path's value.
+    if (peek()?.type === "in") {
+      pos += 1;
+      const rightTok = peek();
+      if (
+        !rightTok ||
+        (rightTok.type !== "value" && rightTok.type !== "string")
+      ) {
+        return { type: "predicate", operand: left, op: "is_truthy" };
+      }
+      pos += 1;
+      const right = operandFromToken(rightTok);
+      if (right.type !== "path") {
+        // Both sides literal: nothing to test against a fill value.
+        return { type: "predicate", operand: right, op: "is_truthy" };
+      }
+      return {
+        type: "predicate",
+        operand: right,
+        op: "contains",
+        value: membershipValue(leftTok),
+      };
+    }
+
     const opTok = peek();
     if (opTok?.type !== "op") {
-      // Bare value → truthiness test.
+      // Bare value -> truthiness test.
       return { type: "predicate", operand: left, op: "is_truthy" };
     }
     pos += 1;
@@ -262,14 +325,6 @@ export const parseCondition = (expression: string): ConditionNode | null => {
     }
     pos += 1;
 
-    if (opTok.raw === "contains") {
-      return {
-        type: "predicate",
-        operand: left,
-        op: "contains",
-        value: containsValue(rightTok),
-      };
-    }
     return {
       type: "compare",
       left,

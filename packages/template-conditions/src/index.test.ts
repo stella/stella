@@ -29,11 +29,11 @@ describe("evaluateCondition", () => {
   // ── Negation ──────────────────────────────────────────
 
   test("negation of truthy", () => {
-    expect(evaluateCondition("!isUK", { isUK: true })).toBe(false);
+    expect(evaluateCondition("not isUK", { isUK: true })).toBe(false);
   });
 
   test("double negation", () => {
-    expect(evaluateCondition("!!isUK", { isUK: true })).toBe(true);
+    expect(evaluateCondition("not not isUK", { isUK: true })).toBe(true);
   });
 
   // ── Comparisons ───────────────────────────────────────
@@ -168,23 +168,23 @@ describe("evaluateCondition", () => {
     expect(evaluateCondition("amount < 1000", { amount: 1000 })).toBe(false);
   });
 
-  // ── contains ──────────────────────────────────────────
+  // ── membership (`in`) ─────────────────────────────────
 
-  test("string contains (case-insensitive, positive)", () => {
+  test("string membership (case-insensitive, positive)", () => {
     expect(
-      evaluateCondition('notes contains "urgent"', { notes: "VERY URGENT!" }),
+      evaluateCondition('"urgent" in notes', { notes: "VERY URGENT!" }),
     ).toBe(true);
   });
 
-  test("string contains (negative)", () => {
-    expect(
-      evaluateCondition('notes contains "urgent"', { notes: "all calm" }),
-    ).toBe(false);
+  test("string membership (negative)", () => {
+    expect(evaluateCondition('"urgent" in notes', { notes: "all calm" })).toBe(
+      false,
+    );
   });
 
   test("array/multi-select membership (positive)", () => {
     expect(
-      evaluateCondition('parties contains "guarantor"', {
+      evaluateCondition('"guarantor" in parties', {
         parties: ["buyer", "guarantor", "seller"],
       }),
     ).toBe(true);
@@ -192,36 +192,34 @@ describe("evaluateCondition", () => {
 
   test("array/multi-select membership (negative)", () => {
     expect(
-      evaluateCondition('parties contains "guarantor"', {
+      evaluateCondition('"guarantor" in parties', {
         parties: ["buyer", "seller"],
       }),
     ).toBe(false);
   });
 
   test("array membership coerces non-string elements to string", () => {
-    expect(evaluateCondition('codes contains "2"', { codes: [1, 2, 3] })).toBe(
+    expect(evaluateCondition('"2" in codes', { codes: [1, 2, 3] })).toBe(true);
+  });
+
+  test("membership substring-matches a stringified scalar operand", () => {
+    expect(evaluateCondition('"1" in n', { n: 12 })).toBe(true); // "12" ⊇ "1"
+    expect(evaluateCondition('"9" in n', { n: 12 })).toBe(false);
+    expect(evaluateCondition('"x" in flag', { flag: true })).toBe(false);
+    expect(evaluateCondition('"x" in missing', {})).toBe(false);
+  });
+
+  test("membership binds tighter than and (comparison precedence)", () => {
+    // "x" in a and b == 1 → ("x" in a) and (b == 1)
+    expect(evaluateCondition('"x" in a and b == 1', { a: "xy", b: 1 })).toBe(
       true,
     );
-  });
-
-  test("contains substring-matches a stringified scalar left", () => {
-    expect(evaluateCondition('n contains "1"', { n: 12 })).toBe(true); // "12" ⊇ "1"
-    expect(evaluateCondition('n contains "9"', { n: 12 })).toBe(false);
-    expect(evaluateCondition('flag contains "x"', { flag: true })).toBe(false);
-    expect(evaluateCondition('missing contains "x"', {})).toBe(false);
-  });
-
-  test("contains binds tighter than and (comparison precedence)", () => {
-    // a contains "x" and b == 1 → (a contains "x") and (b == 1)
-    expect(
-      evaluateCondition('a contains "x" and b == 1', { a: "xy", b: 1 }),
-    ).toBe(true);
-    expect(
-      evaluateCondition('a contains "x" and b == 1', { a: "xy", b: 2 }),
-    ).toBe(false);
-    expect(
-      evaluateCondition('a contains "x" and b == 1', { a: "zz", b: 1 }),
-    ).toBe(false);
+    expect(evaluateCondition('"x" in a and b == 1', { a: "xy", b: 2 })).toBe(
+      false,
+    );
+    expect(evaluateCondition('"x" in a and b == 1', { a: "zz", b: 1 })).toBe(
+      false,
+    );
   });
 
   // ── Logical operators ─────────────────────────────────
@@ -278,22 +276,22 @@ describe("evaluateCondition", () => {
   });
 
   test("negated parenthesized group", () => {
-    // !(A and B) — De Morgan: !A or !B
+    // not (A and B) — De Morgan: not A or not B
     expect(
-      evaluateCondition("!(isUK and hasLicense)", {
+      evaluateCondition("not (isUK and hasLicense)", {
         isUK: true,
         hasLicense: false,
       }),
-    ).toBe(true); // !(true and false) = !false = true
+    ).toBe(true); // not (true and false) = not false = true
   });
 
   test("negated parenthesized group: both true", () => {
     expect(
-      evaluateCondition("!(isUK and hasLicense)", {
+      evaluateCondition("not (isUK and hasLicense)", {
         isUK: true,
         hasLicense: true,
       }),
-    ).toBe(false); // !(true and true) = !true = false
+    ).toBe(false); // not (true and true) = not true = false
   });
 
   test("nested parentheses", () => {
@@ -307,11 +305,11 @@ describe("evaluateCondition", () => {
   });
 
   test("compound negation for else branch", () => {
-    // Simulates: {{#if isUK and hasLicense}}
-    //            {{#else}} → !(isUK and hasLicense)
+    // Simulates: {% if isUK and hasLicense %}
+    //            {% else %} → not (isUK and hasLicense)
     // With isUK=false, hasLicense=false: else should show
     expect(
-      evaluateCondition("!(isUK and hasLicense)", {
+      evaluateCondition("not (isUK and hasLicense)", {
         isUK: false,
         hasLicense: false,
       }),
@@ -319,10 +317,10 @@ describe("evaluateCondition", () => {
   });
 
   test("elseif with or expression", () => {
-    // Simulates: {{#if A}}...{{#elseif C or D}}
+    // Simulates: {% if A %}...{% elif C or D %}
     // Condition: !A and (C or D)
     expect(
-      evaluateCondition("!A and (C or D)", {
+      evaluateCondition("not A and (C or D)", {
         A: false,
         C: false,
         D: true,
@@ -331,7 +329,7 @@ describe("evaluateCondition", () => {
 
     // A is true → !A is false → whole thing false
     expect(
-      evaluateCondition("!A and (C or D)", {
+      evaluateCondition("not A and (C or D)", {
         A: true,
         C: false,
         D: true,
@@ -349,7 +347,7 @@ describe("evaluateCondition", () => {
   });
 
   test("AST-backed named condition resolves a formula operand", () => {
-    // `rent * 12 < 100000` — no `{{#if}}` string form, so the rule lives as the
+    // `rent * 12 < 100000` — no `{% if %}` string form, so the rule lives as the
     // AST `node` and the formula operand is computed against the fill bag.
     const conditions: NamedCondition[] = [
       {
