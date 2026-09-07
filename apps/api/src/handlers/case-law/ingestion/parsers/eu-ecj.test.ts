@@ -584,32 +584,45 @@ describe("parseEcjDecisionHtml", () => {
   });
 
   /**
-   * Rule 10 as an invariant rather than an example: a row shape the
+   * Rule 10 as an invariant rather than an example: a row the
    * marker/content rules do not match is still walked for its text.
    * The converter emits a numbered paragraph as a two-cell row, so the
    * shape rules read cell 1 as the marker and cell 2 as its content —
    * but a decision quoting a tariff or rate table carries a column per
-   * heading, description and rate, and a header row of `th`. Asserted
-   * across the row shapes rather than on one of them, because losing a
-   * cell is invisible downstream: the AST reads as complete.
+   * heading, description and rate, and a header row of `th`.
+   *
+   * Both dimensions the publisher varies are asserted together: how many
+   * cells a row holds, and which section it sits in. A row the source
+   * put in `<thead>` or `<tfoot>` never reaches the cell rules at all,
+   * so a check that fixes the section to `<tbody>` cannot see it go
+   * missing. Losing either way is invisible downstream — the AST reads
+   * as complete.
    */
-  test("keeps every cell of every row shape", () => {
-    const cellText = (row: number, cell: number) => `r${row}c${cell} content`;
+  test("keeps every cell of every row shape, in every row section", () => {
+    const sections = ["thead", "tbody", "tfoot"] as const;
+    const cellText = (section: string, row: number, cell: number) =>
+      `${section}-r${row}c${cell} content`;
     const shapes = [1, 2, 3, 4, 5];
-    const rows = shapes
-      .map((cellCount, row) => {
-        const tag = row % 2 === 0 ? "td" : "th";
-        const cells = Array.from(
-          { length: cellCount },
-          (_, cell) => `<${tag}><p>${cellText(row, cell)}</p></${tag}>`,
-        ).join("");
-        return `<tr>${cells}</tr>`;
+    const body = sections
+      .map((section) => {
+        const rows = shapes
+          .map((cellCount, row) => {
+            const tag = row % 2 === 0 ? "td" : "th";
+            const cells = Array.from(
+              { length: cellCount },
+              (_, cell) =>
+                `<${tag}><p>${cellText(section, row, cell)}</p></${tag}>`,
+            ).join("");
+            return `<tr>${cells}</tr>`;
+          })
+          .join("");
+        return `<${section}>${rows}</${section}>`;
       })
       .join("");
     const html = [
       "<html><body><div class='coj-normal' lang='en'>",
       "<p class='coj-sum-title-1'>JUDGMENT OF THE COURT</p>",
-      `<table><tbody>${rows}</tbody></table>`,
+      `<table>${body}</table>`,
       "</div></body></html>",
     ].join("");
 
@@ -624,10 +637,12 @@ describe("parseEcjDecisionHtml", () => {
       html,
     });
 
-    const missing = shapes.flatMap((cellCount, row) =>
-      Array.from({ length: cellCount }, (_, cell) =>
-        cellText(row, cell),
-      ).filter((text) => !fulltext.includes(text)),
+    const missing = sections.flatMap((section) =>
+      shapes.flatMap((cellCount, row) =>
+        Array.from({ length: cellCount }, (_, cell) =>
+          cellText(section, row, cell),
+        ).filter((text) => !fulltext.includes(text)),
+      ),
     );
     expect(missing).toEqual([]);
   });

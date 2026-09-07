@@ -933,10 +933,16 @@ const visitTable = (
   builder: BlockBuilder,
   $table: cheerio.Cheerio<AnyNode>,
 ): void => {
-  // `cheerio.load` runs a spec-compliant tree builder, so every row is
-  // reachable through an explicit `<tbody>` even when the source omits it.
+  // A spec-compliant tree builder gives every row an explicit section
+  // parent, but that parent is `<tbody>` only for rows the source left
+  // unsectioned: rows the source put in `<thead>` or `<tfoot>` stay
+  // there, as siblings of `<tbody>` rather than inside it. Reading
+  // `<tbody>` alone therefore drops a sectioned row whole — the column
+  // labels of a quoted tariff table, or the note under it — which is the
+  // one failure rule 10 does not allow, and which the cell selector
+  // below cannot catch because the row never reaches it.
   $table
-    .children("tbody")
+    .children("thead, tbody, tfoot")
     .children("tr")
     .each((_, tr) => {
       // `th` counts as a cell. A decision quoting a tariff or rate
