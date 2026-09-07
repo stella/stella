@@ -154,6 +154,10 @@ const booleanKeyword = (
 const quoted = (values: readonly string[]): string =>
   values.map((value) => `"${value}"`).join(", ");
 
+const DEFAULT_DATE_STYLE = "long" satisfies (typeof DATE_FORMAT_STYLES)[number];
+
+const DATE_SPEC_HINT = `Write date("pl") or date("pl-long"); the styles are ${quoted(DATE_FORMAT_STYLES)} and the default is "${DEFAULT_DATE_STYLE}".`;
+
 /** Narrow a filter argument to one of a closed set, so a binding kind or a
  *  registry slug reaches the manifest as its own union rather than a cast. */
 const isOneOf = <TValue extends string>(
@@ -376,32 +380,26 @@ const applyFilter = (draft: Draft, call: FilterCall): void => {
       const spec = stringAt(call, 0);
       if (spec === null) {
         draft.issues.push(
-          issue(
-            call.name,
-            "date() needs a locale and a style.",
-            `Write date("pl-long"); the styles are ${quoted(DATE_FORMAT_STYLES)}.`,
-          ),
+          issue(call.name, "date() needs a locale.", DATE_SPEC_HINT),
         );
         return;
       }
+      /** A locale carries its own hyphens (`en-GB`, `pt-BR`), so only a final
+       *  segment that names a style is one; everything else is the locale. */
       const cut = spec.lastIndexOf("-");
-      const locale = cut === -1 ? "" : spec.slice(0, cut);
-      const style = cut === -1 ? spec : spec.slice(cut + 1);
-      if (
-        !isOneOf(DATE_FORMAT_STYLES, style) ||
-        locale === "" ||
-        !isPlausibleLocale(locale)
-      ) {
+      const tail = spec.slice(cut + 1);
+      const styled = isOneOf(DATE_FORMAT_STYLES, tail);
+      const locale = styled ? spec.slice(0, Math.max(cut, 0)) : spec;
+      if (locale === "" || !isPlausibleLocale(locale)) {
         draft.issues.push(
-          issue(
-            call.name,
-            `date("${spec}") is not a locale and a style.`,
-            `Write date("pl-long"); the styles are ${quoted(DATE_FORMAT_STYLES)}.`,
-          ),
+          issue(call.name, `date("${spec}") is not a locale.`, DATE_SPEC_HINT),
         );
         return;
       }
-      draft.meta["dateFormat"] = { locale, style };
+      draft.meta["dateFormat"] = {
+        locale,
+        style: styled ? tail : DEFAULT_DATE_STYLE,
+      };
       return;
     }
     case "options_from": {

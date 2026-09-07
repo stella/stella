@@ -80,29 +80,29 @@ describe("fieldMetaFromFilters", () => {
     });
   });
 
-  test("date splits the locale from the style", () => {
-    expect(fieldFrom("signed_on", 'signed_on | date("pl-long")').field).toEqual(
-      {
-        path: "signed_on",
-        inputType: "date",
-        dateFormat: { locale: "pl", style: "long" },
-      },
-    );
-    expect(
-      fieldFrom("signed_on", 'signed_on | date("pt-BR-short")').field,
-    ).toEqual({
+  test.each([
+    ['date("pl-long")', { locale: "pl", style: "long" }],
+    ['date("cs")', { locale: "cs", style: "long" }],
+    ['date("en-GB")', { locale: "en-GB", style: "long" }],
+    ['date("en-GB-short")', { locale: "en-GB", style: "short" }],
+    ['date("pt-BR-short")', { locale: "pt-BR", style: "short" }],
+  ])("%s reads as a locale and a style", (filter, dateFormat) => {
+    expect(fieldFrom("signed_on", `signed_on | ${filter}`).field).toEqual({
       path: "signed_on",
       inputType: "date",
-      dateFormat: { locale: "pt-BR", style: "short" },
+      dateFormat,
     });
   });
 
-  test("a date without a known style is rejected by name", () => {
-    const { field, issues } = fieldFrom("signed_on", 'signed_on | date("pl")');
-    expect(field).toEqual({ path: "signed_on", inputType: "date" });
-    expect(issues.at(0)?.filter).toBe("date");
-    expect(issues.at(0)?.hint).toContain('date("pl-long")');
-  });
+  test.each(['date("cs_CZ")', 'date("iso")', 'date("cs_CZ-long")'])(
+    "%s is rejected by name",
+    (filter) => {
+      const { field, issues } = fieldFrom("signed_on", `signed_on | ${filter}`);
+      expect(field).toEqual({ path: "signed_on", inputType: "date" });
+      expect(issues.at(0)?.filter).toBe("date");
+      expect(issues.at(0)?.hint).toContain('date("pl-long")');
+    },
+  );
 
   test("lookup takes the registry positionally and the formats as names", () => {
     expect(
