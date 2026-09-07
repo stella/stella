@@ -397,6 +397,12 @@ type AdvanceProjectionAppendTailsOptions<Entry extends ProjectionAppendPart> = {
  * Extend one serialized, byte-bounded tail per physical index in linear time.
  * A tail flushes when full or near its earliest lease deadline; serialization
  * and byte measurement are paid once per revision, not once per read window.
+ *
+ * `leaseMarginReached` separates the two reasons a tail flushed. A cap is a
+ * property of the tail, so the next one fills from empty as before. The lease
+ * margin is a property of the clock: once crossed it is true on every later
+ * call, so a caller that keeps buffering past it gets one request per entry
+ * rather than one per capful. Callers stop appending on it instead.
  */
 export const advanceCorpusProjectionAppendTails = <
   Entry extends ProjectionAppendPart,
@@ -408,6 +414,7 @@ export const advanceCorpusProjectionAppendTails = <
 }: AdvanceProjectionAppendTailsOptions<Entry>): {
   flush: ProjectionAppendTail<Entry>[];
   tails: Map<string, ProjectionAppendTail<Entry>>;
+  leaseMarginReached: boolean;
 } => {
   const nextTails = tails;
   const flush: ProjectionAppendTail<Entry>[] = [];
@@ -451,6 +458,7 @@ export const advanceCorpusProjectionAppendTails = <
       );
     }
   }
+  let leaseMarginReached = false;
   for (const [indexId, tail] of nextTails) {
     if (
       mode === "buffer" &&
@@ -459,10 +467,11 @@ export const advanceCorpusProjectionAppendTails = <
     ) {
       continue;
     }
+    leaseMarginReached = leaseMarginReached || mode === "buffer";
     flush.push(tail);
     nextTails.delete(indexId);
   }
-  return { flush, tails: nextTails };
+  return { flush, tails: nextTails, leaseMarginReached };
 };
 
 /** The synchronous half of a prepared entry: payload in, append request out. */
@@ -777,6 +786,24 @@ type ProcessPreparedStreamOptions = {
  * is unchanged. Failed reads are classified in one transaction per append
  * rather than one per revision.
  */
+/** Leases still buffered in a tail, plus every material not yet consumed. */
+const remainingLeases = (
+  tails: Map<string, ProjectionAppendTail<PreparedProjectionEntry>>,
+  consumed: number,
+  materialsReady: readonly CorpusProjectionMaterial[],
+): CorpusProjectionIntentLease[] => {
+  const leases: CorpusProjectionIntentLease[] = [];
+  for (const tail of tails.values()) {
+    for (const { material } of tail.entries) {
+      leases.push(material.lease);
+    }
+  }
+  for (const { lease } of materialsReady.slice(consumed)) {
+    leases.push(lease);
+  }
+  return leases;
+};
+
 const processPreparedStream = async ({
   runInTransaction,
   client,
@@ -871,13 +898,11 @@ const processPreparedStream = async ({
     tails = advanced.tails;
     if (advanced.flush.length > 0) {
       await classifyPendingFailures();
-      const unattemptedLeases = [...tails.values()].flatMap(
-        ({ entries: tailEntries }) =>
-          tailEntries.map(({ material: tailMaterial }) => tailMaterial.lease),
+      const unattemptedLeases = remainingLeases(
+        tails,
+        consumed,
+        materialsReady,
       );
-      for (const { lease } of materialsReady.slice(consumed)) {
-        unattemptedLeases.push(lease);
-      }
       const requestStatus = await processPreparedRequests({
         runInTransaction,
         client,
@@ -889,6 +914,25 @@ const processPreparedStream = async ({
       });
       if (requestStatus === "append_unknown") {
         return requestStatus;
+      }
+      if (advanced.leaseMarginReached) {
+        // The lease is inside the margin an append needs to start safely, and
+        // it only gets closer. Reading on would append one revision per
+        // request, each paying a batch start, an ingest round trip and a
+        // commit for what belongs in one capful, so the cycle stops here and
+        // hands the rest back to a cycle that can fill its requests.
+        result.timing.payloadLoadMs += Date.now() - waitingSince;
+        addCancellation(
+          result,
+          await cancelReservations({
+            runInTransaction,
+            leases: unattemptedLeases,
+            errorMessage:
+              "projection append stopped inside the lease start margin",
+          }),
+        );
+        await classifyPendingFailures();
+        return "completed";
       }
     }
     waitingSince = Date.now();

@@ -228,3 +228,46 @@ test("append requests do not depend on how many revisions arrive at once", () =>
   );
   expect(streamed).toEqual(requestsPerIndex(32));
 });
+
+/**
+ * The two reasons a tail flushes are not interchangeable to the caller. A cap
+ * is a property of the tail, so the next one fills from empty. The margin is a
+ * property of the clock: it stays true, so a caller that keeps buffering past
+ * it flushes on every later call, one revision at a time.
+ */
+test("a cap-led flush and a margin-led flush are told apart", () => {
+  const entry = (ndjson: string, leaseExpiresAtMs: number) => ({
+    indexId: "case_law_v5_cs_sk",
+    ndjson,
+    ndjsonBytes: CORPUS_PROJECTION_APPEND_MAX_REQUEST_BYTES,
+    leaseExpiresAtMs,
+  });
+
+  const capLed = advanceCorpusProjectionAppendTails({
+    tails: new Map(),
+    entries: [entry("first", 600_000), entry("second", 600_000)],
+    mode: "buffer",
+    nowMs: 0,
+  });
+  expect(capLed.flush).toHaveLength(1);
+  expect(capLed.leaseMarginReached).toBe(false);
+
+  const marginLed = advanceCorpusProjectionAppendTails({
+    tails: new Map(),
+    entries: [entry("first", 1000)],
+    mode: "buffer",
+    nowMs: 0,
+  });
+  expect(marginLed.flush).toHaveLength(1);
+  expect(marginLed.leaseMarginReached).toBe(true);
+
+  // The final drain is the caller ending the cycle, not the clock forcing it.
+  expect(
+    advanceCorpusProjectionAppendTails({
+      tails: marginLed.tails,
+      entries: [entry("third", 600_000)],
+      mode: "flush-all",
+      nowMs: 0,
+    }).leaseMarginReached,
+  ).toBe(false);
+});
