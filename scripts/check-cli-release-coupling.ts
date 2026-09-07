@@ -220,33 +220,106 @@ const mapSurfaceParts = (
   "src/generated/mcp-contract.ts": read("src/generated/mcp-contract.ts"),
 });
 
-const EXPORTED_CONSTANT = /^export const (\w+) =\s*([\s\S]*?);\s*$/gmu;
-const AS_CONST_SUFFIX = /\s+as const$/u;
-const TRAILING_COMMA = /,(\s*[\]}])/gu;
-const BARE_OBJECT_KEY = /([{,]\s*)([A-Za-z_$][\w$]*)\s*:/gu;
+const EXPORT_PREFIX = "export const ";
+const AS_CONST = "as const";
+const STATEMENT_END = ";";
+
+const isIdentifierStart = (char: string): boolean => /[A-Za-z_$]/u.test(char);
+const isIdentifierChar = (char: string): boolean => /[\w$]/u.test(char);
+const isWhitespace = (char: string): boolean => /\s/u.test(char);
+
+/**
+ * Turns a generated object or array literal into JSON: trailing commas go,
+ * bare object keys get quoted. Walks the text once, string-aware, so it stays
+ * linear whatever the literal's size.
+ */
+const literalToJson = (literal: string): string => {
+  let json = "";
+  let inString = false;
+  for (let index = 0; index < literal.length; index += 1) {
+    const char = literal.charAt(index);
+    if (inString) {
+      json += char;
+      if (char === "\\") {
+        json += literal.charAt(index + 1);
+        index += 1;
+      } else if (char === '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (char === '"') {
+      inString = true;
+      json += char;
+      continue;
+    }
+    if (char === "," || char === "{") {
+      let cursor = index + 1;
+      while (cursor < literal.length && isWhitespace(literal.charAt(cursor))) {
+        cursor += 1;
+      }
+      const next = literal.charAt(cursor);
+      if (char === "," && (next === "]" || next === "}")) {
+        continue;
+      }
+      json += char;
+      if (isIdentifierStart(next)) {
+        let end = cursor + 1;
+        while (end < literal.length && isIdentifierChar(literal.charAt(end))) {
+          end += 1;
+        }
+        let colon = end;
+        while (colon < literal.length && isWhitespace(literal.charAt(colon))) {
+          colon += 1;
+        }
+        if (literal.charAt(colon) === ":") {
+          json += `${literal.slice(index + 1, cursor)}"${literal.slice(cursor, end)}"`;
+          index = end - 1;
+        }
+      }
+      continue;
+    }
+    json += char;
+  }
+  return json;
+};
 
 /**
  * Reads a generated constants module (TypeScript source or its compiled
  * JavaScript) as data. The generator only emits string, number, array and
- * flat object literals, so each exported literal becomes JSON after dropping
- * `as const`, trailing commas and bare keys. Anything else is a generator
- * change this parser must learn about, so it fails loudly.
+ * flat object literals, so each `export const` statement becomes JSON once
+ * `as const`, trailing commas and bare keys are gone. Anything else is a
+ * generator change this parser must learn about, so it fails loudly.
  */
 export const parseGeneratedConstants = (
   source: string,
 ): Readonly<Record<string, unknown>> => {
   const constants: Record<string, unknown> = {};
-  for (const match of source.matchAll(EXPORTED_CONSTANT)) {
-    const [, name, literal] = match;
-    if (name === undefined || literal === undefined) {
+  const lines = source.split("\n");
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index] ?? "";
+    if (!line.startsWith(EXPORT_PREFIX)) {
       continue;
     }
-    const json = literal
-      .replace(AS_CONST_SUFFIX, "")
-      .replace(TRAILING_COMMA, "$1")
-      .replace(BARE_OBJECT_KEY, '$1"$2":');
+    const assignment = line.indexOf("=");
+    if (assignment === -1) {
+      continue;
+    }
+    const name = line.slice(EXPORT_PREFIX.length, assignment).trim();
+    let statement = line.slice(assignment + 1);
+    while (
+      !statement.trimEnd().endsWith(STATEMENT_END) &&
+      index + 1 < lines.length
+    ) {
+      index += 1;
+      statement += `\n${lines[index] ?? ""}`;
+    }
+    let literal = statement.trimEnd().slice(0, -STATEMENT_END.length).trim();
+    if (literal.endsWith(AS_CONST)) {
+      literal = literal.slice(0, -AS_CONST.length).trimEnd();
+    }
     try {
-      constants[name] = JSON.parse(json) as unknown;
+      constants[name] = JSON.parse(literalToJson(literal)) as unknown;
     } catch {
       panic(`generated constant ${name} is not a plain literal: ${literal}`);
     }
