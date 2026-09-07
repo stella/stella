@@ -739,3 +739,76 @@ describe("property: loop-expanded num() markers number sequentially", () => {
     );
   });
 });
+
+// ── Inline nesting ───────────────────────────────────────
+
+/** The whole paragraph's text, in document order, with runs joined. */
+const paragraphTextsOf = async (buffer: Buffer): Promise<string[]> => {
+  const zip = await JSZip.loadAsync(buffer);
+  const xml = (await zip.file("word/document.xml")?.async("string")) ?? "";
+  return [...parseBody(xml).getElementsByTagNameNS(W_NS, "p")].map((p) =>
+    paragraphText(p),
+  );
+};
+
+describe("property: an inline loop may condition on its own position", () => {
+  // `{% for a in xs %}{{ a.n }}{% if not loop.last %}, {% endif %}{% endfor %}`
+  // is the comma-join every drafting model writes. It has to render the list
+  // for any item count, leave no marker behind, and produce no blank rows.
+  test("a comma-join renders every item with n-1 separators", async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.array(fc.constantFrom("Alice", "Bob", "Carol", "Dan", "Eve"), {
+          minLength: 1,
+          maxLength: 5,
+        }),
+        async (names) => {
+          const xml = WRAP(
+            P(
+              "appoints: {% for a in attorneys %}{{ a.name }}" +
+                "{% if not loop.last %}, {% endif %}{% endfor %}.",
+            ),
+          );
+          const { buffer } = await fillTemplate(await makeDocx(xml), {
+            attorneys: names.map((name) => ({ name })),
+          });
+
+          expect(await paragraphTextsOf(buffer)).toEqual([
+            `appoints: ${names.join(", ")}.`,
+          ]);
+        },
+      ),
+      propertyConfig({ numRuns: 25 }),
+    );
+  });
+
+  test("an item-field condition inside the loop reads that item", async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.array(fc.boolean(), { minLength: 1, maxLength: 5 }),
+        async (leads) => {
+          const xml = WRAP(
+            P(
+              "{% for a in attorneys %}{{ a.name }}" +
+                "{% if a.lead %}*{% endif %}" +
+                "{% if not loop.last %}, {% endif %}{% endfor %}",
+            ),
+          );
+          const attorneys = leads.map((lead, index) => ({
+            name: `N${String(index)}`,
+            lead,
+          }));
+          const { buffer } = await fillTemplate(await makeDocx(xml), {
+            attorneys,
+          });
+
+          const expected = attorneys
+            .map(({ lead, name }) => (lead ? `${name}*` : name))
+            .join(", ");
+          expect(await paragraphTextsOf(buffer)).toEqual([expected]);
+        },
+      ),
+      propertyConfig({ numRuns: 25 }),
+    );
+  });
+});

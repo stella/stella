@@ -4,6 +4,7 @@ import * as slimdom from "slimdom";
 
 import { adaptAiFields, type AiOccurrenceAdapter } from "./adapt-ai-fields";
 import {
+  MAX_INLINE_NESTING,
   parseInlineConditions,
   processInlineConditions,
 } from "./inline-conditions";
@@ -110,13 +111,27 @@ describe("parseInlineConditions", () => {
     );
   });
 
-  test("rejects nested inline ifs", () => {
+  test("returns only the outermost group of a nested pair", () => {
     const parsed = parseInlineConditions(
       "a {% if x %}b {% if y %}c{% endif %}{% endif %}",
     );
+    if (!parsed.ok) {
+      throw new Error(parsed.message);
+    }
+    // The inner block stays in the text; the next pass reads it as top-level.
+    expect(parsed.groups).toHaveLength(1);
+    expect(parsed.groups[0]?.kind).toBe("if");
+    expect(parsed.groups[0]?.start).toBe(2);
+  });
+
+  test("refuses to nest past the bound", () => {
+    const deep = `${"{% if x %}".repeat(MAX_INLINE_NESTING + 1)}y${"{% endif %}".repeat(MAX_INLINE_NESTING + 1)}`;
+    const parsed = parseInlineConditions(deep);
     expect(parsed.ok).toBe(false);
     if (!parsed.ok) {
-      expect(parsed.message).toContain("Nested inline {% if %}");
+      expect(parsed.message).toContain(
+        `nest at most ${String(MAX_INLINE_NESTING)} deep`,
+      );
     }
   });
 
@@ -141,13 +156,21 @@ describe("parseInlineConditions", () => {
     );
   });
 
-  test("rejects an inline each nested inside an inline if", () => {
+  test("a loop inside a condition is one outermost group", () => {
     const parsed = parseInlineConditions(
       "x {% if a %}{% for item in items %}y{% endfor %}{% endif %}",
     );
+    if (!parsed.ok) {
+      throw new Error(parsed.message);
+    }
+    expect(parsed.groups.map(({ kind }) => kind)).toEqual(["if"]);
+  });
+
+  test("a closer that does not match the open block is an error", () => {
+    const parsed = parseInlineConditions("{% if a %}{% endfor %}");
     expect(parsed.ok).toBe(false);
     if (!parsed.ok) {
-      expect(parsed.message).toContain("Nested inline {% for %}");
+      expect(parsed.message).toContain("Orphaned inline {% endfor %}");
     }
   });
 
@@ -305,14 +328,49 @@ describe("processInlineConditions", () => {
     expect(bodyTexts(body)).toEqual(["Intro.", original]);
   });
 
-  test("reports nested inline ifs as structure errors", () => {
-    const nested = "a {% if x %}b {% if y %}c{% endif %}{% endif %}";
-    const body = parseBody(WRAP(P(nested)));
-    const errors = processInlineConditions(body, { x: true });
-    expect(errors.map((e) => e.paragraphIndex)).toEqual([0]);
-    expect(errors[0]?.message).toContain("Nested inline {% if %}");
-    // The paragraph stays untouched.
-    expect(bodyTexts(body)).toEqual([nested]);
+  test("resolves a condition nested inside a condition", () => {
+    const body = parseBody(
+      WRAP(P("a {% if x %}b {% if y %}c{% else %}d{% endif %}{% endif %}e")),
+    );
+    const errors = processInlineConditions(body, { x: true, y: false });
+    expect(errors).toEqual([]);
+    expect(bodyTexts(body)).toEqual(["a b de"]);
+  });
+
+  test("a loop body may condition on the item and on its position", () => {
+    const body = parseBody(
+      WRAP(
+        P(
+          "for: {% for a in attorneys %}{{ a.name }}" +
+            '{% if a.role == "lead" %} (lead){% endif %}' +
+            "{% if not loop.last %}, {% endif %}{% endfor %}.",
+        ),
+      ),
+    );
+    const errors = processInlineConditions(body, {
+      attorneys: [
+        { name: "Alice", role: "lead" },
+        { name: "Bob", role: "associate" },
+      ],
+    });
+    expect(errors).toEqual([]);
+    expect(bodyTexts(body)).toEqual(["for: Alice (lead), Bob."]);
+  });
+
+  test("a nested loop's counters bind to the nested loop", () => {
+    const body = parseBody(
+      WRAP(
+        P(
+          "{% for g in groups %}[{% for i in g.items %}{{ loop.index }}" +
+            "{% if not loop.last %}-{% endif %}{% endfor %}]{% endfor %}",
+        ),
+      ),
+    );
+    const errors = processInlineConditions(body, {
+      groups: [{ items: [{}, {}] }, { items: [{}, {}, {}] }],
+    });
+    expect(errors).toEqual([]);
+    expect(bodyTexts(body)).toEqual(["[1-2][1-2-3]"]);
   });
 
   test("expands an inline each over a record array, repeating separators", () => {

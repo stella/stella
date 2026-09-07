@@ -521,7 +521,7 @@ export const flattenTemplateData = (
 
 // ── w:t node rewriting ───────────────────────────────────
 
-const escapeRegExp = (s: string): string =>
+export const escapeRegExp = (s: string): string =>
   s.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 
 // ── OOXML block-level tag names ──────────────────────────

@@ -588,12 +588,20 @@ export const expandInlineEachRuns = (
     contentEnd: number;
   },
   itemCount: number,
-  rewriteItem: (text: string, itemIndex: number) => string,
+  /** `fragmentIndex` counts the text nodes of ONE item's clone, from 0, in
+   *  document order — what a rewrite that has to track nesting across the
+   *  body needs in order to know where the item starts. */
+  rewriteItem: (
+    text: string,
+    itemIndex: number,
+    fragmentIndex: number,
+  ) => string,
 ): void => {
   const spans = collectTextSpans(paragraph);
 
   const replacementRuns: slimdom.Element[] = [];
   for (let itemIdx = 0; itemIdx < itemCount; itemIdx++) {
+    let fragmentIndex = 0;
     for (const runClone of cloneRunSequence(
       spans,
       range.contentStart,
@@ -601,7 +609,8 @@ export const expandInlineEachRuns = (
     )) {
       for (const t of runClone.getElementsByTagNameNS(W_NS, "t")) {
         const text = t.textContent ?? "";
-        const rewritten = rewriteItem(text, itemIdx);
+        const rewritten = rewriteItem(text, itemIdx, fragmentIndex);
+        fragmentIndex += 1;
         if (rewritten !== text) {
           setText(t, rewritten);
         }
