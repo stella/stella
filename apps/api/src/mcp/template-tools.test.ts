@@ -3377,6 +3377,83 @@ describe("MCP template tools", () => {
     });
   });
 
+  test("configure_template_fields passes a lookup format key's own entry to the service", async () => {
+    // `{{company.address}}` is the "address" format of the lookup on
+    // `company`. The entry is not the tool's to refuse: it reaches the
+    // service, which folds it into that format and reports what a format
+    // cannot hold, one property at a time.
+    let received: unknown;
+    configureTemplateFieldsMock.mockImplementation(async function* (options: {
+      fields: unknown;
+    }) {
+      yield* [];
+      received = options.fields;
+      return Result.ok({
+        issues: [
+          {
+            path: "fields.1.date_format",
+            index: 1,
+            property: "date_format",
+            message:
+              '"company.address" renders the "address" format of ' +
+              '"company"\'s lookup; a format carries no date_format, so it ' +
+              "was dropped.",
+            hint: 'Send date_format on "company", the field a person fills.',
+          },
+        ],
+        manifest: { version: 1, fields: [] },
+      });
+    });
+    describeStoredTemplateMock.mockResolvedValue(
+      describedTemplate({ name: "Company POA" }),
+    );
+
+    const result = await handleMcpToolCall({
+      args: {
+        template_id: TEMPLATE_ID,
+        fields: [
+          {
+            path: "company",
+            source: {
+              type: "lookup",
+              registry: "krs",
+              formats: [{ key: "address", template: "[seat]" }],
+            },
+          },
+          {
+            path: "company.address",
+            label: "Registered address",
+            required: true,
+            date_format: { locale: "pl-PL", style: "long" },
+            source: {
+              type: "lookup",
+              registry: "krs",
+              formats: [{ key: "address", template: "[street], [city]" }],
+            },
+          },
+        ],
+      },
+      context: createContext(),
+      toolName: "configure_template_fields",
+    });
+
+    expect(result.isError).toBeFalsy();
+    expect(received).toMatchObject([
+      { path: "company" },
+      {
+        path: "company.address",
+        required: true,
+        lookup: {
+          registry: "krs",
+          formats: [{ key: "address", template: "[street], [city]" }],
+        },
+      },
+    ]);
+    expect(parseToolPayload(result)).toMatchObject({
+      issues: [{ path: "fields.1.date_format", index: 1 }],
+    });
+  });
+
   /**
    * The exact call one model sent when it filled every optional property it
    * could see: a placeholder in every string, a `parts` entry with an empty

@@ -134,40 +134,37 @@ describe("validateFieldOverlay", () => {
     ]);
   });
 
-  test("rejects a lookup format key that collides with a configured field", async () => {
+  test("a field configured at a lookup format key is that format, not a rival", async () => {
     const discovered = await discoverTemplate(
       await makeDocx("{{company.name}}", "{{company.krs}}"),
     );
 
-    const issues = validateFieldOverlay({
-      configured: [],
-      discovered,
-      overlay: [
-        { path: "company", lookup: krsLookup("name", "krs") },
-        { path: "company.name", inputType: "number", label: "Company name" },
-      ],
-    });
-
-    // Both sides of the collision are named, each at its own entry index.
-    expect(issues.map(({ path }) => path)).toEqual(["fields.0", "fields.1"]);
-    for (const { message } of issues) {
-      expect(message).toContain('"company"');
-      expect(message).toContain('"company.name"');
-    }
+    // The marker belongs to the lookup that renders it, so neither entry is
+    // refused: the child folds and what a format cannot hold is reported.
+    expect(
+      validateFieldOverlay({
+        configured: [],
+        discovered,
+        overlay: [
+          { path: "company", lookup: krsLookup("name", "krs") },
+          { path: "company.name", inputType: "number", label: "Company name" },
+        ],
+      }),
+    ).toEqual([]);
   });
 
-  test("rejects a lookup colliding with an already-configured child", async () => {
+  test("an already-configured child is a rendering the incoming lookup claims", async () => {
     const discovered = await discoverTemplate(
       await makeDocx("{{company.name}}", "{{company.krs}}"),
     );
 
-    const issues = validateFieldOverlay({
-      configured: [{ path: "company.name", inputType: "number" }],
-      discovered,
-      overlay: [{ path: "company", lookup: krsLookup("name", "krs") }],
-    });
-
-    expect(issues.map(({ path }) => path)).toEqual(["fields.0"]);
+    expect(
+      validateFieldOverlay({
+        configured: [{ path: "company.name", inputType: "number" }],
+        discovered,
+        overlay: [{ path: "company", lookup: krsLookup("name", "krs") }],
+      }),
+    ).toEqual([]);
   });
 
   test("a bare discovered child entry is a marker, not a rival configuration", async () => {
@@ -186,7 +183,7 @@ describe("validateFieldOverlay", () => {
     ).toEqual([]);
   });
 
-  test("lookup ownership is enforced across every split of existing and incoming configuration", async () => {
+  test("lookup ownership resolves the same across every split of existing and incoming configuration", async () => {
     const discovered = await discoverTemplate(
       await makeDocx("{{company.name}}"),
     );
@@ -202,14 +199,18 @@ describe("validateFieldOverlay", () => {
       { configured: [], overlay: [owner, child] },
       { configured: [], overlay: [child, owner] },
     ]) {
-      const issues = validateFieldOverlay({ configured, discovered, overlay });
-      expect(new Set(issues.map(({ path }) => path))).toEqual(
-        new Set(overlay.map((_, index) => `fields.${index}`)),
-      );
-      for (const { message } of issues) {
-        expect(message).toContain('"company"');
-        expect(message).toContain('"company.name"');
-      }
+      const { applied, issues } = partitionFieldOverlay({
+        configured,
+        discovered,
+        overlay,
+      });
+      // Whichever side the child came from, one lookup carries the marker and
+      // no entry is refused: every issue names a property of an entry that
+      // landed.
+      expect(
+        applyFieldOverlay({ version: 1, fields: configured }, applied),
+      ).toEqual({ version: 1, fields: [owner] });
+      expect(issues.every(({ property }) => property !== undefined)).toBe(true);
     }
   });
 
@@ -589,7 +590,115 @@ describe("a child restating the parent's lookup", () => {
     ]);
   });
 
-  test("a child on a different registry is still refused", async () => {
+  /**
+   * The other shape a model sends for the same document: every dotted marker
+   * described as a fillable field of its own — wording, an input type, a
+   * required flag, value constraints — with the format's lookup beside it.
+   * The template is the one part a format can take.
+   */
+  test("a child that describes a whole field reports what the format cannot hold", async () => {
+    const discovered = await discoverTemplate(await companyDocx());
+
+    const { applied, issues } = partitionFieldOverlay({
+      configured: [],
+      discovered,
+      overlay: [
+        {
+          path: "company",
+          label: "Company",
+          lookup: krsLookup("address", "krs"),
+        },
+        {
+          path: "company.address",
+          label: "Registered address",
+          hint: "From the register",
+          inputType: "text",
+          required: true,
+          validation: { minLength: 5, maxLength: 200, pattern: "^.+$" },
+          lookup: {
+            registry: "krs",
+            formats: [{ key: "address", template: "[street], [city]" }],
+          },
+        },
+      ],
+    });
+
+    expect(issues.map(({ path, property }) => [path, property])).toEqual([
+      ["fields.1.validation", "validation"],
+      ["fields.1.required", "required"],
+    ]);
+    expect(applyFieldOverlay(null, applied).fields).toEqual([
+      {
+        path: "company",
+        label: "Company",
+        lookup: {
+          registry: "krs",
+          formats: [
+            { key: "address", template: "[street], [city]" },
+            { key: "krs", template: "[company name]" },
+          ],
+        },
+      },
+    ]);
+  });
+
+  test("a child restating every format of the parent's lookup keeps the parent's", async () => {
+    const discovered = await discoverTemplate(await companyDocx());
+    const wholeLookup = krsLookup("address", "krs");
+
+    const { applied, issues } = partitionFieldOverlay({
+      configured: [],
+      discovered,
+      overlay: [
+        { path: "company", lookup: wholeLookup },
+        { path: "company.address", lookup: wholeLookup },
+      ],
+    });
+
+    // A format is one rendering, so a child offering both cannot say which of
+    // them "address" is: the parent's formats stand.
+    expect(issues.map(({ path }) => path)).toEqual(["fields.1.source"]);
+    expect(issues.at(0)?.message).toBe(
+      '"company.address" renders the "address" format of "company"\'s ' +
+        "lookup; a format is one rendering, so the lookup sent on " +
+        '"company.address", which names 2, was dropped.',
+    );
+    expect(applyFieldOverlay(null, applied).fields).toEqual([
+      { path: "company", lookup: wholeLookup },
+    ]);
+  });
+
+  test("a child that binds elsewhere and formats a date folds without them", async () => {
+    const discovered = await discoverTemplate(await companyDocx());
+
+    const { applied, issues } = partitionFieldOverlay({
+      configured: [],
+      discovered,
+      overlay: [
+        { path: "company", lookup: krsLookup("address", "krs") },
+        {
+          path: "company.address",
+          label: "Registered address",
+          source: { kind: "contact", field: "address" },
+          dateFormat: { locale: "pl-PL", style: "long" },
+        },
+      ],
+    });
+
+    expect(issues.map(({ path }) => path)).toEqual([
+      "fields.1.source",
+      "fields.1.date_format",
+    ]);
+    expect(issues.at(1)?.message).toBe(
+      '"company.address" renders the "address" format of "company"\'s ' +
+        "lookup; a format carries no date_format, so it was dropped.",
+    );
+    expect(applyFieldOverlay(null, applied).fields).toEqual([
+      { path: "company", lookup: krsLookup("address", "krs") },
+    ]);
+  });
+
+  test("a child on a different registry keeps the parent's registry", async () => {
     const discovered = await discoverTemplate(await companyDocx());
 
     const { applied, issues } = partitionFieldOverlay({
@@ -601,17 +710,34 @@ describe("a child restating the parent's lookup", () => {
       }),
     });
 
-    expect(issues.map(({ path }) => path)).toEqual(["fields.0", "fields.2"]);
-    for (const { message } of issues) {
-      expect(message).toContain('"company.krs"');
-    }
-    expect(applied.map(({ path }) => path)).toEqual(["company.address"]);
+    // One registry fills the parent, so the second one is dropped off the
+    // entry that sent it; the entry itself lands.
+    expect(issues.map(({ path }) => path)).toEqual(["fields.2.source"]);
+    expect(issues.at(0)?.message).toBe(
+      '"company.krs" renders the "krs" format of "company"\'s lookup, which ' +
+        "queries krs; a format carries no registry of its own, so the ares " +
+        'lookup sent on "company.krs" was dropped.',
+    );
+    expect(applyFieldOverlay(null, applied).fields).toEqual([
+      {
+        path: "company",
+        label: "Company",
+        lookup: {
+          registry: "krs",
+          formats: [
+            { key: "name", template: "[company name]" },
+            { key: "address", template: "[street], [postal_code] [city]" },
+            { key: "krs", template: "[company name]" },
+          ],
+        },
+      },
+    ]);
   });
 
-  test("a child carrying what a format cannot hold is still refused", async () => {
+  test("a child carrying what a format cannot hold folds without it", async () => {
     const discovered = await discoverTemplate(await companyDocx());
 
-    const { issues } = partitionFieldOverlay({
+    const { applied, issues } = partitionFieldOverlay({
       configured: [],
       discovered,
       overlay: [
@@ -620,7 +746,18 @@ describe("a child restating the parent's lookup", () => {
       ],
     });
 
-    expect(issues.map(({ path }) => path)).toEqual(["fields.0", "fields.1"]);
+    expect(issues.map(({ path }) => path)).toEqual(["fields.1.input_type"]);
+    expect(issues.at(0)?.message).toBe(
+      '"company.krs" renders the "krs" format of "company"\'s lookup; a ' +
+        "format carries no input_type, so it was dropped.",
+    );
+    // The template the child declared is the one thing a format can take.
+    expect(
+      applyFieldOverlay(null, applied).fields.at(0)?.lookup?.formats,
+    ).toEqual([
+      { key: "name", template: "[company name]" },
+      { key: "krs", template: "[registration_number]" },
+    ]);
   });
 
   /** How a model that never repeats the lookup describes the same document:
@@ -671,10 +808,11 @@ describe("a child restating the parent's lookup", () => {
     );
   });
 
-  test("a child that names a real input type is still refused", async () => {
+  test("a child that names a real input type folds without it", async () => {
     const discovered = await discoverTemplate(await companyDocx());
+    const [parent] = shapeOnlyOverlay();
 
-    const { issues } = partitionFieldOverlay({
+    const { applied, issues } = partitionFieldOverlay({
       configured: [],
       discovered,
       overlay: [
@@ -683,7 +821,8 @@ describe("a child restating the parent's lookup", () => {
       ],
     });
 
-    expect(issues.map(({ path }) => path)).toEqual(["fields.0", "fields.1"]);
+    expect(issues.map(({ path }) => path)).toEqual(["fields.1.input_type"]);
+    expect(applyFieldOverlay(null, applied).fields).toEqual([parent]);
   });
 
   test("a second configure of the shape-only overlay changes nothing", async () => {

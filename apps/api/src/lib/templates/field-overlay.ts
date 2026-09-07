@@ -14,7 +14,10 @@
 
 import { panic } from "better-result";
 
-import { referencedConditionPaths } from "@stll/template-conditions";
+import {
+  assertNever,
+  referencedConditionPaths,
+} from "@stll/template-conditions";
 
 import { arrayOrEmpty } from "@/api/lib/array";
 import { foldItemCountConstraints } from "@/api/lib/docx/field-filters";
@@ -28,6 +31,7 @@ import {
   LOOKUP_FORMATS_MAX,
   type DiscoveredField,
   type DiscoveredTemplate,
+  type FieldLookup,
   type FieldLookupFormat,
   type FieldMeta,
   type TemplateManifest,
@@ -201,6 +205,27 @@ export const fieldOverlayIssuePath = (
     ? `fields.${String(index)}`
     : `fields.${String(index)}.${property}`;
 
+/** The issue a property dropped out of an entry that otherwise applied
+ *  reports. Every dropped-property rule builds its issue here, so the path,
+ *  the index and the property they carry cannot drift apart. */
+const droppedPropertyIssue = ({
+  hint,
+  index,
+  message,
+  property,
+}: {
+  hint: string;
+  index: number;
+  message: string;
+  property: string;
+}): FieldOverlayIssue => ({
+  path: fieldOverlayIssuePath(index, property),
+  index,
+  message,
+  hint,
+  property,
+});
+
 /**
  * The markers a group holds, without the namespaces between: `address` over
  * `{{address.street}}` and `{{address.city}}` holds those two, and a deeper
@@ -248,17 +273,18 @@ const expandGroupEntry = (
   const markers = leaves.map((leaf) => `{{${leaf}}}`).join(", ");
   return {
     required: field.required === true,
-    issues: [...configured].map((property) => ({
-      path: fieldOverlayIssuePath(index, property),
-      index,
-      property,
-      message:
-        `"${field.path}" is a group of ${markers}; a group carries no ` +
-        `${property}.`,
-      hint:
-        `Send ${property} on the child paths instead. Only required travels ` +
-        "from a group, to every child that does not set its own.",
-    })),
+    issues: [...configured].map((property) =>
+      droppedPropertyIssue({
+        index,
+        property,
+        message:
+          `"${field.path}" is a group of ${markers}; a group carries no ` +
+          `${property}.`,
+        hint:
+          `Send ${property} on the child paths instead. Only required ` +
+          "travels from a group, to every child that does not set its own.",
+      }),
+    ),
   };
 };
 
@@ -319,6 +345,130 @@ const expandGroups = (
   };
 };
 
+/** The lookup each path carries once the overlay is applied: the entry the
+ *  call sends wins over the one the template already stored. */
+const effectiveLookups = (
+  configured: readonly FieldMeta[],
+  entries: readonly OverlayEntry[],
+): Map<string, FieldLookup> => {
+  const lookups = new Map<string, FieldLookup>();
+  for (const { lookup, path } of [
+    ...configured,
+    ...entries.map((entry) => entry.field),
+  ]) {
+    if (lookup !== undefined) {
+      lookups.set(path, lookup);
+    }
+  }
+  return lookups;
+};
+
+/**
+ * The issue one property of a lookup-format child reports. The entry landed —
+ * it named a marker the parent's lookup renders — so the issue names the one
+ * property that had nowhere to go, the way a group entry's does.
+ */
+const formatDropIssue = ({
+  drop,
+  index,
+  key,
+  parent,
+  parentPath,
+  path,
+}: {
+  drop: FormatFoldDrop;
+  index: number;
+  key: string;
+  parent: FieldLookup;
+  parentPath: string;
+  path: string;
+}): FieldOverlayIssue => {
+  const { property } = drop;
+  const renders = `"${path}" renders the "${key}" format of "${parentPath}"'s lookup`;
+  const filledByTheParent =
+    `One lookup fills "${parentPath}", and every marker under it renders ` +
+    "the hit that lookup resolved.";
+  switch (drop.reason) {
+    case "registry":
+      return droppedPropertyIssue({
+        index,
+        property,
+        message:
+          `${renders}, which queries ${parent.registry}; a format carries no ` +
+          `registry of its own, so the ${drop.registry} lookup sent on ` +
+          `"${path}" was dropped.`,
+        hint: `Configure the registry on "${parentPath}". ${filledByTheParent}`,
+      });
+    case "renderings":
+      return droppedPropertyIssue({
+        index,
+        property,
+        message:
+          `${renders}; a format is one rendering, so the lookup sent on ` +
+          `"${path}", which names ${String(drop.renderings)}, was dropped.`,
+        hint:
+          `Name one format on "${path}" to set the template "${key}" renders ` +
+          `with, or set every format on "${parentPath}". ${filledByTheParent}`,
+      });
+    case "property":
+      return droppedPropertyIssue({
+        index,
+        property,
+        message: `${renders}; a format carries no ${property}, so it was dropped.`,
+        hint:
+          `Send ${property} on "${parentPath}", the field a person fills; a ` +
+          "format is a key and its [token] template, nothing else.",
+      });
+    default:
+      return assertNever(drop);
+  }
+};
+
+/**
+ * The overlay with every entry a parent's lookup already renders reduced to
+ * that rendering.
+ *
+ * `{{company.address}}` is the "address" format of the lookup on `company`,
+ * so an entry at `company.address` is that format spelled as a field: its
+ * template moves onto the format, and what a format cannot hold is dropped
+ * per property. The entry is never refused — the caller described a real
+ * marker of the document — and the parent's lookup stands.
+ */
+const foldLookupFormatChildren = (
+  entries: readonly OverlayEntry[],
+  lookups: ReadonlyMap<string, FieldLookup>,
+): { entries: OverlayEntry[]; issues: FieldOverlayIssue[] } => {
+  const issues: FieldOverlayIssue[] = [];
+  const folded = entries.map((entry) => {
+    const { field, index } = entry;
+    const cut = field.path.lastIndexOf(".");
+    const parentPath = field.path.slice(0, cut);
+    const parent = cut === -1 ? undefined : lookups.get(parentPath);
+    if (parent === undefined) {
+      return entry;
+    }
+    const key = field.path.slice(cut + 1);
+    const fold = foldFieldIntoFormat(field, parent, key);
+    if (fold === null) {
+      return entry;
+    }
+    issues.push(
+      ...fold.drops.map((drop) =>
+        formatDropIssue({
+          drop,
+          index,
+          key,
+          parent,
+          parentPath,
+          path: field.path,
+        }),
+      ),
+    );
+    return { field: fold.field, index };
+  });
+  return { entries: folded, issues };
+};
+
 /**
  * The overlay in the vocabulary the manifest speaks: loop aliases resolved,
  * item counts on the repeat they count, and a condition that answers itself
@@ -345,17 +495,14 @@ const canonicalizeOverlay = ({
     }),
     index,
   }));
-  const lookupOwners = new Set(
-    configured.flatMap((field) =>
-      field.lookup === undefined ? [] : [field.path],
-    ),
-  );
+  const lookups = effectiveLookups(configured, canonical);
   const grouped = expandGroups(
     canonical,
     declaredPathsOfDocument,
-    lookupOwners,
+    new Set(lookups.keys()),
   );
-  const entries = grouped.entries;
+  const children = foldLookupFormatChildren(grouped.entries, lookups);
+  const entries = children.entries;
   const { fields, moves } = foldItemCountConstraints(
     entries.map((entry) => entry.field),
     arrays,
@@ -377,7 +524,7 @@ const canonicalizeOverlay = ({
       const index = positionOf(field.path);
       return index === undefined ? [] : [{ field, index }];
     }),
-    issues: grouped.issues,
+    issues: [...grouped.issues, ...children.issues],
   };
 };
 
@@ -583,12 +730,17 @@ export const partitionFieldOverlay = ({
  * nothing else:
  *
  *   identity  the path, which names the format's key
- *   template  becomes the format's template
- *   dropped   has nowhere to go in a format and is discarded
- *   default   discarded when it carries the value it would have anyway,
- *             blocking when it decides something
- *   blocking  a decision only a field of its own can hold, so the child stays
- *             a rival configuration of the marker and keeps the refusal
+ *   template  becomes the format's template, when it restates the parent's
+ *             lookup; a second registry over one marker is reported and gone
+ *   silent    wording addressed at the person filling: nobody fills a
+ *             rendering of the hit, so it goes without a word
+ *   dropped   has nowhere to go in a format, and the caller is told which
+ *             property went
+ *   default   goes silently when it carries the value it would have anyway,
+ *             and is reported like the rest when it decides something
+ *
+ * Nothing blocks: the marker belongs to the lookup that renders it, so the
+ * child always folds and the difference is only what the caller hears about.
  *
  * Total over the manifest shape: a property added to `fieldMetaSchema` cannot
  * ship without deciding whether a rendering of a registry hit can hold it.
@@ -596,28 +748,26 @@ export const partitionFieldOverlay = ({
 const FORMAT_FOLD = {
   path: "identity",
   lookup: "template",
-  // Nobody fills a rendering of the resolved hit, so wording addressed at the
-  // person filling has nowhere to go in a format.
-  label: "dropped",
-  hint: "dropped",
+  label: "silent",
+  hint: "silent",
   inputType: "default",
   options: "default",
   validation: "default",
   required: "default",
-  optionsFrom: "blocking",
-  aiPrompt: "blocking",
-  aiAdapt: "blocking",
-  aiSeesDocument: "blocking",
-  parts: "blocking",
-  format: "blocking",
-  source: "blocking",
-  formula: "blocking",
-  condition: "blocking",
-  conditionAst: "blocking",
-  dateFormat: "blocking",
+  optionsFrom: "dropped",
+  aiPrompt: "dropped",
+  aiAdapt: "dropped",
+  aiSeesDocument: "dropped",
+  parts: "dropped",
+  format: "dropped",
+  source: "dropped",
+  formula: "dropped",
+  condition: "dropped",
+  conditionAst: "dropped",
+  dateFormat: "dropped",
 } as const satisfies Record<
   keyof FieldMeta,
-  "identity" | "template" | "dropped" | "default" | "blocking"
+  "identity" | "template" | "silent" | "dropped" | "default"
 >;
 
 /** Derived from {@link FORMAT_FOLD}, so a property that becomes `default`
@@ -642,16 +792,6 @@ const AT_DEFAULT_VALUE = {
     validation === undefined || Object.keys(validation).length === 0,
   required: ({ required }) => required !== true,
 } as const satisfies Record<DefaultFoldProperty, (field: FieldMeta) => boolean>;
-
-const foldsIntoFormat = (field: FieldMeta): boolean => {
-  const declared: Record<string, unknown> = field;
-  return (
-    Object.entries(FORMAT_FOLD).every(
-      ([property, disposition]) =>
-        disposition !== "blocking" || declared[property] === undefined,
-    ) && Object.values(AT_DEFAULT_VALUE).every((atDefault) => atDefault(field))
-  );
-};
 
 /** The parent's formats with `key` rendering `template`. The child is the more
  *  specific declaration, so its template replaces the parent's; a child that
@@ -679,26 +819,123 @@ const withFormatTemplate = (
 };
 
 /**
- * Fold `parent.key` back into the lookup that renders it.
+ * One property of a child the parent's format cannot hold, and why. A lookup
+ * a format cannot take is not a property with nowhere to go: it is either a
+ * second registry over one marker, or several renderings offered for the one
+ * the format holds, and each says something different back to the caller.
+ */
+type FormatFoldDrop = { property: string } & (
+  | { reason: "property" }
+  | { reason: "registry"; registry: string }
+  | { reason: "renderings"; renderings: number }
+);
+
+/** What `parent.key` leaves behind once the format renders it. */
+type FormatFold = {
+  /** The child reduced to what the format keeps: its path, and the lookup
+   *  whose template moves onto the format. */
+  field: FieldMeta;
+  /** The parent's formats with this child's rendering among them. */
+  formats: FieldLookupFormat[];
+  /** What the format could not carry, one entry per wire property — the
+   *  derived half of the shape is configured through one `source` — and only
+   *  the properties a caller is told about. */
+  drops: FormatFoldDrop[];
+};
+
+/**
+ * Fold `parent.key` into the format of `parent`'s lookup that renders it.
  *
  * A model that reads `{{company}}`, `{{company.address}}` and `{{company.krs}}`
  * describes every marker it sees, and describes the dotted ones the only way
  * it can: as the same registry lookup rendered differently, or as an entry
- * that says nothing beyond the shape every entry has. That is not a rival
- * configuration of one marker, it is the parent's format `key` spelled as a
- * field of its own, so whatever template the child declares moves onto that
- * format and the field goes. A child on a DIFFERENT registry is two lookups
- * over one marker, and a child carrying a real decision — an input type, a
- * validation, options, a condition, a formula, an AI instruction — is two
- * configurations of it; both stay separate fields and keep the refusal.
+ * filled in with the shape every entry has. That is not a rival configuration
+ * of one marker — the lookup owns every marker under it — so the child always
+ * folds: whatever template it declares moves onto the format, and the rest
+ * goes by {@link FORMAT_FOLD}. A child on a DIFFERENT registry folds too,
+ * without its lookup: one registry fills the parent, and the formats render
+ * the hit it resolved.
  *
- * The child's `label` and `hint` go with it: a rendering of the resolved hit
- * is not filled by anyone, so there is nowhere in a format to put wording
- * addressed at the person filling, and the parent's label names the group.
- * The drop is silent because this merge has no issue channel — the manifest
- * is its whole result — and the only per-property issues the contract reports
- * come from the tool site, where a property is dropped before the overlay
- * reaches the engine at all.
+ * `null` only when there is no format to fold into: the key is not one the
+ * lookup carries, and it cannot be added because the child brings no template
+ * of its own or the lookup already holds its maximum.
+ */
+const foldFieldIntoFormat = (
+  field: FieldMeta,
+  parent: FieldLookup,
+  key: string,
+): FormatFold | null => {
+  if (!isLookupFormatKey(key)) {
+    return null;
+  }
+  // The first format renders the bare marker, and a format key holds no dots,
+  // so a field declaring several renderings cannot move into one.
+  const restated =
+    field.lookup !== undefined &&
+    field.lookup.registry === parent.registry &&
+    field.lookup.formats.length === 1
+      ? field.lookup
+      : undefined;
+  const formats = withFormatTemplate(
+    parent.formats,
+    key,
+    restated?.formats.at(0)?.template,
+  );
+  if (formats === null) {
+    return null;
+  }
+  const declared: Record<string, unknown> = field;
+  const atDefault: Readonly<Record<string, (value: FieldMeta) => boolean>> =
+    AT_DEFAULT_VALUE;
+  const wireProperty: Readonly<Record<string, string>> = FIELD_WIRE_PROPERTY;
+  const drops = new Map<string, FormatFoldDrop>();
+  // The `template` disposition is decided here, where the two lookups are in
+  // hand; the loop below reads the dispositions that only depend on presence.
+  if (field.lookup !== undefined && restated === undefined) {
+    drops.set(FIELD_WIRE_PROPERTY.lookup, {
+      property: FIELD_WIRE_PROPERTY.lookup,
+      ...(field.lookup.registry === parent.registry
+        ? { reason: "renderings", renderings: field.lookup.formats.length }
+        : { reason: "registry", registry: field.lookup.registry }),
+    });
+  }
+  for (const [property, disposition] of Object.entries(FORMAT_FOLD)) {
+    const wire = wireProperty[property];
+    if (
+      disposition === "identity" ||
+      disposition === "silent" ||
+      disposition === "template" ||
+      declared[property] === undefined ||
+      // A persisted-only key (the derived AST, a composite's parts) has no
+      // wire property to name, so its drop goes with the entry.
+      wire === undefined ||
+      (disposition === "default" && atDefault[property]?.(field) === true)
+    ) {
+      continue;
+    }
+    if (!drops.has(wire)) {
+      drops.set(wire, { property: wire, reason: "property" });
+    }
+  }
+  return {
+    field:
+      restated === undefined
+        ? { path: field.path }
+        : { path: field.path, lookup: restated },
+    formats,
+    drops: [...drops.values()],
+  };
+};
+
+/**
+ * The manifest with every marker a lookup renders folded into that lookup.
+ *
+ * This is the same ownership rule the overlay boundary applies, run over the
+ * merged manifest so creation, configuration and read-back agree on which
+ * fields exist. The drops are silent here because this merge has no issue
+ * channel — the manifest is its whole result — while the boundary that a
+ * caller reaches through reports them per property, against the entry the
+ * caller sent.
  */
 const foldLookupFormatFields = (fields: readonly FieldMeta[]): FieldMeta[] => {
   const byPath = new Map(fields.map((field) => [field.path, field]));
@@ -707,36 +944,20 @@ const foldLookupFormatFields = (fields: readonly FieldMeta[]): FieldMeta[] => {
     const cut = field.path.lastIndexOf(".");
     const parent =
       cut === -1 ? undefined : byPath.get(field.path.slice(0, cut));
-    const key = field.path.slice(cut + 1);
-    if (
-      parent?.lookup === undefined ||
-      folded.has(parent.path) ||
-      !isLookupFormatKey(key) ||
-      !foldsIntoFormat(field)
-    ) {
+    if (parent?.lookup === undefined || folded.has(parent.path)) {
       continue;
     }
-    const restated = field.lookup;
-    // The first format renders the bare marker, and a format key holds no
-    // dots, so a field declaring several renderings cannot move into one.
-    if (
-      restated !== undefined &&
-      (restated.registry !== parent.lookup.registry ||
-        restated.formats.length > 1)
-    ) {
-      continue;
-    }
-    const formats = withFormatTemplate(
-      parent.lookup.formats,
-      key,
-      restated?.formats.at(0)?.template,
+    const fold = foldFieldIntoFormat(
+      field,
+      parent.lookup,
+      field.path.slice(cut + 1),
     );
-    if (formats === null) {
+    if (fold === null) {
       continue;
     }
     byPath.set(parent.path, {
       ...parent,
-      lookup: { ...parent.lookup, formats },
+      lookup: { ...parent.lookup, formats: fold.formats },
     });
     folded.add(field.path);
   }
