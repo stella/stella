@@ -57,7 +57,14 @@ export type MarkerMeta =
   | { kind: "elif"; expr: string }
   | { kind: "else" }
   | { kind: "endif" }
-  | { kind: "for"; alias: string; path: string }
+  | {
+      kind: "for";
+      alias: string;
+      path: string;
+      /** Filters on the loop path configure the ARRAY: how many rows it takes
+       *  and what to call it. */
+      filters: readonly FilterCall[];
+    }
   | { kind: "endfor" };
 
 export type DirectiveKind = MarkerMeta["kind"];
@@ -506,7 +513,7 @@ const readPrefix = (token: string | undefined): MarkerPrefix =>
 
 const TAG_RE = /^(?<tag>[\p{L}_][\p{L}\p{N}_]*)\b(?<rest>[\s\S]*)$/u;
 const FOR_RE =
-  /^(?<alias>[\p{L}_][\p{L}\p{N}_-]*)\s+in\s+(?<path>[\p{L}\p{N}_.-]+)$/u;
+  /^(?<alias>[\p{L}_][\p{L}\p{N}_-]*)\s+in\s+(?<path>[\p{L}\p{N}_.-]+)\s*(?<filters>\|[\s\S]*)?$/u;
 const CALL_RE = /^(?<name>[\p{L}_][\p{L}\p{N}_]*)\s*\(/u;
 
 /** Classify a `{% ... %}` tag. */
@@ -533,10 +540,17 @@ const classifyStatement = (inner: string): MarkerMeta | null => {
       if (!loop) {
         return null;
       }
+      const tail = loop.groups?.["filters"];
+      const chain =
+        tail === undefined ? { filters: [] } : scanFilterChain(tail);
+      if (chain === null || "unknownFilter" in chain) {
+        return null;
+      }
       return {
         kind: "for",
         alias: loop.groups?.["alias"] ?? "",
         path: loop.groups?.["path"] ?? "",
+        filters: chain.filters,
       };
     }
     default:

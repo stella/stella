@@ -88,6 +88,21 @@ describe("classifyMarker", () => {
       kind: "for",
       alias: "item",
       path: "items",
+      filters: [],
+    });
+    expect(
+      classifyMarker(
+        'for a in attorneys | min_items(3) | label("Attorneys")',
+        "statement",
+      ),
+    ).toEqual({
+      kind: "for",
+      alias: "a",
+      path: "attorneys",
+      filters: [
+        { name: "min_items", args: [{ kind: "positional", value: 3 }] },
+        { name: "label", args: [{ kind: "positional", value: "Attorneys" }] },
+      ],
     });
     expect(classifyMarker("endfor", "statement")).toEqual({ kind: "endfor" });
   });
@@ -175,6 +190,7 @@ describe("classifyMarker", () => {
       kind: "for",
       alias: "item",
       path: "items",
+      filters: [],
     });
   });
 

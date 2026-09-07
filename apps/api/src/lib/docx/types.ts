@@ -7,6 +7,7 @@ import type { ExtractedDocxParagraph } from "@stll/folio-core/server";
 import {
   type BlockDirectiveKind,
   type ConditionNode,
+  type FilterCall,
   DATE_FORMAT_STYLES,
   type DateFormatStyle,
   type FieldDateFormat,
@@ -147,6 +148,8 @@ export type BlockDirective = {
   expression: string;
   /** The loop variable of a `{% for %}`; absent on every other directive. */
   alias?: string;
+  /** Filters written on a `{% for %}`'s path, which configure the array. */
+  filters?: readonly FilterCall[];
   paragraphIndex: number;
 };
 

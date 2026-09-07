@@ -64,6 +64,7 @@ import {
   evaluateCondition,
   hasBlockDirectivePattern,
   LOOP_PROPERTIES,
+  type FilterCall,
   type LoopProperty,
   type NamedCondition,
   resolvePath,
@@ -111,6 +112,8 @@ type InlineEachGroup = {
   kind: "for";
   alias: string;
   arrayPath: string;
+  /** Filters on the loop path, which configure the array. */
+  filters: readonly FilterCall[];
   /** Offset of the opener's `{{`. */
   start: number;
   /** Offset just past the closer's `}}`. */
@@ -162,6 +165,7 @@ type OpenForFrame = {
   start: number;
   alias: string;
   arrayPath: string;
+  filters: readonly FilterCall[];
   contentStart: number;
 };
 
@@ -227,6 +231,7 @@ export const parseInlineConditions = (text: string): InlineParse => {
                 start: marker.start,
                 alias: meta.alias,
                 arrayPath: meta.path,
+                filters: meta.filters,
                 contentStart: marker.end,
               },
         );
@@ -285,6 +290,7 @@ export const parseInlineConditions = (text: string): InlineParse => {
           kind: "for",
           alias: frame.alias,
           arrayPath: frame.arrayPath,
+          filters: frame.filters,
           start: frame.start,
           end: marker.end,
           contentStart: frame.contentStart,

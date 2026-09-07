@@ -117,7 +117,12 @@ const forMarker: fc.Arbitrary<AuthoredMarker> = fc
   .tuple(identifier, path, prefix)
   .map(([alias, loopPath, tag]) => ({
     text: `{%${tag === "" ? " " : tag}for ${alias} in ${loopPath} %}`,
-    meta: { kind: "for", alias, path: loopPath } satisfies MarkerMeta,
+    meta: {
+      kind: "for",
+      alias,
+      path: loopPath,
+      filters: [],
+    } satisfies MarkerMeta,
   }));
 
 const endforMarker: fc.Arbitrary<AuthoredMarker> = prefix.map((tag) => ({

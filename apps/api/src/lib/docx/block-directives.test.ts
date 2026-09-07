@@ -359,6 +359,7 @@ describe("scanBlockDirectives", () => {
     expect(directives).toEqual([
       {
         alias: "seller",
+        filters: [],
         kind: "for",
         expression: "sellers",
         paragraphIndex: 0,

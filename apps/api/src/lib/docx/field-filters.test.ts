@@ -8,6 +8,19 @@ import { discoverTemplate } from "./discover-template";
 import { fieldMetaFromFilters, FIELD_META_FILTERS } from "./field-filters";
 import type { FieldMeta } from "./types";
 
+const WRAP = (body: string) =>
+  `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+<w:body>${body}</w:body></w:document>`;
+
+const P = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
+
+const makeDocx = async (paragraphs: readonly string[]): Promise<Buffer> => {
+  const zip = new JSZip();
+  zip.file("word/document.xml", WRAP(paragraphs.map(P).join("")));
+  return Buffer.from(await zip.generateAsync({ type: "nodebuffer" }));
+};
+
 const filtersOf = (marker: string): readonly FilterCall[] => {
   const meta = classifyMarker(marker);
   if (meta?.kind !== "placeholder") {
@@ -177,6 +190,46 @@ describe("fieldMetaFromFilters", () => {
   });
 });
 
+describe("filters on a loop path", () => {
+  test("configure the array itself", async () => {
+    const discovered = await discoverTemplate(
+      await makeDocx([
+        '{% for a in attorneys | label("Attorneys") | min_items(3) | max_items(3) | required %}',
+        "{{ a.name }}",
+        "{% endfor %}",
+      ]),
+    );
+
+    expect(discovered.structureErrors).toEqual([]);
+    expect(discovered.documentFields).toEqual([
+      {
+        path: "attorneys",
+        label: "Attorneys",
+        required: true,
+        validation: { required: true, minItems: 3, maxItems: 3 },
+      },
+    ]);
+  });
+
+  test("a value filter on the loop path names the set that applies", async () => {
+    const discovered = await discoverTemplate(
+      await makeDocx([
+        '{% for a in attorneys | number | label("Attorneys") %}',
+        "{{ a.name }}",
+        "{% endfor %}",
+      ]),
+    );
+
+    const [error] = discovered.structureErrors;
+    expect(error?.message).toContain("number() configures a value");
+    expect(error?.message).toContain("min_items");
+    // The rest of the chain still lands.
+    expect(discovered.documentFields).toEqual([
+      { path: "attorneys", label: "Attorneys" },
+    ]);
+  });
+});
+
 describe("the filter catalogue", () => {
   test("composites are the one deliberate exclusion", () => {
     expect(FIELD_META_FILTERS.parts).toEqual({
@@ -187,19 +240,6 @@ describe("the filter catalogue", () => {
 });
 
 // ── Fixed point ──────────────────────────────────────────
-
-const WRAP = (body: string) =>
-  `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-<w:body>${body}</w:body></w:document>`;
-
-const P = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
-
-const makeDocx = async (paragraphs: readonly string[]): Promise<Buffer> => {
-  const zip = new JSZip();
-  zip.file("word/document.xml", WRAP(paragraphs.map(P).join("")));
-  return Buffer.from(await zip.generateAsync({ type: "nodebuffer" }));
-};
 
 const quote = (value: string): string => `"${value.replaceAll('"', '\\"')}"`;
 

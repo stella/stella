@@ -23,7 +23,11 @@ import {
 
 import { parseBlockTree, scanBlockDirectives } from "./block-directives";
 import { scanPlaceholders } from "./discover-placeholders";
-import { fieldMetaFromFilters, filterChainSignature } from "./field-filters";
+import {
+  arrayFieldFromFilters,
+  fieldMetaFromFilters,
+  filterChainSignature,
+} from "./field-filters";
 import { parseInlineConditions } from "./inline-conditions";
 import {
   MAIN_DOCUMENT_PART_PATH,
@@ -454,6 +458,9 @@ type DocumentFieldDeclaration = {
   filters: readonly FilterCall[];
   signature: string;
   paragraphIndex: number;
+  /** A loop path's filters configure the repeat, not a value, so the two are
+   *  read by different halves of the catalogue. */
+  scope: "value" | "array";
 };
 
 type AnalysisResult = {
@@ -495,6 +502,7 @@ type RecordDeclarationOptions = {
   filters: readonly FilterCall[];
   paragraphIndex: number;
   path: string;
+  scope?: "value" | "array";
 };
 
 const recordFieldDeclaration = ({
@@ -503,6 +511,7 @@ const recordFieldDeclaration = ({
   filters,
   paragraphIndex,
   path,
+  scope = "value",
 }: RecordDeclarationOptions): void => {
   if (filters.length === 0) {
     return;
@@ -510,7 +519,7 @@ const recordFieldDeclaration = ({
   const signature = filterChainSignature(filters);
   const existing = declarations.get(path);
   if (existing === undefined) {
-    declarations.set(path, { filters, signature, paragraphIndex });
+    declarations.set(path, { filters, signature, paragraphIndex, scope });
     return;
   }
   if (existing.signature === signature) {
@@ -531,6 +540,7 @@ const recordFieldDeclaration = ({
 type ContainerStructureOptions = {
   body: slimdom.Element;
   conditionPaths: Set<string>;
+  documentFilters: Map<string, DocumentFieldDeclaration>;
   errors: TemplateStructureError[];
   fields: FieldAccumulator;
   loopAliases: Map<string, Set<string>>;
@@ -540,6 +550,7 @@ type ContainerStructureOptions = {
 const collectContainerStructure = ({
   body,
   conditionPaths,
+  documentFilters,
   errors,
   fields,
   loopAliases,
@@ -582,6 +593,14 @@ const collectContainerStructure = ({
       registerField(fields, scopedPath, "array");
       const alias = directive.alias ?? directive.expression;
       recordLoopAlias(loopAliases, alias, scopedPath);
+      recordFieldDeclaration({
+        declarations: documentFilters,
+        errors,
+        filters: directive.filters ?? [],
+        paragraphIndex: authoredIndices[i] ?? i,
+        path: scopedPath,
+        scope: "array",
+      });
       activeArrays.push({
         alias,
         declaredPath: directive.expression,
@@ -715,6 +734,14 @@ const collectParagraphPlaceholders = ({
           );
           registerField(fields, scopedPath, "array");
           recordLoopAlias(loopAliases, group.alias, scopedPath);
+          recordFieldDeclaration({
+            declarations: documentFilters,
+            errors,
+            filters: group.filters,
+            paragraphIndex: authoredIndices[i] ?? i,
+            path: scopedPath,
+            scope: "array",
+          });
           inlineLoopScopes.push({
             alias: group.alias,
             declaredPath: group.arrayPath,
@@ -867,6 +894,7 @@ const analyzeContainer = (body: slimdom.Element): AnalysisResult => {
   const structure = collectContainerStructure({
     body,
     conditionPaths,
+    documentFilters,
     errors,
     fields,
     loopAliases,
@@ -935,6 +963,7 @@ const mergeAnalysis = (
       filters: declaration.filters,
       paragraphIndex: declaration.paragraphIndex,
       path,
+      scope: declaration.scope,
     });
   }
   for (const path of secondary.conditionPaths) {
@@ -1158,10 +1187,13 @@ const documentLayerFields = (
   errors: TemplateStructureError[],
 ): FieldMeta[] => {
   const fields: FieldMeta[] = [];
-  for (const [path, { filters, paragraphIndex }] of [...declarations].toSorted(
-    ([a], [b]) => compareCodeUnit(a, b),
-  )) {
-    const { field, issues } = fieldMetaFromFilters(path, filters);
+  for (const [path, { filters, paragraphIndex, scope }] of [
+    ...declarations,
+  ].toSorted(([a], [b]) => compareCodeUnit(a, b))) {
+    const { field, issues } =
+      scope === "array"
+        ? arrayFieldFromFilters(path, filters)
+        : fieldMetaFromFilters(path, filters);
     for (const { filter, hint, message } of issues) {
       errors.push({
         message: `${message} ${hint}`,

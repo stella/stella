@@ -246,6 +246,7 @@ const scanDirectivesInParagraphs = (
             kind: meta.kind,
             expression: meta.path,
             alias: meta.alias,
+            filters: meta.filters,
             paragraphIndex: i,
           }
         : {

@@ -573,6 +573,45 @@ export const fieldMetaFromFilters = (
   return { field: parsed.output, issues: draft.issues };
 };
 
+/**
+ * The filters that describe a REPEAT rather than a value: how many rows it
+ * takes, and what to call the group. These are the ones a `{% for %}` tag may
+ * carry, since the loop path names the array, not one of its values.
+ */
+export const ARRAY_FILTERS = [
+  "label",
+  "hint",
+  "required",
+  "min_items",
+  "max_items",
+] as const satisfies readonly FilterName[];
+
+const isArrayFilter = (name: FilterName): boolean =>
+  ARRAY_FILTERS.some((candidate) => candidate === name);
+
+/**
+ * The manifest field a loop's own filters declare. A value filter on a loop
+ * path configures nothing — there is no single value there — so it is reported
+ * against the set that does apply, and the rest of the chain still lands.
+ */
+export const arrayFieldFromFilters = (
+  path: string,
+  filters: readonly FilterCall[],
+): FieldFilterResult => {
+  const applicable = filters.filter(({ name }) => isArrayFilter(name));
+  const issues = filters
+    .filter(({ name }) => !isArrayFilter(name))
+    .map(({ name }) =>
+      issue(
+        name,
+        `${name}() configures a value, and {% for ${path} %} names the repeat itself.`,
+        `On a loop the filters are ${ARRAY_FILTERS.join(", ")}; put a value filter on the item's own marker.`,
+      ),
+    );
+  const applied = fieldMetaFromFilters(path, applicable);
+  return { field: applied.field, issues: [...issues, ...applied.issues] };
+};
+
 /** A stable rendering of one chain, so two occurrences of a path can be
  *  compared for agreement without caring about whitespace. */
 export const filterChainSignature = (filters: readonly FilterCall[]): string =>
