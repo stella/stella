@@ -3,6 +3,7 @@ import { startTransition, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useFormatter, useLocale, useTranslations } from "use-intl";
 
+import { displayLanguageName } from "@stll/locales";
 import { Avatar, AvatarFallback } from "@stll/ui/avatar";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
@@ -23,7 +24,6 @@ import { cn } from "@stll/ui/utils";
 
 import {
   isSupportedLanguage,
-  LANGUAGE_LABELS,
   setPreferredLanguage,
   SUPPORTED_LANGUAGES,
 } from "../i18n";
@@ -324,7 +324,7 @@ const GeneralPane = ({
             autoHighlight
             items={SUPPORTED_LANGUAGES}
             itemToStringLabel={(supportedLanguage) =>
-              LANGUAGE_LABELS[supportedLanguage]
+              displayLanguageName(supportedLanguage)
             }
             onValueChange={(value) => {
               if (value !== null) {
@@ -345,7 +345,7 @@ const GeneralPane = ({
                     key={supportedLanguage}
                     value={supportedLanguage}
                   >
-                    {LANGUAGE_LABELS[supportedLanguage]}
+                    {displayLanguageName(supportedLanguage)}
                   </ComboboxItem>
                 )}
               </ComboboxList>

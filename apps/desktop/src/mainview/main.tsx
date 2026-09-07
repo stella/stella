@@ -7,6 +7,7 @@ import { panic } from "better-result";
 
 import ClipboardApp from "../clipboard/ClipboardApp";
 import {
+  applyDocumentLanguage,
   defaultMessages,
   DESKTOP_LANGUAGE_CHANGED_EVENT,
   DesktopIntlProvider,
@@ -39,11 +40,20 @@ const isReactRoot = (value: unknown): value is ReactRoot =>
   "render" in value &&
   typeof value.render === "function";
 
+// Applied before the first render so an RTL window never paints left-to-right
+// first; the effect below follows later switches.
+const initialLanguage = getPreferredLanguage();
+applyDocumentLanguage(initialLanguage);
+
 const Root = () => {
   useSystemTheme();
 
-  const [language, setLanguage] = useState(getPreferredLanguage);
+  const [language, setLanguage] = useState(initialLanguage);
   const [messages, setMessages] = useState<DesktopMessages>(defaultMessages);
+
+  useEffect(() => {
+    applyDocumentLanguage(language);
+  }, [language]);
 
   useEffect(() => {
     let disposed = false;

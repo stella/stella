@@ -324,10 +324,21 @@ test("source apps receive a stable tint from the bounded palette", () => {
 
 describe("keyboard indexes", () => {
   test("timeline arrows navigate horizontally and Arrow Down focuses search", () => {
-    expect(clipboardTimelineKeyAction("ArrowLeft")).toBe("previous");
-    expect(clipboardTimelineKeyAction("ArrowRight")).toBe("next");
-    expect(clipboardTimelineKeyAction("ArrowDown")).toBe("focusSearch");
-    expect(clipboardTimelineKeyAction("ArrowUp")).toBeNull();
+    const ltr = (key: string) =>
+      clipboardTimelineKeyAction({ direction: "ltr", key });
+    expect(ltr("ArrowLeft")).toBe("previous");
+    expect(ltr("ArrowRight")).toBe("next");
+    expect(ltr("ArrowDown")).toBe("focusSearch");
+    expect(ltr("ArrowUp")).toBeNull();
+  });
+
+  test("timeline arrows follow the rail's direction under RTL", () => {
+    const rtl = (key: string) =>
+      clipboardTimelineKeyAction({ direction: "rtl", key });
+    expect(rtl("ArrowLeft")).toBe("next");
+    expect(rtl("ArrowRight")).toBe("previous");
+    expect(rtl("ArrowDown")).toBe("focusSearch");
+    expect(rtl("ArrowUp")).toBeNull();
   });
 
   test("timeline navigation has no target beyond either edge", () => {
@@ -530,7 +541,7 @@ describe("clipboardRailWindow", () => {
         ...base,
         activeIndex: 0,
         itemCount: 500,
-        scrollLeft: 0,
+        scrollOffset: 0,
       }),
     ).toEqual({ end: 8, start: 0 });
     expect(
@@ -538,7 +549,7 @@ describe("clipboardRailWindow", () => {
         ...base,
         activeIndex: 250,
         itemCount: 500,
-        scrollLeft: 25_000,
+        scrollOffset: 25_000,
       }),
     ).toEqual({ end: 258, start: 248 });
   });
@@ -548,7 +559,7 @@ describe("clipboardRailWindow", () => {
       ...base,
       activeIndex: 499,
       itemCount: 500,
-      scrollLeft: 0,
+      scrollOffset: 0,
     });
     // The viewport is at the head while the selection is at the tail, so the
     // window spans both; the point is that neither is left unmounted.
@@ -559,18 +570,18 @@ describe("clipboardRailWindow", () => {
   test("always mounts the viewport and the active card", () => {
     // The viewport range must stay mounted for every scroll offset, otherwise
     // pointer scrolling reveals an unmounted (blank) region of the rail.
-    for (let scrollLeft = 0; scrollLeft <= 50_000; scrollLeft += 731) {
+    for (let scrollOffset = 0; scrollOffset <= 50_000; scrollOffset += 731) {
       for (const activeIndex of [0, 1, 7, 8, 9, 250, 498, 499, 900]) {
         const window = clipboardRailWindow({
           ...base,
           activeIndex,
           itemCount: 500,
-          scrollLeft,
+          scrollOffset,
         });
         expect(window.start).toBeGreaterThanOrEqual(0);
         expect(window.end).toBeLessThanOrEqual(500);
 
-        const firstVisible = Math.floor(scrollLeft / base.stride);
+        const firstVisible = Math.floor(scrollOffset / base.stride);
         const lastVisible = Math.min(
           499,
           firstVisible + Math.ceil(base.viewportWidth / base.stride),
@@ -592,7 +603,7 @@ describe("clipboardRailWindow", () => {
       ...base,
       activeIndex: 251,
       itemCount: 500,
-      scrollLeft: 25_000,
+      scrollOffset: 25_000,
     });
     expect(window.end - window.start).toBeLessThanOrEqual(6 + 2 * 2);
   });
@@ -603,7 +614,7 @@ describe("clipboardRailWindow", () => {
         activeIndex: 0,
         itemCount: 3,
         overscan: 2,
-        scrollLeft: 0,
+        scrollOffset: 0,
         stride: 100,
         viewportWidth: 0,
       }),

@@ -187,6 +187,7 @@
       "dependencies": {
         "@atlaskit/pragmatic-drag-and-drop": "catalog:",
         "@stll/api-contract": "workspace:*",
+        "@stll/locales": "workspace:*",
         "@stll/text-normalize": "workspace:*",
         "@stll/ui": "workspace:*",
         "@tauri-apps/api": "^2.11.1",

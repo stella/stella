@@ -4,12 +4,17 @@ use std::sync::OnceLock;
 static TRANSLATIONS: OnceLock<Translations> = OnceLock::new();
 
 struct Translations {
+  locale: &'static str,
   messages: HashMap<String, String>,
   fallback: HashMap<String, String>,
 }
 
+/// Every locale the app ships, in the picker's order. A test asserts this
+/// list is exactly the message files on disk, which the TypeScript side pins
+/// to the shared UI-locale list, so the two cannot drift apart.
 const LOCALES: &[(&str, &str)] = &[
   ("en", include_str!("../../src/i18n/langs/en.json")),
+  ("ar", include_str!("../../src/i18n/langs/ar.json")),
   ("cs", include_str!("../../src/i18n/langs/cs.json")),
   ("de", include_str!("../../src/i18n/langs/de.json")),
   ("es", include_str!("../../src/i18n/langs/es.json")),
@@ -19,6 +24,7 @@ const LOCALES: &[(&str, &str)] = &[
   ("lt", include_str!("../../src/i18n/langs/lt.json")),
   ("lv", include_str!("../../src/i18n/langs/lv.json")),
   ("pl", include_str!("../../src/i18n/langs/pl.json")),
+  ("pt-BR", include_str!("../../src/i18n/langs/pt-BR.json")),
   ("sk", include_str!("../../src/i18n/langs/sk.json")),
 ];
 
@@ -54,15 +60,40 @@ fn parse_locale(json_str: &str) -> HashMap<String, String> {
   map
 }
 
-fn detect_locale() -> String {
+fn locale_source(locale: &str) -> Option<(&'static str, &'static str)> {
+  LOCALES
+    .iter()
+    .find(|(l, _)| *l == locale)
+    .map(|(l, source)| (*l, *source))
+}
+
+/// Map a system locale tag onto a shipped locale: the exact tag first, then
+/// the base code, and finally Portuguese, whose only build is `pt-BR`. Mirrors
+/// the TypeScript resolver so both sides pick the same file for a tag.
+fn resolve_locale(tag: &str) -> Option<&'static str> {
+  let normalized = tag.replace('_', "-");
+  if let Some((locale, _)) = locale_source(&normalized) {
+    return Some(locale);
+  }
+  let base = normalized.split('-').next()?;
+  if let Some((locale, _)) = locale_source(base) {
+    return Some(locale);
+  }
+  if base == "pt" {
+    return locale_source("pt-BR").map(|(locale, _)| locale);
+  }
+  None
+}
+
+fn detect_locale() -> &'static str {
   sys_locale::get_locale()
-    .map(|l| l.split('-').next().unwrap_or("en").to_string())
-    .unwrap_or_else(|| "en".to_string())
+    .and_then(|tag| resolve_locale(&tag))
+    .unwrap_or("en")
 }
 
 /// Initialize the translation system. Call once at startup.
 pub fn init() {
-  init_with_locale(&detect_locale());
+  init_with_locale(detect_locale());
 }
 
 /// Initialize with a specific locale. Useful for tests.
@@ -73,21 +104,20 @@ pub fn init_en() {
 
 fn init_with_locale(locale: &str) {
   TRANSLATIONS.get_or_init(|| {
-    let fallback = parse_locale(
-      LOCALES
-        .iter()
-        .find(|(l, _)| *l == "en")
-        .map(|(_, s)| *s)
-        .unwrap_or("{}"),
-    );
+    let fallback = parse_locale(locale_source("en").map(|(_, s)| s).unwrap_or("{}"));
 
-    let messages = LOCALES
-      .iter()
-      .find(|(l, _)| *l == locale)
-      .map(|(_, s)| parse_locale(s))
-      .unwrap_or_else(|| fallback.clone());
-
-    Translations { messages, fallback }
+    match locale_source(locale) {
+      Some((locale, source)) => Translations {
+        locale,
+        messages: parse_locale(source),
+        fallback,
+      },
+      None => Translations {
+        locale: "en",
+        messages: fallback.clone(),
+        fallback,
+      },
+    }
   });
 }
 
@@ -137,10 +167,28 @@ pub fn t_plural(key: &str, count: usize) -> String {
   template.replace("{count}", &count.to_string())
 }
 
+/// CLDR plural category for Arabic, whose six categories the branch probe
+/// below cannot express: it knows only one/few/other.
+fn arabic_plural_form(count: usize) -> &'static str {
+  match count {
+    0 => "zero",
+    1 => "one",
+    2 => "two",
+    _ => match count % 100 {
+      3..=10 => "few",
+      11..=99 => "many",
+      _ => "other",
+    },
+  }
+}
+
 /// Select the ICU plural form based on the active locale and count.
 /// Covers CLDR plural rules for supported languages.
 fn select_plural_form(count: usize) -> &'static str {
   let tr = TRANSLATIONS.get().expect("i18n not initialized");
+  if tr.locale == "ar" {
+    return arabic_plural_form(count);
+  }
 
   // Check if this locale has a "few" branch by testing a known key
   let has_few = tr.messages.values().any(|v| v.contains("few {"));
@@ -193,6 +241,76 @@ mod tests {
 
   fn ensure_init() {
     init_en();
+  }
+
+  // -- LOCALES --
+
+  /// The tray strings and the window strings must cover the same languages.
+  /// The TypeScript side pins its catalogue directory to the shared UI-locale
+  /// list, so matching the directory here is what keeps Rust in step with it.
+  #[test]
+  fn locales_cover_every_shipped_message_file() {
+    let dir =
+      std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../src/i18n/langs");
+    let mut on_disk: Vec<String> = std::fs::read_dir(&dir)
+      .expect("desktop message directory")
+      .map(|entry| entry.expect("directory entry").path())
+      .filter(|path| path.extension().is_some_and(|ext| ext == "json"))
+      .map(|path| {
+        path
+          .file_stem()
+          .expect("message file name")
+          .to_string_lossy()
+          .into_owned()
+      })
+      .collect();
+    on_disk.sort();
+
+    let mut declared: Vec<String> =
+      LOCALES.iter().map(|(l, _)| (*l).to_string()).collect();
+    declared.sort();
+
+    assert_eq!(declared, on_disk);
+  }
+
+  // -- resolve_locale --
+
+  #[test]
+  fn test_resolve_locale_exact_tag() {
+    assert_eq!(resolve_locale("pt-BR"), Some("pt-BR"));
+    assert_eq!(resolve_locale("cs"), Some("cs"));
+  }
+
+  #[test]
+  fn test_resolve_locale_base_code() {
+    assert_eq!(resolve_locale("de-AT"), Some("de"));
+    assert_eq!(resolve_locale("ar_EG"), Some("ar"));
+  }
+
+  #[test]
+  fn test_resolve_locale_portuguese_falls_back_to_brazilian() {
+    assert_eq!(resolve_locale("pt-PT"), Some("pt-BR"));
+  }
+
+  #[test]
+  fn test_resolve_locale_unknown() {
+    assert_eq!(resolve_locale("ja-JP"), None);
+  }
+
+  // -- arabic_plural_form --
+
+  #[test]
+  fn test_arabic_plural_form_covers_every_category() {
+    assert_eq!(arabic_plural_form(0), "zero");
+    assert_eq!(arabic_plural_form(1), "one");
+    assert_eq!(arabic_plural_form(2), "two");
+    assert_eq!(arabic_plural_form(3), "few");
+    assert_eq!(arabic_plural_form(10), "few");
+    assert_eq!(arabic_plural_form(11), "many");
+    assert_eq!(arabic_plural_form(99), "many");
+    assert_eq!(arabic_plural_form(100), "other");
+    assert_eq!(arabic_plural_form(102), "other");
+    assert_eq!(arabic_plural_form(103), "few");
   }
 
   // -- flatten_json --
