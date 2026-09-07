@@ -84,7 +84,7 @@ const FIELD_PROPERTY_DOCS = {
   options_from:
     "Dependent select: the path of another field whose entered values supply this field's options. Use instead of `options`.",
   validation:
-    "Constraints checked at fill time: `required`, `min_length`/`max_length`, `min`/`max`, `pattern` (a regex matched against the complete value), `min_items`/`max_items` for repeated fields.",
+    "Constraints checked at fill time: `required`, `min_length`/`max_length`, `min`/`max`, `pattern` (a regex matched against the complete value), `min_items`/`max_items` for repeated fields. A maximum is at least 1: 0 admits nothing, so send the property only when you mean to constrain it.",
   required: "Whether the fill form rejects an empty value.",
   source:
     "Who fills the field. ONE object with a `type`; the branches are listed below. Omit it for a field the person fills.",

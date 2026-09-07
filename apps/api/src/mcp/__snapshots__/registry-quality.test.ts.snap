@@ -895,7 +895,8 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                   },
                   "max_length": {
                     "type": "number",
-                    "description": "Maximum string length"
+                    "minimum": 1,
+                    "description": "Maximum string length, at least 1"
                   },
                   "min": {
                     "type": "number",
@@ -916,7 +917,8 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                   },
                   "max_items": {
                     "type": "number",
-                    "description": "Maximum repeated items"
+                    "minimum": 1,
+                    "description": "Maximum repeated items, at least 1"
                   }
                 },
                 "required": [],

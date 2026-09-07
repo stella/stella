@@ -2934,6 +2934,38 @@ describe("MCP template tools", () => {
     );
   });
 
+  test("configure_template_fields drops a maximum of 0 and keeps a real one", async () => {
+    // The same strict-schema client writes a typed placeholder for every
+    // constraint it is not setting. A maximum of 0 admits nothing, so the
+    // property rejects it and the entry keeps everything else it decided;
+    // a maximum that constrains something is untouched.
+    const issues = await configureEntryIssues([
+      {
+        path: "attorneys",
+        label: "Attorneys",
+        validation: {
+          min: 0,
+          max: 0,
+          min_length: 0,
+          max_length: 0,
+          min_items: 0,
+          max_items: 0,
+        },
+      },
+      { path: "fee", validation: { max_items: 3 } },
+    ]);
+
+    expect(issues).toMatchObject([{ path: "fields.0.validation", index: 0 }]);
+    expect(configureTemplateFieldsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fields: [
+          { path: "attorneys", label: "Attorneys" },
+          { path: "fee", validation: { maxItems: 3 } },
+        ],
+      }),
+    );
+  });
+
   test("configure_template_fields reads a null-padded field entry as a plain text field", async () => {
     // GPT-family clients send `null` for every optional property they are not
     // setting. Null is absence here: without that, this entry reads as a
@@ -3325,13 +3357,12 @@ describe("MCP template tools", () => {
     });
 
     expect(result.isError).toBeFalsy();
-    const { issues } = asTestRaw<{ issues: unknown[] }>(
+    const { issues } = asTestRaw<{ issues: { path: string }[] }>(
       parseToolPayload(result),
     );
-    expect(issues).toEqual([]);
     // `options_from: ""` is a placeholder the property refuses, so it reads as
-    // omitted; the zero bounds are values the property accepts, so they are
-    // applied as sent.
+    // omitted. A maximum of 0 admits nothing, so `validation` is refused and
+    // named; the field's own decisions are applied all the same.
     expect(received).toMatchObject([
       {
         path: "rozhodne_pravo",
@@ -3340,6 +3371,7 @@ describe("MCP template tools", () => {
         required: true,
       },
     ]);
+    expect(issues).toMatchObject([{ path: "fields.0.validation" }]);
     expect(received).not.toMatchObject([{ optionsFrom: "" }]);
   });
 

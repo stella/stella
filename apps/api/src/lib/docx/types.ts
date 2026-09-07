@@ -392,13 +392,28 @@ export const FIELD_VALIDATION_DESCRIPTION = "Field-level value constraints";
 /** Composites are engine-side: no agent-facing surface advertises them. */
 const FIELD_PARTS_DESCRIPTION = "Composite field parts";
 
+/**
+ * A maximum of 0 admits nothing, so no author means it: it is what a client
+ * that fills in every declared property writes for a length or a count it is
+ * not constraining, and saving it makes a field nobody can fill. Rejecting
+ * the value keeps the rest of that entry, which is what the configure tool
+ * does with a property it cannot read. `min*` and `max` are left alone: a
+ * bound of 0 is a real one.
+ */
+const SMALLEST_MAXIMUM = 1;
+
 export const fieldValidationObjectSchema = v.strictObject({
   required: v.optional(v.pipe(v.boolean(), v.description("Value is required"))),
   minLength: v.optional(
     v.pipe(v.number(), v.finite(), v.description("Minimum string length")),
   ),
   maxLength: v.optional(
-    v.pipe(v.number(), v.finite(), v.description("Maximum string length")),
+    v.pipe(
+      v.number(),
+      v.finite(),
+      v.minValue(SMALLEST_MAXIMUM),
+      v.description("Maximum string length, at least 1"),
+    ),
   ),
   min: v.optional(
     v.pipe(v.number(), v.finite(), v.description("Minimum numeric value")),
@@ -411,7 +426,12 @@ export const fieldValidationObjectSchema = v.strictObject({
     v.pipe(v.number(), v.finite(), v.description("Minimum repeated items")),
   ),
   maxItems: v.optional(
-    v.pipe(v.number(), v.finite(), v.description("Maximum repeated items")),
+    v.pipe(
+      v.number(),
+      v.finite(),
+      v.minValue(SMALLEST_MAXIMUM),
+      v.description("Maximum repeated items, at least 1"),
+    ),
   ),
 });
 
