@@ -27,6 +27,7 @@ describe("buildPrefillTargets", () => {
         hint: null,
         inputType: "text",
         options: null,
+        dateFormat: null,
       },
       {
         id: "f2",
@@ -36,6 +37,7 @@ describe("buildPrefillTargets", () => {
         hint: null,
         inputType: "date",
         options: null,
+        dateFormat: null,
       },
     ]);
   });
@@ -77,6 +79,7 @@ describe("buildPrefillTargets", () => {
         hint: null,
         inputType: "text",
         options: null,
+        dateFormat: null,
       },
       {
         id: "f2",
@@ -86,6 +89,7 @@ describe("buildPrefillTargets", () => {
         hint: null,
         inputType: "select",
         options: ["Praha", "Brno"],
+        dateFormat: null,
       },
     ]);
   });
@@ -107,6 +111,7 @@ describe("buildPrefillTargets", () => {
         hint: null,
         inputType: "text",
         options: null,
+        dateFormat: null,
       },
     ]);
   });
@@ -236,6 +241,38 @@ describe("mapPrefillResults", () => {
     expect(
       mapPrefillResults(targets, [
         { id: "f3", value: "maybe", sourceSnippet: null },
+      ]),
+    ).toEqual([]);
+  });
+
+  test("a date is read in the locale the field renders it in", () => {
+    const dateTargets = buildPrefillTargets([
+      field({
+        path: "signing_date",
+        inputType: "date",
+        dateFormat: { locale: "cs", style: "long" },
+      }),
+      field({ path: "filed_on", inputType: "date" }),
+    ]);
+
+    expect(
+      mapPrefillResults(dateTargets, [
+        { id: "f1", value: "1. října 2026", sourceSnippet: null },
+      ]),
+    ).toEqual([
+      {
+        path: "signing_date",
+        partKey: null,
+        value: "2026-10-01",
+        sourceSnippet: null,
+      },
+    ]);
+
+    // A field with no format of its own reads English alone, so a Czech month
+    // name is not a suggestion it can offer.
+    expect(
+      mapPrefillResults(dateTargets, [
+        { id: "f2", value: "1. října 2026", sourceSnippet: null },
       ]),
     ).toEqual([]);
   });

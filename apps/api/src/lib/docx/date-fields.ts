@@ -63,15 +63,18 @@ export const formatDateExample = (dateFormat: FieldDateFormat): string =>
 /**
  * The submitted value of one date field, as the ISO date both the formatter
  * and the `{% if %}` comparison read. The field's own locale is what makes a
- * month name written in the document's language readable, so the two callers
- * (this module and the raw-value stash in `manifest-fill-steps`) go through
- * here rather than each choosing which locales to accept.
+ * date written the way the document renders it readable, so every caller
+ * (this module, the raw-value stash in `manifest-fill-steps`, and the prefill
+ * suggestions) goes through here rather than each choosing which locales to
+ * accept. A field with no format of its own reads English alone.
  */
 export const normalizeDateFieldValue = (
   incoming: unknown,
-  dateFormat: FieldDateFormat,
+  dateFormat: FieldDateFormat | null,
 ): Normalized<string> =>
-  normalizeDateValue(incoming, { locales: [dateFormat.locale] });
+  normalizeDateValue(incoming, {
+    locales: dateFormat === null ? [] : [dateFormat.locale],
+  });
 
 /** Format one incoming date value, pushing a field-named error carrying the
  *  normalizer's own wording when the value names no calendar date, and

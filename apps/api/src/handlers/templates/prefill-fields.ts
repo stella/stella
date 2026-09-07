@@ -11,12 +11,12 @@
 
 import {
   normalizeBoolean,
-  normalizeDateValue,
   normalizeEnumValue,
   normalizeNumber,
 } from "@stll/agent-input";
 
-import type { ResolvedField } from "@/api/lib/docx/types";
+import { normalizeDateFieldValue } from "@/api/lib/docx/date-fields";
+import type { FieldDateFormat, ResolvedField } from "@/api/lib/docx/types";
 
 export type PrefillTarget = {
   /** Simple mapped id used in the model conversation (f1, f2, …). */
@@ -32,6 +32,9 @@ export type PrefillTarget = {
   inputType: string;
   /** Allowed values for select inputs; free-form otherwise. */
   options: string[] | null;
+  /** The field's own date format, when it has one: a date is read in the
+   *  locale the document renders it in, the same way filling reads it. */
+  dateFormat: FieldDateFormat | null;
 };
 
 const targetInputType = (field: ResolvedField): string =>
@@ -71,6 +74,8 @@ export const buildPrefillTargets = (
             part.options.length > 0
               ? part.options
               : null,
+          // A part is text or a select; only the whole field carries a date.
+          dateFormat: null,
         });
       }
       continue;
@@ -88,6 +93,7 @@ export const buildPrefillTargets = (
         inputType === "select" && field.options && field.options.length > 0
           ? field.options
           : null,
+      dateFormat: field.dateFormat ?? null,
     });
   }
 
@@ -168,7 +174,7 @@ const normalizeValue = (
     return number.ok ? String(number.value) : null;
   }
   if (target.inputType === "date") {
-    const date = normalizeDateValue(value);
+    const date = normalizeDateFieldValue(value, target.dateFormat);
     return date.ok ? date.value : null;
   }
   return value;
