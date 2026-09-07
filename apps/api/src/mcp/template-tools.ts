@@ -13,7 +13,6 @@ import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack
 import { assertUsageAvailableForHandler } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
-import { getOrganizationRegistryAvailability } from "@/api/lib/business-registries/credentials";
 import type {
   AssertNoExtraFields,
   CONFIGURE_TEMPLATE_FIELDS_PROJECTION,
