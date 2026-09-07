@@ -30,6 +30,7 @@ import { discoverTemplate } from "@/api/lib/docx/discover-template";
 import { extractTextForPreview } from "@/api/lib/docx/extract-text";
 import type { AiFieldError } from "@/api/lib/docx/resolve-ai-fields";
 import { readManifest, writeManifest } from "@/api/lib/docx/template-manifest";
+import { inlineBytesIgnoredWarning } from "@/api/lib/docx/template-warnings";
 import type { TemplateWarning } from "@/api/lib/docx/template-warnings";
 import type { FieldMeta } from "@/api/lib/docx/types";
 import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buffer";
@@ -180,6 +181,13 @@ const TEMPLATE_FILL_COMPLETION_MODE_PROP = {
  * needs: resending the same document under the same id publishes one more
  * version instead of accumulating near-duplicate templates. A template is
  * never matched by name, because two templates may share one.
+ *
+ * A call carrying BOTH document sources is accepted, not refused: the host's
+ * `file` is stored and the inline bytes are ignored, with a warning saying
+ * so. A host fills `file` from its own transport while `docx_base64` is typed
+ * by the caller, so the transported bytes are the trustworthy ones; and
+ * refusing taught nothing, because two models sent both on every attempt of
+ * every task and never dropped one on retry.
  */
 export const createTemplateArgsSchema = nullAsAbsent(
   v.pipe(
@@ -205,23 +213,15 @@ export const createTemplateArgsSchema = nullAsAbsent(
           v.minLength(1),
           v.maxLength(MAX_INLINE_DOCX_BASE64_LENGTH),
           v.description(
-            "Original .docx bytes, base64-encoded verbatim; the fallback when " +
-              "the host cannot supply 'file'. Send one or the other, never " +
-              "both. Never strip parts out of the file to shrink it.",
+            "Original .docx bytes, base64-encoded verbatim; for a host that " +
+              "cannot supply 'file'. Sent beside 'file', it is ignored in " +
+              "favour of the attached file. Never strip parts out of the " +
+              "file to shrink it.",
           ),
         ),
       ),
       file: v.optional(OPENAI_FILE_REFERENCE_SCHEMA),
     }),
-    v.forward(
-      v.partialCheck(
-        [["docx_base64"], ["file"]],
-        ({ docx_base64, file }) =>
-          docx_base64 === undefined || file === undefined,
-        "Provide either file or docx_base64, not both",
-      ),
-      ["docx_base64"],
-    ),
     v.forward(
       v.partialCheck(
         [["template_id"], ["docx_base64"], ["file"]],
@@ -577,7 +577,7 @@ export const CREATE_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
     "create, pass a name and the document. To publish over an existing " +
     "template, pass its template_id with the document; template_id with only " +
     "a name renames it. Same-name templates are never merged: only " +
-    "template_id matches an existing one. For the document, pass either " +
+    "template_id matches an existing one. For the document, pass " +
     "file (preferred, " +
     `up to ${MAX_DOCX_MEGABYTES} MB) or the original bytes as docx_base64 ` +
     `(max ${MAX_INLINE_DOCX_BYTES} bytes decoded within the ` +
@@ -2069,8 +2069,12 @@ const readCreateTemplateDocx = async ({
   return { status: "ok", buffer };
 };
 
-/** How the caller supplied the DOCX, or that they supplied none (which is
- *  only legal for a rename). */
+/**
+ * How the caller supplied the DOCX, or that they supplied none (which is only
+ * legal for a rename). A host reference wins over inline bytes when both are
+ * present: the host transported the file, while the base64 was typed by the
+ * caller. The inline bytes are then never decoded.
+ */
 const createTemplateDocxSource = (input: {
   docx_base64?: string | undefined;
   file?: v.InferOutput<typeof OPENAI_FILE_REFERENCE_SCHEMA> | undefined;
@@ -2181,6 +2185,12 @@ const handleCreateTemplateTool: TypedMcpToolHandler<
     }
     buffer = read.buffer;
   }
+  // Reported with the template rather than refused, so a caller that sent
+  // both learns which document was stored without losing the call.
+  const sourceWarnings =
+    source?.type === "file" && input.docx_base64 !== undefined
+      ? [inlineBytesIgnoredWarning()]
+      : [];
 
   if (input.template_id !== undefined) {
     const templateId = brandPersistedTemplateId(input.template_id);
@@ -2201,6 +2211,7 @@ const handleCreateTemplateTool: TypedMcpToolHandler<
       templateId,
       fieldCount: upserted.fieldCount,
       ...described,
+      warnings: [...sourceWarnings, ...described.warnings],
     });
   }
 
@@ -2243,6 +2254,7 @@ const handleCreateTemplateTool: TypedMcpToolHandler<
     templateId: created.value.id,
     fieldCount: created.value.fieldCount,
     ...described,
+    warnings: [...sourceWarnings, ...described.warnings],
   });
 };
 

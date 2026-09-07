@@ -90,7 +90,9 @@ const WORKFLOW_STEPS: readonly WorkflowStep[] = [
       "`docx_base64`, base64 of the raw bytes, for a small document only " +
       `(at most ${MAX_INLINE_DOCX_BYTES} bytes decoded), because the whole ` +
       "call must fit one MCP request frame. Never strip parts out to fit " +
-      "that; use `file`. Returns `templateId`, `fieldCount`, the discovered " +
+      "that; use `file`. Send one of the two: a call carrying both stores " +
+      "the attached `file` and ignores the inline bytes, and says so in " +
+      "`warnings[]`. Returns `templateId`, `fieldCount`, the discovered " +
       "`fields[]`, `arrays[]`, `conditions[]` and `computed[]`, and " +
       "`warnings[]` (`code`, `path`, `message`, `hint`): markers the create " +
       "accepted that will not do what you meant. Fix them in the DOCX and " +

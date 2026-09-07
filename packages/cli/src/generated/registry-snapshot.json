@@ -803,7 +803,7 @@
       "scope": "templates"
     },
     "name": "create_template",
-    "description": "Create a template from a DOCX, or publish a new version of one. To create, pass a name and the document. To publish over an existing template, pass its template_id with the document; template_id with only a name renames it. Same-name templates are never merged: only template_id matches an existing one. For the document, pass either file (preferred, up to 50 MB) or the original bytes as docx_base64 (max 196608 bytes decoded within the 524288-byte MCP request frame); never retype the file or strip parts out to fit. Read stella://reference/template-markers before authoring the DOCX. Returns the template id, its discovered fields, arrays, conditions, computed values and marker warnings. Then call configure_template_fields to say who fills each field.",
+    "description": "Create a template from a DOCX, or publish a new version of one. To create, pass a name and the document. To publish over an existing template, pass its template_id with the document; template_id with only a name renames it. Same-name templates are never merged: only template_id matches an existing one. For the document, pass file (preferred, up to 50 MB) or the original bytes as docx_base64 (max 196608 bytes decoded within the 524288-byte MCP request frame); never retype the file or strip parts out to fit. Read stella://reference/template-markers before authoring the DOCX. Returns the template id, its discovered fields, arrays, conditions, computed values and marker warnings. Then call configure_template_fields to say who fills each field.",
     "inputSchema": {
       "type": "object",
       "required": [],
@@ -824,7 +824,7 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 262144,
-          "description": "Original .docx bytes, base64-encoded verbatim; the fallback when the host cannot supply 'file'. Send one or the other, never both. Never strip parts out of the file to shrink it."
+          "description": "Original .docx bytes, base64-encoded verbatim; for a host that cannot supply 'file'. Sent beside 'file', it is ignored in favour of the attached file. Never strip parts out of the file to shrink it."
         },
         "file": {
           "type": "object",

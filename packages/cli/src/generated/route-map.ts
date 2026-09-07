@@ -2674,7 +2674,7 @@ export const generatedRouteMap: RouteNode = {
                 kind: "string",
                 repeatable: false,
                 description:
-                  "Original .docx bytes, base64-encoded verbatim; the fallback when the host cannot supply 'file'. Send one or the other, never both. Never strip parts out of the file to shrink it.",
+                  "Original .docx bytes, base64-encoded verbatim; for a host that cannot supply 'file'. Sent beside 'file', it is ignored in favour of the attached file. Never strip parts out of the file to shrink it.",
                 required: false,
               },
               {
@@ -2739,7 +2739,7 @@ export const generatedRouteMap: RouteNode = {
                   minLength: 1,
                   maxLength: 262144,
                   description:
-                    "Original .docx bytes, base64-encoded verbatim; the fallback when the host cannot supply 'file'. Send one or the other, never both. Never strip parts out of the file to shrink it.",
+                    "Original .docx bytes, base64-encoded verbatim; for a host that cannot supply 'file'. Sent beside 'file', it is ignored in favour of the attached file. Never strip parts out of the file to shrink it.",
                 },
                 file: {
                   type: "object",

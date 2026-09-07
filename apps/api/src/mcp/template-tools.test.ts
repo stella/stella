@@ -3280,28 +3280,63 @@ describe("MCP template tools", () => {
     expect(createStoredTemplateMock).not.toHaveBeenCalled();
   });
 
-  test("create_template rejects a request carrying both document sources", async () => {
+  test("create_template prefers the attached file when inline bytes are also sent", async () => {
+    // A host fills `file` from its own transport; `docx_base64` is typed by
+    // the caller. When both arrive the transported bytes are the trustworthy
+    // ones, so the call succeeds on the file and says what it ignored.
+    const fileDocx = Buffer.from(await makeValidDocxBytes());
+    safeOutboundFetchBytesMock.mockResolvedValue(hostFileResponse(fileDocx));
+    createStoredTemplateMock.mockImplementation(async function* () {
+      yield* [];
+      return Result.ok({ id: "tmpl_new", name: "NDA", fieldCount: 1 });
+    });
+    describeStoredTemplateMock.mockResolvedValue(describedTemplate());
+
     const result = await handleMcpToolCall({
       args: {
         name: "NDA",
-        docx_base64: await makeValidDocxBase64(),
+        // Not a DOCX at all: if these bytes were decoded the call would fail
+        // structural validation, so passing proves they never were.
+        docx_base64: Buffer.from("not a docx").toString("base64"),
         file: HOST_FILE_REFERENCE,
       },
       context: createContext(),
       toolName: "create_template",
     });
 
-    expect(result.isError).toBe(true);
-    const error = validationEnvelope(result);
-    expect(error["code"]).toBe("validation_error");
-    expect(error["issues"]).toEqual([
-      {
-        path: "docx_base64",
-        message: "Provide either file or docx_base64, not both",
-      },
-    ]);
-    expect(safeOutboundFetchBytesMock).not.toHaveBeenCalled();
-    expect(createStoredTemplateMock).not.toHaveBeenCalled();
+    expect(result.isError).toBeFalsy();
+    expect(safeOutboundFetchBytesMock).toHaveBeenCalled();
+    // The attached file's bytes are the ones that reached the create path.
+    const created = createStoredTemplateMock.mock.calls.at(0)?.at(0);
+    expect(asTestRaw<{ buffer: Buffer }>(created).buffer.equals(fileDocx)).toBe(
+      true,
+    );
+    expect(parseToolPayload(result)).toMatchObject({
+      templateId: "tmpl_new",
+      warnings: [
+        {
+          code: "inline_bytes_ignored",
+          message: expect.stringContaining("attached file was stored"),
+        },
+      ],
+    });
+  });
+
+  test("create_template reports nothing extra when only one document source is sent", async () => {
+    createStoredTemplateMock.mockImplementation(async function* () {
+      yield* [];
+      return Result.ok({ id: "tmpl_new", name: "NDA", fieldCount: 1 });
+    });
+    describeStoredTemplateMock.mockResolvedValue(describedTemplate());
+
+    const result = await handleMcpToolCall({
+      args: { name: "NDA", docx_base64: await makeValidDocxBase64() },
+      context: createContext(),
+      toolName: "create_template",
+    });
+
+    expect(result.isError).toBeFalsy();
+    expect(parseToolPayload(result)).toMatchObject({ warnings: [] });
   });
 
   test("create_template advertises file as a host file parameter", async () => {

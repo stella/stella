@@ -5,6 +5,7 @@ import { discoverTemplate } from "./discover-template";
 import {
   fieldOverlayWarnings,
   type RegistryGate,
+  inlineBytesIgnoredWarning,
   TEMPLATE_WARNING_CODES,
   type TemplateWarningCode,
 } from "./template-warnings";
@@ -265,6 +266,10 @@ describe("warning code census", () => {
           registryGate: refuseAll(),
         })
       ).map(({ code }) => code),
+      // Not a document defect: the create tool reports it when a call carries
+      // both document sources. It belongs to the same closed code set, so its
+      // producer lives here and the census covers it.
+      inlineBytesIgnoredWarning().code,
     ]);
 
     expect([...produced].toSorted()).toEqual(
