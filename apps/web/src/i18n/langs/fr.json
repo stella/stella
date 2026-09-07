@@ -1741,8 +1741,6 @@
     "uploadFailed": "Échec de l'import"
   },
   "feedback": {
-    "discord": "Communauté Discord",
-    "github": "Tickets GitHub",
     "trigger": "Commentaires"
   },
   "fileDetail": {
@@ -3500,6 +3498,7 @@
     "registryKrsHint": "KRS recherche par numéro d’immatriculation, et non par nom de société. Saisissez un numéro KRS à 10 chiffres, avec les zéros initiaux (par ex. 0000006865).",
     "registryVatHint": "VIES vérifie les numéros de TVA, pas les noms de sociétés. Saisissez un numéro de TVA avec son préfixe pays (p. ex. CZ27082440) ; le format dépend du pays.",
     "renameSearchTitle": "Renommer la recherche enregistrée",
+    "requestCountry": "Demander l’ajout d’un pays",
     "resizeFilters": "Redimensionner la colonne des filtres",
     "resizePreview": "Redimensionner la colonne d’aperçu",
     "resultCount": "{count, plural, one {# résultat} other {# résultats}}",

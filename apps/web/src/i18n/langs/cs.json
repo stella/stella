@@ -1741,8 +1741,6 @@
     "uploadFailed": "Nahrávání selhalo"
   },
   "feedback": {
-    "discord": "Komunita na Discordu",
-    "github": "Hlášení na GitHubu",
     "trigger": "Zpětná vazba"
   },
   "fileDetail": {
@@ -3500,6 +3498,7 @@
     "registryKrsHint": "KRS vyhledává podle registračního čísla, ne podle názvu společnosti. Zadejte desetimístné číslo KRS včetně úvodních nul (např. 0000006865).",
     "registryVatHint": "VIES ověřuje DIČ, ne názvy společností. Zadejte DIČ včetně kódu země (např. CZ27082440); formát závisí na zemi.",
     "renameSearchTitle": "Přejmenovat uložené hledání",
+    "requestCountry": "Požádat o přidání nové země",
     "resizeFilters": "Změnit šířku sloupce filtrů",
     "resizePreview": "Změnit šířku sloupce náhledu",
     "resultCount": "{count, plural, one {# výsledek} few {# výsledky} other {# výsledků}}",

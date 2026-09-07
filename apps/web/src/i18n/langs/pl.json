@@ -1741,8 +1741,6 @@
     "uploadFailed": "Przesyłanie nie powiodło się"
   },
   "feedback": {
-    "discord": "Społeczność Discord",
-    "github": "Zgłoszenia GitHub",
     "trigger": "Opinia"
   },
   "fileDetail": {
@@ -3500,6 +3498,7 @@
     "registryKrsHint": "KRS wyszukuje według numeru rejestrowego, a nie nazwy firmy. Wpisz 10-cyfrowy numer KRS, włącznie z zerami na początku (np. 0000006865).",
     "registryVatHint": "VIES sprawdza numery VAT, a nie nazwy firm. Wpisz numer VAT z prefiksem kraju (np. CZ27082440); format zależy od kraju.",
     "renameSearchTitle": "Zmień nazwę zapisanego wyszukiwania",
+    "requestCountry": "Poproś o dodanie nowego kraju",
     "resizeFilters": "Zmień szerokość kolumny filtrów",
     "resizePreview": "Zmień szerokość kolumny podglądu",
     "resultCount": "{count, plural, one {# wynik} few {# wyniki} many {# wyników} other {# wyników}}",

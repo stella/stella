@@ -1741,8 +1741,6 @@
     "uploadFailed": "Feltöltés sikertelen"
   },
   "feedback": {
-    "discord": "Discord-közösség",
-    "github": "GitHub-problémák",
     "trigger": "Visszajelzés"
   },
   "fileDetail": {
@@ -3500,6 +3498,7 @@
     "registryKrsHint": "A KRS nyilvántartási szám, nem cégnév alapján keres. Adjon meg egy 10 számjegyű KRS-számot a kezdő nullákkal együtt (pl. 0000006865).",
     "registryVatHint": "A VIES adószámokat ellenőriz, nem cégneveket. Adja meg a közösségi adószámot az országkóddal együtt (pl. CZ27082440); a formátum országonként eltér.",
     "renameSearchTitle": "Mentett keresés átnevezése",
+    "requestCountry": "Új ország hozzáadásának kérése",
     "resizeFilters": "Szűrőoszlop átméretezése",
     "resizePreview": "Előnézeti oszlop átméretezése",
     "resultCount": "{count, plural, one {# találat} other {# találat}}",

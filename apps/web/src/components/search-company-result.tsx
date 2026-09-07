@@ -3,15 +3,19 @@ import type { KeyboardEvent } from "react";
 
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { panic } from "better-result";
-import { ChevronRightIcon } from "lucide-react";
+import { ChevronRightIcon, PlusIcon, Settings2Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { isBusinessRegistryCredentialSlug } from "@stll/api-contract";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { Loader } from "@stll/ui/loader";
+import { Menu, MenuPopup, MenuTrigger } from "@stll/ui/menu";
+import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
+import { Separator } from "@stll/ui/separator";
 import { cn } from "@stll/ui/utils";
 
+import { FeedbackCommunityItems } from "@/components/feedback-community-items";
 import { RegistryCredentialSetup } from "@/components/registry-credential-setup";
 import {
   getRegistryQueryHint,
@@ -231,6 +235,23 @@ export const SearchCompanyResult = ({
           onSelect={onSelect}
         />
       ))}
+      <Separator className="my-2" />
+      <Menu>
+        <MenuTrigger
+          render={
+            <Button
+              variant="ghost"
+              className="min-h-11 w-full justify-start gap-2 px-2"
+            />
+          }
+        >
+          <PlusIcon className="size-4" />
+          {t("search.requestCountry")}
+        </MenuTrigger>
+        <MenuPopup align="start">
+          <FeedbackCommunityItems />
+        </MenuPopup>
+      </Menu>
     </section>
   );
 };
@@ -246,27 +267,59 @@ const RegistryCountryGroup = ({
 }) => {
   const id = useId();
   const format = useFormatter();
+  const t = useTranslations();
   return (
     <section>
-      <Button
-        variant="ghost"
-        className="min-h-11 w-full justify-start gap-2 px-2 text-start"
-        aria-expanded={group.expanded}
-        aria-controls={id}
-        onClick={() => search.toggleCountry(group.country)}
-      >
-        <DirectionalIcon
-          icon={ChevronRightIcon}
-          flip={!group.expanded}
-          className={cn("size-4 shrink-0", group.expanded && "rotate-90")}
-        />
-        <span>{format.displayName(group.country, { type: "region" })}</span>
-        <span className="text-muted-foreground ms-auto truncate text-xs font-normal">
-          <bdi>
-            {group.registries.map((entry) => entry.registry.name).join(", ")}
-          </bdi>
-        </span>
-      </Button>
+      <div className="hover:bg-accent focus-within:bg-accent flex items-center rounded-md">
+        <Button
+          variant="ghost"
+          className="min-h-11 min-w-0 flex-1 justify-start gap-2 px-2 text-start data-pressed:bg-transparent [:hover,[data-pressed]]:bg-transparent"
+          aria-expanded={group.expanded}
+          aria-controls={id}
+          onClick={() => search.toggleCountry(group.country)}
+        >
+          <DirectionalIcon
+            icon={ChevronRightIcon}
+            flip={!group.expanded}
+            className={cn("size-4 shrink-0", group.expanded && "rotate-90")}
+          />
+          <span>{format.displayName(group.country, { type: "region" })}</span>
+          <span className="text-muted-foreground ms-auto truncate text-xs font-normal">
+            <bdi>
+              {group.registries.map((entry) => entry.registry.name).join(", ")}
+            </bdi>
+          </span>
+        </Button>
+        {group.registries.map((entry) =>
+          isBusinessRegistryCredentialSlug(entry.registry.slug) &&
+          entry.configuration ? (
+            <Popover key={entry.registry.slug}>
+              <PopoverTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-11 shrink-0 data-pressed:bg-transparent [:hover,[data-pressed]]:bg-transparent"
+                    aria-label={`${t("common.settings")} · ${entry.registry.name}`}
+                  />
+                }
+              >
+                <Settings2Icon className="size-4" />
+              </PopoverTrigger>
+              <PopoverPopup layer="search-child" align="end" className="w-80">
+                <p className="px-3 text-sm font-medium">
+                  <bdi>{entry.registry.name}</bdi>
+                </p>
+                <RegistryCredentialSetup
+                  key={`${search.organizationId}:${entry.registry.slug}`}
+                  registry={entry.registry.slug}
+                  source={entry.configuration.source}
+                />
+              </PopoverPopup>
+            </Popover>
+          ) : null,
+        )}
+      </div>
       <div id={id}>
         {group.expanded && (
           <div className="space-y-2 ps-6 pb-2">
@@ -295,31 +348,8 @@ const RegistrySearchResults = ({
   onSelect: (() => void) | undefined;
 }) => {
   const t = useTranslations();
-  const [configurationOpen, setConfigurationOpen] = useState(false);
   return (
     <div className="space-y-1" aria-label={entry.registry.name}>
-      {isBusinessRegistryCredentialSlug(entry.registry.slug) &&
-        entry.configuration && (
-          <>
-            {entry.configuration.status === "ready" && (
-              <Button
-                variant="ghost"
-                className="min-h-11"
-                onClick={() => setConfigurationOpen(!configurationOpen)}
-              >
-                {t("common.settings")}
-              </Button>
-            )}
-            {(entry.configuration.status === "configuration-required" ||
-              configurationOpen) && (
-              <RegistryCredentialSetup
-                key={`${search.organizationId}:${entry.registry.slug}`}
-                registry={entry.registry.slug}
-                source={entry.configuration.source}
-              />
-            )}
-          </>
-        )}
       {entry.queryHint && (
         <p className="text-muted-foreground py-2 text-sm" role="status">
           {t(entry.queryHint)}

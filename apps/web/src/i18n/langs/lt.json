@@ -1741,8 +1741,6 @@
     "uploadFailed": "Įkėlimas nepavyko"
   },
   "feedback": {
-    "discord": "„Discord“ bendruomenė",
-    "github": "„GitHub“ problemos",
     "trigger": "Atsiliepimai"
   },
   "fileDetail": {
@@ -3500,6 +3498,7 @@
     "registryKrsHint": "KRS ieško pagal registracijos numerį, o ne įmonės pavadinimą. Įveskite 10 skaitmenų KRS numerį su nuliais pradžioje (pvz., 0000006865).",
     "registryVatHint": "VIES tikrina PVM mokėtojų kodus, o ne įmonių pavadinimus. Įveskite PVM mokėtojo kodą su šalies prefiksu (pvz., CZ27082440); formatas priklauso nuo šalies.",
     "renameSearchTitle": "Pervadinti išsaugotą paiešką",
+    "requestCountry": "Prašyti pridėti naują šalį",
     "resizeFilters": "Keisti filtrų stulpelio plotį",
     "resizePreview": "Keisti peržiūros stulpelio plotį",
     "resultCount": "{count, plural, one {# rezultatas} few {# rezultatai} many {# rezultato} other {# rezultatų}}",

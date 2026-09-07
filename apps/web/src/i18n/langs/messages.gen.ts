@@ -1744,8 +1744,6 @@ type Messages = {
     "uploadFailed": "Upload failed";
   };
   "feedback": {
-    "discord": "Discord community";
-    "github": "GitHub issues";
     "trigger": "Feedback";
   };
   "fileDetail": {
@@ -3503,6 +3501,7 @@ type Messages = {
     "registryKrsHint": "KRS searches by registration number, not company name. Enter a 10-digit KRS number, including leading zeros (e.g. 0000006865).";
     "registryVatHint": "VIES checks VAT numbers, not company names. Enter a VAT number with its country prefix (e.g. CZ27082440); the format depends on the country.";
     "renameSearchTitle": "Rename saved search";
+    "requestCountry": "Request a new country";
     "resizeFilters": "Resize filters column";
     "resizePreview": "Resize preview column";
     "resultCount": "{count, plural, one {# result} other {# results}}";

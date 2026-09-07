@@ -1741,8 +1741,6 @@
     "uploadFailed": "فشل الرفع"
   },
   "feedback": {
-    "discord": "مجتمع Discord",
-    "github": "مشكلات GitHub",
     "trigger": "ملاحظات"
   },
   "fileDetail": {
@@ -3500,6 +3498,7 @@
     "registryKrsHint": "يبحث KRS برقم التسجيل، وليس باسم الشركة. أدخل رقم KRS المكوّن من 10 أرقام، بما في ذلك الأصفار في البداية (مثل 0000006865).",
     "registryVatHint": "يتحقق VIES من أرقام ضريبة القيمة المضافة، وليس أسماء الشركات. أدخل الرقم مع رمز البلد (مثل CZ27082440)؛ تختلف الصيغة حسب البلد.",
     "renameSearchTitle": "إعادة تسمية البحث المحفوظ",
+    "requestCountry": "طلب إضافة بلد جديد",
     "resizeFilters": "تغيير عرض عمود عوامل التصفية",
     "resizePreview": "تغيير عرض عمود المعاينة",
     "resultCount": "{count, plural, zero {لا نتائج} one {نتيجة واحدة} two {نتيجتان} few {# نتائج} many {# نتيجة} other {# نتيجة}}",

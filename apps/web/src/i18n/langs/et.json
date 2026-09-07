@@ -1741,8 +1741,6 @@
     "uploadFailed": "Üleslaadimine ebaõnnestus"
   },
   "feedback": {
-    "discord": "Discordi kogukond",
-    "github": "GitHubi probleemid",
     "trigger": "Tagasiside"
   },
   "fileDetail": {
@@ -3500,6 +3498,7 @@
     "registryKrsHint": "KRS otsib registrinumbri, mitte ettevõtte nime järgi. Sisestage 10-kohaline KRS-number koos algusnullidega (nt 0000006865).",
     "registryVatHint": "VIES kontrollib käibemaksukohustuslasena registreerimise numbreid, mitte ettevõtete nimesid. Sisestage number koos riigikoodiga (nt CZ27082440); vorming sõltub riigist.",
     "renameSearchTitle": "Nimeta salvestatud otsing ümber",
+    "requestCountry": "Taotle uue riigi lisamist",
     "resizeFilters": "Muuda filtriveeru laiust",
     "resizePreview": "Muuda eelvaateveeru laiust",
     "resultCount": "{count, plural, one {# tulemus} other {# tulemust}}",

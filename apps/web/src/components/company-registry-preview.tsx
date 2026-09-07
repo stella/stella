@@ -118,12 +118,12 @@ const CompanyIdentity = ({
   const sourceUrl = sanitizeHref(hit.registryUrl);
   return (
     <section className="space-y-3">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-center justify-between gap-3">
         <div className="min-w-0 space-y-1">
           <h2 className="text-lg font-semibold text-balance" dir="auto">
             {hit.name}
           </h2>
-          <p className="text-muted-foreground font-mono text-xs">
+          <p className="text-muted-foreground text-sm tabular-nums">
             {t(
               registry === "ares"
                 ? "contacts.create.icoPlaceholder"
@@ -133,15 +133,22 @@ const CompanyIdentity = ({
           </p>
         </div>
         {sourceUrl ? (
-          <a
-            className="hover:bg-muted inline-flex min-h-11 shrink-0 items-center gap-2 rounded-md px-3 text-sm underline underline-offset-4"
-            href={sanitizeHref(sourceUrl)}
-            rel="noopener noreferrer"
-            target="_blank"
+          <Button
+            className="min-h-11 shrink-0"
+            render={
+              <a
+                aria-label={t("common.source")}
+                href={sanitizeHref(sourceUrl)}
+                rel="noopener noreferrer"
+                target="_blank"
+              />
+            }
+            size="sm"
+            variant="link"
           >
             <ExternalLinkIcon className="size-3.5" />
             {t("common.source")}
-          </a>
+          </Button>
         ) : null}
       </div>
       {hit.address?.textAddress ? (

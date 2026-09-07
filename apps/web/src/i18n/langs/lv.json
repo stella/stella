@@ -1741,8 +1741,6 @@
     "uploadFailed": "Augšupielāde neizdevās"
   },
   "feedback": {
-    "discord": "Discord kopiena",
-    "github": "GitHub problēmas",
     "trigger": "Atsauksmes"
   },
   "fileDetail": {
@@ -3500,6 +3498,7 @@
     "registryKrsHint": "KRS meklē pēc reģistrācijas numura, nevis uzņēmuma nosaukuma. Ievadiet 10 ciparu KRS numuru, ieskaitot sākuma nulles (piem., 0000006865).",
     "registryVatHint": "VIES pārbauda PVN numurus, nevis uzņēmumu nosaukumus. Ievadiet PVN numuru ar valsts prefiksu (piem., CZ27082440); formāts ir atkarīgs no valsts.",
     "renameSearchTitle": "Pārdēvēt saglabāto meklējumu",
+    "requestCountry": "Pieprasīt jaunas valsts pievienošanu",
     "resizeFilters": "Mainīt filtru kolonnas platumu",
     "resizePreview": "Mainīt priekšskatījuma kolonnas platumu",
     "resultCount": "{count, plural, zero {# rezultātu} one {# rezultāts} other {# rezultāti}}",

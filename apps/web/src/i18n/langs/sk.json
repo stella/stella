@@ -1741,8 +1741,6 @@
     "uploadFailed": "Nahrávanie zlyhalo"
   },
   "feedback": {
-    "discord": "Komunita na Discorde",
-    "github": "Hlásenia na GitHube",
     "trigger": "Spätná väzba"
   },
   "fileDetail": {
@@ -3500,6 +3498,7 @@
     "registryKrsHint": "KRS vyhľadáva podľa registračného čísla, nie podľa názvu spoločnosti. Zadajte desaťmiestne číslo KRS vrátane úvodných núl (napr. 0000006865).",
     "registryVatHint": "VIES overuje IČ DPH, nie názvy spoločností. Zadajte IČ DPH vrátane kódu krajiny (napr. CZ27082440); formát závisí od krajiny.",
     "renameSearchTitle": "Premenovať uložené vyhľadávanie",
+    "requestCountry": "Požiadať o pridanie novej krajiny",
     "resizeFilters": "Zmeniť šírku stĺpca filtrov",
     "resizePreview": "Zmeniť šírku stĺpca náhľadu",
     "resultCount": "{count, plural, one {# výsledok} few {# výsledky} other {# výsledkov}}",

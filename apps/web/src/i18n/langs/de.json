@@ -1741,8 +1741,6 @@
     "uploadFailed": "Upload fehlgeschlagen"
   },
   "feedback": {
-    "discord": "Discord-Community",
-    "github": "GitHub-Issues",
     "trigger": "Feedback"
   },
   "fileDetail": {
@@ -3500,6 +3498,7 @@
     "registryKrsHint": "KRS sucht nach der Registernummer, nicht nach dem Firmennamen. Geben Sie eine zehnstellige KRS-Nummer einschließlich führender Nullen ein (z. B. 0000006865).",
     "registryVatHint": "VIES prüft Umsatzsteuer-Identifikationsnummern, keine Unternehmensnamen. Geben Sie die Nummer mit Länderpräfix ein (z. B. CZ27082440); das Format hängt vom Land ab.",
     "renameSearchTitle": "Gespeicherte Suche umbenennen",
+    "requestCountry": "Neues Land anfragen",
     "resizeFilters": "Filterspalte anpassen",
     "resizePreview": "Vorschauspalte anpassen",
     "resultCount": "{count, plural, one {# Ergebnis} other {# Ergebnisse}}",

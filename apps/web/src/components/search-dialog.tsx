@@ -1,12 +1,4 @@
-import {
-  lazy,
-  Suspense,
-  useCallback,
-  useId,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { lazy, Suspense, useCallback, useMemo, useRef, useState } from "react";
 import type {
   ComponentProps,
   CSSProperties,
@@ -36,6 +28,13 @@ import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
 import { GLOBAL_SEARCH_RESULT_TYPES } from "@stll/api-contract";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@stll/ui/breadcrumb";
 import { Button } from "@stll/ui/button";
 import {
   Command,
@@ -388,6 +387,7 @@ const SearchSupplementalGroups = ({
   companySearch,
   registryExpanded,
   onRegistryExpandedChange,
+  onRegistryBack,
   onRegistrySelect,
   caseLawEnabled,
   caseLawProps,
@@ -397,43 +397,56 @@ const SearchSupplementalGroups = ({
   companySearch: ReturnType<typeof useCompanyRegistrySearch>;
   registryExpanded: boolean;
   onRegistryExpandedChange: (expanded: boolean) => void;
+  onRegistryBack: () => void;
   onRegistrySelect: () => void;
   caseLawEnabled: boolean;
   caseLawProps: ComponentProps<typeof SearchCaseLawGroup>;
 }) => {
   const t = useTranslations();
-  const registryGroupId = useId();
-  if (scope === "registries") {
-    return <SearchCompanyResult search={companySearch} />;
-  }
-  if (!visible) {
+  if (!visible && scope !== "registries") {
     return null;
+  }
+  if (scope === "registries" || registryExpanded) {
+    return (
+      <section>
+        <Breadcrumb
+          aria-label={t("navigation.search")}
+          className="bg-background sticky top-0 z-10 border-b px-4"
+        >
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <Button
+                variant="ghost"
+                className="text-muted-foreground min-h-11 px-0"
+                onClick={onRegistryBack}
+              >
+                {t("navigation.search")}
+              </Button>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <BreadcrumbPage>{t("search.scopeRegistries")}</BreadcrumbPage>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
+        <SearchCompanyResult
+          search={companySearch}
+          onSelect={onRegistrySelect}
+        />
+      </section>
+    );
   }
   return (
     <>
       <section className="border-t px-2 py-1">
         <Button
-          aria-expanded={registryExpanded}
-          aria-controls={registryGroupId}
           className="bg-background sticky top-0 z-10 min-h-11 w-full justify-start gap-2 px-2 text-start"
           variant="ghost"
-          onClick={() => onRegistryExpandedChange(!registryExpanded)}
+          onClick={() => onRegistryExpandedChange(true)}
         >
-          <DirectionalIcon
-            icon={ChevronRightIcon}
-            flip={!registryExpanded}
-            className={cn("size-4", registryExpanded && "rotate-90")}
-          />
+          <DirectionalIcon icon={ChevronRightIcon} className="size-4" />
           {t("search.searchRegistries")}
         </Button>
-        <div id={registryGroupId}>
-          {registryExpanded && (
-            <SearchCompanyResult
-              search={companySearch}
-              onSelect={onRegistrySelect}
-            />
-          )}
-        </div>
       </section>
       {caseLawEnabled && <SearchCaseLawGroup {...caseLawProps} />}
     </>
@@ -1931,6 +1944,12 @@ export const SearchDialog = ({
                       scope={searchScope}
                       companySearch={companySearch}
                       registryExpanded={registryExpanded}
+                      onRegistryBack={() => {
+                        setSearchScope("all");
+                        setRegistryExpanded(false);
+                        setSupplementalPreview({ type: "internal" });
+                        searchInputRef.current?.focus();
+                      }}
                       onRegistryExpandedChange={(expanded) => {
                         setRegistryExpanded(expanded);
                         setSupplementalPreview(
