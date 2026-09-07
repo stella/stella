@@ -224,14 +224,6 @@ const expansionLeaves = (
 };
 
 /**
- * How the budget pays for one token's alternatives. `stem` is the
- * generation's stem fields, one leaf each; `surface` is every alternative
- * spelling of the word as written — the dictionary's other inflections and
- * the extra surface fields.
- */
-type LeafGroup = "stem" | "surface";
-
-/**
  * The order the budget is spent in, which is deliberately not the order a
  * group is written in.
  *
@@ -250,10 +242,37 @@ type LeafGroup = "stem" | "surface";
  * surface forms alone. Ordering by selectivity means retaining that column at
  * load and exposing it on the expander.
  */
-const LEAF_BUDGET_PASSES = [
-  "stem",
-  "surface",
-] as const satisfies readonly LeafGroup[];
+const LEAF_BUDGET_PASSES = ["stem", "surface"] as const;
+
+/**
+ * How the budget pays for one token's alternatives. `stem` is the
+ * generation's stem fields, one leaf each; `surface` is every alternative
+ * spelling of the word as written — the dictionary's other inflections and
+ * the extra surface fields.
+ *
+ * Derived from the passes rather than declared beside them: a group exists
+ * because a pass spends it, so there is no way to add one the budget never
+ * grants, and every `Record<LeafGroup, …>` below is total over that same list.
+ */
+type LeafGroup = (typeof LEAF_BUDGET_PASSES)[number];
+
+/**
+ * Where a granted group is written inside its OR group, lowest first.
+ *
+ * A group has always been written surface alternatives first, stems last,
+ * which is not the order the budget is spent in. A rank per group keeps the
+ * two orders independent without a second hand-listed sequence to drift from
+ * the first: the map is total over `LeafGroup`, so a new group has to choose
+ * its place rather than inherit one.
+ */
+const LEAF_EMIT_RANK = {
+  stem: 1,
+  surface: 0,
+} as const satisfies Record<LeafGroup, number>;
+
+const LEAF_EMIT_ORDER = [...LEAF_BUDGET_PASSES].sort(
+  (left, right) => LEAF_EMIT_RANK[left] - LEAF_EMIT_RANK[right],
+);
 
 type TokenLeaves = {
   alternatives: Record<LeafGroup, readonly string[]>;
@@ -361,9 +380,7 @@ export const corpusFreeTextClause = (
   );
 
   const clauses = budgeted.map(({ granted, token }) => {
-    // Surface alternatives before stems, the order a group has always been
-    // written in; only which of them the budget bought is new.
-    const extras = [...granted.surface, ...granted.stem];
+    const extras = LEAF_EMIT_ORDER.flatMap((group) => granted[group]);
     if (extras.length === 0) {
       return token.typed;
     }

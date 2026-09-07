@@ -354,6 +354,23 @@ test("stem clauses compose with expansion rather than replacing it", () => {
   );
 });
 
+// Every leaf group the budget can grant reaches the clause, exactly once and
+// in the written order: the group union is the pass list itself, so a group no
+// pass spends cannot exist, and a group spent twice would repeat its leaves
+// here. The stem leaves are last though the budget buys them first.
+test("each leaf group is granted once, in the order a group is written", () => {
+  expect(
+    corpusFreeTextClause("nájemné", {
+      expand: () => ["nájemného"],
+      stemming: CS_STEMMING,
+      surfaceFields: ["headnote"],
+    }),
+  ).toBe(
+    '(("nájemné" OR "nájemného" OR headnote:"nájemné"' +
+      ' OR text_stem:"nájemn" OR headnote_stem:"nájemn"))',
+  );
+});
+
 test("a generation without extra fields gets the query it gets today", () => {
   for (const text of [
     "náhrada škody",
