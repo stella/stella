@@ -83,7 +83,9 @@ operations runbook (private).
 9. **Ruleset audit.** A weekly workflow
    (`audit-branch-protection.yml`) compares the live GitHub
    ruleset against the checked-in expected configuration and
-   alerts on drift.
+   alerts on drift. The same workflow fails when the Actions
+   fork approval policy no longer requires approval for all
+   external contributors.
 
 ## Enforcement
 

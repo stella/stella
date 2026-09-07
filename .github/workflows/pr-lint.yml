@@ -2,10 +2,10 @@ name: PR Lint
 
 on:
   pull_request_target:
-    # Run once when a same-repo PR opens, then only when a maintainer
-    # requests a run with "run-pr-lint" (a rerun, or the first run for a
-    # fork). This metadata-only workflow must never check out or execute
-    # PR code.
+    # Run once when a PR opens, then only when a maintainer requests a
+    # rerun with "run-pr-lint". This metadata-only workflow reads the
+    # title and must never check out or execute PR code, so it is safe
+    # to run for forks without approval.
     types: [opened, labeled]
 
 concurrency:
@@ -26,10 +26,8 @@ jobs:
   pr-lint:
     if: >-
       github.event.pull_request.user.login != 'dependabot[bot]'
-      && ((github.event.action == 'opened'
-           && github.event.pull_request.head.repo.full_name == github.repository)
-          || (github.event.action == 'labeled'
-              && github.event.label.name == 'run-pr-lint'))
+      && (github.event.action == 'opened'
+          || github.event.label.name == 'run-pr-lint')
     # Reusable workflow only consumes the auto-provided GITHUB_TOKEN.
     # Do not switch to `secrets: inherit` — that widens the blast radius
     # if the reusable ever starts touching named secrets.
