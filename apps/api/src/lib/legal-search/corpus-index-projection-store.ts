@@ -1,5 +1,15 @@
 import { panic } from "better-result";
-import { and, asc, eq, inArray, isNotNull, lte, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  inArray,
+  isNotNull,
+  lte,
+  or,
+  sql,
+  type SQL,
+} from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import {
@@ -9,7 +19,10 @@ import {
 } from "@/api/db/schema";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
-import type { CorpusIndexProjectionFailureKind } from "@/api/lib/legal-search/corpus-index-projection-contract";
+import {
+  CORPUS_INDEX_APPEND_CANCEL_REASON,
+  type CorpusIndexProjectionFailureKind,
+} from "@/api/lib/legal-search/corpus-index-projection-contract";
 import {
   lockActiveCorpusProjectionManifestForMutation,
   lockRegisteredCorpusProjectionManifestForMutation,
@@ -469,6 +482,21 @@ export const prepareCorpusProjectionReplacementsTx = async <
   return cleanups.filter(({ intentId }) => updatedIds.has(intentId));
 };
 
+/**
+ * Which half of the start predicate rejected this reserved revision. Both
+ * cancel paths read it off the row instead of naming a reason at the call
+ * site, so the two causes cannot be filed under one message again.
+ * PostgreSQL evaluates a SET expression against the pre-update row, so the
+ * lease read here is still the one the start attempt tested.
+ */
+const appendCancelReason = (transitionAt: Date | SQL<Date>): SQL<string> =>
+  sql<string>`CASE
+    WHEN ${corpusIndexProjectionIntents.leaseExpiresAt} IS NULL
+      OR ${corpusIndexProjectionIntents.leaseExpiresAt} <= ${transitionAt}::timestamptz
+    THEN ${CORPUS_INDEX_APPEND_CANCEL_REASON.leaseExpired}
+    ELSE ${CORPUS_INDEX_APPEND_CANCEL_REASON.desiredStateChanged}
+  END`;
+
 type StartCorpusProjectionAppendOptions = {
   intentId: ProjectionIntentId;
   leaseToken: string;
@@ -568,7 +596,7 @@ export const startCorpusProjectionAppendTx = async (
       leaseToken: null,
       leaseExpiresAt: null,
       cancelledAt: transitionAt,
-      lastError: "projection desired state changed before append",
+      lastError: appendCancelReason(transitionAt),
       updatedAt: transitionAt,
     })
     .where(
@@ -703,7 +731,7 @@ export const startCorpusProjectionAppendBatchTx = async (
       leaseToken: null,
       leaseExpiresAt: null,
       cancelledAt: transitionAt,
-      lastError: "projection desired state changed before append",
+      lastError: appendCancelReason(transitionAt),
       updatedAt: transitionAt,
     })
     .where(

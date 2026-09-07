@@ -41,6 +41,19 @@ export const CORPUS_INDEX_LAUNCH_BLOCKING_INTENT_STATUSES =
     (status) => CORPUS_INDEX_INTENT_LAUNCH_DISPOSITION[status] === "blocking",
   );
 
+/**
+ * Why a reserved revision was cancelled instead of starting its append. The
+ * start predicate rejects on the lease deadline or on the desired state, and
+ * the two mean opposite things: a run of expiries says a cycle is slower than
+ * the lease it takes, a run of desired-state cancellations says the entity
+ * changed underneath it. Recording one reason for both hides which happened,
+ * so the reason is chosen from the row rather than from the call site.
+ */
+export const CORPUS_INDEX_APPEND_CANCEL_REASON = {
+  leaseExpired: "projection reservation lease expired before append",
+  desiredStateChanged: "projection desired state changed before append",
+} as const;
+
 /** Phases that can create or expose one exact append revision. */
 export const CORPUS_INDEX_APPEND_PRODUCING_INTENT_STATUSES = [
   "reserved",

@@ -13,7 +13,10 @@ import type {
   CorpusIndexDeleteSettlement,
   CorpusIndexError,
 } from "@/api/lib/legal-search/corpus-index-client";
-import type { CorpusIndexIntentStatus } from "@/api/lib/legal-search/corpus-index-projection-contract";
+import {
+  CORPUS_INDEX_APPEND_CANCEL_REASON,
+  type CorpusIndexIntentStatus,
+} from "@/api/lib/legal-search/corpus-index-projection-contract";
 import { lockRegisteredCorpusProjectionManifestForMutation } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import {
   CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
@@ -829,7 +832,7 @@ export const recoverExpiredCorpusProjectionIntentsTx = async <
         leaseToken: null,
         leaseExpiresAt: null,
         cancelledAt: transitionAt,
-        lastError: "projection reservation lease expired before append",
+        lastError: CORPUS_INDEX_APPEND_CANCEL_REASON.leaseExpired,
         updatedAt: transitionAt,
       })
       .where(

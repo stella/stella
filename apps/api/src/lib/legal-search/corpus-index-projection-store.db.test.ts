@@ -34,6 +34,7 @@ import {
   reopenCorpusProjectionCleanupTx,
   settleCorpusProjectionCleanupTx,
 } from "@/api/lib/legal-search/corpus-index-projection-cleanup-store";
+import { CORPUS_INDEX_APPEND_CANCEL_REASON } from "@/api/lib/legal-search/corpus-index-projection-contract";
 import { advanceCorpusProjectionDesiredStateTx } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import {
   corpusIndexAppendPublishDelayMs,
@@ -1289,6 +1290,92 @@ test("one append request receives one post-lock database timestamp", async () =>
   ).toEqual([
     { appendStartedAt: requestStartedAt },
     { appendStartedAt: requestStartedAt },
+  ]);
+});
+
+const reserveOneLease = async (reservedAt: Date, leaseMs = 60_000) => {
+  const leases = await db.transaction(
+    async (tx) =>
+      await reserveCorpusProjectionIntentsTx(asTestRaw<Transaction>(tx), {
+        family: "case_law",
+        generation: "case_law_v5",
+        limit: 1,
+        leaseMs,
+        testNow: reservedAt,
+        newIntentId: () => FIRST_INTENT_ID,
+        newLeaseToken: () => FIRST_LEASE_TOKEN,
+      }),
+  );
+  return leases.at(0) ?? panic("Expected one reserved projection lease");
+};
+
+const readCancelReason = async () =>
+  await db
+    .select({ lastError: corpusIndexProjectionIntents.lastError })
+    .from(corpusIndexProjectionIntents)
+    .where(eq(corpusIndexProjectionIntents.id, FIRST_INTENT_ID));
+
+test("an append start past the lease deadline records the expiry, not drift", async () => {
+  const lease = await reserveOneLease(new Date("2026-08-25T12:00:00.000Z"));
+
+  expect(
+    await db.transaction(
+      async (tx) =>
+        await startCorpusProjectionAppendBatchTx(asTestRaw<Transaction>(tx), {
+          leases: [lease],
+          testNow: new Date("2026-08-25T12:02:00.000Z"),
+        }),
+    ),
+  ).toEqual([{ intentId: lease.intentId, status: "stale_cancelled" }]);
+  // The desired state never moved, so naming it here would send the next
+  // diagnosis after epoch churn that did not happen.
+  expect(await readCancelReason()).toEqual([
+    { lastError: CORPUS_INDEX_APPEND_CANCEL_REASON.leaseExpired },
+  ]);
+});
+
+test("an append start under a moved desired state records the drift", async () => {
+  const lease = await reserveOneLease(new Date("2026-08-25T12:00:00.000Z"));
+  await db.transaction(async (tx) => {
+    await tx
+      .update(caseLawDecisions)
+      .set({ court: "Moved desired state court" })
+      .where(eq(caseLawDecisions.id, DECISION_ID));
+    return await advanceCorpusProjectionDesiredStateTx(
+      asTestRaw<Transaction>(tx),
+      { family: "case_law", entityId: DECISION_ID },
+    );
+  });
+
+  expect(
+    await db.transaction(
+      async (tx) =>
+        await startCorpusProjectionAppendBatchTx(asTestRaw<Transaction>(tx), {
+          leases: [lease],
+          testNow: new Date("2026-08-25T12:00:10.000Z"),
+        }),
+    ),
+  ).toEqual([{ intentId: lease.intentId, status: "stale_cancelled" }]);
+  expect(await readCancelReason()).toEqual([
+    { lastError: CORPUS_INDEX_APPEND_CANCEL_REASON.desiredStateChanged },
+  ]);
+});
+
+test("a single append start past the lease deadline records the expiry", async () => {
+  const lease = await reserveOneLease(new Date("2026-08-25T12:00:00.000Z"));
+
+  expect(
+    await db.transaction(
+      async (tx) =>
+        await startCorpusProjectionAppendTx(asTestRaw<Transaction>(tx), {
+          intentId: lease.intentId,
+          leaseToken: lease.leaseToken,
+          testNow: new Date("2026-08-25T12:02:00.000Z"),
+        }),
+    ),
+  ).toBe("stale_cancelled");
+  expect(await readCancelReason()).toEqual([
+    { lastError: CORPUS_INDEX_APPEND_CANCEL_REASON.leaseExpired },
   ]);
 });
 
