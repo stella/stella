@@ -376,6 +376,24 @@ describe("scoreAuthoringRun", () => {
     ).toBe("partial");
   });
 
+  test("a fill the engine refused fails the fill step, not the configure step", () => {
+    const filled = scoreAuthoringRun({
+      created: true,
+      turnError: null,
+      attempt: {
+        ...savedAttempt(),
+        roundTrip: {
+          ...cleanRoundTrip(),
+          fillError: 'Field "Deliverables": allows at most 0 item(s), got 3.',
+        },
+      },
+    });
+    expect(filled.outcome).toBe("partial");
+    expect(filled.steps.configured).toBe(true);
+    expect(filled.steps.filled).toBe(false);
+    expect(filled.overlayIssues).toEqual([]);
+  });
+
   test("a property drop is reported without failing the configure step", () => {
     const dropped = scoreAuthoringRun({
       created: true,

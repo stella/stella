@@ -47,7 +47,9 @@
  *   config        field configuration the brief asked for and did not get
  *   fidelity      source wording the template dropped instead of keeping
  *   round trip    leftover `{{`, blank repeated rows, a conditional row that
- *                 was not dropped, a date outside its requested locale
+ *                 was not dropped, a date outside its requested locale, and
+ *                 a fill the engine refused outright. These fail `filled`,
+ *                 never `configured`: the entries had already landed.
  *   error         exact provider or stream error for the run, including the
  *                 turn deadline: a turn the timer aborts says so instead of
  *                 looking like a model that stopped calling tools
@@ -617,7 +619,6 @@ const neutralizeExternalSources = (
 type RoundTripResult = {
   defects: RoundTripDefects;
   text: string;
-  error: string | null;
 };
 
 const runRoundTrip = async ({
@@ -651,22 +652,33 @@ const runRoundTrip = async ({
     return panic("allow-partial fill returned a rejection");
   }
   if ("error" in filled) {
-    // The fill never rendered, so there is nothing to inspect; the caller
-    // reports the rejection itself, which is what makes the run partial.
-    return { defects: cleanRoundTrip(), text: "", error: filled.error };
+    // The fill never rendered, so there is nothing to inspect. It is the
+    // round trip that failed: the entries the call carried had all landed.
+    return {
+      defects: { ...cleanRoundTrip(), fillError: filled.error },
+      text: "",
+    };
   }
   const document = await readFilledDocument(filled.buffer);
   const leftoverMarkers = [...document.text.matchAll(/\{\{/gu)].length;
   return {
-    defects: { ...task.checkRoundTrip(document), leftoverMarkers },
+    defects: {
+      ...task.checkRoundTrip(document),
+      leftoverMarkers,
+      fillError: null,
+    },
     text: document.text,
-    error: null,
   };
 };
 
 // ── Tasks ─────────────────────────────────────────────────
 
-type TaskRoundTripCheck = Omit<RoundTripDefects, "leftoverMarkers">;
+/** A task inspects what rendered, so the defects only the fill itself can
+ *  report are not its to return. */
+type TaskRoundTripCheck = Omit<
+  RoundTripDefects,
+  "leftoverMarkers" | "fillError"
+>;
 
 type EvalTask = {
   id: string;
@@ -1771,7 +1783,6 @@ const buildAttempt = async ({
           .map((issue) => `${issue.path}: ${issue.message} ${issue.hint}`),
         ...extraIssues,
         ...outcome.structureErrors,
-        ...(roundTrip.error === null ? [] : [`fill: ${roundTrip.error}`]),
       ],
       // The hint every property drop carries is the same sentence; the column
       // names the property, which is the part that differs.
@@ -2269,6 +2280,7 @@ const roundTripCell = (roundTrip: RoundTripDefects): string =>
       : []),
     ...(roundTrip.conditionalRowKept ? ["row-not-dropped"] : []),
     ...(roundTrip.dateLocaleMismatch ? ["date-locale"] : []),
+    ...(roundTrip.fillError === null ? [] : [`fill: ${roundTrip.fillError}`]),
   ]);
 
 /** The four steps as the initials of the ones that were reached, so the

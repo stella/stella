@@ -445,6 +445,10 @@ export type RoundTripDefects = {
   conditionalRowKept: boolean;
   /** A date field rendered outside the locale and style it asked for. */
   dateLocaleMismatch: boolean;
+  /** The fill refused the saved template outright, so nothing rendered. It
+   *  is the round trip that failed, not the configuration: every entry the
+   *  call carried had already landed. */
+  fillError: string | null;
 };
 
 export const cleanRoundTrip = (): RoundTripDefects => ({
@@ -452,13 +456,15 @@ export const cleanRoundTrip = (): RoundTripDefects => ({
   blankRepeatedRows: 0,
   conditionalRowKept: false,
   dateLocaleMismatch: false,
+  fillError: null,
 });
 
 const hasRoundTripDefect = (roundTrip: RoundTripDefects): boolean =>
   roundTrip.leftoverMarkers > 0 ||
   roundTrip.blankRepeatedRows > 0 ||
   roundTrip.conditionalRowKept ||
-  roundTrip.dateLocaleMismatch;
+  roundTrip.dateLocaleMismatch ||
+  roundTrip.fillError !== null;
 
 /**
  * An overlay issue's `path` names either the entry it refuses (`fields.3`) or
