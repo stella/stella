@@ -1,5 +1,6 @@
 ---
-"@stll/ssr-kit": patch
+"@stll/ssr-kit": minor
 ---
 
-Wait for server-rendered hydration to commit before initializing browser state.
+Require hydration callbacks to resolve after their render commits, replacing the
+removed `scheduleAfterPaint` option.
