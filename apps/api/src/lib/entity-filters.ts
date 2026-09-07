@@ -2,7 +2,7 @@ import { panic } from "better-result";
 import { and, asc, eq, inArray, isNull, ne, not, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
-import { isEntityKind } from "@stll/api-contract";
+import { ENTITY_FIND_TERM_MIN_LENGTH, isEntityKind } from "@stll/api-contract";
 import type { EntityFind } from "@stll/api-contract";
 import { compareByLocale } from "@stll/collation";
 import {
@@ -833,8 +833,12 @@ export const buildFindConditions = ({
   if (!find) {
     return [];
   }
+  // The floor over the string the pattern is built from, not the one that
+  // arrived: the wire schema rejects a short term padded or bare, and this is
+  // what makes an ILIKE the trigram index cannot answer unreachable for every
+  // caller, wire or not.
   const term = find.term.trim();
-  if (term === "") {
+  if (term.length < ENTITY_FIND_TERM_MIN_LENGTH) {
     return [];
   }
 

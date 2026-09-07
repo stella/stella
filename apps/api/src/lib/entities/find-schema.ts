@@ -35,6 +35,25 @@ export const tFindScope = t.Object({
 });
 
 /**
+ * The floor again, over the term with its padding removed.
+ *
+ * `minLength` counts the term as it arrives, while the SQL trims before
+ * building the pattern, so `"  ab  "` would clear a floor of three and still
+ * leave the trigram index a two-character term to look up. This says the same
+ * thing about the trimmed term: the padding, then the floor between a first
+ * and last non-space. `\S` after `\s*` pins the leading run to exactly the
+ * padding without a lookahead, which the CLI's `--input` example builder
+ * cannot walk past.
+ *
+ * `find-schema.test.ts` states the rule this stands for over
+ * `ENTITY_FIND_TERM_MIN_LENGTH`, so a floor the shape cannot express fails
+ * there rather than silently accepting the wrong terms.
+ */
+const TRIMMED_TERM_PATTERN = `^\\s*\\S[\\s\\S]{${
+  ENTITY_FIND_TERM_MIN_LENGTH - 2
+},}\\S\\s*$`;
+
+/**
  * The find request field, shared by the three readers a table view issues: the
  * row window, each group's window, and the group counts. One schema because
  * their answers have to agree — group headers that count rows the grid does
@@ -51,6 +70,7 @@ export const tFind = t.Object(
     term: t.String({
       minLength: ENTITY_FIND_TERM_MIN_LENGTH,
       maxLength: LIMITS.searchQueryMaxLength,
+      pattern: TRIMMED_TERM_PATTERN,
     }),
   },
   {
@@ -60,7 +80,7 @@ export const tFind = t.Object(
       "index of document titles, this filters exactly what the grid renders " +
       "and adds no sort keys. `scope.type` `all` also matches the name, " +
       "`columns` matches only `scope.propertyIds`. `term` is at least " +
-      `${ENTITY_FIND_TERM_MIN_LENGTH} characters: the cells are read through ` +
-      "a trigram index, which a shorter term cannot use.",
+      `${ENTITY_FIND_TERM_MIN_LENGTH} characters once trimmed: the cells are ` +
+      "read through a trigram index, which a shorter term cannot use.",
   },
 );

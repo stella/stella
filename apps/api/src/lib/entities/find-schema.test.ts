@@ -51,6 +51,29 @@ describe("find term length", () => {
     expect(Value.Check(tFind, { scope, term: short })).toBe(false);
     expect(Value.Check(tFind, { scope, term: enough })).toBe(true);
   });
+
+  // The floor the SQL enforces is over the trimmed term, so the wire has to
+  // measure the same string: `minLength` alone counts the padding and lets a
+  // two-character term through, which is the unindexed scan the floor exists
+  // to prevent. Stated as the rule rather than as cases, so a new padding
+  // shape cannot slip past a fixture list.
+  test.each([
+    "a".repeat(ENTITY_FIND_TERM_MIN_LENGTH - 1),
+    `  ${"a".repeat(ENTITY_FIND_TERM_MIN_LENGTH - 1)}  `,
+    `\t${"a".repeat(ENTITY_FIND_TERM_MIN_LENGTH - 1)}\n`,
+    " ".repeat(ENTITY_FIND_TERM_MIN_LENGTH + 2),
+    "",
+    "a".repeat(ENTITY_FIND_TERM_MIN_LENGTH),
+    `  ${"a".repeat(ENTITY_FIND_TERM_MIN_LENGTH)}  `,
+    `a ${"b".repeat(ENTITY_FIND_TERM_MIN_LENGTH)}`,
+  ])(
+    "the schema accepts %j exactly when its trimmed length clears the floor",
+    (term) => {
+      expect(Value.Check(tFind, { scope, term })).toBe(
+        term.trim().length >= ENTITY_FIND_TERM_MIN_LENGTH,
+      );
+    },
+  );
 });
 
 describe("find scope schema", () => {

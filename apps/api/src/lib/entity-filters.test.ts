@@ -3,6 +3,7 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import fc from "fast-check";
 
 import {
+  ENTITY_FIND_TERM_MIN_LENGTH,
   PROPERTY_CONTENT_TYPES,
   PROPERTY_FIND_SUPPORT,
 } from "@stll/api-contract";
@@ -157,14 +158,23 @@ const findParams = (find: Find): unknown[] => {
 describe("buildFindConditions", () => {
   const propertyIds = ["p1", "p2"];
 
-  test("an empty or whitespace term produces no condition", () => {
+  test("a term under the floor, padded or not, produces no condition", () => {
+    // The wire schema rejects these, so the builder can only see one from a
+    // direct caller; it still refuses to compile an ILIKE the trigram index
+    // cannot answer.
+    const short = "a".repeat(ENTITY_FIND_TERM_MIN_LENGTH - 1);
+    for (const term of ["", "   ", short, `  ${short}  `]) {
+      expect(
+        findConditions({ scope: { type: "all", propertyIds }, term }),
+      ).toHaveLength(0);
+    }
     expect(findConditions(undefined)).toHaveLength(0);
+  });
+
+  test("a padded term is matched trimmed", () => {
     expect(
-      findConditions({ scope: { type: "all", propertyIds }, term: "" }),
-    ).toHaveLength(0);
-    expect(
-      findConditions({ scope: { type: "all", propertyIds }, term: "   " }),
-    ).toHaveLength(0);
+      findParams({ scope: { type: "all", propertyIds }, term: "  lease  " }),
+    ).toContain("%lease%");
   });
 
   test("an unrestricted scope with no columns matches the name only", () => {
