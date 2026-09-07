@@ -24,19 +24,19 @@ const lawyerField: FieldMeta = {
 describe("resolveCompositeFields", () => {
   test("joins valid parts via the format", () => {
     const result = resolveCompositeFields({
-      values: { lawyer: { position: "rad. praw.", name: "Jan Kowalski" } },
+      values: { lawyer: { position: "rad. praw.", name: "Tomasz Nowicki" } },
       fields: [lawyerField],
     });
 
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.values["lawyer"]).toBe("rad. praw. Jan Kowalski");
+      expect(result.values["lawyer"]).toBe("rad. praw. Tomasz Nowicki");
     }
   });
 
   test("rejects a select part value outside its options", () => {
     const result = resolveCompositeFields({
-      values: { lawyer: { position: "dr hab.", name: "Jan Kowalski" } },
+      values: { lawyer: { position: "dr hab.", name: "Tomasz Nowicki" } },
       fields: [lawyerField],
     });
 
@@ -108,7 +108,7 @@ describe("resolveCompositeFields", () => {
   test("rejects unknown part keys", () => {
     const result = resolveCompositeFields({
       values: {
-        lawyer: { position: "adw.", name: "Jan Kowalski", extra: "x" },
+        lawyer: { position: "adw.", name: "Tomasz Nowicki", extra: "x" },
       },
       fields: [lawyerField],
     });
@@ -164,7 +164,7 @@ describe("resolveCompositeFields", () => {
       values: {
         parties: [
           { signer: { title: "adw.", name: "Anna Nowak" } },
-          { signer: { title: "rad. praw.", name: "Jan Kowalski" } },
+          { signer: { title: "rad. praw.", name: "Tomasz Nowicki" } },
         ],
       },
       fields: [field],
@@ -174,7 +174,7 @@ describe("resolveCompositeFields", () => {
     if (result.ok) {
       expect(result.values["parties"]).toEqual([
         { signer: "adw. Anna Nowak" },
-        { signer: "rad. praw. Jan Kowalski" },
+        { signer: "rad. praw. Tomasz Nowicki" },
       ]);
     }
   });
@@ -190,7 +190,7 @@ describe("resolveCompositeFields", () => {
     };
     const result = resolveCompositeFields({
       values: {
-        parties: [{ signer: { title: "dr hab.", name: "Jan Kowalski" } }],
+        parties: [{ signer: { title: "dr hab.", name: "Tomasz Nowicki" } }],
       },
       fields: [field],
     });

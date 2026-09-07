@@ -12,8 +12,8 @@ describe("applyFieldSuggestions", () => {
   test("replaces literals with markers and emits manifest fields (PoA values)", () => {
     const docXml = [
       "<w:body>",
-      wt("Acting on behalf of ROKA NIERUCHOMOŚCI Sp. z o.o."),
-      wt("Jan Kowalski"),
+      wt("Acting on behalf of MODRZEW INWESTYCJE Sp. z o.o."),
+      wt("Tomasz Nowicki"),
       wt("Prezes Zarządu"),
       wt("Scope: registration matters"),
       "</w:body>",
@@ -21,10 +21,10 @@ describe("applyFieldSuggestions", () => {
 
     const suggestions: FieldSuggestion[] = [
       {
-        literalText: "ROKA NIERUCHOMOŚCI Sp. z o.o.",
+        literalText: "MODRZEW INWESTYCJE Sp. z o.o.",
         fieldPath: "company.name",
       },
-      { literalText: "Jan Kowalski", fieldPath: "signatory.name" },
+      { literalText: "Tomasz Nowicki", fieldPath: "signatory.name" },
       {
         literalText: "Prezes Zarządu",
         fieldPath: "signatory.role",
@@ -60,9 +60,9 @@ describe("applyFieldSuggestions", () => {
 
   test("reports a literal split across runs as unapplied (single-run scope)", () => {
     const docXml =
-      "<w:body><w:p><w:r><w:t>Jan </w:t></w:r><w:r><w:t>Kowalski</w:t></w:r></w:p></w:body>";
+      "<w:body><w:p><w:r><w:t>Tomasz </w:t></w:r><w:r><w:t>Nowicki</w:t></w:r></w:p></w:body>";
     const suggestions: FieldSuggestion[] = [
-      { literalText: "Jan Kowalski", fieldPath: "signatory.name" },
+      { literalText: "Tomasz Nowicki", fieldPath: "signatory.name" },
     ];
     const { xml, fields, unapplied } = applyFieldSuggestions(
       docXml,

@@ -4,7 +4,7 @@
  * A manifest field with `parts` + `format` is filled as several parts (e.g. a
  * select for a professional title plus a free-text name) that are validated
  * and joined into the single string the document's one {{marker}} carries:
- * format "{{position}} {{name}}" renders "rad. praw. Jan Kowalski".
+ * format "{{position}} {{name}}" renders "rad. praw. Tomasz Nowicki".
  *
  * Pure: no IO, no model/provider dependency. The fill boundary calls
  * {@link resolveCompositeFields} on the incoming values before substitution

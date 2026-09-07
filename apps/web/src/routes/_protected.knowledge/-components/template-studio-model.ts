@@ -55,7 +55,7 @@ const trimChar = (value: string, ch: string): string => {
   return value.slice(start, end);
 };
 
-// Derive a field path from selected prose: "Jan Kowalski" -> "jan_kowalski".
+// Derive a field path from selected prose: "Tomasz Nowicki" -> "tomasz_nowicki".
 /** Lowercase + underscore a typed field name without word-count capping —
  *  "Name of lawyer" becomes a valid path instead of a validation error. */
 export const sanitizeFieldPath = (text: string): string => {

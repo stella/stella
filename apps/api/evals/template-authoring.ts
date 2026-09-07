@@ -758,7 +758,7 @@ const POA_SOURCE: AuthoredBlock[] = [
   { type: "paragraph", text: "Warszawa, dnia 12 marca 2026 r." },
   {
     type: "paragraph",
-    text: "Jan Kowalski, Prezes Zarządu / President of the Management Board",
+    text: "Tomasz Nowicki, Prezes Zarządu / President of the Management Board",
   },
 ];
 
@@ -877,7 +877,7 @@ const TASKS: EvalTask[] = [
       "company.krs": "0000123456",
       attorneys: POA_ATTORNEYS.map((name) => ({ name })),
       signing_date: POA_SIGNING_DATE,
-      signatory_name: "Jan Kowalski",
+      signatory_name: "Tomasz Nowicki",
       signatory_role: "Prezes Zarządu",
       scope:
         "reprezentowanie Mocodawcy przed sądami powszechnymi i organami administracji",

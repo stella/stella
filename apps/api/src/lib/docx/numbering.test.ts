@@ -60,7 +60,7 @@ describe("applyNumbering — end to end", () => {
     );
   });
 
-  test("Maciej's amendment: reference to an excluded clause is not resolved", () => {
+  test("an amendment's reference to an excluded clause is not resolved", () => {
     // The {{ num("guarantee") }} clause was removed by a {% if %} before this pass,
     // so only `rent` is numbered; the dangling guarantee reference stays put.
     const assembled =

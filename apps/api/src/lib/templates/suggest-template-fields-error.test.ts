@@ -42,7 +42,7 @@ describe("suggestTemplateFields", () => {
     // .rejects.toThrow trips type-aware lint (bun-types declares it void) and
     // can report a spurious unhandled-rejection warning; capture explicitly.
     const rejection: unknown = await suggestTemplateFields({
-      documentText: "Granted by ROKA NIERUCHOMOŚCI Sp. z o.o.",
+      documentText: "Granted by MODRZEW INWESTYCJE Sp. z o.o.",
       orgAIConfig: null,
       organizationId,
       aiAnalytics,
@@ -74,7 +74,7 @@ describe("suggestTemplateFieldsOrEmpty", () => {
     });
 
     const suggestions = await suggestTemplateFieldsOrEmpty({
-      documentText: "Granted by ROKA NIERUCHOMOŚCI Sp. z o.o.",
+      documentText: "Granted by MODRZEW INWESTYCJE Sp. z o.o.",
       orgAIConfig: null,
       organizationId,
       aiAnalytics,

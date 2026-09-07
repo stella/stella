@@ -876,7 +876,10 @@ describe("fill handler download response", () => {
       organizationId: fakeOrgId,
       userId: fakeUserId,
       query: {},
-      body: { file, values: JSON.stringify({ name: "Maciej Kuropatwiński" }) },
+      body: {
+        file,
+        values: JSON.stringify({ name: "Małgorzata Wróblewska-Żak" }),
+      },
     });
 
     expect(result).toBeInstanceOf(Response);
@@ -891,7 +894,7 @@ describe("fill handler download response", () => {
     const bytes = Buffer.from(await resp.arrayBuffer());
     const zip = await JSZip.loadAsync(bytes);
     const docXml = await zip.file("word/document.xml")?.async("string");
-    expect(docXml).toContain("Maciej Kuropatwiński");
+    expect(docXml).toContain("Małgorzata Wróblewska-Żak");
   });
 });
 

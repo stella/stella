@@ -61,7 +61,7 @@ describe("evaluateNumericExpression — functions", () => {
 });
 
 describe("evaluateNumericExpression — real lease scenarios", () => {
-  test("indexed rent capped at +5% per year (Maciej's case)", () => {
+  test("indexed rent capped at +5% per year", () => {
     // CPI index of 7% would lift rent above the 5% cap → the cap wins.
     expect(
       evalExpr("min(rent * (1 + index / 100), rent * 1.05)", {

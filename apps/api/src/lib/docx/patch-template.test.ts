@@ -479,7 +479,7 @@ describe("fillTemplate — output stays well-formed in every part", () => {
 
     const { buffer, structureErrors, unmatchedPlaceholders } =
       await fillTemplate(fixture, {
-        agent_name: "Maciej Kuropatwiński",
+        agent_name: "Małgorzata Wróblewska-Żak",
         hasSpouse: true,
         showClause: true,
         client: "rč & co.",
@@ -509,7 +509,7 @@ describe("fillTemplate — output stays well-formed in every part", () => {
 
     const texts = (await extractTexts(buffer)).join(" ");
     expect(texts).toContain("and their spouse");
-    expect(texts).toContain("Maciej Kuropatwiński");
+    expect(texts).toContain("Małgorzata Wróblewska-Żak");
     expect(texts).toContain("first");
     expect(texts).toContain("second");
     expect(texts).not.toContain("{{");
