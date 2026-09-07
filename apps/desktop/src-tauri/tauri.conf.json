@@ -60,7 +60,6 @@
         "displayLanguageSelector": false,
         "languages": [
           "English",
-          "Arabic",
           "Czech",
           "German",
           "Spanish",
@@ -70,7 +69,6 @@
           "Lithuanian",
           "Latvian",
           "Polish",
-          "PortugueseBR",
           "Slovak"
         ]
       }
