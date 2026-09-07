@@ -189,7 +189,7 @@ export const buildFieldReference = (): string => {
     "",
     "A marker's filter chain is the primary way to configure a field, and it " +
       "lives in the DOCX: " +
-      '`{{ deposit | number | label(\"Kaution\") | required }}`. See ' +
+      '`{{ deposit | number | label("Kaution") | required }}`. See ' +
       `${TEMPLATE_MARKER_REFERENCE_URI} for the filters. This tool configures ` +
       "the same properties from outside the document, for a template whose " +
       "markers you are not rewriting; where both say something, this wins.",

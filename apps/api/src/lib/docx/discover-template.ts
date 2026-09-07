@@ -15,8 +15,11 @@ import JSZip from "jszip";
 import * as slimdom from "slimdom";
 
 import { compareCodeUnit } from "@stll/collation";
-import { parseCondition, type ConditionNode } from "@stll/template-conditions";
-import type { FilterCall } from "@stll/template-conditions";
+import {
+  parseCondition,
+  type ConditionNode,
+  type FilterCall,
+} from "@stll/template-conditions";
 
 import { parseBlockTree, scanBlockDirectives } from "./block-directives";
 import { scanPlaceholders } from "./discover-placeholders";

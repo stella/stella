@@ -215,6 +215,136 @@ const applySource = (
 const contactField = (value: string | null): FieldSource | null =>
   isOneOf(CONTACT_FIELDS, value) ? { kind: "contact", field: value } : null;
 
+/** The filters that constrain a value rather than describe it. Split from the
+ *  main switch so each half stays readable. */
+type ValidationFilter =
+  | "required"
+  | "pattern"
+  | "min"
+  | "max"
+  | "min_length"
+  | "max_length"
+  | "min_items"
+  | "max_items";
+
+const applyValidationFilter = (
+  draft: Draft,
+  call: FilterCall,
+  name: ValidationFilter,
+): void => {
+  switch (name) {
+    case "required":
+      draft.meta["required"] = true;
+      draft.validation.required = true;
+      return;
+    case "pattern": {
+      const pattern = stringAt(call, 0);
+      if (pattern === null) {
+        draft.issues.push(
+          issue(
+            call.name,
+            "pattern() needs the regular expression the whole value must match.",
+            'Write pattern("^[0-9]{10}$").',
+          ),
+        );
+        return;
+      }
+      draft.validation.pattern = pattern;
+      return;
+    }
+    case "min":
+      applyNumericValidation(draft, call, "min");
+      return;
+    case "max":
+      applyNumericValidation(draft, call, "max");
+      return;
+    case "min_length":
+      applyNumericValidation(draft, call, "minLength");
+      return;
+    case "max_length":
+      applyNumericValidation(draft, call, "maxLength");
+      return;
+    case "min_items":
+      applyNumericValidation(draft, call, "minItems");
+      return;
+    case "max_items":
+      applyNumericValidation(draft, call, "maxItems");
+      return;
+    default:
+      return assertNever(name);
+  }
+};
+
+/** The filters that bind a field to a record in the matter, one per binding
+ *  kind. Split from the main switch so each half stays readable. */
+type BindingFilter = "matter" | "contact" | "party" | "attorney" | "firm";
+
+const applyBindingFilter = (
+  draft: Draft,
+  call: FilterCall,
+  name: BindingFilter,
+): void => {
+  switch (name) {
+    case "matter": {
+      const field = stringAt(call, 0);
+      applySource(
+        draft,
+        call,
+        isOneOf(MATTER_FIELDS, field) ? { kind: "matter", field } : null,
+        `The matter fields are ${quoted(MATTER_FIELDS)}.`,
+      );
+      return;
+    }
+    case "contact": {
+      applySource(
+        draft,
+        call,
+        contactField(stringAt(call, 0)),
+        `The contact fields are ${quoted(CONTACT_FIELDS)}.`,
+      );
+      return;
+    }
+    case "party": {
+      const role = stringAt(call, 0);
+      const field = stringAt(call, 1);
+      applySource(
+        draft,
+        call,
+        isOneOf(WORKSPACE_CONTACT_ROLES, role) && isOneOf(CONTACT_FIELDS, field)
+          ? { kind: "party", role, field }
+          : null,
+        `Write party(role, field): the roles are ${quoted(WORKSPACE_CONTACT_ROLES)} and the fields are ${quoted(CONTACT_FIELDS)}.`,
+      );
+      return;
+    }
+    case "attorney": {
+      const ref = stringAt(call, 0);
+      const field = stringAt(call, 1);
+      applySource(
+        draft,
+        call,
+        isOneOf(ATTORNEY_REFS, ref) && isOneOf(USER_FIELDS, field)
+          ? { kind: "attorney", ref, field }
+          : null,
+        `Write attorney(ref, field): the refs are ${quoted(ATTORNEY_REFS)} and the fields are ${quoted(USER_FIELDS)}.`,
+      );
+      return;
+    }
+    case "firm": {
+      const field = stringAt(call, 0);
+      applySource(
+        draft,
+        call,
+        isOneOf(FIRM_FIELDS, field) ? { kind: "firm", field } : null,
+        `The firm fields are ${quoted(FIRM_FIELDS)}.`,
+      );
+      return;
+    }
+    default:
+      return assertNever(name);
+  }
+};
+
 const applyFilter = (draft: Draft, call: FilterCall): void => {
   switch (call.name) {
     case "text":
@@ -306,41 +436,14 @@ const applyFilter = (draft: Draft, call: FilterCall): void => {
       return;
     }
     case "required":
-      draft.meta["required"] = true;
-      draft.validation.required = true;
-      return;
-    case "pattern": {
-      const pattern = stringAt(call, 0);
-      if (pattern === null) {
-        draft.issues.push(
-          issue(
-            call.name,
-            "pattern() needs the regular expression the whole value must match.",
-            'Write pattern("^[0-9]{10}$").',
-          ),
-        );
-        return;
-      }
-      draft.validation.pattern = pattern;
-      return;
-    }
+    case "pattern":
     case "min":
-      applyNumericValidation(draft, call, "min");
-      return;
     case "max":
-      applyNumericValidation(draft, call, "max");
-      return;
     case "min_length":
-      applyNumericValidation(draft, call, "minLength");
-      return;
     case "max_length":
-      applyNumericValidation(draft, call, "maxLength");
-      return;
     case "min_items":
-      applyNumericValidation(draft, call, "minItems");
-      return;
     case "max_items":
-      applyNumericValidation(draft, call, "maxItems");
+      applyValidationFilter(draft, call, call.name);
       return;
     case "ai": {
       const prompt = stringAt(call, 0);
@@ -396,61 +499,13 @@ const applyFilter = (draft: Draft, call: FilterCall): void => {
       draft.meta["lookup"] = { registry, formats };
       return;
     }
-    case "matter": {
-      const field = stringAt(call, 0);
-      applySource(
-        draft,
-        call,
-        isOneOf(MATTER_FIELDS, field) ? { kind: "matter", field } : null,
-        `The matter fields are ${quoted(MATTER_FIELDS)}.`,
-      );
+    case "matter":
+    case "contact":
+    case "party":
+    case "attorney":
+    case "firm":
+      applyBindingFilter(draft, call, call.name);
       return;
-    }
-    case "contact": {
-      applySource(
-        draft,
-        call,
-        contactField(stringAt(call, 0)),
-        `The contact fields are ${quoted(CONTACT_FIELDS)}.`,
-      );
-      return;
-    }
-    case "party": {
-      const role = stringAt(call, 0);
-      const field = stringAt(call, 1);
-      applySource(
-        draft,
-        call,
-        isOneOf(WORKSPACE_CONTACT_ROLES, role) && isOneOf(CONTACT_FIELDS, field)
-          ? { kind: "party", role, field }
-          : null,
-        `Write party(role, field): the roles are ${quoted(WORKSPACE_CONTACT_ROLES)} and the fields are ${quoted(CONTACT_FIELDS)}.`,
-      );
-      return;
-    }
-    case "attorney": {
-      const ref = stringAt(call, 0);
-      const field = stringAt(call, 1);
-      applySource(
-        draft,
-        call,
-        isOneOf(ATTORNEY_REFS, ref) && isOneOf(USER_FIELDS, field)
-          ? { kind: "attorney", ref, field }
-          : null,
-        `Write attorney(ref, field): the refs are ${quoted(ATTORNEY_REFS)} and the fields are ${quoted(USER_FIELDS)}.`,
-      );
-      return;
-    }
-    case "firm": {
-      const field = stringAt(call, 0);
-      applySource(
-        draft,
-        call,
-        isOneOf(FIRM_FIELDS, field) ? { kind: "firm", field } : null,
-        `The firm fields are ${quoted(FIRM_FIELDS)}.`,
-      );
-      return;
-    }
     case "formula":
     case "condition": {
       const expression = stringAt(call, 0);

@@ -22,7 +22,7 @@
 
 import JSZip from "jszip";
 import { readdir, readFile, stat, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import path from "node:path";
 import * as slimdom from "slimdom";
 
 import {
@@ -52,16 +52,16 @@ const FIELD_PATH_RE = /^[\p{L}\p{N}_.-]+$/u;
 
 /** Rewrite every `path.`-prefixed reference to the loop alias that now owns it,
  *  innermost loop first. */
-const aliasPath = (path: string, stack: readonly LoopFrame[]): string => {
-  for (const { alias, path: loopPath } of [...stack].reverse()) {
-    if (path === loopPath) {
+const aliasPath = (reference: string, stack: readonly LoopFrame[]): string => {
+  for (const { alias, path: loopPath } of stack.toReversed()) {
+    if (reference === loopPath) {
       return alias;
     }
-    if (path.startsWith(`${loopPath}.`)) {
-      return `${alias}.${path.slice(loopPath.length + 1)}`;
+    if (reference.startsWith(`${loopPath}.`)) {
+      return `${alias}.${reference.slice(loopPath.length + 1)}`;
     }
   }
-  return path;
+  return reference;
 };
 
 /** Translate an old condition expression: the operators change, and item paths
@@ -69,7 +69,7 @@ const aliasPath = (path: string, stack: readonly LoopFrame[]): string => {
 const migrateExpression = (expr: string, stack: readonly LoopFrame[]): string =>
   translateLegacyExpression(expr).replace(
     /(?<!["\p{L}\p{N}_.-])(?<path>[\p{L}_][\p{L}\p{N}_.-]*)/gu,
-    (_match, path: string) => aliasPath(path, stack),
+    (_match, reference: string) => aliasPath(reference, stack),
   );
 
 /** The Jinja replacement for one marker's inner text, given the loops it sits
@@ -108,10 +108,10 @@ const migrateMarker = (innerRaw: string, stack: LoopFrame[]): string | null => {
         if (reopened !== -1) {
           stack.length = reopened;
         }
-        const path = aliasPath(expr, stack);
+        const loopPath = aliasPath(expr, stack);
         const alias = legacyLoopAlias(expr);
         stack.push({ alias, path: expr });
-        return `{% for ${alias} in ${path} %}`;
+        return `{% for ${alias} in ${loopPath} %}`;
       }
       case "/each":
         stack.pop();
@@ -223,11 +223,14 @@ const isRewritableInSource = (
   end: number,
   quote: string | null,
 ): boolean => {
-  const span = text.slice(start, end);
-  if (span.includes("\n")) {
+  const withinSpan = (needle: string): boolean => {
+    const at = text.indexOf(needle, start);
+    return at !== -1 && at < end;
+  };
+  if (withinSpan("\n")) {
     return false;
   }
-  return quote === null || quote === "`" || !span.includes(quote);
+  return quote === null || quote === "`" || !withinSpan(quote);
 };
 
 /** Apply {@link migrateMarkerRanges} to a plain string. */
@@ -287,42 +290,49 @@ export const migrateDocx = async (bytes: Buffer): Promise<Buffer | null> => {
     : null;
 };
 
-const TEXT_EXTENSIONS = [".ts", ".tsx", ".json", ".md", ".txt", ".xml"];
+const TEXT_EXTENSIONS = new Set([
+  ".ts",
+  ".tsx",
+  ".json",
+  ".md",
+  ".txt",
+  ".xml",
+]);
 
-const isTextFile = (path: string): boolean =>
-  TEXT_EXTENSIONS.some((extension) => path.endsWith(extension));
+const isTextFile = (file: string): boolean =>
+  TEXT_EXTENSIONS.has(path.extname(file));
 
-const walk = async (path: string): Promise<string[]> => {
-  const info = await stat(path);
+const walk = async (dir: string): Promise<string[]> => {
+  const info = await stat(dir);
   if (!info.isDirectory()) {
-    return [path];
+    return [dir];
   }
-  const entries = await readdir(path, { withFileTypes: true });
+  const entries = await readdir(dir, { withFileTypes: true });
   const files: string[] = [];
   for (const entry of entries) {
     if (entry.name === "node_modules" || entry.name.startsWith(".")) {
       continue;
     }
-    files.push(...(await walk(join(path, entry.name))));
+    files.push(...(await walk(path.join(dir, entry.name))));
   }
   return files;
 };
 
-const migrateFile = async (path: string, check: boolean): Promise<boolean> => {
-  if (path.endsWith(".docx")) {
-    const migrated = await migrateDocx(await readFile(path));
+const migrateFile = async (file: string, check: boolean): Promise<boolean> => {
+  if (file.endsWith(".docx")) {
+    const migrated = await migrateDocx(await readFile(file));
     if (migrated === null) {
       return false;
     }
     if (!check) {
-      await writeFile(path, migrated);
+      await writeFile(file, migrated);
     }
     return true;
   }
-  if (!isTextFile(path)) {
+  if (!isTextFile(file)) {
     return false;
   }
-  const text = await readFile(path, "utf8");
+  const text = await readFile(file, "utf-8");
   if (!text.includes("{{")) {
     return false;
   }
@@ -331,7 +341,7 @@ const migrateFile = async (path: string, check: boolean): Promise<boolean> => {
     return false;
   }
   if (!check) {
-    await writeFile(path, migrated, "utf8");
+    await writeFile(file, migrated, "utf-8");
   }
   return true;
 };
@@ -349,8 +359,8 @@ const main = async (): Promise<void> => {
   }
 
   const touched: string[] = [];
-  for (const path of paths) {
-    for (const file of await walk(path)) {
+  for (const target of paths) {
+    for (const file of await walk(target)) {
       if (await migrateFile(file, check)) {
         touched.push(file);
       }

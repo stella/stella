@@ -299,8 +299,9 @@ const isLoopProperty = (value: string): value is LoopProperty =>
 
 type ArgumentScan = {
   args: FilterArgument[];
-  /** Offset just past the closing `)`, or `null` when it never closed. */
-  end: number | null;
+  /** Offset just past the closing `)`. A list that never closed is no scan at
+   *  all, so this is always a real offset. */
+  end: number;
 };
 
 const NUMBER_LITERAL_RE = /^-?\d+(?:\.\d+)?$/u;
@@ -474,7 +475,7 @@ const scanFilterChain = (tail: string): FilterChainScan | null => {
     }
     if (tail[i] === "(") {
       const scanned = scanArguments(tail, i);
-      if (scanned === null || scanned.end === null) {
+      if (scanned === null) {
         return null;
       }
       filters.push({ name, args: scanned.args });
@@ -552,7 +553,7 @@ const classifyOutput = (inner: string): MarkerMeta | null => {
       return null;
     }
     const scanned = scanArguments(inner, inner.indexOf("("));
-    if (scanned === null || scanned.end === null) {
+    if (scanned === null) {
       return null;
     }
     if (inner.slice(scanned.end).trim() !== "") {
@@ -740,10 +741,7 @@ export const substitutionKey = (meta: MarkerMeta): string | null => {
 const CLAUSE_KEY_PREFIX = "@clause:";
 
 /** The values-map key for one clause slot. */
-export const clauseSlotKey = (
-  name: string,
-  version?: string | undefined,
-): string =>
+export const clauseSlotKey = (name: string, version?: string): string =>
   version === undefined
     ? `${CLAUSE_KEY_PREFIX}${name}`
     : `${CLAUSE_KEY_PREFIX}${name}:${version}`;
@@ -787,7 +785,7 @@ const LEGACY_NUM_RE = /^@(?<fn>num|ref):(?<key>[\p{L}\p{N}_.-]+)$/u;
 
 /** Singular of a plain-word path segment, for a generated loop alias. */
 const singularize = (segment: string): string => {
-  if (/ies$/u.test(segment) && segment.length > 3) {
+  if (segment.endsWith("ies") && segment.length > 3) {
     return `${segment.slice(0, -3)}y`;
   }
   if (/(?:s|ss|sh|ch|x|z)es$/u.test(segment)) {
@@ -817,7 +815,7 @@ export const translateLegacyExpression = (expr: string): string =>
     .replace(
       /(?<path>[\p{L}\p{N}_.-]+)\s+contains\s+(?<value>"[^"]*"|[\p{L}\p{N}_.-]+)/gu,
       (_m, path: string, value: string) =>
-        `${/^"/u.test(value) ? value : `"${value}"`} in ${path}`,
+        `${value.startsWith('"') ? value : `"${value}"`} in ${path}`,
     )
     .replace(/!(?!=)\s*/gu, "not ");
 

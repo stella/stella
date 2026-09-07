@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
-import { classifyMarker } from "@stll/template-conditions";
+import { assertNever, classifyMarker } from "@stll/template-conditions";
 import type { FilterCall } from "@stll/template-conditions";
 
 import { discoverTemplate } from "./discover-template";
@@ -225,8 +225,11 @@ const FIELD_TO_FILTERS = {
           : ["date"];
       case "select":
         return [`select(${(field.options ?? []).map(quote).join(", ")})`];
-      default:
+      case "number":
+      case "text":
         return [field.inputType];
+      default:
+        return assertNever(field.inputType);
     }
   },
   // Rendered with the input type it belongs to.
@@ -304,8 +307,12 @@ const FIELD_TO_FILTERS = {
         return [`party(${quote(source.role)}, ${quote(source.field)})`];
       case "attorney":
         return [`attorney(${quote(source.ref)}, ${quote(source.field)})`];
-      default:
+      case "contact":
+      case "firm":
+      case "matter":
         return [`${source.kind}(${quote(source.field)})`];
+      default:
+        return assertNever(source);
     }
   },
   formula: (field: FieldMeta) =>
