@@ -69,7 +69,13 @@ export const ViewToolbarSearch = ({
   const popupRef = useRef<HTMLDivElement>(null);
   // The column picker lives inside this popover rather than in a menu of its
   // own: a nested popup counts as an outside press and closed the bar.
-  const [columnsShown, setColumnsShown] = useState(false);
+  //
+  // Which view it is unfolded for, rather than whether it is unfolded: this
+  // component stays mounted across a switch between two table views, so a
+  // bare boolean would follow the reader and open the next view's picker
+  // already expanded.
+  const [columnsShownFor, setColumnsShownFor] = useState<string | null>(null);
+  const columnsShown = columnsShownFor === view.id;
 
   // Debounced rather than immediate: `submit` is what turns a keystroke into
   // a row query, so it is the only path from `typed` to `submitted`.
@@ -131,7 +137,7 @@ export const ViewToolbarSearch = ({
         // Flush rather than cancel: the last keystrokes were only waiting out
         // the debounce, and the find they belong to survives this close.
         submit.flush();
-        setColumnsShown(false);
+        setColumnsShownFor(null);
         closeFind(view.id);
       }}
       open={open}
@@ -217,7 +223,7 @@ export const ViewToolbarSearch = ({
             aria-expanded={columnsShown}
             aria-label={t("workspaces.views.findColumns")}
             onClick={() => {
-              setColumnsShown((shown) => !shown);
+              setColumnsShownFor(columnsShown ? null : view.id);
             }}
             size="icon-xs"
             title={t("workspaces.views.findColumns")}

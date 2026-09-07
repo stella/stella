@@ -233,6 +233,26 @@ test.describe("find in table", () => {
     ).toBeVisible({ timeout: 15_000 });
     await expect(otherRow).toBeHidden();
     await expect(matchingRow).toBeVisible();
+
+    // The picker's unfolded state is per view for the same reason the term is.
+    // Unfold it here, switch, and the other view's bar opens folded.
+    const columnsToggle = page.getByRole("button", {
+      exact: true,
+      name: "Columns to find in",
+    });
+    await columnsToggle.click();
+    await expect(columnsToggle).toHaveAttribute("aria-expanded", "true");
+    await expect(
+      page.getByRole("button", { exact: true, name: "All columns" }),
+    ).toBeVisible();
+
+    await page.goBack({ waitUntil: "commit" });
+    await page.keyboard.press("ControlOrMeta+f");
+    await expect(page.getByRole("searchbox")).toBeFocused();
+    await expect(columnsToggle).toHaveAttribute("aria-expanded", "false");
+    await expect(
+      page.getByRole("button", { exact: true, name: "All columns" }),
+    ).toBeHidden();
   });
 
   // Finding 1 of the find browser test: Folio's find/replace dialog binds
