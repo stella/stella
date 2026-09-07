@@ -488,8 +488,12 @@ export const prepareCorpusProjectionReplacementsTx = async <
  * site, so the two causes cannot be filed under one message again.
  * PostgreSQL evaluates a SET expression against the pre-update row, so the
  * lease read here is still the one the start attempt tested.
+ *
+ * The parameter is a settled `Date`, never a SQL expression: the caller must
+ * have read one clock for the start attempt and this cancellation, or the two
+ * statements would compare the same lease against two different instants.
  */
-const appendCancelReason = (transitionAt: Date | SQL<Date>): SQL<string> =>
+const appendCancelReason = (transitionAt: Date): SQL<string> =>
   sql<string>`CASE
     WHEN ${corpusIndexProjectionIntents.leaseExpiresAt} IS NULL
       OR ${corpusIndexProjectionIntents.leaseExpiresAt} <= ${transitionAt}::timestamptz
@@ -558,7 +562,11 @@ export const startCorpusProjectionAppendTx = async (
   if (lockedIntents.length === 0) {
     return "lease_lost";
   }
-  const transitionAt = testNow ?? sql<Date>`clock_timestamp()`;
+  // One clock for the start attempt and the cancellation that reads why it
+  // failed. `clock_timestamp()` is volatile, so leaving it in the statements
+  // would let a lease that was live when the start was rejected read as
+  // expired a moment later and take the blame from the desired state.
+  const transitionAt = testNow ?? (await readPostgresClock(tx));
   const rows = await tx
     .update(corpusIndexProjectionIntents)
     .set({
