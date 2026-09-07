@@ -66,7 +66,7 @@
           "name": "withastro"
         }
       ],
-      "bom-ref": "pkg:npm/@astrojs/react@6.0.4",
+      "bom-ref": "pkg:npm/@astrojs/react@6.0.5",
       "description": "Use React components within Astro",
       "evidence": {
         "identity": [
@@ -2240,10 +2240,10 @@
           "value": "apps/landing/node_modules/@astrojs/react/package.json"
         }
       ],
-      "purl": "pkg:npm/%40astrojs/react@6.0.4",
+      "purl": "pkg:npm/%40astrojs/react@6.0.5",
       "scope": "required",
       "type": "library",
-      "version": "6.0.4"
+      "version": "6.0.5"
     },
     {
       "authors": [
@@ -2251,7 +2251,7 @@
           "name": "withastro"
         }
       ],
-      "bom-ref": "pkg:npm/@astrojs/sitemap@3.7.3",
+      "bom-ref": "pkg:npm/@astrojs/sitemap@3.7.4",
       "description": "Generate a sitemap for your Astro site",
       "evidence": {
         "identity": [
@@ -2304,10 +2304,10 @@
           "value": "apps/landing/node_modules/@astrojs/sitemap/package.json"
         }
       ],
-      "purl": "pkg:npm/%40astrojs/sitemap@3.7.3",
+      "purl": "pkg:npm/%40astrojs/sitemap@3.7.4",
       "scope": "required",
       "type": "library",
-      "version": "3.7.3"
+      "version": "3.7.4"
     },
     {
       "authors": [
@@ -2315,7 +2315,7 @@
           "name": "Chris Swithinbank <swithinbank@gmail.com>"
         }
       ],
-      "bom-ref": "pkg:npm/@astrojs/starlight@0.41.10",
+      "bom-ref": "pkg:npm/@astrojs/starlight@0.41.11",
       "description": "Build beautiful, high-performance documentation websites with Astro",
       "evidence": {
         "identity": [
@@ -2368,10 +2368,10 @@
           "value": "apps/landing/node_modules/@astrojs/starlight/package.json"
         }
       ],
-      "purl": "pkg:npm/%40astrojs/starlight@0.41.10",
+      "purl": "pkg:npm/%40astrojs/starlight@0.41.11",
       "scope": "required",
       "type": "library",
-      "version": "0.41.10"
+      "version": "0.41.11"
     },
     {
       "authors": [
@@ -2828,7 +2828,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-cloudwatch@3.1121.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-cloudwatch@3.1124.0",
       "description": "AWS SDK for JavaScript Cloudwatch Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -2881,13 +2881,13 @@
           "value": "apps/api/node_modules/@aws-sdk/client-cloudwatch/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-cloudwatch@3.1121.0",
+      "purl": "pkg:npm/%40aws-sdk/client-cloudwatch@3.1124.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1121.0"
+      "version": "3.1124.0"
     },
     {
       "authors": [
@@ -2895,7 +2895,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-s3@3.1121.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-s3@3.1124.0",
       "description": "AWS SDK for JavaScript S3 Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -2951,13 +2951,13 @@
           "value": "apps/api/node_modules/@aws-sdk/client-s3/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-s3@3.1121.0",
+      "purl": "pkg:npm/%40aws-sdk/client-s3@3.1124.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1121.0"
+      "version": "3.1124.0"
     },
     {
       "authors": [
@@ -2965,7 +2965,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-sesv2@3.1121.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-sesv2@3.1124.0",
       "description": "AWS SDK for JavaScript Sesv2 Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -3018,13 +3018,13 @@
           "value": "apps/api/node_modules/@aws-sdk/client-sesv2/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-sesv2@3.1121.0",
+      "purl": "pkg:npm/%40aws-sdk/client-sesv2@3.1124.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1121.0"
+      "version": "3.1124.0"
     },
     {
       "authors": [
@@ -3032,7 +3032,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-sts@3.1121.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-sts@3.1124.0",
       "description": "AWS SDK for JavaScript Sts Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -3085,13 +3085,13 @@
           "value": "apps/api/node_modules/@aws-sdk/client-sts/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-sts@3.1121.0",
+      "purl": "pkg:npm/%40aws-sdk/client-sts@3.1124.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1121.0"
+      "version": "3.1124.0"
     },
     {
       "authors": [
@@ -3099,7 +3099,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/s3-request-presigner@3.1121.0",
+      "bom-ref": "pkg:npm/@aws-sdk/s3-request-presigner@3.1124.0",
       "evidence": {
         "identity": [
           {
@@ -3151,13 +3151,13 @@
           "value": "apps/api/node_modules/@aws-sdk/s3-request-presigner/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/s3-request-presigner@3.1121.0",
+      "purl": "pkg:npm/%40aws-sdk/s3-request-presigner@3.1124.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1121.0"
+      "version": "3.1124.0"
     },
     {
       "authors": [
@@ -6056,7 +6056,7 @@
       "version": "3.5.17"
     },
     {
-      "bom-ref": "pkg:npm/@google/genai@2.19.0",
+      "bom-ref": "pkg:npm/@google/genai@2.20.0",
       "evidence": {
         "identity": [
           {
@@ -6108,10 +6108,10 @@
           "value": "apps/api/node_modules/@google/genai/package.json"
         }
       ],
-      "purl": "pkg:npm/%40google/genai@2.19.0",
+      "purl": "pkg:npm/%40google/genai@2.20.0",
       "scope": "required",
       "type": "library",
-      "version": "2.19.0"
+      "version": "2.20.0"
     },
     {
       "bom-ref": "pkg:npm/@hocuspocus/extension-redis@4.6.0",
@@ -6369,7 +6369,7 @@
           "name": "Lucas Smith"
         }
       ],
-      "bom-ref": "pkg:npm/@libpdf/core@0.4.1",
+      "bom-ref": "pkg:npm/@libpdf/core@0.4.2",
       "description": "A modern PDF library for TypeScript - parsing and generation",
       "evidence": {
         "identity": [
@@ -6450,10 +6450,10 @@
           "value": "apps/api/node_modules/@libpdf/core/package.json"
         }
       ],
-      "purl": "pkg:npm/%40libpdf/core@0.4.1",
+      "purl": "pkg:npm/%40libpdf/core@0.4.2",
       "scope": "required",
       "type": "library",
-      "version": "0.4.1"
+      "version": "0.4.2"
     },
     {
       "bom-ref": "pkg:npm/@litko/yara-x@0.7.1",
@@ -6697,10 +6697,10 @@
             "location": "apps/api/src/mcp/resources.ts#5"
           },
           {
-            "location": "apps/api/src/mcp/server-core.ts#6"
+            "location": "apps/api/src/mcp/server-core.ts#7"
           },
           {
-            "location": "apps/api/src/mcp/server-core.ts#14"
+            "location": "apps/api/src/mcp/server-core.ts#15"
           },
           {
             "location": "apps/api/src/mcp/tool-types.ts#4"
@@ -6878,7 +6878,7 @@
           "name": "OpenTelemetry Authors"
         }
       ],
-      "bom-ref": "pkg:npm/@opentelemetry/api-logs@0.221.0",
+      "bom-ref": "pkg:npm/@opentelemetry/api-logs@0.222.0",
       "description": "Public logs API for OpenTelemetry",
       "evidence": {
         "identity": [
@@ -6930,13 +6930,13 @@
           "value": "apps/api/node_modules/@opentelemetry/api-logs/package.json"
         }
       ],
-      "purl": "pkg:npm/%40opentelemetry/api-logs@0.221.0",
+      "purl": "pkg:npm/%40opentelemetry/api-logs@0.222.0",
       "scope": "required",
       "tags": [
         "api"
       ],
       "type": "library",
-      "version": "0.221.0"
+      "version": "0.222.0"
     },
     {
       "authors": [
@@ -6944,7 +6944,7 @@
           "name": "OpenTelemetry Authors"
         }
       ],
-      "bom-ref": "pkg:npm/@opentelemetry/exporter-logs-otlp-http@0.221.0",
+      "bom-ref": "pkg:npm/@opentelemetry/exporter-logs-otlp-http@0.222.0",
       "description": "OpenTelemetry Collector Logs Exporter allows user to send collected logs to the OpenTelemetry Collector",
       "evidence": {
         "identity": [
@@ -6997,10 +6997,10 @@
           "value": "apps/api/node_modules/@opentelemetry/exporter-logs-otlp-http/package.json"
         }
       ],
-      "purl": "pkg:npm/%40opentelemetry/exporter-logs-otlp-http@0.221.0",
+      "purl": "pkg:npm/%40opentelemetry/exporter-logs-otlp-http@0.222.0",
       "scope": "required",
       "type": "library",
-      "version": "0.221.0"
+      "version": "0.222.0"
     },
     {
       "authors": [
@@ -7008,7 +7008,7 @@
           "name": "OpenTelemetry Authors"
         }
       ],
-      "bom-ref": "pkg:npm/@opentelemetry/resources@2.10.0",
+      "bom-ref": "pkg:npm/@opentelemetry/resources@2.11.0",
       "description": "OpenTelemetry SDK resources",
       "evidence": {
         "identity": [
@@ -7057,10 +7057,10 @@
           "value": "apps/api/node_modules/@opentelemetry/resources/package.json"
         }
       ],
-      "purl": "pkg:npm/%40opentelemetry/resources@2.10.0",
+      "purl": "pkg:npm/%40opentelemetry/resources@2.11.0",
       "scope": "required",
       "type": "library",
-      "version": "2.10.0"
+      "version": "2.11.0"
     },
     {
       "authors": [
@@ -7068,7 +7068,7 @@
           "name": "OpenTelemetry Authors"
         }
       ],
-      "bom-ref": "pkg:npm/@opentelemetry/sdk-logs@0.221.0",
+      "bom-ref": "pkg:npm/@opentelemetry/sdk-logs@0.222.0",
       "description": "OpenTelemetry logs SDK",
       "evidence": {
         "identity": [
@@ -7121,10 +7121,10 @@
           "value": "apps/api/node_modules/@opentelemetry/sdk-logs/package.json"
         }
       ],
-      "purl": "pkg:npm/%40opentelemetry/sdk-logs@0.221.0",
+      "purl": "pkg:npm/%40opentelemetry/sdk-logs@0.222.0",
       "scope": "required",
       "type": "library",
-      "version": "0.221.0"
+      "version": "0.222.0"
     },
     {
       "authors": [
@@ -9495,7 +9495,7 @@
           "name": "Yuki Yokotani <silurus.dev@gmail.com>"
         }
       ],
-      "bom-ref": "pkg:npm/@silurus/ooxml@0.82.1",
+      "bom-ref": "pkg:npm/@silurus/ooxml@0.84.1",
       "description": "Browser-based OOXML viewer (docx/xlsx/pptx) — Rust/WASM parser + Canvas renderer",
       "evidence": {
         "identity": [
@@ -9558,13 +9558,13 @@
           "value": "apps/api/node_modules/@silurus/ooxml/package.json"
         }
       ],
-      "purl": "pkg:npm/%40silurus/ooxml@0.82.1",
+      "purl": "pkg:npm/%40silurus/ooxml@0.84.1",
       "scope": "required",
       "tags": [
         "xml"
       ],
       "type": "library",
-      "version": "0.82.1"
+      "version": "0.84.1"
     },
     {
       "authors": [
@@ -10243,7 +10243,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/ai-anthropic@0.17.1",
+      "bom-ref": "pkg:npm/@tanstack/ai-anthropic@0.18.3",
       "description": "Anthropic Claude adapter for TanStack AI chat, tool calling, thinking, and structured outputs.",
       "evidence": {
         "identity": [
@@ -10318,16 +10318,16 @@
           "value": "apps/api/node_modules/@tanstack/ai-anthropic/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/ai-anthropic@0.17.1",
+      "purl": "pkg:npm/%40tanstack/ai-anthropic@0.18.3",
       "scope": "required",
       "tags": [
         "ai"
       ],
       "type": "library",
-      "version": "0.17.1"
+      "version": "0.18.3"
     },
     {
-      "bom-ref": "pkg:npm/@tanstack/ai-bedrock@0.2.6",
+      "bom-ref": "pkg:npm/@tanstack/ai-bedrock@0.3.4",
       "description": "Amazon Bedrock adapter for TanStack AI — OpenAI-compatible chat, responses, tools, and reasoning.",
       "evidence": {
         "identity": [
@@ -10383,13 +10383,13 @@
           "value": "apps/api/node_modules/@tanstack/ai-bedrock/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/ai-bedrock@0.2.6",
+      "purl": "pkg:npm/%40tanstack/ai-bedrock@0.3.4",
       "scope": "required",
       "tags": [
         "ai"
       ],
       "type": "library",
-      "version": "0.2.6"
+      "version": "0.3.4"
     },
     {
       "authors": [
@@ -10397,7 +10397,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/ai-client@0.26.0",
+      "bom-ref": "pkg:npm/@tanstack/ai-client@0.30.0",
       "description": "Framework-agnostic headless client for TanStack AI chat, realtime sessions, streaming transports, and media generations.",
       "evidence": {
         "identity": [
@@ -10487,14 +10487,14 @@
           "value": "apps/api/node_modules/@tanstack/ai-client/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/ai-client@0.26.0",
+      "purl": "pkg:npm/%40tanstack/ai-client@0.30.0",
       "scope": "required",
       "tags": [
         "ai",
         "framework"
       ],
       "type": "framework",
-      "version": "0.26.0"
+      "version": "0.30.0"
     },
     {
       "authors": [
@@ -10502,7 +10502,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/ai-code-mode@0.4.3",
+      "bom-ref": "pkg:npm/@tanstack/ai-code-mode@0.4.7",
       "description": "Secure TypeScript Code Mode for TanStack AI agents to execute sandboxed tool orchestration programs.",
       "evidence": {
         "identity": [
@@ -10558,16 +10558,16 @@
           "value": "apps/api/node_modules/@tanstack/ai-code-mode/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/ai-code-mode@0.4.3",
+      "purl": "pkg:npm/%40tanstack/ai-code-mode@0.4.7",
       "scope": "required",
       "tags": [
         "ai"
       ],
       "type": "library",
-      "version": "0.4.3"
+      "version": "0.4.7"
     },
     {
-      "bom-ref": "pkg:npm/@tanstack/ai-codex@0.4.4",
+      "bom-ref": "pkg:npm/@tanstack/ai-codex@0.5.3",
       "description": "Codex harness adapter for TanStack AI — run OpenAI Codex as a chat backend with local tool execution and stateful sessions.",
       "evidence": {
         "identity": [
@@ -10616,13 +10616,13 @@
           "value": "node_modules/@tanstack/ai-codex/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/ai-codex@0.4.4",
+      "purl": "pkg:npm/%40tanstack/ai-codex@0.5.3",
       "scope": "required",
       "tags": [
         "ai"
       ],
       "type": "library",
-      "version": "0.4.4"
+      "version": "0.5.3"
     },
     {
       "authors": [
@@ -10630,7 +10630,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/ai-gemini@0.25.1",
+      "bom-ref": "pkg:npm/@tanstack/ai-gemini@0.26.5",
       "description": "Google Gemini adapter for TanStack AI chat, images, speech, audio generation, and structured outputs.",
       "evidence": {
         "identity": [
@@ -10690,13 +10690,13 @@
           "value": "apps/api/node_modules/@tanstack/ai-gemini/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/ai-gemini@0.25.1",
+      "purl": "pkg:npm/%40tanstack/ai-gemini@0.26.5",
       "scope": "required",
       "tags": [
         "ai"
       ],
       "type": "library",
-      "version": "0.25.1"
+      "version": "0.26.5"
     },
     {
       "authors": [
@@ -10704,7 +10704,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/ai-mcp@0.3.4",
+      "bom-ref": "pkg:npm/@tanstack/ai-mcp@0.3.8",
       "description": "Host-side Model Context Protocol client for TanStack AI: discover and run MCP server tools, resources, and prompts in any adapter's chat() loop, with generated end-to-end types.",
       "evidence": {
         "identity": [
@@ -10766,13 +10766,13 @@
           "value": "apps/api/node_modules/@tanstack/ai-mcp/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/ai-mcp@0.3.4",
+      "purl": "pkg:npm/%40tanstack/ai-mcp@0.3.8",
       "scope": "required",
       "type": "library",
-      "version": "0.3.4"
+      "version": "0.3.8"
     },
     {
-      "bom-ref": "pkg:npm/@tanstack/ai-mistral@0.4.1",
+      "bom-ref": "pkg:npm/@tanstack/ai-mistral@0.5.3",
       "description": "Mistral adapter for TanStack AI",
       "evidence": {
         "identity": [
@@ -10828,10 +10828,10 @@
           "value": "apps/api/node_modules/@tanstack/ai-mistral/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/ai-mistral@0.4.1",
+      "purl": "pkg:npm/%40tanstack/ai-mistral@0.5.3",
       "scope": "required",
       "type": "library",
-      "version": "0.4.1"
+      "version": "0.5.3"
     },
     {
       "authors": [
@@ -10839,7 +10839,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/ai-openai@0.21.1",
+      "bom-ref": "pkg:npm/@tanstack/ai-openai@0.22.3",
       "description": "OpenAI adapter for TanStack AI chat, tools, images, video, speech, transcription, realtime, and structured outputs.",
       "evidence": {
         "identity": [
@@ -10858,7 +10858,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/api/src/lib/tanstack-ai-generate.ts#16"
+            "location": "apps/api/src/lib/tanstack-ai-generate.ts#14"
           },
           {
             "location": "apps/api/src/lib/tanstack-ai-models.ts#13"
@@ -10898,13 +10898,13 @@
           "value": "apps/api/node_modules/@tanstack/ai-openai/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/ai-openai@0.21.1",
+      "purl": "pkg:npm/%40tanstack/ai-openai@0.22.3",
       "scope": "required",
       "tags": [
         "ai"
       ],
       "type": "library",
-      "version": "0.21.1"
+      "version": "0.22.3"
     },
     {
       "authors": [
@@ -10912,7 +10912,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/ai-openrouter@0.18.3",
+      "bom-ref": "pkg:npm/@tanstack/ai-openrouter@0.19.6",
       "description": "TanStack AI adapter for OpenRouter chat, provider tools, structured outputs, and access to hundreds of LLMs.",
       "evidence": {
         "identity": [
@@ -10975,16 +10975,16 @@
           "value": "apps/api/node_modules/@tanstack/ai-openrouter/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/ai-openrouter@0.18.3",
+      "purl": "pkg:npm/%40tanstack/ai-openrouter@0.19.6",
       "scope": "required",
       "tags": [
         "ai"
       ],
       "type": "library",
-      "version": "0.18.3"
+      "version": "0.19.6"
     },
     {
-      "bom-ref": "pkg:npm/@tanstack/ai-sandbox@0.5.0",
+      "bom-ref": "pkg:npm/@tanstack/ai-sandbox@0.5.5",
       "description": "Provider-agnostic sandbox layer for TanStack AI — run harness adapters inside isolated sandboxes (defineSandbox, defineWorkspace, withSandbox) with a uniform SandboxHandle, workspace bootstrap, policy, and resumable lifecycle.",
       "evidence": {
         "identity": [
@@ -11042,13 +11042,13 @@
           "value": "node_modules/@tanstack/ai-sandbox/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/ai-sandbox@0.5.0",
+      "purl": "pkg:npm/%40tanstack/ai-sandbox@0.5.5",
       "scope": "required",
       "tags": [
         "ai"
       ],
       "type": "library",
-      "version": "0.5.0"
+      "version": "0.5.5"
     },
     {
       "authors": [
@@ -11056,7 +11056,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/ai@0.48.0",
+      "bom-ref": "pkg:npm/@tanstack/ai@0.52.1",
       "description": "Type-safe TypeScript AI SDK for streaming chat, tool calling, agents, structured outputs, and multimodal generation.",
       "evidence": {
         "identity": [
@@ -11097,6 +11097,12 @@
           },
           {
             "location": "apps/api/evals/suggest-changes-precision.ts#33"
+          },
+          {
+            "location": "apps/api/evals/template-authoring.ts#72"
+          },
+          {
+            "location": "apps/api/evals/template-authoring.ts#73"
           },
           {
             "location": "apps/api/evals/template-fill.ts#35"
@@ -11141,16 +11147,13 @@
             "location": "apps/api/src/handlers/chat/loop-detector.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/chat/stream-chat.ts#7"
+            "location": "apps/api/src/handlers/chat/stream-chat.ts#6"
           },
           {
-            "location": "apps/api/src/handlers/chat/stream-chat.ts#17"
+            "location": "apps/api/src/handlers/chat/stream-chat.ts#16"
           },
           {
             "location": "apps/api/src/handlers/chat/stream-message-identity.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/stream-message-identity.ts#2"
           },
           {
             "location": "apps/api/src/handlers/chat/subagent-runner.ts#1"
@@ -11252,6 +11255,12 @@
             "location": "apps/api/src/lib/chat/model-ingress-guard.ts#1"
           },
           {
+            "location": "apps/api/src/lib/chat/tanstack-chat-runtime.ts#13"
+          },
+          {
+            "location": "apps/api/src/lib/chat/tanstack-chat-runtime.ts#20"
+          },
+          {
             "location": "apps/api/src/lib/document-review/reference-grade.ts#19"
           },
           {
@@ -11273,10 +11282,10 @@
             "location": "apps/api/src/lib/tanstack-ai-caching.ts#1"
           },
           {
-            "location": "apps/api/src/lib/tanstack-ai-generate.ts#6"
+            "location": "apps/api/src/lib/tanstack-ai-generate.ts#5"
           },
           {
-            "location": "apps/api/src/lib/tanstack-ai-generate.ts#15"
+            "location": "apps/api/src/lib/tanstack-ai-generate.ts#13"
           },
           {
             "location": "apps/api/src/lib/tanstack-ai-models.ts#3"
@@ -11353,13 +11362,13 @@
           "value": "apps/api/node_modules/@tanstack/ai/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/ai@0.48.0",
+      "purl": "pkg:npm/%40tanstack/ai@0.52.1",
       "scope": "required",
       "tags": [
         "ai"
       ],
       "type": "library",
-      "version": "0.48.0"
+      "version": "0.52.1"
     },
     {
       "authors": [
@@ -17812,7 +17821,7 @@
           "name": "withastro"
         }
       ],
-      "bom-ref": "pkg:npm/astro@7.2.9",
+      "bom-ref": "pkg:npm/astro@7.2.10",
       "description": "Astro is a modern site builder with web best practices, performance, and DX front-of-mind.",
       "evidence": {
         "identity": [
@@ -17880,13 +17889,13 @@
           "value": "apps/landing/node_modules/astro/package.json"
         }
       ],
-      "purl": "pkg:npm/astro@7.2.9",
+      "purl": "pkg:npm/astro@7.2.10",
       "scope": "required",
       "tags": [
         "web"
       ],
       "type": "library",
-      "version": "7.2.9"
+      "version": "7.2.10"
     },
     {
       "bom-ref": "pkg:npm/better-auth@1.7.1",
@@ -18046,7 +18055,7 @@
           "name": "Dillon Mulroy <dillon.mulroy@gmail.com> (https://github.com/dmmulroy)"
         }
       ],
-      "bom-ref": "pkg:npm/better-result@3.0.0",
+      "bom-ref": "pkg:npm/better-result@3.0.1",
       "description": "Lightweight Result type with generator-based composition",
       "evidence": {
         "identity": [
@@ -18075,6 +18084,9 @@
           },
           {
             "location": "apps/api/evals/suggest-changes-precision.ts#34"
+          },
+          {
+            "location": "apps/api/evals/template-authoring.ts#74"
           },
           {
             "location": "apps/api/evals/template-fill.ts#37"
@@ -18581,7 +18593,7 @@
             "location": "apps/api/src/handlers/chat/send-message.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/chat/stream-chat.ts#18"
+            "location": "apps/api/src/handlers/chat/stream-chat.ts#17"
           },
           {
             "location": "apps/api/src/handlers/chat/subagent-runner.ts#3"
@@ -19811,7 +19823,7 @@
             "location": "apps/api/src/handlers/templates/clauses-unlink.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/templates/configure-template-fields-service.ts#15"
+            "location": "apps/api/src/handlers/templates/configure-template-fields-service.ts#14"
           },
           {
             "location": "apps/api/src/handlers/templates/create-blank.ts#1"
@@ -20177,6 +20189,9 @@
             "location": "apps/api/src/lib/analytics/tanstack-ai.ts#6"
           },
           {
+            "location": "apps/api/src/lib/anonymization-allowlist.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/anonymization-blacklist.ts#1"
           },
           {
@@ -20223,6 +20238,9 @@
           },
           {
             "location": "apps/api/src/lib/buffer-intent-reconciliation.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/business-registries/dispatch.ts#10"
           },
           {
             "location": "apps/api/src/lib/capability-transport.ts#19"
@@ -20310,6 +20328,9 @@
           },
           {
             "location": "apps/api/src/lib/db/bounded-all.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/db/executed-rows.ts#1"
           },
           {
             "location": "apps/api/src/lib/db/migration-history.ts#1"
@@ -20408,13 +20429,19 @@
             "location": "apps/api/src/lib/document-translation/segments.ts#1"
           },
           {
+            "location": "apps/api/src/lib/docx/ai-field-generator.ts#14"
+          },
+          {
             "location": "apps/api/src/lib/docx/bounded-pattern.ts#21"
           },
           {
-            "location": "apps/api/src/lib/docx/discover-template.ts#11"
+            "location": "apps/api/src/lib/docx/discover-template.ts#13"
           },
           {
             "location": "apps/api/src/lib/docx/patch-template.ts#11"
+          },
+          {
+            "location": "apps/api/src/lib/docx/resolve-clause-slots.ts#8"
           },
           {
             "location": "apps/api/src/lib/docx/template-manifest.ts#13"
@@ -20810,6 +20837,9 @@
             "location": "apps/api/src/lib/scheduler/tasks/chat-thread-compactor.ts#14"
           },
           {
+            "location": "apps/api/src/lib/scheduler/tasks/corpus-index-job-detail-backfill.ts#13"
+          },
+          {
             "location": "apps/api/src/lib/scheduler/tasks/desktop-edit-session-expiry.ts#1"
           },
           {
@@ -20930,7 +20960,7 @@
             "location": "apps/api/src/lib/subprocess.ts#1"
           },
           {
-            "location": "apps/api/src/lib/tanstack-ai-generate.ts#17"
+            "location": "apps/api/src/lib/tanstack-ai-generate.ts#15"
           },
           {
             "location": "apps/api/src/lib/tanstack-ai-models.ts#16"
@@ -20957,6 +20987,9 @@
             "location": "apps/api/src/lib/templates/create-template.ts#14"
           },
           {
+            "location": "apps/api/src/lib/templates/field-overlay.ts#15"
+          },
+          {
             "location": "apps/api/src/lib/templates/fill-by-id-logic.ts#7"
           },
           {
@@ -20973,6 +21006,9 @@
           },
           {
             "location": "apps/api/src/lib/templates/validate-template-output.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/templates/write-template.ts#1"
           },
           {
             "location": "apps/api/src/lib/timezone.ts#1"
@@ -21086,6 +21122,9 @@
             "location": "apps/api/src/mcp/document-tools.ts#1"
           },
           {
+            "location": "apps/api/src/mcp/egress.ts#1"
+          },
+          {
             "location": "apps/api/src/mcp/errors.ts#1"
           },
           {
@@ -21107,7 +21146,7 @@
             "location": "apps/api/src/mcp/research-admin-tools.ts#1"
           },
           {
-            "location": "apps/api/src/mcp/server-core.ts#15"
+            "location": "apps/api/src/mcp/server-core.ts#16"
           },
           {
             "location": "apps/api/src/mcp/stella-tools.ts#1"
@@ -21234,6 +21273,9 @@
           },
           {
             "location": "apps/collab/src/server.ts#7"
+          },
+          {
+            "location": "apps/desktop/src/clipboard/clipboard-style.ts#1"
           },
           {
             "location": "apps/landing/scripts/check-img-alt.ts#2"
@@ -21393,6 +21435,9 @@
           },
           {
             "location": "apps/web/src/components/route-components.logic.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/templates/template-form.logic.ts#1"
           },
           {
             "location": "apps/web/src/components/translate-document-dialog.logic.ts#1"
@@ -21777,6 +21822,9 @@
           },
           {
             "location": "packages/clipboard/src/index.ts#1"
+          },
+          {
+            "location": "packages/concurrency/src/index.ts#1"
           },
           {
             "location": "packages/conditions/src/effective-leaf.ts#1"
@@ -22466,6 +22514,10 @@
         },
         {
           "name": "SrcFile",
+          "value": "packages/concurrency/node_modules/better-result/package.json"
+        },
+        {
+          "name": "SrcFile",
           "value": "packages/clipboard/node_modules/better-result/package.json"
         },
         {
@@ -22529,10 +22581,10 @@
           "value": "apps/api/node_modules/better-result/package.json"
         }
       ],
-      "purl": "pkg:npm/better-result@3.0.0",
+      "purl": "pkg:npm/better-result@3.0.1",
       "scope": "required",
       "type": "library",
-      "version": "3.0.0"
+      "version": "3.0.1"
     },
     {
       "authors": [
@@ -22540,7 +22592,7 @@
           "name": "Taskforce.sh Inc."
         }
       ],
-      "bom-ref": "pkg:npm/bullmq@6.3.2",
+      "bom-ref": "pkg:npm/bullmq@6.3.4",
       "description": "Queue for messages and jobs based on Redis",
       "evidence": {
         "identity": [
@@ -22644,10 +22696,10 @@
           "value": "apps/api/node_modules/bullmq/package.json"
         }
       ],
-      "purl": "pkg:npm/bullmq@6.3.2",
+      "purl": "pkg:npm/bullmq@6.3.4",
       "scope": "required",
       "type": "library",
-      "version": "6.3.2"
+      "version": "6.3.4"
     },
     {
       "authors": [
@@ -23837,7 +23889,7 @@
             "location": "apps/api/src/handlers/chat/send-message.ts#4"
           },
           {
-            "location": "apps/api/src/handlers/chat/stream-chat.ts#19"
+            "location": "apps/api/src/handlers/chat/stream-chat.ts#18"
           },
           {
             "location": "apps/api/src/handlers/chat/tools/chat-history-tools.ts#3"
@@ -24365,9 +24417,6 @@
             "location": "apps/api/src/handlers/organization-settings/read-anonymization-blacklist.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/organization-settings/update-anonymization-blacklist.ts#2"
-          },
-          {
             "location": "apps/api/src/handlers/organization-settings/update.ts#2"
           },
           {
@@ -24614,9 +24663,6 @@
             "location": "apps/api/src/handlers/templates/categories.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/templates/configure-template-fields-service.ts#16"
-          },
-          {
             "location": "apps/api/src/handlers/templates/delete.ts#2"
           },
           {
@@ -24624,9 +24670,6 @@
           },
           {
             "location": "apps/api/src/handlers/templates/prefill.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/templates/save-document.ts#2"
           },
           {
             "location": "apps/api/src/handlers/templates/update.ts#2"
@@ -24869,10 +24912,13 @@
             "location": "apps/api/src/lib/ai-config-loader.ts#12"
           },
           {
-            "location": "apps/api/src/lib/anonymization-allowlist.ts#1"
+            "location": "apps/api/src/lib/anonymization-allowlist.ts#2"
           },
           {
             "location": "apps/api/src/lib/anonymization-blacklist.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/anonymization-blacklist.ts#3"
           },
           {
             "location": "apps/api/src/lib/anonymization-write-cap.ts#1"
@@ -25067,6 +25113,9 @@
             "location": "apps/api/src/lib/document-translation/version-language.ts#12"
           },
           {
+            "location": "apps/api/src/lib/docx/resolve-clause-slots.ts#9"
+          },
+          {
             "location": "apps/api/src/lib/entities/create-from-buffer.ts#2"
           },
           {
@@ -25232,6 +25281,9 @@
             "location": "apps/api/src/lib/legal-search/corpus-index-projection-materials.ts#2"
           },
           {
+            "location": "apps/api/src/lib/legal-search/corpus-index-projection-publish-fence.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/legal-search/corpus-index-projection-revision.ts#2"
           },
           {
@@ -25350,6 +25402,9 @@
           },
           {
             "location": "apps/api/src/lib/scheduler/tasks/chat-thread-compactor-queue.ts#12"
+          },
+          {
+            "location": "apps/api/src/lib/scheduler/tasks/corpus-index-job-detail-backfill.ts#14"
           },
           {
             "location": "apps/api/src/lib/scheduler/tasks/desktop-edit-session-expiry.ts#2"
@@ -25493,10 +25548,16 @@
             "location": "apps/api/src/lib/template-clause-links.ts#3"
           },
           {
+            "location": "apps/api/src/lib/template-clause-links.ts#4"
+          },
+          {
             "location": "apps/api/src/lib/templates/create-template.ts#15"
           },
           {
             "location": "apps/api/src/lib/templates/record-use.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/templates/write-template.ts#2"
           },
           {
             "location": "apps/api/src/lib/time-entry-offboarding.ts#1"
@@ -25845,7 +25906,7 @@
           "name": "saltyAom <saltyaom@gmail.com> (https://github.com/SaltyAom)"
         }
       ],
-      "bom-ref": "pkg:npm/elysia@1.4.29",
+      "bom-ref": "pkg:npm/elysia@1.4.30",
       "description": "Ergonomic Framework for Human",
       "evidence": {
         "identity": [
@@ -26851,7 +26912,7 @@
             "location": "apps/api/src/handlers/organization-settings/routes.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/organization-settings/update-anonymization-blacklist.ts#3"
+            "location": "apps/api/src/handlers/organization-settings/update-anonymization-blacklist.ts#2"
           },
           {
             "location": "apps/api/src/handlers/organization-settings/update-deepl-key.ts#2"
@@ -27277,7 +27338,7 @@
             "location": "apps/api/src/handlers/templates/routes.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/templates/save-document.ts#3"
+            "location": "apps/api/src/handlers/templates/save-document.ts#2"
           },
           {
             "location": "apps/api/src/handlers/templates/suggest-fields.ts#2"
@@ -27622,10 +27683,10 @@
             "location": "apps/api/src/lib/tasks/update-task.ts#4"
           },
           {
-            "location": "apps/api/src/lib/template-clause-links.ts#4"
+            "location": "apps/api/src/lib/template-clause-links.ts#5"
           },
           {
-            "location": "apps/api/src/lib/template-clause-links.ts#5"
+            "location": "apps/api/src/lib/template-clause-links.ts#6"
           },
           {
             "location": "apps/api/src/lib/views-schema.ts#2"
@@ -27696,13 +27757,13 @@
           "value": "apps/api/node_modules/elysia/package.json"
         }
       ],
-      "purl": "pkg:npm/elysia@1.4.29",
+      "purl": "pkg:npm/elysia@1.4.30",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "1.4.29"
+      "version": "1.4.30"
     },
     {
       "authors": [
@@ -27842,7 +27903,7 @@
           "name": " Inc."
         }
       ],
-      "bom-ref": "pkg:npm/expo-router@57.0.17",
+      "bom-ref": "pkg:npm/expo-router@57.0.18",
       "description": "Expo Router is a file-based router for React Native and web applications.",
       "evidence": {
         "identity": [
@@ -27898,13 +27959,13 @@
           "value": "apps/mobile/node_modules/expo-router/package.json"
         }
       ],
-      "purl": "pkg:npm/expo-router@57.0.17",
+      "purl": "pkg:npm/expo-router@57.0.18",
       "scope": "required",
       "tags": [
         "web"
       ],
       "type": "library",
-      "version": "57.0.17"
+      "version": "57.0.18"
     },
     {
       "authors": [
@@ -28522,6 +28583,9 @@
         ],
         "occurrences": [
           {
+            "location": "apps/api/evals/template-authoring.ts#75"
+          },
+          {
             "location": "apps/api/evals/template-fill.ts#38"
           },
           {
@@ -28546,7 +28610,7 @@
             "location": "apps/api/src/lib/docx/discover-placeholders.ts#10"
           },
           {
-            "location": "apps/api/src/lib/docx/discover-template.ts#12"
+            "location": "apps/api/src/lib/docx/discover-template.ts#14"
           },
           {
             "location": "apps/api/src/lib/docx/patch-template.ts#12"
@@ -28684,7 +28748,7 @@
           "name": "Eric Fennis"
         }
       ],
-      "bom-ref": "pkg:npm/lucide-react@1.30.0",
+      "bom-ref": "pkg:npm/lucide-react@1.39.0",
       "description": "A Lucide icon library package for React applications.",
       "evidence": {
         "identity": [
@@ -28727,7 +28791,7 @@
             "location": "apps/web/src/lib/value-types.ts#22"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#47"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#48"
           },
           {
             "location": "apps/desktop/src/clipboard/ClipboardEditor.tsx#12"
@@ -29853,13 +29917,13 @@
           "value": "apps/desktop/node_modules/lucide-react/package.json"
         }
       ],
-      "purl": "pkg:npm/lucide-react@1.30.0",
+      "purl": "pkg:npm/lucide-react@1.39.0",
       "scope": "required",
       "tags": [
         "network"
       ],
       "type": "library",
-      "version": "1.30.0"
+      "version": "1.39.0"
     },
     {
       "authors": [
@@ -29867,7 +29931,7 @@
           "name": "Andris Reinman"
         }
       ],
-      "bom-ref": "pkg:npm/nodemailer@9.0.6",
+      "bom-ref": "pkg:npm/nodemailer@9.1.1",
       "description": "Easy as cake e-mail sending from your Node.js applications",
       "evidence": {
         "identity": [
@@ -29920,10 +29984,10 @@
           "value": "apps/api/node_modules/nodemailer/package.json"
         }
       ],
-      "purl": "pkg:npm/nodemailer@9.0.6",
+      "purl": "pkg:npm/nodemailer@9.1.1",
       "scope": "required",
       "type": "library",
-      "version": "9.0.6"
+      "version": "9.1.1"
     },
     {
       "authors": [
@@ -30197,7 +30261,7 @@
           "name": "engineering@posthog.com"
         }
       ],
-      "bom-ref": "pkg:npm/posthog-js@1.422.5",
+      "bom-ref": "pkg:npm/posthog-js@1.424.1",
       "description": "Posthog-js allows you to automatically capture usage and send events to PostHog.",
       "evidence": {
         "identity": [
@@ -30256,10 +30320,10 @@
           "value": "apps/web/node_modules/posthog-js/package.json"
         }
       ],
-      "purl": "pkg:npm/posthog-js@1.422.5",
+      "purl": "pkg:npm/posthog-js@1.424.1",
       "scope": "required",
       "type": "library",
-      "version": "1.422.5"
+      "version": "1.424.1"
     },
     {
       "authors": [
@@ -30267,7 +30331,7 @@
           "name": "PostHog <engineering@posthog.com> (https://posthog.com)"
         }
       ],
-      "bom-ref": "pkg:npm/posthog-node@5.51.4",
+      "bom-ref": "pkg:npm/posthog-node@5.51.6",
       "description": "PostHog Node.js integration",
       "evidence": {
         "identity": [
@@ -30316,10 +30380,10 @@
           "value": "apps/api/node_modules/posthog-node/package.json"
         }
       ],
-      "purl": "pkg:npm/posthog-node@5.51.4",
+      "purl": "pkg:npm/posthog-node@5.51.6",
       "scope": "required",
       "type": "library",
-      "version": "5.51.4"
+      "version": "5.51.6"
     },
     {
       "bom-ref": "pkg:npm/prism-react-renderer@2.4.1",
@@ -33578,6 +33642,9 @@
         ],
         "occurrences": [
           {
+            "location": "apps/api/evals/template-authoring.ts#77"
+          },
+          {
             "location": "apps/api/src/lib/bilingual/formatting.ts#2"
           },
           {
@@ -33590,7 +33657,7 @@
             "location": "apps/api/src/lib/document-translation/segments.ts#2"
           },
           {
-            "location": "apps/api/src/lib/docx/block-directives.ts#49"
+            "location": "apps/api/src/lib/docx/block-directives.ts#62"
           },
           {
             "location": "apps/api/src/lib/docx/discover-clause-slots.ts#11"
@@ -33599,7 +33666,7 @@
             "location": "apps/api/src/lib/docx/discover-placeholders.ts#11"
           },
           {
-            "location": "apps/api/src/lib/docx/discover-template.ts#13"
+            "location": "apps/api/src/lib/docx/discover-template.ts#15"
           },
           {
             "location": "apps/api/src/lib/docx/inline-conditions.ts#54"
@@ -33615,6 +33682,9 @@
           },
           {
             "location": "apps/api/src/lib/docx/rich-patch.ts#10"
+          },
+          {
+            "location": "apps/api/src/lib/docx/row-block-markers.ts#26"
           },
           {
             "location": "apps/api/src/lib/docx/template-manifest.ts#15"
@@ -34410,7 +34480,7 @@
           "name": "Jan Amann <jan@amann.work>"
         }
       ],
-      "bom-ref": "pkg:npm/use-intl@4.13.5",
+      "bom-ref": "pkg:npm/use-intl@4.14.2",
       "description": "Internationalization (i18n) for React",
       "evidence": {
         "identity": [
@@ -34531,7 +34601,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/-hooks/use-sort-labels.ts#1"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#48"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#49"
           },
           {
             "location": "apps/desktop/src/clipboard/ClipboardEditor.tsx#13"
@@ -36013,10 +36083,10 @@
           "value": "apps/desktop/node_modules/use-intl/package.json"
         }
       ],
-      "purl": "pkg:npm/use-intl@4.13.5",
+      "purl": "pkg:npm/use-intl@4.14.2",
       "scope": "required",
       "type": "library",
-      "version": "4.13.5"
+      "version": "4.14.2"
     },
     {
       "bom-ref": "pkg:npm/uuid@14.0.2",
@@ -36123,6 +36193,9 @@
           },
           {
             "location": "apps/api/evals/create-document-drafting.ts#38"
+          },
+          {
+            "location": "apps/api/evals/template-authoring.ts#78"
           },
           {
             "location": "apps/api/evals/template-fill.ts#40"
@@ -36332,7 +36405,7 @@
             "location": "apps/api/src/lib/document-translation/ai.ts#1"
           },
           {
-            "location": "apps/api/src/lib/docx/ai-field-generator.ts#14"
+            "location": "apps/api/src/lib/docx/ai-field-generator.ts#15"
           },
           {
             "location": "apps/api/src/lib/docx/template-manifest.ts#16"
@@ -36407,7 +36480,7 @@
             "location": "apps/api/src/lib/secret-brands.ts#17"
           },
           {
-            "location": "apps/api/src/lib/tanstack-ai-generate.ts#18"
+            "location": "apps/api/src/lib/tanstack-ai-generate.ts#16"
           },
           {
             "location": "apps/api/src/lib/tanstack-ai-models.ts#17"
@@ -36420,6 +36493,9 @@
           },
           {
             "location": "apps/api/src/lib/templates/suggest-template-fields.ts#18"
+          },
+          {
+            "location": "apps/api/src/lib/templates/template-fill-completion.ts#1"
           },
           {
             "location": "apps/api/src/lib/usage/usage-ledger.ts#33"
@@ -36531,6 +36607,9 @@
           },
           {
             "location": "apps/web/src/components/docx/use-folio-collaboration-room.ts#7"
+          },
+          {
+            "location": "apps/web/src/components/templates/template-form.logic.ts#2"
           },
           {
             "location": "apps/web/src/env-schema.ts#1"

@@ -102,6 +102,7 @@ Project: desktop-tauri
 - crunchy 0.2.4 — MIT
 - crypto-common 0.1.7 — Apache-2.0 OR MIT
 - crypto-common 0.2.2 — Apache-2.0 OR MIT
+- csscolorparser 0.8.4 — Apache-2.0 OR MIT
 - cssparser 0.36.0 — MPL-2.0
 - cssparser 0.37.0 — MPL-2.0
 - cssparser-macros 0.6.1 — MPL-2.0
@@ -271,6 +272,7 @@ Project: desktop-tauri
 - libc 0.2.189 — Apache-2.0 OR MIT
 - libdbus-sys 0.2.7 — Apache-2.0/MIT
 - libloading 0.7.4 — ISC
+- libm 0.2.16 — MIT
 - libredox 0.1.19 — MIT
 - linux-raw-sys 0.12.1 — Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT
 - litemap 0.8.2 — Unicode-3.0
@@ -475,14 +477,14 @@ Project: desktop-tauri
 - tauri-macros 2.6.3 — Apache-2.0 OR MIT
 - tauri-plugin 2.6.3 — Apache-2.0 OR MIT
 - tauri-plugin-autostart 2.5.1 — Apache-2.0 OR MIT
-- tauri-plugin-clipboard-manager 2.3.2 — Apache-2.0 OR MIT
-- tauri-plugin-deep-link 2.4.9 — Apache-2.0 OR MIT
+- tauri-plugin-clipboard-manager 2.3.3 — Apache-2.0 OR MIT
+- tauri-plugin-deep-link 2.4.10 — Apache-2.0 OR MIT
 - tauri-plugin-global-shortcut 2.3.2 — Apache-2.0 OR MIT
-- tauri-plugin-notification 2.3.3 — Apache-2.0 OR MIT
-- tauri-plugin-opener 2.5.4 — Apache-2.0 OR MIT
+- tauri-plugin-notification 2.4.0 — Apache-2.0 OR MIT
+- tauri-plugin-opener 2.5.5 — Apache-2.0 OR MIT
 - tauri-plugin-process 2.3.1 — Apache-2.0 OR MIT
-- tauri-plugin-single-instance 2.4.3 — Apache-2.0 OR MIT
-- tauri-plugin-updater 2.10.1 — Apache-2.0 OR MIT
+- tauri-plugin-single-instance 2.4.4 — Apache-2.0 OR MIT
+- tauri-plugin-updater 2.11.0 — Apache-2.0 OR MIT
 - tauri-runtime 2.11.3 — Apache-2.0 OR MIT
 - tauri-runtime-wry 2.11.4 — Apache-2.0 OR MIT
 - tauri-utils 2.9.3 — Apache-2.0 OR MIT
@@ -537,6 +539,7 @@ Project: desktop-tauri
 - typeid 1.0.3 — Apache-2.0 OR MIT
 - typenum 1.20.1 — Apache-2.0 OR MIT
 - uds_windows 1.2.1 — MIT
+- uncased 0.9.10 — Apache-2.0 OR MIT
 - unic-char-property 0.9.0 — MIT/Apache-2.0
 - unic-char-range 0.9.0 — MIT/Apache-2.0
 - unic-common 0.9.0 — MIT/Apache-2.0
@@ -653,7 +656,7 @@ Project: desktop-tauri
 - winnow 1.0.4 — MIT
 - winreg 0.10.1 — MIT
 - winreg 0.55.0 — MIT
-- winsafe 0.0.28 — MIT
+- winsafe 0.0.29 — MIT
 - wit-bindgen 0.57.1 — Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT
 - wl-clipboard-rs 0.9.3 — MIT/Apache-2.0
 - writeable 0.6.3 — Unicode-3.0
