@@ -37,11 +37,13 @@ import {
 } from "./ooxml";
 import {
   authoredParagraphIndices,
+  misplacedRowBlocks,
   normalizeRowBlockMarkers,
 } from "./row-block-markers";
 import {
   boundTemplateWarnings,
   collectParagraphWarnings,
+  rowBlockAcrossRowsWarning,
   type TemplateWarning,
 } from "./template-warnings";
 import type {
@@ -887,7 +889,11 @@ const analyzeContainer = (body: slimdom.Element): AnalysisResult => {
   const placeholderCounts = new Map<string, number>();
   const errors: TemplateStructureError[] = [];
   const fieldConditions = new Map<string, string | null>();
-  const warnings: TemplateWarning[] = [];
+  // Read after the row form is normalized away, so only the pairs that could
+  // not be one are left to name.
+  const warnings: TemplateWarning[] = misplacedRowBlocks(body).map(
+    rowBlockAcrossRowsWarning,
+  );
   const conditionPaths = new Set<string>();
   const documentFilters = new Map<string, DocumentFieldDeclaration>();
   const loopAliases = new Map<string, Set<string>>();

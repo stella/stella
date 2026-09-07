@@ -17,6 +17,10 @@ const WRAP = (body: string) =>
 
 const P = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
 
+const TC = (text: string) => `<w:tc>${P(text)}</w:tc>`;
+const TR = (...cells: string[]) => `<w:tr>${cells.join("")}</w:tr>`;
+const TBL = (...rows: string[]) => `<w:tbl>${rows.join("")}</w:tbl>`;
+
 const makeDocx = async (documentXml: string): Promise<Buffer> => {
   const zip = new JSZip();
   zip.file("word/document.xml", documentXml);
@@ -251,6 +255,12 @@ describe("warning code census", () => {
         P("{% set x = 1 %}"),
         P("{% endfor %}"),
         P("Name: {{unclosed"),
+        // A row-form pair whose halves are in two different rows: the shape a
+        // model writes when it starts the repeat in the header row.
+        TBL(
+          TR(TC("{% for d in rows %}Deliverable"), TC("Fee")),
+          TR(TC("{{ d.item }}"), TC("{{ d.fee }}{% endfor %}")),
+        ),
       ].join(""),
     );
     const discovered = await discoverTemplate(await makeDocx(xml));

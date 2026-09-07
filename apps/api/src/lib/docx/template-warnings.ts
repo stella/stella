@@ -25,6 +25,8 @@ import {
 } from "@stll/template-conditions";
 import type { MarkerDefect } from "@stll/template-conditions";
 
+import type { MisplacedRowBlock } from "./row-block-markers";
+
 /**
  * Closed set of authoring mistakes reported at save time. The marker-shape
  * defects are derived from the grammar package, so a new defect kind there
@@ -32,6 +34,7 @@ import type { MarkerDefect } from "@stll/template-conditions";
  */
 export const TEMPLATE_WARNING_CODES = [
   "unaliased_item_path",
+  "row_block_across_rows",
   "split_marker",
   "condition_removes_input",
   "registry_configuration_required",
@@ -379,6 +382,38 @@ export const inlineBytesIgnoredWarning = (): TemplateWarning => ({
     "Send one document source. 'docx_base64' is for a host that cannot " +
     "supply a file reference; when your host can, send 'file' alone.",
 });
+
+/**
+ * A block pair that hugs the text of two cells in DIFFERENT rows. The author
+ * meant a repeating (or conditional) row and the shape is nearly right, so the
+ * warning names the rule against the cells they actually wrote.
+ */
+export const rowBlockAcrossRowsWarning = ({
+  closer,
+  closerCell,
+  opener,
+  openerCell,
+}: MisplacedRowBlock): TemplateWarning => ({
+  code: "row_block_across_rows",
+  path: opener,
+  message:
+    `${opener} opens in "${excerptCell(openerCell)}" and ${closer} closes in ` +
+    `"${excerptCell(closerCell)}", which is a different row. A block pair ` +
+    "wrapping a row's text acts on ONE row, so the two halves must sit in " +
+    "different cells of the SAME row.",
+  hint:
+    `Move ${opener} to the front of the first cell of the row that repeats — ` +
+    "the row with the values in it, not the header row.",
+});
+
+const CELL_EXCERPT_LENGTH = 40;
+
+const excerptCell = (text: string): string => {
+  const trimmed = text.trim().replaceAll("\n", " ");
+  return trimmed.length <= CELL_EXCERPT_LENGTH
+    ? trimmed
+    : `${trimmed.slice(0, CELL_EXCERPT_LENGTH)}…`;
+};
 
 export const boundTemplateWarnings = (
   warnings: readonly TemplateWarning[],

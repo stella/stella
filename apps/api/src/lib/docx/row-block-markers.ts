@@ -25,8 +25,8 @@
 
 import type * as slimdom from "slimdom";
 
-import { detectRowBlockPair } from "@stll/template-conditions";
-import type { RowBlockMarker } from "@stll/template-conditions";
+import { detectRowBlockPair, scanMarkers } from "@stll/template-conditions";
+import type { RowBlockMarker, ScannedMarker } from "@stll/template-conditions";
 
 import { ancestorByLocalName, W_NS } from "./ooxml";
 import { paragraphSpanText, replaceParagraphTextRanges } from "./rich-patch";
@@ -111,6 +111,92 @@ export const normalizeRowBlockMarkers = (container: slimdom.Element): void => {
     hoistMarker(paragraphsByCell, pair.close, "after");
     hoistMarker(paragraphsByCell, pair.open, "before");
   }
+};
+
+/**
+ * A row-form pair whose two halves sit in DIFFERENT rows of one table: the
+ * shape an author reaches for when the header row looks like the place to
+ * start repeating. It is not a row block — the row is the unit, and these name
+ * two — so the engine reports an unclosed opener and an orphaned closer. That
+ * says what broke, not what the author got wrong, which is what this is for.
+ */
+export type MisplacedRowBlock = {
+  /** The cell text the opener prefixes. */
+  openerCell: string;
+  /** The cell text the closer suffixes. */
+  closerCell: string;
+  /** The opener marker, as written. */
+  opener: string;
+  /** The closer marker, as written. */
+  closer: string;
+};
+
+const CLOSER_OF_OPENER = { for: "endfor", if: "endif" } as const;
+
+const isRowBlockOpener = (
+  kind: string,
+): kind is keyof typeof CLOSER_OF_OPENER => kind === "for" || kind === "if";
+
+/**
+ * Every opener/closer pair in `container` that hugs its cell's text the way a
+ * row block does, but whose halves are in different rows of the same table.
+ *
+ * Read after {@link normalizeRowBlockMarkers}, so a genuine row block has
+ * already been rewritten out of the way and only the misplaced ones are left.
+ */
+export const misplacedRowBlocks = (
+  container: slimdom.Element,
+): MisplacedRowBlock[] => {
+  const found: MisplacedRowBlock[] = [];
+  for (const table of container.getElementsByTagNameNS(W_NS, "tbl")) {
+    const open: { marker: ScannedMarker; cell: string; row: number }[] = [];
+    for (const [rowIndex, row] of [
+      ...table.getElementsByTagNameNS(W_NS, "tr"),
+    ].entries()) {
+      const rowParent = row.parentNode;
+      if (
+        rowParent === null ||
+        ancestorByLocalName(rowParent, "tbl") !== table
+      ) {
+        continue;
+      }
+      for (const cell of rowCells(row)) {
+        const text = cellParagraphs(cell).map(paragraphSpanText).join("\n");
+        for (const marker of scanMarkers(text)) {
+          const { kind } = marker.meta;
+          if (
+            isRowBlockOpener(kind) &&
+            text.slice(0, marker.start).trim() === ""
+          ) {
+            open.push({ marker, cell: text, row: rowIndex });
+            continue;
+          }
+          const last = open.at(-1);
+          if (
+            last === undefined ||
+            !isRowBlockOpener(last.marker.meta.kind) ||
+            CLOSER_OF_OPENER[last.marker.meta.kind] !== kind
+          ) {
+            continue;
+          }
+          open.pop();
+          // Same row is either a real row block (already normalized away) or
+          // an inline pair the inline engine owns; only a pair reaching across
+          // rows is the mistake this names.
+          if (last.row === rowIndex || text.slice(marker.end).trim() !== "") {
+            continue;
+          }
+          found.push({
+            opener: last.marker.raw,
+            openerCell: last.cell,
+            closer: marker.raw,
+            closerCell: text,
+          });
+        }
+      }
+    }
+  }
+  return found;
 };
 
 /**
