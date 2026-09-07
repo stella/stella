@@ -114,7 +114,7 @@ true satisfies UncoveredFilter extends never ? true : never;
 // ── Rejections ───────────────────────────────────────────
 
 /** One filter the author wrote that this marker cannot act on. */
-export type FilterIssue = {
+type FilterIssue = {
   filter: FilterName;
   message: string;
   hint: string;
@@ -571,7 +571,7 @@ export const fieldMetaFromFilters = (
  * takes, and what to call the group. These are the ones a `{% for %}` tag may
  * carry, since the loop path names the array, not one of its values.
  */
-export const ARRAY_FILTERS = [
+const ARRAY_FILTERS = [
   "label",
   "hint",
   "required",

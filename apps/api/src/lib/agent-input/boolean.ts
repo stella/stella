@@ -13,8 +13,8 @@ import { foldToAscii } from "@stll/text-normalize";
 import type { Normalized } from "./normalized";
 import { askForFix, readValueAs } from "./normalized";
 
-export const BOOLEAN_EXPECTED = "a yes/no answer";
-export const BOOLEAN_HINT =
+const BOOLEAN_EXPECTED = "a yes/no answer";
+const BOOLEAN_HINT =
   "Send true or false as a JSON boolean; the words yes/no, y/n, 1/0, on/off, " +
   "ano/ne, tak/nie, ja/nein and checked/unchecked are read as well.";
 

@@ -18,8 +18,8 @@ import { Result } from "better-result";
 import type { Normalized } from "./normalized";
 import { askForFix, readValue, readValueAs } from "./normalized";
 
-export const NUMBER_EXPECTED = "a number";
-export const NUMBER_HINT =
+const NUMBER_EXPECTED = "a number";
+const NUMBER_HINT =
   'Send the number as a JSON number (1234.5). Digit grouping ("4 000"), a ' +
   'currency ("EUR 100"), and scientific notation ("1e3") are read as well.';
 

@@ -14,8 +14,8 @@ import { Result } from "better-result";
 import type { Normalized } from "./normalized";
 import { askForFix, readValueAs } from "./normalized";
 
-export const LOCALE_EXPECTED = "a BCP-47 language tag";
-export const LOCALE_HINT =
+const LOCALE_EXPECTED = "a BCP-47 language tag";
+const LOCALE_HINT =
   'Write the tag as language or language-REGION: "cs", "pl", "en-GB", "pt-BR".';
 
 /** The canonical spelling of a well-formed tag, or null. `Intl` throws a

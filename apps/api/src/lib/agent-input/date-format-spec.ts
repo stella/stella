@@ -26,13 +26,12 @@ export type DateFormatSpec = {
 };
 
 /** What a spec means when it names only a locale. */
-export const DEFAULT_DATE_FORMAT_STYLE =
-  "long" as const satisfies DateFormatStyle;
+const DEFAULT_DATE_FORMAT_STYLE = "long" as const satisfies DateFormatStyle;
 
 const quoted = (values: readonly string[]): string =>
   values.map((value) => `"${value}"`).join(", ");
 
-export const DATE_FORMAT_SPEC_EXPECTED = "a locale with an optional style";
+const DATE_FORMAT_SPEC_EXPECTED = "a locale with an optional style";
 export const DATE_FORMAT_SPEC_HINT =
   'Write the BCP-47 locale, optionally suffixed with a style: "pl", ' +
   '"cs-CZ", "pl-long", "en-GB-short". The styles are ' +

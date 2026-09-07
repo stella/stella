@@ -36,7 +36,7 @@ const MAX_RECEIVED_CHARS = 80;
 
 /** The input as one quoted token: what the agent sent, ready to drop into a
  *  sentence. */
-export const describeInput = (input: unknown): string => {
+const describeInput = (input: unknown): string => {
   const rendered =
     input === undefined
       ? "undefined"

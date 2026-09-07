@@ -113,7 +113,7 @@ const carriesConfiguration = (field: FieldMeta): boolean =>
  * not collide with a real path: a field genuinely called `attorney.name`
  * always wins over the alias reading.
  */
-export const canonicalizeOverlayPath = (
+const canonicalizeOverlayPath = (
   path: string,
   discovered: DiscoveredTemplate,
   declared: ReadonlySet<string>,

@@ -17,7 +17,7 @@
 import type { Normalized } from "./normalized";
 import { askForFix, readValueAs } from "./normalized";
 
-export const DATE_VALUE_EXPECTED = "a calendar date";
+const DATE_VALUE_EXPECTED = "a calendar date";
 export const DATE_VALUE_HINT =
   'Send the date as ISO YYYY-MM-DD ("2026-10-01"). The unambiguous ' +
   'spellings "1. 10. 2026", "1 October 2026" and "October 1, 2026" are read ' +
