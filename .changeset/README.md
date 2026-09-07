@@ -40,4 +40,6 @@ versioned workflow in `stella/.github`.
 
 The CLI remains an intentional exception to the trigger timing: its new version
 is published only after the matching stable application release is verified in
-production.
+production. The reverse holds too: a stable release tag is refused while a
+pending changeset names `@stll/cli`, so merge the version-only pull request
+before cutting a release that needs the new CLI (see `docs/releases.md`).

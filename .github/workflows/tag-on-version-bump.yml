@@ -97,6 +97,18 @@ jobs:
             echo "skip=true" >> "$GITHUB_ENV"
           fi
 
+      # The API deploys from this tag; the CLI publishes from the same commit
+      # only after production serves it. A stable tag is refused while a
+      # pending changeset still names the CLI (its coupled version does not
+      # exist yet) or while the commit's CLI is behind, or drifted from, the
+      # version users install. Runs without an install: the script uses only
+      # Bun and Node built-ins plus npm on the runner.
+      - name: Refuse a stable tag whose CLI release is not settled
+        if: env.skip != 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.value }}
+        run: bun scripts/check-cli-release-coupling.ts --version "$VERSION"
+
       - name: Warn on stale marketing recordings
         if: env.skip != 'true'
         # Reads the committed captures.ts matrix and recordings-manifest.json
