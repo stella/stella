@@ -2293,44 +2293,13 @@ const DECLARED_ENTRY_PROPERTIES: ReadonlySet<string> = new Set(
 );
 
 /** What to do with an entry the schema refused: drop the one property the
- *  issue is about and keep the rest, or reject the entry whole. */
+ *  issue is about — named by its key path from the entry down — and keep the
+ *  rest, or reject the entry whole. */
 type EntryRepair =
-  | { type: "drop-property"; property: string; message: string }
+  | { type: "drop-property"; path: readonly string[]; message: string }
   | { type: "reject-entry" };
 
 const ENTRY_REJECTED: EntryRepair = { type: "reject-entry" };
-
-/**
- * How one issue is answered. A property costs itself: a strict-schema client
- * fills every property it can see, so a key this surface retired or a caller
- * misspelled must cost that key and not the field it configures. The issue
- * still names the key, so a misspelled `lable` does not vanish silently.
- *
- * The entry as a whole goes only when it cannot be read: an unusable `path`,
- * a shape that is not an entry, or a property that decides WHO fills the
- * field — dropping that would silently turn a derived field into a question
- * for the person filling.
- */
-const repairForIssue = (issue: v.BaseIssue<unknown>): EntryRepair => {
-  const property = issue.path?.[2]?.key;
-  if (typeof property !== "string" || property === "path") {
-    return ENTRY_REJECTED;
-  }
-  if (!DECLARED_ENTRY_PROPERTIES.has(property)) {
-    return {
-      type: "drop-property",
-      property,
-      message: `\`${property}\` is not a property of a field entry.`,
-    };
-  }
-  return DECISION_PROPERTIES.some((decision) => decision === property)
-    ? ENTRY_REJECTED
-    : {
-        type: "drop-property",
-        property,
-        message: `\`${property}\` was dropped: ${issue.message}`,
-      };
-};
 
 const isUnknownArray = (value: unknown): value is readonly unknown[] =>
   Array.isArray(value);
@@ -2338,16 +2307,93 @@ const isUnknownArray = (value: unknown): value is readonly unknown[] =>
 const isEntryRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-/** One entry with a property removed. */
-const withoutProperty = (
+/**
+ * The keys, from the entry down, of the smallest value an issue can cost.
+ * The walk follows the issue's own path as far as the entry can be rebuilt
+ * without it: through plain objects, while each key is a string the value
+ * carries. It stops at the nearest object property when the path turns into
+ * an array element or into something that is not an object, because removing
+ * one item out of a list the caller sent would silently renumber the rest.
+ */
+const droppablePath = (
+  issue: v.BaseIssue<unknown>,
   entry: unknown,
-  property: string,
+): string[] => {
+  const keys: string[] = [];
+  let value = entry;
+  for (const segment of (issue.path ?? []).slice(2)) {
+    if (
+      typeof segment.key !== "string" ||
+      !isEntryRecord(value) ||
+      !Object.hasOwn(value, segment.key)
+    ) {
+      break;
+    }
+    keys.push(segment.key);
+    value = value[segment.key];
+  }
+  return keys;
+};
+
+/**
+ * How one issue is answered. A property costs itself: a strict-schema client
+ * fills every property it can see, so a key this surface retired, a caller
+ * misspelled, or a constraint it wrote as a placeholder must cost that key
+ * and not the field it configures — and not its siblings either, so a refused
+ * `validation.max_items` leaves the `validation.pattern` beside it standing.
+ * The issue names the key it cost, so a misspelled `lable` does not vanish
+ * silently.
+ *
+ * The entry as a whole goes only when it cannot be read: an unusable `path`,
+ * a shape that is not an entry, or a property that decides WHO fills the
+ * field — dropping that would silently turn a derived field into a question
+ * for the person filling.
+ */
+const repairForIssue = (
+  issue: v.BaseIssue<unknown>,
+  entry: unknown,
+): EntryRepair => {
+  const path = droppablePath(issue, entry);
+  const property = path.at(0);
+  if (property === undefined || property === "path") {
+    return ENTRY_REJECTED;
+  }
+  if (!DECLARED_ENTRY_PROPERTIES.has(property)) {
+    return {
+      type: "drop-property",
+      path: [property],
+      message: `\`${property}\` is not a property of a field entry.`,
+    };
+  }
+  return DECISION_PROPERTIES.some((decision) => decision === property)
+    ? ENTRY_REJECTED
+    : {
+        type: "drop-property",
+        path,
+        message: `\`${path.at(-1) ?? property}\` was dropped: ${issue.message}`,
+      };
+};
+
+/** One entry with the value at `path` removed, rebuilding the objects above
+ *  it. `null` when the path is not there to remove. */
+const withoutPath = (
+  entry: unknown,
+  path: readonly string[],
 ): Record<string, unknown> | null => {
-  if (!isEntryRecord(entry) || !Object.hasOwn(entry, property)) {
+  const [head, ...rest] = path;
+  if (
+    head === undefined ||
+    !isEntryRecord(entry) ||
+    !Object.hasOwn(entry, head)
+  ) {
     return null;
   }
-  const { [property]: _dropped, ...rest } = entry;
-  return rest;
+  if (rest.length === 0) {
+    const { [head]: _dropped, ...remaining } = entry;
+    return remaining;
+  }
+  const inner = withoutPath(entry[head], rest);
+  return inner === null ? null : { ...entry, [head]: inner };
 };
 
 export type ConfigureEntries =
@@ -2368,16 +2414,17 @@ export type ConfigureEntries =
 
 /**
  * Read the request one property at a time. The schema is the tool's own,
- * applied to a `fields` array that is repaired between attempts: a property it
- * refuses — an invalid value, or a key the entry does not declare — is dropped
- * from its entry and reported on its own, and only an entry whose `path` (or
- * whose shape as a whole) is unreadable drops out. A caller that got one
- * property wrong still configures everything else it sent — including the rest
- * of that entry. Anything the schema objects to outside `fields` is about the
- * request, and fails it.
+ * applied to a `fields` array that is repaired between attempts: a value it
+ * refuses — an invalid constraint, or a key the entry does not declare — is
+ * dropped from its entry at the exact key the issue names, and reported on
+ * its own; only an entry whose `path` (or whose shape as a whole) is
+ * unreadable drops out. A caller that got one property wrong still configures
+ * everything else it sent, including the rest of that entry and the siblings
+ * of the key that went. Anything the schema objects to outside `fields` is
+ * about the request, and fails it.
  *
- * The loop terminates: every pass either drops one property from an entry or
- * drops an entry, and both are finite.
+ * The loop terminates: every pass either removes one key from an entry or
+ * drops an entry, and an entry carries finitely many keys.
  */
 export const parseConfigureEntries = (
   args: Record<string, unknown>,
@@ -2420,16 +2467,16 @@ export const parseConfigureEntries = (
       if (rejected.has(position) || repaired.has(position)) {
         continue;
       }
-      const repair = repairForIssue(issue);
+      const repair = repairForIssue(issue, sent[position]);
       const without =
         repair.type === "reject-entry"
           ? null
-          : withoutProperty(sent[position], repair.property);
+          : withoutPath(sent[position], repair.path);
       if (repair.type === "drop-property" && without !== null) {
         repaired.add(position);
         sent[position] = without;
         issues.push({
-          path: `fields.${String(position)}.${repair.property}`,
+          path: [`fields.${String(position)}`, ...repair.path].join("."),
           index: position,
           message: repair.message,
           hint: `The rest of the entry was applied. Check that property against ${TEMPLATE_FIELD_REFERENCE_URI} and send it again if the field needs it.`,

@@ -2955,15 +2955,72 @@ describe("MCP template tools", () => {
       { path: "fee", validation: { max_items: 3 } },
     ]);
 
-    expect(issues).toMatchObject([{ path: "fields.0.validation", index: 0 }]);
+    expect(issues).toMatchObject([
+      { path: "fields.0.validation.max_length", index: 0 },
+      { path: "fields.0.validation.max_items", index: 0 },
+    ]);
     expect(configureTemplateFieldsMock).toHaveBeenCalledWith(
       expect.objectContaining({
         fields: [
-          { path: "attorneys", label: "Attorneys" },
+          {
+            path: "attorneys",
+            label: "Attorneys",
+            validation: { min: 0, max: 0, minLength: 0, minItems: 0 },
+          },
           { path: "fee", validation: { maxItems: 3 } },
         ],
       }),
     );
+  });
+
+  test("configure_template_fields drops the refused constraint, not its siblings", async () => {
+    // The issue names a leaf, so that is what it costs: a pattern the caller
+    // meant is not collateral damage of a maximum it did not.
+    const issues = await configureEntryIssues([
+      {
+        path: "invoice_number",
+        validation: { pattern: "^\\d+$", max_items: 0 },
+      },
+    ]);
+
+    expect(issues).toMatchObject([
+      { path: "fields.0.validation.max_items", index: 0 },
+    ]);
+    expect(configureTemplateFieldsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fields: [{ path: "invoice_number", validation: { pattern: "^\\d+$" } }],
+      }),
+    );
+  });
+
+  test("configure_template_fields drops a whole list rather than renumbering it", async () => {
+    // Removing one item out of a list the caller sent would silently shift
+    // the rest, so the walk stops at the nearest object property.
+    const issues = await configureEntryIssues([
+      { path: "governing_law", options: ["Czech law", 7] },
+    ]);
+
+    expect(issues).toMatchObject([{ path: "fields.0.options", index: 0 }]);
+  });
+
+  test("configure_template_fields still refuses an entry whose source is unreadable", async () => {
+    // `source` decides WHO fills the field, so no part of it is dropped on
+    // its own however deep the schema's objection sits.
+    const issues = await configureEntryIssues([
+      {
+        path: "company",
+        source: {
+          type: "lookup",
+          registry: "krs",
+          formats: [
+            { key: "name", template: "[name]" },
+            { key: "krs", template: 7 },
+          ],
+        },
+      },
+    ]);
+
+    expect(issues).toMatchObject([{ path: "fields.0", index: 0 }]);
   });
 
   test("configure_template_fields reads a null-padded field entry as a plain text field", async () => {
@@ -3361,8 +3418,8 @@ describe("MCP template tools", () => {
       parseToolPayload(result),
     );
     // `options_from: ""` is a placeholder the property refuses, so it reads as
-    // omitted. A maximum of 0 admits nothing, so `validation` is refused and
-    // named; the field's own decisions are applied all the same.
+    // omitted. A maximum of 0 admits nothing, so each of the two is refused
+    // and named on its own; everything else the entry decided is applied.
     expect(received).toMatchObject([
       {
         path: "rozhodne_pravo",
@@ -3371,7 +3428,10 @@ describe("MCP template tools", () => {
         required: true,
       },
     ]);
-    expect(issues).toMatchObject([{ path: "fields.0.validation" }]);
+    expect(issues).toMatchObject([
+      { path: "fields.0.validation.max_length" },
+      { path: "fields.0.validation.max_items" },
+    ]);
     expect(received).not.toMatchObject([{ optionsFrom: "" }]);
   });
 
