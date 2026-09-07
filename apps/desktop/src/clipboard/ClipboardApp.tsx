@@ -47,8 +47,9 @@ import {
   VideoIcon,
   XIcon,
 } from "lucide-react";
-import { useFormatter, useTranslations } from "use-intl";
+import { useFormatter, useLocale, useTranslations } from "use-intl";
 
+import { getUiLocaleDirection, isUiLocale } from "@stll/locales";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { ContextMenu } from "@stll/ui/context-menu";
@@ -1340,6 +1341,10 @@ const ClipboardWelcomeDialog = ({ onClose }: ClipboardWelcomeDialogProps) => {
 
 const ClipboardApp = () => {
   const t = useTranslations("clipboard");
+  const locale = useLocale();
+  const railDirection = isUiLocale(locale)
+    ? getUiLocaleDirection(locale)
+    : "ltr";
   const searchInputRef = useRef<HTMLInputElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
   const timelineRailRef = useRef<HTMLDivElement>(null);
@@ -1487,7 +1492,7 @@ const ClipboardApp = () => {
     activeIndex,
     itemCount: filteredItems.length,
     overscan: CLIPBOARD_RAIL_OVERSCAN,
-    scrollLeft: railViewport.scrollLeft,
+    scrollOffset: railViewport.scrollOffset,
     stride: CLIPBOARD_CARD_STRIDE,
     viewportWidth: railViewport.width,
   });
@@ -1912,7 +1917,10 @@ const ClipboardApp = () => {
       searchInputRef.current?.focus();
       return;
     }
-    const keyAction = clipboardTimelineKeyAction(event.key);
+    const keyAction = clipboardTimelineKeyAction({
+      direction: railDirection,
+      key: event.key,
+    });
     if (keyAction === "focusSearch") {
       event.preventDefault();
       searchInputRef.current?.focus();

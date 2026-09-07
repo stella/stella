@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 
+import type { TextDirection } from "@stll/locales";
 import {
   findSearchMatchRanges,
   foldSearchMatchText,
@@ -143,17 +144,31 @@ export const isClipboardCopyShortcut = (shortcut: ClipboardCopyShortcut) =>
   !shortcut.shiftKey &&
   shortcut.key.toLocaleLowerCase() === "c";
 
-export const clipboardTimelineKeyAction = (key: string) => {
-  switch (key) {
-    case "ArrowDown":
-      return "focusSearch";
-    case "ArrowLeft":
-      return "previous";
-    case "ArrowRight":
-      return "next";
-    default:
-      return null;
+type ClipboardTimelineKey = {
+  direction: TextDirection;
+  key: string;
+};
+
+/**
+ * The horizontal arrows follow the rail's visual order, not a fixed side: an
+ * RTL rail runs right-to-left, so ArrowLeft advances and ArrowRight goes back.
+ */
+export const clipboardTimelineKeyAction = ({
+  direction,
+  key,
+}: ClipboardTimelineKey) => {
+  if (key === "ArrowDown") {
+    return "focusSearch";
   }
+  const forward = direction === "rtl" ? "ArrowLeft" : "ArrowRight";
+  if (key === forward) {
+    return "next";
+  }
+  const backward = direction === "rtl" ? "ArrowRight" : "ArrowLeft";
+  if (key === backward) {
+    return "previous";
+  }
+  return null;
 };
 
 export const clipboardDraggedItemId = (
@@ -321,7 +336,8 @@ type ClipboardRailWindowOptions = {
   activeIndex: number;
   itemCount: number;
   overscan: number;
-  scrollLeft: number;
+  /** Distance scrolled from the rail's inline start, in either direction. */
+  scrollOffset: number;
   /** Card width plus the gap that follows it. */
   stride: number;
   /** 0 before the rail has been measured. */
@@ -357,7 +373,7 @@ const UNMEASURED_VISIBLE_CARDS = 8;
 
 /**
  * Cards mounted for a horizontal rail: always the ones intersecting the
- * viewport (from `scrollLeft`) plus `overscan` on each side, so pointer
+ * viewport (from `scrollOffset`) plus `overscan` on each side, so pointer
  * scrolling never reveals an unmounted region. The range is extended to
  * include the active card when it sits outside the viewport (keyboard jump,
  * focus after reopen) so it stays in the DOM for focus and scroll-into-view.
@@ -366,7 +382,7 @@ export const clipboardRailWindow = ({
   activeIndex,
   itemCount,
   overscan,
-  scrollLeft,
+  scrollOffset,
   stride,
   viewportWidth,
 }: ClipboardRailWindowOptions): ClipboardRailWindow => {
@@ -377,7 +393,7 @@ export const clipboardRailWindow = ({
     viewportWidth > 0
       ? Math.ceil(viewportWidth / stride) + 1
       : UNMEASURED_VISIBLE_CARDS;
-  const viewportStart = Math.floor(Math.max(0, scrollLeft) / stride);
+  const viewportStart = Math.floor(Math.max(0, scrollOffset) / stride);
   const active = Math.min(Math.max(0, activeIndex), itemCount - 1);
   const start = Math.min(viewportStart, active);
   const end = Math.max(viewportStart + visible, active + 1);
