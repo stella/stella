@@ -389,13 +389,18 @@
   },
   "caseLaw": {
     "analysis": {
+      "abstract": "Abstrakt",
+      "aiLayer": "{layer} (AI)",
       "backToSection": "Späť na začiatok tejto časti",
       "categories": {
         "facts": "Skutkový stav",
         "holding": "Právna veta",
         "procedural-history": "Procesná história",
         "reasoning": "Uvažovanie"
-      }
+      },
+      "holdingAnchor": "Prejsť na odsek",
+      "topics": "Témy",
+      "treatment": "Neskoršia judikatúra"
     },
     "analyzing": "Analyzujem...",
     "annotations": {

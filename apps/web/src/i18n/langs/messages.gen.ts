@@ -392,6 +392,8 @@ type Messages = {
   };
   "caseLaw": {
     "analysis": {
+      "abstract": "Abstract";
+      "aiLayer": "AI {layer}";
       "backToSection": "Back to the start of this section";
       "categories": {
         "facts": "Facts";
@@ -399,6 +401,9 @@ type Messages = {
         "procedural-history": "Procedural history";
         "reasoning": "Reasoning";
       };
+      "holdingAnchor": "Go to paragraph";
+      "topics": "Topics";
+      "treatment": "Later treatment";
     };
     "analyzing": "Analyzing...";
     "annotations": {

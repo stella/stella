@@ -389,13 +389,18 @@
   },
   "caseLaw": {
     "analysis": {
+      "abstract": "Összefoglaló",
+      "aiLayer": "MI – {layer}",
       "backToSection": "Vissza a szakasz elejére",
       "categories": {
         "facts": "Tényállás",
         "holding": "Jogi álláspont",
         "procedural-history": "Eljárási előzmények",
         "reasoning": "Érvelés"
-      }
+      },
+      "holdingAnchor": "Ugrás a bekezdésre",
+      "topics": "Témák",
+      "treatment": "Későbbi megítélés"
     },
     "analyzing": "Elemzés folyamatban...",
     "annotations": {

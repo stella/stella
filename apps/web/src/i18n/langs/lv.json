@@ -389,13 +389,18 @@
   },
   "caseLaw": {
     "analysis": {
+      "abstract": "Kopsavilkums",
+      "aiLayer": "{layer} (MI)",
       "backToSection": "Atgriezties šīs sadaļas sākumā",
       "categories": {
         "facts": "Fakti",
         "holding": "Nolēmums",
         "procedural-history": "Procesa gaita",
         "reasoning": "Argumentācija"
-      }
+      },
+      "holdingAnchor": "Pāriet uz rindkopu",
+      "topics": "Tēmas",
+      "treatment": "Vēlākā judikatūra"
     },
     "analyzing": "Analizē...",
     "annotations": {

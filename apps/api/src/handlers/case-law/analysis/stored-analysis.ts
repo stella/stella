@@ -12,7 +12,10 @@ import type {
   AnalysisInputFingerprint,
   DecisionAnalysis,
 } from "@stll/legal-ast/analysis";
-import { parsePersistedDecisionAnalysis } from "@stll/legal-ast/analysis";
+import {
+  CURRENT_ANALYSIS_VERSION,
+  parsePersistedDecisionAnalysis,
+} from "@stll/legal-ast/analysis";
 
 import { caseLawDecisions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -28,7 +31,7 @@ export const analysisSentinel = (
   fingerprint: AnalysisInputFingerprint,
   now: Date,
 ): AnalysisGenerating => ({
-  version: 2,
+  version: CURRENT_ANALYSIS_VERSION,
   status: "generating",
   startedAt: now.toISOString(),
   inputFingerprint: fingerprint,

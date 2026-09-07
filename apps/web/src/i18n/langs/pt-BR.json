@@ -389,13 +389,18 @@
   },
   "caseLaw": {
     "analysis": {
+      "abstract": "Resumo",
+      "aiLayer": "{layer} (IA)",
       "backToSection": "Voltar ao início desta seção",
       "categories": {
         "facts": "Fatos",
         "holding": "Entendimento",
         "procedural-history": "Histórico processual",
         "reasoning": "Fundamentação"
-      }
+      },
+      "holdingAnchor": "Ir para o parágrafo",
+      "topics": "Temas",
+      "treatment": "Tratamento posterior"
     },
     "analyzing": "Analisando...",
     "annotations": {

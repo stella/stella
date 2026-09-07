@@ -389,13 +389,18 @@
   },
   "caseLaw": {
     "analysis": {
+      "abstract": "ملخّص",
+      "aiLayer": "{layer} (ذكاء اصطناعي)",
       "backToSection": "العودة إلى بداية هذا القسم",
       "categories": {
         "facts": "الوقائع",
         "holding": "المبدأ القانوني",
         "procedural-history": "التاريخ الإجرائي",
         "reasoning": "التسبيب"
-      }
+      },
+      "holdingAnchor": "الانتقال إلى الفقرة",
+      "topics": "الموضوعات",
+      "treatment": "المعالجة اللاحقة"
     },
     "analyzing": "جارٍ التحليل...",
     "annotations": {

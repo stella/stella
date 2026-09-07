@@ -389,13 +389,18 @@
   },
   "caseLaw": {
     "analysis": {
+      "abstract": "Kokkuvõte",
+      "aiLayer": "{layer} (AI)",
       "backToSection": "Tagasi selle osa algusesse",
       "categories": {
         "facts": "Asjaolud",
         "holding": "Lahend",
         "procedural-history": "Menetluskäik",
         "reasoning": "Arutlus"
-      }
+      },
+      "holdingAnchor": "Mine lõigu juurde",
+      "topics": "Teemad",
+      "treatment": "Hilisem käsitlus"
     },
     "analyzing": "Analüüsin...",
     "annotations": {

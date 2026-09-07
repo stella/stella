@@ -18,6 +18,13 @@ export const stellaPublicLawReader = p
   .pgRole("stella_public_law_reader")
   .existing();
 
+// Operator login that pre-computes decision analyses. It reads a narrow column
+// set of the two case-law relations the computation needs and may write exactly
+// one column, case_law_decisions.analysis.
+export const stellaCaseLawAnalysisWriter = p
+  .pgRole("stella_case_law_analysis_writer")
+  .existing();
+
 /** Session setting keys set via `set_config` per transaction. */
 export const SETTING_WORKSPACE_IDS = "app.workspace_ids";
 export const SETTING_WORKSPACE_ACCESS_MODE = "app.workspace_access_mode";
@@ -691,6 +698,38 @@ export const publicLawReaderPolicies = () => [
   p.pgPolicy("public_law_reader_access", {
     for: "select",
     to: stellaPublicLawReader,
+    using: allowAllRows,
+  }),
+];
+
+/**
+ * Row visibility for the analysis writer on the relation it also updates. The
+ * column grants are what narrow the role; RLS only decides which rows it sees,
+ * and a grant without a matching policy would return zero rows.
+ */
+export const caseLawAnalysisWriterPolicies = () => [
+  p.pgPolicy("case_law_analysis_writer_read", {
+    for: "select",
+    to: stellaCaseLawAnalysisWriter,
+    using: allowAllRows,
+  }),
+  p.pgPolicy("case_law_analysis_writer_write", {
+    for: "update",
+    to: stellaCaseLawAnalysisWriter,
+    using: allowAllRows,
+    withCheck: allowAllRows,
+  }),
+];
+
+/**
+ * Read-only counterpart for the relations the analysis writer only joins
+ * against. Same reasoning as above: the SELECT grant restricts the columns,
+ * this policy is what makes the granted rows visible at all.
+ */
+export const caseLawAnalysisWriterReadPolicies = () => [
+  p.pgPolicy("case_law_analysis_writer_read", {
+    for: "select",
+    to: stellaCaseLawAnalysisWriter,
     using: allowAllRows,
   }),
 ];

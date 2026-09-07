@@ -7,7 +7,7 @@
 import { buildCategoryCatalogPrompt } from "../category-catalog";
 import { ANALYSIS_GUIDELINES } from "./base";
 
-export const CS_SYSTEM_PROMPT = `Jsi právní analytik. Analyzuj rozhodnutí a vytvoř strukturovanou navigační hierarchii s anotacemi klíčových pasáží.
+export const CS_SYSTEM_PROMPT = `Jsi právní analytik. Analyzuj rozhodnutí a vytvoř strukturovanou navigační hierarchii s anotacemi klíčových pasáží, a k tomu právní větu (holding), abstrakt a témata.
 
 ## Typické sekce českých rozhodnutí
 

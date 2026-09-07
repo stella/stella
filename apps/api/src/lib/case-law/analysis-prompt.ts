@@ -6,6 +6,13 @@
  */
 
 import type { AnalysisInputFingerprint } from "@stll/legal-ast/analysis";
+import {
+  ANALYSIS_ABSTRACT_MAX_LENGTH,
+  ANALYSIS_HOLDING_MAX_ANCHORS,
+  ANALYSIS_HOLDING_MAX_LENGTH,
+  ANALYSIS_MAX_TOPICS,
+  ANALYSIS_TOPIC_MAX_LENGTH,
+} from "@stll/legal-ast/analysis";
 
 /**
  * Behavioral guidelines shared across all language prompts.
@@ -36,6 +43,45 @@ export const ANALYSIS_GUIDELINES = `
    startAnchorId–endAnchorId ranges), not span entire sections.
 9. Annotation summaries: one sentence, stating what the court
    decided or found — not what the section "discusses".
+
+## holding
+
+The legal proposition this decision stands for: the sentence a lawyer
+would quote when citing it as authority.
+
+- One or two sentences, at most ${String(ANALYSIS_HOLDING_MAX_LENGTH)} characters.
+- State the rule, not the procedure: what the court held the law to be,
+  in terms that apply beyond this case's parties.
+- Not a summary of the document, not the disposition ("the appeal was
+  dismissed"), not a description ("the court dealt with limitation").
+- \`anchors\`: up to ${String(ANALYSIS_HOLDING_MAX_ANCHORS)} start/end anchorId ranges naming the
+  paragraphs the proposition rests on, from the same anchorIds the
+  annotations use. Name the paragraphs that carry the rule, not the whole
+  reasoning section.
+
+## abstract
+
+The decision in one paragraph, 5 to 8 sentences, at most
+${String(ANALYSIS_ABSTRACT_MAX_LENGTH)} characters, in this order:
+
+1. the facts, in one sentence;
+2. the legal question the court had to answer;
+3. the reasoning, in two or three sentences;
+4. the outcome;
+5. what it changes against the prior case law, or that it changes nothing.
+
+Write prose, not a list, and no headings.
+
+## topics
+
+Up to ${String(ANALYSIS_MAX_TOPICS)} short subject labels, each at most ${String(ANALYSIS_TOPIC_MAX_LENGTH)} characters:
+the areas of law and the specific institutes this decision turns on
+(for example the equivalent, in the decision's language, of "limitation
+period", "unjust enrichment", "administrative review"). Noun phrases, no
+sentences, no case numbers, no court names, no duplicates.
+
+Every field above is user-visible, so write all of them in the decision's
+language.
 `;
 
 /**
