@@ -245,7 +245,7 @@ export const parseFields = (manifest: unknown): StudioField[] => {
   // prefix of others) are not fillable inputs. This keeps the display clean
   // for templates saved before the server fix landed. A loop-container field
   // (carries `validation.minItems`/`maxItems`) is exempt: it is the bounds
-  // record for an `{{#each <path>}}` and its only "child" is the loop body,
+  // record for a `{% for … in <path> %}` and its only "child" is the loop body,
   // so it must survive to round-trip the repeat bounds.
   const paths = fields.map((f) => f.path);
   return fields.filter(
@@ -458,8 +458,8 @@ const outlineFieldPaths = (nodes: OutlineNode[]): Set<string> => {
 
 export type OutlineGroup = Extract<OutlineNode, { type: "group" }>;
 
-/** Innermost `{{#each}}` group whose subtree contains the field's marker. */
-export const findEnclosingEachGroup = (
+/** Innermost `{% for %}` group whose subtree contains the field's marker. */
+export const findEnclosingForGroup = (
   nodes: OutlineNode[],
   path: string,
   enclosing: OutlineGroup | null,
@@ -469,8 +469,8 @@ export const findEnclosingEachGroup = (
       return enclosing;
     }
     if (node.type === "group") {
-      const next = node.kind === "each" ? node : enclosing;
-      const found = findEnclosingEachGroup(node.children, path, next);
+      const next = node.kind === "for" ? node : enclosing;
+      const found = findEnclosingForGroup(node.children, path, next);
       if (found !== null) {
         return found;
       }
@@ -480,7 +480,7 @@ export const findEnclosingEachGroup = (
 };
 
 /** Innermost `if`/`elseif`/`else` group whose subtree contains the field's
- *  marker. Mirrors findEnclosingEachGroup but for condition branches. */
+ *  marker. Mirrors findEnclosingForGroup but for condition branches. */
 export const findEnclosingIfGroup = (
   nodes: OutlineNode[],
   path: string,
@@ -492,7 +492,7 @@ export const findEnclosingIfGroup = (
     }
     if (node.type === "group") {
       const branch =
-        node.kind === "if" || node.kind === "elseif" || node.kind === "else";
+        node.kind === "if" || node.kind === "elif" || node.kind === "else";
       const next = branch ? node : enclosing;
       const found = findEnclosingIfGroup(node.children, path, next);
       if (found !== null) {
@@ -504,14 +504,14 @@ export const findEnclosingIfGroup = (
 };
 
 /** Snapshot a recipe from the live session: when the field's marker sits
- *  inside a `{{#each}}` block, the recipe is the whole block (loop path +
+ *  inside a `{% for %}` block, the recipe is the whole block (loop path +
  *  every field used inside it); otherwise just this field's config. */
 export const buildRecipeDefinition = (
   fieldPath: string,
   outline: OutlineNode[],
   fields: StudioField[],
 ): TemplateRecipeDefinition => {
-  const group = findEnclosingEachGroup(outline, fieldPath, null);
+  const group = findEnclosingForGroup(outline, fieldPath, null);
   const loopPath =
     group !== null && isFieldPath(group.expr) ? group.expr : null;
   const paths =

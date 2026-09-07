@@ -140,7 +140,7 @@ const isPersistableFormulaGroup = (group: GroupNode): boolean =>
   v.is(conditionNodeSchema, group) && !hasBlankFormulaComparisonValue(group);
 
 /** Persist a built rule onto a condition-field, picking the storage form by
- *  whether it contains a formula operand: a formula has no `{{#if}}` string
+ *  whether it contains a formula operand: a formula has no `{% if %}` string
  *  form, so it must persist as the AST; otherwise serialize to the string and
  *  clear any stale AST. The two forms are mutually exclusive. */
 const persistRuleGroup = (
@@ -196,7 +196,7 @@ const freezeConditionPath = (
 };
 
 /**
- * Settings face for a `{{#if}}` / `{{#elseif}}` opener. Teaches the two real
+ * Settings face for a `{% if %}` / `{% elif %}` opener. Teaches the two real
  * ways a condition is expressed, cheapest first:
  *   1. Ask a yes/no question — creates a boolean field and points the block at
  *      its bare name, so the filler sees a Yes/No toggle (zero syntax).
@@ -216,7 +216,7 @@ export const ConditionFace = ({
     actions?.rewriteConditionExpr(next) ?? false;
   // A block that already references a boolean condition-field edits the FIELD's
   // source (asked / rule / AI), so the single field is the source of truth and
-  // every `{{#if path}}` pointing at it follows. Otherwise (a raw expression)
+  // every `{% if path %}` pointing at it follows. Otherwise (a raw expression)
   // fall back to the builder, which also lets the author repoint the block at a
   // reusable condition.
   const conditionField = booleanFieldForExpr(selected.expr, fields);
@@ -268,7 +268,7 @@ export const ConditionFace = ({
 };
 
 /**
- * Settings face for a `{{#each <path>}}` loop opener. Loops have no value of
+ * Settings face for a `{% for … in <path> %}` loop opener. Loops have no value of
  * their own; the only thing to configure is how many times they may repeat.
  * The bounds live on the loop-container FieldMeta whose path equals the array
  * path (`selected.expr`), which {@link LoopBoundsInputs} upserts.
@@ -295,12 +295,12 @@ export const LoopFace = ({ selected }: { selected: DirectiveRange }) => {
 };
 
 /**
- * The two repeat-bound inputs (minimum / maximum repeats) for an `{{#each}}`
+ * The two repeat-bound inputs (minimum / maximum repeats) for a `{% for %}`
  * loop. Reads the bounds from the loop-container FieldMeta (path =
  * {@link containerPath}) and writes them back via `upsertField`, creating the
  * container record when absent. Shared by {@link LoopFace} and the
  * repeatable-field section of {@link FieldFace} so a single-field loop's author
- * sets bounds without hunting for the `{{#each}}` marker. An empty input unsets
+ * sets bounds without hunting for the `{% for %}` tag. An empty input unsets
  * the bound; min is clamped to ≤ max (and max to ≥ min) so an impossible range
  * cannot be saved.
  */
@@ -408,7 +408,7 @@ const parseBoundInput = (raw: string): number | undefined => {
 };
 
 /** Edit a boolean condition-field's SOURCE — how its yes/no value arises —
- *  writing back to the single field so every `{{#if path}}` that references it
+ *  writing back to the single field so every `{% if path %}` that references it
  *  updates at once. The three sources are mutually exclusive:
  *   - asked: plain boolean, answered in the fill form (clears condition + AI).
  *   - rule:  a `condition` expression, DERIVED at fill time.
@@ -581,7 +581,7 @@ const ConditionFieldEditor = ({
 
 /** The three-tier condition-setting UI (ask-a-question, match-a-field rule,
  *  advanced raw editor), shared by the ConditionFace (editing a selected
- *  `{{#if}}` opener) and the FieldFace's "Show only if…" section (editing the
+ *  `{% if %}` opener) and the FieldFace's "Show only if…" section (editing the
  *  block that wraps the field's own marker). `onRewrite` is the only thing
  *  that differs between callers: it points at whichever block this builder
  *  targets. `fromKey` resets the question/advanced inputs when the target or
@@ -658,7 +658,7 @@ export const ConditionBuilder = ({
 
 /** "Reuse a condition" affordance: every existing reusable condition (boolean
  *  fields), in plain language. Picking one points this block at it by reference
- *  (`{{#if <ref>}}`), so editing that condition's source once updates every
+ *  (`{% if <ref> %}`), so editing that condition's source once updates every
  *  block that reuses it. Quiet by convention: a single collapsed row, and
  *  nothing at all when there is nothing to reuse. */
 const ConditionReusePicker = ({
@@ -823,13 +823,13 @@ const ConditionRuleBuilder = ({
   // Building a rule does not point the block at a raw expression; it creates a
   // reusable boolean condition-field whose value is DERIVED by that rule, then
   // points the block at the field's path. The field is then in the reuse
-  // picker and edit-once-propagates to every `{{#if path}}` referencing it.
+  // picker and edit-once-propagates to every `{% if path %}` referencing it.
   const apply = () => {
     const isFormula = conditionHasFormula(group);
     if (isFormula && !canPersistRuleGroup(group)) {
       return;
     }
-    // A formula rule has no `{{#if}}` string form, so it can only be derived a
+    // A formula rule has no `{% if %}` string form, so it can only be derived a
     // label from the field name (not the humanized expression) and is persisted
     // as the AST. Otherwise serialize as before.
     const expression = isFormula ? "" : serializeCondition(group);

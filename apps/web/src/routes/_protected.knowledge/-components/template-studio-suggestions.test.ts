@@ -368,17 +368,20 @@ describe("operationFingerprint", () => {
 });
 
 describe("extractFieldMarkerPath", () => {
-  test("accepts exactly one {{path}} marker (whitespace tolerated)", () => {
+  test("accepts exactly one value marker (whitespace tolerated)", () => {
     expect(extractFieldMarkerPath("{{company.name}}")).toBe("company.name");
     expect(extractFieldMarkerPath("  {{ signing_date }}  ")).toBe(
       "signing_date",
     );
+    expect(extractFieldMarkerPath("{{ fee | number | min(0) }}")).toBe("fee");
   });
 
-  test("rejects non-marker replacements and invalid paths", () => {
+  test("rejects non-marker replacements, tags, and invalid paths", () => {
     expect(extractFieldMarkerPath("Example Ltd.")).toBeNull();
     expect(extractFieldMarkerPath("{{a}} and {{b}}")).toBeNull();
     expect(extractFieldMarkerPath("{{attorneys[0].name}}")).toBeNull();
-    expect(extractFieldMarkerPath("{{#if condition}}")).toBeNull();
+    expect(extractFieldMarkerPath("{% if condition %}")).toBeNull();
+    expect(extractFieldMarkerPath('{{ clause("Liability") }}')).toBeNull();
+    expect(extractFieldMarkerPath("{{ loop.index }}")).toBeNull();
   });
 });

@@ -3,6 +3,7 @@ import { create } from "zustand";
 import type { DirectiveRange, TemplatePreviewValue } from "@stll/folio-react";
 
 import type { TemplateRecipeDefinition } from "@/lib/api-contract";
+import type { GroupDirectiveKind } from "@/routes/_protected.knowledge/-components/directive-kinds";
 import type { ReplacementSpec } from "@/routes/_protected.knowledge/-components/template-studio-suggestions";
 import {
   templateValueSourceTransition,
@@ -55,39 +56,39 @@ export type StudioActions = {
   insertCondition: () => void;
   insertLoop: () => void;
   insertClause: () => void;
-  /** Insert a `{{@clause:Name}}` slot bound to a linked clause's slot name. */
+  /** Insert a `{{ clause("Name") }}` slot bound to a linked clause's slot name. */
   insertClauseSlot: (slotName: string) => void;
-  /** Insert a raw marker (e.g. `{{@index}}`) inline at the caret. */
+  /** Insert a raw marker (e.g. `{{ loop.index }}`) inline at the caret. */
   insertText: (text: string) => void;
-  /** True when the document caret sits inside a `{{#each}}…{{/each}}` body,
-   *  so loop-only tokens (`{{@index}}`, `{{@count}}`) are meaningful there. */
+  /** True when the document caret sits inside a `{% for %}`…`{% endfor %}` body,
+   *  so loop counters (`{{ loop.index }}`, `{{ loop.length }}`) are meaningful there. */
   isCaretInLoop: () => boolean;
   makeField: () => void;
   /** Persist the document + manifest. Resolves true only on a successful
    *  save, so callers (e.g. "Save and leave") can await it before navigating
    *  away and unmounting the page (which resets the shared store). */
   save: () => Promise<boolean>;
-  /** Rewrite {{oldPath}} markers in the document and rename the field.
+  /** Rewrite the path's markers in the document and rename the field.
    *  Returns false when the new path is invalid or already taken. */
   renameFieldPath: (oldPath: string, newPath: string) => boolean;
-  /** Rewrite the document's `{{@clause:oldSlot}}` markers (preserving any
+  /** Rewrite the document's `{{ clause("oldSlot") }}` markers (preserving any
    *  version modifier) to a new slot name. Returns false when the new name is
    *  invalid, unchanged, or already used by another clause slot. Document-only:
    *  callers must keep any linked clause row's slotName in sync themselves. */
   renameClauseSlot: (oldSlot: string, newSlot: string) => boolean;
-  /** Rewrite the selected `{{#if …}}` / `{{#elseif …}}` opener with a new
+  /** Rewrite the selected `{% if … %}` / `{% elif … %}` opener with a new
    *  expression. Returns false when nothing suitable is selected or the
    *  expression is invalid. */
   rewriteConditionExpr: (next: string) => boolean;
-  /** Inline-wrap this field's own marker in `{{#if condition}}…{{/if}}` so the
+  /** Inline-wrap this field's own marker in `{% if condition %}`…`{% endif %}` so the
    *  field renders only when the condition holds. Returns false when the
    *  field's marker could not be wrapped. */
   wrapFieldInCondition: (path: string) => boolean;
-  /** Rewrite the `{{#if …}}` opener of the block that encloses this field's
+  /** Rewrite the `{% if … %}` opener of the block that encloses this field's
    *  marker. Returns false when no enclosing `if` block exists or the
    *  expression is invalid. */
   rewriteFieldConditionExpr: (path: string, next: string) => boolean;
-  /** Remove the `{{#if …}}` / `{{/if}}` pair around this field's marker (keep
+  /** Remove the `{% if … %}` / `{% endif %}` pair around this field's marker (keep
    *  the field). Returns false when the block holds more than this field's
    *  marker or could not be rewritten. */
   unwrapFieldCondition: (path: string) => boolean;
@@ -110,23 +111,23 @@ export type StudioActions = {
   /** Replace the selection (or insert at the caret) with an existing field's
    *  marker; replacing text flips the field to AI-adapted wording. For a
    *  multi-format lookup field, `formatKey` selects a non-default output
-   *  (`{{path.key}}`); omit it to insert the default (`{{path}}`). */
+   *  (`{{ path.key }}`); omit it to insert the default (`{{ path }}`). */
   insertExistingField: (path: string, formatKey?: string) => void;
-  /** Insert (or wrap the selection in) a `{{#if expr}}…{{/if}}` block for an
+  /** Insert (or wrap the selection in) a `{% if expr %}`…`{% endif %}` block for an
    *  existing condition's expression, so the open condition can be placed in
    *  the document the same way a field marker is. */
   insertExistingCondition: (expr: string) => void;
-  /** Remove every {{path}} marker from the document and drop the field. */
+  /** Remove every marker of the path from the document and drop the field. */
   deleteField: (path: string) => void;
-  /** Insert a saved recipe at the caret: loop recipes add the `{{#each}}`
+  /** Insert a saved recipe at the caret: loop recipes add the `{% for %}`
    *  block with one marker paragraph per field, plain recipes add the
    *  markers inline; the pre-configured fields register in the session
    *  (existing paths are kept and the recipe's get a `_2` suffix). */
   insertRecipe: (definition: TemplateRecipeDefinition) => void;
   /** Make the field repeat per loop item (wrap its marker's containing
-   *  paragraph in `{{#each path}}` / `{{/each}}` and re-path the field to
+   *  paragraph in `{% for … in path %}` / `{% endfor %}` and re-path the field to
    *  the loop-item convention, `path` → `path.value`), or undo it (remove
-   *  the enclosing each markers and re-path back to the loop's name).
+   *  the enclosing loop tags and re-path back to the loop's name).
    *  Returns false when the document could not be rewritten. */
   setFieldRepeatable: (path: string, repeatable: boolean) => boolean;
 };
@@ -160,7 +161,7 @@ export type OutlineNode =
   | { type: "clause"; name: string; from: number }
   | {
       type: "group";
-      kind: "if" | "elseif" | "else" | "each";
+      kind: GroupDirectiveKind;
       expr: string;
       from: number;
       children: OutlineNode[];
@@ -192,7 +193,7 @@ type TemplateStudioState = {
   /** Deferred link-row slot renames as an ordered replay log: each recorded
    *  rename APPENDS a step, preserving edit order; the log is never collapsed.
    *  Recorded when a LINKED clause slot is renamed in the document: the
-   *  `{{@clause:...}}` markers rewrite immediately (marking the session dirty
+   *  `clause(...)` markers rewrite immediately (marking the session dirty
    *  via `renameClauseSlot`), while the stored link rows' slotNames are only
    *  flushed to the API in the save flow, replayed step by step in this order.
    *  Replaying the full log (not a collapsed final state) is what makes chained

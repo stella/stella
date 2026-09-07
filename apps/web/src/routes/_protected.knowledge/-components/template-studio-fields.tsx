@@ -76,7 +76,7 @@ import { protectedRouteApi } from "@/routes/_protected.knowledge/-components/tem
 import {
   buildRecipeDefinition,
   fieldHasLoopBounds,
-  findEnclosingEachGroup,
+  findEnclosingForGroup,
   findEnclosingIfGroup,
   sanitizeFieldPath,
   type OutlineGroup,
@@ -162,7 +162,7 @@ export const ClauseFace = ({ selected }: { selected: DirectiveRange }) => {
     );
   };
 
-  // Rename a clause slot. Rewrite the `{{@clause:...}}` document markers now
+  // Rename a clause slot. Rewrite the clause markers in the document now
   // (this marks the session dirty). When a clause is linked, the link row
   // carries the slot name too, but that row rename is deferred to the save flow
   // (see handleSave): recording it as a pending rename keeps the document edit
@@ -401,7 +401,7 @@ export const FieldNavigator = ({
   // suggested but not placed. Tucked under a disclosure so the main list
   // shows only what is actually in the document.
   const placed = outlineFieldPaths(outline);
-  // A loop-container record (carries `{{#each}}` repeat bounds, no marker of
+  // A loop-container record (carries `{% for %}` repeat bounds, no marker of
   // its own) is loop config, not a fillable field, so it never shows in the
   // unplaced list even though its bare path is not "placed".
   const unplaced = fields.filter(
@@ -674,7 +674,7 @@ const OutlineRow = ({
   // A loop wrapping exactly one field IS that field, made repeatable: render
   // it as the field's row (opens the face) with a repeats badge, so the user
   // doesn't have to drill into the group to reach the only field inside.
-  if (node.kind === "each") {
+  if (node.kind === "for") {
     const onlyChild = node.children.length === 1 ? node.children[0] : undefined;
     if (onlyChild?.type === "field") {
       const loopField = fields.find((f) => f.path === onlyChild.path);
@@ -735,18 +735,18 @@ const OutlineGroupRow = ({
 }) => {
   const t = useTranslations();
   const [open, setOpen] = useState(true);
-  const GroupIcon = node.kind === "each" ? RepeatIcon : SplitIcon;
+  const GroupIcon = node.kind === "for" ? RepeatIcon : SplitIcon;
   const groupTitle =
-    node.kind === "each"
+    node.kind === "for"
       ? t("templates.studio.loop")
       : t("templates.studio.scopeCondition");
   const friendly = humanizeConditionExpr(node.expr, fields, (key) => t(key));
   let groupLabel: string;
-  if (node.kind === "each") {
+  if (node.kind === "for") {
     groupLabel = t("templates.studio.repeats", { item: friendly });
   } else if (node.kind === "else") {
     groupLabel = t("templates.studio.otherwise");
-  } else if (node.kind === "elseif") {
+  } else if (node.kind === "elif") {
     groupLabel = t("templates.studio.otherwiseIf", { condition: friendly });
   } else {
     groupLabel = friendly;
@@ -756,7 +756,7 @@ const OutlineGroupRow = ({
   // it carries the same required/repeatable affordances a field row shows.
   // Rule/AI conditions reference no single field, so they show no indicator.
   const conditionField =
-    node.kind === "if" || node.kind === "elseif"
+    node.kind === "if" || node.kind === "elif"
       ? booleanFieldForExpr(node.expr, fields)
       : undefined;
   return (
@@ -859,7 +859,7 @@ const formulaOperandFields = (
 ): StudioField[] => {
   const currentIndex = fields.findIndex((f) => f.path === currentPath);
   const scopeOf = (path: string): string | null =>
-    findEnclosingEachGroup(outline, path, null)?.expr.trim() || null;
+    findEnclosingForGroup(outline, path, null)?.expr.trim() || null;
   const currentScope = scopeOf(currentPath);
   // Cheap predicates first; `scopeOf` walks the outline tree, so only run it
   // for fields that are already candidate operands.
@@ -873,7 +873,7 @@ const formulaOperandFields = (
 };
 
 /** The name a field at `path` is referenced by inside a formula scoped at
- *  `currentPath`: inside a `{{#each}}` the fill engine evaluates against the
+ *  `currentPath`: inside a `{% for %}` the fill engine evaluates against the
  *  row object, so same-row fields are named by their row-relative path (the
  *  loop-container prefix stripped); at top level the full manifest path is
  *  used. */
@@ -883,7 +883,7 @@ const formulaRefName = (
   path: string,
 ): string => {
   const scopeOf = (p: string): string | null =>
-    findEnclosingEachGroup(outline, p, null)?.expr.trim() || null;
+    findEnclosingForGroup(outline, p, null)?.expr.trim() || null;
   const currentScope = scopeOf(currentPath);
   return currentScope !== null && path.startsWith(`${currentScope}.`)
     ? path.slice(currentScope.length + 1)
@@ -912,7 +912,7 @@ const formulaInScopeRefFields = (
   currentPath: string,
 ): { path: string; label: string }[] => {
   const scopeOf = (path: string): string | null =>
-    findEnclosingEachGroup(outline, path, null)?.expr.trim() || null;
+    findEnclosingForGroup(outline, path, null)?.expr.trim() || null;
   const currentScope = scopeOf(currentPath);
   const result: { path: string; label: string }[] = [];
   for (const f of fields) {
@@ -1020,7 +1020,7 @@ const fieldRepeatState = (
   field: StudioField,
   outline: OutlineNode[],
 ): FieldRepeatState => {
-  const group = findEnclosingEachGroup(outline, field.path, null);
+  const group = findEnclosingForGroup(outline, field.path, null);
   if (group !== null) {
     const loopPath = group.expr.trim();
     if (loopPath !== "" && field.path.startsWith(`${loopPath}.`)) {
@@ -1046,7 +1046,7 @@ const fieldRepeatState = (
   return { kind: "off", disabledKey: null };
 };
 
-/** Whether this field's marker is already wrapped in an `{{#if}}` block, and
+/** Whether this field's marker is already wrapped in an `{% if %}` block, and
  *  the block's live expression. `canRemove` mirrors the Repeatable guard: the
  *  un-wrap is only offered while the branch holds nothing but this field's
  *  marker (otherwise removing the `if` would expose the block's other
@@ -1072,7 +1072,7 @@ const fieldConditionState = (
 /** "Show only if…" section of the field face (secondary, below the value
  *  controls): conditions the field's own marker without leaving the face.
  *  Not conditional yet → a ghost affordance that inline-wraps the marker in
- *  `{{#if condition}}…{{/if}}` and reveals the shared condition builder so the
+ *  `{% if condition %}`…`{% endif %}` and reveals the shared condition builder so the
  *  author sets the expression at once. Already conditional → the current
  *  reading plus the same builder to edit it, and a Remove action that unwraps
  *  the block (disabled when the block holds more than this field). */
@@ -1213,9 +1213,9 @@ export const FieldFace = ({
 
   const repeat = fieldRepeatState(field, outline);
   // The loop-container path that carries this loop's repeat bounds: the
-  // enclosing `{{#each <path>}}` group's array path (which equals `<base>` for
+  // enclosing `{% for … in <path> %}` group's array path (which equals `<base>` for
   // a single-field repeatable, where the item field is `<base>.value`).
-  const enclosingEach = findEnclosingEachGroup(outline, field.path, null);
+  const enclosingEach = findEnclosingForGroup(outline, field.path, null);
   const loopContainerPath =
     enclosingEach === null ? null : enclosingEach.expr.trim() || null;
   const condition = fieldConditionState(field, outline);
@@ -1550,7 +1550,7 @@ type ValueSource = "person" | "textAi" | "ai" | "formula";
 
 /**
  * Save the field's configuration as an org-wide recipe, insertable into any
- * template. When the field's marker sits inside a `{{#each}}` block, the
+ * template. When the field's marker sits inside a `{% for %}` block, the
  * whole block is the recipe: the loop path plus every field used inside it.
  */
 const SaveRecipeDialog = ({
@@ -1660,7 +1660,7 @@ const SaveRecipeDialog = ({
   );
 };
 
-/** Click-to-edit clause slot name: rewrites the `{{@clause:name}}` markers in
+/** Click-to-edit clause slot name: rewrites the clause markers in
  *  the document. When a clause is linked, `onRename` also records a deferred
  *  rename of the stored `slotName` link row, flushed on the next template save
  *  (see {@link ClauseFace}); it returns `false` only when the new name is

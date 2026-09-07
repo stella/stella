@@ -351,7 +351,7 @@ export const templateDocxBufferOptions = (
 
 // Re-parses a *saved* template's stored .docx server-side to recover the
 // fillable field schema (the same merge the fill endpoint applies, so
-// `{{#each}}` array fields and manifest metadata are both present). Shared by
+// `{% for %}` array fields and manifest metadata are both present). Shared by
 // the Studio fill tab and any host that renders the fill form standalone, so
 // both dedupe on one cache entry. Keyed on the stable template id (see the
 // `fillDiscover` key comment): the presigned URL and file name are runtime-only

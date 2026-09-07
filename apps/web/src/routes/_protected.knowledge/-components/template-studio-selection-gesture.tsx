@@ -34,6 +34,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { BoundedMap } from "@/lib/bounded-set";
 import { inputTypeValueKind, VALUE_TYPE_META } from "@/lib/value-types";
+import type { BlockGestureKind } from "@/routes/_protected.knowledge/-components/directive-kinds";
 import { reusableConditions } from "@/routes/_protected.knowledge/-components/template-studio-condition-source";
 import { isInputType } from "@/routes/_protected.knowledge/-components/template-studio-model";
 import {
@@ -50,7 +51,7 @@ type SelectionGesturePopoverProps = {
   onAcceptAi: () => void;
   onWrapIf: () => void;
   onWrapIfExisting: (name: string) => void;
-  onWrapEach: () => void;
+  onWrapLoop: () => void;
   onMakeClause: () => void;
 };
 
@@ -62,7 +63,7 @@ export const TemplateStudioSelectionGesture = ({
   onAcceptAi,
   onWrapIf,
   onWrapIfExisting,
-  onWrapEach,
+  onWrapLoop,
   onMakeClause,
 }: SelectionGesturePopoverProps) => {
   const t = useTranslations();
@@ -125,10 +126,10 @@ export const TemplateStudioSelectionGesture = ({
         />
         <Button
           className="justify-start gap-2 font-normal"
-          onClick={onWrapEach}
-          onFocus={() => setPreview("each")}
+          onClick={onWrapLoop}
+          onFocus={() => setPreview("for")}
           onMouseDown={keepEditorFocus}
-          onMouseEnter={() => setPreview("each")}
+          onMouseEnter={() => setPreview("for")}
           size="sm"
           variant="ghost"
         >
@@ -260,7 +261,7 @@ type UseTemplateStudioSelectionGestureOptions = {
   insertExistingField: (path: string, range: SelectionRange) => void;
   insertExistingCondition: (name: string, range: SelectionRange) => void;
   insertClause: (range: SelectionRange) => void;
-  wrapBlock: (kind: "if" | "each", range: SelectionRange) => void;
+  wrapBlock: (kind: BlockGestureKind, range: SelectionRange) => void;
   upsertField: (path: string, patch: Partial<StudioField>) => void;
 };
 
@@ -521,7 +522,7 @@ export const useTemplateStudioSelectionGesture = ({
     dismissGesture();
   };
 
-  const applyGesture = (kind: "field" | "if" | "each" | "clause") => {
+  const applyGesture = (kind: GestureInsertKind) => {
     const shown = gestureRef.current;
     if (shown === null) {
       return;
@@ -582,36 +583,36 @@ export const useTemplateStudioSelectionGesture = ({
             onInsertExisting: applyExistingFieldGesture,
             onMakeClause: () => applyGesture("clause"),
             onMakeField: () => applyGesture("field"),
-            onWrapEach: () => applyGesture("each"),
+            onWrapLoop: () => applyGesture("for"),
             onWrapIf: () => applyGesture("if"),
             onWrapIfExisting: applyExistingConditionGesture,
           },
   };
 };
 
-type GestureInsertKind = "field" | "if" | "each" | "clause";
+type GestureInsertKind = BlockGestureKind | "field" | "clause";
 
 // Mock document content, not interface text; deliberately untranslated (see
 // the preview-pane pattern) so the previews carry no per-language i18n debt.
 // The concept caption below each IS translated (templates.studio.concept*).
 const GESTURE_PREVIEW_SAMPLE = {
   fieldBefore: "Due within ",
-  fieldMarker: "{{term}}",
+  fieldMarker: "{{ term }}",
   fieldValue: "30",
   fieldAfter: " days.",
-  ifMarker: "{{#if has_guarantor}}",
+  ifMarker: "{% if has_guarantor %}",
   ifBody: "The Guarantor shall be jointly liable.",
-  eachMarker: "{{#each parties}}",
-  eachItem: "– {{name}}, {{role}}",
-  eachFilled: ["– Jane Roe, Buyer", "– John Doe, Seller"],
-  clauseMarker: "{{@clause:liability}}",
+  loopMarker: "{% for party in parties %}",
+  loopItem: "– {{ party.name }}, {{ party.role }}",
+  loopFilled: ["– Jane Roe, Buyer", "– John Doe, Seller"],
+  clauseMarker: '{{ clause("liability") }}',
   clauseText: "Neither party is liable for indirect or consequential loss.",
 } as const;
 
 const CONCEPT_KEY = {
   field: "templates.studio.conceptField",
   if: "templates.studio.conceptCondition",
-  each: "templates.studio.conceptLoop",
+  for: "templates.studio.conceptLoop",
   clause: "templates.studio.conceptClause",
 } as const satisfies Record<GestureInsertKind, TranslationKey>;
 
@@ -716,13 +717,13 @@ const GestureInsertPreview = ({ kind }: { kind: GestureInsertKind }) => {
           </div>
         )}
 
-        {kind === "each" && (
+        {kind === "for" && (
           <div className="border-success/40 bg-success/10 rounded-sm border-s-[3px] py-1.5 ps-3 pe-2">
             <FillReveal
               className="block"
               filled={
                 <span className="block">
-                  {GESTURE_PREVIEW_SAMPLE.eachFilled.map((row) => (
+                  {GESTURE_PREVIEW_SAMPLE.loopFilled.map((row) => (
                     <span className="block" key={row}>
                       {row}
                     </span>
@@ -732,10 +733,10 @@ const GestureInsertPreview = ({ kind }: { kind: GestureInsertKind }) => {
               marker={
                 <span className="block">
                   <code className="text-muted-foreground text-xs">
-                    {GESTURE_PREVIEW_SAMPLE.eachMarker}
+                    {GESTURE_PREVIEW_SAMPLE.loopMarker}
                   </code>
                   <span className="mt-1 block">
-                    {GESTURE_PREVIEW_SAMPLE.eachItem}
+                    {GESTURE_PREVIEW_SAMPLE.loopItem}
                   </span>
                 </span>
               }

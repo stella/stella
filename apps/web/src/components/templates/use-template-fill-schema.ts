@@ -11,7 +11,7 @@ import {
  * The fillable shape of a *saved* template, for hosts that render the fill
  * form outside the Studio: load the template detail (presigned source URL),
  * fetch the bytes, and re-discover fields server-side — the same merge the
- * fill endpoint applies, so `{{#each}}` array fields and manifest metadata
+ * fill endpoint applies, so `{% for %}` array fields and manifest metadata
  * are both present. Shares the `templateFillDiscoverOptions` cache entry with
  * the Studio fill tab.
  */

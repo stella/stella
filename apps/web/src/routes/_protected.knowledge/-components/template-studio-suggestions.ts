@@ -22,7 +22,7 @@ import type {
 import { buildPositionalText } from "@stll/folio-react";
 import type { AISuggestion } from "@stll/folio-react";
 import { stableStringify } from "@stll/stable-stringify";
-import { isFieldPath } from "@stll/template-conditions";
+import { scanMarkers } from "@stll/template-conditions";
 
 /** Chars of surrounding text recorded so suggestions survive document edits
  *  (the host re-anchors stale ranges via contextBefore/After). */
@@ -470,17 +470,23 @@ export type SuggestedFieldMeta = {
 };
 
 /**
- * The field path when `text` is exactly one `{{path}}` marker (the shape
- * the model is told to use when wrapping a literal as a field), else null.
- * Path validity defers to the marker grammar's `isFieldPath`.
+ * The field path when `text` is exactly one value marker (the shape the model
+ * is told to use when wrapping a literal as a field), else null. The grammar's
+ * scanner decides what a value marker is, so a tag, a clause slot, or a
+ * near-miss the fill engine would print literally never passes as one.
  */
 export const extractFieldMarkerPath = (text: string): string | null => {
   const trimmed = text.trim();
-  if (!trimmed.startsWith("{{") || !trimmed.endsWith("}}")) {
+  const [scanned, ...rest] = scanMarkers(trimmed);
+  if (
+    scanned === undefined ||
+    rest.length > 0 ||
+    scanned.raw !== trimmed ||
+    scanned.meta.kind !== "placeholder"
+  ) {
     return null;
   }
-  const inner = trimmed.slice(2, -2).trim();
-  return isFieldPath(inner) ? inner : null;
+  return scanned.meta.expr;
 };
 
 /** Mirrors the Studio inspector's who-fills derivation: a drafting prompt

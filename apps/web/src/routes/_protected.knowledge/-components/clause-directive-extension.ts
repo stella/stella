@@ -7,7 +7,7 @@ import type { NodeViewProps } from "@tiptap/react";
 import { ClauseDirectiveNodeView } from "@/routes/_protected.knowledge/-components/clause-directive-node";
 
 /**
- * A `{{#if}}`/`{{#each}}` block directive rendered as a real, atomic editor
+ * A `{% if %}`/`{% for %}` block directive rendered as a real, atomic editor
  * node. Keeping directives in the document (rather than stripping them and
  * re-interleaving on save) makes them visible and — crucially — keeps their
  * position true to the editor: a directive moves with the surrounding text
