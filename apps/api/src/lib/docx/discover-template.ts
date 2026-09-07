@@ -29,6 +29,7 @@ import {
   arrayFieldFromFilters,
   fieldMetaFromFilters,
   filterChainSignature,
+  foldItemCountConstraints,
 } from "./field-filters";
 import { parseInlineConditions } from "./inline-conditions";
 import {
@@ -1173,7 +1174,11 @@ export const discoverTemplate = async (
     structureErrors: errors,
     warnings: boundTemplateWarnings(primary.warnings),
     conditionPaths,
-    documentFields: documentLayerFields(primary.documentFilters, errors),
+    documentFields: documentLayerFields({
+      arrayPaths: new Set(arrayPaths),
+      declarations: primary.documentFilters,
+      errors,
+    }),
     loopAliases: [...primary.loopAliases]
       .flatMap(([alias, paths]) => {
         const [path] = [...paths];
@@ -1184,16 +1189,25 @@ export const discoverTemplate = async (
   };
 };
 
+type DocumentLayerOptions = {
+  /** The paths the document loops over, so a count written on one of their
+   *  items reaches the repeat it counts. */
+  arrayPaths: ReadonlySet<string>;
+  declarations: ReadonlyMap<string, DocumentFieldDeclaration>;
+  errors: TemplateStructureError[];
+};
+
 /**
  * The manifest the markers themselves declare, in path order. A filter the
  * marker cannot act on becomes a structure error against the paragraph it was
  * written in, so the author is told what to change rather than getting a field
  * that silently ignores half its configuration.
  */
-const documentLayerFields = (
-  declarations: ReadonlyMap<string, DocumentFieldDeclaration>,
-  errors: TemplateStructureError[],
-): FieldMeta[] => {
+const documentLayerFields = ({
+  arrayPaths,
+  declarations,
+  errors,
+}: DocumentLayerOptions): FieldMeta[] => {
   const fields: FieldMeta[] = [];
   for (const [path, { filters, paragraphIndex, scope }] of [
     ...declarations,
@@ -1213,5 +1227,5 @@ const documentLayerFields = (
       fields.push(field);
     }
   }
-  return fields;
+  return foldItemCountConstraints(fields, arrayPaths).fields;
 };

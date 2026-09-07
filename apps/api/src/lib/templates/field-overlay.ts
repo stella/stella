@@ -15,6 +15,7 @@
 import { panic } from "better-result";
 
 import { arrayOrEmpty } from "@/api/lib/array";
+import { foldItemCountConstraints } from "@/api/lib/docx/field-filters";
 import {
   manifestFieldsFromMerge,
   mergeManifestWithDiscovery,
@@ -60,11 +61,15 @@ export const LOOKUP_OWNERSHIP_REFUSAL = "declares a lookup whose format key";
 type DeclaredPaths = {
   declared: Set<string>;
   roots: Set<string>;
+  /** The `{% for %}` paths, which are the only ones that repeat, so a count
+   *  of items has somewhere to land. */
+  arrays: Set<string>;
 };
 
 const declaredPaths = (discovered: DiscoveredTemplate): DeclaredPaths => {
   const declared = new Set<string>();
   const roots = new Set<string>();
+  const arrays = new Set<string>();
   for (const { name } of discovered.placeholders) {
     declared.add(name);
     roots.add(name);
@@ -76,6 +81,7 @@ const declaredPaths = (discovered: DiscoveredTemplate): DeclaredPaths => {
     // shape), so it is an input even though every marker under it is dotted.
     if (field.kind === "array") {
       roots.add(path);
+      arrays.add(path);
     }
     for (const item of arrayOrEmpty(field.itemFields)) {
       visit(item, path);
@@ -84,7 +90,7 @@ const declaredPaths = (discovered: DiscoveredTemplate): DeclaredPaths => {
   for (const field of discovered.fields) {
     visit(field, "");
   }
-  return { declared, roots };
+  return { arrays, declared, roots };
 };
 
 /** Marker paths sitting under `path`. */
@@ -133,6 +139,56 @@ const canonicalizeOverlayPath = (
     }
   }
   return path;
+};
+
+/** One overlay entry, with the position it was sent at: an issue names the
+ *  entry the caller wrote, never the position it ended up in. */
+type OverlayEntry = {
+  field: FieldMeta;
+  index: number;
+};
+
+/**
+ * The overlay in the vocabulary the manifest speaks: loop aliases resolved,
+ * and item counts on the repeat they count.
+ *
+ * A model that configures `attorneys.name` writes the whole entry there,
+ * item count included, because that is the entry it is filling in. The count
+ * belongs to the array — an item field never holds a list — so it moves, and
+ * the array entry the fold creates answers for the entry that sent it.
+ */
+const canonicalizeOverlay = (
+  overlay: readonly FieldMeta[],
+  discovered: DiscoveredTemplate,
+  { arrays, declared }: DeclaredPaths,
+): OverlayEntry[] => {
+  const entries = overlay.map((field, index) => ({
+    field: {
+      ...field,
+      path: canonicalizeOverlayPath(field.path, discovered, declared),
+    },
+    index,
+  }));
+  const { fields, moves } = foldItemCountConstraints(
+    entries.map((entry) => entry.field),
+    arrays,
+  );
+  const indexByPath = new Map(
+    entries.map((entry) => [entry.field.path, entry.index] as const),
+  );
+  const movedFrom = new Map(moves.map(({ from, to }) => [to, from] as const));
+  const positionOf = (path: string): number | undefined => {
+    const own = indexByPath.get(path);
+    if (own !== undefined) {
+      return own;
+    }
+    const from = movedFrom.get(path);
+    return from === undefined ? undefined : indexByPath.get(from);
+  };
+  return fields.flatMap((field) => {
+    const index = positionOf(field.path);
+    return index === undefined ? [] : [{ field, index }];
+  });
 };
 
 type ValidateFieldOverlayOptions = {
@@ -288,14 +344,11 @@ export const partitionFieldOverlay = ({
   overlay,
 }: ValidateFieldOverlayOptions): PartitionFieldOverlayResult => {
   const issuesByIndex = new Map<number, FieldOverlayIssue>();
-  const { declared } = declaredPaths(discovered);
-  let survivors = overlay.map((field, index) => ({
-    field: {
-      ...field,
-      path: canonicalizeOverlayPath(field.path, discovered, declared),
-    },
-    index,
-  }));
+  let survivors = canonicalizeOverlay(
+    overlay,
+    discovered,
+    declaredPaths(discovered),
+  );
   for (;;) {
     const issues = validateFieldOverlay({
       configured,

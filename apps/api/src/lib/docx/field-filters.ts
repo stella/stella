@@ -620,6 +620,114 @@ export const arrayFieldFromFilters = (
   return { field: applied.field, issues: [...issues, ...applied.issues] };
 };
 
+// ── Item counts ──────────────────────────────────────────
+
+/** The constraints that count a repeat's rows rather than describe one value.
+ *  Named against the validation shape, so renaming one is a compile error. */
+const ITEM_COUNT_KEYS = [
+  "minItems",
+  "maxItems",
+] as const satisfies readonly (keyof FieldValidation)[];
+
+/** The item counts a validation carries, or `null` when it carries none. */
+const itemCounts = (
+  validation: FieldValidation | undefined,
+): FieldValidation | null => {
+  if (validation === undefined) {
+    return null;
+  }
+  const counts = Object.fromEntries(
+    ITEM_COUNT_KEYS.flatMap((key) =>
+      validation[key] === undefined ? [] : [[key, validation[key]]],
+    ),
+  );
+  return Object.keys(counts).length === 0 ? null : counts;
+};
+
+/** The same field with the item counts taken off it, and `validation` gone
+ *  when they were all it held. */
+const withoutItemCounts = (field: FieldMeta): FieldMeta => {
+  const {
+    minItems: _minItems,
+    maxItems: _maxItems,
+    ...rest
+  } = field.validation ?? {};
+  const { validation: _validation, ...withoutValidation } = field;
+  return Object.keys(rest).length === 0
+    ? withoutValidation
+    : { ...withoutValidation, validation: rest };
+};
+
+/** The array a path repeats within: the longest declared array path it sits
+ *  under, so an item of a nested loop lands on the inner repeat. */
+const arrayOfItemPath = (
+  path: string,
+  arrayPaths: ReadonlySet<string>,
+): string | null => {
+  let owner: string | null = null;
+  for (const arrayPath of arrayPaths) {
+    if (
+      path.startsWith(`${arrayPath}.`) &&
+      (owner === null || arrayPath.length > owner.length)
+    ) {
+      owner = arrayPath;
+    }
+  }
+  return owner;
+};
+
+export type ItemCountFold = {
+  fields: FieldMeta[];
+  /** Every constraint that moved, from the item path that carried it to the
+   *  array that now does, so a caller with per-entry positions can still
+   *  address the entry it came from. */
+  moves: { from: string; to: string }[];
+};
+
+/**
+ * Move an item-count constraint onto the repeat it counts.
+ *
+ * `min_items(3)` on `attorneys.name` says the loop takes three rows, not that
+ * one attorney's name holds three values, and read as the latter it refuses
+ * every fill: the item field never carries a list. The array is the one place
+ * the constraint means something, so it moves there, creating the array's
+ * field when the caller configured only its items. The array's own count
+ * wins: it is the constraint written where it belongs.
+ */
+export const foldItemCountConstraints = (
+  fields: readonly FieldMeta[],
+  arrayPaths: ReadonlySet<string>,
+): ItemCountFold => {
+  const byPath = new Map(fields.map((field) => [field.path, field]));
+  const order = [...byPath.keys()];
+  const moves: { from: string; to: string }[] = [];
+  for (const field of fields) {
+    const counts = itemCounts(field.validation);
+    const arrayPath =
+      counts === null ? null : arrayOfItemPath(field.path, arrayPaths);
+    if (counts === null || arrayPath === null) {
+      continue;
+    }
+    byPath.set(field.path, withoutItemCounts(field));
+    const array = byPath.get(arrayPath) ?? { path: arrayPath };
+    byPath.set(arrayPath, {
+      ...array,
+      validation: { ...counts, ...array.validation },
+    });
+    if (!order.includes(arrayPath)) {
+      order.push(arrayPath);
+    }
+    moves.push({ from: field.path, to: arrayPath });
+  }
+  return {
+    fields: order.flatMap((path) => {
+      const field = byPath.get(path);
+      return field === undefined ? [] : [field];
+    }),
+    moves,
+  };
+};
+
 /** A stable rendering of one chain, so two occurrences of a path can be
  *  compared for agreement without caring about whitespace. */
 export const filterChainSignature = (filters: readonly FilterCall[]): string =>

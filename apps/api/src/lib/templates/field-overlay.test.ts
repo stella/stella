@@ -302,6 +302,50 @@ describe("loop aliases at the configure boundary", () => {
     expect(applied.at(0)?.path).toBe("attorneys");
   });
 
+  test("an item count written on the item path lands on the array", async () => {
+    const discovered = await discoverTemplate(await loopDocx());
+
+    const { applied, issues } = partitionFieldOverlay({
+      configured: [],
+      discovered,
+      overlay: [
+        {
+          path: "attorney.name",
+          label: "Attorney name",
+          required: true,
+          validation: { minItems: 3, maxItems: 3 },
+        },
+      ],
+    });
+
+    expect(issues).toEqual([]);
+    expect(applied).toEqual([
+      { path: "attorneys.name", label: "Attorney name", required: true },
+      { path: "attorneys", validation: { minItems: 3, maxItems: 3 } },
+    ]);
+  });
+
+  test("a count the array declares itself wins over one on an item", async () => {
+    const discovered = await discoverTemplate(await loopDocx());
+
+    const { applied } = partitionFieldOverlay({
+      configured: [],
+      discovered,
+      overlay: [
+        { path: "attorneys", validation: { minItems: 2 } },
+        {
+          path: "attorney.name",
+          validation: { minItems: 3, minLength: 2 },
+        },
+      ],
+    });
+
+    expect(applied).toEqual([
+      { path: "attorneys", validation: { minItems: 2 } },
+      { path: "attorneys.name", validation: { minLength: 2 } },
+    ]);
+  });
+
   test("a name no loop bound is still refused, naming the discovered paths", async () => {
     const discovered = await discoverTemplate(await loopDocx());
 

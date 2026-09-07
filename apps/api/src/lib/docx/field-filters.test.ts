@@ -264,6 +264,39 @@ describe("filters on a loop path", () => {
   });
 });
 
+describe("item counts", () => {
+  test("a count on an item marker declares the repeat it counts", async () => {
+    const discovered = await discoverTemplate(
+      await makeDocx([
+        "{% for a in attorneys %}",
+        '{{ a.name | label("Attorney name") | min_items(3) | max_items(3) }}',
+        "{% endfor %}",
+      ]),
+    );
+
+    expect(discovered.structureErrors).toEqual([]);
+    expect(discovered.documentFields).toEqual([
+      { path: "attorneys.name", label: "Attorney name" },
+      { path: "attorneys", validation: { minItems: 3, maxItems: 3 } },
+    ]);
+  });
+
+  test("the count the loop tag carries wins", async () => {
+    const discovered = await discoverTemplate(
+      await makeDocx([
+        "{% for a in attorneys | min_items(2) %}",
+        "{{ a.name | min_items(3) | min_length(2) }}",
+        "{% endfor %}",
+      ]),
+    );
+
+    expect(discovered.documentFields).toEqual([
+      { path: "attorneys", validation: { minItems: 2 } },
+      { path: "attorneys.name", validation: { minLength: 2 } },
+    ]);
+  });
+});
+
 describe("the filter catalogue", () => {
   test("composites are the one deliberate exclusion", () => {
     expect(FIELD_META_FILTERS.parts).toEqual({
