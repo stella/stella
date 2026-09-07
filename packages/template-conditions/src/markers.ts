@@ -216,21 +216,36 @@ export const markerPattern = (): RegExp =>
 export const placeholderPattern = (): RegExp =>
   /\{\{\s*(?<name>[\p{L}\p{N}_.-]+)\s*(?<filters>\|(?:[^{}]*)?)?\}\}/gu;
 
-// A function argument may be written with either quote — Word autocorrects one
-// into the other, and a marker embedded in a source string uses whichever the
-// carrier is not — so every literal pattern accepts both through a
-// backreference, which keeps one capture group per value.
+// A function argument may be written with either quote, and Word turns either
+// into its typographic pair as the author types. The classifier normalises
+// those before parsing; the literal patterns below run over raw run text, so
+// they accept the opening and closing forms directly. `\s*` already covers the
+// non-breaking spaces Word inserts, which `\s` matches.
+/** Any character that opens a quoted function argument. */
+const OPEN_QUOTE = String.raw`["'“„«‘‚]`;
+/** Any character that closes one. */
+const CLOSE_QUOTE = String.raw`["'”»’]`;
+/** Everything a quoted argument may hold: no quote of either shape. */
+const QUOTED_BODY = String.raw`[^"'“”„«»‘’‚]*`;
+
 /** `{{ clause("Name") }}` / `{{ clause("Name", "v3") }}`. */
 export const clauseSlotPattern = (): RegExp =>
-  /\{\{\s*clause\(\s*(?<nameQuote>["'])(?<name>[^"']*)\k<nameQuote>\s*(?:,\s*(?<modifierQuote>["'])(?<modifier>[^"']*)\k<modifierQuote>\s*)?\)\s*\}\}/gu;
+  new RegExp(
+    String.raw`\{\{\s*clause\(\s*${OPEN_QUOTE}(?<name>${QUOTED_BODY})${CLOSE_QUOTE}\s*(?:,\s*${OPEN_QUOTE}(?<modifier>${QUOTED_BODY})${CLOSE_QUOTE}\s*)?\)\s*\}\}`,
+    "gu",
+  );
+
+const numberingPattern = (fn: "num" | "ref"): RegExp =>
+  new RegExp(
+    String.raw`\{\{\s*${fn}\(\s*${OPEN_QUOTE}(?<key>[\p{L}\p{N}_.-]+)${CLOSE_QUOTE}\s*\)\s*\}\}`,
+    "gu",
+  );
 
 /** `{{ num("key") }}` — the `key` group. */
-export const numPattern = (): RegExp =>
-  /\{\{\s*num\(\s*(?<quote>["'])(?<key>[\p{L}\p{N}_.-]+)\k<quote>\s*\)\s*\}\}/gu;
+export const numPattern = (): RegExp => numberingPattern("num");
 
 /** `{{ ref("key") }}` — the `key` group. */
-export const refPattern = (): RegExp =>
-  /\{\{\s*ref\(\s*(?<quote>["'])(?<key>[\p{L}\p{N}_.-]+)\k<quote>\s*\)\s*\}\}/gu;
+export const refPattern = (): RegExp => numberingPattern("ref");
 
 /** `{{ loop.index }}` and its siblings — the `property` group. */
 export const loopPattern = (): RegExp =>

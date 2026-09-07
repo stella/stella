@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   blockDirectiveLinePattern,
   classifyMarker,
+  clauseSlotPattern,
   classifyMarkerDefect,
   DIRECTIVE_KINDS,
   isBlockDirectiveKind,
@@ -10,6 +11,7 @@ import {
   isSafeFieldPath,
   legacyLoopAlias,
   legacyMarkerReplacement,
+  numPattern,
   replaceOutputMarkers,
   scanInvalidMarkers,
   scanMarkers,
@@ -140,6 +142,25 @@ describe("classifyMarker", () => {
         { name: "max", args: [{ kind: "positional", value: 60 }] },
       ],
     });
+  });
+
+  test("the literal patterns read Word's typographic quotes too", () => {
+    expect(
+      scanMarkers("{{ num(“k”) }} {{ ref(‘k’) }}").map((m) => m.meta),
+    ).toEqual([
+      { kind: "num", key: "k" },
+      { kind: "ref", key: "k" },
+    ]);
+    expect(
+      [..."{{ num(“k”) }}".matchAll(numPattern())].map(
+        (m) => m.groups?.["key"],
+      ),
+    ).toEqual(["k"]);
+    expect(
+      [..."{{ clause(«NDA», “v3”) }}".matchAll(clauseSlotPattern())].map(
+        (m) => [m.groups?.["name"], m.groups?.["modifier"]],
+      ),
+    ).toEqual([["NDA", "v3"]]);
   });
 
   test("normalizes Word's typographic quotes and fixed spaces", () => {
