@@ -77,10 +77,13 @@ operations runbook (private).
    its author and the actor who pushed have had a commit or pull
    request merged into the repository (repository policy: approval
    required for first-time contributors), so code from an unknown
-   contributor never executes in CI before review.
-   The CI workflow (`.github/workflows/ci.yml`) also fails a merge
-   group that carries a fork pull request; fork changes land from a
-   same-repo branch.
+   contributor never executes in CI before review. The merge queue
+   admits a pull request only when a user with write access enqueues
+   it after `ci-result` passed on its head, and drops the entry when
+   the head moves. The CI workflow (`.github/workflows/ci.yml`)
+   trusts a merge group that carries a fork pull request only when a
+   `pull_request` run of the workflow succeeded on that head, and
+   fails the group otherwise.
 
 9. **Ruleset audit.** A weekly workflow
    (`audit-branch-protection.yml`) compares the live GitHub
