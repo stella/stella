@@ -19,11 +19,17 @@
  * Pure: no IO, no model/provider dependency.
  */
 
+import { panic } from "better-result";
+
 import {
   DATE_FORMAT_EXAMPLE_ISO,
   formatDate,
   resolvePath,
 } from "@stll/template-conditions";
+
+import { normalizeDateValue } from "@/api/lib/agent-input/date-value";
+import type { Normalized } from "@/api/lib/agent-input/normalized";
+import { askSentence } from "@/api/lib/agent-input/normalized";
 
 import { replaceResolvedValue } from "./composite-fields";
 import {
@@ -56,9 +62,23 @@ export { DATE_FORMAT_EXAMPLE_ISO } from "@stll/template-conditions";
 export const formatDateExample = (dateFormat: FieldDateFormat): string =>
   formatDate(DATE_FORMAT_EXAMPLE_ISO, dateFormat) ?? DATE_FORMAT_EXAMPLE_ISO;
 
-/** Format one incoming date value, pushing a field-named error on a non-string
- *  or malformed value and returning the formatted display string (or null when
- *  the value is absent/empty/invalid and nothing should be written back). */
+/**
+ * The submitted value of one date field, as the ISO date both the formatter
+ * and the `{% if %}` comparison read. The field's own locale is what makes a
+ * month name written in the document's language readable, so the two callers
+ * (this module and the raw-value stash in `manifest-fill-steps`) go through
+ * here rather than each choosing which locales to accept.
+ */
+export const normalizeDateFieldValue = (
+  incoming: unknown,
+  dateFormat: FieldDateFormat,
+): Normalized<string> =>
+  normalizeDateValue(incoming, { locales: [dateFormat.locale] });
+
+/** Format one incoming date value, pushing a field-named error carrying the
+ *  normalizer's own wording when the value names no calendar date, and
+ *  returning the formatted display string (or null when the value is
+ *  absent/empty/unreadable and nothing should be written back). */
 const formatDateValue = (
   path: string,
   incoming: unknown,
@@ -68,25 +88,22 @@ const formatDateValue = (
   if (incoming === undefined) {
     return null;
   }
-  if (typeof incoming !== "string") {
+  if (typeof incoming === "string" && incoming.trim() === "") {
+    return null;
+  }
+  const normalized = normalizeDateFieldValue(incoming, dateFormat);
+  if (!normalized.ok) {
     errors.push({
       path,
-      message: `Field "${path}": expected an ISO date (YYYY-MM-DD).`,
+      message: `Field "${path}": ${askSentence(normalized)} ${normalized.hint}`,
     });
     return null;
   }
-  if (incoming.trim() === "") {
-    return null;
-  }
-  const formatted = formatIsoDate(incoming, dateFormat);
+  const formatted = formatIsoDate(normalized.value, dateFormat);
   if (formatted === null) {
-    errors.push({
-      path,
-      message:
-        `Field "${path}": "${incoming}" is not a valid date ` +
-        "(expected YYYY-MM-DD).",
-    });
-    return null;
+    return panic(
+      `Field "${path}": the normalizer produced ${normalized.value}, which the formatter refused`,
+    );
   }
   return formatted;
 };

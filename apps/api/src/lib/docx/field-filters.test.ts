@@ -4,6 +4,8 @@ import JSZip from "jszip";
 import { assertNever, classifyMarker } from "@stll/template-conditions";
 import type { FilterCall } from "@stll/template-conditions";
 
+import { DATE_FORMAT_SPEC_HINT } from "@/api/lib/agent-input/date-format-spec";
+
 import { discoverTemplate } from "./discover-template";
 import { fieldMetaFromFilters, FIELD_META_FILTERS } from "./field-filters";
 import type { FieldMeta } from "./types";
@@ -86,6 +88,11 @@ describe("fieldMetaFromFilters", () => {
     ['date("en-GB")', { locale: "en-GB", style: "long" }],
     ['date("en-GB-short")', { locale: "en-GB", style: "short" }],
     ['date("pt-BR-short")', { locale: "pt-BR", style: "short" }],
+    // Underscore is the ICU spelling of the same tag, and `full` names the
+    // longest style; both are read into the canonical pair.
+    ['date("cs_CZ")', { locale: "cs-CZ", style: "long" }],
+    ['date("cs_CZ-long")', { locale: "cs-CZ", style: "long" }],
+    ['date("pl-full")', { locale: "pl", style: "long" }],
   ])("%s reads as a locale and a style", (filter, dateFormat) => {
     expect(fieldFrom("signed_on", `signed_on | ${filter}`).field).toEqual({
       path: "signed_on",
@@ -94,13 +101,15 @@ describe("fieldMetaFromFilters", () => {
     });
   });
 
-  test.each(['date("cs_CZ")', 'date("iso")', 'date("cs_CZ-long")'])(
+  // A bare style names no locale, and a tag `Intl` refuses cannot be stored:
+  // both ask, with the one hint the date-format reader owns.
+  test.each(['date("iso")', 'date("long")', 'date("!!")'])(
     "%s is rejected by name",
     (filter) => {
       const { field, issues } = fieldFrom("signed_on", `signed_on | ${filter}`);
       expect(field).toEqual({ path: "signed_on", inputType: "date" });
       expect(issues.at(0)?.filter).toBe("date");
-      expect(issues.at(0)?.hint).toContain('date("pl-long")');
+      expect(issues.at(0)?.hint).toBe(DATE_FORMAT_SPEC_HINT);
     },
   );
 

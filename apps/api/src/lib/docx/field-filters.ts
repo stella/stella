@@ -16,7 +16,7 @@
 
 import * as v from "valibot";
 
-import { assertNever, DATE_FORMAT_STYLES } from "@stll/template-conditions";
+import { assertNever } from "@stll/template-conditions";
 import type {
   FilterArgument,
   FilterCall,
@@ -24,6 +24,10 @@ import type {
   MarkerLiteral,
 } from "@stll/template-conditions";
 
+import {
+  DATE_FORMAT_SPEC_HINT,
+  normalizeDateFormatSpec,
+} from "@/api/lib/agent-input/date-format-spec";
 import {
   ATTORNEY_REFS,
   CONTACT_FIELDS,
@@ -35,7 +39,6 @@ import {
 
 import {
   fieldMetaSchema,
-  isPlausibleLocale,
   LOOKUP_REGISTRIES,
   type FieldLookupFormat,
   type FieldMeta,
@@ -153,10 +156,6 @@ const booleanKeyword = (
 
 const quoted = (values: readonly string[]): string =>
   values.map((value) => `"${value}"`).join(", ");
-
-const DEFAULT_DATE_STYLE = "long" satisfies (typeof DATE_FORMAT_STYLES)[number];
-
-const DATE_SPEC_HINT = `Write date("pl") or date("pl-long"); the styles are ${quoted(DATE_FORMAT_STYLES)} and the default is "${DEFAULT_DATE_STYLE}".`;
 
 /** Narrow a filter argument to one of a closed set, so a binding kind or a
  *  registry slug reaches the manifest as its own union rather than a cast. */
@@ -377,29 +376,25 @@ const applyFilter = (draft: Draft, call: FilterCall): void => {
       return;
     case "date": {
       draft.meta["inputType"] = "date";
-      const spec = stringAt(call, 0);
-      if (spec === null) {
+      const spec = positional(call).at(0);
+      if (spec === undefined) {
         draft.issues.push(
-          issue(call.name, "date() needs a locale.", DATE_SPEC_HINT),
+          issue(call.name, "date() needs a locale.", DATE_FORMAT_SPEC_HINT),
         );
         return;
       }
-      /** A locale carries its own hyphens (`en-GB`, `pt-BR`), so only a final
-       *  segment that names a style is one; everything else is the locale. */
-      const cut = spec.lastIndexOf("-");
-      const tail = spec.slice(cut + 1);
-      const styled = isOneOf(DATE_FORMAT_STYLES, tail);
-      const locale = styled ? spec.slice(0, Math.max(cut, 0)) : spec;
-      if (locale === "" || !isPlausibleLocale(locale)) {
+      const dateFormat = normalizeDateFormatSpec(spec);
+      if (!dateFormat.ok) {
         draft.issues.push(
-          issue(call.name, `date("${spec}") is not a locale.`, DATE_SPEC_HINT),
+          issue(
+            call.name,
+            `date(${dateFormat.received}) is not ${dateFormat.expected}.`,
+            dateFormat.hint,
+          ),
         );
         return;
       }
-      draft.meta["dateFormat"] = {
-        locale,
-        style: styled ? tail : DEFAULT_DATE_STYLE,
-      };
+      draft.meta["dateFormat"] = dateFormat.value;
       return;
     }
     case "options_from": {

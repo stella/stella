@@ -814,4 +814,39 @@ describe("fillTemplate with inline conditions", () => {
       "Signed 13. června 2028 (after cutoff).Notice sent.",
     );
   });
+
+  test("a day-first date compares as the ISO date it names, not as its spelling", async () => {
+    // `13. 6. 2028` sorts before "2028-01-01" as a string, so a stash that
+    // kept the submitted spelling would take the else branch. What the value
+    // NAMES is what the condition compares.
+    const docx = await makeDocx(
+      WRAP(
+        P(
+          'Signed {{signing_date}}{% if signing_date > "2028-01-01" %} (after cutoff){% else %} (before cutoff){% endif %}.',
+        ) + P("{% if notify %}{% endif %}"),
+      ),
+    );
+    const values: TemplateData = { signing_date: "13. 6. 2028", notify: true };
+    const stepError = await applyManifestFillSteps({
+      values,
+      manifest: {
+        fields: [
+          {
+            path: "signing_date",
+            inputType: "date",
+            dateFormat: { locale: "cs", style: "long" },
+          },
+        ],
+      },
+      resolveLookup: () => {
+        throw new Error("no lookup field in this manifest");
+      },
+    });
+    expect(stepError).toBeNull();
+
+    const result = await fillTemplate(docx, values);
+    expect(await documentText(result.buffer)).toBe(
+      "Signed 13. června 2028 (after cutoff).",
+    );
+  });
 });

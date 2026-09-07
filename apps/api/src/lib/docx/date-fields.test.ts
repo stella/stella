@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { DATE_VALUE_HINT } from "@/api/lib/agent-input/date-value";
 import {
   applyDateFields,
   DATE_FORMAT_EXAMPLE_ISO,
@@ -8,6 +9,11 @@ import {
   resolveDateFields,
 } from "@/api/lib/docx/date-fields";
 import type { FieldMeta } from "@/api/lib/docx/types";
+
+/** The error a field-named ask renders: the normalizer owns the wording, so
+ *  the test states the shape rather than a second copy of the sentence. */
+const unreadable = (path: string, received: string): string =>
+  `Field "${path}": ${received} is not a calendar date. ${DATE_VALUE_HINT}`;
 
 const dateField = (
   path: string,
@@ -80,6 +86,31 @@ describe("formatIsoDate", () => {
 });
 
 describe("resolveDateFields", () => {
+  test.each([
+    ["13. 6. 2028", "13. června 2028"],
+    ["13.06.2028", "13. června 2028"],
+    // A month name written in the language the field renders in.
+    ["13. června 2028", "13. června 2028"],
+    ["13 June 2028", "13. června 2028"],
+  ])("reads %p and formats it as %p", (submitted, rendered) => {
+    const values: Record<string, unknown> = { signature_date: submitted };
+    const errors = resolveDateFields({
+      values,
+      fields: [dateField("signature_date", "cs", "long")],
+    });
+    expect(errors).toEqual([]);
+    expect(values["signature_date"]).toBe(rendered);
+  });
+
+  test("a date that reads two ways is refused with both readings named", () => {
+    const errors = resolveDateFields({
+      values: { signature_date: "01/02/2028" },
+      fields: [dateField("signature_date", "cs", "long")],
+    });
+    expect(errors.at(0)?.message).toContain("2028-02-01");
+    expect(errors.at(0)?.message).toContain("2028-01-02");
+  });
+
   test("formats the submitted value in place, including nested paths", () => {
     const values: Record<string, unknown> = {
       signature_date: "2028-06-13",
@@ -139,9 +170,7 @@ describe("resolveDateFields", () => {
     expect(errors).toEqual([
       {
         path: "people.dob",
-        message:
-          'Field "people.dob": "2028-02-30" is not a valid date ' +
-          "(expected YYYY-MM-DD).",
+        message: unreadable("people.dob", '"2028-02-30"'),
       },
     ]);
     // The valid row is still formatted in place.
@@ -160,9 +189,7 @@ describe("resolveDateFields", () => {
     expect(errors).toEqual([
       {
         path: "signature_date",
-        message:
-          'Field "signature_date": "2028-02-30" is not a valid date ' +
-          "(expected YYYY-MM-DD).",
+        message: unreadable("signature_date", '"2028-02-30"'),
       },
     ]);
     expect(values["signature_date"]).toBe("2028-02-30");
@@ -176,7 +203,7 @@ describe("resolveDateFields", () => {
     expect(errors).toEqual([
       {
         path: "signature_date",
-        message: 'Field "signature_date": expected an ISO date (YYYY-MM-DD).',
+        message: unreadable("signature_date", "20280613"),
       },
     ]);
   });
@@ -228,8 +255,7 @@ describe("applyDateFields", () => {
       { fields: [dateField("a", "cs", "long"), dateField("b", "cs", "short")] },
     );
     expect(message).toBe(
-      'Field "a": "bad" is not a valid date (expected YYYY-MM-DD). ' +
-        'Field "b": "2028-13-01" is not a valid date (expected YYYY-MM-DD).',
+      `${unreadable("a", '"bad"')} ${unreadable("b", '"2028-13-01"')}`,
     );
   });
 });

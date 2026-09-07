@@ -9,6 +9,10 @@
  * propose. Composite fields are flattened to one target per part.
  */
 
+import { normalizeBoolean } from "@/api/lib/agent-input/boolean";
+import { normalizeDateValue } from "@/api/lib/agent-input/date-value";
+import { normalizeEnumValue } from "@/api/lib/agent-input/enum-value";
+import { normalizeNumber } from "@/api/lib/agent-input/number";
 import type { ResolvedField } from "@/api/lib/docx/types";
 
 export type PrefillTarget = {
@@ -134,11 +138,12 @@ export type PrefillSuggestion = {
 const MAX_SNIPPET_CHARS = 300;
 const MAX_VALUE_CHARS = 4000;
 
-const TRUE_WORDS = new Set(["true", "yes", "1"]);
-const FALSE_WORDS = new Set(["false", "no", "0"]);
-
-/** Normalize one model value against its target's input type; null drops the
- *  suggestion (unparseable boolean, value outside a select's options, …). */
+/**
+ * Read one model value against its target's input type through the wire
+ * normalizers, so a prefill suggestion is spelled exactly the way the fill
+ * tools accept a value. A value the reader would have to ask about is dropped:
+ * a suggestion is an offer, and there is nobody here to ask.
+ */
 const normalizeValue = (
   target: PrefillTarget,
   rawValue: string,
@@ -148,24 +153,20 @@ const normalizeValue = (
     return null;
   }
   if (target.options) {
-    const exact = target.options.find((option) => option === value);
-    if (exact !== undefined) {
-      return exact;
-    }
-    const caseInsensitive = target.options.find(
-      (option) => option.toLowerCase() === value.toLowerCase(),
-    );
-    return caseInsensitive ?? null;
+    const option = normalizeEnumValue(value, target.options);
+    return option.ok ? option.value : null;
   }
   if (target.inputType === "boolean") {
-    const lower = value.toLowerCase();
-    if (TRUE_WORDS.has(lower)) {
-      return "true";
-    }
-    if (FALSE_WORDS.has(lower)) {
-      return "false";
-    }
-    return null;
+    const decided = normalizeBoolean(value);
+    return decided.ok ? String(decided.value) : null;
+  }
+  if (target.inputType === "number") {
+    const number = normalizeNumber(value);
+    return number.ok ? String(number.value) : null;
+  }
+  if (target.inputType === "date") {
+    const date = normalizeDateValue(value);
+    return date.ok ? date.value : null;
   }
   return value;
 };

@@ -28,7 +28,7 @@ import {
 import { checkArrayBounds } from "./array-bounds";
 import { CONDITION_RAW_VALUES } from "./block-directives";
 import { applyCompositeFields } from "./composite-fields";
-import { applyDateFields } from "./date-fields";
+import { applyDateFields, normalizeDateFieldValue } from "./date-fields";
 import { checkDependentFields } from "./dependent-fields";
 import { applyFormulaFields } from "./formula-fields";
 import { applyLookupFields, type LookupResolver } from "./lookup-fields";
@@ -43,7 +43,7 @@ import type { FieldMeta } from "./types";
  * overlay lets `{% if dateField > "2028-01-01" %}` conditions in `fillTemplate`
  * compare the ISO value instead of the display string. Non-string or empty
  * values are skipped (nothing to compare, and `applyDateFields` reports the
- * malformed ones). No-op when the manifest declares no formatted date fields.
+ * unreadable ones). No-op when the manifest declares no formatted date fields.
  *
  * A date field inside an `{% for %}` loop keeps a dotted path (`people.dob`)
  * while the value is an array of rows; its raw ISO is stashed per row under an
@@ -63,22 +63,32 @@ const stashRawDateValues = (
     if (field.inputType !== "date" || field.dateFormat === undefined) {
       continue;
     }
+    const dateFormat = field.dateFormat;
+    // The stash is what a condition compares, so it holds the ISO date the
+    // value NAMES, not the spelling the agent sent: `{% if signed_on >
+    // "2028-01-01" %}` has to compare dates whether the value arrived as
+    // `2028-06-13` or as `13. 6. 2028`.
+    const raw = (incoming: unknown): string | null => {
+      const normalized = normalizeDateFieldValue(incoming, dateFormat);
+      return normalized.ok ? normalized.value : null;
+    };
     const incoming = resolvePath(field.path, values);
     if (incoming === undefined) {
       mapRepeatablePath(
         values,
         field.path,
         ({ row, subPath, index, containerPath }) => {
-          const raw = readRowSubPath(row, subPath);
-          if (typeof raw === "string" && raw.trim() !== "") {
-            rawDates[`${containerPath}.${index}.${subPath}`] = raw;
+          const iso = raw(readRowSubPath(row, subPath));
+          if (iso !== null) {
+            rawDates[`${containerPath}.${index}.${subPath}`] = iso;
           }
         },
       );
       continue;
     }
-    if (typeof incoming === "string" && incoming.trim() !== "") {
-      rawDates[field.path] = incoming;
+    const iso = raw(incoming);
+    if (iso !== null) {
+      rawDates[field.path] = iso;
     }
   }
   if (Object.keys(rawDates).length > 0) {

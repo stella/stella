@@ -17,14 +17,19 @@
 import { panic } from "better-result";
 import * as v from "valibot";
 
+import { normalizeDateFormatSpec } from "@/api/lib/agent-input/date-format-spec";
+import { normalizeLocale } from "@/api/lib/agent-input/locale";
 import type {
+  FieldDateFormat,
   FieldLookup,
   FieldSource,
   FieldValidation,
   fieldMetaToolInputSchema,
 } from "@/api/lib/docx/types";
 import {
+  FIELD_DATE_FORMAT_DESCRIPTION,
   FIELD_VALIDATION_DESCRIPTION,
+  fieldDateFormatObjectSchema,
   fieldLookupFormatSchema,
   fieldMetaToolInputObjectSchema,
   fieldValidationObjectSchema,
@@ -134,6 +139,43 @@ const templateFieldValidationInputSchema = v.pipe(
   v.description(FIELD_VALIDATION_DESCRIPTION),
 );
 
+/**
+ * The wire's own date format. `locale` accepts every spelling the reader
+ * reads (`cs_CZ`, `en-gb`) rather than only the canonical one, and
+ * {@link toFieldMetaToolInput} canonicalizes before the persisted schema sees
+ * it — `new Intl.DateTimeFormat("cs_CZ")` throws, so leniency stops here. The
+ * projected JSON Schema is unchanged: a check carries no keyword.
+ */
+const templateFieldDateFormatInputSchema = v.optional(
+  v.pipe(
+    v.strictObject({
+      locale: v.pipe(
+        v.string(),
+        v.check((value) => normalizeLocale(value).ok, "Invalid BCP-47 locale"),
+        v.description("BCP-47 language tag"),
+      ),
+      style: fieldDateFormatObjectSchema.entries.style,
+    }),
+    v.description(FIELD_DATE_FORMAT_DESCRIPTION),
+  ),
+);
+
+/** The wire pair as the manifest stores it. The schema above already accepted
+ *  the spelling, so the reader cannot refuse it here. */
+const toPersistedDateFormat = (
+  dateFormat: v.InferOutput<typeof templateFieldDateFormatInputSchema>,
+): FieldDateFormat | undefined => {
+  if (dateFormat === undefined) {
+    return undefined;
+  }
+  const normalized = normalizeDateFormatSpec(dateFormat);
+  return normalized.ok
+    ? normalized.value
+    : panic(
+        `Unreadable date format past the wire schema: ${normalized.received}`,
+      );
+};
+
 const templateFieldInputObjectSchema = v.strictObject({
   path: fieldEntries.path,
   label: fieldEntries.label,
@@ -149,7 +191,7 @@ const templateFieldInputObjectSchema = v.strictObject({
       v.description("Who fills the field; one branch, by type"),
     ),
   ),
-  date_format: fieldEntries.dateFormat,
+  date_format: templateFieldDateFormatInputSchema,
 });
 
 /** An `ai` source names exactly one half of the AI contract: a drafting
@@ -516,5 +558,7 @@ export const toFieldMetaToolInput = ({
   ...(source === undefined ? {} : toPersistedFieldSource(source)),
   ...(field[FIELD_WIRE_KEYS.dateFormat] === undefined
     ? {}
-    : { dateFormat: field[FIELD_WIRE_KEYS.dateFormat] }),
+    : {
+        dateFormat: toPersistedDateFormat(field[FIELD_WIRE_KEYS.dateFormat]),
+      }),
 });

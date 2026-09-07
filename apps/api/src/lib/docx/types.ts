@@ -15,6 +15,7 @@ import {
   isFieldPath,
 } from "@stll/template-conditions";
 
+import { isPlausibleLocale } from "@/api/lib/agent-input/locale";
 import type { TemplateWarning } from "@/api/lib/docx/template-warnings";
 import {
   fieldSourceSchema,
@@ -296,18 +297,6 @@ export type TemplateManifest = {
 const isRecordLike = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-/** Structurally malformed BCP-47 tags make `Intl` throw a RangeError; a
- *  well-formed but unknown tag passes and merely falls back to the default
- *  locale at format time. */
-export const isPlausibleLocale = (value: string): boolean => {
-  try {
-    Intl.DateTimeFormat.supportedLocalesOf(value);
-    return true;
-  } catch {
-    return false;
-  }
-};
-
 const describedString = (description: string) =>
   v.pipe(v.string(), v.description(description));
 
@@ -370,19 +359,29 @@ export const fieldLookupSchema = v.pipe(
   v.description("Who fills = business-registry lookup"),
 );
 
+export const FIELD_DATE_FORMAT_DESCRIPTION = "Date rendering config";
+
+/**
+ * The persisted pair, canonical only: `new Intl.DateTimeFormat("cs_CZ")`
+ * throws, so what a manifest stores has to be the spelling `Intl` accepts. The
+ * agent-facing mirror in `mcp/template-field-input.ts` reads the other
+ * spellings and canonicalizes before this schema sees them.
+ */
+export const fieldDateFormatObjectSchema = v.strictObject({
+  locale: v.pipe(
+    v.string(),
+    v.check(isPlausibleLocale, "Invalid BCP-47 locale"),
+    v.description("BCP-47 language tag"),
+  ),
+  style: v.pipe(
+    v.picklist(DATE_FORMAT_STYLES),
+    v.description("Date rendering style"),
+  ),
+});
+
 export const fieldDateFormatSchema = v.pipe(
-  v.strictObject({
-    locale: v.pipe(
-      v.string(),
-      v.check(isPlausibleLocale, "Invalid BCP-47 locale"),
-      v.description("BCP-47 language tag"),
-    ),
-    style: v.pipe(
-      v.picklist(DATE_FORMAT_STYLES),
-      v.description("Date rendering style"),
-    ),
-  }),
-  v.description("Date rendering config"),
+  fieldDateFormatObjectSchema,
+  v.description(FIELD_DATE_FORMAT_DESCRIPTION),
 );
 
 /** Shared with the snake_case MCP mirror in `mcp/template-field-input.ts`, so
