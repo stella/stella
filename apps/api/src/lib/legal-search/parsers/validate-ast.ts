@@ -281,13 +281,24 @@ export const validateAst = (
     blocks.flatMap((b) => (b.plainText ? [b.plainText] : [])).join(" "),
   );
 
-  const retainedPct =
-    originalText.length > 0
-      ? (astText.length / originalText.length) * 100
-      : 100;
-
   const originalWords = extractWords(originalText);
   const astWords = extractWords(astText);
+
+  // `extractWords` already drops decorative markers, skip words, bare
+  // numbers and tokens too short to count, so an empty set means the source
+  // carries nothing meaningful for an AST to lose. Measuring retention over
+  // its raw characters then reports total loss against a faithful parse: a
+  // scanned decision published as nothing but [OBRÁZEK] placeholders reads
+  // 0.0% retained with zero missing meaningful words, which is a
+  // contradiction on its face. Judging presence by the same rule the
+  // missing-word check uses can only ever clear such a phantom, because a
+  // source holding any meaningful word keeps the ratio.
+  const sourceHasMeaningfulText = originalWords.size > 0;
+
+  const retainedPct = sourceHasMeaningfulText
+    ? (astText.length / originalText.length) * 100
+    : 100;
+
   // A decorative marker fused to its neighbour must not read as missing
   // when the peeled remainder is accounted for. It is accounted for when
   // it is present in the AST, or when it is not a meaningful word in its
@@ -324,17 +335,17 @@ export const validateAst = (
   // ── 2. Structural checks ──────────────────────────────
 
   if (blocks.length === 0) {
-    // No blocks is loss only when there was something to lose. A source
-    // carrying no extractable text is represented faithfully by no
-    // blocks, and `retainedPct` already reads 100 for it; calling that an
-    // error reports content loss against a document whose emptiness the
-    // pipeline separately reports as `decision_empty`, sending whoever
-    // sweeps these logs after a parser bug that is not there. It stays an
-    // issue, so the parse still surfaces as structurally degraded.
+    // No blocks is loss only when there was something meaningful to lose. A
+    // source carrying no such text is represented faithfully by no blocks,
+    // and `retainedPct` reads 100 for it; calling that an error reports
+    // content loss against a document whose emptiness the pipeline
+    // separately reports as `decision_empty`, sending whoever sweeps these
+    // logs after a parser bug that is not there. It stays an issue, so the
+    // parse still surfaces as structurally degraded.
     issues.push({
       code: "EMPTY_AST",
       message: "AST has no blocks",
-      severity: originalText.length > 0 ? "error" : "warning",
+      severity: sourceHasMeaningfulText ? "error" : "warning",
     });
   }
 

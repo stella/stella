@@ -56,6 +56,18 @@ const TEXTLESS_SOURCE =
   `<!DOCTYPE html><html lang="cs"><head><title>39 A 1/2026-35 - text` +
   `</title></head><body>N/A</body></html>`;
 
+/**
+ * A decision the court holds only as a scan, in the shape Aspose exports
+ * it: real paragraphs whose entire content is the figure placeholder,
+ * split across the spans a font change produces. Nothing here is text an
+ * AST could carry.
+ */
+const MARKER_ONLY_SOURCE =
+  `<html><body><div>` +
+  `<p><span>[OBR</span><span>Á</span><span>ZEK]</span></p>` +
+  `<p><span>[OBRÁZEK]</span></p>` +
+  `</div></body></html>`;
+
 // ── Content completeness ────────────────────────────────────
 
 describe("validateAst", () => {
@@ -405,6 +417,42 @@ describe("validateAst", () => {
 
       expect(result.issues.some((i) => i.code === "EMPTY_AST")).toBe(true);
       expect(result.ok).toBe(true);
+    });
+
+    test("empty AST over an all-marker source is not content loss", () => {
+      const result = validateAst(MARKER_ONLY_SOURCE, []);
+
+      // Unlike the text-less fixture above, this source does extract
+      // text — so it reaches the branch that measures retention, which is
+      // the whole point: every extracted word is a decorative marker the
+      // AST is right to drop.
+      expect(result.stats.originalLength).toBeGreaterThan(0);
+      expect(result.stats.retainedPct).toBe(100);
+      expect(result.stats.missingWords).toHaveLength(0);
+
+      expect(result.issues.some((i) => i.code === "CONTENT_LOSS")).toBe(false);
+      expect(result.issues.find((i) => i.code === "EMPTY_AST")?.severity).toBe(
+        "warning",
+      );
+      expect(result.ok).toBe(true);
+    });
+
+    test("one meaningful word among the markers still reports loss", () => {
+      const html = MARKER_ONLY_SOURCE.replace(
+        "</body>",
+        "<p>Odůvodnění rozsudku</p></body>",
+      );
+
+      const result = validateAst(html, []);
+
+      expect(result.stats.retainedPct).toBe(0);
+      expect(
+        result.issues.find((i) => i.code === "CONTENT_LOSS")?.severity,
+      ).toBe("error");
+      expect(result.issues.find((i) => i.code === "EMPTY_AST")?.severity).toBe(
+        "error",
+      );
+      expect(result.ok).toBe(false);
     });
 
     test("warns when no headings present", () => {
