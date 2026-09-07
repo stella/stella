@@ -760,10 +760,19 @@ export const FIELD_FIND_SUPPORT = {
   unsupported: "excluded",
 } as const satisfies Record<FieldContent["type"], "searchable" | "excluded">;
 
+/**
+ * The cell types a find reaches, in declaration order. The partial index
+ * `fields_find_text_trgm_idx` and the `field_find_text` function name the same
+ * list by hand; `fields-find-text-index.test.ts` holds the three together.
+ */
+export const FINDABLE_FIELD_TYPES: readonly string[] = Object.entries(
+  FIELD_FIND_SUPPORT,
+)
+  .filter(([, support]) => support === "searchable")
+  .map(([type]) => type);
+
 const FINDABLE_FIELD_TYPES_SQL = typedPgArray(
-  Object.entries(FIELD_FIND_SUPPORT)
-    .filter(([, support]) => support === "searchable")
-    .map(([type]) => type),
+  [...FINDABLE_FIELD_TYPES],
   "text",
 );
 

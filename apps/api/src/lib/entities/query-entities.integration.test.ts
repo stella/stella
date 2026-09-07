@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -9,7 +9,7 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { and, count, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, count, eq, inArray, isNotNull, sql } from "drizzle-orm";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
@@ -26,6 +26,7 @@ import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { TASK_ASSIGNEE_ROLE } from "@/api/lib/entity-constants";
 import { buildFindConditions } from "@/api/lib/entity-filters";
+import { isRecord } from "@/api/lib/type-guards";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -382,6 +383,65 @@ describe("task assignee projection", () => {
         expect.objectContaining({ userId: ids.userA2 }),
       ]),
     );
+  });
+});
+
+describe("field_find_text", () => {
+  // The immutable projection the trigram index is built over. Its contract is
+  // what makes the index only ever narrow: the text it returns is the text
+  // the cell displays, or NULL.
+  const findText = async (content: FieldContent): Promise<string | null> => {
+    const result: unknown = await testDb.execute(
+      sql`SELECT field_find_text(${JSON.stringify(content)}::text::jsonb) AS text`,
+    );
+    // The pglite driver answers `{ rows }`, the postgres driver an array.
+    const rows = isRecord(result) ? result["rows"] : result;
+    if (!Array.isArray(rows)) {
+      return panic("field_find_text returned no rows");
+    }
+    const row: unknown = rows.at(0);
+    return isRecord(row) && typeof row["text"] === "string"
+      ? row["text"]
+      : null;
+  };
+
+  test("a multi-select element keeps its quotes and backslashes", async () => {
+    // The array is read off its JSON text, which escapes these two characters;
+    // left escaped, a term containing either would miss the cell.
+    const text = await findText({
+      version: 1,
+      type: "multi-select",
+      value: ['say "zeta"', "back\\slash"],
+    });
+
+    expect(text).toContain('say "zeta"');
+    expect(text).toContain("back\\slash");
+    expect(text).not.toContain('\\"');
+  });
+
+  test("each findable type yields the text its cell displays", async () => {
+    expect(
+      await findText({ version: 1, type: "text", value: "Zeta lease" }),
+    ).toBe("Zeta lease");
+    expect(
+      await findText({ version: 1, type: "single-select", value: "open" }),
+    ).toBe("open");
+    expect(
+      await findText({
+        version: 1,
+        type: "person",
+        userId: null,
+        name: "Zeta Person",
+        image: null,
+      }),
+    ).toBe("Zeta Person");
+  });
+
+  test("a type a find cannot reach yields nothing", async () => {
+    expect(await findText({ version: 1, type: "pending" })).toBeNull();
+    expect(
+      await findText({ version: 1, type: "int", value: 4321, currency: null }),
+    ).toBeNull();
   });
 });
 

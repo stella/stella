@@ -1406,6 +1406,17 @@ export const fields = p.pgTable(
               NOT IN ('ready', 'not-required')
           )`,
       ),
+    // Find-in-table reads cells through `field_find_text`, the migration's
+    // immutable projection of the text a cell displays. Partial on the
+    // findable types so pending and error placeholders stay out of the GIN
+    // pending list; `fields-find-text-index.test.ts` binds that list to
+    // `FIELD_FIND_SUPPORT` and to the migration.
+    p
+      .index("fields_find_text_trgm_idx")
+      .using("gin", sql`field_find_text(${table.content}) gin_trgm_ops`)
+      .where(
+        sql`${table.content}->>'type' IN ('file', 'text', 'single-select', 'multi-select', 'person')`,
+      ),
     p
       .foreignKey({
         columns: [table.propertyId, table.workspaceId],
