@@ -51,6 +51,22 @@
     "takenOverLocalError": "Desktop-Bearbeitung auf anderes Gerät verschoben. Diese lokale Kopie bleibt erhalten.",
     "takenOverTitle": "Bearbeitung auf anderes Gerät verschoben"
   },
+  "dialog": {
+    "allow": "Zulassen",
+    "apiUrl": "API-URL",
+    "cancel": "Abbrechen",
+    "connect": "Verbinden",
+    "deny": "Ablehnen",
+    "selfHostSubtitle": "Dieser stella-Website erlauben, Dokumente in stella desktop zu öffnen.",
+    "selfHostTitle": "Diese selbst gehostete stella verbinden?",
+    "selfHostWindowTitle": "Selbst gehostete stella verbinden",
+    "takeoverFile": "Office-Datei",
+    "takeoverRequester": "Jemand",
+    "takeoverSubtitle": "Die Bearbeitung wird ab Ihrem zuletzt gespeicherten Checkpoint fortgesetzt.",
+    "takeoverTitle": "{requester} möchte die Bearbeitung übernehmen",
+    "takeoverWindowTitle": "Übernahmeanfrage",
+    "webOrigin": "Web-Origin"
+  },
   "settings": {
     "about": "Über",
     "connected": "Verbunden",

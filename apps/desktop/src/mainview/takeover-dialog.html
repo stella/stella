@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta content="width=device-width, initial-scale=1.0" name="viewport" />
-    <title>Takeover Request</title>
+    <title>stella desktop</title>
     <style>
       * {
         margin: 0;
@@ -128,25 +128,28 @@
   </head>
   <body>
     <div class="dialog">
-      <div class="avatar" id="avatar">??</div>
-      <div class="title">
-        <span class="requester" id="requester">Someone</span> wants to take over
-        editing
-      </div>
-      <div class="subtitle">
-        They'll continue from your latest saved checkpoint.
-      </div>
-      <div class="file-name" id="fileName">Office file</div>
+      <div class="avatar" id="avatar"></div>
+      <div class="title" id="title"></div>
+      <div class="subtitle" id="subtitle"></div>
+      <div class="file-name" id="fileName"></div>
       <div class="actions">
-        <button class="deny" id="denyBtn">Deny</button>
-        <button class="allow" id="allowBtn">Allow</button>
+        <button class="deny" id="denyBtn"></button>
+        <button class="allow" id="allowBtn"></button>
       </div>
     </div>
     <script>
-      // Read params from URL hash (set by Rust when opening the window)
+      // Params and wording both arrive in the URL hash, set by Rust when it
+      // opens the window: the dialog carries no strings of its own, so it
+      // speaks whatever language the rest of the app is running in.
       const params = new URLSearchParams(window.location.hash.slice(1));
-      const requester = params.get("requester") || "Someone";
-      const fileName = params.get("fileName") || "Office file";
+      const strings = JSON.parse(params.get("strings") || "{}");
+
+      document.documentElement.lang = params.get("lang") || "en";
+      document.documentElement.dir = params.get("dir") || "ltr";
+      document.title = strings.takeoverWindowTitle || "";
+
+      const requester = params.get("requester") || strings.takeoverRequester;
+      const fileName = params.get("fileName") || strings.takeoverFile;
       const initials = requester
         .split(" ")
         .map((w) => w[0])
@@ -155,8 +158,28 @@
         .toUpperCase();
 
       document.getElementById("avatar").textContent = initials;
-      document.getElementById("requester").textContent = requester;
-      document.getElementById("fileName").textContent = fileName;
+      document.getElementById("subtitle").textContent =
+        strings.takeoverSubtitle;
+      // Names and file names arrive in whichever script they were written
+      // in; isolating them keeps the bidi algorithm from reordering their
+      // punctuation into the surrounding sentence.
+      const fileNameElement = document.getElementById("fileName");
+      fileNameElement.textContent = fileName;
+      fileNameElement.dir = "auto";
+      document.getElementById("denyBtn").textContent = strings.deny;
+      document.getElementById("allowBtn").textContent = strings.allow;
+
+      // The name is highlighted inside the sentence, and languages put it in
+      // different places, so the translated sentence is split at its
+      // placeholder rather than assembled from fragments here.
+      const title = document.getElementById("title");
+      const parts = (strings.takeoverTitle || "{requester}").split(
+        "{requester}",
+      );
+      const highlighted = document.createElement("bdi");
+      highlighted.className = "requester";
+      highlighted.textContent = requester;
+      title.append(parts[0] || "", highlighted, parts[1] || "");
 
       function respond(approved) {
         if (window.__TAURI_INTERNALS__) {

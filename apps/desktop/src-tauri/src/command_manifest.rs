@@ -17,6 +17,8 @@ macro_rules! with_stella_commands {
       commands::open_edit_root => "open_edit_root",
       commands::is_autostart_enabled => "is_autostart_enabled",
       commands::set_autostart => "set_autostart",
+      i18n::get_desktop_language => "get_desktop_language",
+      i18n::set_desktop_language => "set_desktop_language",
       clipboard_commands::clipboard_get_snapshot => "clipboard_get_snapshot",
       clipboard_commands::clipboard_complete_welcome => "clipboard_complete_welcome",
       clipboard_commands::clipboard_set_capture_status => "clipboard_set_capture_status",

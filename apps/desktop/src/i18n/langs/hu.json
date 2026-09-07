@@ -51,6 +51,22 @@
     "takenOverLocalError": "Az asztali szerkesztés másik eszközre lett áthelyezve. Ez a helyi másolat megőrzésre kerül.",
     "takenOverTitle": "Szerkesztés másik eszközre áthelyezve"
   },
+  "dialog": {
+    "allow": "Engedélyezés",
+    "apiUrl": "API-cím",
+    "cancel": "Mégse",
+    "connect": "Csatlakozás",
+    "deny": "Elutasítás",
+    "selfHostSubtitle": "Engedélyezi, hogy ez a stella webhely dokumentumokat nyisson meg a stella desktop alkalmazásban.",
+    "selfHostTitle": "Csatlakoztatja ezt a saját üzemeltetésű stella példányt?",
+    "selfHostWindowTitle": "Saját üzemeltetésű stella csatlakoztatása",
+    "takeoverFile": "Office-fájl",
+    "takeoverRequester": "Valaki",
+    "takeoverSubtitle": "A szerkesztés a legutóbb mentett ellenőrzőponttól folytatódik.",
+    "takeoverTitle": "{requester} át szeretné venni a szerkesztést",
+    "takeoverWindowTitle": "Átvételi kérés",
+    "webOrigin": "Webes forrás"
+  },
   "settings": {
     "about": "Névjegy",
     "connected": "Csatlakozva",

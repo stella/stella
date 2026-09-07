@@ -51,6 +51,22 @@
     "takenOverTitle": "انتقل التحرير إلى جهاز آخر",
     "takenOverLocalError": "انتقل التحرير على سطح المكتب إلى جهاز آخر. هذه النسخة المحلية محفوظة."
   },
+  "dialog": {
+    "allow": "السماح",
+    "apiUrl": "عنوان API",
+    "cancel": "إلغاء",
+    "connect": "الاتصال",
+    "deny": "الرفض",
+    "selfHostSubtitle": "السماح لموقع stella هذا بفتح المستندات في stella desktop.",
+    "selfHostTitle": "هل تريد الاتصال بنسخة stella المستضافة ذاتياً هذه؟",
+    "selfHostWindowTitle": "الاتصال بنسخة stella المستضافة ذاتياً",
+    "takeoverFile": "ملف Office",
+    "takeoverRequester": "شخص ما",
+    "takeoverSubtitle": "سيتابع من آخر نقطة حفظ لديك.",
+    "takeoverTitle": "يريد {requester} تولي التحرير",
+    "takeoverWindowTitle": "طلب تولي التحرير",
+    "webOrigin": "أصل الويب"
+  },
   "settings": {
     "about": "حول",
     "connected": "متصل",

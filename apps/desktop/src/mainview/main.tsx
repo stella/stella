@@ -1,4 +1,4 @@
-import { lazy, StrictMode, Suspense, useEffect, useState } from "react";
+import { lazy, StrictMode, Suspense, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import type { Root as ReactRoot } from "react-dom/client";
 
@@ -14,6 +14,7 @@ import {
   getPreferredLanguage,
   isSupportedLanguage,
   loadMessages,
+  synchronizeDesktopLanguage,
 } from "../i18n";
 import type { DesktopMessages } from "../i18n";
 import { subscribeDesktopEvent } from "../shared/desktop-events";
@@ -55,6 +56,30 @@ const Root = () => {
     applyDocumentLanguage(language);
   }, [language]);
 
+  // A language event that lands while start-up synchronisation is still
+  // awaiting the backend carries the newer choice; the synchronisation
+  // result must not roll it back.
+  const languageEvents = useRef(0);
+
+  useEffect(() => {
+    const eventsAtStart = languageEvents.current;
+    void synchronizeDesktopLanguage()
+      .then((desktopLanguage) => {
+        if (languageEvents.current === eventsAtStart) {
+          setLanguage(desktopLanguage);
+        }
+        return;
+      })
+      .catch((error: unknown) => {
+        reportDesktopError({
+          code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+          detail: describeError(error),
+          operation: DESKTOP_TELEMETRY_OPERATIONS.runtime,
+          window: telemetryWindow,
+        });
+      });
+  }, []);
+
   useEffect(() => {
     let disposed = false;
     void loadMessages(language).then((nextMessages) => {
@@ -75,6 +100,7 @@ const Root = () => {
         event: DESKTOP_LANGUAGE_CHANGED_EVENT,
         handler: ({ payload }) => {
           if (isSupportedLanguage(payload.language)) {
+            languageEvents.current += 1;
             setLanguage(payload.language);
           }
         },

@@ -86,6 +86,17 @@ fn get_tray_status_label(snapshot: &AppSnapshot) -> String {
   t("tray.noActiveEdits").to_string()
 }
 
+/// Rebuilds the tray menu from `snapshot`. The menu is the one native string
+/// the app caches, so both state changes and a language change come through
+/// here. A failed rebuild leaves the previous menu in place.
+pub fn refresh(app: &AppHandle, snapshot: &AppSnapshot) {
+  if let Ok(menu) = build_tray_menu(app, snapshot)
+    && let Some(tray) = app.tray_by_id("main")
+  {
+    let _ = tray.set_menu(Some(menu));
+  }
+}
+
 pub fn build_tray_menu(
   app: &AppHandle,
   snapshot: &AppSnapshot,

@@ -1,8 +1,8 @@
 {
   "tray": {
-    "activeEdits": "{count, plural, one {1 aktywna edycja} few {{count} aktywne edycje} other {{count} aktywnych edycji}}",
+    "activeEdits": "{count, plural, one {1 aktywna edycja} few {{count} aktywne edycje} many {{count} aktywnych edycji} other {{count} aktywnych edycji}}",
     "clipboard": "Historia schowka",
-    "documentsSyncing": "{count, plural, one {1 dokument synchronizowany} few {{count} dokumenty synchronizowane} other {{count} dokumentów synchronizowanych}}",
+    "documentsSyncing": "{count, plural, one {1 dokument synchronizowany} few {{count} dokumenty synchronizowane} many {{count} dokumentów synchronizowanych} other {{count} dokumentów synchronizowanych}}",
     "needsAttention": "Wymaga uwagi",
     "noActiveEdits": "Brak aktywnych edycji",
     "updateReady": "Aktualizacja gotowa",
@@ -50,6 +50,22 @@
     "takenOverBody": "{fileName} — Otwórz ponownie ze stella, aby odzyskać edycję",
     "takenOverLocalError": "Edycja pulpitu przeniesiona na inne urządzenie. Ta lokalna kopia jest zachowana.",
     "takenOverTitle": "Edycja przeniesiona na inne urządzenie"
+  },
+  "dialog": {
+    "allow": "Zezwól",
+    "apiUrl": "Adres API",
+    "cancel": "Anuluj",
+    "connect": "Połącz",
+    "deny": "Odmów",
+    "selfHostSubtitle": "Zezwól tej witrynie stella na otwieranie dokumentów w aplikacji stella desktop.",
+    "selfHostTitle": "Połączyć tę samodzielnie hostowaną instancję stella?",
+    "selfHostWindowTitle": "Połącz samodzielnie hostowaną instancję stella",
+    "takeoverFile": "Plik pakietu Office",
+    "takeoverRequester": "Ktoś",
+    "takeoverSubtitle": "Edycja będzie kontynuowana od ostatniego zapisanego punktu kontrolnego.",
+    "takeoverTitle": "{requester} chce przejąć edycję",
+    "takeoverWindowTitle": "Prośba o przejęcie",
+    "webOrigin": "Źródło witryny"
   },
   "settings": {
     "about": "Informacje",
@@ -140,7 +156,7 @@
     "groupColor": "Kolor grupy",
     "groupName": "Nazwa grupy",
     "groups": "Grupy",
-    "itemCount": "{count, plural, one {1 element} few {{count} elementy} other {{count} elementów}}",
+    "itemCount": "{count, plural, one {1 element} few {{count} elementy} many {{count} elementów} other {{count} elementów}}",
     "keyboardNavigate": "← → nawigacja",
     "link": "Link",
     "local": "Lokalnie",

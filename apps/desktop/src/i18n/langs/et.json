@@ -51,6 +51,22 @@
     "takenOverLocalError": "Töölaua muutmine teisaldatud teise seadmesse. See kohalik koopia on säilitatud.",
     "takenOverTitle": "Muutmine teisaldatud teise seadmesse"
   },
+  "dialog": {
+    "allow": "Luba",
+    "apiUrl": "API aadress",
+    "cancel": "Loobu",
+    "connect": "Ühenda",
+    "deny": "Keela",
+    "selfHostSubtitle": "Luba sellel stella saidil avada dokumente rakenduses stella desktop.",
+    "selfHostTitle": "Kas ühendada see ise majutatud stella?",
+    "selfHostWindowTitle": "Ühenda ise majutatud stella",
+    "takeoverFile": "Office'i fail",
+    "takeoverRequester": "Keegi",
+    "takeoverSubtitle": "Ta jätkab teie viimasest salvestatud kontrollpunktist.",
+    "takeoverTitle": "{requester} soovib redigeerimise üle võtta",
+    "takeoverWindowTitle": "Ülevõtmistaotlus",
+    "webOrigin": "Veebi päritolu"
+  },
   "settings": {
     "about": "Teave",
     "connected": "Ühendatud",

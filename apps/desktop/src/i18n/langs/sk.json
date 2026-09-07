@@ -51,6 +51,22 @@
     "takenOverLocalError": "Úpravy na desktope presunuté na iné zariadenie. Táto lokálna kópia je zachovaná.",
     "takenOverTitle": "Úpravy presunuté na iné zariadenie"
   },
+  "dialog": {
+    "allow": "Povoliť",
+    "apiUrl": "Adresa API",
+    "cancel": "Zrušiť",
+    "connect": "Pripojiť",
+    "deny": "Odmietnuť",
+    "selfHostSubtitle": "Povoliť tejto stránke stella otvárať dokumenty v aplikácii stella desktop.",
+    "selfHostTitle": "Pripojiť túto vlastnú inštaláciu stella?",
+    "selfHostWindowTitle": "Pripojiť vlastnú inštaláciu stella",
+    "takeoverFile": "Súbor Office",
+    "takeoverRequester": "Niekto",
+    "takeoverSubtitle": "Bude pokračovať od vášho posledného uloženého kontrolného bodu.",
+    "takeoverTitle": "{requester} chce prevziať úpravy",
+    "takeoverWindowTitle": "Žiadosť o prevzatie",
+    "webOrigin": "Pôvod webu"
+  },
   "settings": {
     "about": "O aplikácii",
     "connected": "Pripojené",

@@ -1,8 +1,8 @@
 {
   "tray": {
-    "activeEdits": "{count, plural, one {1 aktīvs labojums} other {{count} aktīvi labojumi}}",
+    "activeEdits": "{count, plural, zero {{count} aktīvu labojumu} one {{count} aktīvs labojums} other {{count} aktīvi labojumi}}",
     "clipboard": "Starpliktuves vēsture",
-    "documentsSyncing": "{count, plural, one {1 dokuments tiek sinhronizēts} other {{count} dokumenti tiek sinhronizēti}}",
+    "documentsSyncing": "{count, plural, zero {{count} dokumentu tiek sinhronizēts} one {{count} dokuments tiek sinhronizēts} other {{count} dokumenti tiek sinhronizēti}}",
     "needsAttention": "Nepieciešama uzmanība",
     "noActiveEdits": "Nav aktīvu labojumu",
     "updateReady": "Atjauninājums gatavs",
@@ -50,6 +50,22 @@
     "takenOverBody": "{fileName} — Atkārtoti atveriet no stella, lai pārņemtu rediģēšanu atpakaļ",
     "takenOverLocalError": "Darbvirsmas rediģēšana pārvietota uz citu ierīci. Šī lokālā kopija ir saglabāta.",
     "takenOverTitle": "Rediģēšana pārvietota uz citu ierīci"
+  },
+  "dialog": {
+    "allow": "Atļaut",
+    "apiUrl": "API adrese",
+    "cancel": "Atcelt",
+    "connect": "Savienot",
+    "deny": "Liegt",
+    "selfHostSubtitle": "Atļaut šai stella vietnei atvērt dokumentus lietotnē stella desktop.",
+    "selfHostTitle": "Vai savienot šo pašmitināto stella?",
+    "selfHostWindowTitle": "Savienot pašmitināto stella",
+    "takeoverFile": "Office fails",
+    "takeoverRequester": "Kāds",
+    "takeoverSubtitle": "Rediģēšana turpināsies no jūsu pēdējā saglabātā kontrolpunkta.",
+    "takeoverTitle": "{requester} vēlas pārņemt rediģēšanu",
+    "takeoverWindowTitle": "Pārņemšanas pieprasījums",
+    "webOrigin": "Tīmekļa izcelsme"
   },
   "settings": {
     "about": "Par",
@@ -140,7 +156,7 @@
     "groupColor": "Grupas krāsa",
     "groupName": "Grupas nosaukums",
     "groups": "Grupas",
-    "itemCount": "{count, plural, one {1 vienums} other {{count} vienumi}}",
+    "itemCount": "{count, plural, zero {{count} vienumu} one {{count} vienums} other {{count} vienumi}}",
     "keyboardNavigate": "← → pārvietoties",
     "link": "Saite",
     "local": "Lokāli",
