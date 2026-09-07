@@ -929,10 +929,10 @@ describe("help surfaces --input for inputOnly tools", () => {
     expect(result.stdout).toContain('"params":{"matterId":"xxxxx"}');
   });
 
-  test("template save --help documents the --input-only fields", async () => {
+  test("template configure-fields --help documents the --input-only fields", async () => {
     const server = startMockServer(() => ({ toolPayload: {} }));
     const result = await runCli({
-      args: ["template", "save", "--help"],
+      args: ["template", "configure-fields", "--help"],
       url: server.url,
       token: makeToken(["templates"]),
     });

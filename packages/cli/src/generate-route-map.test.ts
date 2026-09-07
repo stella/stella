@@ -330,7 +330,9 @@ describe("generateRouteMap: flag mapping (S3)", () => {
     expect(
       findLeaf(tree, ["organization", "set-jurisdictions"])?.inputOnly,
     ).toEqual(["jurisdictions"]);
-    expect(findLeaf(tree, ["template", "save"])?.inputOnly).toEqual(["fields"]);
+    expect(findLeaf(tree, ["template", "configure-fields"])?.inputOnly).toEqual(
+      ["fields"],
+    );
     expect(findLeaf(tree, ["template", "fill"])?.inputOnly).toEqual(["values"]);
     expect(findLeaf(tree, ["clause", "save"])?.inputOnly).toEqual([
       "body",
