@@ -436,6 +436,7 @@ const FIELD_TO_FILTERS = {
   conditionAst: () => [],
   parts: () => [],
   format: () => [],
+  sourceLayer: () => [],
 } as const satisfies Record<keyof FieldMeta, (field: FieldMeta) => string[]>;
 
 const markerFor = (field: FieldMeta): string => {
