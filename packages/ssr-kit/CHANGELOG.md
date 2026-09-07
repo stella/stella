@@ -1,5 +1,12 @@
 # @stll/ssr-kit
 
+## 0.2.0
+
+### Minor Changes
+
+- [#3080](https://github.com/stella/stella/pull/3080) [`8dd1f12`](https://github.com/stella/stella/commit/8dd1f12b7cca5e74cd78518a86e605f0e090227b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Require hydration callbacks to resolve after their render commits, replacing the
+  removed `scheduleAfterPaint` option.
+
 ## 0.1.1
 
 ### Patch Changes

@@ -1,5 +1,17 @@
 # @stll/template-conditions
 
+## 0.3.0
+
+### Minor Changes
+
+- [#3055](https://github.com/stella/stella/pull/3055) [`7823e0e`](https://github.com/stella/stella/commit/7823e0e8100e55bfafaf025efc863d3ec8e50c7f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `detectRowBlockPair` names the row block a table row declares when a `{{#each}}`
+  / `{{#if}}` opener prefixes one cell's text and its closer suffixes a later
+  cell's text in the same row. Both the fill pipeline and the authoring scorer
+  read the placement from this one function, so a row that repeats and a row the
+  scorer accepts cannot disagree.
+
+- [#3033](https://github.com/stella/stella/pull/3033) [`291214c`](https://github.com/stella/stella/commit/291214c19072c7373cf9cb056797e1a2ac43f809) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `classifyMarkerDefect` names the authoring mistake behind a `{{...}}` span the grammar rejects — `unknown_directive` for a `{{#...}}` / `{{/...}}` token that is not a directive, `bracket_index` for `{{items[0].name}}` — and `MARKER_DEFECT_KINDS` lists those kinds so a consumer can derive its own codes from them instead of repeating the list. A span `classifyMarker` accepts is never a defect, so the directive grammar stays the only authority on which tokens exist.
+
 ## 0.2.2
 
 ### Patch Changes
