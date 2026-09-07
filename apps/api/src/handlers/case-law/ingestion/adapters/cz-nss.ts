@@ -25,6 +25,7 @@ import type {
   ReconciliationBuildOutcome,
   ReconciliationSlicePage,
   ReconciliationSlicePageOptions,
+  SourceFieldDisposition,
   StoredRawReparseInput,
   StoredRawReparseOutcome,
 } from "@/api/handlers/case-law/ingestion/adapter";
@@ -702,6 +703,464 @@ const fetchDecisionContent = async (
     };
   }
 };
+
+// ── Source-field inventory ───────────────────────────────
+
+/**
+ * Every field the portal states on the detail page read for one decision.
+ *
+ * The portal names each one in a `data-field-id` attribute, and prints the
+ * fields a document has: a decision the court wrote no headnote for carries
+ * the flag and not the sentence, one that never left a regional court carries
+ * no cassation block. The list is therefore the union over the document kinds
+ * the portal serves, and {@link listCzNssSourceFields} reads back whichever of
+ * them one page states.
+ *
+ * Declared once so the disposition map below is total by type: a field id
+ * added here without a disposition does not compile.
+ */
+const CZ_NSS_SOURCE_FIELDS = [
+  "aktualizovano",
+  "aplikovanepravnipredpisysb§",
+  "aplikovanepravnipredpisysbcislo",
+  "aplikovanepravnipredpisysbcl",
+  "aplikovanepravnipredpisysbodst",
+  "aplikovanepravnipredpisysbpism",
+  "aplikovanepravnipredpisysbpredpis",
+  "aplikovanepravnipredpisysbrok",
+  "aplikovanopravoeu",
+  "citace",
+  "cj",
+  "datumnapadenehorozhodnuti",
+  "datumpravnimoci",
+  "datumpredkladacihorozhodnutinss",
+  "datumrozhodnutikrajskehosoudu",
+  "datumskonceniirizeni",
+  "datumvydanirozhodnuti",
+  "datumvyhotovenirozhodnuti",
+  "datumvypravenirozhodnuti",
+  "datumzahajenirizeni",
+  "datumzahajenirizeninka",
+  "druh",
+  "druhdokumentuavyrokrozhodnuti",
+  "ecli",
+  "hvtparagrafy",
+  "identifikacevesbirkach",
+  "identifikacevesbirkachdelenejudikat",
+  "identifikacevesbirkachdelenerok",
+  "identifikacevesbirkachdelenesesit",
+  "kasacnistiznostoznacenivecideleneclistu",
+  "kasacnistiznostoznacenivecideleneporc",
+  "kasacnistiznostoznacenivecidelenerejstrik",
+  "kasacnistiznostoznacenivecidelenerok",
+  "kasacnistiznostoznacenivecidelenesenat",
+  "kasacnistiznostoznacenivecivcelku",
+  "kasacniustavnistiznost",
+  "krajskysoud",
+  "napadeno",
+  "nazevorganu",
+  "nazevsoudusubjektu",
+  "nazevspravnihoorganu",
+  "oblastupravy",
+  "oznacenivecidelenecislojednaci",
+  "oznacenivecideleneporadovecislo",
+  "oznacenivecidelenerejstrikovaznacka",
+  "oznacenivecidelenerok",
+  "oznacenivecidelenesenat",
+  "oznacenivecivcelku",
+  "podanakasacnistiznostD",
+  "povaha",
+  "pravnivetaanv",
+  "pravnivetaupravena",
+  "prejudikaturaoznacenivecideleneclistu",
+  "prejudikaturaoznacenivecideleneporc",
+  "prejudikaturaoznacenivecidelenerejstrik",
+  "prejudikaturaoznacenivecidelenerok",
+  "prejudikaturaoznacenivecidelenesenat",
+  "prejudikaturaoznacenivecivcelku",
+  "rozhodnuto",
+  "rozhodnutivevztahukrizeni",
+  "rozhodnutonapkasst",
+  "sbnsspublikovano",
+  "souladnaprejudikatura",
+  "soudcezpravodaj",
+  "soudsenat",
+  "spzncjpredkladacihorozhodnutinss",
+  "spzncjrizenipodani",
+  "spzncjrozhodnutispravnihoorganu",
+  "stavrizeni",
+  "sz",
+  "typrizeni",
+  "typucastnika",
+  "typzastupce",
+  "ucastnicirizeniz",
+  "ucastnikrizeni",
+  "vyrokrozhodnuti",
+  "zastupce",
+  "zobrazovanedatum",
+] as const;
+
+type CzNssSourceField = (typeof CZ_NSS_SOURCE_FIELDS)[number];
+
+/**
+ * Why a family of fields is left. Written once per family rather than once per
+ * field: the portal splits one fact across a row of columns, and a reason
+ * repeated per column would read as seven decisions where one was taken.
+ */
+const CZ_NSS_EXCLUSION = {
+  LISTING_REFERENCE:
+    "The reference this document is filed under, whole and split per part. The row is stored under the reference the listing states, as published, with the docket and sheet split off it.",
+  RELATED_CASE_LAW:
+    "The portal's cross-reference grid naming other decisions, one column per part of each reference. This row's citations are extracted from the decision text; the portal's list is not a field of the row.",
+  PROCEEDING_HISTORY:
+    "The proceeding around the document: what was challenged, which court or authority it came from, and what became of it afterwards. The row models one decision and carries no field for the proceeding.",
+  PROCEEDING_DATES:
+    "Docket dates of the proceeding — opened, closed, in legal force, written out, dispatched. The row states the decision date, which is what a citation and a date filter ask for.",
+  PARTY_GRID:
+    "Columns of the participants grid: each party, its role, its representative and that representative's kind. The participants line the portal states for the decision is stored; the grid repeats it per person, and a decision row keeps no personal detail beyond what the decision itself states.",
+  REPORTER_PUBLICATION:
+    "How the portal identifies the decision inside the court's own reporter, and whether it appeared there at all. The row has no reporter-publication field; the reporter citation itself is stored as `citation`.",
+  APPLIED_LEGISLATION:
+    "The applied-legislation grid, one column per part of a reference (act, year, number, section, paragraph, letter, article). This source's rows carry no statute list, and reading the columns would mean rebuilding references the grid splits apart.",
+  PORTAL_RECORD:
+    "What the portal states about its own record rather than about the decision: when the entry was refreshed, which date its result list sorts on, and the paragraph-search aid printed beside it.",
+} as const;
+
+const CZ_NSS_SOURCE_FIELD_DISPOSITIONS = {
+  aktualizovano: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.PORTAL_RECORD,
+  },
+  "aplikovanepravnipredpisysb§": {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.APPLIED_LEGISLATION,
+  },
+  aplikovanepravnipredpisysbcislo: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.APPLIED_LEGISLATION,
+  },
+  aplikovanepravnipredpisysbcl: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.APPLIED_LEGISLATION,
+  },
+  aplikovanepravnipredpisysbodst: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.APPLIED_LEGISLATION,
+  },
+  aplikovanepravnipredpisysbpism: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.APPLIED_LEGISLATION,
+  },
+  aplikovanepravnipredpisysbpredpis: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.APPLIED_LEGISLATION,
+  },
+  aplikovanepravnipredpisysbrok: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.APPLIED_LEGISLATION,
+  },
+  aplikovanopravoeu: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.APPLIED_LEGISLATION,
+  },
+  citace: {
+    disposition: "stored",
+    target: { type: "metadata", key: "citation" },
+  },
+  cj: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.LISTING_REFERENCE,
+  },
+  datumnapadenehorozhodnuti: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
+  },
+  datumpravnimoci: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.PROCEEDING_DATES,
+  },
+  datumpredkladacihorozhodnutinss: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
+  },
+  datumrozhodnutikrajskehosoudu: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
+  },
+  datumskonceniirizeni: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.PROCEEDING_DATES,
+  },
+  datumvydanirozhodnuti: {
+    disposition: "stored",
+    target: { type: "result", key: "decisionDate" },
+  },
+  datumvyhotovenirozhodnuti: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.PROCEEDING_DATES,
+  },
+  datumvypravenirozhodnuti: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.PROCEEDING_DATES,
+  },
+  datumzahajenirizeni: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.PROCEEDING_DATES,
+  },
+  datumzahajenirizeninka: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
+  },
+  druh: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.PARTY_GRID,
+  },
+  druhdokumentuavyrokrozhodnuti: {
+    disposition: "stored",
+    target: { type: "result", key: "decisionType" },
+  },
+  ecli: { disposition: "stored", target: { type: "result", key: "ecli" } },
+  hvtparagrafy: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.PORTAL_RECORD,
+  },
+  identifikacevesbirkach: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.REPORTER_PUBLICATION,
+  },
+  identifikacevesbirkachdelenejudikat: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.REPORTER_PUBLICATION,
+  },
+  identifikacevesbirkachdelenerok: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.REPORTER_PUBLICATION,
+  },
+  identifikacevesbirkachdelenesesit: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.REPORTER_PUBLICATION,
+  },
+  kasacnistiznostoznacenivecideleneclistu: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
+  },
+  kasacnistiznostoznacenivecideleneporc: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
+  },
+  kasacnistiznostoznacenivecidelenerejstrik: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
+  },
+  kasacnistiznostoznacenivecidelenerok: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
+  },
+  kasacnistiznostoznacenivecidelenesenat: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
+  },
+  kasacnistiznostoznacenivecivcelku: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
+  },
+  kasacniustavnistiznost: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
+  },
+  krajskysoud: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
+  },
+  napadeno: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
+  },
+  nazevorganu: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.PARTY_GRID,
+  },
+  nazevsoudusubjektu: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
+  },
+  nazevspravnihoorganu: {
+    disposition: "stored",
+    target: { type: "metadata", key: "administrativeAuthority" },
+  },
+  oblastupravy: {
+    disposition: "stored",
+    target: { type: "metadata", key: "legalArea" },
+  },
+  oznacenivecidelenecislojednaci: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.LISTING_REFERENCE,
+  },
+  oznacenivecideleneporadovecislo: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.LISTING_REFERENCE,
+  },
+  oznacenivecidelenerejstrikovaznacka: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.LISTING_REFERENCE,
+  },
+  oznacenivecidelenerok: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.LISTING_REFERENCE,
+  },
+  oznacenivecidelenesenat: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.LISTING_REFERENCE,
+  },
+  oznacenivecivcelku: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.LISTING_REFERENCE,
+  },
+  podanakasacnistiznostD: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
+  },
+  povaha: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.RELATED_CASE_LAW,
+  },
+  pravnivetaanv: {
+    disposition: "excluded",
+    reason:
+      "The ano/ne flag stating whether the court wrote a headnote for this decision. The headnote itself is stored, so the flag only repeats whether that field is there.",
+  },
+  pravnivetaupravena: {
+    disposition: "stored",
+    target: { type: "metadata", key: "legalSentence" },
+  },
+  prejudikaturaoznacenivecideleneclistu: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.RELATED_CASE_LAW,
+  },
+  prejudikaturaoznacenivecideleneporc: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.RELATED_CASE_LAW,
+  },
+  prejudikaturaoznacenivecidelenerejstrik: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.RELATED_CASE_LAW,
+  },
+  prejudikaturaoznacenivecidelenerok: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.RELATED_CASE_LAW,
+  },
+  prejudikaturaoznacenivecidelenesenat: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.RELATED_CASE_LAW,
+  },
+  prejudikaturaoznacenivecivcelku: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.RELATED_CASE_LAW,
+  },
+  rozhodnuto: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
+  },
+  rozhodnutivevztahukrizeni: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
+  },
+  rozhodnutonapkasst: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
+  },
+  sbnsspublikovano: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.REPORTER_PUBLICATION,
+  },
+  souladnaprejudikatura: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.RELATED_CASE_LAW,
+  },
+  soudcezpravodaj: {
+    disposition: "stored",
+    target: { type: "metadata", key: "judge" },
+  },
+  soudsenat: {
+    disposition: "stored",
+    target: { type: "metadata", key: "senate" },
+  },
+  spzncjpredkladacihorozhodnutinss: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
+  },
+  spzncjrizenipodani: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
+  },
+  spzncjrozhodnutispravnihoorganu: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
+  },
+  stavrizeni: {
+    disposition: "stored",
+    target: { type: "metadata", key: "caseStatus" },
+  },
+  sz: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.LISTING_REFERENCE,
+  },
+  typrizeni: {
+    disposition: "stored",
+    target: { type: "metadata", key: "caseType" },
+  },
+  typucastnika: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.PARTY_GRID,
+  },
+  typzastupce: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.PARTY_GRID,
+  },
+  ucastnicirizeniz: {
+    disposition: "stored",
+    target: { type: "metadata", key: "parties" },
+  },
+  ucastnikrizeni: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.PARTY_GRID,
+  },
+  vyrokrozhodnuti: {
+    disposition: "stored",
+    target: { type: "metadata", key: "outcome" },
+  },
+  zastupce: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.PARTY_GRID,
+  },
+  zobrazovanedatum: {
+    disposition: "excluded",
+    reason: CZ_NSS_EXCLUSION.PORTAL_RECORD,
+  },
+} as const satisfies Record<CzNssSourceField, SourceFieldDisposition>;
+
+/** How the portal names each field it prints on a detail page. */
+const CZ_NSS_FIELD_ID_RE = /data-field-id="(?<field>[^"]+)"/giu;
+
+/** Numeric character references, which ids such as `…sb&#xA7;` carry. */
+const NUMERIC_ENTITY_RE = /&#(?<hex>x[0-9a-f]+|\d+);/giu;
+
+const decodeNumericEntities = (value: string): string =>
+  value.replaceAll(NUMERIC_ENTITY_RE, (match, reference: string) => {
+    const code = reference.startsWith("x")
+      ? Number.parseInt(reference.slice(1), 16)
+      : Number.parseInt(reference, 10);
+    return Number.isNaN(code) ? match : String.fromCodePoint(code);
+  });
+
+/** What the portal states on one detail page, by the names it gives them. */
+const listCzNssSourceFields = (html: string): readonly string[] => [
+  ...new Set(
+    [...html.matchAll(CZ_NSS_FIELD_ID_RE)].map((match) =>
+      decodeNumericEntities(match.groups?.["field"] ?? ""),
+    ),
+  ),
+];
 
 /**
  * The fields the portal states on a document's own detail page, which no
@@ -1642,6 +2101,11 @@ const parseCursor = (cursor: string | null): { date: string; page: number } => {
 
 export const czNssAdapter = defineSourceAdapter({
   key: ADAPTER_KEYS.CZ_NSS,
+  sourceFields: {
+    status: "declared",
+    fields: CZ_NSS_SOURCE_FIELD_DISPOSITIONS,
+    listSourceFields: listCzNssSourceFields,
+  },
   name: "Czech Supreme Administrative Court",
   country: "CZE",
   language: "cs",

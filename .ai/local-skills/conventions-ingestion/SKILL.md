@@ -65,6 +65,8 @@ protection from stale work.
     not stall an entire source forever. Persist the item identity, classified
     terminal/retryable outcome, sanitized error context, and operator-visible
     repair path before allowing later progress.
+14. **Accounted-for source fields.** Every field a source states on a page the
+    adapter already fetches is stored, or excluded with the reason. See below.
 
 ## Checkpoint Boundary
 
@@ -74,6 +76,48 @@ Direct Drizzle writes to `syncCursor` are banned by
 the `persistCheckpoint` callback passed to `commitReplaySafeIngestionBatch`.
 The lint rule enforces the visible boundary; it does not prove that preceding
 external effects are durable.
+
+## Source-Field Inventory
+
+A field an adapter never noticed is indistinguishable from one it decided to
+leave. Case-law adapters therefore declare what their source states, and the
+declaration is part of the contract: `SourceAdapter.sourceFields` is required,
+so an adapter without one does not compile.
+
+An inventory has three parts, in the adapter beside the readers it mirrors:
+
+- `SOURCE_FIELDS`, the list of names the source labels on the per-decision
+  pages this adapter parses, `as const`;
+- a disposition map written
+  `as const satisfies Record<<that union>, SourceFieldDisposition>`, so the map
+  is total by type and a new name without a decision does not compile. Each
+  entry is `{ disposition: "stored", target }` — a metadata key, a result
+  field, the parsed document, or the row's identity — or
+  `{ disposition: "excluded", reason }`, where the reason says what the field
+  is and why the row does not carry it. "Not read today" is not a reason;
+  duplicate of a stored field, derived elsewhere, no field on the row, and data
+  minimization are;
+- `listSourceFields(payload)`, which reads a page back and answers what the
+  publisher labelled on it.
+
+`source-field-inventory.test.ts` drives every registered adapter from the
+registry: each enrolled adapter's fixture goes through its own
+`listSourceFields`, every name that comes out must be in the map, and every
+field the map stores must be on the decision built from that fixture, at the
+target the disposition names. A field on the page that is in neither set fails
+with its name.
+
+Enrolment is a ratchet. `PENDING_SOURCE_FIELD_INVENTORY` is the one sanctioned
+way to not have an inventory, and
+`adapters/source-field-inventory-baseline.json` lists exactly which adapters
+use it. The suite fails when a pending adapter is missing from the baseline and
+when a baseline entry has since enrolled, so the set only shrinks. To enrol
+one: declare the three parts above, add a fixture to the conformance suite, and
+delete the adapter's line from the baseline.
+
+Refresh a fixture from the live page when the source changes. The suite
+certifies the adapter against the page it is given, so a fixture that stopped
+matching the publisher certifies nothing.
 
 ## Verification
 
@@ -89,7 +133,9 @@ Test the behavior that types and lint cannot prove:
 - exhaust the retry budget for one poison item and assert later items still
   reach a durable terminal state without silently dropping the failure;
 - overlap two workers at the provider concurrency limit and assert calls stay
-  bounded and the persisted winner cannot be overwritten.
+  bounded and the persisted winner cannot be overwritten;
+- read a source fixture back through the adapter's own `listSourceFields` and
+  assert every field it states is stored or excluded with a reason.
 
 Prefer invariant and state-machine tests over one example retry.
 

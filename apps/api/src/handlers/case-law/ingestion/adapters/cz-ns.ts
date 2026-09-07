@@ -21,6 +21,7 @@ import type {
   ReconciliationBuildOutcome,
   ReconciliationSlicePage,
   ReconciliationSlicePageOptions,
+  SourceFieldDisposition,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
 import {
@@ -151,6 +152,143 @@ const LABEL_PATTERNS: Record<string, RegExp> = {
    * so the value runs to the cell's close.
    */
   abstract: /Anotace:<\/font><\/b><\/td><td[^>]*>(?<value>[\s\S]*?)<\/td>/iu,
+  /**
+   * The day the document was handed to the web, which the detail page states
+   * and the print page does not. It is the axis the reconciliation slices on,
+   * so a row that carries it can be placed in the day it was published from
+   * the row alone.
+   */
+  publishedOnWeb:
+    /Zveřejněno na webu:<\/font><\/b><\/td><td[^>]*><b><font[^>]*>(?<value>[\s\S]*?)<\/font>/iu,
+};
+
+// ── Source-field inventory ───────────────────────────────
+
+/**
+ * Every field this court labels on the two pages read for one decision: the
+ * detail page, and the print page whose metadata table the parser reads.
+ *
+ * Declared once so the disposition map below is total by type. The names are
+ * the court's own labels, minus the colon it prints them with, because that
+ * is what {@link listCzNsSourceFields} reads back off the page.
+ */
+const CZ_NS_SOURCE_FIELDS = [
+  "Anotace",
+  "Datum rozhodnutí",
+  "Dotčené předpisy",
+  "ECLI",
+  "Heslo",
+  "Kategorie rozhodnutí",
+  "Podána ústavní stížnost",
+  "Právní věta",
+  "Senátní značka",
+  "Soud",
+  "Spisová značka",
+  "Typ rozhodnutí",
+  "Zveřejněno na webu",
+] as const;
+
+type CzNsSourceField = (typeof CZ_NS_SOURCE_FIELDS)[number];
+
+const CZ_NS_SOURCE_FIELD_DISPOSITIONS = {
+  Anotace: {
+    disposition: "stored",
+    target: { type: "metadata", key: "abstract" },
+  },
+  "Datum rozhodnutí": {
+    disposition: "stored",
+    target: { type: "result", key: "decisionDate" },
+  },
+  "Dotčené předpisy": {
+    disposition: "stored",
+    target: { type: "metadata", key: "statutes" },
+  },
+  ECLI: { disposition: "stored", target: { type: "result", key: "ecli" } },
+  Heslo: {
+    disposition: "stored",
+    target: { type: "metadata", key: "keywords" },
+  },
+  "Kategorie rozhodnutí": {
+    disposition: "stored",
+    target: { type: "metadata", key: "category" },
+  },
+  "Podána ústavní stížnost": {
+    disposition: "stored",
+    target: { type: "metadata", key: "ustavniStiznost" },
+  },
+  "Právní věta": {
+    disposition: "stored",
+    target: { type: "metadata", key: "legalSentence" },
+  },
+  "Senátní značka": {
+    disposition: "excluded",
+    reason:
+      "The same docket under the label this court prints for its insolvency senate register. The row's docket is the one the listing entry states, which is what the document was fetched by.",
+  },
+  Soud: { disposition: "stored", target: { type: "result", key: "court" } },
+  "Spisová značka": {
+    disposition: "stored",
+    target: { type: "result", key: "caseNumber" },
+  },
+  "Typ rozhodnutí": {
+    disposition: "stored",
+    target: { type: "result", key: "decisionType" },
+  },
+  "Zveřejněno na webu": {
+    disposition: "stored",
+    target: { type: "metadata", key: "zverejnenoNaWebu" },
+  },
+} as const satisfies Record<CzNsSourceField, SourceFieldDisposition>;
+
+/** The label cell of a detail-page row. */
+const CZ_NS_DETAIL_LABEL_RE =
+  /class="left-part"[^>]*>(?<cell>[\s\S]*?)<\/td>/giu;
+
+/** The print page's metadata table, whose label cells carry no class. */
+const CZ_NS_PRINT_TABLE_RE = /<table[^>]*id="box-table-a"[\s\S]*?<\/table>/iu;
+
+const CZ_NS_CELL_RE = /<td[^>]*>(?<cell>[\s\S]*?)<\/td>/giu;
+
+/**
+ * The related-proceedings table, whose header spans the row rather than
+ * labelling a cell, so it is recognised by its opening words instead. The
+ * court sets each word in its own `<font>` run, so the two are some hundred
+ * characters of markup apart on the page.
+ */
+const CZ_NS_CONSTITUTIONAL_COMPLAINT_RE =
+  /Podána[\s\S]{0,200}?ústavní stížnost/iu;
+
+/**
+ * What this court labels on a page it serves for one decision.
+ *
+ * Both page shapes at once, because both are read for every decision and a
+ * field is the court's whichever of the two prints it: the detail page marks
+ * its label cells with a class, the print page states them in the first cell
+ * of its metadata table. A cell is a label where the court closes it with a
+ * colon, exactly as the readers above anchor on.
+ */
+const listCzNsSourceFields = (html: string): readonly string[] => {
+  const fields = new Set<string>();
+
+  const addLabel = (cell: string): void => {
+    const text = stripHtml(cell).trim();
+    if (text.endsWith(":") && text.length > 1) {
+      fields.add(text.slice(0, -1).trim());
+    }
+  };
+
+  for (const match of html.matchAll(CZ_NS_DETAIL_LABEL_RE)) {
+    addLabel(match.groups?.["cell"] ?? "");
+  }
+  const printTable = CZ_NS_PRINT_TABLE_RE.exec(html)?.[0] ?? "";
+  for (const match of printTable.matchAll(CZ_NS_CELL_RE)) {
+    addLabel(match.groups?.["cell"] ?? "");
+  }
+  if (CZ_NS_CONSTITUTIONAL_COMPLAINT_RE.test(html)) {
+    fields.add("Podána ústavní stížnost");
+  }
+
+  return [...fields];
 };
 
 /**
@@ -464,6 +602,13 @@ export const buildCzNsDecision = async (
         ...sourceMetadata,
         judge,
         ...summaryOfLabels(meta),
+        // Read from the detail page rather than left to the parser: the print
+        // page the parser reads carries the court's other metadata rows but
+        // not this one, so a row built from the print page alone never states
+        // the day the document was published.
+        zverejnenoNaWebu: meta["publishedOnWeb"]
+          ? parseCeDate(meta["publishedOnWeb"])
+          : sourceMetadata["zverejnenoNaWebu"],
         keywords: meta["keywords"]?.split("\n").flatMap((s) => {
           const trimmed = s.trim();
           return trimmed ? [trimmed] : [];
@@ -808,6 +953,11 @@ const buildCzNsFromPayload = async (
 
 export const czNsAdapter = defineSourceAdapter({
   key: ADAPTER_KEYS.CZ_NS,
+  sourceFields: {
+    status: "declared",
+    fields: CZ_NS_SOURCE_FIELD_DISPOSITIONS,
+    listSourceFields: listCzNsSourceFields,
+  },
   name: "Czech Supreme Court",
   country: "CZE",
   language: CZ_NS_LANGUAGE,

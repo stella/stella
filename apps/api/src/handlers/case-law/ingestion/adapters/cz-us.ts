@@ -11,6 +11,7 @@ import {
   defineSourceAdapter,
   EMPTY_AST,
   isPersistableSourceDocumentId,
+  PENDING_SOURCE_FIELD_INVENTORY,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
   sourceTotalRead,
@@ -1503,6 +1504,7 @@ const buildCzUsFromPayload = async (
 
 export const czUsAdapter = defineSourceAdapter({
   key: ADAPTER_KEYS.CZ_US,
+  sourceFields: PENDING_SOURCE_FIELD_INVENTORY,
   name: "Czech Constitutional Court",
   country: "CZE",
   language: "cs",
