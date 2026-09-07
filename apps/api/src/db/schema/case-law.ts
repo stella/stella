@@ -601,14 +601,29 @@ export const caseLawDecisions = p.pgTable(
     // Attempt count is deliberately not a key column: leading with it
     // ordered every retry behind the whole untried backlog, and keeping
     // it here would make the index unable to serve the order that fixed
-    // that. The attempt-led index it replaces
-    // (`case_law_decisions_document_pending_idx`) outlives this change on
-    // purpose, so tasks still on the previous revision keep an index for
-    // the order they issue; a follow-up migration drops it once the
-    // release carrying this one is fully rolled out.
+    // that.
     p
       .index("case_law_decisions_document_pending_date_idx")
       .on(t.sourceId, t.decisionDate.desc().nullsLast(), t.id)
+      .where(sql`${t.fulltext} is null and ${t.documentUrl} is not null`),
+    // The attempt-led index the one above replaces, kept for the length of
+    // one rollout. A migration lands before the deployment finishes, so
+    // tasks still on the previous revision go on ordering the tier by
+    // attempt count, and without this each of their queue refills would
+    // sort the whole backlog. Declared rather than merely left in the
+    // database so the schema states what the database holds.
+    //
+    // Removal condition: every runner on the date-led order, i.e. the
+    // release carrying it fully rolled out. Drop this declaration and the
+    // index together in a follow-up migration.
+    p
+      .index("case_law_decisions_document_pending_idx")
+      .on(
+        t.sourceId,
+        t.documentFetchAttempts,
+        t.decisionDate.desc().nullsLast(),
+        t.id,
+      )
       .where(sql`${t.fulltext} is null and ${t.documentUrl} is not null`),
     // Same rule as on the citation side: null means "does not canonicalize",
     // and an empty string would make every such decision a candidate for
