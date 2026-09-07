@@ -1777,7 +1777,18 @@ export const CREATE_TEMPLATE_PROJECTION = v.strictObject({
 
 /**
  * configure_template_fields echoes the describe shape, so the agent sees
- * exactly what is now configured.
+ * exactly what is now configured, plus one entry per configuration it could
+ * not apply. Issue text is generated from the field paths the org authored
+ * and fixed guidance; no document prose travels in it.
  */
-export const CONFIGURE_TEMPLATE_FIELDS_PROJECTION =
-  TEMPLATE_DESCRIBE_PROJECTION;
+export const CONFIGURE_TEMPLATE_FIELDS_PROJECTION = v.strictObject({
+  ...TEMPLATE_DESCRIBE_PROJECTION.entries,
+  issues: v.array(
+    v.strictObject({
+      path: v.string(),
+      index: v.number(),
+      message: v.string(),
+      hint: v.string(),
+    }),
+  ),
+});

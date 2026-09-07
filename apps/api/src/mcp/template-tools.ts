@@ -47,6 +47,7 @@ import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 import { DOCX_EXT_RE, sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
 import { createStoredTemplate } from "@/api/lib/templates/create-template";
+import type { FieldOverlayIssue } from "@/api/lib/templates/field-overlay";
 import {
   recordTemplateFill,
   recordTemplateUse,
@@ -2042,6 +2043,86 @@ const describeTemplateForAgent = async ({
 /** `configure_template_fields`: overlay field configuration onto an existing
  *  template. The stored document bytes keep their {{markers}}; only the
  *  manifest changes. */
+/**
+ * The position of the `fields` entry a validation issue belongs to, or null
+ * when the issue is about the request rather than one entry. `fields.2.path`
+ * belongs to entry 2; `template_id` and a `fields` that is not an array
+ * belong to the request.
+ */
+const entryIndexOfIssue = (issue: v.BaseIssue<unknown>): number | null => {
+  const [root, position] = issue.path ?? [];
+  if (root?.key !== "fields" || position === undefined) {
+    return null;
+  }
+  return typeof position.key === "number" ? position.key : null;
+};
+
+type ConfigureEntries =
+  | { type: "rejected"; result: InternalToolErrorResult }
+  | {
+      type: "parsed";
+      templateId: string;
+      fields: FieldMeta[];
+      /** Indices, into the `fields` array the caller sent, of the entries the
+       *  schema refused, with what to do about each. */
+      issues: FieldOverlayIssue[];
+    };
+
+/**
+ * Read the request one entry at a time. The schema is the tool's own, applied
+ * to a shrinking `fields` array: an entry it refuses drops out with its own
+ * issue and the rest are re-parsed, so a caller that got one property wrong
+ * still configures the entries beside it. Anything the schema objects to
+ * outside `fields` is about the request, and fails it.
+ */
+const parseConfigureEntries = (
+  args: Record<string, unknown>,
+): ConfigureEntries => {
+  const schema = CONFIGURE_TEMPLATE_FIELDS_TOOL_DEFINITION.inputSchemaSource;
+  const sent = Array.isArray(args["fields"]) ? args["fields"] : null;
+  const issues: FieldOverlayIssue[] = [];
+  let positions = sent === null ? [] : sent.map((_entry, index) => index);
+  for (;;) {
+    const candidate =
+      sent === null
+        ? args
+        : { ...args, fields: positions.map((position) => sent[position]) };
+    const parsed = v.safeParse(schema, candidate);
+    if (parsed.success) {
+      return {
+        type: "parsed",
+        templateId: parsed.output.template_id,
+        fields: parsed.output.fields.map(toFieldMetaToolInput),
+        issues,
+      };
+    }
+    const rejected = new Set<number>();
+    for (const issue of parsed.issues) {
+      const local = entryIndexOfIssue(issue);
+      if (local === null || sent === null) {
+        return {
+          type: "rejected",
+          result: validationErrorResult(parsed.issues),
+        };
+      }
+      const position =
+        positions[local] ??
+        panic(`entry issue names position ${String(local)}`);
+      if (rejected.has(position)) {
+        continue;
+      }
+      rejected.add(position);
+      issues.push({
+        path: `fields.${position}`,
+        index: position,
+        message: issue.message,
+        hint: `Fix this entry against ${TEMPLATE_FIELD_REFERENCE_URI} and send it again; the other entries were applied.`,
+      });
+    }
+    positions = positions.filter((position) => !rejected.has(position));
+  }
+};
+
 const handleConfigureTemplateFieldsTool: TypedMcpToolHandler<
   v.InferInput<typeof CONFIGURE_TEMPLATE_FIELDS_PROJECTION>
 > = async ({ args, context }) => {
@@ -2052,15 +2133,11 @@ const handleConfigureTemplateFieldsTool: TypedMcpToolHandler<
     return errorResult("Forbidden");
   }
 
-  const parsed = v.safeParse(
-    CONFIGURE_TEMPLATE_FIELDS_TOOL_DEFINITION.inputSchemaSource,
-    args,
-  );
-  if (!parsed.success) {
-    return validationErrorResult(parsed.issues);
+  const parsed = parseConfigureEntries(args);
+  if (parsed.type === "rejected") {
+    return parsed.result;
   }
-  const fields: FieldMeta[] = parsed.output.fields.map(toFieldMetaToolInput);
-  const templateId = brandPersistedTemplateId(parsed.output.template_id);
+  const templateId = brandPersistedTemplateId(parsed.templateId);
 
   const configured = await Result.gen(() =>
     (
@@ -2070,7 +2147,7 @@ const handleConfigureTemplateFieldsTool: TypedMcpToolHandler<
       safeDb: context.safeDb,
       organizationId: context.organizationId,
       templateId,
-      fields,
+      fields: parsed.fields,
       recordAuditEvent: context.recordAuditEvent,
     }),
   );
@@ -2079,12 +2156,18 @@ const handleConfigureTemplateFieldsTool: TypedMcpToolHandler<
   }
 
   // Echo the field list in the same shape list_templates' detail mode returns,
-  // so the agent sees exactly what is now configured.
+  // so the agent sees exactly what is now configured, beside every entry that
+  // was not applied and why.
   const described = await describeTemplateForAgent({ context, templateId });
   if (isToolErrorResult(described)) {
     return described;
   }
-  return toolDataResult(described);
+  return toolDataResult({
+    ...described,
+    issues: [...parsed.issues, ...configured.value.issues].toSorted(
+      (left, right) => left.index - right.index,
+    ),
+  });
 };
 
 export const TEMPLATE_TOOL_HANDLERS = {

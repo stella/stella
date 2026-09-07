@@ -1,5 +1,5 @@
 /**
- * Apply a field-configuration overlay to an EXISTING template's manifest and
+ * Apply a field configuration to an EXISTING template's manifest and
  * re-embed it in the stored DOCX. The document bytes' {{markers}} are never
  * touched: only the manifest field metadata (input type, options, who-fills,
  * date format, lookup, composite parts, dependent select, formula, hint,
@@ -26,10 +26,10 @@ import {
 } from "@/api/lib/docx/template-manifest";
 import type { FieldMeta, TemplateManifest } from "@/api/lib/docx/types";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
+import type { FieldOverlayIssue } from "@/api/lib/templates/field-overlay";
 import {
   applyFieldOverlay,
-  fieldOverlayError,
-  validateFieldOverlay,
+  partitionFieldOverlay,
 } from "@/api/lib/templates/field-overlay";
 import { writeStoredTemplate } from "@/api/lib/templates/write-template";
 
@@ -43,9 +43,13 @@ type ConfigureTemplateFieldsOptions = {
 };
 
 /** The manifest after the overlay is applied, so the caller can echo the
- *  updated field list back to the agent without a second read. */
+ *  updated field list back to the agent without a second read, plus the
+ *  entries that could not be applied. The call succeeds with a non-empty
+ *  `issues` list: only a template-level failure (not found, permission, an
+ *  unreadable manifest) fails the whole request. */
 export type ConfiguredTemplate = {
   manifest: TemplateManifest;
+  issues: FieldOverlayIssue[];
 };
 
 export const configureTemplateFields = async function* ({
@@ -55,6 +59,7 @@ export const configureTemplateFields = async function* ({
   fields,
   recordAuditEvent,
 }: ConfigureTemplateFieldsOptions): SafeHandlerGenerator<ConfiguredTemplate> {
+  let rejected: FieldOverlayIssue[] = [];
   const written = yield* Result.await(
     Result.gen(() =>
       writeStoredTemplate({
@@ -78,16 +83,18 @@ export const configureTemplateFields = async function* ({
                 }),
               ),
             } satisfies TemplateManifest);
-          const issues = validateFieldOverlay({
+          // Best effort: an entry the document cannot carry is reported on
+          // its own rather than sinking the entries beside it.
+          const partitioned = partitionFieldOverlay({
             configured: baseManifest.fields,
             discovered,
             overlay: fields,
           });
-          if (issues.length > 0) {
-            return Result.err(fieldOverlayError(issues));
-          }
+          // `prepare` re-runs when a concurrent write moves the template's
+          // pointer, so the issue list is replaced, never appended to.
+          rejected = partitioned.issues;
 
-          const overlaid = applyFieldOverlay(baseManifest, fields);
+          const overlaid = applyFieldOverlay(baseManifest, partitioned.applied);
           const formatMarkers = lookupFormatMarkerPaths(overlaid.fields);
           const manifest: TemplateManifest = {
             version: overlaid.version,
@@ -102,5 +109,5 @@ export const configureTemplateFields = async function* ({
     ),
   );
 
-  return Result.ok({ manifest: written.manifest });
+  return Result.ok({ manifest: written.manifest, issues: rejected });
 };

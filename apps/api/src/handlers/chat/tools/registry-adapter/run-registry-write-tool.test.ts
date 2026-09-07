@@ -110,7 +110,10 @@ describe("runRegistryWriteTool (orchestration)", () => {
         testDependencies: {
           async *configureTemplateFields() {
             yield* [];
-            return Result.ok({ manifest: { fields: [], version: 1 } });
+            return Result.ok({
+              issues: [],
+              manifest: { fields: [], version: 1 },
+            });
           },
           describeStoredTemplate: async () => ({
             arrays: [],

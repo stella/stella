@@ -118,13 +118,20 @@ const WORKFLOW_STEPS: readonly WorkflowStep[] = [
     detail:
       `${CONFIGURE_TEMPLATE_FIELDS} with \`template_id\` and \`fields\`. Every ` +
       `entry's \`path\` must be one ${CREATE_TEMPLATE} or ${LIST_TEMPLATES} ` +
-      "reported; an undiscovered path is refused. Each entry's `source` is " +
+      "reported. Each entry's `source` is " +
       "ONE object naming who fills that field (`person`, `ai`, `lookup`, " +
       "`contact`, `party`, `matter`, `attorney`, `firm`, `formula`, " +
       "`condition`); omit it for a field the person fills — see " +
       `${TEMPLATE_FIELD_REFERENCE_URI}. The response echoes the full ` +
-      `configuration in the ${LIST_TEMPLATES} detail shape, \`warnings[]\` ` +
-      "included: the change recomputes them, so a condition that removes " +
+      `configuration in the ${LIST_TEMPLATES} detail shape, plus ` +
+      "`issues[]` (`path`, `index`, `message`, `hint`): one entry per " +
+      "configuration that could NOT be applied. The call is best effort — an " +
+      "entry naming a path the DOCX does not carry, or a property the schema " +
+      "refuses, is reported on its own and the entries beside it are still " +
+      "applied, so read `issues[]` and resend only the entries it names. Only " +
+      "a template-level problem (not found, no permission, an unreadable " +
+      "manifest) fails the whole call. `warnings[]` comes back too: the " +
+      "change recomputes them, so a condition that removes " +
       "its own input or a lookup on a disabled registry shows up here. A " +
       "`lookup` " +
       "field resolves at fill time only for a registry the organization has " +

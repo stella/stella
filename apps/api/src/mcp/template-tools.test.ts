@@ -2579,7 +2579,7 @@ describe("MCP template tools", () => {
   test("configure_template_fields passes a validated field entry (incl. a lookup source) to the service", async () => {
     configureTemplateFieldsMock.mockImplementation(async function* () {
       yield* [];
-      return Result.ok({ manifest: { version: 1, fields: [] } });
+      return Result.ok({ issues: [], manifest: { version: 1, fields: [] } });
     });
     describeStoredTemplateMock.mockResolvedValue(
       describedTemplate({ name: "Company POA" }),
@@ -2633,7 +2633,7 @@ describe("MCP template tools", () => {
   test("configure_template_fields reports a lookup the org cannot resolve and a format with no marker", async () => {
     configureTemplateFieldsMock.mockImplementation(async function* () {
       yield* [];
-      return Result.ok({ manifest: { version: 1, fields: [] } });
+      return Result.ok({ issues: [], manifest: { version: 1, fields: [] } });
     });
     describeStoredTemplateMock.mockResolvedValue(
       describedTemplate({
@@ -2687,115 +2687,96 @@ describe("MCP template tools", () => {
     });
   });
 
-  test("configure_template_fields rejects a malformed field config before configuring", async () => {
+  /**
+   * Run a configure call whose entries the schema refuses, and read back the
+   * per-entry issues. The call itself succeeds: only the entries the schema
+   * named are dropped, so a caller that got one property wrong still learns
+   * which one, and keeps whatever else it sent.
+   */
+  const configureEntryIssues = async (
+    fields: readonly Record<string, unknown>[],
+  ) => {
+    configureTemplateFieldsMock.mockImplementation(async function* () {
+      yield* [];
+      return Result.ok({ issues: [], manifest: { version: 1, fields: [] } });
+    });
+    describeStoredTemplateMock.mockResolvedValue(
+      describedTemplate({ name: "Company POA" }),
+    );
     const result = await handleMcpToolCall({
-      args: {
-        template_id: TEMPLATE_ID,
-        // `parts` without `format` has no join template, so the entry-level
-        // check rejects it before anything is configured.
-        fields: [
-          { path: "fee", parts: [{ key: "amount", input_type: "text" }] },
-        ],
-      },
+      args: { template_id: TEMPLATE_ID, fields },
       context: createContext(),
       toolName: "configure_template_fields",
     });
+    expect(result.isError).toBeFalsy();
+    const payload = asTestRaw<{
+      issues: { path: string; index: number; message: string }[];
+    }>(parseToolPayload(result));
+    return payload.issues;
+  };
 
-    expect(result.isError).toBe(true);
-    expect(configureTemplateFieldsMock).not.toHaveBeenCalled();
-    const error = validationEnvelope(result);
-    const issues = asTestRaw<{ path: string }[]>(error["issues"]);
-    expect(issues.some(({ path }) => path === "fields.0")).toBe(true);
+  test("configure_template_fields reports a malformed field config as its own entry", async () => {
+    // `parts` without `format` has no join template, so the entry-level check
+    // refuses that entry.
+    const issues = await configureEntryIssues([
+      { path: "fee", parts: [{ key: "amount", input_type: "text" }] },
+    ]);
+
+    expect(issues).toMatchObject([{ path: "fields.0", index: 0 }]);
   });
 
-  test("configure_template_fields rejects a second source beside the one it declared", async () => {
+  test("configure_template_fields reports a second source beside the one it declared", async () => {
     // Two derived sources on one field used to be a runtime conflict between
     // six optionals. `source` is one property with one `type`, so the second
     // source is not a conflicting key but an unknown one, rejected on the
     // branch the caller picked.
-    const result = await handleMcpToolCall({
-      args: {
-        template_id: TEMPLATE_ID,
-        fields: [
-          {
-            path: "company",
-            source: {
-              type: "lookup",
-              registry: "krs",
-              prompt: "Draft the company details",
-            },
-          },
-        ],
+    const issues = await configureEntryIssues([
+      {
+        path: "company",
+        source: {
+          type: "lookup",
+          registry: "krs",
+          prompt: "Draft the company details",
+        },
       },
-      context: createContext(),
-      toolName: "configure_template_fields",
-    });
+    ]);
 
-    expect(result.isError).toBe(true);
-    expect(configureTemplateFieldsMock).not.toHaveBeenCalled();
-    const issues = asTestRaw<{ path: string }[]>(
-      validationEnvelope(result)["issues"],
-    );
-    expect(issues.some(({ path }) => path.startsWith("fields.0.source"))).toBe(
-      true,
-    );
+    expect(issues).toMatchObject([{ path: "fields.0", index: 0 }]);
   });
 
-  test("configure_template_fields rejects an ai source that is neither a draft nor an adaptation", async () => {
+  test("configure_template_fields reports an ai source that is neither a draft nor an adaptation", async () => {
     // The one contradiction the union can still spell: AI drafting the value
     // and AI rewriting the entered value are separate sources in the manifest.
     // The rejection has to say which property is at fault and on which entry.
-    const result = await handleMcpToolCall({
-      args: {
-        template_id: TEMPLATE_ID,
-        fields: [
-          {
-            path: "company",
-            source: {
-              type: "ai",
-              prompt: "Draft the company details",
-              adapt: true,
-            },
-          },
-        ],
+    const issues = await configureEntryIssues([
+      {
+        path: "company",
+        source: {
+          type: "ai",
+          prompt: "Draft the company details",
+          adapt: true,
+        },
       },
-      context: createContext(),
-      toolName: "configure_template_fields",
-    });
+    ]);
 
-    expect(result.isError).toBe(true);
-    expect(configureTemplateFieldsMock).not.toHaveBeenCalled();
-    const issues = asTestRaw<{ path: string; message: string }[]>(
-      validationEnvelope(result)["issues"],
-    );
-    const conflict = issues.find(({ path }) => path === "fields.0.source");
+    const conflict = issues.at(0);
+    expect(conflict?.path).toBe("fields.0");
     expect(conflict?.message).toContain("prompt");
     expect(conflict?.message).toContain("adapt");
   });
 
-  test("configure_template_fields rejects a composite field bound to something other than its parts", async () => {
-    const result = await handleMcpToolCall({
-      args: {
-        template_id: TEMPLATE_ID,
-        fields: [
-          {
-            path: "property_address",
-            parts: [{ key: "street", input_type: "text" }],
-            format: "{{street}}",
-            source: { type: "contact", field: "address" },
-          },
-        ],
+  test("configure_template_fields reports a composite field bound to something other than its parts", async () => {
+    const issues = await configureEntryIssues([
+      {
+        path: "property_address",
+        parts: [{ key: "street", input_type: "text" }],
+        format: "{{street}}",
+        source: { type: "contact", field: "address" },
       },
-      context: createContext(),
-      toolName: "configure_template_fields",
-    });
+    ]);
 
-    expect(result.isError).toBe(true);
-    expect(configureTemplateFieldsMock).not.toHaveBeenCalled();
-    const issues = asTestRaw<{ path: string; message: string }[]>(
-      validationEnvelope(result)["issues"],
-    );
-    const conflict = issues.find(({ path }) => path === "fields.0.source");
+    const conflict = issues.at(0);
+    expect(conflict?.path).toBe("fields.0");
     expect(conflict?.message).toContain("parts");
   });
 
@@ -2806,7 +2787,7 @@ describe("MCP template tools", () => {
     // the plain text field it is.
     configureTemplateFieldsMock.mockImplementation(async function* () {
       yield* [];
-      return Result.ok({ manifest: { version: 1, fields: [] } });
+      return Result.ok({ issues: [], manifest: { version: 1, fields: [] } });
     });
     describeStoredTemplateMock.mockResolvedValue(describedTemplate());
 
@@ -2848,47 +2829,28 @@ describe("MCP template tools", () => {
     );
   });
 
-  test("configure_template_fields still rejects a misspelled key that carries null", async () => {
+  test("configure_template_fields still refuses a misspelled key that carries null", async () => {
     // Null is absence only for a property the surface declares: dropping it
-    // for any key would turn `lable: null` into a silently accepted typo.
-    const result = await handleMcpToolCall({
-      args: {
-        template_id: TEMPLATE_ID,
-        fields: [{ path: "name", lable: null }],
-      },
-      context: createContext(),
-      toolName: "configure_template_fields",
-    });
+    // for any key would turn `lable: null` into a silently accepted typo. The
+    // entry is refused; the call still reports which one and why.
+    const issues = await configureEntryIssues([{ path: "name", lable: null }]);
 
-    expect(result.isError).toBe(true);
-    expect(configureTemplateFieldsMock).not.toHaveBeenCalled();
-    const issues = asTestRaw<{ path: string }[]>(
-      validationEnvelope(result)["issues"],
-    );
-    expect(issues.some(({ path }) => path === "fields.0.lable")).toBe(true);
+    expect(issues).toMatchObject([{ path: "fields.0", index: 0 }]);
   });
 
-  test("configure_template_fields rejects unknown field metadata keys before configuring", async () => {
-    const result = await handleMcpToolCall({
-      args: {
-        template_id: TEMPLATE_ID,
-        fields: [{ path: "fee", lable: "Misspelled label" }],
-      },
-      context: createContext(),
-      toolName: "configure_template_fields",
-    });
+  test("configure_template_fields refuses an entry with an unknown metadata key", async () => {
+    const issues = await configureEntryIssues([
+      { path: "fee", lable: "Misspelled label" },
+    ]);
 
-    expect(result.isError).toBe(true);
-    expect(configureTemplateFieldsMock).not.toHaveBeenCalled();
-    const error = validationEnvelope(result);
-    const issues = asTestRaw<{ path: string }[]>(error["issues"]);
-    expect(issues.some(({ path }) => path === "fields.0.lable")).toBe(true);
+    expect(issues).toMatchObject([{ path: "fields.0", index: 0 }]);
   });
 
   test("configure_template_fields applies the overlay and returns the updated fields", async () => {
     configureTemplateFieldsMock.mockImplementation(async function* () {
       yield* [];
       return Result.ok({
+        issues: [],
         manifest: { version: 1, fields: [] },
       });
     });
@@ -2980,7 +2942,7 @@ describe("MCP template tools", () => {
   test("configure_template_fields accepts a strict client's nulls for the properties it does not set", async () => {
     configureTemplateFieldsMock.mockImplementation(async function* () {
       yield* [];
-      return Result.ok({ manifest: { version: 1, fields: [] } });
+      return Result.ok({ issues: [], manifest: { version: 1, fields: [] } });
     });
     describeStoredTemplateMock.mockResolvedValue(
       describedTemplate({ name: "Company POA" }),
@@ -3054,36 +3016,107 @@ describe("MCP template tools", () => {
     expect(safeOutboundFetchBytesMock).not.toHaveBeenCalled();
   });
 
-  test("configure_template_fields rejects a config whose path is unknown", async () => {
+  test("configure_template_fields reports a config whose path is unknown without failing the call", async () => {
+    // The service applies what it can and hands back the rest, so a bad path
+    // costs its own entry, not the whole call.
     configureTemplateFieldsMock.mockImplementation(async function* () {
       yield* [];
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "No marker {{ghost}} in the DOCX.",
-          issues: [
-            { path: "fields.0", message: "No marker {{ghost}} in the DOCX." },
-          ],
-        }),
-      );
+      return Result.ok({
+        issues: [
+          {
+            path: "fields.1",
+            index: 1,
+            message: "No marker {{ghost}} in the DOCX.",
+            hint: "Configure only the paths the template reported.",
+          },
+        ],
+        manifest: { version: 1, fields: [] },
+      });
     });
+    describeStoredTemplateMock.mockResolvedValue(
+      describedTemplate({ name: "Company POA" }),
+    );
 
     const result = await handleMcpToolCall({
       args: {
         template_id: TEMPLATE_ID,
-        fields: [{ path: "ghost", label: "Ghost" }],
+        fields: [{ path: "company" }, { path: "ghost", label: "Ghost" }],
       },
       context: createContext(),
       toolName: "configure_template_fields",
     });
 
-    expect(result.isError).toBe(true);
-    expect(describeStoredTemplateMock).not.toHaveBeenCalled();
-    const error = validationEnvelope(result);
-    expect(error["message"]).toContain("ghost");
-    expect(error["code"]).toBe("validation_error");
-    expect(error["issues"]).toEqual([
-      { path: "fields.0", message: "No marker {{ghost}} in the DOCX." },
+    expect(result.isError).toBeFalsy();
+    expect(parseToolPayload(result)).toMatchObject({
+      name: "Company POA",
+      issues: [
+        {
+          path: "fields.1",
+          index: 1,
+          message: "No marker {{ghost}} in the DOCX.",
+        },
+      ],
+    });
+  });
+
+  /**
+   * The exact call one model sent when it filled every optional property it
+   * could see: a placeholder in every string, a `parts` entry with an empty
+   * key, a lookup on a field that also declares a contact binding. The whole
+   * call used to be refused. Every entry that can be applied must be.
+   */
+  test("configure_template_fields applies the usable entries of a placeholder-filled call", async () => {
+    let received: unknown;
+    configureTemplateFieldsMock.mockImplementation(async function* (options: {
+      fields: unknown;
+    }) {
+      yield* [];
+      received = options.fields;
+      return Result.ok({ issues: [], manifest: { version: 1, fields: [] } });
+    });
+    describeStoredTemplateMock.mockResolvedValue(
+      describedTemplate({ name: "Dohoda o mlcenlivosti" }),
+    );
+
+    const placeholderEntry = (path: string) => ({
+      path,
+      label: path,
+      hint: "",
+      input_type: "text",
+      options: [],
+      validation: { required: true, min_length: 1, pattern: "" },
+      required: true,
+      parts: [{ key: "", label: "", input_type: "text", options: [] }],
+      format: "",
+      options_from: "",
+      source: { type: "contact", field: "organizationName" },
+      date_format: { locale: "cs", style: "long" },
+    });
+
+    const result = await handleMcpToolCall({
+      args: {
+        template_id: TEMPLATE_ID,
+        fields: [
+          placeholderEntry("strana_a"),
+          { path: "ucinnost_od", input_type: "date" },
+          placeholderEntry("strana_b"),
+        ],
+      },
+      context: createContext(),
+      toolName: "configure_template_fields",
+    });
+
+    expect(result.isError).toBeFalsy();
+    // The one entry the schema accepts is applied...
+    expect(received).toEqual([{ path: "ucinnost_od", inputType: "date" }]);
+    // ...and each placeholder-filled entry is reported at its own position.
+    const { issues } = asTestRaw<{ issues: unknown[] }>(
+      parseToolPayload(result),
+    );
+    expect(issues.length).toBe(2);
+    expect(issues).toMatchObject([
+      { path: "fields.0", index: 0 },
+      { path: "fields.2", index: 2 },
     ]);
   });
 
