@@ -166,14 +166,19 @@ const FILTER_DESCRIPTIONS = {
   min: { usage: "min(0)", detail: "Smallest accepted number." },
   max: { usage: "max(100)", detail: "Largest accepted number." },
   min_length: { usage: "min_length(2)", detail: "Shortest accepted text." },
-  max_length: { usage: "max_length(200)", detail: "Longest accepted text." },
+  max_length: {
+    usage: "max_length(200)",
+    detail: "Longest accepted text. At least 1; a maximum of 0 is refused.",
+  },
   min_items: {
     usage: "min_items(1)",
     detail: "Fewest rows a repeated field accepts.",
   },
   max_items: {
     usage: "max_items(10)",
-    detail: "Most rows a repeated field accepts.",
+    detail:
+      "Most rows a repeated field accepts. At least 1; a maximum of 0 is " +
+      "refused.",
   },
   ai: {
     usage: 'ai("Summarize the dispute", adapt=false, sees_document=false)',

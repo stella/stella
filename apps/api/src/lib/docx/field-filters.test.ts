@@ -112,6 +112,32 @@ describe("fieldMetaFromFilters", () => {
     },
   );
 
+  // The wire schema refuses a maximum below 1, so a DOCX cannot be the one
+  // way to save a field nobody can fill.
+  test.each([
+    ["max_items(0)", "max_items"],
+    ["max_length(0)", "max_length"],
+    ["max_items(-1)", "max_items"],
+  ] as const)("%s is refused", (filter, name) => {
+    const { field, issues } = fieldFrom("rows", `rows | ${filter}`);
+    expect(field).toBeNull();
+    expect(issues).toEqual([
+      {
+        filter: name,
+        message: `${filter} admits nothing.`,
+        hint: "A maximum is at least 1; drop the filter to leave the count open.",
+      },
+    ]);
+  });
+
+  // The minimums and `max` keep taking 0: a bound of 0 is a real one.
+  test.each(["min_items(0)", "min_length(0)", "max(0)"])(
+    "%s is a real bound",
+    (filter) => {
+      expect(fieldFrom("rows", `rows | ${filter}`).issues).toEqual([]);
+    },
+  );
+
   test("lookup takes the registry positionally and the formats as names", () => {
     expect(
       fieldFrom(

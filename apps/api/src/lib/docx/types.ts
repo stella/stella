@@ -398,8 +398,12 @@ const FIELD_PARTS_DESCRIPTION = "Composite field parts";
  * the value keeps the rest of that entry, which is what the configure tool
  * does with a property it cannot read. `min*` and `max` are left alone: a
  * bound of 0 is a real one.
+ *
+ * The marker filters read the same bound (`applyNumericValidation` in
+ * field-filters.ts), so `{{ x | max_items(0) }}` in a DOCX is refused where
+ * the wire refuses it.
  */
-const SMALLEST_MAXIMUM = 1;
+export const SMALLEST_MAXIMUM = 1;
 
 export const fieldValidationObjectSchema = v.strictObject({
   required: v.optional(v.pipe(v.boolean(), v.description("Value is required"))),

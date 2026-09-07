@@ -40,6 +40,7 @@ import {
 import {
   fieldMetaSchema,
   LOOKUP_REGISTRIES,
+  SMALLEST_MAXIMUM,
   type FieldLookupFormat,
   type FieldMeta,
   type FieldValidation,
@@ -193,6 +194,20 @@ const applyNumericValidation = (
         call.name,
         `${call.name}() needs one number.`,
         `Write ${call.name}(3).`,
+      ),
+    );
+    return;
+  }
+  // The wire schema refuses a maximum below 1, so the marker has to as well or
+  // a DOCX becomes the one way to save a field nobody can fill. The minimums
+  // and `max` keep taking 0: a bound of 0 is a real one.
+  if ((key === "maxLength" || key === "maxItems") && value < SMALLEST_MAXIMUM) {
+    draft.issues.push(
+      issue(
+        call.name,
+        `${call.name}(${value}) admits nothing.`,
+        `A maximum is at least ${SMALLEST_MAXIMUM}; drop the filter to leave ` +
+          "the count open.",
       ),
     );
     return;
