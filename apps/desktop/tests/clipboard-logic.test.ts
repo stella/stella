@@ -532,12 +532,17 @@ describe("clipboard input keyboard handling", () => {
 
   test("ArrowRight leaves search for the groups only from the end of the text", () => {
     const atEnd = {
+      altGraphKey: false,
+      altKey: false,
+      ctrlKey: false,
       dataset: {},
       direction: "ltr" as const,
       isComposing: false,
       key: "ArrowRight",
+      metaKey: false,
       selectionEnd: 3,
       selectionStart: 3,
+      shiftKey: false,
       valueLength: 3,
     };
     expect(shouldLeaveSearchForGroups(atEnd)).toBe(true);
@@ -573,14 +578,47 @@ describe("clipboard input keyboard handling", () => {
     ).toBe(false);
   });
 
+  test("a modified ArrowRight keeps the platform's caret and selection gestures", () => {
+    const atEnd = {
+      altGraphKey: false,
+      altKey: false,
+      ctrlKey: false,
+      dataset: {},
+      direction: "ltr" as const,
+      isComposing: false,
+      key: "ArrowRight",
+      metaKey: false,
+      selectionEnd: 3,
+      selectionStart: 3,
+      shiftKey: false,
+      valueLength: 3,
+    };
+    for (const modifier of [
+      "altGraphKey",
+      "altKey",
+      "ctrlKey",
+      "metaKey",
+      "shiftKey",
+    ] as const) {
+      expect(shouldLeaveSearchForGroups({ ...atEnd, [modifier]: true })).toBe(
+        false,
+      );
+    }
+  });
+
   test("an RTL query puts the field's right edge at the start of the text", () => {
     const rtl = {
+      altGraphKey: false,
+      altKey: false,
+      ctrlKey: false,
       dataset: {},
       direction: "rtl" as const,
       isComposing: false,
       key: "ArrowRight",
+      metaKey: false,
       selectionEnd: 0,
       selectionStart: 0,
+      shiftKey: false,
       valueLength: 3,
     };
     expect(shouldLeaveSearchForGroups(rtl)).toBe(true);

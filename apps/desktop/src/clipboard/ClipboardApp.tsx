@@ -1911,9 +1911,11 @@ const ClipboardApp = () => {
       } else if (
         shouldLeaveSearchForGroups({
           ...inputKey,
+          ...modifiers,
           direction: clipboardInputDirection(event.target),
           selectionEnd: event.target.selectionEnd,
           selectionStart: event.target.selectionStart,
+          shiftKey: event.shiftKey,
           valueLength: event.target.value.length,
         })
       ) {

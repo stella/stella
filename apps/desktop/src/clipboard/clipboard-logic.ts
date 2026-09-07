@@ -125,28 +125,36 @@ export const shouldReturnToTimelineFromInput = ({
 }: ClipboardInputKey) =>
   !isClipboardNameInput(dataset) && key === "ArrowUp" && !isComposing;
 
-type ClipboardSearchArrowKey = ClipboardInputKey & {
-  direction: "ltr" | "rtl";
-  selectionEnd: number | null;
-  selectionStart: number | null;
-  valueLength: number;
-};
+type ClipboardSearchArrowKey = ClipboardInputKey &
+  ClipboardModifiers & {
+    direction: "ltr" | "rtl";
+    selectionEnd: number | null;
+    selectionStart: number | null;
+    shiftKey: boolean;
+    valueLength: number;
+  };
 
 /**
  * ArrowRight with the caret at the search field's visual right edge hands
  * focus to the group rail beside the search field (an empty field qualifies).
  * The field resolves its own direction from the query, so an Arabic or Hebrew
  * query puts that edge at offset 0 and the end of the text on the left. With
- * text still to the right of the caret, or a selection, the arrow keeps moving
- * the caret.
+ * text still to the right of the caret the arrow keeps moving the caret, and
+ * any modifier leaves the platform's own word, line, and selection gestures
+ * alone.
  */
 export const shouldLeaveSearchForGroups = ({
+  altGraphKey,
+  altKey,
+  ctrlKey,
   dataset,
   direction,
   isComposing,
   key,
+  metaKey,
   selectionEnd,
   selectionStart,
+  shiftKey,
   valueLength,
 }: ClipboardSearchArrowKey) => {
   const rightEdge = direction === "rtl" ? 0 : valueLength;
@@ -154,6 +162,11 @@ export const shouldLeaveSearchForGroups = ({
     !isClipboardNameInput(dataset) &&
     key === "ArrowRight" &&
     !isComposing &&
+    !altGraphKey &&
+    !altKey &&
+    !ctrlKey &&
+    !metaKey &&
+    !shiftKey &&
     selectionStart === rightEdge &&
     selectionEnd === rightEdge
   );
