@@ -1,10 +1,13 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import { CLAIMS } from "@/routes/dev/-components/avt/sample-data";
+import { ANCHOR_FACTS, CLAIMS } from "@/routes/dev/-components/avt/sample-data";
 import type { ClaimReview } from "@/routes/dev/-components/avt/types";
 import { EMPTY_REVIEW } from "@/routes/dev/-components/avt/types";
-import { effectiveState } from "@/routes/dev/-components/avt/verdict";
+import {
+  countClaims,
+  effectiveState,
+} from "@/routes/dev/-components/avt/verdict";
 
 const claimById = (id: string) =>
   CLAIMS.find((claim) => claim.id === id) ?? panic(`Missing claim ${id}`);
@@ -59,5 +62,26 @@ describe("AVT displayed verdict", () => {
         }),
       ),
     ).toBe("contradicted");
+  });
+
+  test("counts analysis outcomes without treating overrides as verdicts", () => {
+    const contradicted = claimById("c2");
+    const conflict = claimById("c12");
+    const facts = new Map(ANCHOR_FACTS.map((fact) => [fact.id, fact]));
+
+    const counts = countClaims(
+      [contradicted, conflict],
+      {
+        [contradicted.id]: review({ override: "supported" }),
+        [conflict.id]: review({
+          recordConflictResolution: { kind: "governed", factId: "BANK-05" },
+        }),
+      },
+      (id) => facts.get(id),
+    );
+
+    expect(counts.byState.contradicted).toBe(1);
+    expect(counts.byState.supported).toBe(1);
+    expect(counts.byState.recordconflict).toBe(0);
   });
 });

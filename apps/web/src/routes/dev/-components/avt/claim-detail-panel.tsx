@@ -165,7 +165,18 @@ function FactCard({ fact, rel }: { fact: AnchorFact; rel: ClaimFactRelation }) {
   );
 }
 
-/** Mock citation label; the fixture has no real document destination. */
+/**
+ * Source citation label, adapted from the prototype's clickable
+ * `<a onClick={() => onSource(f)}>`. It is not wired to a real destination:
+ * this build is deliberately client-side/mock-data only (see the AVT
+ * findings doc), so there is no real source document to navigate to yet.
+ * When AVT is wired against a real Stella document, this is the integration
+ * point: Stella already has the resolution mechanism
+ * (`apps/web/src/routes/.../justification.tsx`'s `PdfChip`/`DocxQuote`, which
+ * scroll/highlight the real PDF or DOCX for a citation), so an `AnchorFact`
+ * would need a file/citation reference alongside `source`/`page` to reuse it,
+ * not a new mechanism.
+ */
 function SourceLink({ fact }: { fact: AnchorFact }) {
   return (
     <span className="text-muted-foreground inline-flex items-center gap-1">
