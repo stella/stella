@@ -90,9 +90,19 @@ describe("deferred document queue shape", () => {
     );
   });
 
-  test("the rest drain least-tried first, then newest, undated last", () => {
+  test("the rest drain newest first, undated last", () => {
     expect(compileOrder(remainingDocumentOrder)).toBe(
-      `"case_law_decisions"."document_fetch_attempts" asc, "case_law_decisions"."decision_date" desc nulls last, "case_law_decisions"."id" asc`,
+      `"case_law_decisions"."decision_date" desc nulls last, "case_law_decisions"."id" asc`,
+    );
+  });
+
+  test("the attempt count orders nothing in the remaining tier", () => {
+    // Leading with it partitions the tier: every decision that failed
+    // once sorts behind the whole untried backlog, so its retry waits
+    // for the backlog rather than for its cooldown. The cooldown in the
+    // predicate is what bounds a refused document, asserted above.
+    expect(compileOrder(remainingDocumentOrder)).not.toContain(
+      "document_fetch_attempts",
     );
   });
 });

@@ -595,10 +595,27 @@ export const caseLawDecisions = p.pgTable(
       .where(
         sql`${t.fulltext} is null and ${t.documentUrl} is not null and ${t.documentFetchRequestedAt} is not null`,
       ),
-    // Deferred-document queue, remaining tier: least-tried first, then
-    // newest decisions, per source. Matches the loader's ORDER BY so the
-    // head of the queue is a bounded index range scan rather than a sort
-    // over the backlog.
+    // Deferred-document queue, remaining tier: newest decisions first,
+    // per source. Matches the loader's ORDER BY so the head of the queue
+    // is a bounded index range scan rather than a sort over the backlog.
+    // Attempt count is deliberately not a key column: leading with it
+    // ordered every retry behind the whole untried backlog, and keeping
+    // it here would make the index unable to serve the order that fixed
+    // that.
+    p
+      .index("case_law_decisions_document_pending_date_idx")
+      .on(t.sourceId, t.decisionDate.desc().nullsLast(), t.id)
+      .where(sql`${t.fulltext} is null and ${t.documentUrl} is not null`),
+    // The attempt-led index the one above replaces, kept for the length of
+    // one rollout. A migration lands before the deployment finishes, so
+    // tasks still on the previous revision go on ordering the tier by
+    // attempt count, and without this each of their queue refills would
+    // sort the whole backlog. Declared rather than merely left in the
+    // database so the schema states what the database holds.
+    //
+    // Removal condition: every runner on the date-led order, i.e. the
+    // release carrying it fully rolled out. Drop this declaration and the
+    // index together in a follow-up migration.
     p
       .index("case_law_decisions_document_pending_idx")
       .on(
