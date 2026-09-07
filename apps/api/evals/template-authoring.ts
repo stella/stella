@@ -1274,8 +1274,9 @@ const createAuthoringTools = ({
 }): AnyServerTool[] => {
   const written = new Map<string, Buffer>();
   // The one template this run may create, kept as the bytes the create call
-  // accepted so the configure call overlays the same document.
-  let stored: { docxBase64: string } | null = null;
+  // accepted so the configure call overlays the same document, beside the
+  // display name configure echoes back the way production describes it.
+  let stored: { docxBase64: string; name: string | undefined } | null = null;
 
   const writeDocxTool = toolDefinition({
     name: WRITE_DOCX_TOOL_NAME,
@@ -1373,7 +1374,7 @@ const createAuthoringTools = ({
     if (outcome.status === "rejected") {
       return { error: "validation_error", issues: outcome.issues };
     }
-    stored = { docxBase64 };
+    stored = { docxBase64, name: parsed.output.name };
     return {
       templateId: EVAL_TEMPLATE_ID,
       name: parsed.output.name,
@@ -1406,7 +1407,7 @@ const createAuthoringTools = ({
       await recordAttempt({
         outcome: { status: "rejected", issues },
         overlay: [],
-        step: "create",
+        step: "configure",
       });
       return { error: "validation_error", issues };
     }
@@ -1414,6 +1415,19 @@ const createAuthoringTools = ({
     if (stored === null) {
       const issues = [
         `template_id: no template exists yet; call ${CREATE_TEMPLATE_TOOL_NAME} first`,
+      ];
+      await recordAttempt({
+        outcome: { status: "rejected", issues },
+        overlay,
+        step: "configure",
+      });
+      return { error: "not_found", issues };
+    }
+    // The run holds one template. Any other id names a template production
+    // would not find, so the overlay must not reach the stored document.
+    if (parsed.output.template_id !== EVAL_TEMPLATE_ID) {
+      const issues = [
+        `template_id: no template ${parsed.output.template_id} exists; pass the template_id ${CREATE_TEMPLATE_TOOL_NAME} returned`,
       ];
       await recordAttempt({
         outcome: { status: "rejected", issues },
@@ -1434,7 +1448,7 @@ const createAuthoringTools = ({
       return { error: "validation_error", issues: outcome.issues };
     }
     return {
-      name: parsed.output.template_id,
+      name: stored.name,
       fields: outcome.manifest.fields.map((field) => ({ path: field.path })),
     };
   });
