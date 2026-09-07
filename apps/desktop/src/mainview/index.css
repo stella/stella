@@ -69,6 +69,14 @@ body:has(.clipboard-editor-window) .font-sans {
   isolation: isolate;
 }
 
+/* Without a native material (everywhere but macOS) the page is the surface:
+ * it paints a near-opaque wash and a hairline edge so the rounded corners
+ * read against any wallpaper. */
+.clipboard-window-painted {
+  background-color: color-mix(in srgb, var(--background) 94%, transparent);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
 .clipboard-groups-rail {
   background: transparent;
   box-shadow: none;

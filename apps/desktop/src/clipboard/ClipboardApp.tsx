@@ -201,6 +201,11 @@ const PRIMARY_MODIFIER_LABEL = navigator.userAgent.includes("Mac")
 const CLIPBOARD_SHORTCUT_LABEL = navigator.userAgent.includes("Mac")
   ? "⌘⇧V"
   : "Ctrl+Shift+V";
+// Only macOS gives the window a native material; elsewhere the page paints the
+// surface its rounded corners clip.
+const CLIPBOARD_WINDOW_CLASS = navigator.userAgent.includes("Mac")
+  ? "clipboard-window"
+  : "clipboard-window clipboard-window-painted";
 const IMAGE_CLIPBOARD_CAPTURE_SUPPORTED =
   !navigator.userAgent.includes("Linux");
 
@@ -2006,7 +2011,7 @@ const ClipboardApp = () => {
 
   return (
     <div
-      className="clipboard-window text-foreground relative flex min-h-dvh flex-col overflow-hidden outline-none"
+      className={`${CLIPBOARD_WINDOW_CLASS} text-foreground relative flex min-h-dvh flex-col overflow-hidden outline-none`}
       aria-label={t("timeline")}
       ref={(node) => {
         timelineRef.current = node;
