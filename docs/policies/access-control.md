@@ -73,11 +73,11 @@ operations runbook (private).
    authentication, dependency manifests, and privileged desktop code.
 
 8. **Fork trust gate.** GitHub Actions requires a maintainer to
-   approve every workflow run for a fork pull request until the
-   author has had a commit or pull request merged into the
-   repository (repository policy: approval required for first-time
-   contributors), so code from an unknown contributor never
-   executes in CI before review.
+   approve every workflow run for a fork pull request until both
+   its author and the actor who pushed have had a commit or pull
+   request merged into the repository (repository policy: approval
+   required for first-time contributors), so code from an unknown
+   contributor never executes in CI before review.
    The CI workflow (`.github/workflows/ci.yml`) also fails a merge
    group that carries a fork pull request; fork changes land from a
    same-repo branch.
