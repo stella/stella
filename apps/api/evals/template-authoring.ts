@@ -70,12 +70,20 @@
  *   bun run eval:template-authoring
  *   bun run eval:template-authoring -- --models anthropic::claude-haiku-4-5-20251001
  *   bun run eval:template-authoring -- --task cs-nda --runs 3 --json out.json
+ *   bun run eval:template-authoring -- --rescore out.json --json rescored.json
+ *
+ * `--rescore` replays a previous run's recorded tool calls — the authored
+ * document, the create call, every configure call, in order — through the
+ * save, configure and fill path a live run takes, with no model turn, and
+ * prints the same tables. It is how a harness or engine change is measured
+ * against runs already paid for; `--task` narrows it the same way it narrows
+ * a live run.
  */
 import { EventType, maxIterations, toolDefinition } from "@tanstack/ai";
 import type { AnyServerTool, TokenUsage } from "@tanstack/ai";
 import { panic } from "better-result";
 import JSZip from "jszip";
-import { writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import * as slimdom from "slimdom";
 import * as v from "valibot";
 
@@ -1244,6 +1252,14 @@ const authoredBlockSchema = v.variant("type", [
   }),
 ]);
 
+const WRITE_DOCX_INPUT_SCHEMA = v.strictObject({
+  blocks: v.pipe(
+    v.array(authoredBlockSchema),
+    v.minLength(1),
+    v.description("The document in order: paragraphs and tables."),
+  ),
+});
+
 const WRITE_DOCX_DESCRIPTION =
   "Write the marked-up document to a .docx file. This stands in for the DOCX " +
   "writer an MCP client runs locally. Pass `blocks` in document order, one " +
@@ -1271,6 +1287,17 @@ type WrittenDocx = { ref: string; blocks: AuthoredBlock[]; buffer: Buffer };
 
 const EVAL_TEMPLATE_ID = "00000000-0000-4000-8000-00000000e7a1";
 
+/**
+ * The tools of one run, plus the replay entry point a recorded trace goes
+ * through. A model turn calls the handlers through `tools`; `--rescore` calls
+ * the same handlers with the same inputs through `replay`. One
+ * implementation, so a rescored run and a live one cannot drift.
+ */
+type AuthoringToolSet = {
+  tools: AnyServerTool[];
+  replay: (call: ToolTrace) => Promise<void>;
+};
+
 const createAuthoringTools = ({
   trace,
   saveCalls,
@@ -1279,26 +1306,16 @@ const createAuthoringTools = ({
   trace: ToolTrace[];
   saveCalls: SaveCall[];
   writeCalls: WrittenDocx[];
-}): AnyServerTool[] => {
+}): AuthoringToolSet => {
   const written = new Map<string, Buffer>();
   // The one template this run may create, kept as the bytes the create call
   // accepted so the configure call overlays the same document, beside the
   // display name configure echoes back the way production describes it.
   let stored: { docxBase64: string; name: string | undefined } | null = null;
 
-  const writeDocxTool = toolDefinition({
-    name: WRITE_DOCX_TOOL_NAME,
-    description: WRITE_DOCX_DESCRIPTION,
-    inputSchema: toTanStackToolSchema(
-      v.strictObject({
-        blocks: v.pipe(
-          v.array(authoredBlockSchema),
-          v.minLength(1),
-          v.description("The document in order: paragraphs and tables."),
-        ),
-      }),
-    ),
-  }).server(async ({ blocks }) => {
+  const handleWriteDocx = async ({
+    blocks,
+  }: v.InferOutput<typeof WRITE_DOCX_INPUT_SCHEMA>) => {
     trace.push({ name: WRITE_DOCX_TOOL_NAME, input: { blocks } });
     const ref = `docx#${String(written.size + 1)}`;
     const authored: AuthoredBlock[] = blocks.map((block) =>
@@ -1312,7 +1329,7 @@ const createAuthoringTools = ({
     // Named after the parameter it feeds: copying a value into a property of
     // the same name is one step, inferring the mapping is a guess.
     return { docx_base64: ref, bytes: buffer.byteLength };
-  });
+  };
 
   /** Record one attempt at the create/configure pair, in the shape scoring
    *  reads: the saved document's blocks, the overlay it carried, the outcome. */
@@ -1336,11 +1353,7 @@ const createAuthoringTools = ({
     });
   };
 
-  const createTemplateTool = toolDefinition({
-    name: CREATE_TEMPLATE_TOOL_NAME,
-    description: CREATE_TEMPLATE_TOOL_DEFINITION.description,
-    inputSchema: productionToolSchema(CREATE_TEMPLATE_TOOL_DEFINITION),
-  }).server(async (input: unknown) => {
+  const handleCreateTemplate = async (input: unknown) => {
     trace.push({ name: CREATE_TEMPLATE_TOOL_NAME, input });
     const parsed = v.safeParse(
       CREATE_TEMPLATE_TOOL_DEFINITION.inputSchemaSource,
@@ -1396,15 +1409,9 @@ const createAuthoringTools = ({
         })),
       },
     };
-  });
+  };
 
-  const configureFieldsTool = toolDefinition({
-    name: CONFIGURE_FIELDS_TOOL_NAME,
-    description: CONFIGURE_TEMPLATE_FIELDS_TOOL_DEFINITION.description,
-    inputSchema: productionToolSchema(
-      CONFIGURE_TEMPLATE_FIELDS_TOOL_DEFINITION,
-    ),
-  }).server(async (input: unknown) => {
+  const handleConfigureFields = async (input: unknown) => {
     trace.push({ name: CONFIGURE_FIELDS_TOOL_NAME, input });
     // The tool site's own reader, not a second one: it is best effort per
     // property and per entry, so what the eval counts as a contract rejection
@@ -1477,9 +1484,49 @@ const createAuthoringTools = ({
       issues: dropped,
       fields: outcome.manifest.fields.map((field) => ({ path: field.path })),
     };
-  });
+  };
 
-  return [writeDocxTool, createTemplateTool, configureFieldsTool];
+  const tools = [
+    toolDefinition({
+      name: WRITE_DOCX_TOOL_NAME,
+      description: WRITE_DOCX_DESCRIPTION,
+      inputSchema: toTanStackToolSchema(WRITE_DOCX_INPUT_SCHEMA),
+    }).server(handleWriteDocx),
+    toolDefinition({
+      name: CREATE_TEMPLATE_TOOL_NAME,
+      description: CREATE_TEMPLATE_TOOL_DEFINITION.description,
+      inputSchema: productionToolSchema(CREATE_TEMPLATE_TOOL_DEFINITION),
+    }).server(handleCreateTemplate),
+    toolDefinition({
+      name: CONFIGURE_FIELDS_TOOL_NAME,
+      description: CONFIGURE_TEMPLATE_FIELDS_TOOL_DEFINITION.description,
+      inputSchema: productionToolSchema(
+        CONFIGURE_TEMPLATE_FIELDS_TOOL_DEFINITION,
+      ),
+    }).server(handleConfigureFields),
+  ];
+
+  const replay = async ({ input, name }: ToolTrace): Promise<void> => {
+    if (name === WRITE_DOCX_TOOL_NAME) {
+      const parsed = v.safeParse(WRITE_DOCX_INPUT_SCHEMA, input);
+      // A recorded write_docx input passed this schema before the handler ran
+      // live; anything else authored no document then either.
+      if (parsed.success) {
+        await handleWriteDocx(parsed.output);
+      }
+      return;
+    }
+    if (name === CREATE_TEMPLATE_TOOL_NAME) {
+      await handleCreateTemplate(input);
+      return;
+    }
+    if (name === CONFIGURE_FIELDS_TOOL_NAME) {
+      await handleConfigureFields(input);
+    }
+    // Anything else is a `(raw)` entry, which never reached a handler live.
+  };
+
+  return { tools, replay };
 };
 
 const createQuizTool = ({
@@ -1488,17 +1535,30 @@ const createQuizTool = ({
 }: {
   trace: ToolTrace[];
   answers: Record<string, unknown>[];
-}): AnyServerTool[] => [
-  toolDefinition({
-    name: ANSWER_SYNTAX_TOOL_NAME,
-    description: `Answer the ${SYNTAX_QUIZ_QUESTION_COUNT} marker-grammar questions. Every property is required.`,
-    inputSchema: toTanStackToolSchema(SYNTAX_QUIZ_ANSWER_SCHEMA),
-  }).server(async (input) => {
+}): AuthoringToolSet => {
+  const handleAnswer = async (input: Record<string, unknown>) => {
     trace.push({ name: ANSWER_SYNTAX_TOOL_NAME, input });
     answers.push({ ...input });
     return await Promise.resolve({ received: true });
-  }),
-];
+  };
+  return {
+    tools: [
+      toolDefinition({
+        name: ANSWER_SYNTAX_TOOL_NAME,
+        description: `Answer the ${SYNTAX_QUIZ_QUESTION_COUNT} marker-grammar questions. Every property is required.`,
+        inputSchema: toTanStackToolSchema(SYNTAX_QUIZ_ANSWER_SCHEMA),
+      }).server(handleAnswer),
+    ],
+    // A recorded answer is what the handler already stored, so it replays as
+    // it stands: re-validating it here would refuse an answer the live turn
+    // scored.
+    replay: async ({ input, name }) => {
+      if (name === ANSWER_SYNTAX_TOOL_NAME && isPlainRecord(input)) {
+        await handleAnswer(input);
+      }
+    },
+  };
+};
 
 // ── CLI ───────────────────────────────────────────────────
 
@@ -1507,6 +1567,8 @@ type CliOptions = {
   runs: number;
   taskFilter: string | null;
   jsonPath: string | null;
+  /** A previous run's JSON to replay instead of calling any model. */
+  rescorePath: string | null;
 };
 
 const parseArgs = (argv: readonly string[]): CliOptions => {
@@ -1515,6 +1577,7 @@ const parseArgs = (argv: readonly string[]): CliOptions => {
     runs: DEFAULT_RUNS,
     taskFilter: null,
     jsonPath: null,
+    rescorePath: null,
   };
   for (let index = 0; index < argv.length; index += 1) {
     const flag = argv.at(index);
@@ -1540,6 +1603,10 @@ const parseArgs = (argv: readonly string[]): CliOptions => {
         break;
       case "--json":
         options.jsonPath = value;
+        index += 1;
+        break;
+      case "--rescore":
+        options.rescorePath = value;
         index += 1;
         break;
       default:
@@ -1733,36 +1800,30 @@ const buildUnsavedAttempt = async ({
   };
 };
 
-const runAuthoringTask = async ({
-  model,
+/**
+ * Score one authoring turn: the tool calls a model made, or the tool calls a
+ * recorded trace replayed. Everything past the turn — which save attempt
+ * counts, the fill round trip, the run's diagnostics — lives here so a
+ * rescored run cannot be scored by a second implementation.
+ */
+const scoreAuthoringTurn = async ({
   modelId,
-  task,
   repeat,
+  saveCalls,
+  task,
+  trace,
+  turn,
+  writeCalls,
 }: {
-  model: ResolvedTanStackTextModel;
   modelId: string;
-  task: EvalTask;
   repeat: number;
+  saveCalls: readonly SaveCall[];
+  task: EvalTask;
+  trace: ToolTrace[];
+  turn: ModelTurn;
+  writeCalls: readonly WrittenDocx[];
 }): Promise<EvalRun> => {
   const organizationId = mintAuthProviderId<"organization">();
-  const trace: ToolTrace[] = [];
-  const saveCalls: SaveCall[] = [];
-  const writeCalls: WrittenDocx[] = [];
-  const tools = createAuthoringTools({ trace, saveCalls, writeCalls });
-  const sourceDocx = await buildDocx(task.source);
-  const prompt = [
-    task.brief,
-    "",
-    "Source document:",
-    renderBlocks(await readDocxBlocks(sourceDocx)),
-  ].join("\n");
-
-  const turn = await runModelTurn({
-    model,
-    prompt,
-    systemPrompt: AUTHORING_SYSTEM_PROMPT,
-    tools,
-  });
   // Every call the advertised schema rejected before the handler ran, kept in
   // the trace: a pass rate without the payload the model actually sent cannot
   // say whether the model or the contract failed.
@@ -1894,26 +1955,62 @@ const runAuthoringTask = async ({
   };
 };
 
-const SYNTAX_QUIZ_TASK_ID = "syntax-quiz";
-
-const runSyntaxQuiz = async ({
+const runAuthoringTask = async ({
   model,
   modelId,
+  task,
   repeat,
 }: {
   model: ResolvedTanStackTextModel;
   modelId: string;
+  task: EvalTask;
   repeat: number;
 }): Promise<EvalRun> => {
   const trace: ToolTrace[] = [];
-  const answers: Record<string, unknown>[] = [];
-  const tools = createQuizTool({ trace, answers });
+  const saveCalls: SaveCall[] = [];
+  const writeCalls: WrittenDocx[] = [];
+  const { tools } = createAuthoringTools({ trace, saveCalls, writeCalls });
+  const sourceDocx = await buildDocx(task.source);
+  const prompt = [
+    task.brief,
+    "",
+    "Source document:",
+    renderBlocks(await readDocxBlocks(sourceDocx)),
+  ].join("\n");
+
   const turn = await runModelTurn({
     model,
-    prompt: SYNTAX_QUIZ_PROMPT,
-    systemPrompt: QUIZ_SYSTEM_PROMPT,
+    prompt,
+    systemPrompt: AUTHORING_SYSTEM_PROMPT,
     tools,
   });
+  return await scoreAuthoringTurn({
+    modelId,
+    repeat,
+    saveCalls,
+    task,
+    trace,
+    turn,
+    writeCalls,
+  });
+};
+
+const SYNTAX_QUIZ_TASK_ID = "syntax-quiz";
+
+/** Score one quiz turn, model-driven or replayed, from the answer it left. */
+const scoreQuizTurn = ({
+  answers,
+  modelId,
+  repeat,
+  trace,
+  turn,
+}: {
+  answers: readonly Record<string, unknown>[];
+  modelId: string;
+  repeat: number;
+  trace: ToolTrace[];
+  turn: ModelTurn;
+}): EvalRun => {
   const quiz = scoreSyntaxQuiz(answers.at(-1) ?? null, SYNTAX_QUIZ_EXPECTED);
   const quizOutcome = (): AuthoringRunScore["outcome"] => {
     if (turn.error !== null) {
@@ -1961,6 +2058,160 @@ const runSyntaxQuiz = async ({
     trace,
     renderedText: null,
   };
+};
+
+const runSyntaxQuiz = async ({
+  model,
+  modelId,
+  repeat,
+}: {
+  model: ResolvedTanStackTextModel;
+  modelId: string;
+  repeat: number;
+}): Promise<EvalRun> => {
+  const trace: ToolTrace[] = [];
+  const answers: Record<string, unknown>[] = [];
+  const { tools } = createQuizTool({ trace, answers });
+  const turn = await runModelTurn({
+    model,
+    prompt: SYNTAX_QUIZ_PROMPT,
+    systemPrompt: QUIZ_SYSTEM_PROMPT,
+    tools,
+  });
+  return scoreQuizTurn({ answers, modelId, repeat, trace, turn });
+};
+
+// ── Rescoring a recorded run ──────────────────────────────
+
+/**
+ * The fields `--rescore` reads back out of a previous run's JSON. Only the
+ * turn's own record and its tool calls: everything else in the file is a
+ * score, which is exactly what this mode recomputes. Unknown properties are
+ * ignored, so a file written by a later version still replays.
+ */
+const RECORDED_RUN_SCHEMA = v.object({
+  modelId: v.string(),
+  taskId: v.string(),
+  repeat: v.number(),
+  error: v.nullable(v.string()),
+  finalText: v.string(),
+  latencyMs: v.number(),
+  // The per-category token breakdowns a provider may add are not read by
+  // anything the report prints, so they are not carried back.
+  usage: v.nullable(
+    v.object({
+      promptTokens: v.number(),
+      completionTokens: v.number(),
+      totalTokens: v.number(),
+    }),
+  ),
+  trace: v.array(v.object({ name: v.string(), input: v.unknown() })),
+});
+
+const RECORDED_EVAL_SCHEMA = v.object({
+  runs: v.array(RECORDED_RUN_SCHEMA),
+});
+
+type RecordedRun = v.InferOutput<typeof RECORDED_RUN_SCHEMA>;
+
+/** The suffix the live loop appends to a call that never reached a handler. */
+const RAW_CALL_SUFFIX = "(raw)";
+
+/**
+ * The turn a recorded run stands for. `rawCalls` is reconstructed from the
+ * trace, which holds every create/configure call the run made — the ones a
+ * handler ran and the `(raw)` ones it did not — so a replayed turn reaches the
+ * same branch of scoring the live one did.
+ */
+const recordedTurn = (run: RecordedRun): ModelTurn => ({
+  error: run.error,
+  finalText: run.finalText,
+  latencyMs: run.latencyMs,
+  usage: run.usage,
+  rawCalls: run.trace.flatMap(({ input, name }) => {
+    const called = name.endsWith(RAW_CALL_SUFFIX)
+      ? name.slice(0, -RAW_CALL_SUFFIX.length)
+      : name;
+    return called === CREATE_TEMPLATE_TOOL_NAME ||
+      called === CONFIGURE_FIELDS_TOOL_NAME
+      ? [{ name: called, input }]
+      : [];
+  }),
+});
+
+const rescoreAuthoringRun = async (
+  run: RecordedRun,
+  task: EvalTask,
+): Promise<EvalRun> => {
+  const trace: ToolTrace[] = [];
+  const saveCalls: SaveCall[] = [];
+  const writeCalls: WrittenDocx[] = [];
+  const { replay } = createAuthoringTools({ trace, saveCalls, writeCalls });
+  for (const call of run.trace) {
+    await replay(call);
+  }
+  return await scoreAuthoringTurn({
+    modelId: run.modelId,
+    repeat: run.repeat,
+    saveCalls,
+    task,
+    trace,
+    turn: recordedTurn(run),
+    writeCalls,
+  });
+};
+
+const rescoreQuizRun = async (run: RecordedRun): Promise<EvalRun> => {
+  const trace: ToolTrace[] = [];
+  const answers: Record<string, unknown>[] = [];
+  const { replay } = createQuizTool({ trace, answers });
+  for (const call of run.trace) {
+    await replay(call);
+  }
+  return scoreQuizTurn({
+    answers,
+    modelId: run.modelId,
+    repeat: run.repeat,
+    trace,
+    turn: recordedTurn(run),
+  });
+};
+
+/**
+ * Replay a recorded eval's tool calls through the save, configure and fill
+ * path a live run takes, with no model turn. What a harness or engine change
+ * does to the same authored bytes is then measurable without paying for the
+ * turns again.
+ */
+const rescoreRuns = async ({
+  path,
+  taskFilter,
+}: {
+  path: string;
+  taskFilter: string | null;
+}): Promise<EvalRun[]> => {
+  const recorded = v.parse(
+    RECORDED_EVAL_SCHEMA,
+    JSON.parse(await readFile(path, "utf8")),
+  );
+  const runs: EvalRun[] = [];
+  for (const run of recorded.runs) {
+    if (taskFilter !== null && run.taskId !== taskFilter) {
+      continue;
+    }
+    process.stderr.write(
+      `rescore · ${run.modelId} · ${run.taskId} · run ${String(run.repeat)}\n`,
+    );
+    if (run.taskId === SYNTAX_QUIZ_TASK_ID) {
+      runs.push(await rescoreQuizRun(run));
+      continue;
+    }
+    const task =
+      TASKS.find((candidate) => candidate.id === run.taskId) ??
+      panic(`Recorded run names unknown task ${run.taskId}`);
+    runs.push(await rescoreAuthoringRun(run, task));
+  }
+  return runs;
 };
 
 // ── Report ────────────────────────────────────────────────
@@ -2085,8 +2336,7 @@ const resolveModels = async (
   }));
 };
 
-const main = async () => {
-  const options = parseArgs(process.argv.slice(2));
+const runEval = async (options: CliOptions): Promise<EvalRun[]> => {
   const tasks = TASKS.filter(
     (task) => options.taskFilter === null || task.id === options.taskFilter,
   );
@@ -2113,6 +2363,18 @@ const main = async () => {
       }
     }
   }
+  return runs;
+};
+
+const main = async () => {
+  const options = parseArgs(process.argv.slice(2));
+  const runs =
+    options.rescorePath === null
+      ? await runEval(options)
+      : await rescoreRuns({
+          path: options.rescorePath,
+          taskFilter: options.taskFilter,
+        });
 
   process.stdout.write(`${renderReport(runs)}\n`);
   if (options.jsonPath !== null) {
