@@ -13,6 +13,7 @@ import type {
 } from "@/lib/types";
 import { propertiesKeys } from "@/lib/workspaces/queries/properties";
 import { viewsKeys } from "@/lib/workspaces/queries/views";
+import { useTableStore } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
 
 import { invalidateViewDerivedQueries, viewOrderCache } from "./views.logic";
 
@@ -136,7 +137,11 @@ export const useConvertView = (workspaceId: string) => {
         .convert.post({ targetType });
       return unwrapEden(response);
     },
-    onSuccess: async () => {
+    onSuccess: async (_result, { viewId }) => {
+      // A find belongs to the table layout: no other layout sends it or shows
+      // its chip, so left in the store it would re-narrow the rows, unexplained,
+      // when the view is converted back.
+      useTableStore.getState().clearFind(viewId);
       await queryClient.invalidateQueries({
         queryKey: viewsKeys.all(workspaceId),
       });

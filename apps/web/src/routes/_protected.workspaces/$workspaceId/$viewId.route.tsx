@@ -1,3 +1,5 @@
+import { useRef } from "react";
+
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import {
   createFileRoute,
@@ -44,9 +46,14 @@ import {
 } from "@/lib/workspaces/queries/time-entries";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
 import { windowIncludesAssignees } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.logic";
+import {
+  resolveTableFind,
+  UNRESTRICTED_FIND,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-find.logic";
 import { includesListItems } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
 import { ViewSwitcher } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher";
 import { ViewToolbar } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar";
+import { useTableStore } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
 
 // v.object: validateSearch receives the full URL search params
 // including params from child routes; strictObject would reject them.
@@ -215,6 +222,15 @@ export const Route = createFileRoute(
       )
         ? ["folder"]
         : ["folder", "task"];
+      // A live find is part of the window's key: without it the layout would
+      // suspend a second time on the window it actually reads.
+      const find = useTableStore.getState().find[activeView.id];
+      const { request } = resolveTableFind({
+        layout: activeView.layout,
+        properties,
+        selection: find?.scope ?? UNRESTRICTED_FIND,
+        term: find?.submitted ?? "",
+      });
       await ensureRouteInfiniteQueryData(
         queryClient,
         entitiesWindowOptions({
@@ -225,6 +241,7 @@ export const Route = createFileRoute(
           excludedKinds,
           fieldMode,
           fieldIds,
+          ...request,
         }),
       );
       return;
@@ -356,6 +373,7 @@ function ViewShell({ activeView, workspaceId }: ViewContentProps) {
   const navigate = Route.useNavigate();
   const matches = useMatches();
   const isOnPdfRoute = matches.some((m) => m.fullPath.endsWith("/document"));
+  const paneRef = useRef<HTMLDivElement>(null);
 
   // File detail view: hide the view chrome; breadcrumbs provide navigation
   // back to the matter.
@@ -364,7 +382,7 @@ function ViewShell({ activeView, workspaceId }: ViewContentProps) {
   }
 
   return (
-    <>
+    <div className="flex min-h-0 flex-1 flex-col" ref={paneRef}>
       <div className="flex min-w-0 flex-col border-b md:flex-row md:items-center md:justify-between">
         <div
           className={cn(
@@ -389,7 +407,11 @@ function ViewShell({ activeView, workspaceId }: ViewContentProps) {
           />
         </div>
         {activeView.layout.type !== "overview" && (
-          <ViewToolbar view={activeView} workspaceId={workspaceId} />
+          <ViewToolbar
+            paneRef={paneRef}
+            view={activeView}
+            workspaceId={workspaceId}
+          />
         )}
       </div>
       <div className="flex min-h-0 flex-1 flex-col">
@@ -397,7 +419,7 @@ function ViewShell({ activeView, workspaceId }: ViewContentProps) {
           <Outlet />
         </div>
       </div>
-    </>
+    </div>
   );
 }
 

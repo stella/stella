@@ -1,10 +1,6 @@
 import { useDeferredValue } from "react";
 
-import {
-  infiniteQueryOptions,
-  keepPreviousData,
-  queryOptions,
-} from "@tanstack/react-query";
+import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
 import { isEntityPriority, isTaskStatus } from "@stll/api-contract";
 import { isListItemType } from "@stll/api-contract/entity-options";
@@ -25,10 +21,13 @@ import {
   DEFAULT_ENTITY_VIEW_PAGE_SIZE,
   DEFAULT_ENTITY_WINDOW_SIZE,
   entitiesKeys,
+  keepsRowsAcrossFind,
+  normalizeFind,
   normalizeVisibleFieldIds,
   visibleEntityFieldIds,
 } from "@/lib/workspaces/queries/entities.logic";
 import type {
+  EntitiesFindKey,
   EntitiesPageKey,
   EntitiesWindowKey,
   FilesystemEntitiesKey,
@@ -43,6 +42,28 @@ export type EntitiesWindowOptionsInput = QueryOptionsInput<EntitiesWindowKey>;
 type FilesystemEntitiesOptionsInput = QueryOptionsInput<FilesystemEntitiesKey>;
 export type KanbanGroupOptionsInput = QueryOptionsInput<KanbanGroupKey>;
 export type GroupCountsOptionsInput = QueryOptionsInput<GroupCountsKey>;
+
+/**
+ * The find field a request body carries, branded. Absent when the term is
+ * blank, so a bar that is open but empty sends nothing.
+ */
+const findRequestFields = ({ find }: EntitiesFindKey) => {
+  const normalized = normalizeFind(find);
+  if (!normalized) {
+    return {};
+  }
+  return {
+    find: {
+      scope: {
+        propertyIds: normalized.scope.propertyIds.map((propertyId) =>
+          toSafeId<"property">(propertyId),
+        ),
+        type: normalized.scope.type,
+      },
+      term: normalized.term,
+    },
+  };
+};
 
 type RawWorkspaceEntity = Omit<
   WorkspaceEntity,
@@ -184,6 +205,7 @@ export const entitiesWindowOptions = (key: EntitiesWindowOptionsInput) =>
             filters: key.filters,
             sorts: key.sorts,
             ...(key.search?.trim() && { search: key.search.trim() }),
+            ...findRequestFields(key),
             limit: key.limit ?? DEFAULT_ENTITY_WINDOW_SIZE,
             excludedKinds: normalizeOptionalArray(key.excludedKinds),
             fieldMode,
@@ -261,6 +283,7 @@ export const kanbanGroupOptions = (key: KanbanGroupOptionsInput) =>
           {
             filters: key.filters,
             sorts: key.sorts,
+            ...findRequestFields(key),
             limit: key.limit ?? DEFAULT_ENTITY_WINDOW_SIZE,
             fieldMode,
             fieldIds:
@@ -294,8 +317,13 @@ export const kanbanGroupOptions = (key: KanbanGroupOptionsInput) =>
     // The key carries the visible fieldIds, so showing/hiding a column changes
     // it and refetches. Keep the previous rows on screen during that refetch
     // (and on filter/sort/paging changes) instead of dropping every group to
-    // skeleton — the rows already exist, only the column set changed.
-    placeholderData: keepPreviousData,
+    // skeleton: the rows already exist, only the column set changed. A new
+    // find is the one change they do not survive, or they would render under
+    // its counts and marks.
+    placeholderData: (previousData, previousQuery) =>
+      keepsRowsAcrossFind(previousQuery?.queryKey, key)
+        ? previousData
+        : undefined,
   });
 
 // Per-group entity counts in one query, so the grouped table can skip
@@ -309,6 +337,7 @@ export const groupCountsOptions = (key: GroupCountsOptionsInput) =>
         ["group-counts"].post(
           {
             filters: key.filters,
+            ...findRequestFields(key),
             groupByPropertyId:
               key.groupByPropertyId === "_status" ||
               key.groupByPropertyId === "_kind"

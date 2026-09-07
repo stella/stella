@@ -1200,6 +1200,7 @@ type Messages = {
       "title": "Save message";
     };
     "filter": "Filter";
+    "find": "Find";
     "formula": "Formula";
     "goBack": "Go back";
     "goBackToEditing": "Go back to editing";
@@ -2028,7 +2029,6 @@ type Messages = {
     "editSessionTakenOver": "Another tab, window, or device opened this document for editing, so this session was released. Unsaved local changes are preserved — reopen the doc to continue.";
     "findReplace": {
       "close": "Close search";
-      "find": "Find";
       "findAndReplace": "Find and replace";
       "findPlaceholder": "Search document...";
       "findText": "Find text";
@@ -5151,6 +5151,14 @@ type Messages = {
       "filter": "Filter";
       "filterByPlaceholder": "Filter by…";
       "filtersWithCount": "{count, plural, one {# filter} other {# filters}}";
+      "findAllColumns": "All columns";
+      "findColumnMetadataNotSearchable": "Sort this column instead of finding in it";
+      "findColumnNotSearchable": "Filter this column instead of finding in it";
+      "findColumns": "Columns to find in";
+      "findInTable": "Find in table";
+      "findPlaceholder": "Find in rows…";
+      "findScopeColumns": "{count, plural, one {# column} other {# columns}}";
+      "findTermTooShort": "{count, plural, one {Type at least # character} other {Type at least # characters}}";
       "group": "Group";
       "groupBy": "Group by:";
       "groupItemCount": "{count, plural, one {# item} other {# items}}";
@@ -5167,6 +5175,8 @@ type Messages = {
       "newView": "{layoutType, select, other {New {layout}}}";
       "noFilterResults": "No items match these filters";
       "noFilterResultsHint": "They would show up here if you removed some filters.";
+      "noFindResults": "Nothing matches “{term}”";
+      "noFindResultsHint": "Try a shorter term, or search in more columns.";
       "removeAdvancedFilter": "Remove advanced filter";
       "reportExport": {
         "action": "Export report…";

@@ -13976,7 +13976,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "entities", "read-window"],
                 capabilityId: "entities.read-window",
                 description:
-                  "Read a window of a matter's documents, folders, and tasks with the same filters, sorts, search, and field selection as entities.list, but with the page bounds the virtualized table scrolls by (200 rows by default). Prefer entities.list unless you are filling a table viewport.",
+                  "Read a window of a matter's documents, folders, and tasks with the same filters, sorts, search, and field selection as entities.list, plus the find filter, but with the page bounds the virtualized table scrolls by (200 rows by default). Prefer entities.list unless you are filling a table viewport.",
                 access: "read",
                 flags: [
                   {
@@ -13991,6 +13991,8 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
+                    description:
+                      "Rank rows by relevance against the asynchronous document-title index, and sort by that relevance. For a literal substring filter over the rendered rows, use `find`.",
                     flag: "--search",
                     prop: "search",
                     required: false,
@@ -14035,7 +14037,12 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "includeAssignees",
                   },
                 ],
-                inputOnly: ["body.filters", "body.sorts", "body.fieldMode"],
+                inputOnly: [
+                  "body.filters",
+                  "body.sorts",
+                  "body.find",
+                  "body.fieldMode",
+                ],
                 paginated: true,
                 paginationPart: "body",
                 itemsKey: "items",
@@ -14367,7 +14374,52 @@ export const generatedRouteMap: RouteNode = {
                         },
                         search: {
                           maxLength: 500,
+                          description:
+                            "Rank rows by relevance against the asynchronous document-title index, and sort by that relevance. For a literal substring filter over the rendered rows, use `find`.",
                           type: "string",
+                        },
+                        find: {
+                          description:
+                            "Filter rows to those whose displayed name or chosen columns contain this literal substring. Not `search`: that ranks an asynchronous index of document titles, this filters exactly what the grid renders and adds no sort keys. `scope.type` `all` also matches the name, `columns` matches only `scope.propertyIds`. `term` is at least 3 characters once trimmed: the cells are read through a trigram index, which a shorter term cannot use.",
+                          type: "object",
+                          required: ["scope", "term"],
+                          properties: {
+                            scope: {
+                              type: "object",
+                              required: ["propertyIds", "type"],
+                              properties: {
+                                propertyIds: {
+                                  maxItems: 300,
+                                  type: "array",
+                                  items: {
+                                    minLength: 36,
+                                    maxLength: 36,
+                                    pattern:
+                                      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                                    type: "string",
+                                  },
+                                },
+                                type: {
+                                  anyOf: [
+                                    {
+                                      const: "all",
+                                      type: "string",
+                                    },
+                                    {
+                                      const: "columns",
+                                      type: "string",
+                                    },
+                                  ],
+                                },
+                              },
+                            },
+                            term: {
+                              minLength: 3,
+                              maxLength: 500,
+                              pattern: "^\\s*\\S[\\s\\S]{1,}\\S\\s*$",
+                              type: "string",
+                            },
+                          },
                         },
                         limit: {
                           minimum: 1,

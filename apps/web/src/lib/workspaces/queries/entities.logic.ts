@@ -1,4 +1,43 @@
+import { hashKey } from "@tanstack/react-query";
+
+import type { EntityFind } from "@stll/api-contract";
+
 import type { ConditionNode, EntityKind, WorkspaceProperty } from "@/lib/types";
+
+/**
+ * A find, as it travels to the server. `find.term` is the find bar's submitted
+ * term: what is typed never reaches a key, or every keystroke would mint a
+ * cache entry.
+ *
+ * Separate from `search`: that one ranks an asynchronous index for the mention
+ * picker, this one filters the rows the grid renders. The scope's property list
+ * is always explicit, because group-counts takes no field selection and so
+ * cannot derive a default that would agree with the rows.
+ */
+export type EntitiesFindKey = {
+  find?: EntityFind | undefined;
+};
+
+/**
+ * A blank term drops the whole find, so an open-but-empty find bar costs
+ * neither a cache entry nor a server condition. Property ids sort, so the same
+ * selection reached two ways is one cache key.
+ */
+export const normalizeFind = (
+  find: EntityFind | undefined,
+): EntityFind | null => {
+  const term = find?.term.trim();
+  if (!find || !term) {
+    return null;
+  }
+  return {
+    scope: {
+      propertyIds: [...find.scope.propertyIds].toSorted(),
+      type: find.scope.type,
+    },
+    term,
+  };
+};
 
 export type ViewSort = {
   propertyId: string;
@@ -19,13 +58,14 @@ export type EntitiesPageKey = {
   previewableForAi?: boolean;
 };
 
-export type EntitiesWindowKey = Omit<EntitiesPageKey, "page" | "pageSize"> & {
-  limit?: number;
-  // Off by default: the assignees join is extra work every other window
-  // caller skips. Only the kanban assignee sub-group's window request
-  // sets this.
-  includeAssignees?: boolean;
-};
+export type EntitiesWindowKey = Omit<EntitiesPageKey, "page" | "pageSize"> &
+  EntitiesFindKey & {
+    limit?: number;
+    // Off by default: the assignees join is extra work every other window
+    // caller skips. Only the kanban assignee sub-group's window request
+    // sets this.
+    includeAssignees?: boolean;
+  };
 
 export type FilesystemEntitiesKey = Omit<
   EntitiesPageKey,
@@ -40,7 +80,7 @@ export type KanbanGroupKey = EntitiesWindowKey & {
   optionValues?: string[];
 };
 
-export type GroupCountsKey = {
+export type GroupCountsKey = EntitiesFindKey & {
   workspaceId: string;
   filters: ConditionNode[];
   groupByPropertyId: string;
@@ -108,8 +148,10 @@ export const entitiesKeys = {
     excludedKinds,
     previewableForAi,
     includeAssignees,
+    find,
   }: EntitiesWindowKey) => {
     const normalizedFieldMode = fieldMode ?? "full";
+    const normalizedFind = normalizeFind(find);
     return [
       ...entitiesKeys.all(workspaceId),
       "window",
@@ -117,6 +159,7 @@ export const entitiesKeys = {
         filters,
         sorts,
         ...(search?.trim() && { search: search.trim() }),
+        ...(normalizedFind && { find: normalizedFind }),
         limit: limit ?? DEFAULT_ENTITY_WINDOW_SIZE,
         fieldMode: normalizedFieldMode,
         fieldIds:
@@ -164,14 +207,17 @@ export const entitiesKeys = {
     groupByPropertyId,
     groupValue,
     optionValues,
+    find,
   }: KanbanGroupKey) => {
     const normalizedFieldMode = fieldMode ?? "full";
+    const normalizedFind = normalizeFind(find);
     return [
       ...entitiesKeys.all(workspaceId),
       "kanban-group",
       {
         filters,
         sorts,
+        ...(normalizedFind && { find: normalizedFind }),
         limit: limit ?? DEFAULT_ENTITY_WINDOW_SIZE,
         fieldMode: normalizedFieldMode,
         fieldIds:
@@ -190,11 +236,20 @@ export const entitiesKeys = {
     filters,
     groupByPropertyId,
     optionValues,
-  }: GroupCountsKey) => [
-    ...entitiesKeys.all(workspaceId),
-    "group-counts",
-    { filters, groupByPropertyId, optionValues: optionValues?.toSorted() },
-  ],
+    find,
+  }: GroupCountsKey) => {
+    const normalizedFind = normalizeFind(find);
+    return [
+      ...entitiesKeys.all(workspaceId),
+      "group-counts",
+      {
+        filters,
+        groupByPropertyId,
+        optionValues: optionValues?.toSorted(),
+        ...(normalizedFind && { find: normalizedFind }),
+      },
+    ];
+  },
   summaries: (workspaceId: string) => [
     ...entitiesKeys.all(workspaceId),
     "summaries",
@@ -204,6 +259,53 @@ export const entitiesKeys = {
     "count",
   ],
 };
+
+/** The shape every kanban-group key ends in; any object may be read as it. */
+const isKeyParams = (
+  value: unknown,
+): value is {
+  find?: unknown;
+  groupByPropertyId?: unknown;
+  groupValue?: unknown;
+} => typeof value === "object" && value !== null;
+
+/**
+ * What a kanban-group key says about which rows it holds, as opposed to how
+ * many of them and which of their cells: the workspace, the group, and the
+ * find. Null for a key that is not a kanban-group key at all.
+ */
+const kanbanRowsIdentity = (queryKey: readonly unknown[]): string | null => {
+  const [root, workspaceId, kind, params] = queryKey;
+  if (root !== "entities" || kind !== "kanban-group" || !isKeyParams(params)) {
+    return null;
+  }
+  return hashKey([
+    workspaceId,
+    params.groupByPropertyId,
+    params.groupValue,
+    params.find,
+  ]);
+};
+
+/**
+ * Whether a group's previous rows may stand in for `key`'s while they load.
+ *
+ * They may while columns, filters, sorts or paging change: the rows already
+ * exist, and dropping every group to skeleton for a column toggle is the
+ * flicker `placeholderData` is there to prevent. They may not across a find.
+ * The group counts answer first and carry the new term, and the marks over
+ * the rows already name it, so the previous term's rows would render under
+ * the new term's counts and highlights until their replacement arrived. Rows
+ * of another workspace or another group are not these rows either.
+ */
+export const keepsRowsAcrossFind = (
+  previousKey: readonly unknown[] | undefined,
+  key: KanbanGroupKey,
+): boolean =>
+  previousKey !== undefined &&
+  kanbanRowsIdentity(previousKey) !== null &&
+  kanbanRowsIdentity(previousKey) ===
+    kanbanRowsIdentity(entitiesKeys.kanbanGroup(key));
 
 export const visibleEntityFieldIds = ({
   hiddenProperties,

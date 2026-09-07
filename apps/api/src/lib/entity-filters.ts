@@ -2,7 +2,8 @@ import { panic } from "better-result";
 import { and, asc, eq, inArray, isNull, ne, not, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
-import { isEntityKind } from "@stll/api-contract";
+import { ENTITY_FIND_TERM_MIN_LENGTH, isEntityKind } from "@stll/api-contract";
+import type { EntityFind } from "@stll/api-contract";
 import { compareByLocale } from "@stll/collation";
 import {
   type CompareNode,
@@ -22,6 +23,7 @@ import {
 import { user } from "@/api/db/auth-schema";
 import { entities, entityVersions, fields, properties } from "@/api/db/schema";
 import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
+import { escapeLike } from "@/api/lib/escape-like";
 import { typedPgArray } from "@/api/lib/search/sql";
 
 // -- Types --
@@ -394,15 +396,18 @@ const numericFieldValueExpr = (contentCol: typeof fields.content): SQL =>
 
 /**
  * Wraps a per-field predicate in an EXISTS subquery against the
- * entity's current version.
+ * entity's current version, for the fields whose property matches.
  */
-const propertyExists = (propertyId: string, opCondition: SQL): SQL =>
+const fieldsExist = (propertyMatch: SQL, opCondition: SQL): SQL =>
   sql`EXISTS (
     SELECT 1 FROM ${fields}
     WHERE ${fields.entityVersionId} = ${entities.currentVersionId}
-      AND ${fields.propertyId} = ${propertyId}
+      AND ${propertyMatch}
       AND ${opCondition}
   )`;
+
+const propertyExists = (propertyId: string, opCondition: SQL): SQL =>
+  fieldsExist(sql`${fields.propertyId} = ${propertyId}`, opCondition);
 
 const builtinColumn = (field: "status" | "priority") =>
   field === "status" ? entities.status : entities.priority;
@@ -525,8 +530,7 @@ const compileCompare = (node: CompareNode): SQL | null => {
  * multi-select arrays (the value matches if ANY element does) and scalar
  * values. `elemMatch` receives the per-element/per-scalar text expression.
  */
-const propertyValueMatches = (
-  propertyId: string,
+const fieldValueMatches = (
   arrayMatch: (valueExpr: SQL) => SQL,
   scalarMatch: (valueExpr: SQL) => SQL,
 ): SQL => {
@@ -535,14 +539,18 @@ const propertyValueMatches = (
     SELECT 1 FROM jsonb_array_elements_text(${content}->'value') AS elem
     WHERE ${arrayMatch(sql`elem`)}
   )`;
-  return propertyExists(
-    propertyId,
-    sql`CASE WHEN jsonb_typeof(${content}->'value') = 'array'
-      THEN ${anyElement}
-      ELSE ${scalarMatch(fieldValueExpr(content))}
-    END`,
-  );
+  return sql`CASE WHEN jsonb_typeof(${content}->'value') = 'array'
+    THEN ${anyElement}
+    ELSE ${scalarMatch(fieldValueExpr(content))}
+  END`;
 };
+
+const propertyValueMatches = (
+  propertyId: string,
+  arrayMatch: (valueExpr: SQL) => SQL,
+  scalarMatch: (valueExpr: SQL) => SQL,
+): SQL =>
+  propertyExists(propertyId, fieldValueMatches(arrayMatch, scalarMatch));
 
 const compilePropertyPredicate = (
   propertyId: string,
@@ -712,6 +720,154 @@ export const buildFilterConditions = (filters: ConditionNode[]): SQL[] => {
     }
   }
   return conditions;
+};
+
+// -- Find --
+
+/**
+ * The name a row sorts by. `entities.display_name` is maintained synchronously
+ * by trigger and has its own fallback chain (name, first file's name, first
+ * text value, an "Untitled ..." default); tasks sort by their own `name`.
+ */
+export const displayedNameExpr = (): SQL =>
+  sql`CASE WHEN ${entities.kind} = 'task' THEN ${entities.name} ELSE ${entities.displayName} END`;
+
+/**
+ * Whether a cell can be found by substring, total over the stored field
+ * content types.
+ *
+ * The client only ever offers the searchable property types, but the gate is
+ * here rather than there: a cell whose stored scalar is not the string it
+ * renders must not match whatever ids arrive. A date is stored `2026-09-04` and
+ * rendered in the reader's locale, an int is stored `1234` and rendered
+ * digit-grouped, money is stored as `amountCents` (where `%1234%` would also
+ * match $12.34), and a clip renders its citation or URL, neither of which
+ * `fieldValueExpr` projects. Typing what you see would find nothing in all
+ * four, and typing the stored form could not be highlighted.
+ */
+export const FIELD_FIND_SUPPORT = {
+  file: "searchable",
+  text: "searchable",
+  "single-select": "searchable",
+  "multi-select": "searchable",
+  person: "searchable",
+  clip: "excluded",
+  date: "excluded",
+  int: "excluded",
+  money: "excluded",
+  error: "excluded",
+  pending: "excluded",
+  unsupported: "excluded",
+} as const satisfies Record<FieldContent["type"], "searchable" | "excluded">;
+
+/**
+ * The cell types a find reaches, in declaration order. The partial index
+ * `fields_find_text_trgm_idx` and the `field_find_text` function name the same
+ * list by hand; `fields-find-text-index.test.ts` holds the three together.
+ */
+export const FINDABLE_FIELD_TYPES: readonly string[] = Object.entries(
+  FIELD_FIND_SUPPORT,
+)
+  .filter(([, support]) => support === "searchable")
+  .map(([type]) => type);
+
+/**
+ * The type gate as the partial index `fields_find_text_trgm_idx` spells it:
+ * inline literals, not a bound array. The planner proves a query clause
+ * implies an index predicate only when it can see both, and a parameter it
+ * cannot see would leave the index unusable for every find. The literals are
+ * content-type names from a const map, checked here so a name that needed
+ * quoting could not reach `sql.raw`.
+ */
+const FINDABLE_FIELD_TYPES_PREDICATE_SQL: SQL = (() => {
+  const unquotable = FINDABLE_FIELD_TYPES.find(
+    (type) => !/^[a-z-]+$/u.test(type),
+  );
+  if (unquotable !== undefined) {
+    return panic(`Findable field type is not a plain literal: ${unquotable}`);
+  }
+  return sql`${fields.content}->>'type' IN (${sql.raw(
+    FINDABLE_FIELD_TYPES.map((type) => `'${type}'`).join(", "),
+  )})`;
+})();
+
+type BuildFindConditionsOptions = {
+  find: EntityFind | undefined;
+  /** The workspace the reader is already scoped to; bounds the cell scan. */
+  workspaceId: string;
+};
+
+/**
+ * The find predicate: the row's name when the scope is unrestricted, ORed
+ * with a membership test over the searched columns. Every reader of a table
+ * view compiles it here — the row window, each group's window, and the group
+ * counts — because counts that disagree with rows is the failure this shares
+ * one expression to prevent.
+ *
+ * The column half is an uncorrelated subquery over `fields`, not an EXISTS
+ * per entity: the planner runs it once, reading candidates off the trigram
+ * index `fields_find_text_trgm_idx` through the same `field_find_text`
+ * expression and the same type gate the index is built over. A correlated
+ * form would probe the index once per candidate row instead. The index only
+ * proposes: `fieldValueMatches` stays inside as the recheck, so a multi-select
+ * whose joined text matches across an element boundary is still rejected, and
+ * what a find returns is defined by the recheck alone.
+ *
+ * The name half reads `entities.name`, the string the grid's name column
+ * renders, not `display_name`: its fallbacks (a file name, a text value, an
+ * English "Untitled") would return rows the highlighter has nothing to mark
+ * in, and a reader typing their own locale's placeholder would find nothing.
+ *
+ * A find term is literal text, not a pattern: a typed `%` or `_` has to match
+ * itself, or the server would return rows the highlighter cannot mark.
+ * `contains` filters keep their pass-through behaviour; find is stricter.
+ *
+ * Property ids need no ownership check: like `fieldIds`, they are only used
+ * inside a subquery already scoped to the authorized workspace, so a foreign
+ * id is inert.
+ */
+export const buildFindConditions = ({
+  find,
+  workspaceId,
+}: BuildFindConditionsOptions): SQL[] => {
+  if (!find) {
+    return [];
+  }
+  // The floor over the string the pattern is built from, not the one that
+  // arrived: the wire schema rejects a short term padded or bare, and this is
+  // what makes an ILIKE the trigram index cannot answer unreachable for every
+  // caller, wire or not.
+  const term = find.term.trim();
+  if (term.length < ENTITY_FIND_TERM_MIN_LENGTH) {
+    return [];
+  }
+
+  const pattern = `%${escapeLike(term)}%`;
+  const matchesPattern = (valueExpr: SQL) => sql`${valueExpr} ILIKE ${pattern}`;
+  const { propertyIds } = find.scope;
+  const columnsMatch =
+    propertyIds.length === 0
+      ? null
+      : sql`${entities.currentVersionId} IN (
+          SELECT ${fields.entityVersionId} FROM ${fields}
+          WHERE ${fields.workspaceId} = ${workspaceId}
+            AND ${fields.propertyId} = ANY(${typedPgArray(propertyIds, "uuid")})
+            AND ${FINDABLE_FIELD_TYPES_PREDICATE_SQL}
+            AND field_find_text(${fields.content}) ILIKE ${pattern}
+            AND ${fieldValueMatches(matchesPattern, matchesPattern)}
+        )`;
+
+  // "columns" drops the name half, so a row whose name matches but whose chosen
+  // columns do not is absent. Narrowed to no columns at all, nothing can match;
+  // falling back to every row would read as the find having been ignored.
+  if (find.scope.type === "columns") {
+    return [columnsMatch ?? sql`false`];
+  }
+
+  const nameMatch = matchesPattern(sql`${entities.name}`);
+  return [
+    columnsMatch === null ? nameMatch : sql`(${nameMatch} OR ${columnsMatch})`,
+  ];
 };
 
 // Internal property sort expressions (metadata columns).

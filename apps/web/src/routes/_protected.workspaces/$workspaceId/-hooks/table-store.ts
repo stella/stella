@@ -17,6 +17,47 @@ const TABLE_CONTENT_MODES = ["tight", "fit-content"] as const;
 
 export type TableContentMode = (typeof TABLE_CONTENT_MODES)[number];
 
+/**
+ * How wide a find reaches. `all` is the state the bar opens in: no
+ * column chosen, so the row's name counts too. Narrowing to columns is a
+ * different question, not a shorter list, which is why it is a branch rather
+ * than an empty array.
+ */
+export type TableFindSelection =
+  | { type: "all" }
+  | { propertyIds: string[]; type: "columns" };
+
+/**
+ * A view's find. Absent from the record means there is no find at all; the
+ * bar's own visibility is `status` alone, because a find outlives its editor.
+ * Closing the popover leaves the rows narrowed and the toolbar chip explaining
+ * why, and `clearFind` is the only thing that ends it.
+ *
+ * `typed` is what the input holds this keystroke. `submitted` is what the row
+ * readers have actually been asked for, and so what the rows on screen and
+ * their marks reflect. They are separate because the bar debounces: keeping
+ * one field would either lag the input by a quarter second or refetch on every
+ * keystroke, and "search now" (Enter) needs something to submit early into.
+ *
+ * Only `submitted` may reach a query key or a highlight. Highlighting against
+ * `typed` would mark runs the server has not answered for, so the marks would
+ * run ahead of the rows they are meant to explain.
+ */
+export type TableFind = {
+  scope: TableFindSelection;
+  status: "closed" | "open";
+  submitted: string;
+  typed: string;
+};
+
+const pruneByViewId = <T>(
+  record: Record<string, T>,
+  activeViewIds: ReadonlySet<string>,
+): Record<string, T> =>
+  Object.fromEntries(
+    Object.entries(record).filter(([viewId]) => activeViewIds.has(viewId)),
+  );
+
 const selectedEntitiesEqual = (
   prev: readonly WorkspaceEntity[] | undefined,
   next: readonly WorkspaceEntity[],
@@ -128,6 +169,21 @@ type TableStore = {
    */
   preservableRowIds: Record<string, string[]>;
   setPreservableRowIds: (viewId: string, rowIds: string[]) => void;
+  /**
+   * The find per view. Never persisted: a find is a question about the rows in
+   * front of you, not a saved view setting, so it does not survive a reload
+   * the way column widths do.
+   */
+  find: Record<string, TableFind>;
+  openFind: (viewId: string) => void;
+  /** Hide the bar and keep the term: the rows stay narrowed. */
+  closeFind: (viewId: string) => void;
+  /** End the find. The only way back to every row. */
+  clearFind: (viewId: string) => void;
+  setFindTyped: (viewId: string, typed: string) => void;
+  /** Submit what is typed: the readers requery it, and the marks follow. */
+  submitFind: (viewId: string) => void;
+  setFindScope: (viewId: string, scope: TableFindSelection) => void;
   pruneStaleViews: (activeViewIds: string[]) => void;
 };
 
@@ -139,6 +195,7 @@ export const useTableStore = create<TableStore>()(
       rowSelection: {},
       selectedEntities: {},
       preservableRowIds: {},
+      find: {},
 
       setContentMode: (viewId, mode) => {
         set((state) => {
@@ -178,6 +235,68 @@ export const useTableStore = create<TableStore>()(
         });
       },
 
+      openFind: (viewId) => {
+        set((state) => {
+          const current = state.find[viewId];
+          if (current) {
+            // Reopening keeps what was typed and submitted: the shortcut and
+            // the chip both show the running find, they do not start over.
+            current.status = "open";
+            return;
+          }
+          state.find[viewId] = {
+            scope: { type: "all" },
+            status: "open",
+            submitted: "",
+            typed: "",
+          };
+        });
+      },
+
+      closeFind: (viewId) => {
+        set((state) => {
+          const current = state.find[viewId];
+          if (current) {
+            current.status = "closed";
+          }
+        });
+      },
+
+      clearFind: (viewId) => {
+        set((state) => {
+          state.find = Object.fromEntries(
+            Object.entries(state.find).filter(([id]) => id !== viewId),
+          );
+        });
+      },
+
+      setFindTyped: (viewId, typed) => {
+        set((state) => {
+          const current = state.find[viewId];
+          if (current) {
+            current.typed = typed;
+          }
+        });
+      },
+
+      submitFind: (viewId) => {
+        set((state) => {
+          const current = state.find[viewId];
+          if (current) {
+            current.submitted = current.typed;
+          }
+        });
+      },
+
+      setFindScope: (viewId, scope) => {
+        set((state) => {
+          const current = state.find[viewId];
+          if (current) {
+            current.scope = scope;
+          }
+        });
+      },
+
       pruneStaleViews: (activeViewIds) => {
         set((state) => {
           const active = new Set(activeViewIds);
@@ -186,36 +305,17 @@ export const useTableStore = create<TableStore>()(
               state.columnSizing.delete(viewId);
             }
           }
-          const prunedContentMode: Record<string, TableContentMode> = {};
-          for (const [vid, mode] of Object.entries(state.contentMode)) {
-            if (active.has(vid)) {
-              prunedContentMode[vid] = mode;
-            }
-          }
-          state.contentMode = prunedContentMode;
-          const pruned: Record<string, RowSelectionState> = {};
-          for (const [vid, sel] of Object.entries(state.rowSelection)) {
-            if (active.has(vid)) {
-              pruned[vid] = sel;
-            }
-          }
-          state.rowSelection = pruned;
-          const prunedSelectedEntities: Record<string, WorkspaceEntity[]> = {};
-          for (const [vid, entities] of Object.entries(
+          state.contentMode = pruneByViewId(state.contentMode, active);
+          state.rowSelection = pruneByViewId(state.rowSelection, active);
+          state.selectedEntities = pruneByViewId(
             state.selectedEntities,
-          )) {
-            if (active.has(vid)) {
-              prunedSelectedEntities[vid] = entities;
-            }
-          }
-          state.selectedEntities = prunedSelectedEntities;
-          const prunedPreservableRowIds: Record<string, string[]> = {};
-          for (const [vid, rowIds] of Object.entries(state.preservableRowIds)) {
-            if (active.has(vid)) {
-              prunedPreservableRowIds[vid] = rowIds;
-            }
-          }
-          state.preservableRowIds = prunedPreservableRowIds;
+            active,
+          );
+          state.preservableRowIds = pruneByViewId(
+            state.preservableRowIds,
+            active,
+          );
+          state.find = pruneByViewId(state.find, active);
         });
       },
     })),

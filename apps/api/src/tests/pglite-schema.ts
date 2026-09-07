@@ -94,6 +94,7 @@ export const installPgliteSchemaPrerequisites = async (
   await db.execute(sql.raw("CREATE EXTENSION IF NOT EXISTS pg_trgm"));
   await db.execute(sql.raw(arabicNormalizeFunctionSql()));
   await db.execute(sql.raw(legislationTitleFoldPgliteSql()));
+  await db.execute(sql.raw(fieldFindTextFunctionSql()));
   // Drizzle emits policies that reference this view before its backing tables
   // exist. Install a harmless shape-compatible stub for schema creation; the
   // security test database replaces it after pushSchema finishes.
@@ -136,6 +137,12 @@ const latestMigrationStatementContaining = (fragment: string): string => {
 const arabicNormalizeFunctionSql = (): string =>
   latestMigrationStatementContaining(
     "CREATE OR REPLACE FUNCTION arabic_normalize",
+  );
+
+// Plain jsonb operators, so the production function installs verbatim.
+const fieldFindTextFunctionSql = (): string =>
+  latestMigrationStatementContaining(
+    "CREATE OR REPLACE FUNCTION field_find_text",
   );
 
 // Split by leading keyword so each pattern stays below the lint's regex

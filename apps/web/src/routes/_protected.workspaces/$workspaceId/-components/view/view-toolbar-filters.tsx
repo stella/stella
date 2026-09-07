@@ -135,29 +135,29 @@ export const FilterChips = ({
     append(leafFromField(field));
   };
 
+  // One picker element, rendered alone when there are no filters and after the
+  // chips when there are.
+  const addFilterPicker = (
+    <AddFilterPicker
+      fields={pickerFields}
+      onAddAdvanced={addAdvanced}
+      onAddField={addField}
+      trigger={
+        <Button
+          aria-label={t("workspaces.views.filter")}
+          disabled={atFilterCap}
+          size="icon-xs"
+          title={t("workspaces.views.filter")}
+          variant="ghost"
+        >
+          <FilterIcon className="size-3.5" />
+        </Button>
+      }
+    />
+  );
+
   if (filters.length === 0) {
-    return (
-      <AddFilterPicker
-        fields={pickerFields}
-        onAddAdvanced={addAdvanced}
-        onAddField={addField}
-        trigger={
-          <Button
-            aria-label={t("workspaces.views.filter")}
-            className="gap-1.5"
-            disabled={atFilterCap}
-            size="xs"
-            title={t("workspaces.views.filter")}
-            variant="ghost"
-          >
-            <FilterIcon className="size-3.5" />
-            <span className="hidden sm:inline">
-              {t("workspaces.views.filter")}
-            </span>
-          </Button>
-        }
-      />
-    );
+    return addFilterPicker;
   }
 
   return (
@@ -192,26 +192,7 @@ export const FilterChips = ({
           />
         );
       })}
-      <AddFilterPicker
-        fields={pickerFields}
-        onAddAdvanced={addAdvanced}
-        onAddField={addField}
-        trigger={
-          <Button
-            aria-label={t("workspaces.views.filter")}
-            className="gap-1.5"
-            disabled={atFilterCap}
-            size="xs"
-            title={t("workspaces.views.filter")}
-            variant="ghost"
-          >
-            <FilterIcon className="size-3.5" />
-            <span className="hidden sm:inline">
-              {t("workspaces.views.filter")}
-            </span>
-          </Button>
-        }
-      />
+      {addFilterPicker}
     </>
   );
 };

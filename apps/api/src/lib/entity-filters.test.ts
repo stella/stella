@@ -2,6 +2,11 @@ import { describe, expect, test } from "bun:test";
 import { PgDialect } from "drizzle-orm/pg-core";
 import fc from "fast-check";
 
+import {
+  ENTITY_FIND_TERM_MIN_LENGTH,
+  PROPERTY_CONTENT_TYPES,
+  PROPERTY_FIND_SUPPORT,
+} from "@stll/api-contract";
 import { compareByLocale } from "@stll/collation";
 import type { ConditionNode } from "@stll/conditions";
 import { propertyConfig } from "@stll/property-testing";
@@ -11,6 +16,9 @@ import {
   applySorts,
   buildSortExpressions,
   buildFilterConditions,
+  buildFindConditions,
+  FIELD_FIND_SUPPORT,
+  FINDABLE_FIELD_TYPES,
 } from "./entity-filters";
 
 // -- buildFilterConditions (builtin filters) --
@@ -119,6 +127,170 @@ describe("buildFilterConditions (kind)", () => {
     const { sql, params } = dialect.sqlToQuery(cond);
     expect(sql).toContain('"kind"');
     expect(params).toContain("folder");
+  });
+});
+
+// -- buildFindConditions --
+
+const WORKSPACE_ID = "ws1";
+
+type Find = NonNullable<Parameters<typeof buildFindConditions>[0]["find"]>;
+
+const findConditions = (find: Find | undefined) =>
+  buildFindConditions({ find, workspaceId: WORKSPACE_ID });
+
+const findSql = (find: Find): string => {
+  const [condition] = findConditions(find);
+  if (!condition) {
+    throw new Error("expected a find condition");
+  }
+  return new PgDialect().sqlToQuery(condition).sql;
+};
+
+const findParams = (find: Find): unknown[] => {
+  const [condition] = findConditions(find);
+  if (!condition) {
+    throw new Error("expected a find condition");
+  }
+  return new PgDialect().sqlToQuery(condition).params;
+};
+
+describe("buildFindConditions", () => {
+  const propertyIds = ["p1", "p2"];
+
+  test("a term under the floor, padded or not, produces no condition", () => {
+    // The wire schema rejects these, so the builder can only see one from a
+    // direct caller; it still refuses to compile an ILIKE the trigram index
+    // cannot answer.
+    const short = "a".repeat(ENTITY_FIND_TERM_MIN_LENGTH - 1);
+    for (const term of ["", "   ", short, `  ${short}  `]) {
+      expect(
+        findConditions({ scope: { type: "all", propertyIds }, term }),
+      ).toHaveLength(0);
+    }
+    expect(findConditions(undefined)).toHaveLength(0);
+  });
+
+  test("a padded term is matched trimmed", () => {
+    expect(
+      findParams({ scope: { type: "all", propertyIds }, term: "  lease  " }),
+    ).toContain("%lease%");
+  });
+
+  test("an unrestricted scope with no columns matches the name only", () => {
+    // The raw name is what the grid's name column renders; `display_name`
+    // falls back to strings no cell shows, which nothing could highlight.
+    const sql = findSql({
+      scope: { type: "all", propertyIds: [] },
+      term: "lease",
+    });
+    expect(sql).toContain('"entities"."name"');
+    expect(sql).not.toContain("display_name");
+    expect(sql).not.toContain("IN (");
+  });
+
+  test("an unrestricted scope ORs the name with the searched columns", () => {
+    const sql = findSql({
+      scope: { type: "all", propertyIds },
+      term: "lease",
+    });
+    expect(sql).toContain('"entities"."name"');
+    expect(sql).toContain(" OR ");
+    expect(sql).toContain('"entities"."current_version_id" IN (');
+  });
+
+  test("a narrowed scope drops the name half", () => {
+    const sql = findSql({
+      scope: { type: "columns", propertyIds },
+      term: "lease",
+    });
+    expect(sql).not.toContain('"entities"."name"');
+    expect(sql).toContain('"entities"."current_version_id" IN (');
+  });
+
+  test("a narrowed scope with no columns matches nothing", () => {
+    expect(
+      findSql({
+        scope: { type: "columns", propertyIds: [] },
+        term: "lease",
+      }),
+    ).toContain("false");
+  });
+
+  test("columns are reached with one ANY list, not a subquery each", () => {
+    const sql = findSql({
+      scope: { type: "all", propertyIds },
+      term: "lease",
+    });
+    expect(sql).toContain("= ANY(");
+    expect(sql.match(/IN \(\s*SELECT/gu)).toHaveLength(1);
+  });
+
+  test("candidates come off the trigram index, scoped to the workspace", () => {
+    // Uncorrelated: the subquery names the workspace and never the outer
+    // row, so the planner runs it once against the index rather than once
+    // per entity. The expression and the type gate are the index's own.
+    const sql = findSql({
+      scope: { type: "columns", propertyIds },
+      term: "lease",
+    });
+    const subquery = sql.slice(sql.indexOf("IN ("));
+    expect(subquery).toContain('"fields"."workspace_id" = ');
+    expect(subquery).toContain('field_find_text("fields"."content") ILIKE');
+    expect(subquery).toContain(
+      `->>'type' IN (${FINDABLE_FIELD_TYPES.map((type) => `'${type}'`).join(", ")})`,
+    );
+    expect(subquery).not.toContain('"entities".');
+    expect(
+      findParams({ scope: { type: "columns", propertyIds }, term: "lease" }),
+    ).toContain(WORKSPACE_ID);
+  });
+
+  test("a multi-select array matches element-wise, a scalar by substring", () => {
+    const sql = findSql({
+      scope: { type: "columns", propertyIds },
+      term: "lease",
+    });
+    expect(sql).toContain("jsonb_array_elements_text");
+    expect(sql).toContain("jsonb_typeof");
+    expect(sql).toContain("ILIKE");
+  });
+
+  test("the term is trimmed and bound as a literal substring", () => {
+    expect(
+      findParams({
+        scope: { type: "all", propertyIds },
+        term: "  lease  ",
+      }),
+    ).toContain("%lease%");
+  });
+
+  test("only searchable cell types are reachable", () => {
+    const sql = findSql({
+      scope: { type: "columns", propertyIds },
+      term: "lease",
+    });
+    expect(sql).toContain("->>'type' IN (");
+  });
+
+  test("the cell gate and the column picker classify a type the same way", () => {
+    // The picker offers columns by property type; the SQL gates cells by the
+    // stored field type. They are two maps, so bind them: a type the picker
+    // offers that the SQL refuses would return rows with nothing highlighted.
+    for (const type of PROPERTY_CONTENT_TYPES) {
+      expect(FIELD_FIND_SUPPORT[type]).toBe(PROPERTY_FIND_SUPPORT[type]);
+    }
+  });
+
+  test("LIKE metacharacters in the term match themselves", () => {
+    // The highlighter matches literal text, so a wildcard that widened the
+    // server's match would return rows with nothing to mark.
+    expect(
+      findParams({
+        scope: { type: "all", propertyIds: [] },
+        term: "50%_off",
+      }),
+    ).toContain("%50\\%\\_off%");
   });
 });
 

@@ -1,7 +1,13 @@
-import { expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { Elysia, t } from "elysia";
 
-import { fieldContentSchema } from "@/api/db/schema-validators";
+import { PROPERTY_CONTENT_TYPES } from "@stll/api-contract";
+
+import {
+  fieldContentSchema,
+  propertyContentTypeSchema,
+  type PropertyContentType,
+} from "@/api/db/schema-validators";
 
 /**
  * A workspace field's currency is normalized where it is written, not where it
@@ -71,4 +77,33 @@ test("an upper-case code passes through unchanged", async () => {
       currency: "KWD",
     }),
   ).toEqual({ version: 1, type: "money", amountCents: 1500, currency: "KWD" });
+});
+
+// A stale copy of the list would still typecheck if it were merely a subset,
+// so bind the two directions: the schema's members are exactly the contract's,
+// and the contract's type is exactly the schema's.
+type AssertEqual<A, B> = [A] extends [B]
+  ? [B] extends [A]
+    ? true
+    : never
+  : never;
+
+const contractTypeMatchesSchema: AssertEqual<
+  PropertyContentType,
+  (typeof PROPERTY_CONTENT_TYPES)[number]
+> = true;
+
+describe("property content types", () => {
+  test("the wire schema accepts exactly the contract's list", () => {
+    expect(contractTypeMatchesSchema).toBe(true);
+    expect(
+      propertyContentTypeSchema.anyOf.map((member) => member.const),
+    ).toEqual([...PROPERTY_CONTENT_TYPES]);
+  });
+
+  test("omitting the field is rejected rather than defaulted", () => {
+    // `t.UnionEnum` would advertise a default of the first member, which turns
+    // a request that forgot `contentType` into a silent "file" column.
+    expect(propertyContentTypeSchema).not.toHaveProperty("default");
+  });
 });

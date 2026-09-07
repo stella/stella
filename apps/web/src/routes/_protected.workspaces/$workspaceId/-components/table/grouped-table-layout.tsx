@@ -1,4 +1,11 @@
-import { type RefObject, useCallback, useMemo, useRef, useState } from "react";
+import {
+  type RefObject,
+  useCallback,
+  useDeferredValue,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import {
   useInfiniteQuery,
@@ -6,7 +13,12 @@ import {
   useSuspenseQuery,
 } from "@tanstack/react-query";
 import { useTable } from "@tanstack/react-table";
-import { ChevronDownIcon, ChevronRightIcon, TableIcon } from "lucide-react";
+import {
+  ChevronDownIcon,
+  ChevronRightIcon,
+  SearchXIcon,
+  TableIcon,
+} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { ENTITY_KINDS, VIEW_SORTS_MAX } from "@stll/api-contract";
@@ -25,6 +37,7 @@ import {
 } from "@/components/workspaces/entity-utils";
 import { useSyncJustificationChunks } from "@/components/workspaces/hooks/use-sync-justifications";
 import { SelectColorIcon } from "@/components/workspaces/properties/shared";
+import { FindHighlightScope } from "@/components/workspaces/table/find-highlight";
 import {
   buildDocTypeGateLabels,
   resolveDocumentTypeClassifier,
@@ -39,6 +52,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
 import type { EntityKind, WorkspaceView } from "@/lib/types";
 import { visibleEntityFieldIds } from "@/lib/workspaces/queries/entities";
+import type { EntitiesFindKey } from "@/lib/workspaces/queries/entities.logic";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 import { workspaceTableAdapter } from "@/lib/workspaces/table-adapter";
 import { BottomRow } from "@/routes/_protected.workspaces/$workspaceId/-components/bottom-row";
@@ -81,6 +95,7 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/internals-helpers";
 import { useTableStore } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
 import { useSyncSelectedEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-selected-entities";
+import { useTableFind } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-table-find";
 import { useTableState } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-table-state";
 
 // Grouped views eager-load only the first few sections' rows upfront; every
@@ -143,6 +158,9 @@ export const GroupedTableLayout = ({
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
   const tableState = useTableState({ workspaceId, view });
   const columns = useTableColumns({ properties, view });
+  // Deferred alongside the group keys (each section defers its own), so the
+  // marks describe the rows on screen, not a term still being fetched.
+  const find = useDeferredValue(useTableFind({ properties, view }));
   // One shared scroller for the whole grouped view: every group's table flows
   // inside it (no nested scroll boxes), so the sticky group headers stack
   // correctly and a single horizontal scroll keeps every group aligned.
@@ -231,6 +249,7 @@ export const GroupedTableLayout = ({
       filters: view.layout.filters,
       groupByPropertyId: groupByPropertyId ?? "",
       ...(optionValues !== undefined && { optionValues }),
+      ...find.request,
     }),
     enabled: groupByPropertyId !== null && !isUnsupportedGrouping,
   });
@@ -313,6 +332,26 @@ export const GroupedTableLayout = ({
     ? getEagerGroupValues(groups, countByValue)
     : null;
 
+  // A find that matches nothing gets the same answer here as in the flat
+  // layout. Left to the sections, a grouped view says it with a column of
+  // "0 items" headers and no term in sight, so the same search reads as two
+  // different outcomes depending on how the view happens to be grouped.
+  if (
+    find.highlight &&
+    countsLoaded &&
+    groups.every((group) => (countByValue.get(group.value) ?? 0) === 0)
+  ) {
+    return (
+      <EmptyState
+        hint={t("workspaces.views.noFindResultsHint")}
+        icon={SearchXIcon}
+        message={t("workspaces.views.noFindResults", {
+          term: find.highlight.term,
+        })}
+      />
+    );
+  }
+
   return (
     // Flex column so empty categories can sink below populated ones via
     // `order` (set per-section once its count resolves). No own scroll: the
@@ -323,33 +362,36 @@ export const GroupedTableLayout = ({
     // so every section — populated, empty, and the add-row — stretches to the
     // full table width (their bands then run the whole scroll width).
     <MobileTableOrientationGate>
-      <div className="flex w-max min-w-full flex-col" ref={scrollRef}>
-        {groups.map((group) => (
-          <GroupSection
-            columns={columns}
-            count={
-              countsLoaded ? (countByValue.get(group.value) ?? 0) : undefined
-            }
-            eager={eagerGroupValues?.has(group.value) ?? false}
-            fieldIds={fieldIds}
-            gateLabelsByColumnId={gateLabelsByColumnId}
-            group={group}
-            groupByPropertyId={groupByPropertyId}
-            key={groupKeyFor(group.value)}
-            optionValues={optionValues}
-            outerScrollRef={scrollRef}
-            reportGroupTreeData={reportGroupTreeData}
+      <FindHighlightScope highlight={find.highlight}>
+        <div className="flex w-max min-w-full flex-col" ref={scrollRef}>
+          {groups.map((group) => (
+            <GroupSection
+              columns={columns}
+              count={
+                countsLoaded ? (countByValue.get(group.value) ?? 0) : undefined
+              }
+              eager={eagerGroupValues?.has(group.value) ?? false}
+              fieldIds={fieldIds}
+              find={find.request}
+              gateLabelsByColumnId={gateLabelsByColumnId}
+              group={group}
+              groupByPropertyId={groupByPropertyId}
+              key={groupKeyFor(group.value)}
+              optionValues={optionValues}
+              outerScrollRef={scrollRef}
+              reportGroupTreeData={reportGroupTreeData}
+              tableState={tableState}
+              view={view}
+              workspaceId={workspaceId}
+            />
+          ))}
+          <GroupedAddRow
+            columns={addRowColumns}
             tableState={tableState}
-            view={view}
             workspaceId={workspaceId}
           />
-        ))}
-        <GroupedAddRow
-          columns={addRowColumns}
-          tableState={tableState}
-          workspaceId={workspaceId}
-        />
-      </div>
+        </div>
+      </FindHighlightScope>
     </MobileTableOrientationGate>
   );
 };
@@ -528,6 +570,9 @@ type GroupSectionProps = {
   // Skip the lazy scroll-gate and load this section's rows upfront.
   eager: boolean;
   fieldIds: string[];
+  // The view's find, resolved once by the layout so every section asks the
+  // same question its group count was answered with.
+  find: EntitiesFindKey;
   columns: TableColumnDef[];
   // propertyId -> document-type labels its column is gated to, for per-section
   // column selection when grouped by the "Document Type" classifier. Empty for
@@ -547,6 +592,7 @@ const GroupSection = ({
   count,
   eager,
   fieldIds,
+  find,
   columns,
   gateLabelsByColumnId,
   tableState,
@@ -609,6 +655,7 @@ const GroupSection = ({
       groupByPropertyId,
       groupValue: group.value,
       ...(optionValues !== undefined && { optionValues }),
+      ...find,
     }),
     enabled: hasRows && (eager || hasScrolledIntoView),
   });

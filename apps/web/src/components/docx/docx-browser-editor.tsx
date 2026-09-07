@@ -94,6 +94,7 @@ import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { fileOptions } from "@/lib/files/queries";
+import { useFindSurface } from "@/lib/find-owner";
 import { folioUIComponents } from "@/lib/folio-ui-components";
 import { getDisplayName } from "@/lib/get-display-name";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
@@ -673,6 +674,20 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     containerRef,
     editorRef,
     enabled: surface === "inspector",
+  });
+  // The full view is a surface of the registry too, or the inspector docked
+  // beside it (a reference preview, a DOCX tab) would take a press with the
+  // caret in this editor and open its bar over Folio's dialog. Folio answers a
+  // press inside its own root itself (`keyboardShortcuts="editor"` below, which
+  // also keeps print, replace and delete-table); the registry sends it the
+  // presses outside, which is what Folio's page-wide binding used to give the
+  // reader.
+  useFindSurface({
+    enabled: surface === "fullView",
+    onFind: () => editorRef.current?.openFind(),
+    owner: "document",
+    root: containerRef,
+    scope: "app",
   });
   const t = useTranslations();
   const format = useFormatter();
@@ -1890,6 +1905,10 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
             key={`docx-${previewIdentity}-${collaborationIdentity}`}
             ref={editorRef}
             autoOpenReviewSidebar={false}
+            // Docked, the pane has a find bar of its own and no Folio binding
+            // may answer beside it. Full view keeps Folio's bindings for a
+            // press inside the editor; the registry above covers the rest.
+            keyboardShortcuts={surface === "inspector" ? "none" : "editor"}
             className="folio-docx-preview folio-peek h-full"
             comments={docxComments}
             onCommentsChange={handleEditorDocxCommentsChange}

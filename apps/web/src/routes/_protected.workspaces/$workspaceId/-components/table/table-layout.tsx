@@ -1,11 +1,11 @@
-import { lazy, Suspense, useMemo } from "react";
+import { lazy, Suspense, useDeferredValue, useMemo } from "react";
 
 import {
   useSuspenseInfiniteQuery,
   useSuspenseQuery,
 } from "@tanstack/react-query";
 import { useTable } from "@tanstack/react-table";
-import { TableIcon } from "lucide-react";
+import { SearchXIcon, TableIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { VIEW_SORTS_MAX } from "@stll/api-contract";
@@ -13,6 +13,7 @@ import { VIEW_SORTS_MAX } from "@stll/api-contract";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import { toTableEntities } from "@/components/workspaces/entity-utils";
 import { useSyncJustificationChunks } from "@/components/workspaces/hooks/use-sync-justifications";
+import { FindHighlightScope } from "@/components/workspaces/table/find-highlight";
 import { workspaceTableFeatures } from "@/components/workspaces/table/table-features";
 import { useMountEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
@@ -37,6 +38,7 @@ import {
 import { WorkspaceTable } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table";
 import { includesListItems } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
 import { useSyncSelectedEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-selected-entities";
+import { useTableFind } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-table-find";
 import { useTableState } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-table-state";
 import { useUpdateView } from "@/routes/_protected.workspaces/$workspaceId/-mutations/views";
 
@@ -104,6 +106,10 @@ const FlatTableLayout = ({ workspaceId, view }: TableLayoutProps) => {
 
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
   const columns = useTableColumns({ properties, view });
+  // Deferred alongside the window key (`useListPage` defers its own), so the
+  // marks and the empty state describe the rows on screen, not the term whose
+  // fetch is still in flight.
+  const find = useDeferredValue(useTableFind({ properties, view }));
   const fieldIds = useMemo(
     () =>
       visibleEntityFieldIds({
@@ -123,6 +129,7 @@ const FlatTableLayout = ({ workspaceId, view }: TableLayoutProps) => {
         excludedKinds,
         fieldMode: "visible",
         fieldIds,
+        ...find.request,
       }),
     );
 
@@ -170,6 +177,19 @@ const FlatTableLayout = ({ workspaceId, view }: TableLayoutProps) => {
   });
 
   if (table.getRowModel().rows.length === 0) {
+    // Ahead of the filter and upload states: with a find running, "upload your
+    // first document" answers a question nobody asked.
+    if (find.highlight) {
+      return (
+        <EmptyState
+          hint={t("workspaces.views.noFindResultsHint")}
+          icon={SearchXIcon}
+          message={t("workspaces.views.noFindResults", {
+            term: find.highlight.term,
+          })}
+        />
+      );
+    }
     if (view.layout.filters.length > 0) {
       return (
         <FilteredEmptyState
@@ -193,16 +213,18 @@ const FlatTableLayout = ({ workspaceId, view }: TableLayoutProps) => {
 
   return (
     <MobileTableOrientationGate>
-      <WorkspaceTable
-        hasNextPage={hasNextPage}
-        isFetchingNextPage={isFetchingNextPage}
-        onLoadMore={() => {
-          detached(fetchNextPage(), "table-layout.fetch-next-page");
-        }}
-        table={table}
-        contentMode={tableState.contentMode}
-        workspaceId={workspaceId}
-      />
+      <FindHighlightScope highlight={find.highlight}>
+        <WorkspaceTable
+          hasNextPage={hasNextPage}
+          isFetchingNextPage={isFetchingNextPage}
+          onLoadMore={() => {
+            detached(fetchNextPage(), "table-layout.fetch-next-page");
+          }}
+          table={table}
+          contentMode={tableState.contentMode}
+          workspaceId={workspaceId}
+        />
+      </FindHighlightScope>
       {TableDevtoolsGate ? (
         <Suspense fallback={null}>
           <TableDevtoolsGate table={table} />

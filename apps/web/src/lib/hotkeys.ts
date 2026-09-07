@@ -10,6 +10,7 @@ export const HOTKEYS = {
   NEW_CHAT: "Mod+Shift+J",
   NEW_MATTER: "Mod+Shift+E",
   SELECT_ALL: "Mod+A",
+  FIND: "Mod+F",
   ACCEPT_SUGGESTION: "Alt+Enter",
   REJECT_SUGGESTION: "Alt+Shift+Enter",
   NEXT_SUGGESTION: "Alt+ArrowDown",
@@ -61,6 +62,7 @@ export type ShortcutLabelKey = Extract<
   | "navigation.toggleChat"
   | "navigation.showShortcuts"
   | "common.newMatter"
+  | "common.find"
   | "common.accept"
   | "common.previous"
   | "common.next"
@@ -132,6 +134,12 @@ export const SHORTCUT_GROUPS = [
         id: "selectAll",
         binding: { type: "hotkey", hotkey: HOTKEYS.SELECT_ALL },
         labelKey: "folio.selectAll",
+        contexts: ["workspace"],
+      },
+      {
+        id: "find",
+        binding: { type: "hotkey", hotkey: HOTKEYS.FIND },
+        labelKey: "common.find",
         contexts: ["workspace"],
       },
     ],

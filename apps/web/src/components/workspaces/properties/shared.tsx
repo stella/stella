@@ -11,6 +11,7 @@ import {
   PropertyPopoverLabel,
 } from "@/components/workspaces/property-helpers";
 import { resolveOptionColor } from "@/components/workspaces/property-utils";
+import { HighlightedText } from "@/components/workspaces/table/find-highlight";
 import type { OptionColor, PropertyContent } from "@/lib/api-contract";
 import type { WorkspaceProperty } from "@/lib/types";
 
@@ -57,7 +58,9 @@ export const PropertyPopoverTrigger = ({
         className={cn(isValid ? "" : "text-warning")}
         type={property.content.type}
       />
-      <span className="w-0 flex-1 truncate">{name}</span>
+      <span className="w-0 flex-1 truncate">
+        <HighlightedText text={name} />
+      </span>
     </Tooltip>
   );
 };

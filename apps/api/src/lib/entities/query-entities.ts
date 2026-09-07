@@ -13,7 +13,7 @@ import {
 import type { SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
-import type { OcrExportStatus } from "@stll/api-contract";
+import type { EntityFind, OcrExportStatus } from "@stll/api-contract";
 import type { ConditionNode } from "@stll/conditions";
 
 import { member, user } from "@/api/db/auth-schema";
@@ -57,7 +57,11 @@ import type {
   AgendaItemKind,
   AgendaItemSource,
 } from "@/api/lib/entity-constants";
-import { buildFilterConditions } from "@/api/lib/entity-filters";
+import {
+  buildFilterConditions,
+  buildFindConditions,
+  displayedNameExpr,
+} from "@/api/lib/entity-filters";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { ViewSort } from "@/api/lib/views-schema";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
@@ -159,6 +163,7 @@ type QueryEntitiesProps = {
   filters: ConditionNode[];
   sorts: ViewSort[];
   search?: string | undefined;
+  find?: EntityFind | undefined;
   cursor?: EntitiesWindowCursorValues | null | undefined;
   limit: number;
   fieldMode: QueryEntitiesFieldMode;
@@ -386,9 +391,6 @@ const dateSortKey = ({
   direction,
   type: "date",
 });
-
-const displayedNameExpr = (): SQL =>
-  sql`CASE WHEN ${entities.kind} = 'task' THEN ${entities.name} ELSE ${entities.displayName} END`;
 
 const propertySortValueExpr = (propertyId: string): SQL => sql`(
   SELECT left(
@@ -677,6 +679,7 @@ const queryEntitiesGenerator = async function* ({
   filters,
   sorts,
   search,
+  find,
   cursor,
   limit,
   fieldMode,
@@ -702,6 +705,7 @@ const queryEntitiesGenerator = async function* ({
     workspaceCondition,
     ...filterConditions,
     ...searchConditions,
+    ...buildFindConditions({ find, workspaceId }),
     ...kindConditions,
     ...previewableConditions,
     ...extraConditions,

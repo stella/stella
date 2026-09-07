@@ -14,11 +14,15 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { tConditionNode } from "@/api/lib/conditions/contract";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { tFind } from "@/api/lib/entities/find-schema";
 import {
   buildKanbanGroupCondition,
   buildOptionArraySql,
 } from "@/api/lib/entities/kanban-group-condition";
-import { buildFilterConditions } from "@/api/lib/entity-filters";
+import {
+  buildFilterConditions,
+  buildFindConditions,
+} from "@/api/lib/entity-filters";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { groupableSql } from "@/api/lib/groupable-sql";
 import { LIMITS } from "@/api/lib/limits";
@@ -50,6 +54,7 @@ const readGroupCountsBodySchema = t.Object({
   filters: t.Optional(
     t.Array(tConditionNode, { maxItems: LIMITS.viewFiltersCount }),
   ),
+  find: t.Optional(tFind),
 });
 
 const config = {
@@ -66,13 +71,15 @@ const readGroupCounts = createSafeHandler(
   config,
   async function* ({ safeDb, workspaceId, body }) {
     // Same base set the table/window query scopes to: this workspace, only
-    // entities with a live current version, plus the view's compiled filters.
-    // Matching this exactly is what keeps the group-header counts in sync with
-    // the rows the table actually renders.
+    // entities with a live current version, plus the view's compiled filters
+    // and the same find condition, compiled by the same builder. Matching this
+    // exactly is what keeps the group-header counts in sync with the rows the
+    // table actually renders.
     const baseConditions = and(
       eq(entities.workspaceId, workspaceId),
       isNotNull(entities.currentVersionId),
       ...buildFilterConditions(arrayOrEmpty(body.filters)),
+      ...buildFindConditions({ find: body.find, workspaceId }),
     );
     // The grouped table is a document table: it never renders folders or tasks
     // (the flat window query excludes them too), so the counts must exclude them

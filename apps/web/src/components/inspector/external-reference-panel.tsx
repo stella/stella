@@ -50,6 +50,7 @@ import { createChatThreadId, toChatThreadId } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 import { APIError, toAPIError } from "@/lib/errors/api";
 import { fetchWithTimeout } from "@/lib/fetch";
+import { useFindSurface } from "@/lib/find-owner";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { PDFPage } from "@/lib/pdf/pdf-page";
@@ -71,6 +72,7 @@ type InspectorFindOptions = {
   contentRef: RefObject<HTMLElement | null>;
   enabled: boolean;
   highlightKey: string;
+  panelRef: RefObject<HTMLElement | null>;
 };
 
 type FindState =
@@ -94,6 +96,7 @@ const useInspectorFind = ({
   contentRef,
   enabled,
   highlightKey,
+  panelRef,
 }: InspectorFindOptions) => {
   const [findState, setFindState] = useState<FindState>(FIND_CLOSED);
   const allHighlightName = `stella-inspector-find-${highlightKey}`;
@@ -153,19 +156,25 @@ const useInspectorFind = ({
   const matchCount = findState.open ? findState.matchCount : 0;
   const activeIndex = findState.open ? findState.activeIndex : 0;
 
+  // The DOCX pane and a table view's toolbar are candidates for the same
+  // press: this panel reaches the whole app while it is showing a document,
+  // and stands down for a pane the press landed inside or while a modal
+  // covers it.
+  useFindSurface({
+    enabled,
+    onFind: () => {
+      setFindState((prev) => (prev.open ? prev : FIND_OPENED));
+    },
+    owner: "inspector",
+    root: panelRef,
+    scope: "app",
+  });
+
+  // Escape closes this bar and nothing else, so it keeps a listener of its own
+  // rather than travelling through a registry that has no opinion about it.
   useExternalSyncEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (!enabled) {
-        return;
-      }
-
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "f") {
-        event.preventDefault();
-        setFindState((prev) => (prev.open ? prev : FIND_OPENED));
-        return;
-      }
-
-      if (event.key === "Escape" && findOpen) {
+      if (enabled && findOpen && event.key === "Escape") {
         event.preventDefault();
         setFindState(FIND_CLOSED);
       }
@@ -662,6 +671,7 @@ const GenericExternalReferencePanel = ({
   );
   const highlightKey = useMemo(() => sanitizeHighlightKey(tab.id), [tab.id]);
   const contentRef = useRef<HTMLElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
   const findInputRef = useRef<HTMLInputElement | null>(null);
   const {
     activeMatchNumber,
@@ -678,6 +688,7 @@ const GenericExternalReferencePanel = ({
     contentRef,
     enabled: previewText !== undefined,
     highlightKey,
+    panelRef,
   });
   const { data: mcpConnectorsData } = useQuery({
     ...mcpConnectorsOptions(activeOrganizationId),
@@ -738,7 +749,10 @@ const GenericExternalReferencePanel = ({
   }, [findOpen]);
 
   return (
-    <div className="bg-background flex min-h-0 flex-1 flex-col overflow-hidden">
+    <div
+      className="bg-background flex min-h-0 flex-1 flex-col overflow-hidden"
+      ref={panelRef}
+    >
       <style>
         {`
           ::highlight(stella-inspector-find-${highlightKey}) {
@@ -756,14 +770,14 @@ const GenericExternalReferencePanel = ({
           <div className="flex items-center gap-1">
             {previewText && (
               <Button
-                aria-label={t("folio.findReplace.find")}
+                aria-label={t("common.find")}
                 onClick={openFind}
                 size="xs"
                 title="Cmd+F"
                 variant="ghost"
               >
                 <SearchIcon className="size-3.5" />
-                {t("folio.findReplace.find")}
+                {t("common.find")}
               </Button>
             )}
             {canPreview && (

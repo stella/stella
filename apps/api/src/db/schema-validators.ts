@@ -104,6 +104,11 @@ const currencyCode = currencyCodeSchema();
 export const entityKindSchema = t.UnionEnum(ENTITY_KINDS);
 export type { EntityKind } from "@stll/api-contract";
 
+// Deliberately a union of literals, not `t.UnionEnum`: Elysia gives a
+// UnionEnum a default of its first member, which would turn a request that
+// omits this required field into a silent "file" instead of a 400.
+// `schema-validators.test.ts` binds the members to `PROPERTY_CONTENT_TYPES`,
+// so a new property type still has to be classified for find.
 export const propertyContentTypeSchema = t.Union([
   fileType,
   textType,

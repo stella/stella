@@ -12,6 +12,7 @@ import {
   emptyColor,
   resolveOptionColor,
 } from "@/components/workspaces/property-utils";
+import { HighlightedText } from "@/components/workspaces/table/find-highlight";
 import { useFormatter, useLocale } from "@/i18n/formatting-context";
 import type { WorkspaceFieldContent, WorkspaceProperty } from "@/lib/types";
 
@@ -57,11 +58,23 @@ export const FieldValue = ({
   }
 
   if (content.type === "file") {
-    return <FileFieldValue content={content} variant={resolvedVariant} />;
+    return (
+      <FileFieldValue
+        content={content}
+        propertyId={property.id}
+        variant={resolvedVariant}
+      />
+    );
   }
 
   if (content.type === "text") {
-    return <TextFieldValue content={content} variant={resolvedVariant} />;
+    return (
+      <TextFieldValue
+        content={content}
+        propertyId={property.id}
+        variant={resolvedVariant}
+      />
+    );
   }
 
   if (content.type === "date") {
@@ -83,13 +96,20 @@ export const FieldValue = ({
   }
 
   if (content.type === "person") {
-    return <PersonFieldValue content={content} variant={resolvedVariant} />;
+    return (
+      <PersonFieldValue
+        content={content}
+        propertyId={property.id}
+        variant={resolvedVariant}
+      />
+    );
   }
 
   if (content.type === "single-select") {
     return (
       <SelectFieldValue
         property={property}
+        propertyId={property.id}
         value={content.value}
         variant={resolvedVariant}
       />
@@ -100,6 +120,7 @@ export const FieldValue = ({
     return (
       <MultiSelectFieldValue
         property={property}
+        propertyId={property.id}
         value={content.value}
         variant={resolvedVariant}
       />
@@ -165,9 +186,11 @@ export const MoneyFieldValue = ({
 
 export const PersonFieldValue = ({
   content,
+  propertyId,
   variant,
 }: {
   content: Extract<WorkspaceFieldContent, { type: "person" }>;
+  propertyId?: string | undefined;
   variant?: FieldValueVariant;
 }) => {
   const resolvedVariant = variant ?? "default";
@@ -182,7 +205,9 @@ export const PersonFieldValue = ({
       )}
     >
       <PersonAvatar image={content.image} name={content.name} />
-      <span className="truncate">{content.name}</span>
+      <span className="truncate">
+        <HighlightedText propertyId={propertyId} text={content.name} />
+      </span>
     </span>
   );
 };
@@ -314,9 +339,11 @@ const UnsupportedFieldValue = ({ variant }: { variant: FieldValueVariant }) => {
 
 const FileFieldValue = ({
   content,
+  propertyId,
   variant,
 }: {
   content: Extract<WorkspaceFieldContent, { type: "file" }>;
+  propertyId: string;
   variant: FieldValueVariant;
 }) => {
   if (variant === "kanban") {
@@ -328,18 +355,24 @@ const FileFieldValue = ({
       as="span"
       className={cn(variant === "table" ? "truncate" : "text-sm")}
     >
-      {content.fileName}
+      <HighlightedText propertyId={propertyId} text={content.fileName} />
     </BidiText>
   );
 };
 
 const TextFieldValue = ({
   content,
+  propertyId,
   variant,
 }: {
   content: Extract<WorkspaceFieldContent, { type: "text" }>;
+  propertyId: string;
   variant: FieldValueVariant;
 }) => {
+  const value = (
+    <HighlightedText propertyId={propertyId} text={content.value} />
+  );
+
   if (variant === "kanban") {
     if (!content.value.trim()) {
       return null;
@@ -350,7 +383,7 @@ const TextFieldValue = ({
         as="span"
         className="text-muted-foreground line-clamp-2 min-w-0 basis-full text-xs leading-4"
       >
-        {content.value}
+        {value}
       </BidiText>
     );
   }
@@ -360,7 +393,7 @@ const TextFieldValue = ({
 
   return (
     <BidiText as="span" className={cn(className)}>
-      {content.value}
+      {value}
     </BidiText>
   );
 };
@@ -380,7 +413,12 @@ const DateFieldValue = ({
   if (!date || Number.isNaN(date.getTime())) {
     if (variant === "table") {
       return (
-        <SelectFieldValue property={property} value={null} variant={variant} />
+        <SelectFieldValue
+          property={property}
+          propertyId={property.id}
+          value={null}
+          variant={variant}
+        />
       );
     }
     return <EmptyFieldValue variant={variant} />;
@@ -410,15 +448,25 @@ const DateFieldValue = ({
 
 const SelectFieldValue = ({
   property,
+  propertyId,
   value,
   variant,
 }: {
   property: WorkspaceProperty;
+  propertyId: string;
   value: string | null;
   variant: FieldValueVariant;
 }) => {
   const t = useTranslations();
   const color = getSelectPropertyColor(property, value);
+  // Only the stored option is marked: the "empty" placeholder is the app's own
+  // word, not a value a find could have matched.
+  const label =
+    value === null ? (
+      t("common.empty")
+    ) : (
+      <HighlightedText propertyId={propertyId} text={value} />
+    );
 
   if (variant === "kanban") {
     return (
@@ -430,7 +478,7 @@ const SelectFieldValue = ({
           color: color?.foreground,
         }}
       >
-        {value ?? t("common.empty")}
+        {label}
       </BidiText>
     );
   }
@@ -449,7 +497,7 @@ const SelectFieldValue = ({
     >
       {variant === "table" && !value && <SquareMinusIcon className="size-4" />}
       <BidiText as="span" className="truncate">
-        {value ?? t("common.empty")}
+        {label}
       </BidiText>
     </span>
   );
@@ -457,17 +505,24 @@ const SelectFieldValue = ({
 
 const MultiSelectFieldValue = ({
   property,
+  propertyId,
   value,
   variant,
 }: {
   property: WorkspaceProperty;
+  propertyId: string;
   value: string[];
   variant: FieldValueVariant;
 }) => {
   if (value.length === 0) {
     if (variant === "table") {
       return (
-        <SelectFieldValue property={property} value={null} variant={variant} />
+        <SelectFieldValue
+          property={property}
+          propertyId={propertyId}
+          value={null}
+          variant={variant}
+        />
       );
     }
     return <EmptyFieldValue variant={variant} />;
@@ -485,6 +540,7 @@ const MultiSelectFieldValue = ({
         <SelectFieldValue
           key={option}
           property={property}
+          propertyId={propertyId}
           value={option}
           variant={variant}
         />
