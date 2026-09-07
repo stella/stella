@@ -24,9 +24,13 @@ whether a contract change helped.
    (authored, created, configured, filled, or the workflow's equivalents). Run it
    before and after a contract change and put both tables in the PR. A change that
    is "obviously better" without numbers is a hypothesis.
-2. **Keep the rejected call.** Record the raw input of every call the schema
-   rejected before the handler ran. A pass rate without the rejected payloads
-   cannot say whether the model or the contract failed.
+2. **Keep the rejected call, in the eval only.** The eval records the raw input
+   of every call the schema rejected before the handler ran; a pass rate without
+   the rejected payloads cannot say whether the model or the contract failed.
+   Eval fixtures are synthetic, so the trace may hold them whole. Production
+   telemetry for a rejected call records the tool name, the issue codes, and the
+   issue paths, never the payload: tool arguments carry matter content and
+   personal data.
 3. **Parse through the schema the handler uses.** The eval, the tests, and the
    handler must validate the same object; a normalisation that lives only in one
    handler's pre-step is invisible to the eval and drifts.
