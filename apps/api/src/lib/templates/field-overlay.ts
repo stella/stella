@@ -327,18 +327,18 @@ const expandGroups = (
       .filter((entry) => !keptPaths.has(entry.field.path))
       .map((entry) => [entry.field.path, entry] as const),
   );
-  return {
-    entries: [
-      ...kept.map((entry) =>
-        requiredPaths.has(entry.field.path) &&
-        entry.field.required === undefined
-          ? { ...entry, field: { ...entry.field, required: true } }
-          : entry,
-      ),
-      ...created.values(),
-    ],
-    issues,
-  };
+  const applied: OverlayEntry[] = [];
+  for (const entry of kept) {
+    const inherits =
+      requiredPaths.has(entry.field.path) && entry.field.required === undefined;
+    applied.push(
+      inherits
+        ? { field: { ...entry.field, required: true }, index: entry.index }
+        : entry,
+    );
+  }
+  applied.push(...created.values());
+  return { entries: applied, issues };
 };
 
 /** The lookup each path carries once the overlay is applied: the entry the
