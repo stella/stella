@@ -1461,6 +1461,31 @@ describe("processBlockDirectives — iteration tokens", () => {
     expect(patchValues["__each_p_1_name"]).toBe("Bob");
   });
 
+  test("a filter on a nested loop path keeps that loop's keys per outer item", () => {
+    const xml = WRAP(
+      [
+        P("{% for group in groups %}"),
+        P('{% for item in group.items | label("Items") %}'),
+        P("{{ item.name }}"),
+        P("{% endfor %}"),
+        P("{% endfor %}"),
+      ].join(""),
+    );
+    const body = parseBody(xml);
+    const { patchValues } = processBlockDirectives(body, {
+      groups: [{ items: [{ name: "first" }] }, { items: [{ name: "second" }] }],
+    });
+
+    // Each outer item's inner loop writes its own keys; sharing them would
+    // render the last group's values in every group.
+    expect(new Set(Object.keys(patchValues)).size).toBe(
+      Object.keys(patchValues).length,
+    );
+    expect(
+      bodyTexts(body).map((text) => patchValues[text.slice(2, -2)]),
+    ).toEqual(["first", "second"]);
+  });
+
   test("nested loops: {{ loop.index }}/{{ loop.length }} bind to the innermost loop", () => {
     const xml = WRAP(
       [

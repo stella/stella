@@ -228,6 +228,8 @@ export {
   LOOP_PROPERTIES,
   loopPattern,
   MARKER_DEFECT_KINDS,
+  MARKER_OUTPUT_BODY,
+  MARKER_STATEMENT_BODY,
   markerPattern,
   normalizeMarkerInner,
   numPattern,

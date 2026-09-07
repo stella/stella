@@ -69,6 +69,8 @@ import {
   hasBlockDirectivePattern,
   isBlockDirectiveKind,
   loopPattern,
+  MARKER_OUTPUT_BODY,
+  MARKER_STATEMENT_BODY,
   numPattern,
   refPattern,
   resolvePath,
@@ -1649,7 +1651,7 @@ const rewriteEachPlaceholdersWithIdentity = (
   // `unaliased_item_path` warning names it at save time).
   const heads = [...new Set([alias, arrayPath])].map(escapeRegExp).join("|");
   const re = new RegExp(
-    `\\{\\{\\s*(?:${heads})\\.(?<field>[.\\p{L}\\p{N}_-]+)\\s*(?:\\|[^{}]*)?\\}\\}`,
+    `\\{\\{\\s*(?:${heads})\\.(?<field>[.\\p{L}\\p{N}_-]+)\\s*(?:\\|${MARKER_OUTPUT_BODY})?\\}\\}`,
     "gu",
   );
   return text.replace(
@@ -1677,7 +1679,9 @@ const rewriteEachPlaceholders = (
  * recursion, resolves against the outer item's array (registered under the same
  * key in the iteration context) and its synthetic keys stay unique per outer
  * item. Unprefixed nested loops (`{% for x in other %}`) are left untouched and
- * resolve through the item context by name.
+ * resolve through the item context by name. Filters on the nested path
+ * configure that array, so they are carried over to the rewritten opener
+ * instead of ending the match.
  */
 const rewriteNestedEachExpr = (
   root: slimdom.Element,
@@ -1685,7 +1689,7 @@ const rewriteNestedEachExpr = (
 ): void => {
   const heads = [...new Set([alias, arrayPath])].map(escapeRegExp).join("|");
   const re = new RegExp(
-    `(\\{%(?:tr|p)?\\s*for\\s+[\\p{L}_][\\p{L}\\p{N}_-]*\\s+in\\s+)(?:${heads})\\.([.\\p{L}\\p{N}_-]+)(\\s*%\\})`,
+    `(\\{%(?:tr|p)?\\s*for\\s+[\\p{L}_][\\p{L}\\p{N}_-]*\\s+in\\s+)(?:${heads})\\.([.\\p{L}\\p{N}_-]+)((?:\\s*\\|${MARKER_STATEMENT_BODY})?\\s*%\\})`,
     "gu",
   );
   rewriteTextNodes(root, (text) =>

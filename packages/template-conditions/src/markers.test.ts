@@ -231,6 +231,37 @@ describe("scanMarkers", () => {
     ]);
   });
 
+  test("reads braces inside a quoted filter argument as content", () => {
+    const text = 'Zip {{ postal | pattern("^[0-9]{5}$") }} here';
+    const [marker] = scanMarkers(text);
+
+    expect(marker?.inner).toBe('postal | pattern("^[0-9]{5}$")');
+    expect(marker?.meta).toEqual({
+      kind: "placeholder",
+      expr: "postal",
+      filters: [
+        {
+          name: "pattern",
+          args: [{ kind: "positional", value: "^[0-9]{5}$" }],
+        },
+      ],
+    });
+  });
+
+  test("an apostrophe inside a quoted argument stays ordinary text", () => {
+    const markers = scanMarkers('{{ owner | label("Owner\'s name") }}');
+    expect(markers.map((m) => m.inner)).toEqual([
+      'owner | label("Owner\'s name")',
+    ]);
+  });
+
+  test("a marker's braces still end it, so one span never swallows the next", () => {
+    expect(scanMarkers("{{ a }} and {{ b }}").map((m) => m.inner)).toEqual([
+      "a",
+      "b",
+    ]);
+  });
+
   test("skips unrecognized brace spans", () => {
     expect(scanMarkers("{{ not a marker!! }} and {{tenant.name}}")).toEqual([
       {

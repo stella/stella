@@ -208,20 +208,40 @@ export const normalizeMarkerInner = (inner: string): string =>
 // Each returns a fresh RegExp so callers never share `lastIndex` state.
 
 /**
+ * What an output marker holds between its braces: anything but a brace or a
+ * double quote, plus whole double-quoted arguments, whose braces are content
+ * rather than the marker's own delimiters — `pattern("^[0-9]{5}$")` is a regex,
+ * not a nested marker. An apostrophe stays an ordinary character, so
+ * `label("Owner's")` reads as it always did.
+ *
+ * The alternatives cannot overlap (the plain one excludes every character the
+ * quoted one may start with) and a quoted run's end is forced by its body, so
+ * the scan stays linear on adversarial input: a `{{` with no closing `}}`
+ * costs one failed pass, not a polynomial retry.
+ */
+export const MARKER_OUTPUT_BODY = String.raw`(?:[^{}"“”„«»]|["“„«][^"”»]*["”»])*`;
+
+/** What a tag holds between `{%` and `%}`: anything but a brace, and a `%`
+ *  only where it does not close the tag. */
+export const MARKER_STATEMENT_BODY = String.raw`(?:[^{}%]|%(?!\}))*`;
+
+/**
  * Any marker span: an output `{{...}}` (group `output`) or a tag `{%...%}`
  * (group `statement`, with the docxtpl placement in group `prefix`).
- *
- * Every alternative is built from single-character alternatives that cannot
- * overlap, so the scan is linear on adversarial input: a `{{` with no closing
- * `}}` costs one failed pass, not a polynomial retry.
  */
 export const markerPattern = (): RegExp =>
-  /\{\{(?<output>[^{}]*)\}\}|\{%(?:(?<prefix>tr|p)(?=\s))?(?<statement>(?:[^{}%]|%(?!\}))*)%\}/gu;
+  new RegExp(
+    String.raw`\{\{(?<output>${MARKER_OUTPUT_BODY})\}\}|\{%(?:(?<prefix>tr|p)(?=\s))?(?<statement>${MARKER_STATEMENT_BODY})%\}`,
+    "gu",
+  );
 
 /** Inline value marker, including its filter chain; group `name` is the path
  *  the value comes from and group `filters` the untouched chain. */
 export const placeholderPattern = (): RegExp =>
-  /\{\{\s*(?<name>[\p{L}\p{N}_.-]+)\s*(?<filters>\|(?:[^{}]*)?)?\}\}/gu;
+  new RegExp(
+    String.raw`\{\{\s*(?<name>[\p{L}\p{N}_.-]+)\s*(?<filters>\|${MARKER_OUTPUT_BODY})?\}\}`,
+    "gu",
+  );
 
 // A function argument may be written with either quote, and Word turns either
 // into its typographic pair as the author types. The classifier normalises
