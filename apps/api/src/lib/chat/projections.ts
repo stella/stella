@@ -1560,18 +1560,6 @@ export const TEMPLATE_DESCRIBE_PROJECTION = v.strictObject({
       date_format: v.optional(
         v.strictObject({ locale: v.string(), style: v.string() }),
       ),
-      parts: v.optional(
-        v.array(
-          v.strictObject({
-            key: v.string(),
-            label: v.optional(v.string()),
-            input_type: v.string(),
-            options: v.optional(v.array(v.string())),
-            pattern: v.optional(v.string()),
-          }),
-        ),
-      ),
-      format: v.optional(v.string()),
     }),
   ),
   // Derived fields, named the way the `fields` overlay names them, so a

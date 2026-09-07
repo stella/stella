@@ -655,8 +655,6 @@ describe("MCP template tools", () => {
           aiAdapt: false,
           optionsFrom: null,
           dateFormat: null,
-          parts: null,
-          format: null,
         },
         {
           path: "scope",
@@ -673,8 +671,6 @@ describe("MCP template tools", () => {
           aiAdapt: false,
           optionsFrom: null,
           dateFormat: null,
-          parts: null,
-          format: null,
         },
         {
           path: "role",
@@ -691,8 +687,6 @@ describe("MCP template tools", () => {
           aiAdapt: false,
           optionsFrom: "parties",
           dateFormat: null,
-          parts: null,
-          format: null,
         },
       ],
       conditions: [{ path: "isCorp", condition: "type == 'corp'" }],
@@ -753,14 +747,6 @@ describe("MCP template tools", () => {
           label: "Smith role",
           inputType: "select",
           options: ["Smith director"],
-          parts: [
-            {
-              key: "capacity",
-              label: "Smith capacity",
-              inputType: "select",
-              options: ["Smith signatory"],
-            },
-          ],
           lookup: {
             registry: "krs",
             formats: [
@@ -782,13 +768,11 @@ describe("MCP template tools", () => {
       ],
     });
     anonymizeTextFieldsMock.mockResolvedValue({
-      entityCount: 9,
+      entityCount: 7,
       fields: [
         "[PERSON_1] POA",
         "[PERSON_1] role",
         "[PERSON_1] director",
-        "[PERSON_1] capacity",
-        "[PERSON_1] signatory",
         "[company name], [PERSON_1] registry",
         "{{[PERSON_1].name}}",
         "{{[PERSON_1].name}} is split across runs.",
@@ -809,12 +793,6 @@ describe("MCP template tools", () => {
         {
           label: "[PERSON_1] role",
           options: ["[PERSON_1] director"],
-          parts: [
-            {
-              label: "[PERSON_1] capacity",
-              options: ["[PERSON_1] signatory"],
-            },
-          ],
           source: {
             type: "lookup",
             formats: [
@@ -853,8 +831,6 @@ describe("MCP template tools", () => {
         "Smith POA",
         "Smith role",
         "Smith director",
-        "Smith capacity",
-        "Smith signatory",
         "[company name], Smith registry",
         "{{Smith.name}}",
         "{{Smith.name}} is split across runs.",
@@ -2884,12 +2860,10 @@ describe("MCP template tools", () => {
     return payload.issues;
   };
 
-  test("configure_template_fields reports a malformed field config as its own entry", async () => {
-    // `parts` without `format` has no join template, so the entry-level check
-    // refuses that entry.
-    const issues = await configureEntryIssues([
-      { path: "fee", parts: [{ key: "amount", input_type: "text" }] },
-    ]);
+  test("configure_template_fields refuses an entry whose path it cannot read", async () => {
+    // Without a usable path there is no field to configure, so the entry as a
+    // whole is the smallest thing that can be refused.
+    const issues = await configureEntryIssues([{ path: 7, label: "Fee" }]);
 
     expect(issues).toMatchObject([{ path: "fields.0", index: 0 }]);
   });
@@ -2934,19 +2908,30 @@ describe("MCP template tools", () => {
     expect(conflict?.message).toContain("adapt");
   });
 
-  test("configure_template_fields reports a composite field bound to something other than its parts", async () => {
+  test("configure_template_fields drops a retired property and configures the rest of the entry", async () => {
+    // A strict-schema client fills every property it can see, so a key this
+    // surface no longer declares costs that key and not the field.
     const issues = await configureEntryIssues([
       {
         path: "property_address",
+        label: "Address",
         parts: [{ key: "street", input_type: "text" }],
         format: "{{street}}",
-        source: { type: "contact", field: "address" },
       },
     ]);
 
-    const conflict = issues.at(0);
-    expect(conflict?.path).toBe("fields.0");
-    expect(conflict?.message).toContain("parts");
+    expect(issues).toMatchObject([
+      { path: "fields.0.parts", index: 0 },
+      { path: "fields.0.format", index: 0 },
+    ]);
+    for (const issue of issues) {
+      expect(issue.message).toContain("is not a property of a field entry");
+    }
+    expect(configureTemplateFieldsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fields: [{ path: "property_address", label: "Address" }],
+      }),
+    );
   });
 
   test("configure_template_fields reads a null-padded field entry as a plain text field", async () => {
@@ -2972,8 +2957,6 @@ describe("MCP template tools", () => {
             options: null,
             validation: { required: true, min_length: null, pattern: null },
             required: null,
-            parts: null,
-            format: null,
             options_from: null,
             source: null,
             date_format: null,
@@ -2998,21 +2981,24 @@ describe("MCP template tools", () => {
     );
   });
 
-  test("configure_template_fields still refuses a misspelled key that carries null", async () => {
-    // Null is absence only for a property the surface declares: dropping it
-    // for any key would turn `lable: null` into a silently accepted typo. The
-    // entry is refused; the call still reports which one and why.
-    const issues = await configureEntryIssues([{ path: "name", lable: null }]);
-
-    expect(issues).toMatchObject([{ path: "fields.0", index: 0 }]);
-  });
-
-  test("configure_template_fields refuses an entry with an unknown metadata key", async () => {
-    const issues = await configureEntryIssues([
+  test("configure_template_fields names a misspelled key rather than swallowing it", async () => {
+    // Null is absence only for a property the surface declares: a key it does
+    // not declare is dropped on its own and named, so `lable` is neither a
+    // silently accepted typo nor a refusal of the field it meant to label.
+    for (const entry of [
+      { path: "name", lable: null },
       { path: "fee", lable: "Misspelled label" },
-    ]);
+    ]) {
+      const issues = await configureEntryIssues([entry]);
 
-    expect(issues).toMatchObject([{ path: "fields.0", index: 0 }]);
+      expect(issues).toMatchObject([
+        {
+          path: "fields.0.lable",
+          index: 0,
+          message: "`lable` is not a property of a field entry.",
+        },
+      ]);
+    }
   });
 
   test("configure_template_fields applies the overlay and returns the updated fields", async () => {
@@ -3045,8 +3031,6 @@ describe("MCP template tools", () => {
             aiAdapt: false,
             optionsFrom: null,
             dateFormat: null,
-            parts: null,
-            format: null,
           },
         ],
       }),
@@ -3129,8 +3113,6 @@ describe("MCP template tools", () => {
             options: null,
             validation: null,
             required: true,
-            parts: null,
-            format: null,
             options_from: null,
             source: null,
             date_format: null,
@@ -3232,7 +3214,8 @@ describe("MCP template tools", () => {
    * The exact call one model sent when it filled every optional property it
    * could see: a placeholder in every string, a `parts` entry with an empty
    * key, a lookup on a field that also declares a contact binding. The whole
-   * call used to be refused. Every entry that can be applied must be.
+   * call used to be refused, then the placeholder-filled entries were. Every
+   * entry that can be applied must be, and each dropped key must be named.
    */
   test("configure_template_fields applies the usable entries of a placeholder-filled call", async () => {
     let received: unknown;
@@ -3276,16 +3259,21 @@ describe("MCP template tools", () => {
     });
 
     expect(result.isError).toBeFalsy();
-    // The one entry the schema accepts is applied...
-    expect(received).toEqual([{ path: "ucinnost_od", inputType: "date" }]);
-    // ...and each placeholder-filled entry is reported at its own position.
-    const { issues } = asTestRaw<{ issues: unknown[] }>(
+    // Every entry is configured, the placeholders it filled included...
+    expect(received).toMatchObject([
+      { path: "strana_a", label: "strana_a", inputType: "text" },
+      { path: "ucinnost_od", inputType: "date" },
+      { path: "strana_b", label: "strana_b", inputType: "text" },
+    ]);
+    // ...and the retired keys cost themselves, named at their own positions.
+    const { issues } = asTestRaw<{ issues: { path: string }[] }>(
       parseToolPayload(result),
     );
-    expect(issues.length).toBe(2);
-    expect(issues).toMatchObject([
-      { path: "fields.0", index: 0 },
-      { path: "fields.2", index: 2 },
+    expect(issues.map((issue) => issue.path).toSorted()).toEqual([
+      "fields.0.format",
+      "fields.0.parts",
+      "fields.2.format",
+      "fields.2.parts",
     ]);
   });
 
@@ -3326,7 +3314,6 @@ describe("MCP template tools", () => {
               max_items: 0,
             },
             required: true,
-            format: "",
             options_from: "",
             source: { type: "person" },
             date_format: { locale: "cs", style: "long" },
@@ -3343,8 +3330,8 @@ describe("MCP template tools", () => {
     );
     expect(issues).toEqual([]);
     // `options_from: ""` is a placeholder the property refuses, so it reads as
-    // omitted; `format: ""` and the zero bounds are values the property
-    // accepts, so they are applied as sent.
+    // omitted; the zero bounds are values the property accepts, so they are
+    // applied as sent.
     expect(received).toMatchObject([
       {
         path: "rozhodne_pravo",

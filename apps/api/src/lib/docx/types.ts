@@ -325,7 +325,7 @@ const fieldPathSchema = (description: string) =>
     v.description(description),
   );
 
-export const fieldPartSchema = v.strictObject({
+const fieldPartSchema = v.strictObject({
   key: fieldPathSchema("Part key used in format"),
   label: v.optional(describedString("Part label")),
   inputType: v.pipe(
@@ -388,7 +388,9 @@ export const fieldDateFormatSchema = v.pipe(
 /** Shared with the snake_case MCP mirror in `mcp/template-field-input.ts`, so
  *  both surfaces advertise the same line. */
 export const FIELD_VALIDATION_DESCRIPTION = "Field-level value constraints";
-export const FIELD_PARTS_DESCRIPTION = "Composite field parts";
+
+/** Composites are engine-side: no agent-facing surface advertises them. */
+const FIELD_PARTS_DESCRIPTION = "Composite field parts";
 
 export const fieldValidationObjectSchema = v.strictObject({
   required: v.optional(v.pipe(v.boolean(), v.description("Value is required"))),
@@ -569,7 +571,7 @@ const fieldMetaObjectSchema = v.strictObject({
   dateFormat: v.optional(fieldDateFormatSchema),
 });
 
-export const hasCompleteCompositeField = ({
+const hasCompleteCompositeField = ({
   format,
   parts,
 }: {
@@ -592,10 +594,12 @@ export const fieldMetaSchema = v.pipe(
 );
 
 /** Model-facing subset: conditionAst is the persisted canonical form, not an
- * authoring input. This schema derives its public fields from the persisted
- * object schema and applies the same named invariant predicates. */
+ * authoring input, and a composite field's `parts`/`format` are assembled by
+ * the engine — the document text around the markers is the format an author
+ * writes. This schema derives its public fields from the persisted object
+ * schema and applies the same named invariant predicates. */
 export const fieldMetaToolInputObjectSchema = v.strictObject({
-  ...v.omit(fieldMetaObjectSchema, ["conditionAst"]).entries,
+  ...v.omit(fieldMetaObjectSchema, ["conditionAst", "parts", "format"]).entries,
   source: v.optional(
     v.pipe(fieldSourceToolInputSchema, v.description(FIELD_SOURCE_DESCRIPTION)),
   ),
@@ -603,11 +607,6 @@ export const fieldMetaToolInputObjectSchema = v.strictObject({
 
 export const fieldMetaToolInputSchema = v.pipe(
   fieldMetaToolInputObjectSchema,
-  v.check(
-    (field: v.InferOutput<typeof fieldMetaToolInputObjectSchema>) =>
-      hasCompleteCompositeField(field),
-    "parts and format must be provided together",
-  ),
   v.check(
     (field: v.InferOutput<typeof fieldMetaToolInputObjectSchema>) =>
       hasCompatibleDerivedSources(field),

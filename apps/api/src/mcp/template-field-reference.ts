@@ -86,10 +86,6 @@ const FIELD_PROPERTY_DOCS = {
   validation:
     "Constraints checked at fill time: `required`, `min_length`/`max_length`, `min`/`max`, `pattern` (a regex matched against the complete value), `min_items`/`max_items` for repeated fields.",
   required: "Whether the fill form rejects an empty value.",
-  parts:
-    "Composite field: one entry per sub-input (`key`, `label`, `input_type` text or select, `options`, `pattern`). Set `format` alongside it. A composite field is assembled from its parts, so its `source` must stay `person`.",
-  format:
-    "Join template over the composite part keys, for example `{{title}} {{name}}`. Required with `parts`, meaningless without.",
   source:
     "Who fills the field. ONE object with a `type`; the branches are listed below. Omit it for a field the person fills.",
   date_format: `Locale-aware rendering for a date field: \`locale\` is a BCP-47 tag (\`cs\`, \`de\`, \`pl\`), \`style\` is one of ${DATE_FORMAT_STYLES.join(", ")}.`,

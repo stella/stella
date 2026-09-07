@@ -423,9 +423,6 @@ const toTemplateDetailPayload = (
 
 type TemplateDetailPayload = ReturnType<typeof toTemplateDetailPayload>;
 type TemplateDetailField = TemplateDetailPayload["fields"][number];
-type TemplateDetailFieldPart = NonNullable<
-  TemplateDetailField["parts"]
->[number];
 
 const templateFieldOptionItems = (
   payload: TemplateDetailPayload,
@@ -435,34 +432,12 @@ const templateFieldOptionItems = (
     return options ? options.map((_option, index) => ({ index, options })) : [];
   });
 
-const templateFieldPartItems = (
-  payload: TemplateDetailPayload,
-): readonly TemplateDetailFieldPart[] =>
-  payload.fields.flatMap((field) => compact(field.parts));
-
-const templateFieldPartOptionItems = (
-  payload: TemplateDetailPayload,
-): readonly { index: number; options: string[] }[] =>
-  templateFieldPartItems(payload).flatMap((part) => {
-    const options = part.options;
-    return options ? options.map((_option, index) => ({ index, options })) : [];
-  });
-
 const templateFieldFormatItems = (
   payload: TemplateDetailPayload,
 ): readonly { key: string; template: string }[] =>
   payload.fields.flatMap((field) =>
     field.source.type === "lookup" ? arrayOrEmpty(field.source.formats) : [],
   );
-
-const compact = <T>(
-  items: readonly (T | null)[] | null | undefined,
-): readonly T[] => {
-  if (items === undefined || items === null) {
-    return [];
-  }
-  return items.filter((item) => item !== null);
-};
 
 const buildTemplateDetailTextFieldSpecs = (
   organizationId: string,
@@ -509,25 +484,6 @@ const buildTemplateDetailTextFieldSpecs = (
   defineTextFieldSpec({
     path: "fields[].options[]",
     items: templateFieldOptionItems,
-    scope: () => organizationId,
-    read: (item: { index: number; options: string[] }) =>
-      item.options[item.index],
-    apply: (item: { index: number; options: string[] }, value) => {
-      item.options[item.index] = value;
-    },
-  }),
-  defineTextFieldSpec({
-    path: "fields[].parts[].label",
-    items: templateFieldPartItems,
-    scope: () => organizationId,
-    read: (part: TemplateDetailFieldPart) => part.label,
-    apply: (part: TemplateDetailFieldPart, value) => {
-      part.label = value;
-    },
-  }),
-  defineTextFieldSpec({
-    path: "fields[].parts[].options[]",
-    items: templateFieldPartOptionItems,
     scope: () => organizationId,
     read: (item: { index: number; options: string[] }) =>
       item.options[item.index],
@@ -2328,35 +2284,52 @@ type TemplateFieldProperty = keyof v.InferInput<
  */
 const DECISION_PROPERTIES = [
   "source",
-  "parts",
-  "format",
 ] as const satisfies readonly TemplateFieldProperty[];
 
-/** Every property the entry schema declares, so an undeclared key is never
- *  dropped: a misspelled `lable` must refuse the entry, not vanish. */
+/** Every property the entry schema declares, so an undeclared key is reported
+ *  as one rather than as a value the schema rejected. */
 const DECLARED_ENTRY_PROPERTIES: ReadonlySet<string> = new Set(
   Object.keys(templateFieldInputSchema.entries),
 );
 
+/** What to do with an entry the schema refused: drop the one property the
+ *  issue is about and keep the rest, or reject the entry whole. */
+type EntryRepair =
+  | { type: "drop-property"; property: string; message: string }
+  | { type: "reject-entry" };
+
+const ENTRY_REJECTED: EntryRepair = { type: "reject-entry" };
+
 /**
- * The entry property one issue is about and that may be dropped on its own, or
- * null when the issue belongs to the entry as a whole: an undeclared key, a
- * failed cross-property check, `path` (the entry cannot be read without it),
- * or a property that decides who fills the field.
+ * How one issue is answered. A property costs itself: a strict-schema client
+ * fills every property it can see, so a key this surface retired or a caller
+ * misspelled must cost that key and not the field it configures. The issue
+ * still names the key, so a misspelled `lable` does not vanish silently.
+ *
+ * The entry as a whole goes only when it cannot be read: an unusable `path`,
+ * a shape that is not an entry, or a property that decides WHO fills the
+ * field — dropping that would silently turn a derived field into a question
+ * for the person filling.
  */
-const droppablePropertyOfIssue = (
-  issue: v.BaseIssue<unknown>,
-): string | null => {
+const repairForIssue = (issue: v.BaseIssue<unknown>): EntryRepair => {
   const property = issue.path?.[2]?.key;
   if (typeof property !== "string" || property === "path") {
-    return null;
+    return ENTRY_REJECTED;
   }
   if (!DECLARED_ENTRY_PROPERTIES.has(property)) {
-    return null;
+    return {
+      type: "drop-property",
+      property,
+      message: `\`${property}\` is not a property of a field entry.`,
+    };
   }
   return DECISION_PROPERTIES.some((decision) => decision === property)
-    ? null
-    : property;
+    ? ENTRY_REJECTED
+    : {
+        type: "drop-property",
+        property,
+        message: `\`${property}\` was dropped: ${issue.message}`,
+      };
 };
 
 const isUnknownArray = (value: unknown): value is readonly unknown[] =>
@@ -2396,11 +2369,12 @@ export type ConfigureEntries =
 /**
  * Read the request one property at a time. The schema is the tool's own,
  * applied to a `fields` array that is repaired between attempts: a property it
- * refuses is dropped from its entry and reported on its own, and only an entry
- * whose `path` (or whose shape as a whole) is unreadable drops out. A caller
- * that got one property wrong still configures everything else it sent —
- * including the rest of that entry. Anything the schema objects to outside
- * `fields` is about the request, and fails it.
+ * refuses — an invalid value, or a key the entry does not declare — is dropped
+ * from its entry and reported on its own, and only an entry whose `path` (or
+ * whose shape as a whole) is unreadable drops out. A caller that got one
+ * property wrong still configures everything else it sent — including the rest
+ * of that entry. Anything the schema objects to outside `fields` is about the
+ * request, and fails it.
  *
  * The loop terminates: every pass either drops one property from an entry or
  * drops an entry, and both are finite.
@@ -2446,17 +2420,19 @@ export const parseConfigureEntries = (
       if (rejected.has(position) || repaired.has(position)) {
         continue;
       }
-      const property = droppablePropertyOfIssue(issue);
+      const repair = repairForIssue(issue);
       const without =
-        property === null ? null : withoutProperty(sent[position], property);
-      if (property !== null && without !== null) {
+        repair.type === "reject-entry"
+          ? null
+          : withoutProperty(sent[position], repair.property);
+      if (repair.type === "drop-property" && without !== null) {
         repaired.add(position);
         sent[position] = without;
         issues.push({
-          path: `fields.${String(position)}.${property}`,
+          path: `fields.${String(position)}.${repair.property}`,
           index: position,
-          message: `\`${property}\` was dropped: ${issue.message}`,
-          hint: `Send that property again once it is valid; the rest of the entry was applied. See ${TEMPLATE_FIELD_REFERENCE_URI}.`,
+          message: repair.message,
+          hint: `The rest of the entry was applied. Check that property against ${TEMPLATE_FIELD_REFERENCE_URI} and send it again if the field needs it.`,
         });
         continue;
       }

@@ -19,19 +19,15 @@ import * as v from "valibot";
 
 import type {
   FieldLookup,
-  FieldPart,
   FieldSource,
   FieldValidation,
   fieldMetaToolInputSchema,
 } from "@/api/lib/docx/types";
 import {
-  FIELD_PARTS_DESCRIPTION,
   FIELD_VALIDATION_DESCRIPTION,
   fieldLookupFormatSchema,
   fieldMetaToolInputObjectSchema,
-  fieldPartSchema,
   fieldValidationObjectSchema,
-  hasCompleteCompositeField,
   LOOKUP_FORMATS_MAX,
   LOOKUP_REGISTRIES,
 } from "@/api/lib/docx/types";
@@ -45,7 +41,6 @@ import {
 } from "@/api/lib/template-binding/binding-sources";
 
 const { entries: fieldEntries } = fieldMetaToolInputObjectSchema;
-const { entries: partEntries } = fieldPartSchema;
 const { entries: validationEntries } = fieldValidationObjectSchema;
 
 /**
@@ -139,14 +134,6 @@ const templateFieldValidationInputSchema = v.pipe(
   v.description(FIELD_VALIDATION_DESCRIPTION),
 );
 
-const templateFieldPartInputSchema = v.strictObject({
-  key: partEntries.key,
-  label: partEntries.label,
-  input_type: partEntries.inputType,
-  options: partEntries.options,
-  pattern: partEntries.pattern,
-});
-
 const templateFieldInputObjectSchema = v.strictObject({
   path: fieldEntries.path,
   label: fieldEntries.label,
@@ -155,14 +142,6 @@ const templateFieldInputObjectSchema = v.strictObject({
   options: fieldEntries.options,
   validation: v.optional(templateFieldValidationInputSchema),
   required: fieldEntries.required,
-  parts: v.optional(
-    v.pipe(
-      v.array(templateFieldPartInputSchema),
-      v.minLength(1),
-      v.description(FIELD_PARTS_DESCRIPTION),
-    ),
-  ),
-  format: fieldEntries.format,
   options_from: fieldEntries.optionsFrom,
   source: v.optional(
     v.pipe(
@@ -181,32 +160,8 @@ const hasUsableAiSource = (source: TemplateFieldSourceInput): boolean =>
   source.type !== "ai" ||
   (source.prompt !== undefined) !== (source.adapt === true);
 
-/** A composite field is assembled from its own `parts`, so nothing else may
- *  produce its value. */
-const hasCompatibleCompositeSource = ({
-  parts,
-  source,
-}: {
-  parts?: readonly unknown[] | undefined;
-  source?: TemplateFieldSourceInput | undefined;
-}): boolean =>
-  parts === undefined || source === undefined || source.type === "person";
-
 export const templateFieldInputSchema = v.pipe(
   templateFieldInputObjectSchema,
-  v.check(
-    (field: v.InferOutput<typeof templateFieldInputObjectSchema>) =>
-      hasCompleteCompositeField(field),
-    "parts and format must be provided together",
-  ),
-  v.forward(
-    v.check(
-      (field: v.InferOutput<typeof templateFieldInputObjectSchema>) =>
-        hasCompatibleCompositeSource(field),
-      'A composite field is assembled from its parts, so its source must be "person".',
-    ),
-    ["source"],
-  ),
   v.forward(
     v.check(
       (field: v.InferOutput<typeof templateFieldInputObjectSchema>) =>
@@ -225,9 +180,6 @@ type TemplateFieldInput = v.InferOutput<typeof templateFieldInputSchema>;
 export type DescribedTemplateField = Omit<TemplateFieldInput, "source"> & {
   source: TemplateFieldSourceInput;
 };
-type TemplateFieldPartInput = v.InferOutput<
-  typeof templateFieldPartInputSchema
->;
 type TemplateFieldValidationInput = v.InferOutput<
   typeof templateFieldValidationInputSchema
 >;
@@ -246,8 +198,6 @@ const FIELD_WIRE_KEYS = {
   options: "options",
   validation: "validation",
   required: "required",
-  parts: "parts",
-  format: "format",
   optionsFrom: "options_from",
   dateFormat: "date_format",
 } as const satisfies Record<
@@ -269,33 +219,11 @@ const VALIDATION_WIRE_KEYS = {
   keyof TemplateFieldValidationInput
 >;
 
-const PART_WIRE_KEYS = {
-  key: "key",
-  label: "label",
-  inputType: "input_type",
-  options: "options",
-  pattern: "pattern",
-} as const satisfies Record<keyof FieldPart, keyof TemplateFieldPartInput>;
-
 /** Camel-case field data returned by the template service. Describe uses
  * `null` for absent values, while the tool treats null as absence. */
 type DescribedFieldInput = {
   [Key in keyof PersistedFieldInput]?: PersistedFieldInput[Key] | null;
 } & { path: string };
-
-const toFieldPart = (part: TemplateFieldPartInput): FieldPart => ({
-  key: part[PART_WIRE_KEYS.key],
-  ...(part[PART_WIRE_KEYS.label] === undefined
-    ? {}
-    : { label: part[PART_WIRE_KEYS.label] }),
-  inputType: part[PART_WIRE_KEYS.inputType],
-  ...(part[PART_WIRE_KEYS.options] === undefined
-    ? {}
-    : { options: part[PART_WIRE_KEYS.options] }),
-  ...(part[PART_WIRE_KEYS.pattern] === undefined
-    ? {}
-    : { pattern: part[PART_WIRE_KEYS.pattern] }),
-});
 
 const toFieldValidation = (
   validation: TemplateFieldValidationInput,
@@ -547,26 +475,6 @@ export const toTemplateFieldWireInput = (
   ...(field.required === null || field.required === undefined
     ? {}
     : { [FIELD_WIRE_KEYS.required]: field.required }),
-  ...(field.parts === null || field.parts === undefined
-    ? {}
-    : {
-        [FIELD_WIRE_KEYS.parts]: field.parts.map((part) => ({
-          [PART_WIRE_KEYS.key]: part.key,
-          ...(part.label === undefined
-            ? {}
-            : { [PART_WIRE_KEYS.label]: part.label }),
-          [PART_WIRE_KEYS.inputType]: part.inputType,
-          ...(part.options === undefined
-            ? {}
-            : { [PART_WIRE_KEYS.options]: part.options }),
-          ...(part.pattern === undefined
-            ? {}
-            : { [PART_WIRE_KEYS.pattern]: part.pattern }),
-        })),
-      }),
-  ...(field.format === null || field.format === undefined
-    ? {}
-    : { [FIELD_WIRE_KEYS.format]: field.format }),
   ...(field.optionsFrom === null || field.optionsFrom === undefined
     ? {}
     : { [FIELD_WIRE_KEYS.optionsFrom]: field.optionsFrom }),
@@ -580,7 +488,6 @@ export const toTemplateFieldWireInput = (
  * describe serializer. */
 export const toFieldMetaToolInput = ({
   [FIELD_WIRE_KEYS.validation]: validation,
-  [FIELD_WIRE_KEYS.parts]: parts,
   source,
   ...field
 }: TemplateFieldInput): PersistedFieldInput => ({
@@ -603,10 +510,6 @@ export const toFieldMetaToolInput = ({
   ...(field[FIELD_WIRE_KEYS.required] === undefined
     ? {}
     : { required: field[FIELD_WIRE_KEYS.required] }),
-  ...(parts === undefined ? {} : { parts: parts.map(toFieldPart) }),
-  ...(field[FIELD_WIRE_KEYS.format] === undefined
-    ? {}
-    : { format: field[FIELD_WIRE_KEYS.format] }),
   ...(field[FIELD_WIRE_KEYS.optionsFrom] === undefined
     ? {}
     : { optionsFrom: field[FIELD_WIRE_KEYS.optionsFrom] }),

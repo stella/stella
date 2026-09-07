@@ -949,48 +949,6 @@
                 "type": "boolean",
                 "description": "Value is required"
               },
-              "parts": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "properties": {
-                    "key": {
-                      "type": "string",
-                      "description": "Part key used in format"
-                    },
-                    "label": {
-                      "type": "string",
-                      "description": "Part label"
-                    },
-                    "input_type": {
-                      "enum": ["text", "select"],
-                      "type": "string",
-                      "description": "Part input control"
-                    },
-                    "options": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      },
-                      "description": "Allowed values for a select part"
-                    },
-                    "pattern": {
-                      "type": "string",
-                      "minLength": 1,
-                      "description": "Regex for the whole part value"
-                    }
-                  },
-                  "required": ["key", "input_type"],
-                  "additionalProperties": false
-                },
-                "minItems": 1,
-                "description": "Composite field parts"
-              },
-              "format": {
-                "type": "string",
-                "minLength": 1,
-                "description": "Join template over the part keys"
-              },
               "options_from": {
                 "type": "string",
                 "description": "Dependent select: source field path"

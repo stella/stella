@@ -114,7 +114,7 @@ const WORKFLOW_STEPS: readonly WorkflowStep[] = [
       "you did not just " +
       "create. `fields[]` (`path`, " +
       "`label`, `input_type`, `required`, `hint`, `options`, `options_from`, " +
-      "`parts`, `format`, `date_format`, and `source`: who fills the field, " +
+      "`date_format`, and `source`: who fills the field, " +
       "as one object with a `type`), " +
       "`arrays[]` (one entry per `{% for %}` loop: its `path` plus the " +
       "`itemFieldPaths` it repeats), `conditions[]`, `computed[]` " +
