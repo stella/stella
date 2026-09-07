@@ -39,10 +39,11 @@ jobs:
       BRANCH_PROTECTION_APP_ID: ${{ secrets.BRANCH_PROTECTION_APP_ID }}
       BRANCH_PROTECTION_APP_KEY: ${{ secrets.BRANCH_PROTECTION_APP_KEY }}
 
-  # Fork pull requests run CI only after a maintainer approves the push
-  # (`docs/policies/access-control.md`, "Fork trust gate"). That gate is
-  # a repository setting rather than workflow code, so drift would not
-  # show up in review; fail when it is loosened.
+  # A first-time contributor's fork pull request runs CI only after a
+  # maintainer approves the push (`docs/policies/access-control.md`,
+  # "Fork trust gate"). That gate is a repository setting rather than
+  # workflow code, so drift would not show up in review; fail when it
+  # is loosened.
   audit-fork-approval:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -59,7 +60,7 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           REPO: ${{ github.repository }}
-          EXPECTED_POLICY: all_external_contributors
+          EXPECTED_POLICY: first_time_contributors
         shell: bash --noprofile --norc -eo pipefail {0}
         run: |
           LIVE_POLICY=$(

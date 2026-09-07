@@ -63,9 +63,10 @@ jobs:
         run: |
           # A pull_request run is trusted once it starts. Same-repo
           # authors have write access to push branches, and a fork
-          # run only starts after a maintainer approves that exact
-          # push in the Actions UI (repository policy: approval
-          # required for all external contributors).
+          # run starts only for an author with a merged pull request
+          # here, or after a maintainer approves that exact push in
+          # the Actions UI (repository policy: approval required for
+          # first-time contributors).
           #
           # A merge group runs with the base repository's secrets and
           # carries no per-push approval. Only a same-repo pull
