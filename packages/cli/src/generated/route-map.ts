@@ -2848,7 +2848,8 @@ export const generatedRouteMap: RouteNode = {
                           },
                           max_length: {
                             type: "number",
-                            description: "Maximum string length",
+                            minimum: 1,
+                            description: "Maximum string length, at least 1",
                           },
                           min: {
                             type: "number",
@@ -2869,7 +2870,8 @@ export const generatedRouteMap: RouteNode = {
                           },
                           max_items: {
                             type: "number",
-                            description: "Maximum repeated items",
+                            minimum: 1,
+                            description: "Maximum repeated items, at least 1",
                           },
                         },
                         required: [],
