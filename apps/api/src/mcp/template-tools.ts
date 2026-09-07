@@ -2204,14 +2204,17 @@ const handleCreateTemplateTool: TypedMcpToolHandler<
     });
   }
 
+  // The schema guarantees both on this branch: a create carries a name and a
+  // document, and only an upsert may omit either.
+  const name = input.name ?? panic("create branch reached without a name");
   const created = await Result.gen(() =>
     (context.testDependencies?.createStoredTemplate ?? createStoredTemplate)({
       safeDb: context.safeDb,
       organizationId: context.organizationId,
       userId: context.userId,
       buffer: buffer ?? panic("create branch reached without a DOCX"),
-      name: input.name ?? panic("create branch reached without a name"),
-      fileName: `${input.name ?? ""}.docx`,
+      name,
+      fileName: `${name}.docx`,
       recordAuditEvent: context.recordAuditEvent,
     }),
   );
