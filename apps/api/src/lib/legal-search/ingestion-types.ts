@@ -565,7 +565,7 @@ export type SourceFieldDisposition =
  * the field name, which is the check a per-adapter test cannot make about the
  * fields its author never noticed.
  */
-export type DeclaredSourceFieldInventory = {
+type DeclaredSourceFieldInventory = {
   readonly status: "declared";
   readonly fields: Readonly<Record<string, SourceFieldDisposition>>;
   readonly listSourceFields: (payload: string) => readonly string[];

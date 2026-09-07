@@ -77,6 +77,12 @@ const CZ_NS_HEADNOTE =
 const CZ_NS_ANNOTATION =
   "Okresní soud uložil rodičům povinnost účastnit se mediačního jednání.";
 
+/** Enough of a decision for the parser to build a document from. */
+const CZ_NS_DECISION_BODY =
+  "Nejvyšší soud rozhodl v senátě složeném z předsedy JUDr. Pavla Horáka, " +
+  "Ph.D., takto: Dovolání se odmítá. Odůvodnění: Soud prvního stupně " +
+  "rozsudkem zamítl žalobu. JUDr. Pavel Horák, Ph.D.\npředseda senátu";
+
 /**
  * The detail page, carrying every row this court is known to label. Both
  * docket labels are on it: the court prints `Spisová značka` for most of its
@@ -102,7 +108,7 @@ const CZ_NS_DETAIL_PAGE = `<!DOCTYPE HTML><html><body><table>${[
   CZ_NS_CONSTITUTIONAL_COMPLAINT_TABLE,
 ].join(
   "",
-)}</table><font face="Times New Roman">${"Nejvyšší soud rozhodl v senátě složeném z předsedy JUDr. Pavla Horáka, Ph.D., takto: Dovolání se odmítá. Odůvodnění: Soud prvního stupně rozsudkem zamítl žalobu. JUDr. Pavel Horák, Ph.D.\npředseda senátu"}</font></body></html>`;
+)}</table><font face="Times New Roman">${CZ_NS_DECISION_BODY}</font></body></html>`;
 
 /**
  * The print page, whose metadata table is where the parser reads the court,
@@ -128,12 +134,12 @@ const CZ_NS_PRINT_PAGE =
 const czNsFixture = (): InventoryFixture => ({
   payload: CZ_NS_DETAIL_PAGE,
   buildDecision: async () => {
-    globalThis.fetch = asFetchMock((input: string | URL | Request) => {
+    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
       const url = input instanceof Request ? input.url : String(input);
       const body = url.includes("/WebPrint/")
         ? CZ_NS_PRINT_PAGE
         : CZ_NS_DETAIL_PAGE;
-      return Promise.resolve(
+      return await Promise.resolve(
         new Response(body, { headers: { "Content-Type": "text/html" } }),
       );
     });
@@ -295,12 +301,12 @@ const CZ_NSS_DOCUMENT_PAGE = `<html><body>
 const czNssFixture = (): InventoryFixture => ({
   payload: CZ_NSS_DETAIL_PAGE,
   buildDecision: async () => {
-    globalThis.fetch = asFetchMock((input: string | URL | Request) => {
+    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
       const url = input instanceof Request ? input.url : String(input);
       const body = url.includes("/DokumentDetail/Index/")
         ? CZ_NSS_DETAIL_PAGE
         : CZ_NSS_DOCUMENT_PAGE;
-      return Promise.resolve(
+      return await Promise.resolve(
         new Response(body, {
           headers: { "Content-Type": "text/html; charset=utf-8" },
         }),
@@ -500,7 +506,7 @@ describe("every adapter accounts for the fields its source states", () => {
       const unstored = stated.flatMap((field) => {
         const disposition: SourceFieldDisposition | undefined =
           sourceFields.fields[field];
-        if (disposition === undefined || disposition.disposition !== "stored") {
+        if (disposition?.disposition !== "stored") {
           return [];
         }
         return isPresent(storedValueOf(decision, disposition.target))
