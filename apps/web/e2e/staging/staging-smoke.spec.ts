@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { appShellNavigationLink } from "../helpers/app-shell";
+import { openGlobalSearchDatePicker } from "../helpers/global-search";
 
 const MACOS_USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) " +
@@ -162,23 +163,8 @@ test.describe("public hydration", () => {
     const firstDecision = page.locator('a[href*="/cases/"]').first();
 
     await expect(firstDecision).toBeVisible();
-    const datePickerTrigger = page
-      .getByRole("button", { name: /select date|vybrat datum/iu })
-      .first();
-    // The route is SSR'd, so the trigger is visible just before React has
-    // attached its handler and a too-early click is dropped (same gotcha as
-    // public-tools.spec.ts). Retry the open until hydration has accepted it.
-    // The re-click guard reads the trigger's aria-expanded, which the
-    // popover flips synchronously with its state: a successful click whose
-    // grid is still mounting is not toggled shut, while the dead SSR markup
-    // keeps it "false" so the pre-hydration case still retries.
-    const dayGrid = page.locator('[role="gridcell"]').first();
-    await expect(async () => {
-      if ((await datePickerTrigger.getAttribute("aria-expanded")) !== "true") {
-        await datePickerTrigger.click();
-      }
-      await expect(dayGrid).toBeVisible({ timeout: 1000 });
-    }).toPass({ timeout: 15_000 });
+    await expect(page.locator("html")).toHaveAttribute("lang", "cs");
+    await openGlobalSearchDatePicker(page);
     await expect(
       page.locator('[role="gridcell"][aria-current="date"]'),
     ).toHaveAttribute("data-date", expectedToday);
