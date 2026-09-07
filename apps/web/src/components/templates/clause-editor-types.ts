@@ -1,3 +1,5 @@
+import type { BlockDirectiveKind } from "@stll/template-conditions";
+
 export type ClauseRun = {
   text: string;
   bold?: boolean;
@@ -12,7 +14,7 @@ export type ClauseParagraph = {
   level?: number;
   runs?: ClauseRun[];
   isDirective?: boolean;
-  directiveKind?: "if" | "elseif" | "else" | "endif" | "each" | "endeach";
+  directiveKind?: BlockDirectiveKind;
   directiveExpression?: string;
   /** When set, this paragraph is a list item; bullet or ordered. */
   listKind?: ClauseListKind;

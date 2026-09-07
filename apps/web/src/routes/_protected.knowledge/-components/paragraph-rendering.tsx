@@ -61,16 +61,16 @@ export const DirectiveLabel = ({
     switch (kind) {
       case "if":
         return t("directiveIf", { expression });
-      case "elseif":
-        return t("directiveElseIf", { expression });
+      case "elif":
+        return t("directiveElif", { expression });
       case "else":
         return t("directiveElse");
       case "endif":
         return t("directiveEndIf");
-      case "each":
-        return t("directiveEach", { expression });
-      case "endeach":
-        return t("directiveEndEach");
+      case "for":
+        return t("directiveFor", { expression });
+      case "endfor":
+        return t("directiveEndFor");
       default:
         kind satisfies never;
         return panic(`Unhandled kind: ${String(kind)}`);
