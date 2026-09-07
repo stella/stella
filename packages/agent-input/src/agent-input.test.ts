@@ -1,15 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
-import { normalizeBoolean } from "@/api/lib/agent-input/boolean";
-import { normalizeDateFormatSpec } from "@/api/lib/agent-input/date-format-spec";
-import { normalizeDateValue } from "@/api/lib/agent-input/date-value";
-import { normalizeEnumValue } from "@/api/lib/agent-input/enum-value";
-import {
-  isPlausibleLocale,
-  normalizeLocale,
-} from "@/api/lib/agent-input/locale";
-import type { Normalized } from "@/api/lib/agent-input/normalized";
-import { normalizeNumber } from "@/api/lib/agent-input/number";
+import { normalizeBoolean } from "./boolean";
+import { normalizeDateFormatSpec } from "./date-format-spec";
+import { normalizeDateValue } from "./date-value";
+import { normalizeEnumValue } from "./enum-value";
+import { isPlausibleLocale, normalizeLocale } from "./locale";
+import type { Normalized } from "./normalized";
+import { normalizeNumber } from "./number";
 
 /** The value, or the ask rendered so a failure names what the agent sent. */
 const valueOf = <TValue>(result: Normalized<TValue>): TValue | string =>

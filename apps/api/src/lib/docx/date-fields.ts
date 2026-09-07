@@ -21,15 +21,13 @@
 
 import { panic } from "better-result";
 
+import type { Normalized } from "@stll/agent-input";
+import { askSentence, normalizeDateValue } from "@stll/agent-input";
 import {
   DATE_FORMAT_EXAMPLE_ISO,
   formatDate,
   resolvePath,
 } from "@stll/template-conditions";
-
-import { normalizeDateValue } from "@/api/lib/agent-input/date-value";
-import type { Normalized } from "@/api/lib/agent-input/normalized";
-import { askSentence } from "@/api/lib/agent-input/normalized";
 
 import { replaceResolvedValue } from "./composite-fields";
 import {

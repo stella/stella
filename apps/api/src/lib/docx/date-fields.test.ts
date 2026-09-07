@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import { DATE_VALUE_HINT } from "@/api/lib/agent-input/date-value";
+import { DATE_VALUE_HINT } from "@stll/agent-input";
+
 import {
   applyDateFields,
   DATE_FORMAT_EXAMPLE_ISO,

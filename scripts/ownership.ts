@@ -489,7 +489,7 @@ export const OWNERSHIP = [
     id: "agent-input-normalization",
     capability:
       "Reading a value a model wrote on the MCP/CLI wire: dates, date formats, numbers, booleans, locales, closed vocabularies",
-    owner: ["apps/api/src/lib/agent-input/"],
+    owner: ["packages/agent-input/src/"],
     summary:
       "Every agent-facing surface is lenient in the same way or it is lenient " +
       "in several different ways, which is worse than being strict: `4 000`, " +

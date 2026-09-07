@@ -1,10 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
+import { DATE_FORMAT_SPEC_HINT } from "@stll/agent-input";
 import { assertNever, classifyMarker } from "@stll/template-conditions";
 import type { FilterCall } from "@stll/template-conditions";
-
-import { DATE_FORMAT_SPEC_HINT } from "@/api/lib/agent-input/date-format-spec";
 
 import { discoverTemplate } from "./discover-template";
 import { fieldMetaFromFilters, FIELD_META_FILTERS } from "./field-filters";

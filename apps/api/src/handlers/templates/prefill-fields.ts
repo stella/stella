@@ -9,10 +9,13 @@
  * propose. Composite fields are flattened to one target per part.
  */
 
-import { normalizeBoolean } from "@/api/lib/agent-input/boolean";
-import { normalizeDateValue } from "@/api/lib/agent-input/date-value";
-import { normalizeEnumValue } from "@/api/lib/agent-input/enum-value";
-import { normalizeNumber } from "@/api/lib/agent-input/number";
+import {
+  normalizeBoolean,
+  normalizeDateValue,
+  normalizeEnumValue,
+  normalizeNumber,
+} from "@stll/agent-input";
+
 import type { ResolvedField } from "@/api/lib/docx/types";
 
 export type PrefillTarget = {

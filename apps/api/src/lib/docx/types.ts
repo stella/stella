@@ -2,6 +2,7 @@
 
 import * as v from "valibot";
 
+import { isPlausibleLocale } from "@stll/agent-input";
 import { BUSINESS_REGISTRY_SLUGS } from "@stll/api-contract";
 import type { ExtractedDocxParagraph } from "@stll/folio-core/server";
 import {
@@ -15,7 +16,6 @@ import {
   isFieldPath,
 } from "@stll/template-conditions";
 
-import { isPlausibleLocale } from "@/api/lib/agent-input/locale";
 import type { TemplateWarning } from "@/api/lib/docx/template-warnings";
 import {
   fieldSourceSchema,

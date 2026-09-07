@@ -2,7 +2,7 @@
  * Census: the surfaces that read a value an agent wrote go through the owner
  * for that kind.
  *
- * A second reader is the bug class this directory exists to kill. It never
+ * A second reader is the bug class `@stll/agent-input` exists to kill. It never
  * looks like a bug — it is one `Number(value)` in a handler, one
  * `new Date(value)` in a fill step — and it silently answers differently from
  * every other surface for `4 000`, `1. 10. 2026`, `ano`, `cs_CZ`. So the
@@ -19,10 +19,12 @@
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
 
-// Repo root, five levels up from apps/api/src/lib/agent-input.
-const REPO_ROOT = path.resolve(import.meta.dir, "../../../../..");
+// Repo root, four levels up from apps/api/src/lib.
+const REPO_ROOT = path.resolve(import.meta.dir, "../../../..");
 
-const OWNER_DIR = "apps/api/src/lib/agent-input";
+/** The package that owns every kind. The census scans api call sites, so this
+ *  only keeps the owner's own readers out of the count. */
+const OWNER_DIR = "packages/agent-input/src";
 
 /** Where a value an agent wrote is read: the template engine, the template
  *  handlers, and the template half of the MCP surface. */
@@ -50,7 +52,7 @@ type BypassRule = {
 
 const BYPASS_RULES = {
   locale: {
-    owner: "normalizeLocale / isPlausibleLocale in agent-input/locale.ts",
+    owner: "normalizeLocale / isPlausibleLocale in @stll/agent-input",
     // Locale plausibility is asked about all over the api, not only on the
     // template surface, so this one is counted app-wide.
     include: ["apps/api/src/**/*.ts"],
@@ -58,7 +60,7 @@ const BYPASS_RULES = {
     allowed: [],
   },
   date: {
-    owner: "normalizeDateValue in agent-input/date-value.ts",
+    owner: "normalizeDateValue in @stll/agent-input",
     include: AGENT_VALUE_SURFACES,
     // `new Date()` with no argument is a clock read, not a parse.
     pattern: /new Date\((?![\s)])|Date\.parse\(/u,
@@ -71,7 +73,7 @@ const BYPASS_RULES = {
     ],
   },
   number: {
-    owner: "normalizeNumber in agent-input/number.ts",
+    owner: "normalizeNumber in @stll/agent-input",
     include: AGENT_VALUE_SURFACES,
     pattern:
       /(?:^|[^\w.])(?:Number|parseFloat|parseInt)\(|Number\.parse(?:Float|Int)\(/u,
@@ -92,7 +94,7 @@ const BYPASS_RULES = {
     ],
   },
   boolean: {
-    owner: "normalizeBoolean in agent-input/boolean.ts",
+    owner: "normalizeBoolean in @stll/agent-input",
     include: AGENT_VALUE_SURFACES,
     pattern: /===\s*"(?:true|false|yes|no)"/u,
     allowed: [

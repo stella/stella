@@ -17,8 +17,8 @@
 import { panic } from "better-result";
 import * as v from "valibot";
 
-import { normalizeDateFormatSpec } from "@/api/lib/agent-input/date-format-spec";
-import { normalizeLocale } from "@/api/lib/agent-input/locale";
+import { normalizeDateFormatSpec, normalizeLocale } from "@stll/agent-input";
+
 import type {
   FieldDateFormat,
   FieldLookup,

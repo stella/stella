@@ -87,7 +87,7 @@ whether a contract change helped.
     because guessing wrong is a wrong date or a factor of a thousand on an
     instrument. Null and the placeholder encodings are that rule for "absent"
     and live in the tool factory; the value kinds live in
-    `apps/api/src/lib/agent-input/`. Cover each kind with a property test over
+    `packages/agent-input/`. Cover each kind with a property test over
     its whole spelling class rather than the examples someone happened to
     write down, and add a guard (an ownership row, a census test) so a new call
     site cannot parse the kind itself. Never per-tool tolerance code, and never
@@ -127,8 +127,8 @@ whether a contract change helped.
 
 - Tool factory and boundary normalisation: `apps/api/src/mcp/valibot-tool-definition.ts`,
   `apps/api/src/mcp/tool-utils.ts`
-- One reader per value kind, and its census: `apps/api/src/lib/agent-input/`,
-  `apps/api/src/lib/agent-input/agent-input-owner.test.ts`
+- One reader per value kind, and its census: `packages/agent-input/src/`,
+  `apps/api/src/lib/agent-input-owner.test.ts`
 - Registry-wide guards: `apps/api/src/mcp/uuid-id-inputs.test.ts`,
   `apps/api/src/mcp/null-optional-inputs.test.ts`
 - Warnings census and references: `apps/api/src/lib/docx/template-warnings.ts`,

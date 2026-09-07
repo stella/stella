@@ -16,6 +16,10 @@
 
 import * as v from "valibot";
 
+import {
+  DATE_FORMAT_SPEC_HINT,
+  normalizeDateFormatSpec,
+} from "@stll/agent-input";
 import { assertNever } from "@stll/template-conditions";
 import type {
   FilterArgument,
@@ -24,10 +28,6 @@ import type {
   MarkerLiteral,
 } from "@stll/template-conditions";
 
-import {
-  DATE_FORMAT_SPEC_HINT,
-  normalizeDateFormatSpec,
-} from "@/api/lib/agent-input/date-format-spec";
 import {
   ATTORNEY_REFS,
   CONTACT_FIELDS,

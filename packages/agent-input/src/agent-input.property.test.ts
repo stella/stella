@@ -15,13 +15,13 @@ import fc from "fast-check";
 import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
 import { foldToAscii } from "@stll/text-normalize";
 
-import { normalizeBoolean } from "@/api/lib/agent-input/boolean";
-import { normalizeDateFormatSpec } from "@/api/lib/agent-input/date-format-spec";
-import { normalizeDateValue } from "@/api/lib/agent-input/date-value";
-import { normalizeEnumValue } from "@/api/lib/agent-input/enum-value";
-import { normalizeLocale } from "@/api/lib/agent-input/locale";
-import type { Normalized } from "@/api/lib/agent-input/normalized";
-import { normalizeNumber } from "@/api/lib/agent-input/number";
+import { normalizeBoolean } from "./boolean";
+import { normalizeDateFormatSpec } from "./date-format-spec";
+import { normalizeDateValue } from "./date-value";
+import { normalizeEnumValue } from "./enum-value";
+import { normalizeLocale } from "./locale";
+import type { Normalized } from "./normalized";
+import { normalizeNumber } from "./number";
 
 setDefaultTimeout(propertyTestTimeout(20_000));
 

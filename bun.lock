@@ -73,6 +73,7 @@
         "@sinclair/typebox": "^0.34.52",
         "@smithy/fetch-http-handler": "^5.7.2",
         "@stll/agent-engine": "workspace:*",
+        "@stll/agent-input": "workspace:*",
         "@stll/ai-catalog": "workspace:*",
         "@stll/anonymize": "catalog:",
         "@stll/anonymize-chat": "workspace:*",
@@ -460,6 +461,21 @@
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
+      },
+    },
+    "packages/agent-input": {
+      "name": "@stll/agent-input",
+      "version": "0.0.0",
+      "dependencies": {
+        "@stll/template-conditions": "workspace:*",
+        "@stll/text-normalize": "workspace:*",
+        "better-result": "catalog:",
+      },
+      "devDependencies": {
+        "@stll/property-testing": "workspace:*",
+        "@stll/typescript-config": "workspace:*",
+        "bun-types": "catalog:",
+        "fast-check": "catalog:",
       },
     },
     "packages/ai-catalog": {
@@ -2502,6 +2518,8 @@
     "@standard-schema/spec": ["@standard-schema/spec@1.1.0", "", {}, "sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w=="],
 
     "@stll/agent-engine": ["@stll/agent-engine@workspace:packages/agent-engine"],
+
+    "@stll/agent-input": ["@stll/agent-input@workspace:packages/agent-input"],
 
     "@stll/ai-catalog": ["@stll/ai-catalog@workspace:packages/ai-catalog"],
 

@@ -13,8 +13,6 @@
 import { DATE_FORMAT_STYLES } from "@stll/template-conditions";
 import type { DateFormatStyle } from "@stll/template-conditions";
 
-import { isRecord } from "@/api/lib/type-guards";
-
 import { normalizeEnumValue } from "./enum-value";
 import { normalizeLocale } from "./locale";
 import type { Normalized, NormalizedAsk } from "./normalized";
@@ -24,6 +22,10 @@ export type DateFormatSpec = {
   locale: string;
   style: DateFormatStyle;
 };
+
+/** Narrow `unknown` to a plain object (not null, not array). */
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
 
 /** What a spec means when it names only a locale. */
 const DEFAULT_DATE_FORMAT_STYLE = "long" as const satisfies DateFormatStyle;
