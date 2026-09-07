@@ -13,6 +13,7 @@ import * as v from "valibot";
 
 import type { FieldMeta } from "@/api/lib/docx/types";
 import { fieldMetaToolInputSchema } from "@/api/lib/docx/types";
+import type { TemplateFieldSourceInput } from "@/api/mcp/template-field-input";
 import {
   DEFAULT_LOOKUP_FORMAT,
   toFieldMetaToolInput,
@@ -165,6 +166,46 @@ describe("describe -> configure round trip", () => {
       formats: [DEFAULT_LOOKUP_FORMAT],
     });
   });
+
+  /**
+   * A configuration entry merges onto the field it names, so a source that
+   * changes branch has to clear the branch it left. Otherwise a field that
+   * was a registry lookup keeps its `lookup` beside the source that replaced
+   * it — two derived sources on one field, which the manifest invariant
+   * forbids and the fill would have to break a tie over.
+   */
+  describe.each([
+    ["lookup", { path: "company", lookup: MANIFEST_FIXTURE.lookup.lookup }],
+    ["ai", { path: "company", aiPrompt: "Draft it.", aiSeesDocument: true }],
+    ["formula", { path: "company", formula: "a * 2" }],
+    ["condition", { path: "company", condition: "a > 1" }],
+    ["binding", { path: "company", source: { kind: "firm", field: "name" } }],
+  ] as [string, FieldMeta][])(
+    "a field configured as %s",
+    (_from, stored: FieldMeta) => {
+      test.each([
+        ["person", { type: "person" }],
+        ["ai", { type: "ai", prompt: "Draft it." }],
+        ["lookup", { type: "lookup", registry: "ares" }],
+        ["matter", { type: "matter", field: "name" }],
+        ["formula", { type: "formula", expression: "base_rent * 12" }],
+        ["condition", { type: "condition", expression: "amount > 1000" }],
+      ] as [string, TemplateFieldSourceInput][])(
+        "keeps nothing of it after moving to %s",
+        (_to, source: TemplateFieldSourceInput) => {
+          const merged: FieldMeta = {
+            ...stored,
+            ...toFieldMetaToolInput({ path: "company", source }),
+          };
+          // Exactly one derived source survives the merge, which is what the
+          // persisted schema demands of every field.
+          expect(v.safeParse(fieldMetaToolInputSchema, merged).success).toBe(
+            true,
+          );
+        },
+      );
+    },
+  );
 
   test("describe reports a false ai_adapt as a person field, not an AI one", () => {
     // The describe payload defaults `aiAdapt`/`aiSeesDocument` to false for

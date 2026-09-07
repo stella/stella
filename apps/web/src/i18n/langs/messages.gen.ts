@@ -938,6 +938,7 @@ type Messages = {
       "save_document": "Save document";
       "save_matter": "Save matter";
       "save_task": "Save task";
+      "save_template": "Save template";
       "save_time_entry": "Save time entry";
       "search-across-matters": "Searching across matters";
       "search-chat-history": "Searching chat history";

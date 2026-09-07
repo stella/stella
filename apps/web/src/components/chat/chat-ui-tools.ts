@@ -287,6 +287,9 @@ const RETIRED_CHAT_TOOL_TITLE_KEYS = {
   edit_workspace_document: "chat.tool.suggest_changes",
   ares_lookup_company: "chat.tool.ares_lookup_company",
   ares_search_companies: "chat.tool.ares_search_companies",
+  // Split into create_template and configure_template_fields; persisted
+  // threads still carry its calls and should not render as an unknown tool.
+  save_template: "chat.tool.save_template",
   // Retired hand-rolled code-execution tools, replaced by the code-mode
   // execute_typescript / discover_tools pair. Kept so historical threads that
   // reference them still render a recognisable label.

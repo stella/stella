@@ -15,6 +15,7 @@ import {
   toTemplateFieldWireInput,
 } from "@/api/mcp/template-field-input";
 import { configureTemplateFieldsArgsSchema } from "@/api/mcp/template-tools";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const TEMPLATE_ID = "6f1f4d1e-59b0-4b4f-9a35-4b0ba0f7a1c9";
 
@@ -128,9 +129,17 @@ describe("template field input schema", () => {
       date_format: { locale: "cs", style: "long" },
     });
 
-    expect(sortedKeys(mapped)).toEqual(
-      sortedKeys(persisted).filter((key) => !isFoldedIntoSource(key)),
-    );
+    // Every persisted key the surface can write is named: the plain ones with
+    // their value, and the derived-source ones the chosen branch does not use
+    // cleared, so merging this entry onto a field configured differently
+    // leaves no half of the old branch behind.
+    expect(sortedKeys(mapped)).toEqual(sortedKeys(persisted));
+    for (const key of sortedKeys(persisted).filter(isFoldedIntoSource)) {
+      const set = key === "source";
+      expect(
+        asTestRaw<Record<string, unknown>>(mapped)[key] === undefined,
+      ).toBe(!set);
+    }
     expect(sortedKeys(mapped.validation ?? {})).toEqual(
       sortedKeys(persisted.validation.wrapped.pipe[0].entries),
     );

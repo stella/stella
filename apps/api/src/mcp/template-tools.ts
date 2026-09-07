@@ -380,11 +380,16 @@ const configureSkeleton = (
     fields: [
       ...payload.fields.map((field) => ({
         path: field.path,
-        ...(field.label === undefined ? {} : { label: field.label }),
         // The default carries no decision, so it stays out of the skeleton.
         ...(field.input_type === undefined || field.input_type === "text"
           ? {}
           : { input_type: field.input_type }),
+        // The SAME object the field above carries, never a copy: the
+        // anonymized surface rewrites an AI prompt and a lookup format
+        // template in place through `fields[].source`, and a copy here would
+        // hand back the original text the redaction just removed. The label
+        // is deliberately absent for that reason — it is a string, so it
+        // cannot be shared, and it is already in `fields[]` to read.
         source: field.source,
       })),
       ...payload.arrays.flatMap((group) =>
@@ -2309,6 +2314,11 @@ type ConfigureEntries =
       type: "parsed";
       templateId: string;
       fields: FieldMeta[];
+      /** Where each applied entry sat in the `fields` array the caller sent,
+       *  in the order the entries were applied. The service that validates
+       *  them against the document counts positions in THIS list, so its
+       *  issues are translated back through it. */
+      applied: number[];
       /** Indices, into the `fields` array the caller sent, of the entries the
        *  schema refused, with what to do about each. */
       issues: FieldOverlayIssue[];
@@ -2339,6 +2349,7 @@ const parseConfigureEntries = (
         type: "parsed",
         templateId: parsed.output.template_id,
         fields: parsed.output.fields.map(toFieldMetaToolInput),
+        applied: positions,
         issues,
       };
     }
@@ -2400,6 +2411,16 @@ const handleConfigureTemplateFieldsTool: TypedMcpToolHandler<
   if (Result.isError(configured)) {
     return internalFailureResult(configured.error);
   }
+  // The service only saw the entries the schema accepted, so it counts
+  // positions in THAT list. The caller counts positions in the list it sent,
+  // and repairs the entry an issue names, so the service's positions are
+  // translated back before the two lists are merged.
+  const serviceIssues = configured.value.issues.map((issue) => {
+    const index =
+      parsed.applied[issue.index] ??
+      panic(`configure issue names applied entry ${String(issue.index)}`);
+    return { ...issue, path: `fields.${index}`, index };
+  });
 
   // Echo the field list in the same shape list_templates' detail mode returns,
   // so the agent sees exactly what is now configured, beside every entry that
@@ -2410,7 +2431,7 @@ const handleConfigureTemplateFieldsTool: TypedMcpToolHandler<
   }
   return toolDataResult({
     ...described,
-    issues: [...parsed.issues, ...configured.value.issues].toSorted(
+    issues: [...parsed.issues, ...serviceIssues].toSorted(
       (left, right) => left.index - right.index,
     ),
   });

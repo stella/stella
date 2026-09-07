@@ -825,6 +825,21 @@ describe("MCP template tools", () => {
           },
         },
       ],
+      // The configure skeleton hands back the SAME source objects, so the
+      // redaction that rewrote them above covers it too. A copy here would
+      // return the org-authored text the anonymized surface just removed, and
+      // the redactor walks `fields[]`, not `configure`.
+      configure: {
+        fields: [
+          {
+            path: "role",
+            source: {
+              type: "lookup",
+              formats: [{ template: "[company name], [PERSON_1] registry" }],
+            },
+          },
+        ],
+      },
       warnings: [
         {
           path: "{{[PERSON_1].name}}",

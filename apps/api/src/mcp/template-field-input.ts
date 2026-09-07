@@ -355,53 +355,93 @@ const toTemplateFieldValidationInput = (
 });
 
 /** The persisted half of a field that says who fills it. Every branch of the
- *  wire union produces exactly one of these shapes. */
-type PersistedFieldSourceProperties = Pick<
-  PersistedFieldInput,
-  "aiAdapt" | "aiPrompt" | "aiSeesDocument" | "condition" | "formula" | "lookup"
-> & { source?: FieldSource | undefined };
+ *  wire union produces exactly one of these shapes, and every key appears in
+ *  it: an entry merges onto the field it names, so a key the new branch omits
+ *  has to be present and cleared, or the old branch survives the merge. */
+type PersistedFieldSourceProperties = Required<{
+  [Key in
+    | "aiAdapt"
+    | "aiPrompt"
+    | "aiSeesDocument"
+    | "condition"
+    | "formula"
+    | "lookup"]: PersistedFieldInput[Key];
+}> & { source: FieldSource | undefined };
 
-/** One wire source branch, spread onto the persisted field. Exhaustive over
- *  the union: a new branch is a compile error until it is mapped. */
+/** Nothing set: the shape every branch below starts from, so switching a
+ *  field from a lookup to a person clears the lookup rather than keeping it
+ *  beside the new source. */
+const NO_PERSISTED_SOURCE: PersistedFieldSourceProperties = {
+  aiAdapt: undefined,
+  aiPrompt: undefined,
+  aiSeesDocument: undefined,
+  condition: undefined,
+  formula: undefined,
+  lookup: undefined,
+  source: undefined,
+};
+
+/**
+ * One wire source branch, spread onto the persisted field. Exhaustive over
+ * the union: a new branch is a compile error until it is mapped.
+ *
+ * Each branch names its own keys over a cleared base rather than adding to
+ * whatever was there. A configuration entry is merged onto the stored field,
+ * so a branch that only added its own keys would leave a field that used to
+ * be a lookup carrying both `lookup` and its new source — two derived sources
+ * on one field, which the manifest invariant forbids and the fill would have
+ * to break a tie over.
+ */
 const toPersistedFieldSource = (
   source: TemplateFieldSourceInput,
 ): PersistedFieldSourceProperties => {
   switch (source.type) {
     case "person":
-      return {};
+      return NO_PERSISTED_SOURCE;
     case "ai":
       return {
-        ...(source.prompt === undefined ? {} : { aiPrompt: source.prompt }),
-        ...(source.adapt === undefined ? {} : { aiAdapt: source.adapt }),
-        ...(source.sees_document === undefined
-          ? {}
-          : { aiSeesDocument: source.sees_document }),
+        ...NO_PERSISTED_SOURCE,
+        aiPrompt: source.prompt,
+        aiAdapt: source.adapt,
+        aiSeesDocument: source.sees_document,
       };
     case "lookup":
       return {
+        ...NO_PERSISTED_SOURCE,
         lookup: {
           registry: source.registry,
           formats: source.formats ?? [DEFAULT_LOOKUP_FORMAT],
         },
       };
     case "contact":
-      return { source: { kind: "contact", field: source.field } };
+      return {
+        ...NO_PERSISTED_SOURCE,
+        source: { kind: "contact", field: source.field },
+      };
     case "party":
       return {
+        ...NO_PERSISTED_SOURCE,
         source: { kind: "party", role: source.role, field: source.field },
       };
     case "matter":
-      return { source: { kind: "matter", field: source.field } };
+      return {
+        ...NO_PERSISTED_SOURCE,
+        source: { kind: "matter", field: source.field },
+      };
     case "attorney":
       return {
+        ...NO_PERSISTED_SOURCE,
         source: { kind: "attorney", ref: source.ref, field: source.field },
       };
     case "firm":
-      return { source: { kind: "firm", field: source.field } };
+      return {
+        ...NO_PERSISTED_SOURCE,
+        source: { kind: "firm", field: source.field },
+      };
     case "formula":
-      return { formula: source.expression };
+      return { ...NO_PERSISTED_SOURCE, formula: source.expression };
     case "condition":
-      return { condition: source.expression };
+      return { ...NO_PERSISTED_SOURCE, condition: source.expression };
     default: {
       source satisfies never;
       return panic(`Unhandled template field source: ${String(source)}`);
