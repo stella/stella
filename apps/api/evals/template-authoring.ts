@@ -519,9 +519,13 @@ const configurableTemplatePaths = (
  */
 const saveTemplateInMemory = async ({
   docxBase64,
+  manifest: storedManifest,
   overlay,
 }: {
   docxBase64: string;
+  /** The manifest the template already carries, which a configure call
+   *  refines. Null on the create call, which has none yet. */
+  manifest: TemplateManifest | null;
   overlay: readonly FieldMeta[] | undefined;
 }): Promise<SaveOutcome> => {
   const buffer = Buffer.from(docxBase64, "base64");
@@ -542,14 +546,13 @@ const saveTemplateInMemory = async ({
   }
 
   const discovered = await discoverTemplate(buffer);
-  // The manifest a stored template carries once the create call resolved it:
-  // the document layer a marker's own filters declare
-  // (`{{ landlord_name | contact("displayName") }}`), then the stored
-  // manifest, then the overlay — `resolveTemplateFieldOverlay`, the same
-  // function and the same order production runs.
-  const stored = resolveTemplateFieldOverlay({
+  // The manifest this call starts from: the document layer a marker's own
+  // filters declare (`{{ landlord_name | contact("displayName") }}`) under
+  // whatever the template already stored. `resolveTemplateFieldOverlay` is
+  // the function and the layer order production resolves it with.
+  const base = resolveTemplateFieldOverlay({
     discovered,
-    manifest: null,
+    manifest: storedManifest,
     overlay: undefined,
   });
 
@@ -564,13 +567,13 @@ const saveTemplateInMemory = async ({
   // `attorneys.name` inside `{% for a in attorneys %}` - that the service accepts.
   // Measuring the contract means running the contract's own validator.
   const { applied, issues } = partitionFieldOverlay({
-    configured: stored.fields,
+    configured: base.fields,
     discovered,
     overlay: overlay ?? [],
   });
   const manifest = resolveTemplateFieldOverlay({
     discovered,
-    manifest: stored,
+    manifest: base,
     overlay: applied,
   });
   const withManifest = await writeManifest(buffer, manifest);
@@ -1308,10 +1311,16 @@ const createAuthoringTools = ({
   writeCalls: WrittenDocx[];
 }): AuthoringToolSet => {
   const written = new Map<string, Buffer>();
-  // The one template this run may create, kept as the bytes the create call
-  // accepted so the configure call overlays the same document, beside the
-  // display name configure echoes back the way production describes it.
-  let stored: { docxBase64: string; name: string | undefined } | null = null;
+  // The one template this run may create: the bytes the create call accepted,
+  // so a configure call overlays the same document, the display name configure
+  // echoes back the way production describes it, and the manifest the last
+  // accepted call left on it. A second configure refines the first one's
+  // result exactly as it does against a stored template.
+  let stored: {
+    docxBase64: string;
+    name: string | undefined;
+    manifest: TemplateManifest;
+  } | null = null;
 
   const handleWriteDocx = async ({
     blocks,
@@ -1386,6 +1395,7 @@ const createAuthoringTools = ({
     const docxBase64 = writtenDocx?.toString("base64") ?? ref;
     const outcome = await saveTemplateInMemory({
       docxBase64,
+      manifest: null,
       overlay: undefined,
     });
     await recordAttempt({ outcome, overlay: [], step: "create" });
@@ -1395,7 +1405,11 @@ const createAuthoringTools = ({
     if (outcome.status === "rejected") {
       return { error: "validation_error", issues: outcome.issues };
     }
-    stored = { docxBase64, name: parsed.output.name };
+    stored = {
+      docxBase64,
+      name: parsed.output.name,
+      manifest: outcome.manifest,
+    };
     return {
       templateId: EVAL_TEMPLATE_ID,
       name: parsed.output.name,
@@ -1455,8 +1469,12 @@ const createAuthoringTools = ({
     }
     const outcome = await saveTemplateInMemory({
       docxBase64: stored.docxBase64,
+      manifest: stored.manifest,
       overlay,
     });
+    if (outcome.status === "saved") {
+      stored = { docxBase64: stored.docxBase64, manifest: outcome.manifest };
+    }
     // The properties and entries the tool site dropped are part of what the
     // call reported, so they are part of what the run is scored on.
     const dropped = parsed.issues.map(
