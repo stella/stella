@@ -34,10 +34,9 @@
  *                 round trip rendered cleanly)
  *   outcome       pass / partial / invalid-docx / no-call / error
  *   missing/extra discovered field paths against the set the brief names
- *   traps         named grammar mistakes (see GRAMMAR_TRAP_CODES):
- *                 unprefixed_item_path, this_prefix, unknown_directive,
- *                 bracket_index, language_variant_path, block_marker_inline,
- *                 lookup_not_parent, condition_on_input
+ *   traps         named grammar mistakes, one column per code in
+ *                 GRAMMAR_TRAP_CODES, which is where they are documented; a
+ *                 second list here would only drift from it
  *   overlay       entry-level production validation issues: the entries a
  *                 best-effort configure refused, schema rejections, and a
  *                 `path` matching no marker. These fail `configured`.
@@ -1774,7 +1773,6 @@ const buildAttempt = async ({
       traps: detectGrammarTraps({
         blocks: call.blocks,
         overlay: call.overlay,
-        overlayIssues: outcome.issues,
         booleanInputPaths: task.booleanInputPaths,
       }),
       overlayIssues: [
@@ -1821,7 +1819,6 @@ const buildUnsavedAttempt = async ({
     traps: detectGrammarTraps({
       blocks,
       overlay: [],
-      overlayIssues: [],
       booleanInputPaths: task.booleanInputPaths,
     }),
     overlayIssues: [
@@ -2073,7 +2070,6 @@ const scoreQuizTurn = ({
     traps: detectGrammarTraps({
       blocks: [],
       overlay: [],
-      overlayIssues: [],
       booleanInputPaths: [],
     }),
     overlayIssues: [],

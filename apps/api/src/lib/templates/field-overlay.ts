@@ -55,12 +55,6 @@ export type FieldOverlayIssue = {
   property?: string;
 };
 
-/** The phrase that names the lookup-ownership refusal built below. A reader
- *  of the issues (the template-authoring eval's grammar-trap detector) has to
- *  recognize that one refusal among the rest, so the message and the matcher
- *  are the same constant and cannot drift apart. */
-export const LOOKUP_OWNERSHIP_REFUSAL = "declares a lookup whose format key";
-
 /**
  * What the DOCX declares, split by how the path came to exist. `declared` is
  * everything discovery knows: markers, the condition paths only an `{% if %}`
@@ -110,7 +104,7 @@ const childMarkers = (path: string, declared: ReadonlySet<string>): string[] =>
 
 /** True when the entry says anything beyond naming a path: a bare `{ path }`
  *  entry is a marker discovery recorded in the manifest, not a decision an
- *  author made, so it never collides with a lookup that owns the same marker. */
+ *  author made, so it never becomes a field of its own. */
 const carriesConfiguration = (field: FieldMeta): boolean =>
   Object.entries(field).some(
     ([key, value]) => key !== "path" && value !== undefined,
@@ -549,15 +543,14 @@ export const validateFieldOverlay = ({
 }: ValidateFieldOverlayOptions): FieldOverlayIssue[] => {
   const { declared, roots } = declaredPaths(discovered);
   const issues: FieldOverlayIssue[] = [];
-  const overlayIndexByPath = new Map(
-    overlay.map((field, index) => [field.path, index] as const),
-  );
-  const effectiveFields = applyFieldOverlay(
-    { version: 1, fields: [...configured] },
-    overlay,
-  ).fields;
+  // The configuration the entries make together: a path is a namespace parent
+  // or the one input of a lookup by what the whole overlay says, not by what
+  // the entry naming it says on its own.
   const effectiveByPath = new Map(
-    effectiveFields.map((field) => [field.path, field]),
+    applyFieldOverlay(
+      { version: 1, fields: [...configured] },
+      overlay,
+    ).fields.map((field) => [field.path, field]),
   );
   const seenPaths = new Set<string>();
 
@@ -607,51 +600,6 @@ export const validateFieldOverlay = ({
     }
   }
 
-  // Validate the resulting ownership graph, so lookup owners and children are
-  // checked identically whether they came from the document or this overlay.
-  for (const field of effectiveFields) {
-    if (field.lookup === undefined) {
-      continue;
-    }
-
-    // A lookup owns `{{path.key}}` for every one of its format keys: that
-    // marker renders the resolved hit. A field configured at the same path
-    // would claim the same marker for a second, unrelated value, so the two
-    // configurations are refused together rather than one silently winning.
-    for (const format of field.lookup.formats) {
-      const childPath = `${field.path}.${format.key}`;
-      const child = effectiveByPath.get(childPath);
-      if (!child || !carriesConfiguration(child)) {
-        continue;
-      }
-      const message =
-        `"${field.path}" ${LOOKUP_OWNERSHIP_REFUSAL} "${format.key}" ` +
-        `renders {{${childPath}}}, but "${childPath}" is configured as its ` +
-        "own field.";
-      const hint =
-        "Drop one of the two: rename the format key, or remove the " +
-        `"${childPath}" configuration.`;
-      const ownerIndex = overlayIndexByPath.get(field.path);
-      if (ownerIndex !== undefined) {
-        issues.push({
-          path: fieldOverlayIssuePath(ownerIndex),
-          index: ownerIndex,
-          message,
-          hint,
-        });
-      }
-      const childIndex = overlayIndexByPath.get(childPath);
-      if (childIndex !== undefined) {
-        issues.push({
-          path: fieldOverlayIssuePath(childIndex),
-          index: childIndex,
-          message,
-          hint,
-        });
-      }
-    }
-  }
-
   return issues;
 };
 
@@ -669,11 +617,11 @@ type PartitionFieldOverlayResult = {
  * an agent that gets one property wrong should not have to resend the other
  * seven to find out whether they were fine.
  *
- * Validation runs to a fixed point because two of the rules relate a pair of
- * entries (a lookup owner and the marker one of its format keys renders), so
- * dropping one entry can settle another. Dropping only ever removes
- * constraints, and every round removes at least one entry, so the loop
- * terminates in at most `overlay.length` rounds.
+ * Validation runs to a fixed point because an entry is checked against the
+ * configuration the surviving entries make together, so dropping one can
+ * settle another. Dropping only ever removes constraints, and every round
+ * removes at least one entry, so the loop terminates in at most
+ * `overlay.length` rounds.
  */
 export const partitionFieldOverlay = ({
   configured,

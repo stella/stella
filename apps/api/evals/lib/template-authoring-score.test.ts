@@ -1,7 +1,5 @@
 import { describe, expect, test } from "bun:test";
 
-import { LOOKUP_OWNERSHIP_REFUSAL } from "@/api/lib/templates/field-overlay";
-
 import type { AuthoredBlock, SaveAttempt } from "./template-authoring-score";
 import {
   checkSourceFidelity,
@@ -27,13 +25,7 @@ const traps = (
   blocks: readonly AuthoredBlock[],
   overlay = [],
   booleanInputPaths: string[] = [],
-) =>
-  detectGrammarTraps({
-    blocks,
-    overlay,
-    overlayIssues: [],
-    booleanInputPaths,
-  });
+) => detectGrammarTraps({ blocks, overlay, booleanInputPaths });
 
 describe("detectGrammarTraps", () => {
   test("a correctly authored repeat trips nothing", () => {
@@ -172,83 +164,11 @@ describe("detectGrammarTraps", () => {
     expect(counts.language_variant_path).toBe(1);
   });
 
-  test("lookup_not_parent counts the per-leaf lookup the engine still refuses", () => {
-    const blocks = [paragraph("{{company}}, {{company.krs}}")];
-    const overlay = [
-      { path: "company", lookup: {} },
-      { path: "company.krs", lookup: {} },
-    ];
-    // The refusal names both sides of the collision; only the child is the
-    // configuration that should have been a format of its parent.
-    const ownership = (index: number) => ({
-      index,
-      message:
-        `"company" ${LOOKUP_OWNERSHIP_REFUSAL} "krs" renders {{company.krs}}, ` +
-        'but "company.krs" is configured as its own field.',
-    });
-    expect(
-      detectGrammarTraps({
-        blocks,
-        overlay,
-        overlayIssues: [ownership(0), ownership(1)],
-        booleanInputPaths: [],
-      }).lookup_not_parent,
-    ).toBe(1);
-  });
-
-  test("a child the engine folded into its parent's format is not a trap", () => {
-    expect(
-      detectGrammarTraps({
-        blocks: [paragraph("{{company}}, {{company.krs}}")],
-        overlay: [
-          { path: "company", lookup: {} },
-          { path: "company.krs", lookup: {} },
-        ],
-        overlayIssues: [],
-        booleanInputPaths: [],
-      }).lookup_not_parent,
-    ).toBe(0);
-  });
-
-  test("a leaf refused for what it carries beside the lookup is not the trap", () => {
-    // The parent owns the lookup; the leaf claims the same marker for an
-    // unrelated configuration. The refusal stands, the grammar trap does not.
-    expect(
-      detectGrammarTraps({
-        blocks: [paragraph("{{company}}, {{company.krs}}")],
-        overlay: [{ path: "company", lookup: {} }, { path: "company.krs" }],
-        overlayIssues: [
-          {
-            index: 1,
-            message:
-              `"company" ${LOOKUP_OWNERSHIP_REFUSAL} "krs" renders ` +
-              '{{company.krs}}, but "company.krs" is configured as its own field.',
-          },
-        ],
-        booleanInputPaths: [],
-      }).lookup_not_parent,
-    ).toBe(0);
-  });
-
-  test("a refusal that is not the ownership one is not a lookup trap", () => {
-    expect(
-      detectGrammarTraps({
-        blocks: [paragraph("{{company.krs}}")],
-        overlay: [{ path: "company.krs", lookup: {} }],
-        overlayIssues: [
-          { index: 0, message: "No marker {{company.krs}} in the DOCX." },
-        ],
-        booleanInputPaths: [],
-      }).lookup_not_parent,
-    ).toBe(0);
-  });
-
   test("a condition the engine drops is no longer counted", () => {
     expect(
       detectGrammarTraps({
         blocks: [paragraph("{% if penalty %}")],
         overlay: [{ path: "penalty", condition: "penalty == true" }],
-        overlayIssues: [],
         booleanInputPaths: ["penalty"],
       }).condition_on_input,
     ).toBe(0);
@@ -259,7 +179,6 @@ describe("detectGrammarTraps", () => {
       detectGrammarTraps({
         blocks: [paragraph("{% if penalty %}")],
         overlay: [{ path: "penalty", condition: "amount > 0" }],
-        overlayIssues: [],
         booleanInputPaths: ["penalty"],
       }).condition_on_input,
     ).toBe(1);
@@ -267,7 +186,6 @@ describe("detectGrammarTraps", () => {
       detectGrammarTraps({
         blocks: [paragraph("{% if has_penalty %}")],
         overlay: [{ path: "has_penalty", condition: "amount > 0" }],
-        overlayIssues: [],
         booleanInputPaths: [],
       }).condition_on_input,
     ).toBe(0);
@@ -329,7 +247,6 @@ describe("scoreAuthoringRun", () => {
     traps: detectGrammarTraps({
       blocks: [],
       overlay: [],
-      overlayIssues: [],
       booleanInputPaths: [],
     }),
     overlayIssues: [],
@@ -552,7 +469,6 @@ describe("scoreAuthoringRun", () => {
         traps: detectGrammarTraps({
           blocks: [paragraph("Hello {{name}}")],
           overlay: [],
-          overlayIssues: [],
           booleanInputPaths: [],
         }),
         overlayIssues: [],
@@ -579,7 +495,6 @@ describe("scoreAuthoringRun", () => {
             paragraph("{{name}}"),
           ],
           overlay: [],
-          overlayIssues: [],
           booleanInputPaths: [],
         }),
         overlayIssues: [],

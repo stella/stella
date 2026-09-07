@@ -29,10 +29,7 @@ import {
 } from "@stll/template-conditions";
 
 import { parseInlineConditions } from "@/api/lib/docx/inline-conditions";
-import {
-  conditionReferencesOnlySelf,
-  LOOKUP_OWNERSHIP_REFUSAL,
-} from "@/api/lib/templates/field-overlay";
+import { conditionReferencesOnlySelf } from "@/api/lib/templates/field-overlay";
 
 /**
  * One block of the document the model authored. A table cell holds a
@@ -50,14 +47,6 @@ export type AuthoredBlock =
 type OverlayFieldView = {
   path: string;
   condition?: string | undefined;
-  lookup?: object | undefined;
-};
-
-/** One refusal the production overlay partition returned, naming the entry it
- *  refuses by its position in the overlay that was sent. */
-type OverlayIssueView = {
-  index: number;
-  message: string;
 };
 
 /**
@@ -85,12 +74,6 @@ export const GRAMMAR_TRAP_CODES = [
    *  not a row block's opener/closer pair, and not a span the inline engine
    *  parses (`{% if x %}…{% endif %}` within one paragraph). */
   "block_marker_inline",
-  /** A lookup declared per leaf (`company.krs`) instead of one parent with
-   *  formats, and still refused after the engine folds a leaf that merely
-   *  restates its parent's format. A leaf refused for anything else it
-   *  carries beside a correctly placed parent lookup is a configuration
-   *  mistake, reported as the overlay issue it is, not as a grammar trap. */
-  "lookup_not_parent",
   /** A `condition` on a field the person answers as a yes/no question. */
   "condition_on_input",
 ] as const;
@@ -109,7 +92,6 @@ const zeroTrapCounts = (): GrammarTrapCounts => ({
   bracket_index: 0,
   language_variant_path: 0,
   block_marker_inline: 0,
-  lookup_not_parent: 0,
   condition_on_input: 0,
 });
 
@@ -249,8 +231,6 @@ type DetectGrammarTrapsOptions = {
   blocks: readonly AuthoredBlock[];
   /** The `fields` entries it passed to `configure_template_fields`. */
   overlay: readonly OverlayFieldView[];
-  /** What `partitionFieldOverlay` refused of those entries. */
-  overlayIssues: readonly OverlayIssueView[];
   /** Paths the task expects a person to answer as a yes/no question, so a
    *  `condition` on one of them is the tick-box confusion. */
   booleanInputPaths: readonly string[];
@@ -264,7 +244,6 @@ type DetectGrammarTrapsOptions = {
 export const detectGrammarTraps = ({
   blocks,
   overlay,
-  overlayIssues,
   booleanInputPaths,
 }: DetectGrammarTrapsOptions): GrammarTrapCounts => {
   const counts = zeroTrapCounts();
@@ -355,21 +334,6 @@ export const detectGrammarTraps = ({
   counts.language_variant_path = countLanguageVariants([
     ...new Set(placeholderPaths),
   ]);
-
-  // The trap is the per-leaf lookup shape, counted only where the engine
-  // still refuses it: a leaf that merely restates its parent's format folds
-  // away. A leaf refused for what it carries BESIDE a correctly placed parent
-  // lookup is a configuration mistake, and stays the overlay issue it is.
-  for (const { index, message } of overlayIssues) {
-    const leaf = overlay[index];
-    if (
-      message.includes(LOOKUP_OWNERSHIP_REFUSAL) &&
-      leaf?.lookup !== undefined &&
-      leaf.path.includes(".")
-    ) {
-      counts.lookup_not_parent += 1;
-    }
-  }
 
   // A condition that reads only the field's own value is one the engine drops
   // before it configures anything, so it is no longer a trap; what remains is
