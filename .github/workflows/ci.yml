@@ -2,7 +2,7 @@ name: CI Checks
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review, labeled]
+    types: [opened, synchronize, reopened, ready_for_review]
   # The merge queue builds main plus one pull request and merges only if this
   # workflow reports `ci-result` success on that commit, so every check below
   # also runs on the tree that will actually land.
@@ -11,18 +11,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  # Non-run-ci label events intentionally skip below. Keep them out of
-  # the main CI concurrency group so an incidental label cannot cancel
-  # real checks. The ci-result job also changes its check name for
-  # those events so it cannot replace the required status with a pass.
-  group: >-
-    ${{ github.workflow }}-${{ github.ref }}-${{
-      github.event_name == 'pull_request'
-      && github.event.action == 'labeled'
-      && github.event.label.name != 'run-ci'
-      && format('label-{0}-{1}', github.event.label.name, github.run_id)
-      || 'checks'
-    }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions: {}
@@ -32,12 +21,9 @@ jobs:
     # Decide trust before checkout, then compute every changed-file scope in
     # the same runner so downstream work starts after one scheduling wave.
     # Skip draft PRs (CI runs when marked ready for review via `reopened`).
-    # Also skip irrelevant label events: only the "run-ci" label matters.
     if: >-
       github.event_name == 'workflow_dispatch'
-      || (github.event.pull_request.draft != true
-          && (github.event.action != 'labeled'
-              || github.event.label.name == 'run-ci'))
+      || github.event.pull_request.draft != true
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -72,20 +58,19 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           GH_TOKEN: ${{ github.token }}
-          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
           BASE_REPO: ${{ github.repository }}
-          HAS_RUN_CI_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'run-ci') }}
           MERGE_GROUP_HEAD_REF: ${{ github.event.merge_group.head_ref }}
         run: |
-          # Same-repo PRs are trusted: the author has write access
-          # to push branches. Fork PRs need a maintainer to add
-          # the "run-ci" label after reviewing the code.
+          # A pull_request run is trusted once it starts. Same-repo
+          # authors have write access to push branches, and a fork
+          # run only starts after a maintainer approves that exact
+          # push in the Actions UI (repository policy: approval
+          # required for all external contributors).
           #
-          # A merge group runs with the base repository's secrets, and
-          # the "run-ci" label survives pushes made after the reviewed
-          # commit, so the label cannot vouch for it. Only a same-repo
-          # pull request is trusted there; the group's head ref names
-          # it as gh-readonly-queue/<base>/pr-<number>-<sha>.
+          # A merge group runs with the base repository's secrets and
+          # carries no per-push approval. Only a same-repo pull
+          # request is trusted there; the group's head ref names it
+          # as gh-readonly-queue/<base>/pr-<number>-<sha>.
           if [[ "$EVENT_NAME" == "merge_group" ]]; then
             if [[ "$MERGE_GROUP_HEAD_REF" =~ /pr-([0-9]+)-[0-9a-f]+$ ]]; then
               queued_head_repo=$(gh api "repos/$BASE_REPO/pulls/${BASH_REMATCH[1]}" --jq '.head.repo.full_name')
@@ -98,13 +83,8 @@ jobs:
               echo "trusted=false" >> "$GITHUB_OUTPUT"
               echo "::error::Merge group for a fork pull request (head ${queued_head_repo:-unknown}). Land fork changes from a same-repo branch."
             fi
-          elif [[ "$HEAD_REPO" == "$BASE_REPO" ]]; then
-            echo "trusted=true" >> "$GITHUB_OUTPUT"
-          elif [[ "$HAS_RUN_CI_LABEL" == "true" ]]; then
-            echo "trusted=true" >> "$GITHUB_OUTPUT"
           else
-            echo "trusted=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Fork PR without 'run-ci' label — CI skipped. A maintainer must review the code and add the 'run-ci' label to run checks."
+            echo "trusted=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Checkout
@@ -394,8 +374,8 @@ jobs:
   # The agent sandbox must be exercised before the standalone protected
   # canary can exist on the default branch. This job is safe for draft PRs: it
   # receives no secrets, keeps the token read-only, and runs on an ephemeral
-  # hosted runner. Same-repository branches run immediately; forks retain the
-  # repository's explicit run-ci approval gate.
+  # hosted runner. Same-repository branches run immediately; forks wait for
+  # the repository's Actions approval gate.
   agent-sandbox-docker:
     name: Agent sandbox Docker isolation and lifecycle
     needs: ci-plan
@@ -2608,14 +2588,7 @@ jobs:
   # this check to pass, which ensures untrusted PRs cannot be
   # merged without CI and trusted PRs must pass all checks.
   ci-result:
-    name: >-
-      ${{
-        github.event_name == 'pull_request'
-        && github.event.action == 'labeled'
-        && github.event.label.name != 'run-ci'
-        && format('ci-result-ignored-label-{0}', github.run_id)
-        || 'ci-result'
-      }}
+    name: ci-result
     if: always()
     needs:
       [
@@ -2675,9 +2648,9 @@ jobs:
           WEB_IMAGE_SMOKE_REQUIRED: ${{ needs.ci-plan.outputs.web_image_smoke_required }}
           WINDOWS_SCRIPTS_RESULT: ${{ needs.windows-scripts.result }}
         run: |
-          # When the CI plan was skipped (draft PR or
-          # irrelevant label event), all downstream jobs are also
-          # skipped. This is expected and should not block the PR.
+          # When the CI plan was skipped (draft PR), all downstream
+          # jobs are also skipped. This is expected and should not
+          # block the PR.
           if [[ "$PLAN_RESULT" == "skipped" ]]; then
             echo "CI plan skipped. Passing."
             exit 0
@@ -2730,7 +2703,7 @@ jobs:
           fi
 
           if [[ "$TRUSTED" != "true" ]]; then
-            echo "::error::CI was not run. A maintainer must review the code and add the 'run-ci' label."
+            echo "::error::CI did not run: the merge group carries a fork pull request. Land fork changes from a same-repo branch."
             exit 1
           fi
 

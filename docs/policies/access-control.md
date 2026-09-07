@@ -72,15 +72,20 @@ operations runbook (private).
    paths, including CI/release automation, database code and migrations,
    authentication, dependency manifests, and privileged desktop code.
 
-8. **Fork trust gate.** The CI workflow
-   (`.github/workflows/ci.yml`) skips checks on fork PRs
-   until a maintainer applies the `run-ci` label, preventing
-   untrusted code from executing in CI.
+8. **Fork trust gate.** GitHub Actions requires a maintainer to
+   approve every workflow run for a pull request from a fork
+   (repository policy: approval required for all external
+   contributors), so untrusted code never executes in CI before
+   review. The CI workflow (`.github/workflows/ci.yml`) also fails a
+   merge group that carries a fork pull request; fork changes land
+   from a same-repo branch.
 
 9. **Ruleset audit.** A weekly workflow
    (`audit-branch-protection.yml`) compares the live GitHub
    ruleset against the checked-in expected configuration and
-   alerts on drift.
+   alerts on drift. The same workflow fails when the Actions
+   fork approval policy no longer requires approval for all
+   external contributors.
 
 ## Enforcement
 

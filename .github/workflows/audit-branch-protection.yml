@@ -38,3 +38,36 @@ jobs:
     secrets:
       BRANCH_PROTECTION_APP_ID: ${{ secrets.BRANCH_PROTECTION_APP_ID }}
       BRANCH_PROTECTION_APP_KEY: ${{ secrets.BRANCH_PROTECTION_APP_KEY }}
+
+  # Fork pull requests run CI only after a maintainer approves the push
+  # (`docs/policies/access-control.md`, "Fork trust gate"). That gate is
+  # a repository setting rather than workflow code, so drift would not
+  # show up in review; fail when it is loosened.
+  audit-fork-approval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Create GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.BRANCH_PROTECTION_APP_CLIENT_ID }}
+          private-key: ${{ secrets.BRANCH_PROTECTION_APP_KEY }}
+
+      - name: Check fork approval policy
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          REPO: ${{ github.repository }}
+          EXPECTED_POLICY: all_external_contributors
+        shell: bash --noprofile --norc -eo pipefail {0}
+        run: |
+          LIVE_POLICY=$(
+            gh api "repos/${REPO}/actions/permissions/fork-pr-contributor-approval" \
+              --jq '.approval_policy'
+          )
+          echo "Fork approval policy: ${LIVE_POLICY}"
+          if [ "${LIVE_POLICY}" != "${EXPECTED_POLICY}" ]; then
+            echo "::error::Actions fork approval policy is '${LIVE_POLICY}', expected '${EXPECTED_POLICY}'. Restore it under Settings > Actions > General."
+            exit 1
+          fi
