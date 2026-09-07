@@ -2656,7 +2656,7 @@ export const generatedRouteMap: RouteNode = {
                 kind: "string",
                 repeatable: false,
                 description:
-                  "Existing template to publish a new version of, or rename; omit to create a new template",
+                  "Omit to create a new template. Set it ONLY to a template id a previous call returned, to publish a new version over that template or rename it",
                 required: false,
               },
               {
@@ -2674,7 +2674,7 @@ export const generatedRouteMap: RouteNode = {
                 kind: "string",
                 repeatable: false,
                 description:
-                  "Original .docx bytes, base64-encoded verbatim; the fallback when the host cannot supply 'file'. Never strip parts out of the file to shrink it.",
+                  "Original .docx bytes, base64-encoded verbatim; the fallback when the host cannot supply 'file'. Send one or the other, never both. Never strip parts out of the file to shrink it.",
                 required: false,
               },
               {
@@ -2725,7 +2725,7 @@ export const generatedRouteMap: RouteNode = {
                   type: "string",
                   format: "uuid",
                   description:
-                    "Existing template to publish a new version of, or rename; omit to create a new template",
+                    "Omit to create a new template. Set it ONLY to a template id a previous call returned, to publish a new version over that template or rename it",
                 },
                 name: {
                   type: "string",
@@ -2739,7 +2739,7 @@ export const generatedRouteMap: RouteNode = {
                   minLength: 1,
                   maxLength: 262144,
                   description:
-                    "Original .docx bytes, base64-encoded verbatim; the fallback when the host cannot supply 'file'. Never strip parts out of the file to shrink it.",
+                    "Original .docx bytes, base64-encoded verbatim; the fallback when the host cannot supply 'file'. Send one or the other, never both. Never strip parts out of the file to shrink it.",
                 },
                 file: {
                   type: "object",

@@ -186,7 +186,7 @@ export const createTemplateArgsSchema = nullAsAbsent(
     v.strictObject({
       template_id: v.optional(
         uuidInputSchema(
-          "Existing template to publish a new version of, or rename; omit to create a new template",
+          "Omit to create a new template. Set it ONLY to a template id a previous call returned, to publish a new version over that template or rename it",
         ),
       ),
       name: v.optional(
@@ -206,8 +206,8 @@ export const createTemplateArgsSchema = nullAsAbsent(
           v.maxLength(MAX_INLINE_DOCX_BASE64_LENGTH),
           v.description(
             "Original .docx bytes, base64-encoded verbatim; the fallback when " +
-              "the host cannot supply 'file'. Never strip parts out of the " +
-              "file to shrink it.",
+              "the host cannot supply 'file'. Send one or the other, never " +
+              "both. Never strip parts out of the file to shrink it.",
           ),
         ),
       ),

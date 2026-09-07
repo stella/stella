@@ -180,9 +180,11 @@ const AUTHORING_SYSTEM_PROMPT = [
   "source document and asks for a reusable template. Work in three steps.",
   "First mark the fillable values with {{markers}} and write the file with",
   `${WRITE_DOCX_TOOL_NAME}. Second call ${CREATE_TEMPLATE_TOOL_NAME} with a`,
-  "name and the returned reference as docx_base64; it answers with the field",
-  `paths the document declares. Third call ${CONFIGURE_FIELDS_TOOL_NAME} with`,
-  "that template_id and one fields entry per path. Keep the document's",
+  "name and, as docx_base64, the exact string write_docx returned; send no",
+  "template_id and no file. It answers with the field paths the document",
+  `declares and the configure call to make next. Third call`,
+  `${CONFIGURE_FIELDS_TOOL_NAME} with that template_id and one fields entry`,
+  "per path. Keep the document's",
   "wording exactly as given; only replace the values that become fields. The",
   "two reference resources below are the complete grammar and configuration",
   "contract; follow them literally.",
@@ -1207,12 +1209,14 @@ const authoredBlockSchema = v.variant("type", [
 ]);
 
 const WRITE_DOCX_DESCRIPTION =
-  "Write the marked-up document to a .docx file and return a reference to " +
-  "its bytes. This stands in for the DOCX writer an MCP client runs locally. " +
-  "Pass `blocks` in document order, one entry per paragraph or per table; a " +
-  "newline inside a table cell starts a new paragraph in that cell. Then " +
-  `pass the returned reference as ${CREATE_TEMPLATE_TOOL_NAME}'s docx_base64: ` +
-  "it expands to the file's base64 bytes at the boundary.";
+  "Write the marked-up document to a .docx file. This stands in for the DOCX " +
+  "writer an MCP client runs locally. Pass `blocks` in document order, one " +
+  "entry per paragraph or per table; a newline inside a table cell starts a " +
+  "new paragraph in that cell. Returns `docx_base64`, a SHORT reference " +
+  `string. Copy that string verbatim into ${CREATE_TEMPLATE_TOOL_NAME}'s ` +
+  "`docx_base64`; it expands to the file's real bytes at the boundary. Never " +
+  "write base64 yourself, and never send `file`: this host has no file " +
+  "transport, so a `file` reference you invent cannot be downloaded.";
 
 type ToolTrace = { name: string; input: unknown };
 type WrittenDocx = { ref: string; blocks: AuthoredBlock[]; buffer: Buffer };
@@ -1256,7 +1260,9 @@ const createAuthoringTools = ({
     const buffer = await buildDocx(authored);
     writeCalls.push({ ref, blocks: authored, buffer });
     written.set(ref, buffer);
-    return { docx_ref: ref, bytes: buffer.byteLength };
+    // Named after the parameter it feeds: copying a value into a property of
+    // the same name is one step, inferring the mapping is a guess.
+    return { docx_base64: ref, bytes: buffer.byteLength };
   });
 
   /** Record one attempt at the create/configure pair, in the shape scoring
