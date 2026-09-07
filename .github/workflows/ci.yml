@@ -2740,7 +2740,7 @@ jobs:
           fi
 
           if [[ "$TRUSTED" != "true" ]]; then
-            echo "::error::CI did not run: the merge group carries a fork pull request whose head has no successful pull_request run."
+            echo "::error::CI did not run: the merge group failed the trust check; see the ci-plan job for the reason."
             exit 1
           fi
 
