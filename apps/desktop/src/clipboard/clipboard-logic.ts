@@ -126,29 +126,38 @@ export const shouldReturnToTimelineFromInput = ({
   !isClipboardNameInput(dataset) && key === "ArrowUp" && !isComposing;
 
 type ClipboardSearchArrowKey = ClipboardInputKey & {
+  direction: "ltr" | "rtl";
   selectionEnd: number | null;
   selectionStart: number | null;
   valueLength: number;
 };
 
 /**
- * ArrowRight with the caret at the end of the search text hands focus to the
- * group rail beside the search field (an empty field qualifies). With text to
- * the right of the caret, or a selection, the arrow keeps moving the caret.
+ * ArrowRight with the caret at the search field's visual right edge hands
+ * focus to the group rail beside the search field (an empty field qualifies).
+ * The field resolves its own direction from the query, so an Arabic or Hebrew
+ * query puts that edge at offset 0 and the end of the text on the left. With
+ * text still to the right of the caret, or a selection, the arrow keeps moving
+ * the caret.
  */
 export const shouldLeaveSearchForGroups = ({
   dataset,
+  direction,
   isComposing,
   key,
   selectionEnd,
   selectionStart,
   valueLength,
-}: ClipboardSearchArrowKey) =>
-  !isClipboardNameInput(dataset) &&
-  key === "ArrowRight" &&
-  !isComposing &&
-  selectionStart === valueLength &&
-  selectionEnd === valueLength;
+}: ClipboardSearchArrowKey) => {
+  const rightEdge = direction === "rtl" ? 0 : valueLength;
+  return (
+    !isClipboardNameInput(dataset) &&
+    key === "ArrowRight" &&
+    !isComposing &&
+    selectionStart === rightEdge &&
+    selectionEnd === rightEdge
+  );
+};
 
 /**
  * The group rail is the row below the timeline: left and right walk its

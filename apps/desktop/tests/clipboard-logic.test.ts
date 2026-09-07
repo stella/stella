@@ -533,6 +533,7 @@ describe("clipboard input keyboard handling", () => {
   test("ArrowRight leaves search for the groups only from the end of the text", () => {
     const atEnd = {
       dataset: {},
+      direction: "ltr" as const,
       isComposing: false,
       key: "ArrowRight",
       selectionEnd: 3,
@@ -570,6 +571,27 @@ describe("clipboard input keyboard handling", () => {
         dataset: { clipboardNameInput: "" },
       }),
     ).toBe(false);
+  });
+
+  test("an RTL query puts the field's right edge at the start of the text", () => {
+    const rtl = {
+      dataset: {},
+      direction: "rtl" as const,
+      isComposing: false,
+      key: "ArrowRight",
+      selectionEnd: 0,
+      selectionStart: 0,
+      valueLength: 3,
+    };
+    expect(shouldLeaveSearchForGroups(rtl)).toBe(true);
+    expect(
+      shouldLeaveSearchForGroups({
+        ...rtl,
+        selectionEnd: 3,
+        selectionStart: 3,
+      }),
+    ).toBe(false);
+    expect(shouldLeaveSearchForGroups({ ...rtl, selectionEnd: 3 })).toBe(false);
   });
 });
 

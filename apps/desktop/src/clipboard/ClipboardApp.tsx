@@ -233,6 +233,13 @@ const focusTimeline = (node: HTMLDivElement | null) => {
   }
 };
 
+/**
+ * The shared input carries `dir="auto"` once it holds text, so only the
+ * computed style says which side of the field its caret offsets sit on.
+ */
+const clipboardInputDirection = (input: HTMLInputElement) =>
+  getComputedStyle(input).direction === "rtl" ? "rtl" : "ltr";
+
 const focusCard = (rail: HTMLDivElement | null, id: string) => {
   requestAnimationFrame(() => {
     if (!rail) {
@@ -1904,6 +1911,7 @@ const ClipboardApp = () => {
       } else if (
         shouldLeaveSearchForGroups({
           ...inputKey,
+          direction: clipboardInputDirection(event.target),
           selectionEnd: event.target.selectionEnd,
           selectionStart: event.target.selectionStart,
           valueLength: event.target.value.length,
