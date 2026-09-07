@@ -16,9 +16,11 @@ import * as slimdom from "slimdom";
 
 import { compareCodeUnit } from "@stll/collation";
 import { parseCondition, type ConditionNode } from "@stll/template-conditions";
+import type { FilterCall } from "@stll/template-conditions";
 
 import { parseBlockTree, scanBlockDirectives } from "./block-directives";
 import { scanPlaceholders } from "./discover-placeholders";
+import { fieldMetaFromFilters, filterChainSignature } from "./field-filters";
 import { parseInlineConditions } from "./inline-conditions";
 import {
   MAIN_DOCUMENT_PART_PATH,
@@ -39,6 +41,7 @@ import type {
   DiscoveredField,
   DiscoveredPlaceholder,
   DiscoveredTemplate,
+  FieldMeta,
   TemplateFieldKind,
   TemplateStructureError,
 } from "./types";
@@ -439,6 +442,17 @@ const buildConditionMapFromRanges = (
   return map;
 };
 
+/**
+ * One path's field configuration as the document declares it: the filter chain
+ * of the occurrence that carries it, and the paragraph it sits in so a
+ * disagreement between two occurrences can name both.
+ */
+type DocumentFieldDeclaration = {
+  filters: readonly FilterCall[];
+  signature: string;
+  paragraphIndex: number;
+};
+
 type AnalysisResult = {
   fields: FieldAccumulator;
   errors: TemplateStructureError[];
@@ -446,6 +460,53 @@ type AnalysisResult = {
   fieldConditions: Map<string, string | null>;
   warnings: TemplateWarning[];
   conditionPaths: Set<string>;
+  documentFilters: Map<string, DocumentFieldDeclaration>;
+};
+
+/**
+ * Record one marker's filter chain against its path. Filters may sit on any
+ * ONE occurrence of a path — repeating the identical chain is fine, since it
+ * says the same thing — but two occurrences that configure the same field
+ * differently have no resolution the author would recognize, so both
+ * paragraphs are named and neither wins.
+ */
+type RecordDeclarationOptions = {
+  declarations: Map<string, DocumentFieldDeclaration>;
+  errors: TemplateStructureError[];
+  filters: readonly FilterCall[];
+  paragraphIndex: number;
+  path: string;
+};
+
+const recordFieldDeclaration = ({
+  declarations,
+  errors,
+  filters,
+  paragraphIndex,
+  path,
+}: RecordDeclarationOptions): void => {
+  if (filters.length === 0) {
+    return;
+  }
+  const signature = filterChainSignature(filters);
+  const existing = declarations.get(path);
+  if (existing === undefined) {
+    declarations.set(path, { filters, signature, paragraphIndex });
+    return;
+  }
+  if (existing.signature === signature) {
+    return;
+  }
+  errors.push({
+    message:
+      `"${path}" is configured twice with different filters: paragraph ` +
+      `${existing.paragraphIndex + 1} says ${existing.signature} and ` +
+      `paragraph ${paragraphIndex + 1} says ${signature}. Keep the filters on ` +
+      "one occurrence and write the others as a plain {{ " +
+      `${path} }} marker.`,
+    paragraphIndex,
+    directive: `{{ ${path} | … }}`,
+  });
 };
 
 type ContainerStructureOptions = {
@@ -583,6 +644,7 @@ const collectParagraphPlaceholders = ({
   conditionMap,
   conditionPaths,
   directiveIndices,
+  documentFilters,
   errors,
   fieldConditions,
   fields,
@@ -690,9 +752,11 @@ const collectParagraphPlaceholders = ({
       }
     }
 
-    for (const { name: declaredName, start: markerStart } of scanPlaceholders(
-      text,
-    )) {
+    for (const {
+      filters,
+      name: declaredName,
+      start: markerStart,
+    } of scanPlaceholders(text)) {
       const loopScope = inlineLoopScopes.find(
         ({ end, start }) => start <= markerStart && markerStart < end,
       );
@@ -711,6 +775,13 @@ const collectParagraphPlaceholders = ({
         scopedArrayPaths,
       );
       placeholderCounts.set(name, (placeholderCounts.get(name) ?? 0) + 1);
+      recordFieldDeclaration({
+        declarations: documentFilters,
+        errors,
+        filters,
+        paragraphIndex: authoredIndices[i] ?? i,
+        path: name,
+      });
 
       const inlineCondition = inlineBranchConditions.find(
         ({ end, start }) => start <= markerStart && markerStart < end,
@@ -766,6 +837,7 @@ const analyzeContainer = (body: slimdom.Element): AnalysisResult => {
   const fieldConditions = new Map<string, string | null>();
   const warnings: TemplateWarning[] = [];
   const conditionPaths = new Set<string>();
+  const documentFilters = new Map<string, DocumentFieldDeclaration>();
   const structure = collectContainerStructure({
     body,
     conditionPaths,
@@ -777,6 +849,7 @@ const analyzeContainer = (body: slimdom.Element): AnalysisResult => {
   collectParagraphPlaceholders({
     ...structure,
     conditionPaths,
+    documentFilters,
     errors,
     fieldConditions,
     fields,
@@ -791,6 +864,7 @@ const analyzeContainer = (body: slimdom.Element): AnalysisResult => {
     fieldConditions,
     warnings,
     conditionPaths,
+    documentFilters,
   };
 };
 
@@ -820,6 +894,15 @@ const mergeAnalysis = (
 
   primary.errors.push(...secondary.errors);
   primary.warnings.push(...secondary.warnings);
+  for (const [path, declaration] of secondary.documentFilters) {
+    recordFieldDeclaration({
+      declarations: primary.documentFilters,
+      errors: primary.errors,
+      filters: declaration.filters,
+      paragraphIndex: declaration.paragraphIndex,
+      path,
+    });
+  }
   for (const path of secondary.conditionPaths) {
     primary.conditionPaths.add(path);
   }
@@ -859,6 +942,7 @@ const analyzeHeadersAndFooters = async (
     fieldConditions: new Map(),
     warnings: [],
     conditionPaths: new Set(),
+    documentFilters: new Map(),
   };
 
   // Sort entries alphabetically to match the order used by
@@ -927,6 +1011,7 @@ export const discoverTemplate = async (
     structureErrors: [],
     warnings: [],
     conditionPaths: [],
+    documentFields: [],
   };
 
   const docEntry = zip.file(MAIN_DOCUMENT_PART_PATH);
@@ -1015,5 +1100,35 @@ export const discoverTemplate = async (
     structureErrors: errors,
     warnings: boundTemplateWarnings(primary.warnings),
     conditionPaths,
+    documentFields: documentLayerFields(primary.documentFilters, errors),
   };
+};
+
+/**
+ * The manifest the markers themselves declare, in path order. A filter the
+ * marker cannot act on becomes a structure error against the paragraph it was
+ * written in, so the author is told what to change rather than getting a field
+ * that silently ignores half its configuration.
+ */
+const documentLayerFields = (
+  declarations: ReadonlyMap<string, DocumentFieldDeclaration>,
+  errors: TemplateStructureError[],
+): FieldMeta[] => {
+  const fields: FieldMeta[] = [];
+  for (const [path, { filters, paragraphIndex }] of [...declarations].toSorted(
+    ([a], [b]) => compareCodeUnit(a, b),
+  )) {
+    const { field, issues } = fieldMetaFromFilters(path, filters);
+    for (const { filter, hint, message } of issues) {
+      errors.push({
+        message: `${message} ${hint}`,
+        paragraphIndex,
+        directive: `{{ ${path} | ${filter}(…) }}`,
+      });
+    }
+    if (field) {
+      fields.push(field);
+    }
+  }
+  return fields;
 };

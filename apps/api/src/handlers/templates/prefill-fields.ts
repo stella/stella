@@ -4,7 +4,7 @@
  * field list for the prompt, and map the model's structured answer back to
  * field paths. The model never sees UUIDs or raw manifest internals.
  *
- * Formula (derived) fields and `{{#each}}` array fields are skipped: the
+ * Formula (derived) fields and `{% for %}` array fields are skipped: the
  * former are computed at fill time, the latter have no single value to
  * propose. Composite fields are flattened to one target per part.
  */

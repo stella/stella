@@ -393,7 +393,7 @@ describe("template fill", () => {
 
   test("returns structure errors for mismatched blocks", async () => {
     const xml = WRAP(
-      [P("{{#if show}}"), P("Content"), P("{{/each}}")].join(""),
+      [P("{% if show %}"), P("Content"), P("{% endfor %}")].join(""),
     );
     const buf = await makeDocx(xml);
 
@@ -714,9 +714,11 @@ describe("fill handler required fields", () => {
   test("rejects when a required loop item field is missing in one row", async () => {
     let buf = await makeDocx(
       WRAP(
-        [P("{{#each persons}}"), P("{{persons.member}}"), P("{{/each}}")].join(
-          "",
-        ),
+        [
+          P("{% for person in persons %}"),
+          P("{{ person.member }}"),
+          P("{% endfor %}"),
+        ].join(""),
       ),
     );
     buf = await writeManifest(buf, {
@@ -754,9 +756,11 @@ describe("fill handler required fields", () => {
   test("fills when every row supplies the required loop item field", async () => {
     let buf = await makeDocx(
       WRAP(
-        [P("{{#each persons}}"), P("{{persons.member}}"), P("{{/each}}")].join(
-          "",
-        ),
+        [
+          P("{% for person in persons %}"),
+          P("{{ person.member }}"),
+          P("{% endfor %}"),
+        ].join(""),
       ),
     );
     buf = await writeManifest(buf, {

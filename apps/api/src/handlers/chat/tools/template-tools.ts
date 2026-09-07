@@ -36,7 +36,7 @@ export const DESCRIBE_TEMPLATE_DESCRIPTION =
   "computed fields) so you know what values to provide before filling " +
   "it. Each field's 'required' flag marks values fill_template rejects " +
   "when omitted (unless the field is AI-fillable); 'arrays' lists any " +
-  "{{#each}} loops, so a path grouped there is an array of objects in " +
+  "{% for %} loops, so a path grouped there is an array of objects in " +
   "'values', not a dotted key. Pass the template id from list_templates.";
 export const FILL_TEMPLATE_DESCRIPTION =
   "Fill a template with values and return the assembled document text. " +

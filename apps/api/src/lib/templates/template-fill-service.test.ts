@@ -136,9 +136,11 @@ describe("fillTemplateDocx required-field rejection", () => {
   test("rejects when a required loop item field is missing in one array row", async () => {
     const buffer = await makeDocx(
       WRAP(
-        [P("{{#each persons}}"), P("{{persons.member}}"), P("{{/each}}")].join(
-          "",
-        ),
+        [
+          P("{% for person in persons %}"),
+          P("{{ person.member }}"),
+          P("{% endfor %}"),
+        ].join(""),
       ),
     );
     const withManifest = await writeManifest(buffer, {
@@ -169,9 +171,11 @@ describe("fillTemplateDocx required-field rejection", () => {
   test("fills when every array row supplies the required loop item field", async () => {
     const buffer = await makeDocx(
       WRAP(
-        [P("{{#each persons}}"), P("{{persons.member}}"), P("{{/each}}")].join(
-          "",
-        ),
+        [
+          P("{% for person in persons %}"),
+          P("{{ person.member }}"),
+          P("{% endfor %}"),
+        ].join(""),
       ),
     );
     const withManifest = await writeManifest(buffer, {
@@ -488,13 +492,13 @@ describe("describeStoredTemplate array shape", () => {
       fn(fakeTx)) as unknown as ScopedDb;
   };
 
-  test("groups an {{#each}} loop over object items under `arrays`, distinct from `fields`", async () => {
+  test("groups an {% for %} loop over object items under `arrays`, distinct from `fields`", async () => {
     let buffer = await makeDocx(
       WRAP(
         [
-          P("{{#each deliverables}}"),
-          P("{{deliverables.name}} due {{deliverables.due_date}}"),
-          P("{{/each}}"),
+          P("{% for deliverable in deliverables %}"),
+          P("{{ deliverable.name }} due {{ deliverable.due_date }}"),
+          P("{% endfor %}"),
         ].join(""),
       ),
     );
@@ -545,9 +549,11 @@ describe("describeStoredTemplate array shape", () => {
     // would hide the latter, real case from a caller; it must stay listed.
     let buffer = await makeDocx(
       WRAP(
-        [P("{{#each entries}}"), P("{{entries.value}}"), P("{{/each}}")].join(
-          "",
-        ),
+        [
+          P("{% for entry in entries %}"),
+          P("{{ entry.value }}"),
+          P("{% endfor %}"),
+        ].join(""),
       ),
     );
     buffer = await writeManifest(buffer, {

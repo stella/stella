@@ -60,21 +60,21 @@ describe("clauseBodyToPlainText", () => {
   test("joins paragraph texts with newlines, keeping directives", () => {
     expect(
       clauseBodyToPlainText([
-        { text: "{{#if penalty}}", isDirective: true },
+        { text: "{% if penalty %}", isDirective: true },
         { text: "First paragraph." },
         { text: "Second paragraph.", runs: [{ text: "ignored for text" }] },
       ]),
-    ).toBe("{{#if penalty}}\nFirst paragraph.\nSecond paragraph.");
+    ).toBe("{% if penalty %}\nFirst paragraph.\nSecond paragraph.");
   });
 
   test("directive paragraphs stay out of the fill patch but in the diff text", () => {
     const body = [
-      { text: "{{#if penalty}}", isDirective: true },
+      { text: "{% if penalty %}", isDirective: true },
       { text: "Visible." },
     ];
     expect(clauseBodyToRichPatch(body)).toEqual({
       paragraphs: [{ runs: [{ text: "Visible." }] }],
     });
-    expect(clauseBodyToPlainText(body)).toContain("{{#if penalty}}");
+    expect(clauseBodyToPlainText(body)).toContain("{% if penalty %}");
   });
 });

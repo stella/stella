@@ -207,6 +207,10 @@ export type DiscoveredTemplate = {
    *  a condition driver from a value marker, which the field list alone
    *  cannot: a path can be both. */
   conditionPaths: string[];
+  /** The manifest the document itself declares: one entry per marker whose
+   *  filter chain configures something. This is the document layer — the
+   *  bytes are the source of truth, and a stored overlay only refines it. */
+  documentFields: FieldMeta[];
 };
 
 // ── Custom XML Manifest ─────────────────────────────────
@@ -556,7 +560,7 @@ export const hasCompleteCompositeField = ({
   parts?: readonly unknown[] | undefined;
 }): boolean => (parts === undefined) === (format === undefined);
 
-const fieldMetaSchema = v.pipe(
+export const fieldMetaSchema = v.pipe(
   fieldMetaObjectSchema,
   v.check(
     (field: v.InferOutput<typeof fieldMetaObjectSchema>) =>

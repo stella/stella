@@ -235,7 +235,7 @@ describe("Due Diligence Report built-in template", () => {
     ];
 
     // Only the NDA's Governing-law risk carries a quoted citation; the MSA's
-    // two risks have none — proving the per-risk {{#if hasCitation}} gate.
+    // two risks have none — proving the per-risk {% if hasCitation %} gate.
     const justifications = new Map<string, ReportJustification>([
       [
         "a-law",
@@ -296,7 +296,7 @@ describe("Due Diligence Report built-in template", () => {
     expect(xml).toContain("Non-Disclosure Agreement — Vendor");
     expect(xml).toContain("Master Services Agreement — Acme s.r.o.");
     expect(xml).toContain("Software Licence Agreement — Globex Ltd");
-    // Heading2 is numbered by the loop {{@index}}.
+    // Heading2 is numbered by the loop {{ loop.index }}.
     expect(xml).toContain("1.");
     expect(xml).toContain("3.");
     // Field row-repeat rendered field labels/values.

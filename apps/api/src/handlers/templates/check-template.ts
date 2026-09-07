@@ -339,7 +339,7 @@ const expressionReferenceFindings = ({
 
   // A boolean condition-field is itself a named condition (addressed by its
   // path), so validate both shapes against the synthesized list: their rules
-  // are checked, and a {{#if field_path}} reference resolves to the field.
+  // are checked, and a {% if field_path %} reference resolves to the field.
   const conditions: NamedCondition[] = manifest
     ? manifestNamedConditions(manifest)
     : [];

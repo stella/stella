@@ -90,21 +90,21 @@ const field = (
 // ── Structure errors ─────────────────────────────────────
 
 describe("template check: structure errors", () => {
-  test("surfaces an unclosed #if as an error finding", async () => {
+  test("surfaces an unclosed {% if %} as an error finding", async () => {
     const findings = await checkDocument({
-      paragraphs: ["{{#if isCorp}}", "Corp clause"],
+      paragraphs: ["{% if isCorp %}", "Corp clause"],
       manifest: { ...emptyManifest, fields: [field("isCorp")] },
     });
 
     const structural = findings.filter((f) => f.code === "structureError");
     expect(structural).toHaveLength(1);
     expect(structural[0]?.severity).toBe("error");
-    expect(structural[0]?.directive).toContain("#if");
+    expect(structural[0]?.directive).toContain("{% if");
   });
 
   test("balanced blocks produce no structure findings", async () => {
     const findings = await checkDocument({
-      paragraphs: ["{{#if isCorp}}", "Corp clause", "{{/if}}"],
+      paragraphs: ["{% if isCorp %}", "Corp clause", "{% endif %}"],
       manifest: { ...emptyManifest, fields: [field("isCorp")] },
     });
 
@@ -133,7 +133,7 @@ describe("template check: invalid markers", () => {
 
   test("recognized markers produce no invalidMarker finding", async () => {
     const findings = await checkDocument({
-      paragraphs: ["{{@clause:NDA}} {{date}} {{#if x}}{{/if}}"],
+      paragraphs: ["{{ clause('NDA') }} {{date}} {% if x %}{% endif %}"],
       manifest: { ...emptyManifest, fields: [field("date")] },
     });
 
@@ -208,7 +208,7 @@ describe("template check: markers vs manifest", () => {
 describe("template check: clause slots", () => {
   test("flags a clause slot with no linked clause", async () => {
     const findings = await checkDocument({
-      paragraphs: ["{{@clause:NonCompete}}"],
+      paragraphs: ["{{ clause('NonCompete') }}"],
     });
 
     expect(findings).toContainEqual({
@@ -220,7 +220,7 @@ describe("template check: clause slots", () => {
 
   test("a link whose clause was deleted does not satisfy the slot", async () => {
     const findings = await checkDocument({
-      paragraphs: ["{{@clause:NonCompete}}"],
+      paragraphs: ["{{ clause('NonCompete') }}"],
       clauseLinks: [{ slotName: "NonCompete", clause: null }],
     });
 
@@ -229,7 +229,7 @@ describe("template check: clause slots", () => {
 
   test("a live link satisfies the slot", async () => {
     const findings = await checkDocument({
-      paragraphs: ["{{@clause:NonCompete}}"],
+      paragraphs: ["{{ clause('NonCompete') }}"],
       clauseLinks: [{ slotName: "NonCompete", clause: { id: "clause_1" } }],
     });
 
@@ -427,11 +427,11 @@ describe("template check: expression references", () => {
     expect(conditionFindings).toHaveLength(1);
   });
 
-  test("a {{#if}} referencing a boolean condition-field resolves", async () => {
+  test("a {% if %} referencing a boolean condition-field resolves", async () => {
     // is_corp is a boolean condition-field (a rule, not a marker); the #if
     // references it by path and it must not be flagged as unknown.
     const findings = await checkDocument({
-      paragraphs: ["{{entityType}}", "{{#if is_corp}}", "Corp", "{{/if}}"],
+      paragraphs: ["{{entityType}}", "{% if is_corp %}", "Corp", "{% endif %}"],
       manifest: {
         ...emptyManifest,
         fields: [
@@ -478,7 +478,11 @@ describe("template check: expression references", () => {
     // hasGuarantor never appears as a {{marker}} but drives an #if block, so
     // discovery registers it as a boolean field.
     const findings = await checkDocument({
-      paragraphs: ["{{#if hasGuarantor}}", "Guarantor: {{name}}", "{{/if}}"],
+      paragraphs: [
+        "{% if hasGuarantor %}",
+        "Guarantor: {{name}}",
+        "{% endif %}",
+      ],
       manifest: {
         ...emptyManifest,
         fields: [field("name")],

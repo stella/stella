@@ -91,9 +91,9 @@ describe("validateFieldOverlay", () => {
   test("accepts a repeat's root and the item paths inside it", async () => {
     const discovered = await discoverTemplate(
       await makeDocx(
-        "{{#each attorneys}}",
-        "{{attorneys.name}} of {{attorneys.firm}}",
-        "{{/each}}",
+        "{% for attorney in attorneys %}",
+        "{{ attorney.name }} of {{ attorney.firm }}",
+        "{% endfor %}",
       ),
     );
 

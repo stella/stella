@@ -42,10 +42,10 @@ export type FieldOverlayIssue = {
 
 /**
  * What the DOCX declares, split by how the path came to exist. `declared` is
- * everything discovery knows: markers, the condition paths only an `{{#if}}`
+ * everything discovery knows: markers, the condition paths only an `{% if %}`
  * names, loop item paths, and the object roots inferred from dotted markers.
  * `roots` is the subset that is value-bearing on its own — a literal
- * `{{marker}}` or an `{{#each}}` array — which is what separates a real field
+ * `{{marker}}` or an `{% for %}` array — which is what separates a real field
  * from a structural namespace parent.
  */
 type DeclaredPaths = {
@@ -312,14 +312,33 @@ type ResolveTemplateFieldOverlayOptions = {
   overlay: readonly FieldMeta[] | undefined;
 };
 
+/**
+ * The document layer under the stored one. A marker's filters are what the
+ * DOCX itself says the field is, so they are the base; the stored manifest and
+ * the call's overlay refine it, in that order. When the overlay layer is
+ * deleted and the manifest becomes a derived cache, the two later layers go
+ * and this becomes the whole resolution.
+ */
+const documentLayer = (
+  discovered: DiscoveredTemplate,
+  manifest: TemplateManifest | null,
+): TemplateManifest | null =>
+  discovered.documentFields.length === 0
+    ? manifest
+    : applyFieldOverlay(
+        { version: manifest?.version ?? 1, fields: discovered.documentFields },
+        arrayOrEmpty(manifest?.fields),
+      );
+
 /** Creation and its diagnostics must classify paths from the same final configuration. */
 export const resolveTemplateFieldOverlay = ({
   discovered,
   manifest,
   overlay,
 }: ResolveTemplateFieldOverlayOptions): TemplateManifest => {
+  const stored = documentLayer(discovered, manifest);
   const baseManifest =
-    overlay === undefined ? manifest : applyFieldOverlay(manifest, overlay);
+    overlay === undefined ? stored : applyFieldOverlay(stored, overlay);
   const fields = mergeManifestWithDiscovery(baseManifest, discovered);
   return {
     version: baseManifest?.version ?? 1,

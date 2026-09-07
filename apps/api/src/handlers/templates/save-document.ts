@@ -61,7 +61,7 @@ export const hasDerivedValueSource = (field: FieldMeta): boolean =>
 /** Whether discovery still found a live `{{marker}}` backing this field. The
  *  bare `field.path` covers plain, composite, and the default lookup rendering.
  *  A lookup also renders keyed `{{field.key}}` markers off the SAME hit, and a
- *  keyed marker can outlive the bare one inside an `{{#each}}` loop (where
+ *  keyed marker can outlive the bare one inside an `{% for %}` loop (where
  *  `field.path` is the item-relative path `companies.krs` and only
  *  `companies.krs.full` survives discovery), so a live keyed-format path keeps
  *  the field too. */
