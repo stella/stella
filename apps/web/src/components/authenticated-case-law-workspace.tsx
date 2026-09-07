@@ -122,6 +122,7 @@ const CaseLawInspector = ({
       <div
         className="text-sidebar-foreground hidden md:block"
         data-side="right"
+        data-slot="inspector-dock"
         data-state={showPaneContent ? "expanded" : "collapsed"}
       >
         <div className="bg-sidebar relative" style={{ width: widthPx }} />
