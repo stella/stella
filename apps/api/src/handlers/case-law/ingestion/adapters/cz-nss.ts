@@ -14,6 +14,7 @@ import {
   defineSourceAdapter,
   EMPTY_AST,
   encodeSourceRawEnvelope,
+  excludedSourceField,
   isPersistableSourceDocumentId,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   STORED_RAW_REPARSE_REJECTION,
@@ -29,6 +30,7 @@ import type {
   ReconciliationSlicePage,
   ReconciliationSlicePageOptions,
   SourceFieldDisposition,
+  SourceRawParts,
   StoredRawReparseInput,
   StoredRawReparseOutcome,
 } from "@/api/handlers/case-law/ingestion/adapter";
@@ -572,6 +574,13 @@ const CZ_NSS_RAW_PART = {
   TEXT: "text",
 } as const;
 
+/**
+ * Shortest plain-text payload this adapter reads as a document. Below it the
+ * endpoint answered with a portal notice rather than a decision, and the crawl
+ * and the replay have to draw that line in the same place.
+ */
+const CZ_NSS_MIN_FULLTEXT_CHARS = 100;
+
 const CZ_NSS_REPARSABLE_CONTENT_TYPES = new Set([
   "text/html",
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
@@ -716,7 +725,7 @@ const fetchDecisionContent = async (
     const buffer = await response.arrayBuffer();
     const text = new TextDecoder("utf-16").decode(buffer);
     const body = stripHtml(text);
-    const usable = body.length > 100;
+    const usable = body.length > CZ_NSS_MIN_FULLTEXT_CHARS;
     return {
       fulltext: usable ? body : undefined,
       documentAst: undefined,
@@ -858,163 +867,103 @@ const CZ_NSS_EXCLUSION = {
 } as const;
 
 const CZ_NSS_SOURCE_FIELD_DISPOSITIONS = {
-  aktualizovano: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.PORTAL_RECORD,
-  },
-  "aplikovanepravnipredpisysb§": {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.APPLIED_LEGISLATION,
-  },
-  aplikovanepravnipredpisysbcislo: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.APPLIED_LEGISLATION,
-  },
-  aplikovanepravnipredpisysbcl: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.APPLIED_LEGISLATION,
-  },
-  aplikovanepravnipredpisysbodst: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.APPLIED_LEGISLATION,
-  },
-  aplikovanepravnipredpisysbpism: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.APPLIED_LEGISLATION,
-  },
-  aplikovanepravnipredpisysbpredpis: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.APPLIED_LEGISLATION,
-  },
-  aplikovanepravnipredpisysbrok: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.APPLIED_LEGISLATION,
-  },
-  aplikovanopravoeu: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.APPLIED_LEGISLATION,
-  },
+  aktualizovano: excludedSourceField(CZ_NSS_EXCLUSION.PORTAL_RECORD),
+  "aplikovanepravnipredpisysb§": excludedSourceField(
+    CZ_NSS_EXCLUSION.APPLIED_LEGISLATION,
+  ),
+  aplikovanepravnipredpisysbcislo: excludedSourceField(
+    CZ_NSS_EXCLUSION.APPLIED_LEGISLATION,
+  ),
+  aplikovanepravnipredpisysbcl: excludedSourceField(
+    CZ_NSS_EXCLUSION.APPLIED_LEGISLATION,
+  ),
+  aplikovanepravnipredpisysbodst: excludedSourceField(
+    CZ_NSS_EXCLUSION.APPLIED_LEGISLATION,
+  ),
+  aplikovanepravnipredpisysbpism: excludedSourceField(
+    CZ_NSS_EXCLUSION.APPLIED_LEGISLATION,
+  ),
+  aplikovanepravnipredpisysbpredpis: excludedSourceField(
+    CZ_NSS_EXCLUSION.APPLIED_LEGISLATION,
+  ),
+  aplikovanepravnipredpisysbrok: excludedSourceField(
+    CZ_NSS_EXCLUSION.APPLIED_LEGISLATION,
+  ),
+  aplikovanopravoeu: excludedSourceField(CZ_NSS_EXCLUSION.APPLIED_LEGISLATION),
   citace: {
     disposition: "stored",
     target: { type: "metadata", key: "citation" },
   },
-  cj: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.LISTING_REFERENCE,
-  },
-  datumnapadenehorozhodnuti: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
-  },
-  datumpravnimoci: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.PROCEEDING_DATES,
-  },
-  datumpredkladacihorozhodnutinss: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
-  },
-  datumrozhodnutikrajskehosoudu: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
-  },
-  datumskonceniirizeni: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.PROCEEDING_DATES,
-  },
+  cj: excludedSourceField(CZ_NSS_EXCLUSION.LISTING_REFERENCE),
+  datumnapadenehorozhodnuti: excludedSourceField(
+    CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
+  ),
+  datumpravnimoci: excludedSourceField(CZ_NSS_EXCLUSION.PROCEEDING_DATES),
+  datumpredkladacihorozhodnutinss: excludedSourceField(
+    CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
+  ),
+  datumrozhodnutikrajskehosoudu: excludedSourceField(
+    CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
+  ),
+  datumskonceniirizeni: excludedSourceField(CZ_NSS_EXCLUSION.PROCEEDING_DATES),
   datumvydanirozhodnuti: {
     disposition: "stored",
     target: { type: "result", key: "decisionDate" },
   },
-  datumvyhotovenirozhodnuti: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.PROCEEDING_DATES,
-  },
-  datumvypravenirozhodnuti: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.PROCEEDING_DATES,
-  },
-  datumzahajenirizeni: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.PROCEEDING_DATES,
-  },
-  datumzahajenirizeninka: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
-  },
-  druh: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.PARTY_GRID,
-  },
+  datumvyhotovenirozhodnuti: excludedSourceField(
+    CZ_NSS_EXCLUSION.PROCEEDING_DATES,
+  ),
+  datumvypravenirozhodnuti: excludedSourceField(
+    CZ_NSS_EXCLUSION.PROCEEDING_DATES,
+  ),
+  datumzahajenirizeni: excludedSourceField(CZ_NSS_EXCLUSION.PROCEEDING_DATES),
+  datumzahajenirizeninka: excludedSourceField(
+    CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
+  ),
+  druh: excludedSourceField(CZ_NSS_EXCLUSION.PARTY_GRID),
   druhdokumentuavyrokrozhodnuti: {
     disposition: "stored",
     target: { type: "result", key: "decisionType" },
   },
   ecli: { disposition: "stored", target: { type: "result", key: "ecli" } },
-  hvtparagrafy: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.PORTAL_RECORD,
-  },
-  identifikacevesbirkach: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.REPORTER_PUBLICATION,
-  },
-  identifikacevesbirkachdelenejudikat: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.REPORTER_PUBLICATION,
-  },
-  identifikacevesbirkachdelenerok: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.REPORTER_PUBLICATION,
-  },
-  identifikacevesbirkachdelenesesit: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.REPORTER_PUBLICATION,
-  },
-  kasacnistiznostoznacenivecideleneclistu: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
-  },
-  kasacnistiznostoznacenivecideleneporc: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
-  },
-  kasacnistiznostoznacenivecidelenerejstrik: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
-  },
-  kasacnistiznostoznacenivecidelenerok: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
-  },
-  kasacnistiznostoznacenivecidelenesenat: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
-  },
-  kasacnistiznostoznacenivecivcelku: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
-  },
-  kasacniustavnistiznost: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
-  },
-  krajskysoud: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
-  },
-  napadeno: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
-  },
-  nazevorganu: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.PARTY_GRID,
-  },
-  nazevsoudusubjektu: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
-  },
+  hvtparagrafy: excludedSourceField(CZ_NSS_EXCLUSION.PORTAL_RECORD),
+  identifikacevesbirkach: excludedSourceField(
+    CZ_NSS_EXCLUSION.REPORTER_PUBLICATION,
+  ),
+  identifikacevesbirkachdelenejudikat: excludedSourceField(
+    CZ_NSS_EXCLUSION.REPORTER_PUBLICATION,
+  ),
+  identifikacevesbirkachdelenerok: excludedSourceField(
+    CZ_NSS_EXCLUSION.REPORTER_PUBLICATION,
+  ),
+  identifikacevesbirkachdelenesesit: excludedSourceField(
+    CZ_NSS_EXCLUSION.REPORTER_PUBLICATION,
+  ),
+  kasacnistiznostoznacenivecideleneclistu: excludedSourceField(
+    CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
+  ),
+  kasacnistiznostoznacenivecideleneporc: excludedSourceField(
+    CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
+  ),
+  kasacnistiznostoznacenivecidelenerejstrik: excludedSourceField(
+    CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
+  ),
+  kasacnistiznostoznacenivecidelenerok: excludedSourceField(
+    CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
+  ),
+  kasacnistiznostoznacenivecidelenesenat: excludedSourceField(
+    CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
+  ),
+  kasacnistiznostoznacenivecivcelku: excludedSourceField(
+    CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
+  ),
+  kasacniustavnistiznost: excludedSourceField(
+    CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
+  ),
+  krajskysoud: excludedSourceField(CZ_NSS_EXCLUSION.PROCEEDING_HISTORY),
+  napadeno: excludedSourceField(CZ_NSS_EXCLUSION.PROCEEDING_HISTORY),
+  nazevorganu: excludedSourceField(CZ_NSS_EXCLUSION.PARTY_GRID),
+  nazevsoudusubjektu: excludedSourceField(CZ_NSS_EXCLUSION.PROCEEDING_HISTORY),
   nazevspravnihoorganu: {
     disposition: "stored",
     target: { type: "metadata", key: "administrativeAuthority" },
@@ -1023,91 +972,58 @@ const CZ_NSS_SOURCE_FIELD_DISPOSITIONS = {
     disposition: "stored",
     target: { type: "metadata", key: "legalArea" },
   },
-  oznacenivecidelenecislojednaci: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.LISTING_REFERENCE,
-  },
-  oznacenivecideleneporadovecislo: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.LISTING_REFERENCE,
-  },
-  oznacenivecidelenerejstrikovaznacka: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.LISTING_REFERENCE,
-  },
-  oznacenivecidelenerok: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.LISTING_REFERENCE,
-  },
-  oznacenivecidelenesenat: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.LISTING_REFERENCE,
-  },
-  oznacenivecivcelku: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.LISTING_REFERENCE,
-  },
-  podanakasacnistiznostD: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
-  },
-  povaha: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.RELATED_CASE_LAW,
-  },
-  pravnivetaanv: {
-    disposition: "excluded",
-    reason:
-      "The ano/ne flag stating whether the court wrote a headnote for this decision. The headnote itself is stored, so the flag only repeats whether that field is there.",
-  },
+  oznacenivecidelenecislojednaci: excludedSourceField(
+    CZ_NSS_EXCLUSION.LISTING_REFERENCE,
+  ),
+  oznacenivecideleneporadovecislo: excludedSourceField(
+    CZ_NSS_EXCLUSION.LISTING_REFERENCE,
+  ),
+  oznacenivecidelenerejstrikovaznacka: excludedSourceField(
+    CZ_NSS_EXCLUSION.LISTING_REFERENCE,
+  ),
+  oznacenivecidelenerok: excludedSourceField(
+    CZ_NSS_EXCLUSION.LISTING_REFERENCE,
+  ),
+  oznacenivecidelenesenat: excludedSourceField(
+    CZ_NSS_EXCLUSION.LISTING_REFERENCE,
+  ),
+  oznacenivecivcelku: excludedSourceField(CZ_NSS_EXCLUSION.LISTING_REFERENCE),
+  podanakasacnistiznostD: excludedSourceField(
+    CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
+  ),
+  povaha: excludedSourceField(CZ_NSS_EXCLUSION.RELATED_CASE_LAW),
+  pravnivetaanv: excludedSourceField(
+    "The ano/ne flag stating whether the court wrote a headnote for this decision. The headnote itself is stored, so the flag only repeats whether that field is there.",
+  ),
   pravnivetaupravena: {
     disposition: "stored",
     target: { type: "metadata", key: "legalSentence" },
   },
-  prejudikaturaoznacenivecideleneclistu: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.RELATED_CASE_LAW,
-  },
-  prejudikaturaoznacenivecideleneporc: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.RELATED_CASE_LAW,
-  },
-  prejudikaturaoznacenivecidelenerejstrik: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.RELATED_CASE_LAW,
-  },
-  prejudikaturaoznacenivecidelenerok: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.RELATED_CASE_LAW,
-  },
-  prejudikaturaoznacenivecidelenesenat: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.RELATED_CASE_LAW,
-  },
-  prejudikaturaoznacenivecivcelku: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.RELATED_CASE_LAW,
-  },
-  rozhodnuto: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
-  },
-  rozhodnutivevztahukrizeni: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
-  },
-  rozhodnutonapkasst: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
-  },
-  sbnsspublikovano: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.REPORTER_PUBLICATION,
-  },
-  souladnaprejudikatura: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.RELATED_CASE_LAW,
-  },
+  prejudikaturaoznacenivecideleneclistu: excludedSourceField(
+    CZ_NSS_EXCLUSION.RELATED_CASE_LAW,
+  ),
+  prejudikaturaoznacenivecideleneporc: excludedSourceField(
+    CZ_NSS_EXCLUSION.RELATED_CASE_LAW,
+  ),
+  prejudikaturaoznacenivecidelenerejstrik: excludedSourceField(
+    CZ_NSS_EXCLUSION.RELATED_CASE_LAW,
+  ),
+  prejudikaturaoznacenivecidelenerok: excludedSourceField(
+    CZ_NSS_EXCLUSION.RELATED_CASE_LAW,
+  ),
+  prejudikaturaoznacenivecidelenesenat: excludedSourceField(
+    CZ_NSS_EXCLUSION.RELATED_CASE_LAW,
+  ),
+  prejudikaturaoznacenivecivcelku: excludedSourceField(
+    CZ_NSS_EXCLUSION.RELATED_CASE_LAW,
+  ),
+  rozhodnuto: excludedSourceField(CZ_NSS_EXCLUSION.PROCEEDING_HISTORY),
+  rozhodnutivevztahukrizeni: excludedSourceField(
+    CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
+  ),
+  rozhodnutonapkasst: excludedSourceField(CZ_NSS_EXCLUSION.PROCEEDING_HISTORY),
+  sbnsspublikovano: excludedSourceField(CZ_NSS_EXCLUSION.REPORTER_PUBLICATION),
+  souladnaprejudikatura: excludedSourceField(CZ_NSS_EXCLUSION.RELATED_CASE_LAW),
   soudcezpravodaj: {
     disposition: "stored",
     target: { type: "metadata", key: "judge" },
@@ -1116,58 +1032,35 @@ const CZ_NSS_SOURCE_FIELD_DISPOSITIONS = {
     disposition: "stored",
     target: { type: "metadata", key: "senate" },
   },
-  spzncjpredkladacihorozhodnutinss: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
-  },
-  spzncjrizenipodani: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
-  },
-  spzncjrozhodnutispravnihoorganu: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
-  },
+  spzncjpredkladacihorozhodnutinss: excludedSourceField(
+    CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
+  ),
+  spzncjrizenipodani: excludedSourceField(CZ_NSS_EXCLUSION.PROCEEDING_HISTORY),
+  spzncjrozhodnutispravnihoorganu: excludedSourceField(
+    CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
+  ),
   stavrizeni: {
     disposition: "stored",
     target: { type: "metadata", key: "caseStatus" },
   },
-  sz: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.LISTING_REFERENCE,
-  },
+  sz: excludedSourceField(CZ_NSS_EXCLUSION.LISTING_REFERENCE),
   typrizeni: {
     disposition: "stored",
     target: { type: "metadata", key: "caseType" },
   },
-  typucastnika: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.PARTY_GRID,
-  },
-  typzastupce: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.PARTY_GRID,
-  },
+  typucastnika: excludedSourceField(CZ_NSS_EXCLUSION.PARTY_GRID),
+  typzastupce: excludedSourceField(CZ_NSS_EXCLUSION.PARTY_GRID),
   ucastnicirizeniz: {
     disposition: "stored",
     target: { type: "metadata", key: "parties" },
   },
-  ucastnikrizeni: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.PARTY_GRID,
-  },
+  ucastnikrizeni: excludedSourceField(CZ_NSS_EXCLUSION.PARTY_GRID),
   vyrokrozhodnuti: {
     disposition: "stored",
     target: { type: "metadata", key: "outcome" },
   },
-  zastupce: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.PARTY_GRID,
-  },
-  zobrazovanedatum: {
-    disposition: "excluded",
-    reason: CZ_NSS_EXCLUSION.PORTAL_RECORD,
-  },
+  zastupce: excludedSourceField(CZ_NSS_EXCLUSION.PARTY_GRID),
+  zobrazovanedatum: excludedSourceField(CZ_NSS_EXCLUSION.PORTAL_RECORD),
 } as const satisfies Record<CzNssSourceField, SourceFieldDisposition>;
 
 /** How the portal names each field it prints on a detail page. */
@@ -1526,6 +1419,86 @@ const storedPublishedCaseNumber = ({
 };
 
 /**
+ * The document a stored payload holds: the rich HTML the parser reads, or the
+ * plain text the portal serves where that endpoint answered instead.
+ */
+type StoredDocument =
+  | { type: "html"; html: string }
+  | { type: "text"; text: string };
+
+const storedDocumentOf = (
+  raw: string,
+  parts: SourceRawParts | null,
+): StoredDocument | null => {
+  // A payload that is not an envelope is a row stored when the raw held the
+  // rich document alone.
+  if (parts === null) {
+    return { type: "html", html: raw };
+  }
+  const html = parts[CZ_NSS_RAW_PART.DOCUMENT];
+  if (html !== undefined) {
+    return { type: "html", html };
+  }
+  const text = parts[CZ_NSS_RAW_PART.TEXT];
+  return text === undefined ? null : { type: "text", text };
+};
+
+type RebuildStoredDocumentOptions = {
+  document: StoredDocument;
+  caseNumber: string;
+  ecli: string | undefined;
+  court: string;
+  decisionDate: string | undefined;
+  decisionType: string | undefined;
+  sourceUrl: string | undefined;
+  detailMetadata: Record<string, unknown>;
+};
+
+type RebuiltDocument = {
+  fulltext: string | undefined;
+  documentAst: DocumentAst | EmptyAst;
+};
+
+/**
+ * What the crawl built from this payload, rebuilt from the payload alone, or
+ * `null` where it holds nothing a row could be stored on.
+ */
+const rebuildStoredDocument = ({
+  caseNumber,
+  court,
+  decisionDate,
+  decisionType,
+  detailMetadata,
+  document,
+  ecli,
+  sourceUrl,
+}: RebuildStoredDocumentOptions): RebuiltDocument | null => {
+  if (document.type === "text") {
+    // The same reading the crawl takes from this endpoint, down to the floor
+    // that tells a document from a portal error page.
+    const body = stripHtml(document.text);
+    return body.length > CZ_NSS_MIN_FULLTEXT_CHARS
+      ? { fulltext: body, documentAst: EMPTY_AST }
+      : null;
+  }
+
+  const parsed = parseNssDecisionHtml({
+    caseNumber,
+    ecli,
+    court,
+    decisionDate,
+    decisionType,
+    sourceUrl,
+    html: document.html,
+    detailMetadata,
+  });
+
+  return parsed.documentAst.blocks.length === 0
+    ? null
+    : { fulltext: parsed.fulltext, documentAst: parsed.documentAst };
+};
+
+/**
  * Rebuild one NSS decision from what the crawl stored for it.
  *
  * Two payload shapes reach this, and the difference is what a replay can
@@ -1534,6 +1507,12 @@ const storedPublishedCaseNumber = ({
  * page itself and a field first read later lands on the row. A row stored
  * before it carries the document alone: its metadata is whatever the ingest
  * of the day wrote, and only a re-crawl can add to it.
+ *
+ * The document itself is whichever of the two endpoints answered for this
+ * decision, and a replay rebuilds what the crawl built from it: an AST from
+ * the rich HTML, plain fulltext under an empty AST from the text endpoint. A
+ * replay that read only the rich part would reject every text-served row as
+ * having no document, which is a row the crawl stored quite deliberately.
  */
 const reparseStoredRaw = (
   stored: StoredRawReparseInput,
@@ -1551,7 +1530,7 @@ const reparseStoredRaw = (
 
   const raw = new TextDecoder().decode(stored.raw);
   const parts = decodeSourceRawEnvelope(raw);
-  const html = parts === null ? raw : (parts[CZ_NSS_RAW_PART.DOCUMENT] ?? "");
+  const storedDocument = storedDocumentOf(raw, parts);
   const storedDetailHtml = parts?.[CZ_NSS_RAW_PART.DETAIL];
   const storedDetail =
     storedDetailHtml === undefined
@@ -1561,22 +1540,25 @@ const reparseStoredRaw = (
   const decisionDate = stored.decisionDate ?? undefined;
   const decisionType = stored.decisionType ?? undefined;
   const ecli = stored.ecli ?? undefined;
-  const parsed = parseNssDecisionHtml({
-    caseNumber: stored.caseNumber,
-    ecli,
-    court: stored.court,
-    decisionDate,
-    decisionType,
-    sourceUrl,
-    html,
-    detailMetadata: stored.metadata,
-  });
+  const rebuilt =
+    storedDocument === null
+      ? null
+      : rebuildStoredDocument({
+          document: storedDocument,
+          caseNumber: stored.caseNumber,
+          ecli,
+          court: stored.court,
+          decisionDate,
+          decisionType,
+          sourceUrl,
+          detailMetadata: stored.metadata,
+        });
 
-  if (parsed.documentAst.blocks.length === 0) {
+  if (rebuilt === null) {
     return {
       type: "rejected",
       rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
-      detail: `no blocks parsed from the stored payload for ${stored.caseNumber}`,
+      detail: `no document parsed from the stored payload for ${stored.caseNumber}`,
     };
   }
 
@@ -1612,7 +1594,7 @@ const reparseStoredRaw = (
       language: stored.language,
       decisionDate,
       decisionType,
-      fulltext: parsed.fulltext,
+      fulltext: rebuilt.fulltext,
       sourceUrl,
       documentUrl: stored.documentUrl ?? undefined,
       // Written back rather than passed through: a legacy row states the
@@ -1643,7 +1625,7 @@ const reparseStoredRaw = (
           nonEmptyString(stored.metadata["legalSentence"]),
       }),
       parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NSS],
-      documentAst: parsed.documentAst,
+      documentAst: rebuilt.documentAst,
       // The payload verbatim, in the shape it was stored in: a replay re-reads
       // a decision, it does not rewrite what the crawl fetched for it.
       sourceRaw: raw,

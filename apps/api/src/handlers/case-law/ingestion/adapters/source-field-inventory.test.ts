@@ -502,6 +502,21 @@ describe("every adapter accounts for the fields its source states", () => {
         `${key}: its source states fields nothing decided about: ${undeclared.join(", ")}. Store them, or exclude them with the reason.`,
       ).toEqual([]);
 
+      // `excludedSourceField` rejects a blank reason at the call site, so this
+      // is the backstop for a reason that reaches an inventory some other way.
+      const unreasoned = stated.filter((field) => {
+        const disposition: SourceFieldDisposition | undefined =
+          sourceFields.fields[field];
+        return (
+          disposition?.disposition === "excluded" &&
+          disposition.reason.trim().length === 0
+        );
+      });
+      expect(
+        unreasoned,
+        `${key}: these fields are excluded with a blank reason: ${unreasoned.join(", ")}. An exclusion nobody explained is the silence this suite exists to break.`,
+      ).toEqual([]);
+
       // The other direction, or a disposition could be declared and never
       // exercised: the checks below only walk what the fixture states, so a
       // stored field missing from the fixture would be certified by nothing.

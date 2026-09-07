@@ -8,6 +8,7 @@ import {
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
   defineSourceAdapter,
+  excludedSourceField,
   EMPTY_AST,
   encodeSourceRawEnvelope,
   isPersistableSourceDocumentId,
@@ -72,6 +73,23 @@ const CZ_NS_RAW_PART = {
   DETAIL: "detail",
   PRINT: "print",
 } as const;
+
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
+
+/**
+ * A stored date as ISO, from either spelling this court's pages use.
+ *
+ * The print page's parser converts the Domino `M/D/YYYY` it expects and keeps
+ * the page's own words for anything else, so a value read back from it is ISO
+ * or the court's `D. M. YYYY`. Normalizing at the one place the row is written
+ * keeps a single format under the key.
+ */
+const isoDate = (value: unknown): string | undefined => {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  return ISO_DATE_PATTERN.test(value) ? value : parseCeDate(value);
+};
 
 /** Domino ReadViewEntries JSON shape. */
 type DominoViewEntry = {
@@ -228,11 +246,9 @@ const CZ_NS_SOURCE_FIELD_DISPOSITIONS = {
     disposition: "stored",
     target: { type: "metadata", key: "legalSentence" },
   },
-  "Senátní značka": {
-    disposition: "excluded",
-    reason:
-      "The same docket under the label this court prints for its insolvency senate register. The row's docket is the one the listing entry states, which is what the document was fetched by.",
-  },
+  "Senátní značka": excludedSourceField(
+    "The same docket under the label this court prints for its insolvency senate register. The row's docket is the one the listing entry states, which is what the document was fetched by.",
+  ),
   Soud: { disposition: "stored", target: { type: "result", key: "court" } },
   "Spisová značka": {
     disposition: "stored",
@@ -623,8 +639,12 @@ export const buildCzNsDecision = async (
         // Read from the detail page rather than left to the parser: the print
         // page the parser reads carries the court's other metadata rows but
         // not this one, so a row built from the print page alone never states
-        // the day the document was published.
-        zverejnenoNaWebu: publishedOnWeb ?? sourceMetadata["zverejnenoNaWebu"],
+        // the day the document was published. Whichever page states it, the
+        // key holds one format: the parser keeps the page's own words for a
+        // date its Domino pattern does not match, and two spellings of a date
+        // under one key is a filter nobody can write.
+        zverejnenoNaWebu:
+          publishedOnWeb ?? isoDate(sourceMetadata["zverejnenoNaWebu"]),
         keywords: meta["keywords"]?.split("\n").flatMap((s) => {
           const trimmed = s.trim();
           return trimmed ? [trimmed] : [];

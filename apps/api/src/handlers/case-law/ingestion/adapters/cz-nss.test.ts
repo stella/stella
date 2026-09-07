@@ -1449,6 +1449,47 @@ describe("cz-nss buildDecision", () => {
     expect(Object.keys(parts ?? {}).toSorted()).toEqual(["detail", "text"]);
   });
 
+  test("a replay rebuilds the text-served row the crawl built", async () => {
+    const payload = await listedRow();
+    installStub({ search: [], htmlDocumentStatus: 404 });
+    const built = await reconciliation.buildDecision(payload);
+    if (built.type !== "built") {
+      throw new TypeError("Expected the text fallback to build a decision");
+    }
+    const reparse = czNssAdapter.reparseStoredRaw;
+    if (reparse === undefined) {
+      throw new TypeError("Expected cz-nss to implement stored-raw replay");
+    }
+    globalThis.fetch = asFetchMock(() => {
+      throw new TypeError("Stored-raw replay must not contact the publisher");
+    });
+
+    const outcome = await reparse({
+      raw: new TextEncoder().encode(built.decision.sourceRaw ?? ""),
+      contentType: built.decision.sourceRawContentType ?? null,
+      caseNumber: built.decision.caseNumber,
+      sourceDocumentId: built.decision.sourceDocumentId ?? null,
+      language: built.decision.language,
+      court: built.decision.court,
+      ecli: built.decision.ecli ?? null,
+      decisionDate: built.decision.decisionDate ?? null,
+      decisionType: built.decision.decisionType ?? null,
+      sourceUrl: built.decision.sourceUrl ?? null,
+      documentUrl: built.decision.documentUrl ?? null,
+      metadata: built.decision.metadata,
+    } satisfies StoredRawReparseInput);
+
+    // The portal served this decision as plain text, and that is the document
+    // the row was stored on. A replay that read only the rich part would
+    // report it as having none and leave the row behind.
+    expect(outcome.type).toBe("parsed");
+    if (outcome.type !== "parsed") {
+      return;
+    }
+    expect(outcome.result.fulltext).toBe(built.decision.fulltext);
+    expect(outcome.result.documentAst).toEqual(built.decision.documentAst);
+  });
+
   test("refuses to write a row whose document the court did not serve", async () => {
     const payload = await listedRow();
     installStub({ search: [], documentStatus: 404 });

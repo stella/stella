@@ -536,16 +536,54 @@ export type SourceFieldTarget =
   | { readonly type: "identity" };
 
 /**
+ * Marks a reason that went through {@link excludedSourceField}. The symbol is
+ * not exported, so an exclusion written as a bare object literal does not
+ * satisfy the union: the only way to state one is through the constructor,
+ * which is where a blank reason is rejected.
+ */
+const STATED_REASON: unique symbol = Symbol("stated exclusion reason");
+
+type Whitespace = " " | "\t" | "\n" | "\r";
+
+type Trimmed<TText extends string> = TText extends `${Whitespace}${infer TRest}`
+  ? Trimmed<TRest>
+  : TText extends `${infer TRest}${Whitespace}`
+    ? Trimmed<TRest>
+    : TText;
+
+/** A reason with words in it, or `never`, which fails at the call site. */
+type StatedReason<TText extends string> =
+  Trimmed<TText> extends "" ? never : TText;
+
+/**
  * What an adapter does with one field its source states.
  *
  * Exclusion carries a reason because that is the whole point: a field nobody
  * decided about and a field deliberately left is the same silence otherwise,
  * and the first is how a published headnote sits unread on a page the adapter
- * already fetches.
+ * already fetches. A blank reason would be that same silence wearing the
+ * shape of a decision, so it cannot be written.
  */
 export type SourceFieldDisposition =
   | { readonly disposition: "stored"; readonly target: SourceFieldTarget }
-  | { readonly disposition: "excluded"; readonly reason: string };
+  | {
+      readonly disposition: "excluded";
+      readonly reason: string;
+      readonly [STATED_REASON]: true;
+    };
+
+/**
+ * State why a field the source publishes is not stored. The reason has to say
+ * something: `""` and `"   "` are compile errors rather than a check somebody
+ * has to remember to run.
+ */
+export const excludedSourceField = <const TText extends string>(
+  reason: StatedReason<TText>,
+): SourceFieldDisposition => ({
+  disposition: "excluded",
+  reason,
+  [STATED_REASON]: true,
+});
 
 /**
  * Every field a source states for one decision, and what becomes of it.

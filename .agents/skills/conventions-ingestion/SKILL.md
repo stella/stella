@@ -93,10 +93,11 @@ An inventory has three parts, in the adapter beside the readers it mirrors:
   is total by type and a new name without a decision does not compile. Each
   entry is `{ disposition: "stored", target }` (a metadata key, a result
   field, the parsed document, or the row's identity), or
-  `{ disposition: "excluded", reason }`, where the reason says what the field
-  is and why the row does not carry it. "Not read today" is not a reason;
-  duplicate of a stored field, derived elsewhere, no field on the row, and data
-  minimization are;
+  `excludedSourceField(reason)`, where the reason says what the field is and
+  why the row does not carry it. "Not read today" is not a reason; duplicate of
+  a stored field, derived elsewhere, no field on the row, and data minimization
+  are. The constructor is the only way to write an exclusion, and a blank
+  reason does not compile;
 - `listSourceFields(payload)`, which reads a page back and answers what the
   publisher labelled on it.
 
