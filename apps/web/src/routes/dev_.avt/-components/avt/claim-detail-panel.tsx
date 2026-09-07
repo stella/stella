@@ -27,6 +27,7 @@ import {
   SplitIcon,
   XCircleIcon,
 } from "lucide-react";
+import { useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/components/button";
@@ -42,8 +43,8 @@ import { cn } from "@stll/ui/lib/utils";
 
 import { useFormatter } from "@/i18n/formatting-context";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
-import { useAvtStore } from "@/routes/dev/-components/avt/avt-store";
-import { CLAIM_TEXT } from "@/routes/dev/-components/avt/sample-data";
+import { useAvtStore } from "@/routes/dev_.avt/-components/avt/avt-store";
+import { CLAIM_TEXT } from "@/routes/dev_.avt/-components/avt/sample-data";
 import {
   ConfBadge,
   InterpNote,
@@ -56,7 +57,7 @@ import {
   StateChip,
   TypeChip,
   type MatchStepperState,
-} from "@/routes/dev/-components/avt/state-chip";
+} from "@/routes/dev_.avt/-components/avt/state-chip";
 import type {
   AnchorFact,
   Claim,
@@ -64,20 +65,20 @@ import type {
   ClaimReview,
   ClaimState,
   RecordConflictBoundary,
-} from "@/routes/dev/-components/avt/types";
+} from "@/routes/dev_.avt/-components/avt/types";
 import {
   CLAIM_TYPE_META,
   EMPTY_REVIEW,
   REVIEWER_OVERRIDE_STATES,
   STATE_META,
-} from "@/routes/dev/-components/avt/types";
+} from "@/routes/dev_.avt/-components/avt/types";
 import {
   confirmLabel,
   dispositionGuidance,
   isContested,
   isSettled,
   type DispositionTone,
-} from "@/routes/dev/-components/avt/verdict";
+} from "@/routes/dev_.avt/-components/avt/verdict";
 
 function factById(facts: Record<string, AnchorFact>) {
   return (id: string): AnchorFact | undefined => facts[id];
@@ -127,6 +128,7 @@ const DISPOSITION_TONE_STYLE: Record<
 };
 
 function FactCard({ fact, rel }: { fact: AnchorFact; rel: ClaimFactRelation }) {
+  const t = useTranslations();
   const supports = rel === "supports";
   return (
     <div className="overflow-hidden rounded-lg border">
@@ -144,7 +146,11 @@ function FactCard({ fact, rel }: { fact: AnchorFact; rel: ClaimFactRelation }) {
           ) : (
             <XCircleIcon className="size-3.5" />
           )}
-          {supports ? "Supports" : "Conflicts"}
+          {t(
+            supports
+              ? "avt.claimDetail.relation.supports"
+              : "avt.claimDetail.relation.conflicts",
+          )}
         </span>
         <ConfBadge level={fact.confidence} />
       </div>
@@ -158,25 +164,16 @@ function FactCard({ fact, rel }: { fact: AnchorFact; rel: ClaimFactRelation }) {
           </span>
           <SourceLink fact={fact} />
           <span>{fact.period}</span>
-          <span className="opacity-70">Fact {fact.id}</span>
+          <span className="opacity-70">
+            {t("avt.claimDetail.factId", { id: fact.id })}
+          </span>
         </div>
       </div>
     </div>
   );
 }
 
-/**
- * Source citation label, adapted from the prototype's clickable
- * `<a onClick={() => onSource(f)}>`. It is not wired to a real destination:
- * this build is deliberately client-side/mock-data only (see the AVT
- * findings doc), so there is no real source document to navigate to yet.
- * When AVT is wired against a real Stella document, this is the integration
- * point: Stella already has the resolution mechanism
- * (`apps/web/src/routes/.../justification.tsx`'s `PdfChip`/`DocxQuote`, which
- * scroll/highlight the real PDF or DOCX for a citation), so an `AnchorFact`
- * would need a file/citation reference alongside `source`/`page` to reuse it,
- * not a new mechanism.
- */
+/** Mock citation; use PdfChip/DocxQuote once facts carry real file references. */
 function SourceLink({ fact }: { fact: AnchorFact }) {
   return (
     <span className="text-muted-foreground inline-flex items-center gap-1">
@@ -193,6 +190,7 @@ function RecordConflictBlock({
   claim: Claim;
   review: ClaimReview;
 }) {
+  const t = useTranslations();
   const rc = claim.recordConflict;
   const resolveRecordConflict = useAvtStore(
     (state) => state.resolveRecordConflict,
@@ -229,16 +227,14 @@ function RecordConflictBlock({
         }}
       >
         <div className="flex items-center gap-1.5 text-sm font-bold">
-          <HistoryIcon className="size-3.5" /> Conflicting evidence in the
-          record
+          <HistoryIcon className="size-3.5" />
+          {t("avt.claimDetail.recordConflict.title")}
         </div>
         <p className="text-foreground mt-1 text-xs leading-relaxed">
-          Two anchor facts speak to the same point — <b>{rc.subject}</b> — but
-          disagree. Both are <b>high-confidence</b> sources, so this is not a
-          reliability problem: the record itself is internally inconsistent. AVT
-          withholds a verdict rather than score the claim, because picking one
-          record over the other is a judgement for you to make and record — not
-          one the tool should make silently.
+          {t.rich("avt.claimDetail.recordConflict.description", {
+            strong: (chunks) => <b>{chunks}</b>,
+            subject: rc.subject,
+          })}
         </p>
       </div>
 
@@ -276,7 +272,9 @@ function RecordConflictBlock({
                 <span>{fact.kind}</span>
                 <SourceLink fact={fact} />
                 <span>{fact.period}</span>
-                <span className="opacity-70">Fact {fact.id}</span>
+                <span className="opacity-70">
+                  {t("avt.claimDetail.factId", { id: fact.id })}
+                </span>
               </div>
             </div>
           ) : null,
@@ -286,7 +284,7 @@ function RecordConflictBlock({
       {rc.boundary && rc.dates && (
         <div className="space-y-2">
           <div className="text-muted-foreground text-xs font-bold tracking-wide uppercase">
-            Why the date decides the verdict
+            {t("avt.claimDetail.recordConflict.dateDecides")}
           </div>
           <ConflictDateline
             boundary={rc.boundary}
@@ -301,7 +299,9 @@ function RecordConflictBlock({
       )}
 
       <div className="space-y-2">
-        <div className="text-sm font-semibold">Reconcile the record</div>
+        <div className="text-sm font-semibold">
+          {t("avt.claimDetail.recordConflict.reconcile")}
+        </div>
         <div className="flex flex-col gap-2">
           {[factIdA, factIdB].map((id) => (
             <Button
@@ -322,8 +322,8 @@ function RecordConflictBlock({
               }
               variant="outline"
             >
-              <CheckIcon /> Treat {id}
-              {" as "}governing
+              <CheckIcon />
+              {t("avt.claimDetail.recordConflict.treatAsGoverning", { id })}
             </Button>
           ))}
           <Button
@@ -339,27 +339,32 @@ function RecordConflictBlock({
             }
             variant="outline"
           >
-            <FlagIcon /> Flag for evidence team
+            <FlagIcon />
+            {t("avt.claimDetail.recordConflict.flagForEvidenceTeam")}
           </Button>
         </div>
         {resolution?.kind === "governed" && governingValue !== undefined && (
           <div className="bg-muted text-muted-foreground rounded-md px-2.5 py-2 text-xs leading-relaxed">
-            This local preview treats <b>{governingId}</b>
-            {" as "}governing and evaluates the claim against{" "}
-            <b>{governingValue}</b>
-            {governedResult ? (
-              <>
-                {" "}
-                — landing on <b>{STATE_META[governedResult.verdict].chip}</b>
-              </>
-            ) : null}
-            . Both fixture records remain unchanged.
+            {governedResult
+              ? t.rich(
+                  "avt.claimDetail.recordConflict.governingPreviewWithVerdict",
+                  {
+                    factId: resolution.factId,
+                    strong: (chunks) => <b>{chunks}</b>,
+                    value: governingValue,
+                    verdict: t(STATE_META[governedResult.verdict].chipKey),
+                  },
+                )
+              : t.rich("avt.claimDetail.recordConflict.governingPreview", {
+                  factId: resolution.factId,
+                  strong: (chunks) => <b>{chunks}</b>,
+                  value: governingValue,
+                })}
           </div>
         )}
         {resolution?.kind === "escalated" && (
           <div className="bg-muted text-muted-foreground rounded-md px-2.5 py-2 text-xs leading-relaxed">
-            Marked locally for evidence-team follow-up. The record conflict
-            remains open and counted until a governing source is selected.
+            {t("avt.claimDetail.recordConflict.escalated")}
           </div>
         )}
       </div>
@@ -392,6 +397,7 @@ function ConflictDateline({
   result: { verdict: ClaimState; note: string } | null;
   month: string | undefined;
 }) {
+  const t = useTranslations();
   // Select by index, not by day value: `dates` may legitimately hold two
   // equal days, and matching on the value then marks both records as
   // governing and picks the wrong one for the sentence below.
@@ -458,18 +464,18 @@ function ConflictDateline({
         <div className="flex items-start gap-2 text-xs leading-relaxed">
           <StateChip state={result.verdict} />
           <span>
-            As at{" "}
-            <b>
-              {governingDate} {month}
-            </b>
-            , the {result.note}
+            {t.rich("avt.claimDetail.recordConflict.resultAsAt", {
+              date: `${governingDate} ${month ?? ""}`.trim(),
+              note: result.note,
+              strong: (chunks) => <b>{chunks}</b>,
+            })}
           </span>
         </div>
       ) : (
         <p className="text-muted-foreground text-[11.5px] leading-relaxed">
-          The two dates fall on <i>opposite sides</i> of the boundary event.
-          Whichever record governs decides the outcome — so resolving the
-          conflict here directly sets the verdict.
+          {t.rich("avt.claimDetail.recordConflict.oppositeSides", {
+            emphasis: (chunks) => <i>{chunks}</i>,
+          })}
         </p>
       )}
     </div>
@@ -491,26 +497,24 @@ function reconcileVerdict(
   return "nocover";
 }
 
-const RECONCILE_LABELS = {
-  supported: "Supported",
-  contradicted: "Contradicted",
-  nocover: "No coverage",
-} as const;
-
 function ReconcileTimeline() {
+  const t = useTranslations();
   const [day, setDay] = React.useState(25);
   const verdict = reconcileVerdict(day);
-  const label = RECONCILE_LABELS[verdict];
+  const label = t(STATE_META[verdict].chipKey);
   return (
     <div className="border-primary/32 mt-2.5 space-y-2 rounded-md border p-3">
       <div className="flex items-center justify-between text-xs">
         <span>
-          As at <b>{day} Aug 2021</b>
+          {t.rich("avt.claimDetail.timeline.asAt", {
+            date: `${day} Aug 2021`,
+            strong: (chunks) => <b>{chunks}</b>,
+          })}
         </span>
         <StateChip state={verdict} />
       </div>
       <input
-        aria-label="As-at date"
+        aria-label={t("avt.claimDetail.timeline.asAtDate")}
         className="w-full"
         max={31}
         min={1}
@@ -519,8 +523,11 @@ function ReconcileTimeline() {
         value={day}
       />
       <p className="text-muted-foreground text-[11px] leading-relaxed">
-        Preview the claim against the fixture record <i>{"as at"}</i> a chosen
-        date. Preview verdict: <b>{label}</b>.
+        {t.rich("avt.claimDetail.timeline.preview", {
+          emphasis: (chunks) => <i>{chunks}</i>,
+          strong: (chunks) => <b>{chunks}</b>,
+          verdict: label,
+        })}
       </p>
     </div>
   );
@@ -536,14 +543,15 @@ function ScoreSection({
   conflictCount: number;
 }) {
   const format = useFormatter();
+  const t = useTranslations();
 
   if (claim.state === "nocover") {
     return (
       <div className="text-muted-foreground bg-muted flex gap-2.5 rounded-md p-3 text-sm leading-relaxed">
         <div>
-          <b>The record is silent.</b> No anchor fact in the database addresses
-          this claim. This is distinct from a weak score — it means there is
-          nothing to check it against yet.
+          {t.rich("avt.claimDetail.score.noCoverage", {
+            strong: (chunks) => <b>{chunks}</b>,
+          })}
         </div>
       </div>
     );
@@ -553,10 +561,9 @@ function ScoreSection({
     return (
       <div className="text-muted-foreground bg-muted flex gap-2.5 rounded-md p-3 text-sm leading-relaxed">
         <div>
-          <b>Not a verifiable assertion.</b> This is the kind of statement no
-          document could ever settle — a counterfactual, a prediction, a
-          statement of intent, a legal conclusion, or a claim too vague to
-          check. Set aside rather than scored.
+          {t.rich("avt.claimDetail.score.notVerifiable", {
+            strong: (chunks) => <b>{chunks}</b>,
+          })}
         </div>
       </div>
     );
@@ -572,9 +579,11 @@ function ScoreSection({
           —
         </div>
         <div className="text-muted-foreground pb-1 text-xs">
-          <b className="text-foreground">Verdict withheld</b>
+          <b className="text-foreground">
+            {t("avt.claimDetail.score.verdictWithheld")}
+          </b>
           <br />
-          Anchor facts disagree
+          {t("avt.claimDetail.score.anchorFactsDisagree")}
         </div>
       </div>
     );
@@ -596,7 +605,9 @@ function ScoreSection({
           {format.number(claim.score)}
         </div>
         <div className="text-muted-foreground pb-1 text-xs">
-          <b>/ 100</b> support score
+          {t.rich("avt.claimDetail.score.outOf100", {
+            strong: (chunks) => <b>{chunks}</b>,
+          })}
         </div>
       </div>
       <div className="bg-muted h-2 overflow-hidden rounded-full border">
@@ -610,8 +621,12 @@ function ScoreSection({
         />
       </div>
       <div className="text-muted-foreground flex gap-3.5 text-xs">
-        <span>{format.number(supportCount)} support</span>
-        <span>{format.number(conflictCount)} conflict</span>
+        <span>
+          {t("avt.claimDetail.score.supportCount", { count: supportCount })}
+        </span>
+        <span>
+          {t("avt.claimDetail.score.conflictCount", { count: conflictCount })}
+        </span>
       </div>
     </div>
   );
@@ -631,6 +646,7 @@ export function ClaimDetailPanel({
   const setNote = useAvtStore((state) => state.setNote);
   const reopenClaim = useAvtStore((state) => state.reopenClaim);
   const format = useFormatter();
+  const t = useTranslations();
 
   const [noteOpen, setNoteOpen] = React.useState(false);
   const [draft, setDraft] = React.useState("");
@@ -673,12 +689,12 @@ export function ClaimDetailPanel({
           // re-scored affected claims; nothing does either, and attaching
           // evidence to a claim is still an open design question (see the
           // "no coverage" note in the handover doc).
-          placeholder="Record a correction or an explanation. Saving records the note against this claim only — it does not change the verdict or the anchor-fact record."
+          placeholder={t("avt.claimDetail.note.placeholder")}
           value={draft}
         />
         <div className="flex gap-1.5">
           <Button onClick={saveNote} size="sm">
-            Save correction
+            {t("avt.claimDetail.note.saveCorrection")}
           </Button>
           <Button
             onClick={() => {
@@ -688,7 +704,7 @@ export function ClaimDetailPanel({
             size="sm"
             variant="ghost"
           >
-            Cancel
+            {t("common.cancel")}
           </Button>
         </div>
       </div>
@@ -697,13 +713,14 @@ export function ClaimDetailPanel({
     noteSection = (
       <div className="bg-muted rounded-md p-2.5 text-xs leading-relaxed">
         <b>
-          Your note ·{" "}
-          {format.dateTime(
-            Temporal.Instant.from(
-              review.savedAt ?? panic("Saved AVT note has no timestamp"),
-            ).epochMilliseconds,
-            MEDIUM_DATE_SHORT_TIME_FORMAT,
-          )}
+          {t("avt.claimDetail.note.heading", {
+            savedAt: format.dateTime(
+              Temporal.Instant.from(
+                review.savedAt ?? panic("Saved AVT note has no timestamp"),
+              ).epochMilliseconds,
+              MEDIUM_DATE_SHORT_TIME_FORMAT,
+            ),
+          })}
         </b>
         <br />
         {review.note}
@@ -715,7 +732,7 @@ export function ClaimDetailPanel({
           size="sm"
           variant="ghost"
         >
-          <PenIcon /> Edit
+          <PenIcon /> {t("common.edit")}
         </Button>
       </div>
     );
@@ -726,7 +743,7 @@ export function ClaimDetailPanel({
         onClick={() => setNoteOpen(true)}
         variant="outline"
       >
-        <PenIcon /> Add note / correction
+        <PenIcon /> {t("avt.claimDetail.note.add")}
       </Button>
     );
   }
@@ -741,9 +758,10 @@ export function ClaimDetailPanel({
             {review.reopened && (
               <span
                 className="bg-primary/10 text-primary border-primary/32 inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-semibold"
-                title="A reviewer re-classified this as a checkable fact; a live record check is still pending."
+                title={t("avt.claimDetail.reopenedTooltip")}
               >
-                <HistoryIcon className="size-3" /> Re-opened, check pending
+                <HistoryIcon className="size-3" />
+                {t("avt.claimDetail.reopened")}
               </span>
             )}
             {review.override && (
@@ -753,9 +771,10 @@ export function ClaimDetailPanel({
                   STATE_COLOR[review.override].chipClass,
                 )}
                 style={STATE_COLOR[review.override].chipStyle}
-                title="A reviewer has recorded a different verdict. The analysis below is the tool's own, unchanged."
+                title={t("avt.claimDetail.overrideTooltip")}
               >
-                <PenIcon className="size-3" /> Overridden
+                <PenIcon className="size-3" />
+                {t("avt.claimDetail.overridden")}
               </span>
             )}
           </div>
@@ -765,7 +784,7 @@ export function ClaimDetailPanel({
           &ldquo;{text}&rdquo;
         </p>
         <p className="text-muted-foreground text-[11.5px] leading-relaxed">
-          {CLAIM_TYPE_META[claim.type].hint}
+          {t(CLAIM_TYPE_META[claim.type].hintKey)}
         </p>
 
         {review.override && (
@@ -778,8 +797,10 @@ export function ClaimDetailPanel({
           >
             <PenIcon className="mt-0.5 size-3.5 shrink-0" />
             <span>
-              Overridden to <b>{STATE_META[review.override].chip}</b> — the
-              analysis below is the tool&rsquo;s own, shown unchanged.
+              {t.rich("avt.claimDetail.overrideNotice", {
+                strong: (chunks) => <b>{chunks}</b>,
+                verdict: t(STATE_META[review.override].chipKey),
+              })}
             </span>
           </div>
         )}
@@ -793,13 +814,14 @@ export function ClaimDetailPanel({
 
       <div className="flex-1 space-y-4 overflow-y-auto p-4">
         {contested && (
-          <InterpNote note="A contributing fact carries a substantive interpretation caveat — what the evidence means, not the medium it came in, is what is uncertain." />
+          <InterpNote note={t("avt.claimDetail.interpretationCaveat")} />
         )}
 
         {claim.superseded && (
           <div className="text-primary bg-primary/10 border-primary/32 rounded-md border px-3 py-2.5 text-xs leading-relaxed">
             <div className="mb-1 flex items-center gap-1.5 font-bold">
-              <HistoryIcon className="size-3.5" /> Revised in a later statement
+              <HistoryIcon className="size-3.5" />
+              {t("avt.claimDetail.revisedLater")}
             </div>
             {claim.superseded.note}
           </div>
@@ -812,7 +834,7 @@ export function ClaimDetailPanel({
         {hasFacts && claim.state !== "recordconflict" && (
           <div className="space-y-2">
             <div className="text-muted-foreground text-xs font-bold tracking-wide uppercase">
-              Why this score — anchor facts
+              {t("avt.claimDetail.whyScore")}
             </div>
             {supports.map((ref) => {
               const fact = factById(facts)(ref.factId);
@@ -834,7 +856,7 @@ export function ClaimDetailPanel({
         <div className="space-y-2.5 border-t pt-3.5">
           <div className="flex items-center justify-between">
             <div className="text-muted-foreground text-xs font-bold tracking-wide uppercase">
-              Human review
+              {t("avt.claimDetail.humanReview")}
             </div>
             {!settled && !isEscalated && (
               <span
@@ -844,7 +866,7 @@ export function ClaimDetailPanel({
                 )}
                 style={DISPOSITION_TONE_STYLE[guidance.tone].badgeStyle}
               >
-                {guidance.guide}
+                {t(guidance.guideKey)}
               </span>
             )}
           </div>
@@ -854,8 +876,7 @@ export function ClaimDetailPanel({
                 aria-hidden="true"
                 className="mt-0.5 size-3.5 shrink-0"
               />
-              Escalated to the evidence team — no verdict to confirm or dispute
-              here until the underlying conflict is resolved.
+              {t("avt.claimDetail.escalatedReview")}
             </p>
           ) : (
             !settled && (
@@ -870,7 +891,7 @@ export function ClaimDetailPanel({
                   aria-hidden="true"
                   className="mt-0.5 size-3.5 shrink-0"
                 />
-                {guidance.ask}
+                {t(guidance.askKey)}
               </p>
             )
           )}
@@ -886,7 +907,7 @@ export function ClaimDetailPanel({
               }
               variant={review.status === "reviewed" ? "default" : "outline"}
             >
-              <CheckIcon /> {confirmLabel(claim.state)}
+              <CheckIcon /> {t(confirmLabel(claim.state))}
             </Button>
             <Button
               className="flex-1"
@@ -899,7 +920,7 @@ export function ClaimDetailPanel({
               }
               variant={review.status === "disputed" ? "destructive" : "outline"}
             >
-              <FlagIcon /> Flag dispute
+              <FlagIcon /> {t("avt.claimDetail.flagDispute")}
             </Button>
           </div>
 
@@ -908,7 +929,7 @@ export function ClaimDetailPanel({
             claim.state !== "recordconflict" && (
               <div className="flex items-center gap-2">
                 <span className="text-muted-foreground text-xs">
-                  Override verdict
+                  {t("avt.claimDetail.overrideVerdict")}
                 </span>
                 <Select
                   disabled={isEscalated}
@@ -928,7 +949,7 @@ export function ClaimDetailPanel({
                   <SelectContent>
                     {REVIEWER_OVERRIDE_STATES.map((state) => (
                       <SelectItem key={state} value={state}>
-                        {STATE_META[state].chip}
+                        {t(STATE_META[state].chipKey)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -939,17 +960,19 @@ export function ClaimDetailPanel({
           {claim.state === "notverifiable" && (
             <div className="border-border bg-muted space-y-2 rounded-md border p-3">
               <p className="text-xs leading-relaxed">
-                <b>{"Set aside as not verifiable."}</b> If this is actually a
-                checkable claim, re-open it: AVT keeps your reclassification and
-                runs only the record-check it skipped.
+                {t.rich("avt.claimDetail.notVerifiable.reopenExplanation", {
+                  strong: (chunks) => <b>{chunks}</b>,
+                })}
               </p>
               <Button onClick={() => reopenClaim(claim.id)} size="sm">
-                <SearchIcon /> Re-open → check against record
+                <SearchIcon />
+                {t("avt.claimDetail.notVerifiable.reopen")}
               </Button>
               {review.reopened && (
                 <p className="text-muted-foreground text-[11px] leading-relaxed">
-                  No live model wired up in this build — landed on{" "}
-                  <b>No coverage, pending check</b>.
+                  {t.rich("avt.claimDetail.notVerifiable.pending", {
+                    strong: (chunks) => <b>{chunks}</b>,
+                  })}
                 </p>
               )}
             </div>

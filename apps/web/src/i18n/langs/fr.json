@@ -151,6 +151,172 @@
     "useDifferentEmail": "Utiliser une autre adresse e-mail",
     "weSentCodeTo": "Nous avons envoyé un code à <email>{emailAddress}</email>"
   },
+  "avt": {
+    "anchorFacts": {
+      "addFact": "Ajouter un fait",
+      "addUnavailable": "Indisponible dans ce banc d’essai — l’ajout d’un fait nécessite une persistance qui n’est pas encore câblée.",
+      "confirmedByReviewer": "Confirmé par le relecteur",
+      "description": "Preuves tangibles — courriels, messages, relevés bancaires, faits convenus — extraites dans le dossier de faits d’ancrage auquel les affirmations sont confrontées. Relisez, modifiez ou ajoutez des faits à la main.",
+      "editFact": "Modifier le fait",
+      "editOrRetype": "Modifier / requalifier",
+      "extractionAndReview": "Extraction et relecture",
+      "factCount": "{count, plural, one {# fait} other {# faits}}",
+      "factText": "Texte du fait d’ancrage",
+      "heldDescription": "Le sens de ces extractions est <strong>réellement incertain</strong> — leur contenu est provisoire ou non confirmé, et pas simplement manuscrit. Elles sont exclues du scoring jusqu’à ce qu’un relecteur les confirme, les modifie ou les requalifie. Une source lisible n’est jamais mise en attente pour son seul support.",
+      "heldForReview": "En attente de relecture",
+      "importSource": "Importer une source",
+      "importUnavailable": "Indisponible dans ce banc d’essai — l’import d’une source nécessite une ingestion et un stockage qui ne sont pas encore câblés.",
+      "interpretation": "Interprétation",
+      "interpretiveConfidence": "Confiance interprétative",
+      "record": "Dossier de faits d’ancrage",
+      "sourceAndProvenance": "Source et provenance",
+      "timePeriod": "Période",
+      "title": "Faits d’ancrage"
+    },
+    "claimDetail": {
+      "escalatedReview": "Transmis à l’équipe chargée des preuves — aucun verdict à confirmer ou à contester ici tant que le conflit sous-jacent n’est pas résolu.",
+      "factId": "Fait {id}",
+      "flagDispute": "Signaler un désaccord",
+      "humanReview": "Relecture humaine",
+      "interpretationCaveat": "Un fait contributif comporte une réserve d’interprétation de fond — c’est le sens de la preuve qui est incertain, et non le support par lequel elle est arrivée.",
+      "notVerifiable": {
+        "pending": "Aucun modèle en direct n’est câblé dans cette version — résultat : <strong>Sans couverture, vérification en attente</strong>.",
+        "reopen": "Rouvrir → vérifier par rapport au dossier",
+        "reopenExplanation": "<strong>Écartée comme non vérifiable.</strong> S’il s’agit en réalité d’une affirmation vérifiable, rouvrez-la : AVT conserve votre requalification et n’exécute que la vérification du dossier qu’il avait sautée."
+      },
+      "note": {
+        "add": "Ajouter une note / correction",
+        "heading": "Votre note · {savedAt}",
+        "placeholder": "Consignez une correction ou une explication. L’enregistrement rattache la note à cette seule affirmation — il ne modifie ni le verdict ni le dossier de faits d’ancrage.",
+        "saveCorrection": "Enregistrer la correction"
+      },
+      "overridden": "Remplacé",
+      "overrideNotice": "Verdict remplacé par <strong>{verdict}</strong> — l’analyse ci-dessous est celle de l’outil, affichée telle quelle.",
+      "overrideTooltip": "Un relecteur a consigné un verdict différent. L’analyse ci-dessous est celle de l’outil, inchangée.",
+      "overrideVerdict": "Remplacer le verdict",
+      "recordConflict": {
+        "dateDecides": "Pourquoi la date décide du verdict",
+        "description": "Deux faits d’ancrage portent sur le même point — <strong>{subject}</strong> — mais se contredisent. Les deux sources sont à <strong>confiance élevée</strong> ; ce n’est donc pas un problème de fiabilité : le dossier lui-même est incohérent. AVT s’abstient de rendre un verdict plutôt que de noter l’affirmation, car choisir un enregistrement plutôt que l’autre est un jugement qu’il vous revient de prendre et de consigner — pas une décision que l’outil devrait prendre en silence.",
+        "escalated": "Marqué localement pour suivi par l’équipe chargée des preuves. Le conflit de dossier reste ouvert et comptabilisé tant qu’une source faisant foi n’est pas sélectionnée.",
+        "flagForEvidenceTeam": "Signaler à l’équipe chargée des preuves",
+        "governingPreview": "Cet aperçu local considère <strong>{factId}</strong> comme faisant foi et évalue l’affirmation par rapport à <strong>{value}</strong>. Les deux enregistrements de test restent inchangés.",
+        "governingPreviewWithVerdict": "Cet aperçu local considère <strong>{factId}</strong> comme faisant foi et évalue l’affirmation par rapport à <strong>{value}</strong> — résultat : <strong>{verdict}</strong>. Les deux enregistrements de test restent inchangés.",
+        "oppositeSides": "Les deux dates se situent <emphasis>de part et d’autre</emphasis> de l’événement charnière. L’enregistrement qui fait foi décide de l’issue — résoudre le conflit ici fixe donc directement le verdict.",
+        "reconcile": "Réconcilier le dossier",
+        "resultAsAt": "Au <strong>{date}</strong>, {note}",
+        "title": "Preuves contradictoires dans le dossier",
+        "treatAsGoverning": "Considérer {id} comme faisant foi"
+      },
+      "relation": {
+        "conflicts": "Contredit",
+        "supports": "Étaye"
+      },
+      "reopened": "Rouverte, vérification en attente",
+      "reopenedTooltip": "Un relecteur a requalifié cette affirmation en fait vérifiable ; une vérification en direct du dossier est encore en attente.",
+      "revisedLater": "Révisée dans une déclaration ultérieure",
+      "score": {
+        "anchorFactsDisagree": "Les faits d’ancrage se contredisent",
+        "conflictCount": "{count, plural, one {# contradiction} other {# contradictions}}",
+        "noCoverage": "<strong>Le dossier est muet.</strong> Aucun fait d’ancrage de la base ne traite de cette affirmation. Ce n’est pas un score faible : cela signifie qu’il n’y a encore rien pour la vérifier.",
+        "notVerifiable": "<strong>Pas une assertion vérifiable.</strong> C’est le genre de déclaration qu’aucun document ne pourra jamais trancher — un contrefactuel, une prédiction, une déclaration d’intention, une conclusion juridique ou une affirmation trop vague pour être vérifiée. Écartée plutôt que notée.",
+        "outOf100": "<strong>/ 100</strong> score de soutien",
+        "supportCount": "{count, plural, one {# soutien} other {# soutiens}}",
+        "verdictWithheld": "Verdict suspendu"
+      },
+      "timeline": {
+        "asAt": "Au <strong>{date}</strong>",
+        "asAtDate": "Date de référence",
+        "preview": "Prévisualisez l’affirmation par rapport au dossier de test <emphasis>à</emphasis> une date choisie. Verdict prévisualisé : <strong>{verdict}</strong>."
+      },
+      "whyScore": "Pourquoi ce score — faits d’ancrage"
+    },
+    "claimTypes": {
+      "fact": {
+        "hint": "Assertion objective et vérifiable — notée par rapport au dossier. Inclut les affirmations formulées comme des aveux ou des dénégations : jugées sur la proposition sous-jacente, pas sur les seuls mots."
+      },
+      "opinion": {
+        "hint": "Un jugement de valeur ou une qualification — aucun document ne peut le confirmer ni le contredire ; il est donc écarté, pas noté.",
+        "label": "Appréciation"
+      },
+      "setAside": "écartée",
+      "unverifiable": {
+        "hint": "Une assertion qu’aucun document ne pourra jamais trancher — un contrefactuel, une prédiction, une déclaration d’intention ou de conviction, une conclusion juridique ou une affirmation trop vague pour être vérifiée. Écartée, pas notée. À distinguer de Sans couverture, qui désigne un fait vérifiable sur lequel le dossier est simplement muet.",
+        "label": "Non vérifiable"
+      }
+    },
+    "confidence": {
+      "interpretation": "Interprétation",
+      "tooltip": "Confiance interprétative — à quel point le sens de cette preuve est dénué d’ambiguïté. Indépendante du support de la source (manuscrit, scan, etc.)."
+    },
+    "confirm": {
+      "recordConflict": "Confirmer la résolution",
+      "supported": "Confirmer — prête",
+      "verdict": "Confirmer le verdict"
+    },
+    "devHarness": {
+      "localSessionNotice": "Session locale uniquement — rien n’est enregistré ici. Chaque relecture, note et modification de fait d’ancrage ne vit que dans cet onglet et disparaît au rechargement.",
+      "title": "Outil de vérification par faits d’ancrage — banc d’essai de développement",
+      "verifyDocument": "Vérifier le document"
+    },
+    "disposition": {
+      "contested": "Le verdict est net, mais l’interprétation d’un fait contributif est contestée — un coup d’œil s’impose avant validation.",
+      "contradicted": "Le dossier s’écarte de cette affirmation. Une décision humaine est nécessaire avant que ce verdict soit retenu.",
+      "nocover": "Aucun fait d’ancrage ne traite de cette affirmation ; il n’y a donc rien pour la confirmer. La validation est facultative.",
+      "notverifiable": "Écartée comme non vérifiable — la validation est facultative. Rouvrez-la ci-dessous si elle est en réalité vérifiable.",
+      "recordconflict": "Deux pièces du dossier se contredisent. Déterminez ci-dessus laquelle fait foi, ou signalez-le à l’équipe chargée des preuves — l’outil ne choisira pas à votre place.",
+      "supported": "Le dossier confirme cette affirmation. Votre validation atteste que l’outil l’a bien lue — aucun jugement à rendre.",
+      "tension": "Le dossier n’étaye cette affirmation qu’en partie. Pesez les faits favorables et contraires ci-dessus avant que le verdict soit retenu."
+    },
+    "guidance": {
+      "escalate": "Faire remonter",
+      "manualJudgement": "Jugement manuel",
+      "optional": "Facultatif",
+      "readyToConfirm": "Prête à confirmer"
+    },
+    "matches": {
+      "count": "{count, plural, one {# correspondance} other {# correspondances}}",
+      "position": "{current}/{total}"
+    },
+    "sourceMediumTooltip": "Support de la source — un descripteur neutre. Il n’abaisse pas la confiance à lui seul.",
+    "states": {
+      "contradicted": {
+        "chip": "Contredite",
+        "label": "Contredite par le dossier"
+      },
+      "nocover": {
+        "chip": "Sans couverture",
+        "label": "Aucun fait d’ancrage ne couvre cette affirmation"
+      },
+      "notverifiable": {
+        "chip": "Non vérifiable",
+        "label": "Pas une affirmation factuelle vérifiable"
+      },
+      "recordconflict": {
+        "chip": "Conflit de dossier",
+        "label": "Les faits d’ancrage se contredisent entre eux"
+      },
+      "supported": {
+        "chip": "Étayée",
+        "label": "Étayée par le dossier"
+      },
+      "tension": {
+        "chip": "En tension",
+        "label": "En tension avec le dossier"
+      }
+    },
+    "verification": {
+      "acceptRoutine": "Accepter {count, plural, one {# affirmation de routine} other {# affirmations de routine}}",
+      "attentionComplete": "<strong>Toutes les affirmations nécessitant un jugement ont été traitées.</strong> {count, plural, one {La # détermination de routine ne nécessite pas d’examen individuel.} other {Les # déterminations de routine ne nécessitent pas d’examen individuel.}}",
+      "attentionOpen": "<strong>{count, plural, one {# affirmation requiert} other {# affirmations requièrent}} votre jugement</strong> — contradictions et interprétations contestées. {routineCount, plural, one {L’autre # est de routine et ne nécessite pas de validation individuelle.} other {Les # autres sont de routine et ne nécessitent pas de validation individuelle.}}",
+      "claimStatus": " ({state}{contested, select, true {, contestée} other {}}{superseded, select, true {, remplacée} other {}}{reviewStatus, select, reviewed {, examinée} disputed {, désaccord signalé} other {}})",
+      "selectClaim": "Sélectionnez une affirmation pour inspecter le dossier.",
+      "showQueue": "Afficher la file",
+      "stats": {
+        "claims": "Affirmations",
+        "needsJudgement": "Jugement requis"
+      }
+    }
+  },
   "bilingual": {
     "dialog": {
       "create": "Créer la version bilingue",

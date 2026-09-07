@@ -151,6 +151,172 @@
     "useDifferentEmail": "Andere E-Mail verwenden",
     "weSentCodeTo": "Wir haben einen Code an <email>{emailAddress}</email> gesendet"
   },
+  "avt": {
+    "anchorFacts": {
+      "addFact": "Fakt hinzufügen",
+      "addUnavailable": "In dieser Testumgebung nicht verfügbar – das Hinzufügen eines Fakts erfordert eine noch nicht angebundene Persistenz.",
+      "confirmedByReviewer": "Durch Prüfer bestätigt",
+      "description": "Harte Belege – E-Mails, Nachrichten, Bankunterlagen, unstreitige Tatsachen – werden in einem Ankerfaktenbestand erfasst, mit dem Behauptungen abgeglichen werden. Prüfen, bearbeiten oder ergänzen Sie Fakten von Hand.",
+      "editFact": "Fakt bearbeiten",
+      "editOrRetype": "Bearbeiten / neu eingeben",
+      "extractionAndReview": "Extraktion und Prüfung",
+      "factCount": "{count, plural, one {# Fakt} other {# Fakten}}",
+      "factText": "Text des Ankerfakts",
+      "heldDescription": "Diese Extraktionen sind <strong>inhaltlich tatsächlich unsicher</strong> – ihr Inhalt ist vorläufig oder unbestätigt, nicht lediglich handschriftlich. Sie fließen erst in die Bewertung ein, wenn ein Prüfer sie bestätigt, bearbeitet oder neu eingibt. Eine lesbare Quelle wird nie allein wegen ihres Mediums zurückgestellt.",
+      "heldForReview": "Zur Prüfung zurückgestellt",
+      "importSource": "Quelle importieren",
+      "importUnavailable": "In dieser Testumgebung nicht verfügbar – das Importieren einer Quelle erfordert eine noch nicht angebundene Datenaufnahme und Speicherung.",
+      "interpretation": "Auslegung",
+      "interpretiveConfidence": "Auslegungssicherheit",
+      "record": "Ankerfaktenbestand",
+      "sourceAndProvenance": "Quelle und Herkunft",
+      "timePeriod": "Zeitraum",
+      "title": "Ankerfakten"
+    },
+    "claimDetail": {
+      "escalatedReview": "An das Belegteam eskaliert – hier kann kein Ergebnis bestätigt oder beanstandet werden, bis der zugrunde liegende Widerspruch geklärt ist.",
+      "factId": "Fakt {id}",
+      "flagDispute": "Beanstandung markieren",
+      "humanReview": "Menschliche Prüfung",
+      "interpretationCaveat": "Ein beitragender Fakt ist mit einem wesentlichen Auslegungsvorbehalt versehen – unsicher ist die Bedeutung des Belegs, nicht das Medium, aus dem er stammt.",
+      "notVerifiable": {
+        "pending": "In diesem Build ist kein Live-Modell angebunden – Ergebnis: <strong>Keine Abdeckung, Prüfung ausstehend</strong>.",
+        "reopen": "Erneut öffnen → mit Bestand abgleichen",
+        "reopenExplanation": "<strong>Als nicht überprüfbar zurückgestellt.</strong> Falls diese Behauptung doch überprüfbar ist, öffnen Sie sie erneut: AVT behält Ihre Neuklassifizierung bei und führt nur den zuvor übersprungenen Bestandsabgleich aus."
+      },
+      "note": {
+        "add": "Notiz / Korrektur hinzufügen",
+        "heading": "Ihre Notiz · {savedAt}",
+        "placeholder": "Erfassen Sie eine Korrektur oder Erklärung. Beim Speichern wird die Notiz nur dieser Behauptung zugeordnet – das Ergebnis und der Ankerfaktenbestand bleiben unverändert.",
+        "saveCorrection": "Korrektur speichern"
+      },
+      "overridden": "Geändert",
+      "overrideNotice": "Geändert in <strong>{verdict}</strong> – die nachstehende Analyse ist die unveränderte Beurteilung des Tools.",
+      "overrideTooltip": "Ein Prüfer hat ein abweichendes Ergebnis erfasst. Die nachstehende Analyse ist die unveränderte Beurteilung des Tools.",
+      "overrideVerdict": "Ergebnis ändern",
+      "recordConflict": {
+        "dateDecides": "Warum das Datum über das Ergebnis entscheidet",
+        "description": "Zwei Ankerfakten betreffen denselben Punkt – <strong>{subject}</strong> –, widersprechen sich jedoch. Beide stammen aus Quellen mit <strong>hoher Sicherheit</strong>; es handelt sich daher nicht um ein Zuverlässigkeitsproblem, sondern der Bestand selbst ist widersprüchlich. AVT hält ein Ergebnis zurück, statt die Behauptung zu bewerten, denn die Entscheidung, welcher Eintrag maßgeblich ist, müssen Sie treffen und dokumentieren – das Tool darf sie nicht stillschweigend treffen.",
+        "escalated": "Lokal zur Nachverfolgung durch das Belegteam markiert. Der Bestandswiderspruch bleibt offen und wird weiter gezählt, bis eine maßgebliche Quelle ausgewählt ist.",
+        "flagForEvidenceTeam": "Für das Belegteam markieren",
+        "governingPreview": "Diese lokale Vorschau behandelt <strong>{factId}</strong> als maßgeblich und gleicht die Behauptung mit <strong>{value}</strong> ab. Beide Testeinträge bleiben unverändert.",
+        "governingPreviewWithVerdict": "Diese lokale Vorschau behandelt <strong>{factId}</strong> als maßgeblich und gleicht die Behauptung mit <strong>{value}</strong> ab – Ergebnis: <strong>{verdict}</strong>. Beide Testeinträge bleiben unverändert.",
+        "oppositeSides": "Die beiden Daten liegen auf <emphasis>entgegengesetzten Seiten</emphasis> des maßgeblichen Ereignisses. Welcher Eintrag gilt, entscheidet das Ergebnis – die Klärung des Widerspruchs legt das Ergebnis daher unmittelbar fest.",
+        "reconcile": "Bestand abgleichen",
+        "resultAsAt": "Zum <strong>{date}</strong> {note}",
+        "title": "Widersprüchliche Belege im Bestand",
+        "treatAsGoverning": "{id} als maßgeblich behandeln"
+      },
+      "relation": {
+        "conflicts": "Widerspricht",
+        "supports": "Stützt"
+      },
+      "reopened": "Erneut geöffnet, Prüfung ausstehend",
+      "reopenedTooltip": "Ein Prüfer hat dies als überprüfbaren Fakt neu klassifiziert; der Live-Abgleich mit dem Bestand steht noch aus.",
+      "revisedLater": "In einer späteren Erklärung geändert",
+      "score": {
+        "anchorFactsDisagree": "Ankerfakten widersprechen sich",
+        "conflictCount": "{count, plural, one {# Widerspruch} other {# Widersprüche}}",
+        "noCoverage": "<strong>Der Bestand enthält hierzu nichts.</strong> Kein Ankerfakt in der Datenbank betrifft diese Behauptung. Das unterscheidet sich von einer niedrigen Bewertung – es gibt bislang schlicht nichts, womit sie abgeglichen werden könnte.",
+        "notVerifiable": "<strong>Keine überprüfbare Aussage.</strong> Eine solche Aussage könnte durch kein Dokument abschließend geklärt werden – etwa eine kontrafaktische Annahme, Prognose, Absichtsbekundung, rechtliche Schlussfolgerung oder eine zu unbestimmte Behauptung. Sie wird zurückgestellt statt bewertet.",
+        "outOf100": "<strong>/ 100</strong> Stützungsgrad",
+        "supportCount": "{count, plural, one {# Stützung} other {# Stützungen}}",
+        "verdictWithheld": "Ergebnis zurückgehalten"
+      },
+      "timeline": {
+        "asAt": "Zum <strong>{date}</strong>",
+        "asAtDate": "Stichtag",
+        "preview": "Vorschau der Behauptung im Abgleich mit dem Testbestand <emphasis>zu</emphasis> einem gewählten Datum. Vorschauergebnis: <strong>{verdict}</strong>."
+      },
+      "whyScore": "Begründung der Bewertung – Ankerfakten"
+    },
+    "claimTypes": {
+      "fact": {
+        "hint": "Objektive, überprüfbare Aussage – wird mit dem Bestand abgeglichen. Umfasst auch als Eingeständnis oder Bestreiten formulierte Behauptungen: Bewertet wird die zugrunde liegende Aussage, nicht der bloße Wortlaut."
+      },
+      "opinion": {
+        "hint": "Werturteil oder Charakterisierung – kein Dokument kann dies bestätigen oder widerlegen; daher wird es zurückgestellt und nicht bewertet.",
+        "label": "Meinung"
+      },
+      "setAside": "zurückgestellt",
+      "unverifiable": {
+        "hint": "Eine Aussage, die kein Dokument abschließend klären könnte – etwa eine kontrafaktische Annahme, Prognose, Absichts- oder Glaubensbekundung, rechtliche Schlussfolgerung oder eine zu unbestimmte Behauptung. Sie wird zurückgestellt und nicht bewertet. Davon zu unterscheiden ist „Keine Abdeckung“: ein überprüfbarer Fakt, zu dem der Bestand lediglich nichts enthält.",
+        "label": "Nicht überprüfbar"
+      }
+    },
+    "confidence": {
+      "interpretation": "Auslegung",
+      "tooltip": "Auslegungssicherheit – wie eindeutig die Bedeutung dieses Belegs ist. Unabhängig vom Quellenmedium (Handschrift, Scan usw.)."
+    },
+    "confirm": {
+      "recordConflict": "Lösung bestätigen",
+      "supported": "Bestätigen – bereit",
+      "verdict": "Ergebnis bestätigen"
+    },
+    "devHarness": {
+      "localSessionNotice": "Nur lokale Sitzung – nichts wird gespeichert. Jede Prüfung, Notiz und Bearbeitung eines Ankerfakts bleibt in diesem Browser-Tab und geht beim Neuladen verloren.",
+      "title": "Tool zur Ankerprüfung – Testumgebung",
+      "verifyDocument": "Dokument prüfen"
+    },
+    "disposition": {
+      "contested": "Das Ergebnis ist eindeutig, doch die Auslegung eines beitragenden Fakts ist strittig – vor der Freigabe sollten Sie dies prüfen.",
+      "contradicted": "Der Bestand weicht von dieser Behauptung ab. Bevor dieses Ergebnis Bestand hat, ist eine menschliche Entscheidung erforderlich.",
+      "nocover": "Kein Ankerfakt betrifft diese Behauptung; sie kann daher mit nichts abgeglichen werden. Die Freigabe ist optional.",
+      "notverifiable": "Als nicht überprüfbar zurückgestellt – die Freigabe ist optional. Öffnen Sie die Behauptung unten erneut, falls sie doch überprüfbar ist.",
+      "recordconflict": "Zwei Anlagen im Bestand widersprechen sich. Klären Sie oben, welche maßgeblich ist, oder markieren Sie den Fall für das Belegteam – das Tool entscheidet nicht für Sie.",
+      "supported": "Der Bestand bestätigt dies. Mit Ihrer Freigabe bestätigen Sie, dass das Tool ihn richtig gelesen hat – eine Ermessensentscheidung ist nicht erforderlich.",
+      "tension": "Der Bestand stützt dies nur teilweise. Wägen Sie die oben aufgeführten stützenden und widersprechenden Fakten ab, bevor das Ergebnis Bestand hat."
+    },
+    "guidance": {
+      "escalate": "Eskalieren",
+      "manualJudgement": "Manuelle Entscheidung",
+      "optional": "Fakultativ",
+      "readyToConfirm": "Bestätigungsbereit"
+    },
+    "matches": {
+      "count": "{count, plural, one {# Treffer} other {# Treffer}}",
+      "position": "{current}/{total}"
+    },
+    "sourceMediumTooltip": "Quellenmedium – eine neutrale Beschreibung. Es mindert die Sicherheit nicht von sich aus.",
+    "states": {
+      "contradicted": {
+        "chip": "Widersprochen",
+        "label": "Durch den Bestand widerlegt"
+      },
+      "nocover": {
+        "chip": "Keine Abdeckung",
+        "label": "Kein Ankerfakt deckt diese Behauptung ab"
+      },
+      "notverifiable": {
+        "chip": "Nicht überprüfbar",
+        "label": "Keine überprüfbare Tatsachenbehauptung"
+      },
+      "recordconflict": {
+        "chip": "Bestandswiderspruch",
+        "label": "Ankerfakten widersprechen einander"
+      },
+      "supported": {
+        "chip": "Gestützt",
+        "label": "Durch den Bestand gestützt"
+      },
+      "tension": {
+        "chip": "Teilweise widersprochen",
+        "label": "Steht teilweise im Widerspruch zum Bestand"
+      }
+    },
+    "verification": {
+      "acceptRoutine": "{count, plural, one {# routinemäßige Behauptung} other {# routinemäßige Behauptungen}} übernehmen",
+      "attentionComplete": "<strong>Alle Behauptungen, die eine Entscheidung erfordern, wurden bearbeitet.</strong> {count, plural, one {Die # routinemäßige Feststellung muss nicht einzeln geprüft werden.} other {Die # routinemäßigen Feststellungen müssen nicht einzeln geprüft werden.}}",
+      "attentionOpen": "<strong>{count, plural, one {# Behauptung erfordert} other {# Behauptungen erfordern}} Ihre Entscheidung</strong> – Widersprüche und strittige Auslegungen. {routineCount, plural, one {Die andere # ist routinemäßig und muss nicht einzeln freigegeben werden.} other {Die anderen # sind routinemäßig und müssen nicht einzeln freigegeben werden.}}",
+      "claimStatus": " ({state}{contested, select, true {, strittig} other {}}{superseded, select, true {, überholt} other {}}{reviewStatus, select, reviewed {, geprüft} disputed {, beanstandet} other {}})",
+      "selectClaim": "Wählen Sie eine Behauptung aus, um den Bestand zu prüfen.",
+      "showQueue": "Warteschlange anzeigen",
+      "stats": {
+        "claims": "Behauptungen",
+        "needsJudgement": "Entscheidung erforderlich"
+      }
+    }
+  },
   "bilingual": {
     "dialog": {
       "create": "Zweisprachige Fassung erstellen",

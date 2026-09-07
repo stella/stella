@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { spanPresentation } from "@/routes/dev/-components/avt/verification-view.logic";
+import { spanPresentation } from "@/routes/dev_.avt/-components/avt/verification-view.logic";
 
 describe("spanPresentation", () => {
   const cases: {

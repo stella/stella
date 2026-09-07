@@ -151,6 +151,172 @@
     "useDifferentEmail": "Másik e-mail-cím használata",
     "weSentCodeTo": "Kódot küldtünk a következő címre: <email>{emailAddress}</email>"
   },
+  "avt": {
+    "anchorFacts": {
+      "addFact": "Tény hozzáadása",
+      "addUnavailable": "Ebben a tesztkörnyezetben nem érhető el — egy tény hozzáadásához még nincs bekötve a tartós tárolás.",
+      "confirmedByReviewer": "Ellenőr által megerősítve",
+      "description": "Közvetlen bizonyítékok — e-mailek, üzenetek, banki nyilvántartások és nem vitatott tények — olyan referenciatény-nyilvántartásba rendezve, amelyhez az állításokat viszonyítjuk. A tények ellenőrizhetők, szerkeszthetők vagy kézzel hozzáadhatók.",
+      "editFact": "Tény szerkesztése",
+      "editOrRetype": "Szerkesztés / újragépelés",
+      "extractionAndReview": "Kinyerés és ellenőrzés",
+      "factCount": "{count, plural, one {# tény} other {# tény}}",
+      "factText": "A referenciatény szövege",
+      "heldDescription": "E kinyert adatok jelentése <strong>valóban bizonytalan</strong> — a tartalom előzetes vagy nincs megerősítve, nem pusztán kézzel írt. Addig nem számítanak bele az értékelésbe, amíg egy ellenőr meg nem erősíti, nem szerkeszti vagy újra nem gépeli őket. Olvasható forrás soha nem kerül várólistára pusztán az adathordozója miatt.",
+      "heldForReview": "Ellenőrzésre visszatartva",
+      "importSource": "Forrás importálása",
+      "importUnavailable": "Ebben a tesztkörnyezetben nem érhető el — egy forrás importálásához még nincs bekötve az adatbevitel és a tárolás.",
+      "interpretation": "Értelmezés",
+      "interpretiveConfidence": "Értelmezési bizonyosság",
+      "record": "Referenciatény-nyilvántartás",
+      "sourceAndProvenance": "Forrás és eredet",
+      "timePeriod": "Időszak",
+      "title": "Referenciatények"
+    },
+    "claimDetail": {
+      "escalatedReview": "Továbbítva a bizonyítékkezelő csapatnak — az alapul szolgáló ellentmondás feloldásáig itt nincs megerősíthető vagy vitatható következtetés.",
+      "factId": "{id}. tény",
+      "flagDispute": "Vita megjelölése",
+      "humanReview": "Emberi ellenőrzés",
+      "interpretationCaveat": "Az egyik figyelembe vett tényhez lényeges értelmezési fenntartás tartozik — a bizonyíték jelentése bizonytalan, nem pedig az adathordozó, amelyen érkezett.",
+      "notVerifiable": {
+        "pending": "Ebben a verzióban nincs bekötve működő modell — az eredmény: <strong>Nincs lefedettség, ellenőrzésre vár</strong>.",
+        "reopen": "Újranyitás → összevetés a nyilvántartással",
+        "reopenExplanation": "<strong>Nem ellenőrizhetőként félretéve.</strong> Ha ez az állítás mégis ellenőrizhető, nyissa újra: az AVT megőrzi az átsorolást, és csak a korábban kihagyott nyilvántartás-ellenőrzést futtatja le."
+      },
+      "note": {
+        "add": "Megjegyzés / javítás hozzáadása",
+        "heading": "Saját megjegyzés · {savedAt}",
+        "placeholder": "Rögzítsen egy javítást vagy magyarázatot. A mentés csak ehhez az állításhoz rögzíti a megjegyzést — nem módosítja a következtetést vagy a referenciatény-nyilvántartást.",
+        "saveCorrection": "Javítás mentése"
+      },
+      "overridden": "Felülírva",
+      "overrideNotice": "A következtetés felülírva erre: <strong>{verdict}</strong> — az eszköz saját elemzése változatlanul látható alább.",
+      "overrideTooltip": "Egy ellenőr eltérő következtetést rögzített. Az eszköz saját elemzése változatlanul látható alább.",
+      "overrideVerdict": "Következtetés felülírása",
+      "recordConflict": {
+        "dateDecides": "Miért a dátum dönti el a következtetést",
+        "description": "Két referenciatény ugyanarra a kérdésre vonatkozik — <strong>{subject}</strong> —, de ellentmond egymásnak. Mindkettő <strong>nagy bizonyosságú</strong> forrásból származik, ezért ez nem megbízhatósági probléma: maga a nyilvántartás belsőleg ellentmondásos. Az AVT nem ad következtetést és nem pontozza az állítást, mert annak eldöntése és rögzítése, hogy melyik adat legyen irányadó, az Ön mérlegelését igényli — az eszköz nem dönthet erről észrevétlenül.",
+        "escalated": "Helyben megjelölve a bizonyítékkezelő csapat általi nyomon követésre. A nyilvántartási ellentmondás mindaddig nyitott és beleszámít az összesítésbe, amíg nincs kiválasztva az irányadó forrás.",
+        "flagForEvidenceTeam": "Megjelölés a bizonyítékkezelő csapatnak",
+        "governingPreview": "Ez a helyi előnézet a(z) <strong>{factId}</strong> tényt tekinti irányadónak, és a(z) <strong>{value}</strong> értékhez viszonyítja az állítást. Mindkét tesztadat változatlan marad.",
+        "governingPreviewWithVerdict": "Ez a helyi előnézet a(z) <strong>{factId}</strong> tényt tekinti irányadónak, és a(z) <strong>{value}</strong> értékhez viszonyítja az állítást — a következtetés: <strong>{verdict}</strong>. Mindkét tesztadat változatlan marad.",
+        "oppositeSides": "A két dátum a határesemény <emphasis>ellentétes oldalára</emphasis> esik. Az eredményt az dönti el, melyik nyilvántartás az irányadó — az ellentmondás itteni feloldása ezért közvetlenül meghatározza a következtetést.",
+        "reconcile": "Nyilvántartási ellentmondás feloldása",
+        "resultAsAt": "<strong>{date}</strong> napján: {note}",
+        "title": "Ellentmondó bizonyítékok a nyilvántartásban",
+        "treatAsGoverning": "A(z) {id} legyen irányadó"
+      },
+      "relation": {
+        "conflicts": "Ellentmond",
+        "supports": "Alátámasztja"
+      },
+      "reopened": "Újranyitva, ellenőrzésre vár",
+      "reopenedTooltip": "Egy ellenőr ellenőrizhető ténynek minősítette át ezt az állítást; a működő nyilvántartással való összevetés még várat magára.",
+      "revisedLater": "Egy későbbi nyilatkozatban módosítva",
+      "score": {
+        "anchorFactsDisagree": "A referenciatények ellentmondanak egymásnak",
+        "conflictCount": "{count, plural, one {# ellentmondás} other {# ellentmondás}}",
+        "noCoverage": "<strong>A nyilvántartás nem tartalmaz erre vonatkozó adatot.</strong> Az adatbázis egyetlen referenciaténye sem foglalkozik ezzel az állítással. Ez nem gyenge értékelést jelent — egyelőre nincs mihez viszonyítani az állítást.",
+        "notVerifiable": "<strong>Nem ellenőrizhető állítás.</strong> Ezt a fajta állítást egyetlen irat sem döntheti el — például feltételezés, előrejelzés, szándéknyilatkozat, jogi következtetés vagy túl homályos állítás. Pontozás helyett félretesszük.",
+        "outOf100": "<strong>/ 100</strong> alátámasztottsági pontszám",
+        "supportCount": "{count, plural, one {# alátámasztó tény} other {# alátámasztó tény}}",
+        "verdictWithheld": "Következtetés visszatartva"
+      },
+      "timeline": {
+        "asAt": "<strong>{date}</strong> napján",
+        "asAtDate": "Vonatkozási dátum",
+        "preview": "Az állítás összevetése a tesztadatokkal egy kiválasztott időpontra <emphasis>vonatkozóan</emphasis>. Előzetes következtetés: <strong>{verdict}</strong>."
+      },
+      "whyScore": "A pontszám indoka — referenciatények"
+    },
+    "claimTypes": {
+      "fact": {
+        "hint": "Objektív, ellenőrizhető állítás — a nyilvántartás alapján pontozzuk. Ide tartoznak a beismerésként vagy tagadásként megfogalmazott állítások is: az alapul szolgáló kijelentést értékeljük, nem pusztán a szavakat."
+      },
+      "opinion": {
+        "hint": "Értékítélet vagy minősítés — egyetlen irat sem tudja megerősíteni vagy cáfolni, ezért pontozás nélkül félretesszük.",
+        "label": "Vélemény"
+      },
+      "setAside": "félretéve",
+      "unverifiable": {
+        "hint": "Olyan állítás, amelyet egyetlen irat sem dönthet el — feltételezés, előrejelzés, szándék- vagy véleménynyilatkozat, jogi következtetés vagy túl homályos állítás. Pontozás nélkül félretesszük. Nem azonos a Nincs lefedettség állapottal, amely ellenőrizhető tényt jelöl, de a nyilvántartás nem tartalmaz róla adatot.",
+        "label": "Nem ellenőrizhető"
+      }
+    },
+    "confidence": {
+      "interpretation": "Értelmezés",
+      "tooltip": "Értelmezési bizonyosság — mennyire egyértelmű e bizonyíték jelentése. Független a forrás adathordozójától (kézírás, szkennelt kép stb.)."
+    },
+    "confirm": {
+      "recordConflict": "Feloldás megerősítése",
+      "supported": "Megerősítés — kész",
+      "verdict": "Következtetés megerősítése"
+    },
+    "devHarness": {
+      "localSessionNotice": "Csak helyi munkamenet — semmi nem kerül mentésre. Minden ellenőrzés, megjegyzés és referenciatény-módosítás csak ezen a böngészőlapon él, és frissítéskor elveszik.",
+      "title": "Referenciatény-ellenőrző eszköz — tesztkörnyezet",
+      "verifyDocument": "Irat ellenőrzése"
+    },
+    "disposition": {
+      "contested": "A következtetés egyértelmű, de az egyik figyelembe vett tény értelmezése vitatott — jóváhagyás előtt érdemes átnézni.",
+      "contradicted": "A nyilvántartás eltér ettől az állítástól. A következtetés jóváhagyásához emberi döntés szükséges.",
+      "nocover": "Egyetlen referenciatény sem foglalkozik ezzel az állítással, ezért nincs mihez viszonyítani. A jóváhagyás nem kötelező.",
+      "notverifiable": "Nem ellenőrizhetőként félretéve — a jóváhagyás nem kötelező. Ha mégis ellenőrizhető, nyissa újra alább.",
+      "recordconflict": "Az ügyirat két bizonyítéka ellentmond egymásnak. Fent válassza ki az irányadó bizonyítékot, vagy jelezze a bizonyítékkezelő csapatnak — az eszköz nem dönt Ön helyett.",
+      "supported": "A nyilvántartás megerősíti ezt az állítást. Jóváhagyásával azt igazolja, hogy az eszköz helyesen értelmezte — nincs szükség mérlegelésre.",
+      "tension": "A nyilvántartás csak részben támasztja alá ezt az állítást. A következtetés jóváhagyása előtt mérlegelje a fenti alátámasztó és ellentmondó tényeket."
+    },
+    "guidance": {
+      "escalate": "Továbbítás",
+      "manualJudgement": "Emberi mérlegelés",
+      "optional": "Nem kötelező",
+      "readyToConfirm": "Megerősítésre kész"
+    },
+    "matches": {
+      "count": "{count, plural, one {# találat} other {# találat}}",
+      "position": "{current}/{total}"
+    },
+    "sourceMediumTooltip": "A forrás adathordozója — semleges leíró adat. Önmagában nem csökkenti a bizonyosságot.",
+    "states": {
+      "contradicted": {
+        "chip": "Cáfolt",
+        "label": "A nyilvántartás cáfolja"
+      },
+      "nocover": {
+        "chip": "Nincs lefedettség",
+        "label": "Egyetlen referenciatény sem fedi le ezt az állítást"
+      },
+      "notverifiable": {
+        "chip": "Nem ellenőrizhető",
+        "label": "Nem ellenőrizhető tényállítás"
+      },
+      "recordconflict": {
+        "chip": "Nyilvántartási ellentmondás",
+        "label": "A referenciatények ellentmondanak egymásnak"
+      },
+      "supported": {
+        "chip": "Alátámasztott",
+        "label": "A nyilvántartás alátámasztja"
+      },
+      "tension": {
+        "chip": "Részben ellentmondó",
+        "label": "Részben ellentmond a nyilvántartásnak"
+      }
+    },
+    "verification": {
+      "acceptRoutine": "{count, plural, one {# rutinjellegű állítás} other {# rutinjellegű állítás}} elfogadása",
+      "attentionComplete": "<strong>Minden mérlegelést igénylő állítás rendezve van.</strong> {count, plural, one {A fennmaradó # rutinjellegű megállapítás nem igényel egyedi ellenőrzést.} other {A fennmaradó # rutinjellegű megállapítás nem igényel egyedi ellenőrzést.}}",
+      "attentionOpen": "<strong>{count, plural, one {# állítás} other {# állítás}} igényli az Ön mérlegelését</strong> — ellentmondások és vitatott értelmezések. {routineCount, plural, one {A másik # rutinjellegű, és nem igényel egyedi jóváhagyást.} other {A többi # rutinjellegű, és nem igényel egyedi jóváhagyást.}}",
+      "claimStatus": " ({state}{contested, select, true {, vitatott} other {}}{superseded, select, true {, felváltott} other {}}{reviewStatus, select, reviewed {, ellenőrzött} disputed {, vitatott} other {}})",
+      "selectClaim": "Válasszon egy állítást a kapcsolódó nyilvántartás megtekintéséhez.",
+      "showQueue": "Várólista megjelenítése",
+      "stats": {
+        "claims": "Állítások",
+        "needsJudgement": "Mérlegelést igényel"
+      }
+    }
+  },
   "bilingual": {
     "dialog": {
       "create": "Kétnyelvű változat létrehozása",

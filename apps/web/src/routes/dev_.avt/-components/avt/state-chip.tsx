@@ -20,17 +20,20 @@ import {
   SplitIcon,
   XCircleIcon,
 } from "lucide-react";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 import { cn } from "@stll/ui/lib/utils";
 
+import { useFormatter } from "@/i18n/formatting-context";
 import {
   CLAIM_TYPE_META,
+  CONFIDENCE_LABEL_KEYS,
   STATE_META,
   type ClaimState,
   type ClaimType,
   type ConfidenceLevel,
-} from "@/routes/dev/-components/avt/types";
+} from "@/routes/dev_.avt/-components/avt/types";
 
 /**
  * Record conflict has no equivalent in Stella's semantic token triad
@@ -143,6 +146,7 @@ export function StateSwatch({ state }: { state: ClaimState }) {
 }
 
 export function StateChip({ state }: { state: ClaimState }) {
+  const t = useTranslations();
   const color = STATE_COLOR[state];
   const Icon = color.icon;
   return (
@@ -154,12 +158,13 @@ export function StateChip({ state }: { state: ClaimState }) {
       style={color.chipStyle}
     >
       <Icon aria-hidden="true" className="size-3.5" />
-      {STATE_META[state].chip}
+      {t(STATE_META[state].chipKey)}
     </span>
   );
 }
 
 export function TypeChip({ type }: { type: ClaimType }) {
+  const t = useTranslations();
   const meta = CLAIM_TYPE_META[type];
   return (
     <span className="bg-muted text-foreground border-border inline-flex h-6 items-center gap-1.5 rounded-md border px-2.5 text-xs font-semibold">
@@ -170,10 +175,10 @@ export function TypeChip({ type }: { type: ClaimType }) {
           type === "fact" ? "bg-primary" : "bg-warning",
         )}
       />
-      {meta.label}
+      {t(meta.labelKey)}
       {!meta.verifiable && (
         <span className="border-border text-muted-foreground border-s ps-1.5 text-[11px] font-medium normal-case">
-          set aside
+          {t("avt.claimTypes.setAside")}
         </span>
       )}
     </span>
@@ -181,6 +186,7 @@ export function TypeChip({ type }: { type: ClaimType }) {
 }
 
 export function ConfBadge({ level }: { level: ConfidenceLevel }) {
+  const t = useTranslations();
   const low = level === "Low";
   return (
     <span
@@ -188,22 +194,24 @@ export function ConfBadge({ level }: { level: ConfidenceLevel }) {
         "border-border bg-muted text-muted-foreground inline-flex h-5.5 items-center gap-1.5 rounded-md border px-2 text-[11px] font-semibold",
         low && "text-warning border-warning/32 bg-warning/10",
       )}
-      title="Interpretive confidence — how unambiguous this evidence's meaning is. Independent of the source medium (handwriting, scan, etc.)."
+      title={t("avt.confidence.tooltip")}
     >
-      Interpretation <span className="font-bold">{level}</span>
+      {t("avt.confidence.interpretation")}{" "}
+      <span className="font-bold">{t(CONFIDENCE_LABEL_KEYS[level])}</span>
     </span>
   );
 }
 
 /** Neutral descriptor of the source carrier (handwritten / scanned). Informational only. */
 export function MediumChip({ medium }: { medium: string | undefined }) {
+  const t = useTranslations();
   if (!medium) {
     return null;
   }
   return (
     <span
       className="bg-muted text-muted-foreground border-border inline-flex h-5.5 items-center gap-1.5 rounded-md border px-2 text-[11px] font-semibold whitespace-nowrap"
-      title="Source medium — a neutral descriptor. It does not lower confidence on its own."
+      title={t("avt.sourceMediumTooltip")}
     >
       <PenIcon aria-hidden="true" className="size-3" />
       {medium}
@@ -244,16 +252,21 @@ export type MatchStepperState = {
  * so both it and claim-detail-panel.tsx can import it without a cycle.
  */
 export function MatchStepper({ stepper }: { stepper: MatchStepperState }) {
+  const format = useFormatter();
+  const t = useTranslations();
   if (stepper.total === 0) {
     return null;
   }
   return (
     <div className="text-muted-foreground inline-flex items-center gap-1 text-xs tabular-nums">
       {stepper.current !== null
-        ? `${stepper.current}/${stepper.total}`
-        : `${stepper.total} matches`}
+        ? t("avt.matches.position", {
+            current: format.number(stepper.current),
+            total: format.number(stepper.total),
+          })
+        : t("avt.matches.count", { count: stepper.total })}
       <Button
-        aria-label="Previous match"
+        aria-label={t("folio.findReplace.previous")}
         disabled={!stepper.onPrev}
         onClick={stepper.onPrev ?? undefined}
         size="icon-xs"
@@ -262,7 +275,7 @@ export function MatchStepper({ stepper }: { stepper: MatchStepperState }) {
         <ChevronUpIcon />
       </Button>
       <Button
-        aria-label="Next match"
+        aria-label={t("folio.findReplace.next")}
         disabled={!stepper.onNext}
         onClick={stepper.onNext ?? undefined}
         size="icon-xs"

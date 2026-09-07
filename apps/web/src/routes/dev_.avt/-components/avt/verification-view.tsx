@@ -22,32 +22,33 @@ import {
   HistoryIcon,
   ScaleIcon,
 } from "lucide-react";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 import { cn } from "@stll/ui/lib/utils";
 
 import { useFormatter } from "@/i18n/formatting-context";
-import { useAvtStore } from "@/routes/dev/-components/avt/avt-store";
-import { ClaimDetailPanel } from "@/routes/dev/-components/avt/claim-detail-panel";
+import { useAvtStore } from "@/routes/dev_.avt/-components/avt/avt-store";
+import { ClaimDetailPanel } from "@/routes/dev_.avt/-components/avt/claim-detail-panel";
 import {
   CLAIM_TEXT,
   CLAIMS,
   DOCUMENT,
-} from "@/routes/dev/-components/avt/sample-data";
+} from "@/routes/dev_.avt/-components/avt/sample-data";
 import {
   MatchStepper,
   STATE_COLOR,
   StateChip,
   StateSwatch,
   type MatchStepperState,
-} from "@/routes/dev/-components/avt/state-chip";
+} from "@/routes/dev_.avt/-components/avt/state-chip";
 import {
   STATE_META,
   type AnchorFact,
   type Claim,
   type ClaimReview,
   type ClaimState,
-} from "@/routes/dev/-components/avt/types";
+} from "@/routes/dev_.avt/-components/avt/types";
 import {
   countClaims,
   effectiveState,
@@ -55,8 +56,8 @@ import {
   isSettled,
   needsAttention,
   resolveClaimView,
-} from "@/routes/dev/-components/avt/verdict";
-import { spanPresentation } from "@/routes/dev/-components/avt/verification-view.logic";
+} from "@/routes/dev_.avt/-components/avt/verdict";
+import { spanPresentation } from "@/routes/dev_.avt/-components/avt/verification-view.logic";
 
 type VerdictFilter =
   | "all"
@@ -99,6 +100,7 @@ function ClaimSpan({
   reviewStatus: "reviewed" | "disputed" | null;
   onSelect: (id: string) => void;
 }) {
+  const t = useTranslations();
   const text = CLAIM_TEXT[claimId] ?? "";
   return (
     <button
@@ -152,12 +154,12 @@ function ClaimSpan({
         without selecting it first.
       */}
       <span className="sr-only">
-        {` (${STATE_META[state].chip}`}
-        {contested ? ", contested" : ""}
-        {superseded ? ", superseded" : ""}
-        {reviewStatus === "reviewed" ? ", reviewed" : ""}
-        {reviewStatus === "disputed" ? ", disputed" : ""}
-        {")"}
+        {t("avt.verification.claimStatus", {
+          state: t(STATE_META[state].chipKey),
+          contested: String(contested),
+          superseded: String(superseded),
+          reviewStatus: reviewStatus ?? "none",
+        })}
       </span>
     </button>
   );
@@ -194,6 +196,7 @@ function claimMatchesFilter(
 
 export function VerificationView() {
   const format = useFormatter();
+  const t = useTranslations();
   const facts = useAvtStore((state) => state.facts);
   const reviews = useAvtStore((state) => state.reviews);
   const bulkSetReviewed = useAvtStore((state) => state.bulkSetReviewed);
@@ -353,48 +356,48 @@ export function VerificationView() {
   }[] = [
     {
       key: "total",
-      label: "Claims",
+      label: t("avt.verification.stats.claims"),
       value: format.number(counts.total),
       filter: "all",
     },
     {
       key: "contradicted",
-      label: "Contradicted",
+      label: t(STATE_META.contradicted.chipKey),
       value: format.number(counts.byState.contradicted),
       filter: "contradicted",
       state: "contradicted",
     },
     {
       key: "tension",
-      label: "In tension",
+      label: t(STATE_META.tension.chipKey),
       value: format.number(counts.byState.tension),
       filter: "tension",
       state: "tension",
     },
     {
       key: "supported",
-      label: "Supported",
+      label: t(STATE_META.supported.chipKey),
       value: format.number(counts.byState.supported),
       filter: "supported",
       state: "supported",
     },
     {
       key: "recordconflict",
-      label: "Record conflict",
+      label: t(STATE_META.recordconflict.chipKey),
       value: format.number(counts.byState.recordconflict),
       filter: "recordconflict",
       state: "recordconflict",
     },
     {
       key: "nocover",
-      label: "No coverage",
+      label: t(STATE_META.nocover.chipKey),
       value: format.number(counts.byState.nocover),
       filter: "nocover",
       state: "nocover",
     },
     {
       key: "notverifiable",
-      label: "Not verifiable",
+      label: t(STATE_META.notverifiable.chipKey),
       value: format.number(counts.byState.notverifiable),
       filter: "notverifiable",
       state: "notverifiable",
@@ -409,7 +412,7 @@ export function VerificationView() {
     // number is counting down.
     {
       key: "needsjudgement",
-      label: "Needs judgement",
+      label: t("avt.verification.stats.needsJudgement"),
       value: `${format.number(counts.attnSettled)}/${format.number(counts.attnTotal)}`,
       filter: "needsreview",
     },
@@ -456,19 +459,18 @@ export function VerificationView() {
         <FilterIcon className="size-3.5 shrink-0" />
         {counts.attnOpen > 0 ? (
           <span>
-            <b>
-              {format.number(counts.attnOpen)} claim
-              {counts.attnOpen === 1 ? "" : "s"} need your judgement
-            </b>{" "}
-            — conflicts and contested interpretations. The other{" "}
-            {format.number(counts.routineTotal)} are routine and don't need
-            individual sign-off.
+            {t.rich("avt.verification.attentionOpen", {
+              count: counts.attnOpen,
+              routineCount: counts.routineTotal,
+              strong: (chunks) => <b>{chunks}</b>,
+            })}
           </span>
         ) : (
           <span>
-            <b>Every claim needing judgement has been dispositioned.</b> The{" "}
-            {format.number(counts.routineTotal)} routine determinations don't
-            require individual review.
+            {t.rich("avt.verification.attentionComplete", {
+              count: counts.routineTotal,
+              strong: (chunks) => <b>{chunks}</b>,
+            })}
           </span>
         )}
         <div className="flex-1" />
@@ -480,7 +482,9 @@ export function VerificationView() {
             size="sm"
             variant="link"
           >
-            {filter === "needsreview" ? "Show all" : "Show queue"}
+            {filter === "needsreview"
+              ? t("common.showAll")
+              : t("avt.verification.showQueue")}
           </Button>
         )}
         {counts.routineUnsettled > 0 && (
@@ -489,8 +493,10 @@ export function VerificationView() {
             size="sm"
             variant="outline"
           >
-            <CheckIcon /> Accept {format.number(counts.routineUnsettled)}{" "}
-            routine
+            <CheckIcon />
+            {t("avt.verification.acceptRoutine", {
+              count: counts.routineUnsettled,
+            })}
           </Button>
         )}
       </div>
@@ -562,7 +568,7 @@ export function VerificationView() {
             />
           ) : (
             <div className="text-muted-foreground p-4 text-sm">
-              Select a claim to inspect the record.
+              {t("avt.verification.selectClaim")}
             </div>
           )}
         </div>

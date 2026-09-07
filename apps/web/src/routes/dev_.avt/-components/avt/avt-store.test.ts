@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
 
-import { useAvtStore } from "@/routes/dev/-components/avt/avt-store";
+import { useAvtStore } from "@/routes/dev_.avt/-components/avt/avt-store";
 
 afterEach(() => {
   setSystemTime();

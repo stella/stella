@@ -154,6 +154,172 @@ type Messages = {
     "useDifferentEmail": "Use a different email";
     "weSentCodeTo": "We sent a code to <email>{emailAddress}</email>";
   };
+  "avt": {
+    "anchorFacts": {
+      "addFact": "Add fact";
+      "addUnavailable": "Not available in this harness — adding a fact needs persistence that is not wired up yet.";
+      "confirmedByReviewer": "Confirmed by reviewer";
+      "description": "Hard evidence — emails, messages, bank records, agreed facts — extracted into the anchor-fact record that claims are checked against. Review, edit, or add facts by hand.";
+      "editFact": "Edit fact";
+      "editOrRetype": "Edit / retype";
+      "extractionAndReview": "Extraction & review";
+      "factCount": "{count, plural, one {# fact} other {# facts}}";
+      "factText": "Anchor fact text";
+      "heldDescription": "These extractions are <strong>genuinely uncertain in meaning</strong> — the content is provisional or unconfirmed, not merely written by hand. They are held out of scoring until a reviewer confirms, edits, or retypes them. A legible source is never queued just for its medium.";
+      "heldForReview": "Held for review";
+      "importSource": "Import source";
+      "importUnavailable": "Not available in this harness — importing a source needs ingestion and storage that are not wired up yet.";
+      "interpretation": "Interpretation";
+      "interpretiveConfidence": "Interpretive confidence";
+      "record": "Anchor-fact record";
+      "sourceAndProvenance": "Source & provenance";
+      "timePeriod": "Time period";
+      "title": "Anchor facts";
+    };
+    "claimDetail": {
+      "escalatedReview": "Escalated to the evidence team — no verdict to confirm or dispute here until the underlying conflict is resolved.";
+      "factId": "Fact {id}";
+      "flagDispute": "Flag dispute";
+      "humanReview": "Human review";
+      "interpretationCaveat": "A contributing fact carries a substantive interpretation caveat — what the evidence means, not the medium it came in, is what is uncertain.";
+      "notVerifiable": {
+        "pending": "No live model wired up in this build — landed on <strong>No coverage, pending check</strong>.";
+        "reopen": "Re-open → check against record";
+        "reopenExplanation": "<strong>Set aside as not verifiable.</strong> If this is actually a checkable claim, re-open it: AVT keeps your reclassification and runs only the record-check it skipped.";
+      };
+      "note": {
+        "add": "Add note / correction";
+        "heading": "Your note · {savedAt}";
+        "placeholder": "Record a correction or an explanation. Saving records the note against this claim only — it does not change the verdict or the anchor-fact record.";
+        "saveCorrection": "Save correction";
+      };
+      "overridden": "Overridden";
+      "overrideNotice": "Overridden to <strong>{verdict}</strong> — the analysis below is the tool's own, shown unchanged.";
+      "overrideTooltip": "A reviewer has recorded a different verdict. The analysis below is the tool's own, unchanged.";
+      "overrideVerdict": "Override verdict";
+      "recordConflict": {
+        "dateDecides": "Why the date decides the verdict";
+        "description": "Two anchor facts speak to the same point — <strong>{subject}</strong> — but disagree. Both are <strong>high-confidence</strong> sources, so this is not a reliability problem: the record itself is internally inconsistent. AVT withholds a verdict rather than score the claim, because picking one record over the other is a judgement for you to make and record — not one the tool should make silently.";
+        "escalated": "Marked locally for evidence-team follow-up. The record conflict remains open and counted until a governing source is selected.";
+        "flagForEvidenceTeam": "Flag for evidence team";
+        "governingPreview": "This local preview treats <strong>{factId}</strong> as governing and evaluates the claim against <strong>{value}</strong>. Both fixture records remain unchanged.";
+        "governingPreviewWithVerdict": "This local preview treats <strong>{factId}</strong> as governing and evaluates the claim against <strong>{value}</strong> — landing on <strong>{verdict}</strong>. Both fixture records remain unchanged.";
+        "oppositeSides": "The two dates fall on <emphasis>opposite sides</emphasis> of the boundary event. Whichever record governs decides the outcome — so resolving the conflict here directly sets the verdict.";
+        "reconcile": "Reconcile the record";
+        "resultAsAt": "As at <strong>{date}</strong>, the {note}";
+        "title": "Conflicting evidence in the record";
+        "treatAsGoverning": "Treat {id} as governing";
+      };
+      "relation": {
+        "conflicts": "Conflicts";
+        "supports": "Supports";
+      };
+      "reopened": "Re-opened, check pending";
+      "reopenedTooltip": "A reviewer re-classified this as a checkable fact; a live record check is still pending.";
+      "revisedLater": "Revised in a later statement";
+      "score": {
+        "anchorFactsDisagree": "Anchor facts disagree";
+        "conflictCount": "{count, plural, one {# conflict} other {# conflicts}}";
+        "noCoverage": "<strong>The record is silent.</strong> No anchor fact in the database addresses this claim. This is distinct from a weak score — it means there is nothing to check it against yet.";
+        "notVerifiable": "<strong>Not a verifiable assertion.</strong> This is the kind of statement no document could ever settle — a counterfactual, a prediction, a statement of intent, a legal conclusion, or a claim too vague to check. Set aside rather than scored.";
+        "outOf100": "<strong>/ 100</strong> support score";
+        "supportCount": "{count, plural, one {# support} other {# supports}}";
+        "verdictWithheld": "Verdict withheld";
+      };
+      "timeline": {
+        "asAt": "As at <strong>{date}</strong>";
+        "asAtDate": "As-at date";
+        "preview": "Preview the claim against the fixture record <emphasis>as at</emphasis> a chosen date. Preview verdict: <strong>{verdict}</strong>.";
+      };
+      "whyScore": "Why this score — anchor facts";
+    };
+    "claimTypes": {
+      "fact": {
+        "hint": "Objective, checkable assertion — scored against the record. Includes claims framed as admissions or denials: judged on the underlying proposition, not the bare words.";
+      };
+      "opinion": {
+        "hint": "A value judgement or characterisation — no document can confirm or contradict it, so it is set aside, not scored.";
+        "label": "Opinion";
+      };
+      "setAside": "set aside";
+      "unverifiable": {
+        "hint": "An assertion no document could ever settle — a counterfactual, a prediction, a statement of intent or belief, a legal conclusion, or a claim too vague to check. Set aside, not scored. Distinct from No coverage, which is a checkable fact the record is merely silent on.";
+        "label": "Not verifiable";
+      };
+    };
+    "confidence": {
+      "interpretation": "Interpretation";
+      "tooltip": "Interpretive confidence — how unambiguous this evidence's meaning is. Independent of the source medium (handwriting, scan, etc.).";
+    };
+    "confirm": {
+      "recordConflict": "Confirm resolution";
+      "supported": "Confirm — ready";
+      "verdict": "Confirm verdict";
+    };
+    "devHarness": {
+      "localSessionNotice": "Local session only — nothing here is saved. Every review, note, and anchor-fact edit lives in this browser tab and is lost on refresh.";
+      "title": "Anchor Verification Tool — dev harness";
+      "verifyDocument": "Verify document";
+    };
+    "disposition": {
+      "contested": "The verdict is clean, but a contributing fact's interpretation is contested — worth your eyes before sign-off.";
+      "contradicted": "The record departs from this claim. A human call is needed before this verdict stands.";
+      "nocover": "No anchor fact addresses this claim, so there's nothing to confirm it against. Sign-off is optional.";
+      "notverifiable": "Set aside as not verifiable — sign-off is optional. Re-open below if it's actually checkable.";
+      "recordconflict": "Two exhibits in the record disagree. Resolve which governs above, or flag the evidence team — the tool won't pick for you.";
+      "supported": "The record affirms this. Your sign-off confirms the tool read it correctly — no judgement call needed.";
+      "tension": "The record only partly supports this. Weigh the supporting and conflicting facts above before the verdict stands.";
+    };
+    "guidance": {
+      "escalate": "Escalate";
+      "manualJudgement": "Manual judgement";
+      "optional": "Optional";
+      "readyToConfirm": "Ready to confirm";
+    };
+    "matches": {
+      "count": "{count, plural, one {# match} other {# matches}}";
+      "position": "{current}/{total}";
+    };
+    "sourceMediumTooltip": "Source medium — a neutral descriptor. It does not lower confidence on its own.";
+    "states": {
+      "contradicted": {
+        "chip": "Contradicted";
+        "label": "Contradicted by the record";
+      };
+      "nocover": {
+        "chip": "No coverage";
+        "label": "No anchor fact covers this claim";
+      };
+      "notverifiable": {
+        "chip": "Not verifiable";
+        "label": "Not a checkable factual claim";
+      };
+      "recordconflict": {
+        "chip": "Record conflict";
+        "label": "Anchor facts disagree with each other";
+      };
+      "supported": {
+        "chip": "Supported";
+        "label": "Supported by the record";
+      };
+      "tension": {
+        "chip": "In tension";
+        "label": "In tension with the record";
+      };
+    };
+    "verification": {
+      "acceptRoutine": "Accept {count, plural, one {# routine claim} other {# routine claims}}";
+      "attentionComplete": "<strong>Every claim needing judgement has been dispositioned.</strong> {count, plural, one {The # routine determination does not require individual review.} other {The # routine determinations do not require individual review.}}";
+      "attentionOpen": "<strong>{count, plural, one {# claim needs} other {# claims need}} your judgement</strong> — conflicts and contested interpretations. {routineCount, plural, one {The other # is routine and does not need individual sign-off.} other {The other # are routine and do not need individual sign-off.}}";
+      "claimStatus": " ({state}{contested, select, true {, contested} other {}}{superseded, select, true {, superseded} other {}}{reviewStatus, select, reviewed {, reviewed} disputed {, disputed} other {}})";
+      "selectClaim": "Select a claim to inspect the record.";
+      "showQueue": "Show queue";
+      "stats": {
+        "claims": "Claims";
+        "needsJudgement": "Needs judgement";
+      };
+    };
+  };
   "bilingual": {
     "dialog": {
       "create": "Create bilingual version";

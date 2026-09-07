@@ -28,6 +28,7 @@ import { Route as AuthErrorRouteImport } from './routes/auth/error'
 import { Route as AuthOrganizationRouteImport } from './routes/auth/organization'
 import { Route as AuthOtpRouteImport } from './routes/auth/otp'
 import { Route as AuthTwoFactorRouteImport } from './routes/auth/two-factor'
+import { Route as DevAvtRouteImport } from './routes/dev_.avt'
 import { Route as LawIndexRouteImport } from './routes/law/index'
 import { Route as McpOauthCallbackRouteImport } from './routes/mcp.oauth-callback'
 import { Route as SitemapsLawDotxmlRouteImport } from './routes/sitemaps/law[.]xml'
@@ -190,6 +191,11 @@ const AuthTwoFactorRoute = AuthTwoFactorRouteImport.update({
   id: '/two-factor',
   path: '/two-factor',
   getParentRoute: () => AuthRouteRoute,
+} as any)
+const DevAvtRoute = DevAvtRouteImport.update({
+  id: '/dev_/avt',
+  path: '/dev/avt',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const LawIndexRoute = LawIndexRouteImport.update({
   id: '/',
@@ -596,6 +602,7 @@ export interface FileRoutesByFullPath {
   '/auth/organization': typeof AuthOrganizationRoute
   '/auth/otp': typeof AuthOtpRoute
   '/auth/two-factor': typeof AuthTwoFactorRoute
+  '/dev/avt': typeof DevAvtRoute
   '/mcp/oauth-callback': typeof McpOauthCallbackRoute
   '/sitemaps/law.xml': typeof SitemapsLawDotxmlRoute
   '/sitemaps/tools.xml': typeof SitemapsToolsDotxmlRoute
@@ -678,6 +685,7 @@ export interface FileRoutesByTo {
   '/auth/organization': typeof AuthOrganizationRoute
   '/auth/otp': typeof AuthOtpRoute
   '/auth/two-factor': typeof AuthTwoFactorRoute
+  '/dev/avt': typeof DevAvtRoute
   '/mcp/oauth-callback': typeof McpOauthCallbackRoute
   '/sitemaps/law.xml': typeof SitemapsLawDotxmlRoute
   '/sitemaps/tools.xml': typeof SitemapsToolsDotxmlRoute
@@ -765,6 +773,7 @@ export interface FileRoutesById {
   '/auth/organization': typeof AuthOrganizationRoute
   '/auth/otp': typeof AuthOtpRoute
   '/auth/two-factor': typeof AuthTwoFactorRoute
+  '/dev_/avt': typeof DevAvtRoute
   '/mcp/oauth-callback': typeof McpOauthCallbackRoute
   '/sitemaps/law.xml': typeof SitemapsLawDotxmlRoute
   '/sitemaps/tools.xml': typeof SitemapsToolsDotxmlRoute
@@ -855,6 +864,7 @@ export interface FileRouteTypes {
     | '/auth/organization'
     | '/auth/otp'
     | '/auth/two-factor'
+    | '/dev/avt'
     | '/mcp/oauth-callback'
     | '/sitemaps/law.xml'
     | '/sitemaps/tools.xml'
@@ -937,6 +947,7 @@ export interface FileRouteTypes {
     | '/auth/organization'
     | '/auth/otp'
     | '/auth/two-factor'
+    | '/dev/avt'
     | '/mcp/oauth-callback'
     | '/sitemaps/law.xml'
     | '/sitemaps/tools.xml'
@@ -1023,6 +1034,7 @@ export interface FileRouteTypes {
     | '/auth/organization'
     | '/auth/otp'
     | '/auth/two-factor'
+    | '/dev_/avt'
     | '/mcp/oauth-callback'
     | '/sitemaps/law.xml'
     | '/sitemaps/tools.xml'
@@ -1106,6 +1118,7 @@ export interface RootRouteChildren {
   DevRoute: typeof DevRoute
   RobotsDottxtRoute: typeof RobotsDottxtRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
+  DevAvtRoute: typeof DevAvtRoute
   McpOauthCallbackRoute: typeof McpOauthCallbackRoute
   SitemapsLawDotxmlRoute: typeof SitemapsLawDotxmlRoute
   SitemapsToolsDotxmlRoute: typeof SitemapsToolsDotxmlRoute
@@ -1247,6 +1260,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/auth/two-factor'
       preLoaderRoute: typeof AuthTwoFactorRouteImport
       parentRoute: typeof AuthRouteRoute
+    }
+    '/dev_/avt': {
+      id: '/dev_/avt'
+      path: '/dev/avt'
+      fullPath: '/dev/avt'
+      preLoaderRoute: typeof DevAvtRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/law/': {
       id: '/law/'
@@ -2026,6 +2046,7 @@ const rootRouteChildren: RootRouteChildren = {
   DevRoute: DevRoute,
   RobotsDottxtRoute: RobotsDottxtRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
+  DevAvtRoute: DevAvtRoute,
   McpOauthCallbackRoute: McpOauthCallbackRoute,
   SitemapsLawDotxmlRoute: SitemapsLawDotxmlRoute,
   SitemapsToolsDotxmlRoute: SitemapsToolsDotxmlRoute,

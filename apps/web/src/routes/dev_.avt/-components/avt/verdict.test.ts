@@ -1,13 +1,16 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import { ANCHOR_FACTS, CLAIMS } from "@/routes/dev/-components/avt/sample-data";
-import type { ClaimReview } from "@/routes/dev/-components/avt/types";
-import { EMPTY_REVIEW } from "@/routes/dev/-components/avt/types";
+import {
+  ANCHOR_FACTS,
+  CLAIMS,
+} from "@/routes/dev_.avt/-components/avt/sample-data";
+import type { ClaimReview } from "@/routes/dev_.avt/-components/avt/types";
+import { EMPTY_REVIEW } from "@/routes/dev_.avt/-components/avt/types";
 import {
   countClaims,
   effectiveState,
-} from "@/routes/dev/-components/avt/verdict";
+} from "@/routes/dev_.avt/-components/avt/verdict";
 
 const claimById = (id: string) =>
   CLAIMS.find((claim) => claim.id === id) ?? panic(`Missing claim ${id}`);

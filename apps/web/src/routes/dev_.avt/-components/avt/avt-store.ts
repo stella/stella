@@ -11,7 +11,7 @@ import { create } from "zustand";
 
 import { Temporal } from "@stll/time";
 
-import { ANCHOR_FACTS } from "@/routes/dev/-components/avt/sample-data";
+import { ANCHOR_FACTS } from "@/routes/dev_.avt/-components/avt/sample-data";
 import type {
   AnchorFact,
   ClaimReview,
@@ -19,8 +19,8 @@ import type {
   RecordConflictResolution,
   ReviewerOverrideState,
   ReviewStatus,
-} from "@/routes/dev/-components/avt/types";
-import { EMPTY_REVIEW } from "@/routes/dev/-components/avt/types";
+} from "@/routes/dev_.avt/-components/avt/types";
+import { EMPTY_REVIEW } from "@/routes/dev_.avt/-components/avt/types";
 
 /** Store an absolute instant; UI owners localize it for the viewer. */
 const nowInstant = (): string => Temporal.Now.instant().toString();
