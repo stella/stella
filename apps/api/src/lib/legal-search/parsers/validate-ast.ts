@@ -161,6 +161,31 @@ const peelDecorativeMarkers = (word: string): string => {
   return peeled;
 };
 
+// Whether the source's extracted text is nothing but the publisher's own
+// decorative furniture — a scan published as [OBRÁZEK] placeholders, the NSS
+// emblem and its "ČESKÁ REPUBLIKA / JMÉNEM REPUBLIKY" header. Such a source
+// has nothing for an AST to lose, so a retention ratio over its characters
+// reports total loss against a faithful parse.
+//
+// Deliberately narrower than `isMeaningfulWord`, which also drops bare
+// numbers and one- or two-letter tokens: those are content a decision can
+// lose (awarded amounts, dates, a docket's parts, a roman-numbered ruling
+// item), so reusing the missing-word filter here would silence real loss on a
+// source whose text is entirely numeric. Only a token that peels away to
+// nothing, or to a skip word, counts as decoration.
+const CONTENT_CHAR = /[\p{L}\p{N}]/u;
+const holdsOnlyDecoration = (text: string): boolean =>
+  separateSkipMarkers(text)
+    .split(/\s+/u)
+    .every((word) => {
+      const bare = word.replace(/[[\]]/gu, "").toLowerCase();
+      if (!CONTENT_CHAR.test(bare) || SKIP_WORDS.has(bare)) {
+        return true;
+      }
+      const peeled = peelDecorativeMarkers(bare);
+      return peeled === "" || SKIP_WORDS.has(peeled);
+    });
+
 /** Flatten inline nodes to text (line-break → space). */
 const inlineText = (inlines: readonly Inline[]): string => {
   let text = "";
@@ -284,18 +309,9 @@ export const validateAst = (
   const originalWords = extractWords(originalText);
   const astWords = extractWords(astText);
 
-  // `extractWords` already drops decorative markers, skip words, bare
-  // numbers and tokens too short to count, so an empty set means the source
-  // carries nothing meaningful for an AST to lose. Measuring retention over
-  // its raw characters then reports total loss against a faithful parse: a
-  // scanned decision published as nothing but [OBRÁZEK] placeholders reads
-  // 0.0% retained with zero missing meaningful words, which is a
-  // contradiction on its face. Judging presence by the same rule the
-  // missing-word check uses can only ever clear such a phantom, because a
-  // source holding any meaningful word keeps the ratio.
-  const sourceHasMeaningfulText = originalWords.size > 0;
+  const sourceHasContent = !holdsOnlyDecoration(originalText);
 
-  const retainedPct = sourceHasMeaningfulText
+  const retainedPct = sourceHasContent
     ? (astText.length / originalText.length) * 100
     : 100;
 
@@ -335,8 +351,8 @@ export const validateAst = (
   // ── 2. Structural checks ──────────────────────────────
 
   if (blocks.length === 0) {
-    // No blocks is loss only when there was something meaningful to lose. A
-    // source carrying no such text is represented faithfully by no blocks,
+    // No blocks is loss only when there was something to lose. A source
+    // carrying nothing but decoration is represented faithfully by no blocks,
     // and `retainedPct` reads 100 for it; calling that an error reports
     // content loss against a document whose emptiness the pipeline
     // separately reports as `decision_empty`, sending whoever sweeps these
@@ -345,7 +361,7 @@ export const validateAst = (
     issues.push({
       code: "EMPTY_AST",
       message: "AST has no blocks",
-      severity: sourceHasMeaningfulText ? "error" : "warning",
+      severity: sourceHasContent ? "error" : "warning",
     });
   }
 

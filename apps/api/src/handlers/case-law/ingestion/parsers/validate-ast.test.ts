@@ -437,6 +437,25 @@ describe("validateAst", () => {
       expect(result.ok).toBe(true);
     });
 
+    test("dropped numbers and short tokens still report loss", () => {
+      // Numbers and one- or two-letter tokens are content a decision can
+      // lose — an awarded amount, a date, a roman-numbered ruling item — but
+      // none of them is a missing-word candidate. So the no-content exemption
+      // must be keyed on decoration, not on that filter, or a source whose
+      // text is entirely numeric would have its loss silenced.
+      const html = `<html><body><p>I</p><p>42 43</p></body></html>`;
+      const blocks: Block[] = [makeHeading("I")];
+
+      const result = validateAst(html, blocks);
+
+      expect(result.stats.missingWords).toHaveLength(0);
+      expect(result.stats.retainedPct).toBeLessThan(90);
+      expect(
+        result.issues.find((i) => i.code === "CONTENT_LOSS")?.severity,
+      ).toBe("error");
+      expect(result.ok).toBe(false);
+    });
+
     test("one meaningful word among the markers still reports loss", () => {
       const html = MARKER_ONLY_SOURCE.replace(
         "</body>",
