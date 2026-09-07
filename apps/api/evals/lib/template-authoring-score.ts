@@ -47,6 +47,7 @@ export type AuthoredBlock =
 type OverlayFieldView = {
   path: string;
   condition?: string | undefined;
+  lookup?: object | undefined;
 };
 
 /** One refusal the production overlay partition returned, naming the entry it
@@ -81,7 +82,11 @@ export const GRAMMAR_TRAP_CODES = [
    *  not a row block's opener/closer pair, and not a span the inline engine
    *  parses (`{% if x %}…{% endif %}` within one paragraph). */
   "block_marker_inline",
-  /** A lookup declared per leaf (`company.krs`) instead of one parent with formats. */
+  /** A lookup declared per leaf (`company.krs`) instead of one parent with
+   *  formats, and still refused after the engine folds a leaf that merely
+   *  restates its parent's format. A leaf refused for anything else it
+   *  carries beside a correctly placed parent lookup is a configuration
+   *  mistake, reported as the overlay issue it is, not as a grammar trap. */
   "lookup_not_parent",
   /** A `condition` on a field the person answers as a yes/no question. */
   "condition_on_input",
@@ -356,15 +361,16 @@ export const detectGrammarTraps = ({
     ...new Set(placeholderPaths),
   ]);
 
-  // A child that only restates its parent's lookup now folds into that
-  // parent's format, so the trap is what the engine STILL refuses: the entry
-  // it names as a rival configuration of a marker the lookup already renders.
+  // The trap is the per-leaf lookup shape, counted only where the engine
+  // still refuses it: a leaf that merely restates its parent's format folds
+  // away. A leaf refused for what it carries BESIDE a correctly placed parent
+  // lookup is a configuration mistake, and stays the overlay issue it is.
   for (const { index, message } of overlayIssues) {
-    const path = overlay[index]?.path;
+    const leaf = overlay[index];
     if (
       message.includes(LOOKUP_OWNERSHIP_REFUSAL) &&
-      path !== undefined &&
-      path.includes(".")
+      leaf?.lookup !== undefined &&
+      leaf.path.includes(".")
     ) {
       counts.lookup_not_parent += 1;
     }

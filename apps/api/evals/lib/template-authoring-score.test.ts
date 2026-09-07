@@ -172,9 +172,12 @@ describe("detectGrammarTraps", () => {
     expect(counts.language_variant_path).toBe(1);
   });
 
-  test("lookup_not_parent counts the child the engine still refuses", () => {
+  test("lookup_not_parent counts the per-leaf lookup the engine still refuses", () => {
     const blocks = [paragraph("{{company}}, {{company.krs}}")];
-    const overlay = [{ path: "company" }, { path: "company.krs" }];
+    const overlay = [
+      { path: "company", lookup: {} },
+      { path: "company.krs", lookup: {} },
+    ];
     // The refusal names both sides of the collision; only the child is the
     // configuration that should have been a format of its parent.
     const ownership = (index: number) => ({
@@ -197,8 +200,31 @@ describe("detectGrammarTraps", () => {
     expect(
       detectGrammarTraps({
         blocks: [paragraph("{{company}}, {{company.krs}}")],
-        overlay: [{ path: "company" }, { path: "company.krs" }],
+        overlay: [
+          { path: "company", lookup: {} },
+          { path: "company.krs", lookup: {} },
+        ],
         overlayIssues: [],
+        booleanInputPaths: [],
+      }).lookup_not_parent,
+    ).toBe(0);
+  });
+
+  test("a leaf refused for what it carries beside the lookup is not the trap", () => {
+    // The parent owns the lookup; the leaf claims the same marker for an
+    // unrelated configuration. The refusal stands, the grammar trap does not.
+    expect(
+      detectGrammarTraps({
+        blocks: [paragraph("{{company}}, {{company.krs}}")],
+        overlay: [{ path: "company", lookup: {} }, { path: "company.krs" }],
+        overlayIssues: [
+          {
+            index: 1,
+            message:
+              `"company" ${LOOKUP_OWNERSHIP_REFUSAL} "krs" renders ` +
+              '{{company.krs}}, but "company.krs" is configured as its own field.',
+          },
+        ],
         booleanInputPaths: [],
       }).lookup_not_parent,
     ).toBe(0);
@@ -208,7 +234,7 @@ describe("detectGrammarTraps", () => {
     expect(
       detectGrammarTraps({
         blocks: [paragraph("{{company.krs}}")],
-        overlay: [{ path: "company.krs" }],
+        overlay: [{ path: "company.krs", lookup: {} }],
         overlayIssues: [
           { index: 0, message: "No marker {{company.krs}} in the DOCX." },
         ],
