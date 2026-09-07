@@ -10,6 +10,10 @@ import {
   OVERLAY_LAYER_CLASS_NAMES,
   type OverlayLayer,
 } from "../lib/overlay-layer";
+import {
+  CONTENT_SIZED_POSITIONER_CLASS_NAME,
+  IN_FLOW_POPUP_CLASS_NAME,
+} from "../lib/positioner-sizing";
 import { cn } from "../lib/utils";
 import { renderTooltipTrigger } from "./tooltip-trigger-helper";
 
@@ -54,15 +58,8 @@ const PopoverPopup = ({
       align={align}
       alignOffset={alignOffset}
       anchor={anchor}
-      // `--positioner-width` is written from the popup *payload*, so a popup
-      // whose content grows from local state (a picker swapping to an editor)
-      // left the positioner at the old width. Base UI collision-tests the
-      // positioner, so `shift()` saw no overflow while the popup rendered wider
-      // and ran off-screen. Sizing to content keeps the two in step; the popup
-      // still animates its own width through `--popup-width`, and `max-content`
-      // tracks that as it interpolates.
       className={cn(
-        "h-(--positioner-height) w-max max-w-(--available-width)",
+        CONTENT_SIZED_POSITIONER_CLASS_NAME,
         OVERLAY_LAYER_CLASS_NAMES[layer],
       )}
       collisionPadding={OVERLAY_COLLISION_PADDING}
@@ -72,7 +69,8 @@ const PopoverPopup = ({
     >
       <PopoverPrimitive.Popup
         className={cn(
-          "bg-popover text-popover-foreground relative flex h-(--popup-height,auto) w-(--popup-width,auto) origin-(--transform-origin) rounded-lg border shadow-lg/5 transition-[width,height,scale,opacity] not-dark:bg-clip-padding before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-lg)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] data-starting-style:scale-98 data-starting-style:opacity-0 dark:before:shadow-[0_-1px_--theme(--color-white/6%)]",
+          IN_FLOW_POPUP_CLASS_NAME,
+          "bg-popover text-popover-foreground flex h-(--popup-height,auto) w-(--popup-width,auto) origin-(--transform-origin) rounded-lg border shadow-lg/5 transition-[width,height,scale,opacity] not-dark:bg-clip-padding before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-lg)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] data-starting-style:scale-98 data-starting-style:opacity-0 dark:before:shadow-[0_-1px_--theme(--color-white/6%)]",
           tooltipStyle &&
             "w-fit rounded-md text-xs text-balance shadow-md/5 before:rounded-[calc(var(--radius-md)-1px)]",
           className,

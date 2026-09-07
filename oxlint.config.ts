@@ -976,6 +976,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-raw-locale-format.ts",
     "./.oxlint-plugins/no-input-dir-auto.ts",
     "./.oxlint-plugins/require-dir-on-rendered-name.ts",
+    "./.oxlint-plugins/require-in-flow-viewport-popup.ts",
     "./.oxlint-plugins/no-unformatted-number.ts",
     "./.oxlint-plugins/no-literal-minor-unit-scale.ts",
     "./.oxlint-plugins/no-raw-foreground-opacity.ts",
@@ -2030,6 +2031,20 @@ export default defineConfig({
       ],
       rules: {
         "icon-button-requires-tooltip/icon-button-requires-tooltip": "error",
+      },
+    },
+    {
+      // Base UI positions and collision-tests the Positioner, and a Viewport
+      // takes the popup out of normal flow for side top/left, so a
+      // Viewport-bearing positioner must use the sizing pair owned by
+      // packages/ui/src/lib/positioner-sizing.ts.
+      files: [
+        "packages/ui/src/**/*.tsx",
+        ".oxlint-plugins/__fixtures__/require-in-flow-viewport-popup.fixture.tsx",
+      ],
+      rules: {
+        "require-in-flow-viewport-popup/require-in-flow-viewport-popup":
+          "error",
       },
     },
     {
