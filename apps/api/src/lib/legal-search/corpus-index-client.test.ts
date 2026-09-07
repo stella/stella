@@ -722,6 +722,48 @@ test("delete settlement repeats an offset scan until split identities stabilize"
   expect(firstPageReads).toBe(3);
 });
 
+test("delete settlement reads each split's opstamp from the pass that stabilized", async () => {
+  let firstPageReads = 0;
+  responseBodyForUrl = () => {
+    firstPageReads += 1;
+    return {
+      splits: [
+        {
+          split_id: "split-lagging",
+          split_state: "Published",
+          // The first pass observes this split before its delete task lands.
+          delete_opstamp: firstPageReads === 1 ? 41 : 42,
+        },
+        ...(firstPageReads === 1
+          ? []
+          : [
+              {
+                split_id: "split-added",
+                split_state: "Published",
+                delete_opstamp: 42,
+              },
+            ]),
+      ],
+    };
+  };
+
+  const result = await getCorpusIndexClient("q08").readDeleteSettlement(
+    "legal_corpus_v1_cze",
+    42,
+  );
+
+  expect(result.isOk()).toBe(true);
+  if (result.isOk()) {
+    expect(result.value).toEqual({
+      requiredOpstamp: 42,
+      publishedSplits: 2,
+      laggingSplits: 0,
+      minAppliedOpstamp: 42,
+      settled: true,
+    });
+  }
+});
+
 test("delete settlement accepts exactly the published split ceiling", async () => {
   responseBodyForUrl = settlementResponse(10_000);
 

@@ -823,9 +823,10 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
           }
           return Math.min(remaining, ADMIN_TIMEOUT_MS);
         };
-        const observedSplitOpstamps = new Map<string, number>();
         let scanPasses = 0;
-        const readSplitPass = async (): Promise<Set<string>> => {
+        // Keyed by split id; the value is the lowest opstamp this pass saw for
+        // it, since a split shifting between offset pages can be read twice.
+        const readSplitPass = async (): Promise<Map<string, number>> => {
           scanPasses += 1;
           if (scanPasses > MAX_SETTLEMENT_SCAN_PASSES) {
             throw new CorpusIndexError({
@@ -835,7 +836,7 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
           }
           let offset = 0;
           let scannedSplits = 0;
-          const currentSplitIds = new Set<string>();
+          const passSplitOpstamps = new Map<string, number>();
           const readSplitPage = async (): Promise<void> => {
             const response = await requestJson({
               baseUrl: mutationBaseUrl(cluster),
@@ -873,16 +874,13 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
                     "corpus index split list returned an invalid response",
                 });
               }
-              const previousOpstamp = observedSplitOpstamps.get(splitId);
-              currentSplitIds.add(splitId);
-              if (previousOpstamp === undefined) {
-                observedSplitOpstamps.set(splitId, opstamp);
-              } else {
-                observedSplitOpstamps.set(
-                  splitId,
-                  Math.min(previousOpstamp, opstamp),
-                );
-              }
+              const previousOpstamp = passSplitOpstamps.get(splitId);
+              passSplitOpstamps.set(
+                splitId,
+                previousOpstamp === undefined
+                  ? opstamp
+                  : Math.min(previousOpstamp, opstamp),
+              );
             }
             if (splits.length < SPLIT_PAGE_SIZE) {
               return;
@@ -891,12 +889,13 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
             await readSplitPage();
           };
           await readSplitPage();
-          return currentSplitIds;
+          return passSplitOpstamps;
         };
         const readStableSplitPass = async (
           previousPassSplitIds: ReadonlySet<string>,
-        ): Promise<Set<string>> => {
-          const currentSplitIds = await readSplitPass();
+        ): Promise<Map<string, number>> => {
+          const currentPass = await readSplitPass();
+          const currentSplitIds = new Set(currentPass.keys());
           // Quickwit lists by numeric offset, not a snapshot cursor. A split
           // published or retired while an earlier page is read can shift a
           // later page. Only clear durable delete state after one complete
@@ -905,19 +904,18 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
             currentSplitIds.size === previousPassSplitIds.size &&
             currentSplitIds.isSubsetOf(previousPassSplitIds);
           if (stable) {
-            return currentSplitIds;
+            return currentPass;
           }
           return await readStableSplitPass(currentSplitIds);
         };
-        const finalPassSplitIds = await readStableSplitPass(new Set());
-        const appliedOpstamps = [...finalPassSplitIds].map((splitId) => {
-          const opstamp = observedSplitOpstamps.get(splitId);
-          if (opstamp === undefined) {
-            panic("settlement scan lost a published split opstamp");
-          }
-          return opstamp;
-        });
-        const publishedSplits = finalPassSplitIds.size;
+        // Opstamps come from the stabilizing pass alone. A split read before
+        // its delete task landed is caught up by the time the pass that
+        // settles the identity set reads it again, and carrying the earlier
+        // value forward would report it as lagging for as long as the index
+        // keeps churning.
+        const finalPass = await readStableSplitPass(new Set());
+        const appliedOpstamps = [...finalPass.values()];
+        const publishedSplits = finalPass.size;
         const laggingSplits = appliedOpstamps.filter(
           (opstamp) => opstamp < requiredOpstamp,
         ).length;
