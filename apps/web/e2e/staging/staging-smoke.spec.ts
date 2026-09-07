@@ -169,6 +169,12 @@ test.describe("public hydration", () => {
       page.locator('[role="gridcell"][aria-current="date"]'),
     ).toHaveAttribute("data-date", expectedToday);
     await page.keyboard.press("Escape");
+    const customRangeButton = page.getByRole("button", {
+      name: /custom range|vlastní rozsah/iu,
+    });
+    await expect(customRangeButton).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(customRangeButton).toBeHidden();
     await firstDecision.click();
     await expect(page).toHaveURL(/\/law\/[a-z]{2,3}\/cases\//u);
 
