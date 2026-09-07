@@ -8,16 +8,26 @@
  * marked-up document blocks, the `fields` overlay it passed, the paths the
  * real discovery found) plus the outcome of the real fill round trip, and
  * gets back a run score whose every field is a count or a named code.
+ *
+ * A trap is a placement or a spelling the ENGINE refuses, so the detectors
+ * ask the engine's own parsers (`scanMarkers`, `classifyMarkerDefect`,
+ * `detectRowBlockPair`, `parseInlineConditions`) rather than re-deriving the
+ * rules: a placement the engine learns to run stops being a trap here on the
+ * same day.
  */
 
 import {
   assertNever,
+  blockDirectiveLinePattern,
   classifyMarkerDefect,
   detectRowBlockPair,
   isBlockDirectiveKind,
+  type ScannedMarker,
   scanInvalidMarkers,
   scanMarkers,
 } from "@stll/template-conditions";
+
+import { parseInlineConditions } from "@/api/lib/docx/inline-conditions";
 
 /**
  * One block of the document the model authored. A table cell holds a
@@ -59,7 +69,9 @@ export const GRAMMAR_TRAP_CODES = [
   "bracket_index",
   /** One value given a per-language path (`date_pl` beside `date_en`). */
   "language_variant_path",
-  /** A block directive sharing its paragraph with text or another directive. */
+  /** A block directive in a placement no engine runs: not the paragraph form,
+   *  not a row block's opener/closer pair, and not a span the inline engine
+   *  parses (`{% if x %}…{% endif %}` within one paragraph). */
   "block_marker_inline",
   /** A lookup declared per leaf (`company.krs`) instead of one parent with formats. */
   "lookup_not_parent",
@@ -97,6 +109,19 @@ type ScannedParagraph = {
 };
 
 const NO_ROW_BLOCK: ReadonlySet<number> = new Set<number>();
+
+/** The paragraph text with those markers cut out, which is what the inline
+ *  engine reads once the row engine has hoisted a row block's pair away. */
+const withoutMarkers = (
+  text: string,
+  markers: readonly ScannedMarker[],
+): string => {
+  let remainder = text;
+  for (const marker of [...markers].toSorted((a, b) => b.start - a.start)) {
+    remainder = remainder.slice(0, marker.start) + remainder.slice(marker.end);
+  }
+  return remainder;
+};
 
 /**
  * One table row's paragraphs, with the row block its cells declare (if any)
@@ -270,24 +295,27 @@ export const detectGrammarTraps = ({
 
     const markers = scanMarkers(text);
     // A row block's two markers are placed as the grammar allows: the opener
-    // in front of one cell's text, the closer behind another's. Only markers
-    // that genuinely share a paragraph with other content are the trap.
+    // in front of one cell's text, the closer behind another's, and the row
+    // engine hoists them out of the cell before anything else reads it.
+    const rowBlockMarkers = markers.filter((marker) =>
+      rowBlockStarts.has(marker.start),
+    );
     const blockMarkers = markers.filter(
       (marker) =>
         isBlockDirectiveKind(marker.meta.kind) &&
         !rowBlockStarts.has(marker.start),
     );
-    if (blockMarkers.length > 0) {
-      let remainder = text;
-      for (const marker of blockMarkers.toReversed()) {
-        remainder =
-          remainder.slice(0, marker.start) + remainder.slice(marker.end);
-      }
-      // Two block directives in one paragraph (`{{#if x}}{{/if}}`) leave an
-      // empty remainder, yet neither occupies a paragraph of its own.
-      if (remainder.trim() !== "" || blockMarkers.length > 1) {
-        counts.block_marker_inline += 1;
-      }
+    // Three placements the engine runs, so none of them is a trap: no block
+    // directive left for it at all, a paragraph that is one directive and
+    // nothing else (the block form), and a span the inline engine parses. Only
+    // what `parseInlineConditions` refuses is a placement that renders as
+    // literal markers.
+    if (
+      blockMarkers.length > 0 &&
+      !blockDirectiveLinePattern().test(text) &&
+      !parseInlineConditions(withoutMarkers(text, rowBlockMarkers)).ok
+    ) {
+      counts.block_marker_inline += 1;
     }
 
     for (const { meta } of markers) {

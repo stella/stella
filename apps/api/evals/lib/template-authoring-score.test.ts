@@ -70,20 +70,23 @@ describe("detectGrammarTraps", () => {
     expect(counts.python_expression).toBe(1);
   });
 
-  test("a block marker sharing its paragraph with text is counted once for that paragraph", () => {
+  test("an inline span the engine parses is a placement, not a trap", () => {
     const counts = traps([
       paragraph("{% if penalty %}A penalty applies.{% endif %}"),
+      paragraph(
+        "The tenant{% if guarantor %}, with the guarantor,{% endif %} pays.",
+      ),
+      paragraph(
+        "{% for a in attorneys %}{{ a.name }}{% if not loop.last %}, {% endif %}{% endfor %}",
+      ),
       paragraph("{% for row in rows %}"),
       paragraph("{{ row.name }}"),
       paragraph("{% endfor %}"),
     ]);
-    expect(counts.block_marker_inline).toBe(1);
+    expect(counts.block_marker_inline).toBe(0);
   });
 
-  test("two block directives in one paragraph share it, even with no other text", () => {
-    expect(
-      traps([paragraph("{% if penalty %}{% endif %}")]).block_marker_inline,
-    ).toBe(1);
+  test("an opener alone in a paragraph is the block form", () => {
     expect(
       traps([
         paragraph("{% if penalty %}"),
@@ -91,6 +94,15 @@ describe("detectGrammarTraps", () => {
         paragraph("{% endif %}"),
       ]).block_marker_inline,
     ).toBe(0);
+  });
+
+  test("an opener inline with text and no closer in the paragraph is a trap", () => {
+    expect(
+      traps([
+        paragraph("A penalty applies{% if waived %} unless waived."),
+        paragraph("{% endif %}"),
+      ]).block_marker_inline,
+    ).toBe(1);
   });
 
   test("a row block opened and closed across one row's cells is a placement, not a trap", () => {
