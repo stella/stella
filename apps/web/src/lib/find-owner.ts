@@ -73,13 +73,19 @@ const toCandidate = (
 
 /**
  * The app's only listener for the find shortcut. It runs in the capture phase
- * so the press never reaches the document's bubble phase, where Folio's own
- * find/replace dialog listens unscoped (`useKeyboardShortcuts` in
- * `@stll/folio-react`) and would open a second bar on top of the one that won.
+ * because that is where one press can be arbitrated before anything else sees
+ * it: a cell editor, a Base UI popup, or the ProseMirror view inside a DOCX
+ * pane would otherwise swallow the press before the registry could award it.
+ *
+ * The awarded press is prevented, not stopped. Stopping it was a workaround for
+ * a Folio release that bound the shortcut on `document` unscoped; Folio now
+ * scopes that binding to its own root or drops it (`keyboardShortcuts` on
+ * `DocxEditor`), so the press can keep bubbling to listeners that read
+ * `defaultPrevented`, the way the browser's own bindings do.
  *
  * Surfaces do not bind the shortcut and stand down; they register and are
  * called. A surface that never wins therefore cannot touch the event, and a
- * fourth surface added later cannot reintroduce the two-bar bug, because
+ * fifth surface added later cannot reintroduce the two-bar bug, because
  * binding a listener is not how a surface takes part.
  */
 const handleFindKeyDown = (event: KeyboardEvent) => {
@@ -104,7 +110,6 @@ const handleFindKeyDown = (event: KeyboardEvent) => {
   }
 
   event.preventDefault();
-  event.stopPropagation();
   winner.surface.onFind();
 };
 

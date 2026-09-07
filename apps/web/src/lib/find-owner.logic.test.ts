@@ -22,6 +22,7 @@ const candidate = (
 const TABLE = candidate("table", "app");
 const INSPECTOR = candidate("inspector", "app");
 const DOCX = candidate("docx", "pane");
+const DOCUMENT = candidate("document", "app");
 
 /** Which surface won, for the cases that only care about precedence. */
 const ownerOf = (...candidates: FindCandidate[]): FindOwner | null =>
@@ -48,6 +49,29 @@ describe("resolveFindClaim", () => {
     // table's whatever else is on screen.
     expect(ownerOf(INSPECTOR, { ...TABLE, containsTarget: true })).toBe(
       "table",
+    );
+  });
+
+  test("gives the full view a press that landed in its editor", () => {
+    // A document in full view sits beside the inspector. The reference preview
+    // reaches the app, so by precedence alone it would take a press with the
+    // caret in the editor and open its bar over Folio's dialog.
+    expect(ownerOf(INSPECTOR, { ...DOCUMENT, containsTarget: true })).toBe(
+      "document",
+    );
+  });
+
+  test("prefers the inspector over the full view for a press outside both", () => {
+    expect(ownerOf(DOCUMENT, INSPECTOR)).toBe("inspector");
+    expect(ownerOf(INSPECTOR, DOCUMENT)).toBe("inspector");
+  });
+
+  test("gives the full view the page while the inspector is hidden", () => {
+    // What Folio's own document-wide binding gave the reader: Cmd/Ctrl+F
+    // anywhere on the page opens the dialog while nothing more specific is
+    // on screen to claim it.
+    expect(ownerOf(DOCUMENT, { ...INSPECTOR, reachable: false })).toBe(
+      "document",
     );
   });
 

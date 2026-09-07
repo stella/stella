@@ -2,11 +2,10 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 // The find shortcut has exactly one listener in apps/web: the registry in
 // `@/lib/find-owner` resolves the owning surface and calls it back. Two panes
 // once matched Cmd/Ctrl+F themselves, drifted apart from the remappable
-// binding, and let Folio's unscoped document listener open a second find bar
-// over the one that won. A surface takes part by registering, never by
-// recognising the press, so this rule bans both ways of recognising it: the
-// registry's shortcut id or constant, and a hand-rolled comparison of a
-// keyboard event's `key` against "f".
+// binding, and opened a second find bar over the one that won. A surface
+// takes part by registering, never by recognising the press, so this rule
+// bans both ways of recognising it: the registry's shortcut id or constant,
+// and a hand-rolled comparison of a keyboard event's `key` against "f".
 
 import {
   filenameForContext,

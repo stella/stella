@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 import { apiPut, apiStatus, apiUploadDocx } from "../helpers/api";
+import { createUploadedDocumentRoute } from "../helpers/document";
 import { expect, test } from "../helpers/test";
 import {
   type TestWorkspace,
@@ -257,14 +258,12 @@ test.describe("find in table", () => {
     await expect(allColumnsRow).toBeHidden();
   });
 
-  // Finding 1 of the find browser test: Folio's find/replace dialog binds
-  // Cmd/Ctrl+F on `document` in the bubble phase, unscoped, so one press used
-  // to open its dialog on top of whichever bar the registry had awarded the
-  // press to. The registry now holds the only listener and stops the press it
-  // awards, which is what this asserts — against a stand-in listener of the
-  // same shape rather than against Folio, so the guard survives a Folio
-  // upgrade and needs no DOCX mounted.
-  test("a press the registry awards never reaches a document bubble listener", async ({
+  // The registry prevents the press it awards and leaves the rest alone, and
+  // never stops either: a bubble-phase listener sees every press and can read
+  // from `defaultPrevented` whether the app already claimed it. Asserted
+  // against a stand-in listener rather than against Folio, so the guard needs
+  // no DOCX mounted and survives a Folio upgrade.
+  test("a press the registry awards reaches a document bubble listener already prevented", async ({
     page,
     request,
   }) => {
@@ -328,7 +327,10 @@ test.describe("find in table", () => {
 
     await page.keyboard.press("ControlOrMeta+f");
     await expect(page.getByRole("searchbox")).toBeFocused();
-    await expect(body).not.toHaveAttribute("data-bubbled-find-presses");
+    await expect(body).toHaveAttribute(
+      "data-bubbled-find-presses",
+      "prevented",
+    );
 
     await page.keyboard.press("Escape");
     await expect(page.getByRole("searchbox")).toBeHidden();
@@ -344,14 +346,14 @@ test.describe("find in table", () => {
     await page.keyboard.press("ControlOrMeta+f");
     await expect(body).toHaveAttribute(
       "data-bubbled-find-presses",
-      "untouched",
+      "prevented,untouched",
     );
   });
 
-  // The same contract against the real vendor, which the stand-in above
-  // cannot prove: Folio's find binding is bubble-phase today, and an upgrade
-  // that moved it to capture would leave the stand-in green while the second
-  // bar came back.
+  // Against the real vendor: the docked editor mounts Folio with its
+  // shortcuts off (`keyboardShortcuts="none"`), so the pane's own bar is the
+  // only one a press can open. A mount that lost the prop would bring the
+  // second bar back with the stand-in above still green.
   test("a DOCX docked in the inspector adds no second find bar", async ({
     page,
     request,
@@ -434,5 +436,71 @@ test.describe("find in table", () => {
       page.getByRole("searchbox", { name: "Find text" }),
     ).toBeVisible();
     await expect(folioDialog).toHaveCount(0);
+  });
+
+  // The full view has no bar of its own: Folio answers a press inside the
+  // editor, and the registry hands it every press outside, so Cmd/Ctrl+F
+  // anywhere on the page opens Folio's dialog, and only one of it.
+  test("a DOCX in full view opens Folio's find dialog from anywhere on the page", async ({
+    page,
+    request,
+  }) => {
+    test.slow();
+
+    const testWorkspace = workspace;
+    if (testWorkspace === null) {
+      throw new Error("Test workspace was not created");
+    }
+
+    const route = await createUploadedDocumentRoute({
+      fileName: `alpha-lease-${randomUUID().slice(0, 8)}.docx`,
+      request,
+      workspace: testWorkspace,
+    });
+
+    const { cookies } = await request.storageState();
+    await page.context().addCookies(cookies);
+    await expect
+      .poll(
+        async () =>
+          await apiStatus(page.request, `/workspaces/${testWorkspace.id}`),
+        {
+          message: "browser context can read the created workspace",
+          timeout: 10_000,
+        },
+      )
+      .toBe(200);
+
+    await page.goto(route.path, { waitUntil: "domcontentloaded" });
+    await expect(
+      page.locator(".layout-run-text", {
+        hasText: "Stella E2E test document.",
+      }),
+    ).toBeVisible({ timeout: 45_000 });
+
+    const folioDialog = page.locator(".docx-find-replace-dialog-overlay");
+
+    // Nothing focused: the press lands on the body, outside the editor, and
+    // reaches Folio through the registry rather than through its own binding.
+    await page.evaluate(() => {
+      const active = document.activeElement;
+      if (active instanceof HTMLElement) {
+        active.blur();
+      }
+    });
+    await page.keyboard.press("ControlOrMeta+f");
+    await expect(folioDialog).toHaveCount(1);
+    // The docked bar and the table's bar are both search inputs; Folio's
+    // dialog is not. Neither of the app's bars has any business here.
+    await expect(page.getByRole("searchbox")).toHaveCount(0);
+
+    await page.keyboard.press("Escape");
+    await expect(folioDialog).toHaveCount(0);
+
+    // Inside the editor the registry and Folio award the press to the same
+    // surface, so the dialog still opens exactly once.
+    await page.locator('[contenteditable="true"]').first().focus();
+    await page.keyboard.press("ControlOrMeta+f");
+    await expect(folioDialog).toHaveCount(1);
   });
 });
