@@ -92,7 +92,7 @@ describe("runRegistryWriteTool (orchestration)", () => {
       },
       context: buildContext(),
       refRegistry: createChatRefRegistry(),
-      toolName: "save_template",
+      toolName: "create_template",
     });
 
     expect(Result.isError(result)).toBe(true);
@@ -102,7 +102,7 @@ describe("runRegistryWriteTool (orchestration)", () => {
     }
   });
 
-  test("executes the template configure mode through the chat projection", async () => {
+  test("executes configure_template_fields through the chat projection", async () => {
     const result = await runRegistryWriteTool({
       args: { fields: [], template_id: "00000000-0000-4000-8000-000000000001" },
       context: {
@@ -110,7 +110,10 @@ describe("runRegistryWriteTool (orchestration)", () => {
         testDependencies: {
           async *configureTemplateFields() {
             yield* [];
-            return Result.ok({ manifest: { fields: [], version: 1 } });
+            return Result.ok({
+              issues: [],
+              manifest: { fields: [], version: 1 },
+            });
           },
           describeStoredTemplate: async () => ({
             arrays: [],
@@ -123,7 +126,7 @@ describe("runRegistryWriteTool (orchestration)", () => {
         },
       },
       refRegistry: createChatRefRegistry(),
-      toolName: "save_template",
+      toolName: "configure_template_fields",
     });
 
     expect(Result.isError(result)).toBe(false);
@@ -132,7 +135,7 @@ describe("runRegistryWriteTool (orchestration)", () => {
     }
   });
 
-  test("executes the template inline-DOCX mode through the chat projection", async () => {
+  test("executes create_template through the chat projection", async () => {
     const zip = new JSZip();
     zip.file(
       "word/document.xml",
@@ -155,10 +158,18 @@ describe("runRegistryWriteTool (orchestration)", () => {
               sizeBytes: 0,
             });
           },
+          describeStoredTemplate: async () => ({
+            arrays: [],
+            computed: [],
+            conditions: [],
+            fields: [],
+            name: "NDA",
+            warnings: [],
+          }),
         },
       },
       refRegistry: createChatRefRegistry(),
-      toolName: "save_template",
+      toolName: "create_template",
     });
 
     expect(Result.isError(result)).toBe(false);

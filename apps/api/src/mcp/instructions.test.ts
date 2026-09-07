@@ -51,7 +51,7 @@ describe("MCP server instructions", () => {
 
   test("the default surface points at the template workflow resource", () => {
     // The resource is listed, but an agent that never calls resources/list
-    // starts at save_template and rediscovers the order by trial.
+    // starts at create_template and rediscovers the order by trial.
     expect(MCP_INSTRUCTIONS.default).toContain(TEMPLATE_WORKFLOW_REFERENCE_URI);
   });
 

@@ -29,7 +29,7 @@ The server exposes two MCP endpoints:
 Both endpoints expose static MCP resources through `resources/list` and
 `resources/read`: `stella://about` for canonical product identity and official
 URLs, `stella://reference/template-markers` for the DOCX template marker
-grammar, `stella://reference/template-fields` for the `save_template` field
+grammar, `stella://reference/template-fields` for the `configure_template_fields`
 overlay, and `stella://reference/template-workflow` for the order those two are
 used in (author, create, read the discovered paths back, configure, preview,
 persist).

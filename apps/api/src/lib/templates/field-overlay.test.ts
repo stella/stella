@@ -124,9 +124,11 @@ describe("validateFieldOverlay", () => {
     expect(issues).toEqual([
       {
         path: "fields.1",
-        message:
-          "No marker {{ghost}} in the DOCX. Configure only paths that exist " +
-          "as {{markers}}.",
+        index: 1,
+        message: "No marker {{ghost}} in the DOCX.",
+        hint:
+          "Configure only the paths the template reported. To add a field, " +
+          "put its {{marker}} in the document and publish a new version.",
       },
     ]);
   });
@@ -238,7 +240,7 @@ describe("validateFieldOverlay", () => {
       expect(issues).toEqual([
         expect.objectContaining({
           path: "fields.1",
-          message: expect.stringContaining("duplicate"),
+          message: expect.stringContaining("more than once"),
         }),
       ]);
     }

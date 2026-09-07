@@ -7,19 +7,25 @@ import type {
   FieldSource,
   fieldSourceToolInputSchema,
 } from "@/api/lib/template-binding/binding-sources";
+import type { TemplateFieldSourceInput } from "@/api/mcp/template-field-input";
 import {
+  DEFAULT_LOOKUP_FORMAT,
   templateFieldInputSchema,
   toFieldMetaToolInput,
   toTemplateFieldWireInput,
 } from "@/api/mcp/template-field-input";
-import { saveTemplateArgsSchema } from "@/api/mcp/template-tools";
+import { configureTemplateFieldsArgsSchema } from "@/api/mcp/template-tools";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const TEMPLATE_ID = "6f1f4d1e-59b0-4b4f-9a35-4b0ba0f7a1c9";
 
-/** The `fields` overlay read the way save_template reads it: through the tool
- * input schema, which is where null-as-absence lives. */
+/** The `fields` entries read the way configure_template_fields reads them:
+ * through the tool input schema, which is where null-as-absence lives. */
 const parseFieldsOverlay = (fields: unknown) =>
-  v.safeParse(saveTemplateArgsSchema, { template_id: TEMPLATE_ID, fields });
+  v.safeParse(configureTemplateFieldsArgsSchema, {
+    template_id: TEMPLATE_ID,
+    fields,
+  });
 
 const sortedKeys = (entries: object): string[] => Object.keys(entries).sort();
 
@@ -31,8 +37,30 @@ const camelize = (key: string): string =>
 const sortedCamelKeys = (entries: object): string[] =>
   Object.keys(entries).map(camelize).sort();
 
+const snakeize = (key: string): string =>
+  key.replace(/[A-Z]/gu, (letter: string) => `_${letter.toLowerCase()}`);
+
 const advertised = templateFieldInputSchema.pipe[0].entries;
 const persisted = fieldMetaToolInputSchema.pipe[0].entries;
+
+type PersistedField = v.InferOutput<typeof fieldMetaToolInputSchema>;
+
+/**
+ * The persisted keys the wire's single `source` union folds up. Each is
+ * reachable through exactly one branch of that union, so none of them is
+ * advertised under its own snake_case key any more.
+ */
+const PERSISTED_KEYS_FOLDED_INTO_SOURCE = [
+  "aiAdapt",
+  "aiPrompt",
+  "aiSeesDocument",
+  "condition",
+  "formula",
+  "lookup",
+] as const satisfies readonly (keyof typeof persisted)[];
+
+const isFoldedIntoSource = (key: string): boolean =>
+  PERSISTED_KEYS_FOLDED_INTO_SOURCE.some((folded) => folded === key);
 
 describe("template field input schema", () => {
   test("preserves the persisted source union in the portable schema", () => {
@@ -41,8 +69,19 @@ describe("template field input schema", () => {
     >().toEqualTypeOf<FieldSource>();
   });
 
-  test("advertises the persisted tool-input keys in snake_case", () => {
-    expect(sortedCamelKeys(advertised)).toEqual(sortedKeys(persisted));
+  test("advertises the persisted tool-input keys in snake_case, bar the ones source folds up", () => {
+    expect(sortedCamelKeys(advertised)).toEqual(
+      sortedKeys(persisted).filter((key) => !isFoldedIntoSource(key)),
+    );
+  });
+
+  test("refuses the flat derived keys the source union replaced", () => {
+    for (const key of PERSISTED_KEYS_FOLDED_INTO_SOURCE) {
+      const parsed = parseFieldsOverlay([
+        { path: "company", [snakeize(key)]: "anything" },
+      ]);
+      expect(parsed.success).toBe(false);
+    }
   });
 
   test("advertises the persisted validation keys in snake_case", () => {
@@ -75,9 +114,6 @@ describe("template field input schema", () => {
         max_items: 3,
       },
       required: true,
-      ai_prompt: "Draft the scope",
-      ai_adapt: true,
-      ai_sees_document: true,
       parts: [
         {
           key: "title",
@@ -89,26 +125,181 @@ describe("template field input schema", () => {
       ],
       format: "{{title}} {{name}}",
       options_from: "parties",
-      lookup: {
-        registry: "krs",
-        formats: [{ key: "default", template: "[name]" }],
-      },
-      source: {
-        kind: "contact",
-        field: "displayName",
-      },
-      formula: "rent * 12",
-      condition: "type == 'corp'",
+      source: { type: "contact", field: "displayName" },
       date_format: { locale: "cs", style: "long" },
     });
 
+    // Every persisted key the surface can write is named: the plain ones with
+    // their value, and the derived-source ones the chosen branch does not use
+    // cleared, so merging this entry onto a field configured differently
+    // leaves no half of the old branch behind.
     expect(sortedKeys(mapped)).toEqual(sortedKeys(persisted));
+    for (const key of sortedKeys(persisted).filter(isFoldedIntoSource)) {
+      const set = key === "source";
+      expect(
+        asTestRaw<Record<string, unknown>>(mapped)[key] === undefined,
+      ).toBe(!set);
+    }
     expect(sortedKeys(mapped.validation ?? {})).toEqual(
       sortedKeys(persisted.validation.wrapped.pipe[0].entries),
     );
     expect(sortedKeys(mapped.parts?.at(0) ?? {})).toEqual(
       sortedKeys(persisted.parts.wrapped.pipe[0].item.entries),
     );
+  });
+
+  /**
+   * Every key the union folds up still has to reach the manifest under its
+   * persisted spelling. One entry per branch, so a branch that stops writing
+   * its persisted half fails here rather than silently dropping the field's
+   * source. Keyed by branch so a failure names the branch.
+   */
+  describe("folds each source branch onto its persisted spelling", () => {
+    const BRANCH_CASES = {
+      person: { source: { type: "person" }, persisted: {} },
+      ai_drafted: {
+        source: {
+          type: "ai",
+          prompt: "Draft the recitals",
+          sees_document: true,
+        },
+        persisted: {
+          aiPrompt: "Draft the recitals",
+          aiSeesDocument: true,
+        },
+      },
+      ai_adapted: {
+        source: { type: "ai", adapt: true },
+        persisted: { aiAdapt: true },
+      },
+      lookup: {
+        source: {
+          type: "lookup",
+          registry: "krs",
+          formats: [{ key: "default", template: "[name]" }],
+        },
+        persisted: {
+          lookup: {
+            registry: "krs",
+            formats: [{ key: "default", template: "[name]" }],
+          },
+        },
+      },
+      lookup_without_formats: {
+        source: { type: "lookup", registry: "ares" },
+        persisted: {
+          lookup: { registry: "ares", formats: [{ ...DEFAULT_LOOKUP_FORMAT }] },
+        },
+      },
+      contact: {
+        source: { type: "contact", field: "displayName" },
+        persisted: { source: { kind: "contact", field: "displayName" } },
+      },
+      party: {
+        source: {
+          type: "party",
+          role: "opposing_party",
+          field: "organizationName",
+        },
+        persisted: {
+          source: {
+            kind: "party",
+            role: "opposing_party",
+            field: "organizationName",
+          },
+        },
+      },
+      matter: {
+        source: { type: "matter", field: "reference" },
+        persisted: { source: { kind: "matter", field: "reference" } },
+      },
+      attorney: {
+        source: { type: "attorney", ref: "lead", field: "name" },
+        persisted: { source: { kind: "attorney", ref: "lead", field: "name" } },
+      },
+      firm: {
+        source: { type: "firm", field: "name" },
+        persisted: { source: { kind: "firm", field: "name" } },
+      },
+      formula: {
+        source: { type: "formula", expression: "rent * 12" },
+        persisted: { formula: "rent * 12" },
+      },
+      condition: {
+        source: { type: "condition", expression: "type == 'corp'" },
+        persisted: { condition: "type == 'corp'" },
+      },
+    } satisfies Record<
+      string,
+      { persisted: Partial<PersistedField>; source: TemplateFieldSourceInput }
+    >;
+
+    for (const [name, { persisted: expected, source }] of Object.entries(
+      BRANCH_CASES,
+    )) {
+      test(name, () => {
+        expect(
+          toFieldMetaToolInput(
+            v.parse(templateFieldInputSchema, { path: "company", source }),
+          ),
+        ).toEqual({ path: "company", ...expected });
+      });
+    }
+  });
+
+  test("an ai source names exactly one of prompt and adapt", () => {
+    // The two halves are separate derived sources in the manifest, so the one
+    // combination the union can still spell is refused here.
+    const both = v.safeParse(templateFieldInputSchema, {
+      path: "recitals",
+      source: { type: "ai", prompt: "Draft it", adapt: true },
+    });
+    expect(both.success).toBe(false);
+    expect(
+      both.issues?.some((issue) => issue.path?.at(-1)?.key === "source"),
+    ).toBe(true);
+
+    const neither = v.safeParse(templateFieldInputSchema, {
+      path: "recitals",
+      source: { type: "ai", sees_document: true },
+    });
+    expect(neither.success).toBe(false);
+  });
+
+  test("a second source type cannot be sent alongside the first", () => {
+    // What used to be six mutually exclusive optionals is one property: a
+    // second source is not a conflicting key, it is an unknown one.
+    const parsed = v.safeParse(templateFieldInputSchema, {
+      path: "company",
+      source: {
+        type: "lookup",
+        registry: "krs",
+        prompt: "Draft the company details",
+      },
+    });
+
+    expect(parsed.success).toBe(false);
+  });
+
+  test("a composite field keeps the person source its parts assemble", () => {
+    const bound = v.safeParse(templateFieldInputSchema, {
+      path: "property_address",
+      parts: [{ key: "street", input_type: "text" }],
+      format: "{{street}}",
+      source: { type: "contact", field: "address" },
+    });
+    expect(bound.success).toBe(false);
+    expect(
+      bound.issues?.some((issue) => issue.path?.at(-1)?.key === "source"),
+    ).toBe(true);
+
+    const person = v.safeParse(templateFieldInputSchema, {
+      path: "property_address",
+      parts: [{ key: "street", input_type: "text" }],
+      format: "{{street}}",
+      source: { type: "person" },
+    });
+    expect(person.success).toBe(true);
   });
 
   test("omits absent optional keys instead of writing undefined", () => {
@@ -123,7 +314,6 @@ describe("template field input schema", () => {
       label: "Company",
       input_type: "select",
       options_from: "parties",
-      ai_sees_document: false,
       validation: { required: true, min_length: 2, max_items: 4 },
       parts: [{ key: "title", input_type: "text" }],
       format: "{{title}}",
@@ -137,7 +327,6 @@ describe("template field input schema", () => {
       label: "Company",
       inputType: "select",
       optionsFrom: "parties",
-      aiSeesDocument: false,
       validation: { required: true, minLength: 2, maxItems: 4 },
       parts: [{ key: "title", inputType: "text" }],
       format: "{{title}}",
@@ -163,7 +352,6 @@ describe("template field input schema", () => {
         maxItems: 3,
       },
       required: true,
-      aiSeesDocument: true,
       parts: [
         {
           key: "title",
@@ -196,6 +384,14 @@ describe("template field input schema", () => {
     });
 
     expect(sortedKeys(censusField)).toEqual(sortedKeys(advertised));
+    // Every derived half arrives folded into the one `source` property, never
+    // beside it: a manifest that broke the single-source invariant still
+    // serializes as exactly one branch.
+    expect(censusField.source).toEqual({
+      type: "lookup",
+      registry: "krs",
+      formats: [{ key: "default", template: "[name]" }],
+    });
     expect(sortedKeys(wireField.validation ?? {})).toEqual(
       sortedKeys(advertised.validation.wrapped.pipe[0].entries),
     );
@@ -240,12 +436,11 @@ describe("template field input schema", () => {
           path: "company",
           input_type: "text",
           required: false,
-          lookup: {
+          source: {
+            type: "lookup",
             registry: "krs",
             formats: [{ key: "default", template: "[name]" }],
           },
-          ai_sees_document: false,
-          ai_adapt: false,
         },
       ],
     });

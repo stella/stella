@@ -8,7 +8,10 @@ import { MCP_APP_RESOURCE_MIME_TYPE } from "@stll/api-contract";
 import { envBase } from "@/api/env-base";
 import { DOCUMENT_UPLOAD_APP_RESOURCE_URI } from "@/api/mcp/document-file-upload";
 import { listMcpResources, readMcpResource } from "@/api/mcp/resources";
-import { MCP_STATIC_TOOL_NAMES } from "@/api/mcp/static-tool-definitions";
+import {
+  DEFAULT_MCP_TOOL_DEFINITIONS,
+  MCP_STATIC_TOOL_NAMES,
+} from "@/api/mcp/static-tool-definitions";
 import { buildFieldReference } from "@/api/mcp/template-field-reference";
 import { buildMarkerReference } from "@/api/mcp/template-marker-reference";
 import {
@@ -20,6 +23,25 @@ const MARKER_REFERENCE_URI = "stella://reference/template-markers";
 const FIELD_REFERENCE_URI = "stella://reference/template-fields";
 const WORKFLOW_REFERENCE_URI = "stella://reference/template-workflow";
 const PRODUCT_IDENTITY_URI = "stella://about";
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+/** Every string a tool's advertised JSON Schema declares as an accepted enum
+ *  value, at any depth. */
+const advertisedEnumValues = (schema: unknown): string[] => {
+  if (Array.isArray(schema)) {
+    return schema.flatMap(advertisedEnumValues);
+  }
+  if (!isRecord(schema)) {
+    return [];
+  }
+  return Object.entries(schema).flatMap(([key, value]) =>
+    key === "enum" && Array.isArray(value)
+      ? value.filter((entry) => typeof entry === "string")
+      : advertisedEnumValues(value),
+  );
+};
 
 describe("MCP resources", () => {
   test("shares the official MCP Apps resource MIME type", () => {
@@ -61,11 +83,11 @@ describe("MCP resources", () => {
     expect(content.text).toBe(buildFieldReference());
     // The per-property guidance an agent needs to configure fields: who fills
     // the field, the dependent-select rule, the lookup format addressing, and
-    // the binding kinds with their allowed keys.
-    expect(content.text).toContain("Who fills = AI");
+    // the source branches with their allowed keys.
+    expect(content.text).toContain('`{ "type": "ai" }`');
     expect(content.text).toContain("`options_from`");
     expect(content.text).toContain("{{path.key}}");
-    expect(content.text).toContain('`kind: "party"`');
+    expect(content.text).toContain('`{ "type": "party" }`');
     expect(content.text).toContain("dataBox");
     expect(content.text).toContain(MARKER_REFERENCE_URI);
   });
@@ -109,15 +131,26 @@ describe("MCP resources", () => {
     }
 
     // Any snake_case token opening with a verb the registry uses for tool
-    // names reads as a tool name to an agent, so it must be one.
+    // names reads as a tool name to an agent, so it must be one — unless it
+    // is a value one of those tools actually accepts (`action:
+    // "create_document"`). The accepted values are read off the advertised
+    // schemas, never hand-listed, so a token stops being excused here the
+    // moment the tool stops accepting it.
     const toolVerbs = new Set(
       MCP_STATIC_TOOL_NAMES.map((name) => name.split("_")[0]),
+    );
+    const advertisedValues = new Set(
+      DEFAULT_MCP_TOOL_DEFINITIONS.flatMap((definition) =>
+        advertisedEnumValues(definition.inputSchema),
+      ),
     );
     const mentioned = [...text.matchAll(/\b[a-z]+(?:_[a-z]+)+\b/gu)]
       .map(([token]) => token)
       .filter((token) => toolVerbs.has(token.split("_")[0] ?? ""));
     expect(
-      [...new Set(mentioned)].filter((token) => !registryNames.has(token)),
+      [...new Set(mentioned)].filter(
+        (token) => !registryNames.has(token) && !advertisedValues.has(token),
+      ),
     ).toEqual([]);
   });
 

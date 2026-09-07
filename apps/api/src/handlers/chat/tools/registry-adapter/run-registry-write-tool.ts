@@ -64,7 +64,8 @@ const REGISTRY_WRITE_TOOL_HANDLERS = {
   set_practice_jurisdictions: STELLA_TOOL_HANDLERS.set_practice_jurisdictions,
   fill_template: TEMPLATE_TOOL_HANDLERS.fill_template,
   save_filled_template: TEMPLATE_TOOL_HANDLERS.save_filled_template,
-  save_template: TEMPLATE_TOOL_HANDLERS.save_template,
+  create_template: TEMPLATE_TOOL_HANDLERS.create_template,
+  configure_template_fields: TEMPLATE_TOOL_HANDLERS.configure_template_fields,
   // Non-projectable (`chatProjectable: false`): the orchestrator refuses it
   // before reaching a handler, but the map stays exhaustive over every write
   // tool. `send_feedback` runs its own approval handshake and is served through

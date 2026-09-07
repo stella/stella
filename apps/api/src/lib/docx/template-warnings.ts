@@ -35,6 +35,7 @@ export const TEMPLATE_WARNING_CODES = [
   "condition_removes_input",
   "registry_configuration_required",
   "unmatched_lookup_format",
+  "inline_bytes_ignored",
   ...MARKER_DEFECT_KINDS,
 ] as const;
 
@@ -351,6 +352,25 @@ export const fieldOverlayWarnings = async ({
  * finding) and cap. Order of first appearance is kept: it follows document
  * order, so the author reads the list top-down against the file.
  */
+/**
+ * A create call that carried both a host file reference and inline base64.
+ * The host's file is the document that was stored: a host fills `file` from
+ * its own transport, while `docx_base64` is typed by the caller, so when both
+ * arrive the transported bytes are the trustworthy ones. Refusing the call
+ * instead taught nothing — two models sent both on every attempt of every
+ * task and never dropped one on retry — so the call succeeds and says which
+ * source it used.
+ */
+export const inlineBytesIgnoredWarning = (): TemplateWarning => ({
+  code: "inline_bytes_ignored",
+  message:
+    "Both 'file' and 'docx_base64' were sent; the attached file was stored " +
+    "and the inline bytes were ignored.",
+  hint:
+    "Send one document source. 'docx_base64' is for a host that cannot " +
+    "supply a file reference; when your host can, send 'file' alone.",
+});
+
 export const boundTemplateWarnings = (
   warnings: readonly TemplateWarning[],
 ): TemplateWarning[] => {

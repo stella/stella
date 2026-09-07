@@ -611,7 +611,7 @@
       "singleReadWhen": "template_id"
     },
     "name": "list_templates",
-    "description": "List the document templates in this organization (NDAs, powers of attorney, leases), or describe one template's fillable fields. Omit template_id to list templates: each template's id, name, field count, tags, and usage guidance (whenToUse / whenNotToUse); prefer a template whose whenToUse matches the request and skip any whose whenNotToUse applies. Pass template_id to return that template's full field configuration, in the shape the field reference documents (see stella://reference/template-fields), plus its named conditions and formula fields. Omitted optional scalar placeholders render blank. A required, non-AI-fillable field omitted or empty fails fill_template; `arrays` marks {{#each}} fields as arrays of objects, not dotted keys.",
+    "description": "List the document templates in this organization (NDAs, powers of attorney, leases), or describe one template's fillable fields. Omit template_id to list templates: each template's id, name, field count, tags, and usage guidance (whenToUse / whenNotToUse); prefer a template whose whenToUse matches the request and skip any whose whenNotToUse applies. Pass template_id to return that template's full field configuration, in the shape the field reference documents (see stella://reference/template-fields), its named conditions and formula fields, and the configure_template_fields call to make next. `arrays` marks {{#each}} fields as arrays of objects, not dotted keys.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -799,11 +799,11 @@
   },
   {
     "cli": {
-      "command": ["template", "save"],
+      "command": ["template", "create"],
       "scope": "templates"
     },
-    "name": "save_template",
-    "description": "Create a template from a DOCX or configure its fields. For creation, pass a name and file (preferred, up to 50 MB) or original bytes as docx_base64 (max 196608 bytes decoded within the 524288-byte MCP request frame); never retype the file or strip parts out to fit. {{field}} markers become fillable. For configuration, pass template_id and fields without a document; markers stay intact. Read stella://reference/template-markers before authoring a DOCX and stella://reference/template-fields before configuring fields. Returns id and field count on creation, updated fields on configuration, and marker-authoring warnings.",
+    "name": "create_template",
+    "description": "Create a template from a DOCX, or publish a new version of one. To create, pass a name and the document. To publish over an existing template, pass its template_id with the document; template_id with only a name renames it. Same-name templates are never merged: only template_id matches an existing one. For the document, pass file (preferred, up to 50 MB) or the original bytes as docx_base64 (max 196608 bytes decoded within the 524288-byte MCP request frame); never retype the file or strip parts out to fit. Read stella://reference/template-markers before authoring the DOCX. Returns the template id, its discovered fields, arrays, conditions, computed values and marker warnings. Then call configure_template_fields to say who fills each field.",
     "inputSchema": {
       "type": "object",
       "required": [],
@@ -812,19 +812,19 @@
         "template_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Template to configure; omit when creating"
+          "description": "Omit to create a new template. Set it ONLY to a template id a previous call returned, to publish a new version over that template or rename it"
         },
         "name": {
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Display name; required when creating"
+          "description": "Display name; required when creating, optional when it renames an existing template"
         },
         "docx_base64": {
           "type": "string",
           "minLength": 1,
           "maxLength": 262144,
-          "description": "Original .docx bytes, base64-encoded verbatim; the fallback for creating when the host cannot supply 'file'. Never strip parts out of the file to shrink it."
+          "description": "Original .docx bytes, base64-encoded verbatim; for a host that cannot supply 'file'. Sent beside 'file', it is ignored in favour of the attached file. Never strip parts out of the file to shrink it."
         },
         "file": {
           "type": "object",
@@ -849,6 +849,31 @@
           "required": ["download_url", "file_id"],
           "additionalProperties": false,
           "description": "File reference supplied by a compatible MCP host"
+        }
+      }
+    },
+    "annotations": {
+      "title": "Create template",
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "cli": {
+      "command": ["template", "configure-fields"],
+      "scope": "templates"
+    },
+    "name": "configure_template_fields",
+    "description": "Configure an existing template's fields: who fills each one, its input control, options and validation. The document's {{markers}} are untouched. Pass template_id and one entry per field path; every path must already exist as a marker. Read stella://reference/template-fields first. Returns the template's full field configuration afterwards.",
+    "inputSchema": {
+      "type": "object",
+      "required": ["template_id", "fields"],
+      "additionalProperties": false,
+      "properties": {
+        "template_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Template to configure, as returned by create_template or list_templates"
         },
         "fields": {
           "type": "array",
@@ -923,18 +948,6 @@
                 "type": "boolean",
                 "description": "Value is required"
               },
-              "ai_prompt": {
-                "type": "string",
-                "description": "Who fills = AI: drafting instruction"
-              },
-              "ai_adapt": {
-                "type": "boolean",
-                "description": "Who fills = person + AI"
-              },
-              "ai_sees_document": {
-                "type": "boolean",
-                "description": "AI field also sees the document"
-              },
               "parts": {
                 "type": "array",
                 "items": {
@@ -979,59 +992,91 @@
                 "type": "string",
                 "description": "Dependent select: source field path"
               },
-              "lookup": {
-                "type": "object",
-                "properties": {
-                  "registry": {
-                    "enum": [
-                      "ares",
-                      "brreg",
-                      "companies-house",
-                      "denue",
-                      "edgar",
-                      "gcis",
-                      "krs",
-                      "orsr",
-                      "prh",
-                      "recherche-entreprises",
-                      "vies"
-                    ],
-                    "type": "string",
-                    "description": "Business registry to query"
-                  },
-                  "formats": {
-                    "type": "array",
-                    "items": {
-                      "type": "object",
-                      "properties": {
-                        "key": {
-                          "type": "string",
-                          "description": "Format key, addressed as {{path.key}}"
-                        },
-                        "template": {
-                          "type": "string",
-                          "maxLength": 2000,
-                          "description": "[token] rendering of the registry hit"
-                        }
-                      },
-                      "required": ["key", "template"],
-                      "additionalProperties": false
-                    },
-                    "minItems": 1,
-                    "maxItems": 10,
-                    "description": "Named renderings; the first is the default"
-                  }
-                },
-                "required": ["registry", "formats"],
-                "additionalProperties": false,
-                "description": "Who fills = business-registry lookup"
-              },
               "source": {
                 "anyOf": [
                   {
                     "type": "object",
                     "properties": {
-                      "kind": {
+                      "type": {
+                        "enum": ["person"],
+                        "type": "string"
+                      }
+                    },
+                    "required": ["type"],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "enum": ["ai"],
+                        "type": "string"
+                      },
+                      "prompt": {
+                        "type": "string"
+                      },
+                      "adapt": {
+                        "type": "boolean"
+                      },
+                      "sees_document": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": ["type"],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "enum": ["lookup"],
+                        "type": "string"
+                      },
+                      "registry": {
+                        "enum": [
+                          "ares",
+                          "brreg",
+                          "companies-house",
+                          "denue",
+                          "edgar",
+                          "gcis",
+                          "krs",
+                          "orsr",
+                          "prh",
+                          "recherche-entreprises",
+                          "vies"
+                        ],
+                        "type": "string"
+                      },
+                      "formats": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "key": {
+                              "type": "string",
+                              "description": "Format key, addressed as {{path.key}}"
+                            },
+                            "template": {
+                              "type": "string",
+                              "maxLength": 2000,
+                              "description": "[token] rendering of the registry hit"
+                            }
+                          },
+                          "required": ["key", "template"],
+                          "additionalProperties": false
+                        },
+                        "minItems": 1,
+                        "maxItems": 10
+                      }
+                    },
+                    "required": ["type", "registry"],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
                         "enum": ["contact"],
                         "type": "string"
                       },
@@ -1057,13 +1102,13 @@
                         "type": "string"
                       }
                     },
-                    "required": ["kind", "field"],
+                    "required": ["type", "field"],
                     "additionalProperties": false
                   },
                   {
                     "type": "object",
                     "properties": {
-                      "kind": {
+                      "type": {
                         "enum": ["party"],
                         "type": "string"
                       },
@@ -1103,13 +1148,13 @@
                         "type": "string"
                       }
                     },
-                    "required": ["kind", "role", "field"],
+                    "required": ["type", "role", "field"],
                     "additionalProperties": false
                   },
                   {
                     "type": "object",
                     "properties": {
-                      "kind": {
+                      "type": {
                         "enum": ["matter"],
                         "type": "string"
                       },
@@ -1123,13 +1168,13 @@
                         "type": "string"
                       }
                     },
-                    "required": ["kind", "field"],
+                    "required": ["type", "field"],
                     "additionalProperties": false
                   },
                   {
                     "type": "object",
                     "properties": {
-                      "kind": {
+                      "type": {
                         "enum": ["attorney"],
                         "type": "string"
                       },
@@ -1142,13 +1187,13 @@
                         "type": "string"
                       }
                     },
-                    "required": ["kind", "ref", "field"],
+                    "required": ["type", "ref", "field"],
                     "additionalProperties": false
                   },
                   {
                     "type": "object",
                     "properties": {
-                      "kind": {
+                      "type": {
                         "enum": ["firm"],
                         "type": "string"
                       },
@@ -1157,19 +1202,39 @@
                         "type": "string"
                       }
                     },
-                    "required": ["kind", "field"],
+                    "required": ["type", "field"],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "enum": ["formula"],
+                        "type": "string"
+                      },
+                      "expression": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["type", "expression"],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "enum": ["condition"],
+                        "type": "string"
+                      },
+                      "expression": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["type", "expression"],
                     "additionalProperties": false
                   }
                 ],
-                "description": "Who fills = matter or contact data"
-              },
-              "formula": {
-                "type": "string",
-                "description": "Arithmetic over other fields"
-              },
-              "condition": {
-                "type": "string",
-                "description": "Boolean rule for an {{#if}} marker"
+                "description": "Who fills the field; one branch, by type"
               },
               "date_format": {
                 "type": "object",
@@ -1192,13 +1257,13 @@
             "required": ["path"],
             "additionalProperties": false
           },
-          "description": "Field configuration overlay; see stella://reference/template-fields"
+          "description": "Field configuration entries; see stella://reference/template-fields"
         }
       }
     },
     "annotations": {
-      "title": "Save template",
-      "idempotentHint": false,
+      "title": "Configure template fields",
+      "idempotentHint": true,
       "openWorldHint": false
     }
   },

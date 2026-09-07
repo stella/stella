@@ -60,7 +60,8 @@ const BUILT_IN_CHAT_TOOL_ACTIVITY_CATEGORIES = {
   save_document: "mutation",
   save_matter: "mutation",
   save_task: "mutation",
-  save_template: "mutation",
+  create_template: "mutation",
+  configure_template_fields: "mutation",
   save_time_entry: "mutation",
   "search-chat-history": "research",
   set_field_value: "mutation",
@@ -88,6 +89,7 @@ const RETIRED_CHAT_TOOL_ACTIVITY_CATEGORIES = {
   read_contact: "research",
   read_content_across_matters: "research",
   "run-stella-query": "computation",
+  save_template: "mutation",
   "search-across-matters": "research",
 } as const satisfies Record<string, ChatToolActivityCategory>;
 

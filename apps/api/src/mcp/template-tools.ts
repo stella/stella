@@ -13,13 +13,12 @@ import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack
 import { assertUsageAvailableForHandler } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
-import { getOrganizationRegistryAvailability } from "@/api/lib/business-registries/credentials";
 import type {
   AssertNoExtraFields,
+  CONFIGURE_TEMPLATE_FIELDS_PROJECTION,
+  CREATE_TEMPLATE_PROJECTION,
   LIST_TEMPLATES_LIST_PROJECTION,
   LIST_TEMPLATES_PROJECTION,
-  SAVE_TEMPLATE_CREATE_PROJECTION,
-  SAVE_TEMPLATE_PROJECTION,
   TEMPLATE_DESCRIBE_PROJECTION,
 } from "@/api/lib/chat/projections";
 import {
@@ -30,12 +29,9 @@ import {
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
 import { extractTextForPreview } from "@/api/lib/docx/extract-text";
 import type { AiFieldError } from "@/api/lib/docx/resolve-ai-fields";
-import { readManifest } from "@/api/lib/docx/template-manifest";
-import {
-  boundTemplateWarnings,
-  fieldOverlayWarnings,
-  type TemplateWarning,
-} from "@/api/lib/docx/template-warnings";
+import { readManifest, writeManifest } from "@/api/lib/docx/template-manifest";
+import { inlineBytesIgnoredWarning } from "@/api/lib/docx/template-warnings";
+import type { TemplateWarning } from "@/api/lib/docx/template-warnings";
 import type { FieldMeta } from "@/api/lib/docx/types";
 import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buffer";
 import type { DocxValidationFailure } from "@/api/lib/entity-versions/validate-docx-buffer";
@@ -54,11 +50,13 @@ import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 import { DOCX_EXT_RE, sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
 import { createStoredTemplate } from "@/api/lib/templates/create-template";
+import type { FieldOverlayIssue } from "@/api/lib/templates/field-overlay";
 import { resolveTemplateFieldOverlay } from "@/api/lib/templates/field-overlay";
 import {
   recordTemplateFill,
   recordTemplateUse,
 } from "@/api/lib/templates/record-use";
+import { renameStoredTemplate } from "@/api/lib/templates/rename-template";
 import { containsNull } from "@/api/lib/templates/template-data";
 import type { TemplateFillCompletionMode } from "@/api/lib/templates/template-fill-completion";
 import {
@@ -77,6 +75,7 @@ import {
   fillStoredTemplateWithText,
   fillStoredTemplateWithTextStrict,
 } from "@/api/lib/templates/template-fill-service";
+import { writeStoredTemplate } from "@/api/lib/templates/write-template";
 import { withTimeout } from "@/api/lib/with-timeout";
 import { MCP_MAX_REQUEST_BODY_BYTES } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
@@ -87,7 +86,9 @@ import {
   MAX_INLINE_DOCX_BASE64_LENGTH,
   MAX_INLINE_DOCX_BYTES,
 } from "@/api/mcp/template-docx-limits";
+import type { DescribedTemplateField } from "@/api/mcp/template-field-input";
 import {
+  PERSON_FIELD_SOURCE,
   templateFieldInputSchema,
   toFieldMetaToolInput,
   toTemplateFieldWireInput,
@@ -109,7 +110,6 @@ import {
 } from "@/api/mcp/text-field-spec";
 import type {
   InternalToolErrorResult,
-  InternalToolResult,
   McpTextFieldSpec,
   McpToolDefinition,
   McpToolHandler,
@@ -141,7 +141,8 @@ type TemplateToolName =
   | "list_templates"
   | "fill_template"
   | "save_filled_template"
-  | "save_template";
+  | "create_template"
+  | "configure_template_fields";
 
 /** Max assembled-text length returned inline; full bytes ride along as base64. */
 const TEMPLATE_FILL_TEXT_MAX_CHARS = 16_000;
@@ -171,22 +172,39 @@ const TEMPLATE_FILL_COMPLETION_MODE_PROP = {
 } as const;
 
 /**
- * Exported so `template-field-input.test.ts` can exercise the `fields` overlay
- * through the schema save_template actually parses, rather than through a
- * second assembly of the same array that could drift from it.
+ * `create_template`: a document, and either a name for a new template or the
+ * id of one to publish over. Creation never carries a field overlay;
+ * `configure_template_fields` owns that half, so neither tool advertises
+ * properties the other ignores.
+ *
+ * `template_id` makes the call an upsert, which is what a retrying agent
+ * needs: resending the same document under the same id publishes one more
+ * version instead of accumulating near-duplicate templates. A template is
+ * never matched by name, because two templates may share one.
+ *
+ * A call carrying BOTH document sources is accepted, not refused: the host's
+ * `file` is stored and the inline bytes are ignored, with a warning saying
+ * so. A host fills `file` from its own transport while `docx_base64` is typed
+ * by the caller, so the transported bytes are the trustworthy ones; and
+ * refusing taught nothing, because two models sent both on every attempt of
+ * every task and never dropped one on retry.
  */
-export const saveTemplateArgsSchema = nullAsAbsent(
+export const createTemplateArgsSchema = nullAsAbsent(
   v.pipe(
     v.strictObject({
       template_id: v.optional(
-        uuidInputSchema("Template to configure; omit when creating"),
+        uuidInputSchema(
+          "Omit to create a new template. Set it ONLY to a template id a previous call returned, to publish a new version over that template or rename it",
+        ),
       ),
       name: v.optional(
         v.pipe(
           v.string(),
           v.minLength(1),
           v.maxLength(256),
-          v.description("Display name; required when creating"),
+          v.description(
+            "Display name; required when creating, optional when it renames an existing template",
+          ),
         ),
       ),
       docx_base64: v.optional(
@@ -195,67 +213,67 @@ export const saveTemplateArgsSchema = nullAsAbsent(
           v.minLength(1),
           v.maxLength(MAX_INLINE_DOCX_BASE64_LENGTH),
           v.description(
-            "Original .docx bytes, base64-encoded verbatim; the fallback for " +
-              "creating when the host cannot supply 'file'. Never strip parts " +
-              "out of the file to shrink it.",
+            "Original .docx bytes, base64-encoded verbatim; for a host that " +
+              "cannot supply 'file'. Sent beside 'file', it is ignored in " +
+              "favour of the attached file. Never strip parts out of the " +
+              "file to shrink it.",
           ),
         ),
       ),
       file: v.optional(OPENAI_FILE_REFERENCE_SCHEMA),
-      fields: v.optional(
-        v.pipe(
-          v.array(templateFieldInputSchema),
-          v.description(
-            `Field configuration overlay; see ${TEMPLATE_FIELD_REFERENCE_URI}`,
-          ),
-        ),
-      ),
     }),
-    v.partialCheck(
-      [["template_id"], ["docx_base64"], ["file"]],
-      ({ template_id, docx_base64, file }) =>
-        (template_id === undefined) !==
-        (docx_base64 === undefined && file === undefined),
-      "Provide file or docx_base64 to create a template, or template_id to configure an existing template's fields",
-    ),
     v.forward(
       v.partialCheck(
-        [["docx_base64"], ["file"]],
-        ({ docx_base64, file }) =>
-          docx_base64 === undefined || file === undefined,
-        "Provide either file or docx_base64, not both",
+        [["template_id"], ["docx_base64"], ["file"]],
+        ({ template_id, docx_base64, file }) =>
+          template_id !== undefined ||
+          docx_base64 !== undefined ||
+          file !== undefined,
+        "Provide a document source: file, or docx_base64",
       ),
-      ["file"],
+      ["docx_base64"],
     ),
     v.forward(
       v.partialCheck(
-        [["docx_base64"], ["file"], ["name"]],
-        ({ docx_base64, file, name }) =>
-          (docx_base64 === undefined && file === undefined) ||
-          name !== undefined,
+        [["template_id"], ["name"]],
+        ({ template_id, name }) =>
+          template_id !== undefined || name !== undefined,
         "name is required to create a template",
       ),
       ["name"],
     ),
     v.forward(
       v.partialCheck(
-        [["template_id"], ["name"]],
-        ({ template_id, name }) =>
-          template_id === undefined || name === undefined,
-        "name applies only when creating a template; omit it when configuring",
+        [["template_id"], ["name"], ["docx_base64"], ["file"]],
+        ({ template_id, name, docx_base64, file }) =>
+          template_id === undefined ||
+          name !== undefined ||
+          docx_base64 !== undefined ||
+          file !== undefined,
+        "With template_id, pass a document to publish a new version, a name to rename it, or both",
       ),
-      ["name"],
-    ),
-    v.forward(
-      v.partialCheck(
-        [["template_id"], ["fields"]],
-        ({ template_id, fields }) =>
-          template_id === undefined || fields !== undefined,
-        "fields is required to configure a template",
-      ),
-      ["fields"],
+      ["template_id"],
     ),
   ),
+);
+
+/**
+ * `configure_template_fields`: the template plus the field entries to apply.
+ * Exported so `template-field-input.test.ts` exercises the entries through the
+ * schema the tool actually parses rather than a second assembly of it.
+ */
+export const configureTemplateFieldsArgsSchema = nullAsAbsent(
+  v.strictObject({
+    template_id: uuidInputSchema(
+      "Template to configure, as returned by create_template or list_templates",
+    ),
+    fields: v.pipe(
+      v.array(templateFieldInputSchema),
+      v.description(
+        `Field configuration entries; see ${TEMPLATE_FIELD_REFERENCE_URI}`,
+      ),
+    ),
+  }),
 );
 
 // --- Text-field specs (plan 049, Option B) --------------------------------
@@ -338,24 +356,70 @@ type TemplateDetailSuccess = Extract<
   { fields: unknown[] }
 >;
 
-const toTemplateDetailPayload = (payload: TemplateDetailSuccess) => ({
-  ...payload,
-  fields: payload.fields.map((field) => {
-    // Derived expressions belong to the conditions/computed collections below.
-    const {
-      condition: _condition,
-      formula: _formula,
-      ...wireField
-    } = toTemplateFieldWireInput(field);
-    return {
-      ...wireField,
-      input_type: field.inputType,
-      required: field.required,
-      ai_adapt: field.aiAdapt,
-      ai_sees_document: field.aiSeesDocument,
-    };
-  }),
-});
+/**
+ * The `configure_template_fields` call to make next, spelled out: one entry
+ * per configurable path, carrying the source the template already has (a
+ * freshly created template has `person` everywhere) and nothing else the
+ * caller has not decided. Copying and editing this beats inferring the path
+ * vocabulary, and sending it back unchanged is a no-op.
+ *
+ * Loop item paths are included even though the manifest folds them into their
+ * array root, because they are configurable and an agent has no other way to
+ * learn how they are spelled.
+ */
+const configureSkeleton = (
+  templateId: SafeId<"template">,
+  payload: {
+    fields: readonly DescribedTemplateField[];
+    arrays: TemplateDetailSuccess["arrays"];
+  },
+) => {
+  const configured = new Set(payload.fields.map((field) => field.path));
+  return {
+    template_id: templateId,
+    fields: [
+      ...payload.fields.map((field) => ({
+        path: field.path,
+        // The default carries no decision, so it stays out of the skeleton.
+        ...(field.input_type === undefined || field.input_type === "text"
+          ? {}
+          : { input_type: field.input_type }),
+        // The SAME object the field above carries, never a copy: the
+        // anonymized surface rewrites an AI prompt and a lookup format
+        // template in place through `fields[].source`, and a copy here would
+        // hand back the original text the redaction just removed. The label
+        // is deliberately absent for that reason — it is a string, so it
+        // cannot be shared, and it is already in `fields[]` to read.
+        source: field.source,
+      })),
+      ...payload.arrays.flatMap((group) =>
+        group.itemFieldPaths
+          .map((itemPath) => `${group.path}.${itemPath}`)
+          .filter((path) => !configured.has(path))
+          .map((path) => ({ path, source: PERSON_FIELD_SOURCE })),
+      ),
+    ],
+  };
+};
+
+const toTemplateDetailPayload = (
+  templateId: SafeId<"template">,
+  payload: TemplateDetailSuccess,
+) => {
+  const fields = payload.fields.map((field) => ({
+    ...toTemplateFieldWireInput(field),
+    input_type: field.inputType,
+    required: field.required,
+  }));
+  return {
+    ...payload,
+    fields,
+    configure: configureSkeleton(templateId, {
+      arrays: payload.arrays,
+      fields,
+    }),
+  };
+};
 
 type TemplateDetailPayload = ReturnType<typeof toTemplateDetailPayload>;
 type TemplateDetailField = TemplateDetailPayload["fields"][number];
@@ -387,7 +451,9 @@ const templateFieldPartOptionItems = (
 const templateFieldFormatItems = (
   payload: TemplateDetailPayload,
 ): readonly { key: string; template: string }[] =>
-  payload.fields.flatMap((field) => arrayOrEmpty(field.lookup?.formats));
+  payload.fields.flatMap((field) =>
+    field.source.type === "lookup" ? arrayOrEmpty(field.source.formats) : [],
+  );
 
 const compact = <T>(
   items: readonly (T | null)[] | null | undefined,
@@ -429,12 +495,15 @@ const buildTemplateDetailTextFieldSpecs = (
     },
   }),
   defineTextFieldSpec({
-    path: "fields[].ai_prompt",
+    path: "fields[].source.prompt",
     items: (payload: TemplateDetailPayload) => payload.fields,
     scope: () => organizationId,
-    read: (field: TemplateDetailField) => field.ai_prompt,
+    read: (field: TemplateDetailField) =>
+      field.source.type === "ai" ? field.source.prompt : undefined,
     apply: (field: TemplateDetailField, value) => {
-      field.ai_prompt = value;
+      if (field.source.type === "ai") {
+        field.source.prompt = value;
+      }
     },
   }),
   defineTextFieldSpec({
@@ -467,7 +536,7 @@ const buildTemplateDetailTextFieldSpecs = (
     },
   }),
   defineTextFieldSpec({
-    path: "fields[].lookup.formats[].template",
+    path: "fields[].source.formats[].template",
     items: templateFieldFormatItems,
     scope: () => organizationId,
     read: (format: { key: string; template: string }) => format.template,
@@ -504,34 +573,61 @@ const buildTemplateDetailTextFieldSpecs = (
   }),
 ];
 
-const SAVE_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
+export const CREATE_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
   _meta: {
     "openai/fileParams": ["file"],
   },
   description:
-    "Create a template from a DOCX or configure its fields. For creation, pass " +
-    `a name and file (preferred, up to ${MAX_DOCX_MEGABYTES} MB) or original ` +
-    `bytes as docx_base64 (max ${MAX_INLINE_DOCX_BYTES} bytes decoded within ` +
-    `the ${MCP_MAX_REQUEST_BODY_BYTES}-byte MCP request frame); never retype the ` +
-    "file or strip parts out to fit. {{field}} markers become fillable. For configuration, pass " +
-    "template_id and fields without a document; markers stay intact. Read " +
-    `${TEMPLATE_MARKER_REFERENCE_URI} before authoring a DOCX and ` +
-    `${TEMPLATE_FIELD_REFERENCE_URI} before configuring fields. Returns id ` +
-    "and field count on creation, updated fields on configuration, and marker-authoring warnings.",
-  inputSchema: saveTemplateArgsSchema,
+    "Create a template from a DOCX, or publish a new version of one. To " +
+    "create, pass a name and the document. To publish over an existing " +
+    "template, pass its template_id with the document; template_id with only " +
+    "a name renames it. Same-name templates are never merged: only " +
+    "template_id matches an existing one. For the document, pass " +
+    "file (preferred, " +
+    `up to ${MAX_DOCX_MEGABYTES} MB) or the original bytes as docx_base64 ` +
+    `(max ${MAX_INLINE_DOCX_BYTES} bytes decoded within the ` +
+    `${MCP_MAX_REQUEST_BODY_BYTES}-byte MCP request frame); never retype the ` +
+    `file or strip parts out to fit. Read ${TEMPLATE_MARKER_REFERENCE_URI} ` +
+    "before authoring the DOCX. Returns the template id, its discovered " +
+    "fields, arrays, conditions, computed values and marker warnings. Then " +
+    "call configure_template_fields to say who fills each field.",
+  inputSchema: createTemplateArgsSchema,
   jsonSchemaProjectionWaiver: {
-    ignoreActions: ["check", "finite", "partial_check"],
-    reason:
-      "Field compatibility checks remain runtime-only; JSON numbers are finite on the wire.",
+    ignoreActions: ["partial_check"],
+    reason: "The one-document-source check remains runtime-only.",
   },
   annotations: {
-    title: "Save template",
+    title: "Create template",
     idempotentHint: false,
     openWorldHint: false,
   },
   access: "write",
   anonymized: { exposure: "excluded", reason: "write" },
-  name: "save_template",
+  name: "create_template",
+  scope: "stella:templates",
+});
+
+export const CONFIGURE_TEMPLATE_FIELDS_TOOL_DEFINITION = defineValibotMcpTool({
+  description:
+    "Configure an existing template's fields: who fills each one, its input " +
+    "control, options and validation. The document's {{markers}} are " +
+    "untouched. Pass template_id and one entry per field path; every path " +
+    `must already exist as a marker. Read ${TEMPLATE_FIELD_REFERENCE_URI} ` +
+    "first. Returns the template's full field configuration afterwards.",
+  inputSchema: configureTemplateFieldsArgsSchema,
+  jsonSchemaProjectionWaiver: {
+    ignoreActions: ["check", "finite"],
+    reason:
+      "Field compatibility checks remain runtime-only; JSON numbers are finite on the wire.",
+  },
+  annotations: {
+    title: "Configure template fields",
+    idempotentHint: true,
+    openWorldHint: false,
+  },
+  access: "write",
+  anonymized: { exposure: "excluded", reason: "write" },
+  name: "configure_template_fields",
   scope: "stella:templates",
 });
 
@@ -550,11 +646,9 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
       "whose whenToUse matches the request and skip any whose whenNotToUse " +
       "applies. Pass template_id to return that template's full field " +
       "configuration, in the shape the field reference documents " +
-      `(see ${TEMPLATE_FIELD_REFERENCE_URI}), plus its named conditions and ` +
-      "formula fields. Omitted optional scalar placeholders render blank. " +
-      "A required, non-AI-fillable field omitted or empty fails " +
-      "fill_template; `arrays` marks {{#each}} fields as arrays of objects, " +
-      "not dotted keys.",
+      `(see ${TEMPLATE_FIELD_REFERENCE_URI}), its named conditions and ` +
+      "formula fields, and the configure_template_fields call to make next. " +
+      "`arrays` marks {{#each}} fields as arrays of objects, not dotted keys.",
     inputSchema: {
       type: "object",
       properties: {
@@ -690,7 +784,8 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
     name: "save_filled_template",
     scope: "stella:documents_write",
   },
-  SAVE_TEMPLATE_TOOL_DEFINITION,
+  CREATE_TEMPLATE_TOOL_DEFINITION,
+  CONFIGURE_TEMPLATE_FIELDS_TOOL_DEFINITION,
 ] as const satisfies readonly McpToolDefinition[];
 
 /** The whole advertised list_templates surface, so the branch dispatch below
@@ -851,18 +946,13 @@ const describeTemplateDetail: TypedMcpToolHandler<
     return validationErrorResult(parsed.issues);
   }
 
-  const result = await (
-    context.testDependencies?.describeStoredTemplate ?? describeStoredTemplate
-  )({
+  const payload = await describeTemplateForAgent({
+    context,
     templateId: brandPersistedTemplateId(parsed.output.template_id),
-    organizationId: context.organizationId,
-    scopedDb: context.scopedDb,
   });
-  if ("error" in result) {
-    return errorResult(result.error);
+  if (isToolErrorResult(payload)) {
+    return payload;
   }
-
-  const payload = toTemplateDetailPayload(result);
 
   // Redact the org-authored template name and each field's label/hint/aiPrompt;
   // field paths, input types, options, and condition/formula expressions are
@@ -872,17 +962,7 @@ const describeTemplateDetail: TypedMcpToolHandler<
     payload,
   );
 
-  // `describeStoredTemplate` builds the describe payload, so there is no
-  // literal for excess-property checking to guard; tie its return type instead.
-  type TemplateDescribePayload = AssertNoExtraFields<
-    typeof payload,
-    v.InferInput<typeof TEMPLATE_DESCRIBE_PROJECTION>
-  >;
-  return {
-    egress: "structured",
-    payload: payload satisfies TemplateDescribePayload,
-    textFields,
-  };
+  return { egress: "structured", payload, textFields };
 };
 
 /** One line describing a missing required field for the issues list: its
@@ -1776,44 +1856,6 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
   return toolDataResult(persistence.value.value);
 };
 
-/** Marker mistakes in the uploaded DOCX plus the ones the field overlay
- *  introduces, reported with the new template so the author fixes them before
- *  the first fill. Never blocks the save. */
-const templateAuthoringWarnings = async ({
-  buffer,
-  context,
-  fields,
-}: {
-  buffer: Buffer;
-  context: McpRequestContext;
-  fields: FieldMeta[] | undefined;
-}): Promise<TemplateWarning[]> => {
-  const [discovered, embeddedManifest] = await Promise.all([
-    discoverTemplate(buffer),
-    readManifest(buffer),
-  ]);
-
-  const savedManifest = resolveTemplateFieldOverlay({
-    discovered,
-    manifest: embeddedManifest,
-    overlay: fields,
-  });
-
-  return boundTemplateWarnings([
-    ...discovered.warnings,
-    ...(await fieldOverlayWarnings({
-      conditionPaths: discovered.conditionPaths,
-      fields: savedManifest.fields,
-      placeholderPaths: discovered.placeholders.map(({ name }) => name),
-      loadRegistryAvailability: async () =>
-        await getOrganizationRegistryAvailability({
-          organizationId: context.organizationId,
-          scopedDb: context.scopedDb,
-        }),
-    })),
-  ]);
-};
-
 /**
  * What to tell the caller for each structural DOCX failure on the base64 path.
  *
@@ -1983,80 +2025,212 @@ const resolveTemplateDocx = async ({
   }
 };
 
-// Create branch of save_template: a new template from an uploaded DOCX, with an
-// optional field-configuration overlay. Reused from the former create_template
-// tool.
-const createTemplateFromDocx = async ({
+/** The validated DOCX bytes a create or upsert call carries, or the failure
+ *  that stopped them from being read. */
+type CreateTemplateDocx =
+  | { status: "ok"; buffer: Buffer }
+  | { status: "error"; result: InternalToolErrorResult };
+
+const readCreateTemplateDocx = async ({
   context,
-  fields,
-  name,
   source,
 }: {
   context: McpRequestContext;
-  fields: FieldMeta[] | undefined;
-  name: string;
   source: TemplateDocxSource;
-}): Promise<
-  InternalToolResult<v.InferInput<typeof SAVE_TEMPLATE_PROJECTION>>
-> => {
-  const hasPermission = hasEffectiveAuthority(context, {
-    template: ["create"],
-  });
-  if (!hasPermission) {
-    return errorResult("Forbidden");
-  }
-
-  let clientManifest: { fields: FieldMeta[] } | null = null;
-  if (fields !== undefined) {
-    clientManifest = { fields };
-  }
-
+}): Promise<CreateTemplateDocx> => {
   const resolved = await resolveTemplateDocx({ context, source });
   if (resolved.status === "error") {
-    return resolved.result;
+    return resolved;
   }
   const { buffer } = resolved;
   const issuePath = DOCX_SOURCE_ISSUE_PATH[source.type];
 
   if (buffer.byteLength > FILE_SIZE_LIMIT_BYTES.document) {
-    return structuredErrorResult({
-      code: "validation_error",
-      message: "DOCX exceeds the maximum allowed size",
-      issues: [
-        {
-          path: issuePath,
-          message: "DOCX exceeds the maximum allowed size",
-        },
-      ],
-      hint: `Upload a DOCX no larger than ${FILE_SIZE_LIMIT_BYTES.document} bytes.`,
-    });
+    return {
+      status: "error",
+      result: structuredErrorResult({
+        code: "validation_error",
+        message: "DOCX exceeds the maximum allowed size",
+        issues: [
+          { path: issuePath, message: "DOCX exceeds the maximum allowed size" },
+        ],
+        hint: `Upload a DOCX no larger than ${FILE_SIZE_LIMIT_BYTES.document} bytes.`,
+      }),
+    };
   }
 
   const validation = await validateDocxBuffer(new Uint8Array(buffer).buffer);
   if (!validation.valid) {
-    return structuredErrorResult({
-      code: "validation_error",
-      message: `Invalid DOCX file: ${validation.error}`,
-      issues: [{ path: issuePath, message: validation.error }],
-      hint: DOCX_SOURCE_FAILURE_HINT[source.type][validation.reason],
+    return {
+      status: "error",
+      result: structuredErrorResult({
+        code: "validation_error",
+        message: `Invalid DOCX file: ${validation.error}`,
+        issues: [{ path: issuePath, message: validation.error }],
+        hint: DOCX_SOURCE_FAILURE_HINT[source.type][validation.reason],
+      }),
+    };
+  }
+  return { status: "ok", buffer };
+};
+
+/**
+ * How the caller supplied the DOCX, or that they supplied none (which is only
+ * legal for a rename). A host reference wins over inline bytes when both are
+ * present: the host transported the file, while the base64 was typed by the
+ * caller. The inline bytes are then never decoded.
+ */
+const createTemplateDocxSource = (input: {
+  docx_base64?: string | undefined;
+  file?: v.InferOutput<typeof OPENAI_FILE_REFERENCE_SCHEMA> | undefined;
+}): TemplateDocxSource | null => {
+  if (input.file !== undefined) {
+    return { type: "file", file: input.file };
+  }
+  if (input.docx_base64 !== undefined) {
+    return { type: "base64", docxBase64: input.docx_base64 };
+  }
+  return null;
+};
+
+/**
+ * `create_template` with a `template_id`: publish the document as the
+ * template's next version, rename it, or both. The bytes go to S3 through
+ * `writeStoredTemplate`, which owns that write and keeps it outside the
+ * transaction.
+ */
+const upsertStoredTemplate = async ({
+  buffer,
+  context,
+  name,
+  templateId,
+}: {
+  buffer: Buffer | null;
+  context: McpRequestContext;
+  name: string | undefined;
+  templateId: SafeId<"template">;
+}): Promise<InternalToolErrorResult | { fieldCount: number }> => {
+  if (buffer === null) {
+    const renamed = await Result.gen(() =>
+      (context.testDependencies?.renameStoredTemplate ?? renameStoredTemplate)({
+        safeDb: context.safeDb,
+        organizationId: context.organizationId,
+        templateId,
+        name: name ?? panic("rename branch reached without a name"),
+        recordAuditEvent: context.recordAuditEvent,
+      }),
+    );
+    return Result.isError(renamed)
+      ? internalFailureResult(renamed.error)
+      : { fieldCount: renamed.value.fieldCount };
+  }
+
+  const [discovered, embeddedManifest] = await Promise.all([
+    discoverTemplate(buffer),
+    readManifest(buffer),
+  ]);
+  const written = await Result.gen(() =>
+    (context.testDependencies?.writeStoredTemplate ?? writeStoredTemplate)({
+      safeDb: context.safeDb,
+      organizationId: context.organizationId,
+      templateId,
+      mode: { type: "new-version", userId: context.userId },
+      ...(name === undefined ? {} : { metadata: { name } }),
+      recordAuditEvent: context.recordAuditEvent,
+      async prepare({ manifest: currentManifest }) {
+        // The new document decides which paths exist; the configuration that
+        // survives is the one whose path the new bytes still carry.
+        const manifest = resolveTemplateFieldOverlay({
+          discovered,
+          manifest: embeddedManifest ?? currentManifest,
+          overlay: undefined,
+        });
+        const updatedDocx = await writeManifest(buffer, manifest);
+        return Result.ok({ manifest, bytes: new Uint8Array(updatedDocx) });
+      },
+    }),
+  );
+  return Result.isError(written)
+    ? internalFailureResult(written.error)
+    : { fieldCount: written.value.row.fieldCount };
+};
+
+/**
+ * `create_template`: a new template from an uploaded DOCX, a new version of an
+ * existing one, or a rename. The response is the describe payload the template
+ * now serves, so the agent reads the discovered fields, arrays and warnings
+ * from the same producer `list_templates` uses.
+ */
+const handleCreateTemplateTool: TypedMcpToolHandler<
+  v.InferInput<typeof CREATE_TEMPLATE_PROJECTION>
+> = async ({ args, context }) => {
+  const parsed = v.safeParse(
+    CREATE_TEMPLATE_TOOL_DEFINITION.inputSchemaSource,
+    args,
+  );
+  if (!parsed.success) {
+    return validationErrorResult(parsed.issues);
+  }
+  const input = parsed.output;
+  // Creating a template and publishing over one the organization already has
+  // are different permissions, and the tool checks the one the call needs.
+  const hasPermission = hasEffectiveAuthority(context, {
+    template: [input.template_id === undefined ? "create" : "update"],
+  });
+  if (!hasPermission) {
+    return errorResult("Forbidden");
+  }
+
+  const source = createTemplateDocxSource(input);
+  let buffer: Buffer | null = null;
+  if (source !== null) {
+    const read = await readCreateTemplateDocx({ context, source });
+    if (read.status === "error") {
+      return read.result;
+    }
+    buffer = read.buffer;
+  }
+  // Reported with the template rather than refused, so a caller that sent
+  // both learns which document was stored without losing the call.
+  const sourceWarnings =
+    source?.type === "file" && input.docx_base64 !== undefined
+      ? [inlineBytesIgnoredWarning()]
+      : [];
+
+  if (input.template_id !== undefined) {
+    const templateId = brandPersistedTemplateId(input.template_id);
+    const upserted = await upsertStoredTemplate({
+      buffer,
+      context,
+      name: input.name,
+      templateId,
+    });
+    if (isToolErrorResult(upserted)) {
+      return upserted;
+    }
+    const described = await describeTemplateForAgent({ context, templateId });
+    if (isToolErrorResult(described)) {
+      return described;
+    }
+    return toolDataResult({
+      templateId,
+      fieldCount: upserted.fieldCount,
+      ...described,
+      warnings: [...sourceWarnings, ...described.warnings],
     });
   }
 
-  // Discovery runs again here rather than riding out of `createStoredTemplate`:
-  // that recipe also serves the built-in report clones, which embed a
-  // pre-built manifest and never discover at all. One extra parse per template
-  // creation buys every create branch the same warning list.
-  const warnings = await templateAuthoringWarnings({ buffer, context, fields });
-
+  // The schema guarantees both on this branch: a create carries a name and a
+  // document, and only an upsert may omit either.
+  const name = input.name ?? panic("create branch reached without a name");
   const created = await Result.gen(() =>
     (context.testDependencies?.createStoredTemplate ?? createStoredTemplate)({
       safeDb: context.safeDb,
       organizationId: context.organizationId,
       userId: context.userId,
-      buffer,
+      buffer: buffer ?? panic("create branch reached without a DOCX"),
       name,
       fileName: `${name}.docx`,
-      clientManifest,
       recordAuditEvent: context.recordAuditEvent,
     }),
   );
@@ -2064,55 +2238,41 @@ const createTemplateFromDocx = async ({
     return internalFailureResult(created.error);
   }
 
+  const described = await describeTemplateForAgent({
+    context,
+    templateId: created.value.id,
+  });
+  if (isToolErrorResult(described)) {
+    // The template exists: only reading it back failed. Returning the create
+    // error bare would leave the caller with no id, and a retry would create a
+    // second template, so the id and the way to reach it travel with the
+    // failure.
+    return structuredErrorResult({
+      code: "internal_error",
+      message: `Template ${created.value.id} was created, but reading its fields back failed`,
+      hint: `Do not create it again. Read it with list_templates and template_id '${created.value.id}', then configure its fields.`,
+      retryable: true,
+    });
+  }
+
   return toolDataResult({
     templateId: created.value.id,
-    name: created.value.name,
     fieldCount: created.value.fieldCount,
-    warnings,
-  } satisfies v.InferInput<typeof SAVE_TEMPLATE_CREATE_PROJECTION>);
+    ...described,
+    warnings: [...sourceWarnings, ...described.warnings],
+  });
 };
 
-// Configure branch of save_template: overlay field configuration onto an
-// existing template. Reused from the former configure_template_fields tool.
-const configureExistingTemplate = async ({
+/** The describe payload both `create_template` and `configure_template_fields`
+ *  hand back, read through the same producer `list_templates` detail mode
+ *  uses so the three surfaces cannot drift. */
+const describeTemplateForAgent = async ({
   context,
-  fields,
-  templateId: rawTemplateId,
+  templateId,
 }: {
   context: McpRequestContext;
-  fields: FieldMeta[];
-  templateId: string;
-}): Promise<
-  InternalToolResult<v.InferInput<typeof SAVE_TEMPLATE_PROJECTION>>
-> => {
-  const hasPermission = hasEffectiveAuthority(context, {
-    template: ["update"],
-  });
-  if (!hasPermission) {
-    return errorResult("Forbidden");
-  }
-
-  const templateId = brandPersistedTemplateId(rawTemplateId);
-
-  const configured = await Result.gen(() =>
-    (
-      context.testDependencies?.configureTemplateFields ??
-      configureTemplateFields
-    )({
-      safeDb: context.safeDb,
-      organizationId: context.organizationId,
-      templateId,
-      fields,
-      recordAuditEvent: context.recordAuditEvent,
-    }),
-  );
-  if (Result.isError(configured)) {
-    return internalFailureResult(configured.error);
-  }
-
-  // Echo the updated field list in the same shape the list_templates detail
-  // mode returns, so the agent sees exactly what is now configured (a complete
-  // round-trip).
+  templateId: SafeId<"template">;
+}): Promise<InternalToolErrorResult | TemplateDetailPayload> => {
   const described = await (
     context.testDependencies?.describeStoredTemplate ?? describeStoredTemplate
   )({
@@ -2123,69 +2283,178 @@ const configureExistingTemplate = async ({
   if ("error" in described) {
     return errorResult(described.error);
   }
-
-  const payload = toTemplateDetailPayload(described);
-
-  type ConfiguredTemplatePayload = AssertNoExtraFields<
+  const payload = toTemplateDetailPayload(templateId, described);
+  type DescribedTemplatePayload = AssertNoExtraFields<
     typeof payload,
     v.InferInput<typeof TEMPLATE_DESCRIBE_PROJECTION>
   >;
-  return toolDataResult(payload satisfies ConfiguredTemplatePayload);
+  return payload satisfies DescribedTemplatePayload;
 };
 
-const handleSaveTemplateTool: TypedMcpToolHandler<
-  v.InferInput<typeof SAVE_TEMPLATE_PROJECTION>
+/** `configure_template_fields`: overlay field configuration onto an existing
+ *  template. The stored document bytes keep their {{markers}}; only the
+ *  manifest changes. */
+/**
+ * The position of the `fields` entry a validation issue belongs to, or null
+ * when the issue is about the request rather than one entry. `fields.2.path`
+ * belongs to entry 2; `template_id` and a `fields` that is not an array
+ * belong to the request.
+ */
+const entryIndexOfIssue = (issue: v.BaseIssue<unknown>): number | null => {
+  const path = issue.path;
+  // An issue with no path at all is about the request, not about one entry.
+  if (path === undefined) {
+    return null;
+  }
+  const [root, position] = path;
+  if (root.key !== "fields" || position === undefined) {
+    return null;
+  }
+  return typeof position.key === "number" ? position.key : null;
+};
+
+type ConfigureEntries =
+  | { type: "rejected"; result: InternalToolErrorResult }
+  | {
+      type: "parsed";
+      templateId: string;
+      fields: FieldMeta[];
+      /** Where each applied entry sat in the `fields` array the caller sent,
+       *  in the order the entries were applied. The service that validates
+       *  them against the document counts positions in THIS list, so its
+       *  issues are translated back through it. */
+      applied: number[];
+      /** Indices, into the `fields` array the caller sent, of the entries the
+       *  schema refused, with what to do about each. */
+      issues: FieldOverlayIssue[];
+    };
+
+/**
+ * Read the request one entry at a time. The schema is the tool's own, applied
+ * to a shrinking `fields` array: an entry it refuses drops out with its own
+ * issue and the rest are re-parsed, so a caller that got one property wrong
+ * still configures the entries beside it. Anything the schema objects to
+ * outside `fields` is about the request, and fails it.
+ */
+const parseConfigureEntries = (
+  args: Record<string, unknown>,
+): ConfigureEntries => {
+  const schema = CONFIGURE_TEMPLATE_FIELDS_TOOL_DEFINITION.inputSchemaSource;
+  const sent: unknown[] | null = Array.isArray(args["fields"])
+    ? args["fields"]
+    : null;
+  const issues: FieldOverlayIssue[] = [];
+  let positions = sent === null ? [] : sent.map((_entry, index) => index);
+  for (;;) {
+    const candidate =
+      sent === null
+        ? args
+        : { ...args, fields: positions.map((position) => sent[position]) };
+    const parsed = v.safeParse(schema, candidate);
+    if (parsed.success) {
+      return {
+        type: "parsed",
+        templateId: parsed.output.template_id,
+        fields: parsed.output.fields.map(toFieldMetaToolInput),
+        applied: positions,
+        issues,
+      };
+    }
+    const rejected = new Set<number>();
+    for (const issue of parsed.issues) {
+      const local = entryIndexOfIssue(issue);
+      if (local === null || sent === null) {
+        return {
+          type: "rejected",
+          result: validationErrorResult(parsed.issues),
+        };
+      }
+      const position =
+        positions[local] ??
+        panic(`entry issue names position ${String(local)}`);
+      if (rejected.has(position)) {
+        continue;
+      }
+      rejected.add(position);
+      issues.push({
+        path: `fields.${position}`,
+        index: position,
+        message: issue.message,
+        hint: `Fix this entry against ${TEMPLATE_FIELD_REFERENCE_URI} and send it again; the other entries were applied.`,
+      });
+    }
+    positions = positions.filter((position) => !rejected.has(position));
+  }
+};
+
+const handleConfigureTemplateFieldsTool: TypedMcpToolHandler<
+  v.InferInput<typeof CONFIGURE_TEMPLATE_FIELDS_PROJECTION>
 > = async ({ args, context }) => {
-  const parsed = v.safeParse(
-    SAVE_TEMPLATE_TOOL_DEFINITION.inputSchemaSource,
-    args,
+  const hasPermission = hasEffectiveAuthority(context, {
+    template: ["update"],
+  });
+  if (!hasPermission) {
+    return errorResult("Forbidden");
+  }
+
+  const parsed = parseConfigureEntries(args);
+  if (parsed.type === "rejected") {
+    return parsed.result;
+  }
+  const templateId = brandPersistedTemplateId(parsed.templateId);
+
+  const configured = await Result.gen(() =>
+    (
+      context.testDependencies?.configureTemplateFields ??
+      configureTemplateFields
+    )({
+      safeDb: context.safeDb,
+      organizationId: context.organizationId,
+      templateId,
+      fields: parsed.fields,
+      recordAuditEvent: context.recordAuditEvent,
+    }),
   );
-  if (!parsed.success) {
-    return validationErrorResult(parsed.issues);
+  if (Result.isError(configured)) {
+    return internalFailureResult(configured.error);
   }
-  const input = parsed.output;
-  const fields = input.fields?.map(toFieldMetaToolInput);
+  // The service only saw the entries the schema accepted, so it counts
+  // positions in THAT list. The caller counts positions in the list it sent,
+  // and repairs the entry an issue names, so the service's positions are
+  // translated back before the two lists are merged.
+  const serviceIssues = configured.value.issues.map((issue) => {
+    const index =
+      parsed.applied.at(issue.index) ??
+      panic(`configure issue names applied entry ${String(issue.index)}`);
+    return {
+      path: `fields.${index}`,
+      index,
+      message: issue.message,
+      hint: issue.hint,
+    };
+  });
 
-  // Configure branch: template_id (no docx_base64) overlays field config onto an
-  // existing template. The schema guarantees fields is present here.
-  if (input.template_id !== undefined) {
-    return await configureExistingTemplate({
-      context,
-      fields:
-        fields ??
-        panic(
-          "save_template configure branch reached without a fields overlay",
-        ),
-      templateId: input.template_id,
-    });
+  // Echo the field list in the same shape list_templates' detail mode returns,
+  // so the agent sees exactly what is now configured, beside every entry that
+  // was not applied and why.
+  const described = await describeTemplateForAgent({ context, templateId });
+  if (isToolErrorResult(described)) {
+    return described;
   }
-
-  // Create branch: name and exactly one of file / docx_base64 are guaranteed
-  // present by the schema.
-  return await createTemplateFromDocx({
-    context,
-    fields,
-    name:
-      input.name ?? panic("save_template create branch reached without name"),
-    source:
-      input.file === undefined
-        ? {
-            type: "base64",
-            docxBase64:
-              input.docx_base64 ??
-              panic(
-                "save_template create branch reached without a DOCX source",
-              ),
-          }
-        : { type: "file", file: input.file },
+  return toolDataResult({
+    ...described,
+    issues: [...parsed.issues, ...serviceIssues].toSorted(
+      (left, right) => left.index - right.index,
+    ),
   });
 };
 
 export const TEMPLATE_TOOL_HANDLERS = {
+  configure_template_fields: handleConfigureTemplateFieldsTool,
+  create_template: handleCreateTemplateTool,
   fill_template: handleFillTemplateTool,
   list_templates: handleListTemplatesTool,
   save_filled_template: handleSaveFilledTemplateTool,
-  save_template: handleSaveTemplateTool,
 } satisfies Record<TemplateToolName, McpToolHandler>;
 
 export const TEMPLATE_TOOL_SET = defineMcpToolSet(

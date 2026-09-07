@@ -124,13 +124,13 @@ const config = {
     "Read the marker grammar from the template-markers reference resource " +
     "when unsure. Returns the template id and field count.",
   permissions: { template: ["create"] },
-  mcp: { type: "tool", name: "save_template" },
+  mcp: { type: "tool", name: "create_template" },
   transport: {
     type: "file-input",
     input: { field: "file", required: true, mediaTypes: [DOCX_MIME_TYPE] },
     alternative: {
       type: "mcp-tool",
-      name: "save_template",
+      name: "create_template",
       note: "Pass the DOCX base64-encoded in docx_base64 and a name.",
     },
   },

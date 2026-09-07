@@ -33,7 +33,8 @@ export const TEMPLATE_WORKFLOW_REFERENCE_URI =
  * half can drift from the other.
  */
 const TOOL = {
-  saveTemplate: "save_template",
+  createTemplate: "create_template",
+  configureTemplateFields: "configure_template_fields",
   listTemplates: "list_templates",
   setPracticeJurisdictions: "set_practice_jurisdictions",
   fillTemplate: "fill_template",
@@ -45,10 +46,11 @@ const TOOL = {
 export const TEMPLATE_WORKFLOW_TOOL_NAMES = Object.values(TOOL);
 
 const {
+  configureTemplateFields: CONFIGURE_TEMPLATE_FIELDS,
+  createTemplate: CREATE_TEMPLATE,
   fillTemplate: FILL_TEMPLATE,
   listTemplates: LIST_TEMPLATES,
   saveFilledTemplate: SAVE_FILLED_TEMPLATE,
-  saveTemplate: SAVE_TEMPLATE,
   sendFeedback: SEND_FEEDBACK,
   setPracticeJurisdictions: SET_PRACTICE_JURISDICTIONS,
   uploadDocumentVersion: UPLOAD_DOCUMENT_VERSION,
@@ -82,43 +84,63 @@ const WORKFLOW_STEPS: readonly WorkflowStep[] = [
   {
     title: "Create the template",
     detail:
-      `${SAVE_TEMPLATE} with \`name\`, the DOCX, and no \`fields\`. Two ways ` +
-      `to send it: \`file\`, a host file reference (the shape ` +
+      `${CREATE_TEMPLATE} with \`name\` and the DOCX. Two ways to send it: ` +
+      `\`file\`, a host file reference (the shape ` +
       `${UPLOAD_DOCUMENT_VERSION} takes), up to ${MAX_DOCX_MEGABYTES} MB; or ` +
       "`docx_base64`, base64 of the raw bytes, for a small document only " +
       `(at most ${MAX_INLINE_DOCX_BYTES} bytes decoded), because the whole ` +
       "call must fit one MCP request frame. Never strip parts out to fit " +
-      "that; use `file`. Returns `templateId`, `name`, `fieldCount` and " +
-      "`warnings[]` (`code`, `path`, `message`, `hint`): markers the save " +
+      "that; use `file`. Send one of the two: a call carrying both stores " +
+      "the attached `file` and ignores the inline bytes, and says so in " +
+      "`warnings[]`. Returns `templateId`, `fieldCount`, the discovered " +
+      "`fields[]`, `arrays[]`, `conditions[]` and `computed[]`, and " +
+      "`warnings[]` (`code`, `path`, `message`, `hint`): markers the create " +
       "accepted that will not do what you meant. Fix them in the DOCX and " +
-      "create again before configuring. Discovery decides which paths exist, " +
-      "so configure in a second call rather than guessing paths here.",
+      "send the corrected file back with this `template_id`, which publishes " +
+      "a new version rather than a second template. It also returns " +
+      "`configure`: the " +
+      `exact ${CONFIGURE_TEMPLATE_FIELDS} call for this template, one entry ` +
+      "per configurable path (loop item paths included) with the source each " +
+      "field already has. Copy it and edit the entries that should differ; " +
+      "do not spell the paths yourself.",
   },
   {
     title: "Read the discovered paths back",
     detail:
-      `${LIST_TEMPLATES} with \`template_id\`. Returns \`fields[]\` (\`path\`, ` +
-      "`label`, `inputType`, `required`, `hint`, `options`, `optionsFrom`, " +
-      "`formats`, `aiPrompt`, `aiAdapt`, `parts`, `format`, `dateFormat`), " +
+      `${CREATE_TEMPLATE} already returned this, and ${LIST_TEMPLATES} with ` +
+      "`template_id` returns it again (`configure` included) for a template " +
+      "you did not just " +
+      "create. `fields[]` (`path`, " +
+      "`label`, `input_type`, `required`, `hint`, `options`, `options_from`, " +
+      "`parts`, `format`, `date_format`, and `source`: who fills the field, " +
+      "as one object with a `type`), " +
       "`arrays[]` (one entry per `{{#each}}` loop: its `path` plus the " +
       "`itemFieldPaths` it repeats), `conditions[]`, `computed[]` " +
-      "(`name` + `expression`) and the same `warnings[]`. Compare " +
-      "`fields[].path` against the markers " +
-      "you wrote: a path you expected and do not see was not discovered. Fix " +
-      "the document and create the template again before configuring — " +
+      "(each `path` + its `condition` or `formula`) and the same " +
+      "`warnings[]`. Compare `fields[].path` against the markers you wrote: a " +
+      "path you expected and do not see was not discovered. Fix the document " +
+      `and send it back to ${CREATE_TEMPLATE} with this \`template_id\` — ` +
       "configuration cannot add a field the DOCX does not contain.",
   },
   {
     title: "Configure the fields",
     detail:
-      `${SAVE_TEMPLATE} with \`template_id\` and a \`fields\` overlay, and no ` +
-      "`docx_base64` and no `name`. Every entry's `path` must be one " +
-      `${LIST_TEMPLATES} reported; an undiscovered path is refused. The ` +
-      "overlay decides who fills each field (person, AI, registry lookup, " +
-      "matter or contact binding, formula) — see " +
+      `${CONFIGURE_TEMPLATE_FIELDS} with \`template_id\` and \`fields\`. Every ` +
+      `entry's \`path\` must be one ${CREATE_TEMPLATE} or ${LIST_TEMPLATES} ` +
+      "reported. Each entry's `source` is " +
+      "ONE object naming who fills that field (`person`, `ai`, `lookup`, " +
+      "`contact`, `party`, `matter`, `attorney`, `firm`, `formula`, " +
+      "`condition`); omit it for a field the person fills — see " +
       `${TEMPLATE_FIELD_REFERENCE_URI}. The response echoes the full ` +
-      `configuration in the ${LIST_TEMPLATES} detail shape, \`warnings[]\` ` +
-      "included: the overlay recomputes them, so a condition that removes " +
+      `configuration in the ${LIST_TEMPLATES} detail shape, plus ` +
+      "`issues[]` (`path`, `index`, `message`, `hint`): one entry per " +
+      "configuration that could NOT be applied. The call is best effort — an " +
+      "entry naming a path the DOCX does not carry, or a property the schema " +
+      "refuses, is reported on its own and the entries beside it are still " +
+      "applied, so read `issues[]` and resend only the entries it names. Only " +
+      "a template-level problem (not found, no permission, an unreadable " +
+      "manifest) fails the whole call. `warnings[]` comes back too: the " +
+      "change recomputes them, so a condition that removes " +
       "its own input or a lookup on a disabled registry shows up here. A " +
       "`lookup` " +
       "field resolves at fill time only for a registry the organization has " +

@@ -252,13 +252,18 @@ describe("scoreAuthoringRun", () => {
 
   test("a clean save passes", () => {
     expect(
-      scoreAuthoringRun({ turnError: null, attempt: savedAttempt() }).outcome,
+      scoreAuthoringRun({
+        created: false,
+        turnError: null,
+        attempt: savedAttempt(),
+      }).outcome,
     ).toBe("pass");
   });
 
   test("any single defect makes the run partial", () => {
     expect(
       scoreAuthoringRun({
+        created: false,
         turnError: null,
         attempt: {
           ...savedAttempt(),
@@ -268,6 +273,7 @@ describe("scoreAuthoringRun", () => {
     ).toBe("partial");
     expect(
       scoreAuthoringRun({
+        created: false,
         turnError: null,
         attempt: {
           ...savedAttempt(),
@@ -277,6 +283,7 @@ describe("scoreAuthoringRun", () => {
     ).toBe("partial");
     expect(
       scoreAuthoringRun({
+        created: false,
         turnError: null,
         attempt: { ...savedAttempt(), fidelity: ['dropped "MIETVERTRAG"'] },
       }).outcome,
@@ -285,6 +292,7 @@ describe("scoreAuthoringRun", () => {
 
   test("a provider error overrides the outcome without discarding saved diagnostics", () => {
     const providerError = scoreAuthoringRun({
+      created: false,
       turnError: "provider refused the request",
       attempt: {
         ...savedAttempt(),
@@ -298,8 +306,84 @@ describe("scoreAuthoringRun", () => {
     expect(providerError.configDefects).toEqual(["company has no lookup"]);
   });
 
+  test("the four steps are scored separately, so a run says where it stopped", () => {
+    const clean = scoreAuthoringRun({
+      created: true,
+      turnError: null,
+      attempt: savedAttempt(),
+    });
+    expect(clean.steps).toEqual({
+      authored: true,
+      created: true,
+      configured: true,
+      filled: true,
+    });
+
+    // A document that authored cleanly and was created, whose configuration
+    // was refused entry by entry and whose fill then left markers behind.
+    const configureFailed = scoreAuthoringRun({
+      created: true,
+      turnError: null,
+      attempt: {
+        ...savedAttempt(),
+        overlayIssues: ["fields.0: No marker {{ghost}} in the DOCX."],
+        roundTrip: { ...cleanRoundTrip(), leftoverMarkers: 2 },
+      },
+    });
+    expect(configureFailed.steps).toEqual({
+      authored: true,
+      created: true,
+      configured: false,
+      filled: false,
+    });
+
+    // A grammar trap is an authoring failure even when everything after it
+    // succeeded.
+    const trapped = scoreAuthoringRun({
+      created: true,
+      turnError: null,
+      attempt: {
+        ...savedAttempt(),
+        traps: { ...savedAttempt().traps, unprefixed_item_path: 1 },
+      },
+    });
+    expect(trapped.steps.authored).toBe(false);
+    expect(trapped.steps.created).toBe(true);
+  });
+
+  test("a turn that never created still reports what it authored", () => {
+    const unsaved = scoreAuthoringRun({
+      created: false,
+      turnError: null,
+      attempt: {
+        status: "unsaved",
+        paths: { missing: [], extra: [] },
+        traps: savedAttempt().traps,
+        overlayIssues: [],
+        fidelity: [],
+      },
+    });
+    expect(unsaved.steps).toEqual({
+      authored: true,
+      created: false,
+      configured: false,
+      filled: false,
+    });
+  });
+
+  test("a configure refused after a successful create still credits the create", () => {
+    const rejected = scoreAuthoringRun({
+      created: true,
+      turnError: null,
+      attempt: { status: "rejected", overlayIssues: ["fields.0: nope"] },
+    });
+    expect(rejected.steps.created).toBe(true);
+    expect(rejected.steps.configured).toBe(false);
+  });
+
   test("a provider error with no attempt has no diagnostics", () => {
     const providerError = scoreAuthoringRun({
+      created: false,
       turnError: "provider refused the request",
       attempt: null,
     });
@@ -309,14 +393,16 @@ describe("scoreAuthoringRun", () => {
   });
 
   test("no call without a provider error is its own outcome", () => {
-    expect(scoreAuthoringRun({ turnError: null, attempt: null }).outcome).toBe(
-      "no-call",
-    );
+    expect(
+      scoreAuthoringRun({ created: false, turnError: null, attempt: null })
+        .outcome,
+    ).toBe("no-call");
   });
 
   test("bytes that are not a DOCX are reported apart from a rejected overlay", () => {
     expect(
       scoreAuthoringRun({
+        created: false,
         turnError: null,
         attempt: {
           status: "invalid-docx",
@@ -325,6 +411,7 @@ describe("scoreAuthoringRun", () => {
       }).outcome,
     ).toBe("invalid-docx");
     const rejected = scoreAuthoringRun({
+      created: false,
       turnError: null,
       attempt: { status: "rejected", overlayIssues: ['No field "x"'] },
     });
@@ -334,6 +421,7 @@ describe("scoreAuthoringRun", () => {
 
   test("an unsaved document earns partial credit for its authored markers", () => {
     const score = scoreAuthoringRun({
+      created: false,
       turnError: null,
       attempt: {
         status: "unsaved",
@@ -356,6 +444,7 @@ describe("scoreAuthoringRun", () => {
 
   test("an unsaved document keeps its evidence when the turn errors", () => {
     const score = scoreAuthoringRun({
+      created: false,
       turnError: "output token limit reached",
       attempt: {
         status: "unsaved",

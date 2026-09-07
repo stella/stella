@@ -248,7 +248,8 @@ const CHAT_TOOL_TITLE_KEYS = {
   save_document: "chat.tool.save_document",
   save_matter: "chat.tool.save_matter",
   save_task: "chat.tool.save_task",
-  save_template: "chat.tool.save_template",
+  create_template: "chat.tool.create_template",
+  configure_template_fields: "chat.tool.configure_template_fields",
   save_time_entry: "chat.tool.save_time_entry",
   set_field_value: "chat.tool.set_field_value",
   set_practice_jurisdictions: "chat.tool.set_practice_jurisdictions",
@@ -286,6 +287,9 @@ const RETIRED_CHAT_TOOL_TITLE_KEYS = {
   edit_workspace_document: "chat.tool.suggest_changes",
   ares_lookup_company: "chat.tool.ares_lookup_company",
   ares_search_companies: "chat.tool.ares_search_companies",
+  // Split into create_template and configure_template_fields; persisted
+  // threads still carry its calls and should not render as an unknown tool.
+  save_template: "chat.tool.save_template",
   // Retired hand-rolled code-execution tools, replaced by the code-mode
   // execute_typescript / discover_tools pair. Kept so historical threads that
   // reference them still render a recognisable label.
@@ -419,7 +423,8 @@ const CHAT_TOOL_GRANT_POLICY = {
   save_document: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
   save_matter: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
   save_task: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
-  save_template: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
+  create_template: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
+  configure_template_fields: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
   save_time_entry: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
   set_field_value: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
   set_practice_jurisdictions: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
@@ -506,7 +511,8 @@ const REGISTRY_WRITE_SUMMARY_TOOL_NAMES = {
   save_document: true,
   save_matter: true,
   save_task: true,
-  save_template: true,
+  create_template: true,
+  configure_template_fields: true,
   save_time_entry: true,
   set_field_value: true,
   set_practice_jurisdictions: true,
@@ -521,14 +527,43 @@ const REGISTRY_WRITE_SUMMARY_TOOL_NAMES = {
   boolean
 >;
 
+/**
+ * The same decision for the retired tools whose calls persisted threads still
+ * carry: a card that rendered a write summary when the call was made keeps
+ * rendering it. A TOTAL record over `RETIRED_CHAT_TOOL_TITLE_KEYS`, so
+ * retiring a tool decides this rather than silently dropping its summary.
+ * Every name here must also reach a redacting branch in
+ * `buildRegistryWriteSummaryRows`; the generic branch formats each input
+ * property verbatim.
+ */
+const RETIRED_REGISTRY_WRITE_SUMMARY_TOOL_NAMES = {
+  "apply-active-docx-edits": false,
+  ares_lookup_company: false,
+  ares_search_companies: false,
+  "describe-stella-api": false,
+  "describe-stella-function": false,
+  edit_workspace_document: false,
+  "execute-typescript": false,
+  "read-contact": false,
+  "read-content-across-matters": false,
+  "run-stella-query": false,
+  save_template: true,
+  "search-across-matters": false,
+} as const satisfies Record<keyof typeof RETIRED_CHAT_TOOL_TITLE_KEYS, boolean>;
+
+const REGISTRY_WRITE_SUMMARY_DISPLAY_TOOL_NAMES = {
+  ...REGISTRY_WRITE_SUMMARY_TOOL_NAMES,
+  ...RETIRED_REGISTRY_WRITE_SUMMARY_TOOL_NAMES,
+} as const;
+
 const isRegistryWriteSummaryEligibleToolName = (
   toolName: string,
-): toolName is keyof typeof REGISTRY_WRITE_SUMMARY_TOOL_NAMES =>
-  Object.hasOwn(REGISTRY_WRITE_SUMMARY_TOOL_NAMES, toolName);
+): toolName is keyof typeof REGISTRY_WRITE_SUMMARY_DISPLAY_TOOL_NAMES =>
+  Object.hasOwn(REGISTRY_WRITE_SUMMARY_DISPLAY_TOOL_NAMES, toolName);
 
 export const isRegistryWriteSummaryToolName = (toolName: string): boolean =>
   isRegistryWriteSummaryEligibleToolName(toolName) &&
-  REGISTRY_WRITE_SUMMARY_TOOL_NAMES[toolName];
+  REGISTRY_WRITE_SUMMARY_DISPLAY_TOOL_NAMES[toolName];
 
 export type ChatToolTitleKey =
   | (typeof CHAT_TOOL_DISPLAY_TITLE_KEYS)[keyof typeof CHAT_TOOL_DISPLAY_TITLE_KEYS]

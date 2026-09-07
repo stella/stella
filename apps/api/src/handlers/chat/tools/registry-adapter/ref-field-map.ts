@@ -30,7 +30,8 @@ import {
   SAVE_CONTACT_PROJECTION,
   SAVE_DOCUMENT_PROJECTION,
   SAVE_MATTER_PROJECTION,
-  SAVE_TEMPLATE_PROJECTION,
+  CONFIGURE_TEMPLATE_FIELDS_PROJECTION,
+  CREATE_TEMPLATE_PROJECTION,
   SAVE_TASK_PROJECTION,
   SAVE_TIME_ENTRY_PROJECTION,
   SEARCH_ACROSS_MATTERS_PROJECTION,
@@ -40,7 +41,6 @@ import {
   SET_PRACTICE_JURISDICTIONS_PROJECTION,
 } from "@/api/lib/chat/projections";
 import type { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
-import { TEMPLATE_FIELD_REFERENCE_URI } from "@/api/mcp/template-field-reference";
 import { TEMPLATE_MARKER_REFERENCE_URI } from "@/api/mcp/template-marker-reference";
 
 /**
@@ -462,26 +462,27 @@ export const WRITE_TOOL_REF_FIELD_MAP = {
   // cannot PUT bytes. Chat already has first-class template/document flows;
   // projecting this would duplicate that surface and its approval UX.
   save_filled_template: { chatProjectable: false },
-  save_template: {
+  create_template: {
+    chatProjectable: true,
+    // The returned `templateId` is an org template handle, not a chat ref.
+    inputRefs: [],
+    projection: CREATE_TEMPLATE_PROJECTION,
+    // Chat can create from inline bytes, but it has no adapter for an MCP
+    // host's transient file reference.
+    unavailableInputParams: ["file"],
+    chatDescription:
+      "Create a template from inline base64 DOCX bytes. Pass name and " +
+      "docx_base64; every {{marker}} in the file becomes a fillable field. " +
+      "docx_base64 must carry the original bytes verbatim: never retype the " +
+      "file or strip parts out to fit. Read " +
+      `${TEMPLATE_MARKER_REFERENCE_URI} before authoring the DOCX. Returns ` +
+      "the template id and its discovered field configuration.",
+  },
+  configure_template_fields: {
     chatProjectable: true,
     // `template_id` is an org template handle, not a chat ref: passes through.
     inputRefs: [],
-    projection: SAVE_TEMPLATE_PROJECTION,
-    // Chat can configure a template or create one from inline bytes, but it
-    // has no adapter for an MCP host's transient file reference.
-    unavailableInputParams: ["file"],
-    chatDescription:
-      "Create a template from inline base64 DOCX bytes, or configure an " +
-      "existing template's fields. To create, pass name and docx_base64; " +
-      "the DOCX's {{field}} markers become fillable fields, and fields can " +
-      "configure them in the same call. docx_base64 must carry the original " +
-      "bytes verbatim: never retype the file or strip parts out to fit. To " +
-      "configure, pass template_id with fields and no document; only the " +
-      "manifest changes, the document's {{markers}} stay untouched. Read " +
-      `${TEMPLATE_MARKER_REFERENCE_URI} before authoring a DOCX and ` +
-      `${TEMPLATE_FIELD_REFERENCE_URI} before configuring fields. Returns the ` +
-      "template id and field count when creating, or the updated fields when " +
-      "configuring.",
+    projection: CONFIGURE_TEMPLATE_FIELDS_PROJECTION,
   },
 
   // --- Feedback -------------------------------------------------------------

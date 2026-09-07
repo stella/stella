@@ -157,8 +157,9 @@ const NON_DIRECTIVE_RULES = [
     detail:
       "Markers decide only WHICH values are fillable. How each field behaves " +
       "(input type, options, validation, who fills it) is a separate field " +
-      "configuration, never inside the DOCX: pass it as save_template's " +
-      "`fields` overlay, documented in the template-fields reference resource.",
+      "configuration, never inside the DOCX: pass it as " +
+      "configure_template_fields' `fields`, documented in the " +
+      "template-fields reference resource.",
   },
 ] as const;
 

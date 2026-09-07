@@ -29,10 +29,15 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 /** One rejected overlay entry. `path` is the dot path of the offending entry in
  *  the tool input (`fields.2`), matching the schema-derived issue paths, so an
- *  agent can fix the entry it sent instead of parsing prose. */
+ *  agent can fix the entry it sent instead of parsing prose; `index` is the
+ *  same position as a number, so a caller can address the entry it sent
+ *  without parsing the path. `message` says what is wrong with the entry and
+ *  `hint` says what to do about it. */
 export type FieldOverlayIssue = {
   path: string;
+  index: number;
   message: string;
+  hint: string;
 };
 
 /**
@@ -123,7 +128,9 @@ export const validateFieldOverlay = ({
     if (seenPaths.has(field.path)) {
       issues.push({
         path: issuePath,
-        message: `"${field.path}" is a duplicate field path. Send each path once.`,
+        index,
+        message: `"${field.path}" is configured more than once.`,
+        hint: "Send one entry per path; merge the duplicates into one entry.",
       });
       continue;
     }
@@ -138,20 +145,25 @@ export const validateFieldOverlay = ({
       if (effectiveByPath.get(field.path)?.lookup === undefined) {
         issues.push({
           path: issuePath,
+          index,
           message:
             `"${field.path}" is not a marker of its own: the DOCX only ` +
             `groups ${children.map((child) => `{{${child}}}`).join(", ")} ` +
-            "under it. Configure those paths, or declare a lookup on " +
-            `"${field.path}" whose format keys are those markers.`,
+            "under it.",
+          hint:
+            "Configure those paths instead, or give " +
+            `"${field.path}" a lookup source whose format keys are those markers.`,
         });
         continue;
       }
     } else if (!declared.has(field.path)) {
       issues.push({
         path: issuePath,
-        message:
-          `No marker {{${field.path}}} in the DOCX. Configure only paths ` +
-          "that exist as {{markers}}.",
+        index,
+        message: `No marker {{${field.path}}} in the DOCX.`,
+        hint:
+          "Configure only the paths the template reported. To add a field, " +
+          "put its {{marker}} in the document and publish a new version.",
       });
       continue;
     }
@@ -177,20 +189,93 @@ export const validateFieldOverlay = ({
       const message =
         `"${field.path}" declares a lookup whose format key "${format.key}" ` +
         `renders {{${childPath}}}, but "${childPath}" is configured as its ` +
-        "own field. Drop one of the two: rename the format key, or remove " +
-        `the "${childPath}" configuration.`;
+        "own field.";
+      const hint =
+        "Drop one of the two: rename the format key, or remove the " +
+        `"${childPath}" configuration.`;
       const ownerIndex = overlayIndexByPath.get(field.path);
       if (ownerIndex !== undefined) {
-        issues.push({ path: `fields.${ownerIndex}`, message });
+        issues.push({
+          path: `fields.${ownerIndex}`,
+          index: ownerIndex,
+          message,
+          hint,
+        });
       }
       const childIndex = overlayIndexByPath.get(childPath);
       if (childIndex !== undefined) {
-        issues.push({ path: `fields.${childIndex}`, message });
+        issues.push({
+          path: `fields.${childIndex}`,
+          index: childIndex,
+          message,
+          hint,
+        });
       }
     }
   }
 
   return issues;
+};
+
+type PartitionFieldOverlayResult = {
+  /** The entries that apply together, in the order they were sent. */
+  applied: FieldMeta[];
+  /** One issue per entry that does not, addressed by its position in the
+   *  input the caller sent, not by its position among the survivors. */
+  issues: FieldOverlayIssue[];
+};
+
+/**
+ * Split an overlay into the entries that apply and the ones that do not. A
+ * call carrying seven usable entries and one bad path configures the seven:
+ * an agent that gets one property wrong should not have to resend the other
+ * seven to find out whether they were fine.
+ *
+ * Validation runs to a fixed point because two of the rules relate a pair of
+ * entries (a lookup owner and the marker one of its format keys renders), so
+ * dropping one entry can settle another. Dropping only ever removes
+ * constraints, and every round removes at least one entry, so the loop
+ * terminates in at most `overlay.length` rounds.
+ */
+export const partitionFieldOverlay = ({
+  configured,
+  discovered,
+  overlay,
+}: ValidateFieldOverlayOptions): PartitionFieldOverlayResult => {
+  const issuesByIndex = new Map<number, FieldOverlayIssue>();
+  let survivors = overlay.map((field, index) => ({ field, index }));
+  for (;;) {
+    const issues = validateFieldOverlay({
+      configured,
+      discovered,
+      overlay: survivors.map((entry) => entry.field),
+    });
+    if (issues.length === 0) {
+      return {
+        applied: survivors.map((entry) => entry.field),
+        issues: [...issuesByIndex.values()].toSorted(
+          (left, right) => left.index - right.index,
+        ),
+      };
+    }
+    const rejected = new Set<number>();
+    for (const issue of issues) {
+      const entry =
+        survivors[issue.index] ??
+        panic(`overlay issue names position ${String(issue.index)}`);
+      rejected.add(entry.index);
+      // The first reason an entry is rejected describes the entry itself; a
+      // later round can only report a consequence of dropping another.
+      if (!issuesByIndex.has(entry.index)) {
+        issuesByIndex.set(entry.index, {
+          ...issue,
+          path: `fields.${entry.index}`,
+          index: entry.index,
+        });
+      }
+    }
+    survivors = survivors.filter((entry) => !rejected.has(entry.index));
+  }
 };
 
 /**
@@ -210,7 +295,11 @@ export const applyFieldOverlay = (
   });
   const existingPaths = new Set(existing.map((field) => field.path));
   for (const field of overlayByPath.values()) {
-    if (!existingPaths.has(field.path)) {
+    // A bare `{ path }` entry decides nothing: it is the skeleton read back
+    // unchanged. Appending it would record a loop's item path as a field of
+    // its own and grow the manifest on every no-op configure, so only an
+    // entry that carries a decision creates a new manifest field.
+    if (!existingPaths.has(field.path) && carriesConfiguration(field)) {
       merged.push(field);
     }
   }
@@ -248,9 +337,10 @@ export const fieldOverlayError = (
 ): HandlerError<400> => {
   const first = issues.at(0) ?? panic("field overlay rejected with no issue");
   const others = issues.length - 1;
+  const summary = `${first.message} ${first.hint}`;
   return new HandlerError({
     status: 400,
-    message: others > 0 ? `${first.message} (${others} more)` : first.message,
+    message: others > 0 ? `${summary} (${others} more)` : summary,
     issues: [...issues],
   });
 };

@@ -49,7 +49,7 @@ const NON_UUID_ID_INPUTS: Record<string, string> = {
   // A host-assigned reference from the MCP client's file payload, used only
   // as a display-name fallback.
   "upload_document_version.file.file_id": "host-assigned client file reference",
-  "save_template.file.file_id": "host-assigned client file reference",
+  "create_template.file.file_id": "host-assigned client file reference",
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>

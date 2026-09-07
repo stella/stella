@@ -1503,9 +1503,33 @@ const TEMPLATE_WARNINGS_PROJECTION = v.array(
 );
 
 /**
+ * Who fills a template field, as one discriminated union: the same shape
+ * `configure_template_fields` accepts, so a described field round-trips. A
+ * binding branch names no record id, only the selector and the field key; a
+ * lookup branch names the registry and its rendering templates. The branches
+ * are flattened into one object here because a projection describes the wire
+ * payload, not the runtime validator that already refused every other
+ * combination.
+ */
+const TEMPLATE_FIELD_SOURCE_PROJECTION = v.strictObject({
+  type: v.string(),
+  field: v.optional(v.string()),
+  role: v.optional(v.string()),
+  ref: v.optional(v.string()),
+  prompt: v.optional(v.string()),
+  adapt: v.optional(v.boolean()),
+  sees_document: v.optional(v.boolean()),
+  registry: v.optional(v.string()),
+  formats: v.optional(
+    v.array(v.strictObject({ key: v.string(), template: v.string() })),
+  ),
+  expression: v.optional(v.string()),
+});
+
+/**
  * The describe shape (`DescribeTemplateResult` success variant,
  * `lib/templates/template-fill-service.ts`) served by list_templates' detail
- * mode and echoed by save_template's configure branch. Field paths, input
+ * mode and echoed by configure_template_fields. Field paths, input
  * types, options, and condition/formula expressions are structural
  * org-authored data; no ids anywhere.
  */
@@ -1519,16 +1543,6 @@ export const TEMPLATE_DESCRIBE_PROJECTION = v.strictObject({
       required: v.boolean(),
       hint: v.optional(v.string()),
       options: v.optional(v.array(v.string())),
-      // The complete lookup configuration, in the shape `save_template`'s
-      // `fields` overlay accepts, so a described field round-trips.
-      lookup: v.optional(
-        v.strictObject({
-          registry: v.string(),
-          formats: v.array(
-            v.strictObject({ key: v.string(), template: v.string() }),
-          ),
-        }),
-      ),
       validation: v.optional(
         v.strictObject({
           required: v.optional(v.boolean()),
@@ -1541,19 +1555,7 @@ export const TEMPLATE_DESCRIBE_PROJECTION = v.strictObject({
           max_items: v.optional(v.number()),
         }),
       ),
-      // A binding resolves server-side from matter/contact data; it names no
-      // record id, only the kind, the selector, and the field key.
-      source: v.optional(
-        v.strictObject({
-          kind: v.string(),
-          field: v.string(),
-          role: v.optional(v.string()),
-          ref: v.optional(v.string()),
-        }),
-      ),
-      ai_sees_document: v.boolean(),
-      ai_prompt: v.optional(v.string()),
-      ai_adapt: v.boolean(),
+      source: TEMPLATE_FIELD_SOURCE_PROJECTION,
       options_from: v.optional(v.string()),
       date_format: v.optional(
         v.strictObject({ locale: v.string(), style: v.string() }),
@@ -1593,6 +1595,21 @@ export const TEMPLATE_DESCRIBE_PROJECTION = v.strictObject({
   // field path it names, and fixed guidance text. Structural, like the field
   // paths above; no document prose is echoed.
   warnings: TEMPLATE_WARNINGS_PROJECTION,
+  // The `configure_template_fields` call to make next, spelled exactly as
+  // that tool accepts it: an org template handle plus one entry per
+  // configurable path. Nothing here is new data, only the field paths above
+  // and the loop item paths `arrays` names, arranged as the next call.
+  configure: v.strictObject({
+    template_id: passthroughId(),
+    fields: v.array(
+      v.strictObject({
+        path: v.string(),
+        label: v.optional(v.string()),
+        input_type: v.optional(v.string()),
+        source: TEMPLATE_FIELD_SOURCE_PROJECTION,
+      }),
+    ),
+  }),
 });
 
 /**
@@ -1759,18 +1776,34 @@ export const SET_PRACTICE_JURISDICTIONS_PROJECTION = v.strictObject({
 });
 
 /**
- * save_template: create returns `{ templateId, name, fieldCount, warnings }`
- * (template handle); configure echoes the same describe shape list_templates'
- * detail mode serves, so the agent sees exactly what is now configured.
+ * create_template: the template handle and field count, plus the same describe
+ * shape list_templates' detail mode serves, so one call both creates the
+ * template and hands back the configuration surface to edit.
  */
-export const SAVE_TEMPLATE_CREATE_PROJECTION = v.strictObject({
+export const CREATE_TEMPLATE_PROJECTION = v.strictObject({
   templateId: passthroughId(),
-  name: v.string(),
+  // The manifest field count, the same number list_templates reports per
+  // template. `fields[]` below is the fillable subset: a formula or condition
+  // field is a rule, reported under `computed`/`conditions`, so the two
+  // numbers differ for a template that declares any.
   fieldCount: v.number(),
-  warnings: TEMPLATE_WARNINGS_PROJECTION,
+  ...TEMPLATE_DESCRIBE_PROJECTION.entries,
 });
 
-export const SAVE_TEMPLATE_PROJECTION = v.union([
-  projectionBranch(SAVE_TEMPLATE_CREATE_PROJECTION),
-  projectionBranch(TEMPLATE_DESCRIBE_PROJECTION),
-]);
+/**
+ * configure_template_fields echoes the describe shape, so the agent sees
+ * exactly what is now configured, plus one entry per configuration it could
+ * not apply. Issue text is generated from the field paths the org authored
+ * and fixed guidance; no document prose travels in it.
+ */
+export const CONFIGURE_TEMPLATE_FIELDS_PROJECTION = v.strictObject({
+  ...TEMPLATE_DESCRIBE_PROJECTION.entries,
+  issues: v.array(
+    v.strictObject({
+      path: v.string(),
+      index: v.number(),
+      message: v.string(),
+      hint: v.string(),
+    }),
+  ),
+});

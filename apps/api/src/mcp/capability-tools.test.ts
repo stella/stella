@@ -1473,7 +1473,7 @@ describe("invoke_capability file-input gate", () => {
     });
     const error = errorEnvelope(result);
     expect(error.code).toBe("feature_disabled");
-    expect(error.hint).toContain("Call the save_template MCP tool directly");
+    expect(error.hint).toContain("Call the create_template MCP tool directly");
     expect(error.hint).not.toContain("Use templates.create instead");
   });
 

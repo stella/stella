@@ -514,6 +514,10 @@ describe("tool approval grants", () => {
     expect(isRegistryWriteSummaryToolName("web_search")).toBe(false);
   });
 
+  test("keeps the retired save_template card's write summary", () => {
+    expect(isRegistryWriteSummaryToolName("save_template")).toBe(true);
+  });
+
   test("identifies one representative public-official and external-input tool", () => {
     expect(isPublicOfficialChatToolName("business_registry_lookup")).toBe(true);
     expect(isExternalInputChatToolName("web_search")).toBe(true);

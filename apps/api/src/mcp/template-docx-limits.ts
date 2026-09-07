@@ -2,7 +2,7 @@ import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { MCP_MAX_REQUEST_BODY_BYTES } from "@/api/mcp/constants";
 
 /**
- * Ceilings on the two ways a DOCX reaches `save_template`. Owned here rather
+ * Ceilings on the two ways a DOCX reaches `create_template`. Owned here rather
  * than in the tool module so the workflow reference renders the same numbers
  * the schema enforces instead of restating them in prose.
  */

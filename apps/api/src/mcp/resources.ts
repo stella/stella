@@ -85,7 +85,7 @@ const STATIC_RESOURCES: readonly StaticResource[] = [
     description:
       "stella's {{...}} template marker grammar: fillable values, conditional " +
       "and repeating blocks, clause slots, and numbering inside a DOCX. Read " +
-      "this before authoring a DOCX for save_template.",
+      "this before authoring a DOCX for create_template.",
     mimeType: "text/markdown",
     listed: true,
     read: buildMarkerReference,
@@ -95,7 +95,7 @@ const STATIC_RESOURCES: readonly StaticResource[] = [
     name: "template-fields",
     title: "Template field configuration",
     description:
-      "How save_template's fields overlay configures each template field: " +
+      "How configure_template_fields configures each template field: " +
       "input types, validation, composite parts, registry lookups, contact " +
       "and matter bindings, and who fills the field. Read this before " +
       "passing fields.",
@@ -111,7 +111,7 @@ const STATIC_RESOURCES: readonly StaticResource[] = [
       "The order to drive stella's templates in: author markers, create the " +
       "template, read the discovered paths back, configure fields, preview " +
       "the fill, persist it into a matter. Read this before the first " +
-      "save_template call.",
+      "create_template call.",
     mimeType: "text/markdown",
     listed: true,
     read: buildWorkflowReference,

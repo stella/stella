@@ -56,8 +56,13 @@ type SurfaceMode = (typeof SURFACES)[number]["mode"];
 // deletable over HTTP but not through MCP (delete_document refuses them by
 // kind), so agents and the CLI had no way to remove one. Write-only, so the
 // anonymized ceiling is unchanged.
+// default bumped 49 -> 50 when save_template split into create_template and
+// configure_template_fields: creating a template from a DOCX and configuring
+// its fields are separate intents with separate permissions, and one tool
+// advertising both branches made every property conditional on the other.
+// Write-only, so the anonymized ceiling is unchanged.
 const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
-  default: 49,
+  default: 50,
   anonymized: 21,
 };
 
@@ -70,7 +75,7 @@ const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
 // three are excluded from it).
 // default bumped 54_000 -> 61_000 after contact discovery and template
 // persistence brought the measured payload to 55_283 chars.
-// default bumped 61_000 -> 70_000 after save_template began advertising the
+// default bumped 61_000 -> 70_000 after the template authoring tool began advertising the
 // canonical strict field-configuration contract instead of a loose object
 // approximation: measured 63_213 chars. The new ceiling retains roughly 10%
 // review headroom without weakening the provider-visible schema.
@@ -86,18 +91,31 @@ const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
 // below that again and the ceiling keeps the headroom.
 // default bumped 70_000 -> 70_100 for delete_task plus the uuid format on
 // entity ids and the task status/priority enums: measured 70_059 chars.
-// default bumped 70_100 -> 70_200 when save_template gained the host file
-// reference (the same four-property object upload_document_version
+// default bumped 70_100 -> 70_200 when the template authoring tool gained the
+// host file reference (the same four-property object upload_document_version
 // advertises): measured 70_171 chars, and the tool description shrank to pay
 // part of it back.
+// default bumped 70_200 -> 71_000 when save_template split into
+// create_template and configure_template_fields: two tool entries replace
+// one, and each carries only the properties its own intent uses.
+// Folding the six mutually exclusive derived-source keys into one `source`
+// union then paid part of that back: the union's structure costs more than
+// the flat keys did, but its per-branch prose belongs in the field-reference
+// resource rather than in a schema every client downloads on connect, and
+// the two tool descriptions lost the sentences the references already carry.
+// Measured with both changes in: 70_849 chars.
+// default bumped 71_000 -> 72_000 when create_template became an upsert:
+// `template_id` plus the rules that say what it means with and without a
+// document. Measured 71_254 chars, after list_templates gave back the fill
+// semantics its own description was repeating from fill_template.
 const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 70_200,
+  default: 72_000,
   anonymized: 23_557,
 };
 
-// Longest description measured after plan 047: save_template at 724 chars
-// (~180 tokens), 807 after it documented the file transport. Ceiling keeps a
-// little headroom above that.
+// Longest description measured after plan 047: the template authoring tool at
+// 724 chars (~180 tokens), 807 after it documented the file transport. Ceiling
+// keeps a little headroom above that.
 const TOOL_DESCRIPTION_CHAR_CEILING = 810;
 
 // verb_noun style: lowercase words joined by single underscores.
@@ -386,7 +404,7 @@ describe("MCP registry annotation coherence", () => {
  *
  * The set is exact and empty: every advertised name, at every depth, must be
  * snake_case. Payloads that mirror internal camelCase models (`save_clause`
- * body paragraphs, `save_template` field overlays) carry their own snake_case
+ * body paragraphs, `configure_template_fields` field entries) carry their own snake_case
  * input schema and map onto the model at the tool boundary, so a new
  * camelCase name anywhere in an input fails here.
  */

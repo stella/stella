@@ -204,8 +204,8 @@ const applyNullAsAbsent = (value: unknown, plan: NullAsAbsentPlan): unknown => {
  *
  * A strict tool-schema client must send every declared property, so it sends
  * `null` for the ones it is not setting. Null is not a value on this surface:
- * `ai_prompt: null` reads as an AI-drafted field and collides with every other
- * derived source, `name: null` as a rename. Normalizing inside one handler
+ * `input_type: null` reads as a field with no input control, `name: null` as
+ * a rename to nothing. Normalizing inside one handler
  * leaves every other consumer of the schema (evals, tests, the capability
  * catalog) with the raw contract, so the schema owns it instead.
  *
