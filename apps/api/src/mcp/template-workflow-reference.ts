@@ -94,7 +94,9 @@ const WORKFLOW_STEPS: readonly WorkflowStep[] = [
       "`fields[]`, `arrays[]`, `conditions[]` and `computed[]`, and " +
       "`warnings[]` (`code`, `path`, `message`, `hint`): markers the create " +
       "accepted that will not do what you meant. Fix them in the DOCX and " +
-      `create again before configuring. It also returns \`configure\`: the ` +
+      "send the corrected file back with this `template_id`, which publishes " +
+      "a new version rather than a second template. It also returns " +
+      "`configure`: the " +
       `exact ${CONFIGURE_TEMPLATE_FIELDS} call for this template, one entry ` +
       "per configurable path (loop item paths included) with the source each " +
       "field already has. Copy it and edit the entries that should differ; " +
@@ -112,10 +114,10 @@ const WORKFLOW_STEPS: readonly WorkflowStep[] = [
       "as one object with a `type`), " +
       "`arrays[]` (one entry per `{{#each}}` loop: its `path` plus the " +
       "`itemFieldPaths` it repeats), `conditions[]`, `computed[]` " +
-      "(`name` + `expression`) and the same `warnings[]`. Compare " +
-      "`fields[].path` against the markers " +
-      "you wrote: a path you expected and do not see was not discovered. Fix " +
-      "the document and create the template again before configuring — " +
+      "(each `path` + its `condition` or `formula`) and the same " +
+      "`warnings[]`. Compare `fields[].path` against the markers you wrote: a " +
+      "path you expected and do not see was not discovered. Fix the document " +
+      `and send it back to ${CREATE_TEMPLATE} with this \`template_id\` — ` +
       "configuration cannot add a field the DOCX does not contain.",
   },
   {
