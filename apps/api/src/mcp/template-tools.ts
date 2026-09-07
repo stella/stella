@@ -53,6 +53,7 @@ import { createStoredTemplate } from "@/api/lib/templates/create-template";
 import type { FieldOverlayIssue } from "@/api/lib/templates/field-overlay";
 import {
   conditionReferencesOnlySelf,
+  fieldOverlayIssuePath,
   resolveTemplateFieldOverlay,
 } from "@/api/lib/templates/field-overlay";
 import {
@@ -2477,7 +2478,7 @@ export const parseConfigureEntries = (
     }
     sent[position] = dropped;
     issues.push({
-      path: `fields.${String(position)}.source`,
+      path: fieldOverlayIssuePath(position, "source"),
       index: position,
       message:
         "`source` was dropped: a condition that reads only the field's own " +
@@ -2526,7 +2527,7 @@ export const parseConfigureEntries = (
         repaired.add(position);
         sent[position] = without;
         issues.push({
-          path: [`fields.${String(position)}`, ...repair.path].join("."),
+          path: fieldOverlayIssuePath(position, repair.path.join(".")),
           index: position,
           message: repair.message,
           hint: `The rest of the entry was applied. Check that property against ${TEMPLATE_FIELD_REFERENCE_URI} and send it again if the field needs it.`,
@@ -2535,7 +2536,7 @@ export const parseConfigureEntries = (
       }
       rejected.add(position);
       issues.push({
-        path: `fields.${String(position)}`,
+        path: fieldOverlayIssuePath(position),
         index: position,
         message: issue.message,
         hint: `Fix this entry against ${TEMPLATE_FIELD_REFERENCE_URI} and send it again; the other entries were applied.`,
@@ -2585,7 +2586,7 @@ const handleConfigureTemplateFieldsTool: TypedMcpToolHandler<
       parsed.applied.at(issue.index) ??
       panic(`configure issue names applied entry ${String(issue.index)}`);
     return {
-      path: `fields.${index}`,
+      path: fieldOverlayIssuePath(index, issue.property),
       index,
       message: issue.message,
       hint: issue.hint,

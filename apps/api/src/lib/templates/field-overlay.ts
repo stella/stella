@@ -23,6 +23,7 @@ import {
   mergeManifestWithDiscovery,
 } from "@/api/lib/docx/template-manifest";
 import {
+  FIELD_WIRE_PROPERTY,
   isLookupFormatKey,
   LOOKUP_FORMATS_MAX,
   type DiscoveredField,
@@ -44,6 +45,10 @@ export type FieldOverlayIssue = {
   index: number;
   message: string;
   hint: string;
+  /** The one property of the entry the issue is about, when the entry itself
+   *  was applied. A caller that re-numbers the entries rebuilds `path` from
+   *  it rather than parsing the path it was handed. */
+  property?: string;
 };
 
 /** The phrase that names the lookup-ownership refusal built below. A reader
@@ -185,6 +190,135 @@ type OverlayEntry = {
   index: number;
 };
 
+/** The dot path an issue carries: the entry the caller sent, or the one
+ *  property of it the issue is about. A path with a property tail says the
+ *  entry itself was applied. */
+export const fieldOverlayIssuePath = (
+  index: number,
+  property?: string,
+): string =>
+  property === undefined
+    ? `fields.${String(index)}`
+    : `fields.${String(index)}.${property}`;
+
+/**
+ * The markers a group holds, without the namespaces between: `address` over
+ * `{{address.street}}` and `{{address.city}}` holds those two, and a deeper
+ * `{{address.geo.lat}}` is held by `address.geo`, which is a group of its own.
+ */
+const groupLeaves = (
+  path: string,
+  { declared, roots }: DeclaredPaths,
+): string[] =>
+  childMarkers(path, declared).filter(
+    (child) => roots.has(child) || childMarkers(child, declared).length === 0,
+  );
+
+/**
+ * Split a group entry into what it can decide and what it cannot.
+ *
+ * A path that is only a prefix of markers — `property_address` over
+ * `{{property_address.street}}` and its siblings — is a GROUP: the fill asks
+ * for the children, so there is nothing at the group for a label, an input
+ * type or a source to configure. One property still means something on a
+ * group, because it means the same thing on every child: `required` propagates
+ * to the children that do not answer it themselves. The rest is dropped per
+ * property, and the entry is never refused: the caller described a real part
+ * of the document, and the entries beside it are unaffected.
+ */
+const expandGroupEntry = (
+  { field, index }: OverlayEntry,
+  leaves: readonly string[],
+): { required: boolean; issues: FieldOverlayIssue[] } => {
+  // A persisted-only key (the derived AST, a composite's parts) has no wire
+  // property to name and no caller sets one on a group, so it goes with the
+  // entry rather than being reported.
+  const wireProperty: Readonly<Record<string, string>> = FIELD_WIRE_PROPERTY;
+  const configured = new Set(
+    Object.entries(field).flatMap(([key, value]) => {
+      const property = wireProperty[key];
+      return key === "path" ||
+        key === "required" ||
+        value === undefined ||
+        property === undefined
+        ? []
+        : [property];
+    }),
+  );
+  const markers = leaves.map((leaf) => `{{${leaf}}}`).join(", ");
+  return {
+    required: field.required === true,
+    issues: [...configured].map((property) => ({
+      path: fieldOverlayIssuePath(index, property),
+      index,
+      property,
+      message:
+        `"${field.path}" is a group of ${markers}; a group carries no ` +
+        `${property}.`,
+      hint:
+        `Send ${property} on the child paths instead. Only required travels ` +
+        "from a group, to every child that does not set its own.",
+    })),
+  };
+};
+
+/**
+ * The overlay with every group entry expanded into what its children can
+ * carry. A group holding a lookup is not a group but the lookup's one input,
+ * with the markers under it as its renderings, so it stays as it is.
+ */
+const expandGroups = (
+  entries: readonly OverlayEntry[],
+  declared: DeclaredPaths,
+  lookupOwners: ReadonlySet<string>,
+): { entries: OverlayEntry[]; issues: FieldOverlayIssue[] } => {
+  const kept: OverlayEntry[] = [];
+  const issues: FieldOverlayIssue[] = [];
+  const required: OverlayEntry[] = [];
+  for (const entry of entries) {
+    const { field } = entry;
+    const leaves =
+      declared.roots.has(field.path) ||
+      field.lookup !== undefined ||
+      lookupOwners.has(field.path)
+        ? []
+        : groupLeaves(field.path, declared);
+    if (leaves.length === 0) {
+      kept.push(entry);
+      continue;
+    }
+    const expanded = expandGroupEntry(entry, leaves);
+    issues.push(...expanded.issues);
+    if (expanded.required) {
+      required.push(
+        ...leaves.map((leaf) => ({
+          field: { path: leaf, required: true },
+          index: entry.index,
+        })),
+      );
+    }
+  }
+  const keptPaths = new Set(kept.map((entry) => entry.field.path));
+  const requiredPaths = new Set(required.map((entry) => entry.field.path));
+  const created = new Map(
+    required
+      .filter((entry) => !keptPaths.has(entry.field.path))
+      .map((entry) => [entry.field.path, entry] as const),
+  );
+  return {
+    entries: [
+      ...kept.map((entry) =>
+        requiredPaths.has(entry.field.path) &&
+        entry.field.required === undefined
+          ? { ...entry, field: { ...entry.field, required: true } }
+          : entry,
+      ),
+      ...created.values(),
+    ],
+    issues,
+  };
+};
+
 /**
  * The overlay in the vocabulary the manifest speaks: loop aliases resolved,
  * item counts on the repeat they count, and a condition that answers itself
@@ -195,18 +329,33 @@ type OverlayEntry = {
  * belongs to the array — an item field never holds a list — so it moves, and
  * the array entry the fold creates answers for the entry that sent it.
  */
-const canonicalizeOverlay = (
-  overlay: readonly FieldMeta[],
-  discovered: DiscoveredTemplate,
-  { arrays, declared }: DeclaredPaths,
-): OverlayEntry[] => {
-  const entries = overlay.map((field, index) => ({
+const canonicalizeOverlay = ({
+  configured,
+  declared: declaredPathsOfDocument,
+  discovered,
+  overlay,
+}: ValidateFieldOverlayOptions & {
+  declared: DeclaredPaths;
+}): { entries: OverlayEntry[]; issues: FieldOverlayIssue[] } => {
+  const { arrays, declared } = declaredPathsOfDocument;
+  const canonical = overlay.map((field, index) => ({
     field: withoutSelfCondition({
       ...field,
       path: canonicalizeOverlayPath(field.path, discovered, declared),
     }),
     index,
   }));
+  const lookupOwners = new Set(
+    configured.flatMap((field) =>
+      field.lookup === undefined ? [] : [field.path],
+    ),
+  );
+  const grouped = expandGroups(
+    canonical,
+    declaredPathsOfDocument,
+    lookupOwners,
+  );
+  const entries = grouped.entries;
   const { fields, moves } = foldItemCountConstraints(
     entries.map((entry) => entry.field),
     arrays,
@@ -223,10 +372,13 @@ const canonicalizeOverlay = (
     const from = movedFrom.get(path);
     return from === undefined ? undefined : indexByPath.get(from);
   };
-  return fields.flatMap((field) => {
-    const index = positionOf(field.path);
-    return index === undefined ? [] : [{ field, index }];
-  });
+  return {
+    entries: fields.flatMap((field) => {
+      const index = positionOf(field.path);
+      return index === undefined ? [] : [{ field, index }];
+    }),
+    issues: grouped.issues,
+  };
 };
 
 type ValidateFieldOverlayOptions = {
@@ -263,7 +415,7 @@ export const validateFieldOverlay = ({
   const seenPaths = new Set<string>();
 
   for (const [index, field] of overlay.entries()) {
-    const issuePath = `fields.${index}`;
+    const issuePath = fieldOverlayIssuePath(index);
     if (seenPaths.has(field.path)) {
       issues.push({
         path: issuePath,
@@ -335,7 +487,7 @@ export const validateFieldOverlay = ({
       const ownerIndex = overlayIndexByPath.get(field.path);
       if (ownerIndex !== undefined) {
         issues.push({
-          path: `fields.${ownerIndex}`,
+          path: fieldOverlayIssuePath(ownerIndex),
           index: ownerIndex,
           message,
           hint,
@@ -344,7 +496,7 @@ export const validateFieldOverlay = ({
       const childIndex = overlayIndexByPath.get(childPath);
       if (childIndex !== undefined) {
         issues.push({
-          path: `fields.${childIndex}`,
+          path: fieldOverlayIssuePath(childIndex),
           index: childIndex,
           message,
           hint,
@@ -382,11 +534,13 @@ export const partitionFieldOverlay = ({
   overlay,
 }: ValidateFieldOverlayOptions): PartitionFieldOverlayResult => {
   const issuesByIndex = new Map<number, FieldOverlayIssue>();
-  let survivors = canonicalizeOverlay(
-    overlay,
+  const canonical = canonicalizeOverlay({
+    configured,
+    declared: declaredPaths(discovered),
     discovered,
-    declaredPaths(discovered),
-  );
+    overlay,
+  });
+  let survivors = canonical.entries;
   for (;;) {
     const issues = validateFieldOverlay({
       configured,
@@ -396,7 +550,9 @@ export const partitionFieldOverlay = ({
     if (issues.length === 0) {
       return {
         applied: survivors.map((entry) => entry.field),
-        issues: [...issuesByIndex.values()].toSorted(
+        // A property one entry could not carry sorts beside the entries that
+        // were refused whole, in the order the caller sent them.
+        issues: [...canonical.issues, ...issuesByIndex.values()].toSorted(
           (left, right) => left.index - right.index,
         ),
       };
@@ -412,7 +568,7 @@ export const partitionFieldOverlay = ({
       if (!issuesByIndex.has(entry.index)) {
         issuesByIndex.set(entry.index, {
           ...issue,
-          path: `fields.${entry.index}`,
+          path: fieldOverlayIssuePath(entry.index),
           index: entry.index,
         });
       }

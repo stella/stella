@@ -29,6 +29,7 @@ import type {
 import {
   FIELD_DATE_FORMAT_DESCRIPTION,
   FIELD_VALIDATION_DESCRIPTION,
+  FIELD_WIRE_PROPERTY,
   fieldDateFormatObjectSchema,
   fieldLookupFormatSchema,
   fieldMetaToolInputObjectSchema,
@@ -228,21 +229,11 @@ type TemplateFieldValidationInput = v.InferOutput<
 
 type PersistedFieldInput = v.InferOutput<typeof fieldMetaToolInputSchema>;
 
-/** Persisted properties the wire carries under their own key. The derived
- *  half (`aiPrompt`, `aiAdapt`, `aiSeesDocument`, `lookup`, `source`,
- *  `formula`, `condition`) is folded into `source` instead, and is total over
- *  the union below rather than listed here. */
-const FIELD_WIRE_KEYS = {
-  path: "path",
-  label: "label",
-  hint: "hint",
-  inputType: "input_type",
-  options: "options",
-  validation: "validation",
-  required: "required",
-  optionsFrom: "options_from",
-  dateFormat: "date_format",
-} as const satisfies Record<
+/** Persisted properties the wire carries under their own key, read off the
+ *  manifest-to-wire map. The derived half (`aiPrompt`, `aiAdapt`,
+ *  `aiSeesDocument`, `lookup`, `source`, `formula`, `condition`) is folded
+ *  into `source` instead, and is total over the union below. */
+const FIELD_WIRE_KEYS = FIELD_WIRE_PROPERTY satisfies Record<
   Exclude<keyof PersistedFieldInput, FoldedIntoSourceKey>,
   keyof TemplateFieldInput
 >;

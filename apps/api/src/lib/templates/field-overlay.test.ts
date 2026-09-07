@@ -382,6 +382,98 @@ describe("loop aliases at the configure boundary", () => {
   });
 });
 
+describe("a group of markers at the configure boundary", () => {
+  const addressDocx = async () =>
+    makeDocx(
+      "{{ property_address.street }}",
+      "{{ property_address.postal_code }} {{ property_address.city }}",
+    );
+
+  test("the entry is never refused: its properties are dropped one by one", async () => {
+    const discovered = await discoverTemplate(await addressDocx());
+
+    const { applied, issues } = partitionFieldOverlay({
+      configured: [],
+      discovered,
+      overlay: [
+        {
+          path: "property_address",
+          label: "Anschrift des Mietobjekts",
+          hint: "Straße, PLZ, Ort",
+          inputType: "text",
+          required: false,
+          source: { kind: "contact", field: "address" },
+        },
+        { path: "property_address.city", label: "Ort" },
+      ],
+    });
+
+    expect(issues.map(({ path }) => path)).toEqual([
+      "fields.0.label",
+      "fields.0.hint",
+      "fields.0.input_type",
+      "fields.0.source",
+    ]);
+    expect(issues.at(0)?.message).toBe(
+      '"property_address" is a group of {{property_address.city}}, ' +
+        "{{property_address.postal_code}}, {{property_address.street}}; a " +
+        "group carries no label.",
+    );
+    // The entry beside it, and the group's own path, are unaffected.
+    expect(applied).toEqual([{ path: "property_address.city", label: "Ort" }]);
+  });
+
+  test("required propagates to every child that does not answer it", async () => {
+    const discovered = await discoverTemplate(await addressDocx());
+
+    const { applied } = partitionFieldOverlay({
+      configured: [],
+      discovered,
+      overlay: [
+        { path: "property_address", required: true },
+        { path: "property_address.city", label: "Ort", required: false },
+      ],
+    });
+
+    expect(applied).toEqual([
+      { path: "property_address.city", label: "Ort", required: false },
+      { path: "property_address.postal_code", required: true },
+      { path: "property_address.street", required: true },
+    ]);
+  });
+
+  test("a path that is neither a marker nor a group is still refused", async () => {
+    const discovered = await discoverTemplate(await addressDocx());
+
+    const { applied, issues } = partitionFieldOverlay({
+      configured: [],
+      discovered,
+      overlay: [{ path: "landlord_address", label: "Anschrift" }],
+    });
+
+    expect(applied).toEqual([]);
+    expect(issues.map(({ path }) => path)).toEqual(["fields.0"]);
+    expect(issues.at(0)?.message).toContain("No marker {{landlord_address}}");
+  });
+
+  test("a lookup makes the same path the one input, not a group", async () => {
+    const discovered = await discoverTemplate(
+      await makeDocx("{{company.name}}", "{{company.krs}}"),
+    );
+
+    const { applied, issues } = partitionFieldOverlay({
+      configured: [],
+      discovered,
+      overlay: [
+        { path: "company", label: "Company", lookup: krsLookup("name", "krs") },
+      ],
+    });
+
+    expect(issues).toEqual([]);
+    expect(applied.at(0)?.label).toBe("Company");
+  });
+});
+
 describe("a condition that answers itself", () => {
   test("a condition that reads only its own field is read as absent", async () => {
     const discovered = await discoverTemplate(

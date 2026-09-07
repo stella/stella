@@ -637,6 +637,38 @@ export const fieldMetaToolInputSchema = v.pipe(
   ),
 );
 
+/**
+ * The tool-wire property each manifest key is configured through: its own
+ * snake_case key, or the `source` union the derived half folds up into. Total
+ * over the model-facing shape, so a new manifest key cannot ship without
+ * saying which property a caller sets it with.
+ *
+ * Lives here, beside the schema, because both the wire serializer and the
+ * engine's own diagnostics have to name a property the way the caller spelled
+ * it, and two lists of that mapping would drift.
+ */
+export const FIELD_WIRE_PROPERTY = {
+  path: "path",
+  label: "label",
+  hint: "hint",
+  inputType: "input_type",
+  options: "options",
+  optionsFrom: "options_from",
+  validation: "validation",
+  required: "required",
+  dateFormat: "date_format",
+  aiPrompt: "source",
+  aiAdapt: "source",
+  aiSeesDocument: "source",
+  lookup: "source",
+  source: "source",
+  formula: "source",
+  condition: "source",
+} as const satisfies Record<
+  keyof v.InferOutput<typeof fieldMetaToolInputObjectSchema>,
+  string
+>;
+
 export const isFieldPart = (value: unknown): value is FieldPart =>
   v.is(fieldPartSchema, value);
 

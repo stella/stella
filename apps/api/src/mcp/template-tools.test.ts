@@ -3332,6 +3332,51 @@ describe("MCP template tools", () => {
     });
   });
 
+  test("configure_template_fields keeps the property a group entry could not carry", async () => {
+    // A group's entry is applied; one property of it is not. The issue path
+    // says which, and the entry number is the caller's own, so an entry the
+    // schema dropped earlier cannot shift it.
+    configureTemplateFieldsMock.mockImplementation(async function* () {
+      yield* [];
+      return Result.ok({
+        issues: [
+          {
+            path: "fields.0.label",
+            index: 0,
+            property: "label",
+            message:
+              '"property_address" is a group of {{property_address.street}}; ' +
+              "a group carries no label.",
+            hint: "Send label on the child paths instead.",
+          },
+        ],
+        manifest: { version: 1, fields: [] },
+      });
+    });
+    describeStoredTemplateMock.mockResolvedValue(
+      describedTemplate({ name: "Mietvertrag" }),
+    );
+
+    const result = await handleMcpToolCall({
+      args: {
+        template_id: TEMPLATE_ID,
+        fields: [
+          { path: "property_address", label: "Anschrift", parts: [] },
+          { path: "rent" },
+        ],
+      },
+      context: createContext(),
+      toolName: "configure_template_fields",
+    });
+
+    expect(parseToolPayload(result)).toMatchObject({
+      issues: [
+        { path: "fields.0.parts", index: 0 },
+        { path: "fields.0.label", index: 0 },
+      ],
+    });
+  });
+
   /**
    * The exact call one model sent when it filled every optional property it
    * could see: a placeholder in every string, a `parts` entry with an empty
