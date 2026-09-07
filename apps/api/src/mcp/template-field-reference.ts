@@ -88,7 +88,7 @@ const FIELD_PROPERTY_DOCS = {
   required: "Whether the fill form rejects an empty value.",
   source:
     "Who fills the field. ONE object with a `type`; the branches are listed below. Omit it for a field the person fills.",
-  date_format: `Locale-aware rendering for a date field: \`locale\` is a BCP-47 tag (\`cs\`, \`de\`, \`pl\`), \`style\` is one of ${DATE_FORMAT_STYLES.join(", ")}.`,
+  date_format: `Locale-aware rendering for a date field: \`locale\` is a BCP-47 tag (\`cs\`, \`de\`, \`pl\`), \`style\` is one of ${DATE_FORMAT_STYLES.join(", ")}. The stored tag is the canonical spelling; \`cs_CZ\` and \`cs-cz\` are read as \`cs-CZ\`.`,
 } as const satisfies Record<FieldConfigProperty, string>;
 
 /** One branch of the `source` union, keyed by its `type`. Total over the

@@ -141,7 +141,11 @@ const FILTER_DESCRIPTIONS = {
     usage: 'date("pl") or date("pl-long")',
     detail:
       "A date input, rendered in that BCP-47 locale. A trailing style is " +
-      `optional and defaults to long; the styles are ${DATE_FORMAT_STYLES.join(", ")}.`,
+      `optional and defaults to long; the styles are ${DATE_FORMAT_STYLES.join(", ")}. ` +
+      "Write the tag as pl or en-GB; the underscore spelling (cs_CZ) is read " +
+      "as the same tag, and a style named full or numeric is read as long or " +
+      'short. A style with no locale in front of it, date("iso"), configures ' +
+      "nothing and is reported.",
   },
   select: {
     usage: 'select("company", "person")',

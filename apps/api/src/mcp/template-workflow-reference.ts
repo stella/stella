@@ -167,8 +167,11 @@ const WORKFLOW_STEPS: readonly WorkflowStep[] = [
       '`unusedValues`, `structureErrors`. `output_mode: "docx"` returns the ' +
       "same fill with `text` and the base64 archive in `docxBase64` instead; " +
       "ask for it only when you keep the bytes. Unknown value keys fail " +
-      "unless `allow_unused_values` is true. Show the preview to the user " +
-      "before persisting.",
+      "unless `allow_unused_values` is true. Write a date field's value as " +
+      "ISO YYYY-MM-DD; the unambiguous alternatives are read too (1. 10. " +
+      "2026, 1 October 2026, and a month name in the field's own locale), " +
+      "while a spelling that reads two ways (01/02/2026) is refused with " +
+      "both readings named. Show the preview to the user before persisting.",
   },
   {
     title: "Persist into a matter",
