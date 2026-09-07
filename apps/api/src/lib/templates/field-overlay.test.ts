@@ -1,8 +1,11 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
-import type { FieldMeta } from "@/api/lib/docx/types";
+import { readManifest, writeManifest } from "@/api/lib/docx/template-manifest";
+import type { FieldMeta, TemplateManifest } from "@/api/lib/docx/types";
+import { CLEARED_FIELD_SOURCE } from "@/api/lib/docx/types";
 
 import {
   applyFieldOverlay,
@@ -926,5 +929,80 @@ describe("applyFieldOverlay", () => {
       version: 1,
       fields: [{ path: "fee", label: "Fee" }],
     });
+  });
+});
+
+/**
+ * A cleared property is absent, and the manifest serializes absence as
+ * silence. Without a record that the configuration decided the source, the
+ * marker's own filter would be read again on the next describe or fill and
+ * quietly undo a configuration the tool reported as applied.
+ */
+describe("a source the configuration decided", () => {
+  const configuredAs = (path: string, source: Partial<FieldMeta>): FieldMeta =>
+    ({
+      path,
+      ...CLEARED_FIELD_SOURCE,
+      ...source,
+      sourceLayer: "configuration",
+    }) satisfies FieldMeta;
+
+  const throughStorage = async (
+    docx: Buffer,
+    manifest: TemplateManifest,
+  ): Promise<TemplateManifest> => {
+    const stored = await readManifest(await writeManifest(docx, manifest));
+    return stored ?? panic("the manifest just written did not read back");
+  };
+
+  test.each([
+    ["a person fills it", {}],
+    ["a registry lookup fills it", { lookup: krsLookup("name") }],
+  ] as [string, Partial<FieldMeta>][])(
+    "survives a DOCX round trip when %s",
+    async (_name, source) => {
+      const docx = await makeDocx('{{ recitals | ai("Draft the recitals") }}');
+      const discovered = await discoverTemplate(docx);
+      expect(discovered.documentFields).toEqual([
+        expect.objectContaining({
+          path: "recitals",
+          aiPrompt: "Draft the recitals",
+        }),
+      ]);
+
+      const configured = resolveTemplateFieldOverlay({
+        discovered,
+        manifest: null,
+        overlay: [configuredAs("recitals", source)],
+      });
+      const reread = resolveTemplateFieldOverlay({
+        discovered,
+        manifest: await throughStorage(docx, configured),
+        overlay: undefined,
+      });
+
+      const field = reread.fields.find(({ path }) => path === "recitals");
+      expect(field?.aiPrompt).toBeUndefined();
+      expect(field?.lookup).toEqual(source.lookup);
+    },
+  );
+
+  test("a marker's filter still configures a field the tool never touched", async () => {
+    const docx = await makeDocx('{{ recitals | ai("Draft the recitals") }}');
+    const discovered = await discoverTemplate(docx);
+    const labelled = resolveTemplateFieldOverlay({
+      discovered,
+      manifest: null,
+      overlay: [{ path: "recitals", label: "Recitals" }],
+    });
+
+    const reread = resolveTemplateFieldOverlay({
+      discovered,
+      manifest: await throughStorage(docx, labelled),
+      overlay: undefined,
+    });
+    expect(
+      reread.fields.find(({ path }) => path === "recitals")?.aiPrompt,
+    ).toBe("Draft the recitals");
   });
 });

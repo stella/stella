@@ -96,6 +96,10 @@ export const FIELD_META_FILTERS = {
   conditionAst: {
     excluded: "the canonical AST is derived from `condition` when it is saved",
   },
+  sourceLayer: {
+    excluded:
+      "the record that a configure call decided the source, which is what a filter is not",
+  },
 } as const satisfies Record<keyof FieldMeta, FilterDisposition>;
 
 type CoveredFilter = {

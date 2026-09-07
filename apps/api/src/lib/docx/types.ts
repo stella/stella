@@ -538,6 +538,37 @@ export const describeDerivedSourceConflict = (
 
 const FIELD_SOURCE_DESCRIPTION = "Who fills = matter or contact data";
 
+/** The persisted keys that say who fills a field. They travel as one cluster:
+ *  naming a source replaces whatever was there, so a field that used to be a
+ *  lookup does not keep it beside its new source. */
+export const FIELD_SOURCE_KEYS = [
+  "aiAdapt",
+  "aiPrompt",
+  "aiSeesDocument",
+  "condition",
+  "formula",
+  "lookup",
+  "source",
+] as const satisfies readonly (keyof FieldMeta)[];
+
+export type FieldSourceKey = (typeof FIELD_SOURCE_KEYS)[number];
+
+/**
+ * The cluster, cleared. Spread ahead of a configuration's own keys so a
+ * configure call that names one source (or none: a field a person fills)
+ * carries the clear with it, and total over the cluster by construction, so a
+ * new source property cannot be forgotten here.
+ */
+export const CLEARED_FIELD_SOURCE = {
+  aiAdapt: undefined,
+  aiPrompt: undefined,
+  aiSeesDocument: undefined,
+  condition: undefined,
+  formula: undefined,
+  lookup: undefined,
+  source: undefined,
+} satisfies Record<FieldSourceKey, undefined>;
+
 /**
  * Every description below is advertised in `configure_template_fields`'s
  * `inputSchema`,
@@ -592,6 +623,14 @@ const fieldMetaObjectSchema = v.strictObject({
     ),
   ),
   dateFormat: v.optional(fieldDateFormatSchema),
+  sourceLayer: v.optional(
+    v.pipe(
+      v.picklist(["configuration"]),
+      v.description(
+        "Set when a configure call decided who fills this field, so a marker filter cannot reinstate the source it replaced",
+      ),
+    ),
+  ),
 });
 
 const hasCompleteCompositeField = ({
@@ -617,12 +656,19 @@ export const fieldMetaSchema = v.pipe(
 );
 
 /** Model-facing subset: conditionAst is the persisted canonical form, not an
- * authoring input, and a composite field's `parts`/`format` are assembled by
+ * authoring input, a composite field's `parts`/`format` are assembled by
  * the engine — the document text around the markers is the format an author
- * writes. This schema derives its public fields from the persisted object
- * schema and applies the same named invariant predicates. */
+ * writes — and `sourceLayer` is a record of who decided the source, which the
+ * boundary stamps rather than the caller. This schema derives its public
+ * fields from the persisted object schema and applies the same named invariant
+ * predicates. */
 export const fieldMetaToolInputObjectSchema = v.strictObject({
-  ...v.omit(fieldMetaObjectSchema, ["conditionAst", "parts", "format"]).entries,
+  ...v.omit(fieldMetaObjectSchema, [
+    "conditionAst",
+    "parts",
+    "format",
+    "sourceLayer",
+  ]).entries,
   source: v.optional(
     v.pipe(fieldSourceToolInputSchema, v.description(FIELD_SOURCE_DESCRIPTION)),
   ),
@@ -790,6 +836,9 @@ export type ResolvedField = {
   /** Mirrors {@link FieldMeta.dateFormat}: the fill form can preview how the
    *  entered date will render in the document's language. */
   dateFormat?: FieldDateFormat | undefined;
+  /** Mirrors {@link FieldMeta.sourceLayer}: carried through the merge so the
+   *  manifest a save writes still says the configuration owns the source. */
+  sourceLayer?: "configuration" | undefined;
   itemFields?: ResolvedField[] | undefined;
   /** Condition expression that must be true for this
    *  field to be visible in the fill form. */

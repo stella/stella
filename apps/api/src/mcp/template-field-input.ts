@@ -23,10 +23,12 @@ import type {
   FieldDateFormat,
   FieldLookup,
   FieldSource,
+  FieldSourceKey,
   FieldValidation,
   fieldMetaToolInputSchema,
 } from "@/api/lib/docx/types";
 import {
+  CLEARED_FIELD_SOURCE,
   FIELD_DATE_FORMAT_DESCRIPTION,
   FIELD_VALIDATION_DESCRIPTION,
   FIELD_WIRE_PROPERTY,
@@ -234,7 +236,7 @@ type PersistedFieldInput = v.InferOutput<typeof fieldMetaToolInputSchema>;
  *  `aiSeesDocument`, `lookup`, `source`, `formula`, `condition`) is folded
  *  into `source` instead, and is total over the union below. */
 const FIELD_WIRE_KEYS = FIELD_WIRE_PROPERTY satisfies Record<
-  Exclude<keyof PersistedFieldInput, FoldedIntoSourceKey>,
+  Exclude<keyof PersistedFieldInput, FieldSourceKey>,
   keyof TemplateFieldInput
 >;
 
@@ -320,33 +322,15 @@ const toTemplateFieldValidationInput = (
  *  wire union produces exactly one of these shapes, and every key appears in
  *  it: an entry merges onto the field it names, so a key the new branch omits
  *  has to be present and cleared, or the old branch survives the merge. */
-/** The persisted properties `source` folds up. Everything else on a field
- *  travels under its own wire key. */
-type FoldedIntoSourceKey =
-  | "aiAdapt"
-  | "aiPrompt"
-  | "aiSeesDocument"
-  | "condition"
-  | "formula"
-  | "lookup"
-  | "source";
-
 type PersistedFieldSourceProperties = Required<{
-  [Key in Exclude<FoldedIntoSourceKey, "source">]: PersistedFieldInput[Key];
+  [Key in Exclude<FieldSourceKey, "source">]: PersistedFieldInput[Key];
 }> & { source: FieldSource | undefined };
 
 /** Nothing set: the shape every branch below starts from, so switching a
  *  field from a lookup to a person clears the lookup rather than keeping it
  *  beside the new source. */
-const NO_PERSISTED_SOURCE: PersistedFieldSourceProperties = {
-  aiAdapt: undefined,
-  aiPrompt: undefined,
-  aiSeesDocument: undefined,
-  condition: undefined,
-  formula: undefined,
-  lookup: undefined,
-  source: undefined,
-};
+const NO_PERSISTED_SOURCE: PersistedFieldSourceProperties =
+  CLEARED_FIELD_SOURCE;
 
 /**
  * One wire source branch, spread onto the persisted field. Exhaustive over

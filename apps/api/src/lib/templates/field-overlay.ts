@@ -26,6 +26,8 @@ import {
   mergeManifestWithDiscovery,
 } from "@/api/lib/docx/template-manifest";
 import {
+  CLEARED_FIELD_SOURCE,
+  FIELD_SOURCE_KEYS,
   FIELD_WIRE_PROPERTY,
   isLookupFormatKey,
   LOOKUP_FORMATS_MAX,
@@ -346,12 +348,17 @@ const effectiveLookups = (
   entries: readonly OverlayEntry[],
 ): Map<string, FieldLookup> => {
   const lookups = new Map<string, FieldLookup>();
-  for (const { lookup, path } of [
-    ...configured,
-    ...entries.map((entry) => entry.field),
-  ]) {
-    if (lookup !== undefined) {
-      lookups.set(path, lookup);
+  for (const field of [...configured, ...entries.map((entry) => entry.field)]) {
+    if (field.lookup !== undefined) {
+      lookups.set(field.path, field.lookup);
+      continue;
+    }
+    // An entry that names any source carries an own `lookup: undefined`; one
+    // that says nothing about who fills the field has no such key at all, and
+    // leaves the stored lookup standing. Reading the value alone would treat
+    // a cleared lookup as a rendering of itself and drop a child's label.
+    if (Object.hasOwn(field, "lookup")) {
+      lookups.delete(field.path);
     }
   }
   return lookups;
@@ -713,6 +720,9 @@ const FORMAT_FOLD = {
   condition: "dropped",
   conditionAst: "dropped",
   dateFormat: "dropped",
+  // Not a property a caller sends: it records that a configure call decided
+  // the source, so folding a child into a format has nothing to report.
+  sourceLayer: "silent",
 } as const satisfies Record<
   keyof FieldMeta,
   "identity" | "template" | "silent" | "dropped" | "default"
@@ -930,7 +940,15 @@ export const applyFieldOverlay = (
   const existing = arrayOrEmpty(manifest?.fields);
   const merged: FieldMeta[] = existing.map((field) => {
     const override = overlayByPath.get(field.path);
-    return override ? { ...field, ...override } : field;
+    if (override === undefined) {
+      return field;
+    }
+    // A configuration that decided who fills the field replaces the whole
+    // source cluster, so the layer under it — a marker's `ai(…)` filter, or a
+    // lookup the template used to carry — cannot survive beside the new one.
+    return override.sourceLayer === "configuration"
+      ? { ...field, ...CLEARED_FIELD_SOURCE, ...override }
+      : { ...field, ...override };
   });
   const existingPaths = new Set(existing.map((field) => field.path));
   for (const field of overlayByPath.values()) {
@@ -972,6 +990,43 @@ const documentLayer = (
         arrayOrEmpty(manifest?.fields),
       );
 
+/** The cluster's values, spelled so two fields can be compared by what they
+ *  say about who fills the field rather than by identity. */
+const sourceSignature = (field: FieldMeta | undefined): string =>
+  JSON.stringify(FIELD_SOURCE_KEYS.map((key) => field?.[key] ?? null));
+
+/** True when the entry decides who fills the field: every wire source branch
+ *  writes the whole cluster, clearing the keys its own branch does not use, so
+ *  an own key is the signal — reading the values alone cannot tell a cleared
+ *  property from an absent one. */
+const decidesSource = (field: FieldMeta): boolean =>
+  FIELD_SOURCE_KEYS.some((key) => Object.hasOwn(field, key));
+
+/**
+ * The overlay, with the record of a source the caller moved.
+ *
+ * A cleared property is absent, and the manifest serializes absence as
+ * silence, so a configuration that took a field off the `ai(…)` its marker
+ * declares would be undone the next time the document layer is read. The entry
+ * therefore carries `sourceLayer` — but only when it actually departs from
+ * what the document declares: the skeleton a create hands back names a person
+ * source on every path, and sending it unchanged must still change nothing.
+ */
+const withSourceLayer = (
+  overlay: readonly FieldMeta[],
+  documentFields: readonly FieldMeta[],
+): FieldMeta[] => {
+  const declared = new Map(documentFields.map((field) => [field.path, field]));
+  const stamped: FieldMeta[] = [];
+  for (const field of overlay) {
+    const departs =
+      decidesSource(field) &&
+      sourceSignature(field) !== sourceSignature(declared.get(field.path));
+    stamped.push(departs ? { ...field, sourceLayer: "configuration" } : field);
+  }
+  return stamped;
+};
+
 /** Creation and its diagnostics must classify paths from the same final configuration. */
 export const resolveTemplateFieldOverlay = ({
   discovered,
@@ -980,7 +1035,12 @@ export const resolveTemplateFieldOverlay = ({
 }: ResolveTemplateFieldOverlayOptions): TemplateManifest => {
   const stored = documentLayer(discovered, manifest);
   const baseManifest =
-    overlay === undefined ? stored : applyFieldOverlay(stored, overlay);
+    overlay === undefined
+      ? stored
+      : applyFieldOverlay(
+          stored,
+          withSourceLayer(overlay, discovered.documentFields),
+        );
   const fields = mergeManifestWithDiscovery(baseManifest, discovered);
   return {
     version: baseManifest?.version ?? 1,
