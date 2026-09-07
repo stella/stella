@@ -99,9 +99,15 @@ const I18nProvider = ({ children }: PropsWithChildren) => {
       });
 
   const messageLocale = preHydrationEnglish ? "en" : locale;
+  // The provider can finish hydrating while a nested Suspense boundary still
+  // holds server markup. Remount the context subtree when browser formatting
+  // becomes active so that deferred descendants mount from one coherent
+  // locale and time zone instead of hydrating against changed context.
+  const hydrationPhase = preHydrationEnglish ? "server" : "browser";
 
   return (
     <IntlProvider
+      key={hydrationPhase}
       locale={messageLocale}
       messages={activeMessages}
       timeZone={timeZone}
