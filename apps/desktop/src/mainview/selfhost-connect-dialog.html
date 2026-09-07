@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta content="width=device-width, initial-scale=1.0" name="viewport" />
-    <title>Connect self-hosted Stella</title>
+    <title>stella desktop</title>
     <style>
       * {
         box-sizing: border-box;
@@ -137,30 +137,48 @@
   <body>
     <main class="dialog">
       <div class="mark">§</div>
-      <h1 class="title">Connect this self-hosted Stella?</h1>
-      <p class="subtitle">
-        Allow this Stella site to open documents in stella desktop.
-      </p>
+      <h1 class="title" id="title"></h1>
+      <p class="subtitle" id="subtitle"></p>
       <div class="details">
         <p>
-          <span class="label">Web origin</span>
+          <span class="label" id="webOriginLabel"></span>
           <span class="value" id="webOrigin"></span>
         </p>
         <p>
-          <span class="label">API URL</span>
+          <span class="label" id="apiBaseUrlLabel"></span>
           <span class="value" id="apiBaseUrl"></span>
         </p>
       </div>
       <div class="actions">
-        <button class="cancel" id="cancelBtn">Cancel</button>
-        <button class="connect" id="connectBtn">Connect</button>
+        <button class="cancel" id="cancelBtn"></button>
+        <button class="connect" id="connectBtn"></button>
       </div>
     </main>
     <script>
+      // Origins and wording both arrive in the URL hash, set by Rust when it
+      // opens the window: the dialog carries no strings of its own, so it
+      // speaks whatever language the rest of the app is running in.
       const params = new URLSearchParams(window.location.hash.slice(1));
+      const strings = JSON.parse(params.get("strings") || "{}");
       const webOrigin = params.get("webOrigin") || "";
       const apiBaseUrl = params.get("apiBaseUrl") || "";
 
+      document.documentElement.lang = params.get("lang") || "en";
+      document.documentElement.dir = params.get("dir") || "ltr";
+      document.title = strings.selfHostWindowTitle || "";
+
+      document.getElementById("title").textContent = strings.selfHostTitle;
+      document.getElementById("subtitle").textContent =
+        strings.selfHostSubtitle;
+      document.getElementById("webOriginLabel").textContent = strings.webOrigin;
+      document.getElementById("apiBaseUrlLabel").textContent = strings.apiUrl;
+      document.getElementById("cancelBtn").textContent = strings.cancel;
+      document.getElementById("connectBtn").textContent = strings.connect;
+
+      // The origins stay left-to-right whichever way the dialog reads: a URL
+      // reordered by the bidi algorithm is a different URL to the eye.
+      document.getElementById("webOrigin").dir = "ltr";
+      document.getElementById("apiBaseUrl").dir = "ltr";
       document.getElementById("webOrigin").textContent = webOrigin;
       document.getElementById("apiBaseUrl").textContent = apiBaseUrl;
 

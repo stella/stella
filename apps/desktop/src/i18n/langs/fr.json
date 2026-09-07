@@ -51,6 +51,22 @@
     "takenOverLocalError": "La modification sur le bureau a été déplacée vers un autre appareil. Cette copie locale est préservée.",
     "takenOverTitle": "Modification déplacée vers un autre appareil"
   },
+  "dialog": {
+    "allow": "Autoriser",
+    "apiUrl": "URL de l’API",
+    "cancel": "Annuler",
+    "connect": "Connecter",
+    "deny": "Refuser",
+    "selfHostSubtitle": "Autoriser ce site stella à ouvrir des documents dans stella desktop.",
+    "selfHostTitle": "Connecter cette instance stella auto-hébergée ?",
+    "selfHostWindowTitle": "Connecter une instance stella auto-hébergée",
+    "takeoverFile": "Fichier Office",
+    "takeoverRequester": "Quelqu’un",
+    "takeoverSubtitle": "La modification reprendra à votre dernier point de contrôle enregistré.",
+    "takeoverTitle": "{requester} souhaite reprendre la modification",
+    "takeoverWindowTitle": "Demande de reprise",
+    "webOrigin": "Origine web"
+  },
   "settings": {
     "about": "À propos",
     "connected": "Connecté",

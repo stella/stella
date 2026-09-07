@@ -51,6 +51,22 @@
     "takenOverLocalError": "Darbvirsmas rediģēšana pārvietota uz citu ierīci. Šī lokālā kopija ir saglabāta.",
     "takenOverTitle": "Rediģēšana pārvietota uz citu ierīci"
   },
+  "dialog": {
+    "allow": "Atļaut",
+    "apiUrl": "API adrese",
+    "cancel": "Atcelt",
+    "connect": "Savienot",
+    "deny": "Liegt",
+    "selfHostSubtitle": "Atļaut šai stella vietnei atvērt dokumentus lietotnē stella desktop.",
+    "selfHostTitle": "Vai savienot šo pašmitināto stella?",
+    "selfHostWindowTitle": "Savienot pašmitināto stella",
+    "takeoverFile": "Office fails",
+    "takeoverRequester": "Kāds",
+    "takeoverSubtitle": "Rediģēšana turpināsies no jūsu pēdējā saglabātā kontrolpunkta.",
+    "takeoverTitle": "{requester} vēlas pārņemt rediģēšanu",
+    "takeoverWindowTitle": "Pārņemšanas pieprasījums",
+    "webOrigin": "Tīmekļa izcelsme"
+  },
   "settings": {
     "about": "Par",
     "connected": "Savienots",

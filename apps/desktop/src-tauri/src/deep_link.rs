@@ -259,10 +259,16 @@ async fn show_self_host_connect_dialog(
     return Err("A self-host connection dialog is already open.".to_string());
   }
 
+  // The dialog holds no strings of its own; its wording travels in the hash
+  // with the origins, so it renders in the language the rest of the app runs
+  // in.
   let hash = format!(
-    "webOrigin={}&apiBaseUrl={}",
+    "webOrigin={}&apiBaseUrl={}&strings={}&lang={}&dir={}",
     percent_encode(web_origin),
-    percent_encode(api_base_url)
+    percent_encode(api_base_url),
+    percent_encode(&crate::i18n::namespace_json("dialog")),
+    percent_encode(crate::i18n::active_locale()),
+    percent_encode(crate::i18n::text_direction()),
   );
 
   let builder = tauri::WebviewWindowBuilder::new(
@@ -270,7 +276,7 @@ async fn show_self_host_connect_dialog(
     "selfhost-connect-dialog",
     tauri::WebviewUrl::App(format!("selfhost-connect-dialog.html#{hash}").into()),
   )
-  .title("Connect self-hosted Stella")
+  .title(crate::i18n::t("dialog.selfHostWindowTitle"))
   .inner_size(420.0, 320.0)
   .resizable(false);
   let builder = crate::window_placement::centered_on_target_screen(

@@ -53,6 +53,22 @@
     "takenOverTitle": "Editing moved to another device",
     "takenOverLocalError": "Desktop editing moved to another device. This local copy is preserved."
   },
+  "dialog": {
+    "allow": "Allow",
+    "apiUrl": "API URL",
+    "cancel": "Cancel",
+    "connect": "Connect",
+    "deny": "Deny",
+    "selfHostSubtitle": "Allow this stella site to open documents in stella desktop.",
+    "selfHostTitle": "Connect this self-hosted stella?",
+    "selfHostWindowTitle": "Connect self-hosted stella",
+    "takeoverFile": "Office file",
+    "takeoverRequester": "Someone",
+    "takeoverSubtitle": "They'll continue from your latest saved checkpoint.",
+    "takeoverTitle": "{requester} wants to take over editing",
+    "takeoverWindowTitle": "Takeover request",
+    "webOrigin": "Web origin"
+  },
   "settings": {
     "about": "About",
     "connected": "Connected",

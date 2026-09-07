@@ -246,6 +246,39 @@ fn persist_language(locale: &str) -> Result<(), String> {
   write_language_file(&path, locale)
 }
 
+/// Right-to-left locales, as the shared direction map the web app reads
+/// declares them. A test pins this list to that map.
+const RTL_LOCALES: &[&str] = &["ar"];
+
+/// The direction the active locale lays out in, for a window that has no
+/// bundle of its own to read it from.
+pub fn text_direction() -> &'static str {
+  if RTL_LOCALES.contains(&active_locale()) {
+    "rtl"
+  } else {
+    "ltr"
+  }
+}
+
+/// The catalogue entries under `namespace`, keyed by their leaf name, as a
+/// JSON object. The dialog windows render from this rather than carrying
+/// their own copies of the strings, so their keys live in the catalogues with
+/// everything else and the parity test covers them.
+pub fn namespace_json(namespace: &str) -> String {
+  let tr = active();
+  let prefix = format!("{namespace}.");
+  let mut entries = serde_json::Map::new();
+  // English first so a locale that is missing a key still renders something.
+  for source in [tr.fallback, &tr.messages] {
+    for (key, value) in source {
+      if let Some(leaf) = key.strip_prefix(&prefix) {
+        entries.insert(leaf.to_string(), serde_json::Value::String(value.clone()));
+      }
+    }
+  }
+  serde_json::Value::Object(entries).to_string()
+}
+
 /// The locale the native strings render in, for a window that has to agree
 /// with them.
 #[tauri::command]
@@ -428,6 +461,68 @@ mod tests {
     declared.sort();
 
     assert_eq!(declared, on_disk);
+  }
+
+  /// The web app reads its directions from `packages/locales`; a dialog window
+  /// has no bundle to read them from, so the list here is a second copy. This
+  /// reads the shared map so the copy cannot quietly disagree with it, and
+  /// fails if a shipped locale is missing from the map altogether.
+  #[test]
+  fn rtl_locales_match_the_shared_direction_map() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+      .join("../../../packages/locales/src/directions.ts");
+    let source = std::fs::read_to_string(&path).expect("shared direction map");
+
+    let mut mapped: Vec<(String, String)> = Vec::new();
+    for line in source.lines() {
+      let Some((left, right)) = line.split_once(':') else {
+        continue;
+      };
+      let locale = left.trim().trim_matches('"');
+      let Some(direction) = right.trim().strip_prefix('"') else {
+        continue;
+      };
+      let Some(direction) = direction.split('"').next() else {
+        continue;
+      };
+      if direction == "ltr" || direction == "rtl" {
+        mapped.push((locale.to_string(), direction.to_string()));
+      }
+    }
+
+    let mut declared: Vec<String> =
+      LOCALES.iter().map(|(l, _)| (*l).to_string()).collect();
+    declared.sort();
+    let mut mapped_locales: Vec<String> =
+      mapped.iter().map(|(locale, _)| locale.clone()).collect();
+    mapped_locales.sort();
+    assert_eq!(declared, mapped_locales);
+
+    let mut shared_rtl: Vec<&str> = mapped
+      .iter()
+      .filter(|(_, direction)| direction == "rtl")
+      .map(|(locale, _)| locale.as_str())
+      .collect();
+    shared_rtl.sort_unstable();
+    let mut ours = RTL_LOCALES.to_vec();
+    ours.sort_unstable();
+    assert_eq!(ours, shared_rtl);
+  }
+
+  #[test]
+  fn dialog_strings_come_from_the_catalogue() {
+    ensure_init();
+    let strings: serde_json::Value =
+      serde_json::from_str(&namespace_json("dialog")).unwrap();
+
+    assert_eq!(strings["deny"], "Deny");
+    assert_eq!(
+      strings["takeoverTitle"],
+      "{requester} wants to take over editing"
+    );
+    // The namespace prefix is stripped and nothing outside it leaks in.
+    assert!(strings.get("dialog.deny").is_none());
+    assert!(strings.get("settings").is_none());
   }
 
   // -- startup resolution --

@@ -51,6 +51,22 @@
     "takenOverLocalError": "Edycja pulpitu przeniesiona na inne urządzenie. Ta lokalna kopia jest zachowana.",
     "takenOverTitle": "Edycja przeniesiona na inne urządzenie"
   },
+  "dialog": {
+    "allow": "Zezwól",
+    "apiUrl": "Adres API",
+    "cancel": "Anuluj",
+    "connect": "Połącz",
+    "deny": "Odmów",
+    "selfHostSubtitle": "Zezwól tej witrynie stella na otwieranie dokumentów w aplikacji stella desktop.",
+    "selfHostTitle": "Połączyć tę samodzielnie hostowaną instancję stella?",
+    "selfHostWindowTitle": "Połącz samodzielnie hostowaną instancję stella",
+    "takeoverFile": "Plik pakietu Office",
+    "takeoverRequester": "Ktoś",
+    "takeoverSubtitle": "Edycja będzie kontynuowana od ostatniego zapisanego punktu kontrolnego.",
+    "takeoverTitle": "{requester} chce przejąć edycję",
+    "takeoverWindowTitle": "Prośba o przejęcie",
+    "webOrigin": "Źródło witryny"
+  },
   "settings": {
     "about": "Informacje",
     "connected": "Połączono",

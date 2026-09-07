@@ -2476,11 +2476,16 @@ async fn show_takeover_dialog(
   requested_by: &str,
   file_name: &str,
 ) -> bool {
-  // Pass dynamic data via URL hash — the static HTML reads it via JS.
+  // Pass dynamic data via URL hash — the static HTML reads it via JS. The
+  // dialog's own wording travels the same way: it holds no strings of its own,
+  // so it renders in the language the rest of the app runs in.
   let hash = format!(
-    "requester={}&fileName={}",
+    "requester={}&fileName={}&strings={}&lang={}&dir={}",
     urlencode(requested_by),
     urlencode(file_name),
+    urlencode(&crate::i18n::namespace_json("dialog")),
+    urlencode(crate::i18n::active_locale()),
+    urlencode(crate::i18n::text_direction()),
   );
 
   let builder = tauri::WebviewWindowBuilder::new(
@@ -2488,7 +2493,7 @@ async fn show_takeover_dialog(
     "takeover-dialog",
     tauri::WebviewUrl::App(format!("takeover-dialog.html#{hash}").into()),
   )
-  .title("stella desktop")
+  .title(crate::i18n::t("dialog.takeoverWindowTitle"))
   .inner_size(400.0, 260.0)
   .resizable(false)
   .always_on_top(true);

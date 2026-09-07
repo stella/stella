@@ -51,6 +51,22 @@
     "takenOverTitle": "A edição foi movida para outro dispositivo",
     "takenOverLocalError": "A edição no desktop foi movida para outro dispositivo. Esta cópia local está preservada."
   },
+  "dialog": {
+    "allow": "Permitir",
+    "apiUrl": "URL da API",
+    "cancel": "Cancelar",
+    "connect": "Conectar",
+    "deny": "Negar",
+    "selfHostSubtitle": "Permitir que este site da stella abra documentos no stella desktop.",
+    "selfHostTitle": "Conectar esta stella auto-hospedada?",
+    "selfHostWindowTitle": "Conectar stella auto-hospedada",
+    "takeoverFile": "Arquivo do Office",
+    "takeoverRequester": "Alguém",
+    "takeoverSubtitle": "A edição continuará a partir do seu último ponto de controle salvo.",
+    "takeoverTitle": "{requester} quer assumir a edição",
+    "takeoverWindowTitle": "Solicitação de transferência",
+    "webOrigin": "Origem web"
+  },
   "settings": {
     "about": "Sobre",
     "connected": "Conectado",

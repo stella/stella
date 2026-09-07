@@ -51,6 +51,22 @@
     "takenOverLocalError": "Darbalaukio redagavimas perkeltas į kitą įrenginį. Ši vietinė kopija yra išsaugota.",
     "takenOverTitle": "Redagavimas perkeltas į kitą įrenginį"
   },
+  "dialog": {
+    "allow": "Leisti",
+    "apiUrl": "API adresas",
+    "cancel": "Atšaukti",
+    "connect": "Prijungti",
+    "deny": "Neleisti",
+    "selfHostSubtitle": "Leisti šiai stella svetainei atverti dokumentus programoje stella desktop.",
+    "selfHostTitle": "Prijungti šią savarankiškai talpinamą stella?",
+    "selfHostWindowTitle": "Prijungti savarankiškai talpinamą stella",
+    "takeoverFile": "Office failas",
+    "takeoverRequester": "Kažkas",
+    "takeoverSubtitle": "Redagavimas bus tęsiamas nuo paskutinio išsaugoto kontrolinio taško.",
+    "takeoverTitle": "{requester} nori perimti redagavimą",
+    "takeoverWindowTitle": "Perėmimo prašymas",
+    "webOrigin": "Žiniatinklio kilmė"
+  },
   "settings": {
     "about": "Apie",
     "connected": "Prisijungta",
