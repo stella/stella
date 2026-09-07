@@ -45,6 +45,16 @@ RUN out=$(DATABASE_URL=postgres://smoke:smoke@localhost:5432/smoke \
 
 FROM base AS runner
 ENV NODE_ENV=production
+# Stamp the running container with the release version so the runner tags its
+# PostHog events with build metadata, as the API and web images do. Without
+# these the resolver in apps/api/src/lib/version.ts has nothing to read and
+# every build reports the "dev" fallback.
+ARG STELLA_VERSION=dev
+ARG STELLA_COMMIT_SHA=dev
+ARG RAILWAY_GIT_COMMIT_SHA=dev
+ENV STELLA_VERSION=${STELLA_VERSION}
+ENV STELLA_COMMIT_SHA=${STELLA_COMMIT_SHA}
+ENV RAILWAY_GIT_COMMIT_SHA=${RAILWAY_GIT_COMMIT_SHA}
 RUN groupadd --system --gid 1001 stella && \
     useradd --system --uid 1001 --gid stella --no-create-home stella
 COPY --chown=stella:stella --from=builder /app/apps/legal-atlas-runner/dist/index.js /app/legal-atlas.js
