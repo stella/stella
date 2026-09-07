@@ -52,7 +52,7 @@ export const PARSER_VERSIONS = {
   [ADAPTER_KEYS.AT_UMSE]: 2,
   [ADAPTER_KEYS.AT_BKS]: 2,
   [ADAPTER_KEYS.AT_FINDOK]: 2,
-  [ADAPTER_KEYS.EU_ECJ]: 3,
+  [ADAPTER_KEYS.EU_ECJ]: 4,
 } as const satisfies Record<AdapterKey, number>;
 
 /**
