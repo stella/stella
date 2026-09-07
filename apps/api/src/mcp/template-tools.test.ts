@@ -33,6 +33,8 @@ const fillStoredTemplateWithTextStrictMock = mock();
 const createEntityFromBufferMock = mock();
 const createEntityVersionFromBufferMock = mock();
 const createStoredTemplateMock = mock();
+const renameStoredTemplateMock = mock();
+const writeStoredTemplateMock = mock();
 const safeOutboundFetchBytesMock = mock();
 const recordTemplateFillMock = mock();
 const recordTemplateUseMock = mock();
@@ -234,6 +236,8 @@ const createContext = ({
     fillStoredTemplateWithText: fillStoredTemplateWithTextMock,
     fillStoredTemplateWithTextStrict: fillStoredTemplateWithTextStrictMock,
     createStoredTemplate: createStoredTemplateMock,
+    renameStoredTemplate: renameStoredTemplateMock,
+    writeStoredTemplate: writeStoredTemplateMock,
     safeOutboundFetchBytes: safeOutboundFetchBytesMock,
     recordTemplateFill: recordTemplateFillMock,
     recordTemplateUse: recordTemplateUseMock,
@@ -352,6 +356,8 @@ describe("MCP template tools", () => {
     createEntityFromBufferMock.mockReset();
     createEntityVersionFromBufferMock.mockReset();
     createStoredTemplateMock.mockReset();
+    renameStoredTemplateMock.mockReset();
+    writeStoredTemplateMock.mockReset();
     safeOutboundFetchBytesMock.mockReset();
     recordTemplateFillMock.mockReset();
     recordTemplateUseMock.mockReset();
@@ -2534,6 +2540,105 @@ describe("MCP template tools", () => {
     expect(createStoredTemplateMock).not.toHaveBeenCalled();
   });
 
+  test("create_template with a template_id publishes a new version", async () => {
+    writeStoredTemplateMock.mockImplementation(async function* () {
+      yield* [];
+      return Result.ok({
+        row: { id: TEMPLATE_ID, name: "NDA", fieldCount: 4, updatedAt: null },
+        manifest: { version: 1, fields: [] },
+      });
+    });
+    describeStoredTemplateMock.mockResolvedValue(describedTemplate());
+
+    const result = await handleMcpToolCall({
+      args: {
+        template_id: TEMPLATE_ID,
+        docx_base64: await makeValidDocxBase64(),
+      },
+      context: createContext(),
+      toolName: "create_template",
+    });
+
+    expect(result.isError).toBeFalsy();
+    // A new version, never a second template: the writer owns the S3 write and
+    // the version increment.
+    expect(createStoredTemplateMock).not.toHaveBeenCalled();
+    expect(writeStoredTemplateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        templateId: TEMPLATE_ID,
+        mode: { type: "new-version", userId: toSafeId<"user">("user_1") },
+      }),
+    );
+    expect(parseToolPayload(result)).toMatchObject({
+      templateId: TEMPLATE_ID,
+      fieldCount: 4,
+    });
+  });
+
+  test("create_template with a template_id and only a name renames it", async () => {
+    renameStoredTemplateMock.mockImplementation(async function* () {
+      yield* [];
+      return Result.ok({ id: TEMPLATE_ID, name: "Renamed", fieldCount: 2 });
+    });
+    describeStoredTemplateMock.mockResolvedValue(
+      describedTemplate({ name: "Renamed" }),
+    );
+
+    const result = await handleMcpToolCall({
+      args: { template_id: TEMPLATE_ID, name: "Renamed" },
+      context: createContext(),
+      toolName: "create_template",
+    });
+
+    expect(result.isError).toBeFalsy();
+    // A rename is metadata: it must not mint a version of the same bytes.
+    expect(writeStoredTemplateMock).not.toHaveBeenCalled();
+    expect(renameStoredTemplateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ templateId: TEMPLATE_ID, name: "Renamed" }),
+    );
+    expect(parseToolPayload(result)).toMatchObject({
+      templateId: TEMPLATE_ID,
+      name: "Renamed",
+    });
+  });
+
+  test("create_template with a template_id and nothing to change is refused", async () => {
+    const result = await handleMcpToolCall({
+      args: { template_id: TEMPLATE_ID },
+      context: createContext(),
+      toolName: "create_template",
+    });
+
+    expect(result.isError).toBe(true);
+    expect(writeStoredTemplateMock).not.toHaveBeenCalled();
+    expect(renameStoredTemplateMock).not.toHaveBeenCalled();
+  });
+
+  test("create_template needs template:create, publishing over one needs template:update", async () => {
+    // The tool checks the permission the call needs, not the union of both:
+    // an editor who may update a template must not gain the right to create.
+    const creating = await handleMcpToolCall({
+      args: { name: "NDA", docx_base64: await makeValidDocxBase64() },
+      context: createContext({ memberRole: "intern" }),
+      toolName: "create_template",
+    });
+    expect(creating.isError).toBe(true);
+    expect(creating.content).toEqual([{ type: "text", text: "Forbidden" }]);
+    expect(createStoredTemplateMock).not.toHaveBeenCalled();
+
+    const publishing = await handleMcpToolCall({
+      args: {
+        template_id: TEMPLATE_ID,
+        docx_base64: await makeValidDocxBase64(),
+      },
+      context: createContext({ memberRole: "intern" }),
+      toolName: "create_template",
+    });
+    expect(publishing.isError).toBe(true);
+    expect(publishing.content).toEqual([{ type: "text", text: "Forbidden" }]);
+    expect(writeStoredTemplateMock).not.toHaveBeenCalled();
+  });
+
   test("create_template forbids members without template:create permission", async () => {
     const result = await handleMcpToolCall({
       args: {
@@ -3170,7 +3275,7 @@ describe("MCP template tools", () => {
     const error = validationEnvelope(result);
     expect(error["code"]).toBe("validation_error");
     expect(error["message"]).toContain(
-      "Provide exactly one document source: file, or docx_base64",
+      "Provide a document source: file, or docx_base64",
     );
     expect(createStoredTemplateMock).not.toHaveBeenCalled();
   });
@@ -3192,7 +3297,7 @@ describe("MCP template tools", () => {
     expect(error["issues"]).toEqual([
       {
         path: "docx_base64",
-        message: "Provide exactly one document source: file, or docx_base64",
+        message: "Provide either file or docx_base64, not both",
       },
     ]);
     expect(safeOutboundFetchBytesMock).not.toHaveBeenCalled();
@@ -3220,8 +3325,9 @@ describe("MCP template tools", () => {
         },
       },
     });
-    // Neither source is required at the schema level; the partial check picks
-    // exactly one at parse time. Only the name is unconditionally required.
-    expect(createTemplate?.inputSchema.required).toEqual(["name"]);
+    // Nothing is required at the schema level: creating needs a name and a
+    // document, publishing over an existing template needs its id and either,
+    // and the partial checks decide which combination the call is.
+    expect(createTemplate?.inputSchema.required).toEqual([]);
   });
 });

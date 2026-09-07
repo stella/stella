@@ -26,8 +26,10 @@ import {
   buildAiFieldGenerator,
   buildAiOccurrenceAdapter,
 } from "@/api/lib/docx/ai-field-generator";
+import { discoverTemplate } from "@/api/lib/docx/discover-template";
 import { extractTextForPreview } from "@/api/lib/docx/extract-text";
 import type { AiFieldError } from "@/api/lib/docx/resolve-ai-fields";
+import { readManifest, writeManifest } from "@/api/lib/docx/template-manifest";
 import type { TemplateWarning } from "@/api/lib/docx/template-warnings";
 import type { FieldMeta } from "@/api/lib/docx/types";
 import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buffer";
@@ -48,10 +50,12 @@ import { DOCX_EXT_RE, sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
 import { createStoredTemplate } from "@/api/lib/templates/create-template";
 import type { FieldOverlayIssue } from "@/api/lib/templates/field-overlay";
+import { resolveTemplateFieldOverlay } from "@/api/lib/templates/field-overlay";
 import {
   recordTemplateFill,
   recordTemplateUse,
 } from "@/api/lib/templates/record-use";
+import { renameStoredTemplate } from "@/api/lib/templates/rename-template";
 import { containsNull } from "@/api/lib/templates/template-data";
 import type { TemplateFillCompletionMode } from "@/api/lib/templates/template-fill-completion";
 import {
@@ -70,6 +74,7 @@ import {
   fillStoredTemplateWithText,
   fillStoredTemplateWithTextStrict,
 } from "@/api/lib/templates/template-fill-service";
+import { writeStoredTemplate } from "@/api/lib/templates/write-template";
 import { withTimeout } from "@/api/lib/with-timeout";
 import { MCP_MAX_REQUEST_BODY_BYTES } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
@@ -166,18 +171,33 @@ const TEMPLATE_FILL_COMPLETION_MODE_PROP = {
 } as const;
 
 /**
- * `create_template`: a name and exactly one document source. Creation never
- * carries a field overlay; `configure_template_fields` owns that half, so
- * neither tool advertises properties the other ignores.
+ * `create_template`: a document, and either a name for a new template or the
+ * id of one to publish over. Creation never carries a field overlay;
+ * `configure_template_fields` owns that half, so neither tool advertises
+ * properties the other ignores.
+ *
+ * `template_id` makes the call an upsert, which is what a retrying agent
+ * needs: resending the same document under the same id publishes one more
+ * version instead of accumulating near-duplicate templates. A template is
+ * never matched by name, because two templates may share one.
  */
 export const createTemplateArgsSchema = nullAsAbsent(
   v.pipe(
     v.strictObject({
-      name: v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.maxLength(256),
-        v.description("Display name for the template"),
+      template_id: v.optional(
+        uuidInputSchema(
+          "Existing template to publish a new version of, or rename; omit to create a new template",
+        ),
+      ),
+      name: v.optional(
+        v.pipe(
+          v.string(),
+          v.minLength(1),
+          v.maxLength(256),
+          v.description(
+            "Display name; required when creating, optional when it renames an existing template",
+          ),
+        ),
       ),
       docx_base64: v.optional(
         v.pipe(
@@ -197,10 +217,42 @@ export const createTemplateArgsSchema = nullAsAbsent(
       v.partialCheck(
         [["docx_base64"], ["file"]],
         ({ docx_base64, file }) =>
-          (docx_base64 === undefined) !== (file === undefined),
-        "Provide exactly one document source: file, or docx_base64",
+          docx_base64 === undefined || file === undefined,
+        "Provide either file or docx_base64, not both",
       ),
       ["docx_base64"],
+    ),
+    v.forward(
+      v.partialCheck(
+        [["template_id"], ["docx_base64"], ["file"]],
+        ({ template_id, docx_base64, file }) =>
+          template_id !== undefined ||
+          docx_base64 !== undefined ||
+          file !== undefined,
+        "Provide a document source: file, or docx_base64",
+      ),
+      ["docx_base64"],
+    ),
+    v.forward(
+      v.partialCheck(
+        [["template_id"], ["name"]],
+        ({ template_id, name }) =>
+          template_id !== undefined || name !== undefined,
+        "name is required to create a template",
+      ),
+      ["name"],
+    ),
+    v.forward(
+      v.partialCheck(
+        [["template_id"], ["name"], ["docx_base64"], ["file"]],
+        ({ template_id, name, docx_base64, file }) =>
+          template_id === undefined ||
+          name !== undefined ||
+          docx_base64 !== undefined ||
+          file !== undefined,
+        "With template_id, pass a document to publish a new version, a name to rename it, or both",
+      ),
+      ["template_id"],
     ),
   ),
 );
@@ -521,7 +573,12 @@ export const CREATE_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
     "openai/fileParams": ["file"],
   },
   description:
-    "Create a template from a DOCX. Pass a name and either file (preferred, " +
+    "Create a template from a DOCX, or publish a new version of one. To " +
+    "create, pass a name and the document. To publish over an existing " +
+    "template, pass its template_id with the document; template_id with only " +
+    "a name renames it. Same-name templates are never merged: only " +
+    "template_id matches an existing one. For the document, pass either " +
+    "file (preferred, " +
     `up to ${MAX_DOCX_MEGABYTES} MB) or the original bytes as docx_base64 ` +
     `(max ${MAX_INLINE_DOCX_BYTES} bytes decoded within the ` +
     `${MCP_MAX_REQUEST_BODY_BYTES}-byte MCP request frame); never retype the ` +
@@ -584,11 +641,9 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
       "whose whenToUse matches the request and skip any whose whenNotToUse " +
       "applies. Pass template_id to return that template's full field " +
       "configuration, in the shape the field reference documents " +
-      `(see ${TEMPLATE_FIELD_REFERENCE_URI}), plus its named conditions and ` +
-      "formula fields. Omitted optional scalar placeholders render blank. " +
-      "A required, non-AI-fillable field omitted or empty fails " +
-      "fill_template; `arrays` marks {{#each}} fields as arrays of objects, " +
-      "not dotted keys.",
+      `(see ${TEMPLATE_FIELD_REFERENCE_URI}), its named conditions and ` +
+      "formula fields, and the configure_template_fields call to make next. " +
+      "`arrays` marks {{#each}} fields as arrays of objects, not dotted keys.",
     inputSchema: {
       type: "object",
       properties: {
@@ -1965,21 +2020,141 @@ const resolveTemplateDocx = async ({
   }
 };
 
+/** The validated DOCX bytes a create or upsert call carries, or the failure
+ *  that stopped them from being read. */
+type CreateTemplateDocx =
+  | { status: "ok"; buffer: Buffer }
+  | { status: "error"; result: InternalToolErrorResult };
+
+const readCreateTemplateDocx = async ({
+  context,
+  source,
+}: {
+  context: McpRequestContext;
+  source: TemplateDocxSource;
+}): Promise<CreateTemplateDocx> => {
+  const resolved = await resolveTemplateDocx({ context, source });
+  if (resolved.status === "error") {
+    return resolved;
+  }
+  const { buffer } = resolved;
+  const issuePath = DOCX_SOURCE_ISSUE_PATH[source.type];
+
+  if (buffer.byteLength > FILE_SIZE_LIMIT_BYTES.document) {
+    return {
+      status: "error",
+      result: structuredErrorResult({
+        code: "validation_error",
+        message: "DOCX exceeds the maximum allowed size",
+        issues: [
+          { path: issuePath, message: "DOCX exceeds the maximum allowed size" },
+        ],
+        hint: `Upload a DOCX no larger than ${FILE_SIZE_LIMIT_BYTES.document} bytes.`,
+      }),
+    };
+  }
+
+  const validation = await validateDocxBuffer(new Uint8Array(buffer).buffer);
+  if (!validation.valid) {
+    return {
+      status: "error",
+      result: structuredErrorResult({
+        code: "validation_error",
+        message: `Invalid DOCX file: ${validation.error}`,
+        issues: [{ path: issuePath, message: validation.error }],
+        hint: DOCX_SOURCE_FAILURE_HINT[source.type][validation.reason],
+      }),
+    };
+  }
+  return { status: "ok", buffer };
+};
+
+/** How the caller supplied the DOCX, or that they supplied none (which is
+ *  only legal for a rename). */
+const createTemplateDocxSource = (input: {
+  docx_base64?: string | undefined;
+  file?: v.InferOutput<typeof OPENAI_FILE_REFERENCE_SCHEMA> | undefined;
+}): TemplateDocxSource | null => {
+  if (input.file !== undefined) {
+    return { type: "file", file: input.file };
+  }
+  if (input.docx_base64 !== undefined) {
+    return { type: "base64", docxBase64: input.docx_base64 };
+  }
+  return null;
+};
+
 /**
- * `create_template`: a new template from an uploaded DOCX. The response is the
- * describe payload the template now serves, so the agent reads the discovered
- * fields, arrays and warnings from the same producer `list_templates` uses.
+ * `create_template` with a `template_id`: publish the document as the
+ * template's next version, rename it, or both. The bytes go to S3 through
+ * `writeStoredTemplate`, which owns that write and keeps it outside the
+ * transaction.
+ */
+const upsertStoredTemplate = async ({
+  buffer,
+  context,
+  name,
+  templateId,
+}: {
+  buffer: Buffer | null;
+  context: McpRequestContext;
+  name: string | undefined;
+  templateId: SafeId<"template">;
+}): Promise<InternalToolErrorResult | { fieldCount: number }> => {
+  if (buffer === null) {
+    const renamed = await Result.gen(() =>
+      (context.testDependencies?.renameStoredTemplate ?? renameStoredTemplate)({
+        safeDb: context.safeDb,
+        organizationId: context.organizationId,
+        templateId,
+        name: name ?? panic("rename branch reached without a name"),
+        recordAuditEvent: context.recordAuditEvent,
+      }),
+    );
+    return Result.isError(renamed)
+      ? internalFailureResult(renamed.error)
+      : { fieldCount: renamed.value.fieldCount };
+  }
+
+  const [discovered, embeddedManifest] = await Promise.all([
+    discoverTemplate(buffer),
+    readManifest(buffer),
+  ]);
+  const written = await Result.gen(() =>
+    (context.testDependencies?.writeStoredTemplate ?? writeStoredTemplate)({
+      safeDb: context.safeDb,
+      organizationId: context.organizationId,
+      templateId,
+      mode: { type: "new-version", userId: context.userId },
+      ...(name === undefined ? {} : { metadata: { name } }),
+      recordAuditEvent: context.recordAuditEvent,
+      async prepare({ manifest: currentManifest }) {
+        // The new document decides which paths exist; the configuration that
+        // survives is the one whose path the new bytes still carry.
+        const manifest = resolveTemplateFieldOverlay({
+          discovered,
+          manifest: embeddedManifest ?? currentManifest,
+          overlay: undefined,
+        });
+        const updatedDocx = await writeManifest(buffer, manifest);
+        return Result.ok({ manifest, bytes: new Uint8Array(updatedDocx) });
+      },
+    }),
+  );
+  return Result.isError(written)
+    ? internalFailureResult(written.error)
+    : { fieldCount: written.value.row.fieldCount };
+};
+
+/**
+ * `create_template`: a new template from an uploaded DOCX, a new version of an
+ * existing one, or a rename. The response is the describe payload the template
+ * now serves, so the agent reads the discovered fields, arrays and warnings
+ * from the same producer `list_templates` uses.
  */
 const handleCreateTemplateTool: TypedMcpToolHandler<
   v.InferInput<typeof CREATE_TEMPLATE_PROJECTION>
 > = async ({ args, context }) => {
-  const hasPermission = hasEffectiveAuthority(context, {
-    template: ["create"],
-  });
-  if (!hasPermission) {
-    return errorResult("Forbidden");
-  }
-
   const parsed = v.safeParse(
     CREATE_TEMPLATE_TOOL_DEFINITION.inputSchemaSource,
     args,
@@ -1988,41 +2163,44 @@ const handleCreateTemplateTool: TypedMcpToolHandler<
     return validationErrorResult(parsed.issues);
   }
   const input = parsed.output;
-  const source: TemplateDocxSource =
-    input.file === undefined
-      ? {
-          type: "base64",
-          docxBase64:
-            input.docx_base64 ??
-            panic("create_template reached without a DOCX source"),
-        }
-      : { type: "file", file: input.file };
-
-  const resolved = await resolveTemplateDocx({ context, source });
-  if (resolved.status === "error") {
-    return resolved.result;
+  // Creating a template and publishing over one the organization already has
+  // are different permissions, and the tool checks the one the call needs.
+  const hasPermission = hasEffectiveAuthority(context, {
+    template: [input.template_id === undefined ? "create" : "update"],
+  });
+  if (!hasPermission) {
+    return errorResult("Forbidden");
   }
-  const { buffer } = resolved;
-  const issuePath = DOCX_SOURCE_ISSUE_PATH[source.type];
 
-  if (buffer.byteLength > FILE_SIZE_LIMIT_BYTES.document) {
-    return structuredErrorResult({
-      code: "validation_error",
-      message: "DOCX exceeds the maximum allowed size",
-      issues: [
-        { path: issuePath, message: "DOCX exceeds the maximum allowed size" },
-      ],
-      hint: `Upload a DOCX no larger than ${FILE_SIZE_LIMIT_BYTES.document} bytes.`,
+  const source = createTemplateDocxSource(input);
+  let buffer: Buffer | null = null;
+  if (source !== null) {
+    const read = await readCreateTemplateDocx({ context, source });
+    if (read.status === "error") {
+      return read.result;
+    }
+    buffer = read.buffer;
+  }
+
+  if (input.template_id !== undefined) {
+    const templateId = brandPersistedTemplateId(input.template_id);
+    const upserted = await upsertStoredTemplate({
+      buffer,
+      context,
+      name: input.name,
+      templateId,
     });
-  }
-
-  const validation = await validateDocxBuffer(new Uint8Array(buffer).buffer);
-  if (!validation.valid) {
-    return structuredErrorResult({
-      code: "validation_error",
-      message: `Invalid DOCX file: ${validation.error}`,
-      issues: [{ path: issuePath, message: validation.error }],
-      hint: DOCX_SOURCE_FAILURE_HINT[source.type][validation.reason],
+    if (isToolErrorResult(upserted)) {
+      return upserted;
+    }
+    const described = await describeTemplateForAgent({ context, templateId });
+    if (isToolErrorResult(described)) {
+      return described;
+    }
+    return toolDataResult({
+      templateId,
+      fieldCount: upserted.fieldCount,
+      ...described,
     });
   }
 
@@ -2031,9 +2209,9 @@ const handleCreateTemplateTool: TypedMcpToolHandler<
       safeDb: context.safeDb,
       organizationId: context.organizationId,
       userId: context.userId,
-      buffer,
-      name: input.name,
-      fileName: `${input.name}.docx`,
+      buffer: buffer ?? panic("create branch reached without a DOCX"),
+      name: input.name ?? panic("create branch reached without a name"),
+      fileName: `${input.name ?? ""}.docx`,
       recordAuditEvent: context.recordAuditEvent,
     }),
   );

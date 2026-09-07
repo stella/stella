@@ -54,12 +54,14 @@ import type {
   recordTemplateFill,
   recordTemplateUse,
 } from "@/api/lib/templates/record-use";
+import type { renameStoredTemplate } from "@/api/lib/templates/rename-template";
 import type {
   describeStoredTemplate,
   fillStoredTemplateDocx,
   fillStoredTemplateWithText,
   fillStoredTemplateWithTextStrict,
 } from "@/api/lib/templates/template-fill-service";
+import type { writeStoredTemplate } from "@/api/lib/templates/write-template";
 import type { withTimeout } from "@/api/lib/with-timeout";
 import type { startWorkflow } from "@/api/lib/workflow-queue";
 import type { materializePlaybookRun } from "@/api/lib/workflow/materialize-playbook-run";
@@ -121,6 +123,8 @@ export type McpRequestContext = {
     fillStoredTemplateWithText?: typeof fillStoredTemplateWithText;
     fillStoredTemplateWithTextStrict?: typeof fillStoredTemplateWithTextStrict;
     createStoredTemplate?: typeof createStoredTemplate;
+    renameStoredTemplate?: typeof renameStoredTemplate;
+    writeStoredTemplate?: typeof writeStoredTemplate;
     safeOutboundFetchBytes?: typeof safeOutboundFetchBytes;
     recordTemplateFill?: typeof recordTemplateFill;
     recordTemplateUse?: typeof recordTemplateUse;

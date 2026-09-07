@@ -235,8 +235,7 @@ are omitted here.
 - `stella template configure-fields`
   - `--template-id` — Template to configure, as returned by create_template or list_templates (string)
 - `stella template create`
-  - `--name` — Display name for the template (string)
-  - optional: --docx-base64, --file.download-url, --file.file-id, --file.mime-type, --file.file-name
+  - optional: --template-id, --name, --docx-base64, --file.download-url, --file.file-id, --file.mime-type, --file.file-name
 - `stella template fill`
   - `--template-id` — Template id, as returned by list_templates (string)
   - optional: --allow-unused-values, --completion-mode (require_complete|allow_partial), --output-mode (text|docx)

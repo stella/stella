@@ -2647,15 +2647,26 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["template", "create"],
             toolName: "create_template",
-            description: "Create a template from a DOCX.",
+            description:
+              "Create a template from a DOCX, or publish a new version of one.",
             flags: [
+              {
+                flag: "--template-id",
+                prop: "template_id",
+                kind: "string",
+                repeatable: false,
+                description:
+                  "Existing template to publish a new version of, or rename; omit to create a new template",
+                required: false,
+              },
               {
                 flag: "--name",
                 prop: "name",
                 kind: "string",
                 repeatable: false,
-                description: "Display name for the template",
-                required: true,
+                description:
+                  "Display name; required when creating, optional when it renames an existing template",
+                required: false,
               },
               {
                 flag: "--docx-base64",
@@ -2707,14 +2718,21 @@ export const generatedRouteMap: RouteNode = {
             scope: "templates",
             inputSchema: {
               type: "object",
-              required: ["name"],
+              required: [],
               additionalProperties: false,
               properties: {
+                template_id: {
+                  type: "string",
+                  format: "uuid",
+                  description:
+                    "Existing template to publish a new version of, or rename; omit to create a new template",
+                },
                 name: {
                   type: "string",
                   minLength: 1,
                   maxLength: 256,
-                  description: "Display name for the template",
+                  description:
+                    "Display name; required when creating, optional when it renames an existing template",
                 },
                 docx_base64: {
                   type: "string",

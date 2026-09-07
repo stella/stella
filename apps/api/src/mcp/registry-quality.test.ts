@@ -104,8 +104,12 @@ const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
 // resource rather than in a schema every client downloads on connect, and
 // the two tool descriptions lost the sentences the references already carry.
 // Measured with both changes in: 70_849 chars.
+// default bumped 71_000 -> 72_000 when create_template became an upsert:
+// `template_id` plus the rules that say what it means with and without a
+// document. Measured 71_254 chars, after list_templates gave back the fill
+// semantics its own description was repeating from fill_template.
 const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 71_000,
+  default: 72_000,
   anonymized: 23_557,
 };
 

@@ -607,7 +607,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "name": "list_templates",
     "scope": "stella:templates",
     "access": "read",
-    "description": "List the document templates in this organization (NDAs, powers of attorney, leases), or describe one template's fillable fields. Omit template_id to list templates: each template's id, name, field count, tags, and usage guidance (whenToUse / whenNotToUse); prefer a template whose whenToUse matches the request and skip any whose whenNotToUse applies. Pass template_id to return that template's full field configuration, in the shape the field reference documents (see stella://reference/template-fields), plus its named conditions and formula fields. Omitted optional scalar placeholders render blank. A required, non-AI-fillable field omitted or empty fails fill_template; \`arrays\` marks {{#each}} fields as arrays of objects, not dotted keys.",
+    "description": "List the document templates in this organization (NDAs, powers of attorney, leases), or describe one template's fillable fields. Omit template_id to list templates: each template's id, name, field count, tags, and usage guidance (whenToUse / whenNotToUse); prefer a template whose whenToUse matches the request and skip any whose whenNotToUse applies. Pass template_id to return that template's full field configuration, in the shape the field reference documents (see stella://reference/template-fields), its named conditions and formula fields, and the configure_template_fields call to make next. \`arrays\` marks {{#each}} fields as arrays of objects, not dotted keys.",
     "annotations": {
       "title": "List templates",
       "readOnlyHint": true,
@@ -766,7 +766,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "name": "create_template",
     "scope": "stella:templates",
     "access": "write",
-    "description": "Create a template from a DOCX. Pass a name and either file (preferred, up to 50 MB) or the original bytes as docx_base64 (max 196608 bytes decoded within the 524288-byte MCP request frame); never retype the file or strip parts out to fit. Read stella://reference/template-markers before authoring the DOCX. Returns the template id, its discovered fields, arrays, conditions, computed values and marker warnings. Then call configure_template_fields to say who fills each field.",
+    "description": "Create a template from a DOCX, or publish a new version of one. To create, pass a name and the document. To publish over an existing template, pass its template_id with the document; template_id with only a name renames it. Same-name templates are never merged: only template_id matches an existing one. For the document, pass either file (preferred, up to 50 MB) or the original bytes as docx_base64 (max 196608 bytes decoded within the 524288-byte MCP request frame); never retype the file or strip parts out to fit. Read stella://reference/template-markers before authoring the DOCX. Returns the template id, its discovered fields, arrays, conditions, computed values and marker warnings. Then call configure_template_fields to say who fills each field.",
     "annotations": {
       "title": "Create template",
       "idempotentHint": false,
@@ -774,16 +774,19 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     },
     "inputSchema": {
       "type": "object",
-      "required": [
-        "name"
-      ],
+      "required": [],
       "additionalProperties": false,
       "properties": {
+        "template_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Existing template to publish a new version of, or rename; omit to create a new template"
+        },
         "name": {
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Display name for the template"
+          "description": "Display name; required when creating, optional when it renames an existing template"
         },
         "docx_base64": {
           "type": "string",
@@ -3711,7 +3714,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     "name": "list_templates",
     "scope": "stella:templates_anonymized",
     "access": "read",
-    "description": "List the document templates in this organization (NDAs, powers of attorney, leases), or describe one template's fillable fields. Omit template_id to list templates: each template's id, name, field count, tags, and usage guidance (whenToUse / whenNotToUse); prefer a template whose whenToUse matches the request and skip any whose whenNotToUse applies. Pass template_id to return that template's full field configuration, in the shape the field reference documents (see stella://reference/template-fields), plus its named conditions and formula fields. Omitted optional scalar placeholders render blank. A required, non-AI-fillable field omitted or empty fails fill_template; \`arrays\` marks {{#each}} fields as arrays of objects, not dotted keys.",
+    "description": "List the document templates in this organization (NDAs, powers of attorney, leases), or describe one template's fillable fields. Omit template_id to list templates: each template's id, name, field count, tags, and usage guidance (whenToUse / whenNotToUse); prefer a template whose whenToUse matches the request and skip any whose whenNotToUse applies. Pass template_id to return that template's full field configuration, in the shape the field reference documents (see stella://reference/template-fields), its named conditions and formula fields, and the configure_template_fields call to make next. \`arrays\` marks {{#each}} fields as arrays of objects, not dotted keys.",
     "annotations": {
       "title": "List templates",
       "readOnlyHint": true,
