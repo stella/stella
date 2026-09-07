@@ -1,7 +1,4 @@
-import { useState } from "react";
-
 import { createFileRoute } from "@tanstack/react-router";
-import { panic } from "better-result";
 import {
   ClipboardListIcon,
   FileTextIcon,
@@ -16,14 +13,9 @@ import { stellaToast } from "@stll/ui/toast";
 
 import { DesktopDownloadButtons } from "@/components/desktop-download-buttons";
 import { env } from "@/env";
+import { DesktopConnectionStatus } from "@/features/desktop/desktop-connection-status";
+import { useDesktopAccountConnection } from "@/features/desktop/use-desktop-account-connection";
 import { useHydrationSafeDesktopPlatform } from "@/hooks/use-hydration-safe-desktop-platform";
-import { getAnalytics } from "@/lib/analytics/provider";
-import { externalApiOrigin } from "@/lib/api-origins";
-import { getFreshLinkedAccount } from "@/lib/auth-session";
-import {
-  connectSelfHostedDesktop,
-  linkDesktopAccount,
-} from "@/lib/desktop-bridge";
 import { detached } from "@/lib/detached";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
 
@@ -34,42 +26,20 @@ export const Route = createFileRoute("/_protected/settings/account/desktop")({
 function DesktopPage() {
   const t = useTranslations();
   const platform = useHydrationSafeDesktopPlatform();
-  const [connectStatus, setConnectStatus] = useState<
-    "idle" | "connecting" | "connected" | "error"
-  >("idle");
+  // Downloading the app starts a watch that links it as soon as it runs; the
+  // button below is the manual path and shares the same attempt, so the two
+  // cannot link twice.
+  const { connect, startWatch, state } = useDesktopAccountConnection();
 
   const shortcut = platform === "mac" ? "⌘ ⇧ V" : "Ctrl + Shift + V";
 
   const handleConnectDesktop = async () => {
-    setConnectStatus("connecting");
-    try {
-      const apiBaseUrl = externalApiOrigin();
-      if (env.VITE_SELFHOST) {
-        await connectSelfHostedDesktop({
-          apiBaseUrl,
-          webOrigin: window.location.origin,
-        });
-      }
-
-      const linkedAccount = await getFreshLinkedAccount();
-      if (!linkedAccount) {
-        panic("Protected desktop settings did not have a linked account.");
-      }
-
-      await linkDesktopAccount({ apiBaseUrl, linkedAccount });
-      setConnectStatus("connected");
-      stellaToast.add({
-        title: t("common.done"),
-        type: "success",
-      });
-    } catch (error) {
-      getAnalytics().captureError(error);
-      setConnectStatus("error");
-      stellaToast.add({
-        title: t("errors.actionFailed"),
-        type: "error",
-      });
-    }
+    const outcome = await connect();
+    stellaToast.add(
+      outcome.status === "connected"
+        ? { title: t("common.done"), type: "success" }
+        : { title: t("errors.actionFailed"), type: "error" },
+    );
   };
 
   return (
@@ -89,7 +59,11 @@ function DesktopPage() {
                 {t("settings.account.desktopAppDescription")}
               </p>
               <div className="mt-6">
-                <DesktopDownloadButtons platform={platform} size="lg" />
+                <DesktopDownloadButtons
+                  onDownload={startWatch}
+                  platform={platform}
+                  size="lg"
+                />
               </div>
             </div>
 
@@ -143,7 +117,7 @@ function DesktopPage() {
             </div>
             <div className="flex flex-wrap items-center gap-3">
               <Button
-                loading={connectStatus === "connecting"}
+                loading={state.status === "connecting"}
                 onClick={() => {
                   detached(
                     handleConnectDesktop(),
@@ -155,11 +129,7 @@ function DesktopPage() {
                 <LinkIcon />
                 {t("common.connect")}
               </Button>
-              <p className="text-muted-foreground text-sm">
-                {connectStatus === "connecting" && t("common.loading")}
-                {connectStatus === "connected" && t("common.done")}
-                {connectStatus === "error" && t("errors.actionFailed")}
-              </p>
+              <DesktopConnectionStatus state={state} />
             </div>
           </div>
         </FramePanel>

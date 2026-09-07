@@ -120,10 +120,12 @@ const parseBridgeResponse = async (response: Response) => {
 
 const readBridgeHealth = async (
   timeoutMs: number,
+  signal?: AbortSignal,
 ): Promise<BridgeHealth | null> => {
   try {
     const response = await fetchWithTimeout(`${DESKTOP_BRIDGE_URL}/health`, {
       method: "GET",
+      ...(signal && { signal }),
       timeoutMs,
     });
     if (!response.ok) {
@@ -315,11 +317,19 @@ const waitForDesktopEditHandoffOpened = async ({
 };
 
 /**
- * Check if the desktop bridge is reachable (app is running).
- * Returns true/false without throwing.
+ * Whether a running desktop app can link an account right now. Answers false
+ * rather than throwing, and also for an app too old to link: a watch then keeps
+ * polling instead of ending on a bridge that would refuse the link anyway.
  */
-export const isDesktopBridgeReachable = async (): Promise<boolean> =>
-  (await readBridgeHealth(500)) !== null;
+export const isDesktopAccountLinkReachable = async (
+  signal?: AbortSignal,
+): Promise<boolean> => {
+  const health = await readBridgeHealth(500, signal);
+  return (
+    health !== null &&
+    isCompatibleDesktopBridge(health, DESKTOP_ACCOUNT_LINK_CAPABILITY)
+  );
+};
 
 const readSelfHostedDesktopConnection = async ({
   apiBaseUrl,
